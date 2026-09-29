@@ -24,6 +24,29 @@ use super::toolchain::{self, Client};
 /// The host script, embedded so a released `ttc` needs no files beside it.
 const HOST: &str = include_str!("host.mjs");
 
+const HOST_DIGEST: u64 = {
+    let bytes = HOST.as_bytes();
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut index = 0;
+    while index < bytes.len() {
+        hash = (hash ^ bytes[index] as u64).wrapping_mul(0x0000_0100_0000_01b3);
+        index += 1;
+    }
+    hash
+};
+
+fn prepare_host(session: u64) -> std::io::Result<PathBuf> {
+    let dir = std::env::temp_dir().join(format!("ttc-host-{HOST_DIGEST:016x}"));
+    std::fs::create_dir_all(&dir)?;
+    let script = dir.join("host.mjs");
+    if std::fs::read(&script).ok().as_deref() != Some(HOST.as_bytes()) {
+        let staging = dir.join(format!("host.mjs.{}-{session}.tmp", std::process::id()));
+        std::fs::write(&staging, HOST)?;
+        std::fs::rename(&staging, &script)?;
+    }
+    Ok(script)
+}
+
 /// A [`TypeScriptBackend`] over a running compiler.
 ///
 /// The first question starts the host and opens the project; every question
@@ -36,6 +59,7 @@ pub(crate) struct NativeBackend {
     /// The `node` binary that runs the host (`--node`, else `node` on PATH).
     node: PathBuf,
     session: RefCell<Option<Session>>,
+    observed: std::cell::Cell<Option<(u64, u64, bool)>>,
 }
 
 /// The running host: a process, and the two pipes a request travels over.
@@ -47,9 +71,7 @@ struct Session {
     /// What the project was opened as. A question about a different project
     /// needs a different session.
     opened: (Option<PathBuf>, PathBuf),
-    /// The directory this session created for its host script. The session
-    /// owns it, so it goes away with the session.
-    dir: PathBuf,
+    id: u64,
 }
 
 impl NativeBackend {
@@ -60,6 +82,7 @@ impl NativeBackend {
             toolchain: toolchain::client(from)?,
             node: node.unwrap_or_else(|| PathBuf::from("node")),
             session: RefCell::new(None),
+            observed: std::cell::Cell::new(None),
         })
     }
 
@@ -70,13 +93,8 @@ impl NativeBackend {
         // job resolve against.
         static NEXT_SESSION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let session_id = NEXT_SESSION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let dir =
-            std::env::temp_dir().join(format!("ttc-host-{}-{session_id}", std::process::id()));
-        std::fs::create_dir_all(&dir)
+        let script = prepare_host(session_id)
             .map_err(|e| Failure::unavailable(format!("cannot prepare the host: {e}")))?;
-        let script = dir.join("host.mjs");
-        std::fs::write(&script, HOST)
-            .map_err(|e| Failure::unavailable(format!("cannot write the host: {e}")))?;
 
         let mut child = Command::new(&self.node)
             .arg(&script)
@@ -112,7 +130,7 @@ impl NativeBackend {
             stdin,
             stdout,
             opened: (tsconfig.map(Path::to_path_buf), root.to_path_buf()),
-            dir,
+            id: session_id,
         })
     }
 }
@@ -157,11 +175,77 @@ impl Drop for Session {
         // outliving the run.
         let _ = self.child.kill();
         let _ = self.child.wait();
-        // The whole directory, not just the script in it: this session
-        // created it, nothing else writes there, and leaving the empty
-        // directory behind would add one per typed run for the life of the
-        // machine.
-        let _ = std::fs::remove_dir_all(&self.dir);
+    }
+}
+
+impl NativeBackend {
+    pub(crate) fn observe_generations(&self) {
+        self.observed.set(None);
+    }
+
+    pub(crate) fn stable_generation(&self) -> Option<(u64, u64)> {
+        self.observed
+            .take()
+            .and_then(|(id, generation, stable)| stable.then_some((id, generation)))
+    }
+
+    pub(crate) fn current_generation(
+        &self,
+        tsconfig: Option<&Path>,
+        root: &Path,
+    ) -> Option<(u64, u64)> {
+        let wanted = (tsconfig.map(Path::to_path_buf), root.to_path_buf());
+        let mut slot = self.session.borrow_mut();
+        let session = slot.as_mut().filter(|session| session.opened == wanted)?;
+        let generation = exchange(session, r#"{"diskGeneration":true}"#)
+            .ok()
+            .and_then(|line| serde_json::from_str::<serde_json::Value>(line.trim()).ok())
+            .and_then(|value| value["diskGeneration"].as_u64());
+        match generation {
+            Some(generation) => Some((session.id, generation)),
+            None => {
+                *slot = None;
+                None
+            }
+        }
+    }
+}
+
+impl NativeBackend {
+    pub(crate) fn configured_mappers(
+        &self,
+        tsconfig: &Path,
+        root: &Path,
+    ) -> Result<Vec<serde_json::Value>, Failure> {
+        let wanted = (Some(tsconfig.to_path_buf()), root.to_path_buf());
+        let mut slot = self.session.borrow_mut();
+        if slot.as_ref().is_some_and(|s| s.opened != wanted) {
+            *slot = None;
+        }
+        if slot.is_none() {
+            *slot = Some(self.start(Some(tsconfig), root)?);
+        }
+        let session = slot.as_mut().expect("started");
+        let line = match exchange(session, r#"{"configuredMappers":true}"#) {
+            Ok(line) => line,
+            Err(_) => {
+                let mut session = slot.take().expect("started");
+                return Err(host_died(&mut session.child));
+            }
+        };
+        let value: serde_json::Value = serde_json::from_str(line.trim()).map_err(|e| {
+            Failure::internal(format!(
+                "the TypeScript backend answered with malformed JSON: {e}"
+            ))
+        })?;
+        if let Some(error) = value["error"].as_str() {
+            return Err(Failure::internal(format!(
+                "the TypeScript backend failed:\n{error}"
+            )));
+        }
+        value["contentMappers"].as_array().cloned().ok_or_else(|| {
+            Failure::internal("the TypeScript backend answer omitted contentMappers")
+        })
     }
 }
 
@@ -182,7 +266,17 @@ impl TypeScriptBackend for NativeBackend {
         let job = job_json(query);
         let answer = exchange(session, &job.to_string());
         match answer {
-            Ok(line) => parse_answers(&line),
+            Ok(line) => {
+                let answers = parse_answers(&line, tsconfig.unwrap_or(root))?;
+                let seen = (session.id, answers.disk_generation.unwrap_or(u64::MAX));
+                self.observed.set(Some(match self.observed.get() {
+                    None => (seen.0, seen.1, answers.disk_generation.is_some()),
+                    Some((id, generation, stable)) => {
+                        (seen.0, seen.1, stable && (id, generation) == seen)
+                    }
+                }));
+                Ok(answers)
+            }
             Err(_) => {
                 // The host is gone; take its last words, and let the next
                 // question start a fresh one.
@@ -209,9 +303,10 @@ fn job_json(query: &Query) -> serde_json::Value {
     use serde_json::json;
     json!({
         "modules": query.modules.iter()
-            .map(|m| json!({ "path": m.path, "text": m.text }))
+            .map(|m| json!({ "path": m.path, "text": crate::error::decoded(&m.text) }))
             .collect::<Vec<_>>(),
         "sources": query.sources,
+        "roots": query.roots,
         "literalChecks": query.literals.iter()
             .map(|l| json!({
                 "module": l.module,
@@ -248,16 +343,13 @@ fn literal_json(literal: &crate::Literal) -> serde_json::Value {
         crate::Literal::String(s) => json!(s),
         crate::Literal::Number(n) => json!(n),
         crate::Literal::Boolean(b) => json!(b),
-        // No finite literal union TypeScript reports holds a BigInt, so a
-        // match covering one is never asked about; carried as text for
-        // completeness.
-        crate::Literal::BigInt(d) => json!(d),
+        crate::Literal::BigInt(d) => json!({ "bigint": d }),
     }
 }
 
 /// Reads the host's answer. A shape that does not match is a bug in the pair
 /// of this file and `host.mjs`, and is reported as one.
-fn parse_answers(stdout: &str) -> Result<Answers, Failure> {
+fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
     let value: serde_json::Value = serde_json::from_str(stdout.trim()).map_err(|e| {
         Failure::internal(format!(
             "the TypeScript backend answered with malformed JSON: {e}"
@@ -269,7 +361,10 @@ fn parse_answers(stdout: &str) -> Result<Answers, Failure> {
         )));
     }
 
-    let mut answers = Answers::default();
+    let mut answers = Answers {
+        disk_generation: value["diskGeneration"].as_u64(),
+        ..Answers::default()
+    };
     let project_modules = value["projectModules"]
         .as_array()
         .ok_or_else(|| Failure::internal("the TypeScript backend answer omitted projectModules"))?;
@@ -323,6 +418,15 @@ fn parse_answers(stdout: &str) -> Result<Answers, Failure> {
                         .collect()
                 })
                 .unwrap_or_default(),
+        });
+    }
+    for d in array(&value, "projectDiagnostics") {
+        answers.project_diagnostics.push(ProjectDiagnostic {
+            file: d["file"]
+                .as_str()
+                .map_or_else(|| project.to_path_buf(), PathBuf::from),
+            code: d["code"].as_u64().unwrap_or_default() as u32,
+            message: d["message"].as_str().unwrap_or_default().to_string(),
         });
     }
     for m in array(&value, "literalMissing") {
@@ -422,6 +526,10 @@ fn json_literal(value: &serde_json::Value) -> Option<crate::Literal> {
         serde_json::Value::String(s) => Some(crate::Literal::String(s.clone())),
         serde_json::Value::Number(n) => n.as_f64().map(crate::Literal::Number),
         serde_json::Value::Bool(b) => Some(crate::Literal::Boolean(*b)),
+        serde_json::Value::Object(o) => o
+            .get("bigint")
+            .and_then(|d| d.as_str())
+            .map(|d| crate::Literal::BigInt(d.to_string())),
         _ => None,
     }
 }
@@ -455,7 +563,7 @@ const value = consume(match (flag) {
         .unwrap();
         assert!(!emit.contextual_slots.is_empty());
         let mut modules = vec![(root.join("contextual-materialized.ts"), emit)];
-        super::super::contextual::materialize(&backend, None, root, &mut modules, &[], &[])
+        super::super::contextual::materialize(&backend, None, root, &mut modules, &[], &[], &[])
             .unwrap();
         let emit = &modules[0].1;
         for mapping in &emit.mappings {

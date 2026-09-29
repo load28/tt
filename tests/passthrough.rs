@@ -273,6 +273,37 @@ console.log(variant.kind, variant);
 }
 
 #[test]
+fn variant_followed_by_a_line_break_is_an_expression_statement() {
+    assert_passthrough(
+        "declare let declare: number, variant: number, Foo: number, A: number;\n\
+         variant\nFoo\n{ A }\n\
+         variant /* a\n */ Foo\n{ A }\n\
+         declare\nvariant\nFoo\n{ A }\n\
+         export {};\n",
+    );
+}
+
+#[test]
+fn a_default_export_of_a_value_named_variant_passes_through() {
+    assert_passthrough("declare let variant: number, Foo: number;\nexport default variant\nFoo\n");
+    assert_passthrough("declare let variant: number;\nexport default variant;\n");
+}
+
+#[test]
+fn declare_followed_by_a_line_break_does_not_declare_the_variant() {
+    let out = compile(
+        "declare let declare: number;\ndeclare\nvariant Foo { A }\n",
+        &Options::default(),
+    )
+    .expect("compile failed");
+    assert!(
+        out.starts_with("declare let declare: number;\ndeclare\n"),
+        "{out}"
+    );
+    assert!(out.contains("const Foo = {"), "{out}");
+}
+
+#[test]
 fn match_inside_string() {
     assert_passthrough("const s = \"match (x) { A => 1 }\";\n");
 }
@@ -467,6 +498,21 @@ fn computed_dynamic_import_of_tt_path_is_untouched() {
 }
 
 #[test]
+fn tt_paths_outside_module_references_are_untouched() {
+    for source in [
+        "import alias = Namespace.member;\n",
+        "const fs = require(\"./legacy.tt\");\n",
+        "const m = import(`./${name}.tt`);\n",
+        "module\n\"./token.tt\";\n",
+        "const o = { module: \"./token.tt\" };\n",
+        "/// <reference path=\"./token.tt\" />\nexport {};\n",
+        "/** @type {import(\"./token.tt\").Token} */\nlet token;\n",
+    ] {
+        assert_passthrough(source);
+    }
+}
+
+#[test]
 fn export_declarations_are_not_reexports() {
     // `export` followed by a declaration must never be scanned for a
     // module specifier, even if a `from` + string appears later.
@@ -646,6 +692,215 @@ fn val_as_a_call_argument_or_element() {
 }
 
 #[test]
+fn non_ascii_identifiers_ending_in_a_tt_keyword() {
+    assert_passthrough(
+        "const étry = (n: number) => n;\nconsole.log(étry(2));\nconst 名try = (n: number) => n;\n名try(1);\nconst x = { étry: (n: number) => n };\nx.étry(1);\nfunction g() {\n  return étry(3);\n}\n",
+    );
+    assert_passthrough(
+        "declare function f(...a: unknown[]): number;\nconst ématch = (n: number) => ({ n });\nconst m = ématch (1)\n{ }\nconst éval = [1];\nconst w = f(1, éval [0]);\nconst éflow = [1];\nconst q = f(1, éflow [0]);\n",
+    );
+    assert_passthrough(
+        "const évariant = 1;\nconst v = évariant\nlet Foo = 2;\nconst éresult = 1;\nlet r = éresult\n{ }\nconst éelse = 1;\n",
+    );
+}
+
+#[test]
+fn non_ascii_white_space_still_separates_words() {
+    assert_passthrough("const\u{00A0}a = 1;\nlet\u{3000}b = a;\u{2028}const c = b;\n");
+}
+
+#[test]
+fn val_element_access_in_arguments_and_elements() {
+    assert_passthrough(
+        "const val = [5];\nconsole.log(val [0]);\nconst arr = [1, val [0]];\ng(1, val [1]);\n",
+    );
+    assert_passthrough("h(val [0], val [1]);\nnew C(val [0]);\nconst p = (val [0]);\n");
+    assert_passthrough("const t = c ? f(val [0]) : { a: 1 };\n");
+    assert_passthrough("const u = c ? f(val [0]) : w => w;\n");
+    assert_passthrough("function k(a = g(1, val [0])) { return a; }\n");
+    assert_passthrough("if (val [0]) { log(1); }\nwhile (x, val [0]) { break; }\n");
+}
+
+#[test]
+fn val_element_access_never_becomes_a_parameter_by_its_surroundings() {
+    assert_passthrough("const v = c ? (val [0]) : w => w;\n");
+    assert_passthrough("const v = c ? (val [0]) : (w: number): number => w;\n");
+    assert_passthrough("f(val [0])\n{\n  log(1);\n}\n");
+    assert_passthrough("g(1, val [0])\n{ }\n");
+    assert_passthrough("type T = [val [number]];\nlet t: (val [number]) | undefined;\n");
+}
+
+#[test]
+fn val_decorators_stay_decorators() {
+    assert_passthrough(
+        "class D {\n  @val x = 1;\n  @val [k]() {}\n  constructor(@val y: number, @val private z: number) {}\n}\n",
+    );
+}
+
+#[test]
 fn untyped_try_method_signatures_remain_host_members() {
     assert_passthrough("interface X { try(x); }\ntype Y = { try(x); };\n");
+}
+
+/// A `/` or `<` after a statement the grammar has completed begins the next
+/// statement's operand (TASK-494).
+const FINISHED_STATEMENTS: &[&str] = &[
+    "if (1) a;\n",
+    "if (1) a; else b;\n",
+    "if (1) {}\n",
+    "while (0) a;\n",
+    "for (;;) {}\n",
+    "L: {}\n",
+    "function f() {}\n",
+    "class C {}\n",
+    "interface I {}\n",
+    "enum E {}\n",
+    "namespace N {}\n",
+    "try {} catch {}\n",
+    "switch (1) {}\n",
+    "export default function () {}\n",
+    "let c: number\n",
+    "type T = number\n",
+    "import \"a\"\n",
+    "do {} while (0) ",
+    "{ a; } ",
+];
+
+#[test]
+fn a_regex_or_element_after_a_finished_statement_passes_through() {
+    for prefix in FINISHED_STATEMENTS {
+        assert_passthrough(&format!(
+            "declare const a: any, b: any;\n{prefix}/ a /.test(\"\") / 2;\n"
+        ));
+        assert_tsx_passthrough(&format!(
+            "declare const a: any, b: any;\n{prefix}<b>/ a /</b>;\n"
+        ));
+    }
+    assert_passthrough("function* g() {\n  yield\n  / a /.test(\"\");\n}\n");
+    assert_passthrough("L: for (;;) {\n  break L\n  / a /.test(\"\");\n}\n");
+    assert_passthrough("const f = function () {}\n/ 2 / 1;\n");
+}
+
+#[test]
+fn type_arguments_with_commas_pass_through() {
+    assert_passthrough(
+        "declare function f<A, B>(v: unknown): unknown;\ntype A = 1;\ntype B = 2;\nconst m = new Map<A, B>();\nconst r = f<A, B>(m), s = f<B, A>;\nlet t = (f<A, Map<A, B>>(r), s);\n",
+    );
+}
+
+#[test]
+fn an_automatic_semicolon_ends_a_block_bodied_arrow_function_before_an_operator_line() {
+    for arrow in [
+        "export const f = () => {}",
+        "export const f = async () => {}",
+        "export const f = (): void => {}",
+        "export const f = <T,>(a: T) => {}",
+        "declare let x: unknown; x = () => {}",
+    ] {
+        for line in [
+            "/x/g.exec(\"x\")",
+            "/=x/.test(\"=x\")",
+            "+1",
+            "-1",
+            "(1)",
+            "[1]",
+            "`t`",
+        ] {
+            let source = format!("{arrow}\n{line}\n");
+            assert_passthrough(&source);
+            assert_tsx_passthrough(&source);
+        }
+    }
+}
+
+#[test]
+fn an_arrow_function_with_a_parenthesized_return_type_passes_through() {
+    for ty in [
+        "(A | B)",
+        "(void)",
+        "(() => void)",
+        "(\"a\" | \"b\")",
+        "(A[])",
+        "(typeof x)",
+        "(keyof A)",
+        "(readonly A[])",
+        "([\"a\"])",
+        "(a: A) => void",
+        "({ a }: A) => void",
+        "([p, q = 1]: A[]) => void",
+        "(this: A) => void",
+    ] {
+        let source = format!(
+            "type A = {{ a: 1 }};\ntype B = 2;\ndeclare const x: number;\nexport const f = (): {ty} => {{ return null as any }}\n/x/g.exec(\"x\")\n"
+        );
+        assert_passthrough(&source);
+        assert_tsx_passthrough(&source);
+    }
+}
+
+#[test]
+fn a_line_after_an_import_equals_declaration_passes_through() {
+    for declaration in [
+        "import fs = require(\"fs\")\n",
+        "import type R = require(\"fs\")\n",
+        "export import F = require(\"fs\")\n",
+        "import A = B.C\n",
+        "export import D = B.\n  C\n",
+        "import E = B\n",
+    ] {
+        for line in [
+            "/x/g.exec(\"x\")",
+            "[1].forEach(n => n)",
+            "(1)",
+            "-1",
+            "`t`",
+        ] {
+            let source = format!(
+                "namespace B {{ export namespace C {{ export const q = 1 }} }}\n{declaration}{line}\n"
+            );
+            assert_passthrough(&source);
+            assert_tsx_passthrough(&source);
+        }
+    }
+}
+
+#[test]
+fn contextual_type_and_statement_words_pass_through() {
+    for head in [
+        "type asserts = number;\nexport let a: asserts\n",
+        "type abstract = number;\nexport type A = abstract\n",
+        "declare let namespace: any;\nnamespace instanceof Object;\n",
+        "declare let module: any;\nmodule in Object;\n",
+        "declare let declare: any;\ndeclare as any;\n",
+        "export function g(v: unknown): asserts v is string {}\n",
+        "export type C = abstract new () => object\n",
+        "export type G = <T>(x: T) => T\n",
+    ] {
+        for line in ["/x/g.exec(\"x\")", "[1].forEach(n => n)", "(1)", "`t`"] {
+            let source = format!("{head}{line}\n");
+            assert_passthrough(&source);
+            assert_tsx_passthrough(&source);
+        }
+    }
+}
+
+#[test]
+fn a_line_after_an_import_type_is_not_its_type_arguments() {
+    for source in [
+        "declare const y: any;\nlet x: typeof import(\"x\")\n<any>y\n",
+        "declare const y: any;\nlet x: import(\"x\")\n<any>y\n",
+        "declare const y: any;\nlet x: import(\"x\").A\n<any>y\n",
+        "let x: import(\"x\").A<any>;\n",
+        "let x: typeof import(\"x\")<any>;\n",
+        "let x: import(\"x\")<<T>() => T>;\n",
+    ] {
+        assert_passthrough(source);
+    }
+    for source in [
+        "let x: typeof import(\"x\")\n<b>hi</b>\n",
+        "let x: import(\"x\").A\n<b>hi</b>\n",
+        "let x: import(\"x\").A<any>;\n",
+    ] {
+        assert_tsx_passthrough(source);
+    }
 }

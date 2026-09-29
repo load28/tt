@@ -51,6 +51,12 @@ impl<'t> Cursor<'t> {
         Some(t)
     }
 
+    /// Whether a line terminator comes before the token under the cursor.
+    pub(super) fn line_break_before(&self) -> bool {
+        self.peek()
+            .is_some_and(|token| token.facts.line_break_before())
+    }
+
     pub(super) fn text(&self, t: &Token) -> &'t str {
         &self.parser.src[t.span.start..t.span.end]
     }
@@ -66,10 +72,12 @@ impl<'t> Cursor<'t> {
         None
     }
 
-    /// Consumes the current token if it is an identifier.
+    /// Consumes the current token if it is an ASCII identifier, the only
+    /// kind a tt construct names or binds.
     pub(super) fn eat_ident(&mut self) -> Option<(&'t str, Span)> {
-        match self.peek()?.kind {
-            TokenKind::Ident => {
+        let token = self.peek()?;
+        match token.kind {
+            TokenKind::Ident if self.text(token).is_ascii() => {
                 let t = self.bump()?;
                 Some((&self.parser.src[t.span.start..t.span.end], t.span))
             }
@@ -77,10 +85,11 @@ impl<'t> Cursor<'t> {
         }
     }
 
-    /// The token index of the closer matching the opener at `self.idx`
-    /// (which must be a `( [ { <` punct). Like the byte scanner, only the
-    /// matching pair is counted — and `=>` can never miscount a `< >`
-    /// match because it is a fused [`TokenKind::Arrow`].
+    /// The token index of the closer matching the opener at `self.idx`,
+    /// which must open a bracket pair ([`Token::opens_bracket`]): `(`, `[`,
+    /// `{`, or a `<` the token facts record as opening type arguments or
+    /// parameters. Only the matching pair is counted, so a stray closer of
+    /// another kind never ends the group.
     pub(super) fn find_close(&self) -> Option<usize> {
         find_close_at(self.tokens, self.idx)
     }
@@ -108,21 +117,19 @@ impl<'t> Cursor<'t> {
 
 /// See [`Cursor::find_close`].
 pub(crate) fn find_close_at(tokens: &[Token], open_idx: usize) -> Option<usize> {
-    let open = match tokens.get(open_idx)?.kind {
-        TokenKind::Punct(b @ (b'(' | b'[' | b'{' | b'<')) => b,
+    let opener = tokens.get(open_idx)?;
+    let (open, close) = match opener.kind {
+        TokenKind::Punct(b'(') => (b'(', b')'),
+        TokenKind::Punct(b'[') => (b'[', b']'),
+        TokenKind::Punct(b'{') => (b'{', b'}'),
+        TokenKind::Punct(b'<') if opener.opens_bracket() => (b'<', b'>'),
         _ => return None,
-    };
-    let close = match open {
-        b'{' => b'}',
-        b'(' => b')',
-        b'[' => b']',
-        _ => b'>',
     };
     let mut depth = 0usize;
     for (k, t) in tokens.iter().enumerate().skip(open_idx) {
         match t.kind {
-            TokenKind::Punct(x) if x == open => depth += 1,
-            TokenKind::Punct(x) if x == close => {
+            TokenKind::Punct(x) if x == open && t.opens_bracket() => depth += 1,
+            TokenKind::Punct(x) if x == close && t.closes_bracket() => {
                 depth -= 1;
                 if depth == 0 {
                     return Some(k);
@@ -134,15 +141,27 @@ pub(crate) fn find_close_at(tokens: &[Token], open_idx: usize) -> Option<usize> 
     None
 }
 
-/// True when the token before `k` (within a scan that started at `from`)
-/// is a member-access dot — `.` or the `?.` of optional chaining — i.e.
-/// the identifier at `k` is a property name, not a keyword.
+/// Whether the `{` at `k`, in an expression scan that started at `from`,
+/// begins an expression: an object literal (ECMA-262 PrimaryExpression),
+/// an arrow body, or a type literal, each stepped over as one group. It
+/// is a block that follows the expression only when the token before it
+/// ends an expression ([`crate::lexer::TokenFacts::ends_expression`]).
+pub(super) fn brace_begins_expression(tokens: &[Token], from: usize, k: usize) -> bool {
+    k <= from || !tokens[k - 1].facts.ends_expression()
+}
+
+/// True when the identifier at `k` (within a scan that started at `from`)
+/// is a property name, not a keyword or a binding: the token before it is a
+/// member-access dot (`.` or the `?.` of optional chaining), or the `#` of a
+/// private name (`#name`, ECMA-262 `PrivateIdentifier`), which the lexer
+/// splits into `#` and the identifier with no gap between them.
 pub(crate) fn dotted_at(tokens: &[Token], from: usize, k: usize) -> bool {
     k > from
-        && matches!(
-            tokens[k - 1].kind,
-            TokenKind::Punct(b'.') | TokenKind::OptChain
-        )
+        && match tokens[k - 1].kind {
+            TokenKind::Punct(b'.') | TokenKind::OptChain => true,
+            TokenKind::Punct(b'#') => tokens[k - 1].span.end == tokens[k].span.start,
+            _ => false,
+        }
 }
 
 /// The index just past a construct that carries its own top-level braces

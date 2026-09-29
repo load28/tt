@@ -56,13 +56,31 @@ impl EvaluationFile {
         let file = Self {
             regions: builder.regions,
             occupied_names: syntax.occupied_names().map(str::to_owned).collect(),
+            declared_names: syntax.declared_names(),
+            module_declared_names: syntax.module_declared_names(),
+            directive_prologue_end: syntax.directive_prologue_end(),
             tt_spans: syntax
                 .core_contexts()
                 .map(|(_, _, _, _, source, _, _)| source)
                 .collect(),
+            script: syntax.is_script(),
+            globals: syntax.globals().clone(),
         };
         file.validate()?;
         Ok(file)
+    }
+
+    fn host_anchor(&self, region: &EvalRegion) -> Option<SourceSpan> {
+        let mut region = region;
+        loop {
+            match &region.placement {
+                RegionPlacement::Host { host_owner, .. } => return Some(host_owner.anchor()),
+                RegionPlacement::Nested { parent, .. } => {
+                    region = &self.regions[parent.0 as usize];
+                }
+                RegionPlacement::SourceEdit => return None,
+            }
+        }
     }
 
     pub(crate) fn lowering_plan(&self, core: &CoreFile) -> Result<LoweringPlan, EvaluationError> {
@@ -160,11 +178,15 @@ impl EvaluationFile {
         let mut next_slot = 0u32;
         let mut occupied_names = self.occupied_names.clone();
         let mut slot_names = Vec::new();
+        let mut slot_anchors: Vec<Option<SourceSpan>> = Vec::new();
         let mut value_slots = HashMap::new();
         let mut capture_dependencies = HashMap::new();
         let mut rewrites = Vec::with_capacity(owners.len());
         let mut structurally_owned_children = HashSet::new();
         let mut owned_child_schedules = Vec::new();
+        let mut owned_child_exits = Vec::new();
+        let mut nested_operations = Vec::new();
+        let mut unsupported_owned_children = Vec::new();
         for (owner, values) in owners {
             let assigned = values
                 .into_iter()
@@ -256,6 +278,13 @@ impl EvaluationFile {
                 .map(|child| child.expr)
                 .collect();
             structurally_owned_children.extend(owned_children.iter().copied());
+            owned_child_exits.extend(
+                values
+                    .iter()
+                    .filter(|value| owned_children.contains(&value.expr) && !value.exits.is_empty())
+                    .map(|value| (value.expr, value.exits.clone())),
+            );
+            let mut owned_groups: Vec<(ExprId, Vec<PlannedValue>)> = Vec::new();
             for child in values
                 .iter()
                 .filter(|value| owned_children.contains(&value.expr))
@@ -283,16 +312,56 @@ impl EvaluationFile {
                     })
                     .cloned()
                     .collect();
-                if steps.is_empty() {
-                    continue;
-                }
-                owned_child_schedules.push((
+                let schedule = EvaluationSchedule {
+                    steps,
+                    call_completion: None,
+                };
+                let capability = target_capability(
+                    core,
+                    &self.tt_spans,
                     child.expr,
-                    EvaluationSchedule {
-                        steps,
-                        call_completion: None,
-                    },
-                ));
+                    child.source,
+                    &child.context,
+                    &schedule,
+                );
+                let owned = PlannedValue {
+                    schedule,
+                    capability,
+                    ..child.clone()
+                };
+                match owned_groups
+                    .iter_mut()
+                    .find(|(group, _)| *group == outer.expr)
+                {
+                    Some((_, group)) => group.push(owned),
+                    None => owned_groups.push((outer.expr, vec![owned])),
+                }
+            }
+            for (_, mut group) in owned_groups {
+                let operations = plan_conditional_operations(
+                    &mut group,
+                    &self.tt_spans,
+                    &mut next_slot,
+                    &mut slot_names,
+                    &mut occupied_names,
+                )?;
+                let consumed: HashSet<_> = operations
+                    .iter()
+                    .flat_map(|operation| operation.values.iter().copied())
+                    .collect();
+                for child in group {
+                    if let TargetCapability::ExpressionBoundary(reason) = child.capability {
+                        unsupported_owned_children.push((
+                            child.expr,
+                            child.source,
+                            child.context.owner,
+                            reason,
+                        ));
+                    } else if !consumed.contains(&child.expr) && !child.schedule.steps.is_empty() {
+                        owned_child_schedules.push((child.expr, child.schedule));
+                    }
+                }
+                nested_operations.extend(operations);
             }
             values.retain(|value| !owned_children.contains(&value.expr));
             let operations = plan_conditional_operations(
@@ -335,6 +404,7 @@ impl EvaluationFile {
                     );
                 }
             }
+            slot_anchors.resize(slot_names.len(), Some(owner.anchor()));
             rewrites.push(HostRewrite {
                 owner,
                 values,
@@ -359,7 +429,26 @@ impl EvaluationFile {
                 continue;
             }
             let slot = allocate_value_slot(&mut next_slot, &mut slot_names, &mut occupied_names)?;
+            slot_anchors.resize(slot_names.len(), self.host_anchor(region));
             value_slots.insert(expr, slot);
+        }
+        let mut pipelines: Vec<_> = value_slots
+            .iter()
+            .filter_map(|(expr, slot)| match &core.exprs[expr.index()] {
+                Expr::Apply(apply) if apply.head.is_some() && core.has_statement_form(*expr) => {
+                    Some((*slot, *expr, apply.steps.len()))
+                }
+                _ => None,
+            })
+            .collect();
+        pipelines.sort_unstable_by_key(|(slot, ..)| slot.0);
+        let mut piped_slots = HashMap::new();
+        for (_, expr, steps) in pipelines {
+            let slots = (0..steps)
+                .map(|_| allocate_value_slot(&mut next_slot, &mut slot_names, &mut occupied_names))
+                .collect::<Result<Vec<_>, _>>()?;
+            slot_anchors.resize(slot_names.len(), None);
+            piped_slots.insert(expr, slots);
         }
         let nested_sources: HashMap<_, _> = self
             .regions
@@ -380,6 +469,8 @@ impl EvaluationFile {
             .collect();
         let mut nested_source_slots = HashMap::new();
         let mut nested_schedules: HashMap<_, _> = owned_child_schedules.into_iter().collect();
+        let mut nested_groups: Vec<(SourceSpan, Option<SourceSpan>, Vec<PlannedValue>)> =
+            Vec::new();
         let planned_sources: HashMap<_, _> = rewrites
             .iter()
             .flat_map(|owner| owner.values.iter().map(|value| (value.expr, value.source)))
@@ -395,7 +486,10 @@ impl EvaluationFile {
                 continue;
             }
             let RegionPlacement::Nested {
-                parent, protocol, ..
+                parent,
+                protocol,
+                source,
+                exits,
             } = &region.placement
             else {
                 continue;
@@ -412,6 +506,10 @@ impl EvaluationFile {
                 };
                 ancestor = &self.regions[parent.0 as usize];
             };
+            let mut host = ancestor;
+            while let RegionPlacement::Nested { parent, .. } = host.placement {
+                host = &self.regions[parent.0 as usize];
+            }
             let step_count = planned_boundary.map_or(protocol.steps().len(), |boundary| {
                 protocol
                     .steps()
@@ -435,7 +533,68 @@ impl EvaluationFile {
                 &mut occupied_names,
                 false,
             )?;
+            slot_anchors.resize(slot_names.len(), self.host_anchor(region));
+            if let (
+                Expr::Propagate(_),
+                Some(boundary),
+                Some(source),
+                RegionPlacement::Host { context, .. },
+                Some(slot),
+            ) = (
+                &core.exprs[expr.index()],
+                planned_boundary,
+                source,
+                &host.placement,
+                value_slots.get(&expr),
+            ) {
+                let capability =
+                    target_capability(core, &self.tt_spans, expr, *source, context, &schedule);
+                let value = PlannedValue {
+                    expr,
+                    source: *source,
+                    target: ValueTarget::Slot(*slot),
+                    context: *context,
+                    schedule,
+                    exits: exits.clone(),
+                    capability,
+                };
+                match nested_groups
+                    .iter_mut()
+                    .find(|(group, ..)| *group == boundary)
+                {
+                    Some((.., group)) => group.push(value),
+                    None => nested_groups.push((boundary, self.host_anchor(region), vec![value])),
+                }
+                continue;
+            }
             nested_schedules.insert(expr, schedule);
+        }
+        for (_, anchor, mut group) in nested_groups {
+            let operations = plan_conditional_operations(
+                &mut group,
+                &self.tt_spans,
+                &mut next_slot,
+                &mut slot_names,
+                &mut occupied_names,
+            )?;
+            slot_anchors.resize(slot_names.len(), anchor);
+            let consumed: HashSet<_> = operations
+                .iter()
+                .flat_map(|operation| operation.values.iter().copied())
+                .collect();
+            for value in group {
+                if let TargetCapability::ExpressionBoundary(reason) = value.capability {
+                    unsupported_owned_children.push((
+                        value.expr,
+                        value.source,
+                        value.context.owner,
+                        reason,
+                    ));
+                } else if !consumed.contains(&value.expr) {
+                    nested_schedules.insert(value.expr, value.schedule);
+                }
+            }
+            nested_operations.extend(operations);
         }
         let direct_capabilities: HashMap<_, _> = rewrites
             .iter()
@@ -585,6 +744,19 @@ impl EvaluationFile {
                 reason,
             });
         }
+        unsupported_expression_propagations.extend(
+            unsupported_owned_children
+                .iter()
+                .filter(|(expr, ..)| matches!(core.exprs[expr.index()], Expr::Propagate(_)))
+                .map(
+                    |&(expr, source, owner, reason)| UnsupportedExpressionPropagation {
+                        expr,
+                        source,
+                        owner,
+                        reason,
+                    },
+                ),
+        );
         let for_initializer_propagations = self
             .regions
             .iter()
@@ -671,7 +843,9 @@ impl EvaluationFile {
                 Some(TargetCapability::ExpressionBoundary(reason)) => reason,
                 Some(TargetCapability::StatementRegion) => return None,
                 None => match context.owner {
-                    EvaluationOwner::ParameterInitializer | EvaluationOwner::ClassInitializer => {
+                    EvaluationOwner::ParameterInitializer
+                    | EvaluationOwner::ClassInitializer
+                    | EvaluationOwner::ClassDefinition => {
                         ExpressionBoundaryReason::OwnerTakesNoStatements
                     }
                     _ => ExpressionBoundaryReason::ValueHasNoStatementForm,
@@ -684,30 +858,207 @@ impl EvaluationFile {
                 reason,
             })
         }));
+        unsupported_matches.extend(
+            unsupported_owned_children
+                .iter()
+                .filter(|(expr, ..)| matches!(core.exprs[expr.index()], Expr::Decision(_)))
+                .map(|&(expr, source, owner, reason)| UnsupportedMatch {
+                    expr,
+                    source,
+                    owner,
+                    reason,
+                }),
+        );
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         let match_raise_name = allocate_generated_name("$tt_raise", &mut occupied_names)?;
+        let match_show_name = allocate_generated_name("$tt_show", &mut occupied_names)?;
+        let global_bindings: HashMap<SourceSpan, &str> = self
+            .globals
+            .iter()
+            .filter_map(|(anchor, global)| match global {
+                GlobalStatement::Binding(binding) => Some((*anchor, binding.as_str())),
+                GlobalStatement::Enclose => None,
+            })
+            .collect();
+        slot_anchors.resize(slot_names.len(), None);
+        for (name, anchor) in slot_names.iter_mut().zip(&slot_anchors) {
+            if let Some(binding) = anchor.and_then(|anchor| global_bindings.get(&anchor)) {
+                *name = globalize_name(name, binding, &mut occupied_names)?;
+            }
+        }
         let mut match_subject_names = HashMap::new();
+        let mut taken_subject_names = 0;
         for rewrite in &rewrites {
+            let binding = global_bindings.get(&rewrite.owner.anchor()).copied();
             for value in &rewrite.values {
                 if let Expr::Decision(decision) = &core.exprs[value.expr.index()] {
                     let names = decision
                         .subjects
                         .iter()
-                        .map(|_| allocate_generated_name("$tt_subject", &mut occupied_names))
+                        .map(|_| {
+                            let name = crate::generated_names::allocate_after(
+                                "$tt_subject",
+                                &mut occupied_names,
+                                &mut taken_subject_names,
+                            )
+                            .ok_or(EvaluationError::GeneratedNameOverflow)?;
+                            match binding {
+                                Some(binding) => {
+                                    globalize_name(&name, binding, &mut occupied_names)
+                                }
+                                None => Ok(name),
+                            }
+                        })
                         .collect::<Result<Vec<_>, _>>()?;
                     match_subject_names.insert(value.expr, names);
                 }
             }
         }
+        let adt_names: HashSet<&str> = core
+            .bodies
+            .iter()
+            .flat_map(|body| &body.statements)
+            .filter_map(|statement| match statement {
+                Statement::Adt(adt) => Some(adt.name.as_str()),
+                _ => None,
+            })
+            .collect();
+        let declared = |name: &str| self.declared_names.contains(name) || adt_names.contains(name);
+        let module_declared =
+            |name: &str| self.module_declared_names.contains(name) || adt_names.contains(name);
+        let shadowed_globals: HashSet<String> = ["Error", "JSON", "String"]
+            .into_iter()
+            .filter(|name| declared(name))
+            .map(str::to_owned)
+            .collect();
+        let mut host_global_aliases = HashMap::new();
+        if declared("globalThis") {
+            for name in ["Error", "JSON", "String"] {
+                if !shadowed_globals.contains(name) {
+                    continue;
+                }
+                let capture = if !module_declared("globalThis") {
+                    format!("globalThis.{name}")
+                } else if !module_declared(name) {
+                    name.to_owned()
+                } else {
+                    continue;
+                };
+                let alias = allocate_generated_name(&format!("$tt_{name}"), &mut occupied_names)?;
+                host_global_aliases.insert(
+                    name.to_owned(),
+                    HostGlobalAlias {
+                        name: alias,
+                        capture,
+                    },
+                );
+            }
+        }
+        let allocated_names = occupied_names
+            .difference(&self.occupied_names)
+            .cloned()
+            .collect();
+        let block_required: Vec<(NodeId, SourceSpan)> = self
+            .regions
+            .iter()
+            .filter_map(|region| match (region.root, &region.placement) {
+                (
+                    Some(CoreRoot::Propagate(node)),
+                    RegionPlacement::Host {
+                        context, source, ..
+                    },
+                ) if context.requires_block
+                    && context.continuation != HostContinuation::ForInitialize =>
+                {
+                    Some((node, *source))
+                }
+                (
+                    Some(CoreRoot::Decision(node)),
+                    RegionPlacement::Host {
+                        context, source, ..
+                    },
+                ) if context.requires_block => Some((node, *source)),
+                _ => None,
+            })
+            .collect();
+        let mut block_required_statements: HashSet<NodeId> =
+            block_required.iter().map(|(node, _)| *node).collect();
+        let lexical_declaration_bodies = core
+            .bodies
+            .iter()
+            .flat_map(|body| &body.statements)
+            .filter_map(|statement| match statement {
+                Statement::Decision(Decision {
+                    extent,
+                    kind: DecisionKind::LetElse { binding_mode, .. },
+                    ..
+                }) => Some((*extent, *binding_mode, BindingStatement::LetElse)),
+                Statement::Propagate(Propagate {
+                    node,
+                    binding: Some(binding),
+                    ..
+                }) => Some((*node, binding.mode, BindingStatement::Try)),
+                _ => None,
+            })
+            .filter(|(_, mode, _)| *mode != BindingMode::Var)
+            .filter_map(|(node, _, statement)| {
+                block_required
+                    .iter()
+                    .find(|(required, _)| *required == node)
+                    .map(|(_, source)| LexicalDeclarationBody {
+                        source: *source,
+                        statement,
+                    })
+            })
+            .collect();
+        let mut global_temps = HashMap::new();
+        for region in &self.regions {
+            let (Some(CoreRoot::Decision(extent)), RegionPlacement::Host { host_owner, .. }) =
+                (region.root, &region.placement)
+            else {
+                continue;
+            };
+            let Some(global) = self.globals.get(&host_owner.anchor()) else {
+                continue;
+            };
+            let Some(decision) = statement_decision(core, extent) else {
+                continue;
+            };
+            if !matches!(decision.kind, DecisionKind::LetElse { .. }) {
+                continue;
+            }
+            match global {
+                GlobalStatement::Enclose => {
+                    block_required_statements.insert(extent);
+                }
+                GlobalStatement::Binding(binding) => {
+                    for subject in &decision.subjects {
+                        global_temps.insert(subject.temporary, binding.clone());
+                    }
+                }
+            }
+        }
         Ok(LoweringPlan {
+            script: self.script,
+            global_temps,
+            shadowed_globals,
+            host_global_aliases,
+            directive_prologue_end: self.directive_prologue_end,
+            generated_names: Some(crate::generated_names::GeneratedNames::from_occupied(
+                occupied_names,
+                allocated_names,
+            )),
             match_raise_name,
+            match_show_name,
             match_subject_names,
             owners: rewrites,
             for_initializer_propagations,
             slot_names,
             capture_dependencies,
             value_slots,
+            piped_slots,
             nested_schedules,
+            nested_operations,
             nested_values: self
                 .regions
                 .iter()
@@ -752,18 +1103,38 @@ impl EvaluationFile {
                     };
                     (!exits.is_empty()).then(|| (expr, exits.clone()))
                 })
+                .chain(owned_child_exits)
                 .collect(),
             expression_boundary_name,
             unsupported_expression_propagations,
             unsupported_matches,
-            block_required_propagations: self
+            block_required_statements,
+            lexical_declaration_bodies,
+            // Every root that hoists a prelude in front of its owner, rather
+            // than replacing the owner as a statement-form `try` does.
+            block_required_owners: self
                 .regions
                 .iter()
                 .filter_map(|region| match (region.root, &region.placement) {
-                    (Some(CoreRoot::Propagate(node)), RegionPlacement::Host { context, .. })
-                        if context.requires_block =>
+                    (
+                        Some(root),
+                        RegionPlacement::Host {
+                            context,
+                            host_owner,
+                            ..
+                        },
+                    ) if (context.requires_block
+                        || self.globals.get(&host_owner.anchor())
+                            == Some(&GlobalStatement::Enclose))
+                        && match root {
+                            CoreRoot::Expr(_) => true,
+                            CoreRoot::Propagate(_) => {
+                                context.continuation == HostContinuation::ForInitialize
+                            }
+                            CoreRoot::Adt(_) | CoreRoot::Decision(_) => false,
+                        } =>
                     {
-                        Some(node)
+                        Some(host_owner.anchor())
                     }
                     _ => None,
                 })
@@ -780,6 +1151,27 @@ impl EvaluationFile {
                     _ => None,
                 })
                 .collect(),
+            owner_model_unavailable: false,
         })
     }
+}
+
+fn globalize_name(
+    name: &str,
+    binding: &str,
+    occupied: &mut HashSet<String>,
+) -> Result<String, EvaluationError> {
+    occupied.remove(name);
+    crate::generated_names::allocate_global(name, binding, occupied)
+        .ok_or(EvaluationError::GeneratedNameOverflow)
+}
+
+fn statement_decision(core: &CoreFile, extent: NodeId) -> Option<&Decision> {
+    core.bodies
+        .iter()
+        .flat_map(|body| &body.statements)
+        .find_map(|statement| match statement {
+            Statement::Decision(decision) if decision.extent == extent => Some(decision),
+            _ => None,
+        })
 }

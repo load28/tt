@@ -54,6 +54,21 @@ fn head_kind(
     }
 }
 
+pub(super) fn asserted(src: &str, tokens: &[Token], from: usize, k: usize) -> bool {
+    tokens.get(k).is_some_and(|token| {
+        matches!(token.kind, TokenKind::Ident) && asserts_pipeline(src, tokens, from, k)
+    })
+}
+
+fn asserts_pipeline(src: &str, tokens: &[Token], from: usize, k: usize) -> bool {
+    k > from
+        && matches!(
+            &src[tokens[k].span.start..tokens[k].span.end],
+            "as" | "satisfies"
+        )
+        && tokens[k - 1].facts.ends_expression()
+}
+
 /// `tokens[pipe_idx]` is a `|>` token and `tokens[head_idx..pipe_idx]` is
 /// the head expression (non-empty, guaranteed by the caller). Parses the
 /// step chain; on success returns the token index just past the last step
@@ -91,12 +106,27 @@ pub(super) fn parse_pipeline(
         let step_from = k;
         let mut depth = 0usize;
         while let Some(t) = tokens.get(k) {
+            if depth == 0 && k > step_from && t.facts.boundary_before() {
+                break;
+            }
+            if depth == 0
+                && k == step_from
+                && let Some(past) = super::iflets::if_let_end(parser, tokens, k)
+            {
+                k = past;
+                continue;
+            }
             match &t.kind {
                 TokenKind::PipeOp if depth == 0 => break,
                 TokenKind::JsxRaw if depth == 0 => break,
                 TokenKind::Punct(b';' | b',') if depth == 0 => break,
                 TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
                 TokenKind::Punct(b':') if depth == 0 && case_test => break,
+                TokenKind::Ident
+                    if depth == 0 && asserts_pipeline(parser.src, tokens, step_from, k) =>
+                {
+                    break;
+                }
                 TokenKind::Punct(b'?' | b':') if depth == 0 => return None,
                 TokenKind::Arrow if depth == 0 => return None,
                 TokenKind::Punct(b'=') if depth == 0 && is_assignment_eq(parser.bytes, t.span) => {
@@ -105,13 +135,14 @@ pub(super) fn parse_pipeline(
                 TokenKind::Ident
                     if depth == 0
                         && !dotted_at(tokens, step_from, k)
-                        && super::tries::STMT_ONLY_WORDS
-                            .contains(&&parser.src[t.span.start..t.span.end]) =>
+                        && crate::lexer::statement_only_keyword(
+                            &parser.src[t.span.start..t.span.end],
+                        ) =>
                 {
                     return None;
                 }
-                TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-                TokenKind::Punct(b')' | b']' | b'}') => depth -= 1,
+                _ if t.opens_bracket() => depth += 1,
+                _ if t.closes_bracket() => depth -= 1,
                 _ => {}
             }
             k += 1;
@@ -251,8 +282,8 @@ fn malformed_pipeline_end(tokens: &[Token], mut k: usize) -> (usize, usize) {
             TokenKind::JsxRaw if depth == 0 => break,
             TokenKind::Punct(b';' | b',') if depth == 0 => break,
             TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => depth -= 1,
+            _ if token.opens_bracket() => depth += 1,
+            _ if token.closes_bracket() => depth -= 1,
             _ => {}
         }
         end = token.span.end;

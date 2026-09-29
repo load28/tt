@@ -176,14 +176,22 @@ fn syntax(source: &str) -> ProgramSyntax {
 fn syntax_kind(source: &str, source_kind: crate::SourceKind) -> ProgramSyntax {
     let program = crate::parser::parse(source);
     let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
-    let core = crate::core_ir::lower_semantic(&semantic, source);
+    let core = crate::core_ir::lower_semantic(
+        &semantic,
+        source,
+        &crate::lexer::lex(source, 0, source.len()),
+    );
     ProgramSyntax::build(&semantic, &core, source, source_kind).expect("projection should parse")
 }
 
 fn build_error(source: &str) -> ProgramSyntaxError {
     let program = crate::parser::parse(source);
     let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
-    let core = crate::core_ir::lower_semantic(&semantic, source);
+    let core = crate::core_ir::lower_semantic(
+        &semantic,
+        source,
+        &crate::lexer::lex(source, 0, source.len()),
+    );
     ProgramSyntax::build(&semantic, &core, source, crate::SourceKind::TypeScript)
         .expect_err("projection should not parse")
 }
@@ -228,11 +236,19 @@ fn a_projected_byte_maps_only_through_copied_segments() {
     let source = "const value = match (s) { A(v) => v, _ => 0 };\n";
     let program = crate::parser::parse(source);
     let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
-    let core = crate::core_ir::lower_semantic(&semantic, source);
-    let projection =
-        ProjectionBuilder::new(&semantic, &core, source, crate::SourceKind::TypeScript)
-            .build()
-            .expect("projection");
+    let core = crate::core_ir::lower_semantic(
+        &semantic,
+        source,
+        &crate::lexer::lex(source, 0, source.len()),
+    );
+    let projection = ProjectionBuilder::new(
+        &semantic,
+        &core,
+        source,
+        &crate::lexer::lex(source, 0, source.len()),
+    )
+    .build()
+    .expect("projection");
     let segments = &projection.source_segments;
     let placeholder = segments
         .iter()
@@ -324,6 +340,31 @@ fn an_expression_bodied_arrow_has_an_arrow_return_continuation() {
 }
 
 #[test]
+fn an_arrow_body_that_wraps_its_value_composes_the_value() {
+    for body in [
+        "match (e) { A => 1, B => 2 } as number",
+        "match (e) { A => 1, B => 2 } satisfies number",
+        "(match (e) { A => 1, B => 2 })",
+        "match (e) { A => 1, B => 2 }!",
+    ] {
+        let syntax = syntax(&format!(
+            "variant E {{ A, B }}\nconst f = (e: E) => {body};\n"
+        ));
+        let entry = syntax
+            .overlay
+            .iter()
+            .find(|entry| entry.category == SyntaxCategory::Expression)
+            .expect("match overlay");
+        assert_eq!(
+            entry.context.continuation,
+            HostContinuation::Compose,
+            "{body}: {:?}",
+            entry.parents
+        );
+    }
+}
+
+#[test]
 fn semicolon_free_concise_arrow_ends_before_the_next_try_statement() {
     let source = "type R<T> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: string };\n\
             declare const flag: boolean; declare function load(): R<number>;\n\
@@ -409,6 +450,33 @@ fn a_whole_variable_initializer_has_an_initialize_continuation() {
         .expect("match overlay");
     assert_eq!(entry.context.continuation, HostContinuation::Initialize);
     assert!(entry.protocol.steps().is_empty());
+}
+
+#[test]
+fn a_script_classifies_each_global_statement_by_the_bindings_it_declares() {
+    let script = syntax(
+        "variant E { A, B }\nconst out = match (e) { A => 1, B => 2 };\nvar legacy = match (e) { A => 1, B => 2 };\nuse(match (e) { A => 1, B => 2 });\n",
+    );
+    assert!(script.is_script());
+    let classes: Vec<_> = script
+        .overlay
+        .iter()
+        .filter(|entry| entry.category == SyntaxCategory::Expression)
+        .map(|entry| script.globals().get(&entry.host_owner.anchor()).cloned())
+        .collect();
+    assert_eq!(
+        classes,
+        [
+            Some(GlobalStatement::Binding("out".to_owned())),
+            Some(GlobalStatement::Enclose),
+            Some(GlobalStatement::Enclose),
+        ]
+    );
+
+    let module =
+        syntax("variant E { A, B }\nconst out = match (e) { A => 1, B => 2 };\nexport {};\n");
+    assert!(!module.is_script());
+    assert!(module.globals().is_empty());
 }
 
 #[test]
@@ -605,6 +673,7 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
             EvaluationOwner::Generator => "generator",
             EvaluationOwner::ParameterInitializer => "parameter",
             EvaluationOwner::ClassInitializer => "class-field",
+            EvaluationOwner::ClassDefinition => "class-definition",
             EvaluationOwner::StaticBlock => "static-block",
         }
     }
@@ -770,6 +839,10 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
         ),
         (
             crate::SourceKind::TypeScript,
+            format!("class C {{ [{expression}]() {{}} }}"),
+        ),
+        (
+            crate::SourceKind::TypeScript,
             format!("class C {{ static {{ use({expression}); }} }}"),
         ),
         (
@@ -836,6 +909,7 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
     assert_eq!(
         owners,
         BTreeSet::from([
+            "class-definition",
             "class-field",
             "constructor",
             "function",

@@ -101,7 +101,7 @@
           "scope": "resource",
           "type": "string",
           "default": "",
-          "markdownDescription": "Path to the `ttc` compiler used for diagnostics and language features. When empty, the extension looks for `target/release/ttc` or `target/debug/ttc` in the workspace, then for the `ttc` of the `@openload28/tt-lang` package the project installed (the same binary `npx ttc` runs), then falls back to `ttc` on PATH."
+          "markdownDescription": "Path to the `ttc` compiler used for diagnostics and language features. Each workspace folder uses its own value: a relative path such as `tools/ttc` is resolved against that folder, and a bare name such as `ttc` is looked up on PATH. When empty, the extension looks for `target/release/ttc` or `target/debug/ttc` in the document's workspace folder, then for the `ttc` of the `@openload28/tt-lang` package the project installed (the same binary `npx ttc` runs), then falls back to `ttc` on PATH."
         },
         "tt.verify": {
           "scope": "resource",
@@ -136,7 +136,7 @@
           "scope": "resource",
           "type": "string",
           "default": "",
-          "markdownDescription": "Where sidecars are written, relative to the workspace root. Empty (the default) puts them next to each `.tt` or `.ttx` file; set it to a directory such as `.tt-types` to keep generated declarations out of the source tree, and add that directory to your `tsconfig.json` `rootDirs` so TypeScript still resolves source-extension imports. A relative path needs a workspace folder to resolve against: for a file that is in none, no sidecar is written and the tt output channel says so. Use an absolute path to cover those files."
+          "markdownDescription": "Where sidecars are written, relative to the workspace root. Empty (the default) puts them next to each `.tt` or `.ttx` file; set it to a directory such as `.tt-types` to keep generated declarations out of the source tree, and add that directory to your `tsconfig.json` `rootDirs` so TypeScript still resolves source-extension imports. The directory mirrors the source tree the way `ttc --types` writes it: an existing sidecar whose declaration map names the saved file (such as `.tt-types/a/x.tt.d.ts` from `ttc --types src`) is refreshed where it is, and `always` creates a missing one at the file's path relative to its workspace folder (`.tt-types/src/a/x.tt.d.ts`). A relative path needs a workspace folder to resolve against: for a file that is in none, no sidecar is written and the tt output channel says so. Use an absolute path to cover those files."
         },
         "tt.trace.server": {
           "scope": "window",

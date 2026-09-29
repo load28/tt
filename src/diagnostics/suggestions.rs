@@ -6,15 +6,19 @@ use super::*;
 pub(crate) fn non_exhaustive_message(
     subject: Option<&str>,
     missing: &[String],
+    total: usize,
+    exact: bool,
     tuple: bool,
 ) -> String {
-    let shown = if missing.len() > 4 {
+    let shown = if missing.len() > 4 || total > missing.len() || !exact {
         let unit = if tuple {
             "combinations in total"
         } else {
             "in total"
         };
-        format!("{}, … ({} {unit})", missing[..3].join(", "), missing.len())
+        let head = &missing[..missing.len().min(3)];
+        let bound = if exact { "" } else { "at least " };
+        format!("{}, … ({bound}{total} {unit})", head.join(", "))
     } else {
         missing.join(", ")
     };
@@ -43,12 +47,12 @@ pub(crate) const NON_EXHAUSTIVE_WILDCARD_HELP: &str = "or add a final `_` arm";
 const ARM_BODY: &str = "=> undefined,";
 
 /// Where a match is written: what a diagnostic about the match as a whole
-/// underlines, and the braces an arm-insertion edit writes between.
+/// underlines, the braces an arm-insertion edit writes between, and where
+/// the arms already written end.
 ///
-/// Both exhaustiveness pipelines carry these four offsets — the default
-/// one off the parsed match, the typed one off the probe the emission
-/// recorded — so the edits below have one implementation rather than one
-/// per pipeline.
+/// Both exhaustiveness pipelines carry these offsets — the default one off
+/// the parsed match, the typed one off the probe the emission recorded — so
+/// the edits below have one implementation rather than one per pipeline.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MatchSite {
     /// Byte offset of the `match` keyword.
@@ -57,6 +61,9 @@ pub(crate) struct MatchSite {
     pub body_open: usize,
     /// Byte offset of the body's closing `}`.
     pub body_close: usize,
+    /// Where the parsed arms end, and whether the last one is followed by
+    /// its separator.
+    pub tail: crate::ArmsTail,
 }
 
 /// How to close a non-exhaustive match, as the two edits that do it: write
@@ -107,52 +114,71 @@ pub(crate) fn non_exhaustive_suggestions(
 }
 
 /// The edit that writes `arms` into a match body, matching how the body is
-/// already laid out: above the closing brace when it stands on its own
-/// line, spliced in before it when the whole match is on one line.
+/// already laid out: whole lines above the closing brace when it stands on
+/// its own line, spliced in before it when it does not.
+///
+/// The last written arm is found from the parse, not from the text: its
+/// final token and whether a `,` token follows it are what the parser saw,
+/// so a comment or a block body after that arm cannot be mistaken for, or
+/// hide, the separator (TASK-460). When the separator is missing, the one
+/// edit starts right after that arm, writes the comma, and carries the
+/// text between the arm and the insertion point over unchanged.
 fn insert_arms(source: &str, site: MatchSite, arms: &[String]) -> Option<Edit> {
     let bytes = source.as_bytes();
+    let tail = site.tail;
     if site.keyword_off > site.body_open
-        || site.body_open >= site.body_close
+        || site.body_open >= tail.last_start
+        || tail.last_start >= tail.last_end
+        || tail.last_end > site.body_close
         || site.body_close >= bytes.len()
         || bytes[site.body_open] != b'{'
         || bytes[site.body_close] != b'}'
     {
         return None;
     }
-    let line_start = |at: usize| source[..at].rfind('\n').map_or(0, |nl| nl + 1);
+    let line_start = |at: usize| crate::lines::line_start_before(source, at);
+    let leading = |at: usize| -> Option<&str> {
+        let prefix = &source[line_start(at)..at];
+        prefix
+            .bytes()
+            .all(|b| b == b' ' || b == b'\t')
+            .then_some(prefix)
+    };
     let close_line = line_start(site.body_close);
-    if source[close_line..site.body_close].trim().is_empty() {
-        // `}` on its own line: whole arm lines above it, indented one step
-        // in from the `match` keyword's own line.
-        let keyword_line = line_start(site.keyword_off);
-        let indent: String = source[keyword_line..site.keyword_off]
-            .chars()
-            .take_while(|c| *c == ' ' || *c == '\t')
-            .collect();
+    let (at, text) = if close_line > tail.last_end && leading(site.body_close).is_some() {
+        let indent = match leading(tail.last_start) {
+            Some(indent) => indent.to_string(),
+            None => {
+                let keyword_line = line_start(site.keyword_off);
+                let outer: String = source[keyword_line..site.keyword_off]
+                    .chars()
+                    .take_while(|c| *c == ' ' || *c == '\t')
+                    .collect();
+                let step = if outer.starts_with('\t') { "\t" } else { "  " };
+                format!("{outer}{step}")
+            }
+        };
+        let newline = crate::line_ending(source);
         let text: String = arms
             .iter()
-            .map(|arm| format!("{indent}  {arm}\n"))
+            .map(|arm| format!("{indent}{arm}{newline}"))
             .collect();
+        (close_line, text)
+    } else {
+        let padded = bytes[site.body_close - 1].is_ascii_whitespace();
+        let text = format!("{}{} ", if padded { "" } else { " " }, arms.join(" "));
+        (site.body_close, text)
+    };
+    if tail.separated {
         return Some(Edit {
-            start: close_line,
-            end: close_line,
+            start: at,
+            end: at,
             replacement: text,
         });
     }
-    // One-line match: splice the arms in after the last written arm,
-    // adding the comma that arm may be missing. The range starts where the
-    // body's text ends rather than at the `}`, so the padding before the
-    // brace is rewritten instead of being left in the middle.
-    let body = &source[site.body_open + 1..site.body_close];
-    let written = body.trim_end();
-    let separator = if written.is_empty() || written.ends_with(',') {
-        " "
-    } else {
-        ", "
-    };
     Some(Edit {
-        start: site.body_open + 1 + written.len(),
-        end: site.body_close,
-        replacement: format!("{separator}{} ", arms.join(" ")),
+        start: tail.last_end,
+        end: at,
+        replacement: format!(",{}{text}", &source[tail.last_end..at]),
     })
 }

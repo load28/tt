@@ -158,6 +158,7 @@ pub(crate) struct Query {
     /// otherwise never be checked. With a `tsconfig.json` the project's own
     /// `include` decides and this stays empty.
     pub sources: Vec<PathBuf>,
+    pub roots: Vec<PathBuf>,
     pub literals: Vec<LiteralQuery>,
     pub tags: Vec<TagQuery>,
     pub symbols: Vec<SymbolQuery>,
@@ -193,6 +194,13 @@ pub(crate) struct Diagnostic {
     /// this declaration", "first declared here" — each in the coordinates
     /// of the file it names. Empty when the checker offered none.
     pub related: Vec<RelatedInformation>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ProjectDiagnostic {
+    pub file: PathBuf,
+    pub code: u32,
+    pub message: String,
 }
 
 /// One place the checker relates a diagnostic to, in that file's own
@@ -303,6 +311,7 @@ pub(crate) struct Answers {
     /// Files and directories read while resolving the configured program.
     pub dependencies: Vec<PathBuf>,
     pub diagnostics: Vec<Diagnostic>,
+    pub project_diagnostics: Vec<ProjectDiagnostic>,
     pub literal_missing: Vec<LiteralMissing>,
     pub tag_missing: Vec<TagMissing>,
     pub tag_members: Vec<TagMembers>,
@@ -310,6 +319,7 @@ pub(crate) struct Answers {
     pub result_shapes: Vec<ResultShape>,
     pub declarations: Vec<Declaration>,
     pub contextual_slots: Vec<ContextualSlotType>,
+    pub disk_generation: Option<u64>,
 }
 
 /// A checker-proven Result shape answer. Absent answers remain unknown.

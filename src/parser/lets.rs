@@ -19,29 +19,39 @@
 //! statement grammar, tt's own `if let` included) as a bool on the AST
 //! node, and *enforced* by [`crate::sema`] — the parser stays infallible.
 
-use super::cursor::{Cursor, dotted_at, skip_braced_construct};
+use super::cursor::{Cursor, brace_begins_expression, dotted_at, skip_braced_construct};
 use crate::ast::{LetElseStmt, Span};
-use crate::lexer::TokenKind;
+use crate::lexer::{Token, TokenKind};
+
+/// The token index where a let-else's pattern starts, when the token at
+/// `k` is an undotted `const`, `let`, or `var` followed by `Tag(`: a
+/// declaration keyword is never followed by `<ident>(` in valid
+/// TypeScript, and a reserved tag (`const enum`) is TypeScript's own.
+pub(super) fn let_else_pattern(src: &str, tokens: &[Token], k: usize) -> Option<usize> {
+    let word = |at: usize| {
+        tokens
+            .get(at)
+            .filter(|token| matches!(token.kind, TokenKind::Ident))
+            .map(|token| &src[token.span.start..token.span.end])
+    };
+    let tag = word(k + 1)?;
+    (matches!(word(k)?, "const" | "let" | "var")
+        && !dotted_at(tokens, 0, k)
+        && tag.is_ascii()
+        && !super::is_reserved(tag)
+        && matches!(tokens.get(k + 2)?.kind, TokenKind::Punct(b'(')))
+    .then_some(k + 1)
+}
 
 /// `cur` is positioned just past a `const`/`let`/`var` keyword
-/// (`kw_span`). Parses `Tag(bindings...) = <expr> else { ... };`; on
-/// success returns the advanced cursor, the byte just past the `;`, and
-/// the parsed statement.
+/// (`kw_span`) whose [`let_else_pattern`] the caller found. Parses
+/// `Tag(bindings...) = <expr> else { ... };`; on success returns the
+/// advanced cursor, the byte just past the `;`, and the parsed statement.
 pub(super) fn parse_let_else<'t>(
     mut cur: Cursor<'t>,
     kw_span: crate::ast::Span,
 ) -> Option<(Cursor<'t>, usize, LetElseStmt)> {
-    // pattern: `Tag(bindings...) (| Tag[(bindings...)])*` — the first
-    // alternative's parens claim the construct (a declaration keyword is
-    // never followed by `<ident>(` in valid TypeScript); later ones may be
-    // bare. `||` lexes as one OrOr token, so it never separates.
     let (tag, tag_span) = cur.eat_ident()?;
-    if super::is_reserved(tag) {
-        return None; // `const enum E { ... }` and friends
-    }
-    if !cur.at_punct(b'(') {
-        return None;
-    }
     let open = cur.idx;
     let close = cur.find_close()?;
     let bindings = super::matches::parse_bindings(
@@ -137,12 +147,12 @@ pub(super) fn parse_let_else<'t>(
 }
 
 /// Scans the bound expression from `cur.idx` until a top-level undotted
-/// `else`, returning `(expression end byte, else token index)`. The same
-/// aborts as the try statement's expression scanner apply — anything that
-/// cannot appear at the top level of an expression (a bare `{`, a closer,
-/// `,`, `=` except the fused `=>`, `:` without a pending `?`, `;`, an
-/// undotted statement-only keyword) fails the parse so the text passes
-/// through.
+/// `else`, returning `(expression end byte, else token index)`. Anything
+/// that cannot appear at the top level of an expression (a `{` after a
+/// token that ends an expression, a closer, `,`, `=` except the fused
+/// `=>`, `:` without a pending `?`, `;`, an undotted statement-only
+/// keyword) fails the parse so the text passes through. A `{` that begins
+/// an expression is an object literal and is stepped over as a group.
 fn expr_until_else(cur: &Cursor) -> Option<(usize, usize)> {
     let mut depth = 0usize;
     let mut ternaries = 0usize;
@@ -160,11 +170,11 @@ fn expr_until_else(cur: &Cursor) -> Option<(usize, usize)> {
                         None
                     };
                 }
-                if super::tries::STMT_ONLY_WORDS.contains(&word) {
+                if crate::lexer::statement_only_keyword(word) {
                     return None;
                 }
                 // Skip a whole `match ( ... ) { ... }` or `result { ... }`
-                // shape so the bare-`{` abort below doesn't reject it (the
+                // shape so the block-`{` abort below doesn't reject it (the
                 // recursive parse decides whether it really is tt syntax).
                 if let Some(past) = skip_braced_construct(cur.tokens, word, k) {
                     expr_end = cur.tokens[past - 1].span.end;
@@ -178,7 +188,10 @@ fn expr_until_else(cur: &Cursor) -> Option<(usize, usize)> {
         }
         if depth == 0 {
             match t.kind {
-                TokenKind::Punct(b';' | b'{' | b'}' | b')' | b']' | b',' | b'=') => return None,
+                TokenKind::Punct(b'{') if !brace_begins_expression(cur.tokens, cur.idx, k) => {
+                    return None;
+                }
+                TokenKind::Punct(b';' | b'}' | b')' | b']' | b',' | b'=') => return None,
                 TokenKind::Punct(b'?') => ternaries += 1,
                 TokenKind::Punct(b':') => {
                     if ternaries == 0 {
@@ -190,8 +203,8 @@ fn expr_until_else(cur: &Cursor) -> Option<(usize, usize)> {
             }
         }
         match t.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ if t.opens_bracket() => depth += 1,
+            _ if t.closes_bracket() => depth = depth.saturating_sub(1),
             _ => {}
         }
         expr_end = t.span.end;

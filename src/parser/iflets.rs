@@ -23,7 +23,30 @@
 
 use super::cursor::{Cursor, dotted_at, skip_braced_construct};
 use crate::ast::{IfLetElse, IfLetStmt, Span, TagPattern};
-use crate::lexer::TokenKind;
+use crate::lexer::{Token, TokenKind};
+
+/// The token index where an `if let`'s pattern starts, when the token at
+/// `k` is an undotted `if` followed by `let` — a sequence TypeScript never
+/// writes.
+pub(super) fn if_let_pattern(src: &str, tokens: &[Token], k: usize) -> Option<usize> {
+    let word = |at: usize| {
+        tokens
+            .get(at)
+            .filter(|token| matches!(token.kind, TokenKind::Ident))
+            .map(|token| &src[token.span.start..token.span.end])
+    };
+    (word(k)? == "if" && word(k + 1)? == "let" && !dotted_at(tokens, 0, k)).then_some(k + 2)
+}
+
+pub(super) fn if_let_end(parser: &super::Parser, tokens: &[Token], k: usize) -> Option<usize> {
+    if_let_pattern(parser.src, tokens, k)?;
+    let keyword = &tokens[k];
+    let range_end = tokens
+        .last()
+        .map_or(keyword.span.end, |token| token.span.end);
+    parse_if_let(Cursor::new(parser, tokens, k + 1, range_end), keyword.span)
+        .map(|(cur, _, _)| cur.idx)
+}
 
 /// `cur` is positioned just past an undotted `if` keyword (`kw_span`) whose
 /// next token is `let` (the caller pre-checked). On success returns the
@@ -157,6 +180,7 @@ pub(super) fn parse_if_let<'t>(
             // `else if let` is never in expression position, so only the
             // outer one's placement is ever judged).
             in_function: false,
+            expression_position: false,
         },
     ))
 }
@@ -177,7 +201,7 @@ fn expr_until_block(cur: &Cursor) -> Option<(usize, usize)> {
         if let TokenKind::Ident = t.kind {
             if depth == 0 && !dotted_at(cur.tokens, cur.idx, k) {
                 let word = cur.text(t);
-                if super::tries::STMT_ONLY_WORDS.contains(&word) {
+                if crate::lexer::statement_only_keyword(word) {
                     return None;
                 }
                 // Skip a whole `match ( ... ) { ... }` or `result { ... }`
@@ -217,8 +241,8 @@ fn expr_until_block(cur: &Cursor) -> Option<(usize, usize)> {
             }
         }
         match t.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ if t.opens_bracket() => depth += 1,
+            _ if t.closes_bracket() => depth = depth.saturating_sub(1),
             _ => {}
         }
         expr_end = t.span.end;

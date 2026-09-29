@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
-import { basename, join, relative, resolve } from 'node:path'
+import { lstat, mkdir, readFile, readdir, readlink, realpath, writeFile } from 'node:fs/promises'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const ownManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
@@ -142,14 +142,27 @@ export async function initializeExisting(options) {
   const bundler = options.bundler === 'auto' ? detectBundler(manifest) : options.bundler
   const devDependencies = manifest.devDependencies ?? {}
   devDependencies['@openload28/tt-lang'] ??= versions['@openload28/tt-lang']
-  devDependencies.typescript ??= versions.typescript
+  const updated = []
+  const typescriptSection = manifest.dependencies?.typescript !== undefined
+    ? manifest.dependencies
+    : devDependencies
+  const declaredTypeScript = typescriptSection.typescript
+  if (declaredTypeScript !== versions.typescript) {
+    typescriptSection.typescript = versions.typescript
+    if (declaredTypeScript !== undefined) {
+      updated.push({ name: 'typescript', from: declaredTypeScript, to: versions.typescript })
+    }
+  }
   manifest.devDependencies = devDependencies
   manifest.scripts ??= {}
   const typeConfig = 'tsconfig.tt.json'
-  manifest.scripts['tt:check'] ??= `tsc -p ${typeConfig} --runExternalCode`
-
-  const baseConfig = existsSync(join(root, 'tsconfig.json')) ? './tsconfig.json' : undefined
-  const generated = [[typeConfig, `${JSON.stringify(tsconfig(baseConfig), null, '  ')}\n`]]
+  const generated = []
+  const realRoot = await realpath(root)
+  const references = existsSync(join(root, 'tsconfig.json'))
+    ? await typeConfigGraph(realRoot, await projectConfig(realRoot, join(root, 'tsconfig.json')), generated)
+    : (generated.push([typeConfig, `${JSON.stringify(tsconfig(), null, '  ')}\n`]), false)
+  const typeCheck = `tsc ${references ? '-b' : '-p'} ${typeConfig} --runExternalCode`
+  manifest.scripts['tt:check'] ??= typeCheck
 
   const files = []
   let manualModule
@@ -164,7 +177,7 @@ export async function initializeExisting(options) {
       generated.push([adapter.wrapper, wrapperConfig(adapter.module, base)])
       files.push(adapter.wrapper)
       manifest.scripts['tt:dev'] ??= `${adapter.commands.dev} --config ${adapter.wrapper}`
-      manifest.scripts['tt:build'] ??= `tsc -p ${typeConfig} --runExternalCode && ${adapter.commands.build} --config ${adapter.wrapper}`
+      manifest.scripts['tt:build'] ??= `${typeCheck} && ${adapter.commands.build} --config ${adapter.wrapper}`
     }
   } else {
     manifest.scripts['tt:build'] ??= 'ttc -o .tt-build src'
@@ -173,16 +186,121 @@ export async function initializeExisting(options) {
   // Validate the complete output set before changing any project files.
   // Identical generated files make repeated init safe; customized files
   // require an explicit user decision outside the initializer.
-  for (const [file, content] of generated) {
-    const path = join(root, file)
-    if (existsSync(path) && await readFile(path, 'utf8') !== content) {
+  const writes = generated.map(([file, content]) => ({ path: join(root, file), content, replace: false }))
+  writes.push({ path: manifestPath, content: jsonText(manifest, indentation(source)), replace: true })
+  for (const { path, content, replace } of writes) {
+    await assertInsideProject(realRoot, path)
+    if (!replace && existsSync(path) && await readFile(path, 'utf8') !== content) {
       throw new Error(`refusing to overwrite existing config: ${path}`)
     }
   }
-  for (const [file, content] of generated) await writeFile(join(root, file), content)
-  await writeJson(manifestPath, manifest, indentation(source))
-  files.push(typeConfig)
-  return { root, packageManager, mode: 'init', bundler: bundler ?? 'none', files, manualModule }
+  for (const { path, content } of writes) await writeFile(path, content)
+  files.push(...generated.map(([file]) => file).filter((file) => !files.includes(file)))
+  return { root, packageManager, mode: 'init', bundler: bundler ?? 'none', files, manualModule, updated }
+}
+
+async function typeConfigGraph(root, configPath, generated, visited = new Set()) {
+  visited.add(configPath)
+  let config
+  try {
+    config = parseJsonc(await readFile(configPath, 'utf8'))
+  } catch (error) {
+    throw new Error(`cannot read ${configPath}: ${error.message}`)
+  }
+  const directory = dirname(configPath)
+  const counterpart = configPath.replace(/\.json$/, '') + '.tt.json'
+  const slot = generated.push(undefined) - 1
+  const content = tsconfig(`./${basename(configPath)}`)
+  const hasReferences = Array.isArray(config.references)
+  if (hasReferences) {
+    const references = []
+    for (const reference of config.references) {
+      const lexical = typeof reference?.path === 'string' && referencedConfig(directory, reference.path)
+      const target = lexical && existsSync(lexical) && await realpath(lexical)
+      if (!target || !insideRoot(root, target)) {
+        references.push(reference)
+        continue
+      }
+      if (!visited.has(target)) await typeConfigGraph(root, target, generated, visited)
+      const referenced = target.replace(/\.json$/, '') + '.tt.json'
+      references.push({ ...reference, path: relativePath(directory, referenced) })
+    }
+    content.references = references
+  }
+  generated[slot] = [relative(root, counterpart), `${JSON.stringify(content, null, '  ')}\n`]
+  return hasReferences
+}
+
+async function projectConfig(root, path) {
+  const config = await realpath(path)
+  if (!insideRoot(root, config)) throw new Error(`refusing to follow ${path}: it resolves outside the project to ${config}`)
+  return config
+}
+
+async function assertInsideProject(root, path) {
+  const target = await writtenPath(path, new Set())
+  if (!insideRoot(root, target)) throw new Error(`refusing to write ${path}: it resolves outside the project to ${target}`)
+}
+
+async function writtenPath(path, seen) {
+  if (seen.has(path)) throw new Error(`refusing to write ${path}: its symbolic links form a cycle`)
+  seen.add(path)
+  const entry = await lstat(path).catch(() => null)
+  if (entry?.isSymbolicLink()) return writtenPath(resolve(dirname(path), await readlink(path)), seen)
+  return entry ? realpath(path) : join(await realpath(dirname(path)), basename(path))
+}
+
+function referencedConfig(directory, path) {
+  const target = resolve(directory, path)
+  return target.endsWith('.json') ? target : join(target, 'tsconfig.json')
+}
+
+function insideRoot(root, path) {
+  const fromRoot = relative(root, path)
+  return fromRoot !== '' && fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`) && !isAbsolute(fromRoot)
+}
+
+function relativePath(from, to) {
+  const path = relative(from, to).split('\\').join('/')
+  return path === '..' || path.startsWith('../') ? path : `./${path}`
+}
+
+export function parseJsonc(source) {
+  let text = ''
+  let pendingComma = false
+  let index = 0
+  while (index < source.length) {
+    const char = source[index]
+    if (source.startsWith('//', index)) {
+      while (index < source.length && source[index] !== '\n') index += 1
+      continue
+    }
+    if (source.startsWith('/*', index)) {
+      const end = source.indexOf('*/', index + 2)
+      index = end === -1 ? source.length : end + 2
+      continue
+    }
+    if (/\s/.test(char)) {
+      text += char
+      index += 1
+      continue
+    }
+    if (pendingComma && char !== '}' && char !== ']') text += ','
+    pendingComma = false
+    if (char === ',') {
+      pendingComma = true
+      index += 1
+    } else if (char === '"') {
+      let end = index + 1
+      while (end < source.length && source[end] !== '"') end += source[end] === '\\' ? 2 : 1
+      text += source.slice(index, end + 1)
+      index = end + 1
+    } else {
+      text += char
+      index += 1
+    }
+  }
+  return JSON.parse(text)
 }
 
 export function detectBundler(manifest) {
@@ -262,10 +380,17 @@ function printResult(result, io) {
   const location = relative(process.cwd(), result.root) || '.'
   io.log(result.mode === 'create' ? `Created a tt project in ${location}.` : `Added tt to ${location}.`)
   if (result.files.length) io.log(`Generated: ${result.files.join(', ')}`)
+  for (const { name, from, to } of result.updated ?? []) {
+    io.log(`Updated ${name} from ${from} to ${to}: tt's content mapper needs this TypeScript 7.1 build.`)
+  }
   if (result.manualModule) {
     io.log(`Add tt() from ${result.manualModule} to your esbuild plugins array.`)
   }
-  io.log(result.mode === 'create' ? `Run: cd ${location} && ${runScript(result.packageManager, 'dev')}` : `Run: ${runScript(result.packageManager, 'tt:check')}`)
+  io.log(result.mode === 'create' ? `Run: cd ${shellQuote(location)} && ${runScript(result.packageManager, 'dev')}` : `Run: ${runScript(result.packageManager, 'tt:check')}`)
+}
+
+export function shellQuote(word) {
+  return /^[A-Za-z0-9_@%+=:,.\/-]+$/.test(word) ? word : `'${word.replaceAll("'", "'\\''")}'`
 }
 
 function runScript(packageManager, script) {
@@ -316,8 +441,12 @@ function indentation(source) {
   return source.match(/\n([ \t]+)\S/)?.[1] ?? '  '
 }
 
-async function writeJson(path, value, space = '  ') {
-  await writeFile(path, `${JSON.stringify(value, null, space)}\n`)
+function jsonText(value, space = '  ') {
+  return `${JSON.stringify(value, null, space)}\n`
+}
+
+async function writeJson(path, value, space) {
+  await writeFile(path, jsonText(value, space))
 }
 
 const viteConfig = `import { defineConfig } from 'vite'

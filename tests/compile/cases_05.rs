@@ -68,6 +68,43 @@ fn exported_variants_returns_exported_tt_enums_only() {
 }
 
 #[test]
+fn exported_variants_names_a_variant_by_its_local_export_specifiers() {
+    let decls = ttc::exported_variants(
+        "variant Color { Red, Green }\n\
+         variant Size { S, L }\n\
+         variant Kept { K }\n\
+         export variant Token { Eof }\n\
+         export { Color as Hue, Size };\n\
+         export type { Color as Tint };\n\
+         export { Kept as default };\n\
+         export { Token as Tok };\n\
+         export { Other } from \"./other.tt\";\n\
+         namespace N { export { Color as Inner }; }\n\
+         declare const o: { export: any };\n\
+         o.export({ Size: 1 });\n",
+    );
+    let names: Vec<(&str, Vec<&str>)> = decls
+        .iter()
+        .map(|d| (d.name.as_str(), d.tags.iter().map(String::as_str).collect()))
+        .collect();
+    assert_eq!(
+        names,
+        [
+            ("Token", vec!["Eof"]),
+            ("Hue", vec!["Red", "Green"]),
+            ("Size", vec!["S", "L"]),
+            ("Tint", vec!["Red", "Green"]),
+            ("default", vec!["K"]),
+            ("Tok", vec!["Eof"]),
+        ]
+    );
+    let symbols = ttc::exported_variant_symbols("variant Color { Red }\nexport { Color as Hue };\n");
+    assert_eq!(symbols[0].name, "Hue");
+    assert!(symbols[0].exported);
+    assert_eq!(symbols[0].offset, "variant ".len());
+}
+
+#[test]
 fn tt_imports_reports_specifiers_and_names() {
     use ttc::TtImportNames;
     let imports = ttc::tt_imports(
@@ -77,9 +114,17 @@ import * as ns from "../b.tt";
 import "./side.tt";
 export { X } from "./re.tt";
 import { skip } from "./not-tt.ts";
+import legacy = require("./legacy.tt");
+declare module "./augmented.tt" {}
+const lazy = import(`./lazy.tt`);
 "#,
     );
-    assert_eq!(imports.len(), 4);
+    assert_eq!(imports.len(), 7);
+    assert_eq!(imports[4].specifier, "./legacy.tt");
+    assert_eq!(imports[4].names, TtImportNames::Namespace("legacy".to_string()));
+    assert_eq!(imports[5].specifier, "./augmented.tt");
+    assert_eq!(imports[5].names, TtImportNames::None);
+    assert_eq!(imports[6].specifier, "./lazy.tt");
     assert_eq!(imports[0].specifier, "./a.tt");
     assert_eq!(
         imports[0].names,
@@ -159,7 +204,7 @@ fn variant_symbols_carries_positions_and_field_shapes() {
 
 #[test]
 fn pipeline_emits_nested_apply_helper_calls() {
-    let out = ok("const y = half(4) |> double |> label;\n");
+    let out = ok("const y = half(4) |> double |> label;\nexport {};\n");
     assert!(
         out.contains("const y = $tt_ap($tt_ap(half(4), double), label);"),
         "{out}"
@@ -326,9 +371,9 @@ fn a_delivered_value_keeps_only_the_parentheses_that_group_it() {
         "variant E { A(v: number), B }\ndeclare const e: E;\nconst plain = match (e) { A(v) => v + 1, B => 0 };\nconst seq = match (e) { A(v) => (v, v + 1), B => 0 };\n",
     );
     let compact = compact(&out);
-    assert!(compact.contains("$tt_v0 = v + 1; break;"), "{out}");
-    assert!(compact.contains("$tt_v0 = 0; break;"), "{out}");
-    assert!(compact.contains("$tt_v1 = (v, v + 1); break;"), "{out}");
+    assert!(compact.contains("$tt_v0$plain = v + 1; break;"), "{out}");
+    assert!(compact.contains("$tt_v0$plain = 0; break;"), "{out}");
+    assert!(compact.contains("$tt_v1$seq = (v, v + 1); break;"), "{out}");
 }
 
 #[test]
@@ -366,7 +411,7 @@ fn generated_control_flow_uses_statement_lines_and_expanded_blocks() {
     );
     assert!(
         out.contains(
-            "if (!(\"value\" in $tt_t2)) {\n    $tt_v2 = $tt_t2;\n    break $tt_v2;\n  }\n  $tt_v2 = { kind: \"Ok\" as const, value: $tt_t2.value };\n  break $tt_v2;"
+            "if (!(\"value\" in $tt_t2)) {\n    $tt_v2$computed = $tt_t2;\n    break $tt_v2$computed;\n  }\n  $tt_v2$computed = { kind: \"Ok\" as const, value: $tt_t2.value };\n  break $tt_v2$computed;"
         ),
         "{out}"
     );
@@ -386,7 +431,7 @@ fn a_postfix_step_parenthesizes_only_a_receiver_that_needs_it() {
 
 #[test]
 fn pipeline_runtime_is_imported_once_per_file() {
-    let out = ok("const a = x |> f;\nconst b = y |> g;\n");
+    let out = ok("const a = x |> f;\nconst b = y |> g;\nexport {};\n");
     assert_eq!(out.matches("$tt_ap(").count(), 2, "{out}");
     assert_eq!(out.matches("from \"@tt/runtime\"").count(), 1, "{out}");
 }
@@ -402,7 +447,7 @@ fn an_inert_pipeline_input_uses_a_direct_call() {
 fn a_materialized_pipeline_accumulator_uses_a_direct_call() {
     let out = ok("variant E { A(value: number), B }\n\
          const value = match (E.A(1)) { A(value) => value, B => 0 } |> String;\n");
-    assert!(out.contains("$tt_v0 = String($tt_v0);"), "{out}");
+    assert!(out.contains("$tt_v0$value = String($tt_v2);"), "{out}");
     assert!(!out.contains("$tt_ap"), "{out}");
 }
 
@@ -438,8 +483,8 @@ fn pipeline_head_reclaims_a_lifted_match() {
     );
     assert!(!out.contains("(() =>"), "{out}");
     assert!(out.contains("switch ($tt_m.kind)"), "{out}");
-    assert!(out.contains("$tt_v0 = double($tt_v0);"), "{out}");
-    assert!(out.contains("const a = $tt_v0;"), "{out}");
+    assert!(out.contains("$tt_v0$a = double($tt_v2);"), "{out}");
+    assert!(out.contains("const a = $tt_v0$a;"), "{out}");
 }
 
 #[test]
@@ -457,7 +502,7 @@ fn pipeline_inside_match_scrutinee_arm_and_template() {
     );
     assert!(out.contains("const $tt_m = $tt_ap(x, norm);"), "{out}");
     assert!(
-        compact(&out).contains("$tt_v0 = $tt_ap(v, double); break;"),
+        compact(&out).contains("$tt_v0$r = $tt_ap(v, double); break;"),
         "{out}"
     );
     assert!(out.contains("`n=${$tt_ap(x, f)}`"), "{out}");

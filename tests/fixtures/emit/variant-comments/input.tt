@@ -1,0 +1,32 @@
+/** A drawable shape. */
+export variant Shape {
+  /** A circle around the origin. */
+  Circle(radius: number), // the common case
+  // Rectangles are axis-aligned.
+  /**
+   * A rectangle.
+   *
+   * Its corner is the origin.
+   */
+  Rect(
+    /** Width in pixels. */
+    width: number,
+    height: number, // in pixels
+  ),
+  /** No area at all. */
+  Point // the last case
+}
+
+export declare variant Remote {
+  /** A value the server sent. */
+  Loaded(/** The payload. */ value: string),
+  Pending,
+}
+
+declare const shape: Shape;
+
+export const area = match (shape) {
+  Circle(radius) => Math.PI * radius ** 2,
+  Rect(width, height) => width * height,
+  Point => 0,
+};

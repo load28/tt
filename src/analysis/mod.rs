@@ -231,6 +231,8 @@ pub struct MatchAnalysis {
     /// coverage hole's fix is an edit, and the edit needs the braces
     /// (TASK-216).
     pub body_close: usize,
+    /// Where the written arms end — what that edit appends after.
+    pub tail: crate::ArmsTail,
     /// One subject per scrutinee position: one entry for a single match,
     /// one per position for a tuple match. `None` when the position's arm
     /// tags belong to no known variant — the match still analyzes, its
@@ -238,6 +240,16 @@ pub struct MatchAnalysis {
     pub subjects: Vec<Option<MatchSubject>>,
     /// The arms, in source order.
     pub arms: Vec<AnalyzedArm>,
+    /// Indices of arms that match nothing an earlier arm has not already
+    /// matched — dead code, in source order. Computed for every match whose
+    /// tags identify a known variant, with or without a `_` arm.
+    ///
+    /// Nothing reports these as errors: an unreachable arm is a *lint* in
+    /// Rust, and tt has only errors, so turning it into one would reject
+    /// programs that compile today. The editor is where a hint belongs
+    /// (TASK-101 §P3). The narrower duplicate-arm rule sema enforces is
+    /// unchanged.
+    pub unreachable: Vec<usize>,
     /// The exhaustiveness answer — for a single match over its subject's
     /// tags, for a tuple match over the product of its positions. `None`
     /// when the question does not arise: a wildcard arm covers everything,
@@ -371,18 +383,17 @@ pub struct Coverage {
     pub covered: Vec<String>,
     /// **Witnesses**: the values the arms leave unhandled. Empty when the
     /// match is exhaustive; bounded, so a wide product does not build a
-    /// list nobody can read.
+    /// list nobody can read. Together they cover every unhandled value
+    /// when the list holds all [`Coverage::total`] of them.
     pub missing: Vec<Uncovered>,
-    /// Indices of arms that match nothing an earlier arm has not already
-    /// matched — dead code, in source order.
-    ///
-    /// Nothing reports these yet: an unreachable arm is a *lint* in Rust,
-    /// and tt has only errors, so turning it into one would reject
-    /// programs that compile today. It is computed here because the same
-    /// recursion answers it, and because the editor is where a hint
-    /// belongs (TASK-101 §P3). The narrower duplicate-arm rule sema
-    /// enforces is unchanged.
-    pub unreachable: Vec<usize>,
+    /// How many witnesses there are in all, however many
+    /// [`Coverage::missing`] lists.
+    pub total: usize,
+    /// How many of those witnesses are [`Uncovered::certain`].
+    pub certain_total: usize,
+    /// Whether the two totals are exact. A match too wide to enumerate
+    /// within the analysis budget has at least that many.
+    pub exact: bool,
 }
 
 /// One value a match leaves unhandled, as the tt pattern that would cover
@@ -648,14 +659,16 @@ fn validate_semantic(file: &SemanticFile) {
             "unresolved HIR use has no source span"
         );
     }
+    let site_starts: std::collections::HashSet<usize> = file
+        .hir
+        .sites
+        .iter()
+        .filter_map(|(_, site)| file.hir.source_map.node_span(site.node))
+        .map(|span| span.start)
+        .collect();
     for analysis in &file.patterns.matches {
         assert!(
-            file.hir.sites.iter().any(|(_, site)| {
-                file.hir
-                    .source_map
-                    .node_span(site.node)
-                    .is_some_and(|span| span.start == analysis.keyword_off)
-            }),
+            site_starts.contains(&analysis.keyword_off),
             "match analysis has no HIR pattern site"
         );
     }

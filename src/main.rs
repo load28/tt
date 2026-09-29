@@ -46,6 +46,9 @@ mod typed;
 #[path = "main/tests.rs"]
 mod help_tests;
 
+#[cfg(test)]
+mod test_workspace;
+
 use ttc::engine::collect_sources;
 use ttc::source_map::SourceMapRequest;
 use ttc::{
@@ -113,7 +116,9 @@ Tooling options (bundler plugins, editors):
                         js = ./x.js/.jsx (default), ts = ./x.ts/.tsx,
                         off = untouched
   --sidecar <dir>       write <name>.tt.d.ts and .map next to each input from
-                        <dir>/<name>.d.ts (tsc --emitDeclarationOnly output);
+                        <dir>/<path>/<name>.d.ts, where <path> is the input's
+                        directory below the inputs' common directory (the
+                        layout of tsc --emitDeclarationOnly --outDir <dir>);
                         compiles nothing (--types runs this step for you)
   --symbols             print tt variant declarations (with positions) and the
                         direct .tt imports of each input as JSON; compiles
@@ -135,7 +140,24 @@ Tooling options (bundler plugins, editors):
                         editor can ask about text it has not saved; needs
                         --check-types (not --types, which writes)
   --tt-only             report the tt layer of --check-types and leave the
-                        type layer to TypeScript (not --types, which writes)"
+                        type layer to TypeScript (not --types, which writes)
+  --json-report         with --types (not --watch): print one JSON object on
+                        stdout, {{\"checked\", \"diagnostics\", \"written\",
+                        \"failed\"}}: whether the check ran, how many
+                        diagnostics it reported, the absolute path of every
+                        file written, and {{\"path\", \"error\"}} for every
+                        file that was not; no object means nothing was written
+
+Exit status of --check-types and --types:
+  0    checked; nothing reported; --types wrote every file
+  1    diagnostics reported; --types wrote every file all the same
+  2    the check could not run (a tt-level error left nothing to lower, the
+       project could not be opened, or TypeScript did not run); nothing was
+       written and earlier outputs stand
+  3    --types: the check ran, and one or more files could not be written;
+       the others were (stderr, or the report, names each one)
+  101  internal compiler error
+  An invalid command line exits 1 before anything runs."
     ));
 }
 
@@ -246,7 +268,7 @@ fn run_explain(args: &[String]) -> ExitCode {
             out::line("ttc explain <code> — what a diagnostic's rule is and why\n");
             out::line("Codes:");
             for code in ttc::DiagnosticCode::ALL {
-                out::line(&format!("  {}", code.as_str()));
+                out::line(&format!("  {:<32} tt{}", code.as_str(), code.number()));
             }
             return ExitCode::SUCCESS;
         }
@@ -264,11 +286,23 @@ fn run_explain(args: &[String]) -> ExitCode {
         .trim_start_matches("error[")
         .trim_start_matches("warning[")
         .trim_end_matches(']');
-    match ttc::DiagnosticCode::parse(code) {
+    let code = code
+        .strip_prefix("error ")
+        .unwrap_or(code)
+        .trim()
+        .trim_end_matches(':');
+    match ttc::DiagnosticCode::lookup(code) {
         Some(code) => {
-            out::line(&format!("error[{}]\n", code.as_str()));
+            out::line(&format!("error[{}] (tt{})\n", code.as_str(), code.number()));
             out::line(code.explanation());
             ExitCode::SUCCESS
+        }
+        None if let Some(name) = ttc::DiagnosticCode::retired(code) => {
+            eprintln!(
+                "ttc: diagnostic code \"{code}\" ({name}) is retired and no longer reported \
+                 (run `ttc explain` for the list)"
+            );
+            ExitCode::FAILURE
         }
         None => {
             eprintln!("ttc: unknown diagnostic code \"{code}\" (run `ttc explain` for the list)");

@@ -62,6 +62,9 @@ pub(crate) fn diagnostic_origin(
 /// Offset of `byte` in `text`, counted in UTF-16 code units — TypeScript's
 /// own coordinate space. An offset past the end clamps to the end.
 pub(crate) fn to_utf16(text: &str, byte: usize) -> usize {
+    let signature = crate::error::signature_len(text);
+    let text = crate::error::decoded(text);
+    let byte = byte.saturating_sub(signature);
     match text.get(..byte) {
         Some(prefix) => prefix.encode_utf16().count(),
         None => text.encode_utf16().count(),
@@ -72,14 +75,16 @@ pub(crate) fn to_utf16(text: &str, byte: usize) -> usize {
 /// offset past the end clamps to the length; one landing inside a surrogate
 /// pair clamps to the start of that character.
 pub(crate) fn from_utf16(text: &str, utf16: usize) -> usize {
+    let signature = crate::error::signature_len(text);
+    let text = crate::error::decoded(text);
     let mut units = 0;
     for (byte, ch) in text.char_indices() {
         if units >= utf16 {
-            return byte;
+            return signature + byte;
         }
         units += ch.len_utf16();
     }
-    text.len()
+    signature + text.len()
 }
 
 /// Where a source byte landed in the emitted output, or `None` when it was
@@ -127,6 +132,27 @@ pub(crate) fn to_source_inclusive(mappings: &[EmitMapping], out: usize) -> Optio
         .map(|m| m.src + (out - m.out))
 }
 
+pub(crate) fn to_source_span(
+    mappings: &[EmitMapping],
+    start: usize,
+    end: usize,
+) -> Option<(usize, usize)> {
+    if end <= start {
+        let at = to_source_inclusive(mappings, start)?;
+        return (end == start).then_some((at, at));
+    }
+    let first = mappings
+        .iter()
+        .find(|m| start >= m.out && start < m.out + m.len)?;
+    let mut last = first;
+    while end > last.out + last.len {
+        last = mappings
+            .iter()
+            .find(|m| m.len > 0 && m.out == last.out + last.len && m.src == last.src + last.len)?;
+    }
+    Some((first.src + (start - first.out), last.src + (end - last.out)))
+}
+
 /// Where an emitted byte came from, or — when it is compiler-written glue —
 /// where the nearest preceding verbatim byte came from.
 ///
@@ -149,6 +175,18 @@ pub(crate) fn to_source_or_nearest(mappings: &[EmitMapping], out: usize) -> Opti
 mod tests {
     use super::*;
     use crate::AnchorKind;
+
+    #[test]
+    fn utf16_offsets_are_measured_in_the_decoded_text() {
+        let text = "\u{feff}const 한 = 1;\n";
+        let name = text.find('한').unwrap();
+        assert_eq!(to_utf16(text, name), 6);
+        assert_eq!(from_utf16(text, 6), name);
+        assert_eq!(to_utf16(text, 0), 0);
+        assert_eq!(to_utf16(text, 3), 0);
+        assert_eq!(from_utf16(text, 0), 3);
+        assert_eq!(to_utf16(text, text.len()), text.len() - 3 - 2);
+    }
 
     #[test]
     fn a_partially_mapped_diagnostic_belongs_to_its_lowering_anchor() {
@@ -240,5 +278,32 @@ mod tests {
         // Between the chunks is compiler-written glue.
         assert_eq!(to_output(&mappings, 8), None);
         assert_eq!(to_source(&mappings, 10), None);
+    }
+
+    #[test]
+    fn a_span_maps_only_over_copied_source_bytes() {
+        let mappings = [
+            EmitMapping {
+                src: 0,
+                out: 0,
+                len: 10,
+            },
+            EmitMapping {
+                src: 10,
+                out: 10,
+                len: 4,
+            },
+            EmitMapping {
+                src: 50,
+                out: 20,
+                len: 5,
+            },
+        ];
+        assert_eq!(to_source_span(&mappings, 2, 6), Some((2, 6)));
+        assert_eq!(to_source_span(&mappings, 8, 12), Some((8, 12)));
+        assert_eq!(to_source_span(&mappings, 21, 25), Some((51, 55)));
+        assert_eq!(to_source_span(&mappings, 14, 20), None);
+        assert_eq!(to_source_span(&mappings, 12, 22), None);
+        assert_eq!(to_source_span(&mappings, 14, 14), Some((14, 14)));
     }
 }

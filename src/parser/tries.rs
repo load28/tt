@@ -20,7 +20,6 @@ use super::Claim;
 use super::cursor::{Cursor, dotted_at, skip_braced_construct};
 use crate::ast::{Span, TryExpr, TryStmt, UnclaimedTtCandidate, UnclaimedTtKind};
 use crate::lexer::{Token, TokenKind};
-use crate::scanner::is_primary_expression;
 
 /// `cur` is positioned just past the `try` keyword (`kw_span`) of a bare
 /// `try <expr>;` statement. On success returns the advanced cursor, the
@@ -121,6 +120,12 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
         k += 1;
     }
     let head = cur.tokens.get(k)?;
+    if matches!(head.kind, TokenKind::Ident)
+        && !dotted_at(cur.tokens, cur.idx, k)
+        && crate::lexer::statement_only_keyword(cur.text(head))
+    {
+        return None;
+    }
     let operand_start = head.span.start;
     let mut operand_end = None;
     let mut operand_token_end = cur.idx;
@@ -145,7 +150,7 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
             && k > cur.idx
             && matches!(token.kind, TokenKind::Ident)
             && !dotted_at(cur.tokens, cur.idx, k)
-            && STMT_ONLY_WORDS.contains(&cur.text(token))
+            && crate::lexer::statement_only_keyword(cur.text(token))
         {
             break;
         }
@@ -157,8 +162,8 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
         }
 
         match token.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ if token.opens_bracket() => depth += 1,
+            _ if token.closes_bracket() => depth = depth.saturating_sub(1),
             _ => {}
         }
         k += 1;
@@ -167,7 +172,12 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
                 operand_end = Some(token.span.end);
                 operand_token_end = k;
             }
-        } else if is_primary_expression(cur.parser.src.as_bytes(), operand_start, token.span.end) {
+        } else if crate::lexer::is_primary_expression(
+            cur.parser.src,
+            operand_start,
+            token.span.end,
+            cur.parser.source_kind,
+        ) {
             operand_end = Some(token.span.end);
             operand_token_end = k;
         }
@@ -198,7 +208,7 @@ fn unclaimed_try_extent(cur: &Cursor, kw_span: Span) -> Span {
             if k > cur.idx
                 && matches!(token.kind, TokenKind::Ident)
                 && !dotted_at(cur.tokens, cur.idx, k)
-                && STMT_ONLY_WORDS.contains(&cur.text(token))
+                && crate::lexer::statement_only_keyword(cur.text(token))
             {
                 break;
             }
@@ -347,18 +357,6 @@ fn is_expr_start(t: &Token) -> bool {
     }
 }
 
-/// Statement-only keywords: meeting one at the top level of the expression
-/// scan means we ran past the statement (e.g. a missing `;`) or into a
-/// declaration — abort so the text passes through. Expression-capable
-/// keywords (`new`, `typeof`, `await`, `function`, `class`, `import(...)`,
-/// ...) are deliberately absent. Shared with the let-else expression
-/// scanner (which treats `else` as its terminator instead).
-pub(super) const STMT_ONLY_WORDS: &[&str] = &[
-    "break", "case", "catch", "const", "continue", "debugger", "default", "do", "else", "enum",
-    "export", "finally", "for", "if", "let", "return", "switch", "throw", "try", "var", "while",
-    "with",
-];
-
 /// Scans a statement expression from `cur.idx` until a top-level `;`,
 /// returning its token index and byte offset. Aborts (None) on anything
 /// that cannot appear at the top level of an expression: a bare `{`, a
@@ -374,7 +372,7 @@ fn stmt_expr_end(cur: &Cursor) -> Option<(usize, usize)> {
         if let TokenKind::Ident = t.kind {
             if depth == 0 && !dotted_at(cur.tokens, cur.idx, k) {
                 let word = cur.text(t);
-                if STMT_ONLY_WORDS.contains(&word) {
+                if crate::lexer::statement_only_keyword(word) {
                     return None;
                 }
                 // A match expression and a `result` block carry their own
@@ -410,8 +408,8 @@ fn stmt_expr_end(cur: &Cursor) -> Option<(usize, usize)> {
             }
         }
         match t.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
+            _ if t.opens_bracket() => depth += 1,
+            _ if t.closes_bracket() => depth = depth.saturating_sub(1),
             _ => {}
         }
         k += 1;
@@ -429,14 +427,13 @@ fn binding_end(cur: &Cursor) -> Option<(usize, usize)> {
     while k < cur.tokens.len() {
         let t = &cur.tokens[k];
         match t.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{' | b'<') => depth += 1,
-            TokenKind::Punct(b')' | b']' | b'}') => {
+            _ if t.opens_bracket() => depth += 1,
+            _ if t.closes_bracket() => {
                 if depth == 0 {
                     return None;
                 }
                 depth -= 1;
             }
-            TokenKind::Punct(b'>') => depth = depth.saturating_sub(1),
             TokenKind::Punct(b'=') if depth == 0 => return Some((k, t.span.start)),
             TokenKind::Punct(b';' | b',') if depth == 0 => return None,
             _ => {}

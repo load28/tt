@@ -41,13 +41,13 @@ pub struct TtVariantDecl {
 /// Where a visible variant is declared.
 #[derive(Debug, PartialEq, Eq)]
 pub enum TtVariantOrigin {
-    /// Declared in this file. `name_span` is the declared name;
-    /// `span` runs from the name to the last declared piece — the outline
-    /// range.
+    /// Declared in this file. `name_span` is the declared name; `span` is
+    /// the whole declaration — the outline range.
     Local {
         /// Byte span of the declared name.
         name_span: (usize, usize),
-        /// Byte span of the declaration's names, name through last field.
+        /// Byte span of the whole declaration, from its first modifier
+        /// (`export`, `declare`) or `variant` through the closing `}`.
         span: (usize, usize),
     },
     /// Imported; the specifier as written, when recorded.
@@ -65,6 +65,9 @@ pub struct TtCaseDecl {
     /// The tag.
     pub tag: String,
     /// Byte span of the tag, for a local declaration.
+    pub name_span: Option<(usize, usize)>,
+    /// Byte span of the whole case, tag through the payload's closing `)`,
+    /// for a local declaration.
     pub span: Option<(usize, usize)>,
     /// `true` when the case is declared without parens — the constructor
     /// is a plain value, not a call.
@@ -126,9 +129,13 @@ pub fn tt_declarations(path: &Path, source: &str) -> TtDeclarations {
             .iter()
             .map(|variant| TtCaseDecl {
                 tag: variant.name.clone(),
-                span: variant
+                name_span: variant
                     .node
                     .and_then(|node| hir.source_map.node_span(node))
+                    .map(|s| (s.start, s.end)),
+                span: variant
+                    .node
+                    .and_then(|node| hir.source_map.node_extent(node))
                     .map(|s| (s.start, s.end)),
                 unit: variant.fields.is_none(),
                 fields: variant
@@ -151,28 +158,11 @@ pub fn tt_declarations(path: &Path, source: &str) -> TtDeclarations {
                     .node_span(*node)
                     .map(|s| (s.start, s.end))
                     .unwrap_or((0, 0));
-                // The outline range: the name through the last declared
-                // name (a tag, or a field of the last case).
-                let end = data
-                    .variants
-                    .iter()
-                    .flat_map(|v| {
-                        v.node.into_iter().chain(
-                            v.fields
-                                .as_deref()
-                                .unwrap_or_default()
-                                .iter()
-                                .filter_map(|f| f.node),
-                        )
-                    })
-                    .filter_map(|node| hir.source_map.node_span(node))
-                    .map(|s| s.end)
-                    .max()
-                    .unwrap_or(name_span.1);
-                TtVariantOrigin::Local {
-                    name_span,
-                    span: (name_span.0, end.max(name_span.1)),
-                }
+                let span = hir
+                    .source_map
+                    .node_extent(*node)
+                    .map_or(name_span, |s| (s.start, s.end));
+                TtVariantOrigin::Local { name_span, span }
             }
             DeclOrigin::Imported { from } => TtVariantOrigin::Imported {
                 specifier: from.clone(),
@@ -299,7 +289,7 @@ mod tests {
             panic!("Shape is local");
         };
         assert_eq!(&src[name_span.0..name_span.1], "Shape");
-        assert!(src[span.0..span.1].contains("radius"), "outline range");
+        assert_eq!(&src[span.0..span.1], src.trim_end(), "outline range");
         assert!(!shape.cases[0].unit);
         assert_eq!(shape.cases[0].fields[0].ty, "number");
         assert!(shape.cases[1].unit);
@@ -307,6 +297,44 @@ mod tests {
         let option = decls.variants.iter().find(|e| e.name == "Option").unwrap();
         assert_eq!(option.generics, "<T>");
         assert_eq!(option.origin, TtVariantOrigin::Builtin);
+    }
+
+    #[test]
+    fn outline_ranges_enclose_the_whole_declaration_and_each_case() {
+        for (src, declaration) in [
+            (
+                "/** doc */ export declare variant P { R(v: number) }\n",
+                "export declare variant P { R(v: number) }",
+            ),
+            (
+                "declare variant P {\n  R(v: number),\n  Q,\n}\n",
+                "declare variant P {\n  R(v: number),\n  Q,\n}",
+            ),
+            (
+                "const n = 1;\nvariant P<T> { R(v: T, w?: string), Q }\n",
+                "variant P<T> { R(v: T, w?: string), Q }",
+            ),
+        ] {
+            let decls = declarations(src);
+            let TtVariantOrigin::Local { name_span, span } = &decls.variants[0].origin else {
+                panic!("P is local in {src:?}");
+            };
+            assert_eq!(&src[span.0..span.1], declaration, "{src:?}");
+            assert!(span.0 <= name_span.0 && name_span.1 <= span.1, "{src:?}");
+            for case in &decls.variants[0].cases {
+                let (name, whole) = (case.name_span.unwrap(), case.span.unwrap());
+                assert_eq!(&src[name.0..name.1], case.tag, "{src:?}");
+                assert!(whole.0 <= name.0 && name.1 <= whole.1, "{src:?}");
+                assert!(span.0 <= whole.0 && whole.1 <= span.1, "{src:?}");
+                let text = &src[whole.0..whole.1];
+                if case.unit {
+                    assert_eq!(text, case.tag, "{src:?}");
+                } else {
+                    assert!(text.starts_with(&format!("{}(", case.tag)), "{src:?}");
+                    assert!(text.ends_with(')'), "{src:?}");
+                }
+            }
+        }
     }
 
     #[test]

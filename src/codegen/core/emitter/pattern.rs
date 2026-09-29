@@ -21,7 +21,7 @@ impl<'a> Emitter<'a> {
         !decision
             .arms
             .last()
-            .is_some_and(|arm| matches!(arm.pattern, PatternPlan::Any) && arm.guard.is_none())
+            .is_some_and(DecisionArm::always_matches)
             || decision.arms.iter().any(|arm| reads(&arm.pattern, index))
     }
 
@@ -50,7 +50,7 @@ impl<'a> Emitter<'a> {
             for subject in &decision.subjects {
                 out.append(self.emit_subject_initialization(
                     subject,
-                    &temp_name(subject.temporary),
+                    &self.temp_name(subject.temporary),
                     decision.head,
                 ));
                 out.push_break(0);
@@ -62,14 +62,14 @@ impl<'a> Emitter<'a> {
             out.push_break(1);
             out.append(self.emit_subject_initialization(
                 subject,
-                &temp_name(subject.temporary),
+                &self.temp_name(subject.temporary),
                 decision.head,
             ));
         }
         let DecisionKind::Match { dispatch, .. } = decision.kind else {
             crate::ice::bug!("selector is not a match")
         };
-        let temp = temp_name(decision.subjects[0].temporary);
+        let temp = self.temp_name(decision.subjects[0].temporary);
         if dispatch == MatchDispatch::Conditional {
             crate::ice::bug!("a narrowing condition cannot be separated from its arm value");
         }
@@ -131,27 +131,28 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         out.push_lit("(");
         for (index, arm) in decision.arms.iter().enumerate() {
-            if index + 1 < decision.arms.len() {
-                if self.has_conditional_match_dispatch(expr) {
+            let mut last = index + 1 == decision.arms.len();
+            if !last {
+                if !self.has_conditional_match_dispatch(expr) {
+                    out.push_lit(format!("{slot} === {index} ? "));
+                } else if let Some(test) = self.emit_arm_test(arm, decision) {
                     out.push_lit("(");
-                    out.append(self.emit_condition(&arm.pattern, decision));
-                    if let Some(guard) = arm.guard {
-                        out.push_lit(" && ");
-                        push_grouped(&mut out, self.emit_expr(guard).trim());
-                    }
+                    out.append(test);
                     out.push_lit(") ? ");
                 } else {
-                    out.push_lit(format!("{slot} === {index} ? "));
+                    last = true;
                 }
             }
             let value = self.emit_deferred_arm_value(expr, &arm.action);
             push_grouped(
                 &mut out,
                 guard_line_comment(value.trim(), 0, self.source_kind),
+                self.source_kind,
             );
-            if index + 1 < decision.arms.len() {
-                out.push_lit(" : ");
+            if last {
+                break;
             }
+            out.push_lit(" : ");
         }
         out.push_lit(")");
         out
@@ -202,21 +203,21 @@ impl<'a> Emitter<'a> {
             if self.inline_subject_needs_storage(decision, index) {
                 out.push_lit(format!("{name} = "));
             }
-            push_grouped(&mut out, self.emit_expr(subject.value).trim());
+            push_grouped(
+                &mut out,
+                self.emit_expr(subject.value).trim(),
+                self.source_kind,
+            );
             out.push_lit(", ");
         }
         let mut total = false;
         for arm in &decision.arms {
-            if matches!(arm.pattern, PatternPlan::Any) && arm.guard.is_none() {
-                total = true;
-            } else {
+            if let Some(test) = self.emit_arm_test(arm, decision) {
                 out.push_lit("(");
-                out.append(self.emit_condition(&arm.pattern, decision));
-                if let Some(guard) = arm.guard {
-                    out.push_lit(" && ");
-                    push_grouped(&mut out, self.emit_expr(guard).trim());
-                }
+                out.append(test);
                 out.push_lit(") ? ");
+            } else {
+                total = true;
             }
             push_grouped(
                 &mut out,
@@ -225,6 +226,7 @@ impl<'a> Emitter<'a> {
                     0,
                     self.source_kind,
                 ),
+                self.source_kind,
             );
             if total {
                 break;
@@ -235,17 +237,20 @@ impl<'a> Emitter<'a> {
             self.used_match_raise.set(true);
             let (kind, value) = match decision.miss {
                 MissAction::ThrowUnexpected(UnexpectedKind::Literal) => {
-                    ("literal", names[0].clone())
+                    ("literal", self.shown(&names[0]))
                 }
-                MissAction::ThrowUnexpected(UnexpectedKind::Case) => ("case", names[0].clone()),
+                MissAction::ThrowUnexpected(UnexpectedKind::Case) => {
+                    ("case", self.shown(&names[0]))
+                }
                 MissAction::ThrowUnexpected(UnexpectedKind::Tuple) => {
-                    ("case", format!("[{}]", names.join(", ")))
+                    ("case", self.shown_tuple(names))
                 }
                 _ => crate::ice::bug!("inline match has no failure completion"),
             };
             out.push_lit(format!(
-                "{}(new Error(\"tt match: unexpected {kind} \" + JSON.stringify({value})))",
-                self.match_raise_name
+                "{}(new {}(\"tt match: unexpected {kind} \" + {value}))",
+                self.match_raise_name,
+                self.host_error()
             ));
         }
         out.push_lit(")");
@@ -267,7 +272,7 @@ impl<'a> Emitter<'a> {
             crate::ice::bug!("switch decision is not a match")
         };
         let literal = dispatch == MatchDispatch::LiteralSwitch;
-        let temp = temp_name(decision.subjects[0].temporary);
+        let temp = self.temp_name(decision.subjects[0].temporary);
         let mut out = Rope::new();
         out.push_break(0);
         out.push_lit(if literal {
@@ -340,10 +345,11 @@ impl<'a> Emitter<'a> {
         };
         let mut out = Rope::new();
         let mut depth = 0;
-        let chain_exit_label = needs_label.then_some("$tt_b");
-        if needs_label {
+        let chain_exit_label = needs_label.then(|| self.generated_name("$tt_b"));
+        let chain_exit_label = chain_exit_label.as_deref();
+        if let Some(label) = chain_exit_label {
             out.push_break(depth);
-            out.push_lit("$tt_b: {");
+            out.push_lit(format!("{label}: {{"));
             depth += 1;
         } else if continuation.assigns() {
             out.push_break(depth);
@@ -352,10 +358,10 @@ impl<'a> Emitter<'a> {
         }
         let mut unconditional = false;
         for arm in &decision.arms {
-            let is_any = !pattern_has_test(&arm.pattern);
+            let is_any = !arm.pattern.has_test();
             out.push_break(depth);
-            if is_any && arm.guard.is_none() {
-                unconditional = true;
+            if is_any {
+                unconditional |= arm.guard.is_none();
             } else {
                 out.push_lit("if (");
                 out.append(self.emit_condition(&arm.pattern, decision));
@@ -386,7 +392,7 @@ impl<'a> Emitter<'a> {
                 },
                 &mut out,
             );
-            if !is_any || arm.guard.is_some() {
+            if !is_any {
                 out.push_break(depth);
                 out.push_lit("}");
             }
@@ -423,23 +429,29 @@ impl<'a> Emitter<'a> {
         let ArmAction::Yield { body, kind } = arm.action else {
             crate::ice::bug!("match arm does not yield")
         };
-        let body_expr = self.core.body_value_expr(body).or_else(|| {
-            // A nested schedule delivers its complete host expression, including
-            // surrounding calls and conditional operators. A child with its own
-            // function owner cannot stand in for this arm's value.
-            self.core
-                .body_tail_expr(body)
-                .filter(|expr| self.nested_schedules.contains_key(expr))
-        });
-        let structured_body = matches!(kind, ArmBodyKind::Expression)
-            .then(|| {
-                body_expr.and_then(|expr| {
-                    (!continuation.is_expression())
-                        .then(|| self.emit_continued_expr(expr, continuation))
-                        .flatten()
-                })
-            })
-            .flatten();
+        let structured_body = (matches!(kind, ArmBodyKind::Expression)
+            && !continuation.is_expression())
+        .then(|| match self.core.body_value_expr(body) {
+            Some(expr) => self.emit_continued_expr(expr, continuation),
+            None => self
+                .emit_sequence_operand(body, continuation)
+                .map(|(mut prelude, value)| {
+                    let value = value.trim();
+                    let close = value
+                        .last_line_has_line_comment(self.source_kind)
+                        .then_some(action_depth);
+                    prelude.append(self.emit_value_delivery_control(
+                        value,
+                        close,
+                        continuation,
+                        None,
+                        None,
+                        false,
+                    ));
+                    Rope::scoped(prelude)
+                }),
+        })
+        .flatten();
         // A block arm's body sits between braces this lowering writes, and
         // the author's own line break and indentation after their `{` is
         // the layout the rest of their block is written against — so it
@@ -558,7 +570,12 @@ impl<'a> Emitter<'a> {
         };
         let span = self.span(node);
         let mut prelude = Rope::new();
-        for rewrite in &self.owner_slot_rewrites {
+        for rewrite in self
+            .owner_slot_index
+            .starting_in(span.start, span.start.saturating_add(1))
+            .into_iter()
+            .map(|index| &self.owner_slot_rewrites[index])
+        {
             if rewrite.owner == SourceSpan::from(span)
                 && !self.emitted_owner_rewrites.contains(rewrite.expr)
             {
@@ -567,7 +584,12 @@ impl<'a> Emitter<'a> {
                 prelude.push_break(depth);
             }
         }
-        for rewrite in &self.compose_rewrites {
+        for rewrite in self
+            .compose_index
+            .starting_in(span.start, span.start.saturating_add(1))
+            .into_iter()
+            .map(|index| &self.compose_rewrites[index])
+        {
             if rewrite.owner == SourceSpan::from(span)
                 && self.emitted_compose_rewrites.claim(rewrite.owner)
             {
@@ -627,13 +649,13 @@ impl<'a> Emitter<'a> {
                 ValueWrapper::ResultOk => {
                     let mut wrapped = Rope::new();
                     wrapped.push_lit("{ kind: \"Ok\" as const, value: ");
-                    push_grouped(&mut wrapped, value);
+                    push_grouped(&mut wrapped, value, self.source_kind);
                     wrapped.push_lit(" }");
                     value = wrapped;
                 }
             }
         }
-        let grouped = needs_grouping(&value);
+        let grouped = needs_grouping(&value, self.source_kind);
         let mut out = Rope::new();
         match continuation.destination {
             ValueDestination::Expression | ValueDestination::Return => out.push_lit("return "),
@@ -684,6 +706,24 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    pub(super) fn emit_arm_test(&self, arm: &DecisionArm, decision: &Decision) -> Option<Rope<'a>> {
+        let tested = arm.pattern.has_test();
+        if !tested && arm.guard.is_none() {
+            return None;
+        }
+        let mut out = Rope::new();
+        if tested {
+            out.append(self.emit_condition(&arm.pattern, decision));
+        }
+        if let Some(guard) = arm.guard {
+            if tested {
+                out.push_lit(" && ");
+            }
+            push_grouped(&mut out, self.emit_expr(guard).trim(), self.source_kind);
+        }
+        Some(out)
+    }
+
     pub(super) fn emit_condition(&self, plan: &PatternPlan, decision: &Decision) -> Rope<'a> {
         match plan {
             PatternPlan::Any | PatternPlan::Bind(_) => Rope::new(),
@@ -692,7 +732,7 @@ impl<'a> Emitter<'a> {
                 let mut out = Rope::new();
                 let tests = parts
                     .iter()
-                    .filter(|part| pattern_has_test(part))
+                    .filter(|part| part.has_test())
                     .collect::<Vec<_>>();
                 for (index, part) in tests.iter().enumerate() {
                     if index > 0 {
@@ -763,12 +803,7 @@ impl<'a> Emitter<'a> {
         payload_for: Option<NodeId>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
-        out.push_lit(
-            self.inline_subjects
-                .get(&decision.extent)
-                .map(|names| names[place.subject].clone())
-                .unwrap_or_else(|| temp_name(decision.subjects[place.subject].temporary)),
-        );
+        out.push_lit(self.subject_reference(decision, place.subject));
         for (index, field) in place.fields.iter().enumerate() {
             out.push_lit(".");
             if index + 1 == place.fields.len()
@@ -797,7 +832,7 @@ impl<'a> Emitter<'a> {
         let mut groups: Vec<BindingGroup<'_>> = Vec::new();
         collect_binding_groups(
             selected,
-            !matches!(plan, PatternPlan::AnyOf(_)),
+            matches!(plan, PatternPlan::AnyOf(_)).then_some(plan),
             &mut groups,
         );
         let mut out = Rope::new();
@@ -816,11 +851,11 @@ impl<'a> Emitter<'a> {
             } else {
                 out.push_lit("const { ");
             }
-            for (index, (binding, mapped)) in bindings.iter().enumerate() {
+            for (index, (binding, shared)) in bindings.iter().enumerate() {
                 if index > 0 {
                     out.push_lit(", ");
                 }
-                self.emit_binding(binding, *mapped, recovery, &mut out);
+                self.emit_binding(binding, *shared, recovery, &mut out);
             }
             out.push_lit(" } = ");
             out.append(self.emit_place(&receiver, decision, None));
@@ -836,7 +871,7 @@ impl<'a> Emitter<'a> {
     pub(super) fn emit_binding(
         &self,
         binding: &Bind,
-        mapped: bool,
+        shared: Option<&PatternPlan>,
         recovery: &mut BindingRecovery,
         out: &mut Rope<'a>,
     ) {
@@ -847,22 +882,48 @@ impl<'a> Emitter<'a> {
             .unwrap_or_else(|| crate::ice::bug!("binding has no source field"));
         let field_node = field_node(field);
         let field_text = self.field_name(field);
-        if mapped {
+        let Some(alternatives) = shared else {
             let span = self.span(field_node);
             let (text, at) = self.source_span(span);
             out.push_src(text, at);
+            if let Some(replacement) = recovery.replacement(self, binding) {
+                out.push_lit(format!(": {replacement}"));
+            } else if binding.binding != field_node {
+                out.push_lit(": ");
+                out.append(self.source_rope(binding.binding));
+            }
+            return;
+        };
+        if let Some(replacement) = recovery.replacement(self, binding) {
+            out.push_lit(field_text);
+            out.push_lit(format!(": {replacement}"));
+            return;
+        }
+        let name = self.source_node(binding.binding).0;
+        let mut every = Vec::new();
+        every_binding(alternatives, &mut every);
+        let occurrences: Vec<crate::BindingOccurrence> = every
+            .into_iter()
+            .filter(|other| self.source_node(other.binding).0 == name)
+            .map(|other| {
+                let span = self.span(other.binding);
+                crate::BindingOccurrence {
+                    src: span.start,
+                    src_end: span.end,
+                    shorthand: other
+                        .source
+                        .fields
+                        .last()
+                        .is_some_and(|field| helpers::field_node(field) == other.binding),
+                }
+            })
+            .collect();
+        if binding.binding == field_node {
+            out.push_shared_binding(field_text, &occurrences);
         } else {
             out.push_lit(field_text);
-        }
-        if let Some(replacement) = recovery.replacement(self, binding) {
-            out.push_lit(format!(": {replacement}"));
-        } else if binding.binding != field_node {
             out.push_lit(": ");
-            if mapped {
-                out.append(self.source_rope(binding.binding));
-            } else {
-                out.push_lit(self.source_node(binding.binding).0.to_owned());
-            }
+            out.push_shared_binding(name.to_owned(), &occurrences);
         }
     }
 
@@ -907,28 +968,50 @@ impl<'a> Emitter<'a> {
         self.constructor_name(constructor)
     }
 
+    fn subject_reference(&self, decision: &Decision, subject: usize) -> String {
+        self.inline_subjects
+            .get(&decision.extent)
+            .map(|names| names[subject].clone())
+            .unwrap_or_else(|| self.temp_name(decision.subjects[subject].temporary))
+    }
+
     pub(super) fn unexpected_throw(&self, decision: &Decision) -> String {
-        match decision.miss {
+        let (kind, shown) = match decision.miss {
             MissAction::ThrowUnexpected(UnexpectedKind::Tuple) => {
-                let temps = decision
-                    .subjects
-                    .iter()
-                    .map(|subject| temp_name(subject.temporary))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!(
-                    "throw new Error(\"tt match: unexpected case \" + JSON.stringify([{temps}]));"
-                )
+                let temps = (0..decision.subjects.len())
+                    .map(|subject| self.subject_reference(decision, subject))
+                    .collect::<Vec<_>>();
+                ("case", self.shown_tuple(&temps))
             }
             MissAction::ThrowUnexpected(UnexpectedKind::Literal) => {
-                "throw new Error(\"tt match: unexpected literal \" + JSON.stringify($tt_m));"
-                    .to_owned()
+                ("literal", self.shown(&self.subject_reference(decision, 0)))
             }
             MissAction::ThrowUnexpected(UnexpectedKind::Case) => {
-                "throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m));"
-                    .to_owned()
+                ("case", self.shown(&self.subject_reference(decision, 0)))
             }
             _ => crate::ice::bug!("match has non-match miss action"),
-        }
+        };
+        format!(
+            "throw new {}(\"tt match: unexpected {kind} \" + {shown});",
+            self.host_error()
+        )
+    }
+
+    fn host_error(&self) -> &str {
+        self.used_host_error.set(true);
+        &self.host_error
+    }
+
+    fn shown(&self, value: &str) -> String {
+        self.used_match_show.set(true);
+        format!("{}({value})", self.match_show_name)
+    }
+
+    fn shown_tuple(&self, values: &[String]) -> String {
+        let parts = values
+            .iter()
+            .map(|value| self.shown(value))
+            .collect::<Vec<_>>();
+        format!("\"[\" + {} + \"]\"", parts.join(" + \",\" + "))
     }
 }

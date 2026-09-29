@@ -1,5 +1,7 @@
 //! Whole-file parsing, recovery collection, and parser implementation.
 
+use std::collections::HashMap;
+
 use super::*;
 
 /// Parses a whole source file into a [`Program`].
@@ -22,25 +24,44 @@ pub(crate) fn lex_and_parse_with_kind(
     src: &str,
     source_kind: crate::SourceKind,
 ) -> (Program, Vec<Token>) {
+    crate::work::tick("source parses");
     let tokens = lexer::lex_with_kind(src, 0, src.len(), source_kind);
-    let parser = Parser {
-        src,
-        bytes: src.as_bytes(),
-        host_owned_matches: Vec::new(),
-        flow_queries: crate::flow::FlowBodyQueries::default(),
-    };
-    let mut program = parser.parse_tokens(&tokens, 0, src.len());
-    let host_owned_matches = host::owned_match_names_in_mixed(src, source_kind, &program);
-    if !host_owned_matches.is_empty() {
-        program = Parser {
+    let parse = |host_rejected_vals: &[usize], host_owned_matches: Vec<Span>| {
+        Parser {
             src,
             bytes: src.as_bytes(),
+            source_kind,
             host_owned_matches,
+            host_rejected_vals: host_rejected_vals.to_vec(),
             flow_queries: crate::flow::FlowBodyQueries::default(),
         }
-        .parse_tokens(&tokens, 0, src.len());
+        .parse_tokens(&tokens, 0, src.len())
+    };
+    let mut program = parse(&[], Vec::new());
+    let host_rejected_vals = host::rejected_val_candidates(src, source_kind, &program);
+    if !host_rejected_vals.is_empty() {
+        program = parse(&host_rejected_vals, Vec::new());
+    }
+    let host_owned_matches = host::owned_match_names_in_mixed(src, source_kind, &program);
+    if !host_owned_matches.is_empty() {
+        program = parse(&host_rejected_vals, host_owned_matches);
     }
     (program, tokens)
+}
+
+/// Every `val` modifier of the parse, keyed by the keyword's byte offset —
+/// the parser's decision, which the `val` analysis reads over the token
+/// stream instead of re-deriving it.
+pub(crate) fn val_modifiers(program: &Program) -> HashMap<usize, ValModifier> {
+    let mut modifiers = HashMap::new();
+    visit_programs(program, &mut |region| {
+        for segment in &region.segments {
+            if let Segment::ValModifier(modifier) = segment {
+                modifiers.insert(modifier.span.start, *modifier);
+            }
+        }
+    });
+    modifiers
 }
 
 /// Visits every recursively nested parse region exactly once.
@@ -164,11 +185,53 @@ pub(crate) fn unclaimed_candidates(program: &Program) -> Vec<UnclaimedTtCandidat
 pub(crate) struct Parser<'a> {
     pub src: &'a str,
     pub bytes: &'a [u8],
+    /// The file's surface, for re-lexing a piece of it.
+    pub source_kind: crate::SourceKind,
     host_owned_matches: Vec<Span>,
+    /// Keyword offsets of parameter-shaped `val` candidates whose binding
+    /// the host grammar does not read as a formal parameter, sorted.
+    host_rejected_vals: Vec<usize>,
     flow_queries: crate::flow::FlowBodyQueries,
 }
 
+impl<'a> Parser<'a> {
+    pub(super) fn new(src: &'a str) -> Self {
+        Parser {
+            src,
+            bytes: src.as_bytes(),
+            source_kind: crate::SourceKind::TypeScript,
+            host_owned_matches: Vec::new(),
+            host_rejected_vals: Vec::new(),
+            flow_queries: crate::flow::FlowBodyQueries::default(),
+        }
+    }
+}
+
 impl Parser<'_> {
+    /// The modifier kind of the undotted identifier `val` at token index
+    /// `idx`, recording a parameter-shaped one as a host candidate.
+    fn val_modifier_at(
+        &self,
+        tokens: &[Token],
+        idx: usize,
+        candidates: &mut Vec<Span>,
+    ) -> Option<ValModifierKind> {
+        match vals::shape(self.src, tokens, idx)? {
+            vals::ValShape::Declaration => Some(ValModifierKind::Declaration),
+            vals::ValShape::Parameter => {
+                let keyword = tokens[idx].span.start;
+                if self.host_rejected_vals.binary_search(&keyword).is_ok() {
+                    return None;
+                }
+                candidates.push(Span {
+                    start: keyword,
+                    end: tokens[idx + 1].span.start,
+                });
+                Some(ValModifierKind::Parameter)
+            }
+        }
+    }
+
     fn host_owns_match_name(&self, candidate: Span) -> bool {
         let preceding = self
             .host_owned_matches
@@ -182,6 +245,11 @@ impl Parser<'_> {
     pub(super) fn body_diverges(&self, span: Span, tokens: &[Token], program: &Program) -> bool {
         self.flow_queries.diverges(self.src, span, tokens, program)
     }
+}
+
+enum ExprFrame {
+    Resume((usize, bool)),
+    StatementHeader,
 }
 
 fn flush_verbatim(segments: &mut Vec<Segment>, start: usize, end: usize) {
@@ -210,7 +278,7 @@ fn segment_start(seg: &Segment) -> usize {
         },
         Segment::Pipe(p) => p.head_span.start,
         Segment::ResultBlock(b) => b.keyword_off,
-        Segment::ValModifier(span) => span.start,
+        Segment::ValModifier(modifier) => modifier.span.start,
     }
 }
 
@@ -264,9 +332,9 @@ fn recovery_expression_span(
         .map_or(range_end, |token| token.span.end);
     for token in tokens.iter().skip(operator_idx + 1) {
         match token.kind {
-            TokenKind::Punct(b'(' | b'[' | b'{') => depth += 1,
+            _ if token.opens_bracket() => depth += 1,
             TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
-            TokenKind::Punct(b')' | b']' | b'}') => depth -= 1,
+            _ if token.closes_bracket() => depth -= 1,
             TokenKind::Punct(b';' | b',') if depth == 0 => break,
             _ => recovery_end = token.span.end,
         }
@@ -291,54 +359,12 @@ fn recovery_statement_span(tokens: &[Token], start_idx: usize, range_end: usize)
     }
 }
 
-fn starts_statement(src: &str, tokens: &[Token], idx: usize, in_ternary: bool) -> bool {
-    if crate::flow::concise_arrow_boundary_before(src, tokens, idx) {
-        return true;
-    }
-    if in_ternary {
-        return false;
-    }
-    let Some(previous) = idx.checked_sub(1).and_then(|idx| tokens.get(idx)) else {
-        return true;
-    };
-    if matches!(previous.kind, TokenKind::Punct(b'{' | b'}' | b';' | b':')) {
-        return true;
-    }
-    if matches!(previous.kind, TokenKind::Ident)
-        && matches!(&src[previous.span.start..previous.span.end], "else" | "do")
-    {
-        return true;
-    }
-    if !matches!(previous.kind, TokenKind::Punct(b')')) {
-        return false;
-    }
-    let mut depth = 0usize;
-    for open in (0..idx).rev() {
-        match tokens[open].kind {
-            TokenKind::Punct(b')') => depth += 1,
-            TokenKind::Punct(b'(') => {
-                depth -= 1;
-                if depth == 0 {
-                    return open.checked_sub(1).is_some_and(|before| {
-                        matches!(tokens[before].kind, TokenKind::Ident)
-                            && matches!(
-                                &src[tokens[before].span.start..tokens[before].span.end],
-                                "if" | "for" | "while" | "with"
-                            )
-                    });
-                }
-            }
-            _ => {}
-        }
-    }
-    false
-}
-
-/// The update of a C-style `for` header follows its second top-level
-/// semicolon. Its `try` is an expression candidate, while the test position
-/// keeps statement-propagation ownership so Evaluation IR can report the
-/// repeated-evaluation reason.
-fn in_for_update(src: &str, tokens: &[Token], idx: usize) -> bool {
+/// The clause of the enclosing C-style `for` head that token `idx` is in:
+/// its top-level `;` separators before `idx`, or `None` outside a `for`
+/// head. The test clause (1) keeps a `try` statement's grammar so Evaluation
+/// IR can report the repeated evaluation; the update clause (2) is an
+/// expression position.
+fn for_head_clause(src: &str, tokens: &[Token], idx: usize) -> Option<usize> {
     let mut depth = 0usize;
     let mut separators = 0usize;
     for cursor in (0..idx).rev() {
@@ -346,11 +372,13 @@ fn in_for_update(src: &str, tokens: &[Token], idx: usize) -> bool {
             TokenKind::Punct(b')') => depth += 1,
             TokenKind::Punct(b'(') => {
                 if depth == 0 {
-                    return separators >= 2
-                        && cursor.checked_sub(1).is_some_and(|before| {
+                    return cursor
+                        .checked_sub(1)
+                        .is_some_and(|before| {
                             matches!(tokens[before].kind, TokenKind::Ident)
                                 && &src[tokens[before].span.start..tokens[before].span.end] == "for"
-                        });
+                        })
+                        .then_some(separators);
                 }
                 depth -= 1;
             }
@@ -358,48 +386,21 @@ fn in_for_update(src: &str, tokens: &[Token], idx: usize) -> bool {
             _ => {}
         }
     }
-    false
-}
-
-/// A colon normally admits a following statement (labels, `case`, match
-/// arms), but a colon inside an object literal introduces a value expression.
-/// This recognizes the object-literal brace from the token that introduced it
-/// instead of guessing from the spelling of the property.
-fn follows_object_member_colon(src: &str, tokens: &[Token], idx: usize) -> bool {
-    if !idx
-        .checked_sub(1)
-        .and_then(|previous| tokens.get(previous))
-        .is_some_and(|token| matches!(token.kind, TokenKind::Punct(b':')))
-    {
-        return false;
-    }
-
-    let mut depth = 0usize;
-    for open in (0..idx - 1).rev() {
-        match tokens[open].kind {
-            TokenKind::Punct(b'}') => depth += 1,
-            TokenKind::Punct(b'{') if depth > 0 => depth -= 1,
-            TokenKind::Punct(b'{') => {
-                let Some(before) = open.checked_sub(1).and_then(|at| tokens.get(at)) else {
-                    return false;
-                };
-                return match before.kind {
-                    TokenKind::Punct(b'(' | b'[' | b',' | b'=' | b':' | b'?') => true,
-                    TokenKind::Ident => {
-                        matches!(&src[before.span.start..before.span.end], "return" | "yield")
-                    }
-                    _ => false,
-                };
-            }
-            _ => {}
-        }
-    }
-    false
+    None
 }
 
 /// A spread operand begins with three adjacent dot tokens. The last dot is
 /// not member access, even though the generic property-name test sees it
 /// immediately before the operand keyword.
+/// Whether the token at `k` is a `match` keyword that may start a tt match:
+/// undotted, or the operand of a spread, whose third dot is punctuation.
+pub(super) fn match_keyword_at(src: &str, tokens: &[Token], k: usize) -> bool {
+    let token = &tokens[k];
+    matches!(token.kind, TokenKind::Ident)
+        && &src[token.span.start..token.span.end] == "match"
+        && (!cursor::dotted_at(tokens, 0, k) || follows_spread_operator(tokens, k))
+}
+
 fn follows_spread_operator(tokens: &[Token], idx: usize) -> bool {
     idx >= 3
         && tokens[idx - 3..idx]
@@ -410,11 +411,13 @@ fn follows_spread_operator(tokens: &[Token], idx: usize) -> bool {
 /// Whether a parsed `match (...) { ... }` still overlaps a possible host
 /// declaration position. The expression tracker already models where a host
 /// operator or delimiter requires an operand; those positions need no second
-/// parser. A preceding prefix, statement boundary, or comma remains ambiguous
-/// and is delegated to the host AST without enumerating TypeScript modifiers.
-fn match_may_be_host_owned(src: &str, tokens: &[Token], idx: usize, expr: (usize, bool)) -> bool {
+/// parser. A preceding prefix, a statement start or member name (the
+/// lexer's [`crate::lexer::TokenFacts`]), or a comma remains ambiguous and
+/// is delegated to the host AST without enumerating TypeScript modifiers.
+fn match_may_be_host_owned(tokens: &[Token], idx: usize, expr: (usize, bool)) -> bool {
     expr.0 < idx
-        || starts_statement(src, tokens, idx, expr.1)
+        || tokens[idx].facts.statement_start()
+        || tokens[idx].facts.member()
         || idx
             .checked_sub(1)
             .is_some_and(|previous| matches!(tokens[previous].kind, TokenKind::Punct(b',')))
@@ -449,7 +452,7 @@ impl Parser<'_> {
         let mut unclaimed: Vec<UnclaimedTtCandidate> = Vec::new();
         let mut recoveries: Vec<RecoveryNode> = Vec::new();
         let mut malformed = Vec::new();
-        let mut host_match_candidates = Vec::new();
+        let mut host_candidates = HostCandidates::default();
         let mut stray_pipes: Vec<usize> = Vec::new();
         let mut stray_if_lets: Vec<usize> = Vec::new();
         let stray_results: Vec<usize> = Vec::new();
@@ -463,10 +466,13 @@ impl Parser<'_> {
         // rule). Brackets save and restore the enclosing expression's
         // state, so `f(a(b) |> g)` finds `a(b)`, not `b`.
         let mut expr: (usize, bool) = (0, false);
-        let mut expr_stack: Vec<(usize, bool)> = Vec::new();
+        let mut expr_stack: Vec<ExprFrame> = Vec::new();
 
         while i < tokens.len() {
             let tok = &tokens[i];
+            if tok.facts.boundary_before() {
+                expr = (i, false);
+            }
             let word = match tok.kind {
                 TokenKind::Template(ref parts) => {
                     flush_verbatim(&mut segments, seg_start, tok.span.start);
@@ -525,7 +531,9 @@ impl Parser<'_> {
                         segments.push(Segment::Pipe(pipe));
                         seg_start = pipe_end;
                         i = next_i;
-                        expr = (i, false);
+                        if !pipes::asserted(self.src, tokens, expr.0, i) {
+                            expr = (i, false);
+                        }
                         continue;
                     }
                     stray_pipes.push(tok.span.start);
@@ -556,16 +564,45 @@ impl Parser<'_> {
                 };
                 let (kw_idx, exported, declared) = match word {
                     "variant" => (Some(i), false, false),
-                    "declare" if word_at(i + 1) == Some("variant") => (Some(i + 1), false, true),
+                    "declare"
+                        if word_at(i + 1) == Some("variant")
+                            && !tokens[i + 1].facts.line_break_before() =>
+                    {
+                        (Some(i + 1), false, true)
+                    }
                     "export" if word_at(i + 1) == Some("variant") => (Some(i + 1), true, false),
                     "export"
                         if word_at(i + 1) == Some("declare")
-                            && word_at(i + 2) == Some("variant") =>
+                            && word_at(i + 2) == Some("variant")
+                            && !tokens[i + 2].facts.line_break_before() =>
                     {
                         (Some(i + 2), true, true)
                     }
                     _ => (None, false, false),
                 };
+                if word == "export"
+                    && word_at(i + 1) == Some("default")
+                    && word_at(i + 2) == Some("variant")
+                {
+                    match variants::parse_default_variant(
+                        Cursor::new(self, tokens, i + 3, end),
+                        tok.span.start,
+                    ) {
+                        Claim::Malformed { error, recovery } => {
+                            malformed.push(error);
+                            recoveries.push(recovery);
+                            i += 3;
+                            continue;
+                        }
+                        Claim::Unclaimed(candidate) => {
+                            unclaimed.push(candidate);
+                            i += 3;
+                            continue;
+                        }
+                        Claim::Parsed(never) => match never {},
+                        Claim::NotTt => {}
+                    }
+                }
                 if let Some(kw_idx) = kw_idx {
                     match variants::parse_variant(
                         Cursor::new(self, tokens, kw_idx + 1, end),
@@ -583,18 +620,24 @@ impl Parser<'_> {
                         Claim::Malformed { error, recovery } => {
                             malformed.push(error);
                             recoveries.push(recovery);
+                            i = kw_idx + 1;
+                            continue;
                         }
-                        Claim::Unclaimed(candidate) => unclaimed.push(candidate),
+                        Claim::Unclaimed(candidate) => {
+                            unclaimed.push(candidate);
+                            i = kw_idx + 1;
+                            continue;
+                        }
                         Claim::NotTt => {}
                     }
                 }
             }
 
-            // Literal import / re-export of a relative tt path — only
-            // the specifier string is lifted; the clause before it and
-            // the rest of the statement stay verbatim.
+            // Literal import / re-export / import-equals / ambient module
+            // name of a relative tt path — only the specifier string is
+            // lifted; the syntax around it stays verbatim.
             if !dotted
-                && (word == "import" || word == "export")
+                && (word == "import" || word == "export" || word == "module")
                 && let Some((cur, decl)) =
                     imports::parse_tt_import(Cursor::new(self, tokens, i + 1, end), word)
             {
@@ -609,15 +652,12 @@ impl Parser<'_> {
             // A spread's third dot is punctuation in the host grammar, not
             // member access. Keep the same structural distinction used for
             // `try` so every spread-capable host can own a match operand.
-            if (!dotted || follows_spread_operator(tokens, i))
-                && word == "match"
-                && !self.host_owns_match_name(tok.span)
-            {
-                let host_ambiguous = match_may_be_host_owned(self.src, tokens, i, expr);
+            if match_keyword_at(self.src, tokens, i) && !self.host_owns_match_name(tok.span) {
+                let host_ambiguous = match_may_be_host_owned(tokens, i, expr);
                 match matches::parse_match(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     Claim::Parsed((cur, byte_end, parsed)) => {
                         if host_ambiguous {
-                            host_match_candidates.push(Span {
+                            host_candidates.matches.push(Span {
                                 start: tok.span.start,
                                 end: byte_end,
                             });
@@ -633,7 +673,7 @@ impl Parser<'_> {
                     }
                     Claim::Malformed { error, recovery } => {
                         if host_ambiguous {
-                            host_match_candidates.push(recovery.span);
+                            host_candidates.matches.push(recovery.span);
                         }
                         malformed.push(error);
                         recoveries.push(recovery);
@@ -647,10 +687,9 @@ impl Parser<'_> {
             // position (`try { ... }` blocks and member names are
             // structurally excluded by the sub-parser).
             if (!dotted || follows_spread_operator(tokens, i)) && word == "try" {
-                let misplaced = (expression_root && i == 0)
-                    || !starts_statement(self.src, tokens, i, expr.1)
-                    || in_for_update(self.src, tokens, i)
-                    || follows_object_member_colon(self.src, tokens, i);
+                let misplaced = !tok.facts.member()
+                    && !(tok.facts.statement_start()
+                        || for_head_clause(self.src, tokens, i) == Some(1));
                 if misplaced
                     && let Some((next_i, parsed)) =
                         tries::parse_try_expr(Cursor::new(self, tokens, i + 1, end), tok.span)
@@ -664,7 +703,7 @@ impl Parser<'_> {
                 }
                 match tries::parse_try_stmt(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     Claim::Parsed((cur, byte_end, mut stmt)) => {
-                        stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
+                        stmt.in_function = crate::flow::in_function_body(tokens, i);
                         flush_verbatim(&mut segments, seg_start, tok.span.start);
                         segments.push(Segment::Try(stmt));
                         seg_start = byte_end;
@@ -688,18 +727,32 @@ impl Parser<'_> {
                 if let Some((cur, byte_end, mut stmt)) =
                     tries::parse_try_decl(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
-                    stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
-                    flush_verbatim(&mut segments, seg_start, tok.span.start);
+                    stmt.in_function = crate::flow::in_function_body(tokens, i);
+                    let mut first = i;
+                    while first > 0
+                        && tokens[first - 1].span.start >= seg_start
+                        && matches!(tokens[first - 1].kind, TokenKind::Ident)
+                        && matches!(
+                            &self.src[tokens[first - 1].span.start..tokens[first - 1].span.end],
+                            "export" | "declare"
+                        )
+                        && !cursor::dotted_at(tokens, 0, first - 1)
+                    {
+                        first -= 1;
+                    }
+                    stmt.owner_span.start = tokens[first].span.start;
+                    flush_verbatim(&mut segments, seg_start, stmt.owner_span.start);
                     segments.push(Segment::Try(stmt));
                     seg_start = byte_end;
                     i = cur.idx;
                     expr = (i, false);
                     continue;
                 }
-                if let Some((cur, byte_end, mut stmt)) =
-                    lets::parse_let_else(Cursor::new(self, tokens, i + 1, end), tok.span)
+                if lets::let_else_pattern(self.src, tokens, i).is_some()
+                    && let Some((cur, byte_end, mut stmt)) =
+                        lets::parse_let_else(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
-                    stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
+                    stmt.in_function = crate::flow::in_function_body(tokens, i);
                     flush_verbatim(&mut segments, seg_start, tok.span.start);
                     segments.push(Segment::LetElse(stmt));
                     seg_start = byte_end;
@@ -712,21 +765,26 @@ impl Parser<'_> {
             // `if let ...` — an undotted `if` followed by `let` is never
             // valid TypeScript, so a candidate that fails to parse cannot
             // be passed through either; it is recorded for sema.
-            if !dotted
-                && word == "if"
-                && matches!(tokens.get(i + 1),
-                    Some(t) if matches!(t.kind, TokenKind::Ident)
-                        && &self.src[t.span.start..t.span.end] == "let")
-            {
+            if iflets::if_let_pattern(self.src, tokens, i).is_some() {
                 if let Some((cur, byte_end, mut stmt)) =
                     iflets::parse_if_let(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
-                    stmt.in_function = crate::flow::in_function_body(self.src, tokens, i);
+                    stmt.in_function = crate::flow::in_function_body(tokens, i);
+                    stmt.expression_position = !tok.facts.statement_start();
+                    if stmt.expression_position {
+                        recoveries.push(RecoveryNode {
+                            span: stmt.owner_span,
+                            kind: RecoveryKind::Expression,
+                        });
+                    }
+                    let expression_position = stmt.expression_position;
                     flush_verbatim(&mut segments, seg_start, tok.span.start);
                     segments.push(Segment::IfLet(stmt));
                     seg_start = byte_end;
                     i = cur.idx;
-                    expr = (i, false);
+                    if !expression_position {
+                        expr = (i, false);
+                    }
                     continue;
                 }
                 stray_if_lets.push(tok.span.start);
@@ -758,17 +816,22 @@ impl Parser<'_> {
                 }
             }
 
-            // `val` — a binding modifier, dropped from the output. The
-            // two accepted shapes (`val const|let|var` on one line, and
-            // `val <binding>` at the start of a parameter-list entry)
-            // cannot occur in valid TypeScript, so every other `val` is
-            // an ordinary identifier and stays verbatim.
-            if !dotted && word == "val" && val::modifier_at(self.src, tokens, i).is_some() {
+            // `val` — a binding modifier, dropped from the output. Its
+            // shapes are in `vals`; a parameter-shaped one stays a modifier
+            // only when the host grammar reads its binding as a formal
+            // parameter. Every other `val` is an ordinary identifier.
+            if !dotted
+                && word == "val"
+                && let Some(kind) = self.val_modifier_at(tokens, i, &mut host_candidates.vals)
+            {
                 flush_verbatim(&mut segments, seg_start, tok.span.start);
-                let end = val::modifier_end(self.src, tok.span.end);
-                segments.push(Segment::ValModifier(Span {
-                    start: tok.span.start,
-                    end,
+                let end = vals::modifier_end(self.src, tok.span.end);
+                segments.push(Segment::ValModifier(ValModifier {
+                    span: Span {
+                        start: tok.span.start,
+                        end,
+                    },
+                    kind,
                 }));
                 seg_start = end;
                 i += 1;
@@ -786,7 +849,9 @@ impl Parser<'_> {
             span: Span { start, end },
             expression_root,
             segments,
-            host_match_candidates,
+            host_candidates: (!host_candidates.matches.is_empty()
+                || !host_candidates.vals.is_empty())
+            .then(|| Box::new(host_candidates)),
             unclaimed: (!unclaimed.is_empty()).then(|| Box::new(UnclaimedTtCandidates(unclaimed))),
             recoveries,
             malformed,
@@ -808,24 +873,33 @@ impl Parser<'_> {
         i: usize,
         tokens: &[Token],
         expr: &mut (usize, bool),
-        stack: &mut Vec<(usize, bool)>,
+        stack: &mut Vec<ExprFrame>,
     ) {
+        let fresh = (i + 1, false);
+        let restore = |frame: Option<ExprFrame>| match frame {
+            Some(ExprFrame::Resume(outer)) => outer,
+            Some(ExprFrame::StatementHeader) | None => fresh,
+        };
         match tok.kind {
-            TokenKind::JsxRaw => *expr = (i + 1, false),
-            TokenKind::Punct(b'(' | b'[' | b'{') => {
-                stack.push(*expr);
-                *expr = (i + 1, false);
+            TokenKind::JsxRaw => *expr = fresh,
+            TokenKind::Punct(b'(') if self.opens_statement_header(tokens, i) => {
+                stack.push(ExprFrame::StatementHeader);
+                *expr = fresh;
             }
-            TokenKind::Punct(b')' | b']') => {
-                *expr = stack.pop().unwrap_or((i + 1, false));
+            _ if tok.opens_bracket() => {
+                stack.push(ExprFrame::Resume(*expr));
+                *expr = fresh;
             }
             TokenKind::Punct(b'}') => {
-                let outer = stack.pop().unwrap_or((i + 1, false));
+                let outer = restore(stack.pop());
                 *expr = if self.brace_ends_expression(tokens, i) {
                     outer
                 } else {
                     (i + 1, false)
                 };
+            }
+            _ if tok.closes_bracket() => {
+                *expr = restore(stack.pop());
             }
             TokenKind::Punct(b';' | b',') => *expr = (i + 1, false),
             TokenKind::Punct(b'=') if pipes::is_assignment_eq(self.bytes, tok.span) => {
@@ -850,24 +924,33 @@ impl Parser<'_> {
         }
     }
 
+    fn opens_statement_header(&self, tokens: &[Token], open_idx: usize) -> bool {
+        let word_at = |k: usize| {
+            tokens
+                .get(k)
+                .filter(|t| matches!(t.kind, TokenKind::Ident) && !cursor::dotted_at(tokens, 0, k))
+                .map(|t| &self.src[t.span.start..t.span.end])
+        };
+        let Some(keyword_idx) = open_idx.checked_sub(1) else {
+            return false;
+        };
+        match word_at(keyword_idx) {
+            Some("if" | "while" | "for" | "with") => true,
+            Some("await") => keyword_idx
+                .checked_sub(1)
+                .is_some_and(|k| word_at(k) == Some("for")),
+            _ => false,
+        }
+    }
+
     /// True when the token after the `}` at `close_idx` continues the
     /// surrounding expression (`.m`, `)`, an operator, `|>`, ...) rather
-    /// than starting a new statement or expression.
+    /// than starting a new statement: no statement boundary
+    /// ([`crate::lexer::TokenFacts::boundary_before`]) separates them.
     pub(super) fn brace_ends_expression(&self, tokens: &[Token], close_idx: usize) -> bool {
-        match tokens.get(close_idx + 1) {
-            None => true,
-            Some(t) => match &t.kind {
-                TokenKind::Ident => {
-                    matches!(&self.src[t.span.start..t.span.end], "instanceof" | "in")
-                }
-                TokenKind::Str | TokenKind::Template(_) | TokenKind::Regex => false,
-                TokenKind::JsxRaw => true,
-                TokenKind::Punct(c) => {
-                    !matches!(c, b'(' | b'[' | b'{' | b'!' | b'~') && !c.is_ascii_digit()
-                }
-                _ => true, // |>, =>, ||, ?., ?? all continue an expression
-            },
-        }
+        tokens
+            .get(close_idx + 1)
+            .is_none_or(|next| !next.facts.boundary_before())
     }
 
     /// Turns a lexed template token into the AST template, recursively

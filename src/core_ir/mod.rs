@@ -66,15 +66,12 @@ impl CoreFile {
             Expr::Sequence(body) => self
                 .body_tail_expr(*body)
                 .is_some_and(|inner| self.has_statement_form(inner)),
-            // An optional postfix owns the conditional reach of every value
-            // in its tail. Those values must stay at an expression boundary
-            // inside that tail instead of being lifted into the Apply region.
             Expr::Apply(apply) => apply.head.is_some_and(|head| {
                 self.has_statement_form(head)
-                    || apply.steps.iter().any(|step| {
-                        !matches!(step.mode, ApplyMode::Postfix { optional: true })
-                            && self.has_statement_form(step.value)
-                    })
+                    || apply
+                        .steps
+                        .iter()
+                        .any(|step| self.has_statement_form(step.value))
             }),
             Expr::Template(template) => template.parts.iter().any(|part| match part {
                 TemplatePart::Raw(_) => false,
@@ -172,6 +169,7 @@ pub(crate) struct Decision {
     pub head: NodeId,
     pub extent: NodeId,
     pub is_async: bool,
+    pub in_generator: bool,
     pub kind: DecisionKind,
 }
 
@@ -208,6 +206,12 @@ pub(crate) struct DecisionArm {
     pub action: ArmAction,
 }
 
+impl DecisionArm {
+    pub(crate) fn always_matches(&self) -> bool {
+        self.guard.is_none() && !self.pattern.has_test()
+    }
+}
+
 #[derive(Debug)]
 pub(crate) enum PatternPlan {
     Any,
@@ -215,6 +219,18 @@ pub(crate) enum PatternPlan {
     Bind(Bind),
     AllOf(Vec<PatternPlan>),
     AnyOf(Vec<PatternPlan>),
+}
+
+impl PatternPlan {
+    pub(crate) fn has_test(&self) -> bool {
+        match self {
+            PatternPlan::Any | PatternPlan::Bind(_) => false,
+            PatternPlan::Test(_) => true,
+            PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
+                parts.iter().any(PatternPlan::has_test)
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -257,16 +273,20 @@ pub(crate) struct Adt {
 
 #[derive(Debug)]
 pub(crate) struct AdtVariant {
+    pub node: NodeId,
     pub name: String,
     pub fields: Option<Vec<AdtField>>,
     pub emit_constructor: bool,
+    pub comments: crate::ast::Comments,
 }
 
 #[derive(Debug)]
 pub(crate) struct AdtField {
+    pub node: NodeId,
     pub name: String,
     pub optional: bool,
     pub ty_text: String,
+    pub comments: crate::ast::Comments,
 }
 
 #[derive(Debug, Clone)]
@@ -386,6 +406,8 @@ pub(crate) struct ResultRegion {
     pub completes: bool,
     pub value: Option<ExprId>,
     pub is_async: bool,
+    pub in_generator: bool,
+    pub outward_jumps: Option<Vec<String>>,
 }
 
 #[derive(Debug)]
@@ -412,7 +434,11 @@ mod tests {
     fn lower(source: &str) -> CoreFile {
         let program = crate::parser::parse(source);
         let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
-        lower_semantic(&semantic, source)
+        lower_semantic(
+            &semantic,
+            source,
+            &crate::lexer::lex(source, 0, source.len()),
+        )
     }
 
     #[test]

@@ -29,7 +29,7 @@ export function Cart({state,onSelect}:{state:Load<Item[]>;onSelect:(item:Item)=>
      case "Loaded": {
        const { value } = $tt_m;
        const items=value.filter(item=>item.title.includes(filter));
-   $tt_v0 = (<ul>{items.map(item=>{
+   $tt_v0 = <ul>{items.map(item=>{
      let $tt_v4: number;
      let $tt_v5: number;
      const $tt_v7 = (item.id);
@@ -64,11 +64,11 @@ export function Cart({state,onSelect}:{state:Load<Item[]>;onSelect:(item:Item)=>
        }
      }
      return <li key={$tt_v7}>{$tt_v9}<strong>{$tt_v11 + $tt_v5}</strong></li>;
-   })}</ul>);
+   })}</ul>;
    break;
      }
      default: {
-       throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
+       throw new Error("tt match: unexpected case " + $tt_show($tt_m));
      }
    }
  }
@@ -87,4 +87,22 @@ export function Cart({state,onSelect}:{state:Load<Item[]>;onSelect:(item:Item)=>
    }
  }
  return <section>{$tt_v2}{$tt_v0}<footer>{$tt_v1} items</footer></section>;
+}
+function $tt_show(value: unknown): string {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "bigint") {
+    return String(value) + "n";
+  }
+  if (typeof value === "object" || typeof value === "function") {
+    try {
+      const text = JSON.stringify(value);
+      if (typeof text === "string") {
+        return text;
+      }
+    } catch {}
+    return typeof value;
+  }
+  return String(value);
 }

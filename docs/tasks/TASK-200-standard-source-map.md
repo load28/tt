@@ -1,5 +1,11 @@
 # TASK-200: 일반 compile 출력용 표준 source map
 
+> **Reversed decision**: Decision 6 (one segment per run edge and line
+> start, so a copied chunk reports its own start column) is reversed by
+> [TASK-443](./TASK-443-token-granular-source-maps.md): every source token a
+> verbatim run copies now gets its own segment, so the column is exact.
+> The rest of this record stands.
+
 - **상태**: 완료
 - **시작일**: 2026-08-24
 - **완료일**: 2026-08-24

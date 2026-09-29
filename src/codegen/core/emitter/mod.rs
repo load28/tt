@@ -16,31 +16,62 @@ pub(super) struct Emitter<'a> {
     pub(super) source: &'a str,
     pub(super) source_kind: SourceKind,
     pub(super) direct_apply_inputs: HashSet<ExprId>,
+    pub(super) member_apply_steps: HashMap<ExprId, crate::program_syntax::MemberCallee>,
     pub(super) rewrite_imports: ImportRewrite,
     pub(super) std_imports: StdImports<'a>,
     pub(super) owner_slot_rewrites: Vec<OwnerSlotRewrite>,
+    pub(super) owner_slot_index: crate::span_index::SpanIndex,
+    pub(super) owner_slots_by_expr: HashMap<ExprId, Vec<usize>>,
     pub(super) for_initializer_propagations: Vec<ForInitializerPropagationRewrite>,
+    pub(super) propagation_index: crate::span_index::SpanIndex,
     pub(super) compose_rewrites: Vec<ComposeRewrite>,
+    pub(super) compose_index: crate::span_index::SpanIndex,
     pub(super) loop_test_rewrites: Vec<LoopTestRewrite>,
+    pub(super) loop_body_index: crate::span_index::SpanIndex,
     pub(super) active_capture_sources: RefCell<Vec<SourceSpan>>,
     pub(super) source_replacements: Vec<SourceReplacement>,
+    pub(super) replacement_index: crate::span_index::SpanIndex,
     pub(super) consumed_exprs: HashSet<ExprId>,
     pub(super) arrow_return_rewrites: Vec<ArrowReturnRewrite>,
+    pub(super) arrow_returns_by_expr: HashMap<ExprId, usize>,
     pub(super) slot_exprs: HashMap<ExprId, String>,
     pub(super) value_slots: HashMap<ExprId, String>,
+    pub(super) piped_slots: HashMap<ExprId, Vec<String>>,
     pub(super) scheduled_slots: HashMap<crate::evaluation_ir::ValueSlotId, String>,
     pub(super) result_failures: RefCell<HashMap<ResultRegionId, ResultFailure>>,
     pub(super) value_exits: HashMap<ExprId, Vec<HostExit>>,
     pub(super) nested_schedules: HashMap<ExprId, EvaluationSchedule>,
+    pub(super) nested_operations: Vec<PlannedConditionalOperation>,
     pub(super) nested_values: HashSet<ExprId>,
     pub(super) structurally_nested_values: HashSet<ExprId>,
     pub(super) recovered_propagations: HashSet<ExprId>,
+    pub(super) recovered_matches: HashSet<ExprId>,
+    pub(super) owner_model: bool,
+    pub(super) recovered_sources: RefCell<Vec<SourceSpan>>,
     pub(super) expression_boundary_name: String,
     pub(super) match_raise_name: String,
+    pub(super) match_show_name: String,
+    pub(super) host_error: String,
+    pub(super) host_json: String,
+    pub(super) host_string: String,
     pub(super) inline_subjects: HashMap<NodeId, Vec<String>>,
-    pub(super) block_required_propagations: HashSet<NodeId>,
+    pub(super) block_required_statements: HashSet<NodeId>,
+    /// Statement owners that must open a block before their first hoisted
+    /// prelude and close it after their last byte. Several entry points can
+    /// write a prelude, and the owner's end can be reached by more than one
+    /// source walk, so both braces are claimed exactly once.
+    pub(super) block_required_owners: HashSet<SourceSpan>,
+    pub(super) block_required_by_end: std::collections::BTreeMap<usize, Vec<SourceSpan>>,
+    pub(super) opened_owner_blocks: ClosedComposeBlocks,
+    pub(super) closed_owner_blocks: ClosedComposeBlocks,
+    /// Owners whose prelude is being written right now. A prelude re-emits
+    /// source inside its own owner, which can end exactly where the owner
+    /// ends; that walk must not close the block around it.
+    pub(super) emitting_owner_preludes: RefCell<Vec<SourceSpan>>,
     pub(super) ambient_items: HashSet<NodeId>,
     pub(super) used_match_raise: Cell<bool>,
+    pub(super) used_match_show: Cell<bool>,
+    pub(super) used_host_error: Cell<bool>,
     /// How many conditional-operation regions are being emitted right now.
     /// Inside one, the operation's own host replacement does not apply —
     /// the region re-emits the operation's fragments itself.
@@ -49,7 +80,6 @@ pub(super) struct Emitter<'a> {
     /// Suppress only that value's own replacement; nested structured values
     /// must still replace their host occurrences compositionally.
     pub(super) active_structured_exprs: ActiveExprStack,
-    pub(super) active_scheduled_exprs: ActiveExprStack,
     /// Owner preludes can be reached either through an opaque source prefix
     /// or through the Core expression entry. Record which path emitted the
     /// prelude so the other path contributes only the join-slot occurrence.
@@ -61,6 +91,7 @@ pub(super) struct Emitter<'a> {
     /// brace is written exactly once.
     pub(super) closed_compose_blocks: ClosedComposeBlocks,
     pub(super) emitted_compose_rewrites: ClosedComposeBlocks,
+    pub(super) emitted_loop_tests: ClosedComposeBlocks,
     /// Loop-test actions emit their tt values before the rebuilt source test.
     /// Host replacements apply only to that source test, not while the
     /// actions recursively emit their own source fragments.
@@ -68,6 +99,31 @@ pub(super) struct Emitter<'a> {
     pub(super) used_expression_boundary: Cell<bool>,
     pub(super) used_pipe: Cell<bool>,
     pub(super) used_flow: Cell<bool>,
+    pub(super) generated_names: RefCell<crate::generated_names::GeneratedNames>,
+    pub(super) global_temps: HashMap<TempId, String>,
+}
+
+impl Emitter<'_> {
+    pub(super) fn generated_name(&self, base: &str) -> String {
+        self.generated_names.borrow_mut().stable(base)
+    }
+
+    pub(super) fn temp_name(&self, temp: TempId) -> String {
+        match self.global_temps.get(&temp) {
+            Some(binding) => self
+                .generated_names
+                .borrow_mut()
+                .stable_global(&temp_base(temp), binding),
+            None => self.generated_name(&temp_base(temp)),
+        }
+    }
+
+    fn exit_label(&self, target: &str) -> String {
+        self.generated_name(&format!(
+            "$tt_y_{}",
+            target.strip_prefix("$tt_").unwrap_or(target)
+        ))
+    }
 }
 
 /// A recursion stack whose guard never holds a `RefCell` borrow while target
@@ -327,10 +383,6 @@ fn decision_has_block_arm(decision: &Decision) -> bool {
             }
         )
     })
-}
-
-fn exit_label(target: &str) -> String {
-    format!("$tt_y_{}", target.strip_prefix("$tt_").unwrap_or(target))
 }
 
 fn push_region_break(out: &mut Rope<'_>, label: Option<&str>) {

@@ -331,6 +331,76 @@ console.log(chain());
 }
 
 #[test]
+fn std_result_combinators_keep_the_side_a_callback_never_returns() {
+    require_toolchain!();
+    let (ok, out) = typecheck_with_std(&format!(
+        r#"{ERROR_UNION_PRELUDE}
+import * as Option from "./tt/option.js";
+import type {{ TOption }} from "./tt/index.js";
+
+declare const r: TResult<number, string>;
+declare const flag: boolean;
+
+const okOnly = Result.andThen(r, (n) => Result.Ok(n + 1));
+const annotated: TResult<number, string> = okOnly;
+const errOnly = Result.andThen(r, (n) => Result.Err(n > 1));
+const both = Result.andThen(r, (n) => (flag ? Result.Ok(String(n)) : Result.Err(false)));
+const full = Result.andThen(r, (n): TResult<string, boolean> => Result.Ok(String(n)));
+const okOnlyP = r |> Result.andThenP((n: number) => Result.Ok(n + 1));
+const errOnlyP = r |> Result.andThenP((n: number) => Result.Err(n));
+const recovered = Result.orElse(r, (s) => Result.Ok(s.length));
+const remapped = Result.orElse(r, (s) => Result.Err(s.length));
+const recoveredP = r |> Result.orElseP((s: string) => Result.Ok(s.length));
+const remappedP = r |> Result.orElseP((s: string) => Result.Err(s.length));
+const mapped = Result.map(Result.Ok(1), (n) => n + 1);
+const mappedErr = Result.mapErr(Result.Err("x"), (s) => s.length);
+const mappedP = r |> Result.mapP((n: number) => String(n));
+const mappedErrP = r |> Result.mapErrP((s: string) => s.length);
+const collected = Result.collect([Result.Ok(1), Result.Ok(2)]);
+const none = Option.andThen(Option.Some(1), (n) => Option.None);
+const fallback = Option.Some(1) |> Option.orElseP(() => Option.None);
+
+const checks: [
+  Exact<typeof okOnly, TResult<number, string>>,
+  Exact<typeof errOnly, TResult<never, string | boolean>>,
+  Exact<typeof both, TResult<string, string | boolean>>,
+  Exact<typeof full, TResult<string, string | boolean>>,
+  Exact<typeof okOnlyP, TResult<number, string>>,
+  Exact<typeof errOnlyP, TResult<never, string | number>>,
+  Exact<typeof recovered, TResult<number, never>>,
+  Exact<typeof remapped, TResult<number, number>>,
+  Exact<typeof recoveredP, TResult<number, never>>,
+  Exact<typeof remappedP, TResult<number, number>>,
+  Exact<typeof mapped, TResult<number, never>>,
+  Exact<typeof mappedErr, TResult<never, number>>,
+  Exact<typeof mappedP, TResult<string, string>>,
+  Exact<typeof mappedErrP, TResult<number, number>>,
+  Exact<typeof collected, TResult<number[], never>>,
+  Exact<typeof none, TOption<never>>,
+  Exact<typeof fallback, TOption<number>>,
+] = [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true];
+
+console.log(annotated, checks);
+"#
+    ));
+    assert!(ok, "a combinator widened a side its callback never returns:\n{out}");
+}
+
+#[test]
+fn std_result_or_else_still_requires_the_recovered_value_type() {
+    require_toolchain!();
+    let (ok, out) = typecheck_with_std(&format!(
+        r#"{ERROR_UNION_PRELUDE}
+declare const r: TResult<number, string>;
+
+const recovered = Result.orElse(r, (s) => Result.Ok(s));
+console.log(recovered);
+"#
+    ));
+    assert!(!ok, "orElse accepted a recovery of the wrong type:\n{out}");
+}
+
+#[test]
 fn runtime_result_and_then_chain_short_circuits_on_the_first_err() {
     require_toolchain!();
     // The types changed; the emitted values did not. Both spellings still

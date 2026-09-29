@@ -7,7 +7,11 @@ fn evaluation(source: &str) -> (EvaluationFile, CoreFile) {
 fn evaluation_kind(source: &str, source_kind: crate::SourceKind) -> (EvaluationFile, CoreFile) {
     let program = crate::parser::parse(source);
     let semantic = crate::analysis::coverage_semantics(source, &program, &[]);
-    let core = crate::core_ir::lower_semantic(&semantic, source);
+    let core = crate::core_ir::lower_semantic(
+        &semantic,
+        source,
+        &crate::lexer::lex(source, 0, source.len()),
+    );
     let syntax =
         ProgramSyntax::build(&semantic, &core, source, source_kind).expect("program syntax");
     let file = EvaluationFile::build(&syntax, &core).expect("evaluation ir");
@@ -248,7 +252,7 @@ fn generated_slot_names_do_not_collide_with_typescript_identifiers() {
         evaluation("const $tt_v0 = 1;\nconst out = match (value) { A => $tt_v0, _ => 0 };\n");
     let plan = plan(&file, &core);
     let ValueTarget::Slot(slot) = plan.owners().next().expect("host rewrite").values[0].target;
-    assert_eq!(plan.slot_name(slot), "$tt_v0_1");
+    assert_eq!(plan.slot_name(slot), "$tt_v0_1$out");
 }
 
 #[test]
@@ -348,8 +352,8 @@ fn a_conditional_operation_owns_its_complete_active_branch() {
         TargetCapability::StatementRegion,
     );
     let operation = &plan.owners[0].operations[0];
-    assert!(operation.active_branch.is_some());
-    assert_eq!(operation.active_steps.len(), 1);
+    assert_eq!(operation.active.len(), 1);
+    assert_eq!(operation.active[0].steps.len(), 1);
 }
 
 #[test]

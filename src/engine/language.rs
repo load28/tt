@@ -68,8 +68,8 @@ pub struct Location {
 pub struct Reference {
     /// Where.
     pub location: Location,
-    /// Whether this is the declaration. (The service does not mark it; the
-    /// first result stands in, as it always has — presentation only.)
+    /// Whether this is a declaration: one of the definitions the checker
+    /// names for the same position.
     pub is_definition: bool,
 }
 
@@ -211,6 +211,7 @@ pub(crate) struct ServiceSession {
     /// The text last served for each `.tt` file — the emitted TypeScript,
     /// or a probe standing in for it.
     served: HashMap<PathBuf, String>,
+    uris: HashMap<PathBuf, String>,
     /// Unprojected host buffers served at their authored paths.
     host_served: HashMap<PathBuf, String>,
     /// Service projections by source path, reused while the text matches.
@@ -237,6 +238,8 @@ pub(crate) struct ServiceDoc {
     /// The glue each construct wrote — what a diagnostic landing outside
     /// every mapping is *about* (`crate::EmitAnchor`).
     anchors: Vec<crate::EmitAnchor>,
+    declared_names: Vec<crate::DeclaredName>,
+    shared_bindings: Vec<crate::SharedBinding>,
     /// Parser-owned error ranges replaced only in this service projection.
     /// TypeScript diagnostics intersecting one are recovery cascades.
     recovered: Vec<(usize, usize)>,
@@ -244,6 +247,7 @@ pub(crate) struct ServiceDoc {
     /// quick checker layer uses their syntax owners before VSCode ever sees
     /// a provisional consequence.
     tt_diagnostics: Vec<crate::Diagnostic>,
+    generated_names: HashSet<String>,
 }
 
 /// A compiled completion probe: the buffer with `$tt_probe` spliced in at
@@ -256,6 +260,7 @@ struct ProbeDoc {
     /// asked.
     offset: usize,
     version: u64,
+    generated_names: HashSet<String>,
 }
 
 /// Inserted at the cursor to complete the construct being typed. `$`-led so
@@ -263,4 +268,6 @@ struct ProbeDoc {
 const PROBE_NAME: &str = "$tt_probe";
 
 use service::*;
-pub(super) use service::{analyses_for, externs_from, externs_of, source_byte, span_range};
+pub(super) use service::{
+    analyses_for, externs_from, externs_of, imported_variants, source_byte, span_range,
+};

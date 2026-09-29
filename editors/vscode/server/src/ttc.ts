@@ -142,6 +142,18 @@ export function findCompiler(
   return "ttc";
 }
 
+export function folderCompiler(configuredPath: string, root: string): string {
+  const configured = configuredPath.trim();
+  const namesPath =
+    configured.includes("/") || configured.includes(path.sep);
+  return findCompiler(
+    namesPath && !path.isAbsolute(configured)
+      ? path.resolve(root, configured)
+      : configured,
+    [root],
+  );
+}
+
 /**
  * Whether a TypeScript language toolchain is around, from the one place
  * the engine looks: the TypeScript the project installed
@@ -258,7 +270,10 @@ async function runCheckOnce(
             resolve({ kind: "not-found", compiler, reason: unusable });
             return;
           }
-          const diagnostics = parseStderr(String(stderr), file);
+          const diagnostics = protocolPositions(
+            parseStderr(String(stderr), file),
+            text,
+          );
           if (err && diagnostics.length === 0) {
             // Crashed or timed out without a parseable diagnostic.
             resolve({
@@ -503,7 +518,10 @@ function runTypedCheckOnce(
           maxBuffer: 4 * 1024 * 1024,
         },
         (err, _stdout, stderr) => {
-          const diagnostics = parseStderr(String(stderr), shown);
+          const diagnostics = protocolPositions(
+            parseStderr(String(stderr), shown),
+            text,
+          );
           // Exit code 2 is "could not run, nothing was checked" — a tt-level
           // error left nothing to lower. Anything else with no parseable
           // diagnostic is a missing toolchain or a crash. Both keep whatever
@@ -584,6 +602,58 @@ export function parseStderr(stderr: string, file: string): TtcDiagnostic[] {
     });
   }
   return diagnostics;
+}
+
+/** ECMA-262's line terminators — the lines the compiler reports on. */
+const COMPILER_LINE_BREAKS = /\r\n|[\n\r\u2028\u2029]/g;
+/** The protocol's end-of-line sequences (LSP 3.17) — an editor's lines. */
+const PROTOCOL_LINE_BREAKS = /\r\n|[\n\r]/g;
+
+function measureLines(text: string, breaks: RegExp): { starts: number[]; ends: number[] } {
+  const starts = [0];
+  const ends: number[] = [];
+  for (const match of text.matchAll(breaks)) {
+    ends.push(match.index);
+    starts.push(match.index + match[0].length);
+  }
+  ends.push(text.length);
+  return { starts, ends };
+}
+
+/**
+ * A compiler position — a 1-based line under ECMA-262's line terminators
+ * and a 1-based code-point column, what the CLI renders — as the protocol's
+ * 1-based line (LF, CR LF, CR) and UTF-16 column. The compiler's
+ * `ProtocolPositions` does the same conversion for its own server answers.
+ * A position the text does not have is left as reported.
+ */
+export function protocolPosition(
+  text: string,
+  line: number,
+  column: number,
+): { line: number; col: number } {
+  const body = text.startsWith("﻿") ? text.slice(1) : text;
+  const compiler = measureLines(body, COMPILER_LINE_BREAKS);
+  if (line < 1 || column < 1 || line > compiler.starts.length) return { line, col: column };
+  const start = compiler.starts[line - 1];
+  const characters = Array.from(body.slice(start, compiler.ends[line - 1]));
+  if (column - 1 > characters.length) return { line, col: column };
+  const offset = start + characters.slice(0, column - 1).join("").length;
+  const protocol = measureLines(body, PROTOCOL_LINE_BREAKS);
+  let index = protocol.starts.length - 1;
+  while (protocol.starts[index] > offset) index -= 1;
+  return { line: index + 1, col: offset - protocol.starts[index] + 1 };
+}
+
+function protocolPositions(
+  diagnostics: TtcDiagnostic[],
+  text: string,
+): TtcDiagnostic[] {
+  return diagnostics.map((diagnostic) => {
+    if (diagnostic.line <= 0 || diagnostic.col <= 0) return diagnostic;
+    const start = protocolPosition(text, diagnostic.line, diagnostic.col);
+    return { ...diagnostic, line: start.line, col: start.col };
+  });
 }
 
 /** Reads a spawn failure: `null` when the process ran and merely reported

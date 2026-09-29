@@ -2,96 +2,53 @@
 
 use super::*;
 
-/// The byte offset a generated `import` may be written at: past a shebang
-/// and past the file's directive prologue.
+/// Where a generated module-top `import` is written, and whether it needs a
+/// line break before it: past a byte-order mark, a hashbang comment
+/// (ECMA-262 §12.5), and the directive prologue the parsed program reports
+/// (ECMA-262 §11.2.1).
 ///
-/// A directive (`"use client"`, `"use strict"`) is only a directive while
-/// it is the first thing in the file, so an import written above one would
-/// silently turn it into a string expression — a bundler would stop seeing
-/// the boundary the author declared. Everything else about the top of a
-/// file (a license comment, a blank line) is ordinary text an import may
-/// precede, so the scan stops at the first statement that is not one of
-/// these two.
+/// An import written above a directive would demote it to a string
+/// expression, so a bundler would stop seeing the boundary the author
+/// declared. After the last directive, the rest of its line — whitespace and
+/// comments — stays with it, and the import opens the next line. When code
+/// follows the directive on its own line, the import is written right after
+/// the directive statement on a line of its own.
 ///
-/// ASCII bytes decide, and multi-byte UTF-8 is opaque: a string's contents
-/// are skipped by its quotes, not read.
-pub(super) fn directive_prologue_end(source: &str) -> usize {
+/// Line terminators and white space are the scanner's (`crate::scanner`).
+pub(super) fn module_import_position(source: &str, directive_end: Option<usize>) -> (usize, bool) {
     let bytes = source.as_bytes();
-    let mut at = 0;
-    // A shebang is not a statement, but nothing may precede it either.
-    if bytes.starts_with(b"#!") {
-        at = source.find('\n').map_or(bytes.len(), |nl| nl + 1);
-    }
-    let mut end = at;
+    let Some(end) = directive_end else {
+        return (program_start(source), false);
+    };
+    let len = bytes.len();
+    let mut at = end;
     loop {
-        let open = skip_trivia(bytes, at);
-        let Some(&quote) = bytes.get(open) else { break };
-        if quote != b'"' && quote != b'\'' {
-            break;
-        }
-        let Some(close) = string_literal_end(bytes, open) else {
-            break;
-        };
-        // What follows decides whether that string was a directive or the
-        // start of an expression (`"a" + b`).
-        let mut after = close;
-        while matches!(bytes.get(after), Some(b' ' | b'\t' | b'\r')) {
-            after += 1;
-        }
-        let directive_end = match bytes.get(after) {
-            Some(b';') => after + 1,
-            None | Some(b'\n') => close,
-            _ => break,
-        };
-        // Past the rest of that line, so what is written next opens a line
-        // of its own rather than trailing the directive.
-        end = match bytes[directive_end..].iter().position(|&b| b == b'\n') {
-            Some(nl) => directive_end + nl + 1,
-            None => bytes.len(),
-        };
-        at = end;
-    }
-    end
-}
-
-/// The offset past whitespace and comments starting at `at`.
-pub(super) fn skip_trivia(bytes: &[u8], mut at: usize) -> usize {
-    loop {
-        while matches!(bytes.get(at), Some(b) if b.is_ascii_whitespace()) {
-            at += 1;
+        at = crate::scanner::skip_space(bytes, at, len, false);
+        if let Some(next_line) = crate::scanner::line_break_end(bytes, at, len) {
+            return (next_line, false);
         }
         match (bytes.get(at), bytes.get(at + 1)) {
-            (Some(b'/'), Some(b'/')) => {
-                at = match bytes[at..].iter().position(|&b| b == b'\n') {
-                    Some(nl) => at + nl + 1,
-                    None => bytes.len(),
-                };
-            }
-            (Some(b'/'), Some(b'*')) => {
-                at = match bytes[at + 2..].windows(2).position(|w| w == b"*/") {
-                    Some(close) => at + 2 + close + 2,
-                    None => bytes.len(),
-                };
-            }
-            _ => return at,
+            (None, _) => return (at, false),
+            (Some(b'/'), Some(b'/')) => at = crate::scanner::line_end(bytes, at, len),
+            (Some(b'/'), Some(b'*')) => at = crate::scanner::block_comment_end(bytes, at, len),
+            _ => return (end, true),
         }
     }
 }
 
-/// The offset just past the string literal opening at `at`, or `None` when
-/// it is unterminated.
-pub(super) fn string_literal_end(bytes: &[u8], at: usize) -> Option<usize> {
-    let quote = bytes[at];
-    let mut i = at + 1;
-    while i < bytes.len() {
-        match bytes[i] {
-            b'\\' => i += 2,
-            b'\n' => return None,
-            b if b == quote => return Some(i + 1),
-            _ => i += 1,
-        }
+fn program_start(source: &str) -> usize {
+    let at = if source.starts_with('\u{feff}') {
+        '\u{feff}'.len_utf8()
+    } else {
+        0
+    };
+    let bytes = source.as_bytes();
+    if bytes[at..].starts_with(b"#!") {
+        let line = crate::scanner::line_end(bytes, at, bytes.len());
+        crate::scanner::line_break_end(bytes, line, bytes.len()).unwrap_or(bytes.len())
+    } else {
+        at
     }
-    None
 }
 
 /// Inline `$tt_ap(v, f)` as `f(v)` exactly when moving the input behind the
@@ -123,6 +80,31 @@ pub(super) fn direct_apply_inputs(
             crate::program_syntax::source_expression_effects(source, span, source_kind)
                 .is_inert()
                 .then_some(head)
+        })
+        .collect()
+}
+
+pub(super) fn member_apply_steps(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    source_kind: SourceKind,
+) -> HashMap<ExprId, crate::program_syntax::MemberCallee> {
+    core.exprs
+        .iter()
+        .filter_map(|expr| match expr {
+            Expr::Apply(apply) => Some(apply),
+            _ => None,
+        })
+        .flat_map(|apply| &apply.steps)
+        .filter(|step| matches!(step.mode, ApplyMode::Call))
+        .filter_map(|step| {
+            let Expr::Opaque(node) = &core.exprs[step.value.index()] else {
+                return None;
+            };
+            let span = semantic.hir.source_map.node_span(*node)?;
+            crate::program_syntax::source_member_callee(source, span, source_kind)
+                .map(|member| (step.value, member))
         })
         .collect()
 }
@@ -353,24 +335,35 @@ pub(super) struct TargetRewritePlan {
     /// recovering projection emits `undefined` for them and claims their
     /// source so editor/type diagnostics can continue.
     pub(super) recovered_propagations: Vec<(ExprId, SourceSpan)>,
+    pub(super) recovered_matches: Vec<(ExprId, SourceSpan)>,
+    pub(super) owner_model: bool,
     /// tt values a conditional operation consumes; their inline Core
     /// position emits nothing (the operation's replacement covers it).
     pub(super) consumed_exprs: HashSet<ExprId>,
     pub(super) arrow_returns: Vec<ArrowReturnRewrite>,
     pub(super) slot_exprs: HashMap<ExprId, String>,
     pub(super) value_slots: HashMap<ExprId, String>,
+    pub(super) piped_slots: HashMap<ExprId, Vec<String>>,
     pub(super) scheduled_slots: HashMap<crate::evaluation_ir::ValueSlotId, String>,
     pub(super) value_exits: HashMap<ExprId, Vec<HostExit>>,
     pub(super) nested_schedules: HashMap<ExprId, EvaluationSchedule>,
+    pub(super) nested_operations: Vec<PlannedConditionalOperation>,
     pub(super) nested_values: HashSet<ExprId>,
     /// Every value whose Evaluation IR placement is structurally nested,
     /// before target-specific slot-substitution filtering.
     pub(super) structurally_nested_values: HashSet<ExprId>,
     pub(super) expression_boundary_name: String,
     pub(super) match_raise_name: String,
+    pub(super) match_show_name: String,
+    pub(super) host_error: String,
+    pub(super) host_json: String,
+    pub(super) host_string: String,
     pub(super) inline_subjects: HashMap<NodeId, Vec<String>>,
-    pub(super) block_required_propagations: HashSet<NodeId>,
+    pub(super) block_required_statements: HashSet<NodeId>,
+    pub(super) block_required_owners: HashSet<SourceSpan>,
     pub(super) ambient_items: HashSet<NodeId>,
+    pub(super) script: bool,
+    pub(super) global_temps: HashMap<crate::core_ir::TempId, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -396,7 +389,6 @@ pub(super) struct ArrowReturnRewrite {
     pub(super) source: SourceSpan,
     pub(super) expr: ExprId,
     pub(super) slot: String,
-    pub(super) parenthesized: bool,
     pub(super) contextual_type: Option<SourceSpan>,
     pub(super) contextual_type_awaited: bool,
 }
@@ -708,7 +700,7 @@ fn can_defer_arm_values(
             decision
                 .arms
                 .last()
-                .is_some_and(|arm| matches!(arm.pattern, PatternPlan::Any) && arm.guard.is_none())
+                .is_some_and(DecisionArm::always_matches)
         }
         DecisionKind::Match { .. } => true,
         _ => false,
@@ -761,8 +753,6 @@ pub(super) struct SourceReplacement {
     pub(super) claim: bool,
 }
 
-pub(super) type NestedSourceReplacement = (SourceSpan, String, Option<(AnchorKind, usize)>);
-
 #[derive(Debug, Clone)]
 pub(super) struct LocalSourceEdit {
     pub(super) span: SourceSpan,
@@ -787,7 +777,7 @@ impl TargetRewritePlan {
             .for_initializer_propagations()
             .map(|propagation| ForInitializerPropagationRewrite {
                 node: propagation.node,
-                owner: propagation.owner.span,
+                owner: propagation.owner.anchor(),
                 source: propagation.source,
             })
             .collect();
@@ -796,8 +786,14 @@ impl TargetRewritePlan {
             .into_iter()
             .map(|failure| (failure.expr, failure.source))
             .collect();
+        let recovered_matches: Vec<_> = lowering
+            .unsupported_matches()
+            .into_iter()
+            .map(|failure| (failure.expr, failure.source))
+            .collect();
         let recovered: HashSet<_> = recovered_propagations
             .iter()
+            .chain(&recovered_matches)
             .map(|(expr, _)| *expr)
             .collect();
         // Whether a value's control flow may become statements in its host
@@ -820,7 +816,7 @@ impl TargetRewritePlan {
                     && value.schedule.steps().is_empty()
                     && value.capability == TargetCapability::StatementRegion)
                     .then(|| OwnerSlotRewrite {
-                        owner: rewrite.owner.span,
+                        owner: rewrite.owner.anchor(),
                         source: structured_expr_span(semantic, core, value.expr)
                             .unwrap_or(value.source),
                         expr: value.expr,
@@ -845,7 +841,6 @@ impl TargetRewritePlan {
                         source: value.source,
                         expr: value.expr,
                         slot: lowering.slot_name(slot).to_owned(),
-                        parenthesized: rewrite.owner.span != value.source,
                         contextual_type: value.context.contextual_type,
                         contextual_type_awaited: value.context.contextual_type_awaited,
                     })
@@ -1031,7 +1026,7 @@ impl TargetRewritePlan {
                         })
                         .collect();
                     ComposeRewrite {
-                        owner: rewrite.owner.span,
+                        owner: rewrite.owner.anchor(),
                         owner_kind: rewrite.owner.kind,
                         actions,
                     }
@@ -1107,6 +1102,48 @@ impl TargetRewritePlan {
                 .flat_map(|(_, exits)| exits.iter().filter_map(|exit| exit.argument)),
         );
         relocated_values.extend(all_operations().map(|operation| operation.parent));
+        relocated_values.extend(lowering.nested_operations().iter().flat_map(|operation| {
+            let condition = match operation.condition {
+                PlannedEvaluationInput::Source { source, .. }
+                | PlannedEvaluationInput::Stable { source, .. } => Some(source),
+                PlannedEvaluationInput::Slot { .. } => None,
+            };
+            let branches = match &operation.kind {
+                PlannedConditionalKind::Ternary {
+                    consequent,
+                    alternate,
+                } => [consequent, alternate]
+                    .into_iter()
+                    .filter_map(|branch| match branch {
+                        PlannedBranch::Source(span) => Some(*span),
+                        PlannedBranch::Value(_) => None,
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            std::iter::once(operation.parent)
+                .chain(condition)
+                .chain(branches)
+                .chain(
+                    operation
+                        .active
+                        .iter()
+                        .flat_map(|active| &active.steps)
+                        .chain(&operation.outer)
+                        .flat_map(|step| {
+                            std::iter::once(step.parent).chain(step.inputs.iter().filter_map(
+                                |input| match input {
+                                    PlannedEvaluationInput::Source { source, .. }
+                                    | PlannedEvaluationInput::Stable { source, .. } => {
+                                        Some(*source)
+                                    }
+                                    PlannedEvaluationInput::Slot { .. } => None,
+                                },
+                            ))
+                        }),
+                )
+                .collect::<Vec<_>>()
+        }));
         relocated_values.extend(loop_tests.iter().filter_map(|rewrite| rewrite.update));
         relocated_values.extend(lowering.nested_value_schedules().flat_map(|(_, schedule)| {
             schedule.steps().iter().flat_map(|step| {
@@ -1224,6 +1261,12 @@ impl TargetRewritePlan {
         };
         let rewritten_operations: Vec<SourceSpan> = all_operations()
             .map(|operation| operation.parent)
+            .chain(
+                lowering
+                    .nested_operations()
+                    .iter()
+                    .map(|operation| operation.parent),
+            )
             .chain(call_frames().map(|(span, _)| span))
             .chain(loop_tests.iter().flat_map(|rewrite| {
                 let prefix = (rewrite.kind == LoopTestKind::While).then_some(SourceSpan {
@@ -1235,7 +1278,7 @@ impl TargetRewritePlan {
                     end: rewrite.body.start,
                 }))
             }))
-            // Concise-arrow rewrites emit host grouping as block/IIFE
+            // Concise-arrow rewrites emit host grouping as block
             // delimiters. Claim only frames outside their Core values;
             // source between and inside values remains exactly preserved.
             .chain(arrow_return_frames)
@@ -1260,10 +1303,13 @@ impl TargetRewritePlan {
             .collect();
         let mut source_replacements: Vec<_> = all_values()
             .flat_map(|value| &value.steps)
-            .chain(
-                all_operations()
-                    .flat_map(|operation| operation.active_steps.iter().chain(&operation.outer)),
-            )
+            .chain(all_operations().flat_map(|operation| {
+                operation
+                    .active
+                    .iter()
+                    .flat_map(|active| &active.steps)
+                    .chain(&operation.outer)
+            }))
             .flat_map(|step| &step.inputs)
             .filter_map(|input| match input {
                 PlannedEvaluationInput::Source {
@@ -1446,9 +1492,16 @@ impl TargetRewritePlan {
             .collect();
         Self {
             inline_subjects,
-            block_required_propagations: lowering.block_required_propagations().clone(),
+            block_required_statements: lowering.block_required_statements().clone(),
+            block_required_owners: lowering.block_required_owners().clone(),
             ambient_items: lowering.ambient_items().clone(),
+            script: lowering.is_script(),
+            global_temps: lowering.global_temps().clone(),
             match_raise_name: lowering.match_raise_name().to_owned(),
+            match_show_name: lowering.match_show_name().to_owned(),
+            host_error: lowering.host_global("Error"),
+            host_json: lowering.host_global("JSON"),
+            host_string: lowering.host_global("String"),
             owner_slots,
             for_initializer_propagations,
             composes,
@@ -1457,13 +1510,17 @@ impl TargetRewritePlan {
             relocated_values,
             rewritten_operations,
             recovered_propagations,
+            recovered_matches,
+            owner_model: lowering.has_owner_model(),
             consumed_exprs,
             arrow_returns,
             slot_exprs,
             value_slots,
+            piped_slots: lowering.piped_slot_names().collect(),
             scheduled_slots,
             value_exits,
             nested_schedules,
+            nested_operations: lowering.nested_operations().to_vec(),
             nested_values,
             structurally_nested_values,
             expression_boundary_name,

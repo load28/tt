@@ -59,7 +59,7 @@ fn tt_only_keeps_the_tt_layer_and_drops_the_type_layer() {
 #[test]
 fn overlay_keeps_the_buffer_in_its_project() {
     require_types_toolchain!();
-    let dir = tmpdir();
+    let dir = typed_workspace();
     let src = dir.join("src");
     fs::create_dir_all(&src).unwrap();
     fs::write(
@@ -153,6 +153,48 @@ fn the_server_resolves_tt_names_without_a_toolchain() {
     );
     // ...and points at the declaration on line 0.
     assert_eq!(answer["result"]["definition"]["range"]["start"]["line"], 0);
+}
+
+#[test]
+fn a_server_position_past_the_line_end_stays_on_its_line() {
+    use std::io::Write;
+    let dir = tmpdir();
+    let file = dir.join("shape.tt");
+    let source = "const\nvariant Shape { Circle(radius: number), Point }\n";
+    fs::write(&file, source).unwrap();
+    let requests = [
+        ("ttSymbol", 0, 30),
+        ("ttSymbol", 1, 9),
+        ("ttCompletions", 0, 30),
+    ];
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--server")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("server starts");
+    for (id, (method, line, character)) in requests.iter().enumerate() {
+        let request = serde_json::json!({
+            "id": id,
+            "method": method,
+            "params": {
+                "path": file.to_string_lossy(),
+                "text": source,
+                "position": { "line": line, "character": character },
+            },
+        });
+        writeln!(child.stdin.as_mut().unwrap(), "{request}").unwrap();
+    }
+    drop(child.stdin.take());
+    let out = child.wait_with_output().expect("server answers");
+    let answers: Vec<serde_json::Value> = String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(|line| serde_json::from_str(line).expect("one JSON line"))
+        .collect();
+    assert_eq!(answers.len(), requests.len());
+    assert!(answers[0]["result"].is_null(), "{}", answers[0]);
+    assert_eq!(answers[1]["result"]["kind"], "variant", "{}", answers[1]);
+    assert_eq!(answers[2]["result"]["items"], serde_json::json!([]));
 }
 
 /* ------------------------------------------------------------------ */
@@ -366,6 +408,28 @@ fn explain_accepts_a_code_pasted_from_a_build_log() {
     assert!(out.status.success(), "{out:?}");
     let text = String::from_utf8(out.stdout).unwrap();
     assert!(text.starts_with("error[val-mutation]"), "{text}");
+}
+
+#[test]
+fn explain_accepts_the_number_tsc_prints() {
+    for reference in ["tt27", "27", "error tt27:"] {
+        let out = ttc(&["explain", reference]);
+        assert!(out.status.success(), "{reference}: {out:?}");
+        let text = String::from_utf8(out.stdout).unwrap();
+        assert!(
+            text.starts_with("error[match-not-exhaustive] (tt27)"),
+            "{reference}: {text}"
+        );
+    }
+    let out = ttc(&["explain", "tt33"]);
+    assert!(!out.status.success(), "{out:?}");
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(err.contains("result-tail-semicolon"), "{err}");
+    assert!(err.contains("retired"), "{err}");
+    let out = ttc(&["explain", "tt999"]);
+    assert!(!out.status.success(), "{out:?}");
+    let err = String::from_utf8(out.stderr).unwrap();
+    assert!(err.contains("unknown diagnostic code"), "{err}");
 }
 
 #[test]

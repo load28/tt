@@ -59,22 +59,22 @@ pub struct ProjectedDocument {
     /// typed projection. Diagnostics originating inside these ranges are
     /// recovery effects; diagnostics elsewhere remain reportable.
     pub(crate) recovered: Vec<(usize, usize)>,
-    /// The file's variant declaration symbols, parsed once per content
-    /// version — what an importer's extern collection reads, so a file
-    /// that did not change is never re-parsed for its exports
-    /// (`docs/design/compiler-core.md` §11).
-    variant_symbols: std::sync::OnceLock<Vec<crate::VariantSymbol>>,
+    /// The variants the file exports, under their exported names, parsed
+    /// once per content version — what an importer's extern collection
+    /// reads, so a file that did not change is never re-parsed for its
+    /// exports (`docs/design/compiler-core.md` §11).
+    exported_variant_symbols: std::sync::OnceLock<Vec<crate::VariantSymbol>>,
     /// Relative `.tt` imports collected while projecting this content version.
     /// Shared by snapshot graph discovery and semantic cache dependencies.
     imports: Vec<crate::TtImport>,
 }
 
 impl ProjectedDocument {
-    /// The file's variant declaration symbols (exported or not), computed on
-    /// first use and pinned to this projection's content version.
-    pub(crate) fn variant_symbols(&self) -> &[crate::VariantSymbol] {
-        self.variant_symbols.get_or_init(|| {
-            crate::variant_symbols_with_kind(
+    /// The variants the file exports ([`crate::exported_variant_symbols`]),
+    /// computed on first use and pinned to this projection's content version.
+    pub(crate) fn exported_variant_symbols(&self) -> &[crate::VariantSymbol] {
+        self.exported_variant_symbols.get_or_init(|| {
+            crate::exported_variant_symbols_with_kind(
                 &self.source,
                 crate::SourceKind::from_path(&self.source_path).unwrap_or_default(),
             )
@@ -129,7 +129,8 @@ impl ProjectedDocument {
             ..Options::default()
         };
         let source_kind = options.source_kind;
-        let report = crate::compile_projection_report(&source, &options);
+        let (program, tokens) = crate::parser::lex_and_parse_with_kind(&source, source_kind);
+        let report = crate::compile_projection_report_parsed(&source, &options, &program, &tokens);
         let Some(emit) = report.emit else {
             return Err(BlockedFile::new(
                 source_path.to_path_buf(),
@@ -137,21 +138,21 @@ impl ProjectedDocument {
                 report.diagnostics,
             ));
         };
-        let scan = crate::scan_module_with_kind(&source, source_kind);
+        let scan = crate::scan_module_of(&source, &program);
         Ok(ProjectedDocument {
             module_path: module_path_of(source_path),
             imports_std: scan.imports_std,
             uses_pipeline: scan.uses_pipeline,
-            literal_probes: crate::literal_matches_with_kind(&source, source_kind),
-            tag_probes: crate::tag_matches_with_kind(&source, source_kind),
-            payload_probes: crate::payload_probes_with_kind(&source, source_kind),
-            val: crate::val_probes_with_kind(&source, source_kind),
+            literal_probes: crate::probe::literal_matches_of(&source, &program),
+            tag_probes: crate::probe::tag_matches_of(&source, &program),
+            payload_probes: crate::probe::payload_probes_of(&program),
+            val: crate::val_probes_with_emit(&source, source_kind, &program, &tokens, &emit),
             source_path: source_path.to_path_buf(),
             source,
             emit,
             tt_diagnostics: report.diagnostics,
             recovered: report.recovered,
-            variant_symbols: std::sync::OnceLock::new(),
+            exported_variant_symbols: std::sync::OnceLock::new(),
             imports: scan.imports,
         })
     }
@@ -160,13 +161,14 @@ impl ProjectedDocument {
 /// The module path an `.tt` file takes in the project graph: its own path
 /// with `.ts` appended, so `src/token.tt` becomes `src/token.tt.ts`.
 ///
-/// This is what makes the whole arrangement need no configuration. A
-/// specifier written `"./token.tt"` — which is what a hand-written `.ts`
-/// and an `.tt` alike write — resolves to `token.tt.ts` by ordinary
-/// TypeScript resolution, with no `allowImportingTsExtensions`, no
-/// `paths`, and no rewriting. And the declaration the compiler emits for
-/// it lands on `token.tt.d.ts`, which is exactly the editor sidecar the
-/// same specifier resolves to when no compiler is running.
+/// This is the engine's name for the module. The TypeScript backend decides
+/// how the compiler sees it (`src/typescript/host.mjs`). A configured project
+/// holds it as `token.tt` through a content mapper, so `"./token.tt"`
+/// resolves as it does under `tsc --runExternalCode`. Otherwise it is served
+/// as `token.tt.ts`, which ordinary resolution finds where TypeScript probes
+/// extensions. Either way the declaration the compiler emits for it lands on
+/// `token.tt.d.ts`, the editor sidecar the same specifier resolves to when no
+/// compiler is running.
 pub(crate) fn module_path_of(source_path: &Path) -> PathBuf {
     let mut name = source_path.as_os_str().to_os_string();
     let kind = crate::SourceKind::from_path(source_path).unwrap_or_default();
@@ -181,10 +183,26 @@ pub(crate) fn module_path_of(source_path: &Path) -> PathBuf {
 /// specifier stays bare in the source and in every declaration emitted from
 /// it. Nothing is written to the user's `node_modules`.
 pub(crate) fn std_module_path(module: crate::StdModule) -> PathBuf {
-    match module {
-        crate::StdModule::Runtime => PathBuf::from("node_modules/@tt/runtime/index.ts"),
-        _ => Path::new("node_modules/@tt/std").join(module.file_name()),
-    }
+    let package = match module {
+        crate::StdModule::Runtime => crate::StdPackage::Runtime,
+        _ => crate::StdPackage::Std,
+    };
+    std_package_dir(package).join(crate::StdPackage::file_name(module))
+}
+
+fn std_package_dir(package: crate::StdPackage) -> PathBuf {
+    Path::new("node_modules").join(package.name())
+}
+
+fn std_package_modules(root: &Path, package: crate::StdPackage) -> impl Iterator<Item = Module> {
+    let directory = root.join(std_package_dir(package));
+    package
+        .files_with_banner("")
+        .into_iter()
+        .map(move |(name, text)| Module {
+            path: directory.join(name),
+            text,
+        })
 }
 
 /// The path the compiler emits a lowered module's declarations to:
@@ -214,17 +232,12 @@ pub(crate) fn assemble(
     if files.iter().any(|f| f.imports_std) {
         query
             .modules
-            .extend(crate::StdModule::STANDARD.map(|module| Module {
-                path: root.join(std_module_path(module)),
-                text: module.source().to_string(),
-            }));
+            .extend(std_package_modules(root, crate::StdPackage::Std));
     }
     if files.iter().any(|f| f.uses_pipeline) {
-        let module = crate::StdModule::Runtime;
-        query.modules.push(Module {
-            path: root.join(std_module_path(module)),
-            text: module.source().to_string(),
-        });
+        query
+            .modules
+            .extend(std_package_modules(root, crate::StdPackage::Runtime));
     }
 
     for file in files {
@@ -258,15 +271,6 @@ pub(crate) fn assemble(
             {
                 continue;
             }
-            // A BigInt is never a member of a finite literal union
-            // TypeScript reports, so such a match is left unchecked.
-            if probe
-                .covered
-                .iter()
-                .any(|l| matches!(l, crate::Literal::BigInt(_)))
-            {
-                continue;
-            }
             let Some(position) = scrutinee_position(&file.emit, probe.offset) else {
                 continue;
             };
@@ -283,6 +287,7 @@ pub(crate) fn assemble(
                 },
                 body_open: probe.body_open,
                 body_close: probe.body_close,
+                tail: probe.tail,
             });
         }
 
@@ -321,6 +326,7 @@ pub(crate) fn assemble(
                     },
                     body_open: probe.body_open,
                     body_close: probe.body_close,
+                    tail: probe.tail,
                 });
             }
         }
@@ -344,7 +350,7 @@ pub(crate) fn assemble(
                     offset: binding.val_at,
                     end: binding.val_at + "val".len(),
                 },
-                modifier_end: crate::val::modifier_end(&file.source, binding.val_at + "val".len()),
+                modifier_end: binding.modifier_end,
             });
         }
         for mutation in &val.mutations {
@@ -528,6 +534,8 @@ pub(crate) struct MatchAnchor {
     pub body_open: usize,
     /// Byte offset of the body's closing `}`.
     pub body_close: usize,
+    /// Where the written arms end.
+    pub tail: crate::ArmsTail,
 }
 
 /// One mutation, with the symbol questions that decide whether it is one.

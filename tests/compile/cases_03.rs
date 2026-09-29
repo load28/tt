@@ -2,7 +2,7 @@
 #[test]
 fn try_inside_match_arm_is_an_error() {
     // Directly in an arm's statement stream the emitted `return` would
-    // exit the switch IIFE — the match would *evaluate to* the `Err`
+    // deliver the arm's value — the match would *evaluate to* the `Err`
     // instead of propagating it.
     let e = err(
         "const x = match (r) {\n  Ok(value) => { const y = try f(value); return y; },\n  Err(error) => fallback(error),\n};\n",
@@ -13,6 +13,13 @@ fn try_inside_match_arm_is_an_error() {
         "{}",
         e.message
     );
+    assert!(
+        e.message
+            .contains("would complete this construct's value instead of returning from"),
+        "{}",
+        e.message
+    );
+    assert!(!e.message.contains("IIFE"), "{}", e.message);
     // The propagation, not the declaration it is written in.
     assert_eq!((e.line, e.col), (2, 28));
     assert_eq!((e.end_line, e.end_col), (2, 40));
@@ -443,6 +450,26 @@ fn let_else_emits_guard_and_bind() {
         compact(&out).contains(
             "const $tt_t0 = find(); if ($tt_t0.kind !== \"Some\") { return 0; } const { value } = $tt_t0;"
         ),
+        "{out}"
+    );
+}
+
+#[test]
+fn let_else_initializer_may_be_an_object_literal() {
+    let out = ok(
+        "function f(n: number) {\n  const Some(value: v) = { kind: \"Some\" as const, value: n } else { return; };\n  return v;\n}\n",
+    );
+    assert!(
+        compact(&out).contains(
+            "const $tt_t0 = { kind: \"Some\" as const, value: n }; if ($tt_t0.kind !== \"Some\") { return; } const { value: v } = $tt_t0;"
+        ),
+        "{out}"
+    );
+    let out = ok(
+        "function f(o?: { kind: \"Some\"; value: number }, c = true) {\n  const Some(value) = o ?? (c ? { kind: \"Some\" as const, value: 1 } : { kind: \"None\" as const }) else { return 0; };\n  const Some(value: w) = c ? { kind: \"Some\" as const, value } : { kind: \"None\" as const } else { return 1; };\n  return w;\n}\n",
+    );
+    assert!(
+        out.contains("const $tt_t1 = c ? { kind: \"Some\" as const, value } : { kind: \"None\" as const };"),
         "{out}"
     );
 }

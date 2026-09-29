@@ -27,7 +27,7 @@ const $tt_v1 = (consume);
       break;
     }
     default: {
-      throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
+      throw new Error("tt match: unexpected case " + $tt_show($tt_m));
     }
   }
 }
@@ -47,7 +47,7 @@ const $tt_v3 = ($tt_v4.consume).bind($tt_v4);
       break;
     }
     default: {
-      throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
+      throw new Error("tt match: unexpected case " + $tt_show($tt_m));
     }
   }
 }
@@ -69,7 +69,7 @@ if ($tt_v6 != null) {
         break;
       }
       default: {
-        throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
+        throw new Error("tt match: unexpected case " + $tt_show($tt_m));
       }
     }
   }
@@ -95,10 +95,28 @@ const $tt_v10 = $tt_v9<Item>;
       break;
     }
     default: {
-      throw new Error("tt match: unexpected case " + JSON.stringify($tt_m));
+      throw new Error("tt match: unexpected case " + $tt_show($tt_m));
     }
   }
 }
 const instantiated = $tt_v8;
 
 export { consumed, optional, instantiated };
+function $tt_show(value: unknown): string {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "bigint") {
+    return String(value) + "n";
+  }
+  if (typeof value === "object" || typeof value === "function") {
+    try {
+      const text = JSON.stringify(value);
+      if (typeof text === "string") {
+        return text;
+      }
+    } catch {}
+    return typeof value;
+  }
+  return String(value);
+}

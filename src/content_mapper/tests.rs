@@ -1,4 +1,5 @@
 use super::*;
+use crate::test_workspace::Workspace;
 
 #[test]
 fn free_intervals_carve_around_occupied_stretches() {
@@ -15,7 +16,7 @@ fn free_intervals_carve_around_occupied_stretches() {
 fn passthrough_maps_as_one_verbatim_span() {
     let source = "const n: number = 1;\n";
     let emit = ttc::emit_mapped(source);
-    let spans = span_mappings(&emit.mappings, &emit.anchors);
+    let spans = span_mappings(&emit.mappings, &emit.anchors, &[]);
     assert_eq!(
         spans,
         [serde_json::json!([
@@ -32,7 +33,7 @@ fn passthrough_maps_as_one_verbatim_span() {
 fn glue_maps_to_its_construct_without_features() {
     let source = "variant E { A(x: number), B }\nconst v = match (E.A(1)) { A(x) => x, B => 0 };\n";
     let emit = ttc::emit_mapped(source);
-    let spans = span_mappings(&emit.mappings, &emit.anchors);
+    let spans = span_mappings(&emit.mappings, &emit.anchors, &[]);
     // Spans are sorted and non-overlapping in the virtual text.
     let mut last_end = 0u64;
     for span in &spans {
@@ -52,48 +53,10 @@ fn glue_maps_to_its_construct_without_features() {
     }
 }
 
-#[test]
-fn code_numbers_are_stable_and_start_at_one() {
-    assert_eq!(code_number("stray-pipe"), 1);
-    assert_eq!(code_number("match-not-exhaustive"), 27);
-    assert_eq!(code_number("result-tail-semicolon"), 33);
-    assert_eq!(code_number("lowering-plan-failed"), 34);
-    assert_eq!(code_number("result-no-success-value"), 35);
-    assert_eq!(code_number("try-crosses-value-region"), 42);
-    for code in ttc::DiagnosticCode::ALL {
-        assert_ne!(
-            code_number(code.as_str()),
-            0,
-            "active diagnostic {} has no mapper wire number",
-            code.as_str()
-        );
-    }
-    assert_eq!(code_number("never-heard-of-it"), 0);
-}
-
-/// A scratch directory for one case, removed on drop.
-struct Scratch(PathBuf);
-
-impl Scratch {
-    fn new(tag: &str) -> Scratch {
-        let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|since| since.as_nanos())
-            .unwrap_or_default();
-        let path = std::env::temp_dir().join(format!("tt-cm-{tag}-{}-{nonce}", std::process::id()));
-        std::fs::create_dir_all(&path).expect("a writable temporary directory");
-        Scratch(path)
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for Scratch {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
+fn code_number(name: &str) -> u32 {
+    ttc::DiagnosticCode::parse(name)
+        .unwrap_or_else(|| panic!("{name} is not a diagnostic code"))
+        .number()
 }
 
 fn session() -> Session {
@@ -186,7 +149,7 @@ fn missing_string_params_answer_invalid_params() {
 
 #[test]
 fn open_project_tracks_the_handle_and_materializes_std() {
-    let scratch = Scratch::new("open");
+    let scratch = Workspace::new("open");
     std::fs::write(scratch.path().join("package.json"), "{}\n").unwrap();
     let config = scratch.path().join("tsconfig.json");
     let mut session = session();
@@ -247,7 +210,7 @@ fn a_project_without_a_config_file_opens_too() {
 
 #[test]
 fn transform_serves_a_variant_file_as_virtual_typescript() {
-    let scratch = Scratch::new("transform");
+    let scratch = Workspace::new("transform");
     std::fs::write(scratch.path().join("package.json"), "{}\n").unwrap();
     let file = scratch.path().join("shape.tt");
     let source = "export variant Shape { Circle(radius: number), Point }\n\
@@ -281,7 +244,7 @@ fn transform_serves_a_variant_file_as_virtual_typescript() {
 
 #[test]
 fn transform_reads_one_hop_imports_for_exhaustiveness() {
-    let scratch = Scratch::new("extern");
+    let scratch = Workspace::new("extern");
     std::fs::write(
         scratch.path().join("shape.tt"),
         "export variant Shape { Circle(radius: number), Rect(width: number, height: number) }\n",
@@ -306,7 +269,11 @@ fn transform_reads_one_hop_imports_for_exhaustiveness() {
     .unwrap();
     let diagnostics = result["diagnostics"].as_array().unwrap();
     assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
-    assert_eq!(diagnostics[0]["code"], code_number("match-not-exhaustive"));
+    assert_eq!(diagnostics[0]["code"], 27);
+    assert_eq!(
+        ttc::DiagnosticCode::lookup("tt27"),
+        Some(ttc::DiagnosticCode::MatchNotExhaustive)
+    );
     let message = diagnostics[0]["messageText"].as_str().unwrap();
     assert!(message.contains("not exhaustive"), "{message}");
     assert!(
@@ -320,7 +287,7 @@ fn transform_reads_one_hop_imports_for_exhaustiveness() {
 
 #[test]
 fn namespace_imports_qualify_their_extern_variants() {
-    let scratch = Scratch::new("ns");
+    let scratch = Workspace::new("ns");
     std::fs::write(
         scratch.path().join("dep.tt"),
         "export variant Mode { Fast(), Safe }\n",
@@ -393,7 +360,7 @@ fn incomplete_match_arms_preserve_mapped_siblings_in_both_source_kinds() {
         .unwrap();
         let text = result["text"].as_str().unwrap();
         assert!(text.contains("const { name } = $tt_m;"), "{text}");
-        assert!(text.contains("$tt_v0 = name;"), "{text}");
+        assert!(text.contains("$tt_v0$greeting = name;"), "{text}");
         assert!(!result["mappings"].as_array().unwrap().is_empty());
         let diagnostics = result["diagnostics"].as_array().unwrap();
         assert!(
@@ -425,7 +392,7 @@ fn a_ttx_file_serves_as_tsx() {
 
 #[test]
 fn std_imports_materialize_next_to_the_nearest_package_root() {
-    let scratch = Scratch::new("std");
+    let scratch = Workspace::new("std");
     std::fs::write(scratch.path().join("package.json"), "{}\n").unwrap();
     let nested = scratch.path().join("src/deep");
     std::fs::create_dir_all(&nested).unwrap();
@@ -453,7 +420,7 @@ fn std_imports_materialize_next_to_the_nearest_package_root() {
 
 #[test]
 fn package_root_walks_to_a_marker_or_gives_up() {
-    let scratch = Scratch::new("root");
+    let scratch = Workspace::new("root");
     let nested = scratch.path().join("a/b");
     std::fs::create_dir_all(&nested).unwrap();
     std::fs::write(scratch.path().join("package.json"), "{}\n").unwrap();
@@ -471,4 +438,72 @@ fn positionless_diagnostics_serialize_as_zero_spans() {
     assert_eq!(wire["code"], code_number("variant-duplicate-case"));
     assert!(wire["start"].as_u64().is_some());
     assert!(wire["length"].as_u64().is_some());
+}
+
+#[test]
+fn recovered_syntax_never_travels_as_verbatim_text() {
+    let cases = [
+        (
+            "declare const s: any;\nconst v = match (s) {\n  Circle { r } => r,\n};\nexport const a = 1;\n",
+            "malformed-match",
+        ),
+        (
+            "export variant Shape {\n  Circle(r: number\n}\nexport const a = 1;\n",
+            "malformed-variant",
+        ),
+        (
+            "declare function f(): any;\nconst v = try f();\nexport const a = 1;\n",
+            "try-placement",
+        ),
+        (
+            "export variant Broken { Value(x: number]) }\nexport const a = 1;\n",
+            "variant-invalid-field-type",
+        ),
+    ];
+    for (content, code) in cases {
+        let result = respond(
+            &mut session(),
+            &request(
+                "transform",
+                serde_json::json!({
+                    "fileName": "/nonexistent/recovered.tt",
+                    "content": content,
+                    "projectHandle": "p:0",
+                }),
+            ),
+        )
+        .unwrap();
+        let text = result["text"].as_str().unwrap();
+        let spans = result["mappings"].as_array().unwrap();
+        assert!(text.contains("export const a = 1;"), "{code}: {text}");
+        let mut atoms = 0;
+        for span in spans {
+            let values: Vec<usize> = span
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|value| value.as_u64().unwrap() as usize)
+                .collect();
+            let (out, out_len, src, src_len) = (values[0], values[1], values[2], values[3]);
+            if values[4] as u64 == SPAN_VERBATIM {
+                assert_eq!(out_len, src_len);
+                assert_eq!(
+                    &text[out..out + out_len],
+                    &content[src..src + src_len],
+                    "{code}: verbatim span {span} differs from the original"
+                );
+            } else {
+                atoms += 1;
+                assert_eq!(values[5] as u64, FEATURES_NONE);
+            }
+        }
+        assert!(atoms > 0, "{code}: the recovered stretch maps as an atom");
+        let diagnostics = result["diagnostics"].as_array().unwrap();
+        assert!(
+            diagnostics
+                .iter()
+                .any(|diagnostic| diagnostic["code"] == code_number(code)),
+            "{code}: {diagnostics:?}"
+        );
+    }
 }

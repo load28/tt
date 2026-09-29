@@ -1,12 +1,12 @@
 //! tt's own names — the semantic surface the checker cannot be asked about.
 //!
 //! Three of tt's name spaces exist only in `.tt` source: a **variant name**,
-//! a **case tag**, and a **payload field name**. None survives lowering in
-//! a form TypeScript can be pointed at — a variant declaration is synthesized
-//! text with no mapping back, a tag becomes a string literal, a field a
-//! destructuring key. So the answers TypeScript gives for every other
-//! identifier (hover, go-to-definition) are simply absent here, and tt has
-//! to give them itself.
+//! a **case tag**, and a **payload field name**. Inside the declaration and
+//! in a pattern, none survives lowering in a form TypeScript can be pointed
+//! at — a variant declaration is synthesized text with no mapping back, a
+//! tag becomes a string literal, a field a destructuring key. So the answers
+//! TypeScript gives for every other identifier (hover, go-to-definition) are
+//! simply absent there, and tt has to give them itself.
 //!
 //! This module is that answer, and it follows the same layering the rest of
 //! the engine does:
@@ -62,6 +62,9 @@ pub struct TtSymbol {
     pub detail: String,
     /// Where it is declared, when that is a place the editor can open.
     pub definition: Option<Location>,
+    /// Whether the identifier also declares a local binding — a shorthand
+    /// payload pattern (`Circle(radius)`), whose rename is the binding's.
+    pub binds: bool,
 }
 
 /// The tt name at `position`, or `None` when the position is not on one.
@@ -93,6 +96,10 @@ pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtS
         .declarations
         .iter()
         .find(|d| d.name == resolved.variant_name)?;
+    let binds = resolved.kind == NameKind::Field
+        && analyses
+            .binding_at(resolved.start)
+            .is_some_and(|binding| binding.start == resolved.start && binding.end == resolved.end);
     let (kind, signature, detail, definition) = match resolved.kind {
         NameKind::Case => {
             let constructor = declared
@@ -134,6 +141,7 @@ pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtS
         signature,
         detail,
         definition,
+        binds,
     })
 }
 
@@ -166,6 +174,7 @@ fn declaration_at(
                          object of the same name"
                     .to_string(),
                 definition: Some(here),
+                binds: false,
             });
         }
         for case in &declaration.cases {
@@ -198,6 +207,7 @@ fn declaration_at(
                             path: path.to_path_buf(),
                             range,
                         }),
+                        binds: false,
                     });
                 }
             }
@@ -237,6 +247,7 @@ fn symbol_of_local_case(
             path: path.to_path_buf(),
             range,
         }),
+        binds: false,
     }
 }
 
@@ -257,7 +268,7 @@ fn case_definition(
             range: super::language::span_range(source, case.offset, case.offset + case.tag.len()),
         });
     }
-    let (target, text, imported) = imported_declaration(path, declared)?;
+    let (target, text, imported) = imported_declaration(path, source, declared)?;
     let case = imported.cases.iter().find(|c| c.tag == tag)?;
     Some(Location {
         path: target,
@@ -285,7 +296,7 @@ fn field_definition(
             range: super::language::span_range(source, start, end),
         });
     }
-    let (target, text, imported) = imported_declaration(path, declared)?;
+    let (target, text, imported) = imported_declaration(path, source, declared)?;
     let (start, end) = find(&imported)?;
     Some(Location {
         path: target,
@@ -298,40 +309,30 @@ fn field_definition(
 /// `.tt` imports.
 fn imported_declaration(
     path: &Path,
+    source: &str,
     declared: &DeclaredVariant,
 ) -> Option<(PathBuf, String, VariantSymbol)> {
     let Origin::Imported { .. } = declared.origin else {
         return None;
     };
-    // A namespace import renames the variant to `ns.Name`; the declaration in
-    // the other file still carries its own name.
-    let own = declared
-        .name
-        .rsplit('.')
-        .next()
-        .unwrap_or(&declared.name)
-        .to_string();
-    let dir = path.parent().unwrap_or(Path::new("."));
-    let source = std::fs::read_to_string(path).ok()?;
-    for import in crate::tt_imports_with_kind(
-        &source,
+    let texts = std::cell::RefCell::new(std::collections::HashMap::new());
+    let imports = crate::tt_imports_with_kind(
+        source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
-    ) {
-        let target = super::paths::canonical(&dir.join(&import.specifier)).ok()?;
-        let Ok(text) = std::fs::read_to_string(&target) else {
-            continue;
-        };
-        if let Some(found) = crate::variant_symbols_with_kind(
+    );
+    let (target, found) = super::language::imported_variants(path, &imports, &|target| {
+        let text = std::fs::read_to_string(target).ok()?;
+        let exported = crate::exported_variant_symbols_with_kind(
             &text,
-            crate::SourceKind::from_path(&target).unwrap_or_default(),
-        )
-        .into_iter()
-        .find(|d| d.exported && (d.name == own || d.name == declared.name))
-        {
-            return Some((target, text, found));
-        }
-    }
-    None
+            crate::SourceKind::from_path(target).unwrap_or_default(),
+        );
+        texts.borrow_mut().insert(target.to_path_buf(), text);
+        Some(exported)
+    })
+    .into_iter()
+    .find(|(_, symbol)| symbol.name == declared.name)?;
+    let text = texts.borrow_mut().remove(&target)?;
+    Some((target, text, found))
 }
 
 /// `variant Shape { Circle(radius: number), Point }` — the declaration as the
@@ -410,10 +411,10 @@ mod tests {
 
     fn at(source: &str, needle: &str, delta: usize) -> Position {
         let offset = source.find(needle).expect("needle") + delta;
-        let before = &source[..offset];
+        let (line, character) = crate::lines::LineMap::lsp(source).utf16_position(offset);
         Position {
-            line: before.matches('\n').count() as u32,
-            character: (offset - before.rfind('\n').map_or(0, |n| n + 1)) as u32,
+            line: line as u32,
+            character: character as u32,
         }
     }
 
@@ -456,6 +457,36 @@ mod tests {
     }
 
     #[test]
+    fn protocol_positions_count_the_protocols_line_breaks() {
+        const DECLARATION: &str = "variant Shape { Circle(radius: number), Point }";
+        const USE: &str = "const a = match (s) { Circle(radius) => radius, Point => 0 };";
+        for (separator, position) in [
+            ("\r", (1, 22)),
+            ("\r\n", (1, 22)),
+            ("\u{2028}", (0, DECLARATION.len() + 1 + 22)),
+            ("\u{2029}\r", (1, 22)),
+        ] {
+            let source = format!("\u{feff}{DECLARATION}{separator}{USE}{separator}");
+            let position = Position {
+                line: position.0 as u32,
+                character: position.1 as u32,
+            };
+            let case = tt_symbol_at(Path::new("/p/a.tt"), &source, position)
+                .unwrap_or_else(|| panic!("no symbol in {source:?}"));
+            assert_eq!(case.signature, "Shape.Circle(radius: number)");
+            let definition = case.definition.expect("declared in this file");
+            assert_eq!(
+                (
+                    definition.range.start.line,
+                    definition.range.start.character
+                ),
+                (0, 16),
+                "{source:?}"
+            );
+        }
+    }
+
+    #[test]
     fn an_if_let_pattern_answers_too() {
         // The construct with no answer at all before this module.
         let case = symbol(SRC, "Circle(radius: r)", 0);
@@ -466,6 +497,35 @@ mod tests {
     }
 
     #[test]
+    fn a_shorthand_payload_binding_is_a_field_that_also_binds() {
+        let src = "variant Shape { Circle(radius: number), Rect(width: number, height: number) }\n\
+                   const a = match (s) { Circle(radius) => radius, Rect(width: w, height) => w };\n\
+                   let Rect(width, height: h) = s else { throw 0; };\n\
+                   if let Circle(radius: r) = s { use(r); }\n";
+        for (needle, delta) in [
+            ("radius) =>", 0),
+            ("height) =>", 0),
+            ("width, height: h", 0),
+        ] {
+            let shorthand = symbol(src, needle, delta);
+            assert_eq!(shorthand.kind, TtSymbolKind::Field, "{needle}");
+            assert!(shorthand.binds, "{needle}");
+            assert!(shorthand.definition.is_some(), "{needle}");
+        }
+        for (needle, delta) in [
+            ("width: w", 0),
+            ("height: h", 0),
+            ("radius: r", 0),
+            ("radius: number", 0),
+            ("width: number", 0),
+            ("Circle(radius) =>", 0),
+            ("Shape {", 0),
+        ] {
+            assert!(!symbol(src, needle, delta).binds, "{needle}");
+        }
+    }
+
+    #[test]
     fn a_builtin_case_is_named_as_one() {
         let src = "const n = match (o) { Some(value) => value, None => 0 };\n";
         let case = symbol(src, "Some(value)", 0);
@@ -473,6 +533,43 @@ mod tests {
         assert!(case.detail.contains("built-in"), "{}", case.detail);
         // The built-ins have no declaration to open.
         assert_eq!(case.definition, None);
+    }
+
+    #[test]
+    fn an_imported_case_is_found_under_the_name_the_buffer_imports_it_by() {
+        let dir = crate::test_workspace::Workspace::new("imported-definition");
+        let shapes = "export variant Shape { Circle(r: number), Point }\n";
+        std::fs::write(dir.join("shapes.tt"), shapes).unwrap();
+        let user = dir.join("user.tt");
+        std::fs::write(&user, "export const saved = 1;\n").unwrap();
+        let declared = dir.join("shapes.tt").canonicalize().unwrap();
+        let case = shapes.find("Circle").unwrap();
+        let field = shapes.find("r:").unwrap();
+        let arms = "match (s) { Circle(r) => r, Point => 0 }";
+        for header in [
+            "import { Shape as S } from \"./shapes.tt\";\ndeclare const s: S;\n",
+            "import { Gone } from \"./gone.tt\";\nimport { Shape } from \"./shapes.tt\";\n\
+             declare const s: Shape;\n",
+            "import * as ns from \"./shapes.tt\";\ndeclare const s: ns.Shape;\n",
+        ] {
+            let source = format!("{header}export const f = {arms};\n");
+            let tag = tt_symbol_at(&user, &source, at(&source, "Circle(r)", 0))
+                .unwrap_or_else(|| panic!("no case in {source}"));
+            let definition = tag.definition.unwrap_or_else(|| panic!("{source}"));
+            assert_eq!(definition.path, declared, "{source}");
+            assert_eq!(
+                definition.range,
+                super::super::language::span_range(shapes, case, case + 6),
+                "{source}"
+            );
+            let binding = tt_symbol_at(&user, &source, at(&source, "Circle(r)", 7))
+                .unwrap_or_else(|| panic!("no field in {source}"));
+            assert_eq!(
+                binding.definition.map(|location| location.range),
+                Some(super::super::language::span_range(shapes, field, field + 1)),
+                "{source}"
+            );
+        }
     }
 
     #[test]

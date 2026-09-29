@@ -11,15 +11,17 @@
  *   ahead-of-time pipeline (where a `.tt` neighbour has already become a
  *   `.ts` file); here the specifier must stay `.tt` so this plugin resolves
  *   it too.
- * - Module ids get a `.ts` suffix. ttc emits TypeScript, and the host's own
- *   TypeScript pass keys off the extension — this keeps the plugin out of
- *   that job entirely. esbuild is told the loader explicitly instead, since
+ * - Module ids are the real file plus a query ending in `lang.ts` (or
+ *   `lang.tsx`). ttc emits TypeScript, and the host's own TypeScript pass
+ *   keys off that ending — this keeps the plugin out of that job entirely,
+ *   while hosts that strip the query still find the file on disk. esbuild is told the loader explicitly instead, since
  *   its `load` hook may only return JavaScript.
  *
  * Editor support is separate: `ttc --types` writes the declarations that let
  * a `.ts` file import `.tt` without the type checker complaining.
  * ----------------------------------------------------------------------- */
 import { execFile } from "node:child_process";
+import * as fs from "node:fs";
 import { createRequire } from "node:module";
 import * as path from "node:path";
 import { promisify } from "node:util";
@@ -42,17 +44,29 @@ function defaultCompiler() {
   }
 }
 
-/** Virtual suffix for ordinary `.tt` modules. */
 const TS_SUFFIX = ".ts";
-/** Virtual suffix for JSX-bearing `.ttx` modules. */
 const TSX_SUFFIX = ".tsx";
 
-const sourceSuffix = (file) => (file.endsWith(".ttx") ? TSX_SUFFIX : TS_SUFFIX);
+const TT_FILE = /\.ttx?$/;
+const cleanUrl = (id) => id.replace(/[?#][\s\S]*$/, "");
+const SPECIAL_QUERY = /[?&](?:worker|sharedworker|raw|url)\b/;
+const MODULE_MARKERS = new Set([`lang${TS_SUFFIX}`, `lang${TSX_SUFFIX}`]);
+const moduleMarker = (file) => (file.endsWith(".ttx") ? `lang${TSX_SUFFIX}` : `lang${TS_SUFFIX}`);
+
+const SCANNED_FILE = /\.ttx?(?:\?[^/]*)?$/;
+
+const queryOf = (id, file) => id.slice(file.length).replace(/#[\s\S]*$/, "");
+
+const moduleId = (file, query) => {
+  const params = query.slice(1).split("&").filter((param) => param !== "" && !MODULE_MARKERS.has(param));
+  return `${file}?${[...params, moduleMarker(file)].join("&")}`;
+};
 
 const sourceFileOfId = (id) => {
-  if (id.endsWith(`.ttx${TSX_SUFFIX}`)) return id.slice(0, -TSX_SUFFIX.length);
-  if (id.endsWith(`.tt${TS_SUFFIX}`)) return id.slice(0, -TS_SUFFIX.length);
-  return null;
+  const file = cleanUrl(id);
+  if (!TT_FILE.test(file)) return null;
+  const params = queryOf(id, file).slice(1).split("&");
+  return params[params.length - 1] === moduleMarker(file) ? file : null;
 };
 
 /** The bare specifier tt sources use for the standard library. */
@@ -63,9 +77,10 @@ const STD_MODULES = new Map([
   ["@tt/runtime", "runtime"],
 ]);
 
-/** Virtual module id for the standard library, per working directory. */
-const stdId = (module) =>
-  path.resolve(process.cwd(), "__tt_std__", `${module}${TS_SUFFIX}`);
+const STD_ID_PREFIX = "virtual:unplugin-tt/std/";
+
+/** Virtual module id for the standard library. */
+const stdId = (module) => `${STD_ID_PREFIX}${module}${TS_SUFFIX}`;
 
 const stdModuleOfId = (id) => {
   for (const module of STD_MODULES.values()) {
@@ -74,8 +89,10 @@ const stdModuleOfId = (id) => {
   return null;
 };
 
+const nativePath = (file) => path.resolve(file);
+
 const INLINE_MAP =
-  /\n\/\/# sourceMappingURL=data:application\/json;charset=utf-8;base64,([A-Za-z0-9+/=]+)\n?$/;
+  /(\r?\n)\/\/# sourceMappingURL=data:application\/json;charset=utf-8;base64,([A-Za-z0-9+/=]+)(?:\r?\n)?$/;
 
 /**
  * Splits ttc's inline source map back out of the printed output.
@@ -87,12 +104,14 @@ const INLINE_MAP =
  * @param {string} code
  * @returns {{ code: string, map: object | null }}
  */
-function detachInlineSourceMap(code) {
+function detachInlineSourceMap(code, file) {
   const found = INLINE_MAP.exec(code);
   if (found === null) return { code, map: null };
   try {
-    const map = JSON.parse(Buffer.from(found[1], "base64").toString("utf8"));
-    return { code: code.slice(0, found.index + 1), map };
+    const { sourceRoot, ...map } = JSON.parse(Buffer.from(found[2], "base64").toString("utf8"));
+    const base = path.resolve(path.dirname(file), sourceRoot ?? "");
+    map.sources = (map.sources ?? []).map((source) => (source === null ? null : path.resolve(base, source)));
+    return { code: code.slice(0, found.index + found[1].length), map };
   } catch {
     // An unreadable map is not a reason to fail the build; the code is
     // still exactly what ttc produced.
@@ -117,6 +136,42 @@ export const unpluginFactory = (options = {}) => {
   const dependenciesByModule = new Map();
   let devServer;
 
+  const printArgs = (file, withMap) => {
+    const args = ["-p", "--rewrite-imports", "off"];
+    if (!verify) args.push("--no-verify");
+    // ttc prints the map into the output as a data: URL — the one form
+    // that survives a pipe. It is split back out here so the host gets a
+    // real map object and composes it with its own transforms.
+    if (withMap) args.push("--source-map", "inline");
+    args.push(file);
+    return args;
+  };
+
+  const scanSource = async (id) => {
+    const file = cleanUrl(id);
+    const { stdout } = await run(compiler, printArgs(file, false), { maxBuffer: 16 * 1024 * 1024 });
+    return { code: stdout, lang: file.endsWith(".ttx") ? "tsx" : "ts" };
+  };
+
+  const esbuildScanPlugin = {
+    name: "@openload28/unplugin-tt:dep-scan",
+    setup(build) {
+      build.onLoad({ filter: SCANNED_FILE }, async (args) => {
+        const { code, lang } = await scanSource(args.path);
+        return { contents: code, loader: lang, resolveDir: path.dirname(cleanUrl(args.path)) };
+      });
+    },
+  };
+
+  const rolldownScanPlugin = {
+    name: "@openload28/unplugin-tt:dep-scan",
+    async load(id) {
+      if (!SCANNED_FILE.test(id)) return null;
+      const { code, lang } = await scanSource(id);
+      return { code, moduleType: lang };
+    },
+  };
+
   return {
     name: "@openload28/unplugin-tt",
     // Ahead of the host's own resolution: `.tt` is not an extension it
@@ -129,6 +184,7 @@ export const unpluginFactory = (options = {}) => {
       // becomes a virtual module. Nothing lands in the project tree.
       const stdModule = STD_MODULES.get(source);
       if (stdModule !== undefined) return stdId(stdModule);
+      if (stdModuleOfId(source) !== null) return source;
       if (importer !== undefined && importer !== null) {
         const importerModule = stdModuleOfId(importer);
         if (importerModule !== null) {
@@ -136,22 +192,25 @@ export const unpluginFactory = (options = {}) => {
           if (source === "./result.js") return stdId("result");
         }
       }
-      if (!source.endsWith(".tt") && !source.endsWith(".ttx")) return null;
+      const file = cleanUrl(source);
+      if (!TT_FILE.test(file)) return null;
+      const query = queryOf(source, file);
+      if (SPECIAL_QUERY.test(query)) return null;
 
-      if (!path.isAbsolute(source) && !source.startsWith(".")) {
-        // Package exports and aliases belong to the host resolver.
-        if (typeof this.resolve !== "function") return null;
-        return this.resolve(source, importer, { skipSelf: true }).then(resolved => {
-          if (!resolved || resolved.external || !/\.ttx?$/.test(resolved.id)) return resolved;
-          return { ...resolved, id: `${resolved.id}${sourceSuffix(resolved.id)}` };
+      if (typeof this?.resolve === "function") {
+        // Package exports, aliases, and dev-server urls belong to the host resolver.
+        return this.resolve(file, importer, { skipSelf: true }).then(resolved => {
+          if (!resolved || resolved.external || !TT_FILE.test(cleanUrl(resolved.id))) return resolved;
+          return { ...resolved, id: moduleId(cleanUrl(resolved.id), query) };
         });
       }
-      const file = path.isAbsolute(source)
-        ? source
+      if (!path.isAbsolute(file) && !file.startsWith(".")) return null;
+      const resolved = path.isAbsolute(file)
+        ? file
         : importer === undefined || importer === null
-          ? null
-          : path.resolve(path.dirname(importer), source);
-      return file === null ? null : `${file}${sourceSuffix(file)}`;
+          ? path.resolve(file)
+          : path.resolve(path.dirname(cleanUrl(importer)), file);
+      return moduleId(resolved, query);
     },
 
     async load(id) {
@@ -165,13 +224,7 @@ export const unpluginFactory = (options = {}) => {
       const file = sourceFileOfId(id);
       if (file === null) return null;
 
-      const args = ["-p", "--rewrite-imports", "off"];
-      if (!verify) args.push("--no-verify");
-      // ttc prints the map into the output as a data: URL — the one form
-      // that survives a pipe. It is split back out here so the host gets a
-      // real map object and composes it with its own transforms.
-      if (sourcemap) args.push("--source-map", "inline");
-      args.push(file);
+      const args = printArgs(file, sourcemap);
 
       this.addWatchFile(file);
       // Compiler metadata includes erased type imports and configuration reads.
@@ -179,10 +232,10 @@ export const unpluginFactory = (options = {}) => {
       try {
         const metadata = await run(compiler, ["--dependencies", file], { maxBuffer: 16 * 1024 * 1024 });
         const dependencies = JSON.parse(metadata.stdout);
-        dependenciesByModule.set(id, new Set(dependencies));
+        dependenciesByModule.set(id, new Set(dependencies.map(nativePath)));
         for (const dependency of dependencies) if (dependency !== file) this.addWatchFile(dependency);
         const { stdout } = await run(compiler, args, { maxBuffer: 16 * 1024 * 1024 });
-        return detachInlineSourceMap(stdout);
+        return detachInlineSourceMap(stdout, file);
       } catch (error) {
         // ttc reports `file:line:col: message` on stderr; surface that as
         // the build error so the host shows the compiler's diagnostic.
@@ -194,20 +247,28 @@ export const unpluginFactory = (options = {}) => {
 
     watchChange(file) {
       if (!devServer) return;
+      const changed = nativePath(file);
       for (const environment of Object.values(devServer.environments ?? { client: devServer })) {
         for (const [id, dependencies] of dependenciesByModule) {
-          if (!dependencies.has(file)) continue;
+          if (!dependencies.has(changed)) continue;
           const module = environment.moduleGraph.getModuleById(id);
           if (module) environment.moduleGraph.invalidateModule(module);
         }
       }
     },
     vite: {
+      config() {
+        const scanner = this?.meta?.rolldownVersion
+          ? { rolldownOptions: { plugins: [rolldownScanPlugin] } }
+          : { esbuildOptions: { plugins: [esbuildScanPlugin] } };
+        return { optimizeDeps: { extensions: [".tt", ".ttx"], ...scanner } };
+      },
       configureServer(server) { devServer = server; },
       handleHotUpdate(context) {
         const modules = new Set(context.modules);
+        const changed = nativePath(context.file);
         for (const [id, dependencies] of dependenciesByModule) {
-          if (!dependencies.has(context.file)) continue;
+          if (!dependencies.has(changed)) continue;
           const module = context.server.moduleGraph.getModuleById(id);
           if (module) {
             context.server.moduleGraph.invalidateModule(module);
@@ -223,14 +284,14 @@ export const unpluginFactory = (options = {}) => {
           if (args.pluginData?.ttResolving || path.isAbsolute(args.path) || args.path.startsWith(".")) return;
           const resolved = await build.resolve(args.path, { importer: args.importer, resolveDir: args.resolveDir, kind: args.kind, pluginData: { ttResolving: true } });
           if (resolved.errors.length || resolved.external || !/\.ttx?$/.test(resolved.path)) return resolved;
-          return { path: `${resolved.path}${sourceSuffix(resolved.path)}`, namespace: "@openload28/unplugin-tt" };
+          return { path: moduleId(resolved.path, ""), namespace: "@openload28/unplugin-tt" };
         });
       },
       // esbuild resolves and loads through its own filters, and its `load`
       // may only return JavaScript — so narrow the filters to our ids and
       // name the loader for the TypeScript ttc emits.
       onResolveFilter: /(\.ttx?|^@tt\/(?:std(?:\/(?:option|result))?|runtime)$|\.\/(?:option|result)\.js$)/,
-      onLoadFilter: /(\.tt\.ts|\.ttx\.tsx|__tt_std__\/(?:types|option|result|runtime)\.ts)$/,
+      onLoadFilter: /(\.tt\?(?:[^#]*&)?lang\.ts|\.ttx\?(?:[^#]*&)?lang\.tsx|^virtual:unplugin-tt\/std\/(?:types|option|result|runtime)\.ts)$/,
       loader: (_code, id) => (id.endsWith(TSX_SUFFIX) ? "tsx" : "ts"),
     },
   };

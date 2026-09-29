@@ -1,6 +1,6 @@
 #[test]
 fn flow_emits_nested_composition_helper_calls() {
-    let out = ok("const f = flow |> parse |> double |> label;\n");
+    let out = ok("const f = flow |> parse |> double |> label;\nexport {};\n");
     assert!(
         out.contains("const f = $tt_fl($tt_fl(parse, double), label);"),
         "{out}"
@@ -37,7 +37,7 @@ fn flow_with_a_single_step_is_that_step_and_needs_no_helper() {
 
 #[test]
 fn flow_runtime_is_imported_once_per_file() {
-    let out = ok("const a = flow |> f |> g;\nconst b = flow |> h |> i;\n");
+    let out = ok("const a = flow |> f |> g;\nconst b = flow |> h |> i;\nexport {};\n");
     assert_eq!(out.matches("$tt_fl(").count(), 2, "{out}");
     assert_eq!(out.matches("from \"@tt/runtime\"").count(), 1, "{out}");
 }
@@ -114,15 +114,15 @@ const step = match (dir, speed) {
     assert!(out.contains("const $tt_m1 = speed;"), "{out}");
     assert!(
         compact(&out).contains(
-            "if ($tt_m0.kind === \"North\" && $tt_m1.kind === \"Fast\") { $tt_v0 = 2; break; }"
+            "if ($tt_m0.kind === \"North\" && $tt_m1.kind === \"Fast\") { $tt_v0$step = 2; break; }"
         ),
         "{out}"
     );
     assert!(
-        compact(&out).contains("if ($tt_m0.kind === \"South\") { $tt_v0 = -1; break; }"),
+        compact(&out).contains("if ($tt_m0.kind === \"South\") { $tt_v0$step = -1; break; }"),
         "{out}"
     );
-    assert!(out.contains("JSON.stringify([$tt_m0, $tt_m1])"), "{out}");
+    assert!(out.contains(r#""[" + $tt_show($tt_m0) + "," + $tt_show($tt_m1) + "]""#), "{out}");
 }
 
 #[test]
@@ -135,7 +135,7 @@ const r = match (a, b) {
 "#);
     assert!(
         compact(&out).contains(
-            "{ const { value: x } = $tt_m0; const { value: y } = $tt_m1; $tt_v0 = x + y; break; }"
+            "{ const { value: x } = $tt_m0; const { value: y } = $tt_m1; $tt_v0$r = x + y; break; }"
         ),
         "{out}"
     );
@@ -188,7 +188,7 @@ const step = match (d, s) {
     assert!(out.contains("$tt_m0"), "{out}");
     assert!(
         compact(&out).contains(
-            "if (($tt_m0.kind === \"North\" || $tt_m0.kind === \"South\")) { $tt_v0 = 1; break; }"
+            "if (($tt_m0.kind === \"North\" || $tt_m0.kind === \"South\")) { $tt_v0$step = 1; break; }"
         ),
         "{out}"
     );
@@ -221,7 +221,7 @@ const r = match (a, b) {
   _ => 0,
 };
 "#);
-    assert!(compact(&out).contains("$tt_v0 = 0; break;"), "{out}");
+    assert!(compact(&out).contains("$tt_v0$r = 0; break;"), "{out}");
 
     let e = err("const r = match (a, b) {\n  _ => 0,\n  (A, B) => 1,\n};\n");
     assert!(e.message.contains("must be the last arm"), "{}", e.message);
@@ -301,6 +301,49 @@ fn tuple_match_arity_mismatch_lowers_over_the_subjects_it_has() {
 }
 
 #[test]
+fn a_value_pattern_in_a_tuple_element_is_reported_at_that_element() {
+    let cases = [
+        (
+            "declare const a: number;\ndeclare const b: string;\n\
+             const r = match (a, b) {\n  (1, \"x\") => 1,\n  _ => 0,\n};\n",
+            "1",
+            "a literal pattern cannot be a tuple pattern element",
+        ),
+        (
+            "variant O { Some(value: number), None }\ndeclare const a: O;\ndeclare const b: O;\n\
+             const r = match (a, b) {\n  (Some(value), None) => value,\n  (None, 1 | 2) => 0,\n  _ => -1,\n};\n",
+            "1 | 2",
+            "a literal pattern cannot be a tuple pattern element",
+        ),
+        (
+            "variant O { Some(value: number), None }\ndeclare const a: O;\ndeclare const n: unknown;\n\
+             const r = match (a, n) {\n  (None, is Date) => 0,\n  _ => 1,\n};\n",
+            "is Date",
+            "an `is` pattern cannot be a tuple pattern element",
+        ),
+    ];
+    for (src, element, message) in cases {
+        let diagnostics = ttc::analyze(src, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+        let d = &diagnostics[0];
+        assert_eq!(d.code, ttc::DiagnosticCode::MalformedMatch);
+        assert_eq!(d.message, message);
+        assert_eq!(&src[d.start.unwrap()..d.end.unwrap()], element);
+        let help: Vec<&str> = d.suggestions.iter().map(|s| s.message.as_str()).collect();
+        assert_eq!(
+            help,
+            ["tuple pattern elements are tag patterns or `_`; test this value in an arm guard or a nested `match`"]
+        );
+    }
+}
+
+#[test]
+fn an_unparseable_match_help_does_not_claim_an_arity_problem() {
+    let advice = advice("const r = match (x) { A B => 1 };\n");
+    assert_eq!(advice, ["write `match (<scrutinee>) { <pattern> => <body> }`"]);
+}
+
+#[test]
 fn match_without_scrutinee_parentheses_is_a_malformed_tt_match() {
     let src = "const r = match value { A => 1, _ => 0 };\n";
     let e = err(src);
@@ -373,7 +416,7 @@ const r = match (a, b) {
     // The arm's body always leaves, through the region's own
     // `do { … } while (false)` — so neither the chain's fall-through label
     // nor a second exit label around the region is written.
-    assert!(out.contains("$tt_v0 = 1; break;"), "{out}");
+    assert!(out.contains("$tt_v0$r = 1; break;"), "{out}");
     assert!(!out.contains("$tt_b"), "{out}");
     assert!(!out.contains("$tt_y_"), "{out}");
 }
@@ -414,12 +457,12 @@ const n = match (r) {
 };
 "#);
     assert!(
-        compact(&out).contains("if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"Some\") { const { value: v } = $tt_m.value; $tt_v0 = v; break; }"),
+        compact(&out).contains("if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"Some\") { const { value: v } = $tt_m.value; $tt_v0$n = v; break; }"),
         "{out}"
     );
     assert!(
         compact(&out).contains(
-            "if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"None\") { $tt_v0 = 0; break; }"
+            "if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"None\") { $tt_v0$n = 0; break; }"
         ),
         "{out}"
     );
@@ -452,7 +495,7 @@ const n = match (r) {
 "#);
     assert!(
         compact(&out).contains(
-            "{ const { left } = $tt_m; const { value } = $tt_m.right; $tt_v0 = left + value; break; }"
+            "{ const { left } = $tt_m; const { value } = $tt_m.right; $tt_v0$n = left + value; break; }"
         ),
         "{out}"
     );
@@ -555,7 +598,7 @@ const n = match (r) {
 };
 "#);
     assert!(
-        compact(&out).contains("if (v > 0) { $tt_v0 = v; break; }"),
+        compact(&out).contains("if (v > 0) { $tt_v0$n = v; break; }"),
         "{out}"
     );
 }
@@ -788,4 +831,31 @@ fn val_writes_follow_assignment_targets_not_neighboring_tokens() {
         let source = format!("val const cfg = {{ a: 1 }};\n{statement}\n");
         assert!(!ttc::analyze(&source, &Options::default()).iter().any(|d| d.code == ttc::DiagnosticCode::ValMutation), "{source}");
     }
+}
+
+#[test]
+fn an_optional_variant_field_is_set_only_when_its_argument_is() {
+    let out = ok("variant V { C(req: string, opt?: number), D }\n");
+    assert!(out.contains("| { kind: \"C\"; req: string; opt?: number }"), "{out}");
+    assert!(
+        out.contains(
+            "C: (req: string, opt?: number): V => ({ kind: \"C\", req, ...(opt === undefined ? {} : { opt }) }),"
+        ),
+        "{out}"
+    );
+}
+
+#[test]
+fn a_required_variant_field_cannot_follow_an_optional_one() {
+    let src = "variant W { C(opt?: number, req: string, more: boolean), D(a?: number, b?: string) }\n";
+    let diagnostics = ttc::analyze(src, &Options::default());
+    let found = diagnostics
+        .iter()
+        .filter(|d| d.code == ttc::DiagnosticCode::VariantRequiredAfterOptional)
+        .map(|d| (d.start, d.end))
+        .collect::<Vec<_>>();
+    let at = |name: &str| src.find(name).map(|start| (Some(start), Some(start + name.len())));
+    assert_eq!(found, [at("req").unwrap(), at("more").unwrap()], "{diagnostics:?}");
+    let e = err(src);
+    assert!(e.message.contains("required field `req` after optional field `opt`"), "{e}");
 }

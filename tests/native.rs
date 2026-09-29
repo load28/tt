@@ -726,6 +726,10 @@ fn naming_one_file_still_compiles_against_the_whole_project() {
 include!("native/cases_01.rs");
 include!("native/cases_02.rs");
 include!("native/cases_03.rs");
+include!("native/cases_04.rs");
+include!("native/cases_05.rs");
+include!("native/cases_06.rs");
+include!("native/cases_07.rs");
 
 #[test]
 fn scoped_contextual_values_cross_all_mixed_source_edges() {
@@ -780,5 +784,109 @@ fn scoped_contextual_values_cross_all_mixed_source_edges() {
         );
         let code = String::from_utf8(printed.stdout).unwrap();
         assert_eq!(code.matches(": import(").count(), 4, "{code}");
+    }
+}
+
+#[test]
+fn typed_missing_arm_edits_compile_after_an_unseparated_last_arm() {
+    require_tsgo!();
+    let source = "variant Shape { Circle(radius: number), Rect(width: number, height: number), Point }\n\
+                  export function area(s: Shape) {\n\
+                  \tconst a = match (s) {\n\
+                  \t\tCircle(radius) => { return radius; } // last\n\
+                  \t};\n\
+                  \treturn a;\n\
+                  }\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let answer = typed_server(&dir, "src/main.tt", source);
+    let hole = answer["result"]["diagnostics"]
+        .as_array()
+        .and_then(|diagnostics| {
+            diagnostics
+                .iter()
+                .find(|d| d["code"] == "match-not-exhaustive")
+        })
+        .unwrap_or_else(|| panic!("{answer}"))
+        .clone();
+    let suggestions = hole["suggestions"].as_array().unwrap();
+    assert_eq!(suggestions.len(), 2, "{hole}");
+    for suggestion in suggestions {
+        let edit = &suggestion["edit"];
+        let replaced = source_slice(source, edit);
+        let start = replaced.as_ptr() as usize - source.as_ptr() as usize;
+        let fixed = format!(
+            "{}{}{}",
+            &source[..start],
+            edit["replacement"].as_str().unwrap(),
+            &source[start + replaced.len()..]
+        );
+        assert!(
+            fixed.contains("\t\tCircle(radius) => { return radius; }, // last\n\t\t"),
+            "{fixed}"
+        );
+        let after = typed_server(&dir, "src/main.tt", &fixed);
+        assert!(
+            after["result"]["diagnostics"]
+                .as_array()
+                .is_some_and(Vec::is_empty),
+            "{fixed}\n{after}"
+        );
+    }
+}
+
+#[test]
+fn typed_missing_arms_list_every_hole_under_a_written_constructor() {
+    require_tsgo!();
+    for (source, said) in [
+        (
+            "variant A { X, Y }\nvariant B { P, Q }\n\
+             export function f(c: A, m: B) {\n\
+             \treturn match (c, m) { (Y, Q) => 1, };\n\
+             }\n",
+            "missing (X, P), (X, Q), (Y, P)",
+        ),
+        (
+            "variant O { Some(value: number), None }\n\
+             variant R { Ok(value: O), Err(error: string) }\n\
+             export function f(r: R) {\n\
+             \treturn match (r) { Ok(value: Some(value: v)) => v };\n\
+             }\n",
+            "missing \"Ok(value: None())\", \"Err\"",
+        ),
+    ] {
+        let dir = project(&[("src/main.tt", source)]);
+        let answer = typed_server(&dir, "src/main.tt", source);
+        let holes: Vec<&serde_json::Value> = answer["result"]["diagnostics"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{answer}"))
+            .iter()
+            .filter(|d| d["code"] == "match-not-exhaustive")
+            .collect();
+        assert_eq!(holes.len(), 1, "{answer}");
+        let hole = holes[0];
+        assert!(
+            hole["message"]
+                .as_str()
+                .unwrap()
+                .starts_with("match is not exhaustive: missing")
+                && hole["message"].as_str().unwrap().ends_with(said),
+            "{hole}"
+        );
+        let edit = &hole["suggestions"][0]["edit"];
+        let replaced = source_slice(source, edit);
+        let start = replaced.as_ptr() as usize - source.as_ptr() as usize;
+        let fixed = format!(
+            "{}{}{}",
+            &source[..start],
+            edit["replacement"].as_str().unwrap(),
+            &source[start + replaced.len()..]
+        );
+        let after = typed_server(&dir, "src/main.tt", &fixed);
+        assert!(
+            after["result"]["diagnostics"]
+                .as_array()
+                .is_some_and(Vec::is_empty),
+            "{fixed}\n{after}"
+        );
     }
 }

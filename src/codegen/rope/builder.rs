@@ -61,6 +61,16 @@ impl<'a> Rope<'a> {
         out
     }
 
+    pub(crate) fn braced(inner: Rope<'a>) -> Rope<'a> {
+        let mut block = Rope::new();
+        block.push_lit("{");
+        block.push_break(1);
+        block.append(Rope::indented(1, inner.trim()));
+        block.push_break(0);
+        block.push_lit("}");
+        Rope::scoped(block)
+    }
+
     /// Nests `inner` `depth` indentation units deeper: every break `inner`
     /// wrote in its *own* layout scope moves in by `depth`. Breaks inside a
     /// scope `inner` opened keep their depth — that scope has its own base.
@@ -109,6 +119,15 @@ impl<'a> Rope<'a> {
         self.push_lit(";");
     }
 
+    pub(crate) fn push_value_definition(&mut self, name: &str) {
+        self.push_lit(format!("const {name}"));
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::ContextualSlot,
+        });
+        self.push_lit(" = ");
+    }
+
     /// Starts a captured value while retaining its contextual annotation site.
     pub(crate) fn push_value_capture(&mut self, name: &str) {
         self.push_lit(format!("const {name}"));
@@ -133,6 +152,50 @@ impl<'a> Rope<'a> {
         self.pieces.push(Piece::Mark {
             src,
             kind: MarkKind::ResultReturnEnd,
+        });
+    }
+
+    pub(crate) fn push_declared_name(
+        &mut self,
+        text: impl Into<Cow<'a, str>>,
+        src: usize,
+        src_end: usize,
+    ) {
+        self.pieces.push(Piece::Mark {
+            src,
+            kind: MarkKind::DeclaredNameStart,
+        });
+        self.push_lit(text);
+        self.pieces.push(Piece::Mark {
+            src: src_end,
+            kind: MarkKind::DeclaredNameEnd,
+        });
+    }
+
+    pub(crate) fn push_shared_binding(
+        &mut self,
+        text: impl Into<Cow<'a, str>>,
+        occurrences: &[BindingOccurrence],
+    ) {
+        self.pieces.push(Piece::Mark {
+            src: occurrences.first().map_or(0, |occurrence| occurrence.src),
+            kind: MarkKind::SharedBindingStart,
+        });
+        for occurrence in occurrences {
+            self.pieces.push(Piece::Mark {
+                src: occurrence.src,
+                kind: MarkKind::SharedBindingOccurrence {
+                    end: occurrence.src_end,
+                    shorthand: occurrence.shorthand,
+                },
+            });
+        }
+        self.push_lit(text);
+        self.pieces.push(Piece::Mark {
+            src: occurrences
+                .last()
+                .map_or(0, |occurrence| occurrence.src_end),
+            kind: MarkKind::SharedBindingEnd,
         });
     }
 
@@ -179,9 +242,10 @@ impl<'a> Rope<'a> {
         }
     }
 
-    /// Inserts `text` immediately before the first source byte at or after
-    /// `at` that this rope prints at its top level, or appends it when the
-    /// rope prints no such byte.
+    /// Inserts `text` after the leading top-level source pieces that print
+    /// only bytes before `at`, splitting the piece that straddles `at`, so
+    /// `text` precedes every piece written for source at or after `at`,
+    /// generated glue included.
     ///
     /// The one thing codegen cannot know while emitting is what the
     /// emission will *need* — a pipeline helper's import is decided by the
@@ -189,51 +253,26 @@ impl<'a> Rope<'a> {
     /// but read as a stray line at the bottom of the file; this puts it
     /// where a reader looks for an import.
     ///
-    /// Only the top level is considered: a piece inside a construct's own
-    /// glue belongs to that lowering's arrangement, and a statement cannot
-    /// go there anyway. Splitting a pass-through piece in two keeps both
-    /// halves pointing at the bytes they always did, so the emission still
-    /// covers the source exactly once and still in order.
+    /// Splitting a pass-through piece in two keeps both halves pointing at
+    /// the bytes they always did, so the emission still covers the source
+    /// exactly once and still in order.
     pub(crate) fn insert_lit_at_source(&mut self, at: usize, text: impl Into<Cow<'a, str>>) {
         let text = text.into();
         if text.is_empty() {
             return;
         }
-        let mut depth = 0usize;
-        let mut top_level_container = None;
-        let mut found: Option<(usize, Option<usize>)> = None;
-        for (index, piece) in self.pieces.iter().enumerate() {
-            match piece {
-                Piece::Open { .. } | Piece::ScopeOpen => {
-                    if depth == 0 {
-                        top_level_container = Some(index);
-                    }
-                    depth += 1;
-                }
-                Piece::Close | Piece::ScopeClose => {
-                    depth = depth.saturating_sub(1);
-                    if depth == 0 {
-                        top_level_container = None;
-                    }
-                }
-                Piece::Src { text, src } if src + text.len() > at => {
-                    found = if depth == 0 {
-                        Some((index, (*src < at).then(|| at - src)))
-                    } else {
-                        // The source sits inside a top-level construct. An
-                        // import cannot split that construct's anchor or
-                        // layout scope, so insert before its outer boundary.
-                        top_level_container.map(|container| (container, None))
-                    };
-                    break;
-                }
-                _ => {}
+        let mut index = 0;
+        let mut split = None;
+        while let Some(Piece::Src { text, src }) = self.pieces.get(index) {
+            if src + text.len() <= at {
+                index += 1;
+                continue;
             }
+            if *src < at {
+                split = Some(at - src);
+            }
+            break;
         }
-        let Some((index, split)) = found else {
-            self.push_lit(text);
-            return;
-        };
         self.len += text.len();
         match split {
             None => self.pieces.insert(index, Piece::Lit(text)),
@@ -314,6 +353,9 @@ impl<'a> Rope<'a> {
                 text.push_str(piece.text());
             }
         }
+        if !text.contains("//") {
+            return false;
+        }
         let tokens = crate::lexer::lex_with_kind(&text, 0, text.len(), source_kind);
         let mut at = tokens.last().map_or(0, |token| token.span.end);
         let bytes = text.as_bytes();
@@ -325,7 +367,7 @@ impl<'a> Rope<'a> {
                 return false;
             }
             if bytes[at..].starts_with(b"//") {
-                return !bytes[at..].contains(&b'\n');
+                return crate::scanner::line_end(bytes, at, bytes.len()) == bytes.len();
             }
             if bytes[at..].starts_with(b"/*") {
                 let Some(close) = crate::scanner::find_subslice(bytes, b"*/", at + 2, bytes.len())
@@ -425,10 +467,19 @@ impl<'a> Rope<'a> {
     /// Both validators run in every build: a violated target contract is an
     /// internal compiler error, and a release build must fail on it exactly
     /// like a debug build so a wrong lowering is never shipped silently
-    /// (`docs/design/program-lowering.md` §11).
-    pub(crate) fn flatten(self, source: &'a str, preservation: &SourcePreservation) -> Flat {
+    /// (`docs/design/program-lowering.md` §11). `boundaries` are the sorted
+    /// starts of the source statements an automatic semicolon separates
+    /// from the statement before them, which the target keeps separate.
+    pub(crate) fn flatten(
+        self,
+        source: &'a str,
+        source_kind: SourceKind,
+        boundaries: &[usize],
+        preservation: &SourcePreservation,
+    ) -> Flat {
         let mut target = TargetFile::from_rope(self, source.len());
         target.source = Some(source);
+        target.separate_statements(boundaries, source_kind);
         if let Err(error) = target.validate() {
             error.into_ice().raise();
         }
@@ -451,4 +502,7 @@ pub(crate) struct Flat {
     /// Explicit Result return values in source and emitted coordinates.
     pub result_return_temps: Vec<ResultReturnTemp>,
     pub contextual_slots: Vec<usize>,
+    pub generated_names: std::collections::HashSet<String>,
+    pub declared_names: Vec<DeclaredName>,
+    pub shared_bindings: Vec<SharedBinding>,
 }

@@ -9,45 +9,44 @@ use super::*;
 /// CLI's contract.
 pub(super) fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_>) -> ExitCode {
     let engine = ttc::engine::Engine::new(options.node.map(Path::to_path_buf));
-    let mut project = match engine.open_project(
+    let report = match engine.open_project(
         inputs,
         &ttc::engine::ProjectOptions {
             tsconfig: options.project.map(Path::to_path_buf),
             out_dir: options.out_dir.map(Path::to_path_buf),
         },
     ) {
-        Ok(project) => project,
+        Ok(mut project) => {
+            for (path, text) in options.overlay {
+                project.open_document(path.clone(), text.clone());
+            }
+            if options.watch {
+                return typed_watch(&mut project, options);
+            }
+            let mut files = project.initial_files();
+            files.extend(
+                options
+                    .overlay
+                    .keys()
+                    .filter(|path| ttc::SourceKind::from_tt_path(path).is_some())
+                    .cloned(),
+            );
+            files.sort();
+            files.dedup();
+            typed_pass(&mut project, &files, options).unwrap_or_else(|e| {
+                eprintln!("ttc: {e}");
+                TypedReport::unchecked()
+            })
+        }
         Err(e) => {
             eprintln!("ttc: {e}");
-            return ExitCode::FAILURE;
+            TypedReport::unchecked()
         }
     };
-    for (path, text) in options.overlay {
-        project.open_document(path.clone(), text.clone());
+    if options.json_report {
+        crate::out::line(&report.to_json());
     }
-
-    if options.watch {
-        return typed_watch(&mut project, options);
-    }
-
-    let files = project.initial_files();
-    match typed_pass(&mut project, &files, options) {
-        // The exit code answers "did the check pass?", in every mode — a
-        // `--types` run still *writes* its sidecars when the code has type
-        // errors (a stale sidecar is worse than one built from erroring
-        // code), but it says so.
-        //
-        // 2 is the third answer: the check could not run, so nothing was
-        // written. A caller holding a previous result — an editor showing
-        // the last good sidecar — keeps it on 2 and replaces it on 1.
-        Ok(report) if report.blocked => ExitCode::from(2),
-        Ok(report) if report.reported == 0 => ExitCode::SUCCESS,
-        Ok(_) => ExitCode::FAILURE,
-        Err(e) => {
-            eprintln!("ttc: {e}");
-            ExitCode::FAILURE
-        }
-    }
+    report.exit_code()
 }
 
 /// What the typed modes were asked for, beside their inputs.
@@ -66,6 +65,7 @@ pub(super) struct TypedCheckOptions<'a> {
     pub(super) tt_only: bool,
     /// The raw inputs, for mirroring their layout under `-o`.
     pub(super) inputs: &'a [String],
+    pub(super) json_report: bool,
 }
 
 /// What one pass printed.
@@ -74,6 +74,67 @@ pub(super) struct TypedReport {
     reported: usize,
     /// Whether the pass could not run at all — see [`ttc::engine::Blocked`].
     blocked: bool,
+    writes: WriteOutcome,
+}
+
+impl TypedReport {
+    fn unchecked() -> Self {
+        Self {
+            reported: 1,
+            blocked: true,
+            writes: WriteOutcome::default(),
+        }
+    }
+
+    fn exit_code(&self) -> ExitCode {
+        if self.blocked {
+            ExitCode::from(2)
+        } else if !self.writes.failed.is_empty() {
+            ExitCode::from(3)
+        } else if self.reported == 0 {
+            ExitCode::SUCCESS
+        } else {
+            ExitCode::FAILURE
+        }
+    }
+
+    fn to_json(&self) -> String {
+        serde_json::json!({
+            "checked": !self.blocked,
+            "diagnostics": self.reported,
+            "written": self.writes.written.iter().map(|path| path.to_string_lossy()).collect::<Vec<_>>(),
+            "failed": self.writes.failed.iter().map(|(path, error)| serde_json::json!({
+                "path": path.to_string_lossy(),
+                "error": error,
+            })).collect::<Vec<_>>(),
+        })
+        .to_string()
+    }
+}
+
+#[derive(Default)]
+pub(super) struct WriteOutcome {
+    pub(super) written: Vec<PathBuf>,
+    pub(super) failed: Vec<(PathBuf, String)>,
+}
+
+impl WriteOutcome {
+    fn record(&mut self, path: &Path, result: std::io::Result<()>) -> bool {
+        match result {
+            Ok(()) => {
+                self.written.push(normalized_absolute(path));
+                true
+            }
+            Err(error) => {
+                self.fail(path, error.to_string());
+                false
+            }
+        }
+    }
+
+    fn fail(&mut self, path: &Path, error: String) {
+        self.failed.push((normalized_absolute(path), error));
+    }
 }
 
 /// One snapshot, one check, everything printed.
@@ -91,10 +152,7 @@ pub(super) fn typed_pass(
                 "{}",
                 ttc::render::compile_error(&blocked.error, None, &shown(&blocked.path), styles())
             );
-            return Ok(TypedReport {
-                reported: 1,
-                blocked: true,
-            });
+            return Ok(TypedReport::unchecked());
         }
     };
     let checked = project.check(
@@ -107,14 +165,18 @@ pub(super) fn typed_pass(
 
     // The declarations the compiler emitted for the lowered modules, laid
     // out under `-o` the way the sources are laid out under the project.
-    if options.emit && checked.backend_error.is_none() {
+    let writes = if options.emit && checked.backend_error.is_none() {
         write_declarations(
             &checked.declarations,
             options.inputs,
             options.out_dir,
             project.root(),
         )
-        .map_err(|e| e.to_string())?;
+    } else {
+        WriteOutcome::default()
+    };
+    for (path, error) in &writes.failed {
+        eprintln!("ttc: cannot write {}: {error}", shown(path));
     }
 
     // The snapshot, not the file on disk: an `--overlay` was checked
@@ -144,12 +206,14 @@ pub(super) fn typed_pass(
         return Ok(TypedReport {
             reported: checked.diagnostics.len().max(1),
             blocked: true,
+            writes,
         });
     }
 
     Ok(TypedReport {
         reported: checked.diagnostics.len(),
         blocked: false,
+        writes,
     })
 }
 
@@ -188,10 +252,17 @@ pub(super) fn typed_watch(
         if first || current != stamps {
             let started = std::time::Instant::now();
             match typed_pass(project, &files, options) {
-                Ok(report) => eprintln!(
+                Ok(report) if report.writes.failed.is_empty() => eprintln!(
                     "ttc: {} file(s), {} reported in {} ms — watching",
                     files.len(),
                     report.reported,
+                    started.elapsed().as_millis()
+                ),
+                Ok(report) => eprintln!(
+                    "ttc: {} file(s), {} reported, {} not written in {} ms — watching",
+                    files.len(),
+                    report.reported,
+                    report.writes.failed.len(),
                     started.elapsed().as_millis()
                 ),
                 Err(e) => eprintln!("ttc: {e}"),
@@ -231,7 +302,21 @@ pub(super) fn write_declarations(
     inputs: &[String],
     out_dir: Option<&Path>,
     root: &Path,
-) -> std::io::Result<()> {
+) -> WriteOutcome {
+    let mut outcome = WriteOutcome::default();
+    let std_dir = out_dir.unwrap_or(root).join("tt");
+    let std_files: Vec<_> = declarations
+        .std
+        .iter()
+        .map(|declaration| {
+            (
+                std_dir
+                    .join(declaration.module.file_name())
+                    .with_extension("d.ts"),
+                declaration.text.as_bytes(),
+            )
+        })
+        .collect();
     let targets: Vec<_> = declarations
         .modules
         .iter()
@@ -250,50 +335,68 @@ pub(super) fn write_declarations(
         })
         .collect();
     let mut claims = HashMap::new();
-    for (declaration, target) in declarations.modules.iter().zip(&targets) {
-        if let Some(previous) =
-            claims.insert(normalized_absolute(target), &declaration.file.source_path)
-        {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!(
-                    "{}: multiple declaration inputs claim this output: {} and {}",
-                    target.display(),
-                    previous.display(),
-                    declaration.file.source_path.display()
-                ),
-            ));
+    let collision = declarations
+        .modules
+        .iter()
+        .zip(&targets)
+        .find_map(|(declaration, target)| {
+            claims
+                .insert(normalized_absolute(target), &declaration.file.source_path)
+                .map(|previous| {
+                    format!(
+                        "multiple declaration inputs claim this output: {} and {}",
+                        previous.display(),
+                        declaration.file.source_path.display()
+                    )
+                })
+        });
+    if let Some(error) = collision {
+        for (path, _) in &std_files {
+            outcome.fail(path, error.clone());
         }
+        for target in &targets {
+            outcome.fail(target, error.clone());
+            outcome.fail(&target.with_extension("ts.map"), error.clone());
+        }
+        return outcome;
     }
     // Standard-library declarations mirror the generated `tt/` package, so
     // plain tsc can map the root and wildcard `@tt/std` entries to them.
-    if !declarations.std.is_empty() {
-        let dir = out_dir.unwrap_or(root);
-        let std_dir = dir.join("tt");
-        fs::create_dir_all(&std_dir)?;
-        for declaration in &declarations.std {
-            fs::write(
-                std_dir
-                    .join(declaration.module.file_name())
-                    .with_extension("d.ts"),
-                &declaration.text,
-            )?;
-        }
+    for (path, text) in &std_files {
+        outcome.record(
+            path,
+            fs::create_dir_all(&std_dir).and_then(|()| super::output::replace_file(path, text)),
+        );
     }
     for (declaration, target) in declarations.modules.iter().zip(targets) {
         let file = &declaration.file;
         let dir = target.parent().unwrap_or(Path::new(".")).to_path_buf();
-        fs::create_dir_all(&dir)?;
-
+        let map = target.with_extension("ts.map");
+        let created = fs::create_dir_all(&dir);
         let sidecar = ttc::build_sidecar(
             &file.source,
             &declaration.text,
             &relative_path(&dir, &file.source_path),
         );
-        super::output::replace_file(&target, sidecar.declarations.as_bytes())?;
-        super::output::replace_file(&target.with_extension("ts.map"), sidecar.map.as_bytes())?;
+        let declared = outcome.record(
+            &target,
+            created.and_then(|()| {
+                super::output::replace_file(&target, sidecar.declarations.as_bytes())
+            }),
+        );
+        if declared {
+            outcome.record(
+                &map,
+                super::output::replace_file(&map, sidecar.map.as_bytes()),
+            );
+        } else {
+            outcome.fail(
+                &map,
+                format!("not written because {} was not written", target.display()),
+            );
+        }
     }
-    Ok(())
+    outcome
 }
 
 /// A path as a diagnostic should name it: relative to the directory the

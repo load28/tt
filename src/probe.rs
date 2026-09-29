@@ -38,6 +38,8 @@ pub struct LiteralMatch {
     /// body_open`], where the fix for a hole in this match is written —
     /// the typed pipeline authors that edit too (TASK-216).
     pub body_close: usize,
+    /// Where the written arms end — what that fix appends after.
+    pub tail: ArmsTail,
 }
 
 /// One literal a [`LiteralMatch`] covers, normalized to the value
@@ -48,8 +50,8 @@ pub enum Literal {
     String(String),
     /// A number literal, as the `f64` JavaScript compares (`-0` is `0`).
     Number(f64),
-    /// Decimal digits. A BigInt is never a member of a finite literal union
-    /// TypeScript would report, so a match covering one is left unchecked.
+    /// A BigInt literal, as its decimal digits with a leading `-` when
+    /// negative (`-0n` is `0`).
     BigInt(String),
     /// `true` / `false`.
     Boolean(bool),
@@ -84,6 +86,8 @@ pub struct TagMatch {
     /// Byte offset of the body's closing `}` — same role as
     /// [`LiteralMatch::body_close`].
     pub body_close: usize,
+    /// Where the written arms end — same role as [`LiteralMatch::tail`].
+    pub tail: ArmsTail,
 }
 
 /// One nested pattern, as a question about the *payload* it tests.
@@ -121,9 +125,12 @@ pub fn payload_probes(source: &str) -> Vec<PayloadProbe> {
 
 /// [`payload_probes`] under an explicit TypeScript surface kind.
 pub fn payload_probes_with_kind(source: &str, source_kind: crate::SourceKind) -> Vec<PayloadProbe> {
-    let program = crate::parser::parse_with_kind(source, source_kind);
+    payload_probes_of(&crate::parser::parse_with_kind(source, source_kind))
+}
+
+pub(crate) fn payload_probes_of(program: &Program) -> Vec<PayloadProbe> {
     let mut out = Vec::new();
-    payload_walk(&program, &mut out);
+    payload_walk(program, &mut out);
     out.sort_by_key(|p| p.offset);
     out
 }
@@ -256,9 +263,12 @@ pub fn tag_matches(source: &str) -> Vec<TagMatch> {
 
 /// [`tag_matches`] under an explicit TypeScript surface kind.
 pub fn tag_matches_with_kind(source: &str, source_kind: crate::SourceKind) -> Vec<TagMatch> {
-    let program = crate::parser::parse_with_kind(source, source_kind);
+    tag_matches_of(source, &crate::parser::parse_with_kind(source, source_kind))
+}
+
+pub(crate) fn tag_matches_of(source: &str, program: &Program) -> Vec<TagMatch> {
     let mut out = Probes::default();
-    walk(&program, source, &mut out);
+    walk(program, source, &mut out);
     out.tags
 }
 
@@ -288,9 +298,12 @@ pub fn literal_matches_with_kind(
     source: &str,
     source_kind: crate::SourceKind,
 ) -> Vec<LiteralMatch> {
-    let program = crate::parser::parse_with_kind(source, source_kind);
+    literal_matches_of(source, &crate::parser::parse_with_kind(source, source_kind))
+}
+
+pub(crate) fn literal_matches_of(source: &str, program: &Program) -> Vec<LiteralMatch> {
     let mut out = Probes::default();
-    walk(&program, source, &mut out);
+    walk(program, source, &mut out);
     out.literals
 }
 
@@ -436,6 +449,7 @@ fn collect(expr: &MatchExpr, src: &str, out: &mut Probes) {
             covered: literals,
             body_open: expr.body_open,
             body_close: expr.body_close,
+            tail: expr.tail,
         }),
         Kind::Tag => out.tags.push(TagMatch {
             offset: expr.keyword_off,
@@ -445,6 +459,7 @@ fn collect(expr: &MatchExpr, src: &str, out: &mut Probes) {
             covered: tags,
             body_open: expr.body_open,
             body_close: expr.body_close,
+            tail: expr.tail,
         }),
         Kind::None => {}
     }
@@ -488,6 +503,7 @@ fn collect_tuple(expr: &TupleMatchExpr, out: &mut Probes) {
         covered: Vec::new(),
         body_open: expr.body_open,
         body_close: expr.body_close,
+        tail: expr.tail,
     });
 }
 

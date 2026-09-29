@@ -25,13 +25,13 @@ export const map = <T, U>(o: TOption<T>, f: (value: T) => U): TOption<U> =>
   o.kind === "Some" ? Some(f(o.value)) : None;
 
 /** Chains a computation that itself returns an `Option`. */
-export const andThen = <T, U>(
+export const andThen = <T, U = never>(
   o: TOption<T>,
   f: (value: T) => TOption<U>,
 ): TOption<U> => (o.kind === "Some" ? f(o.value) : None);
 
 /** Returns `o` if it is `Some`, otherwise the fallback produced by `f`. */
-export const orElse = <T>(o: TOption<T>, f: () => TOption<T>): TOption<T> =>
+export const orElse = <T = never>(o: TOption<T>, f: () => TOption<T>): TOption<T> =>
   o.kind === "Some" ? o : f();
 
 /** Keeps `Some` only when the predicate holds. */
@@ -100,14 +100,14 @@ export const mapP =
 
 /** Curried `andThen` for pipelines. */
 export const andThenP =
-  <T, U>(f: (value: T) => TOption<U>) =>
+  <T, U = never>(f: (value: T) => TOption<U>) =>
   (o: TOption<T>): TOption<U> =>
     o.kind === "Some" ? f(o.value) : None;
 
 /** Curried `orElse` for pipelines. */
 export const orElseP =
-  <T>(f: () => TOption<T>) =>
-  (o: TOption<T>): TOption<T> =>
+  <U = never>(f: () => TOption<U>) =>
+  <T = never>(o: TOption<T>): TOption<T | U> =>
     o.kind === "Some" ? o : f();
 
 /** Curried `filter` for pipelines. */

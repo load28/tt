@@ -77,8 +77,8 @@ impl Lower<'_> {
                     let node = self.node(Self::span(*span), AstOrigin::Verbatim);
                     stmts.push(Stmt::Opaque(node));
                 }
-                ast::Segment::ValModifier(span) => {
-                    let node = self.node(Self::span(*span), AstOrigin::ValModifier);
+                ast::Segment::ValModifier(modifier) => {
+                    let node = self.node(Self::span(modifier.span), AstOrigin::ValModifier);
                     stmts.push(Stmt::Opaque(node));
                 }
                 ast::Segment::Variant(decl) => {
@@ -153,6 +153,9 @@ impl Lower<'_> {
                 Span::new(case.tag_off, case.tag_off + case.tag.len()),
                 AstOrigin::VariantCase,
             );
+            self.hir
+                .source_map
+                .record_owner(case_node, Self::span(case.span));
             // The variant is allocated before its fields so the owner link
             // can be recorded on each field.
             let variant = self.hir.variants.alloc(VariantData {
@@ -160,6 +163,7 @@ impl Lower<'_> {
                 owner,
                 name: case.tag.clone(),
                 fields: None,
+                comments: case.comments.clone(),
             });
             let fields = case.fields.as_ref().map(|fields| {
                 fields
@@ -175,6 +179,7 @@ impl Lower<'_> {
                             name: field.name.clone(),
                             optional: field.optional,
                             ty_text: field.ty.clone(),
+                            comments: field.comments.clone(),
                         })
                     })
                     .collect()
@@ -638,6 +643,8 @@ impl Lower<'_> {
         };
         let completes =
             crate::flow::program_diverges_in_span(self.source, statement_body, block.body_span);
+        let outward_jumps =
+            crate::flow::outward_jump_labels(self.source, statement_body, block.body_span);
         let items: Vec<ResultItem> = block
             .items
             .iter()
@@ -696,6 +703,7 @@ impl Lower<'_> {
             node,
             items,
             completes,
+            outward_jumps,
             value,
         })
     }

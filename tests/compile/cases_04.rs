@@ -189,6 +189,7 @@ fn let_else_inside_match_arm_is_error() {
         "{}",
         e.message
     );
+    assert!(!e.message.contains("IIFE"), "{}", e.message);
 }
 
 #[test]
@@ -584,10 +585,60 @@ fn dynamic_import_is_rewritten_and_import_meta_is_untouched() {
 }
 
 #[test]
-fn import_assignment_is_untouched() {
-    // TS import-assignment is not a static import declaration.
-    let src = "import fs = require(\"./legacy.tt\");\n";
-    assert_eq!(ok(src), src);
+fn import_equals_require_reference_is_rewritten() {
+    for (source, expected) in [
+        (
+            "import fs = require(\"./legacy.tt\");\n",
+            "import fs = require(\"./legacy.js\");\n",
+        ),
+        (
+            "export import view = require('../view.ttx');\n",
+            "export import view = require('../view.jsx');\n",
+        ),
+        (
+            "import type T = require(\"./types.tt\");\n",
+            "import type T = require(\"./types.js\");\n",
+        ),
+        (
+            "import type = require(\"./named-type.tt\");\n",
+            "import type = require(\"./named-type.js\");\n",
+        ),
+    ] {
+        assert_eq!(ok(source), expected, "{source}");
+    }
+    let options = Options {
+        rewrite_imports: ttc::ImportRewrite::Ts,
+        ..Options::default()
+    };
+    assert_eq!(
+        compile("import fs = require(\"./legacy.tt\");\n", &options).unwrap(),
+        "import fs = require(\"./legacy.ts\");\n"
+    );
+}
+
+#[test]
+fn no_substitution_template_dynamic_import_is_rewritten() {
+    for (source, expected) in [
+        (
+            "const m = import(`./x.tt`);\n",
+            "const m = import(`./x.js`);\n",
+        ),
+        (
+            "const m = import(`../view.ttx`, { with: { type: 'module' } });\n",
+            "const m = import(`../view.jsx`, { with: { type: 'module' } });\n",
+        ),
+    ] {
+        assert_eq!(ok(source), expected, "{source}");
+    }
+}
+
+#[test]
+fn module_augmentation_name_is_rewritten() {
+    let source =
+        "declare module \"./token.tt\" {\n  interface Token { extra: number }\n}\nexport {};\n";
+    assert_eq!(ok(source), source.replace("./token.tt", "./token.js"));
+    let ambient = "declare module \"pkg.tt\" {}\ndeclare module \"@scope/x.tt\" {}\n";
+    assert_eq!(ok(ambient), ambient);
 }
 
 #[test]
@@ -692,7 +743,6 @@ fn literal_import_rewrite_matrix_preserves_surrounding_syntax() {
 fn computed_and_non_module_import_lookalikes_remain_unchanged() {
     for source in [
         "const load = import('./feature.tt' + suffix);",
-        "const load = import(`./feature.tt`);",
         "const load = import(path);",
         "const load = import('package.tt');",
         "const load = object.import('./feature.tt');",

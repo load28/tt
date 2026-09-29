@@ -65,6 +65,15 @@
 
 ### Fixed
 
+- **`ttc --types` reports what it wrote, file by file** (TASK-509). A write
+  failure used to exit 1, the code for "diagnostics reported, files written",
+  and the editor refreshed nothing while recording success. Typed runs now
+  exit 0/1/2/3 (clean, reported, could not check, could not write every file),
+  a project that cannot be opened exits 2, `--types --json-report` prints the
+  written and failed files as JSON, and the VS Code extension settles each
+  sidecar from that report; a compiler killed by a signal is a failed refresh
+  (as in #129).
+
 - **진단이 구문의 범위를 가진다 — 에디터의 밑줄이 정확해졌다** (TASK-116).
   `try`가 전파하는 `Err`가 함수 반환 타입에 맞지 않을 때, 진단이 문의 첫
   글자에 1글자 밑줄로 붙던 것을 고쳤다. 이제 위치는 `try` 키워드이고 밑줄은

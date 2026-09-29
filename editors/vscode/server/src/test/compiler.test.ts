@@ -9,17 +9,16 @@
 import * as assert from "node:assert/strict";
 import { after, test } from "node:test";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 
 import * as engine from "../engine";
-import { runCheck, unusableCompiler } from "../ttc";
+import { runCheck, runTypedCheck, unusableCompiler } from "../ttc";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
-import { caseDir } from "./workspace";
+import { repoTestDir, testDir } from "../../../../../scripts/test-dirs.cjs";
 
 after(() => engine.shutdownEngineServer());
 
-const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tt-unusable-"));
+const dir = testDir("tt-unusable-");
 
 test("a spawn failure is read for what the user has to fix", () => {
   assert.equal(unusableCompiler({ code: "ENOENT" }), "missing");
@@ -75,7 +74,7 @@ const typedSkip = !compilerAvailable()
     : false;
 
 test("an unreachable engine answers null, not an empty diagnostics list", { skip: typedSkip, timeout: 60_000 }, async () => {
-  const project = caseDir("tt-unreachable-");
+  const project = repoTestDir("tt-unreachable-");
   fs.writeFileSync(
     path.join(project, "tsconfig.json"),
     JSON.stringify({
@@ -109,7 +108,7 @@ test("an unreachable engine answers null, not an empty diagnostics list", { skip
 });
 
 test("one-shot checks own and remove their temporary input directories", { skip: process.platform === "win32" }, async () => {
-  const project = caseDir("tt-check-lifetime-");
+  const project = repoTestDir("tt-check-lifetime-");
   const compiler = path.join(project, "compiler");
   const log = path.join(project, "inputs.jsonl");
   fs.writeFileSync(compiler, `#!/usr/bin/env node
@@ -134,4 +133,45 @@ setTimeout(() => {
   const inputs: string[] = fs.readFileSync(log, "utf8").trim().split("\n").map(line => JSON.parse(line));
   assert.equal(new Set(inputs).size, 3);
   for (const input of inputs) assert.equal(fs.existsSync(path.dirname(input)), false);
+});
+
+function oneShotCompiler(project: string): string {
+  const compiler = path.join(project, "one-shot-ttc");
+  fs.writeFileSync(compiler, `#!/usr/bin/env node
+const { spawn } = require("node:child_process");
+const args = process.argv.slice(2);
+if (args.includes("--server")) process.exit(1);
+const child = spawn(${JSON.stringify(COMPILER)}, args, { stdio: ["pipe", "inherit", "inherit"] });
+child.stdin.on("error", () => {});
+process.stdin.pipe(child.stdin);
+child.on("exit", (code) => process.exit(code ?? 1));
+`);
+  fs.chmodSync(compiler, 0o755);
+  return compiler;
+}
+
+test("the one-shot check reports UTF-16 columns after astral characters, as the engine does", { skip: compilerAvailable() ? process.platform === "win32" : "no ttc", timeout: 60_000 }, async () => {
+  const project = repoTestDir("tt-oneshot-columns-");
+  const compiler = oneShotCompiler(project);
+  const line = 'const e = "\u{1F600}\u{1F600}"; const a = match (s) { Circel(radius) => radius, Empty => 0 };';
+  const source = `variant Shape { Circle(radius: number), Empty }\ndeclare const s: Shape;\n${line}\n`;
+  const column = (result: Awaited<ReturnType<typeof runCheck>>) =>
+    result.kind === "ok" ? result.diagnostics.find((d) => d.code === "unknown-case")?.col : result.kind;
+
+  assert.equal(column(await runCheck(COMPILER, source, "shape.tt", false)), line.indexOf("Circel") + 1);
+  assert.equal(column(await runCheck(compiler, source, "shape.tt", false)), line.indexOf("Circel") + 1);
+});
+
+test("the one-shot typed check reports UTF-16 columns after astral characters, as the engine does", { skip: typedSkip || (process.platform === "win32" ? "posix wrapper" : false), timeout: 60_000 }, async () => {
+  const project = repoTestDir("tt-oneshot-typed-columns-");
+  const compiler = oneShotCompiler(project);
+  const file = path.join(project, "main.tt");
+  const source = 'const e = "\u{1F600}\u{1F600}"; export const value: number = "wrong";\n';
+  fs.writeFileSync(file, source);
+  const column = (result: Awaited<ReturnType<typeof runTypedCheck>>) =>
+    result.kind === "ok" ? result.diagnostics.find((d) => d.code === "ts2322")?.col : JSON.stringify(result);
+
+  const engineColumn = column(await runTypedCheck(COMPILER, source, file, true));
+  assert.equal(engineColumn, source.indexOf('"wrong"') + 1);
+  assert.equal(column(await runTypedCheck(compiler, source, file, true)), engineColumn);
 });

@@ -30,6 +30,17 @@ fn val_parameter_positions_beyond_plain_identifiers() {
 }
 
 #[test]
+fn val_parameter_beside_an_element_access_of_a_variable_named_val() {
+    let e = err(
+        "const g = c ? (val [0]) : w => w;\nfunction read(val [user]: User[]) {\n  user.name = \"x\";\n}\n",
+    );
+    assert_eq!((e.line, e.col), (3, 3));
+    assert!(e.message.contains("val binding `user`"));
+    let src = "const g = c ? (val [0]) : w => w;\nf(val [0])\n{\n  val.name = 1;\n}\n";
+    assert_eq!(ok(src), src);
+}
+
+#[test]
 fn val_argument_may_only_reach_a_val_parameter() {
     let src = "\
 function read(val user: User) { log(user.name); }
@@ -500,6 +511,121 @@ fn an_authored_arm_keeps_a_one_line_match_on_one_line() {
         with_suggestion_applied(src, &d, 0),
         "variant Shape { Circle(r: number), Empty }\nconst a = match (v) { Empty => 0, Circle(r) => undefined, };\n"
     );
+}
+
+#[test]
+fn every_authored_arm_edit_compiles_after_the_last_written_arm() {
+    let prelude = "variant Shape { Circle(radius: number), Rect(width: number, height: number), Point }\ndeclare const s: Shape;\n";
+    for body in [
+        "const a = match (s) {\n  Circle(radius) => radius\n};\n",
+        "const a = match (s) {\n  Circle(r) => { return radius; }\n};\n",
+        "const a = match (s) {\n  Circle(radius) => radius // trailing\n};\n",
+        "const a = match (s) {\n  Circle(radius) => radius\n  // trailing\n};\n",
+        "const a = match (s) {\n  Circle(radius) => radius /* note, here */\n};\n",
+        "const a = match (s) {\n  Circle(radius) => radius, // after\n};\n",
+        "const a = match (s) {\n  Circle(radius) => radius /* , */\n};\n",
+        "const a = match (s) { Circle(r) => { return radius; } };\n",
+        "const a = match (s) { Circle(radius) => radius /* note */ };\n",
+        "const a = match (s) { Circle(radius) => radius, /* note */ };\n",
+        "const a = match (s) { Circle(radius) => radius,};\n",
+        "const a = match (s) { Circle(radius) => radius\n};\n",
+        "const a = match (s, s) {\n  (Circle(radius), _) => radius\n};\n",
+    ] {
+        let src = format!("{prelude}{body}");
+        let d = hole(&src);
+        for which in 0..d.suggestions.len() {
+            let fixed = with_suggestion_applied(&src, &d, which);
+            let left = ttc::analyze(&fixed, &Options::default());
+            assert!(left.is_empty(), "{fixed}\n{left:#?}");
+        }
+    }
+}
+
+#[test]
+fn authored_arms_take_the_indentation_of_the_written_arms() {
+    let src = "variant Shape { Circle(r: number), Empty }\nfunction f(s: Shape) {\n\tconst a = match (s) {\n\t\tCircle(r) => r\n\t};\n}\n";
+    let d = hole(src);
+    assert_eq!(
+        with_suggestion_applied(src, &d, 0),
+        "variant Shape { Circle(r: number), Empty }\nfunction f(s: Shape) {\n\tconst a = match (s) {\n\t\tCircle(r) => r,\n\t\tEmpty => undefined,\n\t};\n}\n"
+    );
+    assert_eq!(
+        with_suggestion_applied(src, &d, 1),
+        "variant Shape { Circle(r: number), Empty }\nfunction f(s: Shape) {\n\tconst a = match (s) {\n\t\tCircle(r) => r,\n\t\t_ => undefined,\n\t};\n}\n"
+    );
+    let src = "variant Shape { Circle(r: number), Empty }\nconst a = match (s) {\n    Circle(r) => r, // kept\n};\n";
+    let d = hole(src);
+    assert_eq!(
+        with_suggestion_applied(src, &d, 0),
+        "variant Shape { Circle(r: number), Empty }\nconst a = match (s) {\n    Circle(r) => r, // kept\n    Empty => undefined,\n};\n"
+    );
+}
+
+#[test]
+fn authored_arm_lines_end_with_the_line_ending_of_a_crlf_file() {
+    for (src, arms) in [
+        (
+            "variant Shape { Circle(r: number), Point }\r\ndeclare const s: Shape;\r\nconst a = match (s) {\r\n    Circle(r) => r,\r\n};\r\n",
+            "    Point => undefined,\r\n",
+        ),
+        (
+            "variant Dir { North, South }\r\ndeclare const d: Dir;\r\nconst b = match (d, d) {\r\n  (North, _) => 1,\r\n  (South, North) => 2,\r\n};\r\n",
+            "  (South, South) => undefined,\r\n",
+        ),
+        (
+            "variant Shape { Circle(r: number), Point }\r\ndeclare const s: Shape;\r\nconst c = match (s) {\r\n    Circle(r) => r\r\n};\r\n",
+            "    Point => undefined,\r\n",
+        ),
+    ] {
+        let d = hole(src);
+        let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
+        assert!(edit.replacement.ends_with(arms), "{:?}", edit.replacement);
+        for which in 0..d.suggestions.len() {
+            let fixed = with_suggestion_applied(src, &d, which);
+            assert_eq!(
+                fixed.matches('\n').count(),
+                fixed.matches("\r\n").count(),
+                "{fixed:?}"
+            );
+            assert!(
+                ttc::analyze(&fixed, &Options::default()).is_empty(),
+                "{fixed:?}"
+            );
+        }
+    }
+}
+
+/// A CR-only file's arm lines are found by the same line model the
+/// positions use, and the authored lines end with CR (TASK-498).
+#[test]
+fn authored_arm_lines_end_with_the_line_ending_of_a_cr_file() {
+    let src = "variant Shape { Circle(r: number), Point }\rdeclare const s: Shape;\rfunction f() {\r\tconst a = match (s) {\r\t\tCircle(r) => r,\r\t};\r}\r";
+    let d = hole(src);
+    let edit = d.suggestions[0].edit.as_ref().expect("an applicable edit");
+    assert_eq!(edit.replacement, "\t\tPoint => undefined,\r");
+    assert_eq!(
+        with_suggestion_applied(src, &d, 0),
+        "variant Shape { Circle(r: number), Point }\rdeclare const s: Shape;\rfunction f() {\r\tconst a = match (s) {\r\t\tCircle(r) => r,\r\t\tPoint => undefined,\r\t};\r}\r"
+    );
+    for which in 0..d.suggestions.len() {
+        let fixed = with_suggestion_applied(src, &d, which);
+        assert!(!fixed.contains('\n'), "{fixed:?}");
+        assert!(
+            ttc::analyze(&fixed, &Options::default()).is_empty(),
+            "{fixed:?}"
+        );
+    }
+}
+
+/// A CR-only file is laid out like any other: generated lines end with CR
+/// and take their indentation from the line they replace (TASK-498).
+#[test]
+fn a_cr_file_emits_the_same_layout_with_its_own_line_ending() {
+    let lf = "variant Shape { Circle(r: number), Point }\ndeclare const s: Shape;\nfunction f() {\n  const a = match (s) {\n    Circle(r) => r,\n    Point => 0,\n  };\n  return a |> String;\n}\n";
+    let cr = lf.replace('\n', "\r");
+    let emitted = ok(&cr);
+    assert!(!emitted.contains('\n'), "{emitted:?}");
+    assert_eq!(emitted, ok(lf).replace('\n', "\r"));
 }
 
 #[test]

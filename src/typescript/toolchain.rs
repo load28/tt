@@ -201,11 +201,8 @@ mod tests {
         node_modules
     }
 
-    fn scratch(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("tt-toolchain-{name}"));
-        std::fs::remove_dir_all(&dir).ok();
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    fn scratch(name: &str) -> crate::test_workspace::Workspace {
+        crate::test_workspace::Workspace::new(&format!("toolchain-{name}"))
     }
 
     /// Both halves of a published install are found — the checker's API
@@ -224,7 +221,6 @@ mod tests {
                 exe.file_name().unwrap(),
                 exe_file_name(distribution.exe).as_str()
             );
-            std::fs::remove_dir_all(&dir).ok();
         }
     }
 
@@ -254,7 +250,6 @@ mod tests {
         std::fs::create_dir_all(&nested).unwrap();
         assert!(client(&nested).is_ok());
         assert!(service_binary(&nested).is_ok());
-        std::fs::remove_dir_all(&dir).ok();
     }
 
     /// A local `file:` install may link only the JS client package into the
@@ -287,8 +282,6 @@ mod tests {
             std::fs::remove_dir_all(consumer.join("node_modules")).unwrap();
             std::fs::remove_dir_all(source.join("node_modules")).unwrap();
         }
-        std::fs::remove_dir_all(consumer).ok();
-        std::fs::remove_dir_all(source).ok();
     }
 
     /// Both halves fail the same way, and the message names the one fix —
@@ -299,6 +292,5 @@ mod tests {
         for message in [client(&dir).unwrap_err(), service_binary(&dir).unwrap_err()] {
             assert!(message.contains(INSTALL), "unhelpful message: {message}");
         }
-        std::fs::remove_dir_all(&dir).ok();
     }
 }

@@ -383,6 +383,49 @@ fn a_type_error_inside_glue_reports_at_the_construct() {
 }
 
 #[test]
+fn recovered_syntax_reports_its_tt_diagnostic_instead_of_a_rejected_mapping() {
+    let tsc = require_mapper_toolchain!();
+    let cases = [
+        (
+            "declare const s: any;\nconst v = match (s) {\n  Circle { r } => r,\n};\nexport const a = 1;\n",
+            "b.tt(2,11): error tt7",
+        ),
+        (
+            "export variant Shape {\n  Circle(r: number\n}\nexport const a = 1;\n",
+            "b.tt(1,8): error tt6",
+        ),
+        (
+            "declare function f(): any;\nconst v = try f();\nexport const a = 1;\n",
+            "b.tt(2,11): error tt11",
+        ),
+        (
+            "declare const o: any;\nconst v = if let Some(value) = o { value };\nexport const a = 1;\n",
+            "b.tt(2,11): error tt14",
+        ),
+    ];
+    for (source, expected) in cases {
+        let project = mapper_project(false);
+        fs::write(project.path().join("src/b.tt"), source).unwrap();
+        fs::write(
+            project.path().join("src/main.ts"),
+            "import { a } from \"./b.tt\";\nconst x: string = a;\n",
+        )
+        .unwrap();
+
+        let (ok, text) = check(&tsc, &project);
+        assert!(!ok);
+        assert!(
+            !text.contains("TS100029"),
+            "TypeScript rejected the mapping:\n{text}"
+        );
+        assert!(
+            text.contains(expected),
+            "expected `{expected}` at its source, got:\n{text}"
+        );
+    }
+}
+
+#[test]
 fn generated_slots_preserve_contextual_literal_types_for_the_checker() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);
@@ -440,6 +483,186 @@ fn std_imports_resolve_through_materialization() {
             .join("node_modules/@tt/std/index.ts")
             .exists()
     );
+}
+
+fn node_module_project(package_type: &str, module: &str, verbatim: bool) -> Workspace {
+    let project = mapper_project(false);
+    fs::write(
+        project.path().join("package.json"),
+        format!("{{ \"private\": true, \"type\": \"{package_type}\" }}\n"),
+    )
+    .unwrap();
+    let config = project.path().join("tsconfig.json");
+    let text = fs::read_to_string(&config)
+        .unwrap()
+        .replace("\"esnext\"", &format!("\"{module}\""))
+        .replace("\"bundler\"", &format!("\"{module}\""))
+        .replace(
+            "\"skipLibCheck\": true",
+            &format!("\"skipLibCheck\": true,\n    \"verbatimModuleSyntax\": {verbatim}"),
+        );
+    fs::write(&config, text).unwrap();
+    fs::write(
+        project.path().join("src/opt.tt"),
+        "import type { TOption } from \"@tt/std\";\nimport * as Option from \"@tt/std/option\";\nimport * as Result from \"@tt/std/result\";\n\nexport function first(values: readonly number[]): TOption<number> {\n  return values.length > 0 ? Option.Some(values[0]) : Option.None;\n}\n\nexport const ok = Result.Ok(1);\nexport const count = [1, 2] |> ((xs) => xs.length);\n",
+    )
+    .unwrap();
+    project
+}
+
+#[test]
+fn std_imports_resolve_under_node_esm_with_verbatim_module_syntax() {
+    let tsc = require_mapper_toolchain!();
+    let project = node_module_project("module", "nodenext", true);
+    let legacy = project.path().join("node_modules/@tt/std");
+    fs::create_dir_all(&legacy).unwrap();
+    fs::write(
+        legacy.join("package.json"),
+        "{\n  \"name\": \"@tt/std\",\n  \"version\": \"0.0.0\",\n  \"types\": \"index.ts\"\n}\n",
+    )
+    .unwrap();
+    for module in ttc::StdPackage::Std.modules() {
+        fs::write(
+            legacy.join(ttc::StdPackage::file_name(*module)),
+            module.source(),
+        )
+        .unwrap();
+    }
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { first, count } from \"./opt.tt\";\nconst value = first([1]);\nexport const n: number = count;\nexport { value };\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, &project);
+    assert!(ok, "expected a clean check, got:\n{text}");
+    assert_eq!(
+        fs::read_to_string(legacy.join("package.json")).unwrap(),
+        ttc::StdPackage::Std.manifest()
+    );
+}
+
+#[test]
+fn std_imports_resolve_from_commonjs_and_esm_files_under_node16() {
+    let tsc = require_mapper_toolchain!();
+    for package_type in ["commonjs", "module"] {
+        let project = node_module_project(package_type, "node16", false);
+        fs::write(
+            project.path().join("src/legacy.cts"),
+            "import Option = require(\"@tt/std/option\");\nimport type { TOption } from \"@tt/std\";\nexport const legacy: TOption<number> = Option.Some(2);\n",
+        )
+        .unwrap();
+        fs::write(
+            project.path().join("src/modern.mts"),
+            "import { legacy } from \"./legacy.cjs\";\nimport * as Option from \"@tt/std/option\";\nexport const next: typeof legacy = Option.None;\n",
+        )
+        .unwrap();
+        check(&tsc, &project);
+        let (ok, text) = check(&tsc, &project);
+        assert!(ok, "{package_type}: expected a clean check, got:\n{text}");
+    }
+}
+
+#[test]
+fn a_commonjs_file_requires_the_std_package_cleanly_under_verbatim_module_syntax() {
+    let tsc = require_mapper_toolchain!();
+    for skip_lib_check in [true, false] {
+        let project = node_module_project("module", "nodenext", true);
+        let config = project.path().join("tsconfig.json");
+        let text = fs::read_to_string(&config).unwrap().replace(
+            "\"skipLibCheck\": true",
+            &format!("\"skipLibCheck\": {skip_lib_check}"),
+        );
+        fs::write(&config, text).unwrap();
+        let copied = project.path().join("node_modules/@tt/std");
+        fs::create_dir_all(copied.join(ttc::STD_PACKAGE_COMMONJS_DIR)).unwrap();
+        let mut entries = Vec::new();
+        for module in ttc::StdPackage::Std.modules() {
+            let file = ttc::StdPackage::file_name(*module);
+            let generated = format!("{}{}", ttc::GENERATED_BANNER, module.source());
+            fs::write(copied.join(file), &generated).unwrap();
+            fs::write(
+                copied.join(ttc::STD_PACKAGE_COMMONJS_DIR).join(file),
+                &generated,
+            )
+            .unwrap();
+            let subpath = &module.specifier()[ttc::StdPackage::Std.name().len()..];
+            entries.push(format!(
+                "    \".{subpath}\": {{\n      \"import\": {{ \"types\": \"./{file}\", \"default\": \"./{file}\" }},\n      \"require\": {{ \"types\": \"./cjs/{file}\", \"default\": \"./cjs/{file}\" }}\n    }}"
+            ));
+        }
+        fs::write(
+            copied.join("cjs/package.json"),
+            "{\n  \"type\": \"commonjs\"\n}\n",
+        )
+        .unwrap();
+        fs::write(
+            copied.join("package.json"),
+            format!(
+                "{{\n  \"name\": \"@tt/std\",\n  \"version\": \"0.0.0\",\n  \"type\": \"module\",\n  \"types\": \"./index.ts\",\n  \"exports\": {{\n{}\n  }}\n}}\n",
+                entries.join(",\n")
+            ),
+        )
+        .unwrap();
+        fs::write(
+            project.path().join("src/b.cts"),
+            "import Option = require(\"@tt/std/option\");\nimport type { TOption } from \"@tt/std\" with { \"resolution-mode\": \"require\" };\nconst legacy: TOption<number> = Option.None;\nexport = { legacy };\n",
+        )
+        .unwrap();
+        check(&tsc, &project);
+        let (ok, text) = check(&tsc, &project);
+        assert!(
+            ok,
+            "skipLibCheck {skip_lib_check}: expected a clean check, got:\n{text}"
+        );
+        assert_eq!(
+            fs::read_to_string(copied.join("package.json")).unwrap(),
+            ttc::StdPackage::Std.manifest()
+        );
+        assert!(!copied.join("cjs/option.ts").exists());
+    }
+}
+
+#[test]
+fn std_commonjs_declarations_are_the_compilers_declaration_emit() {
+    let tsc = require_mapper_toolchain!();
+    let project = Workspace::new("std-declarations");
+    let modules = [
+        ("types", ttc::StdModule::Types),
+        ("option", ttc::StdModule::Option),
+        ("result", ttc::StdModule::Result),
+        ("runtime", ttc::StdModule::Runtime),
+    ];
+    for (name, module) in modules {
+        fs::write(project.path().join(format!("{name}.ts")), module.source()).unwrap();
+    }
+    let mut command = Command::new("node");
+    command
+        .arg(&tsc)
+        .args([
+            "--declaration",
+            "--emitDeclarationOnly",
+            "--strict",
+            "--target",
+            "es2022",
+            "--module",
+            "esnext",
+            "--moduleResolution",
+            "bundler",
+            "--outDir",
+            "out",
+        ])
+        .args(modules.map(|(name, _)| format!("{name}.ts")))
+        .current_dir(project.path());
+    let output = command.output().expect("tsc runs");
+    assert!(output.status.success(), "{output:?}");
+    for (name, module) in modules {
+        assert_eq!(
+            fs::read_to_string(project.path().join(format!("out/{name}.d.ts"))).unwrap(),
+            module.declaration(),
+            "{name}"
+        );
+    }
 }
 
 #[test]
@@ -574,4 +797,36 @@ fn the_mapper_process_answers_the_protocol_directly() {
             .join("node_modules/@tt/std/index.ts")
             .exists()
     );
+}
+
+/// The mapper speaks byte offsets, so the checker counts the lines itself —
+/// ECMA-262's, whichever terminator a `.tt` file uses, and UTF-16 columns
+/// after a byte-order mark (TASK-498).
+#[test]
+fn a_tt_diagnostic_lands_on_the_line_every_terminator_starts() {
+    let tsc = require_mapper_toolchain!();
+    for (name, separator) in [
+        ("lf", "\n"),
+        ("crlf", "\r\n"),
+        ("cr", "\r"),
+        ("ls", "\u{2028}"),
+        ("ps", "\u{2029}"),
+    ] {
+        let project = mapper_project(false);
+        let source = format!(
+            "\u{feff}declare const s: any;{separator}{separator}\"\u{1F389}\"; const v = try f();{separator}export const a = 1;{separator}"
+        );
+        fs::write(project.path().join("src/b.tt"), source).unwrap();
+        fs::write(
+            project.path().join("src/main.ts"),
+            "import { a } from \"./b.tt\";\nconst x: number = a;\n",
+        )
+        .unwrap();
+        let (ok, text) = check(&tsc, &project);
+        assert!(!ok, "{name}");
+        assert!(
+            text.contains("b.tt(3,17): error tt11"),
+            "{name}: expected the diagnostic at its source line, got:\n{text}"
+        );
+    }
 }

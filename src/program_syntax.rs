@@ -45,13 +45,15 @@ use crate::core_ir::{
 use crate::hir::ids::Idx;
 use crate::hir::{self, BodyId, ExprId, NodeId};
 use crate::host_input::{HostInput, HostOrigin};
-use crate::lexer::Token;
 
 use collector::*;
 #[cfg(test)]
 use projection::ProjectionBuilder;
 pub(crate) use projection::{HostOwnerSyntax, ProgramSyntax, ProgramSyntaxError};
-use projection::{OverlayMarker, PendingOverlay, ProjectionSegmentKind, ProjectionSourceSegment};
+use projection::{
+    OverlayMarker, PendingOverlay, ProjectionSegmentKind, ProjectionSegments,
+    ProjectionSourceSegment,
+};
 use protocol::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -418,6 +420,114 @@ pub(crate) fn source_expression_effects(
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct MemberCallee {
+    pub(crate) receiver: Option<SourceSpan>,
+    pub(crate) key: Option<SourceSpan>,
+    pub(crate) grouped: bool,
+    pub(crate) optional: bool,
+}
+
+pub(crate) fn source_member_callee(
+    source: &str,
+    span: crate::hir::Span,
+    source_kind: crate::SourceKind,
+) -> Option<MemberCallee> {
+    use swc_ecma_ast::{Expr as SwcExpr, MemberProp, OptChainBase, SuperProp};
+
+    let text = source.get(span.start..span.end)?;
+    if crate::lexer::host_syntax_error(text, source_kind).is_some() {
+        return None;
+    }
+    let input = HostInput::new(text);
+    let parse = |context: swc_ecma_parser::Context| {
+        let mut parser = input.parser(source_kind);
+        parser.set_ctx(parser.ctx() | context);
+        match parser.parse_expr() {
+            Ok(expression) if parser.take_errors().is_empty() => Some(expression),
+            Ok(_) | Err(_) => None,
+        }
+    };
+    let expression = parse(swc_ecma_parser::Context::empty()).or_else(|| {
+        parse(
+            swc_ecma_parser::Context::Module
+                | swc_ecma_parser::Context::CanBeModule
+                | swc_ecma_parser::Context::InAsync
+                | swc_ecma_parser::Context::InGenerator,
+        )
+    })?;
+    let at = |node: swc_common::Span| SourceSpan {
+        start: span.start + input.byte(node.lo),
+        end: span.start + input.byte(node.hi),
+    };
+    let grouped = matches!(
+        &*expression,
+        SwcExpr::TsAs(_) | SwcExpr::TsSatisfies(_) | SwcExpr::TsTypeAssertion(_)
+    );
+    let mut callee = &*expression;
+    loop {
+        callee = match callee {
+            SwcExpr::Paren(inner) => &inner.expr,
+            SwcExpr::TsNonNull(inner) => &inner.expr,
+            SwcExpr::TsAs(inner) => &inner.expr,
+            SwcExpr::TsSatisfies(inner) => &inner.expr,
+            SwcExpr::TsTypeAssertion(inner) => &inner.expr,
+            _ => break,
+        };
+    }
+    match callee {
+        SwcExpr::Member(member) => Some(MemberCallee {
+            receiver: Some(at(member.obj.span())),
+            key: match &member.prop {
+                MemberProp::Computed(computed) => Some(at(computed.expr.span())),
+                MemberProp::Ident(_) | MemberProp::PrivateName(_) => None,
+            },
+            grouped,
+            optional: false,
+        }),
+        SwcExpr::SuperProp(member) => Some(MemberCallee {
+            receiver: None,
+            key: match &member.prop {
+                SuperProp::Computed(computed) => Some(at(computed.expr.span())),
+                SuperProp::Ident(_) => None,
+            },
+            grouped,
+            optional: false,
+        }),
+        SwcExpr::OptChain(chain) if matches!(&*chain.base, OptChainBase::Member(_)) => {
+            let mut root = None;
+            let mut node = callee;
+            loop {
+                node = match node {
+                    SwcExpr::OptChain(link) => {
+                        let object = match &*link.base {
+                            OptChainBase::Member(member) => &member.obj,
+                            OptChainBase::Call(call) => &call.callee,
+                        };
+                        if link.optional {
+                            root = Some(&**object);
+                        }
+                        object
+                    }
+                    SwcExpr::Member(member) => &member.obj,
+                    SwcExpr::Call(call) => match &call.callee {
+                        swc_ecma_ast::Callee::Expr(callee) => callee,
+                        swc_ecma_ast::Callee::Super(_) | swc_ecma_ast::Callee::Import(_) => break,
+                    },
+                    _ => break,
+                };
+            }
+            Some(MemberCallee {
+                receiver: Some(at(root?.span())),
+                key: None,
+                grouped,
+                optional: true,
+            })
+        }
+        _ => None,
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HostEvaluationOperation {
     Eager(EagerPosition),
     Conditional(ConditionalBranch),
@@ -476,6 +586,194 @@ pub(crate) struct HostOwner {
     pub(crate) id: HostOwnerId,
     pub(crate) kind: HostOwnerKind,
     pub(crate) span: SourceSpan,
+    /// Where the statement a prelude hoisted to this owner is written
+    /// before begins; it ends where the owner does. See [`HostOwner::anchor`].
+    anchor_start: usize,
+}
+
+impl HostOwner {
+    /// The statement a prelude hoisted to this owner is written before: the
+    /// owner itself, or the outermost label of the labels an iteration
+    /// statement owner stands under. A `continue` can name a label only
+    /// when the label applies directly to its loop (ECMA-262 §14.13.1,
+    /// ContainsUndefinedContinueTarget), so the prelude — and any block
+    /// the owner needs — must enclose the labels rather than separate them
+    /// from the loop.
+    pub(crate) fn anchor(&self) -> SourceSpan {
+        SourceSpan {
+            start: self.anchor_start,
+            end: self.span.end,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum GlobalStatement {
+    Enclose,
+    Binding(String),
+}
+
+fn is_script(module: &Module) -> bool {
+    use swc_ecma_ast::{ForOfStmt, MetaPropExpr, MetaPropKind, ModuleDecl, TsModuleRef, UsingDecl};
+    use swc_ecma_visit::{Visit, VisitWith};
+
+    #[derive(Default)]
+    struct ModuleOnlySyntax {
+        found: bool,
+        function_depth: usize,
+    }
+    impl Visit for ModuleOnlySyntax {
+        fn visit_meta_prop_expr(&mut self, node: &MetaPropExpr) {
+            self.found |= node.kind == MetaPropKind::ImportMeta;
+        }
+        fn visit_await_expr(&mut self, node: &AwaitExpr) {
+            self.found |= self.function_depth == 0;
+            node.visit_children_with(self);
+        }
+        fn visit_for_of_stmt(&mut self, node: &ForOfStmt) {
+            self.found |= node.is_await && self.function_depth == 0;
+            node.visit_children_with(self);
+        }
+        fn visit_using_decl(&mut self, node: &UsingDecl) {
+            self.found |= node.is_await && self.function_depth == 0;
+            node.visit_children_with(self);
+        }
+        fn visit_function(&mut self, node: &Function) {
+            self.function_depth += 1;
+            node.visit_children_with(self);
+            self.function_depth -= 1;
+        }
+        fn visit_arrow_expr(&mut self, node: &ArrowExpr) {
+            self.function_depth += 1;
+            node.visit_children_with(self);
+            self.function_depth -= 1;
+        }
+        fn visit_class(&mut self, node: &swc_ecma_ast::Class) {
+            self.function_depth += 1;
+            node.visit_children_with(self);
+            self.function_depth -= 1;
+        }
+    }
+
+    let indicator = module.body.iter().any(|item| match item {
+        ModuleItem::ModuleDecl(ModuleDecl::TsImportEquals(import)) => {
+            import.is_export || matches!(import.module_ref, TsModuleRef::TsExternalModuleRef(_))
+        }
+        ModuleItem::ModuleDecl(_) => true,
+        ModuleItem::Stmt(_) => false,
+    });
+    if indicator {
+        return false;
+    }
+    let mut syntax = ModuleOnlySyntax::default();
+    module.visit_with(&mut syntax);
+    !syntax.found
+}
+
+fn global_statements(
+    module: &Module,
+    source_start: HostOrigin,
+) -> HashMap<ProjectedSpan, GlobalStatement> {
+    module
+        .body
+        .iter()
+        .filter_map(|item| match item {
+            ModuleItem::Stmt(statement) => Some((
+                projected_span(statement.span(), source_start),
+                global_statement(statement)?,
+            )),
+            ModuleItem::ModuleDecl(_) => None,
+        })
+        .collect()
+}
+
+fn global_statement(statement: &Stmt) -> Option<GlobalStatement> {
+    use swc_ecma_ast::{Decl, VarDeclKind};
+
+    let binding = match statement {
+        Stmt::Decl(Decl::Var(var)) if var.kind == VarDeclKind::Var => None,
+        Stmt::Decl(Decl::Var(var)) => var
+            .decls
+            .iter()
+            .find_map(|declarator| first_binding(&declarator.name)),
+        Stmt::Decl(Decl::Using(using)) => using
+            .decls
+            .iter()
+            .find_map(|declarator| first_binding(&declarator.name)),
+        Stmt::Decl(Decl::Class(class)) => Some(class.ident.sym.to_string()),
+        Stmt::Decl(Decl::Fn(function)) => Some(function.ident.sym.to_string()),
+        Stmt::Decl(
+            Decl::TsEnum(_) | Decl::TsModule(_) | Decl::TsInterface(_) | Decl::TsTypeAlias(_),
+        ) => return None,
+        _ => None,
+    };
+    Some(binding.map_or(GlobalStatement::Enclose, GlobalStatement::Binding))
+}
+
+fn first_binding(pattern: &Pat) -> Option<String> {
+    use swc_ecma_ast::ObjectPatProp;
+
+    match pattern {
+        Pat::Ident(ident) => Some(ident.id.sym.to_string()),
+        Pat::Array(array) => array.elems.iter().flatten().find_map(first_binding),
+        Pat::Object(object) => object.props.iter().find_map(|property| match property {
+            ObjectPatProp::KeyValue(property) => first_binding(&property.value),
+            ObjectPatProp::Assign(property) => Some(property.key.id.sym.to_string()),
+            ObjectPatProp::Rest(rest) => first_binding(&rest.arg),
+        }),
+        Pat::Rest(rest) => first_binding(&rest.arg),
+        Pat::Assign(assign) => first_binding(&assign.left),
+        Pat::Invalid(_) | Pat::Expr(_) => None,
+    }
+}
+
+fn let_else_global_binding(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    extent: NodeId,
+) -> Option<GlobalStatement> {
+    use crate::core_ir::{DecisionKind, PatternPlan};
+
+    fn binds(pattern: &PatternPlan, out: &mut Vec<NodeId>) {
+        match pattern {
+            PatternPlan::Bind(bind) => out.push(bind.binding),
+            PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
+                for part in parts {
+                    binds(part, out);
+                }
+            }
+            PatternPlan::Any | PatternPlan::Test(_) => {}
+        }
+    }
+
+    let decision = core
+        .bodies
+        .iter()
+        .flat_map(|body| &body.statements)
+        .find_map(|statement| match statement {
+            Statement::Decision(decision) if decision.extent == extent => Some(decision),
+            _ => None,
+        })?;
+    let DecisionKind::LetElse { binding_mode, .. } = decision.kind else {
+        return None;
+    };
+    if binding_mode == hir::BindingMode::Var {
+        return Some(GlobalStatement::Enclose);
+    }
+    let mut nodes = Vec::new();
+    for arm in &decision.arms {
+        binds(&arm.pattern, &mut nodes);
+    }
+    Some(
+        nodes
+            .into_iter()
+            .filter_map(|node| semantic.hir.source_map.node_span(node))
+            .min_by_key(|span| span.start)
+            .map_or(GlobalStatement::Enclose, |span| {
+                GlobalStatement::Binding(source[span.start..span.end].to_owned())
+            }),
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -539,6 +837,7 @@ pub(crate) enum EvaluationOwner {
     Generator,
     ParameterInitializer,
     ClassInitializer,
+    ClassDefinition,
     StaticBlock,
 }
 
@@ -593,6 +892,8 @@ pub(crate) struct OverlayFacts {
     pub(crate) function_return_type: Option<SourceSpan>,
     pub(crate) function_return_awaited: bool,
     pub(crate) ambient: bool,
+    pub(crate) decorated_classes: Vec<usize>,
+    pub(crate) value_is_owner: bool,
 }
 
 impl EvaluationContext {
@@ -603,6 +904,7 @@ impl EvaluationContext {
         category: SyntaxCategory,
         parents: &[AstParentKind],
         host_owner_edge: usize,
+        requires_block: bool,
         facts: OverlayFacts,
     ) -> Self {
         let OverlayFacts {
@@ -611,9 +913,10 @@ impl EvaluationContext {
             function_return_type,
             function_return_awaited,
             ambient,
+            decorated_classes,
+            value_is_owner,
         } = facts;
-        let requires_block = statement_requires_block(parents);
-        let (mut owner, owner_edge) = evaluation_owner(parents);
+        let (mut owner, owner_edge) = evaluation_owner(parents, &decorated_classes);
         // The AST path owns local positions such as parameters and class
         // initializers. Function-target metadata only refines a function
         // body into the return contracts that differ from an ordinary
@@ -645,7 +948,10 @@ impl EvaluationContext {
         let local_path = &parents[owner_edge..];
         let value_role = value_role(local_path);
         let frequency = frequency_within_owner(parents, owner_edge);
-        let continuation = host_continuation(local_path);
+        let continuation = match host_continuation(local_path) {
+            HostContinuation::ArrowReturn if !value_is_owner => HostContinuation::Compose,
+            continuation => continuation,
+        };
         let uses_function_return = matches!(
             continuation,
             HostContinuation::Return | HostContinuation::ArrowReturn
@@ -671,18 +977,11 @@ impl EvaluationContext {
     }
 }
 
-fn statement_requires_block(parents: &[AstParentKind]) -> bool {
-    let Some(statement) = parents
-        .iter()
-        .rposition(|parent| matches!(parent, AstParentKind::ExprStmt(_) | AstParentKind::Stmt(_)))
-    else {
-        return false;
-    };
-    let parent = parents[..statement]
-        .iter()
-        .rev()
-        .find(|parent| !matches!(parent, AstParentKind::Stmt(_) | AstParentKind::ExprStmt(_)));
-    parent.is_some_and(|parent| {
+/// Whether the statement the path `above` leads into is the unbraced body
+/// of an `if`, loop, label, or `with`: the one position where replacing that
+/// statement with several leaves only the first under the parent.
+fn is_unbraced_body(above: &[AstParentKind]) -> bool {
+    above.last().is_some_and(|parent| {
         matches!(
             parent,
             AstParentKind::IfStmt(fields::IfStmtField::Cons | fields::IfStmtField::Alt)
@@ -695,6 +994,39 @@ fn statement_requires_block(parents: &[AstParentKind]) -> bool {
                 | AstParentKind::WithStmt(fields::WithStmtField::Body)
         )
     })
+}
+
+/// The owner a prelude for the innermost of `owners` is written before.
+/// `owners` runs from the outermost enclosing host owner to the chosen one;
+/// only an iteration statement looks through the labels naming it.
+fn prelude_anchor<'o>(
+    owners: &'o [ProjectedHostOwner],
+    parents: &[AstParentKind],
+) -> &'o ProjectedHostOwner {
+    let mut index = owners.len() - 1;
+    let owner = &owners[index];
+    let iteration = owner.kind == HostOwnerKind::Statement
+        && matches!(
+            parents.get(owner.edge),
+            Some(AstParentKind::Stmt(
+                fields::StmtField::For
+                    | fields::StmtField::ForIn
+                    | fields::StmtField::ForOf
+                    | fields::StmtField::While
+                    | fields::StmtField::DoWhile
+            ))
+        );
+    while iteration
+        && index > 0
+        && owners[index].edge > 0
+        && matches!(
+            parents.get(owners[index].edge - 1),
+            Some(AstParentKind::LabeledStmt(fields::LabeledStmtField::Body))
+        )
+    {
+        index -= 1;
+    }
+    &owners[index]
 }
 
 /// The evaluation regions between a value's host owner and the value.
@@ -766,9 +1098,22 @@ fn owner_reach(local_path: &[AstParentKind]) -> OwnerReach {
     reach
 }
 
-fn evaluation_owner(parents: &[AstParentKind]) -> (EvaluationOwner, usize) {
+fn evaluation_owner(
+    parents: &[AstParentKind],
+    decorated_classes: &[usize],
+) -> (EvaluationOwner, usize) {
     for (index, parent) in parents.iter().enumerate().rev() {
         match parent {
+            AstParentKind::Class(
+                fields::ClassField::Decorators(_) | fields::ClassField::Body(_),
+            ) => {
+                return (EvaluationOwner::ClassDefinition, index + 1);
+            }
+            AstParentKind::Class(fields::ClassField::SuperClass)
+                if decorated_classes.contains(&index) =>
+            {
+                return (EvaluationOwner::ClassDefinition, index + 1);
+            }
             AstParentKind::Function(fields::FunctionField::Params(_))
             | AstParentKind::ArrowExpr(fields::ArrowExprField::Params(_))
             | AstParentKind::Constructor(fields::ConstructorField::Params(_)) => {

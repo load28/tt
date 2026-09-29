@@ -32,7 +32,7 @@ impl<'a> Emitter<'a> {
                     let mut input = Rope::new();
                     match step.mode {
                         ApplyMode::Postfix { .. } => {
-                            push_receiver(&mut input, acc);
+                            push_receiver(&mut input, acc, self.source_kind);
                             next.anchored_with_context(
                                 AnchorKind::Pipe,
                                 step_span.start,
@@ -45,9 +45,9 @@ impl<'a> Emitter<'a> {
                         }
                         ApplyMode::Call => {
                             if accumulator_is_inert {
-                                push_grouped(&mut next, body);
+                                push_receiver(&mut next, body, self.source_kind);
                                 next.push_lit("(");
-                                push_grouped(&mut input, acc);
+                                push_grouped(&mut input, acc, self.source_kind);
                                 next.anchored_with_context(
                                     AnchorKind::Pipe,
                                     step_span.start,
@@ -57,10 +57,31 @@ impl<'a> Emitter<'a> {
                                     input,
                                 );
                                 next.push_lit(")");
+                            } else if let Some(member) =
+                                self.member_apply_steps.get(&step.value).copied()
+                            {
+                                push_grouped(&mut input, acc, self.source_kind);
+                                let mut call = Rope::new();
+                                call.anchored_with_context(
+                                    AnchorKind::Pipe,
+                                    step_span.start,
+                                    step_span.end,
+                                    end,
+                                    context,
+                                    input,
+                                );
+                                next.anchored_with_context(
+                                    AnchorKind::Pipe,
+                                    step_span.start,
+                                    step_span.end,
+                                    end,
+                                    context,
+                                    self.emit_member_step(step.value, member, call),
+                                );
                             } else {
                                 self.used_pipe.set(true);
-                                next.push_lit("$tt_ap(");
-                                push_grouped(&mut input, acc);
+                                next.push_lit(format!("{}(", self.generated_name("$tt_ap")));
+                                push_grouped(&mut input, acc, self.source_kind);
                                 next.anchored_with_context(
                                     AnchorKind::Pipe,
                                     step_span.start,
@@ -70,7 +91,7 @@ impl<'a> Emitter<'a> {
                                     input,
                                 );
                                 next.push_lit(", ");
-                                push_grouped(&mut next, body);
+                                push_grouped(&mut next, body, self.source_kind);
                                 next.push_lit(")");
                             }
                         }
@@ -91,6 +112,127 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    fn emit_member_step(
+        &self,
+        value: ExprId,
+        member: crate::program_syntax::MemberCallee,
+        input: Rope<'a>,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        let input_name = self.generated_name("$tt_v");
+        let mut names = vec![input_name.clone()];
+        names.extend(self.member_operand_names(member));
+        out.push_lit(format!("(({}) => ", names.join(", ")));
+        if member.grouped {
+            out.push_lit("(");
+            out.append(self.member_callee_body(value, member));
+            out.push_lit(")");
+        } else {
+            out.append(self.member_callee_body(value, member));
+        }
+        out.push_lit(format!("({input_name}))("));
+        out.append(input);
+        self.push_member_operands(&mut out, member, true);
+        out.push_lit(")");
+        out
+    }
+
+    fn member_operand_names(&self, member: crate::program_syntax::MemberCallee) -> Vec<String> {
+        member
+            .receiver
+            .map(|_| self.generated_name("$tt_r"))
+            .into_iter()
+            .chain(member.key.map(|_| self.generated_name("$tt_k")))
+            .collect()
+    }
+
+    fn emit_flow_function(&self, value: ExprId) -> Rope<'a> {
+        match self.member_apply_steps.get(&value).copied() {
+            Some(member) if !member.optional => self.emit_bound_member(value, member),
+            Some(_) | None => guard_line_comment(self.emit_expr(value).trim(), 0, self.source_kind),
+        }
+    }
+
+    fn member_callee_body(
+        &self,
+        value: ExprId,
+        member: crate::program_syntax::MemberCallee,
+    ) -> Rope<'a> {
+        let Expr::Opaque(node) = &self.core.exprs[value.index()] else {
+            crate::ice::bug!("a member pipeline step is not source text");
+        };
+        let callee = self.span(*node);
+        let mut substitutions: Vec<(SourceSpan, String)> = member
+            .receiver
+            .map(|receiver| (receiver, self.generated_name("$tt_r")))
+            .into_iter()
+            .chain(member.key.map(|key| (key, self.generated_name("$tt_k"))))
+            .collect();
+        substitutions.sort_by_key(|(span, _)| span.start);
+        let mut body = Rope::new();
+        let mut cursor = callee.start;
+        for (span, name) in &substitutions {
+            body.append(self.source_range_rope(hir::Span {
+                start: cursor,
+                end: span.start,
+            }));
+            body.push_lit(name.clone());
+            cursor = span.end;
+        }
+        body.append(self.source_range_rope(hir::Span {
+            start: cursor,
+            end: callee.end,
+        }));
+        guard_line_comment(body, 0, self.source_kind)
+    }
+
+    fn push_member_operands(
+        &self,
+        out: &mut Rope<'a>,
+        member: crate::program_syntax::MemberCallee,
+        leading_separator: bool,
+    ) {
+        for (index, span) in [member.receiver, member.key]
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            out.push_lit(if leading_separator || index > 0 {
+                ", ("
+            } else {
+                "("
+            });
+            out.append(guard_line_comment(
+                self.source_range_rope(hir::Span {
+                    start: span.start,
+                    end: span.end,
+                }),
+                0,
+                self.source_kind,
+            ));
+            out.push_lit(")");
+        }
+    }
+
+    fn emit_bound_member(
+        &self,
+        value: ExprId,
+        member: crate::program_syntax::MemberCallee,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        out.push_lit("((");
+        out.push_lit(self.member_operand_names(member).join(", "));
+        out.push_lit(") => (");
+        out.append(self.member_callee_body(value, member));
+        out.push_lit(match member.receiver {
+            Some(_) => format!(").bind({}))(", self.generated_name("$tt_r")),
+            None => ").bind(this))(".to_owned(),
+        });
+        self.push_member_operands(&mut out, member, false);
+        out.push_lit(")");
+        out
+    }
+
     pub(super) fn emit_flow(&self, apply: &Apply, owner_end: usize) -> Rope<'a> {
         let mut steps = apply.steps.iter();
         let first = steps
@@ -99,15 +241,16 @@ impl<'a> Emitter<'a> {
         let mut acc = Rope::new();
         push_grouped(
             &mut acc,
-            guard_line_comment(self.emit_expr(first.value).trim(), 0, self.source_kind),
+            self.emit_flow_function(first.value),
+            self.source_kind,
         );
         let mut produced = self.span(first.node);
         for step in steps {
             self.used_flow.set(true);
             let step_span = self.span(step.node);
-            let body = guard_line_comment(self.emit_expr(step.value).trim(), 0, self.source_kind);
+            let body = self.emit_flow_function(step.value);
             let mut next = Rope::new();
-            next.push_lit("$tt_fl(");
+            next.push_lit(format!("{}(", self.generated_name("$tt_fl")));
             // The composition built so far is what this step composes onto;
             // a mismatch on it means this step rejected it (see
             // `emit_apply`).
@@ -121,13 +264,14 @@ impl<'a> Emitter<'a> {
             );
             match step.mode {
                 ApplyMode::Postfix { .. } => {
-                    next.push_lit(", (($tt_v) => ($tt_v)");
+                    let input_name = self.generated_name("$tt_v");
+                    next.push_lit(format!(", (({input_name}) => ({input_name})"));
                     next.append(body);
                     next.push_lit("))");
                 }
                 ApplyMode::Call => {
                     next.push_lit(", ");
-                    push_grouped(&mut next, body);
+                    push_grouped(&mut next, body, self.source_kind);
                     next.push_lit(")");
                 }
             }
@@ -193,10 +337,13 @@ impl<'a> Emitter<'a> {
     ) {
         let span = self.span(decision.head);
         let (kind, inner) = match &decision.kind {
-            DecisionKind::LetElse { binding_mode, .. } => (
-                AnchorKind::LetElse,
-                self.emit_let_else(decision, *binding_mode, body),
-            ),
+            DecisionKind::LetElse { binding_mode, .. } => {
+                let mut inner = self.emit_let_else(decision, *binding_mode, body);
+                if self.block_required_statements.contains(&decision.extent) {
+                    inner = Rope::braced(inner);
+                }
+                (AnchorKind::LetElse, inner)
+            }
             DecisionKind::IfLet => (AnchorKind::IfLet, self.emit_if_let(decision, body)),
             DecisionKind::Match { .. } => {
                 crate::ice::bug!("expression decision in a statement body")
@@ -227,7 +374,11 @@ impl<'a> Emitter<'a> {
             out.push_lit("const ");
             out.push_mark(self.span(mark).start);
             out.push_lit(format!("{temp} = "));
-            push_grouped(&mut out, self.emit_expr(subject.value).trim());
+            push_grouped(
+                &mut out,
+                self.emit_expr(subject.value).trim(),
+                self.source_kind,
+            );
             out.push_lit(";");
         }
         out
@@ -240,7 +391,7 @@ impl<'a> Emitter<'a> {
         emit_body: &dyn Fn(hir::BodyId) -> Rope<'a>,
     ) -> Rope<'a> {
         let subject = &decision.subjects[0];
-        let temp = temp_name(subject.temporary);
+        let temp = self.temp_name(subject.temporary);
         let arm = &decision.arms[0];
         let mut out = self.emit_subject_initialization(subject, &temp, decision.head);
         out.push_break(0);
@@ -289,7 +440,7 @@ impl<'a> Emitter<'a> {
         emit_body: &dyn Fn(hir::BodyId) -> Rope<'a>,
     ) -> Rope<'a> {
         let subject = &decision.subjects[0];
-        let temp = temp_name(subject.temporary);
+        let temp = self.temp_name(subject.temporary);
         let arm = &decision.arms[0];
         let mut out = Rope::new();
         out.push_lit("{");
@@ -355,7 +506,7 @@ impl<'a> Emitter<'a> {
             .assignment_target()
             .filter(|_| decision_has_block_arm(decision))
             .filter(|_| exits.iter().any(|exit| exit.captured_break))
-            .map(exit_label);
+            .map(|target| self.exit_label(target));
         if let Some(label) = &label {
             out.push_lit(format!("{label}: "));
         }
@@ -367,7 +518,7 @@ impl<'a> Emitter<'a> {
             out.push_break(1);
             out.append(self.emit_subject_initialization(
                 subject,
-                &temp_name(subject.temporary),
+                &self.temp_name(subject.temporary),
                 decision.head,
             ));
         }
@@ -401,41 +552,10 @@ impl<'a> Emitter<'a> {
         // emits the child's inline slot and never schedules its statement
         // region a second time.
         if self
-            .owner_slot_rewrites
-            .iter()
+            .owner_slots_of(expr)
             .any(|rewrite| rewrite.expr == expr)
         {
             self.emitted_owner_rewrites.mark(expr);
-        }
-        if let Some(schedule) = self.nested_schedules.get(&expr)
-            && !schedule.steps().is_empty()
-            && !self.active_scheduled_exprs.contains(expr)
-        {
-            let slot = self
-                .value_slots
-                .get(&expr)
-                .unwrap_or_else(|| crate::ice::bug!("scheduled nested value has no slot"));
-            let _active = self.active_scheduled_exprs.enter(expr);
-            let mut action = self.emit_continued_expr(expr, &ValueContinuation::assign(slot))?;
-            let mut captured = HashSet::new();
-            for step in schedule.steps() {
-                action = self.emit_scheduled_step(step, action, &mut captured);
-            }
-            let parent = schedule
-                .steps()
-                .last()
-                .map(|step| step.parent)
-                .unwrap_or_else(|| crate::ice::bug!("nested schedule lost its parent"));
-            let mut out = Rope::new();
-            out.push_value_declaration(slot);
-            out.push_break(0);
-            out.append(action.trim_end());
-            out.push_break(0);
-            out.append(self.emit_value_delivery_without_region_exit(
-                self.source_range_with_nested_schedule(parent, expr, schedule),
-                continuation,
-            ));
-            return Some(Rope::scoped(out));
         }
         match &self.core.exprs[expr.index()] {
             Expr::Decision(decision) => {
@@ -460,30 +580,23 @@ impl<'a> Emitter<'a> {
             Expr::Sequence(body) => self.emit_sequence_continued(*body, continuation),
             Expr::Apply(apply) => self.emit_apply_continued(expr, apply, continuation),
             Expr::Template(template) => {
-                let mut out = Rope::new();
-                for part in &template.parts {
-                    let TemplatePart::Interpolation(inner) = part else {
-                        continue;
-                    };
-                    if !self.core.has_statement_form(*inner) {
-                        continue;
-                    }
-                    let slot = self
-                        .structured_value_slot(*inner)
-                        .unwrap_or_else(|| crate::ice::bug!("nested template value has no slot"));
-                    out.push_value_declaration(slot);
-                    out.push_break(0);
-                    out.append(self.emit_continued_expr(*inner, &ValueContinuation::assign(slot))?);
-                    out.push_break(0);
-                }
-                out.append(self.emit_value_delivery(
-                    self.emit_template(template),
-                    None,
-                    continuation,
-                ));
+                let (mut out, value) = self.emit_template_operand(expr, template, continuation)?;
+                out.append(self.emit_value_delivery(value, None, continuation));
                 Some(Rope::scoped(out))
             }
             Expr::Opaque(_) => None,
+        }
+    }
+
+    fn emit_nested_operand(&self, expr: ExprId) -> Option<(Rope<'a>, Rope<'a>)> {
+        match &self.core.exprs[expr.index()] {
+            Expr::Sequence(body) => {
+                self.emit_sequence_operand(*body, &ValueContinuation::expression())
+            }
+            Expr::Template(template) if self.core.has_statement_form(expr) => {
+                self.emit_template_operand(expr, template, &ValueContinuation::expression())
+            }
+            _ => None,
         }
     }
 
@@ -492,7 +605,7 @@ impl<'a> Emitter<'a> {
         propagate: &Propagate,
         continuation: &ValueContinuation<'_>,
     ) -> Rope<'a> {
-        let temp = temp_name(propagate.temporary);
+        let temp = self.temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
         out.push_break(0);
         out.push_lit(format!(
@@ -546,29 +659,64 @@ impl<'a> Emitter<'a> {
             .is_some_and(|slot| slot == accumulator);
         let mut inner = Rope::new();
         inner.push_lit("do {");
-        if !accumulator_is_host_slot {
+        if !accumulator_is_host_slot && !continuation.is_unwrapped_assignment_to(accumulator) {
             inner.push_break(1);
             inner.push_value_declaration(accumulator);
         }
+        let piped = self
+            .piped_slots
+            .get(&expr)
+            .filter(|slots| slots.len() == apply.steps.len())
+            .unwrap_or_else(|| crate::ice::bug!("structured apply has no piped slots"));
+        let push_target = |inner: &mut Rope<'a>, index: usize| match piped.get(index + 1) {
+            Some(next) => inner.push_value_definition(next),
+            None => inner.push_lit(format!("{accumulator} = ")),
+        };
         inner.push_break(1);
         if self.nested_structured_value_slot(head).is_some() {
+            inner.push_value_declaration(&piped[0]);
+            inner.push_break(1);
             inner.append(Rope::indented(
                 1,
-                self.emit_continued_expr(head, &ValueContinuation::assign(accumulator))
+                self.emit_continued_expr(head, &ValueContinuation::assign(&piped[0]))
                     .unwrap_or_else(|| crate::ice::bug!("structured apply head was not emitted")),
             ));
         } else {
-            inner.push_lit(format!("{accumulator} = "));
+            let value = match self.emit_nested_operand(head) {
+                Some((prelude, value)) => {
+                    inner.append(Rope::indented(1, prelude.trim_end()));
+                    inner.push_break(1);
+                    value
+                }
+                None => self.emit_expr(head),
+            };
+            inner.push_value_definition(&piped[0]);
             push_grouped(
                 &mut inner,
-                guard_line_comment(self.emit_expr(head).trim(), 1, self.source_kind),
+                guard_line_comment(value.trim(), 1, self.source_kind),
+                self.source_kind,
             );
             inner.push_lit(";");
         }
-        let mut produced = self.span(apply.node);
-        for step in &apply.steps {
+        for (index, step) in apply.steps.iter().enumerate() {
             let conditionally_reached = matches!(step.mode, ApplyMode::Postfix { optional: true });
-            let step_value = if let Some(slot) = self
+            let operand = match (step.mode, self.emit_nested_operand(step.value)) {
+                (ApplyMode::Postfix { .. }, Some((prelude, value))) => {
+                    inner.push_break(1);
+                    inner.append(Rope::indented(1, prelude.trim_end()));
+                    inner.push_break(1);
+                    push_target(&mut inner, index);
+                    inner.append(guard_line_comment(value.trim(), 1, self.source_kind));
+                    inner.push_lit(";");
+                    continue;
+                }
+                (_, operand) => operand,
+            };
+            let step_value = if let Some((prelude, value)) = operand {
+                inner.push_break(1);
+                inner.append(Rope::indented(1, prelude.trim_end()));
+                guard_line_comment(value.trim(), 1, self.source_kind)
+            } else if let Some(slot) = self
                 .nested_structured_value_slot(step.value)
                 .filter(|_| !conditionally_reached)
             {
@@ -589,46 +737,21 @@ impl<'a> Emitter<'a> {
                 guard_line_comment(self.emit_expr(step.value).trim(), 1, self.source_kind)
             };
             inner.push_break(1);
-            let step_span = self.span(step.node);
-            let context = Some((produced.start, produced.end));
-            // The re-piped accumulator is the value this step consumes — a
-            // mismatch on it belongs to this step (see `emit_apply`).
-            let mut input = Rope::new();
-            input.push_lit(accumulator.clone());
+            let input = self.pipe_input(apply, index, &piped[index]);
+            push_target(&mut inner, index);
             match step.mode {
                 ApplyMode::Postfix { .. } => {
-                    inner.push_lit(format!("{accumulator} = "));
-                    inner.anchored_with_context(
-                        AnchorKind::Pipe,
-                        step_span.start,
-                        step_span.end,
-                        end,
-                        context,
-                        input,
-                    );
+                    inner.append(input);
                     inner.append(step_value);
                     inner.push_lit(";");
                 }
                 ApplyMode::Call => {
-                    // The accumulator has already been evaluated into a
-                    // collision-free compiler slot. Reading that slot is
-                    // unobservable, so the callee can occupy its natural
-                    // call position without changing source evaluation.
-                    inner.push_lit(format!("{accumulator} = "));
-                    push_grouped(&mut inner, step_value);
+                    push_grouped(&mut inner, step_value, self.source_kind);
                     inner.push_lit("(");
-                    inner.anchored_with_context(
-                        AnchorKind::Pipe,
-                        step_span.start,
-                        step_span.end,
-                        end,
-                        context,
-                        input,
-                    );
+                    inner.append(input);
                     inner.push_lit(");");
                 }
             }
-            produced = step_span;
         }
         inner.push_break(1);
         if continuation.is_unwrapped_assignment_to(accumulator) {

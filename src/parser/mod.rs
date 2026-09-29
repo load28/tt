@@ -27,8 +27,12 @@
 //! [`tries`] parses `try` statements; [`lets`] parses let-else statements;
 //! [`results`] parses `result { ... }` computation blocks;
 //! [`imports`] lifts relative `.tt` module specifiers out of static
-//! import/re-export statements. The `val` binding modifier is recognized
-//! here too, through the shared structural rule in [`crate::val`].
+//! import/re-export statements; [`partial`] answers which pattern a
+//! position is in while the construct around it does not parse yet, with
+//! the same arm walk and heads the sub-parsers commit with; [`vals`] gives
+//! the lexical shapes of the `val` binding modifier, whose parameter form
+//! the host grammar confirms ([`host`]) before the modifier is recorded in
+//! the AST.
 
 mod cursor;
 mod host;
@@ -39,9 +43,11 @@ mod lets;
 mod literals;
 mod matches;
 mod parse;
+mod partial;
 mod pipes;
 mod results;
 mod tries;
+mod vals;
 mod variants;
 
 #[cfg(test)]
@@ -49,18 +55,20 @@ mod tests;
 
 use crate::ast::*;
 use crate::lexer::{self, Token, TokenKind, TplPart};
-use crate::val;
 use cursor::Cursor;
 
 pub(crate) use cursor::{dotted_at, find_close_at};
+pub(crate) use imports::local_export_specifiers;
 pub(crate) use keywords::is_reserved;
 use keywords::*;
 #[cfg(test)]
 use parse::visit_programs;
 pub(crate) use parse::{
     Parser, lex_and_parse_with_kind, parse, parse_with_kind, projection_recoveries,
-    unclaimed_candidates,
+    unclaimed_candidates, val_modifiers,
 };
+pub(crate) use partial::{PatternSite, arm_headers, pattern_site_at};
+pub(crate) use vals::is_param_modifier;
 
 pub(super) enum Claim<T> {
     Parsed(T),

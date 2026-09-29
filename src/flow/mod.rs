@@ -15,9 +15,9 @@
 //! labeled statements, every iteration statement (`while`, `do`-`while`,
 //! C-style `for`, `for`-`in`/`of`, `for await`), `switch` (clause
 //! fall-through, `default`, and `break`), and `try`/`catch`/`finally`.
-//! Statement boundaries follow `;`, a statement body's closing brace, and
-//! a restricted automatic-semicolon rule, so semicolon-free source reads
-//! the same as semicolon-terminated source.
+//! Statement boundaries are the lexer's ([`crate::lexer::TokenFacts`]):
+//! `;`, a statement start, and automatic semicolon insertion, so
+//! semicolon-free source reads the same as semicolon-terminated source.
 //!
 //! Two things stay deliberately outside the graph, and both can only make
 //! the answer "does not diverge", never a false "diverges":
@@ -30,8 +30,8 @@
 //!   flow pass, which owns their lowered bodies.
 //!
 //! The block/expression brace distinction (an object literal's `}` ends no
-//! statement) lives here too, moved from the let-else parser — one
-//! implementation, shared by statement splitting wherever flow looks.
+//! statement) is the lexer's too: after an object literal's `}` the next
+//! token starts no statement, after a block's it does.
 
 mod scanner;
 mod syntax;
@@ -46,10 +46,12 @@ use crate::ast::{IfLetElse, IfLetStmt, Program, Segment};
 use crate::lexer::{Token, TokenKind};
 
 use scanner::*;
-use syntax::*;
+
+#[cfg(test)]
+use syntax::user_function_target_at;
 pub(crate) use syntax::{
-    FunctionTarget, brace_opens_statement, concise_arrow_boundary_before, function_depth_at,
-    function_target_at, in_function_body, in_static_block,
+    FunctionTarget, FunctionTargets, function_depth_at, function_target_at, in_function_body,
+    in_static_block, user_function_depth_at,
 };
 
 /// One body's control-flow graph.
@@ -203,15 +205,15 @@ pub(crate) fn program_diverges_in_span(
 
 /// An abrupt completion that would leave a Result body instead of a
 /// user-written loop or switch inside it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum OutwardControl {
     Break {
         span: crate::ast::Span,
-        labeled: bool,
+        label: Option<String>,
     },
     Continue {
         span: crate::ast::Span,
-        labeled: bool,
+        label: Option<String>,
     },
     Yield(crate::ast::Span),
 }
@@ -221,15 +223,15 @@ pub(crate) enum OutwardControl {
 /// CFG, so this query uses the same model instead of a second token walk.
 pub(crate) fn outward_controls_in_span(
     src: &str,
-    tokens: &[Token],
     program: &Program,
     span: crate::ast::Span,
 ) -> Vec<OutwardControl> {
+    let tokens = &crate::lexer::lex(src, span.start, span.end)[..];
     let start = tokens.partition_point(|token| token.span.start < span.start);
     let end = start + tokens[start..].partition_point(|token| token.span.end <= span.end);
     let mut heads = IfLetHeads::new();
     collect_if_let_heads(program, &mut heads);
-    let function_depth = function_depth_at(src, tokens, start);
+    let function_depth = function_depth_at(tokens, start);
     let statements = Scanner {
         src,
         tokens: &tokens[start..end],
@@ -246,7 +248,7 @@ pub(crate) fn outward_controls_in_span(
         let absolute = start + index;
         if !matches!(token.kind, TokenKind::Ident)
             || &src[token.span.start..token.span.end] != "yield"
-            || function_depth_at(src, tokens, absolute) != function_depth
+            || function_depth_at(tokens, absolute) != function_depth
             || absolute
                 .checked_sub(1)
                 .and_then(|previous| tokens.get(previous))
@@ -262,6 +264,29 @@ pub(crate) fn outward_controls_in_span(
     controls
 }
 
+pub(crate) fn outward_jump_labels(
+    src: &str,
+    program: &Program,
+    span: crate::ast::Span,
+) -> Option<Vec<String>> {
+    let mut jumps = false;
+    let mut labels: Vec<String> = Vec::new();
+    for control in outward_controls_in_span(src, program, span) {
+        match control {
+            OutwardControl::Break { label, .. } | OutwardControl::Continue { label, .. } => {
+                jumps = true;
+                if let Some(label) = label
+                    && !labels.contains(&label)
+                {
+                    labels.push(label);
+                }
+            }
+            OutwardControl::Yield(_) => {}
+        }
+    }
+    jumps.then_some(labels)
+}
+
 /// Builds the CFG of one token stream treated as a statement sequence.
 fn lower_region(src: &str, tokens: &[Token], if_lets: &IfLetHeads) -> FlowBody {
     let statements = Scanner {
@@ -270,7 +295,10 @@ fn lower_region(src: &str, tokens: &[Token], if_lets: &IfLetHeads) -> FlowBody {
         if_lets,
     }
     .statements(0, tokens.len());
-    let mut builder = Builder { blocks: Vec::new() };
+    let mut builder = Builder {
+        blocks: Vec::new(),
+        abrupt: Vec::new(),
+    };
     let end = builder.block(Terminator::End);
     let entry = builder.seq(&statements, end, &mut Vec::new());
     FlowBody {
@@ -453,7 +481,7 @@ fn collect_outward_control<'a>(
             if !control_break_target(scopes, *label) {
                 controls.push(OutwardControl::Break {
                     span: *span,
-                    labeled: label.is_some(),
+                    label: label.map(str::to_owned),
                 });
             }
         }
@@ -461,7 +489,7 @@ fn collect_outward_control<'a>(
             if !control_continue_target(scopes, *label) {
                 controls.push(OutwardControl::Continue {
                     span: *span,
-                    labeled: label.is_some(),
+                    label: label.map(str::to_owned),
                 });
             }
         }
@@ -546,6 +574,13 @@ fn continue_target(scopes: &[Scope<'_>], label: Option<&str>) -> Option<BlockId>
 
 struct Builder {
     blocks: Vec<BasicBlock>,
+    abrupt: Vec<AbruptTargets>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AbruptTargets {
+    return_to: BlockId,
+    jump_to: BlockId,
 }
 
 impl Builder {
@@ -568,6 +603,12 @@ impl Builder {
     /// The entry block of `stmts` followed by `follow`. Lowered back to
     /// front, so each statement's successor is already built; scopes nest
     /// lexically, never sequentially, so the order is free.
+    fn outside_jump(&self) -> Terminator {
+        self.abrupt.last().map_or(Terminator::Jump, |targets| {
+            Terminator::Goto(targets.jump_to)
+        })
+    }
+
     fn seq<'a>(
         &mut self,
         stmts: &[Stmt<'a>],
@@ -600,15 +641,20 @@ impl Builder {
         label: Option<&'a str>,
     ) -> BlockId {
         match stmt {
-            Stmt::Return => self.block(Terminator::Return),
+            Stmt::Return => {
+                let terminator = self.abrupt.last().map_or(Terminator::Return, |targets| {
+                    Terminator::Goto(targets.return_to)
+                });
+                self.block(terminator)
+            }
             Stmt::Break { label: name, .. } => {
-                let terminator =
-                    break_target(scopes, *name).map_or(Terminator::Jump, Terminator::Goto);
+                let terminator = break_target(scopes, *name)
+                    .map_or_else(|| self.outside_jump(), Terminator::Goto);
                 self.block(terminator)
             }
             Stmt::Continue { label: name, .. } => {
-                let terminator =
-                    continue_target(scopes, *name).map_or(Terminator::Jump, Terminator::Goto);
+                let terminator = continue_target(scopes, *name)
+                    .map_or_else(|| self.outside_jump(), Terminator::Goto);
                 self.block(terminator)
             }
             Stmt::Yield(_) | Stmt::Other => self.block(Terminator::Goto(follow)),
@@ -666,19 +712,35 @@ impl Builder {
                 catch,
                 finally,
             } => {
-                // Everything that leaves the guarded block or its handler
-                // normally runs the `finally` first, so a `finally` that
-                // diverges makes the whole statement diverge. An abrupt
-                // exit (`return`/`break`/`continue`) from inside is *not*
-                // routed through this copy: it already diverges, and a
-                // diverging `finally` could only make it more so — the
-                // omission can never claim a divergence that is not there.
+                // Everything that leaves the guarded block or its handler,
+                // normally or abruptly, runs the `finally` first; an abrupt
+                // `finally` replaces that completion (ECMA-262 §14.15.3).
                 let join = match finally {
                     Some(stmts) => self.seq(stmts, follow, scopes),
                     None => follow,
                 };
+                let mut routed = scopes.clone();
+                if let Some(stmts) = finally {
+                    for scope in routed.iter_mut() {
+                        scope.break_to = self.seq(stmts, scope.break_to, scopes);
+                        scope.continue_to = scope
+                            .continue_to
+                            .map(|target| self.seq(stmts, target, scopes));
+                    }
+                    let return_exit =
+                        self.block(self.abrupt.last().map_or(Terminator::Return, |targets| {
+                            Terminator::Goto(targets.return_to)
+                        }));
+                    let jump_exit = self.block(self.outside_jump());
+                    let targets = AbruptTargets {
+                        return_to: self.seq(stmts, return_exit, scopes),
+                        jump_to: self.seq(stmts, jump_exit, scopes),
+                    };
+                    self.abrupt.push(targets);
+                }
+                let scopes = &mut routed;
                 let try_entry = self.seq(block, join, scopes);
-                match catch {
+                let entry = match catch {
                     // An exception can be raised anywhere in the guarded
                     // block, so the handler is reachable in place of any
                     // prefix of it. The statement then reaches `join`
@@ -694,7 +756,11 @@ impl Builder {
                     // With no handler an exception leaves the function;
                     // normal completion is the only edge out.
                     None => try_entry,
+                };
+                if finally.is_some() {
+                    self.abrupt.pop();
                 }
+                entry
             }
         }
     }

@@ -16,7 +16,8 @@ mod suggestions;
 #[cfg(test)]
 mod tests;
 
-use crate::error::{TtError, line_col};
+use crate::error::TtError;
+use crate::lines::line_col;
 
 pub(crate) use suggestions::{
     MatchSite, NON_EXHAUSTIVE_HELP, NON_EXHAUSTIVE_WILDCARD_HELP, non_exhaustive_message,
@@ -97,6 +98,11 @@ pub enum DiagnosticCode {
     VariantInvalidFieldType,
     /// A variant payload field named like the property the case tag uses.
     VariantFieldShadowsTag,
+    /// A required variant field after an optional one, which the case's
+    /// constructor parameter list cannot express.
+    VariantRequiredAfterOptional,
+    /// A `variant` declared as a module's default export.
+    VariantDefaultExport,
     /// A pattern binding the same name twice.
     PatternDuplicateBinding,
     /// A match mixing tag patterns with literal or `is` patterns.
@@ -145,6 +151,84 @@ pub enum DiagnosticCode {
     Other,
 }
 
+/// One slot of [`NUMBERED_CODES`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Numbered {
+    Active(DiagnosticCode),
+    Retired(&'static str),
+}
+
+/// Every numbered code, in number order from `1`.
+///
+/// Append-only: a new code takes the next number, and a retired code keeps
+/// its slot so every later number stays what `tsc` has already printed.
+const NUMBERED_CODES: [Numbered; 50] = [
+    Numbered::Active(DiagnosticCode::StrayPipe),
+    Numbered::Active(DiagnosticCode::MalformedPipelinePostfix),
+    Numbered::Active(DiagnosticCode::InvalidOptionalReceiver),
+    Numbered::Active(DiagnosticCode::StrayIfLet),
+    Numbered::Active(DiagnosticCode::StrayResult),
+    Numbered::Active(DiagnosticCode::MalformedVariant),
+    Numbered::Active(DiagnosticCode::MalformedMatch),
+    Numbered::Retired("result-missing-keyword"),
+    Numbered::Retired("result-nested-binding"),
+    Numbered::Active(DiagnosticCode::FlowFirstStepMethod),
+    Numbered::Active(DiagnosticCode::TryPlacement),
+    Numbered::Active(DiagnosticCode::LetElsePlacement),
+    Numbered::Active(DiagnosticCode::LetElseNotDiverging),
+    Numbered::Active(DiagnosticCode::IfLetPlacement),
+    Numbered::Active(DiagnosticCode::VariantDuplicateCase),
+    Numbered::Active(DiagnosticCode::VariantInvalidFieldType),
+    Numbered::Active(DiagnosticCode::PatternDuplicateBinding),
+    Numbered::Active(DiagnosticCode::MatchMixedPatterns),
+    Numbered::Active(DiagnosticCode::MatchWildcardNotLast),
+    Numbered::Active(DiagnosticCode::MatchOrLiteralKindMismatch),
+    Numbered::Active(DiagnosticCode::MatchDuplicateArm),
+    Numbered::Active(DiagnosticCode::MatchNestedInOrPattern),
+    Numbered::Active(DiagnosticCode::MatchOrBindingMismatch),
+    Numbered::Active(DiagnosticCode::MatchTupleArity),
+    Numbered::Active(DiagnosticCode::UnknownCase),
+    Numbered::Active(DiagnosticCode::UnknownField),
+    Numbered::Active(DiagnosticCode::MatchNotExhaustive),
+    Numbered::Active(DiagnosticCode::ValMutation),
+    Numbered::Active(DiagnosticCode::ValPass),
+    Numbered::Active(DiagnosticCode::VerifyFailed),
+    Numbered::Active(DiagnosticCode::SourceNotTypeScript),
+    Numbered::Active(DiagnosticCode::Other),
+    Numbered::Retired("result-tail-semicolon"),
+    Numbered::Active(DiagnosticCode::LoweringPlanFailed),
+    Numbered::Active(DiagnosticCode::ResultNoSuccessValue),
+    Numbered::Active(DiagnosticCode::ResultValueDiscarded),
+    Numbered::Active(DiagnosticCode::ResultReturnNested),
+    Numbered::Active(DiagnosticCode::ResultBreakCrossing),
+    Numbered::Active(DiagnosticCode::ResultContinueCrossing),
+    Numbered::Active(DiagnosticCode::ResultYieldCrossing),
+    Numbered::Active(DiagnosticCode::ResultLabelCrossing),
+    Numbered::Active(DiagnosticCode::TryCrossesValueRegion),
+    Numbered::Active(DiagnosticCode::MatchIsWildcardRequired),
+    Numbered::Active(DiagnosticCode::MatchIsEmptyBindings),
+    Numbered::Active(DiagnosticCode::MatchIsOrBindings),
+    Numbered::Active(DiagnosticCode::MatchPlacement),
+    Numbered::Active(DiagnosticCode::MatchControlCrossing),
+    Numbered::Active(DiagnosticCode::VariantFieldShadowsTag),
+    Numbered::Active(DiagnosticCode::VariantRequiredAfterOptional),
+    Numbered::Active(DiagnosticCode::VariantDefaultExport),
+];
+
+/// The numbered slot a code reference names: a name, `tt<number>`, or a
+/// bare number.
+fn numbered(text: &str) -> Option<Numbered> {
+    let digits = text.strip_prefix("tt").unwrap_or(text);
+    if !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        let number: usize = digits.parse().ok()?;
+        return NUMBERED_CODES.get(number.checked_sub(1)?).copied();
+    }
+    NUMBERED_CODES.iter().copied().find(|slot| match slot {
+        Numbered::Active(code) => code.as_str() == text,
+        Numbered::Retired(name) => *name == text,
+    })
+}
+
 impl DiagnosticCode {
     /// The code's stable wire form, e.g. `"match-not-exhaustive"`.
     pub fn as_str(self) -> &'static str {
@@ -172,6 +256,8 @@ impl DiagnosticCode {
             DiagnosticCode::VariantDuplicateCase => "variant-duplicate-case",
             DiagnosticCode::VariantInvalidFieldType => "variant-invalid-field-type",
             DiagnosticCode::VariantFieldShadowsTag => "variant-field-shadows-tag",
+            DiagnosticCode::VariantRequiredAfterOptional => "variant-required-after-optional",
+            DiagnosticCode::VariantDefaultExport => "variant-default-export",
             DiagnosticCode::PatternDuplicateBinding => "pattern-duplicate-binding",
             DiagnosticCode::MatchMixedPatterns => "match-mixed-patterns",
             DiagnosticCode::MatchWildcardNotLast => "match-wildcard-not-last",
@@ -226,6 +312,8 @@ impl DiagnosticCode {
         DiagnosticCode::VariantDuplicateCase,
         DiagnosticCode::VariantInvalidFieldType,
         DiagnosticCode::VariantFieldShadowsTag,
+        DiagnosticCode::VariantRequiredAfterOptional,
+        DiagnosticCode::VariantDefaultExport,
         DiagnosticCode::PatternDuplicateBinding,
         DiagnosticCode::MatchMixedPatterns,
         DiagnosticCode::MatchWildcardNotLast,
@@ -256,6 +344,38 @@ impl DiagnosticCode {
             .iter()
             .copied()
             .find(|code| code.as_str() == text)
+    }
+
+    /// The code's stable number, e.g. `27` for `match-not-exhaustive`.
+    ///
+    /// TypeScript's content mapper protocol carries a numeric diagnostic
+    /// code, which `tsc` prints as `tt<number>`. Numbers come from
+    /// [`NUMBERED_CODES`], which is append-only, so a number never changes
+    /// meaning.
+    pub fn number(self) -> u32 {
+        NUMBERED_CODES
+            .iter()
+            .position(|slot| *slot == Numbered::Active(self))
+            .map_or(0, |index| index as u32 + 1)
+    }
+
+    /// The active code a reference names: its name (`match-not-exhaustive`),
+    /// its number as `tsc` prints it (`tt27`), or the bare number (`27`).
+    pub fn lookup(text: &str) -> Option<DiagnosticCode> {
+        match numbered(text)? {
+            Numbered::Active(code) => Some(code),
+            Numbered::Retired(_) => None,
+        }
+    }
+
+    /// The name of a retired code a reference names, in any form
+    /// [`DiagnosticCode::lookup`] accepts. A retired code keeps its number
+    /// but is no longer reported.
+    pub fn retired(text: &str) -> Option<&'static str> {
+        match numbered(text)? {
+            Numbered::Active(_) => None,
+            Numbered::Retired(name) => Some(name),
+        }
     }
 
     /// What the rule is, why tt has it, and what to write instead — the
@@ -342,9 +462,9 @@ The text committed to tt's `match` syntax but did not parse as one.
 
 The scrutinee parentheses are mandatory and may not be empty. Each arm is
 `pattern => expression,` or `pattern => { ... }`. An object literal body
-needs its own parentheses (`Tag => ({ a: 1 })`), and scrutinees containing
-a top-level `<` or `>` comparison need parenthesizing so they cannot be
-read as type arguments."
+needs its own parentheses (`Tag => ({ a: 1 })`). Tuple pattern elements
+are tag patterns or `_`; a literal or `is` pattern cannot be an element, so
+test such a value in an arm guard or a nested `match`."
             }
 
             DiagnosticCode::FlowFirstStepMethod => {
@@ -369,10 +489,24 @@ A `try` was written where its propagation could not go anywhere.
 a value only where the TypeScript host can preserve that exit and the
 original evaluation order. It is rejected at module or namespace top level
 and at expression boundaries with no equivalent statement position, such as
-loop headers, parameter defaults, and class field initializers.
+loop headers, parameter defaults, class field initializers, decorators,
+computed member names, and the heritage of a decorated class.
+
+Some functions cannot be a Result scope at all. In a constructor, returning
+an `Err` object would replace the constructed instance. In a generator or
+async generator, `return` only completes the iterator, and a `for...of`
+loop discards that value, so the error would vanish. A class static block
+has no function to return from. A `try` targeting any of them is rejected;
+a whole `result` block written there is its own Result scope and is
+allowed.
 
 Move the propagation into the nearest Result scope when the surrounding
-expression cannot carry it."
+expression cannot carry it.
+
+A `try` statement that declares its binding with `const` or `let` is a
+lexical declaration, which TypeScript does not allow as the unbraced body of
+an `if`, `else`, loop, or label. Wrap it in braces; a `var` binding is
+allowed there and stays function-scoped."
             }
 
             DiagnosticCode::ResultNoSuccessValue => {
@@ -442,9 +576,15 @@ explicitly."
 A let-else was written outside the statement stream it needs.
 
 Like `try`, its `else` block leaves the enclosing function, so it belongs
-to a statement list — not to a `match` arm, a `result` block, or another
-construct's value region. Module top level is allowed here, because a
-let-else has no `return` of its own to place."
+to a statement list — not to a `match` arm or another construct's value
+region. Inside a statement-bodied `result` block its `else` exits complete
+that block, as a `return` written there does. Module top level is allowed
+here, because a let-else has no `return` of its own to place.
+
+A let-else that declares its binding with `const` or `let` is a lexical
+declaration, which TypeScript does not allow as the unbraced body of an
+`if`, `else`, loop, or label. Wrap it in braces; a `var` let-else is allowed
+there and its binding stays function-scoped."
             }
 
             DiagnosticCode::LetElseNotDiverging => {
@@ -466,9 +606,15 @@ where both halves diverge all count."
                 "\
 An `if let` was written in expression position.
 
-`if let` is a statement — it lowers to an `if` with a narrowing test.
-Inside an expression region it is allowed only within a function you write
-there, which is the same control-flow rule `try` and let-else follow."
+`if let` is a statement — it lowers to an `if` with a narrowing test and
+produces no value. Its `if` must start a statement, so it cannot be a
+variable initializer, an argument, an operand, a `return` or `throw`
+operand, a concise arrow body, a template interpolation, a scrutinee or
+guard, an expression arm body, a `try` expression, or a pipeline. Inside
+such an expression region it is allowed only as a statement of a function
+you write there, which is the same control-flow rule `try` and let-else
+follow. Use `match` for a value, or declare the variable before the
+statement and assign it in the bodies."
             }
 
             DiagnosticCode::VariantDuplicateCase => {
@@ -502,6 +648,40 @@ so the value could no longer say which case it is.
 Rename the field. Nothing else about the case changes:
 
     variant Token { Word(text: string) }"
+            }
+
+            DiagnosticCode::VariantRequiredAfterOptional => {
+                "\
+A case declares a required field after an optional one.
+
+A case's fields are also its constructor's parameters, in order, and a
+TypeScript parameter list cannot have a required parameter after an
+optional one: the call could not leave the optional argument out and
+still pass the required one.
+
+Put the required fields first, or make the later field optional too:
+
+    variant Request { Get(url: string, timeout?: number) }"
+            }
+
+            DiagnosticCode::VariantDefaultExport => {
+                "\
+A `variant` is declared as the module's default export.
+
+A variant declares two things under one name: a type (the union of its
+cases) and a value (the constructor object). TypeScript has no declaration
+form that makes both the default export: `export default type` is not
+syntax, and neither is `export default const`. Exhaustiveness across
+modules also follows named imports only, so a default-exported variant
+would compile unchecked in every importer.
+
+Export the variant by name and import it by name:
+
+    // shape.tt
+    export variant Dir { Up, Down }
+
+    // use.tt
+    import { Dir } from \"./shape.tt\";"
             }
 
             DiagnosticCode::PatternDuplicateBinding => {
@@ -584,7 +764,13 @@ A `match` is used in a TypeScript host that cannot own its control flow.
 Expression matches lower to host-owned statements and a result slot. They
 never use an IIFE, an immediately invoked callback, or `$tt_expr`. Move the
 match to a function-body statement whose evaluation count and conditional
-reachability are explicit."
+reachability are explicit.
+
+A class definition evaluates its decorators, heritage, and computed member
+names itself, in an order that depends on the TypeScript decorator mode, so
+a match in a decorator, a computed member name, or the heritage of a
+decorated class is rejected. The heritage of an undecorated class is
+evaluated first under every mode and lowers before the class."
             }
             DiagnosticCode::MatchControlCrossing => {
                 r#"A `break`, `continue`, or `yield` in a match arm may target only control flow written inside that arm.
@@ -596,9 +782,18 @@ Each arm is an isolated completion region. Allowing a jump to an enclosing host 
                 "\
 A nested pattern appears inside an or-pattern.
 
-`A(x: Some(v)) | B(y)` would have to bind different shapes on different
-alternatives. Use element-level alternation instead — `Ok(value: Some(v) |
-None())` is not this rule — or write the arms separately."
+The alternatives of an or-pattern share one arm body and are compared by
+tag alone, so none of them may descend into a payload:
+`Ok(value: Some(v)) | Err(error)` is rejected. An alternation inside a
+field, such as `Ok(value: Some(v) | None())`, is not pattern syntax and
+does not parse. Write each nested shape as its own arm:
+
+    Ok(value: Some(v)) => v,
+    Ok(value: None()) => 0,
+    Err(error) => -1,
+
+A tuple match may alternate tags within one position, as in `(A, B | C)`,
+under the same rule: no alternative there is nested either."
             }
 
             DiagnosticCode::MatchOrBindingMismatch => {
@@ -619,7 +814,12 @@ scrutinees.
 `match (a, b)` matches pairs, so every arm is a two-element tuple pattern
 (or a final bare `_`). A one-element side is still claimed as a tuple when
 the other arms prove tuple intent, so the reported arity is the real
-mismatch rather than a guess."
+mismatch rather than a guess.
+
+Scrutinees are split at top-level commas. Comparisons are fine there
+(`match (a < b, v)`), but `a < b, c > (d)` reads as the generic call
+`a<b, c>(d)`, as it does in TypeScript, so the match has one scrutinee.
+Parenthesize a comparison: `match ((a < b), c > (d))`."
             }
 
             DiagnosticCode::UnknownCase => {
@@ -655,7 +855,7 @@ missing arms, or a final `_` arm to opt out.
 Two rules decide what counts as covered: a *guarded* arm never covers its
 tag, because the guard can fail; a *nested* pattern does cover, because
 the check descends into payloads. A hole is reported as a pattern you can
-paste back — `missing \"Ok(value: None)\"`.
+paste back — `missing \"Ok(value: None())\"`.
 
 For a tuple match the answer is the product of the positions, so a hole is
 a combination: `missing (North, Slow)`."
@@ -667,6 +867,11 @@ A value reached through a `val` binding is mutated.
 
 `val` makes the binding *and every path from it* read-only, at any depth:
 `x.a = v` and its compound forms, `x[i] = v`, `x.a++`, `delete x.a`.
+
+Method calls are not judged by name, because a user-defined `set` may not
+mutate anything. With `--check-types` (or `--types`), a call the
+TypeScript checker resolves to a built-in mutator, such as Array `push`,
+Map `set`, or Set `add`, is reported too.
 
 Rebinding is a different axis and is not this rule — `val let state` may
 still be assigned. Reads, comparisons and spreads (`{ ...x }`) are fine;
@@ -752,8 +957,10 @@ look up."
             DiagnosticCode::StrayPipe
                 | DiagnosticCode::InvalidOptionalReceiver
                 | DiagnosticCode::StrayIfLet
+                | DiagnosticCode::IfLetPlacement
                 | DiagnosticCode::StrayResult
                 | DiagnosticCode::MalformedVariant
+                | DiagnosticCode::VariantDefaultExport
                 | DiagnosticCode::MalformedMatch
                 | DiagnosticCode::MatchControlCrossing
                 | DiagnosticCode::VariantInvalidFieldType

@@ -45,7 +45,7 @@ fn one_owner_schedules_multiple_tt_values_without_expression_boundaries() {
     );
     assert!(!out.contains("$tt_expr(() =>"), "{out}");
     assert_eq!(out.matches("switch (").count(), 2, "{out}");
-    assert!(out.contains("const value = new ($tt_v0)($tt_v1);"), "{out}");
+    assert!(out.contains("const value = new ($tt_v0$value)($tt_v1$value);"), "{out}");
 }
 
 #[test]
@@ -154,7 +154,7 @@ const action = match (key) {
 };
 "#);
     assert!(
-        compact(&out).contains("case \"Escape\": case \"Tab\": { $tt_v0 = \"cancel\"; break; }"),
+        compact(&out).contains("case \"Escape\": case \"Tab\": { $tt_v0$action = \"cancel\"; break; }"),
         "{out}"
     );
 }
@@ -164,7 +164,7 @@ fn or_pattern_with_identical_bindings_shares_destructuring() {
     let out = ok("const r = match (x) { A(v) | B(v) => v, _ => 0 };");
     assert!(
         compact(&out)
-            .contains("case \"A\": case \"B\": { const { v } = $tt_m; $tt_v0 = v; break; }"),
+            .contains("case \"A\": case \"B\": { const { v } = $tt_m; $tt_v0$r = v; break; }"),
         "{out}"
     );
 }
@@ -304,19 +304,19 @@ const grade = match (s) {
     assert!(!out.contains("switch ("), "{out}");
     assert!(
         compact(&out).contains(
-            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; if (points >= 90) { $tt_v0 = \"A\"; break; } }"
+            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; if (points >= 90) { $tt_v0$grade = \"A\"; break; } }"
         ),
         "{out}"
     );
     assert!(
         compact(&out).contains(
-            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; $tt_v0 = \"F\"; break; }"
+            "if ($tt_m.kind === \"Graded\") { const { points } = $tt_m; $tt_v0$grade = \"F\"; break; }"
         ),
         "{out}"
     );
     // the same fail-fast runtime guard as the switch emission
     assert!(
-        out.contains("throw new Error(\"tt match: unexpected case \" + JSON.stringify($tt_m));"),
+        out.contains("throw new Error(\"tt match: unexpected case \" + $tt_show($tt_m));"),
         "{out}"
     );
 }
@@ -369,7 +369,7 @@ fn guard_with_or_pattern_emits_combined_condition() {
     let out = ok("const r = match (x) { A(v) | B(v) if v > 0 => v, _ => 0 };");
     assert!(
         compact(&out).contains(
-            "if ($tt_m.kind === \"A\" || $tt_m.kind === \"B\") { const { v } = $tt_m; if (v > 0) { $tt_v0 = v; break; } }"
+            "if ($tt_m.kind === \"A\" || $tt_m.kind === \"B\") { const { v } = $tt_m; if (v > 0) { $tt_v0$r = v; break; } }"
         ),
         "{out}"
     );
@@ -469,8 +469,8 @@ fn a_match_inside_a_literal_argument_completes_the_call_from_its_arms() {
 
     // A consumed call still delivers its result to the authored position.
     let consumed = ok("const kept = consume({item: match (x) { A(v) => v, _ => 0 }});");
-    assert!(consumed.contains("$tt_v0 = $tt_v1({item: v});"), "{consumed}");
-    assert!(consumed.contains("const kept = $tt_v0;"), "{consumed}");
+    assert!(consumed.contains("$tt_v0$kept = $tt_v1$kept({item: v});"), "{consumed}");
+    assert!(consumed.contains("const kept = $tt_v0$kept;"), "{consumed}");
 }
 
 #[test]
@@ -512,12 +512,12 @@ fn inert_arguments_are_not_captured_out_of_their_contextual_position() {
     // consumer types it (TASK-333).
     let out = ok("const items = [{run: (n) => n}, match (x) { A(v) => v, _ => 0 }];");
     assert!(!out.contains("= ({run:"), "{out}");
-    assert!(out.contains("[{run: (n) => n}, $tt_v0]"), "{out}");
+    assert!(out.contains("[{run: (n) => n}, $tt_v0$items]"), "{out}");
     // An argument that evaluates something keeps its capture, so it still
     // runs before the match's subject.
     let effectful = ok("const items = [make(), match (x) { A(v) => v, _ => 0 }];");
-    assert!(effectful.contains("const $tt_v1 = (make());"), "{effectful}");
-    assert!(effectful.contains("[$tt_v1, $tt_v0]"), "{effectful}");
+    assert!(effectful.contains("const $tt_v1$items = (make());"), "{effectful}");
+    assert!(effectful.contains("[$tt_v1$items, $tt_v0$items]"), "{effectful}");
     // A completed call is re-emitted inside the dispatch, where only the
     // generated names are in scope, so its arguments stay captured.
     let completed = ok("consume({run: (n) => n}, match (x) { A(v) => v, _ => 0 });");

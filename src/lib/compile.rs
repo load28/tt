@@ -140,14 +140,23 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
     // the first error in source order — and skips emission when the checks
     // already failed.
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
+    let typescript_tokens = lexer::TypeScriptTokens::of(source, options.source_kind, &tokens);
     let semantics = analysis::coverage_semantics(source, &program, options.extern_variants);
-    let core = core_ir::lower_semantic(&semantics, source);
-    let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
+    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
+    let mut errors = tt_errors(
+        source,
+        &program,
+        &tokens,
+        typescript_tokens.tokens(),
+        options,
+        &semantics,
+    );
     if errors
         .iter()
         .any(|error| error.code == DiagnosticCode::ResultNoSuccessValue)
     {
-        if let Err(failure) = codegen::lowering_plan(&semantics, &core, source, options.source_kind)
+        if let Err(failure) =
+            codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens)
         {
             errors.push(verify::in_source(source, &failure));
         }
@@ -159,7 +168,8 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             diagnostics::Diagnostic::from_tt(first).to_compile_error(source, options.filename)
         );
     }
-    let plan = match codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
+    let plan = match codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens)
+    {
         Ok(plan) => plan,
         // The file's own TypeScript does not parse, so no owner model
         // exists to lower against. Reported where the source says it, not
@@ -176,17 +186,26 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             diagnostics::Diagnostic::from_tt(first).to_compile_error(source, options.filename)
         );
     }
+    let automatic_semicolons = crate::lexer::automatic_semicolons(&tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
-        source,
-        options.source_kind,
+        codegen::EmitSource {
+            text: source,
+            kind: options.source_kind,
+            automatic_semicolons: &automatic_semicolons,
+        },
         &plan,
         options.rewrite_imports,
         options.std_imports,
     );
     if options.verify
-        && let Err(failure) = verify::verify_output(&flat.code, options.source_kind)
+        && let Err(failure) = verify::verify_emit(
+            &flat.code,
+            options.source_kind,
+            &automatic_semicolons,
+            &flat.mappings,
+        )
     {
         // The self-check reads the *generated* module, but the user only
         // has the `.tt` file open. A position in a file no one wrote is
@@ -213,6 +232,9 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
         contextual_slots: flat.contextual_slots,
+        generated_names: flat.generated_names,
+        declared_names: flat.declared_names,
+        shared_bindings: flat.shared_bindings,
     };
     if options.defer_to_checker {
         return Ok(emit);
@@ -239,6 +261,7 @@ fn tt_errors(
     source: &str,
     program: &ast::Program,
     tokens: &[lexer::Token],
+    typescript_tokens: &[lexer::Token],
     options: &Options,
     semantics: &analysis::SemanticFile,
 ) -> Vec<TtError> {
@@ -248,9 +271,14 @@ fn tt_errors(
         options.verify,
         options.defer_to_checker,
         semantics,
+        typescript_tokens,
     );
     if !options.defer_to_checker {
-        errors.extend(val::check_all(source, tokens));
+        errors.extend(val::check_all(
+            source,
+            tokens,
+            &parser::val_modifiers(program),
+        ));
     }
     // One order for every producer: where the reader's eye goes, top to
     // bottom. Stable, so equal positions keep their category order.
@@ -290,6 +318,32 @@ fn match_target_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
         .collect()
 }
 
+fn lexical_declaration_body_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
+    plan.lexical_declaration_bodies()
+        .iter()
+        .map(|body| {
+            let (construct, code) = match body.statement {
+                evaluation_ir::BindingStatement::LetElse => {
+                    ("a let-else", DiagnosticCode::LetElsePlacement)
+                }
+                evaluation_ir::BindingStatement::Try => {
+                    ("a `try` statement", DiagnosticCode::TryPlacement)
+                }
+            };
+            TtError::span(
+                body.source.start,
+                body.source.end,
+                format!(
+                    "{construct} declaring `const` or `let` cannot be the unbraced body of an \
+                     `if`, loop, or label — TypeScript allows no lexical declaration there"
+                ),
+            )
+            .code(code)
+            .help("wrap the statement in braces to give its binding a block")
+        })
+        .collect()
+}
+
 fn match_placement_message(
     owner: program_syntax::EvaluationOwner,
     reason: evaluation_ir::ExpressionBoundaryReason,
@@ -305,6 +359,10 @@ fn match_placement_message(
         ),
         (EvaluationOwner::ClassInitializer, Reason::OwnerTakesNoStatements) => (
             "`match` cannot be used in a class field initializer — this TypeScript boundary has no statement position",
+            help,
+        ),
+        (EvaluationOwner::ClassDefinition, Reason::OwnerTakesNoStatements) => (
+            "`match` cannot be used in a decorator, a computed member name, or a decorated class's heritage — the class definition evaluates it with no statement position",
             help,
         ),
         (_, Reason::RepeatedInOwner) => (
@@ -335,6 +393,7 @@ fn recovered_target_errors(
     semantics: &analysis::SemanticFile,
     core: &core_ir::CoreFile,
     source: &str,
+    tokens: &[lexer::Token],
     options: &Options,
     existing: &[TtError],
 ) -> Vec<TtError> {
@@ -344,7 +403,7 @@ fn recovered_target_errors(
     ) {
         return Vec::new();
     }
-    match codegen::lowering_plan_with(semantics, core, source, options.source_kind, true) {
+    match codegen::lowering_plan_with(semantics, core, source, options.source_kind, tokens, true) {
         Ok(plan) => nonredundant_target_errors(&plan, existing),
         Err(_) => Vec::new(),
     }
@@ -353,6 +412,7 @@ fn recovered_target_errors(
 fn target_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<TtError> {
     let mut errors = try_target_errors(plan);
     errors.extend(match_target_errors(plan));
+    errors.extend(lexical_declaration_body_errors(plan));
     errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
     errors
 }
@@ -403,6 +463,12 @@ fn try_placement_message(
         (EvaluationOwner::ClassInitializer, Reason::OwnerTakesNoStatements) => (
             "`try` cannot be used in a class field initializer — this TypeScript control-flow \
              boundary has no statement position for its `Err` propagation",
+            help,
+        ),
+        (EvaluationOwner::ClassDefinition, Reason::OwnerTakesNoStatements) => (
+            "`try` cannot be used in a decorator, a computed member name, or a decorated \
+             class's heritage — the class definition evaluates it with no statement position \
+             for its `Err` propagation",
             help,
         ),
         (EvaluationOwner::Constructor, _) => (
@@ -464,16 +530,24 @@ fn try_placement_message(
 /// ```
 pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
+    let typescript_tokens = lexer::TypeScriptTokens::of(source, options.source_kind, &tokens);
     let semantics = analysis::coverage_semantics(source, &program, options.extern_variants);
-    let core = core_ir::lower_semantic(&semantics, source);
-    let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
+    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
+    let mut errors = tt_errors(
+        source,
+        &program,
+        &tokens,
+        typescript_tokens.tokens(),
+        options,
+        &semantics,
+    );
     if !errors.iter().any(|error| error.code.blocks_projection()) {
-        match codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
+        match codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens) {
             Ok(plan) => errors.extend(nonredundant_target_errors(&plan, &errors)),
             Err(failure) => {
                 errors.push(verify::in_source(source, &failure));
                 errors.extend(recovered_target_errors(
-                    &failure, &semantics, &core, source, options, &errors,
+                    &failure, &semantics, &core, source, &tokens, options, &errors,
                 ));
             }
         }
@@ -551,7 +625,17 @@ fn overwrite_recovery(source: &mut [u8], start: usize, end: usize, replacement: 
 /// outside the recovered node remains in the original source coordinate
 /// space.
 pub fn compile_projection_report(source: &str, options: &Options) -> ProjectionReport {
-    let ordinary = compile_report(source, options);
+    let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
+    compile_projection_report_parsed(source, options, &program, &tokens)
+}
+
+pub(crate) fn compile_projection_report_parsed(
+    source: &str,
+    options: &Options,
+    program: &ast::Program,
+    tokens: &[lexer::Token],
+) -> ProjectionReport {
+    let ordinary = compile_report_parsed(source, options, program, tokens);
     if ordinary.emit.is_some() {
         return ProjectionReport {
             emit: ordinary.emit,
@@ -560,8 +644,7 @@ pub fn compile_projection_report(source: &str, options: &Options) -> ProjectionR
         };
     }
 
-    let program = parser::parse_with_kind(source, options.source_kind);
-    let mut nodes = parser::projection_recoveries(&program);
+    let mut nodes = parser::projection_recoveries(program);
     for diagnostic in &ordinary.diagnostics {
         let (Some(start), Some(end)) = (diagnostic.start, diagnostic.end) else {
             continue;
@@ -656,13 +739,66 @@ pub fn compile_projection_report(source: &str, options: &Options) -> ProjectionR
     }
 }
 
+fn verified_emit(
+    emit: MappedEmit,
+    program: &ast::Program,
+    automatic_semicolons: &[crate::lexer::AutomaticSemicolon],
+    options: &Options,
+    errors: &mut Vec<TtError>,
+) -> Option<MappedEmit> {
+    if !options.verify {
+        return Some(emit);
+    }
+    let Err(failure) = verify::verify_emit(
+        &emit.code,
+        options.source_kind,
+        automatic_semicolons,
+        &emit.mappings,
+    ) else {
+        return Some(emit);
+    };
+    // A failed self-check *with tt errors already reported* is the
+    // effect, not a second cause — the emitted text reflects the
+    // invalid construct those errors name (e.g. a module-level `try`'s
+    // `return`), and the backstop's "or a ttc bug" wording would
+    // mislead. Report the causes and withhold the emit; the check
+    // reappears on its own once they are fixed.
+    if errors.is_empty() {
+        errors.push(verify::at_source(
+            &parser::unclaimed_candidates(program),
+            &emit.mappings,
+            &emit.anchors,
+            &emit.code,
+            &failure,
+        ));
+    }
+    None
+}
+
 /// Compiles `source` and reports everything — the multi-diagnostic,
 /// still-emitting form of [`compile_mapped`]. See [`CompileReport`].
 pub fn compile_report(source: &str, options: &Options) -> CompileReport {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
-    let semantics = analysis::coverage_semantics(source, &program, options.extern_variants);
-    let core = core_ir::lower_semantic(&semantics, source);
-    let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
+    compile_report_parsed(source, options, &program, &tokens)
+}
+
+pub(crate) fn compile_report_parsed(
+    source: &str,
+    options: &Options,
+    program: &ast::Program,
+    tokens: &[lexer::Token],
+) -> CompileReport {
+    let typescript_tokens = lexer::TypeScriptTokens::of(source, options.source_kind, tokens);
+    let semantics = analysis::coverage_semantics(source, program, options.extern_variants);
+    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
+    let mut errors = tt_errors(
+        source,
+        program,
+        tokens,
+        typescript_tokens.tokens(),
+        options,
+        &semantics,
+    );
     if errors.iter().any(|e| e.code.blocks_projection()) {
         return CompileReport {
             emit: None,
@@ -672,7 +808,8 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
                 .collect(),
         };
     }
-    let plan = match codegen::lowering_plan(&semantics, &core, source, options.source_kind) {
+    let plan = match codegen::lowering_plan(&semantics, &core, source, options.source_kind, tokens)
+    {
         Ok(plan) => plan,
         // Same class as a projection-blocking tt diagnostic: the file has
         // no emittable form, and the cause is reported with everything
@@ -680,7 +817,7 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
         Err(failure) => {
             errors.push(verify::in_source(source, &failure));
             errors.extend(recovered_target_errors(
-                &failure, &semantics, &core, source, options, &errors,
+                &failure, &semantics, &core, source, tokens, options, &errors,
             ));
             errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
             return CompileReport {
@@ -704,16 +841,20 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
                 .collect(),
         };
     }
+    let automatic_semicolons = crate::lexer::automatic_semicolons(tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
-        source,
-        options.source_kind,
+        codegen::EmitSource {
+            text: source,
+            kind: options.source_kind,
+            automatic_semicolons: &automatic_semicolons,
+        },
         &plan,
         options.rewrite_imports,
         options.std_imports,
     );
-    let mut emit = Some(MappedEmit {
+    let lowered = MappedEmit {
         code: flat.code,
         mappings: flat.mappings,
         scrutinee_temps: flat.scrutinee_temps,
@@ -721,35 +862,28 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
         contextual_slots: flat.contextual_slots,
-    });
+        generated_names: flat.generated_names,
+        declared_names: flat.declared_names,
+        shared_bindings: flat.shared_bindings,
+    };
+    let mut emit = verified_emit(
+        lowered,
+        program,
+        &automatic_semicolons,
+        options,
+        &mut errors,
+    );
     if !options.defer_to_checker
         && let Some(lowered) = emit.take()
     {
+        let annotated = !lowered.contextual_slots.is_empty();
         match crate::typescript::contextual::standalone(lowered, source, options) {
+            Ok(typed) if annotated => {
+                emit = verified_emit(typed, program, &automatic_semicolons, options, &mut errors);
+            }
             Ok(typed) => emit = Some(typed),
             Err(failure) => errors.push(TtError::positionless(failure.to_string())),
         }
-    }
-    if options.verify
-        && let Some(flat) = &emit
-        && let Err(failure) = verify::verify_output(&flat.code, options.source_kind)
-    {
-        // A failed self-check *with tt errors already reported* is the
-        // effect, not a second cause — the emitted text reflects the
-        // invalid construct those errors name (e.g. a module-level `try`'s
-        // `return`), and the backstop's "or a ttc bug" wording would
-        // mislead. Report the causes and withhold the emit; the check
-        // reappears on its own once they are fixed.
-        if errors.is_empty() {
-            errors.push(verify::at_source(
-                &parser::unclaimed_candidates(&program),
-                &flat.mappings,
-                &flat.anchors,
-                &flat.code,
-                &failure,
-            ));
-        }
-        emit = None;
     }
     CompileReport {
         emit,

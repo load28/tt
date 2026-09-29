@@ -1,5 +1,7 @@
 # TASK-348: Audit product and mixed-source composition failures
 
+> **Superseded in part by [TASK-467](./TASK-467-module-reference-rewrite.md):** a no-substitution template argument (``import(`./a.tt`)``) is a literal module specifier and is now rewritten; it is no longer an unchanged lookalike.
+
 - **Status**: Complete
 - **Started**: 2026-09-06
 - **Completed**: 2026-09-06

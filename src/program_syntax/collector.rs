@@ -41,6 +41,47 @@ pub(super) fn parse_module(
     Ok(ParsedModule { module, start })
 }
 
+pub(super) fn directive_prologue_end(
+    module: &Module,
+    start: HostOrigin,
+    segments: &[ProjectionSourceSegment],
+) -> Result<Option<usize>, ProgramSyntaxError> {
+    let Some((statement, literal)) = module
+        .body
+        .iter()
+        .map_while(|item| match item {
+            ModuleItem::Stmt(Stmt::Expr(statement)) => match &*statement.expr {
+                swc_ecma_ast::Expr::Lit(swc_ecma_ast::Lit::Str(literal)) => {
+                    Some((statement.span, literal.span))
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .last()
+    else {
+        return Ok(None);
+    };
+    let copied_end = |span: swc_common::Span| {
+        let hi = start.byte(span.hi);
+        hi.checked_sub(1).and_then(|last| {
+            segments.iter().find_map(|segment| {
+                (segment.kind == ProjectionSegmentKind::Copied
+                    && segment.projected.start.0 <= last
+                    && last < segment.projected.end.0)
+                    .then(|| segment.source.start + last - segment.projected.start.0 + 1)
+            })
+        })
+    };
+    copied_end(statement)
+        .or_else(|| copied_end(literal))
+        .map(Some)
+        .ok_or(ProgramSyntaxError::UnmappedEvaluationSpan {
+            start: start.byte(statement.lo),
+            end: start.byte(statement.hi),
+        })
+}
+
 /// Classifies a projection parse failure by the byte it stopped at.
 ///
 /// The projection is a sequence of two kinds of bytes: text copied from the
@@ -72,6 +113,15 @@ fn parse_failure_at(
         None => ProgramSyntaxError::Parse {
             message,
             projection: code.to_owned(),
+            source: segments
+                .iter()
+                .filter(|segment| {
+                    segment.kind == ProjectionSegmentKind::Placeholder
+                        && segment.projected.start <= at
+                        && at < segment.projected.end
+                })
+                .min_by_key(|segment| segment.projected.end.0 - segment.projected.start.0)
+                .map(|segment| segment.source),
         },
     }
 }
@@ -87,7 +137,7 @@ pub(super) struct ParentCollector {
     pub(super) synthetic_returns: HashSet<ProjectedSpan>,
     pub(super) found: HashMap<TtNodeId, FoundOverlay>,
     pub(super) duplicates: Vec<TtNodeId>,
-    pub(super) source_segments: Vec<ProjectionSourceSegment>,
+    pub(super) source_segments: ProjectionSegments,
     pub(super) projection_only_protocol_parents: HashSet<ProjectedSpan>,
     pub(super) host_owners: Vec<ProjectedHostOwner>,
     pub(super) protocol_frames: Vec<ProjectedProtocolFrame>,
@@ -107,16 +157,19 @@ pub(super) struct ParentCollector {
     /// body, whether the block is free of cleanup boundaries, and the
     /// function depth the block sits at.
     pub(super) arm_block_scopes: Vec<(BodyId, bool, usize)>,
+    pub(super) global_statements: HashMap<ProjectedSpan, GlobalStatement>,
 }
 
 pub(super) struct CollectedProgramSyntax {
     pub(super) overlay: Vec<OverlayEntry>,
     pub(super) owners: Vec<HostOwnerSyntax>,
     pub(super) occupied_names: HashSet<String>,
+    pub(super) globals: HashMap<SourceSpan, GlobalStatement>,
 }
 
 pub(super) struct FoundOverlay {
     pub(super) ambient: bool,
+    pub(super) decorated_classes: Vec<usize>,
     pub(super) parents: Vec<AstParentKind>,
     pub(super) host_owners: Vec<ProjectedHostOwner>,
     pub(super) protocol_frames: Vec<ProjectedProtocolFrame>,
@@ -257,7 +310,7 @@ pub(super) fn object_evaluation_positions(
     node: &ObjectLit,
     source_start: HostOrigin,
     placeholders: &HashSet<ProjectedSpan>,
-    segments: &[ProjectionSourceSegment],
+    segments: &ProjectionSegments,
 ) -> Vec<(ProjectedSpan, Effects)> {
     let mut positions = Vec::new();
     for property in &node.props {
@@ -321,7 +374,7 @@ pub(super) fn argument_positions(
     arguments: &[swc_ecma_ast::ExprOrSpread],
     source_start: HostOrigin,
     placeholders: &HashSet<ProjectedSpan>,
-    segments: &[ProjectionSourceSegment],
+    segments: &ProjectionSegments,
 ) -> Vec<(ProjectedSpan, bool, Effects)> {
     arguments
         .iter()

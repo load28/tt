@@ -133,6 +133,12 @@ impl Engine {
             .filter(|path| path.is_dir())
             .filter_map(|path| path.canonicalize().ok())
             .collect();
+        project.named = inputs
+            .iter()
+            .map(PathBuf::from)
+            .filter(|path| path.is_file())
+            .filter_map(|path| path.canonicalize().ok())
+            .collect();
         Ok(project)
     }
 

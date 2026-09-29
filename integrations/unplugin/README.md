@@ -36,13 +36,15 @@ import { Notice, render } from "./notice.tt";
 
 | 단계 | 하는 일 |
 |------|---------|
-| `resolveId` | `.tt`/`.ttx` 지정자를 파일 경로로 풀고 각각 `.ts`/`.tsx`를 덧붙인 가상 id를 돌려줍니다. `@tt/std`, `@tt/std/option`, `@tt/std/result`는 각각 가상 모듈 id로 바꿉니다 |
+| `resolveId` | Resolves a `.tt`/`.ttx` specifier to its file and returns that path with a query ending in `lang.ts` or `lang.tsx`, keeping any query the import already had. `@tt/std`, `@tt/std/option`, and `@tt/std/result` become virtual module ids |
 | `load` | `ttc -p --rewrite-imports off`의 출력을 돌려줍니다. 표준 라이브러리와 파이프 런타임은 모듈별 `ttc --emit-std types|option|result|runtime` 출력을 사용합니다 |
 
-id에 `.ts` 또는 `.tsx`를 붙이는 이유는 **호스트의 TypeScript 처리에 그대로 태우기**
-위해서입니다. 덕분에 플러그인이 변환을 직접 하지 않습니다. 다만 esbuild의
-`load`는 JavaScript만 반환할 수 있어서, 그 경로에는 소스 종류에 맞는 `ts`/`tsx`
-loader를 명시합니다.
+The `lang.ts`/`lang.tsx` query ending **routes the module through the host's own
+TypeScript handling**, so the plugin does not transpile anything itself. The part
+before the query stays the real `.tt` file, so tools that strip the query (Vite's
+`cleanUrl`, its worker and asset handling, and its dependency scanner) find a file
+on disk. esbuild's `load` can return only JavaScript, so that path names the `ts`
+or `tsx` loader that matches the source.
 
 `--rewrite-imports off`인 것도 의도입니다. 지정자 재작성은 미리 컴파일하는
 파이프라인을 위한 기능이고, 여기서는 `.tt`이 그대로 남아야 이 플러그인이
@@ -61,7 +63,7 @@ loader를 명시합니다.
 |------|--------|------|
 | `compiler` | 설치된 `@openload28/tt-lang`의 바이너리, 없으면 `"ttc"` | ttc 실행 파일 경로 |
 | `verify` | `true` | `false`면 `--no-verify`를 넘겨 방출물 자가 검사를 생략합니다 |
-| `sourcemap` | `true` | Set to `false` to omit the source map returned to the bundler |
+| `sourcemap` | `true` | Set to `false` to omit the source map returned to the bundler. The map names each source by its absolute path, so every bundler resolves it to the `.tt` file whatever its output directory |
 
 타입 선언(`index.d.ts`와 서브패스별 `.d.ts`)을 함께 싣습니다 — 소비자가
 `vite.config.ts`를 타입 검사에 넣어도 `tt()`의 옵션이 그대로 검사됩니다.
@@ -94,6 +96,45 @@ load content mappers.
 - `enforce: "pre"`는 Rollup·esbuild에서 무시됩니다 (unplugin 문서의 지원 훅
   표). 그 두 곳에서는 플러그인 순서를 직접 앞에 두세요.
 - `resolveId`는 Rspack·Rsbuild에서 최신 버전을 요구합니다.
+
+## Module ids
+
+A `.tt` module's id is its file path plus a query, for example
+`/project/src/lib.tt?lang.ts`. An import's own query is kept in front of the
+marker, so Vite's worker script request `./worker.tt?worker_file&type=module`
+compiles to `/project/src/worker.tt?worker_file&type=module&lang.ts`. Imports that
+ask Vite for something other than the module (`?raw`, `?url`, `?worker`,
+`?sharedworker`, and their combinations) are left to Vite, which returns the raw
+source, the file URL, or a worker constructor.
+
+Vite applies `config.plugins` to workers only in development. To bundle a `.tt`
+worker in a production build, register the plugin in `worker.plugins` as well:
+
+```ts
+export default defineConfig({
+  plugins: [tt()],
+  worker: { plugins: () => [tt()] },
+});
+```
+
+Vite's dependency scanner reads the file in front of the query. The Vite adapter
+adds `.tt` and `.ttx` to `optimizeDeps.extensions` and registers a scanner plugin
+that compiles them: `optimizeDeps.esbuildOptions.plugins` before Vite 8, and
+`optimizeDeps.rolldownOptions.plugins` on Rolldown-powered Vite (detected with
+`this.meta.rolldownVersion`). As a result, bare dependencies imported only from
+`.tt` files are pre-bundled when the dev server starts.
+
+Rollup derives default chunk names from the id, so an entry or dynamic import of
+`main.tt` is named `main.tt_lang`. Name entries with an input object
+(`input: { main: "src/main.tt" }`) when the output file name matters.
+
+The standard library has no file on disk, so `@tt/std`, `@tt/std/option`,
+`@tt/std/result`, and `@tt/runtime` resolve to the virtual ids
+`virtual:unplugin-tt/std/types.ts`, `…/option.ts`, `…/result.ts`, and
+`…/runtime.ts`. The ids contain no file system path, so they stay the same when
+Vite normalizes Windows separators. They keep the `virtual:` namespace but not
+the `\0` prefix, because the host's TypeScript transform must still process
+them; Vite serves them in development as `/@id/virtual:unplugin-tt/std/…`.
 
 ## Resolution and dependency invalidation
 

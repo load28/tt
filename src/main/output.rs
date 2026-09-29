@@ -30,6 +30,7 @@ pub(super) fn source_map_for(
     source: &str,
     banner: BannerPlacement,
     mode: SourceMapMode,
+    line_ending: &str,
 ) -> RenderedSourceMap {
     let out_name = job
         .out_path
@@ -45,20 +46,22 @@ pub(super) fn source_map_for(
             embed_source: true,
             generated_line_offset: banner.lines,
             generated_line_offset_at: banner.at_line,
+            source_kind: ttc::SourceKind::from_path(&job.file).unwrap_or_default(),
         },
     );
-    match mode {
-        SourceMapMode::Inline | SourceMapMode::Off => RenderedSourceMap {
-            comment: ttc::source_map::SourceMap::url_comment(&map.to_data_url()),
-            document: None,
-        },
-        SourceMapMode::File => RenderedSourceMap {
-            comment: ttc::source_map::SourceMap::url_comment(&format!(
-                "{}.map",
-                out_name.as_deref().unwrap_or("output")
-            )),
-            document: Some(map.to_json()),
-        },
+    let (url, document) = match mode {
+        SourceMapMode::Inline | SourceMapMode::Off => (map.to_data_url(), None),
+        SourceMapMode::File => (
+            ttc::source_map::url_path([
+                format!("{}.map", out_name.as_deref().unwrap_or("output")).as_str()
+            ]),
+            Some(map.to_json()),
+        ),
+    };
+    let comment = ttc::source_map::SourceMap::url_comment(&url);
+    RenderedSourceMap {
+        comment: format!("{}{line_ending}", comment.trim_end_matches('\n')),
+        document,
     }
 }
 
@@ -77,11 +80,9 @@ pub(super) fn relative_to(path: &Path, base: &Path) -> String {
         .zip(base.iter())
         .take_while(|(left, right)| left == right)
         .count();
-    let mut out = String::new();
-    for _ in 0..base.len() - shared {
-        out.push_str("../");
-    }
-    out.push_str(&path[shared..].join("/"));
+    let segments = std::iter::repeat_n("..", base.len() - shared)
+        .chain(path[shared..].iter().map(String::as_str));
+    let out = ttc::source_map::url_path(segments);
     if out.is_empty() { path.join("/") } else { out }
 }
 
@@ -175,6 +176,12 @@ pub(crate) const WATCH_INTERVAL: Duration = Duration::from_millis(300);
 /// imports it is checked against the new declarations, which is what makes
 /// project-wide exhaustiveness errors appear on the importing side.
 ///
+/// Every round places compiler support modules by the [`support_root`] of
+/// the whole input set, as a one-shot build of it would, however few files
+/// the round recompiles. When that root moves — an input added or removed
+/// outside it — every output refers to the support modules anew, so the
+/// round recompiles every job.
+///
 /// Runs until interrupted; the exit code is only reached on a fatal input
 /// error.
 pub(super) fn watch_mode(
@@ -183,6 +190,7 @@ pub(super) fn watch_mode(
     opts: &BuildOptions,
 ) -> ExitCode {
     let mut stamps: HashMap<PathBuf, SystemTime> = HashMap::new();
+    let mut placed: Option<PathBuf> = None;
     let mut first = true;
     let mut input_error = None;
 
@@ -214,24 +222,35 @@ pub(super) fn watch_mode(
             })
             .collect();
 
-        let changed: Vec<PathBuf> = if first {
+        let root = support_root(&jobs, out_dir);
+        let moved = root != placed;
+        let changed: Vec<PathBuf> = if first || moved {
             jobs.iter().map(|job| job.file.clone()).collect()
         } else {
             current
                 .iter()
                 .filter(|(file, stamp)| stamps.get(*file) != Some(stamp))
                 .map(|(file, _)| file.clone())
+                .chain(
+                    stamps
+                        .keys()
+                        .filter(|file| !current.contains_key(*file))
+                        .cloned(),
+                )
                 .collect()
         };
 
-        if !changed.is_empty() {
+        let selected: Vec<Job> = if changed.is_empty() {
+            Vec::new()
+        } else {
             let targets = with_dependents(&jobs, &changed);
-            let selected: Vec<Job> = jobs
-                .iter()
+            jobs.iter()
                 .filter(|job| targets.contains(&job.file))
                 .cloned()
-                .collect();
-            let failed = compile_jobs(&selected, opts);
+                .collect()
+        };
+        if !selected.is_empty() {
+            let failed = compile_jobs(&selected, root.as_deref(), opts);
             // The count is what was rebuilt; only the word after it says
             // how the round went, so "failed" must not borrow it.
             eprintln!(
@@ -246,6 +265,7 @@ pub(super) fn watch_mode(
             first = false;
         }
         stamps = current;
+        placed = root;
         thread::sleep(WATCH_INTERVAL);
     }
 }
@@ -280,10 +300,10 @@ pub(super) fn input_relative(file: &Path, inputs: &[String]) -> PathBuf {
 /// The changed files plus every job that imports one of them.
 pub(super) fn with_dependents(jobs: &[Job], changed: &[PathBuf]) -> HashSet<PathBuf> {
     let mut targets: HashSet<PathBuf> = changed.iter().cloned().collect();
-    let changed_real: HashSet<PathBuf> = changed
-        .iter()
-        .filter_map(|file| file.canonicalize().ok())
-        .collect();
+    let identity = |path: &Path| {
+        ttc::engine::normalize_document_path(path).unwrap_or_else(|_| normalized_absolute(path))
+    };
+    let changed_real: HashSet<PathBuf> = changed.iter().map(|file| identity(file)).collect();
 
     for job in jobs {
         if targets.contains(&job.file) {
@@ -293,11 +313,9 @@ pub(super) fn with_dependents(jobs: &[Job], changed: &[PathBuf]) -> HashSet<Path
             continue;
         };
         let dir = job.file.parent().unwrap_or(Path::new("."));
-        let imports_changed = ttc::tt_imports(&source).iter().any(|import| {
-            dir.join(&import.specifier)
-                .canonicalize()
-                .is_ok_and(|target| changed_real.contains(&target))
-        });
+        let imports_changed = ttc::tt_imports(&source)
+            .iter()
+            .any(|import| changed_real.contains(&identity(&dir.join(&import.specifier))));
         if imports_changed {
             targets.insert(job.file.clone());
         }
@@ -311,8 +329,7 @@ mod tests {
 
     #[test]
     fn concurrent_replacements_publish_complete_files_and_remove_staging() {
-        let dir = std::env::temp_dir().join(format!("tt-output-{}", std::process::id()));
-        fs::create_dir_all(&dir).unwrap();
+        let dir = crate::test_workspace::Workspace::new("output");
         let path = dir.join("out.ts");
         let barrier = std::sync::Barrier::new(8);
         std::thread::scope(|scope| {
@@ -330,6 +347,5 @@ mod tests {
         assert_eq!(output.len(), 65536);
         assert!(output.iter().all(|byte| *byte == output[0]));
         assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
-        fs::remove_dir_all(dir).unwrap();
     }
 }

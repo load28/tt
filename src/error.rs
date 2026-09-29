@@ -161,64 +161,10 @@ impl TtError {
     }
 }
 
-/// Convert a byte offset to (1-based line, 1-based column in UTF-8 code points).
-pub(crate) fn line_col(src: &str, offset: usize) -> (usize, usize) {
-    let mut offset = offset.min(src.len());
-    while offset > 0 && !src.is_char_boundary(offset) {
-        offset -= 1;
-    }
-    let before = &src[..offset];
-    let line = before.bytes().filter(|&b| b == b'\n').count() + 1;
-    let line_start = before.rfind('\n').map(|p| p + 1).unwrap_or(0);
-    let col = before[line_start..].chars().count() + 1;
-    (line, col)
+pub(crate) fn decoded(text: &str) -> &str {
+    text.strip_prefix('\u{feff}').unwrap_or(text)
 }
 
-/// The same column as [`line_col`]'s, counted the way an editor counts it.
-///
-/// ttc measures a column in code points, which is what a rendered caret
-/// lines up with. The editor protocol measures UTF-16 code units, and the
-/// two differ by one for every astral character earlier on the line — an
-/// emoji in a string literal is enough to move a reported span onto the
-/// code beside it. A protocol surface converts here rather than counting
-/// its own way, so one file's positions cannot mean two things.
-///
-/// A line or column the text does not have answers with the column it was
-/// given: an unmeasurable position is better left as it arrived than
-/// silently moved.
-pub(crate) fn utf16_column(src: &str, line: usize, column: usize) -> usize {
-    let Some(text) = line
-        .checked_sub(1)
-        .and_then(|line| src.split('\n').nth(line))
-    else {
-        return column;
-    };
-    let Some((prefix, _)) = text.char_indices().nth(column.saturating_sub(1)) else {
-        // The end of the line is a position; past it is not.
-        return if column == text.chars().count() + 1 {
-            text.encode_utf16().count() + 1
-        } else {
-            column
-        };
-    };
-    text[..prefix].encode_utf16().count() + 1
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{line_col, utf16_column};
-
-    #[test]
-    fn a_position_only_end_stays_the_sentinel() {
-        assert_eq!(utf16_column("한글\n", 0, 0), 0);
-        assert_eq!(utf16_column("한글\n", 1, 2), 2);
-    }
-
-    #[test]
-    fn line_col_normalizes_offsets_inside_multibyte_characters() {
-        let source = "aĳb";
-        assert_eq!(line_col(source, 2), (1, 2));
-        assert_eq!(line_col(source, 3), (1, 3));
-        assert_eq!(line_col(source, 4), (1, 4));
-    }
+pub(crate) fn signature_len(text: &str) -> usize {
+    text.len() - decoded(text).len()
 }

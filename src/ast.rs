@@ -29,9 +29,9 @@ pub(crate) struct Program {
     /// statement stream.
     pub expression_root: bool,
     pub segments: Vec<Segment>,
-    /// `match` constructs whose parser position can also be a host declaration.
-    /// Only these spans require ownership proof from the TypeScript AST.
-    pub host_match_candidates: Vec<Span>,
+    /// Parser positions the host grammar settles; `None` when the region
+    /// has none, which keeps them out of every nested region's inline size.
+    pub host_candidates: Option<Box<HostCandidates>>,
     /// Structurally recognized tt intent that did not fully parse and was
     /// therefore left verbatim. Unlike [`Self::malformed`], these facts do
     /// not diagnose by themselves: output verification consumes them only
@@ -69,6 +69,34 @@ pub(crate) struct UnclaimedTtCandidate {
     pub extent: Span,
 }
 
+/// Positions of one region whose reading the TypeScript AST decides.
+#[derive(Debug, Default)]
+pub(crate) struct HostCandidates {
+    /// `match` constructs whose parser position can also be a host
+    /// declaration. Only these spans require ownership proof from the
+    /// TypeScript AST.
+    pub matches: Vec<Span>,
+    /// Parameter-shaped `val` modifiers this region lifted before the host
+    /// grammar confirmed them: each span runs from the keyword to the start
+    /// of the binding it modifies. The host parse keeps only the ones whose
+    /// binding it reads as a formal parameter ([`ValModifierKind::Parameter`]).
+    pub vals: Vec<Span>,
+}
+
+impl Program {
+    pub(crate) fn host_match_candidates(&self) -> &[Span] {
+        self.host_candidates
+            .as_deref()
+            .map_or(&[], |candidates| &candidates.matches)
+    }
+
+    pub(crate) fn host_val_candidates(&self) -> &[Span] {
+        self.host_candidates
+            .as_deref()
+            .map_or(&[], |candidates| &candidates.vals)
+    }
+}
+
 /// Rare rollback facts kept out of every nested [`Program`]'s inline size.
 #[derive(Debug)]
 pub(crate) struct UnclaimedTtCandidates(pub Vec<UnclaimedTtCandidate>);
@@ -76,6 +104,26 @@ pub(crate) struct UnclaimedTtCandidates(pub Vec<UnclaimedTtCandidate>);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum UnclaimedTtKind {
     Try,
+}
+
+/// A `val` binding modifier: the keyword plus the spaces and tabs after it
+/// (the bytes codegen drops), and what it modifies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ValModifier {
+    pub span: Span,
+    pub kind: ValModifierKind,
+}
+
+/// What a [`ValModifier`] modifies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ValModifierKind {
+    /// `val const|let|var <binding> ...` on one line — a variable
+    /// declaration.
+    Declaration,
+    /// `val <binding>` at the start of an entry that the host grammar
+    /// parses as a formal parameter (a function, arrow, method, accessor,
+    /// constructor, or signature parameter, or a `catch` parameter).
+    Parameter,
 }
 
 /// A parser-owned error node used only by the typed projection.
@@ -131,13 +179,13 @@ pub(crate) enum Segment {
     /// [`crate::ImportRewrite`]. The clause's imported names are recorded
     /// for the declaration-collection API ([`crate::tt_imports`]).
     TtImport(TtImportDecl),
-    /// A lifted `val` binding modifier (the keyword plus the spaces after
-    /// it). `val` is a compile-time-only modifier — codegen emits nothing
-    /// for this segment, so `val const x = 1;` becomes `const x = 1;`.
-    /// Which occurrences of the identifier `val` are modifiers is decided
-    /// structurally by [`crate::val::modifier_at`]; every other one stays
-    /// verbatim.
-    ValModifier(Span),
+    /// A lifted `val` binding modifier. `val` is a compile-time-only
+    /// modifier — codegen emits nothing for this segment, so
+    /// `val const x = 1;` becomes `const x = 1;`. The parser decides once
+    /// which occurrences of the identifier `val` are modifiers and of what
+    /// kind; every later phase reads this node instead of re-deriving it,
+    /// and every other `val` stays verbatim.
+    ValModifier(ValModifier),
     /// A template literal; its interpolations are recursively parsed.
     Template(Template),
     /// A tt pipeline expression (`head |> step |> ...`).
@@ -349,6 +397,7 @@ pub(crate) struct IfLetStmt {
     /// fact only matters in expression regions: a function written there
     /// provides the statement position the construct needs.
     pub in_function: bool,
+    pub expression_position: bool,
 }
 
 /// The `else` continuation of an [`IfLetStmt`].
@@ -435,11 +484,33 @@ pub(crate) struct VariantDecl {
 /// One case of a tt variant.
 #[derive(Debug)]
 pub(crate) struct VariantCase {
+    /// The complete case, from the tag through the payload's closing `)`.
+    pub span: Span,
     pub tag: String,
     /// Byte offset of the tag, for error reporting.
     pub tag_off: usize,
     /// `None` = unit case (no parens); `Some(vec)` = case with a field list.
     pub fields: Option<Vec<Field>>,
+    pub comments: Comments,
+}
+
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Comments {
+    pub leading: Vec<Comment>,
+    pub trailing: Vec<Comment>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct Comment {
+    pub text: String,
+    pub column: usize,
+    pub own_line: bool,
+}
+
+impl Comment {
+    pub(crate) fn is_doc(&self) -> bool {
+        self.text.starts_with("/**") && self.text != "/**/"
+    }
 }
 
 /// One field of a payload-carrying variant case.
@@ -454,6 +525,7 @@ pub(crate) struct Field {
     pub ty: String,
     /// Byte offset of the type annotation, for error reporting.
     pub ty_off: usize,
+    pub comments: Comments,
 }
 
 /// A structurally parsed tt `match` expression.
@@ -471,6 +543,21 @@ pub(crate) struct MatchExpr {
     /// The scrutinee, recursively parsed.
     pub scrutinee: Program,
     pub arms: Vec<Arm>,
+    /// Where the written arms end.
+    pub tail: ArmsTail,
+}
+
+/// Where a match body's written arms end, as the parser tokenized them —
+/// what an edit that appends an arm writes after (TASK-460).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ArmsTail {
+    /// Byte offset of the last arm's first token.
+    pub last_start: usize,
+    /// Byte offset just past the last arm's final token, before any
+    /// separator, whitespace or comment that follows it.
+    pub last_end: usize,
+    /// Whether a `,` follows the last arm.
+    pub separated: bool,
 }
 
 /// A structurally parsed tt tuple match: two or more comma-separated
@@ -493,6 +580,8 @@ pub(crate) struct TupleMatchExpr {
     /// `await` detection plus the recursively parsed expression.
     pub scrutinees: Vec<(Span, Program)>,
     pub arms: Vec<TupleArm>,
+    /// Where the written arms end — same role as [`MatchExpr::tail`].
+    pub tail: ArmsTail,
 }
 
 impl TupleMatchExpr {
@@ -681,9 +770,46 @@ impl LiteralValue {
                 out.push('"');
                 out
             }
-            LiteralValue::Num(n) => format!("{n}"),
+            LiteralValue::Num(n) => js_number_string(*n),
             LiteralValue::BigInt(d) => format!("{d}n"),
             LiteralValue::Bool(b) => b.to_string(),
+        }
+    }
+}
+
+pub(crate) fn js_number_string(value: f64) -> String {
+    if value.is_nan() {
+        return "NaN".to_string();
+    }
+    if value == 0.0 {
+        return "0".to_string();
+    }
+    if value.is_infinite() {
+        return if value < 0.0 { "-Infinity" } else { "Infinity" }.to_string();
+    }
+    if value < 0.0 {
+        return format!("-{}", js_number_string(-value));
+    }
+    let scientific = format!("{value:e}");
+    let (mantissa, exponent) = scientific
+        .split_once('e')
+        .unwrap_or((scientific.as_str(), "0"));
+    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
+    let k = digits.len() as i32;
+    let n = exponent.parse::<i32>().unwrap_or(0) + 1;
+    if k <= n && n <= 21 {
+        format!("{digits}{}", "0".repeat((n - k) as usize))
+    } else if 0 < n && n <= 21 {
+        format!("{}.{}", &digits[..n as usize], &digits[n as usize..])
+    } else if -6 < n && n <= 0 {
+        format!("0.{}{digits}", "0".repeat((-n) as usize))
+    } else {
+        let sign = if n - 1 < 0 { '-' } else { '+' };
+        let exponent = (n - 1).abs();
+        if k == 1 {
+            format!("{digits}e{sign}{exponent}")
+        } else {
+            format!("{}.{}e{sign}{exponent}", &digits[..1], &digits[1..])
         }
     }
 }

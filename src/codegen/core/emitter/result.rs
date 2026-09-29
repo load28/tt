@@ -46,7 +46,7 @@ impl<'a> Emitter<'a> {
     /// The lowering of one `try`. It opens its own layout scope: a
     /// structured propagation value writes block structure into it.
     pub(super) fn emit_propagate(&self, propagate: &Propagate) -> Rope<'a> {
-        let temp = temp_name(propagate.temporary);
+        let temp = self.temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
         out.push_break(0);
         out.push_lit(format!(
@@ -85,7 +85,7 @@ impl<'a> Emitter<'a> {
             out.push_lit(format!("const {temp} = {slot};"));
         } else {
             out.push_lit(format!("const {temp} = "));
-            push_grouped(&mut out, self.emit_expr(value).trim());
+            push_grouped(&mut out, self.emit_expr(value).trim(), self.source_kind);
             out.push_lit(";");
         }
         out
@@ -124,6 +124,7 @@ impl<'a> Emitter<'a> {
                 push_grouped(
                     &mut out,
                     guard_line_comment(self.emit_expr(value).trim(), 0, self.source_kind),
+                    self.source_kind,
                 );
             } else {
                 out.push_lit("undefined");
@@ -152,9 +153,7 @@ impl<'a> Emitter<'a> {
         let mut propagating_returns = Vec::new();
         let mut structured_returns = Vec::new();
         for exit in exits {
-            let line_start = self.source[..exit.statement.start]
-                .rfind('\n')
-                .map_or(0, |index| index + 1);
+            let line_start = crate::lines::line_start_before(self.source, exit.statement.start);
             let line_indent = &self.source[line_start..exit.statement.start];
             let starts_own_line = line_indent.bytes().all(|byte| matches!(byte, b' ' | b'\t'));
             let inner_indent = format!("{line_indent}  ");
@@ -183,7 +182,10 @@ impl<'a> Emitter<'a> {
             }
             match exit.argument {
                 Some(argument) => {
-                    let grouped = grouping_required(&self.source[argument.start..argument.end]);
+                    let grouped = grouping_required(
+                        &self.source[argument.start..argument.end],
+                        self.source_kind,
+                    );
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
                             start: exit.statement.start,
@@ -408,7 +410,7 @@ impl<'a> Emitter<'a> {
                             context.failure,
                             context.exit_label,
                         );
-                        let temp = temp_name(propagate.temporary);
+                        let temp = self.temp_name(propagate.temporary);
                         let mut payload = Rope::new();
                         let try_span = self.span(propagate.node);
                         if argument.start < try_span.start {
@@ -454,6 +456,7 @@ impl<'a> Emitter<'a> {
                         span.end,
                         emit_adt(
                             adt,
+                            |node| self.span(node),
                             self.ambient_items.contains(&adt.node),
                             self.source_kind,
                         ),
@@ -508,7 +511,7 @@ impl<'a> Emitter<'a> {
         let assignment_target = continuation.assignment_target();
         let distinct_label = assignment_target.and_then(|target| {
             let slot = self.structured_value_slot(expr)?;
-            (slot != target).then(|| exit_label(slot))
+            (slot != target).then(|| self.exit_label(slot))
         });
         let exit_label = distinct_label.as_deref().or(assignment_target);
         let _failure_scope = self.enter_result_failure(region.id, continuation, exit_label);
@@ -568,7 +571,7 @@ impl<'a> Emitter<'a> {
         continuation: &ValueContinuation<'_>,
         exit_label: Option<&str>,
     ) -> Rope<'a> {
-        let temp = temp_name(propagate.temporary);
+        let temp = self.temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
         out.push_break(0);
         out.push_lit(format!(

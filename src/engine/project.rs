@@ -65,6 +65,7 @@ pub struct Project {
     /// program owns graph membership; this only narrows emission.
     requested: HashSet<PathBuf>,
     pub(super) input_roots: Vec<PathBuf>,
+    pub(super) named: Vec<PathBuf>,
     dependencies: RefCell<HashSet<PathBuf>>,
     /// Candidate files for the first layered-filesystem pass, fixed at open:
     /// the project scan together with the inputs the caller named. The
@@ -115,6 +116,7 @@ impl Project {
             out_dir,
             requested: collected.into_iter().collect(),
             input_roots: Vec::new(),
+            named: Vec::new(),
             dependencies: RefCell::new(HashSet::new()),
             initial,
             sources,
@@ -126,6 +128,14 @@ impl Project {
             next_snapshot: 0,
             service: None,
         }
+    }
+
+    pub(crate) fn service_arrangement(&self) -> crate::typescript::service::Arrangement {
+        crate::typescript::service::Arrangement::of_project(
+            self.backend.as_ref().ok(),
+            self.tsconfig.as_deref(),
+            &self.root,
+        )
     }
 
     /// The project root — the directory the compiler runs in.
@@ -318,6 +328,7 @@ impl Project {
                 &mut modules,
                 &query.modules,
                 &query.sources,
+                &self.roots(&projected),
             )
             .map_err(|failure| {
                 Box::new(Blocked {
@@ -434,26 +445,26 @@ impl Project {
                 if let Some(doc) = self.cache.get(target)
                     && doc.source == text
                 {
-                    return Some(
-                        doc.variant_symbols()
-                            .iter()
-                            .filter(|d| d.exported)
-                            .cloned()
-                            .collect(),
-                    );
+                    return Some(doc.exported_variant_symbols().to_vec());
                 }
-                Some(
-                    crate::variant_symbols_with_kind(
-                        &text,
-                        crate::SourceKind::from_path(target).unwrap_or_default(),
-                    )
-                    .into_iter()
-                    .filter(|d| d.exported)
-                    .collect(),
-                )
+                Some(crate::exported_variant_symbols_with_kind(
+                    &text,
+                    crate::SourceKind::from_path(target).unwrap_or_default(),
+                ))
             },
         );
         self.pattern_analysis(path, source, externs)
+    }
+
+    fn roots(&self, files: &[Arc<ProjectedDocument>]) -> Vec<PathBuf> {
+        files
+            .iter()
+            .filter(|file| {
+                self.named.contains(&file.source_path)
+                    || self.overlays.contains_key(&file.source_path)
+            })
+            .map(|file| file.module_path.clone())
+            .collect()
     }
 
     /// Checks a snapshot: asks the running compiler about it and returns
@@ -469,6 +480,7 @@ impl Project {
             &self.sources,
         );
         query.emit_declarations = request.emit_declarations;
+        query.roots = self.roots(snapshot.files());
         query
             .modules
             .extend(snapshot.host_overlays.iter().map(|(path, text)| {
@@ -629,11 +641,19 @@ fn collect_sources_in(
         // Without this, `ttc -o build src/app.js` wrote TypeScript syntax
         // into a file still called `.js`.
         if !is_source(entry, include_ts) {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!(
-                    "not a tt or TypeScript source (expected {})",
-                    source_extensions(include_ts)
+            return Err(named(
+                entry,
+                std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!(
+                        "{} (expected {})",
+                        if include_ts {
+                            "not a tt or TypeScript source"
+                        } else {
+                            "not a tt source"
+                        },
+                        source_extensions(include_ts)
+                    ),
                 ),
             ));
         }

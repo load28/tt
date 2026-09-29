@@ -1,6 +1,7 @@
 //! Formatting, naming, pattern, and variant-emission helpers.
 
 use super::*;
+use crate::ast::Comment;
 
 /// Appends `value` to `out` in a position that can only regroup it across
 /// a comma — an initializer, an assignment right-hand side, a `return`
@@ -12,8 +13,8 @@ use super::*;
 /// position it lands in, so the pair is noise the reader has to see past.
 /// A value whose text is not resolved yet (it carries layout breaks, so it
 /// is a lowering rather than one expression) keeps its parentheses.
-pub(super) fn push_grouped<'a>(out: &mut Rope<'a>, value: Rope<'a>) {
-    if needs_grouping(&value) {
+pub(super) fn push_grouped<'a>(out: &mut Rope<'a>, value: Rope<'a>, kind: SourceKind) {
+    if needs_grouping(&value, kind) {
         out.push_lit("(");
         out.append(value);
         out.push_lit(")");
@@ -25,10 +26,10 @@ pub(super) fn push_grouped<'a>(out: &mut Rope<'a>, value: Rope<'a>) {
 /// Appends `value` as the receiver of a postfix step (`value.map(f)`).
 /// Member access binds tighter than every operator, so the parentheses are
 /// needed unless the receiver is already one primary expression.
-pub(super) fn push_receiver<'a>(out: &mut Rope<'a>, value: Rope<'a>) {
+pub(super) fn push_receiver<'a>(out: &mut Rope<'a>, value: Rope<'a>, kind: SourceKind) {
     let primary = value
         .resolved_text()
-        .is_some_and(|text| crate::scanner::is_primary_expression(text.as_bytes(), 0, text.len()));
+        .is_some_and(|text| crate::lexer::is_primary_expression(&text, 0, text.len(), kind));
     if primary {
         out.append(value);
     } else {
@@ -40,16 +41,16 @@ pub(super) fn push_receiver<'a>(out: &mut Rope<'a>, value: Rope<'a>) {
 
 /// Whether a value delivered to one of those positions has to keep the
 /// parentheses codegen wraps it in. See [`push_grouped`].
-pub(super) fn needs_grouping(value: &Rope<'_>) -> bool {
+pub(super) fn needs_grouping(value: &Rope<'_>, kind: SourceKind) -> bool {
     match value.resolved_text() {
-        Some(text) => grouping_required(&text),
+        Some(text) => grouping_required(&text, kind),
         None => true,
     }
 }
 
 /// The same question about text codegen has not yet made a rope of.
-pub(super) fn grouping_required(text: &str) -> bool {
-    crate::scanner::has_top_level_comma(text.as_bytes(), 0, text.len())
+pub(super) fn grouping_required(text: &str, kind: SourceKind) -> bool {
+    crate::lexer::has_top_level_comma(text, 0, text.len(), kind)
 }
 
 /// Ends the line when `rope` finishes inside a `//` comment, so whatever
@@ -75,7 +76,7 @@ pub(super) fn binding_keyword(mode: BindingMode) -> &'static str {
     }
 }
 
-pub(super) fn temp_name(temp: TempId) -> String {
+pub(super) fn temp_base(temp: TempId) -> String {
     match temp {
         TempId::Statement(sequence) => format!("$tt_t{sequence}"),
         TempId::Result(sequence) => format!("$tt_r{sequence}"),
@@ -98,14 +99,6 @@ pub(super) fn field_node(field: &FieldAccess) -> NodeId {
     }
 }
 
-pub(super) fn pattern_has_test(plan: &PatternPlan) -> bool {
-    match plan {
-        PatternPlan::Any | PatternPlan::Bind(_) => false,
-        PatternPlan::Test(_) => true,
-        PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => parts.iter().any(pattern_has_test),
-    }
-}
-
 pub(super) fn pattern_has_literal_test(plan: &PatternPlan) -> bool {
     match plan {
         PatternPlan::Test(Test::Literal { .. }) => true,
@@ -125,11 +118,11 @@ pub(super) fn pattern_alternatives(plan: &PatternPlan) -> Vec<&PatternPlan> {
     }
 }
 
-pub(super) type BindingGroup<'a> = (Place, Vec<(&'a Bind, bool)>);
+pub(super) type BindingGroup<'a> = (Place, Vec<(&'a Bind, Option<&'a PatternPlan>)>);
 
 pub(super) fn collect_binding_groups<'a>(
     plan: &'a PatternPlan,
-    mapped: bool,
+    shared: Option<&'a PatternPlan>,
     groups: &mut Vec<BindingGroup<'a>>,
 ) {
     match plan {
@@ -140,9 +133,9 @@ pub(super) fn collect_binding_groups<'a>(
                 .iter_mut()
                 .find(|(existing, _)| same_place(existing, &receiver))
             {
-                bindings.push((binding, mapped));
+                bindings.push((binding, shared));
             } else {
-                groups.push((receiver, vec![(binding, mapped)]));
+                groups.push((receiver, vec![(binding, shared)]));
             }
         }
         PatternPlan::AllOf(parts) => {
@@ -150,18 +143,30 @@ pub(super) fn collect_binding_groups<'a>(
                 .iter()
                 .filter(|part| matches!(part, PatternPlan::Bind(_)))
             {
-                collect_binding_groups(part, mapped, groups);
+                collect_binding_groups(part, shared, groups);
             }
             for part in parts
                 .iter()
                 .filter(|part| !matches!(part, PatternPlan::Bind(_)))
             {
-                collect_binding_groups(part, mapped, groups);
+                collect_binding_groups(part, shared, groups);
             }
         }
         PatternPlan::AnyOf(parts) => {
             if let Some(first) = parts.first() {
-                collect_binding_groups(first, false, groups);
+                collect_binding_groups(first, shared.or(Some(plan)), groups);
+            }
+        }
+        PatternPlan::Any | PatternPlan::Test(_) => {}
+    }
+}
+
+pub(super) fn every_binding<'a>(plan: &'a PatternPlan, out: &mut Vec<&'a Bind>) {
+    match plan {
+        PatternPlan::Bind(binding) => out.push(binding),
+        PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {
+            for part in parts {
+                every_binding(part, out);
             }
         }
         PatternPlan::Any | PatternPlan::Test(_) => {}
@@ -194,7 +199,7 @@ impl BindingRecovery {
         let mut groups = Vec::new();
         collect_binding_groups(
             selected,
-            !matches!(plan, PatternPlan::AnyOf(_)),
+            matches!(plan, PatternPlan::AnyOf(_)).then_some(plan),
             &mut groups,
         );
         let available = groups
@@ -215,7 +220,8 @@ impl BindingRecovery {
             return None;
         }
         loop {
-            let candidate = format!("$tt_discard{}", self.discard_sequence);
+            let candidate =
+                emitter.generated_name(&format!("$tt_discard{}", self.discard_sequence));
             self.discard_sequence += 1;
             if self.available.insert(candidate.clone()) {
                 return Some(candidate);
@@ -226,7 +232,16 @@ impl BindingRecovery {
 
 /// The union type and constructor object one tt `variant` becomes, laid out
 /// from the line the declaration sits on.
-pub(super) fn emit_adt<'a>(adt: &Adt, ambient: bool, source_kind: crate::SourceKind) -> Rope<'a> {
+pub(super) fn emit_adt<'a>(
+    adt: &Adt,
+    span: impl Fn(NodeId) -> hir::Span,
+    ambient: bool,
+    source_kind: crate::SourceKind,
+) -> Rope<'a> {
+    let declared = |out: &mut Rope<'a>, name: &str, node: NodeId| {
+        let span = span(node);
+        out.push_declared_name(name.to_owned(), span.start, span.end);
+    };
     let export = match (adt.exported, adt.declared) {
         (true, true) => "export declare ",
         (true, false) => "export ",
@@ -234,27 +249,33 @@ pub(super) fn emit_adt<'a>(adt: &Adt, ambient: bool, source_kind: crate::SourceK
         (false, false) => "",
     };
     let ambient = ambient || adt.declared;
-    let arms = adt
-        .variants
-        .iter()
-        .map(|variant| match &variant.fields {
-            Some(fields) if !fields.is_empty() => format!(
-                "{{ kind: \"{}\"; {} }}",
-                variant.name,
-                fields
-                    .iter()
-                    .map(|field| format!(
-                        "{}{}: {}",
-                        field.name,
-                        if field.optional { "?" } else { "" },
-                        field.ty_text
-                    ))
-                    .collect::<Vec<_>>()
-                    .join("; ")
-            ),
-            _ => format!("{{ kind: \"{}\" }}", variant.name),
-        })
-        .collect::<Vec<_>>();
+    let field_list = |fields: &[AdtField], separator: &str, out: &mut Rope<'a>| {
+        for (index, field) in fields.iter().enumerate() {
+            if index > 0 {
+                out.push_lit(separator.to_owned());
+            }
+            declared(out, &field.name, field.node);
+            out.push_lit(format!(
+                "{}: {}",
+                if field.optional { "?" } else { "" },
+                field.ty_text
+            ));
+        }
+    };
+    let parameter_list = |fields: &[AdtField]| {
+        fields
+            .iter()
+            .map(|field| {
+                format!(
+                    "{}{}: {}",
+                    field.name,
+                    if field.optional { "?" } else { "" },
+                    field.ty_text
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
     let type_args = if adt.generics.is_empty() {
         String::new()
     } else {
@@ -274,112 +295,170 @@ pub(super) fn emit_adt<'a>(adt: &Adt, ambient: bool, source_kind: crate::SourceK
     } else {
         adt.generics.clone()
     };
-    let constructors = adt
+    let parameters = |fields: &[AdtField], out: &mut Rope<'a>| {
+        let documented = fields
+            .iter()
+            .any(|field| field.comments.leading.iter().any(Comment::is_doc));
+        if !documented {
+            out.push_lit(parameter_list(fields));
+            return;
+        }
+        for field in fields {
+            for comment in field
+                .comments
+                .leading
+                .iter()
+                .filter(|comment| comment.is_doc())
+            {
+                out.push_break(2);
+                push_comment(out, comment, 2);
+            }
+            out.push_break(2);
+            out.push_lit(format!(
+                "{}{}: {},",
+                field.name,
+                if field.optional { "?" } else { "" },
+                field.ty_text
+            ));
+        }
+        out.push_break(1);
+    };
+    let mut out = Rope::new();
+    out.push_lit(format!("{export}type "));
+    declared(&mut out, &adt.name, adt.node);
+    out.push_lit(format!("{} =", adt.generics));
+    let last = adt.variants.len().saturating_sub(1);
+    for (index, variant) in adt.variants.iter().enumerate() {
+        for comment in &variant.comments.leading {
+            out.push_break(1);
+            push_comment(&mut out, comment, 1);
+        }
+        out.push_break(1);
+        match &variant.fields {
+            Some(fields)
+                if fields.iter().any(|field| {
+                    !field.comments.leading.is_empty() || !field.comments.trailing.is_empty()
+                }) =>
+            {
+                out.push_lit("| {");
+                out.push_break(3);
+                out.push_lit(format!("kind: \"{}\";", variant.name));
+                for field in fields {
+                    for comment in &field.comments.leading {
+                        out.push_break(3);
+                        push_comment(&mut out, comment, 3);
+                    }
+                    out.push_break(3);
+                    declared(&mut out, &field.name, field.node);
+                    out.push_lit(format!(
+                        "{}: {};",
+                        if field.optional { "?" } else { "" },
+                        field.ty_text
+                    ));
+                    push_trailing_comments(&mut out, &field.comments.trailing, 3);
+                }
+                out.push_break(2);
+                out.push_lit("}");
+            }
+            Some(fields) if !fields.is_empty() => {
+                out.push_lit(format!("| {{ kind: \"{}\"; ", variant.name));
+                field_list(fields, "; ", &mut out);
+                out.push_lit(" }");
+            }
+            _ => out.push_lit(format!("| {{ kind: \"{}\" }}", variant.name)),
+        }
+        if index == last {
+            out.push_lit(";");
+        }
+        push_trailing_comments(&mut out, &variant.comments.trailing, 1);
+    }
+    out.push_break(0);
+    out.push_lit(format!("{export}const "));
+    declared(&mut out, &adt.name, adt.node);
+    out.push_lit(if ambient { ": {" } else { " = {" });
+    for variant in adt
         .variants
         .iter()
-        .filter_map(|variant| {
-            if !variant.emit_constructor {
-                return None;
-            }
-            if ambient {
-                return Some(match &variant.fields {
-                    None => format!(
-                        "readonly {}: {{ readonly kind: \"{}\" }};",
-                        variant.name, variant.name
-                    ),
-                    Some(fields) => {
-                        let params = fields
-                            .iter()
-                            .map(|field| {
-                                format!(
-                                    "{}{}: {}",
-                                    field.name,
-                                    if field.optional { "?" } else { "" },
-                                    field.ty_text
-                                )
-                            })
-                            .collect::<Vec<_>>()
-                            .join(", ");
-                        format!(
-                            "readonly {}: {}({params}) => {}{type_args};",
-                            variant.name, adt.generics, adt.name
-                        )
-                    }
-                });
-            }
-            Some(match &variant.fields {
-                None => format!(
-                    "{}: {{ kind: \"{}\" }} as const,",
-                    variant.name, variant.name
-                ),
+        .filter(|variant| variant.emit_constructor)
+    {
+        for comment in variant
+            .comments
+            .leading
+            .iter()
+            .filter(|comment| comment.is_doc())
+        {
+            out.push_break(1);
+            push_comment(&mut out, comment, 1);
+        }
+        out.push_break(1);
+        if ambient {
+            out.push_lit("readonly ");
+            declared(&mut out, &variant.name, variant.node);
+            match &variant.fields {
+                None => out.push_lit(format!(": {{ readonly kind: \"{}\" }};", variant.name)),
                 Some(fields) => {
-                    let params = fields
-                        .iter()
-                        .map(|field| {
-                            format!(
-                                "{}{}: {}",
-                                field.name,
-                                if field.optional { "?" } else { "" },
-                                field.ty_text
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    let object = std::iter::once(format!("kind: \"{}\"", variant.name))
-                        .chain(fields.iter().map(|field| field.name.clone()))
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    format!(
-                        "{}: {}({params}): {}{type_args} => ({{ {object} }}),",
-                        variant.name, arrow_generics, adt.name
-                    )
+                    out.push_lit(format!(": {}(", adt.generics));
+                    parameters(fields, &mut out);
+                    out.push_lit(format!(") => {}{type_args};", adt.name));
                 }
-            })
-        })
-        .collect::<Vec<_>>();
-    let mut out = Rope::new();
-    out.push_lit(format!("{export}type {}{} =", adt.name, adt.generics));
-    for arm in arms {
-        out.push_break(1);
-        out.push_lit(format!("| {arm}"));
-    }
-    out.push_lit(";");
-    out.push_break(0);
-    if ambient {
-        out.push_lit(format!("{export}const {}: {{", adt.name));
-    } else {
-        out.push_lit(format!("{export}const {} = {{", adt.name));
-    }
-    for constructor in constructors {
-        out.push_break(1);
-        out.push_lit(constructor);
+            }
+            continue;
+        }
+        declared(&mut out, &variant.name, variant.node);
+        match &variant.fields {
+            None => out.push_lit(format!(": {{ kind: \"{}\" }} as const,", variant.name)),
+            Some(fields) => {
+                let object = std::iter::once(format!("kind: \"{}\"", variant.name))
+                    .chain(fields.iter().map(|field| {
+                        if field.optional {
+                            format!(
+                                "...({} === undefined ? {{}} : {{ {} }})",
+                                field.name, field.name
+                            )
+                        } else {
+                            field.name.clone()
+                        }
+                    }))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                out.push_lit(format!(": {arrow_generics}("));
+                parameters(fields, &mut out);
+                out.push_lit(format!("): {}{type_args} => ({{ {object} }}),", adt.name));
+            }
+        }
     }
     out.push_break(0);
     out.push_lit("};");
     Rope::scoped(out)
 }
 
-pub(super) fn generic_param_names(generics: &str) -> Vec<String> {
-    let inner = &generics[1..generics.len() - 1];
-    let source = inner.as_bytes();
-    let mut names = Vec::new();
-    let mut index = 0usize;
-    while index < source.len() {
-        index = skip_ws_comments(source, index, source.len());
-        if index >= source.len() || !is_ident_start(source[index]) {
-            break;
-        }
-        let end = ident_end(source, index, source.len());
-        let word = &inner[index..end];
-        if word == "const" || word == "in" || word == "out" {
-            index = end;
-            continue;
-        }
-        names.push(word.to_owned());
-        index = scan_type_end(source, end, source.len());
-        if at(source, index, source.len()) == Some(b',') {
-            index += 1;
-        }
+fn push_comment<'a>(out: &mut Rope<'a>, comment: &Comment, depth: u16) {
+    let mut lines = comment.text.lines();
+    if let Some(first) = lines.next() {
+        out.push_lit(first.to_owned());
     }
-    names
+    for line in lines {
+        out.push_break(depth);
+        let indent = line
+            .bytes()
+            .take(comment.column)
+            .take_while(|byte| matches!(byte, b' ' | b'\t'))
+            .count();
+        out.push_lit(line[indent..].to_owned());
+    }
+}
+
+fn push_trailing_comments<'a>(out: &mut Rope<'a>, comments: &[Comment], depth: u16) {
+    for comment in comments {
+        if comment.own_line {
+            out.push_break(depth);
+        } else {
+            out.push_lit(" ");
+        }
+        push_comment(out, comment, depth);
+    }
+}
+
+pub(super) fn generic_param_names(generics: &str) -> Vec<String> {
+    crate::lexer::type_parameter_names(generics)
 }

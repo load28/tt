@@ -26,9 +26,13 @@ bun run tt:check
 - Adds `@openload28/tt-lang`, TypeScript, and TT scripts — plus
   `@openload28/unplugin-tt` when a bundler is used (`--bundler none` adds no
   plugin)
+- Sets `typescript` to the TypeScript 7.1 build tt is verified with,
+  replacing and reporting any other version the project named
 - Writes `tsconfig.tt.json`, which extends the project's `tsconfig.json`
   with the TypeScript content mapper for `.tt` and `.ttx` imports, and
-  points the generated scripts at it
+  points the generated scripts at it; a `tsconfig.json` with project
+  `references` (such as Vite's solution-style config) gets a `*.tt.json`
+  counterpart for each referenced config, checked with `tsc -b`
 - Creates `tt.*.config.mjs` for declarative bundlers
 - Prints the plugin code to add for esbuild
 

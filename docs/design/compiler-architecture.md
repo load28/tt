@@ -57,15 +57,90 @@ Span/오프셋은 원본 소스의 절대 바이트 위치다 — 이것이 의�
 
 ### 2. `lexer` — 토큰화
 
-swc가 TypeScript를 렉서 → 파서로 처리하듯, 소스는 먼저 **유의 토큰
-스트림**으로 변환된다: 공백·주석은 트리비아로 토큰을 만들지 않고(verbatim
-방출은 원본 바이트를 복사하므로 표현이 필요 없다), 문자열·템플릿·정규식은
-원자 토큰이 된다. 정규식-대-나눗셈 판정(직전 토큰 휴리스틱)이 여기 한
-곳에만 있고, 템플릿은 계층적으로 렉싱되어 각 `${ }` 보간의 토큰 스트림을
-토큰 안에 품는다. 파서가 단위로 소비해야 하는 `=>`/`||`/`?.`/`??` 네
-연산자만 융합 토큰이고 나머지 유의 바이트는 1바이트 `Punct`다. 바이트
-프리미티브(문자열/정규식 스캔, 괄호 매칭)는 `scanner.rs`가 계속 담당하며
-렉서와 codegen(`contains_await` 등)이 공유한다.
+As swc lexes TypeScript before parsing it, the source first becomes a
+**stream of significant tokens**: white space and comments are trivia and
+produce no tokens (verbatim emission copies the original bytes, so they need
+no representation), and strings, templates, and regular expressions are
+atomic tokens. Templates are lexed hierarchically: each `${ }`
+interpolation's token stream rides inside its template token. Only the
+operators the parser must consume as units are fused (`=>`, `||`, `?.`,
+`??`, `|>`); every other significant byte is a one-byte `Punct`. The byte
+primitives — string, regular-expression, and trivia scanning, and the
+ECMA-262 `LineTerminator` set (LF, CR, U+2028, U+2029) — live in
+`scanner.rs`. The questions codegen asks of text it emits
+(`contains_await`, `is_primary_expression`, `has_top_level_comma`) are
+answered over tokens in `lexer/queries.rs`.
+
+**Token facts (TASK-491).** Statement boundaries are modeled once, in the
+lexer layer. `lexer/facts.rs` is a push-down recognizer for TypeScript's
+statement and expression skeleton — statement lists, statements,
+expressions, bracketed groups, object, class, and interface bodies, and a
+small type grammar entered after annotations, `as`/`satisfies`, type
+arguments, heritage clauses, and type aliases — that the lexer drives one
+token at a time. It records `TokenFacts` on every token: a line terminator
+before it, whether it completes an operand, whether an automatic semicolon
+precedes it (§12.10.1, restricted productions included), whether it starts
+a statement, whether it is a label or a member name, on a `{`, whether
+it opens a function body (a generator's or a constructor's), and, on a `<`
+and its `>`, whether they bracket type arguments or type parameters
+(TASK-495). `Token::opens_bracket` and `Token::closes_bracket` read that
+last fact, and every bracket walk in the parser, flow, `val`, completion,
+and the lexer's token queries balances brackets through them, so a `,`
+inside `f<A, B>(x)` is never taken for a top-level separator. Where
+TypeScript's parser looks ahead to classify a token, the machine applies
+the same rule by peeking at the bytes after it: a `(` in a type opens a
+function type's parameters only when `isUnambiguouslyStartOfFunctionType`
+holds, so the `=>` after a parenthesized return type such as
+`(): (A | B) =>` belongs to the arrow function (TASK-499); `asserts` is a
+type prefix only before a same-line name and `abstract` only before `new`,
+and `declare`, `namespace`, and `module` begin a declaration only before
+the tokens TypeScript's `isStartOfDeclaration` accepts (TASK-503). An
+import-equals declaration's module reference is `require(…)` or an entity
+name, never an expression (TASK-500). The lexer's own
+regular-expression, JSX, and leading-`.` number decisions are the machine's
+"an operand is expected here" (the `InputElementRegExp` goal of ECMA-262
+§12), which the machine answers with its own transitions (TASK-494): it
+offers the byte, as a punctuator, to a copy of its stack, so frames the
+grammar has completed — a declaration's body, a control statement's body,
+a statement only `else`/`catch`/`finally` could continue, one an automatic
+semicolon ends — hand it down, and an operand is expected exactly when an
+expression waiting for one receives it. Statement lists carry the `[Yield]`
+parameter a function body sets, so `yield` is an operator only in a
+generator. It also knows tt's statement-shaped constructs (`if let`,
+let-else, `match` arms, `variant` bodies, construct bodies), whose shapes
+TypeScript never has. Every consumer reads the facts instead of deriving a
+boundary from the tokens around it: flow statement splitting and
+function-scope queries, the parser's statement starts, `try`/`if let`
+expression positions, pipeline heads and steps, and `match` host ambiguity,
+the program-syntax projection's boundary semicolon, and `val`'s same-line
+rule. The machine's oracle is SWC: for TypeScript input its statement spans
+equal SWC's, and the lexer reads a regular expression or a JSX element
+exactly where SWC parses one (`lexer/facts/tests.rs`, over the repository's TypeScript and
+tt fixtures and the installed TypeScript package; `TTC_FACTS_CORPUS` adds
+trees).
+
+**One lexing per text (TASK-510).** Driving the machine makes a lexing
+several times as expensive as the byte scan it replaced, so a compile lexes
+each text once: the token stream the parse produced is the one Core
+lowering, the semantic checks, and the program-syntax projection read (Core
+lowering and the checks read the TypeScript-kind lexing, which is the same
+stream for a `.tt` file and a second lexing only for `.ttx`), and the
+engine's projection of a file parses it once for the compile and every
+probe it records. The remaining whole-text lexings are of the host
+projection and of the output, which the host syntax self-checks read; the
+output's statement-boundary check reads the tokens its syntax check lexed
+(TASK-512). A lexical question answers from the bytes alone where no token
+could change the answer — no delimiter byte, TSX `<`, or conflict-marker
+run for the host syntax check, no `await`, no `//` — without lexing.
+`scaling_tests.rs` counts the parses and whole-text lexings of a compile and
+of a projection.
+
+The host syntax checks cannot move behind SWC's parse of the same text
+(TASK-512): SWC accepts some text they reject (an `export namespace` body
+that lacks its `}` or holds a stray `)` parses without an error), and it
+panics or backtracks on the rest (conflict-marker recovery, a TSX
+namespaced member, deeply unbalanced type arguments), so each guarded text
+is lexed before its parse.
 
 파일 표면은 `SourceKind::{TypeScript, Tsx}`로 컴파일 경계에서 정해지고 모든
 단계에 전달된다. TSX 모드에서는 완전한 JSX element/fragment를 구조적으로
@@ -84,6 +159,15 @@ expression container만 같은 렉서로 재귀 처리한다. 따라서 JSX 텍�
 그대로 통과" 계약이 여기서 구현된다: 구문 여부는 순수하게 구조적 판단이고,
 tt 수준 *에러*(중복 케이스 등)는 전부 sema의 몫이다. 중첩 코드(스크루티니,
 arm body, 보간)는 같은 토큰 스트림의 부분 슬라이스로 재귀 파싱된다.
+
+Editor features that ask about text still being typed read the parser's own
+grammar, never a copy of it (TASK-492). `parser/partial.rs` answers which
+pattern a token position is in — a match arm's pattern or the alternatives of
+an `if let` or let-else — and which arms of a match body are already written.
+It uses the same match head (`matches::match_body_open`), arm walk
+(`matches::outline_arms`, which also delimits the strict and recovering arm
+lists), arm pattern grammar, and single-pattern heads (`iflets::if_let_pattern`,
+`lets::let_else_pattern`) that the sub-parsers commit with.
 
 TypeScript `enum` 통과와 tt `variant` 소유권 규칙을 구분한다.
 `const enum`/`declare enum`을 포함한 TypeScript 선언과 예약어 규칙도 파서 소관이다.
@@ -114,17 +198,21 @@ tsc에 위임하지 않는다.
 코드 안에 있다. 그래서 이 검사만 AST가 아니라 **렉서가 만든 토큰 스트림**
 위에서 돈다 (`val.rs`).
 
-- 파서는 `val::modifier_at`로 "이 `val`이 수식자인가"만 **구조적으로**
-  판정해 `Segment::ValModifier`로 들어올린다 — 파서가 무오류라는 성질도,
-  통과 계약도 그대로다 (수식자 두 형태는 유효한 TS에 존재할 수 없고,
-  그 밖의 `val`은 평범한 식별자로 통과한다).
+- The parser decides once whether a `val` is a modifier and records it as
+  `Segment::ValModifier` with its kind (TASK-490). `val const|let|var` on
+  one line is claimed from its tokens (`parser/vals.rs`). A `val <binding>`
+  at the start of a `(`/`,` entry is a candidate; the host parse of the
+  region's tt projection (`parser/host.rs`) keeps it only when the binding
+  lands on a formal parameter, so `f(val [0])` and `c ? (val [0]) : w => w`
+  stay TypeScript. `val::check`, the probes, and the engine read the AST's
+  decision through `parser::val_modifiers` instead of re-deriving it.
 - `val::check`는 같은 토큰 스트림을 한 번 훑으며 렉시컬 스코프 스택을
   쌓고(블록·함수 매개변수·`for` 머리·`catch`), 변경 경로의 루트 식별자를
   해석하고, 같은 파일에서 이름으로 선언된 함수의 시그니처로 호출 시점의
   변경 권한을 검사한다. 에러는 sema와 같은 `TtError`(바이트 오프셋)다.
-- 토큰 스트림은 `parser::lex_and_parse`가 파싱과 함께 돌려주므로 렉싱은
-  파일당 여전히 한 번이고, `val` 수식자가 하나도 없는 파일은 선형 스캔
-  한 번으로 즉시 끝난다.
+- `parser::lex_and_parse` returns the token stream with the parse, so a
+  file is still lexed once, and a file whose AST has no `val` modifier skips
+  the pass entirely.
 - **메서드 호출은 이 단계가 판정하지 않는다**(TASK-071). `x.set(k)`가 값을
   바꾸는지는 `x`의 타입에 대한 사실이고, 여기에는 타입이 없다 — 이름으로
   추측하면 같은 이름의 사용자 정의 API가 오탐으로 막힌다. 그래서 같은 워크가
@@ -176,6 +264,22 @@ lowering 안쪽 depth만큼에서 다시 시작"이라는 뜻이고, 실제 들�
 파싱+방출만 조합한다: sema·verify를 생략해 편집 중인 버퍼에도 무오류로
 방출한다 — 진단이 `--check`의 몫이라는 에러 계층 계약은 그대로다.
 
+**Statement boundaries survive lowering (TASK-496).** A statement the source
+ends by automatic semicolon insertion stays ended in the target, whatever
+emitter path wrote the text after it. The lexer lists those boundaries once
+(`lexer::automatic_semicolons`, template interpolations included), and the
+target file keeps them while it is finalized (`TargetFile::separate_statements`):
+where a source piece carries the line break of such a boundary up to the next
+statement's start, and the target continues with anything but that
+statement's own source text, a `;` is written when the continuing text's
+first token would join the previous statement (`lexer::continues_statement`,
+ECMA-262 §12.10.2: `(`, `[`, a template, `+`, `-`, `/`, and TypeScript's `<`).
+The program-syntax projection reads the same list for its boundary
+semicolon. The self-check backs this up independently: after SWC parses the
+output, `verify::verify_statement_boundaries` lexes it and requires a
+boundary after every source statement end the output copies together with
+its line break (`verify-failed` otherwise).
+
 ## 프로젝트 단위 실행 (드라이버)
 
 `compile()`은 파일 하나짜리 순수 함수다 — 프로젝트 전체를 도는 일은 CLI
@@ -195,6 +299,32 @@ lowering 안쪽 depth만큼에서 다시 시작"이라는 뜻이고, 실제 들�
   두 입력이 같은 출력 경로를 다투는 경우에만 쓰기를 부모 스레드로 되돌려
   순서를 지킨다 — **관측 가능한 결과는 스레드 수와 무관하게 동일하다.**
 
+## Positions and lines (TASK-498)
+
+Every stage reports byte offsets; a line and column exist only at a public
+boundary, and every boundary converts through one line model,
+`src/lines.rs`. It measures a text once (`LineMap`) under an explicit
+policy, because which code points end a line is two facts, not one:
+
+- `LineBreaks::Ecma` — ECMA-262's `LineTerminatorSequence`: LF, CR, CR LF,
+  U+2028, U+2029. `tsc` reports diagnostics on these lines and ECMA-426
+  source maps count them (§11.1.2.1), so compile errors, `ttc::line_col`,
+  the typed engine's `Diagnostic` positions, the CLI renderer, source maps,
+  sidecar maps, the banner's placement after a `#!` line, and indentation
+  lookups (`line_start_before`) use them.
+- `LineBreaks::Lsp` — LSP 3.17's end-of-line set: LF, CR LF, CR. Every
+  position that goes to an editor or to the TypeScript language server
+  (engine `Position`s, semantic tokens, hints, tt symbols and completions,
+  the `--server` protocol) uses it, and `line_ending` reads a file's line
+  ending from it.
+
+Positions are measured in the decoded text (a byte-order mark is not a
+column). The compiler's own column counts code points (what a rendered caret
+lines up with); protocol and source-map columns count UTF-16 units.
+`ProtocolPositions` converts a compiler position to a protocol one through
+the byte both name. The line terminators themselves are recognized by the
+scanner's ECMA-262 primitives, so multibyte text stays opaque.
+
 ## 타입 검사 실행 (엔진)
 
 typed 모드(`--check-types`/`--types`/`--server`)는 배치 드라이버가 아니라
@@ -212,7 +342,7 @@ TT-owned 타입으로 돌아온다. 설계 근거와 typescript-go 비교는
 | 새 구문 | `ast`에 노드 추가 → `parser`에 구조 파싱 → `codegen`에 방출 (+ sema 검사 필요 시) |
 | 새 의미 규칙/에러 | `sema`만 (통과 영역의 바인딩·식이 대상이면 `val`) |
 | 방출 코드 형태 변경 | `codegen`만 (+ `docs/reference/language.md` 갱신) |
-| 새 토큰 수준 인식 | `lexer` (토큰 종류/융합) 또는 `scanner` (바이트 프리미티브) |
+| New token-level recognition | `lexer` (token kinds and fusion, token facts) or `scanner` (byte primitives) |
 
 어느 경우든 CLAUDE.md의 세 계층 테스트(compile / passthrough /
 integration)와 레퍼런스 문서 갱신 규칙을 따른다.

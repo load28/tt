@@ -4,6 +4,58 @@ use super::*;
 
 impl<'a> Emitter<'a> {
     pub(super) fn emit_owner_slot_rewrite(&self, rewrite: &OwnerSlotRewrite) -> Rope<'a> {
+        self.within_owner_prelude(rewrite.owner, || self.emit_owner_slot_prelude(rewrite))
+    }
+
+    /// Writes one prelude hoisted to `owner`, first opening the owner's block
+    /// when the owner is an unbraced body and no earlier prelude opened it.
+    /// The opening brace carries its own layout scope, so the prelude and
+    /// the rest of the owner's source indent one level inside it.
+    pub(super) fn within_owner_prelude(
+        &self,
+        owner: SourceSpan,
+        prelude: impl FnOnce() -> Rope<'a>,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        if self.block_required_owners.contains(&owner) && self.opened_owner_blocks.claim(owner) {
+            out.push_scope_open();
+            out.push_lit("{");
+            out.push_break(1);
+        }
+        self.emitting_owner_preludes.borrow_mut().push(owner);
+        let prelude = prelude();
+        self.emitting_owner_preludes.borrow_mut().pop();
+        out.append(prelude);
+        out
+    }
+
+    /// Closes, innermost first, every opened owner block whose owner ends at
+    /// `at`, unless that owner's own prelude is the one reaching its end.
+    pub(super) fn close_owner_blocks_at(&self, at: usize, out: &mut Rope<'a>) {
+        let mut ending: Vec<_> = self
+            .block_required_by_end
+            .get(&at)
+            .into_iter()
+            .flatten()
+            .filter(|owner| {
+                owner.end == at
+                    && self.opened_owner_blocks.contains(**owner)
+                    && !self.closed_owner_blocks.contains(**owner)
+                    && !self.emitting_owner_preludes.borrow().contains(owner)
+            })
+            .copied()
+            .collect();
+        ending.sort_unstable_by_key(|owner| std::cmp::Reverse(owner.start));
+        for owner in ending {
+            self.closed_owner_blocks.claim(owner);
+            *out = std::mem::take(out).trim_end();
+            out.push_break(0);
+            out.push_lit("}");
+            out.push_scope_close();
+        }
+    }
+
+    fn emit_owner_slot_prelude(&self, rewrite: &OwnerSlotRewrite) -> Rope<'a> {
         let _active = self.active_structured_exprs.enter(rewrite.expr);
         let anchored = self
             .emit_continued_expr(rewrite.expr, &ValueContinuation::assign(&rewrite.slot))
@@ -56,6 +108,15 @@ impl<'a> Emitter<'a> {
         &self,
         rewrite: &ForInitializerPropagationRewrite,
     ) -> Rope<'a> {
+        self.within_owner_prelude(rewrite.owner, || {
+            self.for_initializer_propagation_prelude(rewrite)
+        })
+    }
+
+    fn for_initializer_propagation_prelude(
+        &self,
+        rewrite: &ForInitializerPropagationRewrite,
+    ) -> Rope<'a> {
         let propagate = self
             .core
             .bodies
@@ -70,7 +131,7 @@ impl<'a> Emitter<'a> {
             .unwrap_or_else(|| {
                 crate::ice::bug!("for initializer propagation is missing from Core IR")
             });
-        let temp = temp_name(propagate.temporary);
+        let temp = self.temp_name(propagate.temporary);
         let mut out = self.emit_propagate_input(propagate.value, &temp);
         out.push_break(0);
         out.push_lit(format!(
@@ -81,11 +142,12 @@ impl<'a> Emitter<'a> {
         out.push_lit(format!("return {temp};"));
         out.push_break(0);
         out.push_lit("}");
+        out.push_break(0);
         Rope::scoped(out)
     }
 
     pub(super) fn emit_for_initializer_payload(&self, propagate: &Propagate) -> Rope<'a> {
-        let temp = temp_name(propagate.temporary);
+        let temp = self.temp_name(propagate.temporary);
         let mut out = Rope::new();
         if let Some(binding) = propagate.binding {
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
@@ -96,6 +158,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_compose_rewrite(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
+        self.within_owner_prelude(rewrite.owner, || self.emit_compose_prelude(rewrite))
+    }
+
+    fn emit_compose_prelude(&self, rewrite: &ComposeRewrite) -> Rope<'a> {
         let mut out = Rope::new();
         let depth = u16::from(rewrite.owner_kind == HostOwnerKind::ArrowExpression);
         if depth > 0 {
@@ -355,15 +421,18 @@ impl<'a> Emitter<'a> {
                 consequent,
                 alternate,
             } => {
-                let branch = |out: &mut Rope<'a>, content: &PlannedBranch| match content {
+                let mut branch = |out: &mut Rope<'a>, content: &PlannedBranch| match content {
                     PlannedBranch::Value(expr) => {
-                        out.append(Rope::indented(1, deliver_value(*expr, result)));
+                        out.append(Rope::indented(
+                            1,
+                            self.emit_conditional_active_branch(operation, *expr, result, captured),
+                        ));
                     }
                     PlannedBranch::Source(span) => {
                         out.push_lit(format!("{result} = "));
                         let mut source = Rope::new();
                         source.push_src(&self.source[span.start..span.end], span.start);
-                        push_grouped(out, source);
+                        push_grouped(out, source, self.source_kind);
                         out.push_lit(";");
                     }
                 };
@@ -523,13 +592,15 @@ impl<'a> Emitter<'a> {
         result: &str,
         captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
     ) -> Rope<'a> {
-        let Some(branch) = operation.active_branch else {
+        let _active = self.active_structured_exprs.enter(value);
+        let Some(active) = operation.active.iter().find(|active| active.value == value) else {
             return self
                 .emit_continued_expr(value, &ValueContinuation::assign(result))
                 .unwrap_or_else(|| {
                     crate::ice::bug!("conditional operation value is not structurally emit-able")
                 });
         };
+        let branch = active.branch;
         let value_slot = self.value_name_of(value);
         let mut out = Rope::new();
         out.push_value_declaration(value_slot);
@@ -539,22 +610,24 @@ impl<'a> Emitter<'a> {
             .unwrap_or_else(|| {
                 crate::ice::bug!("conditional branch value is not structurally emit-able")
             });
-        for step in &operation.active_steps {
+        for step in &active.steps {
             lowered = self.emit_scheduled_step(step, lowered, captured);
         }
         out.append(lowered);
         out.push_break(0);
         out.push_lit(format!("{result} = "));
+        let steps: Vec<_> = active.steps.iter().collect();
         push_grouped(
             &mut out,
-            self.source_range_with_value_slots(branch, &operation.values),
+            self.source_range_with_scheduled_values(branch, &operation.values, &steps, &[]),
+            self.source_kind,
         );
         out.push_lit(";");
         out
     }
 
     pub(super) fn carried_by_capture(&self, start: usize, end: usize) -> bool {
-        self.source_replacements.iter().any(|captured| {
+        self.replacements_covering(start, end).any(|captured| {
             captured.anchor.is_none()
                 && captured.source.start <= start
                 && end <= captured.source.end
@@ -589,28 +662,62 @@ impl<'a> Emitter<'a> {
         source: SourceSpan,
         captured: &HashSet<crate::evaluation_ir::ValueSlotId>,
     ) -> Rope<'a> {
+        self.captured_range(source, captured, self.piped_value_at(source.start))
+    }
+
+    fn captured_tail(
+        &self,
+        source: SourceSpan,
+        captured: &HashSet<crate::evaluation_ir::ValueSlotId>,
+    ) -> Rope<'a> {
+        self.captured_range(source, captured, None)
+    }
+
+    fn captured_range(
+        &self,
+        source: SourceSpan,
+        captured: &HashSet<crate::evaluation_ir::ValueSlotId>,
+        piped: Option<Rope<'a>>,
+    ) -> Rope<'a> {
         // Compose the capture from already materialized dependencies and Core
         // expressions. Source bytes belonging to a dependency are never evaluated
         // again; expression-only tt nodes are lowered at this evaluation site.
-        enum Part<'b> {
+        enum Part<'b, 'r> {
             Captured(&'b str),
             Value(ExprId),
             Statement(&'b Statement),
+            Piped(Rope<'r>),
         }
         let mut parts = Vec::new();
-        for replacement in &self.source_replacements {
+        if let Some(piped) = piped {
+            parts.push((
+                SourceSpan {
+                    start: source.start,
+                    end: source.start,
+                },
+                Part::Piped(piped),
+            ));
+        }
+        for replacement in self
+            .replacement_index
+            .starting_in(source.start, source.end.saturating_add(1))
+            .into_iter()
+            .map(|index| &self.source_replacements[index])
+        {
             if replacement.anchor.is_none()
                 && source.start <= replacement.source.start
                 && replacement.source.end <= source.end
                 && replacement.source != source
-                && !self.source_replacements.iter().any(|frame| {
-                    frame.claim
-                        && frame.source.start <= replacement.source.start
-                        && replacement.source.end <= frame.source.end
-                        && !frame
-                            .anchor
-                            .is_some_and(|expr| self.active_structured_exprs.contains(expr))
-                })
+                && !self
+                    .replacements_covering(replacement.source.start, replacement.source.end)
+                    .any(|frame| {
+                        frame.claim
+                            && frame.source.start <= replacement.source.start
+                            && replacement.source.end <= frame.source.end
+                            && !frame
+                                .anchor
+                                .is_some_and(|expr| self.active_structured_exprs.contains(expr))
+                    })
                 && captured
                     .iter()
                     .any(|slot| self.value_slot_name(*slot) == replacement.slot)
@@ -619,6 +726,25 @@ impl<'a> Emitter<'a> {
                     replacement.source,
                     Part::Captured(replacement.slot.as_str()),
                 ));
+            }
+        }
+        for input in self
+            .nested_schedules
+            .values()
+            .flat_map(EvaluationSchedule::steps)
+            .flat_map(|step| &step.inputs)
+        {
+            if let PlannedEvaluationInput::Source {
+                source: dependency,
+                target,
+                ..
+            } = input
+                && source.start <= dependency.start
+                && dependency.end <= source.end
+                && *dependency != source
+                && captured.contains(target)
+            {
+                parts.push((*dependency, Part::Captured(self.value_slot_name(*target))));
             }
         }
         for expr in self.value_slots.keys() {
@@ -669,6 +795,7 @@ impl<'a> Emitter<'a> {
             }
             match part {
                 Part::Captured(name) => out.push_lit(name.to_owned()),
+                Part::Piped(piped) => out.append(piped),
                 Part::Statement(statement) => {
                     out.append(self.emit_statements(std::slice::from_ref(statement)))
                 }
@@ -701,87 +828,102 @@ impl<'a> Emitter<'a> {
         span: SourceSpan,
         values: &[ExprId],
     ) -> Rope<'a> {
-        let mut replacements: Vec<_> = values
-            .iter()
-            .map(|expr| {
-                let (kind, start, head_end, extent) = self.value_anchor(*expr);
-                (*expr, kind, SourceSpan { start, end: extent }, head_end)
-            })
-            .filter(|(_, _, value, _)| span.start <= value.start && value.end <= span.end)
-            .filter(|(_, _, value, _)| {
-                !self.source_replacements.iter().any(|captured| {
-                    captured.anchor.is_none()
-                        && span.start <= captured.source.start
-                        && captured.source.start <= value.start
-                        && value.end <= captured.source.end
-                        && captured.source != *value
-                })
-            })
-            .collect();
-        replacements.sort_unstable_by_key(|(_, _, value, _)| value.start);
-        let mut out = Rope::new();
-        let mut cursor = span.start;
-        for (expr, kind, value, head_end) in replacements {
-            if value.start < cursor {
-                continue;
-            }
-            if cursor < value.start {
-                out.append(self.source_range_rope(hir::Span {
-                    start: cursor,
-                    end: value.start,
-                }));
-            }
-            let mut slot = Rope::new();
-            slot.push_lit(self.value_name_of(expr).to_owned());
-            out.anchored(kind, value.start, head_end, value.end, slot);
-            cursor = value.end;
-        }
-        if cursor < span.end {
-            out.append(self.source_range_rope(hir::Span {
-                start: cursor,
-                end: span.end,
-            }));
-        }
-        out
+        self.source_range_with_scheduled_values(span, values, &[], &[])
     }
 
-    pub(super) fn source_range_with_nested_schedule(
+    pub(super) fn scheduled_steps_within(
+        &self,
+        expr: ExprId,
+        span: SourceSpan,
+    ) -> Vec<&PlannedEvaluationStep> {
+        self.nested_schedules
+            .get(&expr)
+            .map(|schedule| {
+                schedule
+                    .steps()
+                    .iter()
+                    .take_while(|step| {
+                        span.start <= step.parent.start && step.parent.end <= span.end
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    pub(super) fn source_range_with_scheduled_values(
         &self,
         span: SourceSpan,
-        expr: ExprId,
-        schedule: &EvaluationSchedule,
+        values: &[ExprId],
+        steps: &[&PlannedEvaluationStep],
+        operations: &[&PlannedConditionalOperation],
     ) -> Rope<'a> {
-        let (kind, start, head_end, extent) = self.value_anchor(expr);
-        let mut replacements: Vec<NestedSourceReplacement> = vec![(
-            SourceSpan { start, end: extent },
-            self.value_name_of(expr).to_owned(),
-            Some((kind, head_end)),
-        )];
-        for step in schedule.steps() {
-            for input in &step.inputs {
-                if let PlannedEvaluationInput::Source { source, target, .. } = input {
-                    replacements.push((*source, self.value_slot_name(*target).to_owned(), None));
+        let mut replacements: Vec<(SourceSpan, Rope<'a>)> = operations
+            .iter()
+            .map(|operation| {
+                let primary = operation
+                    .values
+                    .first()
+                    .copied()
+                    .unwrap_or_else(|| crate::ice::bug!("conditional operation has no value"));
+                let (kind, start, head_end, extent) = self.value_anchor(primary);
+                let mut slot = Rope::new();
+                slot.push_lit(self.value_slot_name(operation.result).to_owned());
+                let mut rendered = Rope::new();
+                rendered.anchored(kind, start, head_end, extent, slot);
+                (operation.parent, rendered)
+            })
+            .collect();
+        replacements.extend(values.iter().filter_map(|expr| {
+            let (kind, start, head_end, extent) = self.value_anchor(*expr);
+            let source = SourceSpan { start, end: extent };
+            let covered = self
+                .replacements_covering(source.start, source.end)
+                .any(|captured| {
+                    captured.anchor.is_none()
+                        && span.start <= captured.source.start
+                        && captured.source.start <= source.start
+                        && source.end <= captured.source.end
+                        && captured.source != source
+                });
+            (!covered).then(|| {
+                let mut slot = Rope::new();
+                slot.push_lit(self.value_name_of(*expr).to_owned());
+                let mut rendered = Rope::new();
+                rendered.anchored(kind, start, head_end, extent, slot);
+                (source, rendered)
+            })
+        }));
+        replacements.extend(steps.iter().flat_map(|step| {
+            step.inputs.iter().filter_map(|input| match input {
+                PlannedEvaluationInput::Source { source, target, .. } => {
+                    let mut rendered = Rope::new();
+                    rendered.push_lit(self.value_slot_name(*target).to_owned());
+                    Some((*source, rendered))
                 }
-            }
-        }
-        replacements.retain(|(source, _, _)| span.start <= source.start && source.end <= span.end);
-        replacements.sort_unstable_by_key(|(source, _, _)| source.start);
+                PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
+            })
+        }));
+        replacements.extend(self.piped_value_at(span.start).map(|piped| {
+            (
+                SourceSpan {
+                    start: span.start,
+                    end: span.start,
+                },
+                piped,
+            )
+        }));
+        replacements.retain(|(source, _)| span.start <= source.start && source.end <= span.end);
+        replacements.sort_by_key(|(source, _)| (source.start, usize::MAX - source.end));
         let mut out = Rope::new();
         let mut cursor = span.start;
-        for (source, slot, anchor) in replacements {
+        for (source, rendered) in replacements {
             if source.start < cursor {
                 continue;
             }
             if cursor < source.start {
                 out.append(self.source_range_rope(hir::Span::new(cursor, source.start)));
             }
-            if let Some((kind, head_end)) = anchor {
-                let mut rendered = Rope::new();
-                rendered.push_lit(slot);
-                out.anchored(kind, source.start, head_end, source.end, rendered);
-            } else {
-                out.push_lit(slot);
-            }
+            out.append(rendered);
             cursor = source.end;
         }
         if cursor < span.end {
@@ -851,15 +993,12 @@ impl<'a> Emitter<'a> {
                             source.start,
                         );
                     }
-                    if !self.push_pipeline_member_reference(*source, receiver_source, receiver, out)
-                    {
-                        self.push_planned_receiver(receiver, true, out);
-                        if receiver_source.end < source.end {
-                            out.push_src(
-                                &self.source[receiver_source.end..source.end],
-                                receiver_source.end,
-                            );
-                        }
+                    self.push_planned_receiver(receiver, true, out);
+                    if receiver_source.end < source.end {
+                        out.push_src(
+                            &self.source[receiver_source.end..source.end],
+                            receiver_source.end,
+                        );
                     }
                     out.push_lit(");");
                     out.push_break(0);
@@ -921,47 +1060,47 @@ impl<'a> Emitter<'a> {
         }
     }
 
-    pub(super) fn push_pipeline_member_reference(
-        &self,
-        source: SourceSpan,
-        receiver_source: SourceSpan,
-        receiver: &PlannedReceiver,
-        out: &mut Rope<'a>,
-    ) -> bool {
-        let suffix = self.core.exprs.iter().find_map(|expr| {
-            let Expr::Apply(apply) = expr else {
-                return None;
-            };
-            let head = apply.head?;
-            let Expr::Opaque(head_node) = &self.core.exprs[head.index()] else {
-                return None;
-            };
-            if SourceSpan::from(self.span(*head_node)) != receiver_source {
-                return None;
-            }
-            apply.steps.iter().find_map(|step| {
-                let ApplyMode::Postfix { optional: true } = step.mode else {
+    pub(super) fn piped_value_at(&self, position: usize) -> Option<Rope<'a>> {
+        self.core
+            .exprs
+            .iter()
+            .enumerate()
+            .find_map(|(index, expr)| {
+                let Expr::Apply(apply) = expr else {
                     return None;
                 };
-                let step_span = SourceSpan::from(self.span(step.node));
-                (source.start == receiver_source.start
-                    && step_span.start < source.end
-                    && source.end <= step_span.end)
-                    .then_some(SourceSpan {
-                        // Keep optional property access so a null receiver
-                        // never reaches the member lookup. The explicit
-                        // branch below controls argument evaluation.
-                        start: step_span.start,
-                        end: source.end,
-                    })
+                apply.head?;
+                let piped = self.piped_slots.get(&ExprId::new(index))?;
+                let step = apply.steps.iter().position(|step| {
+                    matches!(step.mode, ApplyMode::Postfix { .. })
+                        && self.span(step.node).start == position
+                })?;
+                Some(self.pipe_input(apply, step, piped.get(step)?))
             })
-        });
-        let Some(suffix) = suffix else {
-            return false;
-        };
-        self.push_planned_receiver(receiver, true, out);
-        out.push_src(&self.source[suffix.start..suffix.end], suffix.start);
-        true
+    }
+
+    pub(super) fn pipe_input(&self, apply: &Apply, step: usize, piped: &str) -> Rope<'a> {
+        let end = apply.steps.last().map_or_else(
+            || self.span(apply.node).end,
+            |step| self.span(step.node).end,
+        );
+        let produced = step.checked_sub(1).map_or_else(
+            || self.span(apply.node),
+            |previous| self.span(apply.steps[previous].node),
+        );
+        let step_span = self.span(apply.steps[step].node);
+        let mut input = Rope::new();
+        input.push_lit(piped.to_owned());
+        let mut out = Rope::new();
+        out.anchored_with_context(
+            AnchorKind::Pipe,
+            step_span.start,
+            step_span.end,
+            end,
+            Some((produced.start, produced.end)),
+            input,
+        );
+        out
     }
 
     /// The join slot name of a tt value, from the plan.
@@ -1039,7 +1178,7 @@ impl<'a> Emitter<'a> {
                 }
                 self.push_planned_receiver(&receiver, true, &mut prefix);
                 if receiver_source.end < source.end {
-                    prefix.append(self.captured_source(
+                    prefix.append(self.captured_tail(
                         SourceSpan {
                             start: receiver_source.end,
                             end: source.end,
@@ -1162,6 +1301,7 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn value_anchor(&self, expr: ExprId) -> (AnchorKind, usize, usize, usize) {
+        crate::work::tick("value anchors");
         match &self.core.exprs[expr.index()] {
             Expr::Decision(decision) => {
                 let head = self.span(decision.head);
@@ -1217,11 +1357,7 @@ impl<'a> Emitter<'a> {
                 crate::ice::bug!("arrow return rewrite is not structurally emit-able")
             });
         let mut out = Rope::new();
-        if rewrite.parenthesized {
-            out.push_lit("(() => {");
-        } else {
-            out.push_lit("{");
-        }
+        out.push_lit("{");
         out.push_break(1);
         if rewrite.contextual_type.is_some() {
             out.push_lit(format!("let {}", rewrite.slot));
@@ -1239,7 +1375,7 @@ impl<'a> Emitter<'a> {
         out.push_break(1);
         out.push_lit(format!("return {};", rewrite.slot));
         out.push_break(0);
-        out.push_lit(if rewrite.parenthesized { "})()" } else { "}" });
+        out.push_lit("}");
         Rope::scoped(out)
     }
 }

@@ -251,3 +251,54 @@ fn preservation_exempts_a_registered_rewrite_from_coverage() {
     };
     assert_eq!(target.validate_source_preservation(&preservation), Ok(()));
 }
+
+fn separated(source: &str, boundary: usize, pieces: &[(&'static str, bool)]) -> String {
+    let mut rope = Rope::new();
+    rope.push_src(&source[..boundary], 0);
+    for (text, from_source) in pieces {
+        if *from_source {
+            rope.push_src(&source[boundary..boundary + text.len()], boundary);
+        } else {
+            let mut glue = Rope::new();
+            glue.push_lit(*text);
+            rope.anchored(AnchorKind::Pipe, boundary, source.len(), source.len(), glue);
+        }
+    }
+    let mut target = TargetFile::from_rope(rope, source.len());
+    target.separate_statements(&[boundary], SourceKind::TypeScript);
+    assert_eq!(target.validate(), Ok(()));
+    target.print("\n").code
+}
+
+#[test]
+fn generated_text_that_would_continue_a_statement_is_separated_from_it() {
+    let source = "const v = 1\nv |> o.m\n";
+    let boundary = source.find("v |>").unwrap();
+    for (glue, expected) in [
+        ("(o.m)(v)\n", "const v = 1\n;(o.m)(v)\n"),
+        ("[v].map(o.m)\n", "const v = 1\n;[v].map(o.m)\n"),
+        ("`${v}`\n", "const v = 1\n;`${v}`\n"),
+        ("o.m(v)\n", "const v = 1\no.m(v)\n"),
+        ("let t = v\n", "const v = 1\nlet t = v\n"),
+    ] {
+        assert_eq!(separated(source, boundary, &[(glue, false)]), expected);
+    }
+}
+
+#[test]
+fn the_source_text_of_the_next_statement_needs_no_separator() {
+    let source = "const f = () => {}\n(x)\n";
+    let boundary = source.find("(x)").unwrap();
+    assert_eq!(separated(source, boundary, &[("(x)\n", true)]), source);
+}
+
+#[test]
+fn a_source_piece_without_the_separating_line_break_is_not_a_boundary() {
+    let source = "a\nb";
+    let mut rope = Rope::new();
+    rope.push_src(&source[2..3], 2);
+    rope.push_lit("(c)");
+    let mut target = TargetFile::from_rope(rope, source.len());
+    target.separate_statements(&[3], SourceKind::TypeScript);
+    assert_eq!(target.print("\n").code, "b(c)");
+}

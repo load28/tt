@@ -11,6 +11,9 @@ pub(crate) struct ProgramSyntax {
     pub(super) overlay: Vec<OverlayEntry>,
     pub(super) owners: Vec<HostOwnerSyntax>,
     pub(super) occupied_names: HashSet<String>,
+    pub(super) directive_prologue_end: Option<usize>,
+    pub(super) script: bool,
+    pub(super) globals: HashMap<SourceSpan, GlobalStatement>,
 }
 
 #[derive(Debug)]
@@ -46,9 +49,13 @@ pub(crate) enum ProgramSyntaxError {
         source: usize,
     },
     /// The projection stopped parsing at a byte this compiler generated.
+    /// `source` is the construct whose placeholder holds that byte: the
+    /// innermost one, since a construct's placeholder can enclose those of
+    /// the constructs nested in it.
     Parse {
         message: String,
         projection: String,
+        source: Option<SourceSpan>,
     },
     MissingOverlay {
         id: TtNodeId,
@@ -116,7 +123,8 @@ impl ProgramSyntax {
         source: &str,
         source_kind: crate::SourceKind,
     ) -> Result<Self, ProgramSyntaxError> {
-        Self::build_with(semantic, core, source, source_kind, false)
+        let tokens = crate::lexer::lex_with_kind(source, 0, source.len(), source_kind);
+        Self::build_with(semantic, core, source, source_kind, &tokens, false)
     }
 
     pub(crate) fn build_with(
@@ -124,15 +132,18 @@ impl ProgramSyntax {
         core: &CoreFile,
         source: &str,
         source_kind: crate::SourceKind,
+        tokens: &[crate::lexer::Token],
         tolerant: bool,
     ) -> Result<Self, ProgramSyntaxError> {
-        if let Some((span, message)) = crate::lexer::host_syntax_error(source, source_kind) {
+        if let Some((span, message)) =
+            crate::lexer::host_syntax_error_in(source, source_kind, tokens)
+        {
             return Err(ProgramSyntaxError::SourceNotTypeScript {
                 message: message.to_string(),
                 source: span.start,
             });
         }
-        let projection = ProjectionBuilder::new(semantic, core, source, source_kind).build()?;
+        let projection = ProjectionBuilder::new(semantic, core, source, tokens).build()?;
         let parsed = parse_module(
             &projection.code,
             &projection.source_segments,
@@ -146,16 +157,40 @@ impl ProgramSyntax {
             &projection.projection_only_protocol_parents,
             &projection.arm_blocks,
         );
+        let script = is_script(&parsed.module);
+        if script {
+            collector.global_statements = global_statements(&parsed.module, parsed.start);
+        }
         let mut path = AstNodePath::default();
         parsed.module.visit_with_ast_path(&mut collector, &mut path);
-        let collected = collector.finish(projection.pending)?;
+        let mut collected = collector.finish(projection.pending)?;
+        collected
+            .occupied_names
+            .extend(crate::generated_names::source_names(source, source_kind));
+        let directive_prologue_end =
+            directive_prologue_end(&parsed.module, parsed.start, &projection.source_segments)?;
+        let mut globals = collected.globals;
+        for entry in &collected.overlay {
+            let CoreRoot::Decision(extent) = entry.core_root else {
+                continue;
+            };
+            let Some(global) = globals.get_mut(&entry.host_owner.anchor()) else {
+                continue;
+            };
+            if let Some(binding) = let_else_global_binding(semantic, core, source, extent) {
+                *global = binding;
+            }
+        }
         let syntax = Self {
+            directive_prologue_end,
             source_len: source.len(),
             projection: projection.code,
             module: parsed.module,
             overlay: collected.overlay,
             owners: collected.owners,
             occupied_names: collected.occupied_names,
+            script,
+            globals,
         };
         syntax.validate()?;
         Ok(syntax)
@@ -192,8 +227,199 @@ impl ProgramSyntax {
         self.owners.iter()
     }
 
+    pub(crate) fn directive_prologue_end(&self) -> Option<usize> {
+        self.directive_prologue_end
+    }
+
+    pub(crate) fn is_script(&self) -> bool {
+        self.script
+    }
+
+    pub(crate) fn globals(&self) -> &HashMap<SourceSpan, GlobalStatement> {
+        &self.globals
+    }
+
     pub(crate) fn occupied_names(&self) -> impl Iterator<Item = &str> {
         self.occupied_names.iter().map(String::as_str)
+    }
+
+    pub(crate) fn declared_names(&self) -> HashSet<String> {
+        use swc_ecma_visit::{Visit, VisitWith};
+
+        struct Declarations(HashSet<String>);
+        impl Visit for Declarations {
+            fn visit_binding_ident(&mut self, node: &swc_ecma_ast::BindingIdent) {
+                self.0.insert(node.id.sym.to_string());
+            }
+            fn visit_fn_decl(&mut self, node: &swc_ecma_ast::FnDecl) {
+                self.0.insert(node.ident.sym.to_string());
+                node.visit_children_with(self);
+            }
+            fn visit_fn_expr(&mut self, node: &swc_ecma_ast::FnExpr) {
+                if let Some(ident) = &node.ident {
+                    self.0.insert(ident.sym.to_string());
+                }
+                node.visit_children_with(self);
+            }
+            fn visit_class_decl(&mut self, node: &swc_ecma_ast::ClassDecl) {
+                self.0.insert(node.ident.sym.to_string());
+                node.visit_children_with(self);
+            }
+            fn visit_class_expr(&mut self, node: &swc_ecma_ast::ClassExpr) {
+                if let Some(ident) = &node.ident {
+                    self.0.insert(ident.sym.to_string());
+                }
+                node.visit_children_with(self);
+            }
+            fn visit_import_named_specifier(&mut self, node: &swc_ecma_ast::ImportNamedSpecifier) {
+                self.0.insert(node.local.sym.to_string());
+            }
+            fn visit_import_default_specifier(
+                &mut self,
+                node: &swc_ecma_ast::ImportDefaultSpecifier,
+            ) {
+                self.0.insert(node.local.sym.to_string());
+            }
+            fn visit_import_star_as_specifier(
+                &mut self,
+                node: &swc_ecma_ast::ImportStarAsSpecifier,
+            ) {
+                self.0.insert(node.local.sym.to_string());
+            }
+            fn visit_ts_enum_decl(&mut self, node: &swc_ecma_ast::TsEnumDecl) {
+                self.0.insert(node.id.sym.to_string());
+                node.visit_children_with(self);
+            }
+            fn visit_ts_module_decl(&mut self, node: &swc_ecma_ast::TsModuleDecl) {
+                if let swc_ecma_ast::TsModuleName::Ident(ident) = &node.id {
+                    self.0.insert(ident.sym.to_string());
+                }
+                node.visit_children_with(self);
+            }
+            fn visit_ts_import_equals_decl(&mut self, node: &swc_ecma_ast::TsImportEqualsDecl) {
+                self.0.insert(node.id.sym.to_string());
+            }
+        }
+        let mut declarations = Declarations(HashSet::new());
+        self.module.visit_with(&mut declarations);
+        declarations.0
+    }
+
+    pub(crate) fn module_declared_names(&self) -> HashSet<String> {
+        use swc_ecma_ast::{
+            ArrowExpr, Class, Decl, DefaultDecl, GetterProp, ModuleDecl, ObjectPatProp, SetterProp,
+            TsModuleDecl, VarDecl, VarDeclKind,
+        };
+        use swc_ecma_visit::{Visit, VisitWith};
+
+        fn pattern_names(pattern: &Pat, names: &mut HashSet<String>) {
+            match pattern {
+                Pat::Ident(binding) => {
+                    names.insert(binding.id.sym.to_string());
+                }
+                Pat::Array(array) => {
+                    for element in array.elems.iter().flatten() {
+                        pattern_names(element, names);
+                    }
+                }
+                Pat::Rest(rest) => pattern_names(&rest.arg, names),
+                Pat::Object(object) => {
+                    for property in &object.props {
+                        match property {
+                            ObjectPatProp::KeyValue(pair) => pattern_names(&pair.value, names),
+                            ObjectPatProp::Assign(assign) => {
+                                names.insert(assign.key.id.sym.to_string());
+                            }
+                            ObjectPatProp::Rest(rest) => pattern_names(&rest.arg, names),
+                        }
+                    }
+                }
+                Pat::Assign(assign) => pattern_names(&assign.left, names),
+                Pat::Expr(_) | Pat::Invalid(_) => {}
+            }
+        }
+
+        fn declaration_names(declaration: &Decl, names: &mut HashSet<String>) {
+            match declaration {
+                Decl::Class(class) => {
+                    names.insert(class.ident.sym.to_string());
+                }
+                Decl::Fn(function) => {
+                    names.insert(function.ident.sym.to_string());
+                }
+                Decl::Var(var) => {
+                    for declarator in &var.decls {
+                        pattern_names(&declarator.name, names);
+                    }
+                }
+                Decl::Using(using) => {
+                    for declarator in &using.decls {
+                        pattern_names(&declarator.name, names);
+                    }
+                }
+                Decl::TsEnum(declaration) => {
+                    names.insert(declaration.id.sym.to_string());
+                }
+                Decl::TsModule(declaration) => {
+                    if let swc_ecma_ast::TsModuleName::Ident(ident) = &declaration.id {
+                        names.insert(ident.sym.to_string());
+                    }
+                }
+                Decl::TsInterface(_) | Decl::TsTypeAlias(_) => {}
+            }
+        }
+
+        struct HoistedVars(HashSet<String>);
+        impl Visit for HoistedVars {
+            fn visit_var_decl(&mut self, node: &VarDecl) {
+                if node.kind == VarDeclKind::Var {
+                    for declarator in &node.decls {
+                        pattern_names(&declarator.name, &mut self.0);
+                    }
+                }
+                node.visit_children_with(self);
+            }
+            fn visit_function(&mut self, _: &Function) {}
+            fn visit_arrow_expr(&mut self, _: &ArrowExpr) {}
+            fn visit_class(&mut self, _: &Class) {}
+            fn visit_getter_prop(&mut self, _: &GetterProp) {}
+            fn visit_setter_prop(&mut self, _: &SetterProp) {}
+            fn visit_ts_module_decl(&mut self, _: &TsModuleDecl) {}
+        }
+
+        let mut names = HashSet::new();
+        for item in &self.module.body {
+            match item {
+                ModuleItem::Stmt(Stmt::Decl(declaration)) => {
+                    declaration_names(declaration, &mut names);
+                }
+                ModuleItem::ModuleDecl(ModuleDecl::ExportDecl(export)) => {
+                    declaration_names(&export.decl, &mut names);
+                }
+                ModuleItem::ModuleDecl(ModuleDecl::ExportDefaultDecl(export)) => {
+                    let ident = match &export.decl {
+                        DefaultDecl::Class(class) => class.ident.as_ref(),
+                        DefaultDecl::Fn(function) => function.ident.as_ref(),
+                        DefaultDecl::TsInterfaceDecl(_) => None,
+                    };
+                    if let Some(ident) = ident {
+                        names.insert(ident.sym.to_string());
+                    }
+                }
+                ModuleItem::ModuleDecl(ModuleDecl::Import(import)) => {
+                    for specifier in &import.specifiers {
+                        names.insert(specifier.local().sym.to_string());
+                    }
+                }
+                ModuleItem::ModuleDecl(ModuleDecl::TsImportEquals(import)) => {
+                    names.insert(import.id.sym.to_string());
+                }
+                _ => {}
+            }
+        }
+        let mut hoisted = HoistedVars(names);
+        self.module.visit_with(&mut hoisted);
+        hoisted.0
     }
 
     fn validate(&self) -> Result<(), ProgramSyntaxError> {
@@ -266,6 +492,42 @@ pub(super) struct ProjectionSourceSegment {
     pub(super) kind: ProjectionSegmentKind,
 }
 
+pub(super) struct ProjectionSegments {
+    segments: Vec<ProjectionSourceSegment>,
+    index: crate::span_index::SpanIndex,
+}
+
+impl ProjectionSegments {
+    pub(super) fn new(segments: Vec<ProjectionSourceSegment>) -> Self {
+        let index = crate::span_index::SpanIndex::new(
+            segments
+                .iter()
+                .map(|segment| (segment.projected.start.0, segment.projected.end.0)),
+        );
+        Self { segments, index }
+    }
+
+    pub(super) fn starting_at(&self, at: ProjectedByte) -> Vec<usize> {
+        self.index.starting_in(at.0, at.0.saturating_add(1))
+    }
+
+    pub(super) fn ending_at(&self, at: ProjectedByte) -> Vec<usize> {
+        self.index.ending_in(at.0, at.0.saturating_add(1))
+    }
+
+    pub(super) fn containing(&self, at: ProjectedByte) -> Vec<usize> {
+        self.index.containing(at.0)
+    }
+}
+
+impl std::ops::Deref for ProjectionSegments {
+    type Target = [ProjectionSourceSegment];
+
+    fn deref(&self) -> &Self::Target {
+        &self.segments
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ProjectionSegmentKind {
     Copied,
@@ -274,6 +536,7 @@ pub(super) enum ProjectionSegmentKind {
     /// it was incomplete; the delimiter itself is fixed syntax.
     SourceBoundary,
     Placeholder,
+    AutomaticSemicolon,
 }
 
 #[derive(Debug)]
@@ -303,7 +566,7 @@ pub(super) struct ProjectionBuilder<'a> {
     pub(super) pending: Vec<PendingOverlay>,
     pub(super) source_segments: Vec<ProjectionSourceSegment>,
     pub(super) projection_only_protocol_parents: Vec<ProjectedSpan>,
-    pub(super) tokens: Vec<Token>,
+    pub(super) automatic_semicolons: Vec<crate::lexer::AutomaticSemicolon>,
 }
 
 impl<'a> ProjectionBuilder<'a> {
@@ -311,7 +574,7 @@ impl<'a> ProjectionBuilder<'a> {
         semantic: &'a SemanticFile,
         core: &'a CoreFile,
         source: &'a str,
-        source_kind: crate::SourceKind,
+        tokens: &[crate::lexer::Token],
     ) -> Self {
         Self {
             arm_blocks: HashMap::new(),
@@ -322,7 +585,7 @@ impl<'a> ProjectionBuilder<'a> {
             pending: Vec::new(),
             source_segments: Vec::new(),
             projection_only_protocol_parents: Vec::new(),
-            tokens: crate::lexer::lex_with_kind(source, 0, source.len(), source_kind),
+            automatic_semicolons: crate::lexer::automatic_semicolons(tokens),
         }
     }
 
@@ -372,29 +635,22 @@ impl<'a> ProjectionBuilder<'a> {
         source: SourceSpan,
         core_root: CoreRoot,
     ) -> Result<(), ProgramSyntaxError> {
-        let ordinal =
-            u32::try_from(self.pending.len()).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-        let id = TtNodeId(ordinal);
         let owner_start = ProjectedByte(self.code.len());
         match category {
             SyntaxCategory::Expression | SyntaxCategory::Propagation => self.code.push('('),
-            SyntaxCategory::Statement => self.code.push('{'),
             SyntaxCategory::Item => self.code.push_str("const "),
+            SyntaxCategory::Statement => {
+                crate::ice::bug!("a statement placeholder is framed by its decision")
+            }
         }
-        let start = ProjectedByte(self.code.len());
-        let prefix = match category {
-            SyntaxCategory::Expression | SyntaxCategory::Propagation => "$tt_syntax_expr_",
-            SyntaxCategory::Statement => "$tt_syntax_stmt_",
-            SyntaxCategory::Item => "$tt_syntax_item_",
-        };
-        self.code.push_str(prefix);
-        self.code.push_str(&ordinal.to_string());
-        let end = ProjectedByte(self.code.len());
+        self.push_placeholder_name(category, source, core_root)?;
         match category {
             SyntaxCategory::Expression => self.code.push(')'),
             SyntaxCategory::Propagation => self.code.push_str(");"),
-            SyntaxCategory::Statement => self.code.push_str(";}"),
             SyntaxCategory::Item => self.code.push_str(" = 0;"),
+            SyntaxCategory::Statement => {
+                crate::ice::bug!("a statement placeholder is framed by its decision")
+            }
         }
         let owner_end = ProjectedByte(self.code.len());
         self.source_segments.push(ProjectionSourceSegment {
@@ -405,6 +661,27 @@ impl<'a> ProjectionBuilder<'a> {
             source,
             kind: ProjectionSegmentKind::Placeholder,
         });
+        Ok(())
+    }
+
+    fn push_placeholder_name(
+        &mut self,
+        category: SyntaxCategory,
+        source: SourceSpan,
+        core_root: CoreRoot,
+    ) -> Result<(), ProgramSyntaxError> {
+        let ordinal =
+            u32::try_from(self.pending.len()).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
+        let id = TtNodeId(ordinal);
+        let start = ProjectedByte(self.code.len());
+        let prefix = match category {
+            SyntaxCategory::Expression | SyntaxCategory::Propagation => "$tt_syntax_expr_",
+            SyntaxCategory::Statement => "$tt_syntax_stmt_",
+            SyntaxCategory::Item => "$tt_syntax_item_",
+        };
+        self.code.push_str(prefix);
+        self.code.push_str(&ordinal.to_string());
+        let end = ProjectedByte(self.code.len());
         self.pending.push(PendingOverlay {
             id,
             category,
@@ -449,6 +726,9 @@ impl<'a> ProjectionBuilder<'a> {
 
     fn emit_body(&mut self, body: BodyId) -> Result<(), ProgramSyntaxError> {
         for statement in &self.core.bodies[body.index()].statements {
+            if let Some(start) = self.statement_source_start(statement)? {
+                self.preserve_statement_boundary(start);
+            }
             match statement {
                 Statement::Opaque(node) => self.push_source(*node)?,
                 Statement::Adt(adt) => self.emit_adt(adt)?,
@@ -478,10 +758,14 @@ impl<'a> ProjectionBuilder<'a> {
         // initializer. Project it as an expression so that header remains
         // valid TypeScript; its typed continuation decides the eventual
         // statement shape in target lowering.
-        if self.expr_contains_decision(propagate.value) {
-            return self.emit_propagate_with_shadow(propagate);
+        if self.expr_contains_value_region(propagate.value) {
+            return self.emit_propagate_with_shadow(
+                SyntaxCategory::Propagation,
+                self.source_span(propagate.owner)?,
+                CoreRoot::Propagate(propagate.node),
+                propagate.value,
+            );
         }
-        self.preserve_concise_arrow_statement_boundary(self.source_span(propagate.owner)?.start);
         self.push_placeholder(
             SyntaxCategory::Propagation,
             self.source_span(propagate.owner)?,
@@ -489,12 +773,54 @@ impl<'a> ProjectionBuilder<'a> {
         )
     }
 
-    fn preserve_concise_arrow_statement_boundary(&mut self, source_start: usize) {
-        let at = self
-            .tokens
-            .partition_point(|token| token.span.start < source_start);
-        if crate::flow::concise_arrow_boundary_before(self.source, &self.tokens, at) {
+    fn statement_source_start(
+        &self,
+        statement: &Statement,
+    ) -> Result<Option<usize>, ProgramSyntaxError> {
+        let node = match statement {
+            Statement::Opaque(_) | Statement::Import(_) => return Ok(None),
+            Statement::Adt(adt) => adt.node,
+            Statement::Propagate(propagate) => propagate.owner,
+            Statement::Decision(decision) => decision.extent,
+            Statement::Expr(expr) => match &self.core.exprs[expr.index()] {
+                Expr::Decision(decision) => decision.extent,
+                Expr::Propagate(propagate) => propagate.node,
+                Expr::Apply(apply) => {
+                    let mut start = self.source_span(apply.node)?.start;
+                    if let Some(head) = apply.head
+                        && let Some(head_start) =
+                            self.statement_source_start(&Statement::Expr(head))?
+                    {
+                        start = start.min(head_start);
+                    }
+                    return Ok(Some(start));
+                }
+                Expr::ResultRegion(region) => region.node,
+                Expr::Opaque(_) | Expr::Sequence(_) | Expr::Template(_) => return Ok(None),
+            },
+        };
+        Ok(Some(self.source_span(node)?.start))
+    }
+
+    fn preserve_statement_boundary(&mut self, source_start: usize) {
+        if self
+            .automatic_semicolons
+            .binary_search_by_key(&source_start, |boundary| boundary.next)
+            .is_ok()
+        {
+            let start = ProjectedByte(self.code.len());
             self.code.push(';');
+            self.source_segments.push(ProjectionSourceSegment {
+                projected: ProjectedSpan {
+                    start,
+                    end: ProjectedByte(self.code.len()),
+                },
+                source: SourceSpan {
+                    start: source_start,
+                    end: source_start,
+                },
+                kind: ProjectionSegmentKind::AutomaticSemicolon,
+            });
         }
     }
 
@@ -504,28 +830,30 @@ impl<'a> ProjectionBuilder<'a> {
     /// typed overlays to schedule the decision before the propagation.
     fn emit_propagate_with_shadow(
         &mut self,
-        propagate: &Propagate,
+        category: SyntaxCategory,
+        source: SourceSpan,
+        core_root: CoreRoot,
+        value: ExprId,
     ) -> Result<(), ProgramSyntaxError> {
-        let source = self.source_span(propagate.owner)?;
         let ordinal =
             u32::try_from(self.pending.len()).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
         let id = TtNodeId(ordinal);
         let pending_index = self.pending.len();
         self.pending.push(PendingOverlay {
             id,
-            category: SyntaxCategory::Propagation,
+            category,
             source,
             projected: ProjectedSpan {
                 start: ProjectedByte(0),
                 end: ProjectedByte(0),
             },
-            core_root: CoreRoot::Propagate(propagate.node),
+            core_root,
             marker: OverlayMarker::Identifier,
             synthetic_return: None,
         });
         let owner_start = ProjectedByte(self.code.len());
         self.code.push('(');
-        self.emit_shadow_expr(propagate.value)?;
+        self.emit_shadow_expr(value)?;
         self.code.push_str(", ");
         let start = ProjectedByte(self.code.len());
         self.code.push_str("$tt_syntax_expr_");
@@ -534,7 +862,9 @@ impl<'a> ProjectionBuilder<'a> {
         self.pending[pending_index].projected = ProjectedSpan { start, end };
         self.code.push(')');
         let owner_end = ProjectedByte(self.code.len());
-        self.code.push(';');
+        if category == SyntaxCategory::Propagation {
+            self.code.push(';');
+        }
         self.projection_only_protocol_parents.push(ProjectedSpan {
             start: ProjectedByte(owner_start.0 + 1),
             end: ProjectedByte(owner_end.0 - 1),
@@ -563,15 +893,37 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn emit_statement_decision(&mut self, decision: &Decision) -> Result<(), ProgramSyntaxError> {
-        self.push_placeholder(
+        // The source decision is one statement, so its projection is one
+        // block: as the unbraced body of an `if`, loop, or label, the
+        // placeholder and the bodies below stay together under that parent,
+        // and that block is the statement the decision's host owner maps to.
+        let source = self.source_span(decision.extent)?;
+        let segment_index = self.source_segments.len();
+        let owner_start = ProjectedByte(self.code.len());
+        self.code.push('{');
+        self.push_placeholder_name(
             SyntaxCategory::Statement,
-            self.source_span(decision.extent)?,
+            source,
             CoreRoot::Decision(decision.extent),
         )?;
+        self.code.push(';');
         // Statement decisions do not introduce a function boundary. Keep their
         // bodies in this lexical control-flow region so returns belong to the
         // surrounding match/result, and nested values retain their real owner.
-        self.emit_inline_decision_bodies(decision)
+        self.emit_inline_decision_bodies(decision)?;
+        self.code.push('}');
+        self.source_segments.insert(
+            segment_index,
+            ProjectionSourceSegment {
+                projected: ProjectedSpan {
+                    start: owner_start,
+                    end: ProjectedByte(self.code.len()),
+                },
+                source,
+                kind: ProjectionSegmentKind::Placeholder,
+            },
+        );
+        Ok(())
     }
 
     fn emit_expr(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
@@ -579,15 +931,28 @@ impl<'a> ProjectionBuilder<'a> {
             Expr::Opaque(node) => self.push_source(*node),
             Expr::Sequence(body) => self.emit_body(*body),
             Expr::Decision(decision) => self.emit_decision_region(expr, decision),
-            Expr::Propagate(propagate) => self.push_placeholder(
-                SyntaxCategory::Expression,
-                self.source_span(propagate.node)?,
-                CoreRoot::Expr(expr),
-            ),
+            Expr::Propagate(propagate) => self.emit_propagate_expr(expr, propagate),
             Expr::Apply(apply) => self.emit_apply(expr, apply),
             Expr::ResultRegion(region) => self.emit_result_region(expr, region),
             Expr::Template(template) => self.emit_template(template),
         }
+    }
+
+    fn emit_propagate_expr(
+        &mut self,
+        expr: ExprId,
+        propagate: &Propagate,
+    ) -> Result<(), ProgramSyntaxError> {
+        let source = self.source_span(propagate.node)?;
+        if self.expr_contains_value_region(propagate.value) {
+            return self.emit_propagate_with_shadow(
+                SyntaxCategory::Expression,
+                source,
+                CoreRoot::Expr(expr),
+                propagate.value,
+            );
+        }
+        self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr))
     }
 
     fn emit_apply(&mut self, expr: ExprId, apply: &Apply) -> Result<(), ProgramSyntaxError> {
@@ -606,14 +971,13 @@ impl<'a> ProjectionBuilder<'a> {
         let shadow_steps: Vec<_> = apply
             .steps
             .iter()
-            .enumerate()
             .filter(|step| {
-                self.expr_contains_propagation(step.1.value)
-                    || self.expr_contains_decision(step.1.value)
+                self.expr_contains_propagation(step.value)
+                    || self.expr_contains_value_region(step.value)
             })
             .collect();
         let shadow_head = apply.head.filter(|head| {
-            self.expr_contains_propagation(*head) || self.expr_contains_decision(*head)
+            self.expr_contains_propagation(*head) || self.expr_contains_value_region(*head)
         });
         if shadow_head.is_none() && shadow_steps.is_empty() {
             return self.push_placeholder(SyntaxCategory::Expression, source, CoreRoot::Expr(expr));
@@ -626,20 +990,14 @@ impl<'a> ProjectionBuilder<'a> {
             self.emit_shadow_expr(head)?;
             self.code.push(')');
         }
-        for (index, step) in shadow_steps {
+        for step in shadow_steps {
             self.code.push_str(", (");
-            if let Some(head) = apply.head
-                && apply.steps[..=index]
-                    .iter()
-                    .all(|step| matches!(step.mode, crate::core_ir::ApplyMode::Postfix { .. }))
+            if apply.head.is_some()
+                && matches!(step.mode, crate::core_ir::ApplyMode::Postfix { .. })
             {
-                self.emit_shadow_expr(head)?;
-                for prefix_step in &apply.steps[..=index] {
-                    self.emit_shadow_expr(prefix_step.value)?;
-                }
-            } else {
-                self.emit_shadow_expr(step.value)?;
+                self.push_piped_value(self.source_span(step.node)?.start);
             }
+            self.emit_shadow_expr(step.value)?;
             self.code.push(')');
         }
         self.code.push(')');
@@ -666,6 +1024,22 @@ impl<'a> ProjectionBuilder<'a> {
         Ok(())
     }
 
+    fn push_piped_value(&mut self, step_start: usize) {
+        let start = ProjectedByte(self.code.len());
+        self.code.push_str("$tt_syntax_piped");
+        self.source_segments.push(ProjectionSourceSegment {
+            projected: ProjectedSpan {
+                start,
+                end: ProjectedByte(self.code.len()),
+            },
+            source: SourceSpan {
+                start: step_start,
+                end: step_start,
+            },
+            kind: ProjectionSegmentKind::Placeholder,
+        });
+    }
+
     fn expr_contains_propagation(&self, expr: ExprId) -> bool {
         match &self.core.exprs[expr.index()] {
             Expr::Propagate(_) => true,
@@ -688,7 +1062,10 @@ impl<'a> ProjectionBuilder<'a> {
                     self.body_contains_propagation(*body)
                 }
             }) || region.value.is_some_and(|value| self.expr_contains_propagation(value)),
-            Expr::Opaque(_) | Expr::Template(_) => false,
+            Expr::Template(template) => template.parts.iter().any(|part| {
+                matches!(part, TemplatePart::Interpolation(expr) if self.expr_contains_propagation(*expr))
+            }),
+            Expr::Opaque(_) => false,
         }
     }
 
@@ -716,39 +1093,27 @@ impl<'a> ProjectionBuilder<'a> {
             })
     }
 
-    fn expr_contains_decision(&self, expr: ExprId) -> bool {
+    fn expr_contains_value_region(&self, expr: ExprId) -> bool {
         match &self.core.exprs[expr.index()] {
             Expr::Decision(_) => true,
             Expr::Sequence(body) => self.core.bodies[body.index()].statements.iter().any(
                 |statement| {
-                    matches!(statement, Statement::Expr(expr) if self.expr_contains_decision(*expr))
+                    matches!(statement, Statement::Expr(expr) if self.expr_contains_value_region(*expr))
                 },
             ),
             Expr::Apply(apply) => {
                 apply
                     .head
-                    .is_some_and(|head| self.expr_contains_decision(head))
+                    .is_some_and(|head| self.expr_contains_value_region(head))
                     || apply
                         .steps
                         .iter()
-                        .any(|step| self.expr_contains_decision(step.value))
+                        .any(|step| self.expr_contains_value_region(step.value))
             }
-            Expr::Propagate(propagate) => self.expr_contains_decision(propagate.value),
-            Expr::ResultRegion(region) => {
-                region.items.iter().any(|item| match item {
-                    crate::core_ir::ResultRegionItem::Statements(body) => self.core.bodies
-                        [body.index()]
-                    .statements
-                    .iter()
-                    .any(|statement| {
-                        matches!(statement, Statement::Expr(expr) if self.expr_contains_decision(*expr))
-                    }),
-                }) || region
-                    .value
-                    .is_some_and(|value| self.expr_contains_decision(value))
-            }
+            Expr::Propagate(propagate) => self.expr_contains_value_region(propagate.value),
+            Expr::ResultRegion(_) => true,
             Expr::Template(template) => template.parts.iter().any(|part| {
-                matches!(part, TemplatePart::Interpolation(expr) if self.expr_contains_decision(*expr))
+                matches!(part, TemplatePart::Interpolation(expr) if self.expr_contains_value_region(*expr))
             }),
             Expr::Opaque(_) => false,
         }
@@ -757,11 +1122,7 @@ impl<'a> ProjectionBuilder<'a> {
     fn emit_shadow_expr(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
         match &self.core.exprs[expr.index()] {
             Expr::Opaque(node) => self.push_source(*node),
-            Expr::Propagate(propagate) => self.push_placeholder(
-                SyntaxCategory::Expression,
-                self.source_span(propagate.node)?,
-                CoreRoot::Expr(expr),
-            ),
+            Expr::Propagate(propagate) => self.emit_propagate_expr(expr, propagate),
             Expr::Sequence(body) => self.emit_shadow_body(*body),
             // A nested pipeline is opaque to SWC for the same reason as its
             // parent. Its own projection retains the structural placeholder.
@@ -811,11 +1172,14 @@ impl<'a> ProjectionBuilder<'a> {
             marker: OverlayMarker::CallExpression,
             synthetic_return: None,
         });
-        self.code.push('(');
-        if region.is_async {
-            self.code.push_str("async ");
+        self.push_region_function(region.is_async, region.in_generator);
+        if let Some(labels) = &region.outward_jumps {
+            for label in labels {
+                self.code.push_str(label);
+                self.code.push_str(": ");
+            }
+            self.code.push_str("for (;;) {");
         }
-        self.code.push_str("() => {");
         for item in &region.items {
             match item {
                 crate::core_ir::ResultRegionItem::Statements(body) => self.emit_body(*body)?,
@@ -829,7 +1193,12 @@ impl<'a> ProjectionBuilder<'a> {
         } else {
             self.code.push_str("undefined");
         }
-        self.code.push_str(";})()");
+        self.code.push(';');
+        let synthetic_return_end = ProjectedByte(self.code.len());
+        if region.outward_jumps.is_some() {
+            self.code.push('}');
+        }
+        self.code.push_str("})()");
         let end = ProjectedByte(self.code.len());
         let projected = ProjectedSpan { start, end };
         self.source_segments.insert(
@@ -843,9 +1212,21 @@ impl<'a> ProjectionBuilder<'a> {
         self.pending[pending_index].projected = projected;
         self.pending[pending_index].synthetic_return = Some(ProjectedSpan {
             start: synthetic_return_start,
-            end: ProjectedByte(self.code.len() - 4),
+            end: synthetic_return_end,
         });
         Ok(())
+    }
+
+    fn push_region_function(&mut self, is_async: bool, in_generator: bool) {
+        self.code.push('(');
+        if is_async {
+            self.code.push_str("async ");
+        }
+        self.code.push_str(if in_generator {
+            "function* () {"
+        } else {
+            "() => {"
+        });
     }
 
     fn emit_inline_decision_bodies(
@@ -911,11 +1292,7 @@ impl<'a> ProjectionBuilder<'a> {
             marker: OverlayMarker::DecisionCallExpression,
             synthetic_return: None,
         });
-        self.code.push('(');
-        if decision.is_async {
-            self.code.push_str("async ");
-        }
-        self.code.push_str("() => {");
+        self.push_region_function(decision.is_async, decision.in_generator);
         for subject in &decision.subjects {
             self.code.push('(');
             let segments_since = self.source_segments.len();

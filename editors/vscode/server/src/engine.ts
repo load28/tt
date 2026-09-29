@@ -107,6 +107,7 @@ export interface EngineTtSymbol {
   /** One sentence about what it is and where it came from. */
   detail: string;
   definition: EngineLocation | null;
+  binds: boolean;
 }
 
 /** One thing tt has to say about a range that is not an error. */
@@ -600,6 +601,7 @@ export interface EngineVariantDecl {
 /** One case of an [EngineVariantDecl]. */
 export interface EngineCaseDecl {
   tag: string;
+  nameSpan: EngineSpan | null;
   span: EngineSpan | null;
   unit: boolean;
   fields: { name: string; optional: boolean; ty: string }[];

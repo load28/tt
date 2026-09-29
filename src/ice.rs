@@ -33,7 +33,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
 use crate::evaluation_ir::{EvalBlockId, OperationId, ValueId, ValueSlotId};
-use crate::program_syntax::{CoreRoot, HostOwner, SourceSpan};
+use crate::program_syntax::{CoreRoot, HostOwner, HostOwnerId, HostOwnerKind, SourceSpan};
 
 /// The lowering validator whose contract was violated.
 ///
@@ -160,9 +160,17 @@ impl Invariant {
 /// Every field is optional because the stages know different things: an
 /// order failure names a value and a slot, a target failure names a span.
 /// What a stage does know, it records — the display never invents one.
+/// The host owner a failure names: which owner it is and where it stands.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct LoweringOwner {
+    pub(crate) id: HostOwnerId,
+    pub(crate) kind: HostOwnerKind,
+    pub(crate) span: SourceSpan,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct LoweringSubject {
-    pub(crate) owner: Option<HostOwner>,
+    pub(crate) owner: Option<LoweringOwner>,
     pub(crate) root: Option<CoreRoot>,
     pub(crate) operation: Option<OperationId>,
     pub(crate) value: Option<ValueId>,
@@ -173,7 +181,11 @@ pub(crate) struct LoweringSubject {
 impl LoweringSubject {
     pub(crate) fn owner(owner: HostOwner) -> Self {
         Self {
-            owner: Some(owner),
+            owner: Some(LoweringOwner {
+                id: owner.id,
+                kind: owner.kind,
+                span: owner.span,
+            }),
             ..Self::default()
         }
     }

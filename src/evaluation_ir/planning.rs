@@ -227,10 +227,7 @@ pub(super) fn plan_one_operation(
         let Some((member_index, _)) = whole_operation_step(&values[*member].schedule) else {
             return true;
         };
-        member_index != conditional_index
-            || values[*member].schedule.steps().len() != first_steps.len()
-            || values[*member].schedule.steps()[conditional_index + 1..]
-                != first_steps[conditional_index + 1..]
+        values[*member].schedule.steps()[member_index + 1..] != first_steps[conditional_index + 1..]
     }) {
         return Ok(None);
     }
@@ -247,6 +244,7 @@ pub(super) fn plan_one_operation(
             .iter()
             .any(|tt| !(tt.start <= parent.start && parent.end <= tt.end) && overlaps(span, *tt))
     };
+    let mut active = Vec::new();
     let kind = match step.operation {
         HostEvaluationOperation::Conditional(ConditionalBranch::LogicalAndRight)
         | HostEvaluationOperation::Conditional(ConditionalBranch::LogicalOrRight)
@@ -267,17 +265,25 @@ pub(super) fn plan_one_operation(
         HostEvaluationOperation::Conditional(
             ConditionalBranch::Consequent | ConditionalBranch::Alternate,
         ) => {
-            if conditional_index != 0 {
-                return Ok(None);
-            }
             let mut consequent = None;
             let mut alternate = None;
             for member in members {
                 let value = &values[*member];
-                let Some(member_facts) = &value.schedule.steps()[0].conditional else {
+                let Some((member_index, member_step)) = whole_operation_step(&value.schedule)
+                else {
                     return Ok(None);
                 };
-                let side = match value.schedule.steps()[0].operation {
+                let Some(member_facts) = &member_step.conditional else {
+                    return Ok(None);
+                };
+                if member_index > 0 {
+                    active.push(PlannedActiveBranch {
+                        value: value.expr,
+                        branch: member_facts.branch,
+                        steps: value.schedule.steps()[..member_index].to_vec(),
+                    });
+                }
+                let side = match member_step.operation {
                     HostEvaluationOperation::Conditional(ConditionalBranch::Consequent) => {
                         &mut consequent
                     }
@@ -403,21 +409,25 @@ pub(super) fn plan_one_operation(
         _ => return Ok(None),
     };
     let result = allocate_value_slot(next_slot, slot_names, occupied_names)?;
-    let active_branch = matches!(
+    if matches!(
         &kind,
         PlannedConditionalKind::LogicalAnd
             | PlannedConditionalKind::LogicalOr
             | PlannedConditionalKind::Nullish
-    )
-    .then_some(facts.branch);
+    ) {
+        active.push(PlannedActiveBranch {
+            value: first.expr,
+            branch: facts.branch,
+            steps: first_steps[..conditional_index].to_vec(),
+        });
+    }
     Ok(Some(PlannedConditionalOperation {
         parent,
         result,
         kind,
         condition,
         values: members.iter().map(|member| values[*member].expr).collect(),
-        active_branch,
-        active_steps: first_steps[..conditional_index].to_vec(),
+        active,
         outer: first_steps[conditional_index + 1..].to_vec(),
     }))
 }
@@ -442,7 +452,9 @@ pub(super) fn target_capability(
     use ExpressionBoundaryReason as Reason;
     if matches!(
         context.owner,
-        EvaluationOwner::ParameterInitializer | EvaluationOwner::ClassInitializer
+        EvaluationOwner::ParameterInitializer
+            | EvaluationOwner::ClassInitializer
+            | EvaluationOwner::ClassDefinition
     ) {
         return TargetCapability::ExpressionBoundary(Reason::OwnerTakesNoStatements);
     }
@@ -566,37 +578,12 @@ pub(super) fn allocate_slot_name(
     slot: ValueSlotId,
     occupied: &mut HashSet<String>,
 ) -> Result<String, EvaluationError> {
-    let base = format!("$tt_v{}", slot.0);
-    if occupied.insert(base.clone()) {
-        return Ok(base);
-    }
-    let mut suffix = 1u32;
-    loop {
-        let candidate = format!("{base}_{suffix}");
-        if occupied.insert(candidate.clone()) {
-            return Ok(candidate);
-        }
-        suffix = suffix
-            .checked_add(1)
-            .ok_or(EvaluationError::GeneratedNameOverflow)?;
-    }
+    allocate_generated_name(&format!("$tt_v{}", slot.0), occupied)
 }
 
 pub(super) fn allocate_generated_name(
     base: &str,
     occupied: &mut HashSet<String>,
 ) -> Result<String, EvaluationError> {
-    if occupied.insert(base.to_owned()) {
-        return Ok(base.to_owned());
-    }
-    let mut suffix = 1u32;
-    loop {
-        let candidate = format!("{base}_{suffix}");
-        if occupied.insert(candidate.clone()) {
-            return Ok(candidate);
-        }
-        suffix = suffix
-            .checked_add(1)
-            .ok_or(EvaluationError::GeneratedNameOverflow)?;
-    }
+    crate::generated_names::allocate(base, occupied).ok_or(EvaluationError::GeneratedNameOverflow)
 }

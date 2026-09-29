@@ -23,12 +23,12 @@ fn statement_bodied_result_returns_a_propagated_value() {
     let out = ok("const value = result { return try read(); };\n");
     assert!(out.contains("const $tt_t0 = read();"), "{out}");
     assert!(
-        compact(&out).contains("if (!(\"value\" in $tt_t0)) { $tt_v0 = $tt_t0; break $tt_v0; }"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { $tt_v0$value = $tt_t0; break $tt_v0$value; }"),
         "{out}"
     );
     assert!(
         compact(&out)
-            .contains("$tt_v0 = { kind: \"Ok\" as const, value: $tt_t0.value }; break $tt_v0;"),
+            .contains("$tt_v0$value = { kind: \"Ok\" as const, value: $tt_t0.value }; break $tt_v0$value;"),
         "{out}"
     );
 }
@@ -38,12 +38,12 @@ fn statement_bodied_result_declaration_try_stays_in_the_result_scope() {
     let out = ok("const value = result { const item = try read(); return item; };\n");
     assert!(out.contains("const $tt_t0 = read();"), "{out}");
     assert!(
-        compact(&out).contains("if (!(\"value\" in $tt_t0)) { $tt_v0 = $tt_t0; break $tt_v0; }"),
+        compact(&out).contains("if (!(\"value\" in $tt_t0)) { $tt_v0$value = $tt_t0; break $tt_v0$value; }"),
         "{out}"
     );
     assert!(out.contains("const item = $tt_t0.value;"), "{out}");
     assert!(
-        compact(&out).contains("$tt_v0 = { kind: \"Ok\" as const, value: item }; break $tt_v0;"),
+        compact(&out).contains("$tt_v0$value = { kind: \"Ok\" as const, value: item }; break $tt_v0$value;"),
         "{out}"
     );
 }
@@ -57,7 +57,7 @@ const fromDo = result { do { return try read(); } while (ready()); return 0; };
 const fromSwitch = result { switch (tag) { default: return try read(); } return 0; };
 "#;
     let out = ok(source);
-    for slot in ["$tt_v0", "$tt_v1", "$tt_v2", "$tt_v3"] {
+    for slot in ["$tt_v0$fromFor", "$tt_v1$fromWhile", "$tt_v2$fromDo", "$tt_v3$fromSwitch"] {
         assert!(out.contains(&format!("{slot}: {{")), "{slot}\n{out}");
         assert!(
             out.matches(&format!("break {slot};")).count() >= 2,
@@ -282,9 +282,9 @@ const label = match (dir) {
     assert!(out.contains("switch ($tt_m) {"));
     assert!(!out.contains("$tt_m.kind"));
     let compact = compact(&out);
-    assert!(compact.contains(r#"case "north": { $tt_v0 = "N"; break; }"#));
-    assert!(compact.contains(r#"case "south": { $tt_v0 = "S"; break; }"#));
-    assert!(compact.contains(r#"default: { $tt_v0 = "?"; break; }"#));
+    assert!(compact.contains(r#"case "north": { $tt_v0$label = "N"; break; }"#));
+    assert!(compact.contains(r#"case "south": { $tt_v0$label = "S"; break; }"#));
+    assert!(compact.contains(r#"default: { $tt_v0$label = "?"; break; }"#));
 }
 
 #[test]
@@ -299,9 +299,9 @@ const message = match (status) {
 "#);
     assert!(out.contains("switch ($tt_m) {"));
     let compact = compact(&out);
-    assert!(compact.contains(r#"case 200: { $tt_v0 = "ok"; break; }"#));
-    assert!(compact.contains(r#"case 404: { $tt_v0 = "not found"; break; }"#));
-    assert!(compact.contains(r#"case 500: { $tt_v0 = "error"; break; }"#));
+    assert!(compact.contains(r#"case 200: { $tt_v0$message = "ok"; break; }"#));
+    assert!(compact.contains(r#"case 404: { $tt_v0$message = "not found"; break; }"#));
+    assert!(compact.contains(r#"case 500: { $tt_v0$message = "error"; break; }"#));
 }
 
 #[test]
@@ -309,8 +309,8 @@ fn literal_boolean_match_emits_true_and_false_cases() {
     let out = ok("const v = match (flag) { true => 1, false => 0 };");
     assert!(out.contains("switch ($tt_m) {"));
     let compact = compact(&out);
-    assert!(compact.contains("case true: { $tt_v0 = 1; break; }"));
-    assert!(compact.contains("case false: { $tt_v0 = 0; break; }"));
+    assert!(compact.contains("case true: { $tt_v0$v = 1; break; }"));
+    assert!(compact.contains("case false: { $tt_v0$v = 0; break; }"));
 }
 
 #[test]
@@ -323,10 +323,10 @@ const kind = match (code) {
 };
 "#);
     let compact = compact(&out);
-    assert!(compact.contains(r#"case 200: case 201: case 204: { $tt_v0 = "success"; break; }"#));
-    assert!(compact.contains(r#"case 400: case 404: { $tt_v0 = "client error"; break; }"#));
+    assert!(compact.contains(r#"case 200: case 201: case 204: { $tt_v0$kind = "success"; break; }"#));
+    assert!(compact.contains(r#"case 400: case 404: { $tt_v0$kind = "client error"; break; }"#));
     // one body per arm, never duplicated per alternative
-    assert_eq!(out.matches(r#"$tt_v0 = "success""#).count(), 1);
+    assert_eq!(out.matches(r#"$tt_v0$kind = "success""#).count(), 1);
 }
 
 #[test]
@@ -342,7 +342,7 @@ fn literal_match_keeps_the_number_spelling_of_the_source() {
 fn literal_match_without_a_wildcard_gets_a_runtime_guard() {
     let out = ok(r#"const label = match (dir) { "a" => 1, "b" => 2 };"#);
     assert!(compact(&out).contains(
-        r#"default: { throw new Error("tt match: unexpected literal " + JSON.stringify($tt_m)); }"#
+        r#"default: { throw new Error("tt match: unexpected literal " + $tt_show($tt_m)); }"#
     ));
 }
 
@@ -361,7 +361,7 @@ fn literal_match_block_bodies_break_out_of_the_switch() {
     // target, so the rewritten `return` leaves through it and the region
     // needs no label of its own (TASK-160 §6).
     assert!(
-        compact(&out).contains(r#"case "a": { $tt_v0 = 1; break; }"#),
+        compact(&out).contains(r#"case "a": { $tt_v0$v = 1; break; }"#),
         "{out}"
     );
     assert!(!out.contains("$tt_y_"), "{out}");
@@ -374,8 +374,8 @@ fn a_block_arm_exit_inside_a_loop_still_needs_the_region_label() {
     let out = ok(
         r#"const v = match (s) { "a" => { for (const x of xs) { return x; } return 0; }, _ => 0 };"#,
     );
-    assert!(out.contains("$tt_y_v0: {"), "{out}");
-    assert!(out.contains("break $tt_y_v0;"), "{out}");
+    assert!(out.contains("$tt_y_v0$v: {"), "{out}");
+    assert!(out.contains("break $tt_y_v0$v;"), "{out}");
 }
 
 #[test]
@@ -394,8 +394,8 @@ fn literal_match_with_a_guard_becomes_an_if_chain() {
     let out = ok("const v = match (code) { 200 if ok => 1, 200 => 2, _ => 3 };");
     assert!(!out.contains("switch ("));
     let compact = compact(&out);
-    assert!(compact.contains("if ($tt_m === 200) { if (ok) { $tt_v0 = 1; break; } }"));
-    assert!(compact.contains("if ($tt_m === 200) { $tt_v0 = 2; break; }"));
+    assert!(compact.contains("if ($tt_m === 200) { if (ok) { $tt_v0$v = 1; break; } }"));
+    assert!(compact.contains("if ($tt_m === 200) { $tt_v0$v = 2; break; }"));
 }
 
 #[test]
@@ -409,7 +409,7 @@ fn literal_match_without_a_wildcard_has_no_if_chain_case_guard() {
     let out = ok("const v = match (code) { 200 if ok => 1, 404 => 2 };");
     assert!(
         out.contains(
-            r#"throw new Error("tt match: unexpected literal " + JSON.stringify($tt_m));"#
+            r#"throw new Error("tt match: unexpected literal " + $tt_show($tt_m));"#
         )
     );
 }
@@ -521,7 +521,14 @@ fn tuple_patterns_do_not_accept_literals() {
     };
     let src = r#"const v = match (a, b) { ("x", 1) => 1, _ => 0 };"#;
     let error = compile(src, &opts).expect_err("tuple literals are malformed tt");
-    assert!(error.message.contains("tt `match` could not be parsed"));
+    assert!(
+        error
+            .message
+            .contains("a literal pattern cannot be a tuple pattern element"),
+        "{}",
+        error.message
+    );
+    assert_eq!((error.line, error.col), (1, 27));
 }
 
 #[test]
@@ -580,6 +587,63 @@ fn val_parameter_modifier_is_erased_from_the_output() {
         ok("function pick(a: A, val b: B, val { c }: C) {}\n"),
         "function pick(a: A, b: B, { c }: C) {}\n",
     );
+}
+
+#[test]
+fn val_array_pattern_parameter_is_erased_in_every_parameter_list() {
+    let cases = [
+        (
+            "function a(val [x, y]: number[]) { return x + y; }\n",
+            "function a([x, y]: number[]) { return x + y; }\n",
+        ),
+        (
+            "const b = (val [x]: number[]) => x;\n",
+            "const b = ([x]: number[]) => x;\n",
+        ),
+        (
+            "const c = async (p: number, val [x]: number[]): Promise<number> => x;\n",
+            "const c = async (p: number, [x]: number[]): Promise<number> => x;\n",
+        ),
+        (
+            "const d = function* <T>(val [t]: T[]) { yield t; };\n",
+            "const d = function* <T>([t]: T[]) { yield t; };\n",
+        ),
+        (
+            "class K {\n  m(val [h]: number[]): { k: number } { return { k: h }; }\n  n(val [h]: number[])\n  {\n    return h;\n  }\n}\n",
+            "class K {\n  m([h]: number[]): { k: number } { return { k: h }; }\n  n([h]: number[])\n  {\n    return h;\n  }\n}\n",
+        ),
+        (
+            "const o = { m(val [u]: number[]) { return u; } };\n",
+            "const o = { m([u]: number[]) { return u; } };\n",
+        ),
+        (
+            "try { f(); } catch (val [e]: any) { g(e); }\n",
+            "try { f(); } catch ([e]: any) { g(e); }\n",
+        ),
+        (
+            "function over(val [x]: number[]): void;\nfunction over(val [x]: number[]) {}\n",
+            "function over([x]: number[]): void;\nfunction over([x]: number[]) {}\n",
+        ),
+        (
+            "const e = c ? (val [x]: number[]) => x : (w: number[]) => w;\n",
+            "const e = c ? ([x]: number[]) => x : (w: number[]) => w;\n",
+        ),
+        (
+            "class S { set s(val [v]: number[]) {} get g() { return 1; } }\n",
+            "class S { set s([v]: number[]) {} get g() { return 1; } }\n",
+        ),
+        (
+            "interface I { m(val [x]: number[]): void; new (val y: number): I; (val z: number): void }\ntype F = (val [x]: number[]) => void;\n",
+            "interface I { m([x]: number[]): void; new (y: number): I; (z: number): void }\ntype F = ([x]: number[]) => void;\n",
+        ),
+        (
+            "const t = `${(val [x]: number[]) => x}`;\n",
+            "const t = `${([x]: number[]) => x}`;\n",
+        ),
+    ];
+    for (src, expected) in cases {
+        assert_eq!(ok(src), expected, "{src}");
+    }
 }
 
 #[test]
@@ -646,9 +710,106 @@ fn val_forbids_every_mutating_operator() {
 }
 
 #[test]
+fn val_judges_only_paths_rooted_at_the_binding() {
+    for src in [
+        "val const config = { debug: false };\nconst state = { config: { debug: false } };\nstate.config.debug = true;\n",
+        "val const config = { debug: false };\nclass K {\n  config = { debug: false };\n  m() { this.config.debug = true; }\n}\n",
+        "val const o = { x: 1 };\nconst q = { o: { x: 1 } };\nq.o.x++;\nq!.o.x = 2;\ndelete q.o.x;\n[q.o.x] = [3];\n",
+    ] {
+        assert_eq!(ok(src), src.replacen("val ", "", 1), "{src}");
+    }
+    for (src, at) in [
+        ("val const o = { p: 1 };\n[...o.p] = [1] as any;\n", (2, 5)),
+        ("val const o = { p: 1 };\n({ a: o.p } = { a: 2 });\n", (2, 7)),
+    ] {
+        let e = err(src);
+        assert_eq!((e.line, e.col), at, "{src}");
+        assert!(e.message.contains("val binding `o`"), "{src}: {}", e.message);
+    }
+}
+
+#[test]
+fn val_resolves_hoisted_declarations_to_their_scope() {
+    for src in [
+        "val const o = { x: 1 };\nfunction w() { o.x = 2; var o = { x: 1 }; }\n",
+        "val const o = { x: 1 };\nfunction w() { { var o = { x: 1 }; } o.x = 2; }\n",
+        "val const o = { x: 1 };\nfunction w() { for (var o of [{ x: 1 }]) {} o.x = 2; }\n",
+        "val const o = { x: 1 };\nconst w = [1].map(n => { o.x = n; var o = { x: 1 }; return o; });\n",
+        "val const o = { x: 1 };\nfunction w() { o.x = 2; function o() {} }\n",
+        "val const o = { x: 1 };\nfunction w() { { o.x = 2; function o() {} } }\n",
+    ] {
+        assert_eq!(ok(src), src.replacen("val ", "", 1), "{src}");
+    }
+    for (src, at) in [
+        ("val const o = { x: 1 };\nfunction w() { function g() { var o = { x: 1 }; } o.x = 2; }\n", (2, 51)),
+        ("val const o = { x: 1 };\nfunction w() { try {} catch (e) { var o = { x: 1 }; } }\no.x = 2;\n", (3, 1)),
+        ("val const o = { x: 1 };\nclass C { static { var o = { x: 1 }; } m() { o.x = 2; } }\n", (2, 46)),
+        ("val const o = { x: 1 };\nfunction w() { { function o() {} } o.x = 2; }\n", (2, 36)),
+        ("function w() { p.x = 1; { val var p = { x: 1 }; } }\n", (1, 16)),
+        ("variant V { A(n: number), B }\nval const o = { x: 1 };\nfunction w(v: V) {\n  match (v) {\n    A(n) => { const h = () => { var o = { x: n }; }; },\n    B => {},\n  }\n  o.x = 2;\n}\n", (8, 3)),
+    ] {
+        let e = err(src);
+        assert_eq!((e.line, e.col), at, "{src}");
+        assert!(e.message.contains("cannot mutate through val binding"), "{src}: {}", e.message);
+    }
+    ok("variant V { A(n: number), B }\nval const o = { x: 1 };\nfunction w(v: V) {\n  match (v) {\n    A(n) => { var o = { x: n }; },\n    B => {},\n  }\n  o.x = 2;\n}\n");
+}
+
+#[test]
 fn val_leaves_reads_and_comparisons_alone() {
     // Nothing here mutates `x`, and none of these operators may be
     // mistaken for an assignment.
     let src = "val const x = load();\nconst r = [x.a == 1, x.a === 1, x.a != 1, x.a >= 1, x.a <= 1, x.a && 1, x.a || 1, x.a ?? 1, x.a + 1, x.a > 1];\nconst y = x.a;\nconst z = { ...x };\n";
     assert_eq!(ok(src), src.replacen("val ", "", 1));
+}
+
+#[test]
+fn try_takes_a_non_ascii_identifier_operand_and_never_splits_one() {
+    let output = ok("declare function étry(): Result<number, string>;\n\
+         function r(): Result<number, string> {\n\
+         \x20 const n = try étry();\n\
+         \x20 return Ok(n);\n\
+         }\n");
+    assert!(output.contains("const $tt_t0 = étry();"), "{output}");
+    assert!(output.contains("const n = $tt_t0.value;"), "{output}");
+}
+
+#[test]
+fn a_comment_after_the_last_field_or_case_stays_a_comment() {
+    let output = ok("export variant Shape {\n  Rect(\n    w: number,\n    h: number // height\n  ),\n  Point // last\n}\n");
+    assert_eq!(
+        output.trim_end(),
+        "export type Shape =\n  | {\n      kind: \"Rect\";\n      w: number;\n      h: number; // height\n    }\n  | { kind: \"Point\" }; // last\nexport const Shape = {\n  Rect: (w: number, h: number): Shape => ({ kind: \"Rect\", w, h }),\n  Point: { kind: \"Point\" } as const,\n};"
+    );
+}
+
+#[test]
+fn comments_inside_a_field_type_stay_in_the_type() {
+    let output = ok("variant Size { Px(value: /* css */ number | /* auto */ \"auto\") }\n");
+    assert!(
+        output.contains("| { kind: \"Px\"; value: /* css */ number | /* auto */ \"auto\" };"),
+        "{output}"
+    );
+    assert!(
+        output.contains("Px: (value: /* css */ number | /* auto */ \"auto\"): Size =>"),
+        "{output}"
+    );
+}
+
+#[test]
+fn only_doc_comments_are_repeated_on_constructors() {
+    let output = ok("variant Mode {\n  // internal note\n  /** Read only. */\n  Read, /* block */\n  Write(/** Target path. */ path: string),\n}\n");
+    let constructors = &output[output.find("const Mode").unwrap()..];
+    assert!(constructors.contains("/** Read only. */\n  Read:"), "{output}");
+    assert!(constructors.contains("(\n    /** Target path. */\n    path: string,\n  ): Mode"), "{output}");
+    assert!(!constructors.contains("internal note"), "{output}");
+    assert!(!constructors.contains("/* block */"), "{output}");
+    let union = &output[..output.find("const Mode").unwrap()];
+    assert!(union.contains("  // internal note\n  /** Read only. */\n  | { kind: \"Read\" } /* block */"), "{output}");
+}
+
+#[test]
+fn variant_comments_keep_crlf_line_endings_valid() {
+    let output = ok("variant Flag {\r\n  /** On. */\r\n  On, // yes\r\n  Off,\r\n}\r\n");
+    assert!(output.contains("/** On. */\r\n  | { kind: \"On\" } // yes\r\n"), "{output:?}");
 }

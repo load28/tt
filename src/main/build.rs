@@ -36,16 +36,24 @@ pub(super) struct BuildOptions {
     pub(super) jobs: Option<usize>,
 }
 
+/// The directory that holds the generated `tt/` package: the output root
+/// when `-o` was given, otherwise the deepest directory every output of the
+/// whole build shares. It belongs to the build's full input set, so a
+/// compile of any subset of it places support modules where a build of the
+/// whole set does.
+pub(super) fn support_root(jobs: &[Job], out_dir: Option<&Path>) -> Option<PathBuf> {
+    match out_dir {
+        Some(dir) => Some(dir.to_path_buf()),
+        None => common_ancestor(jobs),
+    }
+}
+
 /// Where the generated `tt/` standard-library package goes.
-pub(super) fn std_placement(jobs: &[Job], needed: bool, out_dir: Option<&Path>) -> Option<PathBuf> {
+pub(super) fn std_placement(root: Option<&Path>, needed: bool) -> Option<PathBuf> {
     if !needed {
         return None;
     }
-    let dir = match out_dir {
-        Some(dir) => dir.to_path_buf(),
-        None => common_ancestor(jobs)?,
-    };
-    Some(dir.join("tt"))
+    Some(root?.join("tt"))
 }
 
 /// The deepest directory every output shares.
@@ -137,8 +145,7 @@ pub(super) fn build_jobs(
         }
         let is_dir = input_path.is_dir();
         let mut files = Vec::new();
-        collect_sources(input_path, include_ts, &mut files)
-            .map_err(|e| format!("ttc: {input}: {e}"))?;
+        collect_sources(input_path, include_ts, &mut files).map_err(|e| format!("ttc: {e}"))?;
         if is_dir && let Some(dir) = out_dir {
             files.retain(|file| !path_is_within(file, dir));
         }
@@ -221,11 +228,14 @@ pub(super) struct Outcome {
 
 /// Compiles every job. Returns true if any of them failed.
 ///
+/// `support_root` is the [`support_root`] of the build's full input set,
+/// which `jobs` may be only part of.
+///
 /// The run is staged so each input is touched once: read and scanned in
 /// parallel, then compiled in parallel against a shared table of imported
 /// declarations. Diagnostics are collected per job and printed in job
 /// order, so the output of a parallel run is identical to a sequential one.
-pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
+pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &BuildOptions) -> bool {
     if !opts.check && !opts.print {
         let mut claims: HashMap<&Path, &Path> = HashMap::with_capacity(jobs.len());
         let mut outputs: Vec<(&Path, &Path)> = Vec::with_capacity(jobs.len());
@@ -267,12 +277,13 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             }
         }
         for job in jobs {
-            if let Err(error) = check_output_owner(&job.out_path, &job.file) {
+            if let Err(error) = check_output_owner(&job.out_path, OutputOwner::Source(&job.file)) {
                 eprintln!("{error}");
                 conflicted = true;
             }
             if opts.source_map == SourceMapMode::File
-                && let Err(error) = check_output_owner(&map_path(&job.out_path), &job.file)
+                && let Err(error) =
+                    check_output_owner(&map_path(&job.out_path), OutputOwner::Source(&job.file))
             {
                 eprintln!("{error}");
                 conflicted = true;
@@ -304,17 +315,14 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             _ => needs_std,
         })
         .collect();
-    let std_dir = std_placement(jobs, !modules.is_empty(), opts.out_dir.as_deref());
+    let std_dir = std_placement(support_root, !modules.is_empty());
     if let Some(dir) = &std_dir
         && !opts.check
         && !opts.print
     {
         for module in &modules {
             let support = dir.join(module.file_name());
-            if let Err(error) = check_output_owner(
-                &support,
-                &PathBuf::from(format!("@tt/std/{}", module.file_name())),
-            ) {
+            if let Err(error) = check_output_owner(&support, OutputOwner::Support(*module)) {
                 eprintln!("{error}");
                 return true;
             }
@@ -346,7 +354,7 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                 }
                 write_owned_output(
                     &dir.join(module.file_name()),
-                    &PathBuf::from(format!("@tt/std/{}", module.file_name())),
+                    OutputOwner::Support(*module),
                     &code,
                 )
                 .map_err(std::io::Error::other)?;
@@ -484,11 +492,18 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                 let map = match opts.source_map {
                     SourceMapMode::Off => None,
                     _ if ttc::SourceKind::from_tt_path(&job.file).is_none() => None,
-                    mode => Some(source_map_for(job, &emit, &loaded.source, banner, mode)),
+                    mode => Some(source_map_for(
+                        job,
+                        &emit,
+                        &loaded.source,
+                        banner,
+                        mode,
+                        ttc::line_ending(&code),
+                    )),
                 };
                 if let Some(rendered) = &map {
                     if !code.ends_with('\n') {
-                        code.push('\n');
+                        code.push_str(ttc::line_ending(&code));
                     }
                     code.push_str(&rendered.comment);
                 }
@@ -497,15 +512,20 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
                     return out;
                 }
                 if !opts.check {
-                    if let Err(e) = write_owned_output(&job.out_path, &job.file, &code) {
+                    if let Err(e) =
+                        write_owned_output(&job.out_path, OutputOwner::Source(&job.file), &code)
+                    {
                         out.messages.push(e);
                         out.failed = true;
                         return out;
                     }
                     if let Some(rendered) = &map
                         && let Some(document) = &rendered.document
-                        && let Err(e) =
-                            write_owned_output(&map_path(&job.out_path), &job.file, document)
+                        && let Err(e) = write_owned_output(
+                            &map_path(&job.out_path),
+                            OutputOwner::Source(&job.file),
+                            document,
+                        )
                     {
                         out.messages.push(e);
                         out.failed = true;
@@ -534,7 +554,7 @@ pub(super) fn compile_jobs(jobs: &[Job], opts: &BuildOptions) -> bool {
             crate::out::text(&code);
             continue;
         }
-        match write_owned_output(&job.out_path, &job.file, &code) {
+        match write_owned_output(&job.out_path, OutputOwner::Source(&job.file), &code) {
             Ok(()) => eprintln!("ttc: {} → {}", job.file.display(), job.out_path.display()),
             Err(e) => {
                 eprintln!("{e}");
@@ -564,25 +584,22 @@ pub(super) struct BannerPlacement {
 /// `"use client"` — a comment may precede, because a comment is not a
 /// statement and does not end a prologue.
 pub(super) fn write_banner(code: &mut String, banner: &str) -> BannerPlacement {
-    let mut at = 0;
-    if code.starts_with('\u{feff}') {
-        at += '\u{feff}'.len_utf8();
-    }
+    let line_map = ttc::lines::LineMap::ecma(code);
+    let mut at = line_map.line_start(0).unwrap_or(0);
+    let mut at_line = 0;
     let mut lines = 1;
     let mut prefix_newline = false;
     if code[at..].starts_with("#!") {
-        match code[at..].find('\n') {
-            Some(newline) => at += newline + 1,
-            None => {
-                // A shebang that runs to the end of the file: the banner
-                // needs a line of its own to sit on.
-                at = code.len();
-                prefix_newline = true;
-                lines += 1;
-            }
+        at = line_map.line_end(0).unwrap_or(code.len());
+        if line_map.len() > 1 {
+            at_line = 1;
+        } else {
+            // A shebang that runs to the end of the file: the banner
+            // needs a line of its own to sit on.
+            prefix_newline = true;
+            lines += 1;
         }
     }
-    let at_line = code[..at].matches('\n').count();
     let mut written = String::with_capacity(code.len() + banner.len() + 1);
     written.push_str(&code[..at]);
     if prefix_newline {

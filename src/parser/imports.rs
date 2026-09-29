@@ -1,9 +1,10 @@
 //! Structural parsing of literal import/re-export module specifiers.
 //!
 //! Only module-specifier strings are lifted; surrounding syntax stays verbatim.
-//! Static declarations, dynamic imports, and import types share the same
-//! relative `.tt`/`.ttx` rewrite. Computed imports and `import.meta` remain
-//! untouched, as do TypeScript import-assignment declarations.
+//! Static declarations, dynamic imports (a string or no-substitution template
+//! argument), import types, import-equals `require` references, and module
+//! augmentation names share the same relative `.tt`/`.ttx` rewrite. Computed
+//! imports and `import.meta` remain untouched.
 //!
 //! Alongside the specifier, the clause's imported names are collected for
 //! the declaration-collection API (project-wide exhaustiveness). Name
@@ -15,11 +16,11 @@ use super::cursor::Cursor;
 use super::is_reserved;
 use crate::ast::{Span, TtImportDecl, TtImportNames, TtSpecifier};
 
-use crate::lexer::TokenKind;
+use crate::lexer::{Token, TokenKind, TplPart};
 
-/// `cur` is positioned just past an `import` or `export` keyword (`kw`).
-/// Returns the advanced cursor and the lifted import (specifier span plus
-/// imported names) when the clause identifies an import/re-export module string
+/// `cur` is positioned just past an `import`, `export`, or `module` keyword
+/// (`kw`). Returns the advanced cursor and the lifted import (specifier span
+/// plus imported names) when the syntax after it names a module by a string
 /// recognized by `tt_spec_span`.
 pub(super) fn parse_tt_import<'t>(
     mut cur: Cursor<'t>,
@@ -27,11 +28,30 @@ pub(super) fn parse_tt_import<'t>(
 ) -> Option<(Cursor<'t>, TtImportDecl)> {
     let first = cur.peek()?;
 
+    if kw == "module" {
+        if !matches!(first.kind, TokenKind::Str) || cur.line_break_before() {
+            return None;
+        }
+        let (spec, kind) = tt_spec_span(&cur, first)?;
+        cur.bump();
+        return Some((
+            cur,
+            TtImportDecl {
+                spec,
+                kind,
+                names: TtImportNames::None,
+            },
+        ));
+    }
+
     if kw == "import" {
+        if let Some(parsed) = import_equals(cur) {
+            return Some(parsed);
+        }
         match first.kind {
             // `import "spec";` — side-effect import, the specifier is right here.
             TokenKind::Str => {
-                let (spec, kind) = tt_spec_span(&cur, first.span)?;
+                let (spec, kind) = tt_spec_span(&cur, first)?;
                 cur.bump();
                 return Some((
                     cur,
@@ -48,10 +68,10 @@ pub(super) fn parse_tt_import<'t>(
             TokenKind::Punct(b'(') => {
                 cur.bump();
                 let token = cur.peek()?;
-                if !matches!(token.kind, TokenKind::Str) {
+                if !matches!(token.kind, TokenKind::Str | TokenKind::Template(_)) {
                     return None;
                 }
-                let (spec, kind) = tt_spec_span(&cur, token.span)?;
+                let (spec, kind) = tt_spec_span(&cur, token)?;
                 cur.bump();
                 if !matches!(cur.peek()?.kind, TokenKind::Punct(b')' | b',')) {
                     return None;
@@ -87,6 +107,49 @@ pub(super) fn parse_tt_import<'t>(
             _ => None,
         }
     }
+}
+
+fn import_equals(mut cur: Cursor<'_>) -> Option<(Cursor<'_>, TtImportDecl)> {
+    fn ident_at<'t>(cur: &Cursor<'t>, offset: usize) -> Option<&'t str> {
+        cur.tokens
+            .get(cur.idx + offset)
+            .filter(|t| matches!(t.kind, TokenKind::Ident))
+            .map(|t| cur.text(t))
+    }
+    if ident_at(&cur, 0) == Some("type")
+        && ident_at(&cur, 1).is_some()
+        && matches!(
+            cur.tokens.get(cur.idx + 2).map(|t| &t.kind),
+            Some(TokenKind::Punct(b'='))
+        )
+    {
+        cur.bump();
+    }
+    let name = ident_at(&cur, 0).filter(|name| !is_reserved(name))?;
+    cur.bump();
+    cur.eat_punct(b'=')?;
+    if ident_at(&cur, 0) != Some("require") {
+        return None;
+    }
+    cur.bump();
+    cur.eat_punct(b'(')?;
+    let spec_tok = cur.peek()?;
+    if !matches!(spec_tok.kind, TokenKind::Str) {
+        return None;
+    }
+    let (spec, kind) = tt_spec_span(&cur, spec_tok)?;
+    cur.bump();
+    if !cur.at_punct(b')') {
+        return None;
+    }
+    Some((
+        cur,
+        TtImportDecl {
+            spec,
+            kind,
+            names: TtImportNames::Namespace(name.to_string()),
+        },
+    ))
 }
 
 /// Consumes an import/re-export clause token by token until `from`, then
@@ -135,7 +198,7 @@ fn clause_then_spec(mut cur: Cursor<'_>, local: bool) -> Option<(Cursor<'_>, TtI
                     if !matches!(spec_tok.kind, TokenKind::Str) {
                         return None;
                     }
-                    let (spec, kind) = tt_spec_span(&cur, spec_tok.span)?;
+                    let (spec, kind) = tt_spec_span(&cur, spec_tok)?;
                     cur.bump();
                     let names = match (namespace, named) {
                         _ if !local => TtImportNames::None,
@@ -196,9 +259,16 @@ fn named_entries(cur: Cursor) -> Vec<(String, Option<String>)> {
     entries
 }
 
-/// `span` is a lexed string token; returns it back if its content is a
-/// relative path ending in `.tt`.
-fn tt_spec_span(cur: &Cursor, span: Span) -> Option<(Span, TtSpecifier)> {
+/// `token` is a lexed string literal or template literal; returns its span
+/// when it is a complete string or no-substitution template whose content is
+/// a relative `.tt`/`.ttx` path or a standard-library module.
+fn tt_spec_span(cur: &Cursor, token: &Token) -> Option<(Span, TtSpecifier)> {
+    let span = token.span;
+    if let TokenKind::Template(parts) = &token.kind
+        && !matches!(&parts[..], [TplPart::Raw(raw)] if *raw == span)
+    {
+        return None;
+    }
     let src = cur.parser.bytes;
     let quote = src[span.start];
     // The lexer tolerates unterminated strings (stopping at a newline or
@@ -218,4 +288,79 @@ fn tt_spec_span(cur: &Cursor, span: Span) -> Option<(Span, TtSpecifier)> {
     } else {
         None
     }
+}
+
+/// The module's local export specifiers, `export { a, b as c };` and
+/// `export type { a as c };`, as (local name, exported name) pairs in source
+/// order.
+///
+/// A clause followed by `from` re-exports another module and binds no local
+/// name, so it is not included; an entry other than `[type] name [as name]`
+/// is skipped. Only a module-level statement exports from the module, so the
+/// scan reads clauses at bracket depth 0 alone.
+pub(crate) fn local_export_specifiers(src: &str, tokens: &[Token]) -> Vec<(String, String)> {
+    let text = |token: &Token| &src[token.span.start..token.span.end];
+    let is_word = |idx: usize, word: &str| {
+        tokens
+            .get(idx)
+            .is_some_and(|token| matches!(token.kind, TokenKind::Ident) && text(token) == word)
+    };
+    let mut specifiers = Vec::new();
+    let mut depth = 0usize;
+    let mut idx = 0usize;
+    while let Some(token) = tokens.get(idx) {
+        match token.kind {
+            _ if token.opens_bracket() => depth += 1,
+            _ if token.closes_bracket() => depth = depth.saturating_sub(1),
+            TokenKind::Ident
+                if depth == 0
+                    && text(token) == "export"
+                    && !super::cursor::dotted_at(tokens, 0, idx) =>
+            {
+                let open = if is_word(idx + 1, "type") {
+                    idx + 2
+                } else {
+                    idx + 1
+                };
+                if matches!(
+                    tokens.get(open).map(|token| &token.kind),
+                    Some(TokenKind::Punct(b'{'))
+                ) && let Some(close) = super::cursor::find_close_at(tokens, open)
+                {
+                    if !is_word(close + 1, "from") {
+                        specifiers.extend(export_entries(src, &tokens[open + 1..close]));
+                    }
+                    idx = close + 1;
+                    continue;
+                }
+            }
+            _ => {}
+        }
+        idx += 1;
+    }
+    specifiers
+}
+
+fn export_entries(src: &str, tokens: &[Token]) -> Vec<(String, String)> {
+    tokens
+        .split(|token| matches!(token.kind, TokenKind::Punct(b',')))
+        .filter_map(|entry| {
+            let words = entry
+                .iter()
+                .map(|token| {
+                    matches!(token.kind, TokenKind::Ident)
+                        .then(|| &src[token.span.start..token.span.end])
+                })
+                .collect::<Option<Vec<&str>>>()?;
+            let words = match words.as_slice() {
+                ["type", rest @ ..] if !rest.is_empty() => rest,
+                all => all,
+            };
+            match words {
+                [name] => Some((name.to_string(), name.to_string())),
+                [local, "as", exported] => Some((local.to_string(), exported.to_string())),
+                _ => None,
+            }
+        })
+        .collect()
 }

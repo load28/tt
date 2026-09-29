@@ -39,6 +39,7 @@ import {
   CodeActionKind,
   CompletionItem,
   CompletionItemKind,
+  CompletionTriggerKind,
   createConnection,
   Diagnostic,
   DiagnosticSeverity,
@@ -56,6 +57,7 @@ import {
   SignatureHelp,
   SignatureInformation,
   SymbolKind,
+  TextDocumentEdit,
   TextDocuments,
   TextDocumentSyncKind,
   TextEdit,
@@ -73,11 +75,15 @@ import * as path from "node:path";
 
 import * as sidecar from "./sidecar";
 
+const MEMBER_TRIGGER_CHARACTERS = ["."];
+const PATTERN_TRIGGER_CHARACTERS = ["(", "|", "{", ","];
+
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
 
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
+let hasVersionedWorkspaceEditCapability = false;
 let workspaceRoots: string[] = [];
 /** What the server has already told the user it cannot do (notices.ts). */
 const notices = new NoticeLedger();
@@ -88,6 +94,9 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   );
   hasWorkspaceFolderCapability = Boolean(
     params.capabilities.workspace?.workspaceFolders,
+  );
+  hasVersionedWorkspaceEditCapability = Boolean(
+    params.capabilities.workspace?.workspaceEdit?.documentChanges,
   );
   workspaceRoots = folderRoots(params.workspaceFolders);
 
@@ -110,7 +119,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
         save: { includeText: false },
       },
       completionProvider: {
-        triggerCharacters: [".", "(", "|", "{", ","],
+        triggerCharacters: [...MEMBER_TRIGGER_CHARACTERS, ...PATTERN_TRIGGER_CHARACTERS],
         // Signatures and documentation are fetched per entry, when the
         // editor asks for the one the user highlighted (onCompletionResolve).
         resolveProvider: true,
@@ -149,7 +158,7 @@ connection.onInitialized(() => {
   // The engine session is keyed by the compiler path, and the document
   // sync that starts it cannot await settings — so `tt.compilerPath` is
   // resolved once here, before the first buffer arrives.
-  void refreshCompiler();
+  void armCompilers();
 });
 
 // ---------------------------------------------------------------- settings
@@ -194,13 +203,11 @@ function rearmProject(): void {
   // Every standing notice describes something one of these could have
   // fixed, so all of them are worth saying again if they are still true.
   notices.reset();
-  // A folder may have gained, lost or changed its `tt.compilerPath`.
-  compilerByRoot.clear();
   // `tt.compilerPath` may be what changed, and a compiler that struck out
   // has earned another try either way.
   engine.retryEngineServer();
   invalidateProjectValidation();
-  void refreshCompiler().then(reloadProjectState);
+  void armCompilers();
 }
 
 connection.onDidChangeConfiguration(() => {
@@ -236,16 +243,28 @@ function invalidateProjectValidation(): void {
   }
 }
 
-function reloadProjectState(): void {
+function reloadProjectState(previous: ReadonlyMap<string, string>): void {
   invalidateDeclarations();
+  const served = new Map<TextDocument, string>();
+  for (const doc of documents.all()) {
+    const compiler = compilerFor(doc);
+    if (compiler !== undefined) served.set(doc, compiler);
+  }
+  for (const [doc, compiler] of served) {
+    const file = enginePath(doc);
+    const before = previous.get(ownerOf(doc));
+    if (file !== null && before !== undefined && before !== compiler) {
+      engine.closeDocument(before, file);
+    }
+  }
   // Every session the window is using, not just one: two folders may be
   // served by different compilers.
-  for (const compiler of new Set([...compilerByRoot.values(), compilerFor(undefined)])) {
+  for (const compiler of new Set(served.values())) {
     engine.reloadProjects(compiler);
   }
-  for (const doc of documents.all()) {
+  for (const [doc, compiler] of served) {
     const file = enginePath(doc);
-    if (file !== null) engine.openDocument(compilerFor(doc), file, doc.getText());
+    if (file !== null) engine.openDocument(compiler, file, doc.getText());
   }
   for (const doc of documents.all()) scheduleValidation(doc);
 }
@@ -302,7 +321,7 @@ async function declarationsOf(
   const generation = declGeneration;
   const text = doc.getText();
   const decls = await engine.declarations(
-    compilerFor(doc),
+    await compilerOf(doc),
     bufferPath(doc),
     text,
     logEngine,
@@ -330,11 +349,7 @@ function caseSignature(
 
 // ------------------------------------------------------------- the engine
 
-/** The compiler path last resolved from settings — the engine session is
- * keyed by it, and the synchronous paths (document sync) cannot await
- * settings. */
-let servedCompiler: string | null = null;
-
+const NO_FOLDER = "";
 /** The compiler each workspace folder resolved to, by folder path.
  *
  * `tt.compilerPath` is a resource-scoped setting, so two folders in one
@@ -342,38 +357,58 @@ let servedCompiler: string | null = null;
  * compiler path — it can serve both. What could not was this server, which
  * kept a single answer: validating a file in one folder repointed every
  * later request, for every folder, at that folder's compiler. */
-const compilerByRoot = new Map<string, string>();
+let compilerByOwner = new Map<string, string>();
+let compilerResolution: Promise<void> = new Promise(() => {});
+let compilerGeneration = 0;
 
-/** The compiler serving `doc`, or the window's last answer for a document
- * outside every folder. The synchronous paths cannot await settings, so
- * this reads what the last validation of that folder resolved. */
-function compilerFor(doc: TextDocument | undefined): string {
-  const uri = doc && URI.parse(doc.uri);
-  const root =
-    uri && uri.scheme === "file"
-      ? containingRoot(workspaceRoots, uri.fsPath)
-      : undefined;
-  const served = (root && compilerByRoot.get(root)) ?? servedCompiler;
-  return served ?? ttc.findCompiler("", workspaceRoots);
+function ownerOf(doc: TextDocument): string {
+  const uri = URI.parse(doc.uri);
+  return uri.scheme === "file"
+    ? (containingRoot(workspaceRoots, uri.fsPath) ?? NO_FOLDER)
+    : NO_FOLDER;
+}
+
+function compilerFor(doc: TextDocument): string | undefined {
+  return compilerByOwner.get(ownerOf(doc));
+}
+
+async function compilerOf(doc: TextDocument): Promise<string> {
+  for (;;) {
+    const compiler = compilerFor(doc);
+    if (compiler !== undefined) return compiler;
+    await compilerResolution;
+  }
+}
+
+async function ownerCompiler(owner: string): Promise<string> {
+  const settings = await getSettings(
+    owner === NO_FOLDER ? undefined : URI.file(owner).toString(),
+  ).catch(() => DEFAULT_SETTINGS);
+  return owner === NO_FOLDER
+    ? ttc.findCompiler(settings.compilerPath, workspaceRoots)
+    : ttc.folderCompiler(settings.compilerPath, owner);
 }
 
 /**
- * Resolves the window's default compiler from configuration and remembers
- * it — the answer for a document that is in no workspace folder. A folder
- * that configures its own `tt.compilerPath` is recorded separately, the
- * moment one of its files is validated ([validate]), and served from there
- * ([compilerFor]).
+ * Resolves the compiler of every workspace folder, and of documents outside
+ * all of them, from configuration, then hands every open buffer to the
+ * session of the compiler that owns it.
  *
  * The engine session is keyed by the compiler, so a change of path starts a
  * new session by itself; the buffers that session serves are re-sent to it
  * (`setOnSessionStart`).
  */
-async function refreshCompiler(): Promise<void> {
-  const scope = workspaceRoots[0]
-    ? URI.file(workspaceRoots[0]).toString()
-    : undefined;
-  const settings = await getSettings(scope);
-  servedCompiler = ttc.findCompiler(settings.compilerPath, workspaceRoots);
+function armCompilers(): Promise<void> {
+  const generation = ++compilerGeneration;
+  const owners = [NO_FOLDER, ...workspaceRoots];
+  const resolution = Promise.all(owners.map(ownerCompiler)).then((compilers) => {
+    if (generation !== compilerGeneration) return;
+    const previous = compilerByOwner;
+    compilerByOwner = new Map(owners.map((owner, index) => [owner, compilers[index]]));
+    reloadProjectState(previous);
+  });
+  compilerResolution = resolution;
+  return resolution;
 }
 
 const logEngine = (message: string) => connection.console.warn(message);
@@ -570,12 +605,8 @@ async function validate(
   attempt = 0,
 ): Promise<void> {
   const settings = await getSettings(doc.uri);
-  const compiler = ttc.findCompiler(settings.compilerPath, workspaceRoots);
-  const uri = URI.parse(doc.uri);
+  const compiler = await compilerOf(doc);
   const docName = bufferPath(doc);
-  servedCompiler = compiler;
-  const root = uri.scheme === "file" ? containingRoot(workspaceRoots, uri.fsPath) : undefined;
-  if (root) compilerByRoot.set(root, compiler);
 
   const result = await ttc.runCheck(
     compiler,
@@ -833,14 +864,17 @@ function toDiagnostic(doc: TextDocument, d: ttc.TtcDiagnostic): Diagnostic {
     // The compiler's own fixes, carried through to `onCodeAction`. LSP
     // round-trips `data` untouched, so the quick fix is the compiler's
     // answer rather than this server's reading of the message.
-    data: d.suggestions?.length ? { suggestions: d.suggestions } : undefined,
+    data: d.suggestions?.length
+      ? { suggestions: d.suggestions, version: doc.version }
+      : undefined,
   };
 }
 
 documents.onDidOpen((e) => {
   const fsPath = enginePath(e.document);
-  if (fsPath !== null) {
-    engine.openDocument(compilerFor(e.document), fsPath, e.document.getText());
+  const compiler = compilerFor(e.document);
+  if (fsPath !== null && compiler !== undefined) {
+    engine.openDocument(compiler, fsPath, e.document.getText());
   }
   scheduleValidation(e.document);
 });
@@ -882,12 +916,13 @@ async function rebuildSidecar(doc: TextDocument): Promise<void> {
     return;
   }
 
-  const compiler = ttc.findCompiler(settings.compilerPath, workspaceRoots);
+  const compiler = await compilerOf(doc);
   const result = await sidecar.refreshSidecar(
     compiler,
     uri.fsPath,
     settings.sidecar,
     location.kind === "directory" ? location.path : undefined,
+    containingRoot(workspaceRoots, uri.fsPath),
   );
   if (result.kind === "failed") {
     connection.console.warn(`tt: sidecar refresh failed — ${result.detail}`);
@@ -895,8 +930,9 @@ async function rebuildSidecar(doc: TextDocument): Promise<void> {
 }
 documents.onDidChangeContent((e) => {
   const fsPath = enginePath(e.document);
-  if (fsPath !== null) {
-    engine.updateDocument(compilerFor(e.document), fsPath, e.document.getText());
+  const compiler = compilerFor(e.document);
+  if (fsPath !== null && compiler !== undefined) {
+    engine.updateDocument(compiler, fsPath, e.document.getText());
   }
   // Editing one file can change what its siblings import — drop their
   // cached declaration surfaces (the edited doc's own entry refreshes by
@@ -909,8 +945,9 @@ documents.onDidChangeContent((e) => {
 });
 documents.onDidClose((e) => {
   const fsPath = enginePath(e.document);
-  if (fsPath !== null) {
-    engine.closeDocument(compilerFor(e.document), fsPath);
+  const compiler = compilerFor(e.document);
+  if (fsPath !== null && compiler !== undefined) {
+    engine.closeDocument(compiler, fsPath);
   }
   analysisCache.delete(e.document.uri);
   declCache.delete(e.document.uri);
@@ -1077,7 +1114,7 @@ async function tsCompletions(
   const fsPath = enginePath(doc);
   if (fsPath === null) return [];
   const list = await engine.completion(
-    compilerFor(doc),
+    await compilerOf(doc),
     fsPath,
     doc.positionAt(offset),
     atMember,
@@ -1106,6 +1143,10 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   const { masked } = analyze(doc);
   const offset = doc.offsetAt(params.position);
   const visible = (await declarationsOf(doc)).variants;
+  const trigger =
+    params.context?.triggerKind === CompletionTriggerKind.TriggerCharacter
+      ? params.context.triggerCharacter
+      : undefined;
 
   // `Variant.` member access → the variant's case constructors, then everything
   // else TypeScript offers on that same object. Both halves are needed:
@@ -1131,6 +1172,9 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   if (atMemberAccess(masked, offset)) {
     return tsCompletions(doc, offset, true);
   }
+  if (trigger !== undefined && !PATTERN_TRIGGER_CHARACTERS.includes(trigger)) {
+    return [];
+  }
 
   // A pattern position — an arm, an `if let`, a payload field list, a
   // nested pattern — is tt's alone: case tags and field names exist
@@ -1140,7 +1184,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   // with, and knows the positions this server never did (`if let`,
   // let-else payloads, nested patterns).
   const ttItemsHere = await engine.ttCompletions(
-    compilerFor(doc),
+    await compilerOf(doc),
     bufferPath(doc),
     doc.getText(),
     params.position,
@@ -1164,8 +1208,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
 
   // Delimiters invoke pattern completion without a word prefix. Outside a
   // pattern they must not open the general keyword/global suggestion list.
-  if (params.context?.triggerKind === 2 &&
-      (params.context.triggerCharacter === "{" || params.context.triggerCharacter === ",")) {
+  if (trigger !== undefined) {
     return [];
   }
 
@@ -1205,7 +1248,7 @@ connection.onCompletionResolve(
     const fsPath = enginePath(doc);
     if (fsPath === null) return item;
     const detail = await engine.completionResolve(
-      compilerFor(doc),
+      await compilerOf(doc),
       fsPath,
       doc.positionAt(data.offset),
       data.name,
@@ -1239,7 +1282,7 @@ connection.onSignatureHelp(async (params): Promise<SignatureHelp | null> => {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
   const help = await engine.signatureHelp(
-    compilerFor(doc),
+    await compilerOf(doc),
     fsPath,
     params.position,
     logEngine,
@@ -1323,7 +1366,7 @@ connection.onHover(async (params) => {
   // answers only where the service cannot be asked; everywhere else
   // (`Shape.Circle(1)`, `const s: Shape`) the service knows more.
   const sym = await engine.ttSymbol(
-    compilerFor(doc),
+    await compilerOf(doc),
     bufferPath(doc),
     doc.getText(),
     params.position,
@@ -1346,7 +1389,7 @@ async function tsHover(
 ) {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
-  const info = await engine.hover(compilerFor(doc), fsPath, position, logEngine);
+  const info = await engine.hover(await compilerOf(doc), fsPath, position, logEngine);
   if (!info || info.signature === "") return null;
   const value =
     "```ts\n" +
@@ -1370,7 +1413,7 @@ connection.onDefinition(async (params) => {
   // names — because the emitted TypeScript carries none of them.
   {
     const sym = await engine.ttSymbol(
-      compilerFor(doc),
+      await compilerOf(doc),
       bufferPath(doc),
       doc.getText(),
       params.position,
@@ -1397,7 +1440,7 @@ connection.onDefinition(async (params) => {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
   const locations = await engine.definition(
-    compilerFor(doc),
+    await compilerOf(doc),
     fsPath,
     params.position,
     logEngine,
@@ -1418,7 +1461,7 @@ connection.onReferences(async (params): Promise<Location[] | null> => {
   // Delegated wholesale to the engine: TypeScript resolves the passthrough
   // region exactly, and tt-specific spans degrade to an empty result.
   const references = (
-    await engine.references(compilerFor(doc), fsPath, params.position, logEngine)
+    await engine.references(await compilerOf(doc), fsPath, params.position, logEngine)
   ).filter((r) => params.context.includeDeclaration || !r.isDefinition);
   if (references.length === 0) return null;
   return references.map((r) =>
@@ -1435,22 +1478,23 @@ connection.onRenameRequest(async (params) => {
   // tt names (variants, case tags, payload fields) are compiled into emitted
   // `kind` strings and destructuring keys — renaming one needs tt-aware
   // rewriting across both worlds, so refuse rather than let TypeScript do
-  // half the job. The engine decides what is a tt name; this server does
-  // not keep a second opinion.
+  // half the job — unless the name also declares a binding (`binds`), which
+  // renames like any use of it. The engine decides what is a tt name; this
+  // server does not keep a second opinion.
   const sym = await engine.ttSymbol(
-    compilerFor(doc),
+    await compilerOf(doc),
     fsPath,
     doc.getText(),
     params.position,
     logEngine,
   );
-  if (sym) return null;
+  if (sym && !sym.binds) return null;
 
   // The engine owns the safety rule: an edit that cannot be mapped back to
   // source would corrupt the rename, so such a rename comes back null —
   // whole or not at all.
   const edits = await engine.rename(
-    compilerFor(doc),
+    await compilerOf(doc),
     fsPath,
     params.position,
     logEngine,
@@ -1495,11 +1539,7 @@ connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
         end: doc.positionAt(e.nameSpan.end),
       },
       children: e.cases.flatMap((c) => {
-        if (!c.span) return [];
-        const tagRange = {
-          start: doc.positionAt(c.span.start),
-          end: doc.positionAt(c.span.end),
-        };
+        if (!c.span || !c.nameSpan) return [];
         return [
           {
             name: c.tag,
@@ -1508,8 +1548,14 @@ connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
                 ? `(${c.fields.map((f) => f.name).join(", ")})`
                 : undefined,
             kind: SymbolKind.EnumMember,
-            range: tagRange,
-            selectionRange: tagRange,
+            range: {
+              start: doc.positionAt(c.span.start),
+              end: doc.positionAt(c.span.end),
+            },
+            selectionRange: {
+              start: doc.positionAt(c.nameSpan.start),
+              end: doc.positionAt(c.nameSpan.end),
+            },
           },
         ];
       }),
@@ -1528,8 +1574,11 @@ connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
  * recognise a message by its shape.
  */
 function suggestedFixes(doc: TextDocument, diag: Diagnostic): CodeAction[] {
-  const data = diag.data as { suggestions?: ttc.TtcSuggestion[] } | undefined;
+  const data = diag.data as
+    | { suggestions?: ttc.TtcSuggestion[]; version?: number }
+    | undefined;
   const actions: CodeAction[] = [];
+  if (data?.version !== doc.version) return actions;
   for (const suggestion of data?.suggestions ?? []) {
     const edit = suggestion.edit;
     if (!edit) continue;
@@ -1548,11 +1597,19 @@ function suggestedFixes(doc: TextDocument, diag: Diagnostic): CodeAction[] {
       kind: CodeActionKind.QuickFix,
       diagnostics: [diag],
       isPreferred: actions.length === 0,
-      edit: {
-        changes: {
-          [doc.uri]: [{ range, newText: edit.replacement }],
-        },
-      },
+      edit: hasVersionedWorkspaceEditCapability
+        ? {
+            documentChanges: [
+              TextDocumentEdit.create({ uri: doc.uri, version: data.version }, [
+                TextEdit.replace(range, edit.replacement),
+              ]),
+            ],
+          }
+        : {
+            changes: {
+              [doc.uri]: [TextEdit.replace(range, edit.replacement)],
+            },
+          },
     });
   }
   return actions;
@@ -1590,7 +1647,7 @@ connection.languages.semanticTokens.on(async (params) => {
   // Text-based and parse-only on the engine side: it answers for unsaved
   // and untitled buffers alike, with or without a TypeScript toolchain.
   const tokens = await engine.semanticTokens(
-    compilerFor(doc),
+    await compilerOf(doc),
     doc.getText(),
     bufferPath(doc),
     logEngine,

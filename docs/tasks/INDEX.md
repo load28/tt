@@ -266,7 +266,6 @@
 | TASK-256 | TypeScript는 프로젝트가 설치한 npm 패키지 하나로 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-256](./TASK-256-typescript-from-npm-only.md) |
 | TASK-257 | TypeScript content mapper 통합 — 사이드카 없는 `.tt` import | 완료 | 2026-08-27 | 2026-08-27 | [TASK-257](./TASK-257-typescript-content-mapper.md) |
 | TASK-258 | TypeScript 프리뷰 확장 VSIX를 릴리스에 동봉 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-258](./TASK-258-ts-preview-vsix.md) |
-
 | TASK-259 | 프리뷰 확장을 업스트림 ID로 배포 | 완료 | 2026-08-27 | 2026-08-27 | [TASK-259](./TASK-259-upstream-extension-id.md) |
 | TASK-260 | 설치 가이드를 나이틀리(next) 기준으로 | 완료 | 2026-08-28 | 2026-08-28 | [TASK-260](./TASK-260-nightly-install-docs.md) |
 | TASK-261 | 온보딩 문서에서 내부 변경 이력 제거 | 완료 | 2026-08-28 | 2026-08-28 | [TASK-261](./TASK-261-focus-onboarding-docs.md) |
@@ -355,23 +354,17 @@
 | TASK-344 | A sidecar directory that cannot be resolved is reported, not ignored | Complete | 2026-09-05 | 2026-09-05 | [TASK-344](./TASK-344-sidecar-directory-resolution.md) |
 | TASK-345 | An engine that cannot answer is not an engine that answered "none" | Complete | 2026-09-05 | 2026-09-05 | [TASK-345](./TASK-345-unreachable-type-layer.md) |
 | TASK-346 | Hold the task index and the task records to the same state | Complete | 2026-09-05 | 2026-09-05 | [TASK-346](./TASK-346-task-state-agreement.md) |
-
 | TASK-347 | Rebase product audit onto updated main | Complete | 2026-09-09 | 2026-09-09 | [TASK-347](./TASK-347-rebase-product-audit.md) |
-
 | TASK-348 | Audit product and mixed-source composition failures | Complete | 2026-09-06 | 2026-09-06 | [TASK-348](./TASK-348-product-composition-audit.md) |
 | TASK-349 | Preserve contextual types across scoped values | Complete | 2026-09-06 | 2026-09-06 | [TASK-349](./TASK-349-contextual-type-materialization.md) |
-
 | TASK-350 | Manually promote a published Nightly to latest | Complete | 2026-09-09 | 2026-09-09 | [TASK-350](./TASK-350-manual-nightly-latest.md) |
-
 | TASK-351 | Tolerate registry propagation during latest verification | Complete | 2026-09-09 | 2026-09-09 | [TASK-351](./TASK-351-nightly-tag-verification.md) |
 | TASK-352 | Repair the developer-facing surfaces of tt | Complete | 2026-09-09 | 2026-09-09 | [TASK-352](./TASK-352-developer-surface-structural-fixes.md) |
 | TASK-353 | Correct PR 115 at the owning compiler and tooling layers | Complete | 2026-09-10 | 2026-09-10 | [TASK-353](./TASK-353-pr115-structural-corrections.md) |
 | TASK-354 | A missing toolchain removes the refinement, not the compilation | Complete | 2026-09-10 | 2026-09-10 | [TASK-354](./TASK-354-contextual-refinement-degrades.md) |
 | TASK-355 | Say which artifact an emit fixture pins | Complete | 2026-09-10 | 2026-09-10 | [TASK-355](./TASK-355-emit-fixture-toolchain-contract.md) |
 | TASK-356 | Separate a missing toolchain from a project the pass cannot read | Complete | 2026-09-10 | 2026-09-10 | [TASK-356](./TASK-356-contextual-inputs-and-std-support.md) |
-
 | TASK-357 | Preserve contextual project inputs and package resolution | Complete | 2026-09-10 | 2026-09-10 | [TASK-357](./TASK-357-contextual-project-boundaries.md) |
-
 | TASK-358 | Audit developer workflows across every product surface | Complete | 2026-09-10 | 2026-09-10 | [TASK-358](./TASK-358-developer-workflow-audit.md) |
 | TASK-359 | Preserve type-service failures across compiler and editor boundaries | Complete | 2026-09-10 | 2026-09-10 | [TASK-359](./TASK-359-type-service-failures.md) |
 | TASK-360 | Give unsaved files full project type services | Complete | 2026-09-10 | 2026-09-10 | [TASK-360](./TASK-360-unsaved-file-type-services.md) |
@@ -384,38 +377,151 @@
 | TASK-367 | Type-check mixed imports from TSX consumers | Complete | 2026-09-12 | 2026-09-12 | [TASK-367](./TASK-367-tsx-consumer-mixed-imports.md) |
 | TASK-368 | Normalize diagnostic byte offsets at UTF-8 boundaries | Complete | 2026-09-12 | 2026-09-12 | [TASK-368](./TASK-368-normalize-diagnostic-byte-offsets.md) |
 | TASK-369 | Remove the duplicated JSX preflight heuristic | Complete | 2026-09-12 | 2026-09-12 | [TASK-369](./TASK-369-remove-jsx-preflight-heuristic.md) |
-
 | TASK-370 | Preserve unrecognized JSX numeric references | Complete | 2026-09-12 | 2026-09-12 | [TASK-370](./TASK-370-jsx-entity-parser-errors.md) |
-
 | TASK-371 | Audit and repair editor type services | Complete | 2026-09-12 | 2026-09-12 | [TASK-371](./TASK-371-editor-type-services.md) |
-
 | TASK-372 | Audit live typing and editor feedback latency | Complete | 2026-09-12 | 2026-09-12 | [TASK-372](./TASK-372-live-typing-feedback.md) |
-
 | TASK-373 | Resolve editor audit review regressions | Complete | 2026-09-12 | 2026-09-12 | [TASK-373](./TASK-373-editor-review-regressions.md) |
-
 | TASK-374 | Refresh native diagnostics across focus transitions | Complete | 2026-09-12 | 2026-09-12 | [TASK-374](./TASK-374-editor-discard-synchronization.md) |
-
 | TASK-375 | Preserve completion candidates while typing patterns | Complete | 2026-09-12 | 2026-09-12 | [TASK-375](./TASK-375-match-pattern-completions.md) |
-
 | TASK-376 | Isolate externally terminated mapper profiles | Complete | 2026-09-12 | 2026-09-12 | [TASK-376](./TASK-376-mapper-coverage-lifecycle.md) |
 | TASK-377 | Repair compiler boundary and lowering defects | Complete | 2026-09-14 | 2026-09-14 | [TASK-377](./TASK-377-compiler-boundary-defects.md) |
 | TASK-378 | Repair editor session and document ownership defects | Complete | 2026-09-14 | 2026-09-14 | [TASK-378](./TASK-378-editor-session-defects.md) |
 | TASK-379 | Complete structurally owned lowering and the remaining audit defects | Complete | 2026-09-15 | 2026-09-16 | [TASK-379](./TASK-379-complete-lowering-ownership.md) |
 | TASK-380 | Color match by the construct shape in the TextMate grammar | Complete | 2026-09-15 | 2026-09-16 | [TASK-380](./TASK-380-grammar-construct-shape.md) |
-
 | TASK-381 | Resolve PR 125 structural review findings | Complete | 2026-09-18 | 2026-09-18 | [TASK-381](./TASK-381-structural-review.md) |
-
 | TASK-382 | Review and rebase native diagnostic focus scheduling | Complete | 2026-09-18 | 2026-09-18 | [TASK-382](./TASK-382-native-diagnostic-review.md) |
-
 | TASK-383 | Audit tt and ttx developer workflows | Complete | 2026-09-18 | 2026-09-18 | [TASK-383](./TASK-383-developer-workflow-audit.md) |
-
 | TASK-384 | Repair developer workflow contracts | Complete | 2026-09-18 | 2026-09-18 | [TASK-384](./TASK-384-developer-workflow-repairs.md) |
-
 | TASK-385 | Reuse projection imports during graph discovery | Complete | 2026-09-18 | 2026-09-18 | [TASK-385](./TASK-385-projection-import-discovery.md) |
-
 | TASK-386 | Track canonical directory identity during source discovery | Complete | 2026-09-23 | 2026-09-23 | [TASK-386](./TASK-386-source-directory-identity.md) |
 | TASK-387 | Classify excluded source entries before reading metadata | Complete | 2026-09-23 | 2026-09-23 | [TASK-387](./TASK-387-source-entry-admission.md) |
+| TASK-388 | Report project, configuration, and syntax diagnostics from the typed check | Complete | 2026-09-27 | 2026-09-27 | [TASK-388](./TASK-388-typed-check-diagnostic-classes.md) |
+| TASK-389 | Run the CLI typed-check suite against the repository TypeScript | Complete | 2026-09-27 | 2026-09-27 | [TASK-389](./TASK-389-cli-typed-suite-toolchain.md) |
+| TASK-390 | Keep block returns of a value region that `try` propagates | Complete | 2026-09-27 | 2026-09-27 | [TASK-390](./TASK-390-propagated-value-region-exits.md) |
+| TASK-391 | Honour automatic semicolon insertion around pipelines and statement constructs | Complete | 2026-09-27 | 2026-09-27 | [TASK-391](./TASK-391-automatic-semicolon-boundaries.md) |
+| TASK-392 | Call member pipeline steps on their receiver | Complete | 2026-09-27 | 2026-09-27 | [TASK-392](./TASK-392-member-pipeline-steps.md) |
+| TASK-393 | Make output owner identity cwd-independent and symlink-canonical | Complete | 2026-09-27 | 2026-09-27 | [TASK-393](./TASK-393-output-owner-identity.md) |
+| TASK-394 | Check unsaved overlays and rebuild importers of deleted files in watch | Complete | 2026-09-27 | 2026-09-27 | [TASK-394](./TASK-394-unsaved-overlay-and-watch-deletions.md) |
+| TASK-395 | Encode source map URLs and end the map comment with the output's line ending | Complete | 2026-09-27 | 2026-09-27 | [TASK-395](./TASK-395-source-map-urls-and-line-endings.md) |
+| TASK-396 | Read sidecar declarations from tsc's layout and name rejected tt-only inputs accurately | Complete | 2026-09-27 | 2026-09-27 | [TASK-396](./TASK-396-sidecar-layout-and-tt-input-errors.md) |
+| TASK-397 | Mirror the source tree in save-time sidecar refresh | Complete | 2026-09-27 | 2026-09-27 | [TASK-397](./TASK-397-sidecar-tree-layout.md) |
+| TASK-398 | Own the compiler per workspace folder end to end | Complete | 2026-09-27 | 2026-09-27 | [TASK-398](./TASK-398-folder-compiler-ownership.md) |
+| TASK-399 | Limit trigger-character completions to their registered contexts | Complete | 2026-09-27 | 2026-09-27 | [TASK-399](./TASK-399-completion-trigger-contexts.md) |
+| TASK-400 | Version quick-fix edits and convert fallback diagnostic columns | Complete | 2026-09-27 | 2026-09-27 | [TASK-400](./TASK-400-versioned-fixes-and-columns.md) |
+| TASK-401 | Judge only val-rooted paths and resolve hoisted declarations | Complete | 2026-09-27 | 2026-09-27 | [TASK-401](./TASK-401-val-path-roots-and-hoisting.md) |
+| TASK-402 | Emit optional variant fields as absent properties and reject required-after-optional | Complete | 2026-09-27 | 2026-09-27 | [TASK-402](./TASK-402-optional-variant-fields.md) |
+| TASK-403 | Claim let-else whose initializer contains an object literal | Complete | 2026-09-27 | 2026-09-27 | [TASK-403](./TASK-403-let-else-object-literal-initializer.md) |
+| TASK-404 | Allocate every generated binding name around the file's identifiers | Complete | 2026-09-27 | 2026-09-27 | [TASK-404](./TASK-404-generated-name-hygiene.md) |
+| TASK-405 | Write the runtime import before generated text at the top of the file | Complete | 2026-09-27 | 2026-09-27 | [TASK-405](./TASK-405-runtime-import-at-top.md) |
+| TASK-406 | Encode sidecar map URLs and verify output before the contextual pass | Complete | 2026-09-27 | 2026-09-27 | [TASK-406](./TASK-406-sidecar-urls-and-contextual-diagnostics.md) |
+| TASK-407 | Describe value-region placement without the retired IIFE lowering | Complete | 2026-09-27 | 2026-09-27 | [TASK-407](./TASK-407-value-region-placement-wording.md) |
+| TASK-408 | Own the calls around a value in either branch of a conditional expression | Complete | 2026-09-27 | 2026-09-27 | [TASK-408](./TASK-408-ternary-active-branches.md) |
+| TASK-409 | Emit a C-style loop test prefix once | Complete | 2026-09-27 | 2026-09-27 | [TASK-409](./TASK-409-loop-test-prefix-once.md) |
+| TASK-410 | Serve tt modules without the project's tt content mapper in the typed check | Complete | 2026-09-27 | 2026-09-27 | [TASK-410](./TASK-410-typed-check-content-mappers.md) |
+| TASK-411 | Detach CRLF-terminated inline maps in the bundler plugin | Complete | 2026-09-27 | 2026-09-27 | [TASK-411](./TASK-411-unplugin-crlf-maps.md) |
+| TASK-412 | Resolve entry and root-relative tt specifiers in the bundler plugin | Complete | 2026-09-27 | 2026-09-27 | [TASK-412](./TASK-412-unplugin-entry-resolution.md) |
+| TASK-413 | Report a malformed variant behind declaration modifiers once | Complete | 2026-09-27 | 2026-09-27 | [TASK-413](./TASK-413-malformed-variant-once.md) |
+| TASK-414 | Own an exported `try` declaration as one statement | Complete | 2026-09-27 | 2026-09-27 | [TASK-414](./TASK-414-exported-try-declaration.md) |
+| TASK-415 | Give numeric literal patterns their ECMAScript values | Complete | 2026-09-27 | 2026-09-27 | [TASK-415](./TASK-415-numeric-literal-values.md) |
+| TASK-416 | Emit values the lowering plan cannot own as recovery placeholders | Complete | 2026-09-27 | 2026-09-27 | [TASK-416](./TASK-416-unowned-value-recovery-emission.md) |
+| TASK-417 | Keep generated bindings out of completion, hover, and references | Complete | 2026-09-27 | 2026-09-27 | [TASK-417](./TASK-417-generated-bindings-out-of-service-answers.md) |
+| TASK-418 | Compute dead arms in matches that have a `_` arm | Complete | 2026-09-27 | 2026-09-27 | [TASK-418](./TASK-418-dead-arms-beside-wildcards.md) |
+| TASK-419 | Stop marking a case covered in completion when only a guarded arm handles it | Complete | 2026-09-27 | 2026-09-27 | [TASK-419](./TASK-419-guarded-arms-never-cover-in-completion.md) |
+| TASK-420 | Clamp a position past the end of its line to the line's length | Complete | 2026-09-27 | 2026-09-27 | [TASK-420](./TASK-420-clamp-positions-to-the-line.md) |
+| TASK-421 | Treat JSX text as opaque when classifying semantic tokens | Complete | 2026-09-27 | 2026-09-27 | [TASK-421](./TASK-421-jsx-text-semantic-tokens.md) |
+| TASK-422 | Navigate from variant use sites to the variant declaration | Complete | 2026-09-27 | 2026-09-27 | [TASK-422](./TASK-422-variant-navigation.md) |
+| TASK-423 | Find an imported variant's declaration the way the analysis resolved it | Complete | 2026-09-27 | 2026-09-27 | [TASK-423](./TASK-423-imported-tt-symbol-definition.md) |
+| TASK-424 | Measure every reported position in the decoded text of a file with a byte order mark | Complete | 2026-09-27 | 2026-09-27 | [TASK-424](./TASK-424-byte-order-mark-positions.md) |
+| TASK-425 | Check a requested file outside the configuration in its inferred project | Complete | 2026-09-27 | 2026-09-27 | [TASK-425](./TASK-425-inferred-project-typed-check.md) |
+| TASK-426 | Dispatch a wildcard-only match without reading its subject | Complete | 2026-09-27 | 2026-09-27 | [TASK-426](./TASK-426-wildcard-only-match.md) |
+| TASK-427 | Decide `result` ownership of `try` from the parsed construct boundaries | Complete | 2026-09-27 | 2026-09-27 | [TASK-427](./TASK-427-result-try-ownership.md) |
+| TASK-428 | Route abrupt exits through `finally` in the divergence graph | Complete | 2026-09-27 | 2026-09-27 | [TASK-428](./TASK-428-finally-routing.md) |
+| TASK-429 | Keep missing-arm suggestions free of duplicate bindings across tuple positions | Complete | 2026-09-27 | 2026-09-27 | [TASK-429](./TASK-429-tuple-suggestion-bindings.md) |
+| TASK-430 | Explain let-else placement as the compiler enforces it | Complete | 2026-09-27 | 2026-09-27 | [TASK-430](./TASK-430-let-else-placement-explanation.md) |
+| TASK-431 | Pipe into an optional member as the optional call | Complete | 2026-09-27 | 2026-09-27 | [TASK-431](./TASK-431-optional-member-steps.md) |
+| TASK-432 | Reach the host `Error` and `JSON` past user declarations in generated guards | Complete | 2026-09-27 | 2026-09-27 | [TASK-432](./TASK-432-host-globals-in-guards.md) |
+| TASK-433 | Map recovered syntax as atoms in the content mapper | Complete | 2026-09-27 | 2026-09-27 | [TASK-433](./TASK-433-mapper-recovered-spans.md) |
+| TASK-434 | Make create-tt init check solution configs, require the verified TypeScript, and quote the printed directory | Complete | 2026-09-27 | 2026-09-27 | [TASK-434](./TASK-434-create-tt-init-project-setup.md) |
+| TASK-435 | Make parse-only engine requests linear in the number of `match` expressions | Complete | 2026-09-27 | 2026-09-27 | [TASK-435](./TASK-435-linear-parse-only-requests.md) |
+| TASK-436 | Reuse contextual projections and checker answers across a project's files | Complete | 2026-09-27 | 2026-09-27 | [TASK-436](./TASK-436-contextual-phase-reuse.md) |
+| TASK-437 | Stop marking a case covered in completion when only a nested pattern handles it | Complete | 2026-09-27 | 2026-09-27 | [TASK-437](./TASK-437-nested-pattern-completion-coverage.md) |
+| TASK-438 | Place watch-mode support modules by the whole input set | Complete | 2026-09-27 | 2026-09-27 | [TASK-438](./TASK-438-watch-support-placement.md) |
+| TASK-439 | Serve unplugin standard modules under path-free ids | Complete | 2026-09-27 | 2026-09-27 | [TASK-439](./TASK-439-unplugin-std-virtual-ids.md) |
+| TASK-440 | Preserve import queries on unplugin tt module ids | Complete | 2026-09-27 | 2026-09-27 | [TASK-440](./TASK-440-unplugin-query-ids.md) |
+| TASK-441 | Let the Vite dependency scanner read tt modules | Complete | 2026-09-27 | 2026-09-27 | [TASK-441](./TASK-441-unplugin-dep-scan.md) |
+| TASK-442 | Anchor unplugin source map sources to the tt file | Complete | 2026-09-27 | 2026-09-27 | [TASK-442](./TASK-442-unplugin-source-map-anchor.md) |
+| TASK-443 | Map every copied token to its own column | Complete | 2026-09-27 | 2026-09-27 | [TASK-443](./TASK-443-token-granular-source-maps.md) |
+| TASK-444 | Start a pipeline head after an `if`/`while`/`for`/`with` header | Complete | 2026-09-27 | 2026-09-27 | [TASK-444](./TASK-444-statement-header-pipeline-head.md) |
+| TASK-445 | Keep `variant` followed by a line break an expression statement | Complete | 2026-09-27 | 2026-09-27 | [TASK-445](./TASK-445-variant-line-break-asi.md) |
+| TASK-446 | Let `try` bind to a private-member operand | Complete | 2026-09-27 | 2026-09-27 | [TASK-446](./TASK-446-try-private-member-operand.md) |
+| TASK-447 | Open a block for a value hoisted out of an unbraced body | Complete | 2026-09-27 | 2026-09-27 | [TASK-447](./TASK-447-unbraced-body-hoist-block.md) |
+| TASK-448 | Project an `if let` in an unbraced body as one statement | Complete | 2026-09-27 | 2026-09-27 | [TASK-448](./TASK-448-if-let-unbraced-body-projection.md) |
+| TASK-449 | Reject a match the class definition evaluates instead of hoisting it before the class | Complete | 2026-09-27 | 2026-09-27 | [TASK-449](./TASK-449-class-definition-placement.md) |
+| TASK-450 | Project a value region in a generator as a generator so its `yield` parses | Complete | 2026-09-27 | 2026-09-27 | [TASK-450](./TASK-450-generator-value-region-projection.md) |
+| TASK-451 | Start a block at a line-broken brace after a complete expression | Complete | 2026-09-27 | 2026-09-27 | [TASK-451](./TASK-451-brace-after-expression-starts-block.md) |
+| TASK-452 | Claim a `val` parameter modifier only inside a proven parameter list | Complete | 2026-09-28 | 2026-09-28 | [TASK-452](./TASK-452-val-parameter-list-context.md) |
+| TASK-453 | Never read a tt keyword out of the middle of a non-ASCII identifier | Complete | 2026-09-28 | 2026-09-28 | [TASK-453](./TASK-453-non-ascii-identifier-boundaries.md) |
+| TASK-454 | Apply a type assertion after a pipeline step to the whole pipeline | Complete | 2026-09-28 | 2026-09-28 | [TASK-454](./TASK-454-pipeline-step-type-assertion.md) |
+| TASK-455 | Lower a wrapped concise-arrow value to a block body | Complete | 2026-09-28 | 2026-09-28 | [TASK-455](./TASK-455-wrapped-arrow-value-block-body.md) |
+| TASK-456 | Lower a let-else in an unbraced body inside its own block | Complete | 2026-09-28 | 2026-09-28 | [TASK-456](./TASK-456-let-else-unbraced-body.md) |
+| TASK-457 | Keep a conditional value's operand when a later sibling captures it | Complete | 2026-09-28 | 2026-09-28 | [TASK-457](./TASK-457-conditional-value-sibling-capture.md) |
+| TASK-458 | Reject a default-exported variant and locate generated-parse failures at their construct | Complete | 2026-09-28 | 2026-09-28 | [TASK-458](./TASK-458-variant-default-export.md) |
+| TASK-459 | Collect variants exported through export specifiers for cross-file exhaustiveness | Complete | 2026-09-28 | 2026-09-28 | [TASK-459](./TASK-459-variant-export-specifiers.md) |
+| TASK-460 | Write the separator a missing-arm edit needs after the last written arm | Complete | 2026-09-28 | 2026-09-28 | [TASK-460](./TASK-460-missing-arm-edit-after-unseparated-arm.md) |
+| TASK-461 | Offer payload field completions only inside a pattern | Complete | 2026-09-28 | 2026-09-28 | [TASK-461](./TASK-461-payload-completions-only-in-patterns.md) |
+| TASK-462 | Offer case tags only at arm positions, never in arm bodies or comments | Complete | 2026-09-28 | 2026-09-28 | [TASK-462](./TASK-462-arm-bodies-and-comments-are-not-case-positions.md) |
+| TASK-463 | Rename a shorthand pattern binding from its declaration | Complete | 2026-09-28 | 2026-09-28 | [TASK-463](./TASK-463-shorthand-binding-rename.md) |
+| TASK-464 | Or-pattern bindings navigate and rename as one binding | Complete | 2026-09-28 | 2026-09-28 | [TASK-464](./TASK-464-or-pattern-binding-navigation.md) |
+| TASK-465 | Address a host TypeScript source as itself in the language service | Complete | 2026-09-28 | 2026-09-28 | [TASK-465](./TASK-465-host-source-service-paths.md) |
+| TASK-466 | DocumentSymbol ranges enclose the whole variant and each case | Complete | 2026-09-28 | 2026-09-28 | [TASK-466](./TASK-466-document-symbol-ranges.md) |
+| TASK-467 | Rewrite every literal relative .tt/.ttx module reference | Complete | 2026-09-28 | 2026-09-28 | [TASK-467](./TASK-467-module-reference-rewrite.md) |
+| TASK-468 | Keep comments written inside a variant body | Complete | 2026-09-28 | 2026-09-28 | [TASK-468](./TASK-468-variant-body-comments.md) |
+| TASK-469 | Report a literal or `is` tuple element as what it is | Complete | 2026-09-28 | 2026-09-28 | [TASK-469](./TASK-469-tuple-value-element-diagnostic.md) |
+| TASK-470 | Check exhaustiveness of a bigint literal union | Complete | 2026-09-28 | 2026-09-28 | [TASK-470](./TASK-470-bigint-literal-union-exhaustiveness.md) |
+| TASK-471 | Show any unexpected value in a match's runtime guard | Complete | 2026-09-28 | 2026-09-28 | [TASK-471](./TASK-471-match-guard-value-display.md) |
+| TASK-472 | The typed engine resolves `.tt` specifiers through a content mapper, as `tsc` does | Complete | 2026-09-28 | 2026-09-28 | [TASK-472](./TASK-472-node-esm-typed-resolution.md) |
+| TASK-473 | `@tt/std` and `@tt/runtime` are dual-format packages that resolve in every module mode | Complete | 2026-09-28 | 2026-09-28 | [TASK-473](./TASK-473-std-package-exports.md) |
+| TASK-474 | std combinators keep the side a callback never returns | Complete | 2026-09-28 | 2026-09-28 | [TASK-474](./TASK-474-std-empty-side-defaults.md) |
+| TASK-475 | `ttc explain` texts match what the compiler does | Complete | 2026-09-28 | 2026-09-28 | [TASK-475](./TASK-475-explain-text-audit.md) |
+| TASK-476 | `ttc explain` accepts the number `tsc` prints | Complete | 2026-09-28 | 2026-09-28 | [TASK-476](./TASK-476-explain-numeric-codes.md) |
+| TASK-477 | The typed `val` check sees every spelling of a member call | Complete | 2026-09-28 | 2026-09-28 | [TASK-477](./TASK-477-val-member-call-probes.md) |
+| TASK-478 | Decide a guarded all-wildcard arm by its guard alone | Complete | 2026-09-28 | 2026-09-28 | [TASK-478](./TASK-478-guarded-wildcard-tuple-arm.md) |
+| TASK-479 | Separate hover documentation from the signature | Complete | 2026-09-28 | 2026-09-28 | [TASK-479](./TASK-479-hover-documentation-split.md) |
+| TASK-480 | Report an `if let` in any expression position as `if-let-placement` alone | Complete | 2026-09-28 | 2026-09-28 | [TASK-480](./TASK-480-if-let-expression-position.md) |
+| TASK-481 | Project a jump that leaves a `result` block so only its crossing is reported | Complete | 2026-09-28 | 2026-09-28 | [TASK-481](./TASK-481-result-jump-crossing-projection.md) |
+| TASK-482 | End a statement at a line break after a postfix operator or a restricted production | Complete | 2026-09-28 | 2026-09-28 | [TASK-482](./TASK-482-asi-postfix-restricted-boundaries.md) |
+| TASK-483 | Keep generated declarations of script files from colliding in the shared global scope | Complete | 2026-09-28 | 2026-09-28 | [TASK-483](./TASK-483-script-global-generated-names.md) |
+| TASK-484 | The editor service resolves `.tt` imports under node16/nodenext ES modules through the installed mapper | Complete | 2026-09-28 | 2026-09-28 | [TASK-484](./TASK-484-editor-node-esm-tt-resolution.md) |
+| TASK-485 | The `@tt/std` CommonJS entry points are declaration files | Complete | 2026-09-28 | 2026-09-28 | [TASK-485](./TASK-485-std-commonjs-declarations.md) |
+| TASK-486 | Place the runtime import after the parsed directive prologue | Complete | 2026-09-28 | 2026-09-28 | [TASK-486](./TASK-486-directive-prologue-import-placement.md) |
+| TASK-487 | Report every missing case and an exact total | Complete | 2026-09-28 | 2026-09-28 | [TASK-487](./TASK-487-complete-missing-case-witnesses.md) |
+| TASK-488 | Write authored match arms with the file's line ending | Complete | 2026-09-28 | 2026-09-28 | [TASK-488](./TASK-488-quick-fix-line-endings.md) |
+| TASK-489 | Reach host globals when `globalThis` itself is shadowed | Complete | 2026-09-28 | 2026-09-28 | [TASK-489](./TASK-489-shadowed-global-this-host-access.md) |
+| TASK-490 | Decide the `val` modifier structurally, once, in the parser | Complete | 2026-09-28 | 2026-09-28 | [TASK-490](./TASK-490-val-modifier-decided-once-in-the-parser.md) |
+| TASK-491 | Model statement boundaries once, as token facts owned by the lexer | Complete | 2026-09-28 | 2026-09-28 | [TASK-491](./TASK-491-token-facts-statement-boundaries.md) |
+| TASK-492 | Completion reads the parser's arm structure | Complete | 2026-09-28 | 2026-09-28 | [TASK-492](./TASK-492-completion-reads-parser-arm-structure.md) |
+| TASK-493 | Document the missing-case enumeration bound as a named analysis limit | Complete | 2026-09-28 | 2026-09-28 | [TASK-493](./TASK-493-witness-enumeration-limit.md) |
+| TASK-494 | Expect an operand after a statement the grammar has completed | Complete | 2026-09-28 | 2026-09-28 | [TASK-494](./TASK-494-operand-goal-after-finished-statements.md) |
+| TASK-495 | Balance type-argument brackets through one token fact | Complete | 2026-09-28 | 2026-09-28 | [TASK-495](./TASK-495-type-argument-bracket-facts.md) |
+| TASK-496 | Keep the source's automatic semicolons when generated code starts a statement | Complete | 2026-09-28 | 2026-09-28 | [TASK-496](./TASK-496-statement-boundaries-survive-lowering.md) |
+| TASK-497 | Let an automatic semicolon end a block-bodied arrow function before an operator line | Complete | 2026-09-28 | 2026-09-28 | [TASK-497](./TASK-497-arrow-body-automatic-semicolon.md) |
+| TASK-498 | Count lines once, under the line breaks each consumer speaks | Complete | 2026-09-28 | 2026-09-28 | [TASK-498](./TASK-498-one-line-model.md) |
+| TASK-499 | Read a parenthesized arrow return type the way TypeScript does | Complete | 2026-09-28 | 2026-09-28 | [TASK-499](./TASK-499-parenthesized-return-type-arrow.md) |
+| TASK-500 | Read an import-equals module reference as TypeScript's grammar does | Complete | 2026-09-28 | 2026-09-28 | [TASK-500](./TASK-500-import-equals-module-reference.md) |
+| TASK-501 | Compose hoisted values inside pipeline operands like any other expression owner | Complete | 2026-09-28 | 2026-09-28 | [TASK-501](./TASK-501-hoisted-values-in-pipeline-operands.md) |
+| TASK-502 | End an import type at a line break before a `<` | Complete | 2026-09-28 | 2026-09-28 | [TASK-502](./TASK-502-import-type-arguments-line-break.md) |
+| TASK-503 | Read contextual type and declaration words under TypeScript's lookahead rules | Complete | 2026-09-28 | 2026-09-28 | [TASK-503](./TASK-503-contextual-word-lookahead.md) |
+| TASK-504 | Evaluate a hoisted value in a member step after the piped value and its method | Complete | 2026-09-28 | 2026-09-28 | [TASK-504](./TASK-504-hoisted-values-in-member-steps.md) |
+| TASK-505 | Give each value a structured pipeline pipes its own slot | Complete | 2026-09-28 | 2026-09-28 | [TASK-505](./TASK-505-pipeline-slot-per-step.md) |
+| TASK-506 | Schedule a `try` inside a template in a pipeline operand | Complete | 2026-09-28 | 2026-09-28 | [TASK-506](./TASK-506-try-in-template-pipeline-operand.md) |
+| TASK-507 | Judge path containment by path segments and canonical identity | Complete | 2026-09-28 | 2026-09-28 | [TASK-507](./TASK-507-path-containment-by-segments.md) |
+| TASK-508 | Hold the start config and every written file to the project boundary | Complete | 2026-09-28 | 2026-09-28 | [TASK-508](./TASK-508-init-start-config-and-write-boundary.md) |
+| TASK-509 | Report `--types` writes per file and settle editor sidecars from the report | Complete | 2026-09-28 | 2026-09-28 | [TASK-509](./TASK-509-types-write-report-contract.md) |
+| TASK-510 | Restore compile throughput lost on the branch | Complete | 2026-09-28 | 2026-09-28 | [TASK-510](./TASK-510-compile-throughput.md) |
+| TASK-511 | Give test temporary directories one owner per language | Complete | 2026-09-28 | 2026-09-28 | [TASK-511](./TASK-511-test-temp-dir-ownership.md) |
+| TASK-512 | Bring single-file compile cost back within the CI budget | Complete | 2026-09-29 | 2026-09-29 | [TASK-512](./TASK-512-single-file-compile-cost.md) |
+| TASK-513 | Plan the package.json update with every other init write | Complete | 2026-09-29 | 2026-09-29 | [TASK-513](./TASK-513-manifest-write-boundary.md) |
 
 ## Next task number
 
-**TASK-388**
+**TASK-514**

@@ -2,7 +2,7 @@
 
 use super::*;
 
-impl Checker {
+impl Checker<'_> {
     fn error(&mut self, error: TtError) {
         self.errors.push(error);
     }
@@ -144,7 +144,7 @@ impl Checker {
             .iter()
             .position(|token| token.span.start >= stmt.span.start)
             .unwrap_or(self.tokens.len());
-        let function_target = crate::flow::function_target_at(&self.source, &self.tokens, at);
+        let function_target = crate::flow::function_target_at(self.tokens, at);
         if place != Place::ResultRegion
             && matches!(
                 function_target,
@@ -176,7 +176,7 @@ impl Checker {
             );
         } else if place != Place::ResultRegion
             && function_target.is_none()
-            && crate::flow::in_static_block(&self.source, &self.tokens, at)
+            && crate::flow::in_static_block(self.source, self.tokens, at)
         {
             self.error(
                 TtError::span(
@@ -227,8 +227,8 @@ impl Checker {
             } else {
                 (
                     "`try` cannot be used here, in an isolated value region — it compiles to \
-                     a `return`, which would exit this construct's own IIFE instead of the \
-                     enclosing function",
+                     a `return`, which would complete this construct's value instead of \
+                     returning from the enclosing function",
                     "extract the logic into a function (a `try` inside a function written \
                      here is fine), or move the propagation into a statement-bodied `result` block",
                 )
@@ -253,8 +253,8 @@ impl Checker {
                     stmt.head_span.start,
                     stmt.head_span.end,
                     "let-else cannot be used here — its `else` block's exit (`return`, \
-                     `break`, `continue`) would leave this construct's own IIFE instead of \
-                     the enclosing function"
+                     `break`, `continue`) would complete this construct's value instead of \
+                     leaving the enclosing function"
                         .to_string(),
                 )
                 .code(DiagnosticCode::LetElsePlacement)
@@ -293,20 +293,19 @@ impl Checker {
     /// places `try`, judged from the other side: no value boundary to escape, just
     /// a statement stream to stand in).
     fn check_if_let(&mut self, stmt: &IfLetStmt, ctx: Ctx, place: Place) {
-        if ctx == Ctx::Expr && !stmt.in_function {
+        if stmt.expression_position || (ctx == Ctx::Expr && !stmt.in_function) {
             self.error(
                 TtError::span(
                     stmt.head_span.start,
                     stmt.head_span.end,
-                    "`if let` cannot be used in expression position (a template \
-                     interpolation, a scrutinee or guard, an expression arm body, a `try` \
-                     expression, or a pipeline) — it compiles to a block statement"
+                    "`if let` cannot be used in expression position — it is a statement and \
+                     produces no value"
                         .to_string(),
                 )
                 .code(DiagnosticCode::IfLetPlacement)
                 .help(
-                    "write it inside a function here (an `if let` in one is fine), or \
-                     `match` on the value instead",
+                    "`match` on the value instead, or write the `if let` as a statement \
+                     (inside an expression region, in a function written there)",
                 ),
             );
         }
@@ -405,23 +404,15 @@ impl Checker {
         let Some(ResultItem::Stmts(body)) = block.items.first() else {
             return;
         };
-        for control in
-            crate::flow::outward_controls_in_span(&self.source, &self.tokens, body, block.body_span)
-        {
+        for control in crate::flow::outward_controls_in_span(self.source, body, block.body_span) {
             let (span, code, message, help) = match control {
-                crate::flow::OutwardControl::Break {
-                    span,
-                    labeled: false,
-                } => (
+                crate::flow::OutwardControl::Break { span, label: None } => (
                     span,
                     DiagnosticCode::ResultBreakCrossing,
                     "`break` cannot leave a `result` block",
                     "break only a loop or switch written inside this `result` block",
                 ),
-                crate::flow::OutwardControl::Continue {
-                    span,
-                    labeled: false,
-                } => (
+                crate::flow::OutwardControl::Continue { span, label: None } => (
                     span,
                     DiagnosticCode::ResultContinueCrossing,
                     "`continue` cannot leave a `result` block",
@@ -435,11 +426,11 @@ impl Checker {
                 ),
                 crate::flow::OutwardControl::Break {
                     span,
-                    labeled: true,
+                    label: Some(_),
                 }
                 | crate::flow::OutwardControl::Continue {
                     span,
-                    labeled: true,
+                    label: Some(_),
                 } => (
                     span,
                     DiagnosticCode::ResultLabelCrossing,
@@ -496,6 +487,32 @@ impl Checker {
                     )
                     .code(DiagnosticCode::VariantFieldShadowsTag)
                     .help("rename the field"),
+                );
+            }
+        }
+
+        for case in &decl.cases {
+            let Some(fields) = &case.fields else {
+                continue;
+            };
+            let Some(first_optional) = fields.iter().position(|field| field.optional) else {
+                continue;
+            };
+            for field in fields[first_optional..]
+                .iter()
+                .filter(|field| !field.optional)
+            {
+                self.error(
+                    TtError::span(
+                        field.name_off,
+                        field.name_off + field.name.len(),
+                        format!(
+                            "variant {}: case \"{}\" declares required field `{}` after optional field `{}`",
+                            decl.name, case.tag, field.name, fields[first_optional].name
+                        ),
+                    )
+                    .code(DiagnosticCode::VariantRequiredAfterOptional)
+                    .help("declare the required fields before the optional ones"),
                 );
             }
         }
@@ -824,9 +841,7 @@ impl Checker {
     }
 
     fn check_match_arm_controls(&mut self, body: &Program, body_span: Span) {
-        for control in
-            crate::flow::outward_controls_in_span(&self.source, &self.tokens, body, body_span)
-        {
+        for control in crate::flow::outward_controls_in_span(self.source, body, body_span) {
             let (span, message, help) = match control {
                 crate::flow::OutwardControl::Break { span, .. } => (
                     span,

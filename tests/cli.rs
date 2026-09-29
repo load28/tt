@@ -689,26 +689,15 @@ fn have(cmd: &str) -> bool {
         .unwrap_or(false)
 }
 
-/// Whether ttc can resolve a TypeScript to drive. Asked by running the mode
-/// itself over a trivial project: the answer is ttc's own resolution, not a
-/// guess about the machine.
-fn have_typescript() -> bool {
-    let dir = tmpdir();
-    fs::create_dir_all(dir.join("src")).unwrap();
-    fs::write(dir.join("src/probe.tt"), "export const n: number = 1;\n").unwrap();
-    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
-        .args(["--check-types", "src"])
-        .current_dir(&dir)
-        .output()
-        .expect("failed to run ttc");
-    out.status.success()
+fn typed_workspace() -> Workspace {
+    Workspace::in_repo("cli")
 }
 
 /// Runs `ttc --check-types` over a one-file project and returns ttc's
 /// stderr. Nothing is written, so a released TypeScript 7 — which cannot
 /// emit declarations — answers these just as well as a built one.
 fn types_stderr(source: &str) -> String {
-    let dir = tmpdir();
+    let dir = typed_workspace();
     let src = dir.join("src");
     fs::create_dir_all(&src).unwrap();
     fs::write(src.join("main.tt"), source).unwrap();
@@ -725,7 +714,7 @@ fn types_stderr(source: &str) -> String {
 /// `--overlay`, and the check is what an editor would run.
 fn types_stderr_overlay(saved: &str, buffer: &str, tt_only: bool) -> String {
     use std::io::Write;
-    let dir = tmpdir();
+    let dir = typed_workspace();
     let src = dir.join("src");
     fs::create_dir_all(&src).unwrap();
     let file = src.join("main.tt");
@@ -759,7 +748,7 @@ fn types_stderr_overlay(saved: &str, buffer: &str, tt_only: bool) -> String {
 
 macro_rules! require_types_toolchain {
     () => {
-        if !have("node") || !have_typescript() {
+        if !have("node") || !common::toolchain() {
             eprintln!("skipping: no node, or no TypeScript for ttc to drive");
             return;
         }
@@ -782,6 +771,116 @@ fn types_reports_a_missing_literal_of_a_finite_union() {
     // reported at the `match` keyword of the .tt source, not in the
     // generated TypeScript
     assert!(err.contains("--> src/main.tt:3:10"), "{err}");
+}
+
+fn types_project_output(tsconfig: &str, files: &[(&str, &str)]) -> (bool, String) {
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("tsconfig.json"), tsconfig).unwrap();
+    for (path, text) in files {
+        fs::write(dir.join(path), text).unwrap();
+    }
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    (
+        out.status.success(),
+        String::from_utf8_lossy(&out.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn types_reports_configuration_parsing_diagnostics() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{ \"compilerOptions\": { \"strict\": tru }, \"include\": [\"src\"] }\n",
+        &[("src/a.tt", "export const ok: number = 1;\n")],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts5024]"), "{err}");
+    assert!(err.contains("--> tsconfig.json:1:"), "{err}");
+}
+
+#[test]
+fn types_reports_a_missing_extended_configuration_without_a_position() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{ \"extends\": \"./missing.json\", \"include\": [\"src\"] }\n",
+        &[("src/a.tt", "export const ok: number = 1;\n")],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts5083]"), "{err}");
+    assert_eq!(err.matches("error[ts5083]").count(), 1, "{err}");
+    assert!(err.contains("--> tsconfig.json\n"), "{err}");
+}
+
+#[test]
+fn types_reports_program_diagnostics_without_a_file() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{ \"compilerOptions\": { \"types\": [\"does-not-exist\"] }, \"include\": [\"src\"] }\n",
+        &[("src/a.tt", "export const ok: number = 1;\n")],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts2688]"), "{err}");
+    assert_eq!(err.matches("error[ts2688]").count(), 1, "{err}");
+}
+
+#[test]
+fn types_reports_option_diagnostics_of_a_rewritten_configuration_without_a_position() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{\n  \"compilerOptions\": { \"target\": \"es5x\" },\n  \"include\": [\"src/**/*.tt\"]\n}\n",
+        &[("src/a.tt", "export const ok: number = 1;\n")],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts6046]"), "{err}");
+    assert!(err.contains("--> tsconfig.json\n"), "{err}");
+}
+
+#[test]
+fn types_serves_tt_modules_itself_under_the_documented_content_mapper_configuration() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{\n  \"compilerOptions\": { \"strict\": true, \"noEmit\": true },\n  \"contentMappers\": [{ \"package\": \"@openload28/tt-lang\", \"extensions\": [\".tt\", \".ttx\"] }],\n  \"include\": [\"src\"]\n}\n",
+        &[("src/a.tt", "export const a: number = 1;\n")],
+    );
+    assert!(ok, "{err}");
+    assert!(!err.contains("ts100024"), "{err}");
+    let (ok, err) = types_project_output(
+        "{\n  \"compilerOptions\": { \"strict\": true, \"noEmit\": true },\n  \"contentMappers\": [{ \"package\": \"@openload28/tt-lang\", \"extensions\": [\".tt\", \".ttx\"] }],\n  \"include\": [\"src\"]\n}\n",
+        &[("src/a.tt", "export const a: string = 1;\n")],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts2322]"), "{err}");
+}
+
+#[test]
+fn types_keeps_reporting_content_mappers_it_does_not_serve() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{\n  \"compilerOptions\": { \"strict\": true, \"noEmit\": true },\n  \"contentMappers\": [{ \"package\": \"@openload28/tt-lang\", \"extensions\": [\".tt\", \".ttx\"] }, { \"package\": \"other-mapper\", \"extensions\": [\".other\"] }],\n  \"include\": [\"src\"]\n}\n",
+        &[("src/a.tt", "export const a: number = 1;\n")],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts100024]"), "{err}");
+}
+
+#[test]
+fn types_reports_syntax_errors_in_hand_written_typescript() {
+    require_types_toolchain!();
+    let (ok, err) = types_project_output(
+        "{ \"compilerOptions\": { \"strict\": true }, \"include\": [\"src\"] }\n",
+        &[
+            ("src/a.tt", "export const ok: number = 1;\n"),
+            ("src/h.ts", "export const broken: number = ;\n"),
+        ],
+    );
+    assert!(!ok, "{err}");
+    assert!(err.contains("error[ts1109]"), "{err}");
+    assert!(err.contains("--> src/h.ts:1:"), "{err}");
 }
 
 #[test]
@@ -1046,10 +1145,10 @@ fn overlay_does_not_combine_with_watch() {
     );
 }
 
-/// The flag needs a value, and the path it names has to exist — it stands
-/// in for a file of the project, so there has to be one.
+/// The flag needs a value, and the path it names needs an existing
+/// directory — it stands in for a file of the project, saved or not.
 #[test]
-fn overlay_reports_a_missing_value_and_a_missing_file() {
+fn overlay_reports_a_missing_value_and_a_missing_directory() {
     let out = ttc(&["--check-types", "--overlay"]);
     let err = String::from_utf8_lossy(&out.stderr).into_owned();
     assert!(!out.status.success(), "{err}");
@@ -1061,7 +1160,7 @@ fn overlay_reports_a_missing_value_and_a_missing_file() {
     let dir = tmpdir();
     let file = dir.join("a.tt");
     fs::write(&file, "export const n = 1;\n").unwrap();
-    let gone = dir.join("gone.tt");
+    let gone = dir.join("gone").join("a.tt");
     let out = ttc(&[
         "--check-types",
         "--overlay",
@@ -1071,10 +1170,51 @@ fn overlay_reports_a_missing_value_and_a_missing_file() {
     let err = String::from_utf8_lossy(&out.stderr).into_owned();
     assert!(!out.status.success(), "{err}");
     assert!(err.contains("--overlay"), "{err}");
-    assert!(err.contains("gone.tt"), "{err}");
+    assert!(err.contains("gone"), "{err}");
+}
+
+/// A variant the imported module exports through an `export { ... }`
+/// specifier is as visible to exhaustiveness as one declared with
+/// `export variant`, under the name the specifier gives it (TASK-459).
+#[test]
+fn check_sees_a_variant_exported_through_a_specifier() {
+    let dir = tmpdir();
+    fs::write(
+        dir.join("shape.tt"),
+        "variant Color { Red, Green }\nexport { Color as Hue };\nexport type { Color };\n",
+    )
+    .unwrap();
+    for (name, import, ty) in [
+        ("alias.tt", "{ Hue }", "Hue"),
+        ("type.tt", "{ Color }", "Color"),
+        ("rename.tt", "{ Hue as Shade }", "Shade"),
+        ("namespace.tt", "* as shapes", "shapes.Hue"),
+    ] {
+        let importer = dir.join(name);
+        fs::write(
+            &importer,
+            format!(
+                "import {import} from \"./shape.tt\";\n\
+                 export function f(h: {ty}) {{ return match (h) {{ Red => \"r\" }}; }}\n"
+            ),
+        )
+        .unwrap();
+        let out = ttc(&[
+            "--check",
+            importer.to_str().unwrap(),
+            dir.join("shape.tt").to_str().unwrap(),
+        ]);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(!out.status.success(), "{name}: {stderr}");
+        assert!(
+            stderr.contains("(imported from \"./shape.tt\") is not exhaustive: missing \"Green\""),
+            "{name}: {stderr}"
+        );
+    }
 }
 
 include!("cli/cases_01.rs");
+include!("cli/line_breaks.rs");
 
 /// A `#!` line and a byte-order mark are only themselves when they come
 /// first, so the generated banner is written after them (TASK-336). A
@@ -1547,6 +1687,91 @@ fn watch_reports_input_failure_transitions_and_recovers() {
     }
 }
 
+/// Support modules belong to the whole watched input set: a round that
+/// recompiles one file in a subdirectory writes them where a one-shot build
+/// does, and a round whose input set moves the shared root recompiles every
+/// output against the new place.
+#[test]
+fn watch_places_support_modules_by_the_whole_input_set() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let dir = tmpdir();
+    let input = dir.join("src");
+    fs::create_dir_all(input.join("sub")).unwrap();
+    fs::write(
+        input.join("a.tt"),
+        "export const x = (n: number) => n |> String;",
+    )
+    .unwrap();
+    fs::write(
+        input.join("sub/b.tt"),
+        "export const x = (n: number) => n |> String;",
+    )
+    .unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
+    command
+        .current_dir(&dir)
+        .args(["--watch", "src"])
+        .stderr(Stdio::piped())
+        .stdout(Stdio::null());
+    dir.isolate_unfinalized_child_profile(&mut command);
+    let mut child = command.spawn().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let (send, receive) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines() {
+            let _ = send.send(line.unwrap());
+        }
+    });
+    let next_round = || {
+        loop {
+            let line = receive.recv_timeout(Duration::from_secs(10)).unwrap();
+            assert!(!line.contains("with errors"), "{line}");
+            if line.contains("file(s) ok") {
+                break;
+            }
+        }
+    };
+    let result = std::panic::catch_unwind(|| {
+        next_round();
+        assert!(input.join("tt/runtime.ts").exists());
+        assert!(
+            fs::read_to_string(input.join("sub/b.ts"))
+                .unwrap()
+                .contains("\"../tt/runtime.js\"")
+        );
+        fs::write(
+            input.join("sub/b.tt"),
+            "export const x = (n: number) => n |> String;\n",
+        )
+        .unwrap();
+        next_round();
+        assert!(!input.join("sub/tt").exists());
+        assert!(
+            fs::read_to_string(input.join("sub/b.ts"))
+                .unwrap()
+                .contains("\"../tt/runtime.js\"")
+        );
+        fs::remove_file(input.join("a.tt")).unwrap();
+        fs::remove_file(input.join("a.ts")).unwrap();
+        next_round();
+        assert!(input.join("sub/tt/runtime.ts").exists());
+        assert!(
+            fs::read_to_string(input.join("sub/b.ts"))
+                .unwrap()
+                .contains("\"./tt/runtime.js\"")
+        );
+    });
+    let _ = child.kill();
+    let _ = child.wait();
+    reader.join().unwrap();
+    if let Err(error) = result {
+        std::panic::resume_unwind(error);
+    }
+}
+
 /// A contextual annotation refines the type of a generated storage slot;
 /// the emitted program is correct without one. `--check` is documented as
 /// needing no TypeScript, and `-p` is what bundler plugins call, so a
@@ -1557,13 +1782,7 @@ fn a_missing_toolchain_does_not_stop_a_tt_level_check_or_print() {
     // Outside the repository: the toolchain is resolved by walking up from
     // the file, and every directory inside this checkout has the
     // repository's own `node_modules` above it.
-    let isolated = std::env::temp_dir().join(format!(
-        "tt-no-toolchain-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    let _ = fs::remove_dir_all(&isolated);
-    fs::create_dir_all(&isolated).unwrap();
+    let isolated = Workspace::new("no-toolchain");
     let file = isolated.join("shape.tt");
     fs::write(
         &file,
@@ -1588,7 +1807,6 @@ fn a_missing_toolchain_does_not_stop_a_tt_level_check_or_print() {
         );
         assert!(output.status.success(), "{mode} failed: {stderr}");
     }
-    let _ = fs::remove_dir_all(&isolated);
 }
 
 /// Input read failures must not be mistaken for absent type information.
@@ -1869,5 +2087,67 @@ fn deeply_nested_host_expressions_with_tt_keep_the_server_alive() {
             serde_json::json!([]),
             "{reply}"
         );
+    }
+}
+
+#[test]
+fn an_invalid_file_reports_the_same_diagnostic_with_typescript_installed() {
+    require_types_toolchain!();
+    let sources = [
+        (
+            "type R<T> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: string };\nfunction res(b: boolean): R<number> {\n  const q = (try result { if (b) { return 10; } return 1; }) * 2;\n  return { kind: \"Ok\", value: q };\n}\n",
+            "error[verify-failed]",
+            "main.tt:3:25",
+        ),
+        (
+            "declare const b: boolean;\nconst q = (try result { if (b) { return 10; } return 1; }) * 2;\nexport { q };\n",
+            "error[try-placement]",
+            "main.tt:2:12",
+        ),
+    ];
+    for (source, code, location) in sources {
+        let mut reports = Vec::new();
+        for dir in [typed_workspace(), Workspace::new("untyped-invalid")] {
+            fs::write(dir.join("main.tt"), source).unwrap();
+            let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+                .args(["--check", "main.tt"])
+                .current_dir(&dir)
+                .output()
+                .expect("failed to run ttc");
+            assert!(!out.status.success());
+            reports.push(String::from_utf8_lossy(&out.stderr).into_owned());
+        }
+        assert!(reports[0].starts_with(code), "{}", reports[0]);
+        assert!(reports[0].contains(location), "{}", reports[0]);
+        assert_eq!(reports[0], reports[1]);
+    }
+}
+
+#[test]
+fn json_report_belongs_to_one_types_run() {
+    let dir = tmpdir();
+    let file = dir.join("a.tt");
+    fs::write(&file, "export const n = 1;\n").unwrap();
+    let path = file.to_str().unwrap();
+
+    for (args, expected) in [
+        (
+            vec!["--types", "--json-report", "--watch", path],
+            "--json-report does not combine with --watch",
+        ),
+        (
+            vec!["--check-types", "--json-report", path],
+            "--check-types does not combine with --json-report",
+        ),
+        (
+            vec!["--json-report", path],
+            "build mode does not combine with --json-report",
+        ),
+    ] {
+        let out = ttc(&args);
+        let err = String::from_utf8_lossy(&out.stderr).into_owned();
+        assert_eq!(out.status.code(), Some(1), "{args:?}:\n{err}");
+        assert!(out.stdout.is_empty(), "{args:?} prints no report");
+        assert!(err.contains(expected), "{args:?}:\n{err}");
     }
 }

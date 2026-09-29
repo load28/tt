@@ -57,6 +57,28 @@ pub struct ResultReturnTemp {
     pub out_end: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DeclaredName {
+    pub src: usize,
+    pub src_end: usize,
+    pub out: usize,
+    pub out_end: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SharedBinding {
+    pub out: usize,
+    pub out_end: usize,
+    pub occurrences: Vec<BindingOccurrence>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct BindingOccurrence {
+    pub src: usize,
+    pub src_end: usize,
+    pub shorthand: bool,
+}
+
 /// Which tt construct a stretch of compiler-written glue belongs to.
 ///
 /// The kind is half of what turns a TypeScript diagnostic on that glue into
@@ -162,6 +184,9 @@ pub struct MappedEmit {
     pub(crate) result_return_temps: Vec<ResultReturnTemp>,
     /// Byte offsets after generated value declaration identifiers.
     pub(crate) contextual_slots: Vec<usize>,
+    pub(crate) generated_names: std::collections::HashSet<String>,
+    pub(crate) declared_names: Vec<DeclaredName>,
+    pub(crate) shared_bindings: Vec<SharedBinding>,
 }
 
 impl MappedEmit {
@@ -177,7 +202,9 @@ impl MappedEmit {
     /// The map is built from [`MappedEmit::mappings`] and
     /// [`MappedEmit::anchors`] — the emission's own record of which output
     /// bytes are copied source and which construct wrote each stretch of
-    /// glue. `code` is not searched for anything but line breaks.
+    /// glue — and `source`'s own tokens, so every token a chunk copies maps
+    /// to its own line and column. `code` is not searched for anything but
+    /// line breaks.
     ///
     /// ```
     /// use ttc::{compile_mapped, source_map::SourceMapRequest, Options};
@@ -226,19 +253,26 @@ pub fn emit_mapped(source: &str) -> MappedEmit {
 
 /// [`emit_mapped`] under an explicit TypeScript surface kind.
 pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmit {
-    let program = parser::parse_with_kind(source, source_kind);
+    let (program, tokens) = parser::lex_and_parse_with_kind(source, source_kind);
+    let typescript_tokens = crate::lexer::TypeScriptTokens::of(source, source_kind, &tokens);
     let semantics = analysis::coverage_semantics(source, &program, &[]);
-    let core = core_ir::lower_semantic(&semantics, source);
+    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
     // A buffer mid-edit is routinely not TypeScript yet, and this entry
     // point is infallible by contract: with no owner model there are no
-    // host rewrites to plan, so the emit degrades to the same shape a file
-    // needing no host lowering gets. Reporting stays [`compile`]'s job.
-    let plan = codegen::lowering_plan(&semantics, &core, source, source_kind).unwrap_or_default();
+    // host rewrites to plan, so every tt value the plan cannot own emits as
+    // a recovery placeholder anchored to its construct — the same values
+    // the plan refuses by placement. Reporting stays [`compile`]'s job.
+    let plan = codegen::lowering_plan(&semantics, &core, source, source_kind, &tokens)
+        .unwrap_or_else(|_| crate::evaluation_ir::LoweringPlan::without_owner_model());
+    let automatic_semicolons = crate::lexer::automatic_semicolons(&tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
-        source,
-        source_kind,
+        codegen::EmitSource {
+            text: source,
+            kind: source_kind,
+            automatic_semicolons: &automatic_semicolons,
+        },
         &plan,
         ImportRewrite::Off,
         StdImports::default(),
@@ -251,6 +285,9 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
         contextual_slots: flat.contextual_slots,
+        generated_names: flat.generated_names,
+        declared_names: flat.declared_names,
+        shared_bindings: flat.shared_bindings,
     }
 }
 
@@ -283,41 +320,86 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
 /// assert_eq!(probes.mutations.len(), 1);
 /// assert_eq!(probes.mutations[0].method.as_ref().unwrap().0, "at");
 /// ```
+///
+/// A call is read from the TypeScript syntax tree, so the method may be
+/// named by a string-literal key and the callee may be parenthesized. A
+/// computed key that is not a literal names no method and is not collected:
+///
+/// ```
+/// let probes = ttc::val_probes("val const d = mk();\nd[\"push\"](1);\n(d.pop)();\nd[k](2);\n");
+/// let methods: Vec<&str> = probes
+///     .mutations
+///     .iter()
+///     .map(|m| m.method.as_ref().unwrap().0.as_str())
+///     .collect();
+/// assert_eq!(methods, ["push", "pop"]);
+/// ```
 pub fn val_probes(source: &str) -> ValProbes {
     val_probes_with_kind(source, SourceKind::TypeScript)
 }
 
 /// [`val_probes`] under an explicit TypeScript surface kind.
 pub fn val_probes_with_kind(source: &str, source_kind: SourceKind) -> ValProbes {
-    let tokens = lexer::lex_with_kind(source, 0, source.len(), source_kind);
-    val::probes(source, &tokens)
+    let probes = val_syntax_probes(source, source_kind);
+    if probes.bindings.is_empty() {
+        return probes;
+    }
+    with_method_calls(
+        probes,
+        &emit_mapped_with_kind(source, source_kind),
+        source_kind,
+    )
+}
+
+/// [`val_probes_with_kind`] over an emission of `source` the caller already
+/// has.
+pub(crate) fn val_probes_with_emit(
+    source: &str,
+    source_kind: SourceKind,
+    program: &ast::Program,
+    tokens: &[crate::lexer::Token],
+    emit: &MappedEmit,
+) -> ValProbes {
+    with_method_calls(
+        val::probes(source, tokens, &parser::val_modifiers(program)),
+        emit,
+        source_kind,
+    )
+}
+
+fn val_syntax_probes(source: &str, source_kind: SourceKind) -> ValProbes {
+    let (program, tokens) = parser::lex_and_parse_with_kind(source, source_kind);
+    val::probes(source, &tokens, &parser::val_modifiers(&program))
+}
+
+fn with_method_calls(
+    mut probes: ValProbes,
+    emit: &MappedEmit,
+    source_kind: SourceKind,
+) -> ValProbes {
+    if probes.bindings.is_empty() {
+        return probes;
+    }
+    probes
+        .mutations
+        .extend(val::method_calls(emit, source_kind));
+    probes.mutations.sort_by_key(|mutation| mutation.root);
+    probes
 }
 
 /// Converts a byte offset into `source` to a 1-based `(line, column)` —
-/// the same mapping [`CompileError`] positions use (column counted in
-/// UTF-8 code points). Offsets past the end clamp to the last position.
+/// the same mapping [`CompileError`] positions use: ECMA-262's line
+/// terminators (LF, CR, CR LF, U+2028, U+2029), as `tsc` counts lines, and
+/// the column counted in code points. Offsets past the end clamp to the
+/// last position. [`lines::LineMap`] measures a text once for many
+/// conversions, and under the editor protocol's line breaks.
+///
+/// ```
+/// let source = "export {};\rconst b = 1;\r";
+/// assert_eq!(ttc::line_col(source, source.find('b').unwrap()), (2, 7));
+/// ```
 pub fn line_col(source: &str, offset: usize) -> (usize, usize) {
-    error::line_col(source, offset)
-}
-
-/// A [`line_col`] column, counted in UTF-16 code units instead of code
-/// points — what an editor protocol means by a character.
-///
-/// The two differ by one for every astral character earlier on the line, so
-/// a surface that speaks to an editor converts here rather than passing a
-/// code-point column off as a protocol one. A position the text does not
-/// have answers with the column it was given.
-///
-/// ```
-/// // An emoji is one code point and two UTF-16 code units.
-/// let source = "const e = \"🎉\"; const x = 1;\n";
-/// let at = source.find("x").unwrap();
-/// let (line, column) = ttc::line_col(source, at);
-/// assert_eq!((line, column), (1, 22));
-/// assert_eq!(ttc::utf16_column(source, line, column), 23);
-/// ```
-pub fn utf16_column(source: &str, line: usize, column: usize) -> usize {
-    error::utf16_column(source, line, column)
+    lines::line_col(source, offset)
 }
 
 /// A byte offset into `source` as a UTF-16 code-unit offset — the offset an
@@ -329,4 +411,46 @@ pub fn utf16_column(source: &str, line: usize, column: usize) -> usize {
 /// ```
 pub fn utf16_offset(source: &str, offset: usize) -> usize {
     crate::typescript::mapper::to_utf16(source, offset)
+}
+
+/// [`utf16_offset`] for many offsets into one measured source.
+pub struct Utf16Offsets<'a> {
+    source: &'a str,
+    signature: usize,
+    multibyte: Vec<(usize, usize)>,
+    total: usize,
+}
+
+impl<'a> Utf16Offsets<'a> {
+    /// Measures `source` once.
+    pub fn new(source: &'a str) -> Self {
+        let signature = error::signature_len(source);
+        let source = error::decoded(source);
+        let mut multibyte = Vec::new();
+        let mut surplus = 0;
+        for (byte, ch) in source.char_indices() {
+            if !ch.is_ascii() {
+                surplus += ch.len_utf8() - ch.len_utf16();
+                multibyte.push((byte + ch.len_utf8(), surplus));
+            }
+        }
+        Self {
+            source,
+            signature,
+            multibyte,
+            total: source.len() - surplus,
+        }
+    }
+
+    /// The answer [`utf16_offset`] gives for `offset`.
+    pub fn offset(&self, offset: usize) -> usize {
+        let byte = offset.saturating_sub(self.signature);
+        if !self.source.is_char_boundary(byte) {
+            return self.total;
+        }
+        let before = self.multibyte.partition_point(|&(end, _)| end <= byte);
+        byte - before
+            .checked_sub(1)
+            .map_or(0, |last| self.multibyte[last].1)
+    }
 }

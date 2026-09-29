@@ -11,8 +11,19 @@ pub(super) struct Target {
     pub(super) members: usize,
 }
 
+fn property_name_at(tokens: &[Token], k: usize) -> bool {
+    match k.checked_sub(1).map(|at| &tokens[at].kind) {
+        Some(TokenKind::OptChain) => true,
+        Some(TokenKind::Punct(b'.')) => {
+            !(k >= 3 && punct_at(tokens, k - 2, b'.') && punct_at(tokens, k - 3, b'.'))
+        }
+        _ => false,
+    }
+}
+
 fn reference(tokens: &[Token], start: usize) -> Option<(usize, Vec<Target>)> {
     let (mut end, mut targets) = match tokens.get(start)?.kind {
+        TokenKind::Ident if property_name_at(tokens, start) => return None,
         TokenKind::Ident => (
             start + 1,
             vec![Target {

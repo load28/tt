@@ -127,6 +127,53 @@ lowering이 TypeScript 문맥을 추측하지 않는다.
 `GeneratedLocalId`를 할당하고, target 직전에 hygiene된 spelling을 정한다. 생성 이름의
 identity와 출력 철자를 분리한다.
 
+### 4.4 A script's global scope is shared with every other script
+
+TypeScript reads a file as a script when it has no top-level `import` or
+`export` (TypeScript's `isFileProbablyExternalModule`); `ProgramSyntax` also
+treats `import.meta` and a top-level `await`, `for await`, or `await using`
+as module syntax, because only the module goal allows them. Every script's
+top-level declarations live in one global scope (ECMA-262 §16.1.7,
+GlobalDeclarationInstantiation), so storage a lowering declares at a
+script's top level would collide with the same storage in another script
+(TASK-483). `ProgramSyntax` classifies each statement of a script's global
+statement list (`GlobalStatement`), and the lowering plan follows it:
+
+- A statement that declares no lexical global (an expression, a control
+  statement, a `var` declaration, a `var` let-else, a lexical declaration
+  that binds nothing) is `Enclose`: its prelude and the statement form one
+  block, through the owner-block mechanism an unbraced `if` body already
+  uses. A `var` inside the block still binds the global.
+- A statement that declares a lexical global (`let`, `const`, `using`,
+  `class`, a function declaration, a `const`/`let` let-else that binds a
+  name) is `Binding(name)`, where `name` is the first binding it declares.
+  Its binding has to stay global, so its prelude cannot move into a block
+  or a function. Every generated name that prelude declares at the top
+  level is derived from that binding: `{stem}${name}` (`$tt_v0$total`,
+  `$tt_t0$value`), allocated through `generated_names` so it still avoids
+  every name the file writes. TypeScript rejects a second declaration of a
+  block-scoped global anywhere in the program (TS2451), so a valid program
+  declares `name` once, and a name derived from it is unique in the
+  program by construction. A generated stem has no `$` after its first
+  byte, so stem and binding cannot be read two ways. User code in the
+  value is emitted where it always was, so a `var` written inside it binds
+  the global.
+- Helpers (`$tt_show`, `$tt_raise`, `$tt_expr`), the `@tt/runtime` helpers
+  `$tt_ap`/`$tt_fl`, and host-global aliases become `var` declarations with
+  an explicit type, written the same way in every script: TypeScript
+  accepts repeated `var` declarations of one type across files (TS2403
+  otherwise), and so does JavaScript. An `import` would make the script a
+  module. A `var` is assigned where it is written, so they go before the
+  first statement: after the directive prologue and the file-level
+  pragmas, and before the first statement's own leading comments. The
+  pragmas are recognized by `crate::lexer::pragmas`, a small grammar of
+  what TypeScript reads only before the first token: triple-slash
+  directives (`<reference>`, `<amd-module>`, `<amd-dependency>`),
+  `@ts-check`/`@ts-nocheck`, and the `@jsx` pragmas.
+
+A function body, block, or namespace body is already a private scope, and a
+module's top level is private to the module, so none of them changes.
+
 ## 5. Evaluation IR
 
 Core IR은 tt 표면을 `Decision`, `Propagate`, `Apply`, `Adt`로 이미 정규화한다. 새
@@ -273,6 +320,64 @@ Evaluation IR validator가 누락된 protocol을 내부 컴파일러 오류로 �
 boundary는 분석 실패 fallback이 아니라 `EvaluationOwner`가 선택하는 명시적 target
 capability다. 이름은 전체 SWC identifier 집합과 충돌하지 않으며 실제 사용 파일에 한 번만
 방출한다.
+
+### 7.5 Values inside an operand of an enclosing tt value (TASK-501)
+
+A tt value can sit inside an operand that another tt value lowers
+structurally: a pipeline head or step (`f(match ...) |> g`), a match subject,
+or an expression arm body. Such a value is planned exactly like a value of a
+TypeScript owner, bounded by the enclosing value instead of the owner:
+
+- Its schedule is the prefix of its protocol whose parents lie inside the
+  enclosing value, and its target capability is decided from that schedule
+  (`target_capability`). A conditional step is planned as a whole conditional
+  operation (`plan_conditional_operations`) among the values the same
+  enclosing value owns; one that cannot be owned whole is a placement
+  diagnostic (`match-placement`, `try-placement`), as it is for an owner.
+- The target emits the operand, not the value: each value's region runs in
+  source order behind the captures its steps take, each conditional
+  operation writes its join slot, and the operand's source is then delivered
+  once with the values, the operations, and the captured inputs replaced by
+  their slots. A value never delivers its enclosing expression itself, so an
+  operand with several values, or a value under a call, a template, or a
+  logical operator, has exactly one emitter for every source byte.
+
+The projection shows a pipeline operand's TypeScript structure to the
+collector whenever the operand contains a tt value, and a template is such an
+operand when any of its interpolations contains one, a value-form `try`
+included (TASK-506): `` `${f(try g())}` |> String `` schedules the capture of
+`f` before `g()` runs, as every other owner of the same `try` does.
+
+A postfix step (`x |> .m(match ...)`, `x |> ?.m(...)`) applies its tail to
+the piped value, which the pipeline has already evaluated into a slot. The
+projection writes that value as a placeholder in front of
+the step's tail and maps it to the empty source span where the tail begins
+(TASK-504), so the step's evaluation structure is TypeScript's own:
+`P.m(match ...)` captures the method reference `P.m` with its receiver `P`
+before the argument, and `P?.m(...)` is an optional call the pipeline owns as
+a conditional operation. Every input that contains the piped value starts at
+the step, inside the pipeline's extent, and the target prints the piped value
+as the slot that holds it wherever such an input or the step's operand is
+delivered. A step never re-projects the head or an earlier step, so each tt
+value in a pipeline has one host.
+
+Each step changes the value's type, so a structured pipeline does not reuse
+one slot across its steps (TASK-505). The Evaluation IR plans one slot per
+value piped into a step (`LoweringPlan::piped_slots`): the head's value, then
+each step's result but the last, which is delivered to the pipeline's own
+value slot. A slot is written once, so its type is the contextual type of
+the step that consumes it or, without one, the type of the one value written
+to it (`docs/design/contextual-type-materialization.md`); the pipeline's
+value slot carries only the pipeline's result type.
+
+```ts
+let $tt_v0: number;
+do {
+  let $tt_v2: number[];
+  // the head's match writes $tt_v2 in each arm
+  $tt_v0 = (p => p.length)($tt_v2);
+} while (false);
+```
 
 ## 8. 전체 tt 표면의 공통 배치
 

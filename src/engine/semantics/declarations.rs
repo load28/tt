@@ -60,37 +60,20 @@ pub(crate) fn externs_of(
             .files()
             .iter()
             .find(|f| f.source_path == target)
-            .map(|f| {
-                f.variant_symbols()
-                    .iter()
-                    .filter(|d| d.exported)
-                    .cloned()
-                    .collect()
-            })
+            .map(|f| f.exported_variant_symbols().to_vec())
             .or_else(|| {
                 snapshot
                     .blocked()
                     .iter()
                     .find(|f| f.source_path == target)
-                    .map(|f| {
-                        f.variant_symbols()
-                            .iter()
-                            .filter(|d| d.exported)
-                            .cloned()
-                            .collect()
-                    })
+                    .map(|f| f.exported_variant_symbols().to_vec())
             })
             .or_else(|| {
                 let text = std::fs::read_to_string(target).ok()?;
-                Some(
-                    crate::variant_symbols_with_kind(
-                        &text,
-                        crate::SourceKind::from_path(target).unwrap_or_default(),
-                    )
-                    .into_iter()
-                    .filter(|d| d.exported)
-                    .collect(),
-                )
+                Some(crate::exported_variant_symbols_with_kind(
+                    &text,
+                    crate::SourceKind::from_path(target).unwrap_or_default(),
+                ))
             })
     })
 }
@@ -99,7 +82,7 @@ pub(crate) fn externs_of(
 pub(super) fn display_literal(literal: &crate::Literal) -> String {
     match literal {
         crate::Literal::String(s) => format!("{s:?}"),
-        crate::Literal::Number(n) => n.to_string(),
+        crate::Literal::Number(n) => crate::ast::js_number_string(*n),
         crate::Literal::BigInt(d) => format!("{d}n"),
         crate::Literal::Boolean(b) => b.to_string(),
     }

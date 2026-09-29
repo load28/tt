@@ -280,7 +280,7 @@ const label = ((() => {
   switch ($tt_m) {
     case "north": { return "N"; }
     case "south": { return "S"; }
-    default: { throw new Error("tt match: unexpected literal " + JSON.stringify($tt_m)); }
+    default: { throw new Error("tt match: unexpected literal " + $tt_show($tt_m)); }
   }
 })());
 ```

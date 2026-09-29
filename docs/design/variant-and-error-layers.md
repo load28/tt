@@ -56,7 +56,7 @@ import한 variant나 손으로 쓴 태그드 유니언에 대한 match는 ttc가
 순수 런타임 가드가 남는다:
 
 ```ts
-default: { throw new Error("tt match: unexpected case " + JSON.stringify($tt_m)); }
+default: { throw new Error("tt match: unexpected case " + $tt_show($tt_m)); }
 ```
 
 이는 타입 검사가 아니라 방어 코드다 — 타입 시스템을 우회한 값(외부 입력 등)에

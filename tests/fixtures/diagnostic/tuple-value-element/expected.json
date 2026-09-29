@@ -1,0 +1,16 @@
+[
+  {
+    "code": "malformed-match",
+    "col": 10,
+    "endCol": 13,
+    "endLine": 7,
+    "line": 7,
+    "message": "a literal pattern cannot be a tuple pattern element",
+    "suggestions": [
+      {
+        "edit": null,
+        "message": "tuple pattern elements are tag patterns or `_`; test this value in an arm guard or a nested `match`"
+      }
+    ]
+  }
+]

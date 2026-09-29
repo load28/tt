@@ -47,7 +47,7 @@ TypeScript 7.1은 정확히 이 부류의 도구(Vue·Svelte·Astro의 템플릿
   innermost-first로 빈 구간만 채운다.
 - **진단**: tt 수준 규칙(`ttc --check`와 같은 [`ttc::compile_report`]의
   진단)을 `diagnosticSource: "tt"`로 반환한다. 코드는
-  `CODE_NUMBERS`(append-only 표)의 안정 번호 — `match-not-exhaustive`는
+  `DiagnosticCode::number`(append-only 표)의 안정 번호 — `match-not-exhaustive`는
   `tt27`로 렌더된다. 타입 오류는 TypeScript의 것 — 에러 계층 계약(§2)이
   프로토콜 위에서 그대로 성립한다. 한 파일에 tt 진단이 있으면 TypeScript는
   그 파일을 구문 오류가 있는 파일처럼 다루어 의미 검사를 건너뛴다(실측).
@@ -58,9 +58,36 @@ TypeScript 7.1은 정확히 이 부류의 도구(Vue·Svelte·Astro의 템플릿
   tsconfig 루트(또는 파일에서 올라가 찾은 패키지 루트)에
   `node_modules/@tt/{std,runtime}`를 물질화한다 — typed engine이 언어
   서비스에 하는 것과 같은 규칙, 이미 있으면 절대 덮어쓰지 않는다.
+  **Update (TASK-473)**: every materializer (this one, the language
+  service, the contextual pass, and the typed engine's in-memory copy)
+  now writes the one package definition, `ttc::StdPackage`. It is
+  dual-format. The root is `"type": "module"`, and `cjs/` holds identical
+  sources under `"type": "commonjs"`. Each `"exports"` entry (`.`,
+  `./option`, `./result`) sends the `import` condition to the root file and
+  the `require` condition to the `cjs/` copy, each with `types` first. As a
+  result, ES-module and CommonJS importers both resolve subpaths under
+  `node16`/`nodenext`/`bundler`, and each gets files of its own format.
+  A manifest byte-equal to the one earlier
+  releases wrote (name/version/types only) is upgraded in place. Any other
+  existing package is still left alone.
+  **Update (TASK-485)**: `cjs/` now holds TypeScript's declaration emit of
+  each module (`cjs/option.d.ts`, ...) instead of source copies. Under
+  `verbatimModuleSyntax`, a CommonJS source file's `export const` is
+  TS1287, and `.ts` files in `node_modules` are checked even with
+  `skipLibCheck`. A declaration file is ambient, so it is not. The
+  `require` condition's `types` names the declaration, and both conditions'
+  `default` names the root source. A package holding exactly the files the
+  TASK-473 layout wrote (source copies in `cjs/`) is upgraded in place, and
+  its copies are removed.
 - **정적 identity**: `dynamicConfig` 없음, `compilerOptions` 요구 없음 —
   tt의 변환은 프로젝트 설정과 무관하다. incremental/`--build`의 up-to-date
   판정이 매퍼 프로세스를 스폰하지 않고 끝난다.
+- **Lowered input (TASK-484)**: the ttc editor service also runs this mapper,
+  in projects whose `tsconfig.json` names it and that have it installed. It
+  serves each `.tt` document's already-lowered TypeScript as the document's
+  content. By the passthrough contract, the transform then returns the same
+  text with verbatim mappings. See
+  [`tsgo-native-backend.md`](./tsgo-native-backend.md) (TASK-484 update).
 
 ## 실측으로 확인한 것 (2026-08-27, 7.1.0-dev.20260826.1)
 

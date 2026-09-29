@@ -14,16 +14,17 @@ mod tests;
 use std::collections::{HashMap, HashSet};
 
 use crate::core_ir::{
-    ArmAction, CoreFile, Decision, ExitTarget, Expr, MissAction, Propagate, ResultRegionItem,
-    Statement,
+    ArmAction, CoreFile, Decision, DecisionKind, ExitTarget, Expr, MissAction, Propagate,
+    ResultRegionItem, Statement,
 };
 use crate::hir::ids::Idx;
-use crate::hir::{ArmBodyKind, BodyId, ExprId, NodeId};
+use crate::hir::{ArmBodyKind, BindingMode, BodyId, ExprId, NodeId};
 use crate::ice::LoweringSubject;
 use crate::program_syntax::{
     ConditionalBranch, ConditionalFacts, CoreRoot, EagerPosition, EvaluationContext,
-    EvaluationInputMode, EvaluationOwner, HostContinuation, HostEvaluationOperation,
-    HostEvaluationProtocol, HostExit, HostOwner, OwnerReach, ProgramSyntax, SourceSpan, TtNodeId,
+    EvaluationInputMode, EvaluationOwner, GlobalStatement, HostContinuation,
+    HostEvaluationOperation, HostEvaluationProtocol, HostExit, HostOwner, OwnerReach,
+    ProgramSyntax, SourceSpan, TtNodeId,
 };
 
 use builder::*;
@@ -113,10 +114,15 @@ struct EvalRegion {
 pub(crate) struct EvaluationFile {
     regions: Vec<EvalRegion>,
     occupied_names: HashSet<String>,
+    declared_names: HashSet<String>,
+    module_declared_names: HashSet<String>,
+    directive_prologue_end: Option<usize>,
     /// Source spans of every tt node in the file. A schedule's source
     /// capture must not overlap one: the capture copies raw source bytes,
     /// and a tt node inside them is lowered elsewhere.
     tt_spans: Vec<SourceSpan>,
+    script: bool,
+    globals: HashMap<SourceSpan, GlobalStatement>,
 }
 
 #[derive(Debug, Default)]
@@ -127,18 +133,36 @@ pub(crate) struct LoweringPlan {
     /// Earlier materializations substituted when an enclosing source is captured.
     capture_dependencies: HashMap<ValueSlotId, Vec<(SourceSpan, ValueSlotId)>>,
     value_slots: HashMap<ExprId, ValueSlotId>,
+    piped_slots: HashMap<ExprId, Vec<ValueSlotId>>,
     nested_exits: HashMap<ExprId, Vec<HostExit>>,
     nested_schedules: HashMap<ExprId, EvaluationSchedule>,
+    nested_operations: Vec<PlannedConditionalOperation>,
     nested_values: HashSet<ExprId>,
     structurally_owned_children: HashSet<ExprId>,
     nested_relocations: Vec<SourceSpan>,
     expression_boundary_name: String,
     match_raise_name: String,
+    match_show_name: String,
+    generated_names: Option<crate::generated_names::GeneratedNames>,
+    shadowed_globals: HashSet<String>,
+    host_global_aliases: HashMap<String, HostGlobalAlias>,
+    directive_prologue_end: Option<usize>,
     match_subject_names: HashMap<ExprId, Vec<String>>,
     unsupported_expression_propagations: Vec<UnsupportedExpressionPropagation>,
     unsupported_matches: Vec<UnsupportedMatch>,
-    block_required_propagations: HashSet<NodeId>,
+    block_required_statements: HashSet<NodeId>,
+    block_required_owners: HashSet<SourceSpan>,
+    lexical_declaration_bodies: Vec<LexicalDeclarationBody>,
     ambient_items: HashSet<NodeId>,
+    script: bool,
+    global_temps: HashMap<crate::core_ir::TempId, String>,
+    owner_model_unavailable: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct HostGlobalAlias {
+    pub(crate) name: String,
+    pub(crate) capture: String,
 }
 
 /// A propagation declaration in a C-style `for` initializer. Its evaluation
@@ -160,6 +184,18 @@ pub(crate) struct UnsupportedExpressionPropagation {
     pub(crate) source: SourceSpan,
     pub(crate) owner: EvaluationOwner,
     pub(crate) reason: ExpressionBoundaryReason,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct LexicalDeclarationBody {
+    pub(crate) source: SourceSpan,
+    pub(crate) statement: BindingStatement,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BindingStatement {
+    LetElse,
+    Try,
 }
 
 /// A match whose host cannot carry a statement region without changing
@@ -206,11 +242,17 @@ pub(crate) struct PlannedConditionalOperation {
     /// evaluation steps between each consumed value and that branch. This
     /// lets the target rebuild `condition && wrapper(match ...)` as one
     /// region instead of requiring the match to be the entire branch.
-    pub(crate) active_branch: Option<SourceSpan>,
-    pub(crate) active_steps: Vec<PlannedEvaluationStep>,
+    pub(crate) active: Vec<PlannedActiveBranch>,
     /// The evaluation steps outside this operation (its own host context),
     /// shared by every consumed value.
     pub(crate) outer: Vec<PlannedEvaluationStep>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct PlannedActiveBranch {
+    pub(crate) value: ExprId,
+    pub(crate) branch: SourceSpan,
+    pub(crate) steps: Vec<PlannedEvaluationStep>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -301,10 +343,12 @@ pub(crate) enum TargetCapability {
 /// Why a value cannot be lowered to statements in its host owner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExpressionBoundaryReason {
-    /// A parameter default or class field initializer: standard TypeScript
-    /// has no statement position in the owner, and moving the value out of
-    /// it would change the parameter scope, `this`, `arguments`, the
-    /// function's `length`, or the field initialization order.
+    /// A parameter default, class field initializer, or class definition
+    /// position (a decorator, a computed member name, or a decorated class's
+    /// heritage): standard TypeScript has no statement position in the
+    /// owner, and moving the value out of it would change the parameter
+    /// scope, `this`, `arguments`, the function's `length`, or the field or
+    /// class definition evaluation order.
     OwnerTakesNoStatements,
     /// The value runs once per iteration but its owner runs once per loop —
     /// it sits in a loop header, so hoisting to the owner would change how
@@ -438,6 +482,17 @@ struct PlannedSourceSlot {
 }
 
 impl LoweringPlan {
+    pub(crate) fn without_owner_model() -> Self {
+        Self {
+            owner_model_unavailable: true,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn has_owner_model(&self) -> bool {
+        !self.owner_model_unavailable
+    }
+
     pub(crate) fn owners(&self) -> impl Iterator<Item = &HostRewrite> {
         self.owners.iter()
     }
@@ -450,6 +505,18 @@ impl LoweringPlan {
         self.value_slots
             .iter()
             .map(|(expr, slot)| (*expr, self.slot_name(*slot)))
+    }
+
+    pub(crate) fn piped_slot_names(&self) -> impl Iterator<Item = (ExprId, Vec<String>)> + '_ {
+        self.piped_slots.iter().map(|(expr, slots)| {
+            (
+                *expr,
+                slots
+                    .iter()
+                    .map(|slot| self.slot_name(*slot).to_owned())
+                    .collect(),
+            )
+        })
     }
 
     pub(crate) fn nested_value_exits(&self) -> impl Iterator<Item = (ExprId, &[HostExit])> {
@@ -468,6 +535,10 @@ impl LoweringPlan {
 
     pub(crate) fn nested_values(&self) -> impl Iterator<Item = ExprId> + '_ {
         self.nested_values.iter().copied()
+    }
+
+    pub(crate) fn nested_operations(&self) -> &[PlannedConditionalOperation] {
+        &self.nested_operations
     }
 
     pub(crate) fn structurally_owned_children(&self) -> impl Iterator<Item = ExprId> + '_ {
@@ -492,6 +563,32 @@ impl LoweringPlan {
         &self.match_raise_name
     }
 
+    pub(crate) fn match_show_name(&self) -> &str {
+        &self.match_show_name
+    }
+
+    pub(crate) fn host_global(&self, name: &str) -> String {
+        if let Some(alias) = self.host_global_aliases.get(name) {
+            alias.name.clone()
+        } else if self.shadowed_globals.contains(name) {
+            format!("globalThis.{name}")
+        } else {
+            name.to_owned()
+        }
+    }
+
+    pub(crate) fn host_global_alias(&self, name: &str) -> Option<&HostGlobalAlias> {
+        self.host_global_aliases.get(name)
+    }
+
+    pub(crate) fn directive_prologue_end(&self) -> Option<usize> {
+        self.directive_prologue_end
+    }
+
+    pub(crate) fn generated_names(&self) -> Option<&crate::generated_names::GeneratedNames> {
+        self.generated_names.as_ref()
+    }
+
     pub(crate) fn match_subject_names(&self, expr: ExprId) -> &[String] {
         self.match_subject_names
             .get(&expr)
@@ -514,8 +611,15 @@ impl LoweringPlan {
         self.unsupported_expression_propagations.clone()
     }
 
-    pub(crate) fn block_required_propagations(&self) -> &HashSet<NodeId> {
-        &self.block_required_propagations
+    pub(crate) fn block_required_statements(&self) -> &HashSet<NodeId> {
+        &self.block_required_statements
+    }
+
+    /// Host owners, by their anchor, that are the unbraced body of an `if`,
+    /// loop, label, or `with`: a prelude hoisted in front of one has to open
+    /// a block there so the owner stays a single statement under its parent.
+    pub(crate) fn block_required_owners(&self) -> &HashSet<SourceSpan> {
+        &self.block_required_owners
     }
 
     pub(crate) fn ambient_items(&self) -> &HashSet<NodeId> {
@@ -524,6 +628,18 @@ impl LoweringPlan {
 
     pub(crate) fn unsupported_matches(&self) -> Vec<UnsupportedMatch> {
         self.unsupported_matches.clone()
+    }
+
+    pub(crate) fn lexical_declaration_bodies(&self) -> &[LexicalDeclarationBody] {
+        &self.lexical_declaration_bodies
+    }
+
+    pub(crate) fn is_script(&self) -> bool {
+        self.script
+    }
+
+    pub(crate) fn global_temps(&self) -> &HashMap<crate::core_ir::TempId, String> {
+        &self.global_temps
     }
 }
 

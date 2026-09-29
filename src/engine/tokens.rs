@@ -24,7 +24,7 @@ use crate::ast::{
     TemplateChunk, TuplePattern,
 };
 use crate::lexer::{self, Token, TokenKind as Lex};
-use crate::typescript::mapper;
+use crate::lines::LineMap;
 
 /// What one token *is*, in the parser's judgement. Names follow the LSP
 /// standard token types so an adapter maps them one to one.
@@ -71,9 +71,17 @@ pub struct SemanticToken {
 
 #[cfg(test)]
 fn scan(source: &str) -> Vec<(usize, usize, SemanticTokenKind)> {
-    let program = crate::parser::parse(source);
+    scan_with_kind(source, crate::SourceKind::TypeScript)
+}
+
+fn scan_with_kind(
+    source: &str,
+    source_kind: crate::SourceKind,
+) -> Vec<(usize, usize, SemanticTokenKind)> {
+    let program = crate::parser::parse_with_kind(source, source_kind);
+    let tokens = lexer::lex_with_kind(source, 0, source.len(), source_kind);
     let mut out = Vec::new();
-    walk(source, &program, &mut out);
+    walk(source, &tokens, &program, &mut out);
     out.sort_by_key(|&(start, _, _)| start);
     out
 }
@@ -92,27 +100,28 @@ pub fn semantic_tokens_with_kind(
     source: &str,
     source_kind: crate::SourceKind,
 ) -> Vec<SemanticToken> {
-    let lines = LineIndex::new(source);
-    let program = crate::parser::parse_with_kind(source, source_kind);
-    let mut scanned = Vec::new();
-    walk(source, &program, &mut scanned);
-    scanned.sort_by_key(|&(start, _, _)| start);
-    scanned
+    let lines = LineMap::lsp(source);
+    scan_with_kind(source, source_kind)
         .into_iter()
         .map(|(start, len, kind)| SemanticToken {
             range: Range {
-                start: lines.position(source, start),
-                end: lines.position(source, start + len),
+                start: position(&lines, start),
+                end: position(&lines, start + len),
             },
             kind,
         })
         .collect()
 }
 
-fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticTokenKind)>) {
+fn walk(
+    src: &str,
+    tokens: &[Token],
+    program: &Program,
+    out: &mut Vec<(usize, usize, SemanticTokenKind)>,
+) {
     for segment in &program.segments {
         match segment {
-            Segment::Verbatim(span) => deny_lookalikes(src, span.start, span.end, out),
+            Segment::Verbatim(span) => deny_in(src, tokens, (span.start, span.end), out),
             Segment::Variant(decl) => {
                 out.push((decl.name_off, decl.name.len(), SemanticTokenKind::Variant));
                 for case in &decl.cases {
@@ -121,19 +130,19 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
             }
             Segment::Match(m) => {
                 out.push((m.keyword_off, 5, SemanticTokenKind::Keyword));
-                walk(src, &m.scrutinee, out);
+                walk(src, tokens, &m.scrutinee, out);
                 for arm in &m.arms {
                     pattern(src, &arm.pattern, out);
                     if let Some(guard) = &arm.guard {
-                        walk(src, &guard.expr, out);
+                        walk(src, tokens, &guard.expr, out);
                     }
-                    walk(src, &arm.body, out);
+                    walk(src, tokens, &arm.body, out);
                 }
             }
             Segment::TupleMatch(m) => {
                 out.push((m.keyword_off, 5, SemanticTokenKind::Keyword));
                 for (_, scrutinee) in &m.scrutinees {
-                    walk(src, scrutinee, out);
+                    walk(src, tokens, scrutinee, out);
                 }
                 for arm in &m.arms {
                     if let TuplePattern::Elems(elems) = &arm.pattern {
@@ -142,9 +151,9 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
                         }
                     }
                     if let Some(guard) = &arm.guard {
-                        walk(src, &guard.expr, out);
+                        walk(src, tokens, &guard.expr, out);
                     }
-                    walk(src, &arm.body, out);
+                    walk(src, tokens, &arm.body, out);
                 }
             }
             Segment::Try(t) => {
@@ -154,20 +163,20 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
                 if t.decl.is_none() {
                     out.push((t.keyword_off, 3, SemanticTokenKind::Keyword));
                 }
-                walk(src, &t.expr, out);
+                walk(src, tokens, &t.expr, out);
             }
             Segment::TryExpr(expr) => {
                 out.push((expr.span.start, 3, SemanticTokenKind::Keyword));
-                walk(src, &expr.expr, out);
+                walk(src, tokens, &expr.expr, out);
             }
             Segment::LetElse(stmt) => {
                 for alt in &stmt.alternatives {
                     tag_pattern(alt, out);
                 }
-                walk(src, &stmt.expr, out);
-                walk(src, &stmt.else_body, out);
+                walk(src, tokens, &stmt.expr, out);
+                walk(src, tokens, &stmt.else_body, out);
             }
-            Segment::IfLet(stmt) => if_let(src, stmt, out),
+            Segment::IfLet(stmt) => if_let(src, tokens, stmt, out),
             Segment::TtImport(_) => {}
             Segment::ValModifier(_) => {
                 // `val` keeps its grammar color (a storage modifier); the
@@ -176,7 +185,7 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
             Segment::Template(template) => {
                 for chunk in &template.chunks {
                     if let TemplateChunk::Interp(body) = chunk {
-                        walk(src, body, out);
+                        walk(src, tokens, body, out);
                     }
                 }
             }
@@ -188,20 +197,20 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
                         pipe.head_span.end - pipe.head_span.start,
                         SemanticTokenKind::Keyword,
                     )),
-                    Some(head) => walk(src, head, out),
+                    Some(head) => walk(src, tokens, head, out),
                 }
                 for step in &pipe.steps {
-                    walk(src, &step.body, out);
+                    walk(src, tokens, &step.body, out);
                 }
             }
             Segment::ResultBlock(block) => {
                 out.push((block.keyword_off, 6, SemanticTokenKind::Keyword));
                 for item in &block.items {
                     let ResultItem::Stmts(stmts) = item;
-                    walk(src, stmts, out);
+                    walk(src, tokens, stmts, out);
                 }
                 if let Some(value) = &block.value {
-                    walk(src, value, out);
+                    walk(src, tokens, value, out);
                 }
             }
         }
@@ -210,17 +219,18 @@ fn walk(src: &str, program: &Program, out: &mut Vec<(usize, usize, SemanticToken
 
 fn if_let(
     src: &str,
+    tokens: &[Token],
     stmt: &crate::ast::IfLetStmt,
     out: &mut Vec<(usize, usize, SemanticTokenKind)>,
 ) {
     for alt in &stmt.alternatives {
         tag_pattern(alt, out);
     }
-    walk(src, &stmt.expr, out);
-    walk(src, &stmt.body, out);
+    walk(src, tokens, &stmt.expr, out);
+    walk(src, tokens, &stmt.body, out);
     match &stmt.else_part {
-        Some(IfLetElse::Block(body)) => walk(src, body, out),
-        Some(IfLetElse::IfLet(chained)) => if_let(src, chained, out),
+        Some(IfLetElse::Block(body)) => walk(src, tokens, body, out),
+        Some(IfLetElse::IfLet(chained)) => if_let(src, tokens, chained, out),
         None => {}
     }
 }
@@ -296,30 +306,30 @@ fn bindings(list: &[Binding], out: &mut Vec<(usize, usize, SemanticTokenKind)>) 
 /// The grammar colors `match (…)` and `result {` wherever they appear; the
 /// parser knows which of those it did *not* claim. Reclassify the ones in
 /// verbatim (plain TypeScript) ranges so the editor shows them as the
-/// identifiers they are. Lexed, not searched — occurrences inside strings,
-/// comments, templates and regexes never reach the token stream as
-/// identifiers.
-fn deny_lookalikes(
+/// identifiers they are. Read off the file's own token stream, lexed once
+/// under its surface kind — occurrences inside strings, comments, templates,
+/// regexes and JSX text never reach it as identifiers.
+fn deny_in(
     src: &str,
-    start: usize,
-    end: usize,
+    tokens: &[Token],
+    (start, end): (usize, usize),
     out: &mut Vec<(usize, usize, SemanticTokenKind)>,
 ) {
-    let tokens = lexer::lex(src, start, end);
-    deny_in(src, &tokens, out);
-}
-
-fn deny_in(src: &str, tokens: &[Token], out: &mut Vec<(usize, usize, SemanticTokenKind)>) {
-    for (i, token) in tokens.iter().enumerate() {
+    let first = tokens.partition_point(|token| token.span.end <= start);
+    for (i, token) in tokens.iter().enumerate().skip(first) {
+        if end <= token.span.start {
+            break;
+        }
+        crate::work::tick("denied token visits");
         match &token.kind {
             Lex::Template(parts) => {
                 for part in parts.iter() {
                     if let lexer::TplPart::Interp { tokens, .. } = part {
-                        deny_in(src, tokens, out);
+                        deny_in(src, tokens, (start, end), out);
                     }
                 }
             }
-            Lex::Ident => {
+            Lex::Ident if start <= token.span.start && token.span.end <= end => {
                 let text = &src[token.span.start..token.span.end];
                 if text != "match" && text != "result" {
                     continue;
@@ -348,30 +358,12 @@ fn deny_in(src: &str, tokens: &[Token], out: &mut Vec<(usize, usize, SemanticTok
     }
 }
 
-/// Line starts, for byte-offset → line / UTF-16-column conversion.
-struct LineIndex {
-    starts: Vec<usize>,
-}
-
-impl LineIndex {
-    fn new(text: &str) -> Self {
-        let mut starts = vec![0];
-        starts.extend(
-            text.bytes()
-                .enumerate()
-                .filter(|&(_, b)| b == b'\n')
-                .map(|(i, _)| i + 1),
-        );
-        LineIndex { starts }
-    }
-
-    fn position(&self, text: &str, byte: usize) -> Position {
-        let line = self.starts.partition_point(|&start| start <= byte) - 1;
-        let line_start = self.starts[line];
-        Position {
-            line: line as u32,
-            character: mapper::to_utf16(&text[line_start..], byte - line_start) as u32,
-        }
+/// A byte of `source` as the editor protocol's line and UTF-16 column.
+fn position(lines: &LineMap<'_>, byte: usize) -> Position {
+    let (line, character) = lines.utf16_position(byte);
+    Position {
+        line: line as u32,
+        character: character as u32,
     }
 }
 
@@ -424,6 +416,19 @@ mod tests {
     }
 
     #[test]
+    fn jsx_text_stays_opaque_and_jsx_expressions_are_still_read() {
+        let src = "const a = <p>match (x) is fun</p>;\nconst b = <p>{match(x)}</p>;\n";
+        let tokens = semantic_tokens_with_kind(src, crate::SourceKind::Tsx);
+        assert_eq!(tokens.len(), 1, "{tokens:?}");
+        assert_eq!(tokens[0].kind, SemanticTokenKind::Function);
+        assert_eq!(tokens[0].range.start.line, 1);
+        assert_eq!(
+            tokens[0].range.start.character,
+            "const b = <p>{".len() as u32
+        );
+    }
+
+    #[test]
     fn lookalikes_inside_strings_and_comments_stay_silent() {
         let src = "const s = \"match(x)\";\n// match(x) result { }\nconst t = `${\"result {\"}`;\n";
         assert!(kinds_at(src).is_empty());
@@ -463,5 +468,21 @@ mod tests {
         assert_eq!(token.range.start.line, 1);
         assert_eq!(token.range.start.character, 10);
         assert_eq!(token.range.end.character, 15);
+    }
+
+    #[test]
+    fn positions_count_the_protocols_line_breaks() {
+        for (src, line, character) in [
+            ("const x = 1;\rconst a = match(x);\r", 1, 10),
+            ("const x = 1;\r\nconst a = match(x);\r\n", 1, 10),
+            ("\u{feff}\u{1F389};\rconst a = match(x);\n", 1, 10),
+            ("const x = 1;\u{2028}const a = match(x);\n", 0, 23),
+            ("const x = 1;\u{2029}\rconst a = match(x);\n", 1, 10),
+        ] {
+            let tokens = semantic_tokens(src);
+            assert_eq!(tokens.len(), 1, "{src:?}");
+            assert_eq!(tokens[0].range.start.line, line, "{src:?}");
+            assert_eq!(tokens[0].range.start.character, character, "{src:?}");
+        }
     }
 }

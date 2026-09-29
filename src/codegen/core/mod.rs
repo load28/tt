@@ -24,7 +24,6 @@ use crate::program_syntax::{
     ConditionalBranch, EvaluationInputMode, HostContinuation, HostEvaluationOperation, HostExit,
     HostOwnerKind, LoopTestKind, SourceSpan,
 };
-use crate::scanner::{at, ident_end, is_ident_start, scan_type_end, skip_ws_comments};
 use crate::{AnchorKind, ImportRewrite, SourceKind, StdImports};
 
 use emitter::*;
@@ -65,8 +64,9 @@ pub(crate) fn lowering_plan(
     core: &CoreFile,
     source: &str,
     source_kind: SourceKind,
+    tokens: &[crate::lexer::Token],
 ) -> Result<LoweringPlan, LoweringFailure> {
-    lowering_plan_with(semantic, core, source, source_kind, false)
+    lowering_plan_with(semantic, core, source, source_kind, tokens, false)
 }
 
 pub(crate) fn lowering_plan_with(
@@ -74,6 +74,7 @@ pub(crate) fn lowering_plan_with(
     core: &CoreFile,
     source: &str,
     source_kind: SourceKind,
+    tokens: &[crate::lexer::Token],
     tolerant: bool,
 ) -> Result<LoweringPlan, LoweringFailure> {
     if !core.requires_host_lowering() {
@@ -95,6 +96,7 @@ pub(crate) fn lowering_plan_with(
         core,
         source,
         source_kind,
+        tokens,
         tolerant,
     ) {
         Ok(syntax) => syntax,
@@ -102,10 +104,14 @@ pub(crate) fn lowering_plan_with(
             return Err(LoweringFailure::SourceNotTypeScript { message, source });
         }
         Err(error) => {
-            return Err(LoweringFailure::HostProjection {
-                error,
-                source: primary_source(),
-            });
+            let source = match &error {
+                crate::program_syntax::ProgramSyntaxError::Parse {
+                    source: Some(source),
+                    ..
+                } => *source,
+                _ => primary_source(),
+            };
+            return Err(LoweringFailure::HostProjection { error, source });
         }
     };
     let evaluation =
@@ -133,17 +139,55 @@ pub(crate) fn lowering_plan_with(
     Ok(plan)
 }
 
+fn span_index(spans: impl Iterator<Item = SourceSpan>) -> crate::span_index::SpanIndex {
+    crate::span_index::SpanIndex::new(spans.map(|span| (span.start, span.end)))
+}
+
+fn match_show_body(json: &str, string: &str) -> String {
+    format!(
+        "{{\n  if (typeof value === \"string\") {{\n    return {json}.stringify(value);\n  }}\n  if (typeof value === \"bigint\") {{\n    return {string}(value) + \"n\";\n  }}\n  if (typeof value === \"object\" || typeof value === \"function\") {{\n    try {{\n      const text = {json}.stringify(value);\n      if (typeof text === \"string\") {{\n        return text;\n      }}\n    }} catch {{}}\n    return typeof value;\n  }}\n  return {string}(value);\n}}"
+    )
+}
+
+fn script_runtime_helper(export: &str, local: &str) -> String {
+    match export {
+        "$tt_ap" => format!(
+            "var {local}: <A, B>(v: A, f: (v: A) => B) => B = function (v, f) {{\n  return f(v);\n}};\n"
+        ),
+        "$tt_fl" => format!(
+            "var {local}: <A extends unknown[], B, C>(\n  f: (...a: A) => B,\n  g: (b: B) => C,\n) => (...a: A) => C = function (f, g) {{\n  return (...a) => g(f(...a));\n}};\n"
+        ),
+        _ => crate::ice::bug!("{export} is not a runtime helper"),
+    }
+}
+
+/// The file target lowering emits: its text, its TypeScript surface, and
+/// the statement boundaries its automatic semicolons make, which the target
+/// keeps ([`crate::lexer::automatic_semicolons`]).
+#[derive(Clone, Copy)]
+pub(crate) struct EmitSource<'a> {
+    pub(crate) text: &'a str,
+    pub(crate) kind: SourceKind,
+    pub(crate) automatic_semicolons: &'a [crate::lexer::AutomaticSemicolon],
+}
+
 pub(crate) fn emit_with_map<'a>(
     semantic: &'a SemanticFile,
     core: &'a CoreFile,
-    source: &'a str,
-    source_kind: SourceKind,
+    emit_source: EmitSource<'a>,
     lowering_plan: &LoweringPlan,
     rewrite_imports: ImportRewrite,
     std_imports: StdImports<'a>,
 ) -> Flat {
+    let EmitSource {
+        text: source,
+        kind: source_kind,
+        automatic_semicolons,
+    } = emit_source;
     let target = TargetRewritePlan::build(semantic, core, source, lowering_plan);
+    let script = target.script;
     let direct_apply_inputs = direct_apply_inputs(semantic, core, source, source_kind);
+    let member_apply_steps = member_apply_steps(semantic, core, source, source_kind);
     let mut relocated: Vec<SourceSpan> = target
         .source_replacements
         .iter()
@@ -151,6 +195,16 @@ pub(crate) fn emit_with_map<'a>(
         .collect();
     relocated.extend(target.relocated_values.iter().copied());
     relocated.extend(direct_apply_inputs.iter().filter_map(|expr| {
+        let Expr::Opaque(node) = &core.exprs[expr.index()] else {
+            return None;
+        };
+        semantic
+            .hir
+            .source_map
+            .node_span(*node)
+            .map(SourceSpan::from)
+    }));
+    relocated.extend(member_apply_steps.keys().filter_map(|expr| {
         let Expr::Opaque(node) = &core.exprs[expr.index()] else {
             return None;
         };
@@ -171,6 +225,7 @@ pub(crate) fn emit_with_map<'a>(
     let target_recovered_propagations: Vec<_> = target
         .recovered_propagations
         .iter()
+        .chain(&target.recovered_matches)
         .map(|(_, span)| *span)
         .collect();
     let emitter = Emitter {
@@ -179,22 +234,54 @@ pub(crate) fn emit_with_map<'a>(
         source,
         source_kind,
         direct_apply_inputs,
+        member_apply_steps,
         rewrite_imports,
         std_imports,
+        owner_slot_index: span_index(target.owner_slots.iter().map(|rewrite| rewrite.owner)),
+        owner_slots_by_expr: target.owner_slots.iter().enumerate().fold(
+            HashMap::new(),
+            |mut by_expr: HashMap<ExprId, Vec<usize>>, (index, rewrite)| {
+                by_expr.entry(rewrite.expr).or_default().push(index);
+                by_expr
+            },
+        ),
         owner_slot_rewrites: target.owner_slots,
+        propagation_index: span_index(
+            target
+                .for_initializer_propagations
+                .iter()
+                .map(|rewrite| rewrite.owner),
+        ),
         for_initializer_propagations: target.for_initializer_propagations,
+        compose_index: span_index(target.composes.iter().map(|rewrite| rewrite.owner)),
         compose_rewrites: target.composes,
+        loop_body_index: span_index(target.loop_tests.iter().map(|rewrite| rewrite.body)),
         loop_test_rewrites: target.loop_tests,
+        replacement_index: span_index(
+            target
+                .source_replacements
+                .iter()
+                .map(|replacement| replacement.source),
+        ),
         source_replacements: target.source_replacements,
         active_capture_sources: RefCell::new(Vec::new()),
         consumed_exprs: target.consumed_exprs,
+        arrow_returns_by_expr: target.arrow_returns.iter().enumerate().rev().fold(
+            HashMap::new(),
+            |mut by_expr, (index, rewrite)| {
+                by_expr.insert(rewrite.expr, index);
+                by_expr
+            },
+        ),
         arrow_return_rewrites: target.arrow_returns,
         slot_exprs: target.slot_exprs,
         value_slots: target.value_slots,
+        piped_slots: target.piped_slots,
         scheduled_slots: target.scheduled_slots,
         result_failures: RefCell::new(HashMap::new()),
         value_exits: target.value_exits,
         nested_schedules: target.nested_schedules,
+        nested_operations: target.nested_operations,
         nested_values: target.nested_values,
         structurally_nested_values: target.structurally_nested_values,
         recovered_propagations: target
@@ -202,66 +289,165 @@ pub(crate) fn emit_with_map<'a>(
             .into_iter()
             .map(|(expr, _)| expr)
             .collect(),
+        recovered_matches: target
+            .recovered_matches
+            .into_iter()
+            .map(|(expr, _)| expr)
+            .collect(),
+        owner_model: target.owner_model,
+        recovered_sources: RefCell::new(Vec::new()),
         expression_boundary_name: target.expression_boundary_name,
         match_raise_name: target.match_raise_name,
+        match_show_name: target.match_show_name,
+        host_error: target.host_error,
+        host_json: target.host_json,
+        host_string: target.host_string,
         inline_subjects: target.inline_subjects,
-        block_required_propagations: target.block_required_propagations,
+        block_required_statements: target.block_required_statements,
+        block_required_by_end: target.block_required_owners.iter().fold(
+            std::collections::BTreeMap::new(),
+            |mut by_end: std::collections::BTreeMap<usize, Vec<SourceSpan>>, owner| {
+                by_end.entry(owner.end).or_default().push(*owner);
+                by_end
+            },
+        ),
+        block_required_owners: target.block_required_owners,
+        opened_owner_blocks: ClosedComposeBlocks::default(),
+        closed_owner_blocks: ClosedComposeBlocks::default(),
+        emitting_owner_preludes: RefCell::new(Vec::new()),
         ambient_items: target.ambient_items,
         used_match_raise: Cell::new(false),
+        used_match_show: Cell::new(false),
+        used_host_error: Cell::new(false),
         conditional_region_depth: Cell::new(0),
         active_structured_exprs: ActiveExprStack::default(),
-        active_scheduled_exprs: ActiveExprStack::default(),
         emitted_owner_rewrites: EmittedOwnerRewrites::default(),
         closed_compose_blocks: ClosedComposeBlocks::default(),
         emitted_compose_rewrites: ClosedComposeBlocks::default(),
+        emitted_loop_tests: ClosedComposeBlocks::default(),
         loop_region_depth: Cell::new(0),
         used_expression_boundary: Cell::new(false),
         used_pipe: Cell::new(false),
         used_flow: Cell::new(false),
+        generated_names: RefCell::new(lowering_plan.generated_names().cloned().unwrap_or_else(
+            || crate::generated_names::GeneratedNames::for_source(source, source_kind),
+        )),
+        global_temps: target.global_temps,
     };
     let mut output = emitter.emit_body(core.root);
     let used_pipe = emitter.used_pipe.get();
     let used_flow = emitter.used_flow.get();
-    if used_pipe || used_flow {
-        let names = match (used_pipe, used_flow) {
-            (true, true) => "$tt_ap, $tt_fl",
-            (true, false) => "$tt_ap",
-            (false, true) => "$tt_fl",
-            // The enclosing `if` is `used_pipe || used_flow`.
-            (false, false) => unreachable!("no helper is needed, so no import is written"),
-        };
-        let runtime = std_imports
-            .get(crate::StdModule::Runtime)
-            .unwrap_or_else(|| crate::StdModule::Runtime.specifier());
+    let used_show = emitter.used_match_show.get();
+    let aliases: Vec<_> = [
+        ("Error", emitter.used_host_error.get()),
+        ("JSON", used_show),
+        ("String", used_show),
+    ]
+    .into_iter()
+    .filter(|(_, used)| *used)
+    .filter_map(|(global, _)| lowering_plan.host_global_alias(global))
+    .collect();
+    let runtime_helpers: Vec<(&str, String)> = [("$tt_ap", used_pipe), ("$tt_fl", used_flow)]
+        .into_iter()
+        .filter(|(_, used)| *used)
+        .map(|(export, _)| (export, emitter.generated_name(export)))
+        .collect();
+    let show = used_show.then(|| match_show_body(&emitter.host_json, &emitter.host_string));
+    let mut prelude = String::new();
+    if script {
+        for alias in &aliases {
+            prelude.push_str(&format!("var {} = {};\n", alias.name, alias.capture));
+        }
+        for (export, local) in &runtime_helpers {
+            prelude.push_str(&script_runtime_helper(export, local));
+        }
+        if emitter.used_match_raise.get() {
+            prelude.push_str(&format!(
+                "var {}: (error: unknown) => never = function (error) {{ throw error; }};\n",
+                emitter.match_raise_name
+            ));
+        }
+        if let Some(body) = &show {
+            prelude.push_str(&format!(
+                "var {}: (value: unknown) => string = function (value) {body};\n",
+                emitter.match_show_name
+            ));
+        }
+        if emitter.used_expression_boundary.get() {
+            prelude.push_str(&format!(
+                "var {}: <T>(run: () => T) => T = function (run) {{ return run(); }};\n",
+                emitter.expression_boundary_name
+            ));
+        }
+    } else {
+        if !runtime_helpers.is_empty() {
+            let names = runtime_helpers
+                .iter()
+                .map(|(export, local)| {
+                    if local == export {
+                        local.clone()
+                    } else {
+                        format!("{export} as {local}")
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            let runtime = std_imports
+                .get(crate::StdModule::Runtime)
+                .unwrap_or_else(|| crate::StdModule::Runtime.specifier());
+            prelude.push_str(&format!("import {{ {names} }} from \"{runtime}\";\n"));
+        }
+        for alias in &aliases {
+            prelude.push_str(&format!("const {} = {};\n", alias.name, alias.capture));
+        }
+    }
+    if !prelude.is_empty() {
         // Which helpers the file needs is only known once the whole file
         // is emitted, but where an import belongs is the top — after
         // anything that has to come before one (TASK-219).
-        let at = directive_prologue_end(source);
+        let (mut at, after_code) =
+            module_import_position(source, lowering_plan.directive_prologue_end());
+        if script && !after_code {
+            at = crate::lexer::pragmas::after_file_pragmas(source, at);
+        }
         // A prologue that runs to the end of the file leaves nothing to
         // insert before, so the import lands at the end and needs the
         // line break the source did not write.
-        if at >= source.len() && !output.ends_with_newline() {
-            output.push_lit("\n");
-        }
-        output.insert_lit_at_source(at, format!("import {{ {names} }} from \"{runtime}\";\n"));
+        let separator = if after_code || (at >= source.len() && !output.ends_with_newline()) {
+            "\n"
+        } else {
+            ""
+        };
+        output.insert_lit_at_source(at, format!("{separator}{prelude}"));
     }
-    if emitter.used_match_raise.get() {
-        if !output.ends_with_newline() {
-            output.push_lit("\n");
+    if !script {
+        if emitter.used_match_raise.get() {
+            if !output.ends_with_newline() {
+                output.push_lit("\n");
+            }
+            output.push_lit(format!(
+                "function {}(error: unknown): never {{ throw error; }}\n",
+                emitter.match_raise_name
+            ));
         }
-        output.push_lit(format!(
-            "function {}(error: unknown): never {{ throw error; }}\n",
-            emitter.match_raise_name
-        ));
-    }
-    if emitter.used_expression_boundary.get() {
-        if !output.ends_with_newline() {
-            output.push_lit("\n");
+        if let Some(body) = &show {
+            if !output.ends_with_newline() {
+                output.push_lit("\n");
+            }
+            output.push_lit(format!(
+                "function {}(value: unknown): string {body}\n",
+                emitter.match_show_name
+            ));
         }
-        output.push_lit(format!(
-            "function {}<T>(run: () => T): T {{ return run(); }}\n",
-            emitter.expression_boundary_name
-        ));
+        if emitter.used_expression_boundary.get() {
+            if !output.ends_with_newline() {
+                output.push_lit("\n");
+            }
+            output.push_lit(format!(
+                "function {}<T>(run: () => T): T {{ return run(); }}\n",
+                emitter.expression_boundary_name
+            ));
+        }
     }
     // A block arm's `return` frame (the keyword, and anything after the
     // argument) is claimed by the exit rewrite, as is the operator frame of
@@ -309,17 +495,23 @@ pub(crate) fn emit_with_map<'a>(
     }));
     rewritten.extend(rewritten_operations);
     rewritten.extend(target_recovered_propagations);
+    rewritten.extend(emitter.recovered_sources.take());
     let preservation = SourcePreservation {
         owned: pass_through_spans(semantic, core),
         relocated,
         rewritten,
     };
-    let mut flat = output.flatten(source, &preservation);
+    let boundaries: Vec<usize> = automatic_semicolons
+        .iter()
+        .map(|boundary| boundary.next)
+        .collect();
+    let mut flat = output.flatten(source, source_kind, &boundaries, &preservation);
     for result_return in &mut flat.result_return_temps {
         result_return.src_end = result_return_args
             .iter()
             .find(|argument| argument.start == result_return.src)
             .map_or(result_return.src, |argument| argument.end);
     }
+    flat.generated_names = emitter.generated_names.into_inner().into_allocated();
     flat
 }

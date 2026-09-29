@@ -10,8 +10,8 @@
 //! An editor does, though. A hint is not part of the compile answer: it is
 //! attached to a range, it never fails a build, and the CLI never prints
 //! one. So the arms the usefulness algorithm already computes as dead
-//! ([`crate::Coverage::unreachable`], TASK-103) surface here and nowhere
-//! else.
+//! ([`crate::MatchAnalysis::unreachable`], TASK-103) surface here and
+//! nowhere else.
 //!
 //! Like [`super::names`] and [`super::completions`] this is **parse-only**:
 //! source in, hints out, no toolchain and no project — so an editor shows
@@ -49,10 +49,7 @@ pub fn tt_hints(path: &Path, source: &str) -> Vec<TtHint> {
     let analyses = super::language::analyses_for(path, source);
     let mut out = Vec::new();
     for analysis in &analyses.matches {
-        let Some(coverage) = &analysis.coverage else {
-            continue;
-        };
-        for &index in &coverage.unreachable {
+        for &index in &analysis.unreachable {
             let Some(arm) = analysis.arms.get(index) else {
                 continue;
             };
@@ -122,5 +119,46 @@ mod tests {
         let found = hints(src);
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!(found[0].range.start.line, 2);
+    }
+
+    #[test]
+    fn a_trailing_wildcard_does_not_hide_dead_arms() {
+        let tuple = "variant S { Circle, Square }\n\
+                     variant W { Nope, Yes }\n\
+                     const v = match (s, w) { (Circle, _) => 1, (_, Nope) => 2, (Circle, Nope) => 3, _ => 4 };\n";
+        let found = hints(tuple);
+        assert_eq!(found.len(), 1, "{found:?}");
+        let line = tuple.lines().nth(2).expect("the match line");
+        assert_eq!(
+            found[0].range.start.character,
+            line.find("(Circle, Nope)").expect("the dead arm") as u32
+        );
+
+        let nested = "variant Shape { Circle(radius: number), Square }\n\
+                      variant Box { Has(s: Shape), Empty }\n\
+                      const v = match (b) { Has(s: Circle(radius: r)) => 1, Has(s: Circle(radius: q)) => 2, _ => 5 };\n";
+        let found = hints(nested);
+        assert_eq!(found.len(), 1, "{found:?}");
+        let line = nested.lines().nth(2).expect("the match line");
+        assert_eq!(
+            found[0].range.start.character,
+            line.find("Has(s: Circle(radius: q))")
+                .expect("the dead arm") as u32
+        );
+    }
+
+    #[test]
+    fn a_wildcard_after_arms_that_cover_every_case_is_dead_and_a_live_one_is_not() {
+        let dead = "variant E { A, B }\nconst v = match (e) { A => 1, B => 2, _ => 3 };\n";
+        let found = hints(dead);
+        assert_eq!(found.len(), 1, "{found:?}");
+        let line = dead.lines().nth(1).expect("the match line");
+        assert_eq!(
+            found[0].range.start.character,
+            line.find("_ =>").expect("the wildcard arm") as u32
+        );
+
+        let live = "variant E { A, B }\nconst v = match (e) { A => 1, _ => 3 };\n";
+        assert!(hints(live).is_empty(), "{:?}", hints(live));
     }
 }

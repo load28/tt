@@ -17,6 +17,8 @@ import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { isWithin } from "./paths";
+
 
 /** What to do when an `.tt` file is saved. */
 export type SidecarMode = "off" | "refresh" | "always";
@@ -25,7 +27,7 @@ export type SidecarMode = "off" | "refresh" | "always";
 export type SidecarResult =
   | { kind: "written"; files: string[] }
   | { kind: "skipped"; reason: string }
-  | { kind: "failed"; detail: string };
+  | { kind: "failed"; detail: string; written: string[] };
 
 export class WriteLedger {
   private readonly entries = new Map<
@@ -42,10 +44,10 @@ export class WriteLedger {
     return this.generation;
   }
 
-  settle(generation: number, written: boolean): void {
+  settle(generation: number, written: readonly string[]): void {
     for (const [file, entry] of this.entries) {
       if (entry.generation !== generation) continue;
-      const fingerprint = written ? fingerprintOf(file) : null;
+      const fingerprint = written.includes(file) ? fingerprintOf(file) : null;
       if (fingerprint === null) this.entries.delete(file);
       else entry.fingerprint = fingerprint;
     }
@@ -84,31 +86,134 @@ export async function refreshSidecar(
   ttPath: string,
   mode: SidecarMode,
   outDir?: string,
+  root?: string,
 ): Promise<SidecarResult> {
   if (mode === "off") return { kind: "skipped", reason: "disabled" };
   if (!ttPath.endsWith(".tt") && !ttPath.endsWith(".ttx")) {
     return { kind: "skipped", reason: "not a tt source" };
   }
 
-  // Declarations either sit next to the source or in their own tree (which
-  // TypeScript merges back with `rootDirs`); the refresh has to look where
-  // they actually are.
-  const base =
-    outDir === undefined ? ttPath : path.join(outDir, path.basename(ttPath));
-  const declarationTarget = `${base}.d.ts`;
-  if (mode === "refresh" && !exists(declarationTarget)) {
+  const existing =
+    outDir === undefined
+      ? [`${ttPath}.d.ts`].filter(exists)
+      : treeSidecarsOf(ttPath, outDir, root);
+  if (mode === "refresh" && existing.length === 0) {
     return { kind: "skipped", reason: "no sidecar to refresh" };
   }
+  const targets =
+    existing.length > 0
+      ? existing
+      : [
+          outDir === undefined
+            ? `${ttPath}.d.ts`
+            : mirroredDeclaration(ttPath, outDir, mirrorBase(ttPath, root)),
+        ];
 
-  // `-o` is always passed: on its own `--types` writes to `.tt-types`, the
-  // directory a project opts into, and the editor's sidecar goes wherever
-  // the settings say — beside the source by default.
-  const args = ["--types", ttPath, "-o", outDir ?? path.dirname(ttPath)];
-  const files = [declarationTarget, `${base}.d.ts.map`];
+  const written: string[] = [];
+  const failures: string[] = [];
+  for (const target of targets) {
+    const result = await writeSidecar(compiler, ttPath, target);
+    if (result.kind === "written") written.push(...result.files);
+    else if (result.kind === "failed") {
+      written.push(...result.written);
+      failures.push(result.detail);
+    }
+  }
+  return failures.length === 0
+    ? { kind: "written", files: written }
+    : { kind: "failed", detail: failures.join("; "), written };
+}
+
+async function writeSidecar(
+  compiler: string,
+  ttPath: string,
+  declarationTarget: string,
+): Promise<SidecarResult> {
+  const args = ["--types", "--json-report", ttPath, "-o", path.dirname(declarationTarget)];
+  const files = [declarationTarget, `${declarationTarget}.map`];
   const generation = selfWrites.expect(files);
-  const result = await run(compiler, args, files);
-  selfWrites.settle(generation, result.kind === "written");
-  return result;
+  const outcome = await run(compiler, args);
+  const written =
+    outcome.kind === "report"
+      ? files.filter((file) => outcome.report.written.some((entry) => samePath(entry, file)))
+      : [];
+  selfWrites.settle(generation, written);
+  if (outcome.kind === "error") return { kind: "failed", detail: outcome.detail, written };
+  if (!outcome.report.checked) {
+    return {
+      kind: "failed",
+      detail: `the check could not run: ${outcome.stderr || "ttc gave no reason"}`,
+      written,
+    };
+  }
+  const missing = files.filter((file) => !written.includes(file));
+  if (missing.length === 0) return { kind: "written", files };
+  return {
+    kind: "failed",
+    detail: missing
+      .map((file) => {
+        const failure = outcome.report.failed.find((entry) => samePath(entry.path, file));
+        return `${file}: ${failure?.error ?? "ttc did not write it"}`;
+      })
+      .join("; "),
+    written,
+  };
+}
+
+function samePath(reported: string, expected: string): boolean {
+  return (
+    path.resolve(reported) === path.resolve(expected) ||
+    canonical(reported) === canonical(expected)
+  );
+}
+
+function mirrorBase(ttPath: string, root: string | undefined): string {
+  const dir = path.dirname(path.resolve(ttPath));
+  return root !== undefined && isWithin(path.resolve(root), dir)
+    ? path.resolve(root)
+    : dir;
+}
+
+function mirroredDeclaration(ttPath: string, outDir: string, base: string): string {
+  return `${path.join(path.resolve(outDir), path.relative(base, path.resolve(ttPath)))}.d.ts`;
+}
+
+function treeSidecarsOf(ttPath: string, outDir: string, root: string | undefined): string[] {
+  const source = path.resolve(ttPath);
+  const top = mirrorBase(ttPath, root);
+  const bases: string[] = [];
+  for (let dir = path.dirname(source); ; dir = path.dirname(dir)) {
+    bases.push(dir);
+    if (dir === top || path.dirname(dir) === dir) break;
+  }
+  return bases
+    .map((base) => mirroredDeclaration(source, outDir, base))
+    .filter((declaration) => exists(declaration) && mapNamesSource(`${declaration}.map`, source));
+}
+
+function mapNamesSource(mapFile: string, source: string): boolean {
+  let parsed: { sources?: unknown; sourceRoot?: unknown };
+  try {
+    parsed = JSON.parse(fs.readFileSync(mapFile, "utf8")) as typeof parsed;
+  } catch {
+    return false;
+  }
+  if (!Array.isArray(parsed.sources)) return false;
+  const sourceRoot = typeof parsed.sourceRoot === "string" ? parsed.sourceRoot : "";
+  const wanted = canonical(source);
+  return parsed.sources.some(
+    (entry) =>
+      typeof entry === "string" &&
+      canonical(path.resolve(path.dirname(mapFile), sourceRoot, entry)) === wanted,
+  );
+}
+
+function canonical(file: string): string {
+  try {
+    return fs.realpathSync(file);
+  } catch {
+    return path.resolve(file);
+  }
 }
 
 function exists(file: string): boolean {
@@ -119,33 +224,77 @@ function exists(file: string): boolean {
   }
 }
 
-/**
- * One `ttc` run.
- *
- * The exit code carries three answers, and the middle one is the whole
- * point: a saved file mid-edit usually has type errors, and the sidecar is
- * written anyway (a stale one is worse than one built from code that does
- * not check yet).
- *
- * - `0` — checked clean, written.
- * - `1` — something was reported, and written all the same.
- * - `2` — the check could not run (a tt-level error left nothing to
- *   lower), so nothing was written and the last good sidecar stands.
- */
-function run(compiler: string, args: string[], files: string[]): Promise<SidecarResult> {
+export interface TypesReport {
+  checked: boolean;
+  diagnostics: number;
+  written: string[];
+  failed: { path: string; error: string }[];
+}
+
+type RunOutcome =
+  | { kind: "report"; report: TypesReport; stderr: string }
+  | { kind: "error"; detail: string };
+
+const TYPES_EXIT_CODES = new Set([0, 1, 2, 3]);
+
+function run(compiler: string, args: string[]): Promise<RunOutcome> {
   return new Promise((resolve) => {
     execFile(
       compiler,
       args,
       { timeout: 30000, maxBuffer: 8 * 1024 * 1024 },
-      (err, _stdout, stderr) => {
-        const code = err === null ? 0 : ((err as { code?: number }).code ?? 1);
-        if (code === 0 || code === 1) {
-          resolve({ kind: "written", files });
+      (err, stdout, stderr) => {
+        const reason = stderr.trim();
+        const code = err === null ? 0 : err.code;
+        if (err !== null && (err.signal ?? null) !== null) {
+          resolve({
+            kind: "error",
+            detail: `ttc was terminated by ${err.signal}${reason ? `: ${reason}` : ""}`,
+          });
           return;
         }
-        resolve({ kind: "failed", detail: stderr.trim() || String(err) });
+        if (typeof code !== "number" || !TYPES_EXIT_CODES.has(code)) {
+          resolve({ kind: "error", detail: reason || String(err) });
+          return;
+        }
+        const report = parseReport(stdout);
+        if (report === null) {
+          resolve({
+            kind: "error",
+            detail: `ttc exited ${code} without a --json-report${reason ? `: ${reason}` : ""}`,
+          });
+          return;
+        }
+        resolve({ kind: "report", report, stderr: reason });
       },
     );
   });
+}
+
+export function parseReport(stdout: string): TypesReport | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    return null;
+  }
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const { checked, diagnostics, written, failed } = parsed as Record<string, unknown>;
+  if (typeof checked !== "boolean" || typeof diagnostics !== "number") return null;
+  if (!Array.isArray(written) || !written.every((entry) => typeof entry === "string")) {
+    return null;
+  }
+  if (
+    !Array.isArray(failed) ||
+    !failed.every(
+      (entry: unknown) =>
+        typeof entry === "object" &&
+        entry !== null &&
+        typeof (entry as Record<string, unknown>).path === "string" &&
+        typeof (entry as Record<string, unknown>).error === "string",
+    )
+  ) {
+    return null;
+  }
+  return { checked, diagnostics, written, failed: failed as TypesReport["failed"] };
 }

@@ -115,3 +115,23 @@ fn a_declaration_try_without_a_semicolon_is_the_value_form_under_asi() {
     let out = ok("declare function g(): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\nfunction f() {\n  const n = try g()\n  return n;\n}\n");
     assert!(out.contains("const n = $tt_v0\n  return n;"), "{out}");
 }
+
+#[test]
+fn the_runtime_import_precedes_generated_text_at_the_top_of_the_file() {
+    for source_kind in [SourceKind::TypeScript, SourceKind::Tsx] {
+        let options = Options { source_kind, ..Options::default() };
+        let source = "variant S { A, B }\nconst xs = [1].map(x => x |> String);\nexport {};\n";
+        let out = compile(source, &options).unwrap();
+        assert!(out.starts_with("import { $tt_ap } from \"@tt/runtime\";\ntype S =\n"), "{out}");
+        assert!(out.contains("B: { kind: \"B\" } as const,\n};\nconst xs"), "{out}");
+
+        let out = compile(&format!("\"use client\";\n{source}"), &options).unwrap();
+        assert!(out.starts_with("\"use client\";\nimport { $tt_ap } from \"@tt/runtime\";\ntype S =\n"), "{out}");
+
+        let out = compile(&format!("\u{feff}{source}"), &options).unwrap();
+        assert!(out.starts_with("\u{feff}import { $tt_ap } from \"@tt/runtime\";\ntype S =\n"), "{out}");
+
+        let out = compile(&format!("\u{feff}#!/usr/bin/env node\n{source}"), &options).unwrap();
+        assert!(out.starts_with("\u{feff}#!/usr/bin/env node\nimport { $tt_ap } from \"@tt/runtime\";\ntype S =\n"), "{out}");
+    }
+}

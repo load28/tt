@@ -9,9 +9,10 @@ impl Project {
     /// The service answers everything it can see — which is everything the
     /// emit-map ties to the source. What it cannot see is a pattern binding
     /// inside an or-pattern (`A(x) | B(x)`): the emitted destructuring
-    /// speaks for every alternative at once, so those spans map to nothing
-    /// (mapping them to one alternative would let a rename rewrite that one
-    /// alone). For those, [`crate::pattern_analyses`] knows the span and the
+    /// speaks for every alternative at once, so no byte mapping ties it to
+    /// one of them; navigation and rename reach it through its shared
+    /// binding, which names every alternative together, but a hover wants
+    /// the one alternative's type. For those, [`crate::pattern_analyses`] knows the span and the
     /// alternative it belongs to, and the answer is still the checker's
     /// wherever possible: the alternative is *isolated* — the same
     /// serve-a-stand-in move as the completion probe — so the service sees
@@ -51,7 +52,7 @@ impl Project {
         let Some(at) = to_service(&doc, position) else {
             return Ok(None);
         };
-        let uri = served_uri(&path);
+        let uri = served_uri(session, &path);
         let hover = session.client.request(
             "textDocument/hover",
             serde_json::json!({
@@ -59,14 +60,7 @@ impl Project {
                 "position": lsp_position(u16_position(&doc.code, at)),
             }),
         )?;
-        let contents = match &hover["contents"] {
-            serde_json::Value::String(s) => s.clone(),
-            value => value["value"].as_str().unwrap_or_default().to_string(),
-        };
-        if contents.is_empty() {
-            return Ok(None);
-        }
-        let (signature, documentation) = split_hover(&contents);
+        let (signature, documentation) = split_hover(&hover["contents"]);
         if signature.is_empty() {
             return Ok(None);
         }
@@ -149,9 +143,9 @@ impl Project {
     ) -> Option<HoverInfo> {
         let (code, offset) = isolate_alternative(path, &doc.source, binding, byte)?;
 
-        let uri = served_uri(path);
         let session = self.session();
-        session.client.open(&uri, &code);
+        open_served(session, path, &code);
+        let uri = served_uri(session, path);
         let answer = session.client.request(
             "textDocument/hover",
             serde_json::json!({
@@ -161,15 +155,10 @@ impl Project {
         );
         // The stand-in answered one question; the real projection is served
         // back before the answer is even read.
-        session.client.open(&uri, &doc.code);
-        session.served.insert(path.to_path_buf(), doc.code.clone());
+        open_served(session, path, &doc.code);
 
         let hover = answer.ok()?;
-        let contents = match &hover["contents"] {
-            serde_json::Value::String(s) => s.clone(),
-            value => value["value"].as_str().unwrap_or_default().to_string(),
-        };
-        let (signature, documentation) = split_hover(&contents);
+        let (signature, documentation) = split_hover(&hover["contents"]);
         if signature.is_empty() {
             return None;
         }
@@ -213,11 +202,9 @@ impl Project {
         if !found.is_empty() {
             return Ok(found);
         }
-        // The service found nothing — for a name an or-pattern binds, the
-        // target it resolved to is compiler glue, which navigation drops.
-        // The match analysis knows the spans the user actually wrote: a
-        // body reference goes to every alternative's binding; a binding is
-        // its own declaration.
+        // The service found nothing mappable. The match analysis knows the
+        // spans the user actually wrote: a body reference goes to every
+        // alternative's binding; a binding is its own declaration.
         self.match_binding_definitions(path, position)
     }
 
@@ -249,8 +236,8 @@ impl Project {
             .collect())
     }
 
-    /// Find references. `is_definition` marks the first result, as the
-    /// editor has always presented it.
+    /// Find references. `is_definition` marks each reference that is a
+    /// definition the checker names for the same position.
     pub fn references(
         &mut self,
         path: &Path,
@@ -262,12 +249,17 @@ impl Project {
             "textDocument/references",
             serde_json::json!({ "context": { "includeDeclaration": true } }),
         )?;
+        let definitions = self.locations(
+            path,
+            position,
+            "textDocument/definition",
+            serde_json::json!({}),
+        )?;
         Ok(locations
             .into_iter()
-            .enumerate()
-            .map(|(index, location)| Reference {
+            .map(|location| Reference {
+                is_definition: definitions.contains(&location),
                 location,
-                is_definition: index == 0,
             })
             .collect())
     }
@@ -284,11 +276,11 @@ impl Project {
             service, overlays, ..
         } = self;
         let session = service.as_mut().expect("serve started it");
-        let Some(at) = to_service(&doc, position) else {
+        let Some(at) = to_service_name(&doc, position) else {
             return Ok(Vec::new());
         };
         let mut params = serde_json::json!({
-            "textDocument": { "uri": served_uri(&path) },
+            "textDocument": { "uri": served_uri(session, &path) },
             "position": lsp_position(u16_position(&doc.code, at)),
         });
         if let (Some(into), Some(from)) = (params.as_object_mut(), extra.as_object()) {
@@ -307,10 +299,25 @@ impl Project {
             let Some(uri) = location["uri"].as_str() else {
                 continue;
             };
-            // Anything unmappable is dropped — a reference into glue is not
-            // a place the user can go.
-            if let Some(mapped) = map_target(session, overlays, uri, &location["range"]) {
-                out.push(mapped);
+            // A shared binding stands for every alternative that writes it;
+            // anything else unmappable is dropped — a reference into glue is
+            // not a place the user can go.
+            let mapped = match map_target(
+                session,
+                overlays,
+                uri,
+                &location["range"],
+                TargetUse::Navigation,
+            ) {
+                Some(mapped) => vec![mapped],
+                None => map_shared_target(session, overlays, uri, &location["range"])
+                    .map(|(_, targets)| targets.into_iter().map(|t| t.location).collect())
+                    .unwrap_or_default(),
+            };
+            for mapped in mapped {
+                if !out.contains(&mapped) {
+                    out.push(mapped);
+                }
             }
         }
         Ok(out)
@@ -330,7 +337,7 @@ impl Project {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
         let plain = match to_service(&doc, position) {
-            Some(at) => ts_completions(session, &path, at, &doc.code)?,
+            Some(at) => ts_completions(session, &path, at, &doc.code, &doc.generated_names)?,
             None => CompletionAnswer::default(),
         };
         if !member {
@@ -357,9 +364,14 @@ impl Project {
             });
         };
         session.probe_count += 1;
-        session.client.open(&served_uri(&path), &probe.code);
-        session.served.insert(path.clone(), probe.code.clone());
-        let mut probed = ts_completions(session, &path, probe.offset, &probe.code)?;
+        open_served(session, &path, &probe.code);
+        let mut probed = ts_completions(
+            session,
+            &path,
+            probe.offset,
+            &probe.code,
+            &probe.generated_names,
+        )?;
         probed.probe = Some(probe.version);
         session.last_probe = Some(probe);
         Ok(if probed.member {
@@ -383,7 +395,7 @@ impl Project {
     ) -> Result<Option<CompletionDetail>, String> {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
-        let at = match probe {
+        let (at, generated_names) = match probe {
             Some(version) => {
                 let Some(installed) = session
                     .last_probe
@@ -392,12 +404,11 @@ impl Project {
                 else {
                     return Ok(None);
                 };
-                session.client.open(&served_uri(&path), &installed.code);
-                session.served.insert(path.clone(), installed.code.clone());
-                installed.offset
+                open_served(session, &path, &installed.code);
+                (installed.offset, installed.generated_names)
             }
             None => match to_service(&doc, position) {
-                Some(at) => at,
+                Some(at) => (at, doc.generated_names.clone()),
                 None => return Ok(None),
             },
         };
@@ -411,7 +422,7 @@ impl Project {
         if !session.last_completion.contains_key(&key) {
             // The server resolves the item *it* produced, not a name, so the
             // list has to have been asked for first.
-            let _ = ts_completions(session, &path, at, &code)?;
+            let _ = ts_completions(session, &path, at, &code, &generated_names)?;
         }
         let Some(item) = session.last_completion.get(&key).cloned() else {
             return Ok(None);
@@ -441,10 +452,10 @@ impl Project {
             service, overlays, ..
         } = self;
         let session = service.as_mut().expect("serve started it");
-        let Some(at) = to_service(&doc, position) else {
+        let Some(at) = to_service_name(&doc, position) else {
             return Ok(None);
         };
-        let uri = served_uri(&path);
+        let uri = served_uri(session, &path);
         let lsp_at = lsp_position(u16_position(&doc.code, at));
 
         // The server's own "can this be renamed?" — a keyword or a literal
@@ -477,9 +488,35 @@ impl Project {
                 return Ok(None);
             };
             for one in edits {
-                let Some(location) = map_target(session, overlays, edited_uri, &one["range"])
-                else {
-                    return Ok(None);
+                let Some(location) = map_target(
+                    session,
+                    overlays,
+                    edited_uri,
+                    &one["range"],
+                    TargetUse::Edit,
+                ) else {
+                    let Some((generated, targets)) =
+                        map_shared_target(session, overlays, edited_uri, &one["range"])
+                    else {
+                        return Ok(None);
+                    };
+                    let text = one["newText"].as_str().unwrap_or(RENAME_PLACEHOLDER);
+                    if text != RENAME_PLACEHOLDER
+                        && text != format!("{generated}: {RENAME_PLACEHOLDER}")
+                    {
+                        return Ok(None);
+                    }
+                    for target in targets {
+                        out.push(RenameEdit {
+                            location: target.location,
+                            new_text: Some(if target.shorthand {
+                                format!("{}: {RENAME_PLACEHOLDER}", target.name)
+                            } else {
+                                RENAME_PLACEHOLDER.to_string()
+                            }),
+                        });
+                    }
+                    continue;
                 };
                 let new_text = one["newText"].as_str().map(String::from);
                 if let Some(text) = &new_text
@@ -510,7 +547,7 @@ impl Project {
         let help = session.client.request(
             "textDocument/signatureHelp",
             serde_json::json!({
-                "textDocument": { "uri": served_uri(&path) },
+                "textDocument": { "uri": served_uri(session, &path) },
                 "position": lsp_position(u16_position(&doc.code, at)),
             }),
         )?;
@@ -564,9 +601,10 @@ impl Project {
         let session = self.session();
         let answer = session.client.request(
             "textDocument/diagnostic",
-            serde_json::json!({ "textDocument": { "uri": served_uri(&path) } }),
+            serde_json::json!({ "textDocument": { "uri": served_uri(session, &path) } }),
         )?;
         let items = answer["items"].as_array().cloned().unwrap_or_default();
+        let served = served_uri(session, &path);
         let mut out = Vec::new();
         // The declaration table a translated message names its types from,
         // built on the first translation of this pass: most passes
@@ -623,7 +661,6 @@ impl Project {
             // The tsgo preview omits `relatedInformation` from pull
             // diagnostics today; when it starts sending it, these entries
             // become labels with no further work here.
-            let served = served_uri(&path);
             for entry in item["relatedInformation"].as_array().into_iter().flatten() {
                 if entry["location"]["uri"].as_str() != Some(served.as_str()) {
                     continue;
@@ -738,10 +775,12 @@ impl Project {
             ensure_std_module(&self.root);
             ensure_runtime_module(&self.root);
             let binary = service_binary(&self.root)?;
-            let client = Service::start(&binary, &self.root)?;
+            let arrangement = self.service_arrangement();
+            let client = Service::start(&binary, &self.root, &arrangement)?;
             self.service = Some(ServiceSession {
                 client,
                 served: HashMap::new(),
+                uris: HashMap::new(),
                 host_served: HashMap::new(),
                 docs: HashMap::new(),
                 last_completion: HashMap::new(),
@@ -816,10 +855,7 @@ impl Project {
         for projected in snapshot.files {
             let path = &projected.source_path;
             if session.served.get(path) != Some(&projected.emit.code) {
-                session.client.open(&served_uri(path), &projected.emit.code);
-                session
-                    .served
-                    .insert(path.clone(), projected.emit.code.clone());
+                open_served(session, path, &projected.emit.code);
             }
             session.docs.insert(
                 path.clone(),
@@ -828,8 +864,11 @@ impl Project {
                     code: projected.emit.code.clone(),
                     mappings: projected.emit.mappings.clone(),
                     anchors: projected.emit.anchors.clone(),
+                    declared_names: projected.emit.declared_names.clone(),
+                    shared_bindings: projected.emit.shared_bindings.clone(),
                     recovered: projected.recovered.clone(),
                     tt_diagnostics: projected.tt_diagnostics.clone(),
+                    generated_names: projected.emit.generated_names.clone(),
                 }),
             );
         }

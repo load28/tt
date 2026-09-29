@@ -65,10 +65,12 @@ pub mod engine;
 mod error;
 mod evaluation_ir;
 pub mod flow;
+mod generated_names;
 pub mod hir;
 mod host_input;
 pub mod ice;
 mod lexer;
+pub mod lines;
 #[path = "lib/mapped.rs"]
 mod mapped;
 mod parser;
@@ -80,17 +82,20 @@ mod scanner;
 mod sema;
 mod sidecar;
 pub mod source_map;
+mod span_index;
 pub mod stack;
 mod stdlib;
 pub(crate) mod typescript;
 mod val;
 mod verify;
+mod work;
 
 pub use analysis::{
     AnalyzedArm, BodyBinding, Coverage, CoveredVariant, MatchAnalysis, MatchConstructor,
     MatchSubject, NameKind, Origin, PatternAnalyses, PatternBinding, PatternSite, PayloadField,
     SiteKind, UnresolvedName, pattern_analyses,
 };
+pub use ast::ArmsTail;
 pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticOwner, Edit, Severity, Suggestion};
 pub use error::CompileError;
 pub use probe::{
@@ -99,8 +104,8 @@ pub use probe::{
 };
 pub use sidecar::{Sidecar, build_sidecar};
 pub use stdlib::{
-    RUNTIME_SOURCE, STD_OPTION_SOURCE, STD_RESULT_SOURCE, STD_SPECIFIER, STD_TYPES_SOURCE,
-    StdImports, StdModule,
+    GENERATED_BANNER, RUNTIME_SOURCE, STD_OPTION_SOURCE, STD_PACKAGE_COMMONJS_DIR,
+    STD_RESULT_SOURCE, STD_SPECIFIER, STD_TYPES_SOURCE, StdImports, StdModule, StdPackage,
 };
 pub use val::{Mutation, ValBinding, ValFn, ValParam, ValPass, ValProbes, is_builtin_mutator_name};
 
@@ -111,5 +116,12 @@ pub use mapped::*;
 #[cfg(test)]
 #[path = "lib/mapped_result_tests.rs"]
 mod mapped_result_tests;
+
+#[cfg(test)]
+#[path = "lib/scaling_tests.rs"]
+mod scaling_tests;
+
+#[cfg(test)]
+mod test_workspace;
 
 use error::TtError;

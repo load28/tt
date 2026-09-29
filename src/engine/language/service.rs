@@ -1,12 +1,30 @@
 //! Service projections, coordinate mapping, and TypeScript response conversion.
 
 use super::*;
+use crate::lines::LineMap;
 
 pub(super) fn projection_accepts_diagnostics(code: &str, source_kind: crate::SourceKind) -> bool {
     crate::verify::verify_output(code, source_kind).is_ok()
 }
 
 pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
+    if crate::engine::project::is_host_source(path) {
+        return ServiceDoc {
+            mappings: vec![EmitMapping {
+                src: 0,
+                out: 0,
+                len: text.len(),
+            }],
+            code: text.clone(),
+            source: text,
+            anchors: Vec::new(),
+            declared_names: Vec::new(),
+            shared_bindings: Vec::new(),
+            recovered: Vec::new(),
+            tt_diagnostics: Vec::new(),
+            generated_names: HashSet::new(),
+        };
+    }
     let options = crate::Options {
         filename: Some(path.to_str().unwrap_or("<input>")),
         source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
@@ -30,8 +48,11 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         code: emit.code,
         mappings: emit.mappings,
         anchors: emit.anchors,
+        declared_names: emit.declared_names,
+        shared_bindings: emit.shared_bindings,
         recovered,
         tt_diagnostics: report.diagnostics,
+        generated_names: emit.generated_names,
     }
 }
 
@@ -54,17 +75,73 @@ pub(super) fn serve_one(
             doc
         }
     };
-    if session.served.get(path) != Some(&doc.code) {
-        session.client.open(&served_uri(path), &doc.code);
-        session.served.insert(path.to_path_buf(), doc.code.clone());
+    if !crate::engine::project::is_host_source(path) && session.served.get(path) != Some(&doc.code)
+    {
+        open_served(session, path, &doc.code);
     }
     Some(doc)
 }
 
-/// The URI an `.tt` file is served under: the lowered module's name, which
-/// is what an `import "./x.tt"` resolves to.
-pub(super) fn served_uri(path: &Path) -> String {
-    file_uri(&module_path_of(path))
+pub(super) fn open_served(session: &mut ServiceSession, path: &Path, code: &str) {
+    let uri = if crate::engine::project::is_host_source(path) {
+        file_uri(path)
+    } else {
+        session
+            .client
+            .document_uri(path, &module_path_of(path), || {
+                lowering_reproduces(path, code)
+            })
+    };
+    if let Some(previous) = session.uris.insert(path.to_path_buf(), uri.clone())
+        && previous != uri
+    {
+        session.client.close(&previous);
+    }
+    session.client.open(&uri, code);
+    session.served.insert(path.to_path_buf(), code.to_string());
+}
+
+fn lowering_reproduces(path: &Path, code: &str) -> bool {
+    let report = crate::compile_projection_report(
+        code,
+        &crate::Options {
+            filename: path.to_str(),
+            source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
+            rewrite_imports: crate::ImportRewrite::Off,
+            ..crate::Options::default()
+        },
+    );
+    report.emit.is_some_and(|emit| emit.code == code)
+        && report
+            .diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.severity != crate::Severity::Error)
+}
+
+/// The URI a file is served under. An `.tt` file is served under the name
+/// [`open_served`] last opened it as; a hand-written TypeScript file is its
+/// own module, served as the buffer the session opened (or read from disk)
+/// under its own name.
+pub(super) fn served_uri(session: &ServiceSession, path: &Path) -> String {
+    if crate::engine::project::is_host_source(path) {
+        return file_uri(path);
+    }
+    match session.uris.get(path) {
+        Some(uri) => uri.clone(),
+        None => session
+            .client
+            .document_uri(path, &module_path_of(path), || true),
+    }
+}
+
+fn tt_document(path: &Path) -> Option<PathBuf> {
+    let name = path.to_string_lossy();
+    let source = name
+        .strip_suffix(".tsx")
+        .filter(|n| n.ends_with(".ttx"))
+        .or_else(|| name.strip_suffix(".ts").filter(|n| n.ends_with(".tt")))
+        .or_else(|| (name.ends_with(".tt") || name.ends_with(".ttx")).then_some(&*name))?;
+    Some(PathBuf::from(source))
 }
 
 /// Completions at a service offset, with the raw items cached for resolve.
@@ -73,11 +150,12 @@ pub(super) fn ts_completions(
     path: &Path,
     at: usize,
     code: &str,
+    generated_names: &HashSet<String>,
 ) -> Result<CompletionAnswer, String> {
     let answer = session.client.request(
         "textDocument/completion",
         serde_json::json!({
-            "textDocument": { "uri": served_uri(path) },
+            "textDocument": { "uri": served_uri(session, path) },
             "position": lsp_position(u16_position(code, at)),
         }),
     )?;
@@ -89,6 +167,9 @@ pub(super) fn ts_completions(
     let mut entries = Vec::with_capacity(items.len());
     for item in items {
         let label = item["label"].as_str().unwrap_or_default().to_string();
+        if generated_names.contains(&label) {
+            continue;
+        }
         session
             .last_completion
             .insert((path.to_path_buf(), at, label.clone()), item.clone());
@@ -113,7 +194,7 @@ pub(super) fn ts_completions(
 /// The source byte a position names — the analysis speaks bytes, the
 /// protocol UTF-16.
 pub(in super::super) fn source_byte(source: &str, position: Position) -> usize {
-    mapper::from_utf16(source, u16_offset(source, position))
+    byte_at(&LineMap::lsp(source), position)
 }
 
 /// The match analysis of one file as a stand-alone question: imported
@@ -134,11 +215,11 @@ pub(in super::super) fn analyses_for(path: &Path, source: &str) -> crate::Patter
 /// A byte span of `text` as a [`Range`] — the byte↔UTF-16 conversion every
 /// answer crosses on its way out.
 pub(in super::super) fn span_range(text: &str, start: usize, end: usize) -> Range {
-    source_range(
-        text,
-        mapper::to_utf16(text, start),
-        mapper::to_utf16(text, end),
-    )
+    let lines = LineMap::lsp(text);
+    Range {
+        start: byte_position(&lines, start),
+        end: byte_position(&lines, end),
+    }
 }
 
 /// The variant declarations a file's direct relative `.tt` imports bring into
@@ -161,15 +242,10 @@ pub(in super::super) fn externs_of(
         ),
         &|target| {
             let text = read(target)?;
-            Some(
-                crate::variant_symbols_with_kind(
-                    &text,
-                    crate::SourceKind::from_path(target).unwrap_or_default(),
-                )
-                .into_iter()
-                .filter(|d| d.exported)
-                .collect(),
-            )
+            Some(crate::exported_variant_symbols_with_kind(
+                &text,
+                crate::SourceKind::from_path(target).unwrap_or_default(),
+            ))
         },
     )
 }
@@ -183,8 +259,19 @@ pub(in super::super) fn externs_from(
     imports: &[crate::TtImport],
     exports_of: &dyn Fn(&Path) -> Option<Vec<crate::VariantSymbol>>,
 ) -> Vec<crate::VariantSymbol> {
+    imported_variants(path, imports, exports_of)
+        .into_iter()
+        .map(|(_, symbol)| symbol)
+        .collect()
+}
+
+pub(in super::super) fn imported_variants(
+    path: &Path,
+    imports: &[crate::TtImport],
+    exports_of: &dyn Fn(&Path) -> Option<Vec<crate::VariantSymbol>>,
+) -> Vec<(PathBuf, crate::VariantSymbol)> {
     let dir = path.parent().unwrap_or(Path::new("."));
-    let mut externs: Vec<crate::VariantSymbol> = Vec::new();
+    let mut externs: Vec<(PathBuf, crate::VariantSymbol)> = Vec::new();
     for import in imports {
         if matches!(import.names, crate::TtImportNames::None) {
             continue; // a re-export brings nothing into scope
@@ -200,7 +287,7 @@ pub(in super::super) fn externs_from(
             crate::TtImportNames::Namespace(ns) => {
                 externs.extend(decls.into_iter().map(|mut d| {
                     d.name = format!("{ns}.{}", d.name);
-                    d
+                    (target.clone(), d)
                 }));
             }
             crate::TtImportNames::Named(entries) => {
@@ -208,7 +295,7 @@ pub(in super::super) fn externs_from(
                     if let Some(d) = decls.iter().find(|d| &d.name == name) {
                         let mut d = d.clone();
                         d.name = alias.clone().unwrap_or_else(|| name.clone());
-                        externs.push(d);
+                        externs.push((target.clone(), d));
                     }
                 }
             }
@@ -299,35 +386,41 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
         offset: mapper::to_utf16(&emit.code, out),
         code: emit.code,
         version,
+        generated_names: emit.generated_names,
     })
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum TargetUse {
+    Navigation,
+    Edit,
 }
 
 /// Maps one service answer target back to a user-visible file. `None` when
 /// the target is not a file, cannot be read, or the span has no source
-/// counterpart — the caller decides whether that skips one result
-/// (navigation) or refuses the whole operation (rename).
+/// counterpart for `purpose` — the caller decides whether that skips one
+/// result (navigation) or refuses the whole operation (rename).
 pub(super) fn map_target(
     session: &mut ServiceSession,
     overlays: &HashMap<PathBuf, String>,
     uri: &str,
     range: &serde_json::Value,
+    purpose: TargetUse,
 ) -> Option<Location> {
     let path = uri_path(uri)?;
     let lsp_range = Range {
         start: position_of(&range["start"]),
         end: position_of(&range["end"]),
     };
-    let name = path.to_string_lossy();
-    let source_name = name
-        .strip_suffix(".tsx")
-        .filter(|n| n.ends_with(".ttx"))
-        .or_else(|| name.strip_suffix(".ts").filter(|n| n.ends_with(".tt")));
-    if let Some(tt) = source_name {
-        let tt_path = PathBuf::from(tt);
+    if let Some(tt_path) = tt_document(&path) {
         let doc = serve_doc_only(session, overlays, &tt_path)?;
         let start = u16_offset(&doc.code, lsp_range.start);
         let end = u16_offset(&doc.code, lsp_range.end);
-        let (s, e) = from_service_span(&doc, start, end)?;
+        let (s, e) = match from_service_span(&doc, start, end) {
+            Some(span) => span,
+            None if purpose == TargetUse::Navigation => declared_name_span(&doc, start, end)?,
+            None => return None,
+        };
         return Some(Location {
             path: tt_path,
             range: source_range(&doc.source, s, e),
@@ -371,8 +464,61 @@ pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> 
     Some(mapper::to_utf16(&doc.code, out))
 }
 
+pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<usize> {
+    if let Some(at) = to_service(doc, position) {
+        return Some(at);
+    }
+    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    doc.shared_bindings.iter().find_map(|binding| {
+        let occurrence = binding
+            .occurrences
+            .iter()
+            .find(|occurrence| occurrence.src <= byte && byte <= occurrence.src_end)?;
+        let within = (byte - occurrence.src).min(binding.out_end - binding.out);
+        Some(mapper::to_utf16(&doc.code, binding.out + within))
+    })
+}
+
+pub(super) struct SharedTarget {
+    pub location: Location,
+    pub name: String,
+    pub shorthand: bool,
+}
+
+pub(super) fn map_shared_target(
+    session: &mut ServiceSession,
+    overlays: &HashMap<PathBuf, String>,
+    uri: &str,
+    range: &serde_json::Value,
+) -> Option<(String, Vec<SharedTarget>)> {
+    let tt_path = tt_document(&uri_path(uri)?)?;
+    let doc = serve_doc_only(session, overlays, &tt_path)?;
+    let start = mapper::from_utf16(
+        &doc.code,
+        u16_offset(&doc.code, position_of(&range["start"])),
+    );
+    let end = mapper::from_utf16(&doc.code, u16_offset(&doc.code, position_of(&range["end"])));
+    let binding = doc
+        .shared_bindings
+        .iter()
+        .find(|binding| binding.out == start && binding.out_end == end)?;
+    let targets = binding
+        .occurrences
+        .iter()
+        .map(|occurrence| SharedTarget {
+            location: Location {
+                path: tt_path.clone(),
+                range: span_range(&doc.source, occurrence.src, occurrence.src_end),
+            },
+            name: doc.source[occurrence.src..occurrence.src_end].to_string(),
+            shorthand: occurrence.shorthand,
+        })
+        .collect();
+    Some((doc.code[start..end].to_string(), targets))
+}
+
 /// A service span translated back to source UTF-16 offsets, or `None` when
-/// either end has no source counterpart.
+/// any byte of it was not copied verbatim from the source.
 pub(super) fn from_service_span(
     doc: &ServiceDoc,
     start: usize,
@@ -380,14 +526,27 @@ pub(super) fn from_service_span(
 ) -> Option<(usize, usize)> {
     let sb = mapper::from_utf16(&doc.code, start);
     let eb = mapper::from_utf16(&doc.code, end);
-    let ss = mapper::to_source_inclusive(&doc.mappings, sb)?;
-    let se = mapper::to_source_inclusive(&doc.mappings, eb)?;
-    if se < ss {
-        return None;
-    }
+    let (ss, se) = mapper::to_source_span(&doc.mappings, sb, eb)?;
     Some((
         mapper::to_utf16(&doc.source, ss),
         mapper::to_utf16(&doc.source, se),
+    ))
+}
+
+pub(super) fn declared_name_span(
+    doc: &ServiceDoc,
+    start: usize,
+    end: usize,
+) -> Option<(usize, usize)> {
+    let sb = mapper::from_utf16(&doc.code, start);
+    let eb = mapper::from_utf16(&doc.code, end);
+    let name = doc
+        .declared_names
+        .iter()
+        .find(|name| name.out == sb && name.out_end == eb)?;
+    Some((
+        mapper::to_utf16(&doc.source, name.src),
+        mapper::to_utf16(&doc.source, name.src_end),
     ))
 }
 
@@ -443,49 +602,29 @@ pub(super) fn source_range(text: &str, start: usize, end: usize) -> Range {
 }
 
 /// The UTF-16 offset a zero-based line/character names in `text` — the LSP
-/// convention: a character past the line's end spills forward, and both
-/// clamp to the text's end.
+/// convention (3.17): its line breaks, a character past the line's end
+/// defaulting back to the line's length, and a line past the text's end
+/// clamping to the text's end.
 pub(crate) fn u16_offset(text: &str, position: Position) -> usize {
-    let mut line = 0u32;
-    let mut u16 = 0usize;
-    let mut line_start = 0usize;
-    if position.line > 0 {
-        for ch in text.chars() {
-            u16 += ch.len_utf16();
-            if ch == '\n' {
-                line += 1;
-                line_start = u16;
-                if line == position.line {
-                    break;
-                }
-            }
-        }
-        if line < position.line {
-            return text.encode_utf16().count();
-        }
-    }
-    let total = text.encode_utf16().count();
-    (line_start + position.character as usize).min(total)
+    mapper::to_utf16(text, byte_at(&LineMap::lsp(text), position))
 }
 
 /// The zero-based line/character a UTF-16 offset names in `text`.
 pub(crate) fn u16_position(text: &str, offset: usize) -> Position {
-    let mut u16 = 0usize;
-    let mut line = 0u32;
-    let mut line_start = 0usize;
-    for ch in text.chars() {
-        if u16 >= offset {
-            break;
-        }
-        u16 += ch.len_utf16();
-        if ch == '\n' {
-            line += 1;
-            line_start = u16;
-        }
-    }
+    byte_position(&LineMap::lsp(text), mapper::from_utf16(text, offset))
+}
+
+/// The byte a protocol position names over measured lines.
+pub(in super::super) fn byte_at(lines: &LineMap<'_>, position: Position) -> usize {
+    lines.utf16_offset(position.line as usize, position.character as usize)
+}
+
+/// A byte as a protocol position over measured lines.
+pub(in super::super) fn byte_position(lines: &LineMap<'_>, byte: usize) -> Position {
+    let (line, character) = lines.utf16_position(byte);
     Position {
-        line,
-        character: (u16.min(offset).max(line_start) - line_start) as u32,
+        line: line as u32,
+        character: character as u32,
     }
 }
 
@@ -505,25 +644,43 @@ pub(super) fn is_member_context(text: &str, offset: usize) -> bool {
     i > 0 && bytes[i - 1] == b'.'
 }
 
-/// Splits hover contents into the signature and the prose under it: the
-/// first fenced block is the signature, else the first paragraph.
-pub(super) fn split_hover(contents: &str) -> (String, String) {
-    let trimmed = contents.trim();
-    if let Some(rest) = trimmed.strip_prefix("```") {
-        // ```lang\n ... \n``` and whatever prose follows.
-        if let Some(newline) = rest.find('\n') {
-            let body = &rest[newline + 1..];
-            if let Some(close) = body.find("\n```") {
-                let signature = body[..close].trim().to_string();
-                let documentation = body[close + 4..].trim().to_string();
-                return (signature, documentation);
-            }
+pub(super) fn split_hover(contents: &serde_json::Value) -> (String, String) {
+    let value = |contents: &serde_json::Value| {
+        contents["value"]
+            .as_str()
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    match contents {
+        serde_json::Value::String(markdown) => split_markdown_hover(markdown),
+        serde_json::Value::Object(_) if contents["kind"] == "markdown" => {
+            split_markdown_hover(contents["value"].as_str().unwrap_or_default())
         }
+        serde_json::Value::Object(_) => (value(contents), String::new()),
+        _ => (String::new(), String::new()),
     }
-    match trimmed.split_once("\n\n") {
-        Some((first, rest)) => (first.trim().to_string(), rest.trim().to_string()),
-        None => (trimmed.to_string(), String::new()),
+}
+
+fn split_markdown_hover(markdown: &str) -> (String, String) {
+    let trimmed = markdown.trim();
+    if let Some(rest) = trimmed.strip_prefix("```")
+        && let Some(newline) = rest.find('\n')
+    {
+        let body = &rest[newline + 1..];
+        let (code, prose) = match body.find("\n```") {
+            Some(close) => {
+                let after = &body[close + 4..];
+                (
+                    &body[..close],
+                    after.find('\n').map_or("", |line| &after[line + 1..]),
+                )
+            }
+            None => (body.strip_suffix("```").unwrap_or(body), ""),
+        };
+        return (code.trim().to_string(), prose.trim().to_string());
     }
+    (String::new(), trimmed.to_string())
 }
 
 /// Documentation as plain text, whichever shape the server used.
@@ -605,21 +762,7 @@ pub(super) fn position_of(value: &serde_json::Value) -> Position {
 /// and never over one that already exists: a project that installs
 /// the `@tt/std` package itself keeps its own copy.
 pub(super) fn ensure_std_module(root: &Path) {
-    let pkg = root.join("node_modules/@tt/std");
-    let entry = pkg.join(crate::StdModule::Types.file_name());
-    if !entry.exists() && !pkg.exists() && std::fs::create_dir_all(&pkg).is_ok() {
-        for module in crate::StdModule::STANDARD {
-            let source = format!(
-                "// @generated by ttc --emit-std — do not edit directly.\n{}",
-                module.source()
-            );
-            let _ = std::fs::write(pkg.join(module.file_name()), source);
-        }
-        let _ = std::fs::write(
-            pkg.join("package.json"),
-            "{\n  \"name\": \"@tt/std\",\n  \"version\": \"0.0.0\",\n  \"types\": \"index.ts\"\n}\n",
-        );
-    }
+    let _ = crate::StdPackage::Std.materialize(root);
 }
 
 /// Makes the pipeline runtime resolvable in `root`, next to `@tt/std`.
@@ -632,16 +775,5 @@ pub(super) fn ensure_std_module(root: &Path) {
 /// when the service resolved makes the whole expression untyped, so the
 /// answer comes back empty (TASK-217).
 pub(super) fn ensure_runtime_module(root: &Path) {
-    let runtime_pkg = root.join("node_modules/@tt/runtime");
-    if !runtime_pkg.exists() && std::fs::create_dir_all(&runtime_pkg).is_ok() {
-        let source = format!(
-            "// @generated by ttc --emit-std — do not edit directly.\n{}",
-            crate::RUNTIME_SOURCE
-        );
-        let _ = std::fs::write(runtime_pkg.join("index.ts"), source);
-        let _ = std::fs::write(
-            runtime_pkg.join("package.json"),
-            "{\n  \"name\": \"@tt/runtime\",\n  \"version\": \"0.0.0\",\n  \"types\": \"index.ts\"\n}\n",
-        );
-    }
+    let _ = crate::StdPackage::Runtime.materialize(root);
 }

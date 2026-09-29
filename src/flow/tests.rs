@@ -12,7 +12,7 @@ fn concise_arrow_is_the_innermost_function_target() {
         })
         .expect("try token");
     assert_eq!(
-        function_target_at(source, &tokens, at),
+        function_target_at(&tokens, at),
         Some(FunctionTarget::Ordinary)
     );
 }
@@ -29,9 +29,42 @@ fn semicolon_free_concise_arrow_does_not_own_the_next_try_statement() {
         })
         .expect("try token");
     assert_eq!(
-        function_target_at(source, &tokens, at),
+        function_target_at(&tokens, at),
         Some(FunctionTarget::Generator)
     );
+}
+
+#[test]
+fn match_body_braces_and_arm_arrows_open_no_function_target() {
+    let source = "function* outer() { const r = match (s) { A => match (yield 1) { B => { const k = match (s) { C => 1 }; } } }; }";
+    let tokens = crate::lexer::lex(source, 0, source.len());
+    let matches: Vec<usize> = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| &source[token.span.start..token.span.end] == "match")
+        .map(|(index, _)| index)
+        .collect();
+    let mut owned: std::collections::HashSet<usize> = tokens
+        .iter()
+        .enumerate()
+        .filter(|(_, token)| matches!(token.kind, TokenKind::Arrow))
+        .map(|(index, _)| index)
+        .collect();
+    for at in &matches {
+        owned.extend(
+            (*at..tokens.len()).find(|index| matches!(tokens[*index].kind, TokenKind::Punct(b'{'))),
+        );
+    }
+    for at in &matches[1..] {
+        assert_eq!(
+            function_target_at(&tokens, *at),
+            Some(FunctionTarget::Ordinary)
+        );
+        assert_eq!(
+            user_function_target_at(&tokens, *at, &owned),
+            Some(FunctionTarget::Generator)
+        );
+    }
 }
 
 /// Answers the divergence question the way the compiler asks it: the
@@ -219,10 +252,8 @@ fn a_try_diverges_when_every_half_that_can_complete_does_not() {
 
 #[test]
 fn a_brace_on_its_own_line_does_not_start_a_statement() {
-    // Allman braces are why the automatic-semicolon rule splits only
-    // before the statement *keywords* and never before `{`: after
-    // `function g()` or `= function ()` a newline and a brace still
-    // open that function's body, and splitting there would let its
+    // After `function g()` or `= function ()` a newline and a brace
+    // still open that function's body, and splitting there would let its
     // `return` escape into the analyzed block.
     assert!(!check("function g()\n{\n  return 1;\n}"));
     assert!(!check("const g = function ()\n{\n  return 1;\n};"));
@@ -234,6 +265,42 @@ fn a_brace_on_its_own_line_does_not_start_a_statement() {
     assert!(check("while (true)\n{\n  log(\"x\");\n}"));
     assert!(check(
         "switch (k)\n{\n  case \"a\": return 1;\n  default: throw e;\n}"
+    ));
+}
+
+#[test]
+fn a_brace_after_a_complete_expression_on_a_new_line_starts_a_block() {
+    assert!(check("foo\nFoo\n{ return 0; }"));
+    assert!(check("Foo\n{ throw e; }"));
+    assert!(check("log(\"x\")\n{\n  return 1;\n}"));
+    assert!(check("const k = items[0]\n{ return k; }"));
+    assert!(check("const g = function () { return 1; }\n{ return 2; }"));
+    assert!(check("const C = class extends Base {}\n{ return 2; }"));
+    assert!(check("if (c) log(\"x\")\n{ return 1; }"));
+    assert!(!check("foo { return 0; }"));
+    assert!(!check(
+        "const g = function (): { n: number }\n{\n  return { n: 1 };\n}"
+    ));
+    assert!(!check(
+        "const C = class extends Base\n{\n  m() { return 1; }\n}"
+    ));
+    assert!(!check(
+        "const C = class extends mixin(function () {})\n{\n  m() { return 1; }\n}"
+    ));
+    assert!(!check("export function g()\n{\n  return 1;\n}"));
+    assert!(!check(
+        "export class C extends Base\n{\n  m() { return 1; }\n}"
+    ));
+    assert!(!check("export interface I extends J\n{\n  m(): number\n}"));
+    assert!(!check("export namespace N.M\n{\n  throw e;\n}"));
+    assert!(!check("declare module \"m\"\n{\n  throw e;\n}"));
+    assert!(!check("declare global\n{\n  throw e;\n}"));
+}
+
+#[test]
+fn if_let_bodies_split_a_brace_after_an_expression() {
+    assert!(check(
+        "if let Some(v) = o {\n  foo\n  { return v; }\n} else {\n  Foo\n  { return 1; }\n}"
     ));
 }
 
@@ -339,7 +406,7 @@ fn inside(src: &str, needle: &str) -> bool {
         .iter()
         .position(|t| t.span.start >= offset)
         .unwrap_or(tokens.len());
-    in_function_body(src, &tokens, at)
+    in_function_body(&tokens, at)
 }
 
 #[test]
@@ -386,4 +453,93 @@ fn module_and_non_function_braces_are_not() {
     assert!(!inside("class A<T> { x = HERE; }", "HERE"));
     // A function body *closed before* the position provides nothing.
     assert!(!inside("function f() {} HERE;", "HERE"));
+}
+
+#[test]
+fn an_abrupt_exit_runs_the_finally_that_can_replace_it() {
+    assert!(!check("x: { try { return -1; } finally { break x; } }"));
+    assert!(!check(
+        "while (true) { try { continue; } finally { break; } }"
+    ));
+    assert!(!check("x: { try { break x; } finally { } }"));
+    assert!(check("x: { try { break x; } finally { return 1; } }"));
+    assert!(check("try { return 1; } finally { }"));
+    assert!(check("try { log(\"x\"); } finally { return 2; }"));
+    assert!(check(
+        "x: { try { throw e; } catch (e) { break x; } finally { return 3; } }"
+    ));
+    assert!(!check(
+        "x: { try { throw e; } catch (e) { return 1; } finally { break x; } }"
+    ));
+}
+
+#[test]
+fn outward_jump_labels_name_every_jump_target_outside_the_body() {
+    let labels = |source: &str| {
+        let span = crate::ast::Span {
+            start: 0,
+            end: source.len(),
+        };
+        outward_jump_labels(source, &crate::parser::parse(source), span)
+    };
+    assert_eq!(labels("const v = 1; return v;"), None);
+    assert_eq!(
+        labels("for (;;) { break; } s: switch (1) { case 1: break s; }"),
+        None
+    );
+    assert_eq!(labels("if (v) break;"), Some(vec![]));
+    assert_eq!(labels("while (v) { continue; } continue;"), Some(vec![]));
+    assert_eq!(
+        labels("inner: for (;;) { break outer; continue a; break inner; } break outer;"),
+        Some(vec!["outer".to_string(), "a".to_string()])
+    );
+    assert_eq!(
+        labels("const g = () => { for (;;) break; }; yield 1;"),
+        None
+    );
+}
+
+#[test]
+fn the_function_target_index_answers_every_position_as_the_scan_does() {
+    let sources = [
+        "function* outer() { const step = (_: unknown) => (try load()); }",
+        "function* outer() {\n  const step = () => flag ? 1 : 2\n  try load();\n}",
+        "function* outer() { const r = match (s) { A => match (yield 1) { B => { const k = match (s) { C => 1 }; } } }; }",
+        "class C { constructor() { const f = x => x + 1, g = function* () { yield (y) => { z; }; }; } m() { return a => b => { c; }; } }\n}}\n{",
+        "const a = (b) => (c) => d, e = [f => g, h => { i }]; function j() { k(l => m); }",
+    ];
+    for source in sources {
+        let tokens = crate::lexer::lex(source, 0, source.len());
+        let positions = |wanted: fn(&TokenKind) -> bool| -> Vec<usize> {
+            tokens
+                .iter()
+                .enumerate()
+                .filter(|(_, token)| wanted(&token.kind))
+                .map(|(index, _)| index)
+                .collect()
+        };
+        let arrows = positions(|kind| matches!(kind, TokenKind::Arrow));
+        let braces = positions(|kind| matches!(kind, TokenKind::Punct(b'{')));
+        let owned_sets: [std::collections::HashSet<usize>; 3] = [
+            std::collections::HashSet::new(),
+            arrows.iter().step_by(2).copied().collect(),
+            braces
+                .iter()
+                .skip(1)
+                .step_by(2)
+                .chain(arrows.iter().skip(1).step_by(3))
+                .copied()
+                .collect(),
+        ];
+        for owned in &owned_sets {
+            let index = FunctionTargets::new(&tokens, owned);
+            for at in 0..tokens.len() + 3 {
+                assert_eq!(
+                    index.at(at),
+                    user_function_target_at(&tokens, at, owned),
+                    "{source:?} at token {at} with {owned:?}"
+                );
+            }
+        }
+    }
 }

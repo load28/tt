@@ -6,19 +6,29 @@
 //! a position in the output is answered by the same structures a diagnostic
 //! is. Nothing here reads the emitted text for meaning: it is scanned only
 //! to count lines and UTF-16 columns, which is what the format's coordinates
-//! are.
+//! are. Lines on both sides are ECMA-262's (`LineMap::ecma`): ECMA-426
+//! (§11.1.2.1) splits lines at the `LineTerminatorSequence` production, so
+//! a CR or a U+2028 ends a line for every consumer of the map.
 //!
 //! Granularity is one segment per *cut point*: the start of each verbatim
-//! run, the byte after it, and the start of every output line. Inside a run
-//! the two sides advance byte for byte, so a consumer that does not
-//! interpolate answers with the run's own start — the line is exact, the
-//! column is the start of the copied chunk the position falls in. Glue maps
-//! to the construct that wrote it, which is what makes a frame inside
-//! generated code point at the `match` (or `try`, or pipeline) it came from.
+//! run, the byte after it, the start of every output line, and the start of
+//! every source token a run copies. A consumer does not interpolate inside a
+//! segment — it answers with the nearest mapping at or before the position
+//! (ECMA-426) — so a run needs a mapping at each token for a position inside
+//! it to name its own column. Inside a run the two sides advance byte for
+//! byte, so each of those segments maps a token to itself: the line and the
+//! column are exact at every token a frame can name. Tokens come from the
+//! source's own lexer, so a run that begins or ends inside a string,
+//! comment or template is still cut at the source's token boundaries, and a
+//! byte outside ASCII never starts one. Glue maps to the construct that
+//! wrote it, which is what makes a frame inside generated code point at the
+//! `match` (or `try`, or pipeline) it came from.
 
 use std::collections::BTreeSet;
 
-use crate::{EmitAnchor, EmitMapping};
+use crate::lexer::{self, Token, TokenKind, TplPart};
+use crate::lines::LineMap;
+use crate::{EmitAnchor, EmitMapping, SourceKind};
 
 /// What the caller wants the map to say about the files it names.
 #[derive(Debug, Clone)]
@@ -43,6 +53,9 @@ pub struct SourceMapRequest<'a> {
     /// of an ordinary file, but a `#!` line has to stay first, so the banner
     /// follows it and that first line does not move.
     pub generated_line_offset_at: usize,
+    /// The original file's surface kind, which decides how its tokens are
+    /// read (a `.ttx` admits JSX).
+    pub source_kind: SourceKind,
 }
 
 impl Default for SourceMapRequest<'_> {
@@ -53,6 +66,7 @@ impl Default for SourceMapRequest<'_> {
             embed_source: true,
             generated_line_offset: 0,
             generated_line_offset_at: 0,
+            source_kind: SourceKind::TypeScript,
         }
     }
 }
@@ -123,16 +137,25 @@ pub(crate) fn build(
     anchors: &[EmitAnchor],
     request: &SourceMapRequest<'_>,
 ) -> SourceMap {
-    let source_lines = LineTable::new(source);
-    let code_lines = LineTable::new(code);
+    let source_lines = LineMap::ecma(source);
+    let code_lines = LineMap::ecma(code);
 
     // A segment is needed wherever the answer changes: at each verbatim
-    // run's edges, and at the start of every output line (a run and a
-    // stretch of glue both continue across line breaks).
-    let mut cuts: BTreeSet<usize> = code_lines.starts.iter().copied().collect();
+    // run's edges, at the start of every output line (a run and a stretch
+    // of glue both continue across line breaks), and at every token a run
+    // copies, since the column a consumer reports is its segment's own.
+    let token_starts = token_starts(source, request.source_kind);
+    let mut cuts: BTreeSet<usize> = (0..code_lines.len())
+        .filter_map(|line| code_lines.line_start(line))
+        .collect();
     for run in mappings {
         cuts.insert(run.out);
         cuts.insert(run.out.saturating_add(run.len));
+        let first = token_starts.partition_point(|start| *start < run.src);
+        let copied = token_starts[first..]
+            .iter()
+            .take_while(|start| **start < run.src.saturating_add(run.len));
+        cuts.extend(copied.map(|start| run.out + (start - run.src)));
     }
 
     let mut encoded = String::new();
@@ -149,14 +172,14 @@ pub(crate) fn build(
         let Some(src) = source_byte_at(out, mappings, anchors) else {
             continue;
         };
-        let (generated_line, generated_column) = code_lines.position(code, out);
+        let (generated_line, generated_column) = code_lines.utf16_position(out);
         let generated_line = generated_line
             + if generated_line >= request.generated_line_offset_at {
                 request.generated_line_offset
             } else {
                 0
             };
-        let (source_line, source_column) = source_lines.position(source, src.min(source.len()));
+        let (source_line, source_column) = source_lines.utf16_position(src);
         while current_line < generated_line {
             encoded.push(';');
             current_line += 1;
@@ -203,34 +226,58 @@ fn source_byte_at(out: usize, mappings: &[EmitMapping], anchors: &[EmitAnchor]) 
         .map(|anchor| anchor.src)
 }
 
-/// Byte offsets of every line start, for turning a byte into the format's
-/// line and UTF-16 column.
-struct LineTable {
-    starts: Vec<usize>,
+#[doc(hidden)]
+pub fn url_path<'a>(segments: impl IntoIterator<Item = &'a str>) -> String {
+    let mut out = String::new();
+    for (index, segment) in segments.into_iter().enumerate() {
+        if index > 0 {
+            out.push('/');
+        }
+        for byte in segment.bytes() {
+            let encode = match byte {
+                b'%' | b'\\' | b'?' | b'#' | b' ' | b'"' | b'<' | b'>' | b'^' | b'`' | b'{'
+                | b'}' => true,
+                b':' => index == 0,
+                _ => !(0x21..0x7f).contains(&byte),
+            };
+            if encode {
+                out.push_str(&format!("%{byte:02X}"));
+            } else {
+                out.push(byte as char);
+            }
+        }
+    }
+    out
 }
 
-impl LineTable {
-    fn new(text: &str) -> Self {
-        let mut starts = vec![0usize];
-        starts.extend(
-            text.bytes()
-                .enumerate()
-                .filter(|(_, byte)| *byte == b'\n')
-                .map(|(at, _)| at + 1),
-        );
-        Self { starts }
+/// The byte offset of every token in `source`, ascending — including the
+/// tokens inside template interpolations and JSX expression containers.
+/// A byte outside ASCII is opaque, so it never starts a token.
+fn token_starts(source: &str, source_kind: SourceKind) -> Vec<usize> {
+    fn collect(tokens: &[Token], starts: &mut Vec<usize>) {
+        for token in tokens {
+            match &token.kind {
+                TokenKind::Punct(byte) if !byte.is_ascii() => {}
+                TokenKind::Template(parts) => {
+                    for part in parts.iter() {
+                        match part {
+                            TplPart::Raw(span) => starts.push(span.start),
+                            TplPart::Interp { tokens, .. } => collect(tokens, starts),
+                        }
+                    }
+                }
+                _ => starts.push(token.span.start),
+            }
+        }
     }
-
-    /// The zero-based line, and the column in UTF-16 code units — the unit
-    /// the format counts in.
-    fn position(&self, text: &str, byte: usize) -> (usize, usize) {
-        let line = self.starts.partition_point(|start| *start <= byte) - 1;
-        let start = self.starts[line];
-        let column = text
-            .get(start..byte)
-            .map_or(0, |prefix| prefix.encode_utf16().count());
-        (line, column)
-    }
+    let mut starts = Vec::new();
+    collect(
+        &lexer::lex_with_kind(source, 0, source.len(), source_kind),
+        &mut starts,
+    );
+    starts.sort_unstable();
+    starts.dedup();
+    starts
 }
 
 const BASE64: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
@@ -313,9 +360,8 @@ mod tests {
         // An astral character is two UTF-16 code units and four UTF-8 bytes;
         // the format counts the former.
         let text = "const a = \"🙂\";\n";
-        let table = LineTable::new(text);
         let quote = text.rfind('"').unwrap();
-        let (line, column) = table.position(text, quote);
+        let (line, column) = LineMap::ecma(text).utf16_position(quote);
         assert_eq!(line, 0);
         assert_eq!(column, "const a = \"🙂".encode_utf16().count());
     }
@@ -345,6 +391,163 @@ mod tests {
         }];
         assert_eq!(source_byte_at(5, &[], &anchors), Some(42));
         assert_eq!(source_byte_at(25, &[], &anchors), None);
+    }
+
+    /// Per generated line, its segments as `(generated column, source line,
+    /// source column)`.
+    type Decoded = Vec<Vec<(i64, i64, i64)>>;
+
+    /// Decodes `mappings` into [`Decoded`] segments.
+    fn decode(mappings: &str) -> Decoded {
+        let mut lines = Vec::new();
+        let (mut source_line, mut source_column) = (0i64, 0i64);
+        for line in mappings.split(';') {
+            let mut segments = Vec::new();
+            let mut generated_column = 0i64;
+            for segment in line.split(',').filter(|segment| !segment.is_empty()) {
+                let mut values = Vec::new();
+                let (mut value, mut shift) = (0i64, 0);
+                for byte in segment.bytes() {
+                    let digit = BASE64.iter().position(|c| *c == byte).unwrap() as i64;
+                    value |= (digit & 0b1_1111) << shift;
+                    shift += 5;
+                    if digit & 0b10_0000 == 0 {
+                        values.push(if value & 1 == 1 {
+                            -(value >> 1)
+                        } else {
+                            value >> 1
+                        });
+                        (value, shift) = (0, 0);
+                    }
+                }
+                generated_column += values[0];
+                source_line += values[2];
+                source_column += values[3];
+                segments.push((generated_column, source_line, source_column));
+            }
+            lines.push(segments);
+        }
+        lines
+    }
+
+    /// What a consumer answers for a generated position: the nearest
+    /// segment at or before it on its line — no interpolation.
+    fn original_at(map: &Decoded, (line, column): (usize, usize)) -> (usize, usize) {
+        let (_, source_line, source_column) = map[line]
+            .iter()
+            .rev()
+            .find(|segment| segment.0 <= column as i64)
+            .copied()
+            .expect("a segment at or before the position");
+        (source_line as usize, source_column as usize)
+    }
+
+    /// Where `needle` first sits in `text` on the line that holds `line`,
+    /// as the format's line and UTF-16 column.
+    fn located(text: &str, line: &str, needle: &str) -> (usize, usize) {
+        let from = text.find(line).unwrap();
+        let at = from + text[from..].find(needle).unwrap();
+        LineMap::ecma(text).utf16_position(at)
+    }
+
+    fn map_of(source: &str) -> (String, Decoded) {
+        let emit = crate::emit_mapped(source);
+        let map = build(
+            source,
+            &emit.code,
+            &emit.mappings,
+            &emit.anchors,
+            &SourceMapRequest::default(),
+        );
+        (emit.code, decode(map.mappings()))
+    }
+
+    #[test]
+    fn every_token_of_a_copied_line_maps_to_its_own_column() {
+        let source = "variant E { A(v: number), B }\n\
+                      export const n = match (E.B) { A(v) => v, B => 0 };\n\
+                      const  x = 1;   function boom() { return [1].map(() => \
+                      { throw new Error(`b${\"o\"}om`); }); }\n";
+        let (code, map) = map_of(source);
+        const LINE: &str = "const  x";
+        for token in [
+            "const  x", "x = 1", "= 1", "1;", "function", "boom", "return", "[1]", ".map", "map",
+            "=>", "throw", "new", "Error", "`b", "\"o\"", "om`", "});",
+        ] {
+            assert_eq!(
+                original_at(&map, located(&code, LINE, token)),
+                located(source, LINE, token),
+                "{token:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_byte_outside_ascii_never_starts_a_segment() {
+        let source = "variant E { A, B }\nconst café = \"🙂\"; boom(café);\n";
+        let (code, map) = map_of(source);
+        const LINE: &str = "const café";
+        let (line, accent) = located(&code, LINE, "é = ");
+        assert!(
+            map[line].iter().all(|segment| segment.0 != accent as i64),
+            "{:?}",
+            map[line]
+        );
+        for token in ["boom", "café)", "\"🙂\"", ");"] {
+            assert_eq!(
+                original_at(&map, located(&code, LINE, token)),
+                located(source, LINE, token),
+                "{token:?}"
+            );
+        }
+    }
+
+    /// The zero-based line and UTF-16 column ECMA-426 gives `byte`: lines
+    /// split at `LineTerminatorSequence`, after any byte-order mark.
+    fn ecma_426_position(text: &str, byte: usize) -> (usize, usize) {
+        let body = text.strip_prefix('\u{feff}').unwrap_or(text);
+        let byte = byte - (text.len() - body.len());
+        let (mut line, mut column) = (0, 0);
+        let mut chars = body[..byte].chars().peekable();
+        while let Some(ch) = chars.next() {
+            match ch {
+                '\r' if chars.peek() == Some(&'\n') => {}
+                '\r' | '\n' | '\u{2028}' | '\u{2029}' => (line, column) = (line + 1, 0),
+                ch => column += ch.len_utf16(),
+            }
+        }
+        (line, column)
+    }
+
+    #[test]
+    fn every_line_terminator_ends_a_line_on_both_sides_of_the_map() {
+        let body = |breaks: [&str; 3]| {
+            format!(
+                "variant E {{ A, B }}{}const x = match (E.A) {{ A => 1, B => 2 }};{}\
+                 const e = \"\u{1F389}\"; boom(x);{}",
+                breaks[0], breaks[1], breaks[2]
+            )
+        };
+        for source in [
+            body(["\n"; 3]),
+            body(["\r\n"; 3]),
+            body(["\r"; 3]),
+            body(["\u{2028}"; 3]),
+            body(["\u{2029}"; 3]),
+            body(["\r\n", "\u{2028}", "\r"]),
+            format!("\u{feff}{}", body(["\n"; 3])),
+            format!("\u{feff}{}", body(["\r"; 3])),
+        ] {
+            let (code, map) = map_of(&source);
+            for token in ["boom", "x);", "const e", "\"\u{1F389}\""] {
+                let generated = ecma_426_position(&code, code.find(token).unwrap());
+                assert_eq!(
+                    original_at(&map, generated),
+                    ecma_426_position(&source, source.find(token).unwrap()),
+                    "{source:?} {token:?}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -397,6 +600,7 @@ mod tests {
                 embed_source: true,
                 generated_line_offset: 0,
                 generated_line_offset_at: 0,
+                source_kind: SourceKind::TypeScript,
             },
         );
         let json = map.to_json();

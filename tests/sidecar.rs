@@ -228,6 +228,31 @@ fn each_declaration_gets_a_segment_at_its_name_column() {
 }
 
 #[test]
+fn every_line_terminator_counts_on_both_sides_of_the_map() {
+    // A source map's lines are ECMA-262's (ECMA-426 §11.1.2.1): CR,
+    // U+2028 and U+2029 end a line just as LF does, and a byte-order mark
+    // is not a column (TASK-498).
+    let expected = build_sidecar(SOURCE, DECLARATIONS, "notice.tt");
+    let expected_segments = decode(&field(&expected.map, "\"mappings\":\""));
+    for source_break in ["\r\n", "\r", "\u{2028}", "\u{2029}"] {
+        for declaration_break in ["\n", "\r\n", "\r"] {
+            let source = format!("\u{feff}{}", SOURCE.replace('\n', source_break));
+            let declarations = DECLARATIONS.replace('\n', declaration_break);
+            let sidecar = build_sidecar(&source, &declarations, "notice.tt");
+            assert_eq!(
+                decode(&field(&sidecar.map, "\"mappings\":\"")),
+                expected_segments,
+                "{source_break:?} {declaration_break:?}"
+            );
+            assert_eq!(
+                sidecar.declarations, expected.declarations,
+                "{source_break:?} {declaration_break:?}"
+            );
+        }
+    }
+}
+
+#[test]
 fn declarations_with_no_source_match_are_skipped_without_panicking() {
     let sidecar = build_sidecar(SOURCE, "export declare const ghost: number;\n", "notice.tt");
     let segments = decode(&field(&sidecar.map, "\"mappings\":\""));

@@ -1,4 +1,4 @@
-//! TypeScript-owned identifier positions used by the lossless tt parser.
+//! Host-grammar answers used by the lossless tt parser.
 //!
 //! Files with ambiguous `match` positions use byte-preserving projections of
 //! each recursive parser region. Confirmed tt nodes become category-safe
@@ -6,10 +6,16 @@
 //! expression-safe probe is rejected at that position. The projection is
 //! retried, and ownership is accepted only when the converged SWC AST contains a
 //! host declaration node for the original identifier span.
+//!
+//! Parameter-shaped `val` modifiers use the same projections: the host AST
+//! says whether the binding after an erased `val` is a formal parameter.
+
+use std::collections::HashSet;
 
 use swc_common::{Span as SwcSpan, Spanned};
 use swc_ecma_ast::{
-    ClassMethod, FnDecl, FnExpr, GetterProp, MethodProp, PrivateMethod, PropName, SetterProp,
+    ArrowExpr, CatchClause, ClassMethod, FnDecl, FnExpr, GetterProp, MethodProp, Module, Param,
+    PrivateMethod, PropName, SetterProp, TsFnParam, TsParamProp,
 };
 use swc_ecma_visit::{Visit, VisitWith};
 
@@ -22,28 +28,105 @@ pub(super) fn owned_match_names_in_mixed(
 ) -> Vec<Span> {
     let mut owned = Vec::new();
     super::parse::visit_programs(program, &mut |region| {
-        let wrappers: &[Wrapper] = if std::ptr::eq(region, program) {
-            &[Wrapper::Module]
-        } else if region.expression_root {
-            &[
-                Wrapper::Expression,
-                Wrapper::AsyncExpression,
-                Wrapper::GeneratorExpression,
-                Wrapper::AsyncGeneratorExpression,
-            ]
-        } else {
-            &[
-                Wrapper::Statements,
-                Wrapper::AsyncStatements,
-                Wrapper::GeneratorStatements,
-                Wrapper::AsyncGeneratorStatements,
-            ]
-        };
-        probe_region(src, source_kind, region, wrappers, &mut owned);
+        probe_region(
+            src,
+            source_kind,
+            region,
+            region_wrappers(program, region),
+            &mut owned,
+        );
     });
     owned.sort_by_key(|span| (span.start, span.end));
     owned.dedup();
     owned
+}
+
+/// The keyword offsets, sorted, of the parameter-shaped `val` candidates
+/// whose binding the host grammar does not read as a formal parameter.
+///
+/// Each region with candidates is projected in its tt reading (every lifted
+/// construct masked, every `val` modifier erased) and parsed by the host. A
+/// candidate stays a modifier when some projection places a formal
+/// parameter — of a function, arrow, method, accessor, constructor, `catch`
+/// clause, or TypeScript signature — exactly at its binding. Erasing `val`
+/// before a binding that valid TypeScript already owns (`f(val [0])`, `c ?
+/// (val [0]) : w => w`) leaves an array literal or tuple type in the same
+/// grammatical position, never a parameter, so TypeScript keeps it. A region
+/// the host cannot parse proves nothing, and its candidates stay
+/// identifiers.
+pub(super) fn rejected_val_candidates(
+    src: &str,
+    source_kind: crate::SourceKind,
+    program: &Program,
+) -> Vec<usize> {
+    let mut candidates = Vec::new();
+    let mut parameters = HashSet::new();
+    super::parse::visit_programs(program, &mut |region| {
+        if region.host_val_candidates().is_empty() {
+            return;
+        }
+        candidates.extend(region.host_val_candidates().iter().copied());
+        parameters.extend(parameter_starts(
+            src,
+            source_kind,
+            region,
+            region_wrappers(program, region),
+        ));
+    });
+    let mut rejected: Vec<usize> = candidates
+        .into_iter()
+        .filter(|candidate| !parameters.contains(&candidate.end))
+        .map(|candidate| candidate.start)
+        .collect();
+    rejected.sort_unstable();
+    rejected.dedup();
+    rejected
+}
+
+fn region_wrappers(root: &Program, region: &Program) -> &'static [Wrapper] {
+    if std::ptr::eq(region, root) {
+        &[Wrapper::Module]
+    } else if region.expression_root {
+        &[
+            Wrapper::Expression,
+            Wrapper::AsyncExpression,
+            Wrapper::GeneratorExpression,
+            Wrapper::AsyncGeneratorExpression,
+        ]
+    } else {
+        &[
+            Wrapper::Statements,
+            Wrapper::AsyncStatements,
+            Wrapper::GeneratorStatements,
+            Wrapper::AsyncGeneratorStatements,
+        ]
+    }
+}
+
+fn parameter_starts(
+    src: &str,
+    source_kind: crate::SourceKind,
+    program: &Program,
+    wrappers: &[Wrapper],
+) -> Vec<usize> {
+    if program.span.start >= program.span.end || program.span.end > src.len() {
+        return Vec::new();
+    }
+    let mut masks = Vec::new();
+    let mut match_candidates = Vec::new();
+    collect_region_facts(program, &mut masks, &mut match_candidates);
+    let projection = projected_region(src, program.span, &masks, &match_candidates, &[]);
+    for &wrapper in wrappers {
+        if let Ok(parsed) = parse_wrapped(&projection, source_kind, program.span.start, wrapper) {
+            let mut collector = ParameterCollector {
+                frame: parsed.frame,
+                starts: Vec::new(),
+            };
+            parsed.module.visit_with(&mut collector);
+            return collector.starts;
+        }
+    }
+    Vec::new()
 }
 
 #[derive(Clone, Copy)]
@@ -122,7 +205,12 @@ fn probe_region(
                 restored.push(next);
                 continue;
             }
-            owned.extend(parsed.names);
+            let mut collector = MatchNameCollector {
+                frame: parsed.frame,
+                spans: Vec::new(),
+            };
+            parsed.module.visit_with(&mut collector);
+            owned.extend(collector.spans);
             return;
         }
     }
@@ -138,7 +226,12 @@ fn candidate_at_error(candidates: &[Span], restored: &[Span], error: usize) -> O
 }
 
 fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &mut Vec<Span>) {
-    candidates.extend(program.host_match_candidates.iter().copied());
+    candidates.extend(program.host_match_candidates().iter().copied());
+    let region_candidates: HashSet<(usize, usize)> = program
+        .host_match_candidates()
+        .iter()
+        .map(|span| (span.start, span.end))
+        .collect();
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_) | Segment::TtImport(_) => {}
@@ -151,7 +244,7 @@ fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &m
                     start: expr.keyword_off,
                     end: expr.body_close + 1,
                 };
-                if !program.host_match_candidates.contains(&span) {
+                if !region_candidates.contains(&(span.start, span.end)) {
                     masks.push(Mask {
                         span,
                         placeholder: Placeholder::Expression,
@@ -163,7 +256,7 @@ fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &m
                     start: expr.keyword_off,
                     end: expr.body_close + 1,
                 };
-                if !program.host_match_candidates.contains(&span) {
+                if !region_candidates.contains(&(span.start, span.end)) {
                     masks.push(Mask {
                         span,
                         placeholder: Placeholder::Expression,
@@ -186,8 +279,8 @@ fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &m
                 span: stmt.owner_span,
                 placeholder: Placeholder::Statement,
             }),
-            Segment::ValModifier(span) => masks.push(Mask {
-                span: *span,
+            Segment::ValModifier(modifier) => masks.push(Mask {
+                span: modifier.span,
                 placeholder: Placeholder::Erase,
             }),
             Segment::Template(template) => {
@@ -221,7 +314,7 @@ fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &m
             RecoveryKind::Statement | RecoveryKind::VariantDecl { .. } => Placeholder::Statement,
             RecoveryKind::Type => Placeholder::Type,
         };
-        if !program.host_match_candidates.contains(&recovery.span) {
+        if !region_candidates.contains(&(recovery.span.start, recovery.span.end)) {
             masks.push(Mask {
                 span: recovery.span,
                 placeholder,
@@ -287,6 +380,7 @@ fn parse_wrapped(
     source_offset: usize,
     wrapper: Wrapper,
 ) -> Result<HostParse, usize> {
+    crate::work::tick("host parses");
     let (prefix, suffix) = match wrapper {
         Wrapper::Module => ("", ""),
         Wrapper::Expression => ("const __tt_host_probe = (", ");"),
@@ -321,51 +415,106 @@ fn parse_owned(
     source_len: usize,
 ) -> Result<HostParse, usize> {
     let input = crate::host_input::HostInput::new(src);
-    let source_start = input.origin();
-    let mut parser = input.parser(source_kind);
-    let module = parser.parse_module().map_err(|error| {
-        source_error_offset(error.span(), source_start, prefix_len, source_offset)
-    })?;
-    let errors = parser
-        .take_errors()
-        .into_iter()
-        .map(|error| source_error_offset(error.span(), source_start, prefix_len, source_offset))
-        .collect();
-
-    let mut collector = MatchNameCollector {
-        source_start,
+    let frame = SourceFrame {
+        origin: input.origin(),
         prefix_len,
         source_offset,
         source_end: source_offset + source_len,
-        spans: Vec::new(),
     };
-    module.visit_with(&mut collector);
+    let mut parser = input.parser(source_kind);
+    let module = parser
+        .parse_module()
+        .map_err(|error| frame.error_offset(error.span()))?;
+    let errors = parser
+        .take_errors()
+        .into_iter()
+        .map(|error| frame.error_offset(error.span()))
+        .collect();
     Ok(HostParse {
-        names: collector.spans,
+        module,
+        frame,
         errors,
     })
 }
 
 struct HostParse {
-    names: Vec<Span>,
+    module: Module,
+    frame: SourceFrame,
     errors: Vec<usize>,
 }
 
-fn source_error_offset(
-    span: SwcSpan,
-    source_start: crate::host_input::HostOrigin,
-    prefix_len: usize,
-    source_offset: usize,
-) -> usize {
-    let projected = source_start.byte(span.lo);
-    source_offset + projected.saturating_sub(prefix_len)
-}
-
-struct MatchNameCollector {
-    source_start: crate::host_input::HostOrigin,
+/// Maps positions in a wrapped projection back to source bytes.
+#[derive(Clone, Copy)]
+struct SourceFrame {
+    origin: crate::host_input::HostOrigin,
     prefix_len: usize,
     source_offset: usize,
     source_end: usize,
+}
+
+impl SourceFrame {
+    fn error_offset(self, span: SwcSpan) -> usize {
+        self.source_offset + self.origin.byte(span.lo).saturating_sub(self.prefix_len)
+    }
+
+    fn source_span(self, span: SwcSpan) -> Option<Span> {
+        let start = self.origin.byte(span.lo).checked_sub(self.prefix_len)?;
+        let end = self.origin.byte(span.hi).checked_sub(self.prefix_len)?;
+        let span = Span {
+            start: self.source_offset + start,
+            end: self.source_offset + end,
+        };
+        (span.start < span.end && span.end <= self.source_end).then_some(span)
+    }
+}
+
+/// Collects the source offset where each formal parameter's binding starts.
+struct ParameterCollector {
+    frame: SourceFrame,
+    starts: Vec<usize>,
+}
+
+impl ParameterCollector {
+    fn insert(&mut self, span: SwcSpan) {
+        if let Some(span) = self.frame.source_span(span) {
+            self.starts.push(span.start);
+        }
+    }
+}
+
+impl Visit for ParameterCollector {
+    fn visit_param(&mut self, node: &Param) {
+        self.insert(node.pat.span());
+        node.visit_children_with(self);
+    }
+
+    fn visit_ts_param_prop(&mut self, node: &TsParamProp) {
+        self.insert(node.param.span());
+        node.visit_children_with(self);
+    }
+
+    fn visit_arrow_expr(&mut self, node: &ArrowExpr) {
+        for param in &node.params {
+            self.insert(param.span());
+        }
+        node.visit_children_with(self);
+    }
+
+    fn visit_catch_clause(&mut self, node: &CatchClause) {
+        if let Some(param) = &node.param {
+            self.insert(param.span());
+        }
+        node.visit_children_with(self);
+    }
+
+    fn visit_ts_fn_param(&mut self, node: &TsFnParam) {
+        self.insert(node.span());
+        node.visit_children_with(self);
+    }
+}
+
+struct MatchNameCollector {
+    frame: SourceFrame,
     spans: Vec<Span>,
 }
 
@@ -374,19 +523,7 @@ impl MatchNameCollector {
         if name != "match" {
             return;
         }
-        let projected_start = self.source_start.byte(span.lo);
-        let projected_end = self.source_start.byte(span.hi);
-        let Some(relative_start) = projected_start.checked_sub(self.prefix_len) else {
-            return;
-        };
-        let Some(relative_end) = projected_end.checked_sub(self.prefix_len) else {
-            return;
-        };
-        let span = Span {
-            start: self.source_offset + relative_start,
-            end: self.source_offset + relative_end,
-        };
-        if span.start < span.end && span.end <= self.source_end {
+        if let Some(span) = self.frame.source_span(span) {
             self.spans.push(span);
         }
     }

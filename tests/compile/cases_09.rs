@@ -13,6 +13,8 @@ fn merge_conflict_markers_report_errors_without_panicking() {
                 format!("const value = 1 |> String;\n{marker}\n/regex/;"),
                 format!("/* leading trivia */{marker}\n/regex/;"),
                 format!("const before = 1; /*\n*/ {marker}\n/regex/;"),
+                format!("const before = 1;\u{2028}{marker}\n/regex/;"),
+                format!("const before = 1;\u{2029}  {marker}\r/regex/;"),
             ] {
                 ttc::analyze(&source, &options);
                 let error = compile(&source, &options).expect_err(&source);

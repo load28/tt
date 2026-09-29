@@ -75,7 +75,7 @@ impl ParentCollector {
             synthetic_returns,
             found: HashMap::new(),
             duplicates: Vec::new(),
-            source_segments: source_segments.to_vec(),
+            source_segments: ProjectionSegments::new(source_segments.to_vec()),
             projection_only_protocol_parents: projection_only_protocol_parents
                 .iter()
                 .copied()
@@ -91,6 +91,7 @@ impl ParentCollector {
             break_capture_depth: 0,
             exit_regions: Vec::new(),
             arm_block_scopes: Vec::new(),
+            global_statements: HashMap::new(),
         }
     }
 
@@ -98,12 +99,25 @@ impl ParentCollector {
         let ambient = path.iter().any(|parent| {
             matches!(parent, swc_ecma_visit::AstParentNodeRef::TsModuleDecl(decl, _) if decl.declare)
         });
+        let decorated_classes = path
+            .iter()
+            .enumerate()
+            .filter_map(|(index, parent)| match parent {
+                swc_ecma_visit::AstParentNodeRef::Class(class, _)
+                    if !class.decorators.is_empty() =>
+                {
+                    Some(index)
+                }
+                _ => None,
+            })
+            .collect();
         if self
             .found
             .insert(
                 id,
                 FoundOverlay {
                     ambient,
+                    decorated_classes,
                     parents: path.kinds().to_vec(),
                     host_owners: self.host_owners.clone(),
                     protocol_frames: self.protocol_frames.clone(),
@@ -133,29 +147,44 @@ impl ParentCollector {
         }
         let mut owner_ids: HashMap<ProjectedHostOwner, HostOwnerId> = HashMap::new();
         let mut owners: Vec<HostOwnerSyntax> = Vec::new();
+        let mut globals = HashMap::new();
         let mut overlay: Vec<OverlayEntry> = Vec::with_capacity(pending.len());
         let overlay_spans: Vec<_> = pending
             .iter()
             .map(|entry| (entry.id, entry.projected))
             .collect();
+        let overlay_index = crate::span_index::SpanIndex::new(
+            overlay_spans
+                .iter()
+                .map(|(_, span)| (span.start.0, span.end.0)),
+        );
         for entry in &pending {
             let found = self
                 .found
                 .remove(&entry.id)
                 .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
-            let (projected_owner, kind, span) = found
+            let (owner_index, projected_owner, kind, span) = found
                 .host_owners
                 .iter()
+                .enumerate()
                 .rev()
-                .filter(|owner| {
+                .filter(|(_, owner)| {
                     owner.span.start <= entry.projected.start
                         && entry.projected.end <= owner.span.end
                 })
-                .find_map(|owner| {
+                .find_map(|(index, owner)| {
                     source_span_for_projection(&self.source_segments, owner.span)
-                        .map(|span| (*owner, owner.kind, span))
+                        .map(|span| (index, *owner, owner.kind, span))
                 })
                 .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
+            let projected_anchor =
+                prelude_anchor(&found.host_owners[..=owner_index], &found.parents);
+            let anchor = source_span_for_projection(&self.source_segments, projected_anchor.span)
+                .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
+            let requires_block = projected_anchor.kind == HostOwnerKind::Statement
+                && is_unbraced_body(
+                    &found.parents[..projected_anchor.edge.min(found.parents.len())],
+                );
             let owner_id = if let Some(owner_id) = owner_ids.get(&projected_owner).copied() {
                 owner_id
             } else {
@@ -169,14 +198,20 @@ impl ParentCollector {
                         id: owner_id,
                         kind,
                         span,
+                        anchor_start: anchor.start,
                     },
                     roots: Vec::new(),
                 });
                 owner_id
             };
             owners[owner_id.0 as usize].roots.push(entry.id);
-            let enclosing_overlay = overlay_spans
-                .iter()
+            if let Some(global) = self.global_statements.get(&projected_anchor.span) {
+                globals.insert(owners[owner_id.0 as usize].owner.anchor(), global.clone());
+            }
+            let enclosing_overlay = overlay_index
+                .covering(entry.projected.start.0, entry.projected.end.0)
+                .into_iter()
+                .map(|index| &overlay_spans[index])
                 .filter(|(id, span)| {
                     *id != entry.id
                         && span.start <= entry.projected.start
@@ -193,6 +228,7 @@ impl ParentCollector {
                     entry.category,
                     &found.parents,
                     projected_owner.edge,
+                    requires_block,
                     OverlayFacts {
                         function_target: found.function_target,
                         contextual_type: found
@@ -205,6 +241,8 @@ impl ParentCollector {
                             .transpose()?,
                         function_return_awaited: found.function_return_awaited,
                         ambient: found.ambient,
+                        decorated_classes: found.decorated_classes,
+                        value_is_owner: span == entry.source,
                     },
                 ),
                 // A frame outside the host owner is not this owner's
@@ -279,6 +317,7 @@ impl ParentCollector {
             overlay,
             owners,
             occupied_names: self.occupied_names,
+            globals,
         })
     }
 }
@@ -798,27 +837,10 @@ impl VisitAstPath for ParentCollector {
                     projected_span(reference_value_span(argument), self.source_start)
                 }),
                 captured_break: self.break_capture_depth > region_break_depth,
-                requires_block: path
-                    .kinds()
-                    .iter()
-                    .rev()
-                    .find(|parent| {
-                        !matches!(parent, AstParentKind::Stmt(fields::StmtField::Return))
-                    })
-                    .is_some_and(|parent| {
-                        matches!(
-                            parent,
-                            AstParentKind::IfStmt(
-                                fields::IfStmtField::Cons | fields::IfStmtField::Alt
-                            ) | AstParentKind::ForStmt(fields::ForStmtField::Body)
-                                | AstParentKind::ForInStmt(fields::ForInStmtField::Body)
-                                | AstParentKind::ForOfStmt(fields::ForOfStmtField::Body)
-                                | AstParentKind::WhileStmt(fields::WhileStmtField::Body)
-                                | AstParentKind::DoWhileStmt(fields::DoWhileStmtField::Body)
-                                | AstParentKind::LabeledStmt(fields::LabeledStmtField::Body)
-                                | AstParentKind::WithStmt(fields::WithStmtField::Body)
-                        )
-                    }),
+                requires_block: is_unbraced_body(match &path.kinds()[..] {
+                    [above @ .., AstParentKind::Stmt(fields::StmtField::Return)] => above,
+                    kinds => kinds,
+                }),
             });
         }
         <ReturnStmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);

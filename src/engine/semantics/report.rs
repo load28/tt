@@ -131,14 +131,14 @@ pub(crate) fn report(
         }
     }
 
-    // A file the configured program does not contain gets no answers from
-    // the checker: no question about its scrutinees is ever asked, so the
-    // tag path below has nothing to report about it. That is the same
-    // situation as a backend that could not run, and the same rule applies
-    // — the typed facts go, the tt layer does not. Its coverage is
+    // A file no checked project contains gets no answers from the checker
+    // (a requested or open file outside the configured program is answered
+    // by its default project): no question about its scrutinees is ever
+    // asked, so the tag path below has nothing to report about it. That is
+    // the same situation as a backend that could not run, and the same rule
+    // applies — the typed facts go, the tt layer does not. Its coverage is
     // answered from the declarations the file can see, exactly as
-    // `ttc --check` answers it, so a file the caller named is never passed
-    // in silence.
+    // `ttc --check` answers it.
     let checker_members: Option<HashSet<&std::path::Path>> = answers
         .project_modules
         .as_ref()
@@ -172,6 +172,19 @@ pub(crate) fn report(
     // TypeScript's own diagnostics, at the position in the `.tt` file the
     // offending code was written at.
     let type_diagnostics: &[TsDiagnostic] = if tt_only { &[] } else { &answers.diagnostics };
+    if !tt_only {
+        for diagnostic in &answers.project_diagnostics {
+            out.push(Diagnostic {
+                path: diagnostic.file.clone(),
+                position: None,
+                end: None,
+                message: diagnostic.message.clone(),
+                code: Some(format!("ts{}", diagnostic.code)),
+                suggestions: Vec::new(),
+                labels: Vec::new(),
+            });
+        }
+    }
     let structured_glue: HashSet<(PathBuf, usize, AnchorKind)> = type_diagnostics
         .iter()
         .filter(|diagnostic| diagnostic.mismatch.is_some())
@@ -427,6 +440,8 @@ pub(crate) fn report(
             message: crate::diagnostics::non_exhaustive_message(
                 Some("literal union"),
                 &uncovered,
+                uncovered.len(),
+                true,
                 false,
             ),
             code: Some(
@@ -552,10 +567,11 @@ pub(crate) fn report(
             }
             // The arms that close the hole, from the same witnesses in
             // their binding form — one authoring, both pipelines.
+            let whole = coverage.exact && uncovered.len() == coverage.certain_total;
             let arms: Vec<String> = coverage
                 .missing
                 .iter()
-                .filter(|m| m.certain)
+                .filter(|m| whole && m.certain)
                 .map(|m| {
                     if m.arm.len() > 1 {
                         format!("({})", m.arm.join(", "))
@@ -574,7 +590,13 @@ pub(crate) fn report(
                 end: match_ends
                     .get(&(file.source_path.clone(), offset))
                     .map(|at| crate::line_col(&file.source, *at)),
-                message: crate::diagnostics::non_exhaustive_message(None, &uncovered, tuple),
+                message: crate::diagnostics::non_exhaustive_message(
+                    None,
+                    &uncovered,
+                    coverage.certain_total,
+                    coverage.exact,
+                    tuple,
+                ),
                 code: Some(
                     crate::DiagnosticCode::MatchNotExhaustive
                         .as_str()

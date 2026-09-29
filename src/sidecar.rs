@@ -11,6 +11,7 @@
 //! that as a declaration map whose `sources` points at the `.tt` file, which
 //! is what sends "go to definition" to the original instead of the `.d.ts`.
 
+use crate::lines::LineMap;
 use crate::variant_symbols;
 
 /// The two files that make up a module's editor sidecar.
@@ -30,9 +31,10 @@ pub struct Sidecar {
 /// for ttc's output of that module, and `tt_path` is the path to the `.tt`
 /// file **relative to where the sidecar will be written** — `"notice.tt"`
 /// when the two sit together, `"../src/notice.tt"` when declarations live
-/// in their own tree (which TypeScript merges back with `rootDirs`). It
-/// becomes the map's `sources`, and its file name becomes the stem of the
-/// written files (`notice.tt.d.ts`).
+/// in their own tree (which TypeScript merges back with `rootDirs`). Written
+/// as a relative URL, it becomes the map's `sources`, and its file name
+/// becomes the stem of the written files (`notice.tt.d.ts`) and, as a URL,
+/// of the `sourceMappingURL` comment.
 ///
 /// Every exported declaration that can be located in the source gets two
 /// mapping segments: one at column 0 and one at the column where its name
@@ -45,42 +47,52 @@ pub fn build_sidecar(source: &str, declarations: &str, tt_path: &str) -> Sidecar
         .next()
         .filter(|name| !name.is_empty())
         .unwrap_or(tt_path);
-    let source_lines: Vec<&str> = source.lines().collect();
+    let source_lines = LineMap::ecma(source);
     let variants = variant_symbols(source);
 
-    let decl_lines: Vec<&str> = declarations
-        .lines()
-        .filter(|line| !line.trim_start().starts_with("//# sourceMappingURL="))
-        .collect();
-
-    let hits: Vec<Option<Hit>> = decl_lines
-        .iter()
-        .map(|line| {
-            let name = declared_name(line)?;
-            let position = locate(source, &source_lines, &variants, name)?;
+    // The declarations are rewritten line by line, and every line the map
+    // counts is one ECMA-262 line of what is written: a line ending becomes
+    // LF, and a U+2028 or U+2029 — a line terminator that is also text, as
+    // inside a string literal — stays itself.
+    let declaration_lines = LineMap::ecma(declarations);
+    let mut body = String::new();
+    let mut hits: Vec<Option<Hit>> = Vec::new();
+    for index in 0..declaration_lines.len() {
+        let line = declaration_lines.line_text(index).unwrap_or_default();
+        if line.trim_start().starts_with("//# sourceMappingURL=") {
+            continue;
+        }
+        if !hits.is_empty() {
+            body.push_str(match declaration_lines.line_break(index - 1) {
+                Some(separator @ ("\u{2028}" | "\u{2029}")) => separator,
+                _ => "\n",
+            });
+        }
+        body.push_str(line);
+        hits.push(declared_name(line).and_then(|name| {
+            let (line_number, column) = locate(&source_lines, &variants, name)?;
             Some(Hit {
-                generated_column: utf16_column(line, line.find(name)?),
-                line: position.0,
-                column: position.1,
+                generated_column: line[..line.find(name)?].encode_utf16().count(),
+                line: line_number,
+                column,
             })
-        })
-        .collect();
+        }));
+    }
 
     let map_name = format!("{tt_file_name}.d.ts.map");
-    let body = decl_lines.join("\n");
     // The banner costs one generated line, so the mappings are shifted by
     // one (the leading `;` below).
     let declarations = format!(
         "// @generated from {tt_file_name} by ttc --sidecar — do not edit.\n{}\n//# sourceMappingURL={}\n",
         body.trim_end(),
-        map_name.as_str()
+        crate::source_map::url_path([map_name.as_str()])
     );
     // A leading `;` skips the banner line the declarations open with.
     let mappings = format!(";{}", encode_mappings(&hits));
     let map = format!(
         "{{\"version\":3,\"file\":{},\"sourceRoot\":\"\",\"sources\":[{}],\"names\":[],\"mappings\":\"{}\"}}\n",
         json_string(&format!("{tt_file_name}.d.ts")),
-        json_string(tt_path),
+        json_string(&crate::source_map::url_path(tt_path.split('/'))),
         mappings,
     );
 
@@ -124,34 +136,35 @@ fn identifier_prefix(text: &str) -> &str {
     &text[..end]
 }
 
-/// Where `name` is declared in the source, as a zero-based (line, column).
+/// Where `name` is declared in the source, as a zero-based line and UTF-16
+/// column — ECMA-262's lines, which are the ones the map counts.
 ///
 /// tt variants come from the parsed declarations, so their positions are exact.
 /// Everything else lives in a passthrough region and is found by scanning
 /// for its declaration keyword; the first match wins.
 fn locate(
-    source: &str,
-    source_lines: &[&str],
+    source_lines: &LineMap<'_>,
     variants: &[crate::VariantSymbol],
     name: &str,
 ) -> Option<(usize, usize)> {
     if let Some(symbol) = variants.iter().find(|e| e.name == name) {
-        let (line, column) = crate::line_col(source, symbol.offset);
-        let index = line.checked_sub(1)?;
         // `offset` points at the declaration keyword; move to the name.
-        let text = source_lines.get(index)?;
-        let column = text
-            .find(name)
-            .map_or(column.saturating_sub(1), |byte| utf16_column(text, byte));
-        return Some((index, column));
+        let line = source_lines.line_of(symbol.offset);
+        let at = source_lines
+            .line_text(line)
+            .and_then(|text| text.find(name))
+            .and_then(|byte| Some(source_lines.line_start(line)? + byte))
+            .unwrap_or(symbol.offset);
+        return Some(source_lines.utf16_position(at));
     }
 
-    source_lines.iter().enumerate().find_map(|(index, text)| {
+    (0..source_lines.len()).find_map(|index| {
+        let text = source_lines.line_text(index)?;
         if !declares(text, name) {
             return None;
         }
-        let byte = text.find(name)?;
-        Some((index, utf16_column(text, byte)))
+        let byte = source_lines.line_start(index)? + text.find(name)?;
+        Some(source_lines.utf16_position(byte))
     })
 }
 
@@ -176,13 +189,6 @@ fn declares(line: &str, name: &str) -> bool {
         }
     }
     false
-}
-
-/// Column of `byte` in `text`, counted in UTF-16 code units (what source
-/// maps and editors use).
-fn utf16_column(text: &str, byte: usize) -> usize {
-    text.get(..byte)
-        .map_or(0, |prefix| prefix.encode_utf16().count())
 }
 
 /// Encodes one segment per located declaration into a source map v3

@@ -21,7 +21,8 @@ use std::borrow::Cow;
 use crate::ice::{InternalCompilerError, Invariant, LoweringStage, LoweringSubject};
 use crate::program_syntax::SourceSpan;
 use crate::{
-    AnchorKind, EmitAnchor, EmitMapping, PayloadTemp, ResultReturnTemp, ScrutineeTemp, SourceKind,
+    AnchorKind, BindingOccurrence, DeclaredName, EmitAnchor, EmitMapping, PayloadTemp,
+    ResultReturnTemp, ScrutineeTemp, SharedBinding, SourceKind,
 };
 
 pub(crate) use builder::{Flat, Rope};
@@ -41,6 +42,14 @@ pub(crate) enum MarkKind {
     ResultReturnStart,
     /// End of the same returned value.
     ResultReturnEnd,
+    DeclaredNameStart,
+    DeclaredNameEnd,
+    SharedBindingStart,
+    SharedBindingOccurrence {
+        end: usize,
+        shorthand: bool,
+    },
+    SharedBindingEnd,
 }
 
 enum Piece<'a> {
@@ -99,6 +108,10 @@ struct ExactOrigin {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SyntheticReason {
     UnanchoredGenerated,
+    /// The `;` that keeps a statement the source ended by automatic
+    /// semicolon insertion from running into generated text after it
+    /// ([`TargetFile::separate_statements`]).
+    StatementSeparator,
 }
 
 enum TargetPiece<'a> {
@@ -204,22 +217,8 @@ pub(crate) struct SourcePreservation {
 }
 
 impl SourcePreservation {
-    fn owns(&self, at: usize) -> bool {
-        self.owned
-            .iter()
-            .any(|span| span.start <= at && at < span.end)
-    }
-
-    fn relocates(&self, at: usize) -> bool {
-        self.relocated
-            .iter()
-            .any(|span| span.start <= at && at < span.end)
-    }
-
-    fn rewrites(&self, at: usize) -> bool {
-        self.rewritten
-            .iter()
-            .any(|span| span.start <= at && at < span.end)
+    fn index(spans: &[SourceSpan]) -> crate::span_index::SpanIndex {
+        crate::span_index::SpanIndex::new(spans.iter().map(|span| (span.start, span.end)))
     }
 }
 
@@ -333,6 +332,91 @@ impl<'a> TargetFile<'a> {
         }
     }
 
+    /// Keeps every statement boundary the source makes by automatic
+    /// semicolon insertion a boundary of the target.
+    ///
+    /// A source piece that carries the line break an automatic semicolon
+    /// stands on and runs up to the next statement's start copies the
+    /// source's separation of two statements. When the target continues
+    /// with anything but that statement's own source text, what follows is
+    /// generated or moved: a lowering's first token. When that token would continue the previous statement
+    /// ([`crate::lexer::continues_statement`]), an explicit `;` is written
+    /// between them. One rule covers every lowering, because it reads the
+    /// target's pieces rather than the emitter path that produced them.
+    fn separate_statements(&mut self, boundaries: &[usize], kind: SourceKind) {
+        if boundaries.is_empty() {
+            return;
+        }
+        let mut separators = Vec::new();
+        for (index, piece) in self.pieces.iter().enumerate() {
+            let TargetPiece::Source { origin, text } = piece else {
+                continue;
+            };
+            if boundaries.binary_search(&origin.end).is_err()
+                || !crate::scanner::contains_line_terminator(text.as_bytes(), 0, text.len())
+            {
+                continue;
+            }
+            let following = self.pieces[index + 1..].iter().find(|piece| {
+                !piece.text().is_empty() || matches!(piece, TargetPiece::Break { .. })
+            });
+            match following {
+                None => continue,
+                Some(TargetPiece::Source { origin: next, .. }) if next.start == origin.end => {
+                    continue;
+                }
+                Some(_) => {}
+            }
+            if crate::lexer::continues_statement(&self.leading_text(index + 1), kind) {
+                separators.push((index + 1, origin.end));
+            }
+        }
+        for (index, boundary) in separators.into_iter().rev() {
+            self.len += 1;
+            self.pieces.insert(
+                index,
+                TargetPiece::Generated {
+                    text: Cow::Borrowed(";"),
+                    origin: SourceOrigin::Synthetic {
+                        parent: ExactOrigin {
+                            start: boundary,
+                            end: boundary,
+                        },
+                        reason: SyntheticReason::StatementSeparator,
+                    },
+                },
+            );
+        }
+    }
+
+    /// The target's text from piece `from` through the end of the line its
+    /// first significant byte is on, with each layout break read as the
+    /// line break it prints.
+    fn leading_text(&self, from: usize) -> String {
+        let mut text = String::new();
+        for piece in &self.pieces[from..] {
+            let chunk = match piece {
+                TargetPiece::Break { .. } => "\n",
+                piece => piece.text(),
+            };
+            let bytes = text.as_bytes();
+            let (start, _) = crate::scanner::skip_trivia(bytes, 0, bytes.len());
+            let from = if start < bytes.len() {
+                0
+            } else {
+                let chunk_bytes = chunk.as_bytes();
+                crate::scanner::skip_trivia(chunk_bytes, 0, chunk_bytes.len()).0
+            };
+            let chunk_bytes = chunk.as_bytes();
+            let stop = crate::scanner::line_end(chunk_bytes, from, chunk_bytes.len());
+            text.push_str(&chunk[..stop]);
+            if stop < chunk_bytes.len() {
+                break;
+            }
+        }
+        text
+    }
+
     fn validate(&self) -> Result<(), TargetError> {
         let actual = self.pieces.iter().map(|piece| piece.text().len()).sum();
         if actual != self.len {
@@ -416,6 +500,9 @@ impl<'a> TargetFile<'a> {
     ) -> Result<(), InternalCompilerError> {
         let stage = LoweringStage::TargetSourcePreservation;
         let subject = LoweringSubject::default();
+        let owned = SourcePreservation::index(&preservation.owned);
+        let relocated = SourcePreservation::index(&preservation.relocated);
+        let rewritten = SourcePreservation::index(&preservation.rewritten);
         let mut printed = vec![0u16; self.source_len];
         let mut last_ordered: Option<(usize, usize)> = None;
         for piece in &self.pieces {
@@ -432,7 +519,7 @@ impl<'a> TargetFile<'a> {
             // Order applies to the pass-through stream only: pieces inside
             // a construct's own text are its lowering's to arrange, and
             // pieces inside a relocated range were moved on purpose.
-            if !preservation.owns(*start) || preservation.relocates(*start) {
+            if !owned.any_containing(*start) || relocated.any_containing(*start) {
                 continue;
             }
             if let Some((previous_start, previous_end)) = last_ordered
@@ -458,21 +545,25 @@ impl<'a> TargetFile<'a> {
             .source
             .expect("flatten installs the source before validating against it");
         // Rope trimming follows `str::trim`, which recognizes Unicode
-        // whitespace. Mark every byte of those scalar values so this
-        // validator uses the same classification, including ASCII vertical
-        // tab and multibyte spaces. Classifying one byte at a time would
-        // reject continuation bytes after trimming had legitimately removed
-        // the complete character.
-        let mut whitespace = vec![false; source.len()];
-        for (start, character) in source.char_indices() {
-            if character.is_whitespace() {
-                whitespace[start..start + character.len_utf8()].fill(true);
-            }
-        }
+        // whitespace. A byte counts as whitespace when the scalar value it
+        // belongs to does, so this validator uses the same classification,
+        // including ASCII vertical tab and multibyte spaces. Classifying one
+        // byte at a time would reject continuation bytes after trimming had
+        // legitimately removed the complete character.
+        let whitespace = |at: usize| {
+            let start = (0..=at)
+                .rev()
+                .find(|&start| source.is_char_boundary(start))
+                .unwrap_or(0);
+            source[start..]
+                .chars()
+                .next()
+                .is_some_and(char::is_whitespace)
+        };
         for span in &preservation.owned {
             let clipped = span.start..span.end.min(self.source_len);
             for (at, &count) in clipped.clone().zip(&printed[clipped]) {
-                if preservation.rewrites(at) {
+                if count == 1 || (count == 0 && whitespace(at)) || rewritten.any_containing(at) {
                     continue;
                 }
                 let byte = SourceSpan {
@@ -488,7 +579,7 @@ impl<'a> TargetFile<'a> {
                     .at(byte)
                     .with_origin(vec![*span]));
                 }
-                if count == 0 && !whitespace[at] {
+                if count == 0 {
                     return Err(InternalCompilerError::new(
                         stage,
                         Invariant::SourceOmitted,
@@ -510,6 +601,8 @@ impl<'a> TargetFile<'a> {
         let mut payloads: Vec<PayloadTemp> = Vec::new();
         let mut result_returns: Vec<ResultReturnTemp> = Vec::new();
         let mut contextual_slots = Vec::new();
+        let mut declared_names: Vec<DeclaredName> = Vec::new();
+        let mut shared_bindings: Vec<SharedBinding> = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
         for piece in &self.pieces {
@@ -589,6 +682,63 @@ impl<'a> TargetFile<'a> {
                         });
                     mark.out_end = out.len();
                 }
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::DeclaredNameStart,
+                } => declared_names.push(DeclaredName {
+                    src: *src,
+                    src_end: *src,
+                    out: out.len(),
+                    out_end: out.len(),
+                }),
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::DeclaredNameEnd,
+                } => {
+                    let name = declared_names
+                        .last_mut()
+                        .filter(|name| name.out_end == name.out && name.src <= *src)
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("declared name end has no matching start")
+                        });
+                    name.src_end = *src;
+                    name.out_end = out.len();
+                }
+                TargetPiece::Mark {
+                    kind: MarkKind::SharedBindingStart,
+                    ..
+                } => shared_bindings.push(SharedBinding {
+                    out: out.len(),
+                    out_end: out.len(),
+                    occurrences: Vec::new(),
+                }),
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::SharedBindingOccurrence { end, shorthand },
+                } => shared_bindings
+                    .last_mut()
+                    .filter(|binding| binding.out_end == binding.out)
+                    .unwrap_or_else(|| {
+                        crate::ice::bug!("shared binding occurrence has no open binding")
+                    })
+                    .occurrences
+                    .push(BindingOccurrence {
+                        src: *src,
+                        src_end: *end,
+                        shorthand: *shorthand,
+                    }),
+                TargetPiece::Mark {
+                    kind: MarkKind::SharedBindingEnd,
+                    ..
+                } => {
+                    shared_bindings
+                        .last_mut()
+                        .filter(|binding| binding.out_end == binding.out)
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("shared binding end has no matching start")
+                        })
+                        .out_end = out.len();
+                }
                 TargetPiece::ScopeOpen => scopes.push(line_indent(&out).to_owned()),
                 TargetPiece::ScopeClose => {
                     scopes.pop();
@@ -638,6 +788,9 @@ impl<'a> TargetFile<'a> {
             anchors,
             result_return_temps: result_returns,
             contextual_slots,
+            generated_names: std::collections::HashSet::new(),
+            declared_names,
+            shared_bindings,
         }
     }
 }
@@ -674,10 +827,7 @@ fn push_generated(out: &mut String, text: &str, newline: &str) {
 /// The whitespace a line starts with — the base a lowering's generated
 /// block structure is laid out from.
 fn line_indent(out: &str) -> &str {
-    let line = match out.rfind('\n') {
-        Some(newline) => &out[newline + 1..],
-        None => out,
-    };
+    let line = &out[crate::lines::line_start_before(out, out.len())..];
     let end = line
         .find(|byte: char| byte != ' ' && byte != '\t')
         .unwrap_or(line.len());
@@ -703,7 +853,7 @@ impl<'a> Piece<'a> {
     fn ends_line(&self) -> bool {
         match self {
             Piece::Break { .. } => true,
-            piece => piece.text().ends_with('\n'),
+            piece => crate::lines::ends_with_line_break(piece.text()),
         }
     }
 

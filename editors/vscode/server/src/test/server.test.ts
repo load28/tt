@@ -15,13 +15,13 @@ import * as assert from "node:assert/strict";
 import { test } from "node:test";
 import { execFileSync, spawn, ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
-import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
+import { URI } from "vscode-uri";
 
 import { refreshSidecar } from "../sidecar";
 import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
-import { caseDir } from "./workspace";
+import { repoTestDir } from "../../../../../scripts/test-dirs.cjs";
 
 const SERVER = path.join(__dirname, "..", "server.js");
 const skip = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
@@ -36,7 +36,7 @@ const timeout = 60_000;
 for (const consumerKind of ["tt", "ttx"]) {
   for (const providerKind of ["tt", "ttx", "ts", "tsx"]) {
     test(`filesystem and config changes refresh ${providerKind} -> ${consumerKind}`, { skip: skipTyped, timeout }, async () => {
-      const dir = caseDir("tt-filesystem-edit-");
+      const dir = repoTestDir("tt-filesystem-edit-");
       const provider = path.join(dir, `provider.${providerKind}`);
       const consumer = path.join(dir, `consumer.${consumerKind}`);
       const configPath = path.join(dir, "tsconfig.json");
@@ -85,7 +85,7 @@ for (const consumerKind of ["tt", "ttx"]) {
     });
 
     test(`unsaved ${providerKind} changes refresh untouched ${consumerKind} diagnostics`, { skip: skipTyped, timeout }, async () => {
-      const dir = caseDir("tt-dependency-edit-");
+      const dir = repoTestDir("tt-dependency-edit-");
       const provider = path.join(dir, `provider.${providerKind}`);
       const consumer = path.join(dir, `consumer.${consumerKind}`);
       const original = 'export const value: string = "disk";\n';
@@ -126,6 +126,195 @@ for (const consumerKind of ["tt", "ttx"]) {
   }
 }
 
+function loggingCompiler(file: string): string {
+  const logs = `${file}.logs`;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, `#!/usr/bin/env node
+const fs = require("node:fs");
+const path = require("node:path");
+const { spawn } = require("node:child_process");
+const logs = ${JSON.stringify(logs)};
+fs.mkdirSync(logs, { recursive: true });
+const log = path.join(logs, process.pid + ".jsonl");
+const args = process.argv.slice(2);
+fs.appendFileSync(log, JSON.stringify({ argv: args }) + "\\n");
+const child = spawn(${JSON.stringify(COMPILER)}, args, { stdio: ["pipe", "inherit", "inherit"] });
+child.stdin.on("error", () => {});
+process.stdin.on("data", (chunk) => { fs.appendFileSync(log, chunk); child.stdin.write(chunk); });
+process.stdin.on("end", () => child.stdin.end());
+child.on("exit", (code) => process.exit(code ?? 1));
+`);
+  fs.chmodSync(file, 0o755);
+  return logs;
+}
+
+function compilerLog(logs: string): any[] {
+  if (!fs.existsSync(logs)) return [];
+  return fs.readdirSync(logs).flatMap((name) =>
+    fs.readFileSync(path.join(logs, name), "utf8").split("\n").flatMap((line) => {
+      try {
+        return [JSON.parse(line)];
+      } catch {
+        return [];
+      }
+    }),
+  );
+}
+
+function openedIn(entries: any[]): string[] {
+  return entries
+    .filter((entry) => entry.method === "openDocument")
+    .map((entry) => path.basename(entry.params.path));
+}
+
+async function eventually(condition: () => boolean, what: string, limit = 20_000): Promise<void> {
+  const deadline = Date.now() + limit;
+  while (!condition()) {
+    if (Date.now() > deadline) assert.fail(`timed out waiting for ${what}`);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+function underFolder(scopeUri: string | undefined, folder: string): boolean {
+  if (scopeUri === undefined) return false;
+  const file = URI.parse(scopeUri).fsPath;
+  return file === folder || file.startsWith(`${folder}${path.sep}`);
+}
+
+async function openTwoFolders(
+  client: Client,
+  first: string,
+  second: string,
+  capabilities: object,
+): Promise<{ alpha: string; beta: string }> {
+  const alpha = path.join(first, "alpha.tt");
+  const beta = path.join(second, "beta.tt");
+  const source = "export const n: number = 1;\n";
+  fs.writeFileSync(alpha, source);
+  fs.writeFileSync(beta, source);
+  await client.request("initialize", {
+    processId: process.pid,
+    rootUri: pathToFileURL(first).toString(),
+    workspaceFolders: [
+      { uri: pathToFileURL(first).toString(), name: "first" },
+      { uri: pathToFileURL(second).toString(), name: "second" },
+    ],
+    capabilities,
+  });
+  client.notify("initialized", {});
+  const published = Promise.all([alpha, beta].map((file) =>
+    client.waitFor("textDocument/publishDiagnostics", (p) => p.uri === pathToFileURL(file).toString())));
+  for (const file of [alpha, beta]) {
+    client.notify("textDocument/didOpen", {
+      textDocument: { uri: pathToFileURL(file).toString(), languageId: "tt", version: 1, text: source },
+    });
+  }
+  await published;
+  return { alpha, beta };
+}
+
+test("each folder keeps its configured compiler when the configuration changes", { skip, timeout }, async () => {
+  const first = repoTestDir("tt-owner-first-");
+  const second = repoTestDir("tt-owner-second-");
+  const firstCompiler = path.join(first, "tools", "ttc");
+  const secondCompiler = path.join(second, "tools", "ttc");
+  const firstLogs = loggingCompiler(firstCompiler);
+  const secondLogs = loggingCompiler(secondCompiler);
+  const client = connect(SERVER, {
+    configuration: (item) => ({
+      compilerPath: underFolder(item.scopeUri, first)
+        ? firstCompiler
+        : underFolder(item.scopeUri, second)
+          ? secondCompiler
+          : "",
+    }),
+  });
+  try {
+    const { alpha, beta } = await openTwoFolders(client, first, second, { workspace: { configuration: true, workspaceFolders: true } });
+    await eventually(
+      () => openedIn(compilerLog(firstLogs)).includes("alpha.tt") && openedIn(compilerLog(secondLogs)).includes("beta.tt"),
+      "each folder's compiler to receive its document",
+    );
+    const firstMark = compilerLog(firstLogs).length;
+    const secondMark = compilerLog(secondLogs).length;
+
+    const republished = Promise.all([alpha, beta].map((file) =>
+      client.waitFor("textDocument/publishDiagnostics", (p) => p.uri === pathToFileURL(file).toString())));
+    client.notify("workspace/didChangeConfiguration", { settings: null });
+    await republished;
+    await eventually(
+      () => openedIn(compilerLog(secondLogs).slice(secondMark)).includes("beta.tt"),
+      "the second folder's compiler to receive its document again",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const firstAfter = compilerLog(firstLogs).slice(firstMark);
+    const secondAfter = compilerLog(secondLogs).slice(secondMark);
+    assert.deepEqual(openedIn(firstAfter), ["alpha.tt"], JSON.stringify(firstAfter));
+    assert.deepEqual(openedIn(secondAfter), ["beta.tt"], JSON.stringify(secondAfter));
+    assert.ok(secondAfter.some((entry) => entry.method === "reloadProjects"), "the second folder's session reloads its projects");
+  } finally { client.stop(); }
+});
+
+test("documents opened before the configuration arrives never reach an unconfigured compiler", { skip, timeout }, async () => {
+  const first = repoTestDir("tt-owner-startup-");
+  const second = repoTestDir("tt-owner-startup-second-");
+  const configured = path.join(first, "tools", "ttc");
+  const configuredLogs = loggingCompiler(configured);
+  const discoveredLogs = loggingCompiler(path.join(first, "target", "debug", "ttc"));
+  const client = connect(SERVER, {
+    configuration: (item) => ({ compilerPath: underFolder(item.scopeUri, first) ? configured : "" }),
+  });
+  try {
+    await openTwoFolders(client, first, second, { workspace: { configuration: true } });
+    await eventually(() => openedIn(compilerLog(configuredLogs)).includes("alpha.tt"), "the configured compiler to receive the document");
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.deepEqual(compilerLog(discoveredLogs), [], "the auto-discovered build was never started");
+  } finally { client.stop(); }
+});
+
+test("a folder without a configured compiler discovers its own build", { skip, timeout }, async () => {
+  const first = repoTestDir("tt-owner-build-first-");
+  const second = repoTestDir("tt-owner-build-second-");
+  const firstLogs = loggingCompiler(path.join(first, "target", "debug", "ttc"));
+  const secondLogs = loggingCompiler(path.join(second, "target", "debug", "ttc"));
+  const client = connect();
+  try {
+    await openTwoFolders(client, first, second, {});
+    await eventually(
+      () => openedIn(compilerLog(firstLogs)).includes("alpha.tt") && openedIn(compilerLog(secondLogs)).includes("beta.tt"),
+      "each folder's build to receive its document",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.ok(!openedIn(compilerLog(firstLogs)).includes("beta.tt"), "the first folder's build does not serve the second folder");
+    assert.ok(!openedIn(compilerLog(secondLogs)).includes("alpha.tt"), "and the reverse");
+  } finally { client.stop(); }
+});
+
+test("a relative compiler path resolves against the folder that configures it", { skip, timeout }, async () => {
+  const first = repoTestDir("tt-owner-relative-first-");
+  const second = repoTestDir("tt-owner-relative-second-");
+  const firstLogs = loggingCompiler(path.join(first, "tools", "ttc"));
+  const secondLogs = loggingCompiler(path.join(second, "tools", "ttc"));
+  const client = connect(SERVER, {
+    configuration: () => ({ compilerPath: path.join("tools", "ttc"), sidecar: "always" }),
+  });
+  try {
+    const { beta } = await openTwoFolders(client, first, second, { workspace: { configuration: true } });
+    await eventually(
+      () => openedIn(compilerLog(firstLogs)).includes("alpha.tt") && openedIn(compilerLog(secondLogs)).includes("beta.tt"),
+      "each folder's relative compiler to receive its document",
+    );
+    client.notify("textDocument/didSave", { textDocument: { uri: pathToFileURL(beta).toString() } });
+    await eventually(
+      () => compilerLog(secondLogs).some((entry) => Array.isArray(entry.argv) && entry.argv.includes("--types")),
+      "the sidecar refresh to run the second folder's compiler",
+    );
+    assert.ok(!compilerLog(firstLogs).some((entry) => Array.isArray(entry.argv) && entry.argv.includes("--types")));
+    assert.ok(!openedIn(compilerLog(firstLogs)).includes("beta.tt"));
+  } finally { client.stop(); }
+});
+
 /* A window's folders are not what it started with: people add and remove
  * them all day. Every folder is a place the compiler, the TypeScript
  * toolchain and a relative `tt.sidecarDir` are resolved from, and the
@@ -133,8 +322,8 @@ for (const consumerKind of ["tt", "ttx"]) {
  * wants one — so without the capability the roots stayed frozen at
  * startup, for the life of the session (TASK-342). */
 test("the server asks for folder changes, and acts on them", { skip, timeout }, async () => {
-  const dir = caseDir("tt-folders-");
-  const added = caseDir("tt-folders-added-");
+  const dir = repoTestDir("tt-folders-");
+  const added = repoTestDir("tt-folders-added-");
   const file = path.join(dir, "main.tt");
   const source = "variant State { Ready, Empty }\ndeclare const state: State;\nexport const label = match (state) { Ready => \"r\" };\n";
   fs.writeFileSync(file, source);
@@ -219,7 +408,12 @@ interface Client {
 }
 
 /** The framing an LSP client speaks: `Content-Length` headers over stdio. */
-function connect(server = SERVER): Client {
+interface ConnectOptions {
+  env?: NodeJS.ProcessEnv;
+  configuration?: (item: { scopeUri?: string; section?: string }) => unknown;
+}
+
+function connect(server = SERVER, options: ConnectOptions = {}): Client {
   const child: ChildProcess = spawn(process.execPath, [server, "--stdio"], {
     stdio: ["pipe", "pipe", "pipe"],
     // The LSP case lives in a temporary project, while the test contract is
@@ -230,6 +424,7 @@ function connect(server = SERVER): Client {
       ...process.env,
       TTC_BINARY: COMPILER,
       PATH: `${path.dirname(COMPILER)}${path.delimiter}${process.env.PATH ?? ""}`,
+      ...options.env,
     },
   });
   interface Request {
@@ -278,7 +473,15 @@ function connect(server = SERVER): Client {
       if (buf.length < sep + 4 + size) return;
       const body = JSON.parse(buf.subarray(sep + 4, sep + 4 + size).toString());
       buf = buf.subarray(sep + 4 + size);
-      const request = body.id !== undefined ? pending.get(body.id) : undefined;
+      if (body.method !== undefined && body.id !== undefined) {
+        const result =
+          body.method === "workspace/configuration" && options.configuration
+            ? (body.params.items as any[]).map(options.configuration)
+            : null;
+        send({ id: body.id, result });
+        continue;
+      }
+      const request = body.id !== undefined && body.method === undefined ? pending.get(body.id) : undefined;
       if (request) {
         pending.delete(body.id);
         request.resolve(body);
@@ -319,9 +522,11 @@ function connect(server = SERVER): Client {
   };
 }
 
+const TRIGGER_CHARACTERS = [".", "(", "|", "{", ","];
+
 /** A server with `source` open as a tt-family document, ready to be asked. */
 async function open(source: string, languageId: "tt" | "ttx" = "tt") {
-  const dir = caseDir("tt-server-test-");
+  const dir = repoTestDir("tt-server-test-");
   const file = path.join(dir, `main.${languageId}`);
   fs.writeFileSync(file, source);
   const uri = pathToFileURL(file).toString();
@@ -351,7 +556,9 @@ async function open(source: string, languageId: "tt" | "ttx" = "tt") {
         line,
         character: before.length - (before.lastIndexOf("\n") + 1),
       },
-      context: { triggerKind: 2, triggerCharacter: "." },
+      context: TRIGGER_CHARACTERS.includes(source[offset - 1])
+        ? { triggerKind: 2, triggerCharacter: source[offset - 1] }
+        : { triggerKind: 1 },
     });
     const items = (
       Array.isArray(response.result)
@@ -425,6 +632,38 @@ test(
         textDocument: { uri },
       });
       assert.ok(semantic.result?.data?.length > 0, JSON.stringify(semantic.result));
+    } finally {
+      stop();
+    }
+  },
+);
+
+const DOCUMENTED_SOURCE = [
+  "/**",
+  " * Adds two numbers.",
+  " * @param a the first",
+  " */",
+  "function add(a: number, b: number): number { return a + b; }",
+  "const sum = add(1, 2);",
+  "",
+].join("\n");
+
+test(
+  "a documented TypeScript hover renders its signature and documentation as separate parts",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, uri, stop } = await open(DOCUMENTED_SOURCE);
+    try {
+      const hover = await client.request("textDocument/hover", {
+        textDocument: { uri },
+        position: positionOf(DOCUMENTED_SOURCE, "sum = ad"),
+      });
+      assert.equal(hover.result?.contents?.kind, "markdown");
+      assert.equal(
+        hover.result?.contents?.value,
+        "```ts\nfunction add(a: number, b: number): number\n```\n" +
+          "Adds two numbers.\n\n*@param* `a` — the first",
+      );
     } finally {
       stop();
     }
@@ -796,6 +1035,170 @@ test("references, rename, signature help, and document symbols cross the LSP ada
   }
 });
 
+test("renaming a shorthand pattern binding at its declaration renames the binding", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    "variant Shape { Circle(radius: number), Rect(width: number, height: number), Point }",
+    "export function area(s: Shape): number {",
+    "  const a = match (s) { Circle(radius) => radius * 2, Rect(width: w, height) => w * height, Point => 0 };",
+    "  let Rect(width, height: h) = s else { return a; };",
+    "  return width + h;",
+    "}",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  const renamed = async (needle: string) => {
+    const answer = await client.request("textDocument/rename", {
+      textDocument: { uri },
+      position: positionOf(source, needle),
+      newName: "zz",
+    });
+    if (answer.result === null) return null;
+    const edits = [...answer.result.changes[uri]].sort(
+      (a: any, b: any) => b.range.start.line - a.range.start.line || b.range.start.character - a.range.start.character,
+    );
+    const lines = source.split("\n");
+    const offset = (p: { line: number; character: number }) =>
+      lines.slice(0, p.line).reduce((n, l) => n + l.length + 1, 0) + p.character;
+    let text = source;
+    for (const edit of edits) {
+      text = text.slice(0, offset(edit.range.start)) + edit.newText + text.slice(offset(edit.range.end));
+    }
+    return text;
+  };
+  try {
+    assert.equal(
+      await renamed("(s) { Circle("),
+      source.replace("Circle(radius) => radius * 2", "Circle(radius: zz) => zz * 2"),
+    );
+    assert.equal(
+      await renamed("let Rect("),
+      source
+        .replace("Rect(width, height: h)", "Rect(width: zz, height: h)")
+        .replace("return width + h", "return zz + h"),
+    );
+    assert.equal(await renamed("Shape { Circle("), null);
+    assert.equal(await renamed("radius * 2, Rect("), null);
+    assert.equal(await renamed("(s) { "), null);
+  } finally {
+    stop();
+  }
+});
+
+test("or-pattern bindings navigate and rename as one binding across the LSP adapter", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    "variant Shape { Circle(size: number), Square(size: number), Point }",
+    "export function area(s: Shape): number {",
+    "  if let Circle(size: q) | Square(size: q) = s { return q; }",
+    "  let Circle(size: z) | Square(size: z) = s else { return 0; };",
+    "  const b = match (s) { Circle(size) | Square(size) => size, Point => 0 };",
+    "  return b + z;",
+    "}",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  const lines = source.split("\n");
+  const offset = (p: { line: number; character: number }) =>
+    lines.slice(0, p.line).reduce((n, l) => n + l.length + 1, 0) + p.character;
+  const renamed = async (marker: string) => {
+    const answer = await client.request("textDocument/rename", {
+      textDocument: { uri },
+      position: positionOf(source, marker),
+      newName: "zz",
+    });
+    assert.ok(answer.result, `rename at ${marker}`);
+    const edits = [...answer.result.changes[uri]].sort(
+      (a: any, b: any) => offset(b.range.start) - offset(a.range.start),
+    );
+    let text = source;
+    for (const edit of edits) {
+      text = text.slice(0, offset(edit.range.start)) + edit.newText + text.slice(offset(edit.range.end));
+    }
+    return text;
+  };
+  try {
+    const definition = await client.request("textDocument/definition", {
+      textDocument: { uri },
+      position: positionOf(source, "{ return "),
+    });
+    assert.deepEqual(
+      definition.result.map((l: any) => [l.range.start.line, covered(source, l.range)]),
+      [[2, "q"], [2, "q"]],
+      JSON.stringify(definition.result),
+    );
+    const references = await client.request("textDocument/references", {
+      textDocument: { uri },
+      position: positionOf(source, "return b + "),
+      context: { includeDeclaration: true },
+    });
+    assert.equal(references.result.length, 3, JSON.stringify(references.result));
+    const q = source.replace(
+      "if let Circle(size: q) | Square(size: q) = s { return q; }",
+      "if let Circle(size: zz) | Square(size: zz) = s { return zz; }",
+    );
+    assert.equal(await renamed("{ return "), q);
+    assert.equal(await renamed("if let Circle(size: "), q);
+    assert.equal(
+      await renamed("let Circle(size: z) | Square(size: "),
+      source
+        .replace("Circle(size: z) | Square(size: z)", "Circle(size: zz) | Square(size: zz)")
+        .replace("b + z;", "b + zz;"),
+    );
+    const size = source.replace(
+      "Circle(size) | Square(size) => size,",
+      "Circle(size: zz) | Square(size: zz) => zz,",
+    );
+    assert.equal(await renamed("Square(size) => "), size);
+    assert.equal(await renamed("(s) { Circle("), size);
+  } finally {
+    stop();
+  }
+});
+
+test("document symbol ranges enclose the whole variant and each case", { skip, timeout }, async () => {
+  const source = [
+    "/** doc */ export declare variant P { R(v: number), Q }",
+    "variant Shape<T> {",
+    "  Circle(radius: T),",
+    "  Point,",
+    "}",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  try {
+    let symbols: any[] = [];
+    for (let attempt = 0; attempt < 40 && symbols.length === 0; attempt += 1) {
+      const answer = await client.request("textDocument/documentSymbol", { textDocument: { uri } });
+      symbols = Array.isArray(answer.result) ? answer.result : [];
+      if (symbols.length === 0) await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+    const shape = (symbol: any): any => ({
+      range: covered(source, symbol.range),
+      selection: covered(source, symbol.selectionRange),
+      children: (symbol.children ?? []).map(shape),
+    });
+    assert.deepEqual(symbols.map(shape), [
+      {
+        range: "export declare variant P { R(v: number), Q }",
+        selection: "P",
+        children: [
+          { range: "R(v: number)", selection: "R", children: [] },
+          { range: "Q", selection: "Q", children: [] },
+        ],
+      },
+      {
+        range: "variant Shape<T> {\n  Circle(radius: T),\n  Point,\n}",
+        selection: "Shape",
+        children: [
+          { range: "Circle(radius: T)", selection: "Circle", children: [] },
+          { range: "Point", selection: "Point", children: [] },
+        ],
+      },
+    ]);
+  } finally {
+    stop();
+  }
+});
+
 /* ------------------------------------------------------------------ */
 /* diagnostic ranges (TASK-116)                                        */
 /* ------------------------------------------------------------------ */
@@ -1051,6 +1454,62 @@ test(
   },
 );
 
+test("a quick fix edits only the document version its diagnostic was computed for", { skip, timeout }, async () => {
+  const source = [
+    "variant Shape { Circle(radius: number), Empty }",
+    "declare const s: Shape;",
+    "const a = match (s) { Circel(radius) => radius, Empty => 0 };",
+    "",
+  ].join("\n");
+  const title = "a case with a similar name exists";
+  for (const versioned of [false, true]) {
+    const dir = repoTestDir("tt-versioned-fix-");
+    const file = path.join(dir, "main.tt");
+    fs.writeFileSync(file, source);
+    const uri = pathToFileURL(file).toString();
+    const client = connect();
+    try {
+      await client.request("initialize", {
+        processId: process.pid,
+        rootUri: pathToFileURL(dir).toString(),
+        workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }],
+        capabilities: versioned ? { workspace: { workspaceEdit: { documentChanges: true } } } : {},
+      });
+      client.notify("initialized", {});
+      const published = client.waitFor("textDocument/publishDiagnostics", (p: any) =>
+        p.uri === uri && p.diagnostics.some((d: any) => d.code === "unknown-case"));
+      client.notify("textDocument/didOpen", { textDocument: { uri, languageId: "tt", version: 1, text: source } });
+      const diagnostic = (await published).diagnostics.find((d: any) => d.code === "unknown-case");
+      const actionsFor = async () => ((await client.request("textDocument/codeAction", {
+        textDocument: { uri },
+        range: diagnostic.range,
+        context: { diagnostics: [diagnostic] },
+      })).result ?? []) as any[];
+
+      const fix = (await actionsFor()).find((a) => a.title === title);
+      assert.ok(fix, "the fix is offered for the version it describes");
+      if (versioned) {
+        assert.equal(fix.edit.changes, undefined);
+        assert.equal(fix.edit.documentChanges.length, 1);
+        assert.deepEqual(fix.edit.documentChanges[0].textDocument, { uri, version: 1 });
+        assert.equal(covered(source, fix.edit.documentChanges[0].edits[0].range), "Circel");
+      } else {
+        assert.equal(covered(source, fix.edit.changes[uri][0].range), "Circel");
+      }
+
+      client.notify("textDocument/didChange", {
+        textDocument: { uri, version: 2 },
+        contentChanges: [{ range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } }, text: "// moved\n" }],
+      });
+      assert.deepEqual(
+        (await actionsFor()).filter((a) => a.title === title),
+        [],
+        "a diagnostic from version 1 offers no edit against version 2",
+      );
+    } finally { client.stop(); }
+  }
+});
+
 test(
   "a match with holes offers the arms the compiler wrote for it",
   { skip, timeout },
@@ -1166,7 +1625,7 @@ for (const caseName of fs.readdirSync(PRACTICAL_FIXTURES).sort()) {
     `the editor reports every practical diagnostic in ${caseName}`,
     { skip: skipTyped, timeout },
     async () => {
-      const project = caseDir(`tt-practical-${caseName}-`);
+      const project = repoTestDir(`tt-practical-${caseName}-`);
       fs.cpSync(fixture, project, {
         recursive: true,
         filter: (source) => path.basename(source) !== "node_modules",
@@ -1272,7 +1731,6 @@ for (const caseName of fs.readdirSync(PRACTICAL_FIXTURES).sort()) {
         }
       } finally {
         client.stop();
-        fs.rmSync(project, { recursive: true, force: true });
       }
     },
   );
@@ -1280,7 +1738,7 @@ for (const caseName of fs.readdirSync(PRACTICAL_FIXTURES).sort()) {
 
 
 test("LSP client reports process exit instead of hanging pending operations", { timeout }, async () => {
-  const dir = caseDir("tt-lsp-exit-");
+  const dir = repoTestDir("tt-lsp-exit-");
   const server = path.join(dir, "exit.cjs");
   fs.writeFileSync(server, 'process.stdin.once("data", () => { process.stderr.write("controlled server failure\\n"); process.exitCode = 7; process.stdin.destroy(); });\n');
   const client = connect(server);
@@ -1378,6 +1836,42 @@ test("pattern completion handles delimiter triggers and incomplete prefixes", { 
   }
 });
 
+test("a trigger character completes only the context it is registered for", { skip, timeout }, async () => {
+  const prefix = 'variant User { Admin(name: string, level: number), Guest }\ndeclare const user: User;\ndeclare const a: number;\n';
+  for (const language of ["tt", "ttx"] as const) {
+    const { client, uri, stop } = await open(prefix, language);
+    try {
+      let version = 1;
+      for (const [line, trigger, expected] of [
+        ['console.log(#);', '(', []],
+        ['if (#) {}', '(', []],
+        ['const y = a |#', '|', []],
+        ['const y = a ||#', '|', []],
+        ['// see user.#', '.', []],
+        ['const r = match (user) { Admin(#) => 0, Guest => 1 };', '(', ['name', 'level']],
+        ['const r = match (user) { Guest |# };', '|', ['Admin']],
+        ['const r = match (user) {# };', '{', ['Admin', 'Guest']],
+        ['const n = user.#', '.', []],
+      ] as const) {
+        const source = prefix + line.replace('#', '');
+        const offset = prefix.length + line.indexOf('#');
+        const before = source.slice(0, offset);
+        client.notify("textDocument/didChange", { textDocument: { uri, version: ++version }, contentChanges: [{ text: source }] });
+        const response = await client.request("textDocument/completion", {
+          textDocument: { uri },
+          position: { line: before.split('\n').length - 1, character: offset - before.lastIndexOf('\n') - 1 },
+          context: { triggerKind: 2, triggerCharacter: trigger },
+        });
+        const labels = (response.result?.items ?? response.result ?? []).map((item: any) => item.label);
+        if (expected.length === 0 && trigger !== '.') assert.deepEqual(labels, [], `${language} ${line}`);
+        for (const label of expected) assert.ok(labels.includes(label), `${language} ${line}: ${JSON.stringify(labels)}`);
+        if (line.startsWith('//')) assert.deepEqual(labels, [], `${language} ${line}`);
+        assert.ok(!labels.includes('match'), `${language} ${line}: no keyword snippets after a trigger character`);
+      }
+    } finally { stop(); }
+  }
+});
+
 test("an untitled ttx buffer is checked as ttx", { skip, timeout }, async () => {
   const client = connect();
   const uri = "untitled:Untitled-2";
@@ -1392,7 +1886,7 @@ test("an untitled ttx buffer is checked as ttx", { skip, timeout }, async () => 
 });
 
 test("a declaration answer that lands after an edit is not cached for the edited version", { skip, timeout }, async () => {
-  const dir = caseDir("tt-declaration-race-");
+  const dir = repoTestDir("tt-declaration-race-");
   const file = path.join(dir, "race.tt");
   const before = "variant First { A }\n";
   const after = "variant Second { B }\n";
@@ -1415,7 +1909,7 @@ test("a declaration answer that lands after an edit is not cached for the edited
 });
 
 test("the server's own sidecar writes do not re-arm the project, a hand-written declaration does", { skip: skipTyped, timeout }, async (t) => {
-  const dir = caseDir("tt-own-sidecar-");
+  const dir = repoTestDir("tt-own-sidecar-");
   const file = path.join(dir, "notice.tt");
   const source = "export variant Notice { Info(text: string), Warn }\n";
   fs.writeFileSync(file, source);

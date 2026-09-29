@@ -2,14 +2,7 @@ use super::*;
 
 #[test]
 fn language_support_materializes_both_tt_packages() {
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
-    let root = std::env::temp_dir().join(format!(
-        "tt-language-runtime-{}-{nonce}",
-        std::process::id()
-    ));
+    let root = crate::test_workspace::Workspace::new("language-runtime");
 
     // Both, and before the service resolves anything: which one a file
     // needs is a question about text that may not parse yet (TASK-217).
@@ -25,7 +18,6 @@ fn language_support_materializes_both_tt_packages() {
         std::fs::read_to_string(root.join("node_modules/@tt/runtime/index.ts")).unwrap(),
         "// mine\n"
     );
-    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -76,7 +68,7 @@ fn u16_positions_round_trip_over_multibyte_text() {
             character: 3
         }
     );
-    // Past-the-line characters spill forward, clamped to the end.
+    // A line past the end clamps to the end of the text.
     assert_eq!(
         u16_offset(
             text,
@@ -87,6 +79,29 @@ fn u16_positions_round_trip_over_multibyte_text() {
         ),
         8
     );
+}
+
+#[test]
+fn a_character_past_the_line_end_defaults_back_to_the_line_length() {
+    let text = "ab한c\r\nsecond\nlast";
+    let at = |line, character| u16_offset(text, Position { line, character });
+    assert_eq!(at(0, 30), 4);
+    assert_eq!(at(0, 5), 4);
+    assert_eq!(at(1, 30), 12);
+    assert_eq!(at(2, 30), 17);
+    assert_eq!(at(1, 2), 8);
+}
+
+#[test]
+fn protocol_positions_are_measured_in_the_decoded_text() {
+    let source = "\u{feff}export const target = 1;\n";
+    let target = mapper::to_utf16(source, source.find("target").unwrap());
+    let position = Position {
+        line: 0,
+        character: 13,
+    };
+    assert_eq!(u16_position(source, target), position);
+    assert_eq!(u16_offset(source, position), target);
 }
 
 #[test]
@@ -130,6 +145,96 @@ fn isolating_an_alternative_maps_its_binding_into_narrowed_output() {
 }
 
 #[test]
+fn an_or_pattern_binding_stands_for_every_alternative_it_is_written_in() {
+    let src = "variant E { A(x: number), B(x: number), C }\n\
+               const v = match (e) { A(x) | B(x: x) => x, C => 0 };\n\
+               if let A(x: y) | B(x: y) = e { use(y); }\n\
+               const t = match (e, e) { (A(w), A(x) | B(x)) => w + x, _ => 0 };\n";
+    let doc = service_doc(Path::new("/p/a.tt"), src.to_string());
+    let position = |byte: usize| {
+        let u16 = mapper::to_utf16(src, byte);
+        source_range(src, u16, u16).start
+    };
+    for (needle, name, shorthand) in [
+        ("A(x) | B(x: x)", "x", vec![true, false]),
+        ("A(x: y) | B(x: y)", "y", vec![false, false]),
+        ("A(x) | B(x))", "x", vec![true, true]),
+    ] {
+        let base = src.find(needle).unwrap();
+        let occurrences: Vec<usize> = needle
+            .match_indices(name)
+            .map(|(offset, _)| base + offset)
+            .filter(|&offset| src.as_bytes()[offset + name.len()] == b')')
+            .collect();
+        let binding = doc
+            .shared_bindings
+            .iter()
+            .find(|binding| binding.occurrences[0].src == occurrences[0])
+            .unwrap_or_else(|| panic!("{needle}: {:?}", doc.shared_bindings));
+        assert_eq!(&doc.code[binding.out..binding.out_end], name, "{needle}");
+        assert_eq!(
+            binding
+                .occurrences
+                .iter()
+                .map(|occurrence| (occurrence.src, occurrence.shorthand))
+                .collect::<Vec<_>>(),
+            occurrences
+                .iter()
+                .copied()
+                .zip(shorthand)
+                .collect::<Vec<_>>(),
+            "{needle}"
+        );
+        let generated = mapper::to_utf16(&doc.code, binding.out);
+        for occurrence in occurrences {
+            assert_eq!(to_service(&doc, position(occurrence)), None, "{needle}");
+            assert_eq!(
+                to_service_name(&doc, position(occurrence)),
+                Some(generated),
+                "{needle}"
+            );
+        }
+    }
+    let single = src.find("(A(w)").unwrap() + 3;
+    assert!(
+        doc.shared_bindings
+            .iter()
+            .all(|binding| binding.occurrences.iter().all(|o| o.src != single))
+    );
+    assert!(to_service(&doc, position(single)).is_some());
+}
+
+#[test]
+fn variant_glue_names_stand_for_their_source_names_in_navigation_only() {
+    for ambient in ["", "declare "] {
+        let src = format!("{ambient}variant V {{ A(x: number), B }}\nconst w = V.B;\n");
+        let doc = service_doc(Path::new("/p/a.tt"), src.clone());
+        let source_of = |glue: &str, name: &str| {
+            let at = doc
+                .code
+                .find(glue)
+                .unwrap_or_else(|| panic!("{glue:?} in {}", doc.code))
+                + glue.find(name).unwrap();
+            let start = mapper::to_utf16(&doc.code, at);
+            let end = start + name.len();
+            assert_eq!(from_service_span(&doc, start, end), None, "{glue:?}");
+            declared_name_span(&doc, start, end)
+        };
+        let variant = src.find("V {").unwrap();
+        let case_a = src.find("A(").unwrap();
+        let case_b = src.find("B }").unwrap();
+        let field = src.find("x:").unwrap();
+        assert_eq!(source_of("type V", "V"), Some((variant, variant + 1)));
+        assert_eq!(source_of("const V", "V"), Some((variant, variant + 1)));
+        assert_eq!(source_of("A: ", "A"), Some((case_a, case_a + 1)));
+        assert_eq!(source_of("B: ", "B"), Some((case_b, case_b + 1)));
+        assert_eq!(source_of("x: number }", "x"), Some((field, field + 1)));
+        let kind = doc.code.find("\"A\"").unwrap();
+        assert_eq!(declared_name_span(&doc, kind + 1, kind + 2), None);
+    }
+}
+
+#[test]
 fn declared_hover_names_the_constructor_and_its_type() {
     let src =
         "variant E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
@@ -155,8 +260,7 @@ fn declared_hover_names_the_constructor_and_its_type() {
 
 #[test]
 fn analyses_collect_imported_declarations_like_the_cli() {
-    let dir = std::env::temp_dir().join(format!("tt-analyses-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_workspace::Workspace::new("analyses");
     std::fs::write(
         dir.join("token.tt"),
         "export variant Token { Num(value: number), Eof }\n",
@@ -203,13 +307,11 @@ fn analyses_collect_imported_declarations_like_the_cli() {
         .unwrap();
     assert_eq!(binding.ty.as_deref(), Some("string"));
     assert_eq!(project.semantic_cache_hits(), 1);
-    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
 fn the_editor_and_the_typed_pass_share_one_semantic_cache() {
-    let dir = std::env::temp_dir().join(format!("tt-shared-cache-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_workspace::Workspace::new("shared-cache");
     let file = dir.join("a.tt");
     let source = "variant E { A(x: number), B }\nconst v = match (e) { A(x) | B => 0 };\n";
     std::fs::write(&file, source).unwrap();
@@ -234,7 +336,6 @@ fn the_editor_and_the_typed_pass_share_one_semantic_cache() {
     // not a second computation of the same answer.
     project.semantic_analyses(&files[0], source);
     assert_eq!(project.semantic_cache_hits(), 1);
-    std::fs::remove_dir_all(&dir).ok();
 }
 
 #[test]
@@ -281,8 +382,7 @@ fn ttx_pattern_analysis_does_not_parse_jsx_text() {
     assert!(analyses.declarations.iter().any(|d| d.name == "Real"));
     assert!(!analyses.declarations.iter().any(|d| d.name == "Fake"));
 
-    let dir = std::env::temp_dir().join(format!("tt-tsx-pattern-kind-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = crate::test_workspace::Workspace::new("tsx-pattern-kind");
     let path = dir.join("a.ttx");
     std::fs::write(&path, source).unwrap();
     let project = crate::engine::Engine::new(None)
@@ -308,7 +408,6 @@ fn ttx_pattern_analysis_does_not_parse_jsx_text() {
     );
     project.semantic_analyses(&path, source);
     assert_eq!(project.semantic_cache_hits(), 1);
-    std::fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
@@ -383,4 +482,35 @@ fn completion_probe_uses_the_same_arm_recovery_as_hover() {
     assert!(!probe.code.contains("match ("), "{}", probe.code);
     let byte = mapper::from_utf16(&probe.code, probe.offset);
     assert!(probe.code[..byte].ends_with("name."), "{}", probe.code);
+}
+
+#[test]
+fn hover_markdown_separates_signature_from_documentation_and_tags() {
+    let markdown = serde_json::json!({
+        "kind": "markdown",
+        "value": "```typescript\nfunction add(a: number): number\n```\nAdds.\n\n```ts\nadd(1)\n```\n\n*@param* `a` — the first",
+    });
+    assert_eq!(
+        split_hover(&markdown),
+        (
+            "function add(a: number): number".to_string(),
+            "Adds.\n\n```ts\nadd(1)\n```\n\n*@param* `a` — the first".to_string()
+        )
+    );
+    let bare =
+        serde_json::json!({ "kind": "markdown", "value": "```typescript\nconst u: 1\n```\n" });
+    assert_eq!(
+        split_hover(&bare),
+        ("const u: 1".to_string(), String::new())
+    );
+    let plain = serde_json::json!({ "kind": "plaintext", "value": "const u: 1" });
+    assert_eq!(
+        split_hover(&plain),
+        ("const u: 1".to_string(), String::new())
+    );
+    let marked = serde_json::json!({ "language": "typescript", "value": "let v: string" });
+    assert_eq!(
+        split_hover(&marked),
+        ("let v: string".to_string(), String::new())
+    );
 }

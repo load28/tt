@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { spawnSync } from 'node:child_process'
 import test from 'node:test'
 
+import { testDir } from '../../../scripts/test-dirs.cjs'
 import { createProject } from '../src/installer.js'
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
@@ -57,41 +57,37 @@ function pack(packageDirectory, outputDirectory, temporaryDirectory) {
 
 test('a freshly resolved Bun scaffold type-checks and builds', { timeout: 180_000 }, async () => {
   await access(compiler, constants.X_OK)
-  const parent = await mkdtemp(join(tmpdir(), 'create-tt-e2e-'))
+  const parent = testDir('create-tt-e2e-')
   const root = join(parent, 'app')
 
-  try {
-    await createProject({ directory: root })
+  await createProject({ directory: root })
 
-    const temporaryDirectory = join(root, '.tmp')
-    const packageDirectory = join(temporaryDirectory, 'packages')
-    await mkdir(packageDirectory, { recursive: true })
+  const temporaryDirectory = join(root, '.tmp')
+  const packageDirectory = join(temporaryDirectory, 'packages')
+  await mkdir(packageDirectory, { recursive: true })
 
-    // Install the unpublished code as tarballs, matching npm publication
-    // semantics. Directory file: dependencies become symlinks under Bun and
-    // would resolve their own dependencies from the repository instead.
-    const ttPackage = pack(join(repositoryRoot, 'npm/tt-lang'), packageDirectory, temporaryDirectory)
-    const unpluginPackage = pack(
-      join(repositoryRoot, 'integrations/unplugin'),
-      packageDirectory,
-      temporaryDirectory,
-    )
+  // Install the unpublished code as tarballs, matching npm publication
+  // semantics. Directory file: dependencies become symlinks under Bun and
+  // would resolve their own dependencies from the repository instead.
+  const ttPackage = pack(join(repositoryRoot, 'npm/tt-lang'), packageDirectory, temporaryDirectory)
+  const unpluginPackage = pack(
+    join(repositoryRoot, 'integrations/unplugin'),
+    packageDirectory,
+    temporaryDirectory,
+  )
 
-    // Leave Vite and its native transitive dependencies to a real fresh
-    // registry resolution.
-    const manifestPath = join(root, 'package.json')
-    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
-    manifest.devDependencies['@openload28/tt-lang'] = `file:${ttPackage}`
-    manifest.devDependencies['@openload28/unplugin-tt'] = `file:${unpluginPackage}`
-    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+  // Leave Vite and its native transitive dependencies to a real fresh
+  // registry resolution.
+  const manifestPath = join(root, 'package.json')
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+  manifest.devDependencies['@openload28/tt-lang'] = `file:${ttPackage}`
+  manifest.devDependencies['@openload28/unplugin-tt'] = `file:${unpluginPackage}`
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
 
-    run('bun', ['install'], root, temporaryDirectory)
-    await access(join(root, 'bun.lock'), constants.R_OK)
-    run('bun', ['run', 'check'], root, temporaryDirectory)
-    run('bun', ['run', 'build'], root, temporaryDirectory)
+  run('bun', ['install'], root, temporaryDirectory)
+  await access(join(root, 'bun.lock'), constants.R_OK)
+  run('bun', ['run', 'check'], root, temporaryDirectory)
+  run('bun', ['run', 'build'], root, temporaryDirectory)
 
-    await assert.rejects(access(join(root, '.tt-types'), constants.F_OK))
-  } finally {
-    await rm(parent, { recursive: true, force: true })
-  }
+  await assert.rejects(access(join(root, '.tt-types'), constants.F_OK))
 })

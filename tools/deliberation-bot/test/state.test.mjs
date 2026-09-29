@@ -1,13 +1,12 @@
 import assert from 'node:assert/strict'
-import { mkdtemp } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import test from 'node:test'
+
+import { testDir } from '../../../scripts/test-dirs.cjs'
 
 import { StateStore } from '../src/state.mjs'
 
 test('allows a failed delivery to be retried', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'tt-deliberation-state-'))
+  const directory = testDir('tt-deliberation-state-')
   const state = new StateStore(directory)
   await state.initialize()
 
