@@ -264,6 +264,45 @@ fn an_output_directory_that_is_or_encloses_the_input_keeps_its_sources() {
     }
 }
 
+/// A directory the input reaches both by its own name and through a symlink
+/// is mirrored under its own name, wherever the alias sorts. A directory
+/// reached only through a symlink is still collected through it.
+#[cfg(unix)]
+#[test]
+fn a_directory_alias_does_not_move_the_real_directory_outputs() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let outside = dir.join("shared");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(source.join("lib")).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(source.join("lib/x.tt"), "export const x = 1;\n").unwrap();
+    fs::write(outside.join("s.tt"), "export const s = 1;\n").unwrap();
+    fs::write(
+        source.join("main.tt"),
+        "import { x } from \"./lib/x.tt\";\nexport const y = x;\n",
+    )
+    .unwrap();
+    for alias in ["@lib", "zlib"] {
+        std::os::unix::fs::symlink("lib", source.join(alias)).unwrap();
+    }
+    std::os::unix::fs::symlink(&outside, source.join("linked")).unwrap();
+
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(out_dir.join("lib/x.ts").is_file());
+    assert!(out_dir.join("linked/s.ts").is_file());
+    for alias in ["@lib", "zlib"] {
+        assert!(!out_dir.join(alias).exists(), "{alias}");
+    }
+    let main = fs::read_to_string(out_dir.join("main.ts")).unwrap();
+    assert!(main.contains("\"./lib/x.js\""), "{main}");
+}
+
 #[test]
 fn mixed_source_project_preserves_all_directed_runtime_values() {
     if !have("tsc") || !have("bun") || !have("node") {

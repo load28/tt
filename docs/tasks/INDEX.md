@@ -522,7 +522,8 @@
 | TASK-512 | Bring single-file compile cost back within the CI budget | Complete | 2026-09-29 | 2026-09-29 | [TASK-512](./TASK-512-single-file-compile-cost.md) |
 | TASK-513 | Plan the package.json update with every other init write | Complete | 2026-09-29 | 2026-09-29 | [TASK-513](./TASK-513-manifest-write-boundary.md) |
 | TASK-516 | Exclude only an output root strictly inside a directory input | Complete | 2026-09-29 | 2026-09-29 | [TASK-516](./TASK-516-output-root-enclosing-input.md) |
+| TASK-517 | Walk a symlinked directory under its link-free spelling | Complete | 2026-09-29 | 2026-09-29 | [TASK-517](./TASK-517-directory-alias-spelling.md) |
 
 ## Next task number
 
-**TASK-517**
+**TASK-518**

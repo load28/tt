@@ -620,15 +620,28 @@ pub(crate) fn find_tsconfig(files: &[PathBuf]) -> Option<PathBuf> {
 /// to the build driver. Typed callers collect tt roots only, so emitted
 /// `.tt.d.ts`/`.ttx.d.ts` sidecars are not inputs. Project candidate scans
 /// independently exclude their configured output tree.
+///
+/// Files keep the spelling the walk reached them by, and the CLI mirrors
+/// that spelling under `-o`. A directory is walked once, under the spelling
+/// that reaches it from `entry` without a symlink when one exists; only a
+/// directory the link-free walk never reaches is taken through its first
+/// alias in sorted order.
 pub fn collect_sources(
     entry: &Path,
     include_ts: bool,
     out: &mut Vec<PathBuf>,
 ) -> std::io::Result<()> {
-    collect_sources_in(entry, include_ts, out, &mut SourceDirectories::new(None))
+    collect_sources_in(
+        entry,
+        entry,
+        include_ts,
+        out,
+        &mut SourceDirectories::new(None),
+    )
 }
 
 fn collect_sources_in(
+    root: &Path,
     entry: &Path,
     include_ts: bool,
     out: &mut Vec<PathBuf>,
@@ -683,8 +696,8 @@ fn collect_sources_in(
             // about a directory that plainly does.
             let meta = std::fs::metadata(&child).map_err(|e| named(&child, e))?;
             if meta.is_dir() {
-                if !excluded_source_entry(&child) {
-                    collect_sources_in(&child, include_ts, out, directories)?;
+                if !excluded_source_entry(&child) && !alias_of_walked_directory(root, &child)? {
+                    collect_sources_in(root, &child, include_ts, out, directories)?;
                 }
             } else if meta.is_file() && is_source(&child, include_ts) {
                 out.push(child);
@@ -692,6 +705,36 @@ fn collect_sources_in(
         }
     }
     Ok(())
+}
+
+/// Whether `dir` is a symlink to a directory the walk from `root` also
+/// reaches without following one. That directory is walked under its own
+/// name, wherever the alias sorts, so which spelling the walk keeps — and
+/// where a build mirrors its files — does not depend on how the alias is
+/// named. A target outside that link-free walk, or behind an excluded
+/// entry, is reached only through its aliases.
+fn alias_of_walked_directory(root: &Path, dir: &Path) -> std::io::Result<bool> {
+    let is_link = |path: &Path| {
+        std::fs::symlink_metadata(path)
+            .map(|meta| meta.file_type().is_symlink())
+            .map_err(|error| named(path, error))
+    };
+    if !is_link(dir)? {
+        return Ok(false);
+    }
+    let identity = super::paths::canonical(dir).map_err(|error| named(dir, error))?;
+    let base = super::paths::canonical(root).map_err(|error| named(root, error))?;
+    let Ok(relative) = identity.strip_prefix(&base) else {
+        return Ok(false);
+    };
+    let mut path = root.to_path_buf();
+    for component in relative.components() {
+        path.push(component);
+        if excluded_source_entry(&path) || is_link(&path)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 /// Exclude generated and vendored entries before probing their targets.
