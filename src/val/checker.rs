@@ -106,7 +106,7 @@ impl<'a> Checker<'a> {
                     }
                 }
                 TokenKind::Ident => {
-                    i = self.visit_ident(tokens, i, frames, &writes);
+                    i = self.visit_ident(tokens, i, frames, &writes, &arms);
                     continue;
                 }
                 _ => {}
@@ -125,6 +125,7 @@ impl<'a> Checker<'a> {
         i: usize,
         frames: &mut Vec<Frame<'a>>,
         writes: &std::collections::HashSet<usize>,
+        arms: &HashSet<usize>,
     ) -> usize {
         let word = self.text(&tokens[i]);
         if dotted_at(tokens, 0, i) && !writes.contains(&tokens[i].span.start) {
@@ -153,10 +154,30 @@ impl<'a> Checker<'a> {
                 return i + 1;
             }
             "function" | "class" => {
-                if let Some(t) = tokens.get(i + 1)
+                let name = if punct_at(tokens, i + 1, b'*') {
+                    i + 2
+                } else {
+                    i + 1
+                };
+                if let Some(t) = tokens.get(name)
                     && matches!(t.kind, TokenKind::Ident)
+                    && !matches!(self.text(t), "extends" | "implements")
                 {
-                    self.declare(frames, vec![self.text(t)], None);
+                    if tokens[i].facts.declaration() {
+                        self.declare(frames, vec![self.text(t)], None);
+                    } else if let Some(end) = self.own_scope_end(tokens, word, name + 1, arms) {
+                        // A function or class expression's name binds only
+                        // inside the function or class itself (ECMA-262
+                        // §15.2.5, §15.7.15), below its parameters.
+                        frames.push(Frame {
+                            end,
+                            vars: vec![Var {
+                                name: self.text(t),
+                                val_at: None,
+                                ident: t.span.start,
+                            }],
+                        });
+                    }
                 }
                 return i + 1;
             }
@@ -222,9 +243,7 @@ impl<'a> Checker<'a> {
                     continue;
                 }
                 TokenKind::Ident
-                    if self.text(&tokens[k]) == "function"
-                        && !dotted_at(tokens, 0, k)
-                        && self.statement_start(tokens, from, k) =>
+                    if self.text(&tokens[k]) == "function" && tokens[k].facts.declaration() =>
                 {
                     let name = if punct_at(tokens, k + 1, b'*') {
                         k + 2
@@ -266,26 +285,6 @@ impl<'a> Checker<'a> {
             }
             k += 1;
         }
-    }
-
-    /// Whether the token at `k` begins a statement of the statement list
-    /// that starts at `from`, looking back over the words that may prefix
-    /// a declaration.
-    fn statement_start(&self, tokens: &[Token], from: usize, k: usize) -> bool {
-        let mut p = k;
-        while p > from {
-            let prev = &tokens[p - 1];
-            match prev.kind {
-                TokenKind::Ident
-                    if matches!(self.text(prev), "async" | "export" | "default" | "declare") =>
-                {
-                    p -= 1;
-                }
-                TokenKind::Punct(b';' | b'}') => return true,
-                _ => return false,
-            }
-        }
-        true
     }
 
     /// The token index at which a nested `var` scope that starts at `k`
@@ -392,6 +391,31 @@ impl<'a> Checker<'a> {
             }
         }
         arms
+    }
+
+    /// The token index at which the scope a function or class expression
+    /// opens for its own name ends: its body's closing brace. `after` is the
+    /// token after the name, where type parameters, a parameter list, or a
+    /// class heritage may follow.
+    fn own_scope_end(
+        &self,
+        tokens: &'a [Token],
+        keyword: &str,
+        after: usize,
+        arms: &HashSet<usize>,
+    ) -> Option<usize> {
+        let mut k = after;
+        while k < tokens.len() {
+            match tokens[k].kind {
+                TokenKind::Punct(b'(') if keyword == "function" => {
+                    return self.function_body(tokens, k, arms).map(|(_, end, _)| end);
+                }
+                TokenKind::Punct(b'{') if keyword == "class" => return find_close_at(tokens, k),
+                _ if tokens[k].opens_bracket() => k = find_close_at(tokens, k)? + 1,
+                _ => k += 1,
+            }
+        }
+        None
     }
 
     /// Registers bindings in the innermost scope.

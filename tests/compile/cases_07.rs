@@ -756,6 +756,32 @@ fn val_resolves_hoisted_declarations_to_their_scope() {
 }
 
 #[test]
+fn val_binds_a_function_or_class_expression_name_only_inside_itself() {
+    for (src, at) in [
+        ("val const s = { a: 1 };\nconst g = function s() {};\ns.a = 2;\n", (3, 1)),
+        ("val const s = { a: 1 };\nconst g = function* s() {};\ns.a = 2;\n", (3, 1)),
+        ("val const s = { a: 1 };\nconst g = async function s() {};\ns.a = 2;\n", (3, 1)),
+        ("val const s = { a: 1 };\nconst K = class s {};\ns.a = 2;\n", (3, 1)),
+        ("val const s = { a: 1 };\nuse(class s extends Base<{ a: 1 }> { m() {} });\ns.a = 2;\n", (3, 1)),
+        ("function f(val p: { a: number }) { const cb = function p() {}; p.a = 1; }\n", (1, 64)),
+        ("val const s = { a: 1 };\nconst g = function s(s: number) { return s; };\ns.a = 2;\n", (3, 1)),
+    ] {
+        let e = err(src);
+        assert_eq!((e.line, e.col), at, "{src}");
+        assert!(e.message.contains("cannot mutate through val binding"), "{src}: {}", e.message);
+    }
+    for src in [
+        "val const s = { a: 1 };\nconst g = function s() { s.a = 2; };\n",
+        "val const s = { a: 1 };\nconst g = function* s<T>(t: T) { s.a = 2; };\n",
+        "val const s = { a: 1 };\nconst K = class s { static m() { s.a = 2; } };\n",
+        "val const s = { a: 1 };\nfunction w() { class s {} s.a = 2; }\n",
+        "val const s = { a: 1 };\nfunction w() { s.a = 2\nfunction s() {} }\n",
+    ] {
+        assert_eq!(ok(src), src.replacen("val ", "", 1), "{src}");
+    }
+}
+
+#[test]
 fn val_leaves_reads_and_comparisons_alone() {
     // Nothing here mutates `x`, and none of these operators may be
     // mistaken for an assignment.

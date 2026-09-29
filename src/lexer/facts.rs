@@ -55,6 +55,7 @@ impl TokenFacts {
     const CONSTRUCTOR_BODY: u16 = 1 << 8;
     const TYPE_ARGUMENTS_OPEN: u16 = 1 << 9;
     const TYPE_ARGUMENTS_CLOSE: u16 = 1 << 10;
+    const DECLARATION: u16 = 1 << 11;
 
     /// A line terminator (ECMA-262 §12.3: LF, CR, U+2028, U+2029), possibly
     /// inside a comment, separates this token from the previous one.
@@ -85,6 +86,14 @@ impl TokenFacts {
     /// a `break`/`continue` names it.
     pub(crate) fn label(self) -> bool {
         self.0 & Self::LABEL != 0
+    }
+
+    /// This `function` or `class` keyword begins a declaration, which binds
+    /// its name in the enclosing scope (ECMA-262 §15.2, §15.7). The same
+    /// keyword in an operand position begins an expression, whose name
+    /// binds only inside the function or class itself.
+    pub(crate) fn declaration(self) -> bool {
+        self.0 & Self::DECLARATION != 0
     }
 
     /// This token names a member of a class, interface, type literal, or
@@ -153,6 +162,7 @@ impl std::fmt::Debug for TokenFacts {
             (Self::CONSTRUCTOR_BODY, "constructor"),
             (Self::TYPE_ARGUMENTS_OPEN, "type-arguments-open"),
             (Self::TYPE_ARGUMENTS_CLOSE, "type-arguments-close"),
+            (Self::DECLARATION, "declaration"),
         ];
         let set: Vec<&str> = names
             .iter()
