@@ -576,6 +576,7 @@
 | TASK-568 | Leave only ttc's own outputs out of the TypeScript program | Complete | 2026-09-29 | 2026-09-29 | [TASK-568](./TASK-568-exclude-only-ttc-outputs.md) |
 | TASK-569 | Answer the server's buffer check without the TypeScript backend | Complete | 2026-09-29 | 2026-09-29 | [TASK-569](./TASK-569-server-check-without-backend.md) |
 | TASK-580 | Report dependency directories apart from files and register each as its bundler expects | Complete | 2026-09-29 | 2026-09-29 | [TASK-580](./TASK-580-dependency-directories.md) |
+| TASK-581 | Report esbuild load errors with their watch files | Complete | 2026-09-29 | 2026-09-29 | [TASK-581](./TASK-581-esbuild-load-errors.md) |
 
 ## Next task number
 

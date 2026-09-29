@@ -19,6 +19,39 @@ import {
 
 const compiler = process.env.TTC_BINARY
 
+/**
+ * esbuild's plugin API as a build drives the published esbuild adapter,
+ * through unplugin's own esbuild bridge: callbacks run in the order they
+ * were registered, a callback runs for its namespace (every namespace when
+ * it names none), and the first one that answers decides.
+ */
+async function esbuildHost(options = { compiler }) {
+  const callbacks = { resolve: [], load: [] }
+  const build = {
+    initialOptions: {},
+    onStart() {},
+    onEnd() {},
+    onDispose() {},
+    onResolve(filter, callback) { callbacks.resolve.push({ filter, callback }) },
+    onLoad(filter, callback) { callbacks.load.push({ filter, callback }) },
+    async resolve() { return { errors: [] } },
+  }
+  await esbuildPlugin(options).setup(build)
+  const ask = async (kind, args) => {
+    for (const { filter, callback } of callbacks[kind]) {
+      if (filter.namespace !== undefined && filter.namespace !== args.namespace) continue
+      if (!filter.filter.test(args.path)) continue
+      const result = await callback(args)
+      if (result !== undefined && result !== null) return result
+    }
+    return undefined
+  }
+  return {
+    resolve: (path, importer) => ask('resolve', { path, importer, namespace: 'file', kind: 'import-statement', resolveDir: dirname(importer) }),
+    load: (path, namespace) => ask('load', { path, namespace, suffix: '' }),
+  }
+}
+
 function context() {
   const watched = []
   return {
@@ -179,7 +212,10 @@ test('query-suffixed tt imports keep their query and the real file before it', a
   const compiled = await plugin.load.call(context(), workerFile)
   assert.match(compiled.code, /const reply/)
   assert.equal(plugin.esbuild.loader('', workerFile), 'ts')
-  assert.ok(plugin.esbuild.onLoadFilter.test(workerFile))
+  const esbuild = await esbuildHost()
+  const loaded = await esbuild.load(workerFile, '@openload28/unplugin-tt')
+  assert.match(loaded.contents, /const reply/)
+  assert.equal(loaded.loader, 'ts')
 
   for (const query of ['?worker', '?sharedworker', '?worker&inline', '?worker&url', '?raw', '?url', '?import&raw']) {
     assert.equal(plugin.resolveId(`./worker.tt${query}`, importer), null, query)
@@ -327,4 +363,46 @@ test('an entry added to or removed from a listed directory invalidates the modul
   plugin.watchChange(join(listed, 'added.ts'), { event: 'create' })
   plugin.watchChange(join(listed, 'removed.ts'), { event: 'delete' })
   assert.deepEqual(invalidated, [module, module])
+})
+
+test('esbuild reports the compiler diagnostic and watches the source until it compiles', async () => {
+  assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
+  const root = testDir('unplugin-tt-esbuild-errors-')
+  const entry = join(root, 'entry.ts')
+  const file = join(root, 'bad.tt')
+  await writeFile(file, 'variant T { A, B }\ndeclare const t: T;\nexport const x = match (t) { A => 1 };\n')
+
+  const esbuild = await esbuildHost()
+  const resolved = await esbuild.resolve('./bad.tt', entry)
+  assert.equal(resolved.path, `${file}?lang.ts`)
+  const failed = await esbuild.load(resolved.path, resolved.namespace)
+  assert.ok(failed, 'no callback answered the load')
+  assert.equal(failed.contents, undefined)
+  assert.match(failed.errors[0].text, /error\[match-not-exhaustive\][\s\S]*missing "B"/)
+  assert.ok(failed.watchFiles.includes(file), 'a failed load must still watch its source')
+
+  await writeFile(file, 'variant T { A, B }\ndeclare const t: T;\nexport const x = match (t) { A => 1, B => 2 };\n')
+  const compiled = await esbuild.load(resolved.path, resolved.namespace)
+  assert.equal(compiled.errors, undefined)
+  assert.equal(compiled.loader, 'ts')
+  assert.equal(compiled.resolveDir, root)
+  assert.ok(compiled.watchFiles.includes(file))
+  assert.ok(Array.isArray(compiled.watchDirs))
+  const map = JSON.parse(Buffer.from(/sourceMappingURL=data:application\/json;charset=utf-8;base64,(\S+)/.exec(compiled.contents)[1], 'base64').toString('utf8'))
+  assert.deepEqual(map.sources, [file])
+
+  const std = await esbuild.load('virtual:unplugin-tt/std/result.ts', '@openload28/unplugin-tt')
+  assert.match(std.contents, /export const Ok/)
+})
+
+test('esbuild watches the directories a module listed as directories', async () => {
+  const root = testDir('unplugin-tt-esbuild-directories-')
+  const file = join(root, 'src', 'main.tt')
+  const model = join(root, 'src', 'model.ts')
+  const listed = join(root, 'src')
+  const fake = await dependencyCompiler(root, [model], [listed])
+  const esbuild = await esbuildHost({ compiler: fake })
+  const loaded = await esbuild.load(`${file}?lang.ts`, '@openload28/unplugin-tt')
+  assert.deepEqual(loaded.watchFiles, [file, model])
+  assert.deepEqual(loaded.watchDirs, [listed])
 })

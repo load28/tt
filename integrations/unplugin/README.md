@@ -43,8 +43,9 @@ The `lang.ts`/`lang.tsx` query ending **routes the module through the host's own
 TypeScript handling**, so the plugin does not transpile anything itself. The part
 before the query stays the real `.tt` file, so tools that strip the query (Vite's
 `cleanUrl`, its worker and asset handling, and its dependency scanner) find a file
-on disk. esbuild's `load` can return only JavaScript, so that path names the `ts`
-or `tsx` loader that matches the source.
+on disk. esbuild's `load` can return only JavaScript, so on esbuild the plugin
+loads `.tt`/`.ttx` modules through esbuild's own `onLoad` and names the `ts` or
+`tsx` loader that matches the source.
 
 `--rewrite-imports off`인 것도 의도입니다. 지정자 재작성은 미리 컴파일하는
 파이프라인을 위한 기능이고, 여기서는 `.tt`이 그대로 남아야 이 플러그인이
@@ -56,6 +57,13 @@ or `tsx` loader that matches the source.
 [@openload28/unplugin-tt] src/notice.tt:22:16: match on variant Notice is not exhaustive:
               missing "Warn" (add the missing arms or a final `_` arm)
 ```
+
+A module that fails to compile still registers the files and directories it
+depends on, so a watching build compiles it again once the source is fixed.
+Rollup-compatible hosts receive the diagnostic from `this.error`, webpack and
+Rspack record it on the module, and esbuild receives it in the `errors` of the
+`onLoad` result together with `watchFiles` and `watchDirs` (unplugin's esbuild
+bridge drops both when a `load` returns no code).
 
 ## 옵션
 
@@ -151,7 +159,7 @@ kind is registered through the bundler's own API:
 |------|-------|-------------|
 | Rollup, Rolldown, `vite build`, Farm | `this.addWatchFile` | `this.addWatchFile`, which Rollup documents for directories too |
 | webpack, Rspack | `this.addWatchFile` (file dependencies) | the loader's `addContextDependency` |
-| esbuild | `watchFiles`, through unplugin | not registered: unplugin passes only `watchFiles` on to esbuild |
+| esbuild | `watchFiles` of the `onLoad` result | `watchDirs` of the `onLoad` result |
 | Vite dev server | the dev server's watcher | the dev server's watcher |
 
 The Vite dev server resolves every path given to `addWatchFile` as an import of
