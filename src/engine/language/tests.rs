@@ -120,6 +120,36 @@ fn a_chunk_end_offset_belongs_to_the_chunk() {
 }
 
 #[test]
+fn a_cursor_between_chunks_split_in_the_output_keeps_its_side() {
+    // `s.ki` was hoisted to output 40; the `, ` after it stayed at 10.
+    let mappings = [
+        crate::EmitMapping {
+            src: 0,
+            out: 40,
+            len: 4,
+        },
+        crate::EmitMapping {
+            src: 4,
+            out: 10,
+            len: 2,
+        },
+    ];
+    let at = |affinity| mapper::cursor_to_output(&mappings, 4, affinity);
+    assert_eq!(at(mapper::Affinity::Preceding), Some(44));
+    assert_eq!(at(mapper::Affinity::Following), Some(10));
+    // Chunks that touch in the output agree, and a lone chunk answers for
+    // either side.
+    assert_eq!(
+        mapper::cursor_to_output(&mappings[..1], 4, mapper::Affinity::Following),
+        Some(44)
+    );
+    assert_eq!(
+        mapper::cursor_to_output(&mappings[1..], 4, mapper::Affinity::Preceding),
+        Some(10)
+    );
+}
+
+#[test]
 fn isolating_an_alternative_maps_its_binding_into_narrowed_output() {
     let src =
         "variant E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";

@@ -261,3 +261,46 @@ export function area(s: Shape): number {\n\
     assert!(utf16_slice(source, symbols[0].range).starts_with("export function area"));
     assert!(utf16_slice(source, symbols[0].range).ends_with("v.length);\n}"));
 }
+
+#[test]
+fn an_operand_hoisted_ahead_of_a_later_match_still_answers_at_its_end() {
+    require_tsgo!();
+    let source = "variant Shape { Circle(radius: number), Point }\n\
+declare const s: Shape;\n\
+declare function helper(n: number): number;\n\
+const obj = { a: s.ki, b: match (s) { Circle(radius) => radius, Point => 0 } };\n\
+const sum = s.ki + match (s) { Circle(radius) => radius, Point => 0 };\n\
+const arr = [helper, match (s) { Circle(radius) => radius, Point => 0 }];\n\
+export { obj, sum, arr };\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = ttc::engine::Engine::new(None)
+        .open_project(
+            &[file.to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let end_of = |needle: &str, nth: usize| {
+        let at = source.match_indices(needle).nth(nth).unwrap().0 + needle.len();
+        ttc::engine::Position {
+            line: source[..at].matches('\n').count() as u32,
+            character: (at - source[..at].rfind('\n').map_or(0, |n| n + 1)) as u32,
+        }
+    };
+    for nth in 0..2 {
+        let labels: Vec<_> = project
+            .completion(&file, end_of("s.ki", nth), false)
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|item| item.label)
+            .collect();
+        assert_eq!(labels, ["kind"], "occurrence {nth}");
+    }
+    let helper = end_of("[helper", 0);
+    let hover = project.hover(&file, helper).unwrap().expect("hover");
+    assert!(hover.signature.starts_with("function helper"), "{hover:?}");
+    let definition = project.definition(&file, helper).unwrap();
+    assert_eq!(definition.len(), 1);
+    assert_eq!(utf16_slice(source, definition[0].range), "helper");
+}

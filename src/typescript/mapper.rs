@@ -122,6 +122,44 @@ pub(crate) fn to_output_inclusive(mappings: &[EmitMapping], src: usize) -> Optio
         .map(|m| m.out + (src - m.src))
 }
 
+/// Which text a cursor between two source bytes belongs to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Affinity {
+    /// The text before it: what is being typed there.
+    Preceding,
+    /// The text after it.
+    Following,
+}
+
+/// Where a cursor at source byte `src` lands in the output. The chunk
+/// holding the byte on the cursor's `affinity` side wins, then the one on
+/// the other side. Two chunks that touch in the source need not touch in
+/// the output — lowering hoists an operand out of the text around it — so
+/// the side decides which neighbour the output position keeps.
+pub(crate) fn cursor_to_output(
+    mappings: &[EmitMapping],
+    src: usize,
+    affinity: Affinity,
+) -> Option<usize> {
+    let ending = || {
+        mappings
+            .iter()
+            .find(|m| m.len > 0 && m.src < src && src <= m.src + m.len)
+            .map(|m| m.out + (src - m.src))
+    };
+    let starting = || {
+        mappings
+            .iter()
+            .find(|m| m.src <= src && src < m.src + m.len)
+            .map(|m| m.out + (src - m.src))
+    };
+    match affinity {
+        Affinity::Preceding => ending().or_else(starting),
+        Affinity::Following => starting().or_else(ending),
+    }
+    .or_else(|| to_output_inclusive(mappings, src))
+}
+
 /// The inverse of [`to_output_inclusive`], for answers coming back.
 pub(crate) fn to_source_inclusive(mappings: &[EmitMapping], out: usize) -> Option<usize> {
     mappings

@@ -483,12 +483,27 @@ pub(super) fn serve_doc_only(
     }
 }
 
-/// A tt position translated into the served text, or `None` when it sits
-/// in compiler-written glue.
+/// A tt position translated into the served text for a question about the
+/// name the cursor touches (hover, navigation), or `None` when it sits in
+/// compiler-written glue. As TypeScript resolves a touching name, the name
+/// starting at the cursor wins over the one ending there.
 pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> {
-    let u16 = u16_offset(&doc.source, position);
-    let byte = mapper::from_utf16(&doc.source, u16);
-    let out = mapper::to_output_inclusive(&doc.mappings, byte)?;
+    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let affinity = match doc.source.as_bytes().get(byte) {
+        Some(&b) if crate::scanner::is_ident_start(b) || b == b'#' || !b.is_ascii() => {
+            mapper::Affinity::Following
+        }
+        _ => mapper::Affinity::Preceding,
+    };
+    let out = mapper::cursor_to_output(&doc.mappings, byte, affinity)?;
+    Some(mapper::to_utf16(&doc.code, out))
+}
+
+/// A tt position translated into the served text for a question about what
+/// is being typed before the cursor (completion, signature help).
+pub(super) fn to_service_typed(doc: &ServiceDoc, position: Position) -> Option<usize> {
+    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let out = mapper::cursor_to_output(&doc.mappings, byte, mapper::Affinity::Preceding)?;
     Some(mapper::to_utf16(&doc.code, out))
 }
 

@@ -445,7 +445,7 @@ impl Project {
     ) -> Result<CompletionAnswer, String> {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
-        let plain = match to_service(&doc, position) {
+        let plain = match to_service_typed(&doc, position) {
             Some(at) => ts_completions(session, &path, at, &doc.code, &doc.generated_names)?,
             None => CompletionAnswer::default(),
         };
@@ -519,7 +519,7 @@ impl Project {
             };
         let (at, generated_names) = match &installed {
             Some(installed) => (installed.offset, installed.generated_names.clone()),
-            None => match to_service(&doc, position) {
+            None => match to_service_typed(&doc, position) {
                 Some(at) => (at, doc.generated_names.clone()),
                 None => return Ok(None),
             },
@@ -680,7 +680,7 @@ impl Project {
     ) -> Result<Option<SignatureHelp>, String> {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
-        let Some(at) = to_service(&doc, position) else {
+        let Some(at) = to_service_typed(&doc, position) else {
             return Ok(None);
         };
         let help = session.client.request(
