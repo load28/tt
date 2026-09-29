@@ -22,7 +22,7 @@ fn cli_build_emits_a_complete_tree_that_runs() {
 
     // The emitted tree stands on its own: tsc compiles it, node runs it.
     fs::write(dir.join("build/package.json"), "{ \"type\": \"module\" }\n").unwrap();
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .current_dir(&dir)
         .args(["build/main.ts", "--outDir", "build"])
         .args(TSC_FLAGS)
@@ -242,7 +242,7 @@ fn cli_types_sidecars_typecheck_the_source_tree() {
 "#,
     )
     .unwrap();
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .current_dir(&dir)
         .args(["-p", "tsconfig.json"])
         .output()
@@ -326,7 +326,7 @@ fn pipeline_files_import_one_shared_runtime() {
     write_runtime(&dir);
     files.push(dir.join("runtime.ts"));
 
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .args(&files)
         .arg("--noEmit")
         .args(TSC_FLAGS)
@@ -387,7 +387,7 @@ fn scripts_stay_scripts_and_their_generated_globals_never_collide() {
     .unwrap();
     files.push(consumer);
 
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .args(&files)
         .arg("--outDir")
         .arg(dir.join("out"))

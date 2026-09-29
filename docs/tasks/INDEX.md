@@ -521,7 +521,8 @@
 | TASK-511 | Give test temporary directories one owner per language | Complete | 2026-09-28 | 2026-09-28 | [TASK-511](./TASK-511-test-temp-dir-ownership.md) |
 | TASK-512 | Bring single-file compile cost back within the CI budget | Complete | 2026-09-29 | 2026-09-29 | [TASK-512](./TASK-512-single-file-compile-cost.md) |
 | TASK-513 | Plan the package.json update with every other init write | Complete | 2026-09-29 | 2026-09-29 | [TASK-513](./TASK-513-manifest-write-boundary.md) |
+| TASK-514 | Run every test against the TypeScript that package.json pins | Complete | 2026-09-29 | 2026-09-29 | [TASK-514](./TASK-514-tests-pinned-typescript.md) |
 
 ## Next task number
 
-**TASK-514**
+**TASK-515**

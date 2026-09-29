@@ -14,7 +14,7 @@ pair(match (read()) { true => ({run: x => x}), false => ({run: x => x}) }, match
     let dir = tmpdir();
     let file = dir.join("unused.ts");
     fs::write(&file, compile(source, &Options::default()).unwrap()).unwrap();
-    let checked = Command::new("tsc")
+    let checked = common::tsc()
         .arg(file)
         .args(TSC_FLAGS)
         .args(["--noEmit", "--noUnusedLocals", "--noUnusedParameters"])
@@ -265,7 +265,7 @@ fn sibling_contextual_match_family_matrix() {
             .unwrap(),
         )
         .unwrap();
-        let checked = Command::new("tsc")
+        let checked = common::tsc()
             .arg(file)
             .args(TSC_FLAGS)
             .args(["--noEmit", "--jsx", "preserve"])
@@ -336,7 +336,7 @@ fn guarded_contextual_values_have_no_unused_generated_locals() {
         compile(&as_module(source), &Options::default()).unwrap(),
     )
     .unwrap();
-    let checked = Command::new("tsc")
+    let checked = common::tsc()
         .arg(&file)
         .args(TSC_FLAGS)
         .args(["--noEmit", "--noUnusedLocals", "--noUnusedParameters"])
@@ -518,7 +518,7 @@ fn composed_match_values_preserve_typescript_contextual_typing() {
         fs::write(&file, emitted).unwrap();
         files.push(file);
     }
-    let checked = Command::new("tsc")
+    let checked = common::tsc()
         .args(&files)
         .args(TSC_FLAGS)
         .args(["--noEmit", "--jsx", "preserve"])
@@ -682,7 +682,7 @@ fn scoped_host_call_completions_preserve_contextual_typing() {
         fs::write(&file, emitted).unwrap();
         files.push(file);
     }
-    let checked = Command::new("tsc")
+    let checked = common::tsc()
         .args(&files)
         .args(TSC_FLAGS)
         .args(["--noEmit", "--jsx", "preserve"])
@@ -928,7 +928,7 @@ fn scoped_sibling_final_arguments_keep_contextual_typing() {
         fs::write(&file, emitted).unwrap();
         files.push(file);
     }
-    let checked = Command::new("tsc")
+    let checked = common::tsc()
         .args(&files)
         .args(TSC_FLAGS)
         .args(["--noEmit", "--jsx", "preserve"])
@@ -1243,7 +1243,7 @@ fn scoped_contextual_family_matrix_covers_hosts_and_nesting() {
             "matrix.ts"
         });
         fs::write(&file, code).unwrap();
-        let checked = Command::new("tsc")
+        let checked = common::tsc()
             .arg(file)
             .args(TSC_FLAGS)
             .args([

@@ -49,23 +49,12 @@ macro_rules! require_emit {
     };
 }
 
-/// Whether the installed API client has the declaration-emit entry point
+/// Whether the pinned API client has the declaration-emit entry point
 /// (`host.mjs` checks for the same method before asking for one).
 fn emits_declarations() -> bool {
-    let mut dir = Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    while let Some(current) = dir {
-        for client in ["typescript", "@typescript/native-preview"] {
-            let api = current
-                .join("node_modules")
-                .join(client)
-                .join("dist/api/sync/api.js");
-            if let Ok(text) = fs::read_to_string(&api) {
-                return text.contains("getDeclarationEmit");
-            }
-        }
-        dir = current.parent().map(Path::to_path_buf);
-    }
-    false
+    common::typescript()
+        .and_then(|dir| fs::read_to_string(dir.join("dist/api/sync/api.js")).ok())
+        .is_some_and(|text| text.contains("getDeclarationEmit"))
 }
 
 mod common;

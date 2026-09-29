@@ -19,19 +19,13 @@ use std::process::Command;
 
 mod common;
 use common::Workspace;
+use common::toolchain_required as required;
 
-/// The repository's installed `typescript/lib/tsc.js`, searched upwards
-/// the way `toolchain.rs` searches.
+/// The pinned TypeScript's `lib/tsc.js` (`common::typescript`).
 fn tsc_entry() -> Option<PathBuf> {
-    let mut dir = Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    while let Some(current) = dir {
-        let entry = current.join("node_modules/typescript/lib/tsc.js");
-        if entry.exists() {
-            return Some(entry);
-        }
-        dir = current.parent().map(Path::to_path_buf);
-    }
-    None
+    common::typescript()
+        .map(|dir| dir.join("lib/tsc.js"))
+        .filter(|entry| entry.exists())
 }
 
 fn have_node() -> bool {
@@ -40,11 +34,6 @@ fn have_node() -> bool {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
-}
-
-/// True when the caller has declared that a toolchain must be present.
-fn required() -> bool {
-    std::env::var_os("TTC_REQUIRE_TSGO").is_some_and(|v| !v.is_empty() && v != "0")
 }
 
 /// Whether the installed TypeScript knows `--runExternalCode` — the gate

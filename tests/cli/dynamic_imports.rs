@@ -2,7 +2,7 @@ use super::*;
 
 #[test]
 fn mixed_source_dynamic_imports_resolve_and_execute() {
-    if !have("tsc") || !have("bun") || !have("node") {
+    if !common::tsc_available() || !have("bun") {
         return;
     }
     let dir = tmpdir();
@@ -79,7 +79,7 @@ declare global { namespace JSX { type Element = number; interface IntrinsicEleme
             "{}",
             String::from_utf8_lossy(&output.stderr)
         );
-        let output = Command::new("tsc")
+        let output = common::tsc()
             .arg(emitted.join("entry.ts"))
             .args([
                 "--noEmit",

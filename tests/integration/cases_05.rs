@@ -27,7 +27,7 @@ console.log(String(mutable.count));
 
 #[test]
 fn a_loop_header_match_is_evaluated_every_iteration() {
-    if !have("tsc") || !have("node") {
+    if !common::tsc_available() {
         return;
     }
     // TASK-160 issue 14: this used to hoist the match out of the loop and
@@ -47,7 +47,7 @@ console.log(JSON.stringify(seen), n);
 
 #[test]
 fn a_short_circuited_argument_match_does_not_evaluate() {
-    if !have("tsc") || !have("node") {
+    if !common::tsc_available() {
         return;
     }
     // TASK-160 issue 15: the match argument (and its subject's effects)
@@ -69,7 +69,7 @@ console.log(JSON.stringify(trace), a, b);
 
 #[test]
 fn sibling_values_beside_a_short_circuit_keep_left_to_right_order() {
-    if !have("tsc") || !have("node") {
+    if !common::tsc_available() {
         return;
     }
     // TASK-160 issue 16: this shape used to duplicate and drop source
@@ -87,7 +87,7 @@ console.log(JSON.stringify(trace));
 
 #[test]
 fn conditional_operations_keep_their_types_without_undefined() {
-    if !have("tsc") {
+    if !common::tsc_available() {
         return;
     }
     // TASK-160 결정 17: promoting only the value used to widen every
@@ -111,7 +111,7 @@ export const g: number | undefined = host.g?.(match (1) { 1 => 6, _ => 0 });
 
 #[test]
 fn an_optional_call_operation_preserves_this_check_order_and_short_circuit() {
-    if !have("tsc") || !have("node") {
+    if !common::tsc_available() {
         return;
     }
     let lines = run(r#"
@@ -131,7 +131,7 @@ console.log(JSON.stringify(trace), hit, miss);
 
 #[test]
 fn a_logical_operation_returns_the_condition_value_when_it_short_circuits() {
-    if !have("tsc") || !have("node") {
+    if !common::tsc_available() {
         return;
     }
     let lines = run(r#"
@@ -147,7 +147,7 @@ console.log(a, JSON.stringify(b), c);
 
 #[test]
 fn eager_arguments_keep_left_to_right_order_at_runtime() {
-    if !have("tsc") || !have("node") {
+    if !common::tsc_available() {
         return;
     }
     // The schedule captures every effectful earlier argument; only a
@@ -165,7 +165,7 @@ console.log(JSON.stringify(trace));
 
 #[test]
 fn a_block_arm_exit_leaves_the_region_from_inside_a_loop() {
-    if !have("tsc") || !have("node") {
+    if !common::tsc_available() {
         return;
     }
     // TASK-160 §6: the region keeps a label exactly when the rewritten
@@ -193,7 +193,7 @@ console.log(choose(Pick.Scan(2)), choose(Pick.Scan(4)), choose(Pick.Zero));
 
 #[test]
 fn a_block_arm_exit_without_a_loop_still_yields_its_value() {
-    if !have("tsc") || !have("node") {
+    if !common::tsc_available() {
         return;
     }
     let lines = run(r#"
@@ -351,7 +351,7 @@ fn a_frame_inside_generated_glue_names_the_construct_that_wrote_it() {
 
 #[test]
 fn run_guard_regions_preserve_all_values_and_short_circuit_effects() {
-    if !have("tsc") || !have("node") { return; }
+    if !common::tsc_available() { return; }
     let out = run(r#"
 const events: number[] = [];
 function mark(n: number) { events.push(n); return n; }
@@ -389,7 +389,7 @@ console.log(choose(false), events.splice(0).join(","));
 
 #[test]
 fn generated_bindings_never_capture_user_identifiers() {
-    if !have("tsc") || !have("node") { return; }
+    if !common::tsc_available() { return; }
     let out = run(r#"
 variant O { S(v: number), N }
 type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
@@ -420,7 +420,7 @@ console.log(r, JSON.stringify(f()), xs[0], ys[0], zs[0], g(1), $tt_ap, $tt_fl);
 
 #[test]
 fn an_unexpected_case_reports_its_own_match_subject() {
-    if !have("tsc") || !have("node") { return; }
+    if !common::tsc_available() { return; }
     let out = run(r#"
 const pick = (s: string) => s as "a" | "b";
 function outer(s: string) {

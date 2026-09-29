@@ -83,11 +83,15 @@ PR을 열기 전에 먼저 실행해야 합니다.
 ./scripts/ci --list            # 단계 이름
 ```
 
-`tsc`, rolldown, TypeScript 7 툴체인이 없으면 관련 테스트는 **실패가 아니라
-조용히 스킵됩니다.** `scripts/ci`는 시작할 때 무엇이 없어서 어떤 검증이 사라지는지
-경고하고 요약에서 한 번 더 알립니다 — 경고가 붙은 통과는 CI와 같은 통과가
-아닙니다. `native` 단계만은 경고가 아니라 실패입니다. 그 단계의 존재 이유가
-TypeScript 7 경로를 실제로 도는 것이기 때문입니다.
+Every suite that type-checks runs the TypeScript that `package.json` pins,
+installed by `npm ci`: the typed suites drive it through ttc, and the
+integration tests run its own `tsc` rather than one on `PATH`. An installed
+version other than the pin fails the suites. Without that install or
+rolldown, the related tests **skip rather than fail.** `scripts/ci` warns at
+startup about what is missing and which checks disappear, and repeats it in
+the summary — a pass with warnings is not the pass CI gives. Only the
+`native` stage fails instead of warning, because running the TypeScript 7
+path is the reason that stage exists.
 
 호스팅된 실행을 다시 확인해야 하면 Actions 탭에서 `CI` → **Run workflow**로도
 시작할 수 있습니다.

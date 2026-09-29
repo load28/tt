@@ -238,7 +238,7 @@ fn an_output_directory_inside_the_input_is_not_recompiled() {
 
 #[test]
 fn mixed_source_project_preserves_all_directed_runtime_values() {
-    if !have("tsc") || !have("bun") || !have("node") {
+    if !common::tsc_available() || !have("bun") {
         return;
     }
 
@@ -276,7 +276,7 @@ fn mixed_source_project_preserves_all_directed_runtime_values() {
         })
         .collect();
     inputs.sort();
-    let output = Command::new("tsc")
+    let output = common::tsc()
         .args(&inputs)
         .args([
             "--strict",

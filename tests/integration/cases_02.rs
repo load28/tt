@@ -485,7 +485,7 @@ fn cross_file_tt_import_typechecks_and_runs() {
     fs::write(dir.join("error.ts"), &error_ts).unwrap();
     fs::write(dir.join("main.ts"), &main_ts).unwrap();
     fs::write(dir.join("package.json"), "{ \"type\": \"module\" }\n").unwrap();
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .arg(dir.join("main.ts"))
         .arg("--outDir")
         .arg(&dir)
@@ -691,7 +691,7 @@ fn cli_cross_file_match_runs_end_to_end() {
     let (ok, err) = run_ttc(&dir, &["token.tt", "main.tt"]);
     assert!(ok, "ttc failed:\n{err}");
     fs::write(dir.join("package.json"), "{ \"type\": \"module\" }\n").unwrap();
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .arg(dir.join("main.ts"))
         .arg("--outDir")
         .arg(&dir)

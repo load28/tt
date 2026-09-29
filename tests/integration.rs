@@ -1,7 +1,9 @@
 //! End-to-end tests: compile tt → TypeScript, then run `tsc` to type-check
 //! (exhaustiveness is checked by ttc itself; tsc sees plain TypeScript) and `node` to execute.
 //!
-//! These tests skip silently when `tsc` or `node` is not installed.
+//! `tsc` is the TypeScript `package.json` pins (`common::tsc`). These tests
+//! skip silently when it or `node` is not installed, and fail instead under
+//! `TTC_REQUIRE_TSGO=1`.
 
 use std::fs;
 use std::process::Command;
@@ -102,7 +104,7 @@ fn typecheck(src: &str) -> (bool, String) {
     write_runtime(&dir);
     let ts = dir.join("main.ts");
     fs::write(&ts, &code).unwrap();
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .arg(&ts)
         .arg("--noEmit")
         .args(TSC_FLAGS)
@@ -117,7 +119,7 @@ fn typecheck(src: &str) -> (bool, String) {
 
 #[test]
 fn ttx_output_typechecks_as_tsx() {
-    if !have("tsc") {
+    if !common::tsc_available() {
         return;
     }
     let source = r#"declare global {
@@ -141,7 +143,7 @@ export const render = (state: State) => <main>{match (state) {
     let dir = tmpdir();
     let tsx = dir.join("main.tsx");
     fs::write(&tsx, &code).unwrap();
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .arg(&tsx)
         .arg("--noEmit")
         .arg("--jsx")
@@ -158,7 +160,7 @@ export const render = (state: State) => <main>{match (state) {
 
 #[test]
 fn mixed_source_fixture_emits_one_type_clean_typescript_tree() {
-    if !have("tsc") {
+    if !common::tsc_available() {
         return;
     }
     let dir = tmpdir();
@@ -226,7 +228,7 @@ fn mixed_source_fixture_emits_one_type_clean_typescript_tree() {
         fs::write(&path, output).unwrap();
         emitted.push(path);
     }
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .args(&emitted)
         .args([
             dir.join("tt/index.ts"),
@@ -255,7 +257,7 @@ fn typecheck_recovery(src: &str) -> (bool, String) {
     write_runtime(&dir);
     let ts = dir.join("main.ts");
     fs::write(&ts, &code).unwrap();
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .arg(&ts)
         .arg("--noEmit")
         .args(TSC_FLAGS)
@@ -277,7 +279,7 @@ fn typecheck_with_std(src: &str) -> (bool, String) {
     let dir = tmpdir();
     write_std(&dir);
     fs::write(dir.join("main.ts"), &code).unwrap();
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .arg(dir.join("main.ts"))
         .arg(dir.join("tt/index.ts"))
         .arg(dir.join("tt/option.ts"))
@@ -303,7 +305,7 @@ fn typecheck_with_std(src: &str) -> (bool, String) {
 
 #[test]
 fn recoverable_codegen_errors_do_not_create_tsc_errors() {
-    if !have("tsc") {
+    if !common::tsc_available() {
         return;
     }
 
@@ -332,7 +334,7 @@ fn run_with_tsc_flags(src: &str, extra_flags: &[&str]) -> Vec<String> {
     fs::write(&ts, &code).unwrap();
     // the emitted .js contains `export {}` — run it as an ES module
     fs::write(dir.join("package.json"), "{ \"type\": \"module\" }\n").unwrap();
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .arg(&ts)
         .arg("--outDir")
         .arg(&dir)
@@ -366,7 +368,7 @@ fn a_grouped_value_still_evaluates_to_what_the_arm_wrote() {
     // bearing: a comma expression delivered without them would take the
     // wrong operand, and a non-primary pipeline receiver would rebind the
     // member access. Both are executed here, not just matched as text.
-    if !have("tsc") || !have("node") {
+    if !common::tsc_available() {
         return;
     }
     let out = run("variant E { A(v: number), B }\n\
@@ -399,7 +401,7 @@ fn a_block_arm_yields_the_same_value_whether_or_not_it_can_fall_out() {
     // control runs into the next case. All three shapes are executed —
     // always leaves, leaves conditionally, never leaves — and each is
     // followed by another arm that must not run.
-    if !have("tsc") || !have("node") {
+    if !common::tsc_available() {
         return;
     }
     let out = run("variant E { A(v: number), B }\n\
@@ -451,7 +453,7 @@ fn run_with_std(src: &str) -> Vec<String> {
     write_std(&dir);
     fs::write(dir.join("main.ts"), &code).unwrap();
     fs::write(dir.join("package.json"), "{ \"type\": \"module\" }\n").unwrap();
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .arg(dir.join("main.ts"))
         .arg(dir.join("tt/index.ts"))
         .arg(dir.join("tt/option.ts"))
@@ -491,8 +493,8 @@ fn run_with_std(src: &str) -> Vec<String> {
 
 macro_rules! require_toolchain {
     () => {
-        if !have("tsc") || !have("node") {
-            eprintln!("skipping: tsc/node not available");
+        if !common::tsc_available() {
+            eprintln!("skipping: node or the pinned TypeScript is not installed");
             return;
         }
     };

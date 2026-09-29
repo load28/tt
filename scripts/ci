@@ -178,14 +178,12 @@ note "  node:  $(node --version)"
 if [ -n "$TS_VERSION" ]; then
   note "  ts:    $TS_VERSION"
 else
-  warn "TypeScript is not installed (npm ci at the repository root); the native stage cannot run"
+  warn "TypeScript is not installed (npm ci at the repository root): the integration tests skip their type checks and the native stage cannot run"
 fi
 
 # Tools CI installs before testing. Without them the suites do not fail —
 # they skip, and a skipped suite is green in every other way, which is the
 # thing this repository keeps guarding against. So name what goes missing.
-have tsc \
-  || warn "tsc is not on PATH: the integration tests will skip their type checks (npm i -g typescript@6)"
 if ! have rolldown && [ ! -x "$TT_ROOT/website/node_modules/.bin/rolldown" ]; then
   warn "rolldown is not on PATH: the std tree-shaking regression will skip (npm i -g rolldown@1.2.5)"
 fi

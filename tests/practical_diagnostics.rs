@@ -186,24 +186,6 @@ fn expect_baseline(path: &Path, actual: &str) {
     );
 }
 
-fn toolchain_installed() -> bool {
-    let mut dir = Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    while let Some(current) = dir {
-        for client in ["typescript", "@typescript/native-preview"] {
-            if current
-                .join("node_modules")
-                .join(client)
-                .join("dist/api/sync/api.js")
-                .exists()
-            {
-                return true;
-            }
-        }
-        dir = current.parent().map(Path::to_path_buf);
-    }
-    false
-}
-
 fn codes(stderr: &str) -> Vec<&str> {
     stderr
         .lines()
@@ -213,11 +195,7 @@ fn codes(stderr: &str) -> Vec<&str> {
 
 #[test]
 fn cli_reports_every_practical_diagnostic_at_its_source() {
-    if !toolchain_installed() {
-        assert!(
-            std::env::var_os("TTC_REQUIRE_TSGO").is_none(),
-            "TTC_REQUIRE_TSGO is set but no TypeScript API is installed"
-        );
+    if !common::toolchain() {
         return;
     }
 
