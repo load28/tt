@@ -103,6 +103,46 @@ fn a_project_writes_one_pipeline_runtime_and_imports_it() {
     }
 }
 
+/// The runtime is written for an output that imports it, which is what
+/// codegen emitted rather than whether the source has a pipeline: a
+/// literal-headed pipeline lowers to a direct call, and a script inlines
+/// its helpers.
+#[test]
+fn a_pipeline_that_imports_no_runtime_writes_none() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("direct.tt"), "export const a = 1 |> String;\n").unwrap();
+    fs::write(
+        source.join("script.tt"),
+        "declare function input(): number;\n\
+         declare const step: (value: number) => number;\n\
+         const value = input() |> step;\n",
+    )
+    .unwrap();
+
+    for out in [None, Some(&out_dir)] {
+        let mut args = vec!["--no-banner"];
+        if let Some(out) = out {
+            args.extend(["-o", out.to_str().unwrap()]);
+        }
+        args.push(source.to_str().unwrap());
+        let output = ttc(&args);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let root = out.unwrap_or(&source);
+        for name in ["direct", "script"] {
+            let code = fs::read_to_string(root.join(format!("{name}.ts"))).unwrap();
+            assert!(!code.contains("runtime"), "{code}");
+        }
+        assert!(!root.join("tt").exists(), "{}", root.display());
+    }
+}
+
 #[test]
 fn a_mixed_source_stem_collision_is_rejected_before_writing() {
     let dir = tmpdir();
@@ -185,8 +225,9 @@ fn a_source_cannot_claim_a_compiler_support_module_output() {
     fs::create_dir_all(source.join("tt")).unwrap();
     fs::write(
         source.join("main.tt"),
-        "const twice = (value: number): number => value * 2;\n\
-         export const result = 1 |> twice;\n",
+        "declare function input(): number;\n\
+         const twice = (value: number): number => value * 2;\n\
+         export const result = input() |> twice;\n",
     )
     .unwrap();
     fs::write(

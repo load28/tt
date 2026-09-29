@@ -297,6 +297,9 @@ impl<'a> Emitter<'a> {
     pub(super) fn emit_import(&self, import: &Import, out: &mut Rope<'a>) {
         let (specifier, at) = self.source_node(import.specifier);
         if let hir::ImportKind::Std(module) = import.kind {
+            if !self.imported_std.borrow().contains(&module) {
+                self.imported_std.borrow_mut().push(module);
+            }
             match self.std_imports.get(module) {
                 Some(path) => {
                     let quote = &specifier[..1];

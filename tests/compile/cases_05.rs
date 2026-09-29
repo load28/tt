@@ -1,3 +1,29 @@
+/// The support modules an emission imports are what codegen wrote, so a
+/// build writes exactly the modules its outputs need.
+#[test]
+fn an_emission_reports_the_support_modules_it_imports() {
+    use ttc::StdModule;
+    let imports = |source: &str| {
+        ttc::compile_mapped(source, &Options::default())
+            .unwrap()
+            .support_imports
+    };
+    let pipeline = "declare function input(): number;\n\
+                    declare const step: (value: number) => number;\n";
+    assert_eq!(
+        imports(&format!("{pipeline}export const v = input() |> step;\n")),
+        [StdModule::Runtime]
+    );
+    // A literal head lowers to a direct call; a script inlines its helper.
+    assert!(imports("export const a = 1 |> String;\n").is_empty());
+    assert!(imports(&format!("{pipeline}const v = input() |> step;\n")).is_empty());
+    assert_eq!(
+        imports("import * as Option from \"@tt/std/option\";\nexport const o = Option;\n"),
+        [StdModule::Option]
+    );
+    assert!(imports("export const plain = 1;\n").is_empty());
+}
+
 #[test]
 fn local_variant_shadows_extern_of_same_name() {
     // The local Token has only two cases; the extern one must not resurrect

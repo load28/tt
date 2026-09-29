@@ -99,6 +99,8 @@ pub(super) struct Emitter<'a> {
     pub(super) used_expression_boundary: Cell<bool>,
     pub(super) used_pipe: Cell<bool>,
     pub(super) used_flow: Cell<bool>,
+    /// The standard-library modules the file's own imports named.
+    pub(super) imported_std: RefCell<Vec<crate::StdModule>>,
     pub(super) generated_names: RefCell<crate::generated_names::GeneratedNames>,
     pub(super) global_temps: HashMap<TempId, String>,
 }

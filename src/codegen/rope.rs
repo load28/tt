@@ -791,6 +791,7 @@ impl<'a> TargetFile<'a> {
             generated_names: std::collections::HashSet::new(),
             declared_names,
             shared_bindings,
+            support_imports: Vec::new(),
         }
     }
 }

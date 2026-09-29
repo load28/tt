@@ -505,4 +505,5 @@ pub(crate) struct Flat {
     pub generated_names: std::collections::HashSet<String>,
     pub declared_names: Vec<DeclaredName>,
     pub shared_bindings: Vec<SharedBinding>,
+    pub support_imports: Vec<crate::StdModule>,
 }

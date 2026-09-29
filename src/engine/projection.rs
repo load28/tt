@@ -37,8 +37,9 @@ pub struct ProjectedDocument {
     /// Whether the file imports any `@tt/std` entry — decides whether the
     /// standard-library package joins the project graph.
     pub(crate) imports_std: bool,
-    /// Whether lowering needs the compiler-owned pipeline runtime module.
-    pub(crate) uses_pipeline: bool,
+    /// Whether the lowered module imports the compiler-owned pipeline
+    /// runtime — what codegen emitted, not whether the source has a pipeline.
+    pub(crate) imports_runtime: bool,
     /// The literal-match exhaustiveness probes of this file.
     pub(crate) literal_probes: Vec<LiteralMatch>,
     /// The tag-match exhaustiveness probes of this file.
@@ -142,7 +143,7 @@ impl ProjectedDocument {
         Ok(ProjectedDocument {
             module_path: module_path_of(source_path),
             imports_std: scan.imports_std,
-            uses_pipeline: scan.uses_pipeline,
+            imports_runtime: emit.support_imports.contains(&crate::StdModule::Runtime),
             literal_probes: crate::probe::literal_matches_of(&source, &program),
             tag_probes: crate::probe::tag_matches_of(&source, &program),
             payload_probes: crate::probe::payload_probes_of(&program),
@@ -234,7 +235,7 @@ pub(crate) fn assemble(
             .modules
             .extend(std_package_modules(root, crate::StdPackage::Std));
     }
-    if files.iter().any(|f| f.uses_pipeline) {
+    if files.iter().any(|f| f.imports_runtime) {
         query
             .modules
             .extend(std_package_modules(root, crate::StdPackage::Runtime));

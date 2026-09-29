@@ -523,7 +523,8 @@
 | TASK-513 | Plan the package.json update with every other init write | Complete | 2026-09-29 | 2026-09-29 | [TASK-513](./TASK-513-manifest-write-boundary.md) |
 | TASK-516 | Exclude only an output root strictly inside a directory input | Complete | 2026-09-29 | 2026-09-29 | [TASK-516](./TASK-516-output-root-enclosing-input.md) |
 | TASK-517 | Walk a symlinked directory under its link-free spelling | Complete | 2026-09-29 | 2026-09-29 | [TASK-517](./TASK-517-directory-alias-spelling.md) |
+| TASK-518 | Write support modules from the imports codegen emitted | Complete | 2026-09-29 | 2026-09-29 | [TASK-518](./TASK-518-runtime-from-emitted-imports.md) |
 
 ## Next task number
 
-**TASK-518**
+**TASK-519**
