@@ -1,7 +1,7 @@
 //! Refine generated value storage with the facts the TypeScript backend
 //! supplied about it (`docs/design/contextual-type-materialization.md`).
 
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use swc_common::Spanned;
 use swc_ecma_ast::{AssignOp, AssignTarget, Expr, SimpleAssignTarget, Stmt};
@@ -226,9 +226,10 @@ fn storage_writes(
     struct Collect<'a> {
         input: &'a HostInput,
         declarations: &'a [usize],
-        names: HashMap<String, usize>,
-        statements: Vec<(usize, usize)>,
-        assignments: Vec<(String, usize, (usize, usize), (usize, usize))>,
+        names: HashSet<String>,
+        statements: HashSet<(usize, usize)>,
+        /// Each assignment to a plain identifier, with its own extent.
+        assignments: Vec<(StorageWrite, (usize, usize))>,
     }
     impl Collect<'_> {
         fn statements(&mut self, statements: &[Stmt]) {
@@ -238,7 +239,7 @@ fn storage_writes(
                 {
                     let span = assign.span();
                     self.statements
-                        .push((self.input.byte(span.lo), self.input.byte(span.hi)));
+                        .insert((self.input.byte(span.lo), self.input.byte(span.hi)));
                 }
             }
         }
@@ -248,7 +249,7 @@ fn storage_writes(
             if let Some(name) = node.name.as_ident() {
                 let end = self.input.byte(name.id.span.hi);
                 if self.declarations.contains(&end) {
-                    self.names.insert(name.id.sym.to_string(), end);
+                    self.names.insert(name.id.sym.to_string());
                 }
             }
             node.visit_children_with(self);
@@ -272,9 +273,11 @@ fn storage_writes(
                 let span = node.span();
                 let value = node.right.span();
                 self.assignments.push((
-                    target.id.sym.to_string(),
-                    self.input.byte(target.id.span.lo),
-                    (self.input.byte(value.lo), self.input.byte(value.hi)),
+                    StorageWrite {
+                        storage: target.id.sym.to_string(),
+                        target: self.input.byte(target.id.span.lo),
+                        value: (self.input.byte(value.lo), self.input.byte(value.hi)),
+                    },
                     (self.input.byte(span.lo), self.input.byte(span.hi)),
                 ));
             }
@@ -291,8 +294,8 @@ fn storage_writes(
     let mut collect = Collect {
         input: &input,
         declarations,
-        names: HashMap::new(),
-        statements: Vec::new(),
+        names: HashSet::new(),
+        statements: HashSet::new(),
         assignments: Vec::new(),
     };
     module.visit_with(&mut collect);
@@ -300,18 +303,14 @@ fn storage_writes(
         crate::ice::bug!("detached value storage has no declaration")
     }
     let mut writes = Vec::new();
-    for (storage, target, value, span) in collect.assignments {
-        if !collect.names.contains_key(&storage) {
+    for (write, span) in collect.assignments {
+        if !collect.names.contains(&write.storage) {
             continue;
         }
         if !collect.statements.contains(&span) {
             crate::ice::bug!("a write to value storage is not a statement of a block")
         }
-        writes.push(StorageWrite {
-            storage,
-            target,
-            value,
-        });
+        writes.push(write);
     }
     writes.sort_by_key(|write| write.target);
     Some(writes)

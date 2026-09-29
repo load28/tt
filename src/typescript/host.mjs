@@ -629,10 +629,11 @@ async function main() {
 
     const contextual = ({ project, members }) => {
       const checker = project.checker;
-      // The storage the lowering declared in each module, annotated or not.
-      // TypeScript can name a type after it (a class expression assigned
-      // to it is `typeof $tt_v0`), and an annotation that did would read
-      // the compiler's glue, or itself (TS2502).
+      // The storage the lowering declared in each module, annotated or not,
+      // and the consts that carry values to detached storage. TypeScript
+      // can name a type after it (a class expression assigned to it is
+      // `typeof $tt_v0`), and an annotation that did would read the
+      // compiler's glue, or itself (TS2502).
       const storage = new Map();
       const storageOf = (module, source) => {
         let symbols = storage.get(module);

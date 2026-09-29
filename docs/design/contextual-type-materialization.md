@@ -44,6 +44,52 @@ facts are available; successful rounds strictly reduce the unresolved set.
 Type errors are reported by the subsequent TypeScript check, not used to drive
 this process. Context-only rounds do not compute diagnostics.
 
+## Values with no contextual type
+
+An assignment types its right operand by its target. A value written to
+storage declared `let $tt_v0;` is contextually typed by the storage's
+implicit `any`: a method of an object literal gets `this: any`, a function
+literal's return expression is typed against `any`, and a reference to a type
+parameter with a union constraint is read through its constraint. The source
+position the storage stands for can have no contextual type at all
+(`const b = match (n) { … }`), and there TypeScript types the value by itself
+(TASK-570).
+
+When contextual propagation reaches its first fixed point, every slot still
+without a contextual type is detached. Each value written to it is first the
+`value` of an object literal an arm-local `const` holds, and the storage reads
+it from there:
+
+```ts
+const $tt_a0 = { value: ({ k: 1, m() { return this; } }) };
+$tt_v0 = $tt_a0.value;
+```
+
+An unannotated `const` initializer has no contextual type, and a property of
+an object literal that has none has none either. The value is a property
+rather than the initializer itself because TypeScript declares an unannotated
+variable by rules of its own: an empty array literal initializer declares an
+evolving array (TS7034 and TS7005 where it is read), and a `Symbol()`
+initializer of a `const` declares a `unique symbol`. A property only widens a
+fresh literal type, which storage with no contextual type widens anyway.
+
+The rule covers every value written to the slot. Which values TypeScript types
+by their context is the checker's question (object and array literals,
+functions, generic calls, type-parameter references and the expressions that
+pass a context on), not a syntactic one, so no value form is exempt. Storage
+for the index of the arm a dispatch selected is not detached: it holds no
+value of the source (`MarkKind::SelectorSlot`). The writes are the assignment
+statements the emission's syntax tree has for the slot's generated name,
+which is unique in its file; the lowering writes storage only in its own
+blocks and `switch` cases, where a `const` can be declared.
+
+The backend says whether an annotation is a contextual type or an inferred
+join (`ContextualSlotType::inferred`). A detached slot that a later round
+finds a contextual type for is written directly again, under that type. The
+arm-local `const`s are listed to the backend as settled storage, so no
+annotation names them. Without a TypeScript toolchain nothing is known about
+contextual types, and the unrefined emission assigns every value directly.
+
 ## Inferred joins
 
 After contextual propagation reaches a fixed point, an uninitialized generated

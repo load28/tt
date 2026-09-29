@@ -68,7 +68,7 @@ the other (Issue 1).
   The annotation writes that type faithfully; removing it does not bring
   the error back. Parameters are not affected: the `auto` type has no
   signature, so `x = (y) => y` still reports TS7006.
-- **Resolution**: Not resolved here. Only the emission can give the value
+- **Resolution**: Not resolved here; TASK-570 resolves it. Only the emission can give the value
   no contextual type (the storage has one in every declaration form), and
   whether the source position had a contextual type is known only after
   the backend's rounds. Left as a follow-up.
