@@ -575,7 +575,7 @@
 | TASK-567 | Serve bundler compiles from one persistent ttc server | Complete | 2026-09-29 | 2026-09-29 | [TASK-567](./TASK-567-bundler-compile-server.md) |
 | TASK-568 | Leave only ttc's own outputs out of the TypeScript program | Complete | 2026-09-29 | 2026-09-29 | [TASK-568](./TASK-568-exclude-only-ttc-outputs.md) |
 | TASK-569 | Answer the server's buffer check without the TypeScript backend | Complete | 2026-09-29 | 2026-09-29 | [TASK-569](./TASK-569-server-check-without-backend.md) |
-| TASK-570 | Type a value with no contextual type as TypeScript does at its source position | In progress | 2026-09-29 | — | [TASK-570](./TASK-570-context-free-storage-writes.md) |
+| TASK-570 | Type a value with no contextual type as TypeScript does at its source position | Complete | 2026-09-29 | 2026-09-29 | [TASK-570](./TASK-570-context-free-storage-writes.md) |
 | TASK-576 | Read imported variants from the open buffer in tt's name surfaces | Complete | 2026-09-29 | 2026-09-29 | [TASK-576](./TASK-576-tt-names-read-open-imports.md) |
 | TASK-577 | Map a variant's field types and type parameters to the source | Complete | 2026-09-29 | 2026-09-29 | [TASK-577](./TASK-577-variant-field-types-are-mapped.md) |
 | TASK-578 | Offer tt completion items only where they are valid, ranked as TypeScript ranks | Complete | 2026-09-29 | 2026-09-29 | [TASK-578](./TASK-578-tt-completion-items-where-valid.md) |
