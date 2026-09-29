@@ -19,7 +19,7 @@
  * a watch or an editor viable — reopening a real project per keystroke is
  * not.
  *
- *   open   { apiModule, cwd, tsconfig (nullable) }
+ *   open   { apiModule, cwd, tsconfig (nullable), outputs: [dir] }
  *       →  { ok: true }
  *
  *   ask    { modules: [{ path, text }],   // lowered .tt → x.tt.ts / x.ttx.tsx
@@ -185,11 +185,20 @@ function diskVersion(file) {
   catch { return null; }
 }
 
-function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links) {
+function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links, outputs) {
   // The packages this host publishes and links into the project are its
   // own, not project inputs: they are neither dependencies nor listings.
   const published = (p) => [...links].some(([link, target]) =>
     [link, target].some((root) => p === root || p.startsWith(root + "/")));
+  // ttc's output directories are never project inputs, as `tsc` leaves its
+  // own outDir out of a default `include`: no glob finds a file in them,
+  // while `files` entries and imports still resolve there.
+  const output = (d) => {
+    let real = d;
+    try { real = fs.realpathSync(d); } catch {}
+    real = real.replaceAll("\\", "/");
+    return outputs.some((dir) => real === dir || real.startsWith(dir + "/"));
+  };
   return {
     // A `.tt` source the engine did not serve does not exist for TypeScript:
     // its text is tt, not the lowered module.
@@ -209,6 +218,7 @@ function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, list
       return undefined;
     },
     getAccessibleEntries: (d) => {
+      if (output(d)) return { files: [], directories: [] };
       let real = { files: [], directories: [] };
       try {
         for (const e of fs.readdirSync(d, { withFileTypes: true })) {
@@ -284,6 +294,7 @@ async function main() {
   const listings = new Map();
   const links = new Map();
   const aliases = new Set();
+  const outputs = (open.outputs ?? []).map((dir) => path.resolve(dir).replaceAll("\\", "/"));
   const pendingDisk = { created: [], changed: [], deleted: [] };
   let diskGeneration = 0;
   let mapped = false;
@@ -296,7 +307,7 @@ async function main() {
   const connect = () => new API({
     cwd: open.cwd,
     runExternalCode: mapped,
-    fs: layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links),
+    fs: layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links, outputs),
   });
   let api = connect();
   writeLine(JSON.stringify({ ok: true }));

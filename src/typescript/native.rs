@@ -58,6 +58,9 @@ pub(crate) struct NativeBackend {
     toolchain: Client,
     /// The `node` binary that runs the host (`--node`, else `node` on PATH).
     node: PathBuf,
+    /// Directories ttc writes this project's outputs to; the program never
+    /// takes an input from them.
+    outputs: Vec<PathBuf>,
     session: RefCell<Option<Session>>,
     observed: std::cell::Cell<Option<(u64, u64, bool)>>,
 }
@@ -81,9 +84,18 @@ impl NativeBackend {
         Ok(NativeBackend {
             toolchain: toolchain::client(from)?,
             node: node.unwrap_or_else(|| PathBuf::from("node")),
+            outputs: Vec::new(),
             session: RefCell::new(None),
             observed: std::cell::Cell::new(None),
         })
+    }
+
+    /// Leaves `dir`, where ttc writes this project's outputs, out of the
+    /// files the program's `include` finds — the rule `tsc` applies to its
+    /// own output directory.
+    pub(crate) fn excluding_output(mut self, dir: PathBuf) -> NativeBackend {
+        self.outputs.push(dir);
+        self
     }
 
     /// Makes the host serve this project, starting it unless it already
@@ -131,6 +143,7 @@ impl NativeBackend {
             "apiModule": self.toolchain.api,
             "cwd": root,
             "tsconfig": tsconfig,
+            "outputs": self.outputs,
         });
         writeln!(stdin, "{open}")
             .map_err(|e| Failure::unavailable(format!("cannot start the host: {e}")))?;
