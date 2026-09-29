@@ -388,9 +388,10 @@ impl Machine<'_> {
     /// the token is the statement's first.
     pub(super) fn statement(&mut self, tok: &Tok<'_>, start: Option<usize>) -> Out {
         let begin = start.unwrap_or(tok.span.start);
-        if start.is_none() {
-            self.mark(TokenFacts::STATEMENT_START);
-        }
+        self.mark(match start {
+            None => TokenFacts::STATEMENT_START,
+            Some(_) => TokenFacts::MODIFIED,
+        });
         match tok.kind {
             Tk::Punct(b'{') => {
                 self.push_frame(Frame::List {

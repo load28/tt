@@ -361,7 +361,7 @@ struct ProbeDoc {
 
 /// Inserted at the cursor to complete the construct being typed. `$`-led so
 /// it cannot collide with the name the user is in the middle of typing.
-const PROBE_NAME: &str = "$tt_probe";
+pub(super) const PROBE_NAME: &str = "$tt_probe";
 
 use service::*;
 pub(super) use service::{

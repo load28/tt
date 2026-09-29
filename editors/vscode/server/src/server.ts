@@ -1169,10 +1169,12 @@ interface TsCompletionData {
 }
 
 /**
- * TypeScript completions from the engine, sorted after the tt-specific
- * items (`2` prefix; tt items use `0`/`1`). The engine applies the whole
- * member/probe policy: at a member access only a member answer comes back,
- * probed from the mended source when the buffer's own text cannot answer.
+ * TypeScript completions from the engine, under a `2` prefix: after the
+ * tt items that own a position outright (`0`/`1`: a variant's constructors
+ * after its `.`), and ranked as TypeScript ranks them, the tt keywords
+ * among its own. The engine applies the whole member/probe policy: at a
+ * member access only a member answer comes back, probed from the mended
+ * source when the buffer's own text cannot answer.
  */
 async function tsCompletions(
   doc: TextDocument,
@@ -1209,7 +1211,6 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return [];
   const offset = doc.offsetAt(params.position);
-  const visible = (await declarationsOf(doc)).variants;
   const trigger =
     params.context?.triggerKind === CompletionTriggerKind.TriggerCharacter
       ? params.context.triggerCharacter
@@ -1239,6 +1240,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   if (here.member !== null) {
     const receiver = here.member.receiver;
     const members = await tsCompletions(doc, offset, true);
+    const visible = (await declarationsOf(doc)).variants;
     const e = visible.find((x) => x.name === receiver);
     if (!e) return members;
     const items = e.cases.map((c) => constructorItem(e, c));
@@ -1278,22 +1280,19 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     return [];
   }
 
-  // General position → variant names + tt keyword snippets, then everything
-  // TypeScript would offer in a .ts file (sorted after the tt items).
-  const items: CompletionItem[] = visible.map((e) => ({
-    label: e.name,
-    kind: CompletionItemKind.Enum,
-    detail:
-      e.origin === "builtin"
-        ? `built-in variant ${e.name}${e.generics}`
-        : e.origin === "imported"
-          ? `variant ${e.name}${e.generics}${e.specifier ? ` — ${e.specifier}` : ""}`
-          : `variant ${e.name}${e.generics}`,
-    sortText: `0${e.name}`,
-  }));
-  const ttItems = items.concat(KEYWORD_SNIPPETS);
-  const seen = new Set(ttItems.map((i) => i.label));
-  return ttItems.concat(
+  // General position → what TypeScript would offer in a .ts file, ranked
+  // as TypeScript ranks it, with the tt keywords whose construct can begin
+  // here among TypeScript's own keywords. The engine reads the grammar
+  // position from the buffer's tokens, so a property name, a JSX attribute,
+  // an import specifier or a type gets none. A variant's name is
+  // TypeScript's to offer: the emission declares it, and the service lists
+  // it where it is in scope and valid.
+  const snippets = here.keywords.flatMap((keyword): CompletionItem[] => {
+    const snippet = KEYWORD_SNIPPETS.find((item) => item.label === keyword.label);
+    return snippet ? [{ ...snippet, sortText: `2${keyword.sortText}` }] : [];
+  });
+  const seen = new Set(snippets.map((i) => i.label));
+  return snippets.concat(
     (await tsCompletions(doc, offset, false)).filter((i) => !seen.has(i.label)),
   );
 });

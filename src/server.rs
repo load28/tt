@@ -38,10 +38,12 @@
 //!
 //! → { "id": 6, "method": "ttCompletions", "params": { "path", "text", "position" } }
 //! ← { "id": 6, "result": { "items": [{ "label", "kind", "detail", "covered" }],
-//!                          "member": { "receiver" } | null } }
+//!                          "member": { "receiver" } | null,
+//!                          "keywords": [{ "label", "sortText" }] } }
 //! `member`: the cursor completes a member name; `receiver` is the path of
 //! names before the `.` (`Result`, `ns.Shape`), or null for any other
-//! expression.
+//! expression. `keywords`: the tt keywords whose construct can be written
+//! at the position, with TypeScript's rank for a keyword.
 //!
 //! → { "id": 7, "method": "ttHints", "params": { "path", "text" } }
 //! ← { "id": 7, "result": { "hints": [{ "kind", "range", "message" }] } }
@@ -719,7 +721,12 @@ fn tt_completions(
             })
         })
         .collect();
-    Ok(json!({ "items": items, "member": member }))
+    let keywords: Vec<_> =
+        ttc::engine::tt_keywords_at(Path::new(path), text_param(params)?, position)
+            .into_iter()
+            .map(|keyword| json!({ "label": keyword.label(), "sortText": keyword.sort_text() }))
+            .collect();
+    Ok(json!({ "items": items, "member": member, "keywords": keywords }))
 }
 
 /// What tt has to say about a buffer that is not an error — today, the
