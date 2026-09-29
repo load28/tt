@@ -30,8 +30,21 @@ impl HostInput {
     }
 
     pub(crate) fn parser(&self, source_kind: SourceKind) -> Parser<Lexer<'_>> {
+        self.parser_with(syntax(source_kind))
+    }
+
+    /// A parser for a TypeScript declaration file (`.d.ts`).
+    pub(crate) fn declaration_parser(&self) -> Parser<Lexer<'_>> {
+        self.parser_with(Syntax::Typescript(TsSyntax {
+            dts: true,
+            decorators: true,
+            ..Default::default()
+        }))
+    }
+
+    fn parser_with(&self, syntax: Syntax) -> Parser<Lexer<'_>> {
         let lexer = Lexer::new(
-            syntax(source_kind),
+            syntax,
             Default::default(),
             StringInput::from(&*self.file),
             None,

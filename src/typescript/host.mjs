@@ -88,6 +88,7 @@ function publishFile(file, text) {
   fs.writeFileSync(staging, text);
   fs.renameSync(staging, file);
 }
+const CANNOT_READ_FILE = 5083;
 const LOWERED = /\.(?:tt\.ts|ttx\.tsx)$/;
 const TT_SOURCE = /\.ttx?$/;
 const MAPPED_DECLARATION = /\.d\.(ttx?)\.ts$/;
@@ -185,13 +186,17 @@ function diskVersion(file) {
 }
 
 function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links) {
+  // The packages this host publishes and links into the project are its
+  // own, not project inputs: they are neither dependencies nor listings.
+  const published = (p) => [...links].some(([link, target]) =>
+    [link, target].some((root) => p === root || p.startsWith(root + "/")));
   return {
     // A `.tt` source the engine did not serve does not exist for TypeScript:
     // its text is tt, not the lowered module.
     fileExists: (f) => (files.has(f) ? true : TT_SOURCE.test(f) ? false : undefined),
     // `undefined` falls back to the real disk; `null` would mean "absent".
     readFile: (f) => {
-      if (!files.has(f) && !dependencies.has(f)) dependencies.set(f, diskVersion(f));
+      if (!files.has(f) && !dependencies.has(f) && !published(f)) dependencies.set(f, diskVersion(f));
       if (configFiles.has(f)) return configFiles.get(f);
       if (files.has(f)) return files.get(f);
       return TT_SOURCE.test(f) ? null : undefined;
@@ -213,7 +218,7 @@ function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, list
       } catch {
         if (!dirs.has(d)) return undefined;
       }
-      listings.set(d, new Set([...real.files, ...real.directories]));
+      if (!published(d)) listings.set(d, new Set([...real.files, ...real.directories]));
       const here = [...files.keys()].filter((f) => path.dirname(f) === d && !aliases.has(f));
       const names = new Set(real.files.map((f) => f));
       for (const f of here) {
@@ -303,7 +308,6 @@ async function main() {
           answer = configuredMappers();
         } else {
           answer = handle(job);
-          opened = true;
         }
       } catch (e) {
         // The Rust boundary classifies this as an internal compiler error.
@@ -465,6 +469,16 @@ async function main() {
       // as modules; never alter source strings or infer membership from a scan.
       const previous = new Map(configFiles);
       configFiles.clear();
+      // A configuration TypeScript cannot read is TS5083, the diagnostic
+      // `tsc` reports for it. No project exists until it can be read again,
+      // and then it is opened afresh.
+      const unreadable = api.readConfigFile(open.tsconfig).error;
+      if (unreadable?.code === CANNOT_READ_FILE) {
+        if (opened) reconnect();
+        out.projectDiagnostics.push({ file: open.tsconfig, code: unreadable.code, message: unreadable.text });
+        out.dependencies = [...dependencies.keys(), ...listings.keys()];
+        return engineAnswer(out);
+      }
       const wanted = !foreignMappers(api.parseConfigFile(open.tsconfig));
       if (wanted !== mapped) {
         mapped = wanted;
@@ -539,6 +553,7 @@ async function main() {
     if (!project) {
       throw new Error("no project for " + (open.tsconfig ?? paths[0] ?? "<nothing>"));
     }
+    opened = true;
 
     // The candidate modules come from a filesystem scan so the layered
     // filesystem can implement tsconfig globs and module resolution. The

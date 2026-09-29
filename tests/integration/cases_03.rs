@@ -187,6 +187,27 @@ fn cli_types_without_typescript_says_so() {
     assert!(err.contains("no TypeScript compiler found"), "{err}");
 }
 
+/// A consumer that type-checks the untouched source tree with plain tsc:
+/// the sidecars merge in through `rootDirs`, and `@tt/std` maps to the
+/// standard-library declarations beside them.
+const SIDECAR_CONSUMER_TSCONFIG: &str = r#"{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "rootDirs": ["./src", "./.tt-types"],
+    "paths": {
+      "@tt/std": ["./.tt-types/tt/index.d.ts"],
+      "@tt/std/*": ["./.tt-types/tt/*.d.ts"]
+    }
+  },
+  "include": ["src"]
+}
+"#;
+
 #[test]
 fn cli_types_sidecars_typecheck_the_source_tree() {
     require_toolchain!();
@@ -221,27 +242,7 @@ fn cli_types_sidecars_typecheck_the_source_tree() {
 
     // Round trip: the untouched source tree typechecks once the sidecars
     // are merged in (`rootDirs`) and `@tt/std` is mapped (`paths`).
-    fs::write(
-        dir.join("tsconfig.json"),
-        r#"{
-  "compilerOptions": {
-    "target": "es2022",
-    "module": "preserve",
-    "moduleResolution": "bundler",
-    "strict": true,
-    "skipLibCheck": true,
-    "noEmit": true,
-    "rootDirs": ["./src", "./.tt-types"],
-    "paths": {
-      "@tt/std": ["./.tt-types/tt/index.d.ts"],
-      "@tt/std/*": ["./.tt-types/tt/*.d.ts"]
-    }
-  },
-  "include": ["src"]
-}
-"#,
-    )
-    .unwrap();
+    fs::write(dir.join("tsconfig.json"), SIDECAR_CONSUMER_TSCONFIG).unwrap();
     let out = common::tsc()
         .current_dir(&dir)
         .args(["-p", "tsconfig.json"])
@@ -250,6 +251,41 @@ fn cli_types_sidecars_typecheck_the_source_tree() {
     assert!(
         out.status.success(),
         "consumer typecheck failed:\n{}\n---sidecar---\n{sidecar}",
+        String::from_utf8_lossy(&out.stdout)
+    );
+}
+
+#[test]
+fn cli_types_under_a_configuration_writes_the_std_declarations_it_maps() {
+    require_toolchain!();
+    require_types_typescript!();
+    let dir = project_dir();
+    write_consumer_tree(&dir);
+    fs::write(dir.join("tsconfig.json"), SIDECAR_CONSUMER_TSCONFIG).unwrap();
+
+    let (ok, err) = run_ttc(&dir, &["--types", "src"]);
+    assert!(ok, "--types failed:\n{err}");
+    for module in ttc::StdModule::STANDARD {
+        let path = dir
+            .join(".tt-types/tt")
+            .join(module.file_name())
+            .with_extension("d.ts");
+        assert_eq!(
+            fs::read_to_string(&path).ok().as_deref(),
+            Some(module.declaration()),
+            "{}:\n{err}",
+            path.display()
+        );
+    }
+
+    let out = common::tsc()
+        .current_dir(&dir)
+        .args(["-p", "tsconfig.json"])
+        .output()
+        .expect("failed to run tsc");
+    assert!(
+        out.status.success(),
+        "consumer typecheck failed:\n{}",
         String::from_utf8_lossy(&out.stdout)
     );
 }

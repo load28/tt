@@ -177,18 +177,24 @@ pub(crate) fn module_path_of(source_path: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
-/// Where one standard-library module sits in the project graph.
+/// The standard-library packages a snapshot's files need, in
+/// [`crate::StdPackage::ALL`] order.
 ///
-/// It is a module of the project like any other — served from the same
-/// layered file system, resolved by ordinary node resolution — so the
-/// specifier stays bare in the source and in every declaration emitted from
-/// it. Nothing is written to the user's `node_modules`.
-pub(crate) fn std_module_path(module: crate::StdModule) -> PathBuf {
-    let package = match module {
-        crate::StdModule::Runtime => crate::StdPackage::Runtime,
-        _ => crate::StdPackage::Std,
-    };
-    std_package_dir(package).join(crate::StdPackage::file_name(module))
+/// Each is a package of the project like any other — served from the same
+/// layered file system under `node_modules`, resolved by ordinary node
+/// resolution — so the specifier stays bare in the source and in every
+/// declaration emitted from it. Nothing is written to the user's
+/// `node_modules`.
+pub(crate) fn served_std_packages(files: &[Arc<ProjectedDocument>]) -> Vec<crate::StdPackage> {
+    crate::StdPackage::ALL
+        .into_iter()
+        .filter(|package| {
+            files.iter().any(|file| match package {
+                crate::StdPackage::Std => file.imports_std,
+                crate::StdPackage::Runtime => file.imports_runtime,
+            })
+        })
+        .collect()
 }
 
 fn std_package_dir(package: crate::StdPackage) -> PathBuf {
@@ -230,15 +236,8 @@ pub(crate) fn assemble(
     };
     let mut probes = Probes::default();
 
-    if files.iter().any(|f| f.imports_std) {
-        query
-            .modules
-            .extend(std_package_modules(root, crate::StdPackage::Std));
-    }
-    if files.iter().any(|f| f.imports_runtime) {
-        query
-            .modules
-            .extend(std_package_modules(root, crate::StdPackage::Runtime));
+    for package in served_std_packages(files) {
+        query.modules.extend(std_package_modules(root, package));
     }
 
     for file in files {

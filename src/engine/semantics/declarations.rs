@@ -7,40 +7,37 @@ use super::*;
 pub(crate) fn match_declarations(
     snapshot: &Snapshot,
     answers: &Answers,
-    root: &std::path::Path,
     requested: &HashSet<PathBuf>,
 ) -> Declarations {
-    let mut out = Declarations::default();
     // The standard library's own declarations, so a consumer running plain
-    // tsc can map every `@tt/std` entry to them. They are project modules
-    // like any other, but have no `.tt` sources to sit beside.
-    for declaration in &answers.declarations {
-        if let Some(module) = crate::StdModule::ALL.into_iter().find(|module| {
-            declaration.path
-                == root
-                    .join(projection::std_module_path(*module))
-                    .with_extension("d.ts")
-        }) {
-            out.std.push(StdDeclaration {
-                module,
+    // tsc can map every `@tt/std` entry to them. They are the package's
+    // declaration files, TypeScript's emit of its sources: the package is
+    // served under `node_modules`, where a configured program holds it as an
+    // external library and emits nothing for it.
+    let std = projection::served_std_packages(snapshot.files())
+        .into_iter()
+        .flat_map(|package| package.modules())
+        .map(|module| StdDeclaration {
+            module: *module,
+            text: module.declaration().to_string(),
+        })
+        .collect();
+    let modules = answers
+        .declarations
+        .iter()
+        .filter_map(|declaration| {
+            let file = snapshot
+                .files()
+                .iter()
+                .find(|f| projection::declaration_path_of(f) == declaration.path)
+                .filter(|f| requested.contains(&f.source_path))?;
+            Some(ModuleDeclaration {
+                file: file.clone(),
                 text: declaration.text.clone(),
-            });
-            continue;
-        }
-        let Some(file) = snapshot
-            .files()
-            .iter()
-            .find(|f| projection::declaration_path_of(f) == declaration.path)
-            .filter(|f| requested.contains(&f.source_path))
-        else {
-            continue;
-        };
-        out.modules.push(ModuleDeclaration {
-            file: file.clone(),
-            text: declaration.text.clone(),
-        });
-    }
-    out
+            })
+        })
+        .collect();
+    Declarations { std, modules }
 }
 
 /// The variant declarations one file's direct `.tt` imports bring into scope,

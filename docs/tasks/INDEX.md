@@ -541,7 +541,11 @@
 | TASK-534 | Leave already-bound fields out of payload completion | Complete | 2026-09-29 | 2026-09-29 | [TASK-534](./TASK-534-bound-payload-fields.md) |
 | TASK-537 | Hover a pattern binding by its type and a tt name with its JSDoc | Complete | 2026-09-29 | 2026-09-29 | [TASK-537](./TASK-537-tt-name-hover.md) |
 | TASK-538 | Keep a cursor's side where lowering splits touching source text | Complete | 2026-09-29 | 2026-09-29 | [TASK-538](./TASK-538-cursor-side-at-split-chunks.md) |
+| TASK-540 | Report an unreadable root configuration as TS5083 and recover | Complete | 2026-09-29 | 2026-09-29 | [TASK-540](./TASK-540-unreadable-root-configuration.md) |
+| TASK-541 | Write the `@tt/std` declarations under a TypeScript configuration | Complete | 2026-09-29 | 2026-09-29 | [TASK-541](./TASK-541-configured-std-declarations.md) |
+| TASK-542 | Place sidecar map segments from declaration syntax | Complete | 2026-09-29 | 2026-09-29 | [TASK-542](./TASK-542-sidecar-syntax-positions.md) |
+| TASK-543 | Leave the backend's own mapper package out of project dependencies | Complete | 2026-09-29 | 2026-09-29 | [TASK-543](./TASK-543-host-owned-dependencies.md) |
 
 ## Next task number
 
-**TASK-539**
+**TASK-544**

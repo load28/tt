@@ -518,7 +518,7 @@ impl Project {
             .borrow_mut()
             .extend(answers.dependencies.iter().cloned());
         let declarations = if request.emit_declarations && backend_error.is_none() {
-            semantics::match_declarations(snapshot, &answers, &self.root, &self.requested)
+            semantics::match_declarations(snapshot, &answers, &self.requested)
         } else {
             Default::default()
         };
