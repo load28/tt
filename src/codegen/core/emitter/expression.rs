@@ -584,7 +584,7 @@ impl<'a> Emitter<'a> {
             Expr::Apply(apply) => self.emit_apply_continued(expr, apply, continuation),
             Expr::Template(template) => {
                 let (mut out, value) = self.emit_template_operand(expr, template, continuation)?;
-                out.append(self.emit_value_delivery(value, None, continuation));
+                out.append(self.emit_value_delivery_without_region_exit(value, continuation));
                 Some(Rope::scoped(out))
             }
             Expr::Opaque(_) => None,

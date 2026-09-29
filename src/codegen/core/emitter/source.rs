@@ -375,6 +375,16 @@ impl<'a> Emitter<'a> {
             if cursor < edit.span.start {
                 out.append(self.source_range_rope(hir::Span::new(cursor, edit.span.start)));
             }
+            // An edit that rewrites the head of a host owner (a return a
+            // value region turns into its exit) still runs the owner's
+            // prelude first.
+            if let Some(rewrite) = self.compose_rewrites.iter().find(|rewrite| {
+                rewrite.owner.start == edit.span.start
+                    && !self.emitted_compose_rewrites.contains(rewrite.owner)
+            }) {
+                self.emitted_compose_rewrites.claim(rewrite.owner);
+                out.append(self.emit_compose_rewrite(rewrite));
+            }
             match edit.result_return_mark {
                 Some((mark, ResultReturnBoundary::Start)) => {
                     // The prefix ends immediately before the authored value.
@@ -392,6 +402,25 @@ impl<'a> Emitter<'a> {
         }
         if cursor < span.end {
             out.append(self.source_range_rope(hir::Span::new(cursor, span.end)));
+        }
+        out
+    }
+
+    /// Emits the file's root body. Every planned host prelude is written by
+    /// the one owner that consumes it; a prelude left unwritten would leave
+    /// its slots unassigned in the output.
+    pub(in super::super) fn emit_file(&self, root: hir::BodyId) -> Rope<'a> {
+        let out = self.emit_body(root);
+        if let Some(rewrite) = self
+            .compose_rewrites
+            .iter()
+            .find(|rewrite| !self.emitted_compose_rewrites.contains(rewrite.owner))
+        {
+            crate::ice::bug!(
+                "the planned prelude of the host owner at {}..{} was not emitted",
+                rewrite.owner.start,
+                rewrite.owner.end
+            );
         }
         out
     }
@@ -646,14 +675,7 @@ impl<'a> Emitter<'a> {
                 }
                 Statement::Import(import) => self.emit_import(import, &mut out),
                 Statement::Propagate(propagate) => {
-                    let owner = self.span(propagate.owner);
-                    if let Some(rewrite) = self
-                        .compose_rewrites
-                        .iter()
-                        .find(|rewrite| rewrite.owner == SourceSpan::from(owner))
-                    {
-                        out.append(self.emit_compose_rewrite(rewrite));
-                    }
+                    out.append(self.emit_propagate_owner_prelude(propagate));
                     let span = self.span(propagate.node);
                     let mut emitted = if self.is_for_initializer_propagation(propagate.node) {
                         self.emit_for_initializer_payload(propagate)
@@ -680,6 +702,22 @@ impl<'a> Emitter<'a> {
             }
         }
         out
+    }
+
+    /// The values a `try` statement's operand holds run in the statement's
+    /// prelude, before the operand is read into the propagation temporary.
+    pub(super) fn emit_propagate_owner_prelude(&self, propagate: &Propagate) -> Rope<'a> {
+        let owner = SourceSpan::from(self.span(propagate.owner));
+        match self
+            .compose_rewrites
+            .iter()
+            .find(|rewrite| rewrite.owner == owner)
+        {
+            Some(rewrite) if self.emitted_compose_rewrites.claim(rewrite.owner) => {
+                self.emit_compose_rewrite(rewrite)
+            }
+            _ => Rope::new(),
+        }
     }
 
     pub(super) fn statement_expr_requires_lowering(&self, expr: ExprId) -> bool {

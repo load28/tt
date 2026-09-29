@@ -464,6 +464,7 @@ impl<'a> Emitter<'a> {
                 }
                 Statement::Import(import) => self.emit_import(import, &mut out),
                 Statement::Propagate(propagate) => {
+                    out.append(self.emit_propagate_owner_prelude(propagate));
                     let span = self.span(propagate.node);
                     let emitted = if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
                         self.emit_region_propagate(propagate, context.failure, context.exit_label)

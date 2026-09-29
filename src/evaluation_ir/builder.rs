@@ -8,6 +8,10 @@ pub(super) struct EvaluationBuilder<'a> {
     pub(super) regions: Vec<EvalRegion>,
     pub(super) seen: HashSet<OperationId>,
     pub(super) next_value: u32,
+    /// The TypeScript owner of a region nested for its control flow
+    /// (a `try` statement whose failure exits a `result` block) while its
+    /// source still has a host of its own.
+    pub(super) nested_owners: HashMap<RegionId, HostOwner>,
 }
 
 impl EvaluationBuilder<'_> {
@@ -226,9 +230,11 @@ impl EvaluationBuilder<'_> {
         produces_value: bool,
         force_nested: bool,
     ) -> Result<RegionId, EvaluationError> {
+        let mut nested_owner = None;
         let placement = if force_nested {
             let parent = parent.ok_or(EvaluationError::MissingHost { root })?;
             let binding = self.hosts.remove(&root);
+            nested_owner = binding.as_ref().map(|binding| binding.owner);
             let source = binding.as_ref().map(|binding| binding.source);
             let exits = binding
                 .as_ref()
@@ -246,7 +252,11 @@ impl EvaluationBuilder<'_> {
         };
         let result = self.result(produces_value)?;
         let blocks = blocks_for(operation, shape, result)?;
-        self.push_region(operation, Some(root), placement, blocks, result)
+        let region = self.push_region(operation, Some(root), placement, blocks, result)?;
+        if let Some(owner) = nested_owner {
+            self.nested_owners.insert(region, owner);
+        }
+        Ok(region)
     }
 
     fn add_source_edit(&mut self, operation: OperationId) -> Result<RegionId, EvaluationError> {
@@ -279,6 +289,9 @@ impl EvaluationBuilder<'_> {
                                 && argument.end <= binding.owner.span.end
                                 && argument.start <= binding.source.start
                                 && binding.source.end <= argument.end
+                                && (!matches!(root, CoreRoot::Expr(expr)
+                                    if matches!(self.core.exprs[expr.index()], Expr::Decision(_)))
+                                    || delivered_by_exit(&binding.protocol, argument))
                         })
                     })
                 }
@@ -337,6 +350,9 @@ impl EvaluationBuilder<'_> {
 
     fn region_host_owner(&self, mut region: RegionId) -> Option<HostOwner> {
         loop {
+            if let Some(owner) = self.nested_owners.get(&region) {
+                return Some(*owner);
+            }
             match &self.regions[region.0 as usize].placement {
                 RegionPlacement::Host { host_owner, .. } => return Some(*host_owner),
                 RegionPlacement::Nested { parent, .. } => region = *parent,
@@ -381,6 +397,24 @@ impl EvaluationBuilder<'_> {
         });
         Ok(id)
     }
+}
+
+/// Whether a return's argument delivers the value as it is: under authored
+/// wrappers, or as an interpolation of a returned template, which lowers
+/// its interpolations itself. A value that a call, an operator, or any
+/// other frame inside the argument consumes first is an ordinary value of
+/// the return statement's owner, evaluated in that owner's prelude.
+fn delivered_by_exit(protocol: &HostEvaluationProtocol, argument: SourceSpan) -> bool {
+    protocol
+        .steps()
+        .iter()
+        .filter(|step| argument.start <= step.parent.start && step.parent.end <= argument.end)
+        .all(|step| {
+            matches!(
+                step.operation,
+                HostEvaluationOperation::Eager(EagerPosition::TemplateInterpolation(_))
+            )
+        })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

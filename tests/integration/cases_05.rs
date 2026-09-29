@@ -1206,3 +1206,97 @@ console.log(match (v) { __proto__(x) => x, Other => 0 }, match (w) { A(__proto__
         ]
     );
 }
+
+#[test]
+fn runtime_a_try_statement_in_a_result_block_lowers_the_values_of_its_operand() {
+    require_toolchain!();
+    // TASK-549: the operand's values and its callee capture run in the
+    // statement's prelude inside a `result` block, as they do in a function.
+    let out = run(r#"
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const trace: string[] = [];
+let r = (n: number): R => { trace.push("r" + n); return n > 15 ? { kind: "Ok", value: n } : { kind: "Err", error: "small" + n }; };
+function swap(n: number): number {
+  trace.push("swap");
+  const first = r;
+  r = (m) => { trace.push("late"); return first(m); };
+  return n;
+}
+const id = <T,>(x: T) => x;
+const g = (x: R): R => x;
+function viaConst(v: number) { return result { const x = try r(match (v) { 1 => swap(10), _ => swap(20) }); return x; }; }
+function viaLet(v: number) { return result { let x = try r(match (v) { 1 => 10, _ => 20 }); x += 1; return x; }; }
+function propagateOnly(v: number) { return result { try r(match (v) { 1 => 10, _ => 20 }); return 0; }; }
+function viaPipeline(v: number) { return result { const x = try (match (v) { 1 => r(10), _ => r(20) } |> id); return x; }; }
+function viaCall(v: number) { return result { const x = try id(match (v) { 1 => r(10), _ => r(20) }); return x; }; }
+function viaResult(v: number) {
+  return result { const x = try r(result { const y = try r(v); return y; } |> g |> (q => q.kind === "Ok" ? q.value : 0)); return x; };
+}
+const base = r;
+console.log(JSON.stringify([viaConst(1), viaConst(2)]), JSON.stringify(trace));
+r = base;
+console.log(JSON.stringify([viaLet(1), viaLet(2), propagateOnly(1), propagateOnly(2)]));
+console.log(JSON.stringify([viaPipeline(1), viaPipeline(2), viaCall(1), viaCall(2), viaResult(20), viaResult(1)]));
+"#);
+    assert_eq!(
+        out,
+        [
+            r#"[{"kind":"Err","error":"small10"},{"kind":"Ok","value":20}] ["swap","r10","swap","late","r20"]"#,
+            r#"[{"kind":"Err","error":"small10"},{"kind":"Ok","value":21},{"kind":"Err","error":"small10"},{"kind":"Ok","value":0}]"#,
+            r#"[{"kind":"Err","error":"small10"},{"kind":"Ok","value":20},{"kind":"Err","error":"small10"},{"kind":"Ok","value":20},{"kind":"Ok","value":20},{"kind":"Err","error":"small0"}]"#,
+        ]
+    );
+}
+
+#[test]
+fn runtime_a_value_inside_a_region_return_argument_runs_in_the_return_s_prelude() {
+    require_toolchain!();
+    // TASK-549: a value that a call or an operator consumes inside the
+    // argument of a return leaving a `result` block or a match block arm
+    // is a value of the return statement, lowered before it with its
+    // callee captured first; a returned template keeps its one exit.
+    let out = run(r#"
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const trace: string[] = [];
+function ok(n: number): R { return { kind: "Ok", value: n }; }
+let s = (n: number): string => { trace.push("s" + n); return "s" + n; };
+function swap(n: number): number {
+  trace.push("swap");
+  const first = s;
+  s = (m) => { trace.push("late"); return first(m); };
+  return n;
+}
+function inResult(v: number) {
+  return result {
+    const q = try ok(1);
+    if (v > 5) return s(match (v) { 6 => swap(6), _ => 2 }) + q;
+    return [match (v) { 1 => "a", _ => "b" }, match (q) { 1 => "c", _ => "d" }].join("") + q;
+  };
+}
+function inArm(v: number) {
+  const x = match (v) {
+    1 => { const q = 1; if (q > 0) return s(match (v) { 1 => swap(1), _ => 2 }) + q; return "n"; },
+    2 => { return `${match (v) { 2 => "t", _ => "u" }}-`; },
+    _ => "x",
+  };
+  return x;
+}
+function template(v: number) {
+  return result { const q = try ok(1); return `${match (v) { 1 => "a", _ => "b" }}-${q}`; };
+}
+const base = s;
+console.log(JSON.stringify([inResult(6), inResult(1)]), JSON.stringify(trace));
+s = base;
+trace.length = 0;
+console.log(JSON.stringify([inArm(1), inArm(2), inArm(3)]), JSON.stringify(trace));
+console.log(JSON.stringify([template(1), template(2)]));
+"#);
+    assert_eq!(
+        out,
+        [
+            r#"[{"kind":"Ok","value":"s61"},{"kind":"Ok","value":"ac1"}] ["swap","s6"]"#,
+            r#"["s11","t-","x"] ["swap","s1"]"#,
+            r#"[{"kind":"Ok","value":"a-1"},{"kind":"Ok","value":"b-1"}]"#,
+        ]
+    );
+}
