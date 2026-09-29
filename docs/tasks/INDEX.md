@@ -541,6 +541,8 @@
 | TASK-531 | Await the expected republish in the sidecar re-arm test | Complete | 2026-09-29 | 2026-09-29 | [TASK-531](./TASK-531-sidecar-rearm-test-wait.md) |
 | TASK-532 | Show TypeScript's declarations in a tt file's outline | Complete | 2026-09-29 | 2026-09-29 | [TASK-532](./TASK-532-typescript-outline.md) |
 | TASK-534 | Leave already-bound fields out of payload completion | Complete | 2026-09-29 | 2026-09-29 | [TASK-534](./TASK-534-bound-payload-fields.md) |
+| TASK-535 | Find references and rename across every open project | Complete | 2026-09-29 | 2026-09-29 | [TASK-535](./TASK-535-cross-project-references.md) |
+| TASK-536 | Share unsaved buffers with every open project | Complete | 2026-09-29 | 2026-09-29 | [TASK-536](./TASK-536-shared-document-overlays.md) |
 | TASK-537 | Hover a pattern binding by its type and a tt name with its JSDoc | Complete | 2026-09-29 | 2026-09-29 | [TASK-537](./TASK-537-tt-name-hover.md) |
 | TASK-538 | Keep a cursor's side where lowering splits touching source text | Complete | 2026-09-29 | 2026-09-29 | [TASK-538](./TASK-538-cursor-side-at-split-chunks.md) |
 | TASK-540 | Report an unreadable root configuration as TS5083 and recover | Complete | 2026-09-29 | 2026-09-29 | [TASK-540](./TASK-540-unreadable-root-configuration.md) |
