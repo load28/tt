@@ -437,9 +437,11 @@ const area = match (shape) {
     assert!(out.contains("switch ($tt_m.kind)"));
     let compact = compact(&out);
     assert!(compact.contains(
-        "case \"Circle\": { const { radius } = $tt_m; $tt_v0$area = 3.14 * radius * radius; break; }"
+        "case \"Circle\": { const { radius } = $tt_m; const $tt_a0 = { value: 3.14 * radius * radius }; $tt_v0$area = $tt_a0.value; break; }"
     ));
-    assert!(compact.contains("case \"Point\": { $tt_v0$area = 0; break; }"));
+    assert!(compact.contains(
+        "case \"Point\": { const $tt_a1 = { value: 0 }; $tt_v0$area = $tt_a1.value; break; }"
+    ));
     // The output is plain TypeScript: a runtime guard, no type-level tricks.
     assert!(compact.contains(
         "default: { throw new Error(\"tt match: unexpected case \" + $tt_show($tt_m)); }"
@@ -450,7 +452,10 @@ const area = match (shape) {
 #[test]
 fn match_wildcard_becomes_default() {
     let out = ok("const r = match (x) { A => 1, _ => 0 };");
-    assert!(compact(&out).contains("default: { $tt_v0$r = 0; break; }"));
+    assert!(
+        compact(&out)
+            .contains("default: { const $tt_a1 = { value: 0 }; $tt_v0$r = $tt_a1.value; break; }")
+    );
     assert!(!out.contains("never"));
 }
 
@@ -459,7 +464,10 @@ fn whole_initializer_match_uses_a_statement_slot_without_an_iife() {
     let out = ok("const r = match (x) { A => 1, _ => 0 };\n");
     assert!(!out.contains("(() =>"), "{out}");
     assert!(out.contains("let $tt_v0$r: number;"), "{out}");
-    assert!(out.contains("$tt_v0$r = 1;"), "{out}");
+    assert!(
+        out.contains("const $tt_a0 = { value: 1 };\n      $tt_v0$r = $tt_a0.value;"),
+        "{out}"
+    );
     assert!(out.contains("const r = $tt_v0$r;"), "{out}");
 }
 

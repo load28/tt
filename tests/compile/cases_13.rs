@@ -81,11 +81,11 @@ fn a_comma_inside_type_arguments_stays_inside_its_construct() {
     for (source, expected) in [
         (
             "export const r = match (x) { 1 => f<A, B>(x), _ => 2 };\n",
-            "$tt_v0 = f<A, B>(x);",
+            "{ value: f<A, B>(x) };",
         ),
         (
             "export const r = match (x) { 1 => new Map<A, B>(), _ => 2 };\n",
-            "$tt_v0 = new Map<A, B>();",
+            "{ value: new Map<A, B>() };",
         ),
         (
             "export const r = match (x) { 1 if f<A, Map<A, B>>(x) => f<B, A>(x), _ => 2 };\n",

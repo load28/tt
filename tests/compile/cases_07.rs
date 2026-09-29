@@ -23,12 +23,15 @@ fn statement_bodied_result_returns_a_propagated_value() {
     let out = ok("const value = result { return try read(); };\n");
     assert!(out.contains("const $tt_t0 = read();"), "{out}");
     assert!(
-        compact(&out).contains("if (!(\"value\" in $tt_t0)) { $tt_v0$value = $tt_t0; break $tt_v0$value; }"),
+        compact(&out).contains(
+            "if (!(\"value\" in $tt_t0)) { const $tt_a0 = { value: $tt_t0 }; $tt_v0$value = $tt_a0.value; break $tt_v0$value; }"
+        ),
         "{out}"
     );
     assert!(
-        compact(&out)
-            .contains("$tt_v0$value = { kind: \"Ok\" as const, value: $tt_t0.value }; break $tt_v0$value;"),
+        compact(&out).contains(
+            "const $tt_a1 = { value: { kind: \"Ok\" as const, value: $tt_t0.value } }; $tt_v0$value = $tt_a1.value; break $tt_v0$value;"
+        ),
         "{out}"
     );
 }
@@ -38,12 +41,16 @@ fn statement_bodied_result_declaration_try_stays_in_the_result_scope() {
     let out = ok("const value = result { const item = try read(); return item; };\n");
     assert!(out.contains("const $tt_t0 = read();"), "{out}");
     assert!(
-        compact(&out).contains("if (!(\"value\" in $tt_t0)) { $tt_v0$value = $tt_t0; break $tt_v0$value; }"),
+        compact(&out).contains(
+            "if (!(\"value\" in $tt_t0)) { const $tt_a0 = { value: $tt_t0 }; $tt_v0$value = $tt_a0.value; break $tt_v0$value; }"
+        ),
         "{out}"
     );
     assert!(out.contains("const item = $tt_t0.value;"), "{out}");
     assert!(
-        compact(&out).contains("$tt_v0$value = { kind: \"Ok\" as const, value: item }; break $tt_v0$value;"),
+        compact(&out).contains(
+            "const $tt_a1 = { value: { kind: \"Ok\" as const, value: item } }; $tt_v0$value = $tt_a1.value; break $tt_v0$value;"
+        ),
         "{out}"
     );
 }
@@ -282,9 +289,15 @@ const label = match (dir) {
     assert!(out.contains("switch ($tt_m) {"));
     assert!(!out.contains("$tt_m.kind"));
     let compact = compact(&out);
-    assert!(compact.contains(r#"case "north": { $tt_v0$label = "N"; break; }"#));
-    assert!(compact.contains(r#"case "south": { $tt_v0$label = "S"; break; }"#));
-    assert!(compact.contains(r#"default: { $tt_v0$label = "?"; break; }"#));
+    assert!(compact.contains(
+        r#"case "north": { const $tt_a0 = { value: "N" }; $tt_v0$label = $tt_a0.value; break; }"#
+    ));
+    assert!(compact.contains(
+        r#"case "south": { const $tt_a1 = { value: "S" }; $tt_v0$label = $tt_a1.value; break; }"#
+    ));
+    assert!(compact.contains(
+        r#"default: { const $tt_a2 = { value: "?" }; $tt_v0$label = $tt_a2.value; break; }"#
+    ));
 }
 
 #[test]
@@ -299,9 +312,15 @@ const message = match (status) {
 "#);
     assert!(out.contains("switch ($tt_m) {"));
     let compact = compact(&out);
-    assert!(compact.contains(r#"case 200: { $tt_v0$message = "ok"; break; }"#));
-    assert!(compact.contains(r#"case 404: { $tt_v0$message = "not found"; break; }"#));
-    assert!(compact.contains(r#"case 500: { $tt_v0$message = "error"; break; }"#));
+    assert!(compact.contains(
+        r#"case 200: { const $tt_a0 = { value: "ok" }; $tt_v0$message = $tt_a0.value; break; }"#
+    ));
+    assert!(compact.contains(
+        r#"case 404: { const $tt_a1 = { value: "not found" }; $tt_v0$message = $tt_a1.value; break; }"#
+    ));
+    assert!(compact.contains(
+        r#"case 500: { const $tt_a2 = { value: "error" }; $tt_v0$message = $tt_a2.value; break; }"#
+    ));
 }
 
 #[test]
@@ -309,8 +328,8 @@ fn literal_boolean_match_emits_true_and_false_cases() {
     let out = ok("const v = match (flag) { true => 1, false => 0 };");
     assert!(out.contains("switch ($tt_m) {"));
     let compact = compact(&out);
-    assert!(compact.contains("case true: { $tt_v0$v = 1; break; }"));
-    assert!(compact.contains("case false: { $tt_v0$v = 0; break; }"));
+    assert!(compact.contains("case true: { const $tt_a0 = { value: 1 }; $tt_v0$v = $tt_a0.value; break; }"));
+    assert!(compact.contains("case false: { const $tt_a1 = { value: 0 }; $tt_v0$v = $tt_a1.value; break; }"));
 }
 
 #[test]
@@ -323,10 +342,14 @@ const kind = match (code) {
 };
 "#);
     let compact = compact(&out);
-    assert!(compact.contains(r#"case 200: case 201: case 204: { $tt_v0$kind = "success"; break; }"#));
-    assert!(compact.contains(r#"case 400: case 404: { $tt_v0$kind = "client error"; break; }"#));
+    assert!(compact.contains(
+        r#"case 200: case 201: case 204: { const $tt_a0 = { value: "success" }; $tt_v0$kind = $tt_a0.value; break; }"#
+    ));
+    assert!(compact.contains(
+        r#"case 400: case 404: { const $tt_a1 = { value: "client error" }; $tt_v0$kind = $tt_a1.value; break; }"#
+    ));
     // one body per arm, never duplicated per alternative
-    assert_eq!(out.matches(r#"$tt_v0$kind = "success""#).count(), 1);
+    assert_eq!(out.matches(r#"{ value: "success" }"#).count(), 1);
 }
 
 #[test]
@@ -361,7 +384,9 @@ fn literal_match_block_bodies_break_out_of_the_switch() {
     // target, so the rewritten `return` leaves through it and the region
     // needs no label of its own (TASK-160 §6).
     assert!(
-        compact(&out).contains(r#"case "a": { $tt_v0$v = 1; break; }"#),
+        compact(&out).contains(
+            r#"case "a": { const $tt_a0 = { value: 1 }; $tt_v0$v = $tt_a0.value; break; }"#
+        ),
         "{out}"
     );
     assert!(!out.contains("$tt_y_"), "{out}");
@@ -394,8 +419,12 @@ fn literal_match_with_a_guard_becomes_an_if_chain() {
     let out = ok("const v = match (code) { 200 if ok => 1, 200 => 2, _ => 3 };");
     assert!(!out.contains("switch ("));
     let compact = compact(&out);
-    assert!(compact.contains("if ($tt_m === 200) { if (ok) { $tt_v0$v = 1; break; } }"));
-    assert!(compact.contains("if ($tt_m === 200) { $tt_v0$v = 2; break; }"));
+    assert!(compact.contains(
+        "if ($tt_m === 200) { if (ok) { const $tt_a0 = { value: 1 }; $tt_v0$v = $tt_a0.value; break; } }"
+    ));
+    assert!(compact.contains(
+        "if ($tt_m === 200) { const $tt_a1 = { value: 2 }; $tt_v0$v = $tt_a1.value; break; }"
+    ));
 }
 
 #[test]
@@ -507,7 +536,7 @@ const v = match (a) {
 fn direct_return_literal_match_keeps_await_in_the_host_function() {
     let out = ok(r#"async function f() { return match (s) { "a" => await g(), _ => null }; }"#);
     assert!(!out.contains("async () =>"), "{out}");
-    assert!(out.contains("$tt_v0 = await g();"), "{out}");
+    assert!(out.contains("const $tt_a0 = { value: await g() };"), "{out}");
     assert!(out.contains("return $tt_v0;"), "{out}");
 }
 

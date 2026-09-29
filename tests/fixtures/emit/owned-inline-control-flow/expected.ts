@@ -34,12 +34,14 @@ export function pick(o: Opt): number {
           const $tt_t0 = o;
           if ($tt_t0.kind === "Some") {
             const { value: v2 } = $tt_t0;
-            const $tt_a0 = { value: v2 }; $tt_v0 = $tt_a0.value; break;
+            const $tt_a0 = { value: v2 };
+            $tt_v0 = $tt_a0.value; break;
           }
         } const $tt_a1 = { value: value }; $tt_v0 = $tt_a1.value; break;
       }
       case "None": {
-        const $tt_a2 = { value: 0 }; $tt_v0 = $tt_a2.value;
+        const $tt_a2 = { value: 0 };
+        $tt_v0 = $tt_a2.value;
         break;
       }
       default: {
@@ -60,13 +62,16 @@ export function read(o: Opt) {
     let $tt_v2: number;
     const $tt_t1 = ({ kind: "Ok" as const, value: pick(o) });
     if (!("value" in $tt_t1)) {
-      const $tt_a3 = { value: $tt_t1 }; $tt_v1 = $tt_a3.value;
+      const $tt_a3 = { value: $tt_t1 };
+      $tt_v1 = $tt_a3.value;
       break $tt_v1;
     }
-    const $tt_a4 = { value: $tt_t1.value }; $tt_v2 = $tt_a4.value;
+    const $tt_a4 = { value: $tt_t1.value };
+    $tt_v2 = $tt_a4.value;
     n = $tt_v2;
     {
-      const $tt_a5 = { value: { kind: "Ok" as const, value: n } }; $tt_v1 = $tt_a5.value;
+      const $tt_a5 = { value: { kind: "Ok" as const, value: n } };
+      $tt_v1 = $tt_a5.value;
       break $tt_v1;
     }
   }
@@ -80,11 +85,13 @@ export const strings = [1].map(x => {
     switch ($tt_m.kind) {
       case "Some": {
         const { value } = $tt_m;
-        const $tt_a6 = { value: value }; $tt_v3 = $tt_a6.value;
+        const $tt_a6 = { value: value };
+        $tt_v3 = $tt_a6.value;
         break;
       }
       case "None": {
-        const $tt_a7 = { value: 0 }; $tt_v3 = $tt_a7.value;
+        const $tt_a7 = { value: 0 };
+        $tt_v3 = $tt_a7.value;
         break;
       }
       default: {
@@ -100,11 +107,13 @@ let $tt_v5: number[];
   switch ($tt_m.kind) {
     case "Some": {
       const { value } = $tt_m;
-      const $tt_a8 = { value: [value] }; $tt_v5 = $tt_a8.value;
+      const $tt_a8 = { value: [value] };
+      $tt_v5 = $tt_a8.value;
       break;
     }
     case "None": {
-      const $tt_a9 = { value: [] }; $tt_v5 = $tt_a9.value;
+      const $tt_a9 = { value: [] };
+      $tt_v5 = $tt_a9.value;
       break;
     }
     default: {

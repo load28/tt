@@ -115,12 +115,14 @@ const step = match (dir, speed) {
     assert!(out.contains("const $tt_m1 = speed;"), "{out}");
     assert!(
         compact(&out).contains(
-            "if ($tt_m0.kind === \"North\" && $tt_m1.kind === \"Fast\") { $tt_v0$step = 2; break; }"
+            "if ($tt_m0.kind === \"North\" && $tt_m1.kind === \"Fast\") { const $tt_a0 = { value: 2 }; $tt_v0$step = $tt_a0.value; break; }"
         ),
         "{out}"
     );
     assert!(
-        compact(&out).contains("if ($tt_m0.kind === \"South\") { $tt_v0$step = -1; break; }"),
+        compact(&out).contains(
+            "if ($tt_m0.kind === \"South\") { const $tt_a2 = { value: -1 }; $tt_v0$step = $tt_a2.value; break; }"
+        ),
         "{out}"
     );
     assert!(out.contains(r#""[" + $tt_show($tt_m0) + "," + $tt_show($tt_m1) + "]""#), "{out}");
@@ -136,7 +138,7 @@ const r = match (a, b) {
 "#);
     assert!(
         compact(&out).contains(
-            "{ const { value: x } = $tt_m0; const { value: y } = $tt_m1; $tt_v0$r = x + y; break; }"
+            "{ const { value: x } = $tt_m0; const { value: y } = $tt_m1; const $tt_a0 = { value: x + y }; $tt_v0$r = $tt_a0.value; break; }"
         ),
         "{out}"
     );
@@ -189,7 +191,7 @@ const step = match (d, s) {
     assert!(out.contains("$tt_m0"), "{out}");
     assert!(
         compact(&out).contains(
-            "if (($tt_m0.kind === \"North\" || $tt_m0.kind === \"South\")) { $tt_v0$step = 1; break; }"
+            "if (($tt_m0.kind === \"North\" || $tt_m0.kind === \"South\")) { const $tt_a0 = { value: 1 }; $tt_v0$step = $tt_a0.value; break; }"
         ),
         "{out}"
     );
@@ -222,7 +224,10 @@ const r = match (a, b) {
   _ => 0,
 };
 "#);
-    assert!(compact(&out).contains("$tt_v0$r = 0; break;"), "{out}");
+    assert!(
+        compact(&out).contains("const $tt_a1 = { value: 0 }; $tt_v0$r = $tt_a1.value; break;"),
+        "{out}"
+    );
 
     let e = err("const r = match (a, b) {\n  _ => 0,\n  (A, B) => 1,\n};\n");
     assert!(e.message.contains("must be the last arm"), "{}", e.message);
@@ -417,7 +422,10 @@ const r = match (a, b) {
     // The arm's body always leaves, through the region's own
     // `do { … } while (false)` — so neither the chain's fall-through label
     // nor a second exit label around the region is written.
-    assert!(out.contains("$tt_v0$r = 1; break;"), "{out}");
+    assert!(
+        out.contains("const $tt_a0 = { value: 1 }; $tt_v0$r = $tt_a0.value; break;"),
+        "{out}"
+    );
     assert!(!out.contains("$tt_b"), "{out}");
     assert!(!out.contains("$tt_y_"), "{out}");
 }
@@ -458,12 +466,12 @@ const n = match (r) {
 };
 "#);
     assert!(
-        compact(&out).contains("if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"Some\") { const { value: v } = $tt_m.value; $tt_v0$n = v; break; }"),
+        compact(&out).contains("if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"Some\") { const { value: v } = $tt_m.value; const $tt_a0 = { value: v }; $tt_v0$n = $tt_a0.value; break; }"),
         "{out}"
     );
     assert!(
         compact(&out).contains(
-            "if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"None\") { $tt_v0$n = 0; break; }"
+            "if ($tt_m.kind === \"Ok\" && $tt_m.value.kind === \"None\") { const $tt_a1 = { value: 0 }; $tt_v0$n = $tt_a1.value; break; }"
         ),
         "{out}"
     );
@@ -496,7 +504,7 @@ const n = match (r) {
 "#);
     assert!(
         compact(&out).contains(
-            "{ const { left } = $tt_m; const { value } = $tt_m.right; $tt_v0$n = left + value; break; }"
+            "{ const { left } = $tt_m; const { value } = $tt_m.right; const $tt_a0 = { value: left + value }; $tt_v0$n = $tt_a0.value; break; }"
         ),
         "{out}"
     );
@@ -599,7 +607,8 @@ const n = match (r) {
 };
 "#);
     assert!(
-        compact(&out).contains("if (v > 0) { $tt_v0$n = v; break; }"),
+        compact(&out)
+            .contains("if (v > 0) { const $tt_a0 = { value: v }; $tt_v0$n = $tt_a0.value; break; }"),
         "{out}"
     );
 }

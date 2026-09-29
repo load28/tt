@@ -674,7 +674,7 @@ fn a_capture_never_escapes_a_generated_conditional_region() {
     let out = ok(source);
     assert!(!out.contains("$tt_expr"), "{out}");
     assert!(out.contains("if ($tt_v2)"), "{out}");
-    assert!(out.contains("$tt_v3 = $tt_v1($tt_v0);"), "{out}");
+    assert!(out.contains("const $tt_a0 = { value: $tt_v1($tt_v0) };"), "{out}");
 }
 
 #[test]
@@ -726,7 +726,14 @@ fn a_conditional_operation_lowers_as_one_region() {
         "declare const flag: boolean;\nexport const a = flag && match (1) { 1 => 1, _ => 0 };\n",
     );
     assert!(out.contains("if ($tt_v1) {"), "{out}");
-    assert!(out.contains("$tt_v2 = $tt_v1;"), "{out}");
+    assert!(
+        compact(&out).contains("const $tt_a2 = { value: $tt_v0 }; $tt_v2 = $tt_a2.value;"),
+        "{out}"
+    );
+    assert!(
+        compact(&out).contains("const $tt_a3 = { value: $tt_v1 }; $tt_v2 = $tt_a3.value;"),
+        "{out}"
+    );
     assert!(out.contains("export const a = $tt_v2;"), "{out}");
     assert!(!out.contains("$tt_expr"), "{out}");
     assert!(!out.contains("&&"), "{out}");
@@ -738,7 +745,7 @@ fn a_ternary_with_one_tt_branch_relocates_the_other_branch() {
         "declare const flag: boolean;\nexport const pick = flag ? match (1) { 1 => 1, _ => 0 } : 9;\n",
     );
     assert!(out.contains("} else {"), "{out}");
-    assert!(out.contains("= 9;"), "{out}");
+    assert!(out.contains("{ value: 9 };"), "{out}");
     assert!(!out.contains("$tt_expr"), "{out}");
     assert!(!out.contains("?"), "{out}");
 }
@@ -751,7 +758,7 @@ fn an_optional_call_evaluates_arguments_only_past_its_check() {
     let check = out.find("!= null) {").expect("nullish check");
     let prior = out.find("(pre())").expect("prior argument capture");
     assert!(check < prior, "{out}");
-    assert!(out.contains("= undefined;"), "{out}");
+    assert!(out.contains("{ value: undefined };"), "{out}");
     assert!(!out.contains("?."), "{out}");
 }
 

@@ -23,11 +23,13 @@ if (x) {
     const $tt_m = x;
     switch ($tt_m.kind) {
       case "A": {
-        const $tt_a0 = { value: 1 }; $tt_v0 = $tt_a0.value;
+        const $tt_a0 = { value: 1 };
+        $tt_v0 = $tt_a0.value;
         break;
       }
       case "B": {
-        const $tt_a1 = { value: 2 }; $tt_v0 = $tt_a1.value;
+        const $tt_a1 = { value: 2 };
+        $tt_v0 = $tt_a1.value;
         break;
       }
       default: {

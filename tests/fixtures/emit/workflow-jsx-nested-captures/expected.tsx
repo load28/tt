@@ -28,11 +28,13 @@ let $tt_v0$view;
         let $tt_subject_2;
         
         return <p>{Number(($tt_subject_1 = item.quantity, ($tt_subject_1 === 0) ? 0 : item.quantity))+Number(($tt_subject_2 = item.price, ($tt_subject_2 === 0) ? 0 : item.price))}</p>;
-      })}</p>) }; $tt_v0$view = $tt_a0.value;
+      })}</p>) };
+      $tt_v0$view = $tt_a0.value;
       break;
     }
     case false: {
-      const $tt_a1 = { value: <p>Empty</p> }; $tt_v0$view = $tt_a1.value;
+      const $tt_a1 = { value: <p>Empty</p> };
+      $tt_v0$view = $tt_a1.value;
       break;
     }
     default: {

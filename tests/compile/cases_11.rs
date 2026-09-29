@@ -7,8 +7,14 @@ fn a_match_under_a_conditional_operation_in_a_guard_keeps_the_short_circuit() {
     let out = ok("variant S { A(v: number), B(w: number), C }\ndeclare const s: S;\nconst x = match (s) { A(v) if v > 0 && match (s) { B(w) => w > 0, _ => false } => 1, _ => 0 };\n");
     assert!(out.contains("const $tt_v2 = (v > 0);"), "{out}");
     assert!(out.contains("if ($tt_v2) {"), "{out}");
-    assert!(out.contains("$tt_v3 = $tt_v1;"), "{out}");
-    assert!(out.contains("$tt_v3 = $tt_v2;"), "{out}");
+    assert!(
+        compact(&out).contains("const $tt_a2 = { value: $tt_v1 }; $tt_v3 = $tt_a2.value;"),
+        "{out}"
+    );
+    assert!(
+        compact(&out).contains("const $tt_a3 = { value: $tt_v2 }; $tt_v3 = $tt_a3.value;"),
+        "{out}"
+    );
     assert!(out.contains("if ($tt_v3) {"), "{out}");
 }
 
@@ -24,16 +30,29 @@ fn a_match_inside_an_arm_body_call_keeps_argument_order() {
     let effect = out.find("= (eff());").expect("eff is captured first");
     let inner = out.find("case \"B\"").expect("the inner match follows");
     assert!(effect < inner, "{out}");
-    assert!(out.contains("$tt_v0$x = $tt_v2$x($tt_v3$x, $tt_v1$x);"), "{out}");
+    assert!(
+        out.contains("const $tt_a0 = { value: $tt_v2$x($tt_v3$x, $tt_v1$x) };"),
+        "{out}"
+    );
 }
 
 #[test]
 fn a_match_under_a_conditional_operation_in_an_arm_body_is_a_region() {
     let out = ok("variant S { A(v: number), B(w: number), C }\ndeclare const s: S;\ndeclare function eff(): number;\nconst y = match (s) { A(v) => eff() > 0 && match (s) { B(w) => w > 0, _ => false }, _ => false };\n");
     assert!(out.contains("const $tt_v2$y = (eff() > 0);\n      if ($tt_v2$y) {"), "{out}");
-    assert!(out.contains("$tt_v3$y = $tt_v1$y;"), "{out}");
-    assert!(out.contains("$tt_v3$y = $tt_v2$y;"), "{out}");
-    assert!(out.contains("$tt_v0$y = $tt_v3$y;"), "{out}");
+    let compact = compact(&out);
+    assert!(
+        compact.contains("const $tt_a2 = { value: $tt_v1$y }; $tt_v3$y = $tt_a2.value;"),
+        "{out}"
+    );
+    assert!(
+        compact.contains("const $tt_a3 = { value: $tt_v2$y }; $tt_v3$y = $tt_a3.value;"),
+        "{out}"
+    );
+    assert!(
+        compact.contains("const $tt_a4 = { value: $tt_v3$y }; $tt_v0$y = $tt_a4.value;"),
+        "{out}"
+    );
 }
 
 #[test]
@@ -180,7 +199,7 @@ fn generated_names_are_allocated_around_the_files_identifiers() {
     );
     assert!(out.contains("x => $tt_ap_1(x, String)"), "{out}");
     assert!(out.contains("const $tt_m_1 = xs[0];"), "{out}");
-    assert!(out.contains("= $tt_m;"), "{out}");
+    assert!(out.contains("{ value: $tt_m };"), "{out}");
 }
 
 #[test]

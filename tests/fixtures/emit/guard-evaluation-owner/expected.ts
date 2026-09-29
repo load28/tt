@@ -14,7 +14,8 @@ export function guarded(left: boolean, right: boolean) {
               const value = left; const $tt_a0 = { value: value }; $tt_v1 = $tt_a0.value; break;
             }
             default: {
-              const $tt_a1 = { value: false }; $tt_v1 = $tt_a1.value;
+              const $tt_a1 = { value: false };
+              $tt_v1 = $tt_a1.value;
               break;
             }
           }
@@ -28,21 +29,26 @@ export function guarded(left: boolean, right: boolean) {
                 const value = right; const $tt_a2 = { value: value }; $tt_v2 = $tt_a2.value; break;
               }
               default: {
-                const $tt_a3 = { value: false }; $tt_v2 = $tt_a3.value;
+                const $tt_a3 = { value: false };
+                $tt_v2 = $tt_a3.value;
                 break;
               }
             }
           }
-          const $tt_a4 = { value: $tt_v2 }; $tt_v3 = $tt_a4.value;
+          const $tt_a4 = { value: $tt_v2 };
+          $tt_v3 = $tt_a4.value;
         } else {
-          const $tt_a5 = { value: $tt_v1 }; $tt_v3 = $tt_a5.value;
+          const $tt_a5 = { value: $tt_v1 };
+          $tt_v3 = $tt_a5.value;
         }
         if ($tt_v3) {
-          const $tt_a6 = { value: true }; $tt_v0 = $tt_a6.value;
+          const $tt_a6 = { value: true };
+          $tt_v0 = $tt_a6.value;
           break;
         }
       }
-      const $tt_a7 = { value: false }; $tt_v0 = $tt_a7.value;
+      const $tt_a7 = { value: false };
+      $tt_v0 = $tt_a7.value;
       break;
     } while (false);
   }

@@ -73,6 +73,7 @@ pub(crate) fn refine(
     };
     if let Some(writes) = writes {
         let mut occupied = crate::generated_names::source_names(&emit.code, source_kind);
+        let newline = crate::line_ending(&emit.code);
         for (index, write) in writes.into_iter().enumerate() {
             let local = crate::generated_names::allocate(&format!("$tt_a{index}"), &mut occupied)
                 .unwrap_or_else(|| crate::ice::bug!("no free generated name remains for a value"));
@@ -82,10 +83,19 @@ pub(crate) fn refine(
                 end: write.value.0,
                 text: format!("const {local} = {{ value: "),
             });
+            // The write keeps the layout it was given: on a line of its own,
+            // the assignment follows on the next line at its indentation.
+            let line = crate::lines::line_start_before(&emit.code, write.target);
+            let indent = &emit.code[line..write.target];
+            let separator = if indent.bytes().all(|byte| matches!(byte, b' ' | b'\t')) {
+                format!("{newline}{indent}")
+            } else {
+                " ".to_owned()
+            };
             edits.push(Edit {
                 start: write.value.1,
                 end: write.value.1,
-                text: format!(" }}; {} = {local}.value", write.storage),
+                text: format!(" }};{separator}{} = {local}.value", write.storage),
             });
             emit.generated_names.insert(local);
         }

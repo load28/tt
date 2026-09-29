@@ -23,11 +23,13 @@ let $tt_v0$view;
   const $tt_m = ready;
   switch ($tt_m) {
     case true: {
-      const $tt_a0 = { value: <p>{items.map(item=><p>{Number(item.quantity)+Number(item.price)}</p>)}</p> }; $tt_v0$view = $tt_a0.value;
+      const $tt_a0 = { value: <p>{items.map(item=><p>{Number(item.quantity)+Number(item.price)}</p>)}</p> };
+      $tt_v0$view = $tt_a0.value;
       break;
     }
     case false: {
-      const $tt_a1 = { value: <p>Empty</p> }; $tt_v0$view = $tt_a1.value;
+      const $tt_a1 = { value: <p>Empty</p> };
+      $tt_v0$view = $tt_a1.value;
       break;
     }
     default: {

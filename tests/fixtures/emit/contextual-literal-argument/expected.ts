@@ -57,11 +57,13 @@ const $tt_v5 = (consume);
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      const $tt_a0 = { value: $tt_v5({ kind: "item", run: x => x + value }) }; $tt_v3 = $tt_a0.value;
+      const $tt_a0 = { value: $tt_v5({ kind: "item", run: x => x + value }) };
+      $tt_v3 = $tt_a0.value;
       break;
     }
     case "Empty": {
-      const $tt_a1 = { value: $tt_v5({ kind: "item", run: x => x }) }; $tt_v3 = $tt_a1.value;
+      const $tt_a1 = { value: $tt_v5({ kind: "item", run: x => x }) };
+      $tt_v3 = $tt_a1.value;
       break;
     }
     default: {
