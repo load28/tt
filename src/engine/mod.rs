@@ -58,8 +58,8 @@ pub use declarations::{
 };
 pub use hints::{TtHint, TtHintKind, tt_hints};
 pub use language::{
-    CompletionAnswer, CompletionDetail, CompletionItem, HoverInfo, Location, Position,
-    RENAME_PLACEHOLDER, Range, Reference, RenameEdit, ServiceDiagnostic, ServiceRelated,
+    CompletionAnswer, CompletionDetail, CompletionItem, DocumentSymbol, HoverInfo, Location,
+    Position, RENAME_PLACEHOLDER, Range, Reference, RenameEdit, ServiceDiagnostic, ServiceRelated,
     ServiceSeverity, ServiceTag, Signature, SignatureHelp, SignatureParameter, TextEdit,
 };
 pub use names::{TtSymbol, TtSymbolKind, tt_symbol_at};

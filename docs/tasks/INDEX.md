@@ -532,7 +532,8 @@
 | TASK-529 | Answer a document opened through a symlink under its own URI | Complete | 2026-09-29 | 2026-09-29 | [TASK-529](./TASK-529-symlinked-document-locations.md) |
 | TASK-530 | Find every reference to a tt variant, case, or payload field | Complete | 2026-09-29 | 2026-09-29 | [TASK-530](./TASK-530-tt-name-references.md) |
 | TASK-531 | Await the expected republish in the sidecar re-arm test | Complete | 2026-09-29 | 2026-09-29 | [TASK-531](./TASK-531-sidecar-rearm-test-wait.md) |
+| TASK-532 | Show TypeScript's declarations in a tt file's outline | Complete | 2026-09-29 | 2026-09-29 | [TASK-532](./TASK-532-typescript-outline.md) |
 
 ## Next task number
 
-**TASK-532**
+**TASK-533**

@@ -1582,8 +1582,16 @@ connection.onRenameRequest(async (params) => {
 connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return [];
-  const decls = await declarationsOf(doc);
-  const out: DocumentSymbol[] = [];
+  const fsPath = enginePath(doc);
+  const [decls, declared] = await Promise.all([
+    declarationsOf(doc),
+    fsPath === null
+      ? Promise.resolve([])
+      : compilerOf(doc).then((compiler) =>
+          engine.documentSymbols(compiler, fsPath, logEngine),
+        ),
+  ]);
+  const out = declared.map(toDocumentSymbol);
   for (const e of decls.variants) {
     // Only this file's declarations belong in its outline.
     if (e.origin !== "local" || !e.span || !e.nameSpan) continue;
@@ -1591,7 +1599,7 @@ connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
       start: doc.positionAt(e.span.start),
       end: doc.positionAt(e.span.end),
     };
-    out.push({
+    insertSymbol(out, {
       name: `${e.name}${e.generics}`,
       kind: SymbolKind.Enum,
       range,
@@ -1624,6 +1632,36 @@ connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
   }
   return out;
 });
+
+function toDocumentSymbol(symbol: engine.EngineDocumentSymbol): DocumentSymbol {
+  return {
+    name: symbol.name,
+    detail: symbol.detail === "" ? undefined : symbol.detail,
+    // LSP 3.17 numbers `SymbolKind` 1–26 on both sides.
+    kind: symbol.kind as SymbolKind,
+    range: symbol.range,
+    selectionRange: symbol.selectionRange,
+    children: symbol.children.map(toDocumentSymbol),
+  };
+}
+
+/** Places `symbol` among `siblings` in source order, inside the innermost
+ * one whose range contains it (a `variant` in a `namespace`). */
+function insertSymbol(siblings: DocumentSymbol[], symbol: DocumentSymbol): void {
+  const before = (a: engine.EnginePosition, b: engine.EnginePosition) =>
+    a.line < b.line || (a.line === b.line && a.character <= b.character);
+  const parent = siblings.find(
+    (candidate) =>
+      before(candidate.range.start, symbol.range.start) &&
+      before(symbol.range.end, candidate.range.end),
+  );
+  if (parent) {
+    insertSymbol((parent.children ??= []), symbol);
+    return;
+  }
+  const at = siblings.findIndex((sibling) => !before(sibling.range.start, symbol.range.start));
+  siblings.splice(at < 0 ? siblings.length : at, 0, symbol);
+}
 
 // ------------------------------------------------------------ code actions
 

@@ -132,6 +132,23 @@ pub struct CompletionDetail {
     pub additional_edits: Vec<TextEdit>,
 }
 
+/// One entry of a file's outline, in its own source coordinates.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentSymbol {
+    /// The declared name.
+    pub name: String,
+    /// What the service adds after the name, empty when nothing.
+    pub detail: String,
+    /// The LSP `SymbolKind` number the service gave it.
+    pub kind: u32,
+    /// The whole declaration.
+    pub range: Range,
+    /// The name, inside `range`.
+    pub selection_range: Range,
+    /// The declarations it contains.
+    pub children: Vec<DocumentSymbol>,
+}
+
 /// A replacement of one range of a source file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextEdit {

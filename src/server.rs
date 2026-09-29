@@ -282,6 +282,11 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 }),
             })
         }),
+        "documentSymbols" => semantic(sessions, params, |project, path, _position| {
+            Ok(
+                json!({ "symbols": project.document_symbols(path)?.iter().map(symbol_json).collect::<Vec<_>>() }),
+            )
+        }),
         "signatureHelp" => semantic(sessions, params, |project, path, position| {
             Ok(match project.signature_help(path, position)? {
                 None => serde_json::Value::Null,
@@ -489,6 +494,17 @@ fn range_json(range: Range) -> serde_json::Value {
 }
 
 /// A [`Location`] as the JSON the protocol speaks.
+fn symbol_json(symbol: &ttc::engine::DocumentSymbol) -> serde_json::Value {
+    serde_json::json!({
+        "name": symbol.name,
+        "detail": symbol.detail,
+        "kind": symbol.kind,
+        "range": range_json(symbol.range),
+        "selectionRange": range_json(symbol.selection_range),
+        "children": symbol.children.iter().map(symbol_json).collect::<Vec<_>>(),
+    })
+}
+
 fn location_json(location: Location) -> serde_json::Value {
     serde_json::json!({
         "path": location.path,

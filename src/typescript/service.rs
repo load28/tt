@@ -203,6 +203,7 @@ impl Service {
                     "references": {},
                     "completion": { "completionItem": { "labelDetailsSupport": true } },
                     "signatureHelp": {},
+                    "documentSymbol": { "hierarchicalDocumentSymbolSupport": true },
                     "rename": { "prepareSupport": true },
                     // LSP 3.18 `DiagnosticsCapabilities`: without them the
                     // server leaves out related places and the unused /

@@ -216,3 +216,48 @@ export const made = Color.Green(3);\n";
     );
     assert_eq!(references("src/lib.tt", "Color {").len(), 8);
 }
+
+#[test]
+fn the_outline_keeps_the_users_declarations_and_leaves_out_generated_ones() {
+    require_tsgo!();
+    let source = "export variant Shape { Circle(radius: number), Point }\n\
+export function area(s: Shape): number {\n\
+\x20 const a = match (s) { Circle(radius) => radius, Point => 0 };\n\
+\x20 return a |> String |> ((v: string) => v.length);\n\
+}\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = ttc::engine::Engine::new(None)
+        .open_project(
+            &[file.to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    fn tree(source: &str, symbols: &[ttc::engine::DocumentSymbol]) -> Vec<String> {
+        symbols
+            .iter()
+            .flat_map(|symbol| {
+                let mut lines = vec![format!(
+                    "{} [{}]",
+                    symbol.name,
+                    utf16_slice(source, symbol.selection_range)
+                )];
+                lines.extend(tree(source, &symbol.children).into_iter().map(|line| format!("  {line}")));
+                lines
+            })
+            .collect()
+    }
+    let symbols = project.document_symbols(&file).unwrap();
+    assert_eq!(
+        tree(source, &symbols),
+        vec![
+            "area [area]",
+            "  a [a]",
+            "  radius [radius]",
+            "  <function> []",
+        ],
+        "{symbols:?}"
+    );
+    assert!(utf16_slice(source, symbols[0].range).starts_with("export function area"));
+    assert!(utf16_slice(source, symbols[0].range).ends_with("v.length);\n}"));
+}

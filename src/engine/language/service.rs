@@ -566,6 +566,53 @@ pub(super) fn map_shared_target(
     Some((doc.code[start..end].to_string(), targets))
 }
 
+/// The service's outline of served text, on the source: an entry whose name
+/// ttc wrote (a generated binding, the type and constructor a `variant`
+/// becomes) is not the user's, and its mapped children take its place.
+pub(super) fn source_symbols(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<DocumentSymbol> {
+    let mut out = Vec::new();
+    for item in items {
+        let children = source_symbols(
+            doc,
+            item["children"]
+                .as_array()
+                .map(Vec::as_slice)
+                .unwrap_or_default(),
+        );
+        let offset = |value: &serde_json::Value| u16_offset(&doc.code, position_of(value));
+        let selection = &item["selectionRange"];
+        let Some((name_start, name_end)) =
+            from_service_span(doc, offset(&selection["start"]), offset(&selection["end"]))
+        else {
+            out.extend(children);
+            continue;
+        };
+        // The declaration's ends are the user's even when glue sits inside
+        // it (a `match` in a function body); an end that is not keeps the
+        // range to the name.
+        let point = |value: &serde_json::Value| {
+            let byte = mapper::from_utf16(&doc.code, offset(value));
+            mapper::to_source_inclusive(&doc.mappings, byte)
+                .map(|source| mapper::to_utf16(&doc.source, source))
+        };
+        let start = point(&item["range"]["start"]).map_or(name_start, |at| at.min(name_start));
+        let end = point(&item["range"]["end"]).map_or(name_end, |at| at.max(name_end));
+        out.push(DocumentSymbol {
+            name: item["name"].as_str().unwrap_or_default().to_string(),
+            detail: item["detail"].as_str().unwrap_or_default().to_string(),
+            kind: item["kind"].as_u64().unwrap_or(13) as u32,
+            range: source_range(&doc.source, start, end),
+            selection_range: source_range(&doc.source, name_start, name_end),
+            children,
+        });
+    }
+    // Lowering can move a declaration ahead of the text around it (a
+    // pattern binding hoisted above its `match`); the outline follows the
+    // source.
+    out.sort_by_key(|symbol| (symbol.range.start.line, symbol.range.start.character));
+    out
+}
+
 /// A service span translated back to source UTF-16 offsets, or `None` when
 /// any byte of it was not copied verbatim from the source.
 pub(super) fn from_service_span(

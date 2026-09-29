@@ -1132,6 +1132,37 @@ test("a document opened through a symlink receives its own locations and edits",
   }
 });
 
+test("the outline lists TypeScript's declarations with the variants in source order", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    "export interface Box { width: number }",
+    "export variant Shape { Circle(radius: number), Point }",
+    "export class Area {",
+    "  add(s: Shape): number {",
+    "    const a = match (s) { Circle(radius) => radius, Point => 0 };",
+    "    return a;",
+    "  }",
+    "}",
+    "export function f(n: number) { return n; }",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  try {
+    const answer = await client.request("textDocument/documentSymbol", { textDocument: { uri } });
+    const tree = (symbol: any): any => [symbol.name, (symbol.children ?? []).map(tree)];
+    assert.deepEqual(answer.result.map(tree), [
+      ["Box", [["width", []]]],
+      ["Shape", [["Circle", []], ["Point", []]]],
+      ["Area", [["add", [["a", []], ["radius", []]]]]],
+      ["f", []],
+    ]);
+    const area = answer.result.find((symbol: any) => symbol.name === "Area");
+    assert.equal(covered(source, area.selectionRange), "Area");
+    assert.ok(covered(source, area.range).startsWith("export class Area {"));
+  } finally {
+    stop();
+  }
+});
+
 test("references, rename, signature help, and document symbols cross the LSP adapter", { skip: skipTyped, timeout }, async () => {
   const source = [
     "variant Shape { Circle(radius: number), Point }",

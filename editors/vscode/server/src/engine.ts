@@ -500,6 +500,33 @@ export async function rename(
   return result?.edits ?? null;
 }
 
+export interface EngineDocumentSymbol {
+  name: string;
+  detail: string;
+  /** The LSP `SymbolKind` number. */
+  kind: number;
+  range: EngineRange;
+  selectionRange: EngineRange;
+  children: EngineDocumentSymbol[];
+}
+
+/** TypeScript's outline of a file, on the `.tt` source; a `variant` is not
+ * in it (the declarations answer carries those). Empty when the engine
+ * cannot answer. */
+export async function documentSymbols(
+  compiler: string,
+  path: string,
+  onError?: (message: string) => void,
+): Promise<EngineDocumentSymbol[]> {
+  const result = await semantic<{ symbols: EngineDocumentSymbol[] }>(
+    compiler,
+    "documentSymbols",
+    { path },
+    onError,
+  );
+  return result?.symbols ?? [];
+}
+
 export function signatureHelp(
   compiler: string,
   path: string,

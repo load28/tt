@@ -648,6 +648,21 @@ impl Project {
         Ok(if out.is_empty() { None } else { Some(out) })
     }
 
+    /// The file's outline as TypeScript sees its declarations, on the source.
+    /// A `variant` is tt's to describe and is not among them.
+    pub fn document_symbols(&mut self, path: &Path) -> Result<Vec<DocumentSymbol>, String> {
+        let (doc, path) = self.serve(path)?;
+        let session = self.session();
+        let answer = session.client.request(
+            "textDocument/documentSymbol",
+            serde_json::json!({ "textDocument": { "uri": served_uri(session, &path) } }),
+        )?;
+        Ok(source_symbols(
+            &doc,
+            answer.as_array().map(Vec::as_slice).unwrap_or_default(),
+        ))
+    }
+
     /// Signature help at a call site.
     pub fn signature_help(
         &mut self,
