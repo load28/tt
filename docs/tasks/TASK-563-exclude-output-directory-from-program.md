@@ -1,5 +1,9 @@
 # TASK-563: Leave ttc's output directory out of the TypeScript program
 
+> **Revised by [TASK-568](./TASK-568-exclude-only-ttc-outputs.md):** hiding
+> the whole output directory also hid the sources when `-o` names the
+> directory they are in. Only what ttc writes there is left out now.
+
 - **Status**: Complete
 - **Started**: 2026-09-29
 - **Completed**: 2026-09-29

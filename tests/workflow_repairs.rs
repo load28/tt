@@ -338,3 +338,30 @@ fn types_output_directory_is_not_a_program_input() {
         assert!(!log.contains("error"), "{log}");
     }
 }
+
+/// `-o` naming the directory the sources are in — how an editor refreshes
+/// the sidecars beside a file — keeps those sources in the program: only
+/// what ttc writes there is left out.
+#[test]
+fn types_written_beside_the_sources_keep_the_sources_as_inputs() {
+    if !common::toolchain() {
+        return;
+    }
+    let root = Workspace::in_repo_with_subdir("types-beside-sources", "src");
+    fs::write(
+        root.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"module":"esnext","moduleResolution":"bundler"}}"#,
+    )
+    .unwrap();
+    fs::write(root.join("src/m.tt"), "export variant K { A, B }\n").unwrap();
+    fs::write(
+        root.join("src/u.tt"),
+        "import { K } from \"./m.tt\";\nexport const k: K = K.A;\nconst globalThing: number = 1;\n",
+    )
+    .unwrap();
+    for _ in 0..2 {
+        success(run(&root, &["--types", "-o", "src", "src"]));
+        assert!(root.join("src/u.tt.d.ts").is_file());
+        assert!(root.join("src/m.tt.d.ts").is_file());
+    }
+}

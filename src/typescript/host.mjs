@@ -190,15 +190,21 @@ function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, list
   // own, not project inputs: they are neither dependencies nor listings.
   const published = (p) => [...links].some(([link, target]) =>
     [link, target].some((root) => p === root || p.startsWith(root + "/")));
-  // ttc's output directories are never project inputs, as `tsc` leaves its
-  // own outDir out of a default `include`: no glob finds a file in them,
-  // while `files` entries and imports still resolve there.
-  const output = (d) => {
+  // What ttc writes into an output directory is never a project input, as
+  // `tsc` leaves its own outputs out of a default `include`: no glob finds
+  // them, while `files` entries and imports still resolve there. Those are
+  // the declaration sidecars it names after their sources (`x.tt.d.ts`,
+  // `x.ttx.d.ts`, each with its `.map`) and the support package it owns at
+  // the output root's `tt/`. The directory may also hold the sources
+  // themselves (sidecars beside them), which stay inputs.
+  const outputRoot = (d) => {
     let real = d;
     try { real = fs.realpathSync(d); } catch {}
     real = real.replaceAll("\\", "/");
-    return outputs.some((dir) => real === dir || real.startsWith(dir + "/"));
+    const root = outputs.find((dir) => real === dir || real.startsWith(dir + "/"));
+    return root === undefined ? undefined : { root, real };
   };
+  const writtenByTtc = (name) => /\.ttx?\.d\.ts(\.map)?$/.test(name);
   return {
     // A `.tt` source the engine did not serve does not exist for TypeScript:
     // its text is tt, not the lowered module.
@@ -218,12 +224,17 @@ function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, list
       return undefined;
     },
     getAccessibleEntries: (d) => {
-      if (output(d)) return { files: [], directories: [] };
+      const inOutput = outputRoot(d);
       let real = { files: [], directories: [] };
       try {
         for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-          if (e.isDirectory()) real.directories.push(e.name);
-          else real.files.push(e.name);
+          if (e.isDirectory()) {
+            if (!(inOutput && inOutput.real === inOutput.root && e.name === "tt")) {
+              real.directories.push(e.name);
+            }
+          } else if (!(inOutput && writtenByTtc(e.name))) {
+            real.files.push(e.name);
+          }
         }
       } catch {
         if (!dirs.has(d)) return undefined;

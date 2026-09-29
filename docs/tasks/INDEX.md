@@ -560,7 +560,8 @@
 | TASK-565 | Share one contextual TypeScript session per project across workers | Complete | 2026-09-29 | 2026-09-29 | [TASK-565](./TASK-565-shared-contextual-session.md) |
 | TASK-566 | Write sidecar imports with the source's specifiers | Complete | 2026-09-29 | 2026-09-29 | [TASK-566](./TASK-566-sidecar-source-specifiers.md) |
 | TASK-567 | Serve bundler compiles from one persistent ttc server | Complete | 2026-09-29 | 2026-09-29 | [TASK-567](./TASK-567-bundler-compile-server.md) |
+| TASK-568 | Leave only ttc's own outputs out of the TypeScript program | Complete | 2026-09-29 | 2026-09-29 | [TASK-568](./TASK-568-exclude-only-ttc-outputs.md) |
 
 ## Next task number
 
-**TASK-568**
+**TASK-569**
