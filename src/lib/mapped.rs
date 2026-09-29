@@ -361,7 +361,7 @@ pub(crate) fn val_probes_with_emit(
     emit: &MappedEmit,
 ) -> ValProbes {
     with_method_calls(
-        val::probes(source, tokens, &parser::val_modifiers(program)),
+        val::probes(source, source_kind, tokens, &parser::val_modifiers(program)),
         emit,
         source_kind,
     )
@@ -369,7 +369,12 @@ pub(crate) fn val_probes_with_emit(
 
 fn val_syntax_probes(source: &str, source_kind: SourceKind) -> ValProbes {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, source_kind);
-    val::probes(source, &tokens, &parser::val_modifiers(&program))
+    val::probes(
+        source,
+        source_kind,
+        &tokens,
+        &parser::val_modifiers(&program),
+    )
 }
 
 fn with_method_calls(

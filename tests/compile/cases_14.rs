@@ -366,3 +366,51 @@ fn an_assignment_captures_its_target_before_a_hoisted_right_operand() {
     assert!(out.contains("state.v = $tt_v1 *= $tt_v0;"), "{out}");
     assert!(out.contains("this.v = $tt_v2;"), "{out}");
 }
+
+#[test]
+fn val_sees_a_mutation_through_every_typescript_wrapper() {
+    let prelude = "val const cfg: { a?: number } = { a: 1 };\n";
+    for mutation in [
+        "cfg!.a = 1;",
+        "(cfg as { a?: number }).a = 1;",
+        "(cfg satisfies { a?: number }).a = 1;",
+        "(<{ a?: number }>cfg).a = 1;",
+        "((cfg as any)).a = 1;",
+        "(cfg as any as { a: number }).a = 1;",
+        "(cfg as any).a++;",
+        "--(cfg as any).a;",
+        "delete (cfg as any).a;",
+        "[(cfg as any).a] = [1];",
+        "({ k: (cfg as any).a } = { k: 1 });",
+        "for ((cfg as any).a of [1]);",
+    ] {
+        let source = format!("{prelude}{mutation}\n");
+        let root = prelude.len() + mutation.find("cfg").expect("the root is written");
+        let diagnostics = ttc::analyze(&source, &Options::default());
+        let mutations: Vec<_> = diagnostics
+            .iter()
+            .filter(|d| d.code == DiagnosticCode::ValMutation)
+            .collect();
+        assert_eq!(mutations.len(), 1, "{source}\n{diagnostics:#?}");
+        let probes = ttc::val_probes(&source);
+        assert!(
+            probes.mutations.iter().any(|m| m.root == root && m.method.is_none()),
+            "{source}\n{probes:#?}"
+        );
+    }
+}
+
+#[test]
+fn a_write_to_a_call_result_is_not_a_write_to_its_argument() {
+    let diagnostics = ttc::analyze(
+        "declare function f(val v: unknown): { y: number };\n\
+         val const cfg = { a: 1 };\n\
+         f(cfg).y = 1;\n",
+        &Options::default(),
+    );
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+    let probes = ttc::val_probes(
+        "declare function f(val v: unknown): { y: number };\nval const cfg = { a: 1 };\nf(cfg).y = 1;\n",
+    );
+    assert!(probes.mutations.is_empty(), "{probes:#?}");
+}

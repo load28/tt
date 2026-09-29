@@ -1,9 +1,12 @@
 //! Assignment-target grammar shared by direct diagnostics and symbol probes.
 //!
-//! A target is a reference, a parenthesized target, or an array/object pattern.
-//! Defaults and computed property names are expressions, not write targets.
+//! A target is a reference or an array/object pattern. Defaults and computed
+//! property names are expressions, not write targets.
+
+use swc_common::Spanned;
 
 use super::*;
+use crate::host_input::HostInput;
 
 #[derive(Clone)]
 pub(super) struct Target {
@@ -21,52 +24,83 @@ fn property_name_at(tokens: &[Token], k: usize) -> bool {
     }
 }
 
-fn reference(tokens: &[Token], start: usize) -> Option<(usize, Vec<Target>)> {
-    let (mut end, mut targets) = match tokens.get(start)?.kind {
+/// The reference that starts at `start`: an identifier or a parenthesized
+/// operand, followed by member steps and non-null assertions. The tokens
+/// delimit it; a reference with a wrapper in it (parentheses, `!`, `as`,
+/// `satisfies`, `<T>`) is read as TypeScript reads it, through the one
+/// definition of an access path ([`super::reference::access_path`]).
+fn reference(
+    src: &str,
+    source_kind: SourceKind,
+    tokens: &[Token],
+    start: usize,
+) -> Option<(usize, Vec<Target>)> {
+    let first = tokens.get(start)?;
+    let mut end = match first.kind {
         TokenKind::Ident if property_name_at(tokens, start) => return None,
-        TokenKind::Ident => (
-            start + 1,
-            vec![Target {
-                root: start,
-                members: 0,
-            }],
-        ),
-        TokenKind::Punct(b'(') => {
-            let close = find_close_at(tokens, start)?;
-            let (end, targets) = target(tokens, start + 1)?;
-            if end != close {
-                return None;
-            }
-            (close + 1, targets)
+        TokenKind::Ident => start + 1,
+        // After a complete operand, `(` opens a call's arguments, not a
+        // parenthesized operand: `f(x).y = 1` writes to what `f` returns.
+        TokenKind::Punct(b'(') if start == 0 || !tokens[start - 1].facts.ends_expression() => {
+            find_close_at(tokens, start)? + 1
         }
         _ => return None,
     };
+    let mut wrapped = !matches!(first.kind, TokenKind::Ident);
+    let mut members = 0;
     loop {
-        let next = match tokens.get(end).map(|t| &t.kind) {
+        end = match tokens.get(end).map(|t| &t.kind) {
             Some(TokenKind::Punct(b'.') | TokenKind::OptChain)
                 if matches!(tokens.get(end + 1)?.kind, TokenKind::Ident) =>
             {
+                members += 1;
                 end + 2
             }
-            Some(TokenKind::Punct(b'[')) => find_close_at(tokens, end)? + 1,
+            Some(TokenKind::Punct(b'[')) => {
+                members += 1;
+                find_close_at(tokens, end)? + 1
+            }
             Some(TokenKind::Punct(b'!')) if !punct_at(tokens, end + 1, b'=') => {
-                end += 1;
-                continue;
+                wrapped = true;
+                end + 1
             }
             _ => break,
         };
-        if targets.len() != 1 {
-            return None;
-        }
-        targets[0].members += 1;
-        end = next;
     }
-    Some((end, targets))
+    if !wrapped {
+        return Some((
+            end,
+            vec![Target {
+                root: start,
+                members,
+            }],
+        ));
+    }
+    let from = first.span.start;
+    let text = &src[from..tokens[end - 1].span.end];
+    let input = HostInput::new(text);
+    let mut parser = input.parser(source_kind);
+    let expression = parser.parse_expr().ok()?;
+    if !parser.take_errors().is_empty() || input.byte(expression.span().hi) != text.len() {
+        return None;
+    }
+    let (root, members) = super::reference::access_path(&expression)?;
+    let root_at = from + input.byte(root.span.lo);
+    let root = start
+        + tokens[start..end]
+            .iter()
+            .position(|token| token.span.start == root_at)?;
+    Some((end, vec![Target { root, members }]))
 }
 
-fn target(tokens: &[Token], start: usize) -> Option<(usize, Vec<Target>)> {
+fn target(
+    src: &str,
+    source_kind: SourceKind,
+    tokens: &[Token],
+    start: usize,
+) -> Option<(usize, Vec<Target>)> {
     if !matches!(tokens.get(start)?.kind, TokenKind::Punct(b'[' | b'{')) {
-        return reference(tokens, start);
+        return reference(src, source_kind, tokens, start);
     }
     let object = punct_at(tokens, start, b'{');
     let close = find_close_at(tokens, start)?;
@@ -86,7 +120,7 @@ fn target(tokens: &[Token], start: usize) -> Option<(usize, Vec<Target>)> {
                 from = key_end + 1;
             }
         }
-        let (end, nested) = target(tokens, from)?;
+        let (end, nested) = target(src, source_kind, tokens, from)?;
         // A default initializer is a read; only the target to its left writes.
         if end != to && assignment_op_at(tokens, end) != Some(1) {
             return None;
@@ -98,10 +132,14 @@ fn target(tokens: &[Token], start: usize) -> Option<(usize, Vec<Target>)> {
 
 /// Root identifiers of property writes, indexed in source coordinates so the
 /// scope walk resolves each occurrence where it is written.
-pub(super) fn writes(src: &str, tokens: &[Token]) -> std::collections::HashSet<usize> {
+pub(super) fn writes(
+    src: &str,
+    source_kind: SourceKind,
+    tokens: &[Token],
+) -> std::collections::HashSet<usize> {
     let mut out = std::collections::HashSet::new();
     for start in 0..tokens.len() {
-        let Some((end, targets)) = target(tokens, start) else {
+        let Some((end, targets)) = target(src, source_kind, tokens, start) else {
             continue;
         };
         let prefix = start.checked_sub(1).is_some_and(|at| {

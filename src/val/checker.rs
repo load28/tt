@@ -7,6 +7,10 @@ use super::*;
 /// The `val` checker's walk state.
 pub(super) struct Checker<'a> {
     pub(super) src: &'a str,
+    /// The surface the source is written in, which decides how a
+    /// parenthesized target reads (`<T>x` is a type assertion only
+    /// outside TSX).
+    pub(super) source_kind: SourceKind,
     /// The parser's `val` modifiers.
     pub(super) modifiers: &'a Modifiers,
     pub(super) signatures: &'a HashMap<&'a str, Option<Vec<ParamSig>>>,
@@ -49,7 +53,7 @@ impl<'a> Checker<'a> {
     /// dropped on the way out, so an interpolation cannot leak scopes into
     /// the stream that contains it.
     pub(super) fn walk(&self, tokens: &'a [Token], frames: &mut Vec<Frame<'a>>) {
-        let writes = targets::writes(self.src, tokens);
+        let writes = targets::writes(self.src, self.source_kind, tokens);
         let arms = self.arm_arrows(tokens);
         let base = frames.len();
         // Parameter scopes, activated when the walk reaches the function
