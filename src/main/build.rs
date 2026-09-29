@@ -321,7 +321,73 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
         }
     }
 
-    let mut failed = false;
+    let outcomes = compile_outcomes(jobs, support_root, opts);
+
+    if opts.print || opts.check {
+        let mut failed = false;
+        for outcome in outcomes {
+            for message in &outcome.messages {
+                eprintln!("{message}");
+            }
+            failed |= outcome.failed;
+            if let Some(output) = outcome.output {
+                crate::out::text(&output.code);
+            }
+        }
+        return failed;
+    }
+
+    write_outcomes(jobs, &outcomes, support_root, opts)
+}
+
+/// What `ttc -p <input>` answers: the text it prints on stdout, present
+/// exactly when it exits successfully, and each message it writes to
+/// stderr.
+pub(super) struct Printed {
+    pub(super) code: Option<String>,
+    pub(super) messages: Vec<String>,
+}
+
+/// `ttc -p <input>` answered instead of printed: the same job, support
+/// root and compile the command line runs, so a long-lived caller gets the
+/// bytes the one-shot prints.
+pub(super) fn print_input(input: &str, opts: &BuildOptions) -> Printed {
+    let failure = |message: String| Printed {
+        code: None,
+        messages: vec![message],
+    };
+    let jobs = match build_jobs(&[input.to_string()], None, true) {
+        Ok(jobs) => jobs,
+        Err(error) => return failure(error),
+    };
+    if jobs.is_empty() {
+        return failure("ttc: no sources found".to_string());
+    }
+    if jobs.len() != 1 {
+        return failure("ttc: --print requires exactly one source file".to_string());
+    }
+    let root = support_root(&jobs, None);
+    let mut printed = Printed {
+        code: None,
+        messages: Vec::new(),
+    };
+    for outcome in compile_outcomes(&jobs, root.as_deref(), opts) {
+        printed.messages.extend(outcome.messages);
+        if !outcome.failed {
+            printed.code = outcome.output.map(|output| output.code);
+        }
+    }
+    printed
+}
+
+/// Compiles every job without writing or printing anything: each job's
+/// diagnostics, whether it failed, and its output, in job order. The
+/// command line prints or writes these; `ttc --server` answers with them.
+fn compile_outcomes(
+    jobs: &[Job],
+    support_root: Option<&Path>,
+    opts: &BuildOptions,
+) -> Vec<Outcome> {
     let loaded = load_jobs(jobs, opts.jobs);
 
     let std_dir = std_placement(support_root);
@@ -333,7 +399,7 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
             .collect(),
     );
 
-    let outcomes = par_map(
+    par_map(
         &jobs.iter().zip(&loaded).collect::<Vec<_>>(),
         opts.jobs,
         |(job, loaded)| {
@@ -473,21 +539,19 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
                 out
             })
         },
-    );
+    )
+}
 
-    if opts.print || opts.check {
-        for outcome in outcomes {
-            for message in &outcome.messages {
-                eprintln!("{message}");
-            }
-            failed |= outcome.failed;
-            if let Some(output) = outcome.output {
-                crate::out::text(&output.code);
-            }
-        }
-        return failed;
-    }
-
+/// Writes the compiled outputs and the support modules they import.
+/// Returns true if any job failed or any write did.
+fn write_outcomes(
+    jobs: &[Job],
+    outcomes: &[Outcome],
+    support_root: Option<&Path>,
+    opts: &BuildOptions,
+) -> bool {
+    let mut failed = false;
+    let std_dir = std_placement(support_root);
     // Compiler-owned support modules are written once for the project, not
     // once per source file, and only when an output being written imports
     // one. What an output imports is what codegen emitted, not what the
@@ -563,7 +627,7 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
     }
 
     let writes = par_map(
-        &jobs.iter().zip(&outcomes).collect::<Vec<_>>(),
+        &jobs.iter().zip(outcomes).collect::<Vec<_>>(),
         opts.jobs,
         |(job, outcome)| write_emitted(job, outcome.output.as_ref()),
     );

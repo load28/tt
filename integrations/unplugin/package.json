@@ -46,6 +46,7 @@
   "files": [
     "index.js",
     "index.d.ts",
+    "compiler-server.js",
     "vite.js",
     "vite.d.ts",
     "rollup.js",

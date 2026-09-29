@@ -554,7 +554,8 @@
 | TASK-546 | Annotate generated storage only with names visible at its declaration | Complete | 2026-09-29 | 2026-09-29 | [TASK-546](./TASK-546-accessible-storage-annotations.md) |
 | TASK-547 | Bind a function or class expression's name only inside itself | Complete | 2026-09-29 | 2026-09-29 | [TASK-547](./TASK-547-function-expression-name-scope.md) |
 | TASK-548 | Recover a discarded `result` block in the typed projection | Complete | 2026-09-29 | 2026-09-29 | [TASK-548](./TASK-548-recover-discarded-result.md) |
+| TASK-567 | Serve bundler compiles from one persistent ttc server | In progress | 2026-09-29 | — | [TASK-567](./TASK-567-bundler-compile-server.md) |
 
 ## Next task number
 
-**TASK-549**
+**TASK-568**

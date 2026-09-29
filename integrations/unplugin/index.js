@@ -5,6 +5,11 @@
  * `ttc` on the way in, so a project needs no intermediate `.ts` tree: the
  * bundler reads the sources directly.
  *
+ * Modules are compiled by one `ttc --server` session per build — the
+ * answer to each request is exactly what `ttc -p` prints — so the
+ * TypeScript project the compiler refines its output with opens once, not
+ * once per module (`compiler-server.js`).
+ *
  * Two deliberate details:
  *
  * - `ttc` runs with `--rewrite-imports off`. Rewriting exists for the
@@ -27,6 +32,8 @@ import * as path from "node:path";
 import { promisify } from "node:util";
 
 import { createUnplugin } from "unplugin";
+
+import { CompilerServer } from "./compiler-server.js";
 
 const run = promisify(execFile);
 
@@ -134,23 +141,30 @@ export const unpluginFactory = (options = {}) => {
   const verify = options.verify ?? true;
   const sourcemap = options.sourcemap ?? true;
   const dependenciesByModule = new Map();
+  const server = new CompilerServer(compiler);
   let devServer;
 
-  const printArgs = (file, withMap) => {
-    const args = ["-p", "--rewrite-imports", "off"];
-    if (!verify) args.push("--no-verify");
-    // ttc prints the map into the output as a data: URL — the one form
-    // that survives a pipe. It is split back out here so the host gets a
-    // real map object and composes it with its own transforms.
-    if (withMap) args.push("--source-map", "inline");
-    args.push(file);
-    return args;
+  /**
+   * `ttc -p --rewrite-imports off <file>`, asked of the server. ttc writes
+   * the map into the output as a data: URL, the form `-p` prints; it is
+   * split back out so the host gets a real map object and composes it
+   * with its own transforms. A failed compile throws what `-p` would have
+   * written on stderr.
+   */
+  const print = async (file, withMap) => {
+    const { code, messages } = await server.request("print", {
+      path: file,
+      rewriteImports: "off",
+      sourceMap: withMap ? "inline" : "off",
+      verify,
+    });
+    if (code === null) throw new Error(messages.map((message) => `${message}\n`).join(""));
+    return code;
   };
 
   const scanSource = async (id) => {
     const file = cleanUrl(id);
-    const { stdout } = await run(compiler, printArgs(file, false), { maxBuffer: 16 * 1024 * 1024 });
-    return { code: stdout, lang: file.endsWith(".ttx") ? "tsx" : "ts" };
+    return { code: await print(file, false), lang: file.endsWith(".ttx") ? "tsx" : "ts" };
   };
 
   const esbuildScanPlugin = {
@@ -224,25 +238,29 @@ export const unpluginFactory = (options = {}) => {
       const file = sourceFileOfId(id);
       if (file === null) return null;
 
-      const args = printArgs(file, sourcemap);
-
       this.addWatchFile(file);
       // Compiler metadata includes erased type imports and configuration reads.
       // Register dependencies before loading so a failed build can recover too.
       try {
-        const metadata = await run(compiler, ["--dependencies", file], { maxBuffer: 16 * 1024 * 1024 });
-        const dependencies = JSON.parse(metadata.stdout);
+        const { paths: dependencies } = await server.request("dependencies", { path: file });
         dependenciesByModule.set(id, new Set(dependencies.map(nativePath)));
         for (const dependency of dependencies) if (dependency !== file) this.addWatchFile(dependency);
-        const { stdout } = await run(compiler, args, { maxBuffer: 16 * 1024 * 1024 });
-        return detachInlineSourceMap(stdout, file);
+        return detachInlineSourceMap(await print(file, sourcemap), file);
       } catch (error) {
-        // ttc reports `file:line:col: message` on stderr; surface that as
-        // the build error so the host shows the compiler's diagnostic.
-        const detail = String(error.stderr ?? error.message).trim();
-        this.error(detail.replace(/^ttc:\s*/, ""));
+        // ttc reports `file:line:col: message`; surface that as the build
+        // error so the host shows the compiler's diagnostic.
+        this.error(error.message.trim().replace(/^ttc:\s*/, ""));
         return null;
       }
+    },
+
+    closeBundle() {
+      // A watching build bundles again after this; its watcher's close ends
+      // the session instead. A dev server closes its bundle once, on close.
+      if (!this?.meta?.watchMode || devServer) server.close();
+    },
+    closeWatcher() {
+      server.close();
     },
 
     watchChange(file) {
@@ -278,8 +296,15 @@ export const unpluginFactory = (options = {}) => {
         return [...modules];
       },
     },
+    webpack(compilerHooks) {
+      compilerHooks.hooks.shutdown.tap("@openload28/unplugin-tt", () => server.close());
+    },
+    rspack(compilerHooks) {
+      compilerHooks.hooks.shutdown.tap("@openload28/unplugin-tt", () => server.close());
+    },
     esbuild: {
       setup(build) {
+        build.onDispose(() => server.close());
         build.onResolve({ filter: /\.ttx?$/ }, async args => {
           if (args.pluginData?.ttResolving || path.isAbsolute(args.path) || args.path.startsWith(".")) return;
           const resolved = await build.resolve(args.path, { importer: args.importer, resolveDir: args.resolveDir, kind: args.kind, pluginData: { ttResolving: true } });

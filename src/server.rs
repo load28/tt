@@ -52,6 +52,20 @@
 //! Project graphs and registered overlays are released. The client must
 //! replay its openDocument notifications before subsequent semantic requests.
 //!
+//! → { "id": 10, "method": "print", "params": { "path", "sourceMap"?,
+//!        "rewriteImports"?, "banner"?, "verify"? } }
+//! ← { "id": 10, "result": { "code": string | null, "messages": [string] } }
+//! `ttc -p` for the file on disk: `code` is what it prints on stdout and is
+//! null exactly when it exits unsuccessfully; `messages` is each message it
+//! writes to stderr. The options are its flags — `sourceMap` "off"
+//! (default) or "inline", `rewriteImports` "js" (default), "ts" or "off",
+//! `banner: false` for `--no-banner`, `verify: false` for `--no-verify`.
+//!
+//! → { "id": 11, "method": "dependencies", "params": { "path" } }
+//! ← { "id": 11, "result": { "paths": [string] } }
+//! `ttc --dependencies` for the file: the paths whose change invalidates
+//! its compile.
+//!
 //! ← { "id": N, "error": "sentence" }   // the request failed; the session lives
 //! ```
 //!
@@ -64,11 +78,21 @@
 //! either way. A `typedCheck` overlay lasts one request: the answer is
 //! stateless, the reuse (projection cache, running compiler) is not.
 //!
+//! `print` is the command line's own `-p` compile, run in this process, so
+//! the TypeScript project that refines the generated storage annotations
+//! (`docs/design/contextual-type-materialization.md`) is opened by the
+//! first request and reused by every later one; a bundler asking once per
+//! module pays for it once per build. `dependencies` checks the file's live
+//! project, and checks it again only when one of the project's watch paths
+//! has changed since.
+//!
 //! Exit: end of stdin, code 0. A failed request never ends the session.
 
+use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::SystemTime;
 use ttc::lines::ProtocolPositions;
 
 use ttc::engine::{
@@ -81,6 +105,7 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
     // One live project per identity, and the documents a consumer holds
     // open in them — what a server exists to keep between requests.
     let mut workspace = Workspace::new(Engine::new(node));
+    let mut checks = Checks::default();
 
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
@@ -122,7 +147,7 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
         // of one request, and what that work builds — a snapshot — is
         // immutable and installed whole or not at all, so the projects the
         // workspace holds are the ones the last successful request left.
-        let response = match ttc::ice::catching(|| respond(&mut workspace, line)) {
+        let response = match ttc::ice::catching(|| respond(&mut workspace, &mut checks, line)) {
             Ok(response) => response,
             Err(message) => serde_json::json!({
                 "id": request_id(line),
@@ -152,7 +177,7 @@ fn request_id(line: &str) -> serde_json::Value {
         .unwrap_or(serde_json::Value::Null)
 }
 
-fn respond(workspace: &mut Workspace, line: &str) -> serde_json::Value {
+fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_json::Value {
     use serde_json::json;
     ttc::ice::panic_for_test("server");
     let request: serde_json::Value = match serde_json::from_str(line) {
@@ -163,11 +188,20 @@ fn respond(workspace: &mut Workspace, line: &str) -> serde_json::Value {
     let params = &request["params"];
     let result = match request["method"].as_str().unwrap_or_default() {
         "check" => check(params),
+        "print" => print(params),
+        "dependencies" => dependencies(workspace, checks, params),
         "emitMap" => emit_map(params),
         "typedCheck" => typed_check(workspace, params),
-        "openDocument" | "updateDocument" => open_document(workspace, params),
-        "closeDocument" => close_document(workspace, params),
+        "openDocument" | "updateDocument" => {
+            *checks = Checks::default();
+            open_document(workspace, params)
+        }
+        "closeDocument" => {
+            *checks = Checks::default();
+            close_document(workspace, params)
+        }
         "reloadProjects" => {
+            *checks = Checks::default();
             // Filesystem/configuration topology changed. Clients replay open
             // buffers after this ordered barrier; old snapshots cannot leak
             // into a graph resolved against the new configuration.
@@ -708,6 +742,131 @@ fn semantic_tokens(params: &serde_json::Value) -> Result<serde_json::Value, Stri
         })
         .collect();
     Ok(json!({ "tokens": tokens }))
+}
+
+/// `-p <path>`: what the one-shot prints for the file on disk, with the
+/// options a bundler passes it. The compile is the command line's own
+/// ([`crate::build::print_input`]), so the bytes are the same; what a
+/// session adds is that the TypeScript project refining the output's
+/// storage annotations stays open between requests.
+fn print(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let path = params["path"]
+        .as_str()
+        .ok_or_else(|| "print needs a \"path\"".to_string())?;
+    let source_map = match params["sourceMap"].as_str().unwrap_or("off") {
+        "off" => crate::build::SourceMapMode::Off,
+        "inline" => crate::build::SourceMapMode::Inline,
+        other => {
+            return Err(format!(
+                "print: \"sourceMap\" expects off or inline (got {other})"
+            ));
+        }
+    };
+    let rewrite_imports = match params["rewriteImports"].as_str().unwrap_or("js") {
+        "js" => ttc::ImportRewrite::Js,
+        "ts" => ttc::ImportRewrite::Ts,
+        "off" => ttc::ImportRewrite::Off,
+        other => {
+            return Err(format!(
+                "print: \"rewriteImports\" expects js, ts, or off (got {other})"
+            ));
+        }
+    };
+    let printed = crate::build::print_input(
+        path,
+        &crate::build::BuildOptions {
+            banner: params["banner"].as_bool().unwrap_or(true),
+            print: true,
+            check: false,
+            verify: params["verify"].as_bool().unwrap_or(true),
+            rewrite_imports,
+            source_map,
+            out_dir: None,
+            jobs: None,
+        },
+    );
+    Ok(serde_json::json!({ "code": printed.code, "messages": printed.messages }))
+}
+
+/// The stamps a project's watch paths had when it was last checked for
+/// `dependencies`, and the files that check covered, per project root.
+///
+/// `Project::watch_paths` names every path whose change invalidates a
+/// project check; while none of them has changed and the check would cover
+/// the same files, its answer stands. This is the rule `--check-types
+/// --watch` re-checks by, and what keeps a bundler's request per module
+/// from type-checking the whole project once per module.
+#[derive(Default)]
+struct Checks(HashMap<PathBuf, Checked>);
+
+struct Checked {
+    files: Vec<PathBuf>,
+    stamps: HashMap<PathBuf, SystemTime>,
+}
+
+fn stamps(paths: &[PathBuf]) -> HashMap<PathBuf, SystemTime> {
+    paths
+        .iter()
+        .map(|path| {
+            let stamp = std::fs::metadata(path)
+                .and_then(|meta| meta.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH);
+            (path.clone(), stamp)
+        })
+        .collect()
+}
+
+/// `--dependencies <path>`: every path whose change invalidates the file's
+/// compile — the watch paths of the live project it belongs to, after a
+/// check of that project with the file among its candidates.
+fn dependencies(
+    workspace: &mut Workspace,
+    checks: &mut Checks,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let path = params["path"]
+        .as_str()
+        .ok_or_else(|| "dependencies needs a \"path\"".to_string())?;
+    let canonical = ttc::engine::normalize_document_path(Path::new(path))?;
+    let project = workspace.project_for(&canonical)?;
+    let mut files = project.scan().map_err(|error| error.to_string())?;
+    files.push(canonical);
+    files.sort();
+    files.dedup();
+    let watched = project.watch_paths().map_err(|error| error.to_string())?;
+    let current = stamps(&watched);
+    if let Some(checked) = checks.0.get(project.root())
+        && checked.files == files
+        && checked.stamps == current
+    {
+        return Ok(serde_json::json!({ "paths": watched }));
+    }
+    checks.0.remove(project.root());
+    let snapshot = project
+        .update(&files)
+        .map_err(|blocked| blocked.error.message.clone())?;
+    let checked = project.check(&snapshot, &CheckRequest::default())?;
+    if let Some(error) = checked.backend_error
+        && error.kind == ttc::engine::BackendErrorKind::Internal
+    {
+        return Err(error.message);
+    }
+    let paths = project.watch_paths().map_err(|error| error.to_string())?;
+    // Stamps taken before the check stand for the paths that were already
+    // watched, so an edit made while it ran still invalidates it; the paths
+    // the check discovered start from now.
+    let mut recorded = current;
+    for (path, stamp) in stamps(&paths) {
+        recorded.entry(path).or_insert(stamp);
+    }
+    checks.0.insert(
+        project.root().to_path_buf(),
+        Checked {
+            files,
+            stamps: recorded,
+        },
+    );
+    Ok(serde_json::json!({ "paths": paths }))
 }
 
 /// `--emit-map` for a buffer: the emitted TypeScript and its byte mappings.

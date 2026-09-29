@@ -1633,6 +1633,9 @@ fn a_named_file_that_is_not_a_source_is_reported() {
 #[path = "cli/dynamic_imports.rs"]
 mod dynamic_imports;
 
+#[path = "cli/server_print.rs"]
+mod server_print;
+
 /// `-o` mirrors input paths, and named files are inputs too: two of them
 /// under one directory keep the layout that makes a relative import between
 /// them resolve in the output tree.

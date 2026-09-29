@@ -28,13 +28,18 @@ export async function resolve(specifier, context, next) {
 `
 
 const compiler = `#!/usr/bin/env node
+import { createInterface } from "node:readline";
 const args = process.argv.slice(2);
-if (args[0] === "--dependencies") {
-  process.stdout.write(JSON.stringify([args[1], "C:\\\\proj\\\\src\\\\model.tt"]));
-} else if (args[0] === "--emit-std") {
+if (args[0] === "--emit-std") {
   process.stdout.write("export const module = " + JSON.stringify(args[1]) + ";\\n");
 } else {
-  process.stdout.write("export const compiled = true;\\n");
+  createInterface({ input: process.stdin }).on("line", (line) => {
+    const { id, method, params } = JSON.parse(line);
+    const result = method === "dependencies"
+      ? { paths: [params.path, "C:\\\\proj\\\\src\\\\model.tt"] }
+      : { code: "export const compiled = true;\\n", messages: [] };
+    process.stdout.write(JSON.stringify({ id, result }) + "\\n");
+  });
 }
 `
 

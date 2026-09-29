@@ -37,7 +37,7 @@ import { Notice, render } from "./notice.tt";
 | 단계 | 하는 일 |
 |------|---------|
 | `resolveId` | Resolves a `.tt`/`.ttx` specifier to its file and returns that path with a query ending in `lang.ts` or `lang.tsx`, keeping any query the import already had. `@tt/std`, `@tt/std/option`, and `@tt/std/result` become virtual module ids |
-| `load` | `ttc -p --rewrite-imports off`의 출력을 돌려줍니다. 표준 라이브러리와 파이프 런타임은 모듈별 `ttc --emit-std types|option|result|runtime` 출력을 사용합니다 |
+| `load` | Returns what `ttc -p --rewrite-imports off` prints for the file, answered by the build's one `ttc --server` session (see [One compiler session per build](#one-compiler-session-per-build)). The standard library and the pipeline runtime use `ttc --emit-std types\|option\|result\|runtime` output per module |
 
 The `lang.ts`/`lang.tsx` query ending **routes the module through the host's own
 TypeScript handling**, so the plugin does not transpile anything itself. The part
@@ -142,7 +142,35 @@ Bare package imports ending in `.tt` or `.ttx` use the bundler's resolver, inclu
 package exports and external decisions. Vite/Rollup-compatible hooks use
 `this.resolve`; esbuild uses `build.resolve`.
 
-The plugin asks `ttc --dependencies` for the project's dependency graph and registers
-those paths with the bundler. Vite invalidates consuming modules when a type-only
-import or compiler configuration changes, including when HMR is disabled. Use a
-compiler version that supports `--dependencies` when overriding `compiler`.
+The plugin asks the compiler session for each module's dependencies (the answer
+`ttc --dependencies` prints) and registers those paths with the bundler. Vite
+invalidates consuming modules when a type-only import or compiler configuration
+changes, including when HMR is disabled.
+
+## One compiler session per build
+
+With TypeScript installed, ttc refines the storage annotations it generates with
+the project's types, which opens the whole TypeScript project. A `ttc -p` per
+module would open it again for every module, so a build of N modules would open
+it N times. Instead, the plugin starts one `ttc --server` session on the first
+module it loads and asks it for every module: `print` answers exactly what
+`ttc -p` prints for the same file and flags, and `dependencies` exactly what
+`ttc --dependencies` prints. The project opens once per build.
+
+On a generated 400-module project, loading 20 modules took 209 s with a process per
+module and 10 s through the session; loading all 400 through the session took 39 s.
+
+- **One session per compiler and working directory.** Requests from concurrent
+  loads carry ids; the session answers them in order.
+- **Restart once.** If the session process ends while a request is waiting, the
+  request is asked once more of a fresh session. If that one ends too, the load
+  fails with the exit status and what the compiler wrote on stderr. The plugin
+  never falls back to another way of compiling.
+- **Shutdown.** The session ends on Rollup's, Rolldown's and Vite's
+  `closeBundle` (after the last rebuild in watch mode, on `closeWatcher`), on
+  webpack's and Rspack's `shutdown`, and on esbuild's `onDispose`. An idle
+  session never keeps the bundler's process alive, and it exits when that process
+  does.
+
+When overriding `compiler`, use a compiler version whose `--server` answers
+`print` and `dependencies`.

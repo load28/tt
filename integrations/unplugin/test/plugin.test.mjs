@@ -112,9 +112,14 @@ test('source map sources are anchored to the compiled file, honouring sourceRoot
   const fake = join(root, 'ttc.mjs')
   const map = { version: 3, sourceRoot: '../shared', sources: ['lib.tt', null], names: [], mappings: 'AAAA' }
   await writeFile(fake, `#!/usr/bin/env node
-const args = process.argv.slice(2);
-if (args[0] === "--dependencies") process.stdout.write(JSON.stringify([args[1]]));
-else process.stdout.write("export const a = 1;\\n//# sourceMappingURL=data:application/json;charset=utf-8;base64," + ${JSON.stringify(Buffer.from(JSON.stringify(map)).toString('base64'))} + "\\n");
+import { createInterface } from "node:readline";
+createInterface({ input: process.stdin }).on("line", (line) => {
+  const { id, method, params } = JSON.parse(line);
+  const result = method === "dependencies"
+    ? { paths: [params.path] }
+    : { code: "export const a = 1;\\n//# sourceMappingURL=data:application/json;charset=utf-8;base64," + ${JSON.stringify(Buffer.from(JSON.stringify(map)).toString('base64'))} + "\\n", messages: [] };
+  process.stdout.write(JSON.stringify({ id, result }) + "\\n");
+});
 `)
   await chmod(fake, 0o755)
   const plugin = unpluginFactory({ compiler: fake })
