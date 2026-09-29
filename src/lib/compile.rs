@@ -876,11 +876,31 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
     compile_report_parsed(source, options, &program, &tokens)
 }
 
+/// [`compile_report`] for a caller that discards the emission, such as
+/// `ttc --check`: the same diagnostics and output self-check, over the
+/// emission before contextual refinement. That refinement only annotates
+/// generated storage in the output a TypeScript project reads, so this
+/// never reaches TypeScript.
+pub fn check_report(source: &str, options: &Options) -> CompileReport {
+    let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
+    report_parsed(source, options, &program, &tokens, false)
+}
+
 pub(crate) fn compile_report_parsed(
     source: &str,
     options: &Options,
     program: &ast::Program,
     tokens: &[lexer::Token],
+) -> CompileReport {
+    report_parsed(source, options, program, tokens, true)
+}
+
+fn report_parsed(
+    source: &str,
+    options: &Options,
+    program: &ast::Program,
+    tokens: &[lexer::Token],
+    refine: bool,
 ) -> CompileReport {
     let typescript_tokens = lexer::TypeScriptTokens::of(source, options.source_kind, tokens);
     let semantics = analysis::coverage_semantics(source, program, options.extern_variants);
@@ -969,7 +989,8 @@ pub(crate) fn compile_report_parsed(
         options,
         &mut errors,
     );
-    if !options.defer_to_checker
+    if refine
+        && !options.defer_to_checker
         && let Some(lowered) = emit.take()
     {
         let annotated = !lowered.contextual_slots.is_empty();

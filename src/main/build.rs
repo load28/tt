@@ -452,7 +452,11 @@ fn compile_outcomes(
                 // Every tt-level diagnostic of the file, not the first one —
                 // the reader fixes a file in one pass (TASK-120). Output is
                 // only produced (and only written) when the file is clean.
-                let report = compile_report(&loaded.source, &options);
+                let report = if opts.check {
+                    ttc::check_report(&loaded.source, &options)
+                } else {
+                    compile_report(&loaded.source, &options)
+                };
                 let errors: Vec<_> = report
                     .diagnostics
                     .iter()

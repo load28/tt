@@ -170,6 +170,10 @@ pub(super) fn sidecar_mode(jobs: &[Job], decl_dir: &Path, inputs: &[String]) -> 
                 continue;
             }
         };
+        let source_dir = job.file.parent().unwrap_or(Path::new("."));
+        let declarations = ttc::source_specifiers(&declarations, |specifier| {
+            source_dir.join(specifier).is_file()
+        });
 
         // `-o` puts the declarations in their own tree (mirroring the input
         // layout); without it they sit next to the source.

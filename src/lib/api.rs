@@ -20,6 +20,34 @@ pub enum ImportRewrite {
     Off,
 }
 
+impl ImportRewrite {
+    /// The relative `.tt`/`.ttx` specifier this rewrite turns into
+    /// `specifier`, if it produces that spelling at all — the rewrite only
+    /// replaces a relative specifier's extension, so this is its inverse.
+    ///
+    /// ```
+    /// use ttc::ImportRewrite;
+    /// assert_eq!(ImportRewrite::Js.source_specifier("./sub/m.js").as_deref(), Some("./sub/m.tt"));
+    /// assert_eq!(ImportRewrite::Ts.source_specifier("../v.tsx").as_deref(), Some("../v.ttx"));
+    /// assert_eq!(ImportRewrite::Js.source_specifier("pkg/m.js"), None);
+    /// assert_eq!(ImportRewrite::Off.source_specifier("./m.tt"), None);
+    /// ```
+    pub fn source_specifier(self, specifier: &str) -> Option<String> {
+        if !(specifier.starts_with("./") || specifier.starts_with("../")) {
+            return None;
+        }
+        let (tt, ttx) = match self {
+            ImportRewrite::Js => (".js", ".jsx"),
+            ImportRewrite::Ts => (".ts", ".tsx"),
+            ImportRewrite::Off => return None,
+        };
+        if let Some(stem) = specifier.strip_suffix(ttx) {
+            return Some(format!("{stem}.ttx"));
+        }
+        specifier.strip_suffix(tt).map(|stem| format!("{stem}.tt"))
+    }
+}
+
 /// The TypeScript surface accepted by one tt source file.
 ///
 /// This is an explicit compiler input rather than a filename heuristic:

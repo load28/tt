@@ -14,6 +14,7 @@
 use std::collections::HashMap;
 
 use swc_ecma_ast::{Decl, Ident, ModuleDecl, ModuleItem, ObjectPatProp, Pat, Stmt, TsModuleName};
+use swc_ecma_visit::{Visit, VisitWith};
 
 use crate::host_input::HostInput;
 use crate::lines::LineMap;
@@ -114,6 +115,87 @@ pub fn build_sidecar(source: &str, declarations: &str, tt_path: &str) -> Sidecar
     );
 
     Sidecar { declarations, map }
+}
+
+/// `declarations` — tsc's declarations for ttc's output — with every
+/// relative module specifier that ttc rewrote from a `.tt`/`.ttx` import
+/// spelled the way the source spells it.
+///
+/// ttc's output names a tt module by the file it compiles to
+/// ([`crate::ImportRewrite`]), and tsc's declarations keep that name. A
+/// sidecar is read where the source is — beside the `.tt` files and their
+/// sidecars, or in a tree that mirrors them — so it has to name them as the
+/// source does, as the sidecars `ttc --types` writes do. A specifier is
+/// restored when a rewrite produces it from a `.tt`/`.ttx` specifier that
+/// `names_source` confirms names a tt source, relative to the source file;
+/// every other byte is kept. A text that does not parse is returned as it is.
+pub fn source_specifiers(declarations: &str, names_source: impl Fn(&str) -> bool) -> String {
+    let input = HostInput::new(declarations);
+    let Ok(module) = input.declaration_parser().parse_module() else {
+        return declarations.to_owned();
+    };
+    let mut specifiers = ModuleSpecifiers::default();
+    module.visit_with(&mut specifiers);
+    let mut restored = String::with_capacity(declarations.len());
+    let mut copied = 0;
+    let mut spans: Vec<_> = specifiers
+        .0
+        .iter()
+        .map(|span| (input.byte(span.lo) + 1, input.byte(span.hi) - 1))
+        .collect();
+    spans.sort_unstable();
+    spans.dedup();
+    for (start, end) in spans {
+        let Some(specifier) = declarations.get(start..end) else {
+            continue;
+        };
+        let Some(source) = [crate::ImportRewrite::Js, crate::ImportRewrite::Ts]
+            .into_iter()
+            .filter_map(|rewrite| rewrite.source_specifier(specifier))
+            .find(|source| names_source(source))
+        else {
+            continue;
+        };
+        restored.push_str(&declarations[copied..start]);
+        restored.push_str(&source);
+        copied = end;
+    }
+    restored.push_str(&declarations[copied..]);
+    restored
+}
+
+/// The string literals of a module that name another module.
+#[derive(Default)]
+struct ModuleSpecifiers(Vec<swc_common::Span>);
+
+impl Visit for ModuleSpecifiers {
+    fn visit_import_decl(&mut self, node: &swc_ecma_ast::ImportDecl) {
+        self.0.push(node.src.span);
+    }
+
+    fn visit_export_all(&mut self, node: &swc_ecma_ast::ExportAll) {
+        self.0.push(node.src.span);
+    }
+
+    fn visit_named_export(&mut self, node: &swc_ecma_ast::NamedExport) {
+        self.0.extend(node.src.as_ref().map(|src| src.span));
+    }
+
+    fn visit_ts_import_type(&mut self, node: &swc_ecma_ast::TsImportType) {
+        self.0.push(node.arg.span);
+        node.visit_children_with(self);
+    }
+
+    fn visit_ts_external_module_ref(&mut self, node: &swc_ecma_ast::TsExternalModuleRef) {
+        self.0.push(node.expr.span);
+    }
+
+    fn visit_ts_module_decl(&mut self, node: &swc_ecma_ast::TsModuleDecl) {
+        if let TsModuleName::Str(name) = &node.id {
+            self.0.push(name.span);
+        }
+        node.visit_children_with(self);
+    }
 }
 
 struct Hit {

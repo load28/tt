@@ -554,6 +554,11 @@
 | TASK-546 | Annotate generated storage only with names visible at its declaration | Complete | 2026-09-29 | 2026-09-29 | [TASK-546](./TASK-546-accessible-storage-annotations.md) |
 | TASK-547 | Bind a function or class expression's name only inside itself | Complete | 2026-09-29 | 2026-09-29 | [TASK-547](./TASK-547-function-expression-name-scope.md) |
 | TASK-548 | Recover a discarded `result` block in the typed projection | Complete | 2026-09-29 | 2026-09-29 | [TASK-548](./TASK-548-recover-discarded-result.md) |
+| TASK-562 | Treat a backend that cannot start as unavailable | Complete | 2026-09-29 | 2026-09-29 | [TASK-562](./TASK-562-unstartable-backend-is-unavailable.md) |
+| TASK-563 | Leave the output directory out of the TypeScript program | Complete | 2026-09-29 | 2026-09-29 | [TASK-563](./TASK-563-exclude-output-directory-from-program.md) |
+| TASK-564 | Keep `--check` from starting the TypeScript backend | Complete | 2026-09-29 | 2026-09-29 | [TASK-564](./TASK-564-check-without-typescript.md) |
+| TASK-565 | Share one contextual TypeScript session per project across workers | Complete | 2026-09-29 | 2026-09-29 | [TASK-565](./TASK-565-shared-contextual-session.md) |
+| TASK-566 | Write sidecar imports with the source's specifiers | Complete | 2026-09-29 | 2026-09-29 | [TASK-566](./TASK-566-sidecar-source-specifiers.md) |
 | TASK-567 | Serve bundler compiles from one persistent ttc server | Complete | 2026-09-29 | 2026-09-29 | [TASK-567](./TASK-567-bundler-compile-server.md) |
 
 ## Next task number

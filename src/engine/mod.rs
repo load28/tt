@@ -209,7 +209,11 @@ impl Engine {
         // No toolchain is not "no project": the tt layer answers without
         // one, and the missing backend is carried as the typed layer's
         // failure instead ([`Checked::backend_error`]).
-        let backend = NativeBackend::new(self.node.clone(), &root);
+        let backend =
+            NativeBackend::new(self.node.clone(), &root).map(|backend| match &options.out_dir {
+                Some(dir) => backend.excluding_output(paths::prospective(dir)),
+                None => backend,
+            });
         // With a configuration the project's own `include` decides which
         // hand-written files are in the program; without one, they have to
         // be listed or a `.ts` nothing imports is never checked.

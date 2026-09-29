@@ -277,3 +277,64 @@ fn extended_config_patterns_preserve_exclusions_and_authored_config() {
     assert!(String::from_utf8_lossy(&output.stderr).contains("2322"));
     assert_eq!(fs::read_to_string(root.join("base.json")).unwrap(), base);
 }
+
+/// `ttc --types -o <dir>` writes its sidecars under the project root. With
+/// no `include` the configuration's default glob reaches that directory, and
+/// `tsc` leaves its own output directory out of that glob; ttc's must stay
+/// out of the program too, or every later pass checks the sources against
+/// the declarations an earlier one wrote.
+#[test]
+fn types_output_directory_is_not_a_program_input() {
+    if !common::toolchain() {
+        return;
+    }
+    let cases: [(&str, &[(&str, &str)]); 2] = [
+        (
+            r#"{"compilerOptions":{"strict":true,"module":"nodenext"}}"#,
+            &[
+                ("src/m.tt", "export variant K { A, B }\n"),
+                (
+                    "src/u.tt",
+                    "import { K } from \"./m.tt\";\nexport const k: K = K.A;\n",
+                ),
+            ],
+        ),
+        (
+            r#"{"compilerOptions":{"strict":true,"module":"esnext","moduleResolution":"bundler"}}"#,
+            &[("src/g.tt", "const globalThing: number = 1;\n")],
+        ),
+    ];
+    for (config, sources) in cases {
+        let root = Workspace::in_repo_with_subdir("types-output-directory", "src");
+        fs::write(root.join("tsconfig.json"), config).unwrap();
+        for (path, text) in sources {
+            fs::write(root.join(path), text).unwrap();
+        }
+        for _ in 0..2 {
+            success(run(&root, &["--types", "-o", "types", "src"]));
+        }
+
+        let log = root.join("watch.log");
+        let _watch = Watch(
+            Command::new(env!("CARGO_BIN_EXE_ttc"))
+                .current_dir(&root)
+                .args(["--types", "--watch", "-o", "types", "src"])
+                .stdout(std::process::Stdio::null())
+                .stderr(fs::File::create(&log).unwrap())
+                .spawn()
+                .unwrap(),
+        );
+        wait_for(|| fs::read_to_string(&log).unwrap().contains("Ctrl-C"));
+        let (path, text) = sources[0];
+        fs::write(root.join(path), format!("{text}export const edited = 1;\n")).unwrap();
+        wait_for(|| {
+            fs::read_to_string(&log)
+                .unwrap()
+                .matches("reported in")
+                .count()
+                >= 2
+        });
+        let log = fs::read_to_string(&log).unwrap();
+        assert!(!log.contains("error"), "{log}");
+    }
+}

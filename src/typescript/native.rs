@@ -58,6 +58,9 @@ pub(crate) struct NativeBackend {
     toolchain: Client,
     /// The `node` binary that runs the host (`--node`, else `node` on PATH).
     node: PathBuf,
+    /// Directories ttc writes this project's outputs to; the program never
+    /// takes an input from them.
+    outputs: Vec<PathBuf>,
     session: RefCell<Option<Session>>,
     observed: std::cell::Cell<Option<(u64, u64, bool)>>,
 }
@@ -81,9 +84,36 @@ impl NativeBackend {
         Ok(NativeBackend {
             toolchain: toolchain::client(from)?,
             node: node.unwrap_or_else(|| PathBuf::from("node")),
+            outputs: Vec::new(),
             session: RefCell::new(None),
             observed: std::cell::Cell::new(None),
         })
+    }
+
+    /// Leaves `dir`, where ttc writes this project's outputs, out of the
+    /// files the program's `include` finds — the rule `tsc` applies to its
+    /// own output directory.
+    pub(crate) fn excluding_output(mut self, dir: PathBuf) -> NativeBackend {
+        self.outputs.push(dir);
+        self
+    }
+
+    /// Makes the host serve this project, starting it unless it already
+    /// does. This is where the backend becomes available or is found not to
+    /// be: every way the host can fail to come up is
+    /// [`FailureKind::Unavailable`] except a rejection of ttc's own request.
+    pub(crate) fn open(&self, tsconfig: Option<&Path>, root: &Path) -> Result<(), Failure> {
+        let wanted = (tsconfig.map(Path::to_path_buf), root.to_path_buf());
+        let mut slot = self.session.borrow_mut();
+        // A question about a different project needs its own session: the
+        // project is opened once and never reopened.
+        if slot.as_ref().is_some_and(|s| s.opened != wanted) {
+            *slot = None;
+        }
+        if slot.is_none() {
+            *slot = Some(self.start(tsconfig, root)?);
+        }
+        Ok(())
     }
 
     /// Starts the host and opens the project.
@@ -113,6 +143,7 @@ impl NativeBackend {
             "apiModule": self.toolchain.api,
             "cwd": root,
             "tsconfig": tsconfig,
+            "outputs": self.outputs,
         });
         writeln!(stdin, "{open}")
             .map_err(|e| Failure::unavailable(format!("cannot start the host: {e}")))?;
@@ -123,7 +154,7 @@ impl NativeBackend {
             .map_err(|e| Failure::unavailable(e.to_string()))?
             == 0
         {
-            return Err(host_died(&mut child));
+            return Err(host_died(&mut child, Phase::Starting));
         }
         Ok(Session {
             child,
@@ -135,10 +166,17 @@ impl NativeBackend {
     }
 }
 
+/// Whether the host had acknowledged the open request when it died.
+#[derive(Clone, Copy)]
+enum Phase {
+    Starting,
+    Serving,
+}
+
 /// What the host said on its way out. A crash before the first answer is
-/// usually a missing API or an unreadable client, and its message is on
-/// stderr.
-fn host_died(child: &mut Child) -> Failure {
+/// usually a missing API, an unreadable client, or a runtime that cannot
+/// start the compiler, and its message is on stderr.
+fn host_died(child: &mut Child, phase: Phase) -> Failure {
     let status = child.wait().ok();
     let mut stderr = String::new();
     if let Some(mut pipe) = child.stderr.take() {
@@ -162,10 +200,14 @@ fn host_died(child: &mut Child) -> Failure {
             stderr
         }
     );
-    if status.and_then(|s| s.code()) == Some(2) {
-        Failure::unavailable(message)
-    } else {
-        Failure::internal(message)
+    // Before the acknowledgement the compiler has not been reached, so a
+    // death then is unavailability — unless the host rejected the open
+    // request ttc wrote (exit 3), which is ttc breaking its own protocol.
+    let code = status.and_then(|s| s.code());
+    match phase {
+        Phase::Starting if code != Some(3) => Failure::unavailable(message),
+        _ if code == Some(2) => Failure::unavailable(message),
+        _ => Failure::internal(message),
     }
 }
 
@@ -217,20 +259,14 @@ impl NativeBackend {
         tsconfig: &Path,
         root: &Path,
     ) -> Result<Vec<serde_json::Value>, Failure> {
-        let wanted = (Some(tsconfig.to_path_buf()), root.to_path_buf());
+        self.open(Some(tsconfig), root)?;
         let mut slot = self.session.borrow_mut();
-        if slot.as_ref().is_some_and(|s| s.opened != wanted) {
-            *slot = None;
-        }
-        if slot.is_none() {
-            *slot = Some(self.start(Some(tsconfig), root)?);
-        }
         let session = slot.as_mut().expect("started");
         let line = match exchange(session, r#"{"configuredMappers":true}"#) {
             Ok(line) => line,
             Err(_) => {
                 let mut session = slot.take().expect("started");
-                return Err(host_died(&mut session.child));
+                return Err(host_died(&mut session.child, Phase::Serving));
             }
         };
         let value: serde_json::Value = serde_json::from_str(line.trim()).map_err(|e| {
@@ -251,16 +287,8 @@ impl NativeBackend {
 
 impl TypeScriptBackend for NativeBackend {
     fn ask(&self, tsconfig: Option<&Path>, root: &Path, query: &Query) -> Result<Answers, Failure> {
-        let wanted = (tsconfig.map(Path::to_path_buf), root.to_path_buf());
+        self.open(tsconfig, root)?;
         let mut slot = self.session.borrow_mut();
-        // A question about a different project needs its own session: the
-        // project is opened once and never reopened.
-        if slot.as_ref().is_some_and(|s| s.opened != wanted) {
-            *slot = None;
-        }
-        if slot.is_none() {
-            *slot = Some(self.start(tsconfig, root)?);
-        }
         let session = slot.as_mut().expect("started");
 
         let job = job_json(query);
@@ -281,7 +309,7 @@ impl TypeScriptBackend for NativeBackend {
                 // The host is gone; take its last words, and let the next
                 // question start a fresh one.
                 let mut session = slot.take().expect("started");
-                Err(host_died(&mut session.child))
+                Err(host_died(&mut session.child, Phase::Serving))
             }
         }
     }

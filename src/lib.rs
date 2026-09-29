@@ -102,7 +102,7 @@ pub use probe::{
     Literal, LiteralMatch, PayloadProbe, TagMatch, literal_matches, literal_matches_with_kind,
     payload_probes, payload_probes_with_kind, tag_matches, tag_matches_with_kind,
 };
-pub use sidecar::{Sidecar, build_sidecar};
+pub use sidecar::{Sidecar, build_sidecar, source_specifiers};
 pub use stdlib::{
     GENERATED_BANNER, RUNTIME_SOURCE, STD_OPTION_SOURCE, STD_PACKAGE_COMMONJS_DIR,
     STD_RESULT_SOURCE, STD_SPECIFIER, STD_TYPES_SOURCE, StdImports, StdModule, StdPackage,
