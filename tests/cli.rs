@@ -1077,6 +1077,49 @@ fn types_reports_nothing_for_storage_inside_a_shadowing_scope() {
 }
 
 #[test]
+fn types_join_storage_after_the_storage_its_values_read() {
+    require_types_toolchain!();
+    // TASK-584: without `noImplicitAny`, storage no round has settled reads
+    // as `any`; `g`'s join waits for `f`'s storage instead of keeping
+    // `f(): any`, across modules too, and an `any` of the source stays.
+    let (ok, err) = types_project_output(
+        "{ \"compilerOptions\": { \"strict\": false, \"target\": \"es2022\", \"module\": \"esnext\", \"moduleResolution\": \"bundler\", \"noEmit\": true }, \"include\": [\"src\"] }\n",
+        &[
+            (
+                "src/a.tt",
+                "declare const flag: boolean;\n\
+                 export const f = () => match(flag) { true => [1], false => [2] };\n\
+                 export const g = match(flag) { true => [f()], false => [] };\n\
+                 export const bad = g[0]![0]!.toUpperCase();\n",
+            ),
+            (
+                "src/m.tt",
+                "declare const flag: boolean;\n\
+                 export const p = () => match(flag) { true => [JSON.parse(\"1\")], false => [JSON.parse(\"2\")] };\n",
+            ),
+            (
+                "src/b.tt",
+                "import { f } from \"./a.tt\";\n\
+                 import { p } from \"./m.tt\";\n\
+                 declare const flag: boolean;\n\
+                 export const g = match(flag) { true => [f()], false => [] };\n\
+                 export const bad = g[0]![0]!.toUpperCase();\n\
+                 export const q = match(flag) { true => [p()], false => [] };\n\
+                 export const worse = q[0]!.foo;\n",
+            ),
+        ],
+    );
+    assert!(!ok, "{err}");
+    assert_eq!(err.matches("error[").count(), 3, "{err}");
+    assert!(err.contains("--> src/a.tt:4:30"), "{err}");
+    assert!(err.contains("--> src/b.tt:5:30"), "{err}");
+    assert!(
+        err.contains("Property 'foo' does not exist on type 'any[]'"),
+        "{err}"
+    );
+}
+
+#[test]
 fn types_does_not_count_a_guarded_arm_as_covering() {
     require_types_toolchain!();
     let err = types_stderr(

@@ -125,6 +125,21 @@ before the remaining union is serialized at the declaration. For example,
 inference without evolving an implicit `any[]`. Unresolved, error, `any`, and
 `unknown` inputs do not provide a definite annotation in that round.
 
+Nor does an input typed through storage no round has settled yet (TASK-584).
+Such storage has no type of its own: without `noImplicitAny` it reads as
+`any`, and so does an evolving variable read in a closure. In
+`const g = match (flag) { true => [f()], false => [] }`, `f()` is then `any`
+while `f`'s own join is inferred in the same round, and `g` would keep
+`any[]` after `f` is annotated. A join whose annotation writes `any` and
+one of whose incoming values reads unsettled storage (directly, or through
+the initializer or body of an unannotated declaration in a lowered module,
+or the statement that contextually types an unannotated parameter) waits
+for a later round; the slot's own storage does not count. Joins therefore
+settle in dependency order, and a join that never stops depending on
+unsettled storage (a cycle) is left unannotated and typed from its
+assignments. An `any` of the source, such as `JSON.parse`'s, is annotated
+as soon as its inputs read only settled storage.
+
 A slot therefore holds values of one type. A structured pipeline writes the
 value piped into each step to a slot of its own and only its result to the
 pipeline's value slot (TASK-505), so no annotation has to cover the values of

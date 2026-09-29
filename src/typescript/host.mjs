@@ -276,6 +276,7 @@ async function main() {
   let isIdentifier;
   let isVariableDeclaration;
   let isBinaryExpression;
+  let isStatement;
   let SyntaxKind;
   try {
     ({ API, SymbolFlags, TypeFlags, NodeBuilderFlags } = await import(open.apiModule));
@@ -284,6 +285,7 @@ async function main() {
       isIdentifier,
       isVariableDeclaration,
       isBinaryExpression,
+      isStatement,
       SyntaxKind,
     } = await import(path.resolve(path.dirname(open.apiModule), "../../ast/index.js")));
   } catch (e) {
@@ -647,6 +649,70 @@ async function main() {
         storage.set(module, symbols);
         return symbols;
       };
+      // The storage no round has settled yet, and whether a node reads it,
+      // directly or through a declaration whose inferred type is computed
+      // from it: an unannotated variable's initializer, an unannotated
+      // function's body, and for an unannotated parameter the statement
+      // whose context types it. Only the lowered modules declare storage,
+      // so only their declarations are followed.
+      let pending;
+      const pendingStorage = () => {
+        if (pending) return pending;
+        pending = new Set();
+        const ends = new Map();
+        for (const slot of job.contextualSlots ?? []) {
+          if (slot.settled || !members.has(slot.module)) continue;
+          if (!ends.has(slot.module)) ends.set(slot.module, new Set());
+          ends.get(slot.module).add(slot.declarationEnd);
+        }
+        for (const [module, declared] of ends) {
+          const collect = (node) => {
+            if (isVariableDeclaration(node) && isIdentifier(node.name) && declared.has(node.name.end)) {
+              const symbol = checker.getSymbolAtLocation(node.name);
+              if (symbol) pending.add(symbol.id);
+            }
+            node.forEachChild(collect);
+          };
+          const source = project.program.getSourceFile(module);
+          if (source) collect(source);
+        }
+        return pending;
+      };
+      const readsPending = (node, own) => {
+        const followed = new Set([own]);
+        const reads = (node) => {
+          const names = [];
+          const collect = (child) => {
+            if (isIdentifier(child)) names.push(child);
+            child.forEachChild(collect);
+          };
+          collect(node);
+          if (!names.length) return false;
+          for (let symbol of checker.getSymbolAtLocation(names)) {
+            if (!symbol) continue;
+            if (symbol.flags & SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
+            if (followed.has(symbol.id)) continue;
+            followed.add(symbol.id);
+            if (pendingStorage().has(symbol.id)) return true;
+            for (const handle of symbol.declarations ?? []) {
+              if (!members.has(String(handle.path))) continue;
+              let declaration = handle.resolve(project);
+              if (declaration?.kind === SyntaxKind.Parameter && !declaration.type) {
+                while (declaration.parent && !isStatement(declaration)) declaration = declaration.parent;
+              }
+              if (declaration && reads(declaration)) return true;
+            }
+          }
+          return false;
+        };
+        return reads(node);
+      };
+      const writesAny = (node) => {
+        if (node.kind === SyntaxKind.AnyKeyword) return true;
+        let found = false;
+        node.forEachChild((child) => { found ||= writesAny(child); });
+        return found;
+      };
       for (const [index, slot] of (job.contextualSlots ?? []).entries()) {
         if (slot.settled || !members.has(slot.module)) continue;
         const source = project.program.getSourceFile(slot.module);
@@ -679,8 +745,8 @@ async function main() {
         const generated = storageOf(slot.module, source);
         const annotation = (type) => {
           const node = typeNode(checker, type, declaration, NodeBuilderFlags.NoTruncation);
-          if (!node || !denotes(checker, node, type, declaration, generated, { SyntaxKind, SymbolFlags })) return undefined;
-          return project.emitter.printNode(node);
+          return node && denotes(checker, node, type, declaration, generated, { SyntaxKind, SymbolFlags })
+            ? node : undefined;
         };
         let expected;
         let ambiguous = false;
@@ -712,15 +778,23 @@ async function main() {
             index !== otherIndex && checker.isTypeAssignableTo(type, other) &&
             (!checker.isTypeAssignableTo(other, type) || otherIndex < index)) ? [] : [index]);
           const annotations = joined.map(index => annotation(types[index]));
-          if (annotations.length && annotations.every(Boolean)) {
-            out.contextualSlots.push({ index, inferred: true, annotation: annotations.length === 1
-              ? annotations[0] : annotations.map(t => `(${t})`).join(" | ") });
-          }
+          if (!annotations.length || !annotations.every(Boolean)) continue;
+          // An incoming value that reads storage no round has settled yet
+          // is typed by that storage's `any` where it has no type of its
+          // own (without `noImplicitAny`, or where an evolving variable is
+          // read in a closure), and a join computed from it would keep that
+          // `any` after the storage is settled. Such a join waits for a
+          // later round, when its inputs are typed by their settled
+          // storage.
+          if (annotations.some(writesAny) && incoming.some((assignment) => readsPending(assignment.right, symbol.id))) continue;
+          const texts = annotations.map((node) => project.emitter.printNode(node));
+          out.contextualSlots.push({ index, inferred: true, annotation: texts.length === 1
+            ? texts[0] : texts.map(t => `(${t})`).join(" | ") });
           continue;
         }
         if (!expected || ambiguous) continue;
-        const text = annotation(expected);
-        if (text) out.contextualSlots.push({ index, inferred: false, annotation: text });
+        const node = annotation(expected);
+        if (node) out.contextualSlots.push({ index, inferred: false, annotation: project.emitter.printNode(node) });
       }
     };
     for (const group of groups) contextual(group);
