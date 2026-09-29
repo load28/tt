@@ -83,6 +83,52 @@ use std::path::PathBuf;
 
 use crate::typescript::native::NativeBackend;
 
+/// What a command's inputs name: every tt source they reach, the files
+/// they name directly — roots by request — and the directories they name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Inputs {
+    collected: Vec<PathBuf>,
+    named: Vec<PathBuf>,
+    directories: Vec<PathBuf>,
+}
+
+impl Inputs {
+    /// Collects `inputs` (files or directories) the way every command
+    /// does. The error is a ready-to-print sentence naming the input:
+    /// nothing collected, an input that does not exist or cannot be read,
+    /// or a file that is not a tt source.
+    pub fn collect(inputs: &[String]) -> Result<Inputs, String> {
+        let collected = match project::collect_tt(inputs) {
+            Ok(files) if files.is_empty() => return Err("no .tt or .ttx sources found".to_string()),
+            Ok(files) => files,
+            Err(e) => return Err(e.to_string()),
+        };
+        let existing = |keep: fn(&std::path::Path) -> bool| -> Vec<PathBuf> {
+            inputs
+                .iter()
+                .map(PathBuf::from)
+                .filter(|path| keep(path))
+                .filter_map(|path| path.canonicalize().ok())
+                .collect()
+        };
+        Ok(Inputs {
+            collected,
+            named: existing(std::path::Path::is_file),
+            directories: existing(std::path::Path::is_dir),
+        })
+    }
+
+    /// Every tt source the inputs reach, canonical.
+    pub fn files(&self) -> &[PathBuf] {
+        &self.collected
+    }
+
+    /// The files the inputs name directly, canonical: roots by request.
+    pub fn named(&self) -> &[PathBuf] {
+        &self.named
+    }
+}
+
 /// Process-wide entry point: toolchain discovery and project creation.
 #[derive(Debug, Default)]
 pub struct Engine {
@@ -132,25 +178,20 @@ impl Engine {
         inputs: &[String],
         options: &ProjectOptions,
     ) -> Result<Project, String> {
-        let collected = match project::collect_tt(inputs) {
-            Ok(files) if files.is_empty() => return Err("no .tt or .ttx sources found".to_string()),
-            Ok(files) => files,
-            Err(e) => return Err(e.to_string()),
-        };
-        let (tsconfig, root) = identity_of(&collected, options);
-        let mut project = self.open_collected(collected, tsconfig, root, options)?;
-        project.input_roots = inputs
-            .iter()
-            .map(PathBuf::from)
-            .filter(|path| path.is_dir())
-            .filter_map(|path| path.canonicalize().ok())
-            .collect();
-        project.named = inputs
-            .iter()
-            .map(PathBuf::from)
-            .filter(|path| path.is_file())
-            .filter_map(|path| path.canonicalize().ok())
-            .collect();
+        self.open_inputs(&Inputs::collect(inputs)?, options)
+    }
+
+    /// Opens the project collected `inputs` belong to, as
+    /// [`Engine::open_project`] does.
+    pub fn open_inputs(
+        &self,
+        inputs: &Inputs,
+        options: &ProjectOptions,
+    ) -> Result<Project, String> {
+        let (tsconfig, root) = identity_of(&inputs.collected, options);
+        let mut project = self.open_collected(inputs.collected.clone(), tsconfig, root, options)?;
+        project.input_roots = inputs.directories.clone();
+        project.named = inputs.named.clone();
         Ok(project)
     }
 

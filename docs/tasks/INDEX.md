@@ -578,6 +578,7 @@
 | TASK-580 | Report dependency directories apart from files and register each as its bundler expects | Complete | 2026-09-29 | 2026-09-29 | [TASK-580](./TASK-580-dependency-directories.md) |
 | TASK-581 | Report esbuild load errors with their watch files | Complete | 2026-09-29 | 2026-09-29 | [TASK-581](./TASK-581-esbuild-load-errors.md) |
 | TASK-582 | Keep a shebang first in a declaration sidecar | Complete | 2026-09-29 | 2026-09-29 | [TASK-582](./TASK-582-sidecar-shebang.md) |
+| TASK-583 | Answer `--dependencies` and the server's `dependencies` through one implementation | Complete | 2026-09-29 | 2026-09-29 | [TASK-583](./TASK-583-one-dependencies-implementation.md) |
 
 ## Next task number
 

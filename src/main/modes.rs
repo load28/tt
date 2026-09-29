@@ -340,23 +340,15 @@ pub(super) fn dependencies_mode(
 ) -> ExitCode {
     let result = (|| -> Result<ttc::engine::Dependencies, String> {
         let engine = ttc::engine::Engine::new(node.map(Path::to_path_buf));
-        let mut project = engine.open_project(
-            inputs,
+        let inputs = ttc::engine::Inputs::collect(inputs)?;
+        let mut project = engine.open_inputs(
+            &inputs,
             &ttc::engine::ProjectOptions {
                 tsconfig: config.map(Path::to_path_buf),
                 out_dir: None,
             },
         )?;
-        let snapshot = project
-            .update(&project.initial_files())
-            .map_err(|error| error.error.message.clone())?;
-        let checked = project.check(&snapshot, &ttc::engine::CheckRequest::default())?;
-        if let Some(error) = checked.backend_error
-            && error.kind == ttc::engine::BackendErrorKind::Internal
-        {
-            return Err(error.message);
-        }
-        project.dependencies().map_err(|error| error.to_string())
+        project.dependencies_of(&inputs)
     })();
     match result {
         Ok(dependencies) => {

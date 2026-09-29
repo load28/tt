@@ -822,9 +822,8 @@ fn stamps(paths: &[PathBuf]) -> HashMap<PathBuf, SystemTime> {
         .collect()
 }
 
-/// `--dependencies <path>`: every path whose change invalidates the file's
-/// compile — the watch paths of the live project it belongs to, after a
-/// check of that project with the file among its candidates.
+/// `--dependencies <path>`, answered by [`ttc::engine::Project::dependencies_of`]
+/// on the live project the file belongs to.
 fn dependencies(
     workspace: &mut Workspace,
     checks: &mut Checks,
@@ -833,17 +832,19 @@ fn dependencies(
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "dependencies needs a \"path\"".to_string())?;
-    let canonical = ttc::engine::normalize_document_path(Path::new(path))?;
-    let project = workspace.project_for(&canonical)?;
-    let mut files = project.scan().map_err(|error| error.to_string())?;
-    files.push(canonical);
-    files.sort();
-    files.dedup();
+    let inputs = ttc::engine::Inputs::collect(&[path.to_string()])?;
+    let project = workspace.project_for(&inputs.files()[0])?;
+    let files = project
+        .candidates(&inputs)
+        .map_err(|error| error.to_string())?;
     let watched = project.watch_paths().map_err(|error| error.to_string())?;
     let current = stamps(&watched);
+    // The previous check stands for a file it covered; one it left out is
+    // a root by request, and is checked as one.
     if let Some(checked) = checks.0.get(project.root())
         && checked.files == files
         && checked.stamps == current
+        && inputs.named().iter().all(|file| project.checked(file))
     {
         return project
             .dependencies()
@@ -851,16 +852,7 @@ fn dependencies(
             .map_err(|error| error.to_string());
     }
     checks.0.remove(project.root());
-    let snapshot = project
-        .update(&files)
-        .map_err(|blocked| blocked.error.message.clone())?;
-    let checked = project.check(&snapshot, &CheckRequest::default())?;
-    if let Some(error) = checked.backend_error
-        && error.kind == ttc::engine::BackendErrorKind::Internal
-    {
-        return Err(error.message);
-    }
-    let dependencies = project.dependencies().map_err(|error| error.to_string())?;
+    let dependencies = project.dependencies_of(&inputs)?;
     let paths = project.watch_paths().map_err(|error| error.to_string())?;
     // Stamps taken before the check stand for the paths that were already
     // watched, so an edit made while it ran still invalidates it; the paths

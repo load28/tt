@@ -193,3 +193,77 @@ fn server_dependencies_answer_what_dependencies_prints() {
         assert_eq!(answer["result"], printed, "{file}");
     }
 }
+
+/// `dependencies` of `files`, asked of one session in order, against what
+/// `--dependencies` prints for each on its own.
+fn assert_dependencies_match(files: &[std::path::PathBuf]) {
+    let requests: Vec<_> = files
+        .iter()
+        .map(|path| serde_json::json!({ "method": "dependencies", "params": { "path": path } }))
+        .collect();
+    for (path, answer) in files.iter().zip(server_answers(&requests)) {
+        let output = ttc(&["--dependencies", path.to_str().unwrap()]);
+        if output.status.success() {
+            let printed: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert_eq!(answer["result"], printed, "{}", path.display());
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let message = stderr.trim_end().strip_prefix("ttc: ").unwrap_or(&stderr);
+            assert_eq!(answer["error"], message, "{}", path.display());
+        }
+    }
+}
+
+#[test]
+fn server_dependencies_check_a_file_its_configuration_leaves_out_as_a_root() {
+    if !common::toolchain() {
+        return;
+    }
+    // A configuration TypeScript cannot read admits nothing; a file it
+    // leaves out still depends on what its own program reads.
+    let broken = Workspace::in_repo("server-dependencies-broken");
+    fs::write(
+        broken.join("tsconfig.json"),
+        r#"{ "compilerOptions": { "strict": true, }"#,
+    )
+    .unwrap();
+    fs::write(
+        broken.join("a.tt"),
+        "declare const flag: boolean;\nexport const v = match (flag) { true => [1], false => [] };\n",
+    )
+    .unwrap();
+    assert_dependencies_match(&[broken.join("a.tt"), broken.join("a.tt")]);
+
+    // A file outside `include`, asked after one inside it: the check that
+    // answered the first did not cover the second.
+    let dir = Workspace::in_repo("server-dependencies-excluded");
+    fs::create_dir(dir.join("shared")).unwrap();
+    fs::write(
+        dir.join("shared/helper.ts"),
+        "export const helper = (x: number) => x + 1;\n",
+    )
+    .unwrap();
+    fs::create_dir_all(dir.join("app/src")).unwrap();
+    fs::write(
+        dir.join("app/tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"module":"preserve","moduleResolution":"bundler","allowImportingTsExtensions":true,"noEmit":true},"include":["src"]}"#,
+    )
+    .unwrap();
+    fs::write(dir.join("app/src/in.tt"), "export const one = 1;\n").unwrap();
+    fs::write(
+        dir.join("app/out.tt"),
+        "import { helper } from \"../shared/helper.ts\";\nexport const two = helper(1);\n",
+    )
+    .unwrap();
+    assert_dependencies_match(&[dir.join("app/src/in.tt"), dir.join("app/out.tt")]);
+}
+
+#[test]
+fn server_dependencies_refuse_what_dependencies_refuses_in_its_words() {
+    let dir = project();
+    assert_dependencies_match(&[
+        dir.join("src/gone.tt"),
+        dir.join("missing/gone.tt"),
+        dir.join("src/plain.ts"),
+    ]);
+}

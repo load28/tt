@@ -88,6 +88,9 @@ pub struct Project {
     dependencies: RefCell<HashSet<PathBuf>>,
     /// Directories the compiler listed while resolving the program.
     directories: RefCell<HashSet<PathBuf>>,
+    /// The sources the last check's TypeScript programs contained, or
+    /// `None` when that check had no TypeScript program to leave one out.
+    members: RefCell<Option<HashSet<PathBuf>>>,
     /// Candidate files for the first layered-filesystem pass, fixed at open:
     /// the project scan together with the inputs the caller named. The
     /// configured TypeScript program filters these to actual members.
@@ -144,6 +147,7 @@ impl Project {
             named: Vec::new(),
             dependencies: RefCell::new(HashSet::new()),
             directories: RefCell::new(HashSet::new()),
+            members: RefCell::new(None),
             initial,
             sources,
             overlays: Documents::default(),
@@ -421,7 +425,7 @@ impl Project {
                 &mut modules,
                 &query.modules,
                 &query.sources,
-                &self.roots(&projected),
+                &self.roots(&projected, &[]),
             )
             .map_err(blocked)?;
             for (doc, (_, emit)) in projected.iter_mut().zip(modules) {
@@ -536,14 +540,54 @@ impl Project {
         self.pattern_analysis(path, source, externs)
     }
 
-    fn roots(&self, files: &[Arc<ProjectedDocument>]) -> Vec<PathBuf> {
+    fn roots(&self, files: &[Arc<ProjectedDocument>], requested: &[PathBuf]) -> Vec<PathBuf> {
         files
             .iter()
             .filter(|file| {
-                self.named.contains(&file.source_path) || self.opened.contains(&file.source_path)
+                self.named.contains(&file.source_path)
+                    || self.opened.contains(&file.source_path)
+                    || requested.contains(&file.source_path)
             })
             .map(|file| file.module_path.clone())
             .collect()
+    }
+
+    /// The candidates a check of `inputs` covers: the project scan and
+    /// every tt source the inputs reach.
+    pub fn candidates(&self, inputs: &super::Inputs) -> std::io::Result<Vec<PathBuf>> {
+        let mut files = self.scan()?;
+        files.extend(inputs.files().iter().cloned());
+        files.sort();
+        files.dedup();
+        Ok(files)
+    }
+
+    /// `--dependencies <inputs>`: checks the project with every candidate,
+    /// the files the inputs name being roots by request (checked even when
+    /// the configuration leaves them out), and answers what that check
+    /// depends on. The command line and the server's `dependencies` both
+    /// answer through this.
+    pub fn dependencies_of(&mut self, inputs: &super::Inputs) -> Result<Dependencies, String> {
+        let files = self.candidates(inputs).map_err(|error| error.to_string())?;
+        let snapshot = self
+            .update(&files)
+            .map_err(|blocked| blocked.error.message.clone())?;
+        let checked = self.check_requested(&snapshot, &CheckRequest::default(), &inputs.named)?;
+        if let Some(error) = checked.backend_error
+            && error.kind == super::BackendErrorKind::Internal
+        {
+            return Err(error.message);
+        }
+        self.dependencies().map_err(|error| error.to_string())
+    }
+
+    /// Whether the last check covered `path`: its TypeScript programs
+    /// contained it, or it had none to leave it out of.
+    pub fn checked(&self, path: &Path) -> bool {
+        self.members
+            .borrow()
+            .as_ref()
+            .is_none_or(|members| members.contains(path))
     }
 
     /// Checks a snapshot: asks the running compiler about it and returns
@@ -551,6 +595,17 @@ impl Project {
     /// the request wants them. The session persists across calls; only what
     /// changed since the last ask travels.
     pub fn check(&self, snapshot: &Snapshot, request: &CheckRequest) -> Result<Checked, String> {
+        self.check_requested(snapshot, request, &[])
+    }
+
+    /// [`Project::check`] with `requested` roots by request besides the
+    /// named and open files, for this check only.
+    fn check_requested(
+        &self,
+        snapshot: &Snapshot,
+        request: &CheckRequest,
+        requested: &[PathBuf],
+    ) -> Result<Checked, String> {
         let semantics = self.file_semantics(snapshot);
         let (mut query, probes) = projection::assemble(
             snapshot.files(),
@@ -559,7 +614,7 @@ impl Project {
             &self.sources,
         );
         query.emit_declarations = request.emit_declarations;
-        query.roots = self.roots(snapshot.files());
+        query.roots = self.roots(snapshot.files(), requested);
         query
             .modules
             .extend(snapshot.host_overlays.iter().map(|(path, text)| {
@@ -599,6 +654,14 @@ impl Project {
         self.directories
             .borrow_mut()
             .extend(answers.directories.iter().cloned());
+        *self.members.borrow_mut() = answers.project_modules.as_ref().map(|modules| {
+            snapshot
+                .files()
+                .iter()
+                .filter(|file| modules.contains(&file.module_path))
+                .map(|file| file.source_path.clone())
+                .collect()
+        });
         let declarations = if request.emit_declarations && backend_error.is_none() {
             semantics::match_declarations(snapshot, &answers, &self.requested)
         } else {
