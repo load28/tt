@@ -151,6 +151,42 @@ fn project_discovers_relative_tt_modules_outside_the_config_root() {
     );
 }
 
+#[test]
+fn dependencies_of_a_configured_project_are_only_its_inputs() {
+    if !common::toolchain() {
+        return;
+    }
+    let root = Workspace::in_repo("configured-dependencies");
+    fs::create_dir(root.join("src")).unwrap();
+    fs::write(root.join("src/main.tt"), "export const value = 1;").unwrap();
+    fs::write(
+        root.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"noEmit":true},"include":["src"]}"#,
+    )
+    .unwrap();
+    let output = run(&root, &["--dependencies", "src"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let dependencies: Vec<std::path::PathBuf> = serde_json::from_slice(&output.stdout).unwrap();
+    assert!(
+        dependencies
+            .iter()
+            .any(|path| path.ends_with("tsconfig.json")),
+        "{dependencies:?}"
+    );
+    // The project and the TypeScript it resolves both live in this
+    // repository; a file the compiler wrote for itself does not.
+    let repository = fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap();
+    let outside: Vec<_> = dependencies
+        .iter()
+        .filter(|path| !fs::canonicalize(path).is_ok_and(|path| path.starts_with(&repository)))
+        .collect();
+    assert!(outside.is_empty(), "{outside:?}");
+}
+
 struct Watch(std::process::Child);
 impl Drop for Watch {
     fn drop(&mut self) {

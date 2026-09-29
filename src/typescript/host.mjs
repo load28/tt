@@ -186,13 +186,17 @@ function diskVersion(file) {
 }
 
 function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links) {
+  // The packages this host publishes and links into the project are its
+  // own, not project inputs: they are neither dependencies nor listings.
+  const published = (p) => [...links].some(([link, target]) =>
+    [link, target].some((root) => p === root || p.startsWith(root + "/")));
   return {
     // A `.tt` source the engine did not serve does not exist for TypeScript:
     // its text is tt, not the lowered module.
     fileExists: (f) => (files.has(f) ? true : TT_SOURCE.test(f) ? false : undefined),
     // `undefined` falls back to the real disk; `null` would mean "absent".
     readFile: (f) => {
-      if (!files.has(f) && !dependencies.has(f)) dependencies.set(f, diskVersion(f));
+      if (!files.has(f) && !dependencies.has(f) && !published(f)) dependencies.set(f, diskVersion(f));
       if (configFiles.has(f)) return configFiles.get(f);
       if (files.has(f)) return files.get(f);
       return TT_SOURCE.test(f) ? null : undefined;
@@ -214,7 +218,7 @@ function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, list
       } catch {
         if (!dirs.has(d)) return undefined;
       }
-      listings.set(d, new Set([...real.files, ...real.directories]));
+      if (!published(d)) listings.set(d, new Set([...real.files, ...real.directories]));
       const here = [...files.keys()].filter((f) => path.dirname(f) === d && !aliases.has(f));
       const names = new Set(real.files.map((f) => f));
       for (const f of here) {

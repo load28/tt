@@ -538,7 +538,8 @@
 | TASK-540 | Report an unreadable root configuration as TS5083 and recover | Complete | 2026-09-29 | 2026-09-29 | [TASK-540](./TASK-540-unreadable-root-configuration.md) |
 | TASK-541 | Write the `@tt/std` declarations under a TypeScript configuration | Complete | 2026-09-29 | 2026-09-29 | [TASK-541](./TASK-541-configured-std-declarations.md) |
 | TASK-542 | Place sidecar map segments from declaration syntax | Complete | 2026-09-29 | 2026-09-29 | [TASK-542](./TASK-542-sidecar-syntax-positions.md) |
+| TASK-543 | Leave the backend's own mapper package out of project dependencies | Complete | 2026-09-29 | 2026-09-29 | [TASK-543](./TASK-543-host-owned-dependencies.md) |
 
 ## Next task number
 
-**TASK-543**
+**TASK-544**
