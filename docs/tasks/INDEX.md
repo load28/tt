@@ -519,7 +519,8 @@
 | TASK-509 | Report `--types` writes per file and settle editor sidecars from the report | Complete | 2026-09-28 | 2026-09-28 | [TASK-509](./TASK-509-types-write-report-contract.md) |
 | TASK-510 | Restore compile throughput lost on the branch | Complete | 2026-09-28 | 2026-09-28 | [TASK-510](./TASK-510-compile-throughput.md) |
 | TASK-511 | Give test temporary directories one owner per language | Complete | 2026-09-28 | 2026-09-28 | [TASK-511](./TASK-511-test-temp-dir-ownership.md) |
+| TASK-512 | Bring single-file compile cost back within the CI budget | Complete | 2026-09-29 | 2026-09-29 | [TASK-512](./TASK-512-single-file-compile-cost.md) |
 
 ## Next task number
 
-**TASK-512**
+**TASK-513**

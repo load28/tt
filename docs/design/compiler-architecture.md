@@ -127,11 +127,20 @@ lowering and the checks read the TypeScript-kind lexing, which is the same
 stream for a `.tt` file and a second lexing only for `.ttx`), and the
 engine's projection of a file parses it once for the compile and every
 probe it records. The remaining whole-text lexings are of the host
-projection and of the output, which the host syntax self-checks read. A
-lexical question answers from the bytes alone where no token could change
-the answer — no delimiter byte, no `await`, no `//` — without lexing.
+projection and of the output, which the host syntax self-checks read; the
+output's statement-boundary check reads the tokens its syntax check lexed
+(TASK-512). A lexical question answers from the bytes alone where no token
+could change the answer — no delimiter byte, TSX `<`, or conflict-marker
+run for the host syntax check, no `await`, no `//` — without lexing.
 `scaling_tests.rs` counts the parses and whole-text lexings of a compile and
 of a projection.
+
+The host syntax checks cannot move behind SWC's parse of the same text
+(TASK-512): SWC accepts some text they reject (an `export namespace` body
+that lacks its `}` or holds a stray `)` parses without an error), and it
+panics or backtracks on the rest (conflict-marker recovery, a TSX
+namespaced member, deeply unbalanced type arguments), so each guarded text
+is lexed before its parse.
 
 파일 표면은 `SourceKind::{TypeScript, Tsx}`로 컴파일 경계에서 정해지고 모든
 단계에 전달된다. TSX 모드에서는 완전한 JSX element/fragment를 구조적으로

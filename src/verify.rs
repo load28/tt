@@ -32,7 +32,17 @@ use swc_common::Spanned;
 use crate::host_input::HostInput;
 
 fn parse_ts_module(code: &str, source_kind: crate::SourceKind) -> Result<(), (String, usize)> {
-    if let Some((span, message)) = crate::lexer::host_syntax_error(code, source_kind) {
+    parse_ts_module_lexed(code, source_kind, &mut None)
+}
+
+fn parse_ts_module_lexed(
+    code: &str,
+    source_kind: crate::SourceKind,
+    tokens: &mut Option<Vec<crate::lexer::Token>>,
+) -> Result<(), (String, usize)> {
+    let (error, lexed) = crate::lexer::host_syntax_check(code, source_kind);
+    *tokens = lexed;
+    if let Some((span, message)) = error {
         return Err((message.to_string(), span.start));
     }
     let input = HostInput::new(code);
@@ -78,7 +88,15 @@ pub(crate) enum FailureKind {
 
 /// Validates the final generated TypeScript.
 pub(crate) fn verify_output(code: &str, source_kind: crate::SourceKind) -> Result<(), Failure> {
-    parse_ts_module(code, source_kind).map_err(|(message, at)| Failure {
+    verify_output_lexed(code, source_kind, &mut None)
+}
+
+fn verify_output_lexed(
+    code: &str,
+    source_kind: crate::SourceKind,
+    tokens: &mut Option<Vec<crate::lexer::Token>>,
+) -> Result<(), Failure> {
+    parse_ts_module_lexed(code, source_kind, tokens).map_err(|(message, at)| Failure {
         message,
         at,
         kind: FailureKind::Parse,
@@ -93,8 +111,9 @@ pub(crate) fn verify_emit(
     automatic_semicolons: &[crate::lexer::AutomaticSemicolon],
     mappings: &[crate::EmitMapping],
 ) -> Result<(), Failure> {
-    verify_output(code, source_kind)?;
-    verify_statement_boundaries(code, source_kind, automatic_semicolons, mappings)
+    let mut tokens = None;
+    verify_output_lexed(code, source_kind, &mut tokens)?;
+    verify_statement_boundaries(code, source_kind, automatic_semicolons, mappings, tokens)
 }
 
 /// Checks that every statement the source ends by automatic semicolon
@@ -108,12 +127,14 @@ pub(crate) fn verify_emit(
 /// boundary after that token too. A copy of the ending token alone is part
 /// of a lowering's text, which ends no statement. Output that copies the
 /// source across the boundary unchanged is the source's statement pair and
-/// needs no lexing.
-pub(crate) fn verify_statement_boundaries(
+/// needs no lexing, and output the parse check already lexed is not lexed
+/// again.
+fn verify_statement_boundaries(
     code: &str,
     source_kind: crate::SourceKind,
     automatic_semicolons: &[crate::lexer::AutomaticSemicolon],
     mappings: &[crate::EmitMapping],
+    mut output_tokens: Option<Vec<crate::lexer::Token>>,
 ) -> Result<(), Failure> {
     let mut by_source: Vec<&crate::EmitMapping> = mappings.iter().collect();
     by_source.sort_unstable_by_key(|mapping| mapping.src);
@@ -122,7 +143,6 @@ pub(crate) fn verify_statement_boundaries(
         let mapping = by_source.get(index.checked_sub(1)?)?;
         (src < mapping.src + mapping.len).then(|| mapping.out + (src - mapping.src))
     };
-    let mut output_tokens = None;
     let bytes = code.as_bytes();
     for boundary in automatic_semicolons {
         let Some(last) = boundary.end.checked_sub(1).and_then(to_output) else {
@@ -357,6 +377,8 @@ mod tests {
         let failure = check(joined, "(o.m)(v)".len()).expect_err("the statements run together");
         assert_eq!(failure.kind, FailureKind::StatementBoundary);
         assert_eq!(failure.at, joined.find("(o.m)").unwrap());
+        let work = crate::work::measure(|| check(joined, "(o.m)(v)".len()));
+        assert_eq!(work["whole-text lexes"], 1);
         let separated = "const v = 1\n;(o.m)(v)\nconst w = 2\n";
         assert!(check(separated, ";(o.m)(v)".len()).is_ok());
         let named = "const v = 1\no.m(v)\nconst w = 2\n";

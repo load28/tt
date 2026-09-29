@@ -29,6 +29,8 @@ mod lower;
 
 use std::collections::HashMap;
 
+use ids::Idx;
+
 pub use ids::{
     Arena, BodyId, DefId, ExprId, FieldId, FileId, LocalId, NodeId, OwnerId, PatternId,
     PatternSiteId, ScopeId, VariantId,
@@ -86,26 +88,32 @@ pub struct HirFile {
 /// one as identity.
 #[derive(Debug, Default)]
 pub struct HirSourceMap {
-    node_spans: HashMap<NodeId, Span>,
+    /// Indexed by [`NodeId`]: the lowering numbers nodes densely, so a node's
+    /// span and origin are one slot rather than two hashed entries.
+    nodes: Vec<Option<(Span, AstOrigin)>>,
     owner_spans: HashMap<NodeId, Span>,
     def_spans: HashMap<DefId, Span>,
     pattern_spans: HashMap<PatternId, Span>,
-    ast_origins: HashMap<NodeId, AstOrigin>,
 }
 
 impl HirSourceMap {
     /// The earliest tt node span in source order, for a diagnostic emitted
     /// before a later lowering phase can identify a narrower construct.
     pub fn first_node_span(&self) -> Option<Span> {
-        self.node_spans
-            .values()
-            .copied()
+        self.nodes
+            .iter()
+            .flatten()
+            .map(|(span, _)| *span)
             .min_by_key(|span| span.start)
     }
 
     /// The byte span a node was lowered from.
     pub fn node_span(&self, node: NodeId) -> Option<Span> {
-        self.node_spans.get(&node).copied()
+        self.node(node).map(|(span, _)| span)
+    }
+
+    fn node(&self, node: NodeId) -> Option<(Span, AstOrigin)> {
+        self.nodes.get(node.index()).copied().flatten()
     }
 
     /// Complete authored extent consumed when relocating a construct. Diagnostic
@@ -133,12 +141,15 @@ impl HirSourceMap {
 
     /// Which kind of AST construct a node came from.
     pub fn ast_origin(&self, node: NodeId) -> Option<AstOrigin> {
-        self.ast_origins.get(&node).copied()
+        self.node(node).map(|(_, origin)| origin)
     }
 
     pub(crate) fn record_node(&mut self, node: NodeId, span: Span, origin: AstOrigin) {
-        self.node_spans.insert(node, span);
-        self.ast_origins.insert(node, origin);
+        let index = node.index();
+        if self.nodes.len() <= index {
+            self.nodes.resize(index + 1, None);
+        }
+        self.nodes[index] = Some((span, origin));
     }
 
     pub(crate) fn record_pattern(&mut self, pattern: PatternId, span: Span) {

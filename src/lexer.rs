@@ -39,7 +39,7 @@ pub(crate) use queries::{
     AutomaticSemicolon, automatic_semicolons, contains_await, continues_statement,
     has_top_level_comma, is_primary_expression, statement_continues_after, type_parameter_names,
 };
-pub(crate) use validation::{host_syntax_error, host_syntax_error_in};
+pub(crate) use validation::{host_syntax_check, host_syntax_error, host_syntax_error_in};
 
 /// One significant token.
 #[derive(Debug)]
@@ -299,7 +299,11 @@ fn lex_region(
     let span = |start: usize, end: usize| Span { start, end };
     let tok = |kind: facts::Tk, start: usize, end: usize, line_break: bool| facts::Tok {
         kind,
-        text: &src_str[start..end],
+        text: if kind == facts::Tk::Word {
+            &src_str[start..end]
+        } else {
+            ""
+        },
         span: Span { start, end },
         line_break,
     };
@@ -491,7 +495,7 @@ fn jsx_expression(
 /// before entering SWC. The tt lexer supplies the lexical isolation here:
 /// strings, comments, regex literals, JSX text, and template raw chunks never
 /// appear as punctuation tokens.
-pub(crate) fn invalid_jsx_namespace_member(src: &str) -> Option<Span> {
+pub(crate) fn invalid_jsx_namespace_member(tokens: &[Token]) -> Option<Span> {
     fn in_tokens(tokens: &[Token]) -> Option<Span> {
         for (index, token) in tokens.iter().enumerate() {
             if let TokenKind::Template(parts) = &token.kind {
@@ -552,7 +556,7 @@ pub(crate) fn invalid_jsx_namespace_member(src: &str) -> Option<Span> {
         None
     }
 
-    in_tokens(&lex_with_kind(src, 0, src.len(), SourceKind::Tsx))
+    in_tokens(tokens)
 }
 
 /// `src[start]` is a backtick — lexes the template into raw chunks and

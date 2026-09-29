@@ -183,6 +183,8 @@ pub(super) enum Tk {
 #[derive(Clone, Copy, Debug)]
 pub(super) struct Tok<'a> {
     pub(super) kind: Tk,
+    /// A word's spelling; empty for every other kind, whose rules read the
+    /// kind alone.
     pub(super) text: &'a str,
     pub(super) span: Span,
     pub(super) line_break: bool,
@@ -289,6 +291,9 @@ pub(super) struct Machine<'s> {
     skip_next: bool,
     last_end: usize,
     statements: Option<Vec<Span>>,
+    /// The stack [`Machine::operand_expected`] offers a byte to, kept
+    /// between queries so a query copies frames without allocating.
+    probe: Vec<Frame>,
 }
 
 impl Frame {
@@ -318,6 +323,7 @@ impl<'s> Machine<'s> {
             skip_next: false,
             last_end: 0,
             statements: trace.then(Vec::new),
+            probe: Vec::new(),
         }
     }
 
@@ -334,19 +340,29 @@ impl<'s> Machine<'s> {
     /// `finally`, `while`) could continue, one an automatic semicolon ends
     /// before the byte (§12.10.1) — and an operand is expected when an
     /// expression waiting for one receives it.
-    pub(super) fn operand_expected(&self, at: usize, line_break: bool) -> bool {
+    pub(super) fn operand_expected(&mut self, at: usize, line_break: bool) -> bool {
+        let mut stack = std::mem::take(&mut self.probe);
+        stack.clear();
+        stack.extend_from_slice(&self.stack);
         let mut probe = Machine {
             src: self.src,
             end: self.end,
-            stack: self.stack.clone(),
+            stack,
             facts: TokenFacts::default(),
             skip_next: false,
             last_end: self.last_end,
             statements: None,
+            probe: Vec::new(),
         };
+        let expected = probe.offer_operand_byte(at, line_break);
+        self.probe = probe.stack;
+        expected
+    }
+
+    fn offer_operand_byte(&mut self, at: usize, line_break: bool) -> bool {
         let tok = Tok {
             kind: Tk::Punct(self.src.as_bytes()[at]),
-            text: &self.src[at..at + 1],
+            text: "",
             span: Span {
                 start: at,
                 end: at + 1,
@@ -354,13 +370,13 @@ impl<'s> Machine<'s> {
             line_break,
         };
         for _ in 0..4096 {
-            let frame = probe.stack.pop().unwrap_or_else(Frame::top_level);
+            let frame = self.stack.pop().unwrap_or_else(Frame::top_level);
             if let Frame::Expr(expr) = frame
                 && expr.operand_expected()
             {
                 return true;
             }
-            if let Out::Consumed = probe.step(frame, &tok) {
+            if let Out::Consumed = self.step(frame, &tok) {
                 return false;
             }
         }

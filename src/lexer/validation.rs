@@ -4,22 +4,64 @@ use super::*;
 
 /// Shares lexical rejection across output, projection, and expression parsing.
 pub(crate) fn host_syntax_error(src: &str, kind: SourceKind) -> Option<(Span, &'static str)> {
+    host_syntax_check(src, kind).0
+}
+
+/// [`host_syntax_error`], and the tokens it lexed `src` into when a failure
+/// was possible, for a caller that reads the same text's tokens next.
+///
+/// A conflict marker needs its marker text, a TSX namespaced member its
+/// `<`, and an unbalanced delimiter a delimiter byte; text with none of
+/// them cannot fail, and is not lexed.
+pub(crate) fn host_syntax_check(
+    src: &str,
+    kind: SourceKind,
+) -> (Option<(Span, &'static str)>, Option<Vec<Token>>) {
     let markers = has_conflict_marker_text(src);
     if markers
-        || src
-            .bytes()
-            .any(|byte| matches!(byte, b'(' | b')' | b'[' | b']' | b'{' | b'}'))
+        || src.bytes().any(|byte| match byte {
+            b'(' | b')' | b'[' | b']' | b'{' | b'}' => true,
+            b'<' => kind.is_tsx(),
+            _ => false,
+        })
     {
-        lexical_error(src, kind, markers, &lex_with_kind(src, 0, src.len(), kind))
+        let tokens = lex_with_kind(src, 0, src.len(), kind);
+        (lexical_error(src, kind, markers, &tokens), Some(tokens))
     } else {
-        lexical_error(src, kind, markers, &[])
+        (None, None)
     }
 }
 
+/// Whether `src` holds one of the four seven-byte conflict-marker runs
+/// (`=======`, `<<<<<<<`, `>>>>>>>`, `|||||||`) anywhere, literal and
+/// comment text included.
+///
+/// A run of seven equal bytes covers one of every seven consecutive
+/// positions, so the scan reads every seventh byte and measures the run
+/// only around a marker byte.
 fn has_conflict_marker_text(src: &str) -> bool {
-    ["=======", "<<<<<<<", ">>>>>>>", "|||||||"]
-        .iter()
-        .any(|marker| src.contains(marker))
+    const RUN: usize = 7;
+    let bytes = src.as_bytes();
+    let mut probe = RUN - 1;
+    while let Some(&byte) = bytes.get(probe) {
+        if !matches!(byte, b'=' | b'<' | b'>' | b'|') {
+            probe += RUN;
+            continue;
+        }
+        let start = bytes[..probe]
+            .iter()
+            .rposition(|other| *other != byte)
+            .map_or(0, |before| before + 1);
+        let end = bytes[probe..]
+            .iter()
+            .position(|other| *other != byte)
+            .map_or(bytes.len(), |after| probe + after);
+        if end - start >= RUN {
+            return true;
+        }
+        probe = end + RUN - 1;
+    }
+    false
 }
 
 pub(crate) fn host_syntax_error_in(
@@ -40,7 +82,7 @@ fn lexical_error(
         return Some((span, "merge conflict marker encountered"));
     }
     if kind.is_tsx()
-        && let Some(span) = invalid_jsx_namespace_member(src)
+        && let Some(span) = invalid_jsx_namespace_member(tokens)
     {
         return Some((
             span,
@@ -135,4 +177,70 @@ fn conflict_marker(src: &str, tokens: &[Token]) -> Option<Span> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn searched(src: &str) -> bool {
+        ["=======", "<<<<<<<", ">>>>>>>", "|||||||"]
+            .iter()
+            .any(|marker| src.contains(marker))
+    }
+
+    #[test]
+    fn the_marker_scan_answers_what_a_search_for_each_marker_answers() {
+        let alphabet = ['=', '<', 'a'];
+        let mut texts = vec![String::new()];
+        for _ in 0..10 {
+            texts = texts
+                .iter()
+                .flat_map(|text| {
+                    alphabet.iter().map(move |byte| {
+                        let mut longer = text.clone();
+                        longer.push(*byte);
+                        longer
+                    })
+                })
+                .collect();
+            for text in &texts {
+                assert_eq!(has_conflict_marker_text(text), searched(text), "{text:?}");
+            }
+        }
+        for run in 1..=16 {
+            for byte in ['=', '<', '>', '|'] {
+                for before in 0..8 {
+                    for after in 0..8 {
+                        let text = format!(
+                            "{}{}{}",
+                            "x".repeat(before),
+                            byte.to_string().repeat(run),
+                            "y".repeat(after)
+                        );
+                        assert_eq!(has_conflict_marker_text(&text), run >= 7, "{text:?}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn text_that_cannot_fail_the_check_is_not_lexed() {
+        let work = crate::work::measure(|| {
+            for (text, kind) in [
+                ("a + b", SourceKind::Tsx),
+                ("a < b", SourceKind::TypeScript),
+            ] {
+                let (error, tokens) = host_syntax_check(text, kind);
+                assert!(error.is_none() && tokens.is_none(), "{text:?}");
+            }
+        });
+        assert_eq!(work.get("whole-text lexes"), None);
+        let work = crate::work::measure(|| {
+            let (error, tokens) = host_syntax_check("<a:b.c", SourceKind::Tsx);
+            assert!(error.is_some() && tokens.is_some());
+        });
+        assert_eq!(work["whole-text lexes"], 1);
+    }
 }
