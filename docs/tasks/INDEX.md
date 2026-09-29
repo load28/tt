@@ -557,6 +557,7 @@
 | TASK-556 | Keep the pipeline runtime's helpers out of completion | Complete | 2026-09-29 | 2026-09-29 | [TASK-556](./TASK-556-runtime-helpers-in-completion.md) |
 | TASK-557 | Keep a pipeline whose last step is not written yet | Complete | 2026-09-29 | 2026-09-29 | [TASK-557](./TASK-557-unfinished-pipeline-step.md) |
 | TASK-558 | Read the member-completion context from the token stream | Complete | 2026-09-29 | 2026-09-29 | [TASK-558](./TASK-558-member-context-from-tokens.md) |
+| TASK-559 | Report a syntax error after an arm body where TypeScript puts it | Complete | 2026-09-29 | 2026-09-29 | [TASK-559](./TASK-559-syntax-error-after-copied-text.md) |
 
 ## Next task number
 

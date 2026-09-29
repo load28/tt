@@ -52,3 +52,30 @@ fn an_unfinished_pipeline_step_leaves_the_rest_of_the_function_checked() {
         assert_eq!(hover.signature, "(parameter) xs: number[]");
     }
 }
+
+#[test]
+fn a_syntax_error_in_a_match_arm_is_reported_where_typescript_puts_it() {
+    require_tsgo!();
+    // In the `.ts` twin TypeScript reports at the token after the arm body,
+    // the `,`; the glue `;` stands where that token was.
+    let decl = "variant Shape { Circle(radius: number), Square(side: number) }\n\
+declare const s: Shape;\n";
+    for (name, body, code, message) in [
+        ("main.tt", "radius.", 1003, "Identifier expected."),
+        ("main.tt", "radius *", 1109, "Expression expected."),
+        ("main.ttx", "radius.", 1003, "Identifier expected."),
+    ] {
+        let source = format!(
+            "{decl}export const a = match (s) {{\n  Circle(radius) => {body},\n  Square(side) => side,\n}};\n"
+        );
+        let dir = project(&[(&format!("src/{name}"), &source)]);
+        let file = dir.join("src").join(name).canonicalize().unwrap();
+        let mut project = open_service(&file);
+        let comma = utf16_position(&source, &format!("{body},")).character + body.len() as u32;
+        assert_eq!(
+            listed(&project.service_diagnostics(&file).unwrap()),
+            vec![(3, comma, code, message.to_string())],
+            "{source}"
+        );
+    }
+}
