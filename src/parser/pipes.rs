@@ -17,10 +17,14 @@
 //! parenthesized (`(flow) |> f`). A step
 //! runs to the next top-level `|>` or to a terminator the pipeline cannot
 //! contain at its top level (`;`, `,`, an unmatched closer, or the region
-//! end). A top-level `?`, `:`, `=` (assignment), `=>`, or statement-only
-//! keyword aborts the claim — ternaries and arrow functions must be
-//! parenthesized (a normative rule, like the match scrutinee parens) — and
-//! the unclaimed `|>` is recorded for the semantic phase to report.
+//! end). A step with no text (`x |>;`, `x |> |> f`, a `|>` before a
+//! statement keyword) is a missing step: the pipeline keeps its head and
+//! written steps, as TypeScript keeps the operands of an operator whose
+//! right operand is missing. A top-level `?`, `:`, `=` (assignment), `=>`,
+//! or statement-only keyword inside a step aborts the claim — ternaries
+//! and arrow functions must be parenthesized (a normative rule, like the
+//! match scrutinee parens) — and the unclaimed `|>` is recorded for the
+//! semantic phase to report.
 
 use super::cursor::dotted_at;
 use crate::ast::{PipeExpr, PipeHeadKind, PipeStep, PipeStepKind, Span};
@@ -132,6 +136,18 @@ pub(super) fn parse_pipeline(
                 TokenKind::Punct(b'=') if depth == 0 && is_assignment_eq(parser.bytes, t.span) => {
                     return None;
                 }
+                // A statement keyword where the step should start is where
+                // TypeScript ends an operand that was never written.
+                TokenKind::Ident
+                    if depth == 0
+                        && k == step_from
+                        && crate::lexer::statement_only_keyword(
+                            &parser.src[t.span.start..t.span.end],
+                        )
+                        && &parser.src[t.span.start..t.span.end] != "try" =>
+                {
+                    break;
+                }
                 TokenKind::Ident
                     if depth == 0
                         && !dotted_at(tokens, step_from, k)
@@ -148,7 +164,15 @@ pub(super) fn parse_pipeline(
             k += 1;
         }
         if k == step_from {
-            return None; // empty step (`x |> |> f`, `x |>;`, trailing `|>`)
+            // `x |> |> f`, `x |>;`, a trailing `|>`: the step is missing,
+            // and the pipeline it would end is still the one written.
+            let at = tokens[k - 1].span.end;
+            steps.push(PipeStep {
+                span: Span { start: at, end: at },
+                kind: PipeStepKind::Missing,
+                body: parser.parse_expression_tokens(&[], at, at),
+            });
+            continue;
         }
 
         // A step starting with `.` + identifier is the existing postfix

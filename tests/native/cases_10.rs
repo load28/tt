@@ -26,3 +26,29 @@ const v = 1 |> String |> cat(@@",
         );
     }
 }
+
+#[test]
+fn an_unfinished_pipeline_step_leaves_the_rest_of_the_function_checked() {
+    require_tsgo!();
+    // TypeScript on `const n = xs.length +` reports only the missing
+    // operand; the head, the statement after it, and the function's
+    // return stay what they are.
+    for next in ["return n;", "const m = n + 1; return m;"] {
+        let source = format!(
+            "export function run(xs: number[]): number {{\n  const n = xs |> .length |> \n  {next}\n}}\n"
+        );
+        let dir = project(&[("src/main.tt", &source)]);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        let mut project = open_service(&file);
+        assert_eq!(
+            listed(&project.service_diagnostics(&file).unwrap()),
+            vec![],
+            "{source}"
+        );
+        let hover = project
+            .hover(&file, utf16_position(&source, "xs |>"))
+            .unwrap()
+            .expect("hover on the head");
+        assert_eq!(hover.signature, "(parameter) xs: number[]");
+    }
+}

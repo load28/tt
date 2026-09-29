@@ -527,7 +527,7 @@ fn duplicate_tuple_binding_is_renamed_across_tuple_elements() {
 fn compile_report_withholds_emission_when_the_output_cannot_be_typescript() {
     // A stray `|>` passes through verbatim, so the output would not parse:
     // that diagnostic blocks projection.
-    let src = "const x = 1 |> ;\n";
+    let src = "const x = a ? 1 : 2 |> f;\n";
     let report = ttc::compile_report(src, &Options::default());
     assert!(report.emit.is_none());
     assert!(
@@ -542,7 +542,7 @@ fn compile_report_withholds_emission_when_the_output_cannot_be_typescript() {
 
 #[test]
 fn every_stray_construct_is_reported_not_just_the_first() {
-    let src = "const x = 1 |> ;\nconst y = 2 |> ;\n";
+    let src = "const x = a ? 1 : 2 |> f;\nconst y = a ? 1 : 2 |> f;\n";
     let diagnostics = ttc::analyze(src, &Options::default());
     let strays = diagnostics
         .iter()

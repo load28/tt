@@ -101,7 +101,7 @@ fn valid_typescript_try_shapes_are_not_tt_candidates() {
 
 #[test]
 fn a_template_interpolation_recovery_is_collected_once() {
-    let program = parse("const value = `x=${1 |> }`;\n");
+    let program = parse("const value = `x=${a ? 1 : 2 |> f}`;\n");
     let recoveries = projection_recoveries(&program);
     assert_eq!(recoveries.len(), 1, "{recoveries:#?}");
 }

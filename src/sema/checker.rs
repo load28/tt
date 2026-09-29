@@ -66,6 +66,19 @@ impl Checker<'_> {
                 Segment::IfLet(stmt) => self.check_if_let(stmt, ctx, place),
                 Segment::ResultBlock(block) => self.check_result_block(block),
                 Segment::Pipe(pipe) => {
+                    for step in &pipe.steps {
+                        if step.kind == PipeStepKind::Missing {
+                            self.error(
+                                TtError::span(
+                                    step.span.start - "|>".len(),
+                                    step.span.start,
+                                    "pipeline: `|>` has no step".to_string(),
+                                )
+                                .code(DiagnosticCode::MissingPipelineStep)
+                                .help("write the step after `|>`, or remove the `|>`"),
+                            );
+                        }
+                    }
                     // A `flow` composition has no value to chain a method
                     // onto until its first function has produced one, so
                     // its first step must be an ordinary function step.

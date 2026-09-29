@@ -1,5 +1,6 @@
 //! Pipeline, template, import, and continued-expression emission.
 
+use super::source::RECOVERED_VALUE;
 use super::*;
 
 impl<'a> Emitter<'a> {
@@ -94,6 +95,19 @@ impl<'a> Emitter<'a> {
                                 push_grouped(&mut next, body, self.source_kind);
                                 next.push_lit(")");
                             }
+                        }
+                        ApplyMode::Missing => {
+                            next.push_lit(format!("{RECOVERED_VALUE}("));
+                            push_grouped(&mut input, acc, self.source_kind);
+                            next.anchored_with_context(
+                                AnchorKind::Pipe,
+                                step_span.start,
+                                step_span.end,
+                                end,
+                                context,
+                                input,
+                            );
+                            next.push_lit(")");
                         }
                     }
                     acc = next;
@@ -239,11 +253,14 @@ impl<'a> Emitter<'a> {
             .next()
             .unwrap_or_else(|| crate::ice::bug!("flow has no step"));
         let mut acc = Rope::new();
-        push_grouped(
-            &mut acc,
-            self.emit_flow_function(first.value),
-            self.source_kind,
-        );
+        match first.mode {
+            ApplyMode::Missing => acc.push_lit(RECOVERED_VALUE),
+            _ => push_grouped(
+                &mut acc,
+                self.emit_flow_function(first.value),
+                self.source_kind,
+            ),
+        }
         let mut produced = self.span(first.node);
         for step in steps {
             self.used_flow.set(true);
@@ -274,6 +291,7 @@ impl<'a> Emitter<'a> {
                     push_grouped(&mut next, body, self.source_kind);
                     next.push_lit(")");
                 }
+                ApplyMode::Missing => next.push_lit(format!(", {RECOVERED_VALUE})")),
             }
             acc = next;
             produced = step_span;
@@ -702,6 +720,15 @@ impl<'a> Emitter<'a> {
             inner.push_lit(";");
         }
         for (index, step) in apply.steps.iter().enumerate() {
+            if step.mode == ApplyMode::Missing {
+                inner.push_break(1);
+                let input = self.pipe_input(apply, index, &piped[index]);
+                push_target(&mut inner, index);
+                inner.push_lit(format!("{RECOVERED_VALUE}("));
+                inner.append(input);
+                inner.push_lit(");");
+                continue;
+            }
             let conditionally_reached = matches!(step.mode, ApplyMode::Postfix { optional: true });
             let operand = match (step.mode, self.emit_nested_operand(step.value)) {
                 (ApplyMode::Postfix { .. }, Some((prelude, value))) => {
@@ -754,6 +781,7 @@ impl<'a> Emitter<'a> {
                     inner.append(input);
                     inner.push_lit(");");
                 }
+                ApplyMode::Missing => unreachable!("a missing step is emitted above"),
             }
         }
         inner.push_break(1);

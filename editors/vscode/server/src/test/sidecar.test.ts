@@ -184,7 +184,7 @@ test("a recoverable malformed node refreshes declarations around it", { skip }, 
   // Parser-owned recovery replaces only the malformed pipeline node in the
   // editor projection. `--types` still exits with diagnostics, while the
   // independent declarations remain emit-capable and must stay fresh.
-  fs.writeFileSync(tt, `${SOURCE}const broken = 1 |> ;\n`);
+  fs.writeFileSync(tt, `${SOURCE}const broken = ready ? 1 : 2 |> f;\n`);
   const result = await refreshSidecar(COMPILER, tt, "refresh");
 
   assert.equal(result.kind, "written", JSON.stringify(result));

@@ -395,7 +395,11 @@ pub(crate) struct ApplyStep {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApplyMode {
     Call,
-    Postfix { optional: bool },
+    Postfix {
+        optional: bool,
+    },
+    /// A step that was not written, applied as TypeScript's error type.
+    Missing,
 }
 
 #[derive(Debug)]

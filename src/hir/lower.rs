@@ -628,6 +628,7 @@ impl Lower<'_> {
                         ast::PipeStepKind::Postfix { optional } => {
                             PipeStepKind::Postfix { optional }
                         }
+                        ast::PipeStepKind::Missing => PipeStepKind::Missing,
                     },
                     body,
                 }

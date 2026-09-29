@@ -92,7 +92,8 @@ fn flow_first_step_cannot_be_a_method_step() {
 #[test]
 fn flow_without_a_step_is_an_error() {
     let e = err("const f = flow |>;\n");
-    assert!(e.message.contains("could not be parsed"), "{}", e.message);
+    assert!(e.message.contains("`|>` has no step"), "{}", e.message);
+    assert_eq!((e.line, e.col), (1, 16));
 }
 
 /* ------------------------------------------------------------------ */

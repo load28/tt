@@ -811,7 +811,7 @@ mod tests {
 
     #[test]
     fn parser_error_nodes_recover_only_their_own_source_ranges() {
-        let source = "const broken = 1 |> ;\n\
+        let source = "const broken = ready ? 1 : 2 |> f;\n\
             const independent: string = 1;\n\
             const optional = value |> ?.member + 1;\n\
             const malformed = match value { Missing => 0 };\n";
@@ -939,9 +939,13 @@ mod tests {
 
     #[test]
     fn text_that_cannot_lower_gets_an_engine_only_error_node() {
-        let file = project("const x = 1 |> ;\n");
-        assert_eq!(file.recovered, [(10, 14)]);
-        assert!(file.emit.code.contains("const x = 0"), "{}", file.emit.code);
+        let file = project("const x = a ? 1 : 2 |> f;\n");
+        assert_eq!(file.recovered, [(18, 24)]);
+        assert!(
+            file.emit.code.contains("const x = a ? 1 : 0     ;"),
+            "{}",
+            file.emit.code
+        );
         assert_eq!(file.tt_diagnostics.len(), 1);
         assert_eq!(
             file.tt_diagnostics[0].code,

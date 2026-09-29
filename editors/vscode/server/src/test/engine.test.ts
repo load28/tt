@@ -369,7 +369,7 @@ test(
       "  const n = try value;",
       "  return n;",
       "}",
-      "const broken = 1 |> ;",
+      "const broken = ready ? 1 : 2 |> f;",
       "",
     ].join("\n");
     engine.openDocument(COMPILER, tt, source);

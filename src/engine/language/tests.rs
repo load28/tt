@@ -35,7 +35,7 @@ fn diagnostic_projection_depends_on_parseability_not_diagnostic_numbers() {
 #[test]
 fn service_projection_recovers_parser_error_nodes() {
     let source = "function f(value: number) { const n = try value; return n; }\n\
-            const broken = 1 |> ;\n";
+            const broken = ready ? 1 : 2 |> f;\n";
     let doc = service_doc(Path::new("/p/src/a.tt"), source.to_string());
     assert!(
         projection_accepts_diagnostics(&doc.code, crate::SourceKind::TypeScript),
@@ -44,7 +44,11 @@ fn service_projection_recovers_parser_error_nodes() {
     );
     assert_eq!(doc.recovered.len(), 1);
     assert!(doc.code.contains("\"value\" in $tt_t0"), "{}", doc.code);
-    assert!(doc.code.contains("const broken = 0"), "{}", doc.code);
+    assert!(
+        doc.code.contains("const broken = ready ? 1 : 0     ;"),
+        "{}",
+        doc.code
+    );
 }
 
 #[test]
