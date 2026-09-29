@@ -356,7 +356,11 @@ fn job_json(query: &Query) -> serde_json::Value {
             .map(|v| json!({ "module": v.module, "start": v.start, "end": v.end }))
             .collect::<Vec<_>>(),
         "contextualSlots": query.contextual_slots.iter()
-            .map(|v| json!({ "module": v.module, "declarationEnd": v.declaration_end }))
+            .map(|v| json!({
+                "module": v.module,
+                "declarationEnd": v.declaration_end,
+                "annotated": v.annotated,
+            }))
             .collect::<Vec<_>>(),
         "contextualOnly": query.contextual_only,
         "inferJoinTypes": query.infer_join_types,
@@ -637,6 +641,7 @@ const result = consume(slot);
             contextual_slots: vec![ContextualSlotQuery {
                 module,
                 declaration_end: text.find("let slot;").unwrap() + "let slot".len(),
+                annotated: false,
             }],
             ..Query::default()
         };

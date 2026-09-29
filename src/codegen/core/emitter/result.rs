@@ -83,6 +83,15 @@ impl<'a> Emitter<'a> {
             out.append(continued);
             out.push_break(0);
             out.push_lit(format!("const {temp} = {slot};"));
+        } else if let Some((prelude, operand)) = self.emit_nested_operand(value) {
+            // The operand computes its own value from the values inside it
+            // (`r(match ...)`): they run into their slots, and the operand
+            // is read once into the temporary.
+            out.append(prelude.trim_end());
+            out.push_break(0);
+            out.push_lit(format!("const {temp} = "));
+            push_grouped(&mut out, operand.trim(), self.source_kind);
+            out.push_lit(";");
         } else {
             out.push_lit(format!("const {temp} = "));
             push_grouped(&mut out, self.emit_expr(value).trim(), self.source_kind);
@@ -464,6 +473,7 @@ impl<'a> Emitter<'a> {
                 }
                 Statement::Import(import) => self.emit_import(import, &mut out),
                 Statement::Propagate(propagate) => {
+                    out.append(self.emit_propagate_owner_prelude(propagate));
                     let span = self.span(propagate.node);
                     let emitted = if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
                         self.emit_region_propagate(propagate, context.failure, context.exit_label)

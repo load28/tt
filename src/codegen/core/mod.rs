@@ -335,7 +335,7 @@ pub(crate) fn emit_with_map<'a>(
         )),
         global_temps: target.global_temps,
     };
-    let mut output = emitter.emit_body(core.root);
+    let mut output = emitter.emit_file(core.root);
     let used_pipe = emitter.used_pipe.get();
     let used_flow = emitter.used_flow.get();
     let used_show = emitter.used_match_show.get();

@@ -271,6 +271,7 @@ async function main() {
   let API;
   let SymbolFlags;
   let TypeFlags;
+  let NodeBuilderFlags;
   let isExpression;
   let isIdentifier;
   let isVariableDeclaration;
@@ -280,7 +281,7 @@ async function main() {
   let isQualifiedName;
   let SyntaxKind;
   try {
-    ({ API, SymbolFlags, TypeFlags } = await import(open.apiModule));
+    ({ API, SymbolFlags, TypeFlags, NodeBuilderFlags } = await import(open.apiModule));
     ({
       isExpression,
       isIdentifier,
@@ -627,8 +628,31 @@ async function main() {
 
     const contextual = ({ project, members }) => {
       const checker = project.checker;
+      // The storage the lowering declared in each module, annotated or not.
+      // TypeScript can name a type after it (a class expression assigned
+      // to it is `typeof $tt_v0`), and an annotation that did would read
+      // the compiler's glue, or itself (TS2502).
+      const storage = new Map();
+      const storageOf = (module, source) => {
+        let symbols = storage.get(module);
+        if (symbols) return symbols;
+        const ends = new Set((job.contextualSlots ?? [])
+          .filter((slot) => slot.module === module)
+          .map((slot) => slot.declarationEnd));
+        symbols = new Set();
+        const collect = (node) => {
+          if (isVariableDeclaration(node) && isIdentifier(node.name) && ends.has(node.name.end)) {
+            const declared = checker.getSymbolAtLocation(node.name);
+            if (declared) symbols.add(declared.id);
+          }
+          node.forEachChild(collect);
+        };
+        collect(source);
+        storage.set(module, symbols);
+        return symbols;
+      };
       for (const [index, slot] of (job.contextualSlots ?? []).entries()) {
-        if (!members.has(slot.module)) continue;
+        if (slot.annotated || !members.has(slot.module)) continue;
         const source = project.program.getSourceFile(slot.module);
         if (!source) continue;
         let declaration;
@@ -651,9 +675,13 @@ async function main() {
         // match arm's block is out of scope there, or an outer declaration
         // of the same name shadows it. An annotation is written only when
         // every name it references denotes, at the declaration, the symbol
-        // it denotes where the type was observed.
+        // it denotes where the type was observed, and that symbol is not
+        // storage the lowering declared. It is written without truncation:
+        // a truncated type is not the type (`... 3 more ...` is not even
+        // TypeScript).
+        const generated = storageOf(slot.module, source);
         const annotation = (type, observed) => {
-          const node = checker.typeToTypeNode(type, declaration);
+          const node = typeNode(checker, type, declaration, NodeBuilderFlags.NoTruncation);
           if (!node) return undefined;
           let accessible = true;
           const visit = (child) => {
@@ -669,7 +697,7 @@ async function main() {
               }
               const here = checker.resolveName(name.text, meaning, declaration);
               const there = checker.resolveName(name.text, meaning, observed);
-              accessible = !!here && !!there && here.id === there.id;
+              accessible = !!here && !!there && here.id === there.id && !generated.has(here.id);
             }
             child.forEachChild(visit);
           };
@@ -953,6 +981,27 @@ async function main() {
     }
     out.dependencies = [...dependencies.keys(), ...listings.keys()];
     return engineAnswer(out);
+  }
+}
+
+/**
+ * The type node TypeScript's node builder writes for `type` at `location`,
+ * or `undefined` when it cannot write one: the node builder gives up on a
+ * type it cannot name there (the instance or constructor type of an
+ * anonymous class), which is `typeToTypeNode`'s documented `undefined`.
+ *
+ * The server sends that answer as an encoded `null`, while this client
+ * treats only an empty payload as no node and hands the four bytes to its
+ * node decoder, which throws. The same session still answers a second
+ * question about the same type, which tells that answer apart from a
+ * session that stopped answering; a session failure propagates.
+ */
+function typeNode(checker, type, location, flags) {
+  try {
+    return checker.typeToTypeNode(type, location, flags);
+  } catch (error) {
+    checker.typeToString(type, location);
+    return undefined;
   }
 }
 

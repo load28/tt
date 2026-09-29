@@ -526,6 +526,9 @@ projection span, SWC span, generated TypeScript span을 사용자 좌표로 직�
 - `validate_origin`: 모든 generated node가 source origin 또는 parent origin을 가짐
 - `validate_source_preservation`: non-TT source span이 한 번씩 원래 순서로 출력됨
 - `verify_output`: 최종 TypeScript가 SWC parser를 통과함
+- `emit_file` (TASK-549): every planned host prelude (a compose rewrite) was
+  written by the owner that consumes it; an unwritten one would leave its
+  slots and captures unassigned in output that still parses
 
 validator 실패는 사용자 오류가 아니라 internal compiler error다. release 경로에서
 침묵하는 잘못된 최적화나 legacy backend 우회를 내보내지 않도록 모든 build에서 즉시

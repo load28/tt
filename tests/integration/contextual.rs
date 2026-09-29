@@ -1289,3 +1289,61 @@ console.log(inner(S.A), inner(S.B), JSON.stringify(inResult(S.A)), unnamed(S.A),
 "#);
     assert_eq!(output, [r#"a b {"kind":"Ok","value":"a1"} h 1"#]);
 }
+
+#[test]
+fn a_type_typescript_cannot_write_leaves_its_storage_unannotated() {
+    require_toolchain!();
+    // TASK-551: TypeScript's node builder writes no type node for an
+    // anonymous class; the storage is typed from its assignments and the
+    // rest of the file still compiles.
+    let output = run(r#"
+class Base {}
+function Tagged<B extends new (...a: any[]) => {}>(Base: B) { return class extends Base { tag = "t"; }; }
+function pick(n: number) {
+  const M = match (n) { 1 => Tagged(Base), _ => Tagged(Base) };
+  const o = match (n) { 1 => new (class { x = 1 })(), _ => new (class { x = 2 })() };
+  const a = match (n) { 1 => [class {}], _ => [class {}, class {}] };
+  return [new M().tag, o.x, a.length];
+}
+console.log(JSON.stringify([pick(1), pick(2)]));
+"#);
+    assert_eq!(output, [r#"[["t",1,1],["t",2,2]]"#]);
+}
+
+#[test]
+fn an_annotation_never_names_the_storage_the_lowering_declared() {
+    require_toolchain!();
+    // TASK-552: TypeScript names a class expression assigned to the storage
+    // after the storage (`typeof $tt_v0`); written as its own annotation
+    // that is TS2502, so the storage is typed from its assignments.
+    let output = run(r#"
+function pick(n: number) {
+  const C = match (n) { 1 => class { q = 1 }, _ => class { q = 2 } };
+  const K = match (n) { 1 => { const Local = class { r = 3 }; return Local; }, _ => class { r = 4 } };
+  return [new C().q, new K().r];
+}
+console.log(JSON.stringify([pick(1), pick(2)]));
+"#);
+    assert_eq!(output, [r#"[[1,3],[2,4]]"#]);
+}
+
+#[test]
+fn a_long_type_is_annotated_whole() {
+    require_toolchain!();
+    // TASK-553: TypeScript's node builder truncates a long type by default
+    // (`... 36 more ...;`), which is neither the type nor TypeScript.
+    let members: String = (0..40)
+        .map(|index| format!(" p{index}_long_property_name: {{ nested_{index}: string }};"))
+        .collect();
+    let output = run(&format!(
+        r#"
+function make(tag: string) {{ return {{ p39_long_property_name: {{ nested_39: tag }} }} as {{{members} }}; }}
+function pick(n: number) {{
+  const x = match (n) {{ 1 => make("a"), _ => make("b") }};
+  return x.p39_long_property_name.nested_39;
+}}
+console.log(pick(1), pick(2));
+"#
+    ));
+    assert_eq!(output, ["a b"]);
+}

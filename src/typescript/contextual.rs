@@ -28,6 +28,8 @@ pub(crate) fn materialize(
         .iter()
         .map(|(_, emit)| (0..emit.contextual_slots.len()).collect())
         .collect();
+    // The declaration ends of the storage earlier rounds annotated.
+    let mut annotated: Vec<Vec<usize>> = vec![Vec::new(); modules.len()];
     let mut infer_joins = false;
     loop {
         let mut query = Query {
@@ -39,6 +41,7 @@ pub(crate) fn materialize(
             ..Query::default()
         };
         let mut sites = Vec::new();
+        let mut settled = Vec::new();
         for (module_index, (path, emit)) in modules.iter().enumerate() {
             query.modules.push(Module {
                 path: path.clone(),
@@ -49,9 +52,22 @@ pub(crate) fn materialize(
                 query.contextual_slots.push(ContextualSlotQuery {
                     module: path.clone(),
                     declaration_end: mapper::to_utf16(&emit.code, position),
+                    annotated: false,
                 });
             }
+            settled.extend(
+                annotated[module_index]
+                    .iter()
+                    .map(|&position| ContextualSlotQuery {
+                        module: path.clone(),
+                        declaration_end: mapper::to_utf16(&emit.code, position),
+                        annotated: true,
+                    }),
+            );
         }
+        // After every slot an answer can name, so an answer's index is its
+        // site's.
+        query.contextual_slots.extend(settled);
         if sites.is_empty() {
             return Ok(types);
         }
@@ -84,6 +100,22 @@ pub(crate) fn materialize(
         for (module, ((_, emit), mut edits)) in modules.iter_mut().zip(edits).enumerate() {
             origins[module].retain(|origin| types[module][*origin].is_none());
             edits.sort_by_key(|edit| edit.0);
+            // An annotation is inserted after its declaration's name, so a
+            // declaration end moves only by the annotations before it.
+            let settled = annotated[module]
+                .iter()
+                .copied()
+                .chain(edits.iter().map(|(position, _)| *position))
+                .map(|position| {
+                    position
+                        + edits
+                            .iter()
+                            .filter(|(at, _)| *at < position)
+                            .map(|(_, text)| text.len() + 2)
+                            .sum::<usize>()
+                })
+                .collect();
+            annotated[module] = settled;
             insert_annotations(emit, &edits);
         }
     }

@@ -296,9 +296,10 @@ fn a_member_step_captures_its_method_from_the_piped_value_before_the_argument() 
         "{TASK_504_PRELUDE}export const v = g() |> .m(match (n) {{ 0 => 1, _ => 2 }});\n"
     ));
     let head = out.find("= g();").expect("the head is evaluated first");
-    let method = out.find(".m).bind(").expect("the method is captured");
+    let method = out.find(".m);").expect("the method is captured");
     let region = out.find("switch (").expect("the match follows");
-    assert!(head < method && method < region, "{out}");
+    let bound = out.find(".bind(").expect("the call binds the method");
+    assert!(head < method && method < region && region < bound, "{out}");
     assert_eq!(out.matches("= g()").count(), 1, "{out}");
 }
 

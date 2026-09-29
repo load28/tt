@@ -554,6 +554,13 @@
 | TASK-546 | Annotate generated storage only with names visible at its declaration | Complete | 2026-09-29 | 2026-09-29 | [TASK-546](./TASK-546-accessible-storage-annotations.md) |
 | TASK-547 | Bind a function or class expression's name only inside itself | Complete | 2026-09-29 | 2026-09-29 | [TASK-547](./TASK-547-function-expression-name-scope.md) |
 | TASK-548 | Recover a discarded `result` block in the typed projection | Complete | 2026-09-29 | 2026-09-29 | [TASK-548](./TASK-548-recover-discarded-result.md) |
+| TASK-549 | Lower the values of a `try` statement's operand inside a `result` block | Complete | 2026-09-29 | 2026-09-29 | [TASK-549](./TASK-549-try-statement-operand-values-in-result.md) |
+| TASK-550 | Give a propagated operand its own storage | Complete | 2026-09-29 | 2026-09-29 | [TASK-550](./TASK-550-propagated-operand-storage.md) |
+| TASK-551 | Leave storage unannotated when TypeScript cannot write its type | Complete | 2026-09-29 | 2026-09-29 | [TASK-551](./TASK-551-unwritable-annotation-types.md) |
+| TASK-552 | Never annotate storage with a type that names generated storage | Complete | 2026-09-29 | 2026-09-29 | [TASK-552](./TASK-552-annotations-name-no-generated-storage.md) |
+| TASK-553 | Annotate storage with the whole type, never a truncated one | Complete | 2026-09-29 | 2026-09-29 | [TASK-553](./TASK-553-untruncated-annotations.md) |
+| TASK-554 | Keep a member step's simple key where the member is read | Complete | 2026-09-29 | 2026-09-29 | [TASK-554](./TASK-554-member-step-simple-keys.md) |
+| TASK-555 | Bind a captured method at its call, after the arguments | Complete | 2026-09-29 | 2026-09-29 | [TASK-555](./TASK-555-late-method-binding.md) |
 | TASK-562 | Treat a backend that cannot start as unavailable | Complete | 2026-09-29 | 2026-09-29 | [TASK-562](./TASK-562-unstartable-backend-is-unavailable.md) |
 | TASK-563 | Leave the output directory out of the TypeScript program | Complete | 2026-09-29 | 2026-09-29 | [TASK-563](./TASK-563-exclude-output-directory-from-program.md) |
 | TASK-564 | Keep `--check` from starting the TypeScript backend | Complete | 2026-09-29 | 2026-09-29 | [TASK-564](./TASK-564-check-without-typescript.md) |

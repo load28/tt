@@ -1206,3 +1206,181 @@ console.log(match (v) { __proto__(x) => x, Other => 0 }, match (w) { A(__proto__
         ]
     );
 }
+
+#[test]
+fn runtime_a_try_statement_in_a_result_block_lowers_the_values_of_its_operand() {
+    require_toolchain!();
+    // TASK-549: the operand's values and its callee capture run in the
+    // statement's prelude inside a `result` block, as they do in a function.
+    let out = run(r#"
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const trace: string[] = [];
+let r = (n: number): R => { trace.push("r" + n); return n > 15 ? { kind: "Ok", value: n } : { kind: "Err", error: "small" + n }; };
+function swap(n: number): number {
+  trace.push("swap");
+  const first = r;
+  r = (m) => { trace.push("late"); return first(m); };
+  return n;
+}
+const id = <T,>(x: T) => x;
+const g = (x: R): R => x;
+function viaConst(v: number) { return result { const x = try r(match (v) { 1 => swap(10), _ => swap(20) }); return x; }; }
+function viaLet(v: number) { return result { let x = try r(match (v) { 1 => 10, _ => 20 }); x += 1; return x; }; }
+function propagateOnly(v: number) { return result { try r(match (v) { 1 => 10, _ => 20 }); return 0; }; }
+function viaPipeline(v: number) { return result { const x = try (match (v) { 1 => r(10), _ => r(20) } |> id); return x; }; }
+function viaCall(v: number) { return result { const x = try id(match (v) { 1 => r(10), _ => r(20) }); return x; }; }
+function viaResult(v: number) {
+  return result { const x = try r(result { const y = try r(v); return y; } |> g |> (q => q.kind === "Ok" ? q.value : 0)); return x; };
+}
+const base = r;
+console.log(JSON.stringify([viaConst(1), viaConst(2)]), JSON.stringify(trace));
+r = base;
+console.log(JSON.stringify([viaLet(1), viaLet(2), propagateOnly(1), propagateOnly(2)]));
+console.log(JSON.stringify([viaPipeline(1), viaPipeline(2), viaCall(1), viaCall(2), viaResult(20), viaResult(1)]));
+"#);
+    assert_eq!(
+        out,
+        [
+            r#"[{"kind":"Err","error":"small10"},{"kind":"Ok","value":20}] ["swap","r10","swap","late","r20"]"#,
+            r#"[{"kind":"Err","error":"small10"},{"kind":"Ok","value":21},{"kind":"Err","error":"small10"},{"kind":"Ok","value":0}]"#,
+            r#"[{"kind":"Err","error":"small10"},{"kind":"Ok","value":20},{"kind":"Err","error":"small10"},{"kind":"Ok","value":20},{"kind":"Ok","value":20},{"kind":"Err","error":"small0"}]"#,
+        ]
+    );
+}
+
+#[test]
+fn runtime_a_value_inside_a_region_return_argument_runs_in_the_return_s_prelude() {
+    require_toolchain!();
+    // TASK-549: a value that a call or an operator consumes inside the
+    // argument of a return leaving a `result` block or a match block arm
+    // is a value of the return statement, lowered before it with its
+    // callee captured first; a returned template keeps its one exit.
+    let out = run(r#"
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const trace: string[] = [];
+function ok(n: number): R { return { kind: "Ok", value: n }; }
+let s = (n: number): string => { trace.push("s" + n); return "s" + n; };
+function swap(n: number): number {
+  trace.push("swap");
+  const first = s;
+  s = (m) => { trace.push("late"); return first(m); };
+  return n;
+}
+function inResult(v: number) {
+  return result {
+    const q = try ok(1);
+    if (v > 5) return s(match (v) { 6 => swap(6), _ => 2 }) + q;
+    return [match (v) { 1 => "a", _ => "b" }, match (q) { 1 => "c", _ => "d" }].join("") + q;
+  };
+}
+function inArm(v: number) {
+  const x = match (v) {
+    1 => { const q = 1; if (q > 0) return s(match (v) { 1 => swap(1), _ => 2 }) + q; return "n"; },
+    2 => { return `${match (v) { 2 => "t", _ => "u" }}-`; },
+    _ => "x",
+  };
+  return x;
+}
+function template(v: number) {
+  return result { const q = try ok(1); return `${match (v) { 1 => "a", _ => "b" }}-${q}`; };
+}
+const base = s;
+console.log(JSON.stringify([inResult(6), inResult(1)]), JSON.stringify(trace));
+s = base;
+trace.length = 0;
+console.log(JSON.stringify([inArm(1), inArm(2), inArm(3)]), JSON.stringify(trace));
+console.log(JSON.stringify([template(1), template(2)]));
+"#);
+    assert_eq!(
+        out,
+        [
+            r#"[{"kind":"Ok","value":"s61"},{"kind":"Ok","value":"ac1"}] ["swap","s6"]"#,
+            r#"["s11","t-","x"] ["swap","s1"]"#,
+            r#"[{"kind":"Ok","value":"a-1"},{"kind":"Ok","value":"b-1"}]"#,
+        ]
+    );
+}
+
+#[test]
+fn runtime_a_propagated_call_around_a_match_does_not_share_the_match_s_slot() {
+    require_toolchain!();
+    // TASK-550: the Result `r(...)` returns is read into the propagation's
+    // own temporary; the match's slot keeps holding the number it wrote.
+    let out = run(r#"
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+function r(n: number): R { return n > 1 ? { kind: "Ok", value: n } : { kind: "Err", error: "small" + n }; }
+function sum(v: number): R {
+  const y = 1 + try r(match (v) { 1 => 1, _ => 2 });
+  return r(y - 1 + 10);
+}
+function listed(v: number): R {
+  const a = [try r(match (v) { 1 => 1, _ => 2 })];
+  console.log(try r(match (v) { 1 => 3, _ => 4 }));
+  return { kind: "Ok", value: a[0] };
+}
+function inResult(v: number) {
+  return result {
+    const y = 1 + try r(match (v) { 1 => 1, _ => 2 });
+    const a = [try r(match (v) { 1 => 1, _ => 2 })];
+    console.log(try r(match (v) { 1 => 3, _ => 4 }));
+    return y + a[0];
+  };
+}
+console.log(JSON.stringify([sum(1), sum(2), listed(1), listed(2), inResult(1), inResult(2)]));
+"#);
+    assert_eq!(
+        out,
+        [
+            "4",
+            "4",
+            r#"[{"kind":"Err","error":"small1"},{"kind":"Ok","value":12},{"kind":"Err","error":"small1"},{"kind":"Ok","value":2},{"kind":"Err","error":"small1"},{"kind":"Ok","value":5}]"#,
+        ]
+    );
+}
+
+#[test]
+fn runtime_a_member_step_s_simple_key_names_its_member() {
+    require_toolchain!();
+    // TASK-554: a literal or identifier key is read where the member is,
+    // right after the receiver, with the type TypeScript gives it there.
+    let out = run(r#"
+const trace: string[] = [];
+const obj = { m(x: number) { return x * 2; }, n(x: number) { return x * 5; } };
+function h(n: number) { trace.push("head"); return n + 1; }
+function getFns(): [(n: number) => number, string] { return [(n) => n * 3, "s"]; }
+let key: "m" | "n" = "m";
+function receiver() { trace.push("receiver"); key = "n"; return obj; }
+const c = (flow |> obj["m"])(3);
+const d = h(3) |> (() => obj)()["m"];
+const e = h(3) |> getFns()[0];
+const f = h(3) |> obj[`n`];
+const g = h(3) |> receiver()[key];
+console.log(c, d, e, f, g, JSON.stringify(trace));
+"#);
+    assert_eq!(
+        out,
+        [r#"6 8 12 20 20 ["head","head","head","head","receiver"]"#]
+    );
+}
+
+#[test]
+fn runtime_a_missing_method_throws_after_the_call_s_arguments() {
+    require_toolchain!();
+    // TASK-555: the method is read before the arguments and bound at the
+    // call, so `IsCallable` fails after the arguments ran (ECMA-262
+    // `EvaluateCall`); a generic method keeps its signature.
+    let out = run(r#"
+const trace: string[] = [];
+function m(): number { trace.push("m"); return 1; }
+type O = { k: number; add(x: number): number; id<T>(v: T): T; missing?: (x: number) => number };
+const o: O = { k: 5, add(x: number) { return x + this.k; }, id<T>(v: T): T { return v; } };
+function attempt(f: () => unknown): string {
+  try { return String(f()); } catch (e) { return (e as Error).constructor.name; }
+}
+const missing = attempt(() => o.missing!(match (m()) { 1 => 10, _ => 20 }));
+const n: number = o.id(match (m()) { 1 => 10, _ => 20 });
+const piped = o |> .add(match (m()) { 1 => 1, _ => 2 });
+console.log(missing, n, o.add(match (m()) { 1 => 10, _ => 20 }), piped, JSON.stringify(trace));
+"#);
+    assert_eq!(out, [r#"TypeError 10 15 6 ["m","m","m","m"]"#]);
+}

@@ -22,6 +22,22 @@ type was observed: the reference that supplied the contextual type, or the
 right-hand side of the join's assignment. Otherwise the storage has no
 annotation and TypeScript infers its type from its assignments.
 
+An annotation is the whole type: the node builder is asked with
+`NoTruncation` (TASK-553), since its default shortens a long type to
+`... N more ...`, which is neither the type nor TypeScript.
+
+Nor may an annotation name storage the lowering declared (TASK-552).
+TypeScript names a class expression after the binding it is assigned to, so
+the join of `class { q = 1 }` arms prints as `typeof $tt_v0`, the storage's
+own type query (TS2502). Every round tells the backend the declarations of
+all generated storage, the ones earlier rounds annotated included, and a
+name that resolves to one of them rejects the annotation.
+
+The same holds for a type TypeScript's node builder cannot write at the
+declaration at all, such as the instance or constructor type of an anonymous
+class (TASK-551): `typeToTypeNode` answers no node, and the storage is typed
+from its assignments. One such type never stops the file's compilation.
+
 Each round annotates previously unresolved declarations. An updated snapshot
 then exposes those contexts to nested values. Rounds stop when no additional
 facts are available; successful rounds strictly reduce the unresolved set.

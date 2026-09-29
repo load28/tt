@@ -136,6 +136,9 @@ pub(crate) struct ContextualSlotQuery {
     pub module: PathBuf,
     /// UTF-16 end of the declaration identifier, where an annotation belongs.
     pub declaration_end: usize,
+    /// Storage an earlier round already annotated: not asked again, and,
+    /// like every slot, never named by another slot's annotation.
+    pub annotated: bool,
 }
 
 /// A type expressed in the lexical scope of the generated declaration.
