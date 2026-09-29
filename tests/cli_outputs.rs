@@ -349,6 +349,50 @@ fn sidecars_read_declarations_from_the_layout_tsc_emits() {
     );
 }
 
+/// tsc's declarations for ttc's output name a tt module by the file it
+/// compiles to; a sidecar is read where the source is, so it names that
+/// module as the source does — the spelling `--types` writes. A specifier
+/// that names hand-written TypeScript, or a package, stays as tsc wrote it.
+#[test]
+fn sidecars_name_tt_modules_as_the_source_does() {
+    let root = Workspace::new("sidecar-specifiers");
+    let declarations = "import { K } from \"./sub/m.js\";\n\
+        import type { V } from './sub/v.jsx';\n\
+        import { h } from \"./h.js\";\n\
+        export * from \"./sub/m.ts\";\n\
+        export { K } from \"pkg/m.js\";\n\
+        export declare const k: K;\n\
+        export type T = import(\"./sub/m.js\").K | V | typeof h;\n";
+    write_all(
+        &root,
+        &[
+            ("src/sub/m.tt", "export variant K { A, B }\n"),
+            ("src/sub/v.ttx", "export type V = number;\n"),
+            ("src/h.ts", "export const h = 1;\n"),
+            (
+                "src/u.tt",
+                "import { K } from \"./sub/m.tt\";\nexport const k: K = K.A;\n",
+            ),
+            ("decl/u.d.ts", declarations),
+            ("decl/sub/m.d.ts", "export type K = { kind: \"A\" };\n"),
+            ("decl/sub/v.d.ts", "export type V = number;\n"),
+        ],
+    );
+    let expected = "import { K } from \"./sub/m.tt\";\n\
+        import type { V } from './sub/v.ttx';\n\
+        import { h } from \"./h.js\";\n\
+        export * from \"./sub/m.tt\";\n\
+        export { K } from \"pkg/m.js\";\n\
+        export declare const k: K;\n\
+        export type T = import(\"./sub/m.tt\").K | V | typeof h;\n";
+    success(run(&root, &["--sidecar", "decl", "src"]));
+    success(run(&root, &["--sidecar", "decl", "-o", "types", "src"]));
+    for sidecar in ["src/u.tt.d.ts", "types/u.tt.d.ts"] {
+        let written = fs::read_to_string(root.join(sidecar)).unwrap();
+        assert!(written.contains(expected), "{sidecar}:\n{written}");
+    }
+}
+
 #[test]
 fn tt_only_modes_name_the_file_and_the_extensions_they_accept() {
     let root = Workspace::new("tt-only-inputs");

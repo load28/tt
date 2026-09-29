@@ -558,6 +558,7 @@
 | TASK-563 | Leave the output directory out of the TypeScript program | Complete | 2026-09-29 | 2026-09-29 | [TASK-563](./TASK-563-exclude-output-directory-from-program.md) |
 | TASK-564 | Keep `--check` from starting the TypeScript backend | Complete | 2026-09-29 | 2026-09-29 | [TASK-564](./TASK-564-check-without-typescript.md) |
 | TASK-565 | Share one contextual TypeScript session per project across workers | Complete | 2026-09-29 | 2026-09-29 | [TASK-565](./TASK-565-shared-contextual-session.md) |
+| TASK-566 | Write sidecar imports with the source's specifiers | Complete | 2026-09-29 | 2026-09-29 | [TASK-566](./TASK-566-sidecar-source-specifiers.md) |
 
 ## Next task number
 
