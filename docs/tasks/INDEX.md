@@ -559,7 +559,8 @@
 | TASK-551 | Leave storage unannotated when TypeScript cannot write its type | Complete | 2026-09-29 | 2026-09-29 | [TASK-551](./TASK-551-unwritable-annotation-types.md) |
 | TASK-552 | Never annotate storage with a type that names generated storage | Complete | 2026-09-29 | 2026-09-29 | [TASK-552](./TASK-552-annotations-name-no-generated-storage.md) |
 | TASK-553 | Annotate storage with the whole type, never a truncated one | Complete | 2026-09-29 | 2026-09-29 | [TASK-553](./TASK-553-untruncated-annotations.md) |
+| TASK-554 | Keep a member step's simple key where the member is read | Complete | 2026-09-29 | 2026-09-29 | [TASK-554](./TASK-554-member-step-simple-keys.md) |
 
 ## Next task number
 
-**TASK-554**
+**TASK-555**

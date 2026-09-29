@@ -1337,3 +1337,28 @@ console.log(JSON.stringify([sum(1), sum(2), listed(1), listed(2), inResult(1), i
         ]
     );
 }
+
+#[test]
+fn runtime_a_member_step_s_simple_key_names_its_member() {
+    require_toolchain!();
+    // TASK-554: a literal or identifier key is read where the member is,
+    // right after the receiver, with the type TypeScript gives it there.
+    let out = run(r#"
+const trace: string[] = [];
+const obj = { m(x: number) { return x * 2; }, n(x: number) { return x * 5; } };
+function h(n: number) { trace.push("head"); return n + 1; }
+function getFns(): [(n: number) => number, string] { return [(n) => n * 3, "s"]; }
+let key: "m" | "n" = "m";
+function receiver() { trace.push("receiver"); key = "n"; return obj; }
+const c = (flow |> obj["m"])(3);
+const d = h(3) |> (() => obj)()["m"];
+const e = h(3) |> getFns()[0];
+const f = h(3) |> obj[`n`];
+const g = h(3) |> receiver()[key];
+console.log(c, d, e, f, g, JSON.stringify(trace));
+"#);
+    assert_eq!(
+        out,
+        [r#"6 8 12 20 20 ["head","head","head","head","receiver"]"#]
+    );
+}

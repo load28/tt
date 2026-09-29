@@ -455,9 +455,28 @@ pub(crate) fn source_expression_effects(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MemberCallee {
     pub(crate) receiver: Option<SourceSpan>,
+    /// A computed key the step evaluates before the member is read. A
+    /// simple-copiable key is none: it stays where it was written.
     pub(crate) key: Option<SourceSpan>,
     pub(crate) grouped: bool,
     pub(crate) optional: bool,
+}
+
+/// A key TypeScript's own down-level transforms copy instead of capturing
+/// (`isSimpleCopiableExpression`): a string, template, or numeric literal,
+/// a keyword such as `this`, or an identifier. Reading it where the member
+/// is read, right after the receiver, is the order `receiver[key]` reads it
+/// in, and it keeps the type TypeScript gives it there: a literal key
+/// captured as a parameter would widen (`"m"` to `string`, `0` to
+/// `number`) and no longer name its member.
+fn simple_copiable(key: &swc_ecma_ast::Expr) -> bool {
+    use swc_ecma_ast::{Expr as SwcExpr, Lit};
+    match key {
+        SwcExpr::Lit(Lit::Str(_) | Lit::Num(_) | Lit::Bool(_) | Lit::Null(_)) => true,
+        SwcExpr::Tpl(template) => template.exprs.is_empty(),
+        SwcExpr::Ident(_) | SwcExpr::This(_) => true,
+        _ => false,
+    }
 }
 
 pub(crate) fn source_member_callee(
@@ -511,8 +530,10 @@ pub(crate) fn source_member_callee(
         SwcExpr::Member(member) => Some(MemberCallee {
             receiver: Some(at(member.obj.span())),
             key: match &member.prop {
-                MemberProp::Computed(computed) => Some(at(computed.expr.span())),
-                MemberProp::Ident(_) | MemberProp::PrivateName(_) => None,
+                MemberProp::Computed(computed) if !simple_copiable(&computed.expr) => {
+                    Some(at(computed.expr.span()))
+                }
+                MemberProp::Computed(_) | MemberProp::Ident(_) | MemberProp::PrivateName(_) => None,
             },
             grouped,
             optional: false,
@@ -520,8 +541,10 @@ pub(crate) fn source_member_callee(
         SwcExpr::SuperProp(member) => Some(MemberCallee {
             receiver: None,
             key: match &member.prop {
-                SuperProp::Computed(computed) => Some(at(computed.expr.span())),
-                SuperProp::Ident(_) => None,
+                SuperProp::Computed(computed) if !simple_copiable(&computed.expr) => {
+                    Some(at(computed.expr.span()))
+                }
+                SuperProp::Computed(_) | SuperProp::Ident(_) => None,
             },
             grouped,
             optional: false,
