@@ -186,15 +186,15 @@ export async function initializeExisting(options) {
   // Validate the complete output set before changing any project files.
   // Identical generated files make repeated init safe; customized files
   // require an explicit user decision outside the initializer.
-  for (const [file, content] of generated) {
-    const path = join(root, file)
+  const writes = generated.map(([file, content]) => ({ path: join(root, file), content, replace: false }))
+  writes.push({ path: manifestPath, content: jsonText(manifest, indentation(source)), replace: true })
+  for (const { path, content, replace } of writes) {
     await assertInsideProject(realRoot, path)
-    if (existsSync(path) && await readFile(path, 'utf8') !== content) {
+    if (!replace && existsSync(path) && await readFile(path, 'utf8') !== content) {
       throw new Error(`refusing to overwrite existing config: ${path}`)
     }
   }
-  for (const [file, content] of generated) await writeFile(join(root, file), content)
-  await writeJson(manifestPath, manifest, indentation(source))
+  for (const { path, content } of writes) await writeFile(path, content)
   files.push(...generated.map(([file]) => file).filter((file) => !files.includes(file)))
   return { root, packageManager, mode: 'init', bundler: bundler ?? 'none', files, manualModule, updated }
 }
@@ -441,8 +441,12 @@ function indentation(source) {
   return source.match(/\n([ \t]+)\S/)?.[1] ?? '  '
 }
 
-async function writeJson(path, value, space = '  ') {
-  await writeFile(path, `${JSON.stringify(value, null, space)}\n`)
+function jsonText(value, space = '  ') {
+  return `${JSON.stringify(value, null, space)}\n`
+}
+
+async function writeJson(path, value, space) {
+  await writeFile(path, jsonText(value, space))
 }
 
 const viteConfig = `import { defineConfig } from 'vite'

@@ -244,6 +244,16 @@ test('init refuses to write a generated file through a symlink that leaves the p
   assert.deepEqual(await readdir(outside), [])
 })
 
+test('init refuses to update a package.json that resolves outside the project and writes nothing', async () => {
+  const outside = testDir('create-tt-outside-manifest-')
+  await writeFile(join(outside, 'package.json'), '{}\n')
+  const root = testDir('create-tt-linked-manifest-')
+  await symlink(join(outside, 'package.json'), join(root, 'package.json'))
+  await assert.rejects(initializeExisting({ directory: root, bundler: 'none' }), /resolves outside the project/)
+  assert.equal(await readFile(join(outside, 'package.json'), 'utf8'), '{}\n')
+  assert.deepEqual(await readdir(root), ['package.json'])
+})
+
 test('init treats a directory whose name begins with two dots as inside the project', async () => {
   const root = testDir('create-tt-dotted-')
   await writeFile(join(root, 'package.json'), '{}\n')
