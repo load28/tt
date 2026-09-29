@@ -71,6 +71,7 @@ import * as engine from "./engine";
 import { NoticeLedger } from "./notices";
 import { applyFolderChange, containingRoot, folderRoots, sidecarLocation } from "./roots";
 import * as ttc from "./ttc";
+import * as fs from "node:fs";
 import * as path from "node:path";
 
 import * as sidecar from "./sidecar";
@@ -435,6 +436,36 @@ function enginePath(doc: TextDocument): string | null {
   return uri.scheme === "file" ? uri.fsPath : null;
 }
 
+/**
+ * The URI the editor knows a file the engine names by.
+ *
+ * The engine identifies a file by its real path
+ * (`engine::normalize_document_path`), so a document opened through a
+ * symlink comes back under its target's name. An answer about that file —
+ * a rename edit, a location — belongs to the open document, not to a second
+ * editor on the target.
+ */
+function editorUri(file: string): string {
+  const real = realPath(file);
+  for (const doc of documents.all()) {
+    const docPath = enginePath(doc);
+    if (docPath !== null && (docPath === file || realPath(docPath) === real)) {
+      return doc.uri;
+    }
+  }
+  return URI.file(file).toString();
+}
+
+/** A path with its symlinks resolved, or the path itself when it does not
+ * exist yet (an unsaved buffer's leaf). */
+function realPath(file: string): string {
+  try {
+    return fs.realpathSync(file);
+  } catch {
+    return file;
+  }
+}
+
 /** A name for the buffer, whether or not it is a file on disk.
  *
  * The engine's text-only answers — the declarations in this buffer, the
@@ -797,7 +828,7 @@ async function typeDiagnostics(
     relatedInformation: d.related?.length
       ? d.related.map((r) => ({
           location: {
-            uri: r.path ? URI.file(r.path).toString() : doc.uri,
+            uri: r.path ? editorUri(r.path) : doc.uri,
             range: r.range,
           },
           message: r.message,
@@ -873,7 +904,7 @@ function toDiagnostic(doc: TextDocument, d: ttc.TtcDiagnostic): Diagnostic {
     relatedInformation: d.labels?.length
       ? d.labels.map((label) => ({
           location: {
-            uri: label.path ? URI.file(label.path).toString() : doc.uri,
+            uri: label.path ? editorUri(label.path) : doc.uri,
             range: {
               start: {
                 line: Math.max(0, label.line - 1),
@@ -1456,7 +1487,7 @@ connection.onDefinition(async (params) => {
       const target =
         sym.definition.path === bufferPath(doc) && enginePath(doc) === null
           ? doc.uri
-          : URI.file(sym.definition.path).toString();
+          : editorUri(sym.definition.path);
       return Location.create(target, sym.definition.range);
     }
     // A built-in case has no declaration to open; nothing else does either
@@ -1477,7 +1508,7 @@ connection.onDefinition(async (params) => {
   );
   if (locations.length === 0) return null;
   return locations.map((l) =>
-    Location.create(URI.file(l.path).toString(), l.range),
+    Location.create(editorUri(l.path), l.range),
   );
 });
 
@@ -1495,7 +1526,7 @@ connection.onReferences(async (params): Promise<Location[] | null> => {
   ).filter((r) => params.context.includeDeclaration || !r.isDefinition);
   if (references.length === 0) return null;
   return references.map((r) =>
-    Location.create(URI.file(r.path).toString(), r.range),
+    Location.create(editorUri(r.path), r.range),
   );
 });
 
@@ -1540,7 +1571,7 @@ connection.onRenameRequest(async (params) => {
       edit.newText === null
         ? params.newName
         : edit.newText.split(engine.RENAME_PLACEHOLDER).join(params.newName);
-    const target = URI.file(edit.path).toString();
+    const target = editorUri(edit.path);
     (changes[target] ??= []).push(TextEdit.replace(edit.range, newText));
   }
   return { changes };

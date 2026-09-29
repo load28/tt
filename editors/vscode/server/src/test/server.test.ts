@@ -1058,6 +1058,53 @@ test("pattern positions complete cases and fields", { skip, timeout }, async () 
   }
 });
 
+test("a document opened through a symlink receives its own locations and edits", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    'const label = "tt";',
+    "export const output = label.length;",
+    "",
+  ].join("\n");
+  const real = repoTestDir("tt-symlink-real-");
+  fs.writeFileSync(path.join(real, "main.tt"), source);
+  fs.writeFileSync(path.join(real, "tsconfig.json"), JSON.stringify({
+    compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", noEmit: true },
+    include: ["*"],
+  }));
+  const link = `${real}-link`;
+  fs.symlinkSync(real, link, "dir");
+  const uri = pathToFileURL(path.join(link, "main.tt")).toString();
+  const client = connect();
+  try {
+    await client.request("initialize", {
+      processId: process.pid,
+      rootUri: pathToFileURL(link).toString(),
+      workspaceFolders: [{ uri: pathToFileURL(link).toString(), name: "test" }],
+      capabilities: {},
+    });
+    client.notify("initialized", {});
+    client.notify("textDocument/didOpen", {
+      textDocument: { uri, languageId: "tt", version: 1, text: source },
+    });
+    const at = positionOf(source, "output = lab");
+    const definition = await client.request("textDocument/definition", { textDocument: { uri }, position: at });
+    assert.deepEqual(
+      (Array.isArray(definition.result) ? definition.result : [definition.result]).map((l: any) => l.uri),
+      [uri],
+    );
+    const references = await client.request("textDocument/references", {
+      textDocument: { uri },
+      position: at,
+      context: { includeDeclaration: true },
+    });
+    assert.deepEqual(references.result.map((l: any) => l.uri), [uri, uri]);
+    const rename = await client.request("textDocument/rename", { textDocument: { uri }, position: at, newName: "title" });
+    assert.deepEqual(Object.keys(rename.result.changes), [uri]);
+  } finally {
+    client.stop();
+    fs.unlinkSync(link);
+  }
+});
+
 test("references, rename, signature help, and document symbols cross the LSP adapter", { skip: skipTyped, timeout }, async () => {
   const source = [
     "variant Shape { Circle(radius: number), Point }",
