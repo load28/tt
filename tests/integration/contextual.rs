@@ -1326,3 +1326,24 @@ console.log(JSON.stringify([pick(1), pick(2)]));
 "#);
     assert_eq!(output, [r#"[[1,3],[2,4]]"#]);
 }
+
+#[test]
+fn a_long_type_is_annotated_whole() {
+    require_toolchain!();
+    // TASK-553: TypeScript's node builder truncates a long type by default
+    // (`... 36 more ...;`), which is neither the type nor TypeScript.
+    let members: String = (0..40)
+        .map(|index| format!(" p{index}_long_property_name: {{ nested_{index}: string }};"))
+        .collect();
+    let output = run(&format!(
+        r#"
+function make(tag: string) {{ return {{ p39_long_property_name: {{ nested_39: tag }} }} as {{{members} }}; }}
+function pick(n: number) {{
+  const x = match (n) {{ 1 => make("a"), _ => make("b") }};
+  return x.p39_long_property_name.nested_39;
+}}
+console.log(pick(1), pick(2));
+"#
+    ));
+    assert_eq!(output, ["a b"]);
+}

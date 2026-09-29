@@ -22,6 +22,10 @@ type was observed: the reference that supplied the contextual type, or the
 right-hand side of the join's assignment. Otherwise the storage has no
 annotation and TypeScript infers its type from its assignments.
 
+An annotation is the whole type: the node builder is asked with
+`NoTruncation` (TASK-553), since its default shortens a long type to
+`... N more ...`, which is neither the type nor TypeScript.
+
 Nor may an annotation name storage the lowering declared (TASK-552).
 TypeScript names a class expression after the binding it is assigned to, so
 the join of `class { q = 1 }` arms prints as `typeof $tt_v0`, the storage's

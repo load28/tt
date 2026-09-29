@@ -558,7 +558,8 @@
 | TASK-550 | Give a propagated operand its own storage | Complete | 2026-09-29 | 2026-09-29 | [TASK-550](./TASK-550-propagated-operand-storage.md) |
 | TASK-551 | Leave storage unannotated when TypeScript cannot write its type | Complete | 2026-09-29 | 2026-09-29 | [TASK-551](./TASK-551-unwritable-annotation-types.md) |
 | TASK-552 | Never annotate storage with a type that names generated storage | Complete | 2026-09-29 | 2026-09-29 | [TASK-552](./TASK-552-annotations-name-no-generated-storage.md) |
+| TASK-553 | Annotate storage with the whole type, never a truncated one | Complete | 2026-09-29 | 2026-09-29 | [TASK-553](./TASK-553-untruncated-annotations.md) |
 
 ## Next task number
 
-**TASK-553**
+**TASK-554**

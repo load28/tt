@@ -250,6 +250,7 @@ async function main() {
   let API;
   let SymbolFlags;
   let TypeFlags;
+  let NodeBuilderFlags;
   let isExpression;
   let isIdentifier;
   let isVariableDeclaration;
@@ -259,7 +260,7 @@ async function main() {
   let isQualifiedName;
   let SyntaxKind;
   try {
-    ({ API, SymbolFlags, TypeFlags } = await import(open.apiModule));
+    ({ API, SymbolFlags, TypeFlags, NodeBuilderFlags } = await import(open.apiModule));
     ({
       isExpression,
       isIdentifier,
@@ -653,10 +654,12 @@ async function main() {
         // of the same name shadows it. An annotation is written only when
         // every name it references denotes, at the declaration, the symbol
         // it denotes where the type was observed, and that symbol is not
-        // storage the lowering declared.
+        // storage the lowering declared. It is written without truncation:
+        // a truncated type is not the type (`... 3 more ...` is not even
+        // TypeScript).
         const generated = storageOf(slot.module, source);
         const annotation = (type, observed) => {
-          const node = typeNode(checker, type, declaration);
+          const node = typeNode(checker, type, declaration, NodeBuilderFlags.NoTruncation);
           if (!node) return undefined;
           let accessible = true;
           const visit = (child) => {
@@ -971,9 +974,9 @@ async function main() {
  * question about the same type, which tells that answer apart from a
  * session that stopped answering; a session failure propagates.
  */
-function typeNode(checker, type, location) {
+function typeNode(checker, type, location, flags) {
   try {
-    return checker.typeToTypeNode(type, location);
+    return checker.typeToTypeNode(type, location, flags);
   } catch (error) {
     checker.typeToString(type, location);
     return undefined;
