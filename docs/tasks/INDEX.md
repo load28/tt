@@ -535,7 +535,8 @@
 | TASK-532 | Show TypeScript's declarations in a tt file's outline | Complete | 2026-09-29 | 2026-09-29 | [TASK-532](./TASK-532-typescript-outline.md) |
 | TASK-534 | Leave already-bound fields out of payload completion | Complete | 2026-09-29 | 2026-09-29 | [TASK-534](./TASK-534-bound-payload-fields.md) |
 | TASK-537 | Hover a pattern binding by its type and a tt name with its JSDoc | Complete | 2026-09-29 | 2026-09-29 | [TASK-537](./TASK-537-tt-name-hover.md) |
+| TASK-540 | Report an unreadable root configuration as TS5083 and recover | Complete | 2026-09-29 | 2026-09-29 | [TASK-540](./TASK-540-unreadable-root-configuration.md) |
 
 ## Next task number
 
-**TASK-538**
+**TASK-541**

@@ -193,3 +193,93 @@ fn types_names_each_file_of_a_declaration_collision_once() {
         );
     }
 }
+
+/// Reads a running watch's stderr and waits for its passes.
+struct WatchPasses {
+    lines: std::sync::mpsc::Receiver<String>,
+    seen: String,
+    passes: usize,
+}
+
+impl WatchPasses {
+    fn of(child: &mut std::process::Child) -> Self {
+        let (sender, lines) = std::sync::mpsc::channel();
+        let stderr = child.stderr.take().expect("stderr piped");
+        std::thread::spawn(move || {
+            use std::io::BufRead;
+            for line in std::io::BufReader::new(stderr)
+                .lines()
+                .map_while(Result::ok)
+            {
+                if sender.send(line).is_err() {
+                    break;
+                }
+            }
+        });
+        Self {
+            lines,
+            seen: String::new(),
+            passes: 0,
+        }
+    }
+
+    /// Waits for the next pass and returns what it printed.
+    fn next(&mut self) -> String {
+        self.passes += 1;
+        let start = self.seen.len();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        while self.seen.matches("— watching").count() < self.passes {
+            let left = deadline.saturating_duration_since(std::time::Instant::now());
+            let line = self
+                .lines
+                .recv_timeout(left)
+                .unwrap_or_else(|_| panic!("pass {} never finished:\n{}", self.passes, self.seen));
+            self.seen.push_str(&line);
+            self.seen.push('\n');
+        }
+        self.seen[start..].to_string()
+    }
+}
+
+#[test]
+fn a_typed_watch_reports_a_missing_configuration_and_recovers_when_it_returns() {
+    require_tsgo!();
+    let dir = project(&[("src/a.tt", "export const a: number = 1;\n")]);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
+    command
+        .args(["--check-types", "-w", "src"])
+        .current_dir(&dir)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::piped());
+    dir.isolate_unfinalized_child_profile(&mut command);
+    let mut child = command.spawn().expect("ttc runs");
+    let mut watch = WatchPasses::of(&mut child);
+
+    let first = watch.next();
+    assert!(!first.contains("error["), "{first}");
+    let config = fs::read_to_string(dir.join("tsconfig.json")).unwrap();
+    fs::rename(dir.join("tsconfig.json"), dir.join("moved.json")).unwrap();
+    let missing = watch.next();
+    fs::remove_file(dir.join("moved.json")).unwrap();
+    write(&dir, "tsconfig.json", &config);
+    let restored = watch.next();
+    write(&dir, "src/a.tt", "export const a: number = \"text\";\n");
+    let edited = watch.next();
+    let _ = child.kill();
+    let status = child.wait().expect("ttc exits");
+
+    assert!(
+        missing.contains("error[ts5083]: Cannot read file")
+            && missing.contains("--> tsconfig.json"),
+        "{}",
+        watch.seen
+    );
+    assert!(!restored.contains("error["), "{}", watch.seen);
+    assert!(
+        edited.contains("error[ts2322]") && edited.contains("--> src/a.tt:1:26"),
+        "{}",
+        watch.seen
+    );
+    assert!(!watch.seen.contains("internal compiler error"), "{}", watch.seen);
+    assert_ne!(status.code(), Some(101), "{}", watch.seen);
+}

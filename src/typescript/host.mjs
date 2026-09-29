@@ -88,6 +88,7 @@ function publishFile(file, text) {
   fs.writeFileSync(staging, text);
   fs.renameSync(staging, file);
 }
+const CANNOT_READ_FILE = 5083;
 const LOWERED = /\.(?:tt\.ts|ttx\.tsx)$/;
 const TT_SOURCE = /\.ttx?$/;
 const MAPPED_DECLARATION = /\.d\.(ttx?)\.ts$/;
@@ -303,7 +304,6 @@ async function main() {
           answer = configuredMappers();
         } else {
           answer = handle(job);
-          opened = true;
         }
       } catch (e) {
         // The Rust boundary classifies this as an internal compiler error.
@@ -465,6 +465,16 @@ async function main() {
       // as modules; never alter source strings or infer membership from a scan.
       const previous = new Map(configFiles);
       configFiles.clear();
+      // A configuration TypeScript cannot read is TS5083, the diagnostic
+      // `tsc` reports for it. No project exists until it can be read again,
+      // and then it is opened afresh.
+      const unreadable = api.readConfigFile(open.tsconfig).error;
+      if (unreadable?.code === CANNOT_READ_FILE) {
+        if (opened) reconnect();
+        out.projectDiagnostics.push({ file: open.tsconfig, code: unreadable.code, message: unreadable.text });
+        out.dependencies = [...dependencies.keys(), ...listings.keys()];
+        return engineAnswer(out);
+      }
       const wanted = !foreignMappers(api.parseConfigFile(open.tsconfig));
       if (wanted !== mapped) {
         mapped = wanted;
@@ -539,6 +549,7 @@ async function main() {
     if (!project) {
       throw new Error("no project for " + (open.tsconfig ?? paths[0] ?? "<nothing>"));
     }
+    opened = true;
 
     // The candidate modules come from a filesystem scan so the layered
     // filesystem can implement tsconfig globs and module resolution. The
