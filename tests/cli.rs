@@ -1043,6 +1043,22 @@ fn types_skips_a_literal_match_with_a_wildcard() {
 }
 
 #[test]
+fn types_type_a_value_with_no_contextual_type_as_at_its_source_position() {
+    require_types_toolchain!();
+    // TASK-570: `this` in the arm's method is the object literal, as in
+    // `n === 1 ? {…} : {…}`, not the `any` of the storage it is written to.
+    let err = types_stderr(
+        "export function f(n: number) {\n\
+         \x20 const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };\n\
+         \x20 return b.m().zzz;\n\
+         }\n",
+    );
+    assert!(err.contains("error[ts2339]"), "{err}");
+    assert!(err.contains("Property 'zzz' does not exist"), "{err}");
+    assert!(err.contains("--> src/main.tt:3:16"), "{err}");
+}
+
+#[test]
 fn types_does_not_count_a_guarded_arm_as_covering() {
     require_types_toolchain!();
     let err = types_stderr(

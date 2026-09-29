@@ -494,7 +494,8 @@ fn a_pipeline_anchors_each_piped_value_to_the_step_consuming_it() {
 
 #[test]
 fn anchors_do_not_change_the_emitted_bytes() {
-    // Anchors are zero-length notes; the output must be what it always was.
+    // Anchors are zero-length notes; the output must be what it always was,
+    // before the project checker refines the storage.
     let src = r#"variant E { A(x: number), B }
 function f() {
   const a = try readNum();
@@ -511,6 +512,7 @@ function f() {
         &Options {
             rewrite_imports: ImportRewrite::Off,
             verify: false,
+            defer_to_checker: true,
             ..Options::default()
         },
     )

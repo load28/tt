@@ -1347,3 +1347,68 @@ console.log(pick(1), pick(2));
     ));
     assert_eq!(output, ["a b"]);
 }
+
+#[test]
+fn a_value_with_no_contextual_type_is_typed_as_at_its_source_position() {
+    require_toolchain!();
+    // TASK-570: the storage an arm value is written to has no type of its
+    // own, and an assignment would type the value by it: `this` in the
+    // literal's method would be `any`.
+    let (valid, diagnostics) = typecheck(
+        r#"
+declare const n: number;
+const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };
+b.m().zzz;
+const xs = match (n) { 1 => [n], _ => [] };
+const s = match (n) { 1 => Symbol(), _ => Symbol() };
+const checked: symbol[] = [s];
+xs.push(1);
+"#,
+    );
+    assert!(!valid, "{diagnostics}");
+    assert_eq!(diagnostics.matches("error TS").count(), 1, "{diagnostics}");
+    assert!(
+        diagnostics.contains("error TS2339: Property 'zzz' does not exist"),
+        "{diagnostics}"
+    );
+    let output = run(r#"
+function pick(n: number) {
+  const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };
+  const f = match (n) { 1 => () => b.m().k, _ => function () { return 0; } };
+  const xs = match (n) { 1 => [n], _ => [] };
+  return [b.m().k, f(), xs.length].join(",");
+}
+console.log(pick(1), pick(2));
+"#);
+    assert_eq!(output, ["1,1,1 2,0,0"]);
+}
+
+#[test]
+fn a_contextual_this_type_still_reaches_the_arm_values() {
+    require_toolchain!();
+    // TASK-570: where the source position has a contextual type, the arm
+    // values keep it, `ThisType` included.
+    let (valid, diagnostics) = typecheck(
+        r#"
+declare const n: number;
+type Methods = { k: number; m(): number } & ThisType<{ q: string }>;
+const d: Methods = match (n) { 1 => ({ k: 1, m() { return this.q.length; } }), _ => ({ k: 2, m() { return this.q.length; } }) };
+const e: Methods = match (n) { 1 => ({ k: 1, m() { return this.k; } }), _ => ({ k: 2, m() { return 0; } }) };
+"#,
+    );
+    assert!(!valid, "{diagnostics}");
+    assert_eq!(diagnostics.matches("error TS").count(), 1, "{diagnostics}");
+    assert!(
+        diagnostics.contains("error TS2339: Property 'k' does not exist on type '{ q: string; }'"),
+        "{diagnostics}"
+    );
+    let output = run(r#"
+type Methods = { k: number; m(): number } & ThisType<{ q: string }>;
+function pick(n: number) {
+  const d: Methods = match (n) { 1 => ({ k: 1, m() { return this.q.length; } }), _ => ({ k: 2, m() { return 0; } }) };
+  return d.m.call({ q: "abc" });
+}
+console.log(pick(1), pick(2));
+"#);
+    assert_eq!(output, ["3 0"]);
+}
