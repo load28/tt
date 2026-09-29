@@ -275,21 +275,19 @@ function reloadProjectState(previous: ReadonlyMap<string, string>): void {
 interface Analyzed {
   version: number;
   text: string;
-  masked: string;
 }
 
 const analysisCache = new Map<string, Analyzed>();
 
-/** The text-shape half: the masked buffer for cursor-context questions
- * (member access, word boundaries). tt *semantics* — which variants are
- * visible, where the match sites are — are the compiler's answer
- * ([declarationsOf]), not this file's. */
+/** The text-shape half: the buffer for word-boundary questions. tt
+ * *semantics* — which variants are visible, where the match sites are —
+ * and the cursor's syntactic context are the compiler's answer
+ * ([declarationsOf], `ttCompletions`), not this file's. */
 function analyze(doc: TextDocument): Analyzed {
   const cached = analysisCache.get(doc.uri);
   if (cached && cached.version === doc.version) return cached;
   const text = doc.getText();
-  const masked = analysis.maskNonCode(text, doc.languageId === "ttx");
-  const result: Analyzed = { version: doc.version, text, masked };
+  const result: Analyzed = { version: doc.version, text };
   analysisCache.set(doc.uri, result);
   return result;
 }
@@ -1173,15 +1171,6 @@ interface TsCompletionData {
 }
 
 /**
- * True when `offset` sits right after a member-access dot. `masked` is the
- * masked source (analysis.ts), so a `.` inside a string, comment or regex
- * is not one.
- */
-function atMemberAccess(masked: string, offset: number): boolean {
-  return offset > 0 && masked[offset - 1] === ".";
-}
-
-/**
  * TypeScript completions from the engine, sorted after the tt-specific
  * items (`2` prefix; tt items use `0`/`1`). The engine applies the whole
  * member/probe policy: at a member access only a member answer comes back,
@@ -1221,7 +1210,6 @@ async function tsCompletions(
 connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return [];
-  const { masked } = analyze(doc);
   const offset = doc.offsetAt(params.position);
   const visible = (await declarationsOf(doc)).variants;
   const trigger =
@@ -1229,29 +1217,35 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
       ? params.context.triggerCharacter
       : undefined;
 
-  // `Variant.` member access → the variant's case constructors, then everything
-  // else TypeScript offers on that same object. Both halves are needed:
-  // the constructors are tt's (case signature, field snippet, tags an
-  // unimported built-in still has), while the rest of a standard-library
-  // namespace — `Result.map`, `Option.unwrapOrElse`, the `*P` pipeline
-  // variants — is ordinary TypeScript the service already types. Returning
-  // only the constructors hid every combinator behind `Result.`/`Option.`
-  // (TASK-062). Any other member access (`obj.`) is TypeScript's alone.
-  const base = analysis.memberAccessAt(masked, offset);
-  if (base !== null) {
-    const e = visible.find((x) => x.name === base);
+  // The engine reads the position from the buffer's tokens: whether the
+  // name being typed follows a `.` or `?.`, and the pattern completions tt
+  // owns there.
+  const here = await engine.ttCompletions(
+    await compilerOf(doc),
+    bufferPath(doc),
+    doc.getText(),
+    params.position,
+    logEngine,
+  );
+
+  // A member name is being typed: members belong there, and nothing else —
+  // no variant names, no keyword snippets — whatever the receiver is
+  // (`x |> .`, `f().t`, `s.trim().ma`). After `Variant.` the variant's case
+  // constructors come first, then everything else TypeScript offers on that
+  // same object. Both halves are needed: the constructors are tt's (case
+  // signature, field snippet, tags an unimported built-in still has), while
+  // the rest of a standard-library namespace — `Result.map`,
+  // `Option.unwrapOrElse`, the `*P` pipeline variants — is ordinary
+  // TypeScript the service already types. Returning only the constructors
+  // hid every combinator behind `Result.`/`Option.` (TASK-062).
+  if (here.member !== null) {
+    const receiver = here.member.receiver;
     const members = await tsCompletions(doc, offset, true);
+    const e = visible.find((x) => x.name === receiver);
     if (!e) return members;
     const items = e.cases.map((c) => constructorItem(e, c));
     const tags = new Set(items.map((i) => i.label));
     return items.concat(members.filter((i) => !tags.has(i.label)));
-  }
-
-  // A `.` with no identifier in front of it is a member access all the same
-  // (`x |> .`, `f().`, `(a + b).`): members belong there, and nothing else —
-  // no variant names, no keyword snippets.
-  if (atMemberAccess(masked, offset)) {
-    return tsCompletions(doc, offset, true);
   }
   if (trigger !== undefined && !PATTERN_TRIGGER_CHARACTERS.includes(trigger)) {
     return [];
@@ -1264,15 +1258,8 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   // declaration table, under the same shadowing the compiler resolves
   // with, and knows the positions this server never did (`if let`,
   // let-else payloads, nested patterns).
-  const ttItemsHere = await engine.ttCompletions(
-    await compilerOf(doc),
-    bufferPath(doc),
-    doc.getText(),
-    params.position,
-    logEngine,
-  );
-  if (ttItemsHere.length > 0) {
-    return ttItemsHere.map((item) => ({
+  if (here.items.length > 0) {
+    return here.items.map((item) => ({
       label: item.label,
       kind:
         item.kind === "case"

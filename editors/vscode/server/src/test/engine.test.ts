@@ -193,7 +193,8 @@ test("ttx receives the complete TypeScript and tt semantic surface", { skip }, a
     TTX_SOURCE,
     positionAt(TTX_SOURCE, TTX_SOURCE.indexOf("Ready(value) =>")),
   );
-  assert.ok(ttCompletions.some((item) => item.label === "Ready"));
+  assert.ok(ttCompletions.items.some((item) => item.label === "Ready"));
+  assert.equal(ttCompletions.member, null);
 
   const tokens = await engine.semanticTokens(COMPILER, TTX_SOURCE, ttx);
   assert.ok(tokens?.some((token) => token.kind === "keyword"));

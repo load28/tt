@@ -556,6 +556,7 @@
 | TASK-548 | Recover a discarded `result` block in the typed projection | Complete | 2026-09-29 | 2026-09-29 | [TASK-548](./TASK-548-recover-discarded-result.md) |
 | TASK-556 | Keep the pipeline runtime's helpers out of completion | Complete | 2026-09-29 | 2026-09-29 | [TASK-556](./TASK-556-runtime-helpers-in-completion.md) |
 | TASK-557 | Keep a pipeline whose last step is not written yet | Complete | 2026-09-29 | 2026-09-29 | [TASK-557](./TASK-557-unfinished-pipeline-step.md) |
+| TASK-558 | Read the member-completion context from the token stream | Complete | 2026-09-29 | 2026-09-29 | [TASK-558](./TASK-558-member-context-from-tokens.md) |
 
 ## Next task number
 

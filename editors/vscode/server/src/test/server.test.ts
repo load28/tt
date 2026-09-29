@@ -2114,6 +2114,37 @@ test("a trigger character completes only the context it is registered for", { sk
   }
 });
 
+test("a member name after any receiver completes members only", { skip: skipTyped, timeout }, async () => {
+  const prefix = [
+    "declare const nm: string;",
+    "declare function foo(): string;",
+    "declare const xs: string[];",
+    "declare const k: string;",
+    "",
+  ].join("\n");
+  for (const [line, member] of [
+    ["const m = nm.trim().ma", "match"],
+    ["const t = foo().t", "trim"],
+    ["const t = xs[0].t", "trim"],
+    ['const t = "abc".len', "length"],
+    ["const t = k |> .t", "trim"],
+  ] as const) {
+    const source = prefix + line;
+    const { completion, stop } = await open(source);
+    try {
+      const { items, labels } = await completion(line);
+      assert.ok(labels.includes(member), `${line}: ${JSON.stringify(labels)}`);
+      for (const tt of ["Option", "Result", "flow", "let-else"]) {
+        assert.ok(!labels.includes(tt), `${line}: ${tt} offered`);
+      }
+      const matches = items.filter((item) => item.label === "match");
+      assert.ok(matches.every((item) => item.kind === 2), `${line}: ${JSON.stringify(matches)}`);
+    } finally {
+      stop();
+    }
+  }
+});
+
 test("an untitled ttx buffer is checked as ttx", { skip, timeout }, async () => {
   const client = connect();
   const uri = "untitled:Untitled-2";
