@@ -522,6 +522,7 @@
 | TASK-512 | Bring single-file compile cost back within the CI budget | Complete | 2026-09-29 | 2026-09-29 | [TASK-512](./TASK-512-single-file-compile-cost.md) |
 | TASK-513 | Plan the package.json update with every other init write | Complete | 2026-09-29 | 2026-09-29 | [TASK-513](./TASK-513-manifest-write-boundary.md) |
 | TASK-521 | Close the hoisting block of a statement value that ends the file | Complete | 2026-09-29 | 2026-09-29 | [TASK-521](./TASK-521-statement-match-at-end-of-file.md) |
+| TASK-522 | Evaluate an assignment's target before a hoisted right operand | Complete | 2026-09-29 | 2026-09-29 | [TASK-522](./TASK-522-assignment-target-evaluation-order.md) |
 
 ## Next task number
 

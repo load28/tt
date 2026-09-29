@@ -743,6 +743,10 @@ fn can_defer_arm_values(
 pub(super) struct SourceReplacement {
     pub(super) source: SourceSpan,
     pub(super) slot: String,
+    /// What the source walk writes in place of `source` when it is not the
+    /// slot's name — a compound assignment's operator, rewritten to apply
+    /// to the accumulator that read the target ([`compound_assignment_operator`]).
+    pub(super) rewrite: Option<String>,
     pub(super) jsx_child: bool,
     /// The tt value whose construct anchor the replacement's generated
     /// name carries — a conditional operation's result stands for the whole
@@ -751,6 +755,56 @@ pub(super) struct SourceReplacement {
     /// A completed call's claimed frame. Its own active value retains the
     /// authored source; unrelated enclosing values do not inhibit the claim.
     pub(super) claim: bool,
+}
+
+impl SourceReplacement {
+    /// The text the source walk writes in place of the replaced source.
+    pub(super) fn written(&self) -> &str {
+        self.rewrite.as_deref().unwrap_or(&self.slot)
+    }
+}
+
+/// The operator token of the compound assignment whose target is `target`.
+///
+/// Only trivia separates an assignment's target from its operator, and the
+/// target's span includes any parentheses around it.
+pub(super) fn compound_assignment_operator(
+    source: &str,
+    target: SourceSpan,
+    operator: &str,
+) -> SourceSpan {
+    let bytes = source.as_bytes();
+    let (start, _) = crate::scanner::skip_trivia(bytes, target.end, bytes.len());
+    let end = start + operator.len();
+    if source.get(start..end) != Some(operator) {
+        crate::ice::bug!("a compound assignment's operator does not follow its target");
+    }
+    SourceSpan { start, end }
+}
+
+/// The target and operator span of every compound assignment whose target a
+/// schedule reads before the right operand. The target is printed twice —
+/// read into its accumulator, then assigned — and the operator is rewritten,
+/// so the plan claims both.
+fn compound_assignment_frames<'s>(
+    source: &str,
+    steps: impl Iterator<Item = &'s PlannedEvaluationStep>,
+) -> Vec<SourceSpan> {
+    steps
+        .flat_map(|step| &step.inputs)
+        .filter_map(|input| match input {
+            PlannedEvaluationInput::Source {
+                source: target,
+                mode: EvaluationInputMode::CompoundAssignmentTarget { operator },
+                ..
+            } => Some([
+                *target,
+                compound_assignment_operator(source, *target, operator),
+            ]),
+            _ => None,
+        })
+        .flatten()
+        .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -1259,8 +1313,34 @@ impl TargetRewritePlan {
                     })
             })
         };
+        let compound_assignments = compound_assignment_frames(
+            source,
+            all_values()
+                .flat_map(|value| &value.steps)
+                .chain(all_operations().flat_map(|operation| {
+                    operation
+                        .active
+                        .iter()
+                        .flat_map(|active| &active.steps)
+                        .chain(&operation.outer)
+                }))
+                .chain(lowering.nested_operations().iter().flat_map(|operation| {
+                    operation
+                        .active
+                        .iter()
+                        .flat_map(|active| &active.steps)
+                        .chain(&operation.outer)
+                }))
+                .chain(
+                    lowering
+                        .nested_value_schedules()
+                        .flat_map(|(_, schedule)| schedule.steps()),
+                ),
+        );
+        relocated_values.extend(compound_assignments.iter().copied());
         let rewritten_operations: Vec<SourceSpan> = all_operations()
             .map(|operation| operation.parent)
+            .chain(compound_assignments)
             .chain(
                 lowering
                     .nested_operations()
@@ -1298,6 +1378,7 @@ impl TargetRewritePlan {
                     jsx_child: false,
                     anchor: Some(primary),
                     claim: false,
+                    rewrite: None,
                 }
             })
             .collect();
@@ -1313,6 +1394,22 @@ impl TargetRewritePlan {
             .flat_map(|step| &step.inputs)
             .filter_map(|input| match input {
                 PlannedEvaluationInput::Source {
+                    source: target_span,
+                    target,
+                    mode: EvaluationInputMode::CompoundAssignmentTarget { operator },
+                    ..
+                } => {
+                    let slot = lowering.slot_name(*target);
+                    Some(SourceReplacement {
+                        source: compound_assignment_operator(source, *target_span, operator),
+                        slot: slot.to_owned(),
+                        jsx_child: false,
+                        anchor: None,
+                        claim: false,
+                        rewrite: Some(format!("= {slot} {operator}")),
+                    })
+                }
+                PlannedEvaluationInput::Source {
                     source,
                     target,
                     mode,
@@ -1323,6 +1420,7 @@ impl TargetRewritePlan {
                     jsx_child: *mode == EvaluationInputMode::JsxChildValue,
                     anchor: None,
                     claim: false,
+                    rewrite: None,
                 }),
                 PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
             })
@@ -1332,6 +1430,7 @@ impl TargetRewritePlan {
                 jsx_child: false,
                 anchor: Some(rewrite.expr),
                 claim: false,
+                rewrite: None,
             }))
             .chain(operation_replacements)
             .collect();
@@ -1345,6 +1444,7 @@ impl TargetRewritePlan {
                 jsx_child: false,
                 anchor: Some(expr),
                 claim: true,
+                rewrite: None,
             }),
         );
         source_replacements.sort_by_key(|replacement| {

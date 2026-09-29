@@ -152,7 +152,6 @@ pub(super) fn protocol_step(
             let operation = HostEvaluationOperation::Eager(match kind {
                 OrderedEvaluationKind::Array => EagerPosition::ArrayElement(index),
                 OrderedEvaluationKind::Object => EagerPosition::ObjectEvaluation(index),
-                OrderedEvaluationKind::Assignment => EagerPosition::AssignmentRight,
                 OrderedEvaluationKind::Sequence => EagerPosition::SequenceElement(index),
                 OrderedEvaluationKind::Unary => EagerPosition::UnaryOperand,
             });
@@ -163,6 +162,32 @@ pub(super) fn protocol_step(
                 .collect();
             (*parent, operation, inputs)
         }
+        ProjectedProtocolFrame::Assignment {
+            parent,
+            operator,
+            target,
+            reference,
+            right,
+        } if projected_contains(*right, value) => (
+            *parent,
+            HostEvaluationOperation::Eager(EagerPosition::AssignmentRight),
+            reference
+                .iter()
+                .map(|(span, effects)| (*span, EvaluationInputMode::Value, None, *effects))
+                .chain(
+                    (operator.to_update().is_some() && !operator.may_short_circuit()).then(|| {
+                        (
+                            *target,
+                            EvaluationInputMode::CompoundAssignmentTarget {
+                                operator: operator.as_str(),
+                            },
+                            None,
+                            Effects::ANY,
+                        )
+                    }),
+                )
+                .collect(),
+        ),
         ProjectedProtocolFrame::Binary {
             parent,
             left: (left, _),
@@ -612,6 +637,96 @@ pub(super) fn call_callee_mode(
         SwcExpr::TsSatisfies(expression) => call_callee_mode(&expression.expr),
         _ => (EvaluationInputMode::DirectReference, None),
     }
+}
+
+/// The parts of an assignment target's reference that evaluate before the
+/// right operand and are captured there: a member target's object, then its
+/// computed key. An identifier target resolves a binding, which evaluates
+/// nothing, and a destructuring pattern is evaluated after the right
+/// operand.
+///
+/// A part that is an identifier or `this` is read again where the
+/// assignment is performed, as TypeScript's own down-level transforms read
+/// a simple-copiable operand (`isSimpleCopiableExpression`): capturing it
+/// would write through a generated name, and TypeScript narrows an assigned
+/// reference such as `state.value`, and infers a class property from a
+/// constructor's `this.value = ...`, only when the assignment names it.
+pub(super) fn assignment_reference(
+    target: &swc_ecma_ast::AssignTarget,
+) -> impl Iterator<Item = &swc_ecma_ast::Expr> {
+    target_reference(target)
+        .into_iter()
+        .flatten()
+        .filter(|part| {
+            !matches!(
+                peel_parens(part),
+                swc_ecma_ast::Expr::Ident(_) | swc_ecma_ast::Expr::This(_)
+            )
+        })
+}
+
+fn peel_parens(expression: &swc_ecma_ast::Expr) -> &swc_ecma_ast::Expr {
+    match expression {
+        swc_ecma_ast::Expr::Paren(inner) => peel_parens(&inner.expr),
+        _ => expression,
+    }
+}
+
+fn target_reference(target: &swc_ecma_ast::AssignTarget) -> [Option<&swc_ecma_ast::Expr>; 2] {
+    use swc_ecma_ast::{AssignTarget, SimpleAssignTarget};
+
+    let AssignTarget::Simple(target) = target else {
+        return [None, None];
+    };
+    match target {
+        SimpleAssignTarget::Member(member) => member_reference(member),
+        SimpleAssignTarget::SuperProp(member) => super_reference(member),
+        SimpleAssignTarget::Paren(expression) => expression_reference(&expression.expr),
+        SimpleAssignTarget::TsAs(expression) => expression_reference(&expression.expr),
+        SimpleAssignTarget::TsSatisfies(expression) => expression_reference(&expression.expr),
+        SimpleAssignTarget::TsNonNull(expression) => expression_reference(&expression.expr),
+        SimpleAssignTarget::TsTypeAssertion(expression) => expression_reference(&expression.expr),
+        SimpleAssignTarget::TsInstantiation(expression) => expression_reference(&expression.expr),
+        SimpleAssignTarget::Ident(_)
+        | SimpleAssignTarget::OptChain(_)
+        | SimpleAssignTarget::Invalid(_) => [None, None],
+    }
+}
+
+fn expression_reference(expression: &swc_ecma_ast::Expr) -> [Option<&swc_ecma_ast::Expr>; 2] {
+    use swc_ecma_ast::Expr as SwcExpr;
+
+    match expression {
+        SwcExpr::Member(member) => member_reference(member),
+        SwcExpr::SuperProp(member) => super_reference(member),
+        SwcExpr::Paren(expression) => expression_reference(&expression.expr),
+        SwcExpr::TsAs(expression) => expression_reference(&expression.expr),
+        SwcExpr::TsSatisfies(expression) => expression_reference(&expression.expr),
+        SwcExpr::TsNonNull(expression) => expression_reference(&expression.expr),
+        SwcExpr::TsTypeAssertion(expression) => expression_reference(&expression.expr),
+        SwcExpr::TsInstantiation(expression) => expression_reference(&expression.expr),
+        _ => [None, None],
+    }
+}
+
+fn member_reference(member: &swc_ecma_ast::MemberExpr) -> [Option<&swc_ecma_ast::Expr>; 2] {
+    [
+        Some(&member.obj),
+        match &member.prop {
+            MemberProp::Computed(computed) => Some(&computed.expr),
+            MemberProp::Ident(_) | MemberProp::PrivateName(_) => None,
+        },
+    ]
+}
+
+fn super_reference(member: &swc_ecma_ast::SuperPropExpr) -> [Option<&swc_ecma_ast::Expr>; 2] {
+    [
+        None,
+        match &member.prop {
+            swc_ecma_ast::SuperProp::Computed(computed) => Some(&computed.expr),
+            swc_ecma_ast::SuperProp::Ident(_) => None,
+        },
+    ]
 }
 
 pub(super) fn operand_span(

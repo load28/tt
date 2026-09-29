@@ -341,3 +341,28 @@ fn a_statement_match_that_ends_the_file_closes_the_block_it_hoists_into() {
         }
     }
 }
+
+#[test]
+fn an_assignment_captures_its_target_before_a_hoisted_right_operand() {
+    let prelude = "type R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n\
+         declare function read(): R;\n\
+         declare function target(): { v: number };\n\
+         declare function key(): \"v\";\n\
+         declare let state: { v: number };\n";
+    let out = ok(&format!(
+        "{prelude}export function f(): R {{\n  target()[key()] -= try read();\n  return {{ kind: \"Ok\", value: 0 }};\n}}\n"
+    ));
+    let object = out.find("= (target());").expect("the object is captured");
+    let key = out.find("= (key());").expect("the key is captured");
+    let current = out.find("= ($tt_v1[$tt_v2]);").expect("the target is read");
+    let region = out.find("= read();").expect("the right operand follows");
+    assert!(object < key && key < current && current < region, "{out}");
+    assert!(out.contains(" -= $tt_v0;"), "{out}");
+
+    let out = ok(&format!(
+        "{prelude}export function g(): R {{\n  state.v *= try read();\n  this.v = try read();\n  return {{ kind: \"Ok\", value: 0 }};\n}}\n"
+    ));
+    assert!(out.contains("let $tt_v1 = (state.v);"), "{out}");
+    assert!(out.contains("state.v = $tt_v1 *= $tt_v0;"), "{out}");
+    assert!(out.contains("this.v = $tt_v2;"), "{out}");
+}

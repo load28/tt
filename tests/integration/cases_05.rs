@@ -1018,3 +1018,83 @@ report(nested(false));
         ]
     );
 }
+
+#[test]
+fn runtime_assignment_evaluates_its_target_before_a_hoisted_right_operand() {
+    require_toolchain!();
+    let out = run(r#"
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+const log: string[] = [];
+const ok = <T,>(value: T): R<T> => { log.push("rhs"); return { kind: "Ok", value }; };
+const done = <T,>(value: T): R<T> => ({ kind: "Ok", value });
+const err = (): R<number> => { log.push("rhs"); return { kind: "Err", error: "e" }; };
+let n = 1;
+let box = { v: 0, s: "a" };
+const first = box;
+const target = () => { log.push("target"); return box; };
+const key = (): "v" => { log.push("key"); return "v"; };
+const report = (label: string, result: R<unknown>) => {
+  console.log(label, JSON.stringify(result), n, first.v, first.s, log.join(","));
+  n = 1; box = first; first.v = 0; first.s = "a"; log.length = 0;
+};
+function compound(): R<number> { n += try (n = 100, ok(5)); return done(n); }
+function member(): R<number> { target().v = try ok(7); return done(box.v); }
+function failed(): R<number> { target().v = try err(); return done(box.v); }
+function computed(): R<number> { target()[key()] += try (first.v = 50, ok(2)); return done(first.v); }
+function text(): R<string> { box.s += try (box.s = "q", ok("b")); return done(box.s); }
+class Counter {
+  #count = 1;
+  add(): R<number> { this.#count *= try (this.#count = 10, ok(3)); return done(this.#count); }
+}
+report("compound", compound());
+report("member", member());
+report("failed", failed());
+report("computed", computed());
+report("text", text());
+report("private", new Counter().add());
+let m = 1;
+m += match (m) { 1 => { m = 100; return 5; }, _ => 0 };
+console.log("match", m);
+"#);
+    assert_eq!(
+        out,
+        [
+            r#"compound {"kind":"Ok","value":6} 6 0 a rhs"#,
+            r#"member {"kind":"Ok","value":7} 1 7 a target,rhs"#,
+            r#"failed {"kind":"Err","error":"e"} 1 0 a target,rhs"#,
+            r#"computed {"kind":"Ok","value":2} 1 2 a target,key,rhs"#,
+            r#"text {"kind":"Ok","value":"ab"} 1 0 ab rhs"#,
+            r#"private {"kind":"Ok","value":3} 1 0 a rhs"#,
+            "match 6",
+        ]
+    );
+}
+
+#[test]
+fn an_assignment_target_keeps_the_narrowing_typescript_gives_it() {
+    require_toolchain!();
+    let (valid, diagnostics) = typecheck(
+        r#"
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+declare function read(): R<number>;
+export function assigned(): R<number> {
+  const state: { value?: number } = {};
+  state.value = try read();
+  return { kind: "Ok", value: state.value.toFixed().length };
+}
+export function compound(): R<number> {
+  const state: { value: number | string } = { value: 1 };
+  state.value = 0;
+  state.value += try read();
+  return { kind: "Ok", value: state.value };
+}
+export class Holder {
+  value;
+  constructor(r: R<number>) {
+    this.value = result { return try r; };
+  }
+}
+"#,
+    );
+    assert!(valid, "{diagnostics}");
+}

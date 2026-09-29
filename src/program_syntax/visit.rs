@@ -438,20 +438,31 @@ impl VisitAstPath for ParentCollector {
         node: &'ast AssignExpr,
         path: &mut AstNodePath<'r>,
     ) {
-        self.protocol_frames.push(ProjectedProtocolFrame::Ordered {
-            parent: projected_span(node.span, self.source_start),
-            positions: vec![(
-                operand_span(
+        self.protocol_frames
+            .push(ProjectedProtocolFrame::Assignment {
+                parent: projected_span(node.span, self.source_start),
+                operator: node.op,
+                target: projected_span(node.left.span(), self.source_start),
+                reference: assignment_reference(&node.left)
+                    .map(|expression| {
+                        (
+                            operand_span(
+                                expression,
+                                self.source_start,
+                                &self.placeholders,
+                                &self.source_segments,
+                            ),
+                            expression_effects(expression),
+                        )
+                    })
+                    .collect(),
+                right: operand_span(
                     &node.right,
                     self.source_start,
                     &self.placeholders,
                     &self.source_segments,
                 ),
-                expression_effects(&node.right),
-            )],
-            kind: OrderedEvaluationKind::Assignment,
-            spread_free: true,
-        });
+            });
         <AssignExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.protocol_frames.pop();
     }

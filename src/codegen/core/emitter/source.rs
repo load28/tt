@@ -276,10 +276,10 @@ impl<'a> Emitter<'a> {
                         Some(expr) => {
                             let (kind, start, end, extent) = self.value_anchor(expr);
                             let mut name = Rope::new();
-                            name.push_lit(replacement.slot.clone());
+                            name.push_lit(replacement.written().to_owned());
                             rope.anchored(kind, start, end, extent, name);
                         }
-                        None => rope.push_lit(replacement.slot.clone()),
+                        None => rope.push_lit(replacement.written().to_owned()),
                     }
                     if replacement.jsx_child {
                         rope.push_lit("}");
@@ -981,7 +981,7 @@ impl<'a> Emitter<'a> {
         {
             let mut out = Rope::new();
             if span.start == capture.source.start {
-                out.push_lit(capture.slot.clone());
+                out.push_lit(capture.written().to_owned());
             }
             return out;
         }

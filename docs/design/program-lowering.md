@@ -379,6 +379,43 @@ do {
 } while (false);
 ```
 
+### 7.6 Assignment targets (TASK-522)
+
+An assignment evaluates its target's reference before its right operand
+(ECMA-262 §13.15.2), so a tt value on the right of an assignment is
+scheduled after that reference. The protocol step of an assignment frame
+(`ProjectedProtocolFrame::Assignment`) carries the reference as inputs, in
+evaluation order:
+
+- a member target's object, then its computed key, captured as values. A
+  Reference Record holds the key's value, not its property key:
+  `ToPropertyKey` runs in `PutValue`, after the right operand, and so does
+  the target's `$object[$key] = ...`. An identifier target resolves a
+  binding and evaluates nothing; a destructuring pattern is evaluated after
+  the right operand. An object or key that is an identifier or `this` is
+  read again at the assignment, as TypeScript's own down-level transforms
+  read a simple-copiable operand (`isSimpleCopiableExpression`). The target
+  then keeps the reference TypeScript narrows (`state.value = ...` narrows
+  `state.value`) and the `this.value = ...` a constructor infers a class
+  property from; rebinding that identifier inside the right operand is the
+  one case where the write does not reach the object the reference named
+  first.
+- for a compound operator (`+=` and the other arithmetic, shift, and bitwise
+  operators), the target's current value (`GetValue(lref)`), read into an
+  accumulator (`EvaluationInputMode::CompoundAssignmentTarget`). The capture
+  reads the target through the slots of the object and key captured before
+  it (an earlier capture inside a later one is its dependency), and the
+  target rewrites the operator: `t += v` becomes `t = $acc += v`. The
+  accumulator applies the operator to the value read before the right
+  operand, and the assignment writes the result through the authored
+  target, so the right operand needs no parentheses. For a computed key
+  whose value is an object, `ToPropertyKey` then runs once for the read and
+  once for the write, where a native compound assignment converts it once.
+
+A logical assignment (`&&=`, `||=`, `??=`) captures its reference parts the
+same way; its right operand is evaluated only conditionally, which this
+section does not lower.
+
 ## 8. 전체 tt 표면의 공통 배치
 
 | Core primitive | tt 표면 | Evaluation IR 동작 |
