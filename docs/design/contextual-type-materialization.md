@@ -22,6 +22,11 @@ type was observed: the reference that supplied the contextual type, or the
 right-hand side of the join's assignment. Otherwise the storage has no
 annotation and TypeScript infers its type from its assignments.
 
+The same holds for a type TypeScript's node builder cannot write at the
+declaration at all, such as the instance or constructor type of an anonymous
+class (TASK-551): `typeToTypeNode` answers no node, and the storage is typed
+from its assignments. One such type never stops the file's compilation.
+
 Each round annotates previously unresolved declarations. An updated snapshot
 then exposes those contexts to nested values. Rounds stop when no additional
 facts are available; successful rounds strictly reduce the unresolved set.

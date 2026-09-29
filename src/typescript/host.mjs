@@ -631,7 +631,7 @@ async function main() {
         // every name it references denotes, at the declaration, the symbol
         // it denotes where the type was observed.
         const annotation = (type, observed) => {
-          const node = checker.typeToTypeNode(type, declaration);
+          const node = typeNode(checker, type, declaration);
           if (!node) return undefined;
           let accessible = true;
           const visit = (child) => {
@@ -931,6 +931,27 @@ async function main() {
     }
     out.dependencies = [...dependencies.keys(), ...listings.keys()];
     return engineAnswer(out);
+  }
+}
+
+/**
+ * The type node TypeScript's node builder writes for `type` at `location`,
+ * or `undefined` when it cannot write one: the node builder gives up on a
+ * type it cannot name there (the instance or constructor type of an
+ * anonymous class), which is `typeToTypeNode`'s documented `undefined`.
+ *
+ * The server sends that answer as an encoded `null`, while this client
+ * treats only an empty payload as no node and hands the four bytes to its
+ * node decoder, which throws. The same session still answers a second
+ * question about the same type, which tells that answer apart from a
+ * session that stopped answering; a session failure propagates.
+ */
+function typeNode(checker, type, location) {
+  try {
+    return checker.typeToTypeNode(type, location);
+  } catch (error) {
+    checker.typeToString(type, location);
+    return undefined;
   }
 }
 

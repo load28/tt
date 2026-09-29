@@ -1289,3 +1289,23 @@ console.log(inner(S.A), inner(S.B), JSON.stringify(inResult(S.A)), unnamed(S.A),
 "#);
     assert_eq!(output, [r#"a b {"kind":"Ok","value":"a1"} h 1"#]);
 }
+
+#[test]
+fn a_type_typescript_cannot_write_leaves_its_storage_unannotated() {
+    require_toolchain!();
+    // TASK-551: TypeScript's node builder writes no type node for an
+    // anonymous class; the storage is typed from its assignments and the
+    // rest of the file still compiles.
+    let output = run(r#"
+class Base {}
+function Tagged<B extends new (...a: any[]) => {}>(Base: B) { return class extends Base { tag = "t"; }; }
+function pick(n: number) {
+  const M = match (n) { 1 => Tagged(Base), _ => Tagged(Base) };
+  const o = match (n) { 1 => new (class { x = 1 })(), _ => new (class { x = 2 })() };
+  const a = match (n) { 1 => [class {}], _ => [class {}, class {}] };
+  return [new M().tag, o.x, a.length];
+}
+console.log(JSON.stringify([pick(1), pick(2)]));
+"#);
+    assert_eq!(output, [r#"[["t",1,1],["t",2,2]]"#]);
+}

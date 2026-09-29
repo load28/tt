@@ -556,7 +556,8 @@
 | TASK-548 | Recover a discarded `result` block in the typed projection | Complete | 2026-09-29 | 2026-09-29 | [TASK-548](./TASK-548-recover-discarded-result.md) |
 | TASK-549 | Lower the values of a `try` statement's operand inside a `result` block | Complete | 2026-09-29 | 2026-09-29 | [TASK-549](./TASK-549-try-statement-operand-values-in-result.md) |
 | TASK-550 | Give a propagated operand its own storage | Complete | 2026-09-29 | 2026-09-29 | [TASK-550](./TASK-550-propagated-operand-storage.md) |
+| TASK-551 | Leave storage unannotated when TypeScript cannot write its type | Complete | 2026-09-29 | 2026-09-29 | [TASK-551](./TASK-551-unwritable-annotation-types.md) |
 
 ## Next task number
 
-**TASK-551**
+**TASK-552**
