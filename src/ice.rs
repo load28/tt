@@ -257,7 +257,7 @@ impl fmt::Display for InternalCompilerError {
     fn fmt(&self, out: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             out,
-            "internal compiler error: {} broke the contract that {} ({:?})",
+            "{} broke the contract that {} ({:?})",
             self.stage,
             self.invariant.contract(),
             self.invariant,
@@ -602,8 +602,14 @@ mod tests {
         });
         panic::set_hook(previous);
         let message = raised.expect_err("raise panics");
-        assert!(message.contains("validate_origin"), "{message}");
+        assert!(message.starts_with("validate_origin"), "{message}");
         assert!(message.contains("inside the source file"), "{message}");
+        let text = report(&message, None, None);
+        assert_eq!(
+            text.matches("internal compiler error:").count(),
+            1,
+            "{text}"
+        );
     }
 
     #[test]

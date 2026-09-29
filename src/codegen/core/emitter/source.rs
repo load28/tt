@@ -701,6 +701,7 @@ impl<'a> Emitter<'a> {
                 self.emitted_owner_rewrites.mark(expr);
                 out.append(self.emit_owner_slot_rewrite(rewrite));
             }
+            self.close_owner_blocks_at(rewrite.source.end, out);
             return;
         }
         if self.emitted_owner_rewrites.contains(expr) {

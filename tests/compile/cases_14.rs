@@ -321,3 +321,23 @@ fn a_try_in_a_template_in_a_pipeline_operand_keeps_its_callee_before_it() {
         assert!(callee < region, "{source}\n{out}");
     }
 }
+
+#[test]
+fn a_statement_match_that_ends_the_file_closes_the_block_it_hoists_into() {
+    let prelude = "declare const x: { kind: \"A\" };\n";
+    for (statement, head) in [
+        ("match (x) { A => 1 }", "{"),
+        ("if (x) match (x) { _ => 1 }", "if (x) {"),
+        ("lbl: match (x) { _ => 1 }", "lbl: {"),
+        ("while (x) match (x) { _ => 1 }", "while (x) {"),
+        ("if (x) 0;\nelse match (x) { _ => 1 }", "else {"),
+        ("match (x) { _ => 1 }\nmatch (x) { _ => 2 }", "{"),
+    ] {
+        for end in ["", "\n"] {
+            let source = format!("{prelude}{statement}{end}");
+            let out = ok(&source);
+            let block = &out[out.rfind(head).expect("the owner opens its block")..];
+            assert!(block.trim_end().ends_with("}\n  }\n}"), "{source:?}\n{out}");
+        }
+    }
+}
