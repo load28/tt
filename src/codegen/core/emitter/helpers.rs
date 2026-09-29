@@ -230,6 +230,12 @@ impl BindingRecovery {
     }
 }
 
+/// The one property name an object literal's `name: value` does not define:
+/// it sets the object's prototype instead (ECMA-262 B.3.1, `__proto__`
+/// Property Names in Object Initializers). A computed key, or shorthand,
+/// defines an own data property.
+const PROTOTYPE_SETTER_NAME: &str = "__proto__";
+
 /// The union type and constructor object one tt `variant` becomes, laid out
 /// from the line the declaration sits on.
 pub(super) fn emit_adt<'a>(
@@ -404,7 +410,11 @@ pub(super) fn emit_adt<'a>(
             }
             continue;
         }
-        declared(&mut out, &variant.name, variant.node);
+        if variant.name == PROTOTYPE_SETTER_NAME {
+            declared(&mut out, &format!("[\"{}\"]", variant.name), variant.node);
+        } else {
+            declared(&mut out, &variant.name, variant.node);
+        }
         match &variant.fields {
             None => out.push_lit(format!(": {{ kind: \"{}\" }} as const,", variant.name)),
             Some(fields) => {

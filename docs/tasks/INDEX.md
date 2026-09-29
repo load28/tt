@@ -525,6 +525,7 @@
 | TASK-522 | Evaluate an assignment's target before a hoisted right operand | Complete | 2026-09-29 | 2026-09-29 | [TASK-522](./TASK-522-assignment-target-evaluation-order.md) |
 | TASK-523 | Read a line-broken brace after `match (…)` as a block statement | Complete | 2026-09-29 | 2026-09-29 | [TASK-523](./TASK-523-match-body-brace-after-a-line-break.md) |
 | TASK-524 | Read a `val` write target through TypeScript's wrappers | Complete | 2026-09-29 | 2026-09-29 | [TASK-524](./TASK-524-val-targets-through-wrappers.md) |
+| TASK-525 | Define a variant case named `__proto__` as an own constructor property | Complete | 2026-09-29 | 2026-09-29 | [TASK-525](./TASK-525-variant-case-named-proto.md) |
 
 ## Next task number
 

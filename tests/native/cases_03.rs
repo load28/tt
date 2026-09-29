@@ -1110,3 +1110,25 @@ fn scripts_of_one_program_check_without_colliding_generated_globals() {
     );
     assert_eq!(error_count(&out), 1, "{out}");
 }
+
+#[test]
+fn a_case_named_like_the_prototype_setter_navigates_to_its_declaration() {
+    require_tsgo!();
+    let local = "variant V { __proto__(x: number), B }\n\
+                 const v: V = V.__proto__(1);\n\
+                 const w = V.B;\n";
+    let dir = project(&[("src/a.tt", local)]);
+    let a = dir.join("src/a.tt").canonicalize().unwrap();
+    let engine = ttc::engine::Engine::new(None);
+    let mut project = engine
+        .open_project(
+            &[dir.join("src").to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .expect("the project opens");
+    let case = source_location(&a, local, "__proto__(x", 0, "__proto__".len());
+    let found = project
+        .definition(&a, source_position(local, "V.__proto__(1)", 2))
+        .expect("definition answers");
+    assert_eq!(found, vec![case]);
+}

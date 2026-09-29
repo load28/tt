@@ -414,3 +414,19 @@ fn a_write_to_a_call_result_is_not_a_write_to_its_argument() {
     );
     assert!(probes.mutations.is_empty(), "{probes:#?}");
 }
+
+#[test]
+fn a_case_named_like_the_prototype_setter_is_an_own_constructor_property() {
+    let out = ok("variant V { __proto__(x: number), B }\nvariant U { __proto__, C }\n");
+    assert!(
+        out.contains("  [\"__proto__\"]: (x: number): V => ({ kind: \"__proto__\", x }),"),
+        "{out}"
+    );
+    assert!(
+        out.contains("  [\"__proto__\"]: { kind: \"__proto__\" } as const,"),
+        "{out}"
+    );
+    assert!(!out.contains("\n  __proto__:"), "{out}");
+    let ambient = ok("declare variant V { __proto__(x: number), B }\n");
+    assert!(ambient.contains("readonly __proto__: (x: number) => V;"), "{ambient}");
+}

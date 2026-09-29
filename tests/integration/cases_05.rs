@@ -1098,3 +1098,28 @@ export class Holder {
     );
     assert!(valid, "{diagnostics}");
 }
+
+#[test]
+fn runtime_a_prototype_setter_name_is_an_own_property() {
+    require_toolchain!();
+    let out = run(r#"
+variant V { __proto__(x: number), Other }
+variant U { __proto__, Other }
+variant W { A(__proto__: number, other?: number), B }
+const v = V.__proto__(1);
+console.log(JSON.stringify(v), Object.keys(V).join(","), Object.getPrototypeOf(V) === Object.prototype);
+console.log(JSON.stringify(U.__proto__), Object.getPrototypeOf(U) === Object.prototype);
+const w = W.A(5);
+console.log(Object.keys(w).join(","), Object.getPrototypeOf(w) === Object.prototype);
+console.log(match (v) { __proto__(x) => x, Other => 0 }, match (w) { A(__proto__) => __proto__, B => 0 });
+"#);
+    assert_eq!(
+        out,
+        [
+            r#"{"kind":"__proto__","x":1} __proto__,Other true"#,
+            r#"{"kind":"__proto__"} true"#,
+            "kind,__proto__ true",
+            "1 5",
+        ]
+    );
+}
