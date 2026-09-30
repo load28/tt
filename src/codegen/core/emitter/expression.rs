@@ -46,7 +46,7 @@ impl<'a> Emitter<'a> {
                         }
                         ApplyMode::Call => {
                             if accumulator_is_inert {
-                                push_receiver(&mut next, body, self.source_kind);
+                                push_callee(&mut next, body, self.source_kind);
                                 next.push_lit("(");
                                 push_grouped(&mut input, acc, self.source_kind);
                                 next.anchored_with_context(

@@ -9,6 +9,9 @@ export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
 }
+export function unexpected(value: unknown): never {
+  throw new Error(`tt match: unexpected literal ${text(value)}`);
+}
 export function later<T>(value: T): Promise<T> {
   out.push("await");
   return Promise.resolve(value);
@@ -31,8 +34,9 @@ export function risky<T>(value: T): T {
   if (++risks % 3 === 0) throw new Error(`risky call ${risks}`);
   return note("risky", value);
 }
+let boxes = 0;
 export function box<T>(value: T): { inner: { value: T } } | undefined {
-  return { inner: { value } };
+  return boxes++ % 2 === 0 ? { inner: { value } } : undefined;
 }
 export const double = (n: number): number => note("double", n * 2);
 export const adder = (a: number) => (b: number): number => note("add", a + b);

@@ -1,2 +1,2 @@
 spreadElement(true) => [0,1] | first 0; yes 1
-spreadElement(false) => [0,0] | first 0; no 0
+spreadElement(false) => threw tt match: unexpected literal undefined | first 0

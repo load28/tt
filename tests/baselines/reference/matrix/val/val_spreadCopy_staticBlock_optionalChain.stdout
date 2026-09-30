@@ -1,2 +1,2 @@
 staticBlock(3) => [3,4] | copy 4
-staticBlock(8) => [8,9] | copy 9
+staticBlock(8) => [null,null] | copy null

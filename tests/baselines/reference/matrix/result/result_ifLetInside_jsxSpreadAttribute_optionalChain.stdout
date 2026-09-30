@@ -1,2 +1,2 @@
 jsxSpreadAttribute(4) => "<div value={'kind':'Ok','value':4}></div>" | read 4; direct 4
-jsxSpreadAttribute(-1) => "<div value={'kind':'Err','error':'negative -7'}></div>" | read -1; fallback -7; read -7
+jsxSpreadAttribute(-1) => "<div value={'kind':'Err','error':'negative -7'}></div>" | read undefined; fallback -7; read -7

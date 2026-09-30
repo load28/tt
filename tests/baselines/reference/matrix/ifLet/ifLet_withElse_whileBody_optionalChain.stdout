@@ -1,2 +1,2 @@
 whileBody(3) => 3 | test true; read 3; then 3
-whileBody(-3) => "missing" | test true; read -3; else "missing"
+whileBody(-3) => "missing" | test true; read undefined; else "missing"

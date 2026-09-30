@@ -1,2 +1,2 @@
 topLevel(4) => 7 | step 3; add 7
-topLevel(-1) => 2 | step 3; add 2
+topLevel(-1) => null | step 3; add null

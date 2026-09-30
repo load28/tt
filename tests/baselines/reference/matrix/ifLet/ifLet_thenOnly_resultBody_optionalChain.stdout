@@ -1,2 +1,2 @@
 resultBody(2) => {"kind":"Ok","value":[1,2]} | base 1; read 1; read 2; then 2
-resultBody(-1) => {"kind":"Ok","value":[1,"none"]} | base 1; read 1; read -1
+resultBody(-1) => {"kind":"Ok","value":[1,"none"]} | base 1; read 1; read undefined

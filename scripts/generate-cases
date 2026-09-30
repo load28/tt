@@ -14,7 +14,7 @@ const COMPANIONS = [
   { id: "plain", title: "nothing around it", operand: plain },
   { id: "await", title: "an await in its operand", operand: () => "await later(/*@operand*/input)" },
   { id: "yield", title: "a yield in its operand", operand: () => "(yield /*@operand*/input)", uncalled: true },
-  { id: "optionalChain", title: "an optional chain in its operand", operand: () => "box(/*@operand*/input)?.inner.value!" },
+  { id: "optionalChain", title: "an optional chain in its operand that continues on one call and short-circuits on the next", operand: () => "box(/*@operand*/input)?.inner.value!" },
   { id: "spread", title: "a spread argument in its operand", operand: () => "first(...[/*@operand*/input])" },
   { id: "exception", title: "an operand that throws, caught around it", operand: () => "risky(/*@operand*/input)", wrap: "catch" },
   { id: "using", title: "a using declaration around it", operand: plain, pre: 'using res = resource("res");' },

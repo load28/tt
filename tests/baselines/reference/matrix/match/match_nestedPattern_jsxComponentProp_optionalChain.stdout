@@ -1,3 +1,3 @@
 jsxComponentProp({"kind":"Done","value":{"kind":"Some","value":7}}) => "<Show 7>" | some 7
-jsxComponentProp({"kind":"Done","value":{"kind":"None"}}) => "<Show 0>" | none 0
+jsxComponentProp({"kind":"Done","value":{"kind":"None"}}) => threw Cannot read properties of undefined (reading 'kind') | 
 jsxComponentProp({"kind":"Failed","error":"lost"}) => "<Show 'lost'>" | failed "lost"

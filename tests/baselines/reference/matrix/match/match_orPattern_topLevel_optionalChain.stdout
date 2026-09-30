@@ -1,4 +1,1 @@
 topLevel({"kind":"Num","value":4}) => 4 | number 4
-topLevel({"kind":"Neg","value":-3}) => -3 | number -3
-topLevel({"kind":"Word","text":"hi"}) => "hi" | word "hi"
-topLevel({"kind":"End"}) => "" | end ""

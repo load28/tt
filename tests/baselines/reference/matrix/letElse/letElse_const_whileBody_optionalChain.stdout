@@ -1,2 +1,2 @@
 whileBody(2) => 2 | test true; read 2
-whileBody(-1) => "none" | test true; read -1
+whileBody(-1) => "none" | test true; read undefined

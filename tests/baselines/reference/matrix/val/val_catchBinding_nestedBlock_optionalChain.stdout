@@ -1,2 +1,2 @@
 nestedBlock(3) => {"n":3} | caught {"n":3}
-nestedBlock(8) => {"n":8} | caught {"n":8}
+nestedBlock(8) => {} | caught {}

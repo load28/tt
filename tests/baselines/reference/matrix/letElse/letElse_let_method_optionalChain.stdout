@@ -1,2 +1,2 @@
 method(3) => 4 | read 3; reassigned 4
-method(-3) => "diverged" | read -3
+method(-3) => "diverged" | read undefined

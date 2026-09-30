@@ -1,2 +1,2 @@
 componentBody(3) => "<p>13</p>" | original 13
-componentBody(8) => "<p>18</p>" | original 18
+componentBody(8) => "<p>null</p>" | original null

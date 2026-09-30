@@ -1,2 +1,2 @@
 resultBody(4) => {"kind":"Ok","value":[1,[{"kind":"North"},{"kind":"South"},4]]} | base 1; read 1; operand 4
-resultBody(9) => {"kind":"Ok","value":[1,[{"kind":"North"},{"kind":"South"},9]]} | base 1; read 1; operand 9
+resultBody(9) => {"kind":"Ok","value":[1,[{"kind":"North"},{"kind":"South"},null]]} | base 1; read 1; operand undefined

@@ -1,4 +1,4 @@
 nullish("north") => 1 | flip true; n 1
 nullish("south") => "set" | flip false; left "set"
-nullish("east") => 2 | flip true; se 2
+nullish("east") => 0 | flip true; other 0
 nullish("up") => "set" | flip false; left "set"

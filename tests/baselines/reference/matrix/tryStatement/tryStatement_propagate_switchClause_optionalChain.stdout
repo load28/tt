@@ -1,2 +1,2 @@
 switchClause(2) => {"kind":"Ok","value":"checked"} | discriminant 1; read 2
-switchClause(-1) => {"kind":"Err","error":"negative -1"} | discriminant 1; read -1
+switchClause(-1) => {"kind":"Err","error":"negative undefined"} | discriminant 1; read undefined

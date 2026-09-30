@@ -1,2 +1,2 @@
 componentBody(2) => "<p>2</p>" | read 2
-componentBody(-1) => "<p>diverged</p>" | read -1
+componentBody(-1) => "<p>diverged</p>" | read undefined

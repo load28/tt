@@ -1,2 +1,2 @@
 whileTest(2) => 1 | read 2; inner {"kind":"Ok","value":3}
-whileTest(-1) => 1 | read -1; inner {"kind":"Err","error":"negative -1"}
+whileTest(-1) => 1 | read undefined; inner {"kind":"Err","error":"negative undefined"}

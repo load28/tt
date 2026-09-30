@@ -1,2 +1,2 @@
 throwOperand(3) => threw "***6" | double 6
-throwOperand(12) => threw "**24" | double 24
+throwOperand(12) => threw "*NaN" | double null

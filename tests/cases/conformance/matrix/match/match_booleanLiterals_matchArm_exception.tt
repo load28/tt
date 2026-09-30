@@ -27,6 +27,9 @@ export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
 }
+export function unexpected(value: unknown): never {
+  throw new Error(`tt match: unexpected literal ${text(value)}`);
+}
 let flips = 0;
 export function flip(): boolean {
   return note("flip", flips++ % 2 === 0);
@@ -74,12 +77,12 @@ function probe(input: boolean) {
 }
 await drive("matchArm", probe, inputs);
 // @filename: twin.ts
-import { note, flip, risky, drive } from "./harness.js";
+import { note, unexpected, flip, risky, drive } from "./harness.js";
 let t0: any;
 const inputs: boolean[] = [true, false];
 function probe(input: boolean) {
   try {
-    return (flip() ? (t0 = risky(input), t0 === true ? note("yes", 1) : note("no", 0)) : note("other arm", 0));
+    return (flip() ? (t0 = risky(input), t0 === true ? note("yes", 1) : t0 === false ? note("no", 0) : unexpected(t0)) : note("other arm", 0));
   } catch (error) {
     return note("caught", (error as Error).message);
   }

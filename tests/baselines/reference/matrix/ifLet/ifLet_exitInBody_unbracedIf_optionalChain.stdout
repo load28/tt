@@ -1,2 +1,2 @@
 unbracedIf(2) => "passed" | enter true; read 2
-unbracedIf(-2) => "diverged" | enter true; read -2; error "negative -2"
+unbracedIf(-2) => "diverged" | enter true; read undefined; error "negative undefined"

@@ -1,4 +1,4 @@
 jsxAttribute({"kind":"Num","value":4}) => "<div data-value=4></div>" | number 4
-jsxAttribute({"kind":"Neg","value":-3}) => "<div data-value=-3></div>" | number -3
+jsxAttribute({"kind":"Neg","value":-3}) => threw Cannot read properties of undefined (reading 'kind') | 
 jsxAttribute({"kind":"Word","text":"hi"}) => "<div data-value='hi'></div>" | word "hi"
-jsxAttribute({"kind":"End"}) => "<div data-value=''></div>" | end ""
+jsxAttribute({"kind":"End"}) => threw Cannot read properties of undefined (reading 'kind') | 

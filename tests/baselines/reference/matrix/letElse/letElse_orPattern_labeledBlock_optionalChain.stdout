@@ -1,3 +1,3 @@
 labeledBlock({"kind":"Num","value":1}) => 1 | 
-labeledBlock({"kind":"Neg","value":-2}) => -2 | 
+labeledBlock({"kind":"Neg","value":-2}) => threw Cannot read properties of undefined (reading 'kind') | 
 labeledBlock({"kind":"Word","text":"w"}) => "none" | 

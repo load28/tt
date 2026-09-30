@@ -1,2 +1,2 @@
 tryBlock(2) => {"kind":"Ok","value":"checked"} | read 2
-tryBlock(-1) => {"kind":"Err","error":"negative -1"} | read -1
+tryBlock(-1) => {"kind":"Err","error":"negative undefined"} | read undefined

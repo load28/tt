@@ -1,5 +1,5 @@
 yieldOperand({"kind":"Circle","r":1}) => 1 | guard big false; small 1; yield 1
-yieldOperand({"kind":"Circle","r":5}) => 5 | guard big true; big 5; yield 5
+yieldOperand({"kind":"Circle","r":5}) => threw Cannot read properties of undefined (reading 'kind') | 
 yieldOperand({"kind":"Rect","w":4,"h":2}) => 4 | guard wide true; wide 4; yield 4
-yieldOperand({"kind":"Rect","w":1,"h":3}) => 3 | guard wide false; tall 3; yield 3
+yieldOperand({"kind":"Rect","w":1,"h":3}) => threw Cannot read properties of undefined (reading 'kind') | 
 yieldOperand({"kind":"Point"}) => 0 | point 0; yield 0

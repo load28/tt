@@ -27,6 +27,9 @@ export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
 }
+export function unexpected(value: unknown): never {
+  throw new Error(`tt match: unexpected literal ${text(value)}`);
+}
 export function later<T>(value: T): Promise<T> {
   out.push("await");
   return Promise.resolve(value);
@@ -66,11 +69,11 @@ function probe(input: boolean) {
 }
 await drive("arrowBody", probe, inputs);
 // @filename: twin.ts
-import { note, later, drive } from "./harness.js";
+import { note, unexpected, later, drive } from "./harness.js";
 let t0: any;
 const inputs: boolean[] = [true, false];
 function probe(input: boolean) {
-  const inner = async (input: boolean) => (t0 = await later(input), t0 === true ? note("yes", 1) : note("no", 0));
+  const inner = async (input: boolean) => (t0 = await later(input), t0 === true ? note("yes", 1) : t0 === false ? note("no", 0) : unexpected(t0));
   return inner(input);
 }
 await drive("arrowBody", probe, inputs);

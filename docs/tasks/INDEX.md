@@ -692,7 +692,8 @@
 | TASK-684 | Lower a `try` nested in an operand of a conditional operation | Complete | 2026-09-30 | 2026-09-30 | [TASK-684](./TASK-684-try-in-conditional-operands.md) |
 | TASK-685 | Generate editor cases from the case matrix, each asked against a TypeScript twin | Complete | 2026-09-30 | 2026-09-30 | [TASK-685](./TASK-685-editor-matrix-infrastructure.md) |
 | TASK-686 | Populate the editor matrix for every construct and triage each difference from TypeScript | Complete | 2026-09-30 | 2026-09-30 | [TASK-686](./TASK-686-editor-matrix-populate.md) |
+| TASK-691 | End the optional chain of a pipeline head before a postfix step | Complete | 2026-09-30 | 2026-09-30 | [TASK-691](./TASK-691-postfix-step-ends-optional-chain.md) |
 
 ## Next task number
 
-**TASK-687**
+**TASK-695**

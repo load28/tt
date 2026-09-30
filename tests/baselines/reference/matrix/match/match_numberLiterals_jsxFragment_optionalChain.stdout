@@ -1,5 +1,5 @@
 jsxFragment(200) => "<>[]</>" | before "["; success true; after "]"
-jsxFragment(201) => "<>[]</>" | before "["; success true; after "]"
+jsxFragment(201) => "<>[]</>" | before "["; other null; after "]"
 jsxFragment(404) => "<>[]</>" | before "["; missing false; after "]"
-jsxFragment(500) => "<>[]</>" | before "["; guard true; server false; after "]"
+jsxFragment(500) => "<>[]</>" | before "["; other null; after "]"
 jsxFragment(7) => "<>[]</>" | before "["; other null; after "]"

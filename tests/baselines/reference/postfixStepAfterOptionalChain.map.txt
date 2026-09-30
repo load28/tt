@@ -1,0 +1,12 @@
+//// [main.tt] 10 mapping(s)
+1:1 -> 2:1 len 481  "export {};\nfunction box(present: boolean): { inn"...
+16:10 -> 17:11 len 26  "box(present)?.inner.value!"
+16:40 -> 17:38 len 121  ".toFixed(1);\n}\nfor (const present of [true, fals"...
+20:27 -> 21:35 len 20  "box(present)?.inner!"
+20:51 -> 21:56 len 6  ".value"
+20:61 -> 21:64 len 6  "String"
+20:67 -> 21:71 len 27  ");\n  attempt(\"tail\", () => "
+21:25 -> 22:26 len 14  "loose(present)"
+21:43 -> 22:40 len 8  "?.trim()"
+21:55 -> 22:49 len 11  ".length);\n}"
+

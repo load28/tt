@@ -8,7 +8,7 @@
 // @signatureHelp: operand, arg
 // @semanticTokens: *
 // @diagnostics: *
-// @parityIgnores: Ok, head, n, t0
+// @parityIgnores: Ok, head, n, t0, unexpected
 // @filename: tsconfig.json
 {
   "compilerOptions": {
@@ -32,6 +32,9 @@ export function text(value: unknown): string {
 export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
+}
+export function unexpected(value: unknown): never {
+  throw new Error(`tt match: unexpected literal ${text(value)}`);
 }
 export type Success<T> = { kind: "Ok"; value: T };
 export type Failure<E> = { kind: "Err"; error: E };

@@ -1,5 +1,5 @@
 differences from match_booleanLiterals_awaitOperand_optionalChain at the questions listed in tests/editor-matrix-differences.txt
 
 === diagnostics main.tt ===
-  ts only: main "await ((t0 = box(input)?.inner.value!, t0 === true ? note(\"yes\", 1) : note(\"no\", 0)))" hint TS80007: 'await' has no effect on the type of this expression.
+  ts only: main "await ((t0 = box(input)?.inner.value!, t0 === true ? note(\"yes\", 1) : t0 === false ? note(\"no\", 0) : unexpected(t0)))" hint TS80007: 'await' has no effect on the type of this expression.
 

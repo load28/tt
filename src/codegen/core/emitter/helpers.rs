@@ -25,12 +25,30 @@ pub(super) fn push_grouped<'a>(out: &mut Rope<'a>, value: Rope<'a>, kind: Source
 
 /// Appends `value` as the receiver of a postfix step (`value.map(f)`).
 /// Member access binds tighter than every operator, so the parentheses are
-/// needed unless the receiver is already one primary expression.
+/// needed unless the receiver is already one primary expression; a receiver
+/// ending in an optional chain keeps them too, because the step would
+/// otherwise join the chain and be skipped when it short-circuits, where
+/// the step applies to the value the chain evaluates to.
 pub(super) fn push_receiver<'a>(out: &mut Rope<'a>, value: Rope<'a>, kind: SourceKind) {
+    let closed = value
+        .resolved_text()
+        .is_some_and(|text| crate::lexer::is_member_receiver(&text, 0, text.len(), kind));
+    push_parenthesized_unless(out, value, closed);
+}
+
+/// Appends `value` as the callee of a call step (`f(value)`). A call binds
+/// tighter than every operator, so the parentheses are needed unless the
+/// callee is already one primary expression. A callee ending in an optional
+/// chain keeps its chain: `x |> o?.m` is the optional call `o?.m(x)`.
+pub(super) fn push_callee<'a>(out: &mut Rope<'a>, value: Rope<'a>, kind: SourceKind) {
     let primary = value
         .resolved_text()
         .is_some_and(|text| crate::lexer::is_primary_expression(&text, 0, text.len(), kind));
-    if primary {
+    push_parenthesized_unless(out, value, primary);
+}
+
+fn push_parenthesized_unless<'a>(out: &mut Rope<'a>, value: Rope<'a>, bare: bool) {
+    if bare {
         out.append(value);
     } else {
         out.push_lit("(");

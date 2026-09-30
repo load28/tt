@@ -1,4 +1,4 @@
 spreadElement({"kind":"Num","value":4}) => [0,-1] | first 0; other -1
-spreadElement({"kind":"Neg","value":-3}) => [0,-1] | first 0; other -1
+spreadElement({"kind":"Neg","value":-3}) => threw Cannot read properties of undefined (reading 'kind') | first 0
 spreadElement({"kind":"Word","text":"hi"}) => [0,2] | first 0; word 2
-spreadElement({"kind":"End"}) => [0,-1] | first 0; other -1
+spreadElement({"kind":"End"}) => threw Cannot read properties of undefined (reading 'kind') | first 0

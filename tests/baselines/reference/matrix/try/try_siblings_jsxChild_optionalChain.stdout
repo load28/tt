@@ -1,2 +1,2 @@
 jsxChild(4) => {"kind":"Ok","value":"<p>9</p>"} | read 4; second 5; read 5
-jsxChild(-4) => {"kind":"Err","error":"negative -4"} | read -4
+jsxChild(-4) => {"kind":"Err","error":"negative undefined"} | read undefined

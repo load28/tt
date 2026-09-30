@@ -1,8 +1,0 @@
-differences from pipeline_postfixStep_conditionalBranch_optionalChain at the questions listed in tests/editor-matrix-differences.txt
-
-=== signatureHelp /*arg*/ main.tt:4:57 ===
-  |   return flip() ? (box(input)?.inner.value! |> .toFixed(1)) : note("else", "skipped");
-  |                                                         ^ /*arg*/
-  tt only: toFixed(fractionDigits?: number): string | undefined [fractionDigits?: number]
-  ts only: toFixed(fractionDigits?: number): string [fractionDigits?: number]
-
