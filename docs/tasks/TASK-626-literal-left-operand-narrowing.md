@@ -109,11 +109,10 @@ as the right operand's type alone.
   change (the inert condition of a logical operation becomes a `Source`
   input, reusing its reserved slot name). Replaced its host change
   (Decision 2 (a)) with the ordering of Decision 2 (c).
-- 2026-09-30: `conditionalOperationNarrowing.ts` baseline: the storage of
-  `u !== undefined && u.v > 0 && match …` is now `number | false` instead
-  of `number | boolean`, which is TypeScript's type for that operation
-  (`extractDefinitelyFalsyTypes(boolean)` is `false`); the hover of `c`
-  was already `number | false`.
+- 2026-09-30: The `conditionalOperationNarrowing.ts` baseline was stale on
+  the base (`number | boolean` for the `&&` storage); the base accepted
+  `number | false` under TASK-623 (its Issue 2), merged here, and this
+  task leaves the baseline as the base has it.
 - 2026-09-30: `cargo test --test compile --test snapshot --test
   case_baselines`, and the `conditional`/`logical`/`nullish`/`operand`
   tests of `native` and `integration`.
@@ -187,8 +186,8 @@ as the right operand's type alone.
 
 Changed `src/evaluation_ir/planning.rs`, `src/typescript/host.mjs`,
 `docs/design/program-lowering.md`,
-`docs/design/contextual-type-materialization.md`, `docs/ai/tt.md`, and
-`tests/baselines/reference/conditionalOperationNarrowing.ts`; added
+`docs/design/contextual-type-materialization.md`, and `docs/ai/tt.md`;
+added
 `tests/cases/compiler/literalLeftOperandNarrowing.tt` and its baselines.
 A logical operation with a literal left operand now has TypeScript's type.
 Issues 2 to 4 remain open.
