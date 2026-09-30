@@ -482,6 +482,48 @@ impl<I: Tokens> Parser<I> {
             }
         }
 
+        let mut using_head = None;
+        if self.input().syntax().explicit_resource_management() && !is_using_decl {
+            let is_await = init
+                .as_await_expr()
+                .filter(|e| e.arg.is_ident_ref_to("using"))
+                .is_some();
+            let cur = self.input().cur();
+            if (is_await || init.is_ident_ref_to("using"))
+                && !self.input().had_line_break_before_cur()
+                && cur != Token::Of
+                && cur != Token::In
+                && self.is_ident_ref()
+            {
+                using_head = Some(is_await);
+            }
+        }
+
+        if let Some(is_await) = using_head {
+            let mut decls = Vec::new();
+            loop {
+                decls.push(self.parse_var_declarator(true, VarDeclKind::Var)?);
+                if !self.input_mut().eat(Token::Comma) {
+                    break;
+                }
+            }
+            for decl in &decls {
+                if !matches!(decl.name, Pat::Ident(..)) {
+                    self.emit_err(self.span(start), SyntaxError::InvalidNameInUsingDecl);
+                }
+                if decl.init.is_none() {
+                    self.emit_err(self.span(start), SyntaxError::InitRequiredForUsingDecl);
+                }
+            }
+            let decl = Box::new(UsingDecl {
+                span: self.span(start),
+                is_await,
+                decls,
+            });
+            expect!(self, Token::Semi);
+            return self.parse_normal_for_head(Some(VarDeclOrExpr::UsingDecl(decl)));
+        }
+
         if is_using_decl {
             let name = self.parse_binding_ident(false)?;
             let decl = VarDeclarator {
@@ -631,6 +673,15 @@ impl<I: Tokens> Parser<I> {
         }
     }
 
+    fn parse_if_clause(&mut self) -> PResult<Stmt> {
+        if self.input().is(Token::Function)
+            && !peek!(self).is_some_and(|peek| peek == Token::Asterisk)
+        {
+            return self.parse_fn_decl(Vec::new()).map(Stmt::from);
+        }
+        self.parse_stmt()
+    }
+
     fn parse_if_stmt(&mut self) -> PResult<IfStmt> {
         let start = self.cur_pos();
 
@@ -659,13 +710,9 @@ impl<I: Tokens> Parser<I> {
         let cons = {
             // Prevent stack overflow
             crate::maybe_grow(256 * 1024, 1024 * 1024, || {
-                // // Annex B
-                // if !self.ctx().contains(Context::Strict) && self.input().is(Token::FUNCTION)
-                // {     // TODO: report error?
-                // }
                 self.do_outside_of_context(
                     Context::IgnoreElseClause.union(Context::TopLevel),
-                    Self::parse_stmt,
+                    Self::parse_if_clause,
                 )
                 .map(Box::new)
             })?
@@ -688,7 +735,7 @@ impl<I: Tokens> Parser<I> {
                     // As we eat `else` above, we need to parse statement once.
                     let last = self.do_outside_of_context(
                         Context::IgnoreElseClause.union(Context::TopLevel),
-                        Self::parse_stmt,
+                        Self::parse_if_clause,
                     )?;
                     break Some(last);
                 }

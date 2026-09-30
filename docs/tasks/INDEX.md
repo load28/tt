@@ -622,6 +622,7 @@
 | TASK-621 | Read an arm whose guard is not written yet as a malformed arm | Complete | 2026-09-30 | 2026-09-30 | [TASK-621](./TASK-621-arm-guard-not-written-yet.md) |
 | TASK-622 | Write a return's suffix after a template literal that ends its statement | Complete | 2026-09-30 | 2026-09-30 | [TASK-622](./TASK-622-return-suffix-after-a-template-literal.md) |
 | TASK-623 | Widen only fresh literal types in a value's storage | Complete | 2026-09-30 | 2026-09-30 | [TASK-623](./TASK-623-storage-widens-only-fresh-literals.md) |
+| TASK-624 | Accept a `using` declaration in a `for` initializer and a function as an `if` clause | Complete | 2026-09-30 | 2026-09-30 | [TASK-624](./TASK-624-for-using-and-if-function-clause.md) |
 
 ## Next task number
 

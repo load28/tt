@@ -1240,6 +1240,7 @@ fn statement_is_cleanup_free(statement: &Stmt) -> bool {
         Stmt::For(node) => {
             let init_is_clean = match &node.init {
                 Some(VarDeclOrExpr::VarDecl(_)) | Some(VarDeclOrExpr::Expr(_)) | None => true,
+                Some(VarDeclOrExpr::UsingDecl(_)) => false,
             };
             init_is_clean && statement_is_cleanup_free(&node.body)
         }
