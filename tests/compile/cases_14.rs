@@ -847,3 +847,38 @@ fn a_value_nested_in_a_for_head_initializer_runs_before_the_loop() {
         assert!(out.contains(head), "{body}: {out}");
     }
 }
+
+#[test]
+fn a_returned_template_literal_that_ends_its_statement_keeps_the_return_suffix() {
+    let prelude = "variant O { A(n: number), B }\ndeclare const o: O;\ndeclare function tag(s: TemplateStringsArray, ...v: unknown[]): string;\ntype R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\ndeclare function r(): R;\n";
+    let cases = [
+        (
+            "export const a = result { const x = try r(); return `v`};",
+            "value: `v` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }\n}",
+        ),
+        (
+            "export const a = result { const x = try r(); return tag`v${x}`}",
+            "value: tag`v${x}` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }\n}",
+        ),
+        (
+            "export const a = result { const x = try r(); return x + `v`}",
+            "value: x + `v` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }\n}",
+        ),
+        (
+            "export const a = result { const x = try r(); if (x > 0) return `a`\n  return `b`};",
+            "value: `a` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }\n",
+        ),
+        (
+            "export const a = match (o) { A(n) => { return `${n}`}, B => 0 };",
+            "$tt_v0 = `${n}`; break;",
+        ),
+        (
+            "export const a = match (o) { A(n) => { if (n) return `a`\n  return `${n}`}, B => 0 };",
+            "if (n) { $tt_v0 = `a`; break; }\n    $tt_v0 = `${n}`;\n    break;\n",
+        ),
+    ];
+    for (source, written) in cases {
+        let out = ok(&format!("{prelude}{source}\n"));
+        assert!(out.contains(written), "{source}: {out}");
+    }
+}
