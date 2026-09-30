@@ -227,6 +227,21 @@ TT 고유의 차이: **Projection 계층**. tsgo는 `TS source → Program`이�
 > free functions (`engine::tt_symbol_at` and the others) are the
 > stand-alone question with no session, and read the disk.
 
+> **Update (TASK-653).** A project keeps its last contextual
+> materialization (`Project::materialized`) with the question it answered:
+> the projected modules as lowered, the modules served beside them (host
+> overlays, std support, blocked files), the listed hand-written sources,
+> and the roots by request, each in path order. The next snapshot reuses
+> the refined emits when it asks the same question and the host reports
+> the same session and disk generation (the probe TASK-436 added for the
+> standalone path); otherwise it materializes again. Every editor request
+> takes a snapshot, so an unchanged project now answers a hover without
+> asking the checker, as TypeScript's language service reuses its program
+> while the project version is unchanged (`synchronizeHostDataWorker`,
+> `src/services/services.ts`) and typescript-go reuses its snapshot while
+> no file change is pending (`Session.getSnapshot`,
+> `internal/project/session.go`).
+
 ---
 
 ## E. 최종 아키텍처

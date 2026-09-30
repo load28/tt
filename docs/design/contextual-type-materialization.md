@@ -235,6 +235,11 @@ is replaced in the same way.
 
 Project snapshots include lowered tt files, TypeScript sources and unsaved host
 overlays. Editor service projections use the same contextualized snapshot.
+A project reuses its last materialization for a snapshot that asks the same
+question (the projected modules, the modules served beside them, the listed
+sources, and the roots) while the host reports the same session and disk
+generation, so repeated editor requests on an unchanged project do not ask
+the checker again.
 Standalone file compilation discovers its configuration and candidate tt files,
 while the invoking working directory supplies the installed TypeScript client.
 An unnamed buffer uses that working directory as its inferred project.

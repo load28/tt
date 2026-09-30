@@ -126,7 +126,16 @@ fn many_utf16_offsets_answer_what_one_offset_answers() {
 }
 
 fn contextual_project(files: usize) -> (crate::test_workspace::Workspace, std::path::PathBuf) {
-    let root = crate::test_workspace::Workspace::with_subdir("contextual-scaling", "src");
+    contextual_files(
+        crate::test_workspace::Workspace::with_subdir("contextual-scaling", "src"),
+        files,
+    )
+}
+
+fn contextual_files(
+    root: crate::test_workspace::Workspace,
+    files: usize,
+) -> (crate::test_workspace::Workspace, std::path::PathBuf) {
     std::fs::write(
         root.join("tsconfig.json"),
         r#"{ "compilerOptions": { "strict": true, "target": "esnext", "module": "preserve", "moduleResolution": "bundler", "noEmit": true, "skipLibCheck": true }, "include": ["src"] }"#,
@@ -228,4 +237,123 @@ fn project_files_share_one_projection_each_and_one_checker_materialization() {
     assert_eq!(changed, fresh(0, Some(dep)));
     assert!(changed.contains("boolean"), "{changed}");
     assert!(after["contextual checker asks"] > 0);
+}
+
+fn toolchain_present() -> bool {
+    if crate::typescript::toolchain::client(Path::new(env!("CARGO_MANIFEST_DIR"))).is_ok() {
+        return true;
+    }
+    assert!(
+        std::env::var_os("TTC_REQUIRE_TSGO").is_none_or(|value| value.is_empty() || value == "0"),
+        "TTC_REQUIRE_TSGO is set but no TypeScript toolchain was found"
+    );
+    false
+}
+
+fn open_contextual_project(
+    engine: &crate::engine::Engine,
+    root: &Path,
+    documents: &[(std::path::PathBuf, String)],
+) -> crate::engine::Project {
+    let mut project = engine
+        .open_project(
+            &[root.join("src").to_string_lossy().into_owned()],
+            &crate::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    for (path, text) in documents {
+        project.open_document(path.clone(), text.clone());
+    }
+    project
+}
+
+fn project_emits(project: &mut crate::engine::Project) -> Vec<(std::path::PathBuf, String)> {
+    let files = project.initial_files();
+    let snapshot = project.update(&files).unwrap();
+    let mut emits: Vec<_> = snapshot
+        .files()
+        .iter()
+        .map(|file| (file.source_path.clone(), file.emit.code.clone()))
+        .collect();
+    emits.sort();
+    emits
+}
+
+#[test]
+fn project_requests_materialize_once_per_state_of_their_inputs() {
+    if !toolchain_present() {
+        return;
+    }
+    let (_workspace, root) = contextual_files(
+        crate::test_workspace::Workspace::in_repo_with_subdir("contextual-requests", "src"),
+        2,
+    );
+    let fresh = |documents: &[(std::path::PathBuf, String)]| {
+        project_emits(&mut open_contextual_project(
+            &crate::engine::Engine::new(None),
+            &root,
+            documents,
+        ))
+    };
+    let edited = root.join("src/f1.tt");
+    let dep = root.join("src/dep.ts");
+    let mut documents = vec![(edited.clone(), std::fs::read_to_string(&edited).unwrap())];
+    let engine = crate::engine::Engine::new(None);
+    let mut project = open_contextual_project(&engine, &root, &documents);
+    let hover = |project: &mut crate::engine::Project, character: u32| {
+        project
+            .hover(&edited, crate::engine::Position { line: 1, character })
+            .unwrap();
+    };
+    let asks = |counts: &HashMap<&'static str, usize>| {
+        counts.get("contextual checker asks").copied().unwrap_or(0)
+    };
+
+    let first = measure(|| hover(&mut project, 16));
+    assert!(asks(&first) > 0);
+    let repeated = measure(|| {
+        for character in [16, 34, 40, 60, 16] {
+            hover(&mut project, character);
+        }
+    });
+    assert_eq!(asks(&repeated), 0, "unchanged hovers materialize again");
+    let mut emits = Vec::new();
+    let unchanged = measure(|| emits = project_emits(&mut project));
+    assert_eq!(asks(&unchanged), 0);
+    assert_eq!(emits, fresh(&documents));
+
+    documents[0].1 = documents[0].1.replace("_ => [s]", "_ => [s, s]");
+    project.update_document(edited.clone(), documents[0].1.clone());
+    let changed = measure(|| hover(&mut project, 16));
+    assert!(asks(&changed) > 0, "an edited document reuses stale types");
+    let again = measure(|| hover(&mut project, 34));
+    assert_eq!(asks(&again), 0);
+    assert_eq!(project_emits(&mut project), fresh(&documents));
+
+    std::fs::write(&dep, "export const d: boolean = true;\n").unwrap();
+    let disk = measure(|| emits = project_emits(&mut project));
+    assert!(
+        asks(&disk) > 0,
+        "a disk dependency change reuses stale types"
+    );
+    assert!(
+        emits.iter().any(|(_, code)| code.contains("boolean")),
+        "{emits:?}"
+    );
+    assert_eq!(emits, fresh(&documents));
+
+    documents.push((dep.clone(), "export const d: number = 1;\n".to_owned()));
+    project.open_document(dep.clone(), documents[1].1.clone());
+    let overlay = measure(|| emits = project_emits(&mut project));
+    assert!(
+        asks(&overlay) > 0,
+        "a host overlay change reuses stale types"
+    );
+    assert!(
+        emits.iter().all(|(_, code)| !code.contains("boolean")),
+        "{emits:?}"
+    );
+    assert_eq!(emits, fresh(&documents));
+    let settled = measure(|| hover(&mut project, 16));
+    assert_eq!(asks(&settled), 0);
 }

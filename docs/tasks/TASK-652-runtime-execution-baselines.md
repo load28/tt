@@ -1,5 +1,7 @@
 # TASK-652: Execute case programs and hold their output to runtime baselines
 
+> Issue 2's follow-up is done in [TASK-653](./TASK-653-contextual-materialization-reuse.md): a project reuses its last contextual materialization while its inputs are unchanged, and the suite's time figures below predate it.
+
 - **Status**: Complete
 - **Started**: 2026-09-30
 - **Completed**: 2026-09-30

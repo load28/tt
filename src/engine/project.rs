@@ -126,6 +126,11 @@ pub struct Project {
     /// recomputing, over the project's lifetime — observability for the
     /// invalidation contract (and its tests).
     pattern_analysis_cache_hits: Cell<usize>,
+    /// The last contextual materialization, reused by the next snapshot
+    /// that asks the same question over the same disk generation: a request
+    /// on an unchanged project asks the checker nothing, as a language
+    /// service reuses its program while the project version is unchanged.
+    materialized: RefCell<Option<Materialized>>,
     next_snapshot: u64,
     /// The language-service half — the running `tsgo --lsp` conversation —
     /// started by the first editor question ([`crate::engine::language`]).
@@ -161,6 +166,7 @@ impl Project {
             backend,
             pattern_analysis_cache: RefCell::new(HashMap::new()),
             pattern_analysis_cache_hits: Cell::new(0),
+            materialized: RefCell::new(None),
             next_snapshot: 0,
             service: None,
         }
@@ -454,23 +460,35 @@ impl Project {
                         text: text.clone(),
                     }),
             );
-            let mut modules: Vec<_> = projected
-                .iter()
-                .map(|doc| (doc.module_path.clone(), doc.emit.clone()))
-                .collect();
-            crate::typescript::contextual::materialize(
-                backend,
-                self.tsconfig.as_deref(),
-                &self.root,
-                &mut modules,
-                &query.modules,
-                &query.sources,
-                &self.roots(&projected, &[]),
-            )
-            .map_err(blocked)?;
-            for (doc, (_, emit)) in projected.iter_mut().zip(modules) {
-                if doc.emit != emit {
-                    Arc::make_mut(doc).emit = emit;
+            let mut order: Vec<usize> = (0..projected.len()).collect();
+            order.sort_by(|&left, &right| {
+                projected[left]
+                    .module_path
+                    .cmp(&projected[right].module_path)
+            });
+            let mut roots = self.roots(&projected, &[]);
+            roots.sort();
+            query
+                .modules
+                .sort_by(|left, right| left.path.cmp(&right.path));
+            let question = ContextualQuestion {
+                modules: order
+                    .iter()
+                    .map(|&index| {
+                        (
+                            projected[index].module_path.clone(),
+                            projected[index].emit.clone(),
+                        )
+                    })
+                    .collect(),
+                support: query.modules,
+                sources: query.sources,
+                roots,
+            };
+            let emits = self.contextual_emits(backend, question).map_err(blocked)?;
+            for (&index, emit) in order.iter().zip(emits) {
+                if projected[index].emit != emit {
+                    Arc::make_mut(&mut projected[index]).emit = emit;
                 }
             }
         }
@@ -485,6 +503,42 @@ impl Project {
                 .map(|(path, text)| (path.clone(), text.clone()))
                 .collect(),
         })
+    }
+
+    /// The refined emits of `question`'s modules, in its order: the last
+    /// materialization's when it answered the same question over the same
+    /// host session and disk generation, a new materialization otherwise.
+    fn contextual_emits(
+        &self,
+        backend: &NativeBackend,
+        question: ContextualQuestion,
+    ) -> Result<Vec<crate::MappedEmit>, crate::typescript::backend::Failure> {
+        let config = self.tsconfig.as_deref();
+        if let Some(last) = self.materialized.borrow().as_ref()
+            && last.question == question
+            && backend.current_generation(config, &self.root) == Some(last.generation)
+        {
+            return Ok(last.emits.clone());
+        }
+        let mut modules = question.modules.clone();
+        backend.observe_generations();
+        crate::typescript::contextual::materialize(
+            backend,
+            config,
+            &self.root,
+            &mut modules,
+            &question.support,
+            &question.sources,
+            &question.roots,
+        )?;
+        let emits: Vec<_> = modules.into_iter().map(|(_, emit)| emit).collect();
+        *self.materialized.borrow_mut() =
+            backend.stable_generation().map(|generation| Materialized {
+                question,
+                generation,
+                emits: emits.clone(),
+            });
+        Ok(emits)
     }
 
     /// How many per-file semantic computations the cross-snapshot cache
@@ -772,6 +826,27 @@ pub(super) fn is_host_source(path: &Path) -> bool {
 struct CachedPatternAnalysis {
     source_hash: u64,
     value: Arc<FileSemantics>,
+}
+
+/// Everything a contextual materialization is asked besides the project's
+/// fixed configuration and root, in path order: the projected modules as
+/// lowered, the modules served beside them, the listed hand-written
+/// sources, and the roots by request.
+#[derive(Debug, PartialEq)]
+struct ContextualQuestion {
+    modules: Vec<(PathBuf, crate::MappedEmit)>,
+    support: Vec<crate::typescript::backend::Module>,
+    sources: Vec<PathBuf>,
+    roots: Vec<PathBuf>,
+}
+
+/// One materialization, kept while its question and the host's disk
+/// generation stay the same.
+#[derive(Debug)]
+struct Materialized {
+    question: ContextualQuestion,
+    generation: (u64, u64),
+    emits: Vec<crate::MappedEmit>,
 }
 
 /// Every file of the project with one of `extensions`, as absolute paths.
