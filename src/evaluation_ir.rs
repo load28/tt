@@ -68,6 +68,7 @@ enum RegionPlacement {
         source: Option<SourceSpan>,
         exits: Vec<HostExit>,
         protocol: HostEvaluationProtocol,
+        context: Option<EvaluationContext>,
     },
     SourceEdit,
 }

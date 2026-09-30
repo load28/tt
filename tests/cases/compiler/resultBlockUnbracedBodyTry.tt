@@ -1,0 +1,85 @@
+// A `try` in a `result` block that sits in the unbraced body of an `if`,
+// `else`, loop, or label opens its own block there, as it does in a
+// function, and so does a returned `match` the block rebuilds.
+// @run: resultBlockUnbracedBodyTry.tt
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+variant S { A(n: number), B }
+const ok = (n: number): TResult<number, string> => Result.Ok(n);
+const bad = (e: string): TResult<number, string> => Result.Err(e);
+function early(c: boolean, r: TResult<number, string>) {
+  return result {
+    if (c) return try r;
+    return 0;
+  };
+}
+function paren(c: boolean, r: TResult<number, string>) {
+  return result {
+    if (c) return (try r);
+    return 0;
+  };
+}
+function statement(c: boolean, r: TResult<number, string>) {
+  return result {
+    if (c) try r;
+    return 1;
+  };
+}
+function elseBody(c: boolean, r: TResult<number, string>) {
+  return result {
+    if (c) {} else return try r;
+    return 2;
+  };
+}
+function elseIf(c: boolean, d: boolean, r: TResult<number, string>) {
+  return result {
+    if (c) return 3;
+    else if (d) try r;
+    else if (!d) return try r;
+    return 4;
+  };
+}
+function nestedIf(c: boolean, d: boolean, r: TResult<number, string>) {
+  return result {
+    if (c) if (d) try r; else return try r;
+    return 5;
+  };
+}
+function loopBody(r: TResult<number, string>) {
+  return result {
+    for (;;) return try r;
+  };
+}
+function whileBody(r: TResult<number, string>) {
+  let turns = 0;
+  return result {
+    while (turns++ < 2) try r;
+    return turns;
+  };
+}
+function labelBody(r: TResult<number, string>) {
+  return result {
+    done: return try r;
+  };
+}
+function returnedMatch(c: boolean, s: S, r: TResult<number, string>) {
+  return result {
+    const base = try r;
+    if (c) return match (s) { A(n) => n + base, B => -1 };
+    return 6;
+  };
+}
+for (const r of [ok(5), bad("no")]) {
+  console.log(JSON.stringify([
+    early(true, r), early(false, r), paren(true, r), statement(true, r),
+    statement(false, r), elseBody(false, r), elseBody(true, r),
+  ]));
+  console.log(JSON.stringify([
+    elseIf(true, false, r), elseIf(false, true, r), elseIf(false, false, r),
+    nestedIf(true, true, r), nestedIf(true, false, r), nestedIf(false, true, r),
+  ]));
+  console.log(JSON.stringify([
+    loopBody(r), whileBody(r), labelBody(r),
+    returnedMatch(true, S.A(7), r), returnedMatch(true, S.B, r), returnedMatch(false, S.B, r),
+  ]));
+}

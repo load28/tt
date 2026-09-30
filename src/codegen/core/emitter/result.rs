@@ -170,12 +170,13 @@ impl<'a> Emitter<'a> {
                 .argument
                 .and_then(|argument| self.result_return_propagate(body, argument))
             {
-                propagating_returns.push((
-                    exit.statement,
-                    exit.argument.expect("checked above"),
+                propagating_returns.push(ResultReturn {
+                    statement: exit.statement,
+                    argument: exit.argument.expect("checked above"),
                     expr,
-                    propagate,
-                ));
+                    requires_block: exit.requires_block,
+                    propagate: Some(propagate),
+                });
                 continue;
             }
             if let Some((argument, expr)) = exit.argument.and_then(|argument| {
@@ -186,7 +187,13 @@ impl<'a> Emitter<'a> {
                 )
                 .map(|expr| (argument, expr))
             }) {
-                structured_returns.push((exit.statement, argument, expr));
+                structured_returns.push(ResultReturn {
+                    statement: exit.statement,
+                    argument,
+                    expr,
+                    requires_block: exit.requires_block,
+                    propagate: None,
+                });
                 continue;
             }
             match exit.argument {
@@ -356,8 +363,8 @@ impl<'a> Emitter<'a> {
         statements: &[Statement],
         exits: &[HostExit],
         edits: &[LocalSourceEdit],
-        propagating_returns: &[(SourceSpan, SourceSpan, ExprId, &Propagate)],
-        structured_returns: &[(SourceSpan, SourceSpan, ExprId)],
+        propagating_returns: &[ResultReturn<'_>],
+        structured_returns: &[ResultReturn<'_>],
         context: &ResultEmissionContext<'_, '_>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
@@ -374,12 +381,8 @@ impl<'a> Emitter<'a> {
                     let node_span = self.span(*node);
                     let erased = propagating_returns
                         .iter()
-                        .map(|(return_span, _, _, _)| *return_span)
-                        .chain(
-                            structured_returns
-                                .iter()
-                                .map(|(return_span, _, _)| *return_span),
-                        )
+                        .chain(structured_returns)
+                        .map(|rewritten| rewritten.statement)
                         .map(|return_span| SourceSpan {
                             start: return_span.start.max(node_span.start),
                             end: return_span.end.min(node_span.end),
@@ -395,14 +398,21 @@ impl<'a> Emitter<'a> {
                     out.append(self.source_rope_with_edits(*node, &opaque_edits));
                 }
                 Statement::Expr(expr) => {
-                    if let Some((return_span, argument, _)) = structured_returns
+                    if let Some(rewritten) = structured_returns
                         .iter()
-                        .find(|(_, _, candidate)| candidate == expr)
+                        .find(|rewritten| rewritten.expr == *expr)
                     {
-                        let mut replacement =
-                            self.emit_returned_structured_value(*expr, *argument, context.success);
+                        let return_span = rewritten.statement;
+                        let mut replacement = self.emit_returned_structured_value(
+                            *expr,
+                            rewritten.argument,
+                            context.success,
+                        );
                         if context.success.assigns() {
                             push_control_break(&mut replacement, 0, context.exit_label);
+                        }
+                        if rewritten.requires_block {
+                            replacement = Rope::braced(replacement);
                         }
                         let (kind, start, head_end, extent) = self.value_anchor(*expr);
                         out.anchored(
@@ -412,10 +422,15 @@ impl<'a> Emitter<'a> {
                             return_span.end.max(extent),
                             replacement,
                         );
-                    } else if let Some((return_span, argument, _, propagate)) = propagating_returns
-                        .iter()
-                        .find(|(_, _, candidate, _)| candidate == expr)
+                    } else if let Some((rewritten, propagate)) =
+                        propagating_returns.iter().find_map(|rewritten| {
+                            (rewritten.expr == *expr)
+                                .then_some(rewritten)
+                                .zip(rewritten.propagate)
+                        })
                     {
+                        let return_span = &rewritten.statement;
+                        let argument = &rewritten.argument;
                         let mut replacement = self.emit_region_propagate(
                             propagate,
                             context.failure,
@@ -443,6 +458,9 @@ impl<'a> Emitter<'a> {
                             context.exit_label,
                             Some(0),
                         ));
+                        if rewritten.requires_block {
+                            replacement = Rope::braced(replacement);
+                        }
                         out.anchored(
                             AnchorKind::Try,
                             return_span.start,
@@ -478,11 +496,14 @@ impl<'a> Emitter<'a> {
                 Statement::Propagate(propagate) => {
                     out.append(self.emit_propagate_owner_prelude(propagate));
                     let span = self.span(propagate.node);
-                    let emitted = if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
+                    let mut emitted = if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
                         self.emit_region_propagate(propagate, context.failure, context.exit_label)
                     } else {
                         self.emit_propagate(propagate)
                     };
+                    if self.block_required_statements.contains(&propagate.node) {
+                        emitted = Rope::braced(emitted);
+                    }
                     out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
                 Statement::Decision(decision) => self.emit_result_statement_decision(
@@ -609,4 +630,12 @@ impl<'a> Emitter<'a> {
         }
         Rope::scoped(out)
     }
+}
+
+pub(super) struct ResultReturn<'p> {
+    statement: SourceSpan,
+    argument: SourceSpan,
+    expr: ExprId,
+    requires_block: bool,
+    propagate: Option<&'p Propagate>,
 }

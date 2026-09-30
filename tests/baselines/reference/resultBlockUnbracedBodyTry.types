@@ -1,0 +1,302 @@
+=== resultBlockUnbracedBodyTry.tt ===
+variant S { A(n: number), B }
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => S
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const ok = (n: number): TResult<number, string> => Result.Ok(n);
+>ok : const ok: (n: number) => TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+const bad = (e: string): TResult<number, string> => Result.Err(e);
+>bad : const bad: (e: string) => TResult<number, string>
+>e : (parameter) e: string
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+>e : (parameter) e: string
+function early(c: boolean, r: TResult<number, string>) {
+>early : function early(c: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>c : (parameter) c: boolean
+>r : (parameter) r: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+    if (c) return try r;
+>c : (parameter) c: boolean
+>r : (parameter) r: TResult<number, string>
+function paren(c: boolean, r: TResult<number, string>) {
+>paren : function paren(c: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>c : (parameter) c: boolean
+>r : (parameter) r: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+    if (c) return (try r);
+>c : (parameter) c: boolean
+>r : (parameter) r: TResult<number, string>
+function statement(c: boolean, r: TResult<number, string>) {
+>statement : function statement(c: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>c : (parameter) c: boolean
+>r : (parameter) r: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+    if (c) try r;
+>c : (parameter) c: boolean
+>r : (parameter) r: TResult<number, string>
+function elseBody(c: boolean, r: TResult<number, string>) {
+>elseBody : function elseBody(c: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>c : (parameter) c: boolean
+>r : (parameter) r: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+    if (c) {} else return try r;
+>c : (parameter) c: boolean
+>r : (parameter) r: TResult<number, string>
+function elseIf(c: boolean, d: boolean, r: TResult<number, string>) {
+>elseIf : function elseIf(c: boolean, d: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>c : (parameter) c: boolean
+>d : (parameter) d: boolean
+>r : (parameter) r: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+    if (c) return 3;
+>c : (parameter) c: boolean
+    else if (d) try r;
+>d : (parameter) d: boolean
+>r : (parameter) r: TResult<number, string>
+    else if (!d) return try r;
+>d : (parameter) d: false
+>r : (parameter) r: TResult<number, string>
+function nestedIf(c: boolean, d: boolean, r: TResult<number, string>) {
+>nestedIf : function nestedIf(c: boolean, d: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>c : (parameter) c: boolean
+>d : (parameter) d: boolean
+>r : (parameter) r: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+    if (c) if (d) try r; else return try r;
+>c : (parameter) c: boolean
+>d : (parameter) d: boolean
+>r : (parameter) r: TResult<number, string>
+>r : (parameter) r: TResult<number, string>
+function loopBody(r: TResult<number, string>) {
+>loopBody : function loopBody(r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : (parameter) r: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+    for (;;) return try r;
+>r : (parameter) r: TResult<number, string>
+function whileBody(r: TResult<number, string>) {
+>whileBody : function whileBody(r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : (parameter) r: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  let turns = 0;
+>turns : let turns: number
+    while (turns++ < 2) try r;
+>turns : let turns: number
+>r : (parameter) r: TResult<number, string>
+    return turns;
+>turns : let turns: number
+function labelBody(r: TResult<number, string>) {
+>labelBody : function labelBody(r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : (parameter) r: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+    done: return try r;
+>r : (parameter) r: TResult<number, string>
+function returnedMatch(c: boolean, s: S, r: TResult<number, string>) {
+>returnedMatch : function returnedMatch(c: boolean, s: S, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>c : (parameter) c: boolean
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>r : (parameter) r: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+    const base = try r;
+>base : const base: number
+>r : (parameter) r: TResult<number, string>
+    if (c) return match (s) { A(n) => n + base, B => -1 };
+>c : (parameter) c: boolean
+>s : (parameter) s: S
+>n : const n: number
+>n : const n: number
+>base : const base: number
+for (const r of [ok(5), bad("no")]) {
+>r : const r: TResult<number, string>
+>ok : const ok: (n: number) => TResult<number, string>
+>bad : const bad: (e: string) => TResult<number, string>
+  console.log(JSON.stringify([
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+    early(true, r), early(false, r), paren(true, r), statement(true, r),
+>early : function early(c: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+>early : function early(c: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+>paren : function paren(c: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+>statement : function statement(c: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+    statement(false, r), elseBody(false, r), elseBody(true, r),
+>statement : function statement(c: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+>elseBody : function elseBody(c: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+>elseBody : function elseBody(c: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+  console.log(JSON.stringify([
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+    elseIf(true, false, r), elseIf(false, true, r), elseIf(false, false, r),
+>elseIf : function elseIf(c: boolean, d: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+>elseIf : function elseIf(c: boolean, d: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+>elseIf : function elseIf(c: boolean, d: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+    nestedIf(true, true, r), nestedIf(true, false, r), nestedIf(false, true, r),
+>nestedIf : function nestedIf(c: boolean, d: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+>nestedIf : function nestedIf(c: boolean, d: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+>nestedIf : function nestedIf(c: boolean, d: boolean, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+  console.log(JSON.stringify([
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+    loopBody(r), whileBody(r), labelBody(r),
+>loopBody : function loopBody(r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+>whileBody : function whileBody(r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+>labelBody : function labelBody(r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>r : const r: TResult<number, string>
+    returnedMatch(true, S.A(7), r), returnedMatch(true, S.B, r), returnedMatch(false, S.B, r),
+>returnedMatch : function returnedMatch(c: boolean, s: S, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>r : const r: TResult<number, string>
+>returnedMatch : function returnedMatch(c: boolean, s: S, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>r : const r: TResult<number, string>
+>returnedMatch : function returnedMatch(c: boolean, s: S, r: TResult<number, string>): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>r : const r: TResult<number, string>
+

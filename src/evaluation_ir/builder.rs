@@ -239,6 +239,7 @@ impl EvaluationBuilder<'_> {
             let exits = binding
                 .as_ref()
                 .map_or_else(Vec::new, |binding| binding.exits.clone());
+            let context = binding.as_ref().map(|binding| binding.context);
             let protocol =
                 binding.map_or_else(HostEvaluationProtocol::default, |binding| binding.protocol);
             RegionPlacement::Nested {
@@ -246,6 +247,7 @@ impl EvaluationBuilder<'_> {
                 source,
                 exits,
                 protocol,
+                context,
             }
         } else {
             self.placement(root, parent)?
@@ -316,6 +318,7 @@ impl EvaluationBuilder<'_> {
             let exits = binding
                 .as_ref()
                 .map_or_else(Vec::new, |binding| binding.exits.clone());
+            let context = binding.as_ref().map(|binding| binding.context);
             let protocol =
                 binding.map_or_else(HostEvaluationProtocol::default, |binding| binding.protocol);
             return Ok(RegionPlacement::Nested {
@@ -323,6 +326,7 @@ impl EvaluationBuilder<'_> {
                 source,
                 exits,
                 protocol,
+                context,
             });
         }
         if let Some(binding) = self.hosts.remove(&root) {
@@ -340,6 +344,7 @@ impl EvaluationBuilder<'_> {
                 source: None,
                 exits: Vec::new(),
                 protocol: HostEvaluationProtocol::default(),
+                context: None,
             })
         } else {
             Err(EvaluationError::MissingHost { root })

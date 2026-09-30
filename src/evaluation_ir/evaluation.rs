@@ -521,6 +521,7 @@ impl EvaluationFile {
                 protocol,
                 source,
                 exits,
+                ..
             } = &region.placement
             else {
                 continue;
@@ -988,6 +989,26 @@ impl EvaluationFile {
                     Some(CoreRoot::Decision(node)),
                     RegionPlacement::Host {
                         context, source, ..
+                    },
+                ) if context.requires_block => Some((node, *source)),
+                (
+                    Some(CoreRoot::Propagate(node)),
+                    RegionPlacement::Nested {
+                        context: Some(context),
+                        source: Some(source),
+                        ..
+                    },
+                ) if context.requires_block
+                    && context.continuation != HostContinuation::ForInitialize =>
+                {
+                    Some((node, *source))
+                }
+                (
+                    Some(CoreRoot::Decision(node)),
+                    RegionPlacement::Nested {
+                        context: Some(context),
+                        source: Some(source),
+                        ..
                     },
                 ) if context.requires_block => Some((node, *source)),
                 _ => None,

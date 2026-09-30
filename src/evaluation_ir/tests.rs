@@ -188,15 +188,21 @@ fn a_result_binding_is_nested_under_the_result_region() {
         .iter()
         .find(|region| matches!(region.operation, OperationId::Propagate(_)))
         .expect("propagation region");
-    assert_eq!(
-        propagation.placement,
-        RegionPlacement::Nested {
-            parent: result.id,
-            source: Some(SourceSpan { start: 21, end: 42 }),
-            exits: Vec::new(),
-            protocol: HostEvaluationProtocol::default(),
-        }
-    );
+    let RegionPlacement::Nested {
+        parent,
+        source,
+        exits,
+        protocol,
+        context,
+    } = &propagation.placement
+    else {
+        panic!("the propagation is not nested: {:?}", propagation.placement);
+    };
+    assert_eq!(*parent, result.id);
+    assert_eq!(*source, Some(SourceSpan { start: 21, end: 42 }));
+    assert_eq!(*exits, Vec::new());
+    assert_eq!(*protocol, HostEvaluationProtocol::default());
+    assert!(context.is_some_and(|context| !context.requires_block));
 }
 
 #[test]
