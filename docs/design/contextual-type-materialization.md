@@ -82,6 +82,18 @@ $tt_v0 = $tt_a0.value;
 Every other value is written directly, as before: `$tt_v0 = 1;`,
 `$tt_v0 = g();`.
 
+A logical operation writes its left operand to operand storage in the test
+of the `if` that branches on it (`if ($tt_v0 = l)`, TASK-595), where no
+`const` can be declared. There the value is carried in place, as the
+`value` of an object literal the test reads at once:
+`if ($tt_v0 = ({ value: [] }).value)`. An object literal that is the
+operand of a property access has no contextual type either. Operand
+storage (`MarkKind::OperandSlot`) holds the value of one operand of the
+source, so it is never annotated with a contextual type found where it is
+read: once contextual propagation has reached its fixed point, it is
+annotated with the widened type of the one value written to it, as a
+`const` initialized with that value would be typed.
+
 An unannotated `const` initializer has no contextual type, and a property of
 an object literal that has none has none either. The value is a property
 rather than the initializer itself because TypeScript declares an unannotated

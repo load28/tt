@@ -52,10 +52,11 @@ pub(crate) fn materialize(
                 path: path.clone(),
                 text: emit.code.clone(),
             });
-            let at = |position: usize, settled: bool| ContextualSlotQuery {
+            let at = |position: usize, settled: bool, operand: bool| ContextualSlotQuery {
                 module: path.clone(),
                 declaration_end: mapper::to_utf16(&emit.code, position),
                 settled,
+                operand,
             };
             for (index, (&position, slot)) in refined
                 .declarations
@@ -64,13 +65,19 @@ pub(crate) fn materialize(
                 .enumerate()
             {
                 if slot.annotation.is_some() {
-                    settled.push(at(position, true));
+                    settled.push(at(position, true, false));
                 } else {
                     sites.push((module_index, index));
-                    query.contextual_slots.push(at(position, false));
+                    let operand = base.operand_slots.contains(&base.contextual_slots[index]);
+                    query.contextual_slots.push(at(position, false, operand));
                 }
             }
-            settled.extend(refined.locals.iter().map(|&position| at(position, true)));
+            settled.extend(
+                refined
+                    .locals
+                    .iter()
+                    .map(|&position| at(position, true, false)),
+            );
         }
         // After every slot an answer can name, so an answer's index is its
         // site's.

@@ -223,7 +223,8 @@ fn a_conditional_operand_owns_its_branch_in_a_pipeline_head() {
     let out = ok(&format!(
         "{TASK_501_PRELUDE}export const v = g() && f(match (n) {{ 0 => 1, _ => 2 }}) |> String;\n"
     ));
-    assert!(out.contains("} else {"), "{out}");
+    assert!(out.contains("if ($tt_v3 = g()) {"), "{out}");
+    assert!(out.contains("$tt_v4 = $tt_v3;"), "{out}");
     assert!(!out.contains("&&"), "{out}");
 }
 
@@ -672,4 +673,22 @@ fn a_statement_value_in_an_enum_member_initializer_is_a_placement_error() {
         compact(&out).contains("R = [0].map(() => { let $tt_v"),
         "{out}"
     );
+}
+
+#[test]
+fn a_conditional_operation_tests_its_condition_where_it_evaluates_it() {
+    let prelude = "variant O { A(n: number), B }\ndeclare const o: O;\ndeclare const cfg: { name?: string };\n";
+    let cases: &[(&str, &str)] = &[
+        ("cfg.name ? match (o) { A(n) => n, B => 0 } : 1", "if (cfg.name) {"),
+        ("cfg.name && match (o) { A(n) => n, B => 0 }", "if ($tt_v1 = cfg.name) {"),
+        ("!cfg.name || match (o) { A(n) => n, B => 0 }", "if ($tt_v1 = !cfg.name) {\n  $tt_v2 = $tt_v1;\n} else {"),
+        ("cfg.name ?? match (o) { A(n) => n, B => 0 }", "if (($tt_v1 = cfg.name) == null) {"),
+        ("(cfg.name, cfg) && match (o) { A(n) => n, B => 0 }", "if ($tt_v1 = (cfg.name, cfg)) {"),
+    ];
+    for (value, test) in cases {
+        let out = ok(&format!("{prelude}export const v = {value};\n"));
+        assert!(out.contains(test), "{value}: {out}");
+        assert!(!out.contains("const $tt_v1"), "{value}: {out}");
+        assert_eq!(out.matches("cfg.name").count(), 1, "{value}: {out}");
+    }
 }

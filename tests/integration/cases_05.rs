@@ -1572,3 +1572,30 @@ console.log(F.Q, F.R, F.S, log.join(" "));
     );
     assert_eq!(out, ["8 8 3 r7 S"]);
 }
+
+#[test]
+fn runtime_a_conditional_operations_condition_is_evaluated_once_where_it_is_tested() {
+    require_toolchain!();
+    // TASK-595: the condition of `? :`, `&&`, `||`, and `??` is tested
+    // where it is evaluated (ECMA-262 §13.13.1, §13.14.1), once, and the
+    // logical operators keep its value as their result when the right
+    // operand does not run.
+    let out = run(r#"
+variant O { A(n: number), B }
+const o = O.A(1) as O;
+let reads = 0;
+function read<T>(v: T): T { reads++; return v; }
+const cfg = { get name(): string | undefined { reads++; return "abc"; } };
+const a = cfg.name ? match (o) { A(n) => n + 1, B => 0 } : -1;
+const b = cfg.name && match (o) { A(n) => n + 2, B => 0 };
+const c = !cfg.name || match (o) { A(n) => n + 3, B => 0 };
+const d = cfg.name ?? match (o) { A(n) => n + 4, B => 0 };
+const e = read(0) && match (o) { A(n) => n, B => 0 };
+const f = read("") || match (o) { A(n) => n + 5, B => 0 };
+const g = read(null) ?? match (o) { A(n) => n + 6, B => 0 };
+const h = (read(true) ? { k: 1 } : null) && match (o) { A(n) => n, B => 0 };
+const i = (read(false) ? [] : null) || match (o) { A(n) => n, B => 0 };
+console.log(a, b, c, d, e, f, g, h, i, reads);
+"#);
+    assert_eq!(out, ["2 3 4 abc 0 6 7 1 1 9"]);
+}

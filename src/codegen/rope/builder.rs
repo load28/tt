@@ -129,6 +129,15 @@ impl<'a> Rope<'a> {
         self.push_lit(";");
     }
 
+    pub(crate) fn push_operand_declaration(&mut self, name: &str) {
+        self.push_lit(format!("let {name}"));
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::OperandSlot,
+        });
+        self.push_lit(";");
+    }
+
     pub(crate) fn push_value_definition(&mut self, name: &str) {
         self.push_lit(format!("const {name}"));
         self.pieces.push(Piece::Mark {
@@ -541,6 +550,7 @@ pub(crate) struct Flat {
     pub result_return_temps: Vec<ResultReturnTemp>,
     pub contextual_slots: Vec<usize>,
     pub selector_slots: Vec<usize>,
+    pub operand_slots: Vec<usize>,
     pub generated_names: std::collections::HashSet<String>,
     pub declared_names: Vec<DeclaredName>,
     pub shared_bindings: Vec<SharedBinding>,

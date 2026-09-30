@@ -74,8 +74,23 @@ pub(crate) fn refine(
     if let Some(writes) = writes {
         let mut occupied = crate::generated_names::source_names(&emit.code, source_kind);
         let newline = crate::line_ending(&emit.code);
-        let carried = writes.into_iter().filter(|write| write.typed_by_context);
-        for (index, write) in carried.enumerate() {
+        let (tested, carried): (Vec<_>, Vec<_>) = writes
+            .into_iter()
+            .filter(|write| write.typed_by_context)
+            .partition(|write| write.tested);
+        for write in tested {
+            edits.push(Edit {
+                start: write.value.0,
+                end: write.value.0,
+                text: "({ value: ".to_owned(),
+            });
+            edits.push(Edit {
+                start: write.value.1,
+                end: write.value.1,
+                text: " }).value".to_owned(),
+            });
+        }
+        for (index, write) in carried.into_iter().enumerate() {
             let local = crate::generated_names::allocate(&format!("$tt_a{index}"), &mut occupied)
                 .unwrap_or_else(|| crate::ice::bug!("no free generated name remains for a value"));
             locals.push((write.target, format!("const {local}").len()));
@@ -195,6 +210,7 @@ fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
         .contextual_slots
         .iter_mut()
         .chain(&mut emit.selector_slots)
+        .chain(&mut emit.operand_slots)
     {
         *position = shifted(edits, *position, true);
     }
@@ -213,6 +229,7 @@ struct StorageWrite {
     /// TypeScript computes the value's type from its contextual type
     /// ([`typed_by_context`]).
     typed_by_context: bool,
+    tested: bool,
 }
 
 /// Whether TypeScript computes the type of `value` from the contextual type
@@ -270,6 +287,7 @@ fn storage_writes(
         declarations: &'a [usize],
         names: HashSet<String>,
         statements: HashSet<(usize, usize)>,
+        tests: HashSet<(usize, usize)>,
         /// Each assignment to a plain identifier, with its own extent.
         assignments: Vec<(StorageWrite, (usize, usize))>,
     }
@@ -308,6 +326,25 @@ fn storage_writes(
             self.statements(&node.cons);
             node.visit_children_with(self);
         }
+        fn visit_if_stmt(&mut self, node: &swc_ecma_ast::IfStmt) {
+            let mut test = &*node.test;
+            loop {
+                match test {
+                    Expr::Paren(inner) => test = &inner.expr,
+                    Expr::Bin(inner) if inner.op == swc_ecma_ast::BinaryOp::EqEq => {
+                        test = &inner.left;
+                    }
+                    Expr::Assign(assign) => {
+                        let span = assign.span();
+                        self.tests
+                            .insert((self.input.byte(span.lo), self.input.byte(span.hi)));
+                        break;
+                    }
+                    _ => break,
+                }
+            }
+            node.visit_children_with(self);
+        }
         fn visit_assign_expr(&mut self, node: &swc_ecma_ast::AssignExpr) {
             if node.op == AssignOp::Assign
                 && let AssignTarget::Simple(SimpleAssignTarget::Ident(target)) = &node.left
@@ -320,6 +357,7 @@ fn storage_writes(
                         target: self.input.byte(target.id.span.lo),
                         value: (self.input.byte(value.lo), self.input.byte(value.hi)),
                         typed_by_context: typed_by_context(&node.right),
+                        tested: false,
                     },
                     (self.input.byte(span.lo), self.input.byte(span.hi)),
                 ));
@@ -339,6 +377,7 @@ fn storage_writes(
         declarations,
         names: HashSet::new(),
         statements: HashSet::new(),
+        tests: HashSet::new(),
         assignments: Vec::new(),
     };
     module.visit_with(&mut collect);
@@ -346,12 +385,15 @@ fn storage_writes(
         crate::ice::bug!("detached value storage has no declaration")
     }
     let mut writes = Vec::new();
-    for (write, span) in collect.assignments {
+    for (mut write, span) in collect.assignments {
         if !collect.names.contains(&write.storage) {
             continue;
         }
-        if !collect.statements.contains(&span) {
-            crate::ice::bug!("a write to value storage is not a statement of a block")
+        write.tested = collect.tests.contains(&span);
+        if !write.tested && !collect.statements.contains(&span) {
+            crate::ice::bug!(
+                "a write to value storage is neither a statement of a block nor an `if` test"
+            )
         }
         writes.push(write);
     }

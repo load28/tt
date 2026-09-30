@@ -512,6 +512,61 @@ reports `match-placement` or `try-placement`, and a `result` block uses the
 expression boundary, which runs in place. A value in the first declarator
 still lowers before the loop.
 
+### 7.10 The condition of a conditional operation (TASK-595)
+
+A conditional operation that holds a value (`c ? v : w`, `l && v`,
+`l || v`, `l ?? v`) is lowered as one region (TASK-160 Decision 17). Its
+condition is evaluated once (ECMA-262 §13.13.1 and §13.14.1: `GetValue` of
+the left operand or the condition, then `ToBoolean`), and TypeScript
+narrows the references in it for the branch that runs ("Narrowing:
+Truthiness narrowing" and "Control flow analysis" in the TypeScript
+handbook). A capture `const $c = (l); if ($c)` evaluates it once but
+narrows only `$c`: TypeScript narrows a reference through a `const` alias
+only when the alias is unannotated and the reference itself is a constant
+(a `const`, a parameter never assigned, or a `readonly` property of one),
+so `cfg.name`, a reassigned `let`, and an annotated capture all lose their
+narrowing.
+
+The condition is therefore tested where it is evaluated:
+
+- `c ? v : w` becomes `if (c) { … } else { … }`; its value is not needed
+  after the test.
+- `l && v`, `l || v`, and `l ?? v` keep the left operand's value, which is
+  the result when the right operand does not run. It is stored in operand
+  storage inside the test: `let $l; if ($l = l) { …; $r = v' } else { $r = $l; }`
+  for `&&`, `if ($l = l) { $r = $l; } else { … }` for `||`, and
+  `if (($l = l) == null) { … } else { $r = $l; }` for `??`. TypeScript
+  narrows an assignment used as a condition by its right operand as well
+  as its target (`narrowTypeByBinaryExpression` for `=`), so `l` narrows
+  its references in the branch, and `$l` is narrowed as the original
+  operation narrows its result (falsy, truthy, or non-nullish) where it is
+  written to the result slot. Writing the left operand to the result slot
+  itself would require its whole type to be assignable to the result's
+  contextual type, which the operation does not require
+  (`const c: number = maybe ?? …`).
+- `$l` is operand storage (`MarkKind::OperandSlot`): it stands for the
+  operand's value, so the backend annotates it with the operand's own type
+  (the widened type of the one value written to it, as a `const` would be
+  typed), never with a contextual type found where it is read. An
+  unannotated `$l` is typed from its assignment.
+- Under `??`, TypeScript narrows `l` to its nullish part in `v`, but no
+  expression that evaluates `l` once and tests it for `null` or
+  `undefined` carries that narrowing to `l` (checked with the pinned
+  `tsc`: `($l = l) == null`, `($l = l) === null || $l === undefined`,
+  `(($l = l) ?? null) === null`, and `!(($l = l) != null)` narrow only
+  `$l`), so a value under `??` does not see it. Narrowing `l` by falsiness
+  instead (`!($l = l) && $l == null`) would be a different, weaker fact, so
+  it is not used.
+
+A condition that was already captured by an earlier step (its slot is in
+the captured set), or that is itself a tt value, is tested through its
+slot, and a provably inert condition is written in place, parenthesized
+(`if ((false))`) as before, so TypeScript does not take a literal `false`
+for an unreachable branch. Storage writes are then either statements of a
+block or the test of an `if`; a detached slot's value TypeScript types
+from its context is carried as `({ value: l }).value` in a test, where no
+`const` can be declared (`docs/design/contextual-type-materialization.md`).
+
 
 
 | Core primitive | tt 표면 | Evaluation IR 동작 |

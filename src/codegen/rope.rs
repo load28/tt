@@ -39,6 +39,7 @@ pub(crate) enum MarkKind {
     /// The same, for storage holding the index of the arm a dispatch
     /// selected rather than a value.
     SelectorSlot,
+    OperandSlot,
     /// The receiver a nested pattern tests ([`crate::PayloadTemp`]).
     Payload,
     /// Start of a value explicitly returned from a `result` block.
@@ -609,6 +610,7 @@ impl<'a> TargetFile<'a> {
         let mut result_returns: Vec<ResultReturnTemp> = Vec::new();
         let mut contextual_slots = Vec::new();
         let mut selector_slots = Vec::new();
+        let mut operand_slots = Vec::new();
         let mut declared_names: Vec<DeclaredName> = Vec::new();
         let mut shared_bindings: Vec<SharedBinding> = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
@@ -679,6 +681,13 @@ impl<'a> TargetFile<'a> {
                 } => {
                     contextual_slots.push(out.len());
                     selector_slots.push(out.len());
+                }
+                TargetPiece::Mark {
+                    kind: MarkKind::OperandSlot,
+                    ..
+                } => {
+                    contextual_slots.push(out.len());
+                    operand_slots.push(out.len());
                 }
                 TargetPiece::Mark {
                     src,
@@ -823,6 +832,7 @@ impl<'a> TargetFile<'a> {
             result_return_temps: result_returns,
             contextual_slots,
             selector_slots,
+            operand_slots,
             generated_names: std::collections::HashSet::new(),
             declared_names,
             shared_bindings,

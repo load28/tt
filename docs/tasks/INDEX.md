@@ -600,6 +600,7 @@
 | TASK-592 | Draw diagnostic carets at each character's display width | Complete | 2026-09-30 | 2026-09-30 | [TASK-592](./TASK-592-caret-display-width.md) |
 | TASK-593 | Run earlier declarators before a later declarator's value | Complete | 2026-09-30 | 2026-09-30 | [TASK-593](./TASK-593-declarator-order-and-scope.md) |
 | TASK-594 | Reject a statement value in an enum member initializer | Complete | 2026-09-30 | 2026-09-30 | [TASK-594](./TASK-594-enum-member-initializer-placement.md) |
+| TASK-595 | Test a conditional operation's condition where it is evaluated | Complete | 2026-09-30 | 2026-09-30 | [TASK-595](./TASK-595-conditional-operation-narrowing.md) |
 | TASK-602 | Recover an unfinished `if let` only as far as TypeScript reads its statement | Complete | 2026-09-30 | 2026-09-30 | [TASK-602](./TASK-602-stray-if-let-stays-local.md) |
 | TASK-603 | Answer signature help for the source call, never for a generated one | Complete | 2026-09-30 | 2026-09-30 | [TASK-603](./TASK-603-signature-help-for-source-calls.md) |
 | TASK-604 | Keep a `try`'s signature help the same while the file has a syntax error | Complete | 2026-09-30 | 2026-09-30 | [TASK-604](./TASK-604-try-signature-help-with-syntax-errors.md) |

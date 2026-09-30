@@ -510,3 +510,39 @@ fn a_later_declarator_reading_an_earlier_one_checks_clean() {
     let out = check(&dir);
     assert!(!out.contains("error"), "{out}");
 }
+
+/// TASK-595: a value under `? :`, `&&`, or `||` sees the narrowing its
+/// operation's condition gives, as in TypeScript: the lowering tests the
+/// condition where it evaluates it, so the references it narrows stay
+/// narrowed in the value.
+#[test]
+fn a_value_under_a_conditional_operation_keeps_the_conditions_narrowing() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/narrowing.tt",
+        "import type { TResult } from \"@tt/std\";\n\
+         variant O { A(n: number), B }\n\
+         declare function g(n: number): TResult<number, string>;\n\
+         export function h(o: O, cfg: { name?: string }) {\n\
+         \x20 return cfg.name ? match (o) { A(n) => cfg.name.slice(n), B => cfg.name } : \"anon\";\n\
+         }\n\
+         export function k(o: O, s: string | null) {\n\
+         \x20 return s && match (o) { A(n) => s.charAt(n), B => s };\n\
+         }\n\
+         export function l(o: O, init: { v: number } | undefined) {\n\
+         \x20 let u = init;\n\
+         \x20 u = init;\n\
+         \x20 const a = u ? match (o) { A(n) => u.v + n, B => u.v } : 0;\n\
+         \x20 const b = !u || match (o) { A(n) => u.v > n, B => u.v > 0 };\n\
+         \x20 const c = u !== undefined && u.v > 0 && match (o) { A(n) => u.v + n, B => 1 };\n\
+         \x20 return [a, b, c];\n\
+         }\n\
+         export function m(s: string | null) {\n\
+         \x20 return result { const x = s && try g(s.length); return x; };\n\
+         }\n\
+         export const e = (Math.random() > 0.5 ? { k: 1 } : null) && match (O.B as O) { A(n) => n, B => 0 };\n\
+         export const f = (Math.random() > 0.5 ? [] : null) || match (O.B as O) { A(n) => n, B => 0 };\n",
+    )]);
+    let out = check(&dir);
+    assert!(!out.contains("error"), "{out}");
+}

@@ -390,90 +390,48 @@ impl<'a> Emitter<'a> {
             .set(self.conditional_region_depth.get() + 1);
         let result = self.value_slot_name(operation.result);
         let mut out = Rope::new();
-        // A call skipped at its callee's member link reads the callee only
-        // past the receiver's test, as the chain does.
-        let mut guarded_callee = Rope::new();
-        let condition = match (&operation.kind, &operation.condition) {
-            (
-                PlannedConditionalKind::OptionalCall {
-                    test: OptionalCallTest::Receiver,
-                    ..
-                },
-                PlannedEvaluationInput::Source {
-                    source,
-                    target,
-                    mode: EvaluationInputMode::MemberReference,
-                    receiver: Some(receiver),
-                    key,
-                },
-            ) => {
-                // The receiver is read before its test and the key once the
-                // test passed; the member is read by the call itself
-                // (`member_callee`).
-                if captured.insert(*target) {
-                    self.capture_planned_receiver(receiver, captured, &mut out);
-                    if let Some(key) = key {
-                        self.capture_planned_receiver(key, captured, &mut guarded_callee);
-                    }
-                }
-                member_callee(self.source, *source, [Some(*receiver), *key], |slot| {
-                    self.value_slot_name(slot)
-                })
-            }
-            _ => self.emit_condition_capture(&operation.condition, captured, &mut out),
-        };
         let deliver_value = |expr: ExprId, target: &str| {
             self.emit_continued_expr(expr, &ValueContinuation::assign(target))
                 .unwrap_or_else(|| {
                     crate::ice::bug!("conditional operation value is not structurally emit-able")
                 })
         };
-        let assign_condition = |out: &mut Rope<'a>| {
-            out.push_lit(format!("{result} = {condition};"));
-        };
         match &operation.kind {
-            PlannedConditionalKind::LogicalAnd => {
+            PlannedConditionalKind::LogicalAnd
+            | PlannedConditionalKind::LogicalOr
+            | PlannedConditionalKind::Nullish => {
                 let value = operation.values[0];
-                out.push_lit(format!("if ({condition}) {{"));
-                out.push_break(1);
-                out.append(Rope::indented(
+                let (test, left) = self.condition_operand(&operation.condition, captured, &mut out);
+                let nullish = matches!(operation.kind, PlannedConditionalKind::Nullish);
+                if nullish {
+                    out.push_lit("if ((");
+                    out.append(test);
+                    out.push_lit(") == null) {");
+                } else {
+                    out.push_lit("if (");
+                    out.append(test);
+                    out.push_lit(") {");
+                }
+                let mut assign_left = Rope::new();
+                assign_left.push_lit(format!("{result} = "));
+                assign_left.append(left);
+                assign_left.push_lit(";");
+                let active = Rope::indented(
                     1,
                     self.emit_conditional_active_branch(operation, value, result, captured),
-                ));
+                );
+                let (first, second) = if matches!(operation.kind, PlannedConditionalKind::LogicalOr)
+                {
+                    (Rope::indented(1, assign_left), active)
+                } else {
+                    (active, Rope::indented(1, assign_left))
+                };
+                out.push_break(1);
+                out.append(first);
                 out.push_break(0);
                 out.push_lit("} else {");
                 out.push_break(1);
-                assign_condition(&mut out);
-                out.push_break(0);
-                out.push_lit("}");
-            }
-            PlannedConditionalKind::LogicalOr => {
-                let value = operation.values[0];
-                out.push_lit(format!("if ({condition}) {{"));
-                out.push_break(1);
-                assign_condition(&mut out);
-                out.push_break(0);
-                out.push_lit("} else {");
-                out.push_break(1);
-                out.append(Rope::indented(
-                    1,
-                    self.emit_conditional_active_branch(operation, value, result, captured),
-                ));
-                out.push_break(0);
-                out.push_lit("}");
-            }
-            PlannedConditionalKind::Nullish => {
-                let value = operation.values[0];
-                out.push_lit(format!("if ({condition} == null) {{"));
-                out.push_break(1);
-                out.append(Rope::indented(
-                    1,
-                    self.emit_conditional_active_branch(operation, value, result, captured),
-                ));
-                out.push_break(0);
-                out.push_lit("} else {");
-                out.push_break(1);
-                assign_condition(&mut out);
+                out.append(second);
                 out.push_break(0);
                 out.push_lit("}");
             }
@@ -481,6 +439,7 @@ impl<'a> Emitter<'a> {
                 consequent,
                 alternate,
             } => {
+                let test = self.condition_test(&operation.condition, captured);
                 let mut branch = |out: &mut Rope<'a>, content: &PlannedBranch| match content {
                     PlannedBranch::Value(expr) => {
                         out.append(Rope::indented(
@@ -496,7 +455,9 @@ impl<'a> Emitter<'a> {
                         out.push_lit(";");
                     }
                 };
-                out.push_lit(format!("if ({condition}) {{"));
+                out.push_lit("if (");
+                out.append(test);
+                out.push_lit(") {");
                 out.push_break(1);
                 branch(&mut out, consequent);
                 out.push_break(0);
@@ -511,6 +472,38 @@ impl<'a> Emitter<'a> {
                 type_args,
                 test,
             } => {
+                // A call skipped at its callee's member link reads the callee only
+                // past the receiver's test, as the chain does.
+                let mut guarded_callee = Rope::new();
+                let condition = match (&operation.kind, &operation.condition) {
+                    (
+                        PlannedConditionalKind::OptionalCall {
+                            test: OptionalCallTest::Receiver,
+                            ..
+                        },
+                        PlannedEvaluationInput::Source {
+                            source,
+                            target,
+                            mode: EvaluationInputMode::MemberReference,
+                            receiver: Some(receiver),
+                            key,
+                        },
+                    ) => {
+                        // The receiver is read before its test and the key once the
+                        // test passed; the member is read by the call itself
+                        // (`member_callee`).
+                        if captured.insert(*target) {
+                            self.capture_planned_receiver(receiver, captured, &mut out);
+                            if let Some(key) = key {
+                                self.capture_planned_receiver(key, captured, &mut guarded_callee);
+                            }
+                        }
+                        member_callee(self.source, *source, [Some(*receiver), *key], |slot| {
+                            self.value_slot_name(slot)
+                        })
+                    }
+                    _ => self.emit_condition_capture(&operation.condition, captured, &mut out),
+                };
                 let receiver = match &operation.condition {
                     PlannedEvaluationInput::Source {
                         mode: EvaluationInputMode::MemberReference,
@@ -1192,6 +1185,73 @@ impl<'a> Emitter<'a> {
                 }
                 self.value_slot_name(*target).to_owned()
             }
+        }
+    }
+
+    fn condition_test(
+        &self,
+        condition: &PlannedEvaluationInput,
+        captured: &HashSet<crate::evaluation_ir::ValueSlotId>,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        match condition {
+            PlannedEvaluationInput::Slot { slot, .. } => {
+                out.push_lit(self.value_slot_name(*slot).to_owned());
+            }
+            PlannedEvaluationInput::Source { target, .. } if captured.contains(target) => {
+                out.push_lit(self.value_slot_name(*target).to_owned());
+            }
+            PlannedEvaluationInput::Source {
+                mode: EvaluationInputMode::MemberReference,
+                ..
+            } => crate::ice::bug!("a condition was planned as a member callee"),
+            PlannedEvaluationInput::Source { source, .. } => {
+                out.append(self.captured_source(*source, captured));
+            }
+            PlannedEvaluationInput::Stable { source, .. } => {
+                out.push_lit("(");
+                out.push_src(&self.source[source.start..source.end], source.start);
+                out.push_lit(")");
+            }
+        }
+        out
+    }
+
+    fn condition_operand(
+        &self,
+        condition: &PlannedEvaluationInput,
+        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+        out: &mut Rope<'a>,
+    ) -> (Rope<'a>, Rope<'a>) {
+        match condition {
+            PlannedEvaluationInput::Source {
+                source,
+                target,
+                mode,
+                ..
+            } if !captured.contains(target) => {
+                if *mode == EvaluationInputMode::MemberReference {
+                    crate::ice::bug!("a condition was planned as a member callee")
+                }
+                let name = self.value_slot_name(*target);
+                out.push_operand_declaration(name);
+                out.push_break(0);
+                let mut test = Rope::new();
+                test.push_lit(format!("{name} = "));
+                push_grouped(
+                    &mut test,
+                    self.captured_source(*source, captured),
+                    self.source_kind,
+                );
+                captured.insert(*target);
+                let mut left = Rope::new();
+                left.push_lit(name.to_owned());
+                (test, left)
+            }
+            _ => (
+                self.condition_test(condition, captured),
+                self.condition_test(condition, captured),
+            ),
         }
     }
 

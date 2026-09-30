@@ -140,6 +140,7 @@ pub(crate) struct ContextualSlotQuery {
     /// `const` holding a value on its way to detached storage. Like every
     /// slot, never named by another slot's annotation.
     pub settled: bool,
+    pub operand: bool,
 }
 
 /// A type expressed in the lexical scope of the generated declaration.

@@ -201,6 +201,7 @@ pub struct MappedEmit {
     /// Those of [`MappedEmit::contextual_slots`] whose storage holds the
     /// index of the arm a dispatch selected, not a value of the source.
     pub(crate) selector_slots: Vec<usize>,
+    pub(crate) operand_slots: Vec<usize>,
     pub(crate) generated_names: std::collections::HashSet<String>,
     pub(crate) declared_names: Vec<DeclaredName>,
     pub(crate) shared_bindings: Vec<SharedBinding>,
@@ -334,6 +335,7 @@ pub(crate) fn emit_mapped_parsed(
         result_return_temps: flat.result_return_temps,
         contextual_slots: flat.contextual_slots,
         selector_slots: flat.selector_slots,
+        operand_slots: flat.operand_slots,
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,

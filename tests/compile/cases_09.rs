@@ -673,7 +673,8 @@ fn a_capture_never_escapes_a_generated_conditional_region() {
     let source = "declare const flag: boolean;\ndeclare function id(v: number): number;\nexport const short = flag && id(match (flag) { true => 1, _ => 0 });\n";
     let out = ok(source);
     assert!(!out.contains("$tt_expr"), "{out}");
-    assert!(out.contains("if ($tt_v2)"), "{out}");
+    assert!(out.contains("let $tt_v2: boolean;\nif ($tt_v2 = flag) {"), "{out}");
+    assert!(out.contains("$tt_v3 = $tt_v2;"), "{out}");
     assert!(out.contains("$tt_v3 = $tt_v1($tt_v0);"), "{out}");
 }
 
@@ -725,8 +726,9 @@ fn a_conditional_operation_lowers_as_one_region() {
     let out = ok(
         "declare const flag: boolean;\nexport const a = flag && match (1) { 1 => 1, _ => 0 };\n",
     );
-    assert!(out.contains("if ($tt_v1) {"), "{out}");
-    assert!(out.contains("$tt_v2 = $tt_v1;"), "{out}");
+    assert!(out.contains("let $tt_v1: boolean;\nif ($tt_v1 = flag) {"), "{out}");
+    assert!(out.contains("$tt_v2 = $tt_v0;"), "{out}");
+    assert!(out.contains("} else {\n  $tt_v2 = $tt_v1;\n}"), "{out}");
     assert!(out.contains("export const a = $tt_v2;"), "{out}");
     assert!(!out.contains("$tt_expr"), "{out}");
     assert!(!out.contains("&&"), "{out}");

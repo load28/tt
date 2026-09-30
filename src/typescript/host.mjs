@@ -764,6 +764,19 @@ async function main() {
           return node && denotes(checker, node, type, declaration, generated, { SyntaxKind, SymbolFlags, TypeFlags })
             ? node : undefined;
         };
+        if (slot.operand) {
+          if (!job.inferJoinTypes || declaration.initializer) continue;
+          const incoming = assignments.filter(assignment =>
+            assignment.left.text === declaration.name.text &&
+            checker.getSymbolAtLocation(assignment.left)?.id === symbol.id);
+          if (incoming.length !== 1) continue;
+          const type = checker.getWidenedType(checker.getTypeAtLocation(incoming[0].right));
+          if ((type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType()) continue;
+          const node = annotation(type);
+          if (!node || (writesAny(node) && readsPending(incoming[0].right, symbol.id))) continue;
+          out.contextualSlots.push({ index, inferred: true, annotation: project.emitter.printNode(node) });
+          continue;
+        }
         let expected;
         let ambiguous = false;
         for (const identifier of identifiers) {

@@ -382,6 +382,7 @@ fn job_json(query: &Query) -> serde_json::Value {
                 "module": v.module,
                 "declarationEnd": v.declaration_end,
                 "settled": v.settled,
+                "operand": v.operand,
             }))
             .collect::<Vec<_>>(),
         "contextualOnly": query.contextual_only,
@@ -676,6 +677,7 @@ const result = consume(slot);
                 module,
                 declaration_end: text.find("let slot;").unwrap() + "let slot".len(),
                 settled: false,
+                operand: false,
             }],
             ..Query::default()
         };
