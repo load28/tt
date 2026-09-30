@@ -104,6 +104,10 @@ template's placeholders.
   `node scripts/check-baselines --tracking <dir>` ("95 compared, none
   unused"); `./scripts/ci agents` passed (warnings: rolldown not on PATH,
   doctor reports the checkout not ready, both environmental).
+- [x] The same gate after merging `claude/ecstatic-dijkstra-qw5pf9` at
+  `4e5b766` (TASK-629 to TASK-633): fmt and clippy clean; `cargo test`
+  43 binaries, 1745 passed, 0 failed, no `SKIP`; "95 compared, none
+  unused"; `./scripts/ci agents` passed.
 
 ## Result
 
