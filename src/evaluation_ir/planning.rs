@@ -492,6 +492,9 @@ pub(super) fn target_capability(
     if context.loop_head_declarator {
         return TargetCapability::ExpressionBoundary(Reason::LoopHeadDeclarator);
     }
+    if context.loop_head_binding {
+        return TargetCapability::ExpressionBoundary(Reason::LoopHeadBinding);
+    }
     match context.owner_reach {
         OwnerReach::Same => {}
         OwnerReach::Repeated => {

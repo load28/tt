@@ -527,6 +527,26 @@ reports `match-placement` or `try-placement`, and a `result` block uses the
 expression boundary, which runs in place. A value in the first declarator
 still lowers before the loop.
 
+Before the loop, the first declarator's initializer is evaluated outside
+the scope `ForLoopEvaluation` creates for a `let`/`const` head (TASK-600).
+Its evaluation reads no head binding directly (that is a TDZ error in the
+source too), but a closure it creates captures that scope and reads the
+binding later. So the syntax layer resolves the identifiers the first
+declarator's initializer reads (`program_syntax/scopes.rs`): TypeScript's
+lexical scoping over the projection — parameters, hoisted `var`s,
+block-scoped declarations, `catch` parameters, named function and class
+expressions, and nested loop heads — plus the bindings tt constructs
+declare, which the projection records (`TtBindings`: `match` arm and `if
+let` pattern bindings over their guard and body, let-else and a
+declaration `try` into their block). A reference that resolves to a name
+the head declares gives every value in that initializer
+`EvaluationContext::loop_head_binding`, and the Evaluation IR answers
+`ExpressionBoundary(LoopHeadBinding)`: `match-placement` or
+`try-placement`, and a `result` block runs in place. An assignment in a
+nested destructuring target counts as a reference; a type annotation's
+name is counted as well, which can only reject, never accept wrongly. A
+`var` head binds in the function, so nothing moves out of its scope.
+
 ### 7.10 The condition of a conditional operation (TASK-595)
 
 A conditional operation that holds a value (`c ? v : w`, `l && v`,

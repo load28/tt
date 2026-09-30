@@ -650,6 +650,7 @@ impl EvaluationFile {
             };
             if context.continuation == HostContinuation::ForInitialize
                 && !context.loop_head_declarator
+                && !context.loop_head_binding
             {
                 return Err(EvaluationError::UnsupportedForInitializer { source: *source });
             }

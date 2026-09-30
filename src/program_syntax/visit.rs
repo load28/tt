@@ -33,6 +33,7 @@ impl ParentCollector {
         source_segments: &[ProjectionSourceSegment],
         projection_only_protocol_parents: &[ProjectedSpan],
         arm_blocks: &HashMap<ProjectedSpan, BodyId>,
+        tt_bindings: &projection::TtBindings,
     ) -> Self {
         let expected_identifiers = pending
             .iter()
@@ -67,6 +68,7 @@ impl ParentCollector {
         Self {
             placeholders,
             arm_blocks: arm_blocks.clone(),
+            tt_bindings: tt_bindings.clone(),
             single_return_bodies: HashMap::new(),
             source_start,
             expected_identifiers,
@@ -96,6 +98,30 @@ impl ParentCollector {
         }
     }
 
+    fn loop_head_reads(&self, head: &swc_ecma_ast::ForStmt) -> bool {
+        let Some(swc_ecma_ast::VarDeclOrExpr::VarDecl(declaration)) = &head.init else {
+            return false;
+        };
+        if declaration.kind == swc_ecma_ast::VarDeclKind::Var {
+            return false;
+        }
+        let Some(initializer) = declaration
+            .decls
+            .first()
+            .and_then(|declarator| declarator.init.as_deref())
+        else {
+            return false;
+        };
+        let mut names = Vec::new();
+        for declarator in &declaration.decls {
+            scopes::pattern_names(&declarator.name, &mut names);
+        }
+        let names = names.into_iter().collect();
+        scopes::reads_outer(initializer, &names, &self.tt_bindings, &|position| {
+            self.source_start.byte(position)
+        })
+    }
+
     pub(super) fn record_overlay(&mut self, id: TtNodeId, path: &AstNodePath<'_>) {
         let ambient = path.iter().any(|parent| {
             matches!(parent, swc_ecma_visit::AstParentNodeRef::TsModuleDecl(decl, _) if decl.declare)
@@ -112,11 +138,23 @@ impl ParentCollector {
                 _ => None,
             })
             .collect();
+        let loop_head_reads = path
+            .iter()
+            .rev()
+            .find_map(|parent| match parent {
+                swc_ecma_visit::AstParentNodeRef::ForStmt(
+                    head,
+                    swc_ecma_visit::fields::ForStmtField::Init,
+                ) => Some(*head),
+                _ => None,
+            })
+            .is_some_and(|head| self.loop_head_reads(head));
         if self
             .found
             .insert(
                 id,
                 FoundOverlay {
+                    loop_head_reads,
                     ambient,
                     decorated_classes,
                     parents: path.kinds().to_vec(),
@@ -268,6 +306,7 @@ impl ParentCollector {
                             .function_return_type
                             .map(|span| map_evaluation_span(&self.source_segments, span))
                             .transpose()?,
+                        loop_head_reads: found.loop_head_reads,
                         assertion: found
                             .assertion
                             .map(|span| {

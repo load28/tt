@@ -20,6 +20,7 @@
 mod collector;
 mod projection;
 mod protocol;
+mod scopes;
 mod visit;
 
 #[cfg(test)]
@@ -1018,6 +1019,7 @@ pub(crate) struct EvaluationContext {
     /// declarations without initializers are TypeScript.
     pub(crate) ambient: bool,
     pub(crate) loop_head_declarator: bool,
+    pub(crate) loop_head_binding: bool,
 }
 
 pub(crate) struct OverlayFacts {
@@ -1026,6 +1028,7 @@ pub(crate) struct OverlayFacts {
     pub(crate) function_return_type: Option<SourceSpan>,
     pub(crate) function_return_awaited: bool,
     pub(crate) assertion: Option<Option<SourceSpan>>,
+    pub(crate) loop_head_reads: bool,
     pub(crate) ambient: bool,
     pub(crate) decorated_classes: Vec<usize>,
     pub(crate) value_is_owner: bool,
@@ -1048,6 +1051,7 @@ impl EvaluationContext {
             function_return_type,
             function_return_awaited,
             assertion,
+            loop_head_reads,
             ambient,
             decorated_classes,
             value_is_owner,
@@ -1080,6 +1084,7 @@ impl EvaluationContext {
                 requires_block,
                 ambient,
                 loop_head_declarator: false,
+                loop_head_binding: false,
             };
         }
 
@@ -1119,6 +1124,10 @@ impl EvaluationContext {
             requires_block,
             ambient,
             loop_head_declarator: loop_head_declarator(local_path),
+            loop_head_binding: loop_head_reads
+                && local_path.iter().any(|parent| {
+                    matches!(parent, AstParentKind::ForStmt(fields::ForStmtField::Init))
+                }),
         }
     }
 }

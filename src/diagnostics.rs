@@ -531,8 +531,9 @@ A `try` was written where its propagation could not go anywhere.
 a value only where the TypeScript host can preserve that exit and the
 original evaluation order. It is rejected at module or namespace top level
 and at expression boundaries with no equivalent statement position, such as
-loop headers, a later declarator of a C-style `for` head, parameter
-defaults, class field initializers, enum member initializers, decorators,
+loop headers, a later declarator of a C-style `for` head, a `for` head
+whose `let`/`const` initializer refers to a binding the head declares,
+parameter defaults, class field initializers, enum member initializers, decorators,
 computed member names, and the heritage of a decorated class.
 
 Some functions cannot be a Result scope at all. In a constructor, returning
@@ -826,7 +827,15 @@ head's declarators run in order in the loop's own scope, and statements
 written before the loop would run before the earlier declarators and could
 not see the bindings they declare. Declare the value before the loop, or
 make it the head's first declarator. Outside a loop head, a declaration is
-split before such a declarator, so the declarators before it run first."
+split before such a declarator, so the declarators before it run first.
+
+The first declarator's value runs before the loop as well, so it is
+rejected when the initializer refers to a binding a `let` or `const` head
+declares, such as `f` in `for (let f = match (o) { A => () => f, B => null };
+...)`: before the loop that name denotes an outer binding, or none. A
+parameter, a declaration, or a pattern binding of the same name inside the
+initializer is its own binding, and a `var` head binds in the function, so
+neither is rejected."
             }
             DiagnosticCode::MatchControlCrossing => {
                 r#"A `break`, `continue`, or `yield` in a match arm may target only control flow written inside that arm.

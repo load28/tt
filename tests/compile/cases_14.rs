@@ -767,3 +767,50 @@ fn a_try_in_a_template_interpolation_claims_its_result_block() {
     assert!(!out.contains("result {"), "{out}");
     assert!(out.contains("$tt_t0.value"), "{out}");
 }
+
+#[test]
+fn a_for_head_initializer_that_reads_a_head_binding_is_a_placement_error() {
+    let prelude = "variant O { A(n: number), B }\ndeclare const o: O;\ntype R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\ndeclare function r(): R;\ndeclare function id<T>(v: T): T;\n";
+    let rejected: &[(&str, DiagnosticCode)] = &[
+        (
+            "for (let g = match (o) { A(n) => () => g, B => null }; g !== null; g = null) {}",
+            DiagnosticCode::MatchPlacement,
+        ),
+        (
+            "for (let h = id(() => h) && match (o) { A(n) => n, B => 0 }; !h; h = 1) {}",
+            DiagnosticCode::MatchPlacement,
+        ),
+        (
+            "for (const [a, b] = match (o) { A(n) => [n, () => b], B => [0, null] }; ; ) break;",
+            DiagnosticCode::MatchPlacement,
+        ),
+        (
+            "for (let w = id(() => w) && try r(); !w; w = 1) {}",
+            DiagnosticCode::TryPlacement,
+        ),
+    ];
+    for (head, code) in rejected {
+        let source = format!("{prelude}export function f(): R {{ {head} return r(); }}\n");
+        let diagnostics = ttc::analyze(&source, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{head}: {diagnostics:#?}");
+        assert_eq!(diagnostics[0].code, *code, "{head}: {diagnostics:#?}");
+        assert!(
+            diagnostics[0]
+                .message
+                .contains("refers to a binding the head declares"),
+            "{head}: {diagnostics:#?}"
+        );
+    }
+    let accepted = [
+        "for (let n = match (o) { A(n) => n, B => 0 }; n < 3; n++) {}",
+        "for (let k = match (o) { A(n) => (k: number) => k + n, B => null }; k; k = null) {}",
+        "for (var v = match (o) { A(n) => () => v, B => null }; v; v = null) {}",
+        "for (let q = match (o) { A(n) => { const q = n; return () => q; }, B => null }; q; q = null) {}",
+    ];
+    for head in accepted {
+        let out = ok(&format!(
+            "{prelude}export function f(): R {{ {head} return r(); }}\n"
+        ));
+        assert!(!out.contains("match ("), "{head}: {out}");
+    }
+}

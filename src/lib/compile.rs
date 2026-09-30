@@ -383,6 +383,10 @@ fn match_placement_message(
             "`match` cannot be lowered from a later declarator of a `for` loop head — its statements would run before the earlier declarators and outside the bindings the head declares",
             "move the declaration before the loop, or make this declarator the first one",
         ),
+        (_, Reason::LoopHeadBinding) => (
+            "`match` cannot be lowered from a `for` loop head whose initializer refers to a binding the head declares — its statements would run before the loop, where that name does not denote the head's binding",
+            "declare the binding before the loop, or compute the value in the loop body",
+        ),
         (_, Reason::ConditionalInOwner | Reason::ConditionalOperationNotStructurable) => (
             "`match` cannot be lowered from this conditional expression position without evaluating a skipped branch",
             help,
@@ -474,6 +478,12 @@ fn try_placement_message(
              propagation would run before the earlier declarators and outside the bindings \
              the head declares",
             "move the declaration before the loop, or make this declarator the first one",
+        ),
+        (_, Reason::LoopHeadBinding) => (
+            "`try` cannot be used in a `for` loop head whose initializer refers to a binding \
+             the head declares — its propagation would run before the loop, where that name \
+             does not denote the head's binding",
+            "declare the binding before the loop, or compute the value in the loop body",
         ),
         (EvaluationOwner::ParameterInitializer, Reason::OwnerTakesNoStatements) => (
             "`try` cannot be used in a parameter initializer — this TypeScript control-flow \

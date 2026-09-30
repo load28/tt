@@ -129,6 +129,7 @@ fn parse_failure_at(
 pub(super) struct ParentCollector {
     pub(super) placeholders: HashSet<ProjectedSpan>,
     pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
+    pub(super) tt_bindings: projection::TtBindings,
     pub(super) single_return_bodies: HashMap<ProjectedSpan, BodyId>,
     pub(super) source_start: HostOrigin,
     pub(super) expected_identifiers: HashMap<ProjectedSpan, TtNodeId>,
@@ -178,6 +179,7 @@ pub(super) struct FoundOverlay {
     pub(super) function_target: Option<EvaluationOwner>,
     pub(super) contextual_type: Option<ProjectedSpan>,
     pub(super) assertion: Option<Option<ProjectedSpan>>,
+    pub(super) loop_head_reads: bool,
     pub(super) function_return_type: Option<ProjectedSpan>,
     pub(super) function_return_awaited: bool,
 }
