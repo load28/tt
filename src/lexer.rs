@@ -791,9 +791,7 @@ fn scan_jsx_opening(
         i = facts::type_arguments_end(src, i, end)?;
     }
     loop {
-        while i < end && is_ws(src[i]) {
-            i += 1;
-        }
+        i = skip_trivia(src, i, end).0;
         match (at(src, i, end), at(src, i + 1, end)) {
             (Some(b'/'), Some(b'>')) => {
                 return Some(JsxOpening {
@@ -821,14 +819,10 @@ fn scan_jsx_opening(
             (Some(b), _) if b == b'"' || b == b'\'' => i = scan_string(src, i, end),
             (Some(b), _) if is_jsx_name_start(b) => {
                 i = scan_jsx_name(src, i, end)?;
-                while i < end && is_ws(src[i]) {
-                    i += 1;
-                }
+                i = skip_trivia(src, i, end).0;
                 if at(src, i, end) == Some(b'=') {
                     i += 1;
-                    while i < end && is_ws(src[i]) {
-                        i += 1;
-                    }
+                    i = skip_trivia(src, i, end).0;
                     match at(src, i, end)? {
                         b'"' | b'\'' => i = scan_string(src, i, end),
                         b'{' => {
@@ -862,9 +856,7 @@ fn scan_jsx_closing(src: &[u8], start: usize, end: usize, opening: Option<&str>)
             if &src[name_start..i] != opening.as_bytes() {
                 return None;
             }
-            while i < end && is_ws(src[i]) {
-                i += 1;
-            }
+            i = skip_trivia(src, i, end).0;
             (at(src, i, end) == Some(b'>')).then_some(i + 1)
         }
     }

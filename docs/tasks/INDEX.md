@@ -648,7 +648,8 @@
 | TASK-640 | Leave the rules TypeScript checks after parsing to TypeScript | Complete | 2026-09-30 | 2026-09-30 | [TASK-640](./TASK-640-verbatim-errors-left-to-typescript.md) |
 | TASK-641 | Read five TypeScript forms the vendored swc parser rejected | Complete | 2026-09-30 | 2026-09-30 | [TASK-641](./TASK-641-swc-typescript-grammar-gaps.md) |
 | TASK-642 | Give a match that mixes tag and literal patterns no single-discriminant dispatch | Complete | 2026-09-30 | 2026-09-30 | [TASK-642](./TASK-642-mixed-pattern-match-dispatch.md) |
+| TASK-643 | Read a comment inside a JSX tag as trivia in the lexer facts | Complete | 2026-09-30 | 2026-09-30 | [TASK-643](./TASK-643-comments-inside-jsx-tags.md) |
 
 ## Next task number
 
-**TASK-643**
+**TASK-644**

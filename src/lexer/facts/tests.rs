@@ -367,6 +367,17 @@ fn the_machine_reads_jsx_containers_as_swc_does() {
 }
 
 #[test]
+fn a_comment_inside_a_jsx_tag_is_trivia() {
+    for case in [
+        "export const view = <Button /*c*/label=\"ok\" />;\nfoo()\n",
+        "const a = <div // line\n  id=/*v*/\"x\" /*end*/>{y}</div /*close*/>\nbar()\n",
+        "const b = <i a={1}/**/b /* \u{2028} */ />\nbaz()\n",
+    ] {
+        assert_agrees(case, SourceKind::Tsx);
+    }
+}
+
+#[test]
 fn line_breaks_are_every_ecma_line_terminator() {
     let src = "a\rb\u{2028}c\u{2029}d\r\ne /* \u{2028} */ f // x\rg";
     let tokens = lex_with_kind(src, 0, src.len(), SourceKind::TypeScript);

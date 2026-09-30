@@ -5,6 +5,13 @@ hover: 3:33-3:38 "label"
     (property) label: string
 ttSymbol: null
 
+=== hover /*attribute*/ plainTsx.ttx:6:29 ===
+  | export const view = <Button label="ok" />;
+  |                             ^ /*attribute*/
+hover: 6:29-6:34 "label"
+    (property) label: string
+ttSymbol: null
+
 === completions /*member*/ plainTsx.ttx:4:31 ===
   |   return <button label={props.label} onClick={() => console.log(props.label)} />;
   |                               ^ /*member*/
@@ -50,6 +57,7 @@ diagnostics: 2 diagnostic(s)
 
 === parity with the TypeScript twin ===
 hover prop: same
+hover attribute: same
 completions member: same
 references prop: same
 semanticTokens plainTsx.ttx: same
