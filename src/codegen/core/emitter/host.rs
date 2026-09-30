@@ -371,12 +371,25 @@ impl<'a> Emitter<'a> {
                     ..
                 },
                 PlannedEvaluationInput::Source {
+                    source,
+                    target,
+                    mode: EvaluationInputMode::MemberReference,
                     receiver: Some(receiver),
-                    ..
+                    key,
                 },
             ) => {
-                self.capture_planned_receiver(receiver, captured, &mut out);
-                self.emit_condition_capture(&operation.condition, captured, &mut guarded_callee)
+                // The receiver is read before its test and the key once the
+                // test passed; the member is read by the call itself
+                // (`member_callee`).
+                if captured.insert(*target) {
+                    self.capture_planned_receiver(receiver, captured, &mut out);
+                    if let Some(key) = key {
+                        self.capture_planned_receiver(key, captured, &mut guarded_callee);
+                    }
+                }
+                member_callee(self.source, *source, [Some(*receiver), *key], |slot| {
+                    self.value_slot_name(slot)
+                })
             }
             _ => self.emit_condition_capture(&operation.condition, captured, &mut out),
         };
@@ -480,6 +493,10 @@ impl<'a> Emitter<'a> {
                     ),
                     _ => None,
                 };
+                // Only a callee the chain tests is a captured value; it is
+                // called through its receiver. Every other callee is the
+                // member call itself.
+                let through = receiver.filter(|_| *test == OptionalCallTest::Callee);
                 let tested = match test {
                     OptionalCallTest::Callee => condition.clone(),
                     OptionalCallTest::Receiver => self.planned_receiver_text(
@@ -500,7 +517,7 @@ impl<'a> Emitter<'a> {
                     && type_args.is_none()
                     && completable_decision_arms(self.core, *expr, &self.exits_for_expr(*expr))
                 {
-                    let prefix = match receiver {
+                    let prefix = match through {
                         Some(receiver) => format!(
                             "{condition}.call({}, ",
                             self.planned_receiver_text(&receiver)
@@ -567,7 +584,7 @@ impl<'a> Emitter<'a> {
                 if let Some(span) = type_args {
                     body.push_src(&self.source[span.start..span.end], span.start);
                 }
-                match receiver {
+                match through {
                     Some(receiver) => {
                         body.push_lit(".call(");
                         self.push_planned_receiver(&receiver, false, &mut body);
@@ -781,7 +798,10 @@ impl<'a> Emitter<'a> {
                         parts.push((comma, Part::Read(String::new())));
                     }
                 } else {
-                    parts.push((*dependency, Part::Read(self.captured_reading(step, input))));
+                    parts.push((
+                        *dependency,
+                        Part::Piped(self.captured_reading_rope(step, input)),
+                    ));
                 }
             }
         }
@@ -862,6 +882,42 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    /// [`Self::captured_reading`], with the authored text of a member
+    /// callee read at its call kept as mapped source.
+    fn captured_reading_rope(
+        &self,
+        step: &PlannedEvaluationStep,
+        input: &PlannedEvaluationInput,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        match input {
+            PlannedEvaluationInput::Source {
+                source,
+                mode: EvaluationInputMode::MemberReference,
+                receiver,
+                key,
+                ..
+            } if !callee_tested_step(step) => {
+                let mut cursor = source.start;
+                for part in [*receiver, *key].into_iter().flatten() {
+                    let PlannedReceiver::Captured { source: at, slot } = part else {
+                        continue;
+                    };
+                    if cursor < at.start {
+                        out.push_src(&self.source[cursor..at.start], cursor);
+                    }
+                    out.push_lit(self.value_slot_name(slot).to_owned());
+                    cursor = at.end;
+                }
+                if cursor < source.end {
+                    out.push_src(&self.source[cursor..source.end], cursor);
+                }
+            }
+            _ => out.push_lit(self.captured_reading(step, input)),
+        }
+        out
+    }
+
     /// The text that reads a captured input where its source stood: its
     /// slot, or, for a method, the method bound to its receiver
     /// (`bound_callee`).
@@ -872,13 +928,15 @@ impl<'a> Emitter<'a> {
     ) -> String {
         match input {
             PlannedEvaluationInput::Source {
-                target,
+                source,
                 mode: EvaluationInputMode::MemberReference,
-                receiver: Some(receiver),
+                receiver,
+                key,
                 ..
-            } if !optional_call_step(step) => {
-                let slot = self.value_slot_name(*target);
-                format!("{slot}.bind({})", self.planned_receiver_text(receiver))
+            } if !callee_tested_step(step) => {
+                member_callee(self.source, *source, [*receiver, *key], |slot| {
+                    self.value_slot_name(slot)
+                })
             }
             PlannedEvaluationInput::Source { target, .. } => {
                 self.value_slot_name(*target).to_owned()
@@ -984,8 +1042,7 @@ impl<'a> Emitter<'a> {
                     (discarded_operand_comma(self.source, *source), Rope::new()),
                 ],
                 PlannedEvaluationInput::Source { source, .. } => {
-                    let mut rendered = Rope::new();
-                    rendered.push_lit(self.captured_reading(step, input));
+                    let rendered = self.captured_reading_rope(step, input);
                     vec![(*source, rendered)]
                 }
                 PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => {
@@ -1052,9 +1109,10 @@ impl<'a> Emitter<'a> {
     }
 
     /// Captures the condition (or callee) of a conditional operation and
-    /// returns the name the region tests and calls. A member callee keeps
-    /// its receiver in a slot of its own — the rebuilt call goes through
-    /// `.call(receiver, ...)`, so no `.bind` is written.
+    /// returns the name the region tests and calls. A member callee an
+    /// optional call tests keeps its receiver in a slot of its own — the
+    /// rebuilt call goes through `.call(receiver, ...)`, so no `.bind` is
+    /// written.
     pub(super) fn emit_condition_capture(
         &self,
         condition: &PlannedEvaluationInput,
@@ -1073,6 +1131,7 @@ impl<'a> Emitter<'a> {
                 target,
                 receiver: Some(receiver),
                 mode: EvaluationInputMode::MemberReference,
+                ..
             } => {
                 if captured.insert(*target) {
                     let receiver_source = self.capture_planned_receiver(receiver, captured, out);
@@ -1247,6 +1306,7 @@ impl<'a> Emitter<'a> {
                 mode,
                 target,
                 receiver,
+                key,
             } = input
             else {
                 continue;
@@ -1254,17 +1314,29 @@ impl<'a> Emitter<'a> {
             if !captured.insert(*target) {
                 continue;
             }
-            if *mode == EvaluationInputMode::MemberReference {
+            if *mode == EvaluationInputMode::MemberReference && !callee_tested_step(step) {
+                // The reference's parts run before the arguments; the member
+                // is read at the call (`member_callee`). A receiver an
+                // optional call tests is read before its test, and a key
+                // only once the test passed, as the chain evaluates them.
+                if let Some(receiver) = receiver {
+                    self.capture_planned_receiver(receiver, captured, &mut prefix);
+                }
+                if let Some(key) = key {
+                    let at = if receiver_test && index == 0 {
+                        &mut guarded
+                    } else {
+                        &mut prefix
+                    };
+                    self.capture_planned_receiver(key, captured, at);
+                }
+            } else if *mode == EvaluationInputMode::MemberReference {
                 let receiver = receiver
                     .unwrap_or_else(|| crate::ice::bug!("member reference has no receiver"));
                 let receiver_source =
                     self.capture_planned_receiver(&receiver, captured, &mut prefix);
                 let mut callee = Rope::new();
-                callee.push_lit(format!(
-                    "{} {} = (",
-                    if optional_reference { "let" } else { "const" },
-                    self.value_slot_name(*target)
-                ));
+                callee.push_lit(format!("let {} = (", self.value_slot_name(*target)));
                 if source.start < receiver_source.start {
                     callee.append(self.captured_source(
                         SourceSpan {
@@ -1284,28 +1356,18 @@ impl<'a> Emitter<'a> {
                         captured,
                     ));
                 }
-                if optional_reference {
-                    let target_name = self.value_slot_name(*target);
-                    callee.push_lit(");");
-                    callee.push_break(0);
-                    callee.push_lit(format!("if ({target_name} != null) {{"));
-                    callee.push_break(1);
-                    callee.push_lit(format!("{target_name} = {target_name}.bind("));
-                    self.push_planned_receiver(&receiver, false, &mut callee);
-                    callee.push_lit(");");
-                    callee.push_break(0);
-                    callee.push_lit("}");
-                    callee.push_break(0);
-                } else {
-                    // The call binds the method (`bound_callee`).
-                    callee.push_lit(");");
-                    callee.push_break(0);
-                }
-                if receiver_test && index == 0 {
-                    guarded.append(callee);
-                } else {
-                    prefix.append(callee);
-                }
+                let target_name = self.value_slot_name(*target);
+                callee.push_lit(");");
+                callee.push_break(0);
+                callee.push_lit(format!("if ({target_name} != null) {{"));
+                callee.push_break(1);
+                callee.push_lit(format!("{target_name} = {target_name}.bind("));
+                self.push_planned_receiver(&receiver, false, &mut callee);
+                callee.push_lit(");");
+                callee.push_break(0);
+                callee.push_lit("}");
+                callee.push_break(0);
+                prefix.append(callee);
             } else {
                 if let EvaluationInputMode::CompoundAssignmentTarget { .. } = mode {
                     prefix.push_lit(format!("let {} = (", self.value_slot_name(*target)));

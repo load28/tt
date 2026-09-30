@@ -605,9 +605,11 @@ const nested = match (E.A(5)) {
 console.log(events.join(","));
 console.log(value, block, nested);
 "#);
+    // TASK-573: the method is read by the call: after the arguments the
+    // prelude evaluates, before those still written in the call.
     assert_eq!(
         lines,
-        ["callee,before,subject,after,call:true:1:2:3", "2 8 6",]
+        ["before,subject,callee,after,call:true:1:2:3", "2 8 6",]
     );
 }
 
@@ -709,7 +711,9 @@ console.log(present, missing, tagged);
     assert_eq!(
         lines,
         [
-            "method,subject,call:true:2,tag,subject,tag-call:true:4",
+            // TASK-573: an optional call tested at its callee reads the
+            // method for the test; a tag is read by the tagged call.
+            "method,subject,call:true:2,subject,tag,tag-call:true:4",
             "2 undefined value:4",
         ]
     );

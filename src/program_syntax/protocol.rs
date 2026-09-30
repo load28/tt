@@ -296,7 +296,7 @@ pub(super) fn protocol_step(
             parent,
             callee,
             callee_mode,
-            callee_receiver,
+            callee_reference,
             arguments,
             type_args,
             optional,
@@ -328,7 +328,7 @@ pub(super) fn protocol_step(
             let inputs = callee
                 .iter()
                 .copied()
-                .map(|callee| (callee, *callee_mode, *callee_receiver, Effects::ANY))
+                .map(|callee| (callee, *callee_mode, *callee_reference, Effects::ANY))
                 .chain(arguments[..position].iter().map(|(argument, _, effects)| {
                     (*argument, EvaluationInputMode::Value, None, *effects)
                 }))
@@ -399,7 +399,7 @@ pub(super) fn protocol_step(
             parent,
             tag,
             tag_mode,
-            tag_receiver,
+            tag_reference,
             expressions,
         } => {
             let Some(position) = expressions
@@ -410,7 +410,7 @@ pub(super) fn protocol_step(
             };
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
-            let inputs = std::iter::once((*tag, *tag_mode, *tag_receiver, Effects::ANY))
+            let inputs = std::iter::once((*tag, *tag_mode, *tag_reference, Effects::ANY))
                 .chain(
                     expressions[..position]
                         .iter()
@@ -511,15 +511,23 @@ pub(super) fn protocol_step(
     };
     let inputs = inputs
         .into_iter()
-        .map(|(source, mode, receiver, effects)| {
+        .map(|(source, mode, reference, effects)| {
+            let reference: ProjectedMemberReference = reference.unwrap_or_default();
+            let part = |part: Option<ProjectedReferencePart>| {
+                part.map(|part| {
+                    Ok(HostReferencePart {
+                        source: map_evaluation_span(segments, part.span)?,
+                        effects: part.effects,
+                        read_at_call: part.read_at_call,
+                    })
+                })
+                .transpose()
+            };
             Ok(HostEvaluationInput {
                 source: map_evaluation_span(segments, source)?,
                 mode,
-                receiver: receiver
-                    .map(|(receiver, effects)| {
-                        Ok((map_evaluation_span(segments, receiver)?, effects))
-                    })
-                    .transpose()?,
+                receiver: part(reference.receiver)?,
+                key: part(reference.key)?,
                 effects: Effects {
                     requires_reference: matches!(
                         mode,
@@ -647,19 +655,29 @@ pub(super) fn optional_call_test(own_link: bool, callee: &swc_ecma_ast::Expr) ->
     }
 }
 
+/// How a call reads its callee, and for a member callee the parts of its
+/// reference evaluated before the arguments: the object, then the computed
+/// key ([`member_reference`], [`super_reference`]).
 pub(super) fn call_callee_mode(
     expression: &swc_ecma_ast::Expr,
-) -> (EvaluationInputMode, Option<&swc_ecma_ast::Expr>) {
+) -> (EvaluationInputMode, [Option<&swc_ecma_ast::Expr>; 2]) {
     use swc_ecma_ast::{Expr as SwcExpr, OptChainBase};
 
     match expression {
-        SwcExpr::Member(member) => (EvaluationInputMode::MemberReference, Some(&member.obj)),
-        SwcExpr::SuperProp(_) => (EvaluationInputMode::MemberReference, None),
+        SwcExpr::Member(member) => (
+            EvaluationInputMode::MemberReference,
+            member_reference(member),
+        ),
+        SwcExpr::SuperProp(member) => (
+            EvaluationInputMode::MemberReference,
+            super_reference(member),
+        ),
         SwcExpr::OptChain(chain) => match &*chain.base {
-            OptChainBase::Member(member) => {
-                (EvaluationInputMode::MemberReference, Some(&member.obj))
-            }
-            OptChainBase::Call(_) => (EvaluationInputMode::DirectReference, None),
+            OptChainBase::Member(member) => (
+                EvaluationInputMode::MemberReference,
+                member_reference(member),
+            ),
+            OptChainBase::Call(_) => (EvaluationInputMode::DirectReference, [None, None]),
         },
         SwcExpr::Paren(paren) => call_callee_mode(&paren.expr),
         SwcExpr::TsAs(expression) => call_callee_mode(&expression.expr),
@@ -667,7 +685,7 @@ pub(super) fn call_callee_mode(
         SwcExpr::TsNonNull(expression) => call_callee_mode(&expression.expr),
         SwcExpr::TsInstantiation(expression) => call_callee_mode(&expression.expr),
         SwcExpr::TsSatisfies(expression) => call_callee_mode(&expression.expr),
-        _ => (EvaluationInputMode::DirectReference, None),
+        _ => (EvaluationInputMode::DirectReference, [None, None]),
     }
 }
 
@@ -689,12 +707,17 @@ pub(super) fn assignment_reference(
     target_reference(target)
         .into_iter()
         .flatten()
-        .filter(|part| {
-            !matches!(
-                peel_parens(part),
-                swc_ecma_ast::Expr::Ident(_) | swc_ecma_ast::Expr::This(_)
-            )
-        })
+        .filter(|part| !simple_copiable(part))
+}
+
+/// An identifier or `this`, possibly parenthesized: what TypeScript's
+/// down-level transforms read again instead of copying
+/// (`isSimpleCopiableExpression`).
+pub(super) fn simple_copiable(expression: &swc_ecma_ast::Expr) -> bool {
+    matches!(
+        peel_parens(expression),
+        swc_ecma_ast::Expr::Ident(_) | swc_ecma_ast::Expr::This(_)
+    )
 }
 
 fn peel_parens(expression: &swc_ecma_ast::Expr) -> &swc_ecma_ast::Expr {
@@ -824,6 +847,47 @@ pub(super) fn source_byte_for_projection(
             ProjectionSegmentKind::Placeholder => None,
         }
     })
+}
+
+/// Whether the projected span is text the author wrote, inside one copied
+/// segment, rather than a placeholder the projection wrote for a tt value
+/// or a piped value.
+pub(super) fn authored_span(segments: &ProjectionSegments, projected: ProjectedSpan) -> bool {
+    segments
+        .starting_at(projected.start)
+        .into_iter()
+        .chain(segments.containing(projected.start))
+        .map(|index| &segments[index])
+        .any(|segment| {
+            segment.kind == ProjectionSegmentKind::Copied
+                && segment.projected.start <= projected.start
+                && projected.end <= segment.projected.end
+        })
+}
+
+/// The parts of a member callee's reference as the protocol records them.
+/// A part that is an authored identifier or `this` is read again at the
+/// call ([`HostReferencePart::read_at_call`]).
+pub(super) fn projected_member_reference(
+    parts: [Option<&swc_ecma_ast::Expr>; 2],
+    source_start: HostOrigin,
+    segments: &ProjectionSegments,
+) -> ProjectedMemberReference {
+    let part = |part: Option<&swc_ecma_ast::Expr>| {
+        part.map(|expression| {
+            let span = projected_span(expression.span(), source_start);
+            ProjectedReferencePart {
+                span,
+                effects: expression_effects(expression),
+                read_at_call: simple_copiable(expression) && authored_span(segments, span),
+            }
+        })
+    };
+    let [receiver, key] = parts;
+    ProjectedMemberReference {
+        receiver: part(receiver),
+        key: part(key),
+    }
 }
 
 pub(super) fn source_span_for_projection(

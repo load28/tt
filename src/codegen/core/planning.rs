@@ -624,34 +624,41 @@ fn scoped_call_completion(
         return None;
     }
     let PlannedEvaluationInput::Source {
+        source: callee_span,
         target,
         mode,
         receiver,
-        ..
+        key,
     } = step.inputs.first()?
     else {
         return None;
     };
     let callee = lowering.slot_name(*target).to_owned();
-    let method_receiver = (*mode == EvaluationInputMode::MemberReference)
-        .then_some(*receiver)
-        .flatten();
-    let instantiation = match (completion.facts.type_args, completion.instantiated) {
-        (Some(type_args), Some(slot)) => Some((
-            lowering.slot_name(slot).to_owned(),
-            type_args,
-            callee.clone(),
-        )),
-        (None, None) => None,
-        _ => return None,
+    let (mut invoke, instantiation) = if *mode == EvaluationInputMode::MemberReference {
+        receiver.as_ref()?;
+        let mut invoke = member_callee(source, *callee_span, [*receiver, *key], |slot| {
+            lowering.slot_name(slot)
+        });
+        if let Some(type_args) = completion.facts.type_args {
+            invoke.push_str(&source[type_args.start..type_args.end]);
+        }
+        (invoke, None)
+    } else {
+        let instantiation = match (completion.facts.type_args, completion.instantiated) {
+            (Some(type_args), Some(slot)) => Some((
+                lowering.slot_name(slot).to_owned(),
+                type_args,
+                callee.clone(),
+            )),
+            (None, None) => None,
+            _ => return None,
+        };
+        let function = instantiation
+            .as_ref()
+            .map_or(callee.clone(), |(name, ..)| name.clone());
+        (function, instantiation)
     };
-    let function = instantiation
-        .as_ref()
-        .map_or(callee.as_str(), |(name, ..)| name.as_str());
-    let mut invoke = match method_receiver {
-        Some(receiver) => format!("{}(", bound_callee(source, lowering, function, receiver)),
-        None => format!("{function}("),
-    };
+    invoke.push('(');
     let mut captures = Vec::new();
     for input in &step.inputs[1..] {
         match input {
@@ -783,24 +790,48 @@ pub(super) fn optional_call_step(step: &PlannedEvaluationStep) -> bool {
     )
 }
 
-/// How a call reads the method a member reference captured. The capture
-/// reads the member where the reference is evaluated (`GetValue`, which
-/// runs a getter); the method is bound to its receiver at the call, after
-/// the arguments ran, so a member that is not callable throws there, as
-/// ECMA-262 `EvaluateCall` checks `IsCallable` after
-/// `ArgumentListEvaluation`. `bind` keeps a generic method's signature,
-/// which `call` does not.
-pub(super) fn bound_callee(
+/// Whether a call reads its member callee before the arguments: an
+/// optional call tested at its callee (`o.m?.(x)`), whose test is on the
+/// member's value, so that value is captured and called through its
+/// receiver. Every other member callee is read where the call is made
+/// ([`member_callee`]).
+pub(super) fn callee_tested_step(step: &PlannedEvaluationStep) -> bool {
+    optional_call_step(step)
+        && step
+            .conditional
+            .as_ref()
+            .and_then(|facts| facts.optional_test)
+            == Some(OptionalCallTest::Callee)
+}
+
+/// How a call reads its member callee: the callee as written, with each
+/// captured part of its reference (the receiver, then a computed key)
+/// replaced by its slot. The member is read at the call, so the call is
+/// the member call TypeScript types — `this`, a generic method's
+/// inference, and a `this` parameter survive, as `bind` (which erases a
+/// generic signature with a `this` parameter) and `call` (which
+/// instantiates type parameters with `unknown`) do not. The parts are
+/// evaluated before the arguments, as ECMA-262 `EvaluateCall` evaluates the
+/// reference; the member's `GetValue` moves after the arguments, next to
+/// the `IsCallable` check that already follows them.
+pub(super) fn member_callee<'n>(
     source: &str,
-    lowering: &LoweringPlan,
-    slot: &str,
-    receiver: PlannedReceiver,
+    callee: SourceSpan,
+    parts: [Option<PlannedReceiver>; 2],
+    slot_name: impl Fn(crate::evaluation_ir::ValueSlotId) -> &'n str,
 ) -> String {
-    let receiver = match receiver {
-        PlannedReceiver::Captured { slot, .. } => lowering.slot_name(slot),
-        PlannedReceiver::Stable { source: at } => &source[at.start..at.end],
-    };
-    format!("{slot}.bind({receiver})")
+    let mut text = String::new();
+    let mut cursor = callee.start;
+    for part in parts.into_iter().flatten() {
+        let PlannedReceiver::Captured { source: at, slot } = part else {
+            continue;
+        };
+        text.push_str(&source[cursor..at.start]);
+        text.push_str(slot_name(slot));
+        cursor = at.end;
+    }
+    text.push_str(&source[cursor..callee.end]);
+    text
 }
 
 /// The operator token of the compound assignment whose target is `target`.
@@ -1498,21 +1529,25 @@ impl TargetRewritePlan {
                     })
                     .collect(),
                 PlannedEvaluationInput::Source {
-                    source: callee,
-                    target,
                     mode: EvaluationInputMode::MemberReference,
-                    receiver: Some(receiver),
-                } if !optional_call_step(step) => {
-                    let slot = lowering.slot_name(*target);
-                    vec![SourceReplacement {
-                        source: *callee,
-                        slot: slot.to_owned(),
-                        jsx_child: false,
-                        anchor: None,
-                        claim: false,
-                        rewrite: Some(bound_callee(source, lowering, slot, *receiver)),
-                    }]
-                }
+                    receiver,
+                    key,
+                    ..
+                } if !callee_tested_step(step) => [*receiver, *key]
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|part| match part {
+                        PlannedReceiver::Captured { source, slot } => Some(SourceReplacement {
+                            source,
+                            slot: lowering.slot_name(slot).to_owned(),
+                            jsx_child: false,
+                            anchor: None,
+                            claim: false,
+                            rewrite: None,
+                        }),
+                        PlannedReceiver::Stable { .. } => None,
+                    })
+                    .collect(),
                 PlannedEvaluationInput::Source {
                     source,
                     target,

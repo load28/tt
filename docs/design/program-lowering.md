@@ -441,7 +441,33 @@ An inert operand needs no statement and stays where it was written. A tt
 value that is itself a comma's left operand is still delivered where it
 was written.
 
-## 8. 전체 tt 표면의 공통 배치
+### 7.8 Method calls (TASK-573)
+
+A member callee (`r.m(...)`, `o?.m(...)`, `o[k](...)`, a tagged template's
+member tag) is a `MemberReference` input whose parts are its receiver and
+computed key (`HostReferencePart`). The parts are evaluated before the
+arguments, as ECMA-262 `EvaluateCall` evaluates the reference; an authored
+identifier or `this` part is read again at the call instead of captured, as
+TypeScript's down-level transforms read a simple-copiable operand. The
+member itself is read by the call, which stays a member call written on the
+receiver (`member_callee`): `$r.m($v)`, `obj?.id($v)`. TypeScript types that
+call as the author's call — a generic method keeps its inference, a `this`
+parameter is checked against the receiver, and an optional call's test on
+an identifier receiver (`if (obj != null)`) narrows the receiver in the
+arguments. Capturing the method instead cannot be typed: `f.call(r, ...)`
+instantiates type parameters with `unknown`, and `f.bind(r)` erases a
+generic signature that declares `this` (`OmitThisParameter`).
+
+This is the one place the lowering deliberately moves an observation: the
+member's `GetValue` (a getter on the method, or a Proxy `get`) runs after
+the arguments the prelude evaluates instead of before them, next to the
+`IsCallable` check that already follows the arguments. An optional call
+tested at its callee (`o.m?.(x)`) is the exception in the other direction:
+its test is on the member's value, so the member is captured, tested, and
+called through `.call(receiver, ...)`, and that form still loses a generic
+method's inference and the receiver's narrowing.
+
+
 
 | Core primitive | tt 표면 | Evaluation IR 동작 |
 |---|---|---|

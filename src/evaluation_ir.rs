@@ -421,6 +421,8 @@ pub(crate) enum PlannedEvaluationInput {
         mode: EvaluationInputMode,
         target: ValueSlotId,
         receiver: Option<PlannedReceiver>,
+        /// A member reference's computed key, evaluated after its receiver.
+        key: Option<PlannedReceiver>,
     },
     Slot {
         slot: ValueSlotId,
@@ -445,9 +447,13 @@ pub(crate) enum PlannedEvaluationInput {
     },
 }
 
-/// How a member reference preserves its `this` receiver. A provably inert
-/// receiver can be re-read when the captured callee is invoked; every other
-/// receiver is evaluated once into its own slot.
+/// How a part of a member reference — its receiver or its computed key — is
+/// evaluated before the call's arguments. The member itself is read where
+/// the call is made, through the receiver, so the call keeps `this`, a
+/// generic method's inference, and the receiver's narrowing. A provably
+/// inert part, or an authored identifier or `this`
+/// ([`crate::program_syntax::HostReferencePart::read_at_call`]), is read
+/// again at the call; every other part is evaluated once into its own slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PlannedReceiver {
     Captured {
@@ -481,6 +487,7 @@ struct HostBinding {
 struct PlannedSourceSlot {
     target: ValueSlotId,
     receiver: Option<PlannedReceiver>,
+    key: Option<PlannedReceiver>,
 }
 
 impl LoweringPlan {

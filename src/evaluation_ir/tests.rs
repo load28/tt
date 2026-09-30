@@ -573,6 +573,7 @@ fn validate_order_rejects_a_capture_overlapping_a_tt_value() {
                     mode,
                     target: slot,
                     receiver: None,
+                    key: None,
                 };
             }
         }

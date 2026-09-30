@@ -585,6 +585,7 @@
 | TASK-583 | Answer `--dependencies` and the server's `dependencies` through one implementation | Complete | 2026-09-29 | 2026-09-29 | [TASK-583](./TASK-583-one-dependencies-implementation.md) |
 | TASK-571 | Lower every value a `result` return's argument consumes in the return's prelude | Complete | 2026-09-29 | 2026-09-29 | [TASK-571](./TASK-571-values-in-a-result-return-argument.md) |
 | TASK-572 | Evaluate a comma operand before a value as a statement | Complete | 2026-09-29 | 2026-09-29 | [TASK-572](./TASK-572-discarded-comma-operands.md) |
+| TASK-573 | Keep a method call around a value a member call on its receiver | Complete | 2026-09-29 | 2026-09-30 | [TASK-573](./TASK-573-method-calls-stay-member-calls.md) |
 
 ## Next task number
 

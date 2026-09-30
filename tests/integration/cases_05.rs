@@ -908,6 +908,8 @@ report(second.kind === "Ok" ? second.value : second.error);
 #[test]
 fn a_hoisted_value_in_a_member_step_runs_after_the_piped_value_and_its_method() {
     require_toolchain!();
+    // TASK-573: the method is read by the call itself, after the argument,
+    // so a getter on it runs there; the piped value still runs first.
     let out = run(r#"
 variant E { A(value: number), B }
 type N = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
@@ -945,15 +947,15 @@ report(second.kind === "Ok" ? second.value.n : second.error);
     assert_eq!(
         out,
         [
-            "head,get,arg,call 2",
-            "head,get,one,call,get,two,call 3",
-            "head,get,call,get,arg,call 3",
+            "head,arg,get,call 2",
+            "head,one,get,call,two,get,call 3",
+            "head,get,call,arg,get,call 3",
             "head,index 20",
-            "head,get,arg,call [object Object]",
+            "head,arg,get,call [object Object]",
             "head undefined",
-            "head,get,arg,make,apply 3",
-            "head,get,try,call 5",
-            "head,get,err err",
+            "head,arg,get,make,apply 3",
+            "head,try,get,call 5",
+            "head,err err",
         ]
     );
 }
@@ -1464,5 +1466,45 @@ console.log(JSON.stringify(propagated()), JSON.stringify(trace));
             r#"false 2 ["tick","pick"]"#,
             r#"{"kind":"Ok","value":3} ["tick","r","r"]"#,
         ]
+    );
+}
+
+#[test]
+fn runtime_a_method_call_around_a_value_stays_a_member_call() {
+    require_toolchain!();
+    // TASK-573: the call is written as a member call on its receiver, so a
+    // generic method keeps its inference (with or without a `this`
+    // parameter), an optional call narrows its receiver in the arguments,
+    // and a receiver or key that is not an identifier still runs before
+    // the arguments.
+    let out = run(r#"
+const trace: string[] = [];
+variant K { A, B }
+function pick(k: K): K { trace.push("pick"); return k; }
+class Repo {
+  items = ["x"];
+  first<T>(this: Repo, fallback: T): string | T { trace.push("first"); return this.items[0] ?? fallback; }
+}
+type O = { name: string; id<T>(x: T): T; add(x: number): number };
+const obj: O = { name: "o", id: (x) => x, add(x: number) { return x + 1; } };
+function getO(): O { trace.push("getO"); return obj; }
+function key(): "add" { trace.push("key"); return "add"; }
+function repo(k: K, r: Repo) {
+  const v: string | number = r.first(match (pick(k)) { A => 1, B => 2 });
+  return v;
+}
+function optional(o: O | undefined, k: K) {
+  const s: string | undefined = o?.id(match (pick(k)) { A => o.name, B => "b" });
+  return s;
+}
+function keyed(k: K) {
+  return getO()[key()](match (pick(k)) { A => 1, B => 2 });
+}
+const n: number = obj.id(match (pick(K.B)) { A => 1, B => 2 });
+console.log(repo(K.A, new Repo()), optional(obj, K.A), optional(undefined, K.A), keyed(K.B), n, JSON.stringify(trace));
+"#);
+    assert_eq!(
+        out,
+        [r#"x o undefined 3 2 ["pick","pick","first","pick","getO","key","pick"]"#]
     );
 }

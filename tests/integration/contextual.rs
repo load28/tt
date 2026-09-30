@@ -728,8 +728,9 @@ console.log(unreached, trace.join(","));
     assert_eq!(
         output,
         [
-            "18 receiver,callee,subject,arm,call,after",
-            "14 receiver,callee,subject,call,after",
+            // TASK-573: the method is read at the call, after its argument.
+            "18 receiver,subject,callee,arm,call,after",
+            "14 receiver,subject,callee,call,after",
             "kept value,throws:3,caught",
         ]
     );

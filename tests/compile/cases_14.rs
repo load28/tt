@@ -291,15 +291,15 @@ fn a_hoisted_value_in_a_member_step_is_emitted_once_after_its_method() {
 }
 
 #[test]
-fn a_member_step_captures_its_method_from_the_piped_value_before_the_argument() {
+fn a_member_step_calls_its_method_on_the_piped_value_after_the_argument() {
     let out = ok(&format!(
         "{TASK_504_PRELUDE}export const v = g() |> .m(match (n) {{ 0 => 1, _ => 2 }});\n"
     ));
     let head = out.find("= g();").expect("the head is evaluated first");
-    let method = out.find(".m);").expect("the method is captured");
     let region = out.find("switch (").expect("the match follows");
-    let bound = out.find(".bind(").expect("the call binds the method");
-    assert!(head < method && method < region && region < bound, "{out}");
+    let call = out.find(".m($tt_v1)").expect("the call reads the method");
+    assert!(head < region && region < call, "{out}");
+    assert!(!out.contains(".bind("), "{out}");
     assert_eq!(out.matches("= g()").count(), 1, "{out}");
 }
 
@@ -488,8 +488,8 @@ fn an_optional_call_tests_the_link_its_chain_is_skipped_at() {
                    declare const a: { b: { m(v: number): number } } | null;\n\
                    declare const f: (() => (v: number) => number) | null;\n";
     for (call, test) in [
-        ("o?.m", "if ($tt_v2 != null) {"),
-        ("o?.[\"m\"]", "if ($tt_v2 != null) {"),
+        ("o?.m", "if (o != null) {"),
+        ("o?.[\"m\"]", "if (o != null) {"),
         ("o?.m?.", "if ($tt_v1 != null) {"),
         ("f?.()?.", "if ($tt_v1 != null) {"),
     ] {
@@ -501,10 +501,8 @@ fn an_optional_call_tests_the_link_its_chain_is_skipped_at() {
     let out = ok(&format!(
         "{prelude}export function g() {{ return o?.m(match (1) {{ _ => 1 }}); }}\n"
     ));
-    assert!(
-        compact(&out).contains("if ($tt_v2 != null) { const $tt_v1 = ($tt_v2?.m);"),
-        "{out}"
-    );
+    assert!(compact(&out).contains("if (o != null) {"), "{out}");
+    assert!(out.contains("= o?.m(1);"), "{out}");
     for call in ["a?.b.m", "a?.b.m?.", "f?.()"] {
         let diagnostics = ttc::analyze(
             &format!("{prelude}export function g() {{ return {call}(match (1) {{ _ => 1 }}); }}\n"),

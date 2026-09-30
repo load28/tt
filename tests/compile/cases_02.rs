@@ -65,7 +65,8 @@ fn reference_protocol_preserves_optional_calls_and_structures_tagged_templates()
     let tagged = ok("variant E { A(value: number), B }\n\
          const value = receiver.tag`value:${match (input) { A(value) => value, B => 0 }}`;\n");
     assert!(!tagged.contains("$tt_expr(() =>"), "{tagged}");
-    assert!(tagged.contains(".bind("), "{tagged}");
+    assert!(tagged.contains("receiver.tag`value:${"), "{tagged}");
+    assert!(!tagged.contains(".bind("), "{tagged}");
     assert_eq!(tagged.matches("switch (").count(), 1, "{tagged}");
 }
 
