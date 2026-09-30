@@ -363,7 +363,7 @@ jobs:
     name: exhaustive regression sweeps (nightly)
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
 
@@ -401,6 +401,12 @@ jobs:
           TTC_REQUIRE_TYPESCRIPT_CASES: "1"
           TTC_TYPESCRIPT_CASES: all
         run: cargo test --release --test corpus typescript_test_cases -- --nocapture
+
+      - name: Every generated matrix case runs against its twin
+        env:
+          TTC_REQUIRE_TSGO: "1"
+          TT_MATRIX_CASES: all
+        run: cargo test --release --test case_baselines -- --nocapture
 
   release-version:
     name: release artifact version

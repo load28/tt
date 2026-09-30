@@ -31,6 +31,8 @@ use ttc::SourceKind;
 use ttc::engine::Position;
 
 const SAMPLE: usize = 1000;
+
+const GENERATED: &str = "tests/cases/conformance/matrix";
 const SEED: u64 = 0x7474_6d75_7461_7465;
 
 fn root() -> PathBuf {
@@ -236,6 +238,9 @@ fn walk(dir: &Path, out: &mut Vec<PathBuf>) {
     };
     for entry in entries {
         let path = entry.expect("a readable entry").path();
+        if path == root().join(GENERATED) {
+            continue;
+        }
         if path.is_dir() {
             walk(&path, out);
         } else {

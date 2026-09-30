@@ -1,0 +1,424 @@
+#!/usr/bin/env node
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const SPEC = join(ROOT, "tests/matrix");
+const OUT = join(ROOT, "tests/cases/conformance/matrix");
+
+const plain = () => `note("operand", input)`;
+
+const COMPANIONS = [
+  { id: "plain", title: "nothing around it", operand: plain },
+  { id: "await", title: "an await in its operand", operand: () => "await later(input)" },
+  { id: "yield", title: "a yield in its operand", operand: () => "(yield input)" },
+  { id: "optionalChain", title: "an optional chain in its operand", operand: () => "box(input)?.inner.value!" },
+  { id: "spread", title: "a spread argument in its operand", operand: () => "first(...[input])" },
+  { id: "exception", title: "an operand that throws, caught around it", operand: () => "risky(input)", wrap: "catch" },
+  { id: "using", title: "a using declaration around it", operand: plain, pre: 'using res = resource("res");' },
+  { id: "finally", title: "a finally block around it", operand: plain, wrap: "finally" },
+];
+
+const TOP_LEVEL = new Set(["plain", "await", "optionalChain", "spread", "using"]);
+
+function chunks(harness) {
+  const out = [];
+  for (const line of harness.trimEnd().split("\n")) {
+    if (out.length === 0 || (/^\S/.test(line) && !/^[}\])]/.test(line))) out.push({ lines: [] });
+    out[out.length - 1].lines.push(line);
+  }
+  return out.map(({ lines }) => {
+    const text = lines.join("\n");
+    const head = lines[0];
+    const name = /^(?:export\s+)?(?:async\s+)?(?:function|const|class|type|let)\s+(\w+)/.exec(head)?.[1];
+    return { text, name, exported: head.startsWith("export ") };
+  });
+}
+
+function identifiers(code) {
+  return new Set(code.replace(/"(?:[^"\\]|\\.)*"/g, '""').match(/[A-Za-z_$][\w$]*/g) ?? []);
+}
+
+function used(parts, code) {
+  const seen = identifiers(code);
+  return [...new Set(parts.filter((part) => part.exported && seen.has(part.name)).map((part) => part.name))];
+}
+
+function closure(parts, names) {
+  const needed = new Set(names);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const part of parts) {
+      if (!needed.has(part.name)) continue;
+      for (const id of identifiers(part.text)) {
+        if (id !== part.name && parts.some((other) => other.name === id) && !needed.has(id)) {
+          needed.add(id);
+          grew = true;
+        }
+      }
+    }
+  }
+  return parts.filter((part) => needed.has(part.name)).map((part) => part.text).join("\n");
+}
+
+const TSCONFIG = `{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022", "esnext.disposable", "dom"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  }
+}`;
+
+function splitTop(list) {
+  const body = list.replace(/\s+as\s+[\w[\]]+$/, "").trim();
+  const inner = body.slice(1, -1);
+  const items = [];
+  let depth = 0;
+  let quote = null;
+  let start = 0;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+    else if ("([{".includes(ch)) depth++;
+    else if (")]}".includes(ch)) depth--;
+    else if (ch === "," && depth === 0) {
+      items.push(inner.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  if (inner.slice(start).trim()) items.push(inner.slice(start).trim());
+  return items;
+}
+
+function indent(code) {
+  let depth = 0;
+  const out = [];
+  for (const raw of code.split("\n")) {
+    const line = raw.trim();
+    if (line === "") {
+      out.push("");
+      continue;
+    }
+    let opens = 0;
+    let closes = 0;
+    let quote = null;
+    let leading = true;
+    let lead = 0;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (quote) {
+        if (ch === "\\") i++;
+        else if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        leading = false;
+      } else if ("{([".includes(ch)) {
+        opens++;
+        leading = false;
+      } else if ("})]".includes(ch)) {
+        if (leading) lead++;
+        else closes++;
+      } else if (ch !== " ") leading = false;
+    }
+    depth = Math.max(0, depth - lead);
+    out.push(`${"  ".repeat(depth)}${line}`);
+    depth = Math.max(0, depth + opens - closes);
+  }
+  return out.join("\n");
+}
+
+function family(construct) {
+  return construct.family ?? (construct.construct === "tryStatement" ? "try" : construct.construct);
+}
+
+function positionsFor(construct, all) {
+  const list = construct.kind === "value" ? all.valuePositions : all.statementPositions;
+  return construct.only ? list.filter((p) => construct.only.includes(p.id)) : list;
+}
+
+function feasible(construct, form, position, companion) {
+  if (position.inner?.includes(companion.id)) return false;
+  if (position.topLevel && !TOP_LEVEL.has(companion.id)) return false;
+  if (position.unbraced && form.hoisted === undefined) return false;
+  if (position.forces === "await" && companion.id === "yield") return false;
+  if (position.forces === "yield" && companion.id === "await") return false;
+  return true;
+}
+
+function expectation(construct, form, position, companion) {
+  const codes = [];
+  const add = (code) => code && !codes.includes(code) && codes.push(code);
+  add(construct.rejects?.all);
+  add(position.rejects?.[family(construct)]);
+  add(position.rejects?.[companion.id]);
+  if (!position.retargets) add(construct.rejects?.[companion.id]);
+  if (position.unbraced) add(form.unbraced);
+  return codes;
+}
+
+function rows(construct, positions) {
+  const forms = construct.forms;
+  const key = (...parts) => parts.join("\u0000");
+  const ok = (f, p, c) => feasible(construct, forms[f], positions[p], COMPANIONS[c]);
+  const needed = new Set();
+  for (let f = 0; f < forms.length; f++) {
+    for (let p = 0; p < positions.length; p++) {
+      for (let c = 0; c < COMPANIONS.length; c++) {
+        if (!ok(f, p, c)) continue;
+        needed.add(key("fp", f, p));
+        needed.add(key("fc", f, c));
+        needed.add(key("pc", p, c));
+      }
+    }
+  }
+  const covered = new Set();
+  const uses = new Array(COMPANIONS.length).fill(0);
+  const out = [];
+  const take = (f, p, c) => {
+    out.push([f, p, c]);
+    uses[c]++;
+    for (const k of [key("fp", f, p), key("fc", f, c), key("pc", p, c)]) covered.add(k);
+  };
+  const gain = (f, p, c) =>
+    [key("fp", f, p), key("fc", f, c), key("pc", p, c)].filter((k) => needed.has(k) && !covered.has(k)).length;
+  for (let f = 0; f < forms.length; f++) {
+    for (let p = 0; p < positions.length; p++) {
+      let best = -1;
+      for (let c = 0; c < COMPANIONS.length; c++) {
+        if (!ok(f, p, c)) continue;
+        if (best < 0 || gain(f, p, c) > gain(f, p, best) || (gain(f, p, c) === gain(f, p, best) && uses[c] < uses[best])) {
+          best = c;
+        }
+      }
+      if (best >= 0) take(f, p, best);
+    }
+  }
+  for (const k of needed) {
+    if (covered.has(k)) continue;
+    const [kind, a, b] = k.split("\u0000");
+    let best = null;
+    for (let f = 0; f < forms.length; f++) {
+      for (let p = 0; p < positions.length; p++) {
+        for (let c = 0; c < COMPANIONS.length; c++) {
+          const fits = kind === "fc" ? f === +a && c === +b : kind === "pc" ? p === +a && c === +b : false;
+          if (!fits || !ok(f, p, c)) continue;
+          if (!best || gain(f, p, c) > gain(...best)) best = [f, p, c];
+        }
+      }
+    }
+    if (best) take(...best);
+  }
+  return out;
+}
+
+function build(parts, construct, form, position, companion, side) {
+  let count = 0;
+  const alloc = (n) => Array.from({ length: n }, () => `t${count++}`);
+  const isAsync = companion.id === "await" || position.forces === "await";
+  const isGenerator = companion.id === "yield" || position.forces === "yield";
+  const target = Boolean(construct.target);
+  const twin = side === "ts";
+  const operand = companion.operand();
+  const c = {
+    side,
+    In: form.In,
+    head: isAsync ? "async " : "",
+    unbraced: Boolean(position.unbraced),
+    ret: (e) => (target ? (twin ? `ok(${e})` : `Result.Ok(${e})`) : e),
+    fn: (body) => (target && twin ? `try {\n${body}\n} catch (error) {\nreturn caught(error);\n}` : body),
+    guard: (name) => (target && twin ? `if (${name} instanceof Propagate) throw ${name};\n` : ""),
+    iife: (body) => (companion.id === "await" ? `(await (async () => {\n${body}\n})())` : `(() => {\n${body}\n})()`),
+    arrow: (params, expr) =>
+      target && twin
+        ? `${c.head}(${params}) => {\n${c.fn(`return ${c.ret(expr)};`)}\n}`
+        : `${c.head}(${params}) => ${c.ret(expr)}`,
+    probe: (body, { target: owns = true, head = true } = {}) => {
+      let inner = body;
+      if (companion.wrap === "finally") inner = `try {\n${inner}\n} finally {\nnote("finally", 0);\n}`;
+      if (companion.wrap === "catch") {
+        inner = `try {\n${inner}\n} catch (error) {\n${c.guard("error")}return ${c.ret('note("caught", (error as Error).message)')};\n}`;
+      }
+      if (companion.pre) inner = `${companion.pre}\n${inner}`;
+      if (owns) inner = c.fn(inner);
+      const modifier = head && isAsync ? "async " : "";
+      const star = isGenerator ? "*" : "";
+      const signature = isGenerator ? `: Generator<unknown, unknown, ${form.In}>` : "";
+      return `${modifier}function${star} probe(input: ${form.In})${signature} {\n${inner}\n}`;
+    },
+  };
+  const temps = () => alloc(form.temps ?? 1);
+  const instance = () => (twin ? form.ts(operand, temps(), c) : form.tt(operand, temps(), c));
+  if (construct.kind === "value") {
+    c.v = instance();
+    c.again = instance;
+  } else {
+    c.s = (exit) => (twin ? form.ts(operand, temps(), exit, c) : form.tt(operand, temps(), exit, c));
+    c.result = form.result;
+    c.hoisted = form.hoisted;
+  }
+  const inputs = splitTop(form.inputs);
+  let host;
+  if (position.topLevel) {
+    const lines = [`let input: ${form.In} = inputs[0]!;`];
+    if (companion.pre) lines.push(companion.pre);
+    if (construct.kind === "value") {
+      inputs.forEach((_, i) => {
+        if (i > 0) lines.push(`input = inputs[${i}]!;`);
+        lines.push(`const top${i} = ${i === 0 ? c.v : c.again()};`);
+        lines.push(`report("${position.id}", input, text(top${i}));`);
+      });
+    } else {
+      lines.push(c.s('throw new Error("diverged");'));
+      lines.push(`report("${position.id}", input, text(${form.result}));`);
+    }
+    host = lines.join("\n");
+  } else {
+    host = `${position.host(c)}\nawait drive("${position.id}", probe, inputs);`;
+  }
+  const decls = (form.decls ?? []).map((d) => d[side]).join("\n");
+  const lines = [];
+  if (target && !twin) lines.push('import * as Result from "@tt/std/result";');
+  if (decls) lines.push(decls);
+  if (twin && construct.kind === "value" && count > 0) {
+    lines.push(`let ${Array.from({ length: count }, (_, i) => `t${i}: any`).join(", ")};`);
+  }
+  lines.push(`const inputs: ${form.In}[] = ${form.inputs.replace(/\s+as\s+[\w[\]]+$/, "")};`);
+  lines.push(host);
+  const code = lines.join("\n");
+  const names = used(parts, code);
+  return { code: indent(`import { ${names.join(", ")} } from "./harness.js";\n${code}`), names };
+}
+
+function caseText(spec, construct, form, position, companion, codes, parts) {
+  const name = `${construct.construct}_${form.id}_${position.id}_${companion.id}`;
+  const header = [
+    `// Generated by scripts/generate-cases from tests/matrix/${spec}; edit the spec, not this file.`,
+    `// ${construct.construct}: ${form.title}, in ${position.title}, with ${companion.title}.`,
+  ];
+  const programs = [["main.tt", build(parts, construct, form, position, companion, "tt")]];
+  if (codes.length > 0) {
+    header.push(`// @expectErrors: ${codes.join(", ")}`, "// @baselines: errors.txt");
+  } else {
+    header.push("// @run: main.tt", "// @twin: twin.ts", "// @baselines: errors.txt, stdout");
+    programs.push(["twin.ts", build(parts, construct, form, position, companion, "ts")]);
+  }
+  const harness = closure(
+    parts,
+    programs.flatMap(([, program]) => program.names),
+  );
+  const units = [["tsconfig.json", TSCONFIG], ["harness.ts", harness], ...programs.map(([file, program]) => [file, program.code])];
+  const body = units.map(([file, text]) => `// @filename: ${file}\n${text}\n`).join("");
+  return { name, text: `${header.join("\n")}\n${body}` };
+}
+
+async function generate() {
+  const positions = await import(pathToFileURL(join(SPEC, "positions.mjs")).href);
+  const parts = chunks(readFileSync(join(SPEC, "harness.ts"), "utf8"));
+  const files = new Map();
+  const stats = [];
+  const specs = readdirSync(SPEC)
+    .filter((name) => name.endsWith(".mjs"))
+    .sort();
+  for (const spec of specs) {
+    const loaded = (await import(pathToFileURL(join(SPEC, spec)).href)).default;
+    if (loaded === undefined) continue;
+    for (const construct of Array.isArray(loaded) ? loaded : [loaded]) {
+      const hosts = positionsFor(construct, positions);
+      for (const [f, p, c] of rows(construct, hosts)) {
+        const form = construct.forms[f];
+        const position = hosts[p];
+        const companion = COMPANIONS[c];
+        const codes = expectation(construct, form, position, companion);
+        const { name, text } = caseText(spec, construct, form, position, companion, codes, parts);
+        const path = join(OUT, construct.construct, `${name}.tt`);
+        if (files.has(path)) throw new Error(`two rows generate ${name}`);
+        files.set(path, text);
+        stats.push({ construct: construct.construct, position: position.id, companion: companion.id, rejected: codes.length > 0 });
+      }
+    }
+  }
+  return { files, stats };
+}
+
+function existing(dir, out = []) {
+  if (!existsSync(dir)) return out;
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) existing(path, out);
+    else out.push(path);
+  }
+  return out;
+}
+
+function show(path) {
+  return relative(ROOT, path).split(sep).join("/");
+}
+
+const { files, stats } = await generate();
+const mode = process.argv[2];
+if (mode === "--stats") {
+  const table = new Map();
+  for (const row of stats) {
+    const entry = table.get(row.construct) ?? { run: 0, rejected: 0, positions: new Set(), companions: new Set() };
+    entry[row.rejected ? "rejected" : "run"]++;
+    entry.positions.add(row.position);
+    entry.companions.add(row.companion);
+    table.set(row.construct, entry);
+  }
+  let total = 0;
+  for (const [construct, entry] of table) {
+    total += entry.run + entry.rejected;
+    console.log(
+      `${construct}: ${entry.run + entry.rejected} cases (${entry.run} run against a twin, ${entry.rejected} expect a diagnostic), ${entry.positions.size} positions, ${entry.companions.size} companions`,
+    );
+  }
+  console.log(`total: ${total}`);
+} else if (mode === "--check") {
+  const problems = [];
+  for (const [path, text] of files) {
+    if (!existsSync(path)) problems.push(`missing ${show(path)}`);
+    else if (readFileSync(path, "utf8") !== text) problems.push(`modified ${show(path)}`);
+  }
+  for (const path of existing(OUT)) {
+    if (!files.has(path)) problems.push(`stale ${show(path)}`);
+  }
+  if (problems.length > 0) {
+    console.error(`${problems.length} generated case(s) differ from tests/matrix:`);
+    for (const problem of problems.slice(0, 50)) console.error(`  ${problem}`);
+    if (problems.length > 50) console.error(`  ... and ${problems.length - 50} more`);
+    process.exit(1);
+  }
+  console.log(`${files.size} generated cases match tests/matrix`);
+} else if (mode === undefined) {
+  let written = 0;
+  let removed = 0;
+  for (const path of existing(OUT)) {
+    if (!files.has(path)) {
+      rmSync(path);
+      removed++;
+    }
+  }
+  for (const [path, text] of files) {
+    if (existsSync(path) && readFileSync(path, "utf8") === text) continue;
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, text);
+    written++;
+  }
+  console.log(`${files.size} cases: ${written} written, ${removed} removed`);
+} else {
+  console.error("usage: node scripts/generate-cases [--check | --stats]");
+  process.exit(2);
+}

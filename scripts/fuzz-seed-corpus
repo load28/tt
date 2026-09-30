@@ -7,11 +7,13 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCES = ["tests/cases", "tests/fixtures"];
 const TARGET = "compile_any_bytes";
+const GENERATED = "tests/cases/conformance/matrix";
 
 function walk(dir, out) {
   if (!existsSync(dir)) return out;
   for (const name of readdirSync(dir).sort()) {
     const path = join(dir, name);
+    if (relative(ROOT, path).split(sep).join("/") === GENERATED) continue;
     if (statSync(path).isDirectory()) walk(path, out);
     else out.push(path);
   }

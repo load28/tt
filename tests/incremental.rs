@@ -56,7 +56,11 @@ fn corpus() -> Vec<Input> {
         cases::files(&root().join("tests/cases").join(suite), &mut files);
     }
     files.sort();
+    let generated = root().join("tests/cases/conformance/matrix");
     for path in files {
+        if path.starts_with(&generated) {
+            continue;
+        }
         let text = fs::read_to_string(&path).expect("readable case");
         let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
         let parsed = cases::parse(&text, &file_name, &path);

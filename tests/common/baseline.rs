@@ -87,6 +87,10 @@ fn record(path: &Path, state: &str) {
     writeln!(file, "{state} {relative}").expect("tracking entry");
 }
 
+pub fn not_sampled(path: &Path) {
+    record(path, "unsampled");
+}
+
 pub fn expect(path: &Path, actual: &str) {
     if let Err(message) = compare(path, actual) {
         panic!("{message}");

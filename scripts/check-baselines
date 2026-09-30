@@ -51,7 +51,8 @@ function readTracking(dir) {
   const runs = new Map();
   const present = new Set();
   const absent = new Set();
-  if (!existsSync(dir)) return { runs, present, absent };
+  const unsampled = new Set();
+  if (!existsSync(dir)) return { runs, present, absent, unsampled };
   for (const name of readdirSync(dir)) {
     const lines = readFileSync(join(dir, name), "utf8").split("\n");
     for (const line of lines) {
@@ -61,11 +62,11 @@ function readTracking(dir) {
         runs.set(binary, (runs.get(binary) ?? false) || filtered === "true");
         continue;
       }
-      const entry = /^(present|absent) (.+)$/.exec(line);
-      if (entry) (entry[1] === "present" ? present : absent).add(entry[2]);
+      const entry = /^(present|absent|unsampled) (.+)$/.exec(line);
+      if (entry) ({ present, absent, unsampled })[entry[1]].add(entry[2]);
     }
   }
-  return { runs, present, absent };
+  return { runs, present, absent, unsampled };
 }
 
 function localPath(path) {
@@ -75,7 +76,7 @@ function localPath(path) {
 }
 
 function check(dir, { accept }) {
-  const { runs, present, absent } = readTracking(dir);
+  const { runs, present, absent, unsampled } = readTracking(dir);
   const problems = [];
   for (const binary of BINARIES) {
     if (!runs.has(binary)) {
@@ -91,7 +92,7 @@ function check(dir, { accept }) {
 
   const unused = references()
     .map((file) => file.path)
-    .filter((path) => !present.has(path) && !absent.has(path));
+    .filter((path) => !present.has(path) && !absent.has(path) && !unsampled.has(path));
   const unowned = [...present].filter((path) => !OWNERS.some((owner) => path.startsWith(`${owner.root}/`) && owner.reference(path)));
   const missing = [...present].filter((path) => !existsSync(join(ROOT, path)));
 
@@ -126,10 +127,11 @@ function check(dir, { accept }) {
     );
     ok = false;
   }
+  const skipped = unsampled.size > 0 ? `, ${unsampled.size} of cases the run did not sample left unjudged` : "";
   if (ok && accept && unused.length > 0) {
-    console.log(`baselines: ${present.size + absent.size} compared, ${unused.length} unused marked for deletion`);
+    console.log(`baselines: ${present.size + absent.size} compared${skipped}, ${unused.length} unused marked for deletion`);
   } else if (ok) {
-    console.log(`baselines: ${present.size + absent.size} compared, none unused`);
+    console.log(`baselines: ${present.size + absent.size} compared${skipped}, none unused`);
   }
   return ok;
 }

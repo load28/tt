@@ -166,10 +166,30 @@ Case files take metadata lines in the form `// @name: value`:
   on, with every varied option in the name, sorted. `*` stands for every
   value of the option and `-value` (or `!value`) removes one. Two varied
   options run every combination, at most 25.
-- `// @run: <unit>` executes the case: a `.tt`, `.ts`, `.mts`, or `.cts`
-  unit named as in its `// @filename` (the case file's own name when it
-  has none) is the entry. Every configuration of the case runs, so a
-  varied case gets one `.stdout` per configuration.
+- `// @run: <unit>` executes the case: a `.tt`, `.ttx`, `.ts`, `.tsx`,
+  `.mts`, or `.cts` unit named as in its `// @filename` (the case file's
+  own name when it has none) is the entry. Every configuration of the case
+  runs, so a varied case gets one `.stdout` per configuration. A `.ttx` or
+  `.tsx` entry needs a `tsconfig.json` unit whose `jsx` emits JavaScript
+  (`react` with a `jsxFactory` the case defines, for instance).
+- `// @twin: <unit>` names a TypeScript unit that is the `@run` entry's
+  twin: the same program written by hand in plain TypeScript. It runs after
+  the entry, from the same emitted tree, and the case fails when its stdout
+  or exit status differs from the entry's, or when it prints nothing.
+- `// @expectErrors: <code>, ...` names tt diagnostics (`try-placement`,
+  `match-placement`, ...) the case must report as `error[<code>]`; the case
+  fails when it compiles cleanly or leaves one out. It takes no `@run`.
+- `// @baselines: <kind>, ...` keeps only the listed baselines (`ts`,
+  `errors.txt`, `map.txt`, `types`, `stdout`; `stdout` includes `stderr`).
+  The default is every kind.
+
+A case with `@twin` or `@expectErrors` carries its own oracle. When the
+oracle disagrees, the case fails unless `tests/oracle-failures.txt` lists
+it with what the run observes and the task that tracks the defect (one line
+per case: the case name, a tab, the observation the failure prints, a tab,
+`TASK-NNN: ...`). A listed case whose oracle agrees fails too, and so does
+a line that names no case, so the list is always the exact set of known
+failures.
 
 Case names must be distinct across `tests/cases`, because each case writes
 its baselines as `tests/baselines/reference/<name>.<kind>`:
@@ -215,6 +235,52 @@ the pinned TypeScript (`npm ci`), and the runtime baselines a Node.js 22
 recent enough for `--permission` (22.13 or later). Without TypeScript they
 are skipped, `TTC_REQUIRE_TSGO=1` turns the skip into a failure, and
 `UPDATE_EXPECT=1` refuses to run.
+
+### The case matrix
+
+`tests/cases/conformance/matrix/` holds cases generated from a spec, the
+way TypeScript's conformance suite covers each feature in many contexts:
+`scripts/generate-cases` reads `tests/matrix/` and writes one case per
+combination of a construct's form (a `match` with tag, literal, tuple, or
+`is` patterns, a `try`, a `result` block, a let-else, an `if let`, ...), a
+host position (a declaration initializer, a call argument, a template
+literal, a class field, a loop head, a match arm, a result block's body,
+...), and a companion feature written around it (`await`, `yield`, an
+optional chain, a spread, a throw caught around it, `using`, `finally`).
+Every form meets every position, and the companions are chosen so that
+every pair of the three factors occurs at least once (all-pairs testing,
+NIST SP 800-142).
+
+A combination the documented placement rules reject (`docs/ai/tt.md`,
+`docs/design/try-result-scopes.md`) becomes a case with `@expectErrors`
+and only an `.errors.txt` baseline. Every other combination runs against a
+`twin.ts` generated from the same spec: each form's twin is written from
+the construct's documented semantics (a `match` as a chain of tests over a
+temporary, a `try` as an `unwrap` that throws its failure to the function it
+leaves, a `result` block as a function run on the spot), never from ttc's
+output. These cases keep only `.stdout` (and `.errors.txt`, which should be
+absent): the twin is the oracle, and the emitted TypeScript, hovers, and
+mappings of thousands of near-identical programs would bury a reviewer
+without testing more.
+
+Edit the spec, not the cases, and regenerate:
+
+```sh
+node scripts/generate-cases            # rewrite the matrix, removing stale cases
+node scripts/generate-cases --stats    # the counts per construct
+UPDATE_EXPECT=1 TT_MATRIX_CASES=all cargo test --test case_baselines
+```
+
+`tests/case_baselines.rs` fails when the committed cases differ from what
+the spec generates. A pull request runs a fixed-seed sample of the matrix
+(`TT_MATRIX_CASES=<count>` and `TT_MATRIX_SEED=<number>` choose another);
+the nightly `exhaustive` job runs every case with `TT_MATRIX_CASES=all`, as
+`TT_CASES=<fragment>` also runs every matching case. The baselines of the
+cases a run did not sample are recorded as not sampled, so
+`scripts/check-baselines` neither judges nor flags them. The fuzz
+regressions, the incremental suite, and the fuzz seed corpus leave the
+matrix out: its programs are one spec's repetitions, and it has its own
+runner.
 
 ### Adding an editor case
 
