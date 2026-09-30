@@ -167,12 +167,14 @@ impl FunctionTargets {
 }
 
 /// Returns the innermost user function enclosing `at`.
+#[cfg(test)]
 pub(crate) fn function_target_at(tokens: &[Token], at: usize) -> Option<FunctionTarget> {
     user_function_target_at(tokens, at, &std::collections::HashSet::new())
 }
 
 /// Returns the innermost user-written function enclosing `at`, skipping the
 /// match body braces and arm arrows in `tt_owned`, which open no function.
+#[cfg(test)]
 pub(crate) fn user_function_target_at(
     tokens: &[Token],
     at: usize,

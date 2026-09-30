@@ -1,0 +1,2 @@
+matchBlockArm(5) => {"kind":"Ok","value":5} | arm true; operand 5; read 5; finally 0
+matchBlockArm(-5) => {"kind":"Err","error":"negative -5"} | arm true; operand -5; read -5; finally 0

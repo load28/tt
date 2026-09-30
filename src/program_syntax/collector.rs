@@ -202,6 +202,12 @@ pub(super) struct ParentCollector {
     pub(super) occupied_names: HashSet<String>,
     pub(super) function_depth: usize,
     pub(super) function_targets: Vec<EvaluationOwner>,
+    /// The projected spans of the `DecisionCallExpression` placeholders.
+    pub(super) decision_calls: HashSet<ProjectedSpan>,
+    /// The function each decision placeholder calls: the projection's
+    /// stand-in for a match's arms, which the lowering writes as statements
+    /// in the match's own owner, so it is no evaluation owner of its own.
+    pub(super) decision_functions: HashSet<ProjectedSpan>,
     pub(super) contextual_types: Vec<Option<ProjectedSpan>>,
     pub(super) assertions: Vec<Option<ProjectedSpan>>,
     pub(super) function_return_types: Vec<Option<ProjectedSpan>>,
@@ -229,6 +235,7 @@ pub(super) struct CollectedProgramSyntax {
 pub(super) struct FoundOverlay {
     pub(super) ambient: bool,
     pub(super) decorated_classes: Vec<usize>,
+    pub(super) decision_functions: Vec<usize>,
     pub(super) parents: Vec<AstParentKind>,
     pub(super) host_owners: Vec<ProjectedHostOwner>,
     pub(super) protocol_frames: Vec<ProjectedProtocolFrame>,

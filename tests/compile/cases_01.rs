@@ -144,17 +144,19 @@ fn generator_statement_owner_accepts_match_initializers() {
 }
 
 #[test]
-fn match_arm_return_try_reports_placement_instead_of_panicking() {
-    let diagnostics = ttc::analyze(
-        "variant R { Ok(value: number), Err(error: string) }\n\
+fn match_arm_return_try_propagates_from_the_concise_arrow() {
+    let source = "variant R { Ok(value: number), Err(error: string) }\n\
          declare const g: () => R;\n\
          const f = (b: boolean): R => match (b) {\n\
            true => { return try g(); }, false => R.Ok(0),\n\
-         };\n",
-        &Options::default(),
+         };\n";
+    let diagnostics = ttc::analyze(source, &Options::default());
+    assert!(diagnostics.is_empty(), "{diagnostics:#?}");
+    let output = ok(source);
+    assert!(
+        compact(&output).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
+        "{output}"
     );
-    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
-    assert_eq!(diagnostics[0].code, ttc::DiagnosticCode::TryPlacement);
 }
 
 #[test]

@@ -18,7 +18,7 @@ use crate::core_ir::{
     ResultRegionItem, Statement,
 };
 use crate::hir::ids::Idx;
-use crate::hir::{ArmBodyKind, BindingMode, BodyId, ExprId, NodeId};
+use crate::hir::{BindingMode, BodyId, ExprId, NodeId};
 use crate::ice::LoweringSubject;
 use crate::program_syntax::{
     ConditionalBranch, ConditionalFacts, CoreRoot, EagerPosition, EvaluationContext,

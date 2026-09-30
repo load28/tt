@@ -12,7 +12,7 @@ pub(crate) fn lower_semantic(
     tokens: &[crate::lexer::Token],
 ) -> CoreFile {
     let temp_ordinals = temp_ordinals(semantic);
-    let tt_owned = tt_owned_tokens(semantic, tokens);
+    let tt_owned = semantic.hir.match_owned_tokens(tokens);
     let mut cx = Lowering {
         semantic,
         source,
@@ -61,51 +61,6 @@ struct Lowering<'a> {
     tt_owned: HashSet<usize>,
     function_targets: std::cell::OnceCell<crate::flow::FunctionTargets>,
     temp_ordinals: HashMap<NodeId, u32>,
-}
-
-fn tt_owned_tokens(semantic: &SemanticFile, tokens: &[crate::lexer::Token]) -> HashSet<usize> {
-    let hir = &semantic.hir;
-    let first_from = |offset: usize, wanted: fn(&crate::lexer::TokenKind) -> bool| {
-        let from = tokens.partition_point(|token| token.span.start < offset);
-        tokens[from..]
-            .iter()
-            .position(|token| wanted(&token.kind))
-            .map(|index| from + index)
-    };
-    let span = |node: NodeId| {
-        hir.source_map
-            .node_span(node)
-            .unwrap_or_else(|| crate::ice::bug!("match syntax has no source span"))
-    };
-    let mut owned = HashSet::new();
-    for (_, expr) in hir.exprs.iter() {
-        let hir::Expr::Match { node, site, .. } = expr else {
-            continue;
-        };
-        owned.extend(first_from(span(*node).end, |kind| {
-            matches!(kind, crate::lexer::TokenKind::Punct(b'{'))
-        }));
-        for arm in &hir.sites[*site].arms {
-            if arm.body.is_none() {
-                continue;
-            }
-            let pattern_end = hir
-                .source_map
-                .pattern_span(arm.pattern)
-                .unwrap_or_else(|| crate::ice::bug!("match arm pattern has no source span"))
-                .end;
-            let guard_end = arm
-                .guard
-                .map_or(pattern_end, |guard| match &hir.exprs[guard] {
-                    hir::Expr::OpaqueTs(node) | hir::Expr::Seq { node, .. } => span(*node).end,
-                    _ => crate::ice::bug!("match guard is not an expression program"),
-                });
-            owned.extend(first_from(pattern_end.max(guard_end), |kind| {
-                matches!(kind, crate::lexer::TokenKind::Arrow)
-            }));
-        }
-    }
-    owned
 }
 
 impl Lowering<'_> {

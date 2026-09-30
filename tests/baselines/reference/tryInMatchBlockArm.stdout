@@ -1,0 +1,4 @@
+[{"kind":"Ok","value":4},{"kind":"Ok","value":0},{"kind":"Ok","value":"checked"},{"kind":"Ok","value":4}] read 3,after declared,after declared,read 3,read 3
+[{"kind":"Ok","value":"<3>"},{"kind":"Ok","value":3},{"kind":"Ok","value":-1},{"kind":"Ok","value":[6,2]},{"kind":"Ok","value":2},{"kind":"Ok","value":-3}] read 3,read 3,read 3,read 1,read 3,read 3,read 3
+[{"kind":"Err","error":"bad -1"},{"kind":"Ok","value":0},{"kind":"Err","error":"bad -1"},{"kind":"Err","error":"bad -1"}] read -1,after declared,read -1,read -1
+[{"kind":"Err","error":"bad -1"},{"kind":"Err","error":"bad -1"},{"kind":"Ok","value":-1},{"kind":"Err","error":"bad -1"},{"kind":"Err","error":"bad -1"},{"kind":"Err","error":"bad -1"}] read -1,read -1,read -1,read -1,read -1

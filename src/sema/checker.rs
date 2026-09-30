@@ -179,73 +179,104 @@ impl Checker<'_> {
         }
     }
 
-    /// `try` placement is a **flow** fact, not a nesting rule: the lowering
-    /// emits a `return`, so the statement must run inside a user-written
-    /// function — one written in its own region (a `try` inside an arrow
-    /// in a match arm, a scrutinee, a pipeline step is fine, exactly like
-    /// `?` inside a closure in Rust), or one an inline chain (an `if let`
-    /// body, a let-else `else` block) bottoms out in. Without one, the
-    /// `return` would exit the construct's own value region, or fall at the
-    /// module's top level, where there is nothing to return from.
+    /// `try` placement is a **flow** fact, not a nesting rule. A statement
+    /// `try` leaves its nearest Result scope (`docs/design/try-result-scopes.md`
+    /// §4.2): a `result` block whose body holds it with no function written
+    /// in between, otherwise the innermost function-like boundary around it.
+    /// An isolated value region (a match arm, a pipeline step, an
+    /// interpolation) is not a boundary: its `try` keeps the function
+    /// target, and only a `try` whose nearest scope is a `result` block
+    /// outside the region crosses it (§4.6). The target must then be able
+    /// to return the `Err`: an ordinary function can; a constructor, a
+    /// generator, class code outside a method, and a module's top level
+    /// cannot. Inside a template literal, which the file's token stream
+    /// holds as one token, the boundary index cannot see the interpolation's
+    /// own functions, so a function written in the `try`'s region is the
+    /// target there, as the region's parse records.
     fn check_try(&mut self, stmt: &TryStmt, place: Place) {
         let at = self
             .tokens
             .iter()
             .position(|token| token.span.start >= stmt.span.start)
             .unwrap_or(self.tokens.len());
-        let function_target = crate::flow::function_target_at(self.tokens, at);
-        if place != Place::ResultRegion
-            && matches!(
-                function_target,
-                Some(
-                    crate::flow::FunctionTarget::Constructor
-                        | crate::flow::FunctionTarget::Generator
-                )
-            )
-        {
-            self.error(
-                TtError::span(
-                    stmt.span.start,
-                    stmt.span.end,
-                    "`try` cannot be used in a constructor or generator — its `Err` propagation requires an ordinary function return".to_string(),
-                )
-                .code(DiagnosticCode::TryPlacement)
-                .help("move the propagation into an ordinary function, or handle the Result explicitly"),
-            );
-        }
-        if place == Place::ResultValueRegion {
-            self.error(
-                TtError::span(
-                    stmt.span.start,
-                    stmt.span.end,
-                    "`try` crosses an isolated value region whose exits cannot target the enclosing `result` block".to_string(),
-                )
-                .code(DiagnosticCode::TryCrossesValueRegion)
-                .help("extract the affected expression into a nested function when doing so preserves its captures and evaluation order"),
-            );
-        } else if place != Place::ResultRegion
-            && let Some(
+        let function_target = match place {
+            Place::ResultRegion if !stmt.in_function => {
+                self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
+                return;
+            }
+            Place::ResultValueRegion if !stmt.in_function => {
+                self.error(
+                    TtError::span(
+                        stmt.span.start,
+                        stmt.span.end,
+                        "`try` crosses an isolated value region whose exits cannot target the enclosing `result` block".to_string(),
+                    )
+                    .code(DiagnosticCode::TryCrossesValueRegion)
+                    .help("extract the affected expression into a nested function when doing so preserves its captures and evaluation order"),
+                );
+                self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
+                return;
+            }
+            _ if at > 0 && self.tokens[at - 1].span.end > stmt.span.start => {
+                if stmt.in_function {
+                    Some(crate::flow::FunctionTarget::Ordinary)
+                } else {
+                    self.function_targets.at(at - 1)
+                }
+            }
+            _ => self.function_targets.at(at),
+        };
+        let (message, help) = match function_target {
+            Some(crate::flow::FunctionTarget::Ordinary) => {
+                self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
+                return;
+            }
+            Some(
+                crate::flow::FunctionTarget::Constructor | crate::flow::FunctionTarget::Generator,
+            ) => (
+                "`try` cannot be used in a constructor or generator — its `Err` propagation \
+                 requires an ordinary function return"
+                    .to_string(),
+                "move the propagation into an ordinary function, or handle the Result explicitly",
+            ),
+            Some(
                 boundary @ (crate::flow::FunctionTarget::StaticBlock
                 | crate::flow::FunctionTarget::ClassElement),
-            ) = function_target
-        {
-            let owner = if boundary == crate::flow::FunctionTarget::StaticBlock {
-                "a class static block"
-            } else {
-                "a class field initializer or computed member name"
-            };
-            self.error(
-                TtError::span(
-                    stmt.span.start,
-                    stmt.span.end,
-                    format!("`try` cannot be used in {owner} — it has no enclosing function failure edge for its `Err` propagation"),
+            ) => {
+                let owner = if boundary == crate::flow::FunctionTarget::StaticBlock {
+                    "a class static block"
+                } else {
+                    "a class field initializer or computed member name"
+                };
+                (
+                    format!(
+                        "`try` cannot be used in {owner} — it has no enclosing function failure \
+                         edge for its `Err` propagation"
+                    ),
+                    "move the propagation into an ordinary function, or handle the Result explicitly",
                 )
+            }
+            None if matches!(place, Place::Module | Place::Function) => (
+                "`try` must be inside a function — it compiles to a `return` that propagates \
+                 the `Err`, and at the top level of a module there is no function to return from"
+                    .to_string(),
+                "move the code into a function whose `Err` this can return, or `match` on the \
+                 `Result` instead",
+            ),
+            None => (
+                "`try` cannot be used here, in an isolated value region — it compiles to a \
+                 `return`, which would complete this construct's value instead of returning \
+                 from the enclosing function"
+                    .to_string(),
+                "extract the logic into a function (a `try` inside a function written here is \
+                 fine), or move the propagation into a statement-bodied `result` block",
+            ),
+        };
+        self.error(
+            TtError::span(stmt.span.start, stmt.span.end, message)
                 .code(DiagnosticCode::TryPlacement)
-                .help("move the propagation into an ordinary function, or handle the Result explicitly"),
-            );
-        } else {
-            self.check_try_placement(stmt.span, stmt.in_function, place);
-        }
+                .help(help),
+        );
         self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
     }
 
@@ -265,36 +296,6 @@ impl Checker<'_> {
             );
         }
         self.visit_program(&expr.expr, Ctx::Expr, Place::ValueRegion);
-    }
-
-    fn check_try_placement(&mut self, span: Span, in_function: bool, place: Place) {
-        if place == Place::ResultRegion {
-            return;
-        }
-        if !in_function && place != Place::Function {
-            let (message, help) = if place == Place::Module {
-                (
-                    "`try` must be inside a function — it compiles to a `return` that \
-                     propagates the `Err`, and at the top level of a module there is no \
-                     function to return from",
-                    "move the code into a function whose `Err` this can return, or `match` \
-                     on the `Result` instead",
-                )
-            } else {
-                (
-                    "`try` cannot be used here, in an isolated value region — it compiles to \
-                     a `return`, which would complete this construct's value instead of \
-                     returning from the enclosing function",
-                    "extract the logic into a function (a `try` inside a function written \
-                     here is fine), or move the propagation into a statement-bodied `result` block",
-                )
-            };
-            self.error(
-                TtError::span(span.start, span.end, message.to_string())
-                    .code(DiagnosticCode::TryPlacement)
-                    .help(help),
-            );
-        }
     }
 
     /// let-else placement is the same flow fact as `try`'s, except the
