@@ -137,6 +137,17 @@ Nightly와 Beta·RC·Stable·Patch의 개발자 절차 및 운영 기준은 [`do
   `tests/baselines/reference/` (`.ts`, `.errors.txt`, `.map.txt`, `.types`)
   are generated with `UPDATE_EXPECT=1 cargo test --test case_baselines`;
   see "Adding a test case" in `CONTRIBUTING.md`.
+- Every bug fix includes at least one test that fails without the fix's
+  non-test changes. Run it against the unfixed code, and record its path
+  and the failure it reported in the task record's "Regression test (fails
+  before the fix)" section; `scripts/check-task-index` requires that
+  section from TASK-636 on. A task that fixes no bug says `Not applicable:`
+  and why.
+- Commit baseline changes (`tests/baselines/reference/`,
+  `tests/fixtures/**/expected.*`) in the same commit as the change that
+  causes them, after reading their diff: an unrelated-looking baseline
+  change is a clue about something the change did not intend. CI fails on
+  a missing, modified, or unused baseline.
 - 기존 사용자 변경을 보존하고 관련 없는 dirty 파일을 수정하지 않습니다.
 
 변경 완료 전 로컬 게이트를 실행합니다. GitHub Actions의 `CI`도 `main`과

@@ -56,6 +56,30 @@ launcher(`npm/tt-lang/bin/ttc.js`)는 이 저장소의 `target/release/ttc`를
 3. 완료 시 검증 결과를 기록하고 상태를 갱신합니다.
 4. 커밋 메시지는 태스크 ID로 시작합니다: `TASK-012: ...`.
 
+## Housekeeping
+
+A pull request should:
+
+- describe what the change intends to do;
+- include at least one test that fails without the change's non-test code.
+  For a bug fix that is usually one case file under `tests/cases/` (see
+  "Adding a test case"). Run it against the unfixed code and record its
+  path and the failure it reported in the task record's "Regression test
+  (fails before the fix)" section, which `scripts/check-task-index`
+  requires from TASK-636 on; a change that fixes no bug says
+  `Not applicable:` and why there;
+- include reasonable permutations of the fixed input, not only the reported
+  one;
+- include the baseline changes it causes, in the same commit, after reading
+  their diff (`git diff -- tests/baselines tests/fixtures`). A baseline that
+  changed for no reason the change explains is a clue about something it
+  did not intend;
+- pass `./scripts/ci` locally.
+
+The pull request template (`.github/pull_request_template.md`) repeats this
+as a checklist. These rules follow the "Housekeeping" section of
+TypeScript's `CONTRIBUTING.md`.
+
 ## 머지 전 검증 게이트
 
 ```sh
