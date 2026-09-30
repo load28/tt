@@ -20,6 +20,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
             anchors: Vec::new(),
             declared_names: Vec::new(),
             shared_bindings: Vec::new(),
+            destructured_lists: Vec::new(),
             recovered: Vec::new(),
             tt_diagnostics: Vec::new(),
             generated_names: HashSet::new(),
@@ -54,6 +55,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         anchors: emit.anchors,
         declared_names: emit.declared_names,
         shared_bindings: emit.shared_bindings,
+        destructured_lists: emit.destructured_lists,
         recovered,
         tt_diagnostics: report.diagnostics,
         generated_names: emit.generated_names,
@@ -156,13 +158,19 @@ pub(super) fn ts_completions(
     at: usize,
     text: ServedText<'_>,
     generated_names: &HashSet<String>,
+    trigger: Option<&str>,
 ) -> Result<CompletionAnswer, String> {
     let code = text.code;
+    let context = match trigger {
+        Some(character) => serde_json::json!({ "triggerKind": 2, "triggerCharacter": character }),
+        None => serde_json::json!({ "triggerKind": 1 }),
+    };
     let answer = session.client.request(
         "textDocument/completion",
         serde_json::json!({
             "textDocument": { "uri": served_uri(session, path) },
             "position": lsp_position(u16_position(code, at)),
+            "context": context,
         }),
     )?;
     let items: Vec<serde_json::Value> = match answer {
@@ -184,9 +192,11 @@ pub(super) fn ts_completions(
         {
             continue;
         }
-        session
-            .last_completion
-            .insert((path.to_path_buf(), at, label.clone()), item.clone());
+        let source = item["data"]["source"].as_str().map(str::to_owned);
+        session.last_completion.insert(
+            (path.to_path_buf(), at, label.clone(), source.clone()),
+            item.clone(),
+        );
         let replaced = ["replace", "range"]
             .iter()
             .map(|key| &item["textEdit"][*key])
@@ -215,6 +225,8 @@ pub(super) fn ts_completions(
             description: item["labelDetails"]["description"]
                 .as_str()
                 .map(str::to_owned),
+            detail: item["detail"].as_str().map(str::to_owned),
+            source,
             label,
         });
     }
@@ -311,6 +323,7 @@ pub(super) fn tt_module_entries(
         .filter_map(|file| {
             let name = file.file_name()?.to_str()?.to_string();
             Some(CompletionItem {
+                detail: Some(name.clone()),
                 label: name,
                 kind: "script".to_string(),
                 sort_text: "11".to_string(),
@@ -320,6 +333,7 @@ pub(super) fn tt_module_entries(
                 range: Some(range),
                 label_detail: None,
                 description: None,
+                source: None,
             })
         })
         .collect()
@@ -588,6 +602,79 @@ pub(super) fn signature_position(
         at = opener;
     }
     at
+}
+
+pub(super) fn signature_question(
+    code: &str,
+    mappings: &[EmitMapping],
+    source: &str,
+    source_kind: crate::SourceKind,
+    at: usize,
+) -> Option<(String, usize)> {
+    let tokens = crate::lexer::lex_with_kind(code, 0, code.len(), source_kind);
+    let opener = innermost_invocation(&tokens, at)?;
+    let written = callee_name(tokens_holding(&tokens, opener), opener)?;
+    if mapper::to_source(mappings, written.start).is_some() {
+        return None;
+    }
+    let source_opener = mapper::to_source(mappings, opener)?;
+    let source_tokens = crate::lexer::lex_with_kind(source, 0, source.len(), source_kind);
+    let name = callee_name(tokens_holding(&source_tokens, source_opener), source_opener)?;
+    let name = &source[name.start..name.end];
+    let question = format!("{}{name}{}", &code[..written.start], &code[written.end..]);
+    let at = if at >= written.end {
+        at + name.len() - (written.end - written.start)
+    } else {
+        at
+    };
+    Some((question, at))
+}
+
+fn tokens_holding(tokens: &[crate::lexer::Token], at: usize) -> &[crate::lexer::Token] {
+    use crate::lexer::{TokenKind, TplPart};
+    for token in tokens {
+        if let TokenKind::Template(parts) = &token.kind
+            && token.span.start < at
+            && at < token.span.end
+        {
+            for part in parts.iter() {
+                if let TplPart::Interp { span, tokens } = part
+                    && span.start <= at
+                    && at <= span.end
+                {
+                    return tokens_holding(tokens, at);
+                }
+            }
+        }
+    }
+    tokens
+}
+
+fn callee_name(tokens: &[crate::lexer::Token], opener: usize) -> Option<crate::ast::Span> {
+    use crate::lexer::TokenKind;
+    let mut index = tokens
+        .iter()
+        .position(|token| token.span.start >= opener)
+        .unwrap_or(tokens.len())
+        .checked_sub(1)?;
+    if matches!(tokens[index].kind, TokenKind::Punct(b'>')) && tokens[index].closes_bracket() {
+        let mut depth = 0usize;
+        loop {
+            let token = &tokens[index];
+            if token.closes_bracket() {
+                depth += 1;
+            } else if token.opens_bracket() {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            index = index.checked_sub(1)?;
+        }
+        index = index.checked_sub(1)?;
+    }
+    let token = &tokens[index];
+    matches!(token.kind, TokenKind::Ident).then_some(token.span)
 }
 
 fn innermost_invocation(tokens: &[crate::lexer::Token], at: usize) -> Option<usize> {
@@ -1040,7 +1127,17 @@ pub(super) fn diagnostic_source_span(
 ) -> Option<(usize, usize, mapper::DiagnosticOrigin)> {
     let sb = mapper::from_utf16(&doc.code, start);
     let eb = mapper::from_utf16(&doc.code, end);
-    let origin = mapper::diagnostic_origin(&doc.mappings, &doc.anchors, sb, eb)?;
+    let origin = match doc
+        .destructured_lists
+        .iter()
+        .find(|list| list.out == sb && list.out_end == eb)
+    {
+        Some(list) => mapper::DiagnosticOrigin::Exact {
+            start: list.src,
+            end: list.src_end,
+        },
+        None => mapper::diagnostic_origin(&doc.mappings, &doc.anchors, sb, eb)?,
+    };
     let (start, end) = match origin {
         mapper::DiagnosticOrigin::Exact { start, end } => (start, end),
         mapper::DiagnosticOrigin::Anchor(anchor) => (anchor.src, anchor.src_end),

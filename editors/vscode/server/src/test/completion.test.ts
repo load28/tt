@@ -91,6 +91,7 @@ test("a completion entry resolves to its type", { skip }, async () => {
     position,
     "andThen",
     undefined,
+    undefined,
   );
   assert.ok(detail, "expected details for andThen");
   // The engine resolves the entry against the position it was asked at, so

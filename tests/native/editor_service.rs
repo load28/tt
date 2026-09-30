@@ -116,6 +116,50 @@ const obj = { twice(n: number) { return n * 2; } };\n";
 }
 
 #[test]
+fn signature_help_names_a_stored_callee_as_the_source_call_does() {
+    require_tsgo!();
+    let head = "class Cls { constructor(a: number, b: string) {} }\n\
+declare function two(a: number, b: string): number;\n";
+    let arm = "match (s) { A => 1, B(x) => x }";
+    for (call, equivalent) in [
+        (format!("two({arm}, \"q@@\")"), "two(1, \"q@@\")"),
+        (format!("two({arm}, @@)"), "two(1, @@)"),
+        (format!("new Cls({arm}, @@)"), "new Cls(1, @@)"),
+        (format!("two<number>({arm}, \"q@@\")"), "two<number>(1, \"q@@\")"),
+        (format!("(two)({arm}, \"q@@\")"), "(two)(1, \"q@@\")"),
+        (format!("`${{two({arm}, \"q@@\")}}`"), "`${two(1, \"q@@\")}`"),
+        (format!("new Cls(1, two({arm}, \"q@@\"))"), "new Cls(1, two(1, \"q@@\"))"),
+    ] {
+        let (tt, at_tt) = at_cursor(&format!(
+            "variant S {{ A, B(x: number) }}\n{head}export function f(s: S) {{\n  return {call};\n}}\n"
+        ));
+        let (ts, at_ts) = at_cursor(&format!(
+            "type S = {{ kind: \"A\" }} | {{ kind: \"B\"; x: number }};\n{head}export function f(s: S) {{\n  return {equivalent};\n}}\n"
+        ));
+        let dir = project(&[("src/main.tt", &tt), ("src/equivalent.ts", &ts)]);
+        let tt_file = dir.join("src/main.tt").canonicalize().unwrap();
+        let ts_file = dir.join("src/equivalent.ts").canonicalize().unwrap();
+        let mut project = open_service(&tt_file);
+        project.open_document(ts_file.clone(), ts.clone());
+        let answer = |help: Option<ttc::engine::SignatureHelp>| {
+            help.map(|help| {
+                (
+                    help.signatures[help.active_signature as usize].label.clone(),
+                    help.active_parameter,
+                )
+            })
+        };
+        let expected = answer(project.signature_help(&ts_file, at_ts).unwrap());
+        assert!(expected.is_some(), "{equivalent}");
+        assert_eq!(
+            answer(project.signature_help(&tt_file, at_tt).unwrap()),
+            expected,
+            "{call}"
+        );
+    }
+}
+
+#[test]
 fn signature_help_in_a_try_is_the_same_while_the_file_has_a_syntax_error() {
     require_tsgo!();
     let decl = "import type { TResult } from \"@tt/std\";\n\
@@ -153,6 +197,78 @@ declare function getUser(id: string): TResult<{ name: string }, string>;\n";
             );
         }
     }
+}
+
+#[test]
+fn the_body_of_an_arm_written_up_to_its_arrow_completes_expressions() {
+    require_tsgo!();
+    let decl = "export variant Shape { Circle(radius: number), Rect(width: number), Point }\n\
+const limit = 1;\n";
+    for arms in [
+        "Circle(radius) => radius,\n    Rect(width) => @@",
+        "Circle(radius) => radius,\n    Rect(width) => @@,\n    _ => 0,",
+        "Circle(radius) => radius,\n    Rect(width) if width > limit => @@",
+    ] {
+        let (source, position) = at_cursor(&format!(
+            "{decl}export function g(s: Shape) {{\n  return match (s) {{\n    {arms}\n  }};\n}}\n"
+        ));
+        let dir = project(&[("src/main.tt", &source)]);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        assert!(
+            ttc::engine::tt_completions_at(&file, &source, position).is_empty(),
+            "{source}"
+        );
+        let mut project = open_service(&file);
+        let labels: Vec<_> = project
+            .completion(&file, position, false)
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|item| item.label)
+            .collect();
+        for name in ["width", "limit", "s", "Math"] {
+            assert!(labels.iter().any(|label| label == name), "{source}: {name}");
+        }
+    }
+}
+
+#[test]
+fn a_payload_list_whose_bindings_are_all_unused_is_faded_whole() {
+    require_tsgo!();
+    let source = "export variant S { A, B(x: number, y: string), C(v: S, w: number) }\n\
+export class Failure extends Error { code = 1; }\n\
+export function f(s: S, e: unknown): number {\n\
+\x20 const a = match (s) {\n\
+\x20   B(x, y) => 1,\n\
+\x20   C(v: B(x, y), w) => w,\n\
+\x20   C(v, w) => 2,\n\
+\x20   A => 3,\n\
+\x20 };\n\
+\x20 if let B(x: p, y: q) = s { console.log(1); }\n\
+\x20 const b = match (e) { is Failure { code, message } => 1, _ => 2 };\n\
+\x20 return a + b;\n\
+}\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let diagnostics = project.service_diagnostics(&file).unwrap();
+    let unused: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code == 6198 || d.code == 6133)
+        .map(|d| (d.range.start.line, utf16_slice(source, d.range), d.code, d.tags.clone()))
+        .collect();
+    use ttc::engine::ServiceTag::Unnecessary;
+    assert_eq!(
+        unused,
+        vec![
+            (4, "(x, y)", 6198, vec![Unnecessary]),
+            (5, "(x, y)", 6198, vec![Unnecessary]),
+            (6, "(v, w)", 6198, vec![Unnecessary]),
+            (9, "(x: p, y: q)", 6198, vec![Unnecessary]),
+            (10, "{ code, message }", 6198, vec![Unnecessary]),
+        ],
+        "{diagnostics:?}"
+    );
 }
 
 #[test]
@@ -526,14 +642,132 @@ fn an_auto_import_entry_names_the_module_it_imports_from() {
     };
     assert_eq!(described("kkValue").as_deref(), Some("./shapes.tt"));
     assert_eq!(described("kkValueLib").as_deref(), Some("./lib"));
+    let source = completion
+        .items
+        .iter()
+        .find(|item| item.label == "kkValue")
+        .and_then(|item| item.source.clone());
     let detail = project
-        .completion_resolve(&file, position, "kkValue", completion.probe)
+        .completion_resolve(&file, position, "kkValue", source.as_deref(), completion.probe)
         .unwrap()
         .expect("the entry resolves");
     assert_eq!(
         detail.additional_edits[0].new_text,
         "import { kkValue } from \"./shapes.tt\";\n\n"
     );
+}
+
+#[test]
+fn entries_of_one_name_from_two_modules_each_import_their_own() {
+    require_tsgo!();
+    let (source, position) = at_cursor("export const z = kkVa@@;\n");
+    let dir = project(&[
+        ("src/main.tt", &source),
+        ("src/shapes.tt", "export const kkValue = 1;\n"),
+        ("src/lib.ts", "export const kkValue = 2;\n"),
+    ]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let completion = project.completion(&file, position, false).unwrap();
+    let entries: Vec<_> = completion
+        .items
+        .iter()
+        .filter(|item| item.label == "kkValue")
+        .cloned()
+        .collect();
+    let mut modules: Vec<_> = entries
+        .iter()
+        .map(|item| item.description.clone().unwrap_or_default())
+        .collect();
+    modules.sort();
+    assert_eq!(modules, ["./lib", "./shapes.tt"]);
+    for entry in entries.iter().chain(entries.iter().rev()) {
+        let detail = project
+            .completion_resolve(
+                &file,
+                position,
+                &entry.label,
+                entry.source.as_deref(),
+                completion.probe,
+            )
+            .unwrap()
+            .expect("the entry resolves");
+        let module = entry.description.as_deref().unwrap();
+        assert_eq!(
+            detail.additional_edits[0].new_text,
+            format!("import {{ kkValue }} from \"{module}\";\n\n"),
+        );
+        assert_eq!(detail.signature, format!("Add import from \"{module}\""));
+    }
+}
+
+#[test]
+fn a_triggered_completion_answers_as_typescript_answers_its_twin() {
+    require_tsgo!();
+    let body = "import { kkTt } from \"./@@\";\n";
+    let rest = "declare global { namespace JSX { interface IntrinsicElements { main: {} } } }\n\
+/** @@@ */\n\
+export function f(n: number) { return n; }\n\
+class K { #secret = 1; read() { return this.#@@; } }\n\
+const q = @@1;\n\
+const s = '@@';\n\
+const t = 2 <@@ 3;\n\
+export const v = <main><@@</main>;\n";
+    let marked = format!("{body}{rest}");
+    let triggers = ["/", "@", "#", " ", "'", "<", "<"];
+    let dir = project(&[
+        ("src/lib.ts", "export const kkLib = 1;\n"),
+        ("src/shapes.tt", "export const kkTt = 2;\n"),
+    ]);
+    let tt_file = dir.join("src/main.ttx");
+    let ts_file = dir.join("src/equivalent.tsx");
+    let cleaned = marked.replace("@@", "");
+    std::fs::write(&tt_file, &cleaned).unwrap();
+    std::fs::write(&ts_file, &cleaned).unwrap();
+    let tt_file = tt_file.canonicalize().unwrap();
+    let ts_file = ts_file.canonicalize().unwrap();
+    let mut project = open_service(&tt_file);
+    project.open_document(ts_file.clone(), cleaned.clone());
+    let mut rest_of = marked.as_str();
+    let mut consumed = 0;
+    for trigger in triggers {
+        let found = rest_of.find("@@").unwrap();
+        let at = consumed + found;
+        let before = &cleaned[..at];
+        let position = ttc::engine::Position {
+            line: before.matches('\n').count() as u32,
+            character: before[before.rfind('\n').map_or(0, |n| n + 1)..].encode_utf16().count() as u32,
+        };
+        consumed = at;
+        rest_of = &rest_of[found + 2..];
+        let labels = |project: &mut ttc::engine::Project, file: &Path| {
+            let mut labels: Vec<String> = project
+                .triggered_completion(file, position, false, Some(trigger))
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|item| item.label)
+                .collect();
+            labels.sort();
+            labels
+        };
+        let mut expected = labels(&mut project, &ts_file);
+        let mut answered = labels(&mut project, &tt_file);
+        if trigger == "/" {
+            assert!(answered.contains(&"shapes.tt".to_string()), "{answered:?}");
+            assert!(expected.contains(&"lib".to_string()), "{expected:?}");
+            let siblings = ["equivalent", "main.ttx", "shapes.tt"];
+            answered.retain(|label| !siblings.contains(&label.as_str()));
+            expected.retain(|label| !siblings.contains(&label.as_str()));
+        }
+        assert_eq!(answered, expected, "{trigger:?} at {position:?}");
+        match trigger {
+            " " | "'" => assert!(answered.is_empty(), "{trigger:?}: {answered:?}"),
+            "@" => assert!(answered.contains(&"@param".to_string()), "{answered:?}"),
+            "#" => assert!(answered.contains(&"#secret".to_string()), "{answered:?}"),
+            _ => {}
+        }
+    }
 }
 
 #[test]

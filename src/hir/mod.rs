@@ -619,6 +619,8 @@ pub enum Pat {
         path: UnresolvedPath,
         /// The destructured fields; `None` when no parens were written.
         fields: Option<Vec<FieldPat>>,
+        /// The parenthesized field list as written.
+        list: Option<NodeId>,
     },
     /// `is Type` / `is Type { field }` — a JavaScript `instanceof`
     /// constructor path plus optional property materialization. The path is
@@ -630,6 +632,8 @@ pub enum Pat {
         path: String,
         /// Property bindings; `None` when no braces were written.
         fields: Option<Vec<FieldPat>>,
+        /// The braced property list as written.
+        list: Option<NodeId>,
     },
     /// `"north"`, `200`, `true`, `1n`.
     Literal(LitValue),

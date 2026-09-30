@@ -206,6 +206,34 @@ fn isolating_an_alternative_maps_its_binding_into_narrowed_output() {
 }
 
 #[test]
+fn a_destructuring_stands_for_the_whole_list_it_destructures() {
+    let src = "variant E { A(x: number, y: number), B(v: E, w: number), C }\n\
+               const v = match (e) { A(x, y) => 1, B(v: A(x: p, y: q), w) => w, B(v, w) => 2, C => 0 };\n\
+               const u = match (e) { A(x) | B(w: x) => x, C => 0 };\n";
+    let doc = service_doc(Path::new("/p/a.tt"), src.to_string());
+    let lists: Vec<(&str, &str)> = doc
+        .destructured_lists
+        .iter()
+        .map(|list| {
+            (
+                &src[list.src..list.src_end],
+                &doc.code[list.out..list.out_end],
+            )
+        })
+        .collect();
+    assert_eq!(
+        lists,
+        [
+            ("(x, y)", "{ x, y }"),
+            ("(x: p, y: q)", "{ x: p, y: q }"),
+            ("(v, w)", "{ v, w }"),
+        ],
+        "{}",
+        doc.code
+    );
+}
+
+#[test]
 fn an_or_pattern_binding_stands_for_every_alternative_it_is_written_in() {
     let src = "variant E { A(x: number), B(x: number), C }\n\
                const v = match (e) { A(x) | B(x: x) => x, C => 0 };\n\

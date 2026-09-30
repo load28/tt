@@ -855,22 +855,32 @@ impl<'a> Emitter<'a> {
             {
                 out.push_break(depth);
             }
-            if group_index == 0 {
-                if let Some(mode) = declaration {
-                    out.push_lit(format!(" {} {{ ", binding_keyword(mode)));
-                } else {
-                    out.push_lit("const { ");
-                }
-            } else {
-                out.push_lit("const { ");
+            let keyword = match declaration {
+                Some(mode) if group_index == 0 => format!(" {} ", binding_keyword(mode)),
+                _ => "const ".to_string(),
+            };
+            out.push_lit(keyword);
+            let list = bindings
+                .iter()
+                .map(|(binding, shared)| binding.list.filter(|_| shared.is_none()))
+                .reduce(|left, right| left.filter(|_| left == right))
+                .flatten()
+                .map(|list| self.span(list));
+            if let Some(list) = list {
+                out.push_destructured_list_start(list.start);
             }
+            out.push_lit("{ ");
             for (index, (binding, shared)) in bindings.iter().enumerate() {
                 if index > 0 {
                     out.push_lit(", ");
                 }
                 self.emit_binding(binding, *shared, recovery, &mut out);
             }
-            out.push_lit(" } = ");
+            out.push_lit(" }");
+            if let Some(list) = list {
+                out.push_destructured_list_end(list.end);
+            }
+            out.push_lit(" = ");
             out.append(self.emit_place(&receiver, decision, None));
             out.push_lit(if declaration.is_some() || separator_depth.is_some() {
                 ";"

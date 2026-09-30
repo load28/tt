@@ -459,7 +459,7 @@ fn context(source: &str, program: &Program, tokens: &[Token], offset: usize) -> 
         None
     };
     let before = prefix.unwrap_or(cursor);
-    if before == 0 {
+    if before == 0 || matches!(tokens[before - 1].kind, TokenKind::Arrow) {
         return None;
     }
     let site = match parsed_at(program, offset) {
@@ -1469,6 +1469,11 @@ const c = match (d) { is Error => 1, \"x\" => 2, ‸ };\n";
             ("=> { if (radius) { } }, _ => 2 };\n", "if (radius) { "),
             ("if radius | ", "radius | "),
             ("if radius > 0 => 1, Rect(w, h) if w > h ", "w > h "),
+            ("=> , _ => 2 };\n", "radius) => "),
+            ("=>  };\n", "radius) => "),
+            ("=>\n  };\n", "radius) =>\n  "),
+            ("=> ", "radius) => "),
+            ("if radius > 0 =>  };\n", "radius > 0 => "),
         ] {
             let source = format!("{head}{arm}");
             assert!(

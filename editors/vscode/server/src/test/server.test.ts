@@ -414,12 +414,14 @@ interface Client {
 
 /** The framing an LSP client speaks: `Content-Length` headers over stdio. */
 interface ConnectOptions {
+  command?: [string, string[]];
   env?: NodeJS.ProcessEnv;
   configuration?: (item: { scopeUri?: string; section?: string }) => unknown;
 }
 
 function connect(server = SERVER, options: ConnectOptions = {}): Client {
-  const child: ChildProcess = spawn(process.execPath, [server, "--stdio"], {
+  const [command, args] = options.command ?? [process.execPath, [server, "--stdio"]];
+  const child: ChildProcess = spawn(command, args, {
     stdio: ["pipe", "pipe", "pipe"],
     // The LSP case lives in a temporary project, while the test contract is
     // against the compiler built from this checkout. Cover both supported
@@ -720,6 +722,45 @@ test(
   },
 );
 
+const UNUSED_LIST_SOURCE = [
+  "variant S { A, B(x: number, y: string) }",
+  "export function run(s: S): number {",
+  "  return match (s) {",
+  "    A => 0,",
+  "    B(x, y) => 1,",
+  "  };",
+  "}",
+  'export const wrong: number = "x";',
+  "",
+].join("\n");
+
+test(
+  "a payload list whose bindings are all unused is faded whole",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, uri, stop } = await open(UNUSED_LIST_SOURCE);
+    try {
+      const published = await client.waitFor(
+        "textDocument/publishDiagnostics",
+        (params) =>
+          params.uri === uri &&
+          params.diagnostics.some((diagnostic: any) => String(diagnostic.code).endsWith("2322")),
+      );
+      const seen = published.diagnostics.map((d: any) => [
+        covered(UNUSED_LIST_SOURCE, d.range),
+        d.severity,
+        d.tags ?? [],
+      ]);
+      assert.deepEqual(seen, [
+        ["(x, y)", 4, [1]],
+        ['"x"', 1, []],
+      ]);
+    } finally {
+      stop();
+    }
+  },
+);
+
 const AUTO_IMPORT_SOURCE = [
   "export const piped = 1 |> String;",
   "export const value = help",
@@ -747,6 +788,164 @@ test(
       ]);
     } finally {
       stop();
+    }
+  },
+);
+
+test(
+  "each auto-import entry of a name exported by two modules imports from its own module",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, completion, stop } = await open("export const value = kkVal", "tt", {
+      "lib.ts": "export const kkValue = 1;\n",
+      "shapes.tt": "export const kkValue = 2;\n",
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", noEmit: true },
+        include: ["*"],
+      }),
+    });
+    try {
+      const { items } = await completion("value = kkVal");
+      const entries = items.filter((item) => item.label === "kkValue");
+      assert.equal(entries.length, 2, `entries: ${JSON.stringify(entries)}`);
+      const imports: string[] = [];
+      for (const entry of [...entries, ...entries.reverse()]) {
+        const resolved = (await client.request("completionItem/resolve", entry)).result;
+        imports.push(resolved.additionalTextEdits[0].newText);
+      }
+      assert.deepEqual(imports.slice(0, 2).sort(), [
+        'import { kkValue } from "./lib";\n\n',
+        'import { kkValue } from "./shapes.tt";\n\n',
+      ]);
+      assert.deepEqual(imports.slice(2), imports.slice(0, 2).reverse());
+    } finally {
+      stop();
+    }
+  },
+);
+
+test(
+  "the server advertises every trigger character TypeScript's server advertises",
+  { skip: skipTyped, timeout },
+  async () => {
+    const dir = repoTestDir("tt-trigger-characters-");
+    const initialize = {
+      processId: process.pid,
+      rootUri: pathToFileURL(dir).toString(),
+      workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }],
+      capabilities: {},
+    };
+    const typescript = connect(SERVER, { command: [findTsgo()!, ["--lsp", "--stdio"]] });
+    const tt = connect();
+    try {
+      const native = (await typescript.request("initialize", initialize)).result.capabilities;
+      const own = (await tt.request("initialize", initialize)).result.capabilities;
+      const missing = (theirs: string[] | undefined, ours: string[] | undefined) =>
+        (theirs ?? []).filter((character) => !(ours ?? []).includes(character));
+      assert.deepEqual(
+        missing(native.completionProvider.triggerCharacters, own.completionProvider.triggerCharacters),
+        [],
+      );
+      for (const character of ["(", "|", "{", ","]) {
+        assert.ok(own.completionProvider.triggerCharacters.includes(character), character);
+      }
+      assert.deepEqual(
+        missing(native.signatureHelpProvider.triggerCharacters, own.signatureHelpProvider.triggerCharacters),
+        [],
+      );
+      assert.deepEqual(
+        missing(
+          native.signatureHelpProvider.retriggerCharacters,
+          own.signatureHelpProvider.retriggerCharacters,
+        ),
+        [],
+      );
+    } finally {
+      typescript.stop();
+      tt.stop();
+    }
+  },
+);
+
+const TRIGGERED_SOURCE = [
+  'import { kkTt } from "./";',
+  'import { kkLib } from ".";',
+  "const q = 1;",
+  "",
+].join("\n");
+
+test(
+  "a TypeScript trigger character is answered as TypeScript answers it",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, uri, stop } = await open(TRIGGERED_SOURCE, "tt", {
+      "lib.ts": "export const kkLib = 1;\n",
+      "shapes.tt": "export const kkTt = 2;\n",
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", noEmit: true },
+        include: ["*"],
+      }),
+    });
+    const triggered = async (line: number, character: number, trigger: string) => {
+      const response = await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: { line, character },
+        context: { triggerKind: 2, triggerCharacter: trigger },
+      });
+      const items = (Array.isArray(response.result) ? response.result : (response.result?.items ?? [])) as any[];
+      return items;
+    };
+    try {
+      const slash = await triggered(0, 'import { kkTt } from "./'.length, "/");
+      const labels = slash.map((item) => item.label);
+      assert.ok(labels.includes("lib"), `labels: ${labels}`);
+      assert.ok(labels.includes("shapes.tt"), `labels: ${labels}`);
+      assert.equal(slash.find((item) => item.label === "lib").detail, "lib.ts");
+      assert.equal(slash.find((item) => item.label === "shapes.tt").detail, "shapes.tt");
+      const dot = await triggered(1, 'import { kkLib } from ".'.length, ".");
+      assert.ok(dot.length > 0, "a `.` in a module specifier is answered");
+      const space = await triggered(2, "const q = ".length, " ");
+      assert.deepEqual(space.map((item) => item.label), []);
+      const help = await client.request("textDocument/signatureHelp", {
+        textDocument: { uri },
+        position: { line: 2, character: "const q = ".length },
+        context: { triggerKind: 2, triggerCharacter: "<", isRetrigger: false },
+      });
+      assert.equal(help.result, null);
+    } finally {
+      stop();
+    }
+  },
+);
+
+const ARM_BODY_SOURCE = [
+  "variant Shape { Circle(radius: number), Rect(width: number), Point }",
+  "export function g(s: Shape, extra: number) {",
+  "  return match (s) {",
+  "    Circle(radius) => radius,",
+  "    Rect(width) => ",
+  "  };",
+  "}",
+  "",
+].join("\n");
+
+test(
+  "the body of an arm written up to its arrow completes expressions",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { labels } = await (async () => {
+      const { completion, stop } = await open(ARM_BODY_SOURCE);
+      try {
+        return await completion("Rect(width) => ");
+      } finally {
+        stop();
+      }
+    })();
+    for (const name of ["width", "extra", "s", "match"]) {
+      assert.ok(labels.includes(name), `${name} in: ${labels}`);
+    }
+    for (const pattern of ["Circle", "Point", "_"]) {
+      assert.ok(!labels.includes(pattern), `${pattern} in: ${labels}`);
     }
   },
 );

@@ -626,6 +626,11 @@
 | TASK-618 | Let a referenced type-check config emit declarations into a cache | Complete | 2026-09-30 | 2026-09-30 | [TASK-618](./TASK-618-referenced-type-configs-emit.md) |
 | TASK-619 | Derive `tt:build` from the configured source roots | Complete | 2026-09-30 | 2026-09-30 | [TASK-619](./TASK-619-derived-build-roots.md) |
 | TASK-620 | Report an impossible match case at its pattern | Complete | 2026-09-30 | 2026-09-30 | [TASK-620](./TASK-620-impossible-case-at-its-pattern.md) |
+| TASK-629 | Resolve each auto-import entry against its own module | Complete | 2026-09-30 | 2026-09-30 | [TASK-629](./TASK-629-auto-import-entry-identity.md) |
+| TASK-630 | Name a stored callee's signature as the source call does | Complete | 2026-09-30 | 2026-09-30 | [TASK-630](./TASK-630-signature-help-for-a-stored-callee.md) |
+| TASK-631 | Open completion on TypeScript's trigger characters and let TypeScript decide | Complete | 2026-09-30 | 2026-09-30 | [TASK-631](./TASK-631-typescript-trigger-characters.md) |
+| TASK-632 | Complete an expression right after an arm's `=>` | Complete | 2026-09-30 | 2026-09-30 | [TASK-632](./TASK-632-arm-body-after-the-arrow.md) |
+| TASK-633 | Fade a payload list whose bindings are all unused | Complete | 2026-09-30 | 2026-09-30 | [TASK-633](./TASK-633-unused-payload-lists.md) |
 | TASK-634 | Run case files against multi-artifact baselines | Complete | 2026-09-30 | 2026-09-30 | [TASK-634](./TASK-634-case-runner-baselines.md) |
 | TASK-635 | Fail on missing, modified, and unused baselines locally and in CI | Complete | 2026-09-30 | 2026-09-30 | [TASK-635](./TASK-635-baseline-tracking-and-ci.md) |
 | TASK-636 | Require a test that fails before the fix, and reviewed baselines | Complete | 2026-09-30 | 2026-09-30 | [TASK-636](./TASK-636-contribution-regression-rules.md) |

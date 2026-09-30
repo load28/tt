@@ -404,6 +404,9 @@ impl Lower<'_> {
                 .map(|binding| self.lower_field_pat(binding))
                 .collect()
         });
+        let list = alt
+            .list
+            .map(|list| self.node(Self::span(list), AstOrigin::Pattern));
         self.alloc_pattern(
             Pat::Constructor {
                 path: UnresolvedPath {
@@ -411,6 +414,7 @@ impl Lower<'_> {
                     name: alt.tag.clone(),
                 },
                 fields,
+                list,
             },
             Span::new(alt.tag_off, alt.end),
         )
@@ -424,11 +428,15 @@ impl Lower<'_> {
                 .map(|binding| self.lower_field_pat(binding))
                 .collect()
         });
+        let list = alt
+            .list
+            .map(|list| self.node(Self::span(list), AstOrigin::Pattern));
         self.alloc_pattern(
             Pat::Instance {
                 constructor,
                 path: alt.path.clone(),
                 fields,
+                list,
             },
             Span::new(alt.is_off, alt.end),
         )
@@ -839,7 +847,7 @@ mod tests {
         let src = "const m = match (r) { Ok(value: Some(v)) => v, _ => 0 };\n";
         let hir = lower(src);
         let site = hir.sites.iter().next().unwrap().1;
-        let Pat::Constructor { path, fields } = &hir.patterns[site.arms[0].pattern] else {
+        let Pat::Constructor { path, fields, .. } = &hir.patterns[site.arms[0].pattern] else {
             panic!("expected a constructor");
         };
         assert_eq!(path.name, "Ok");

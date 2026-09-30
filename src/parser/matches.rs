@@ -732,6 +732,7 @@ fn parse_instance_pattern(cur: &mut Cursor) -> Option<InstancePattern> {
     }
 
     let mut bindings = None;
+    let mut list = None;
     let mut end = path_end;
     if cur.at_punct(b'{') {
         let open = cur.idx;
@@ -741,6 +742,10 @@ fn parse_instance_pattern(cur: &mut Cursor) -> Option<InstancePattern> {
             false,
         )?);
         end = cur.tokens[close].span.end;
+        list = Some(Span {
+            start: cur.tokens[open].span.start,
+            end,
+        });
         cur.idx = close + 1;
     }
     Some(InstancePattern {
@@ -752,6 +757,7 @@ fn parse_instance_pattern(cur: &mut Cursor) -> Option<InstancePattern> {
         is_off,
         end,
         bindings,
+        list,
     })
 }
 
@@ -1069,6 +1075,7 @@ pub(super) fn parse_alternative(cur: &mut Cursor, allow_nested: bool) -> Option<
         return None;
     }
     let mut bindings = None;
+    let mut list = None;
     let mut end = tag_span.end;
     if cur.at_punct(b'(') {
         let open = cur.idx;
@@ -1078,6 +1085,10 @@ pub(super) fn parse_alternative(cur: &mut Cursor, allow_nested: bool) -> Option<
             allow_nested,
         )?);
         end = cur.tokens[close].span.end;
+        list = Some(Span {
+            start: cur.tokens[open].span.start,
+            end,
+        });
         cur.idx = close + 1;
     }
     Some(TagPattern {
@@ -1085,6 +1096,7 @@ pub(super) fn parse_alternative(cur: &mut Cursor, allow_nested: bool) -> Option<
         tag_off: tag_span.start,
         end,
         bindings,
+        list,
     })
 }
 
@@ -1123,6 +1135,10 @@ pub(super) fn parse_bindings(mut cur: Cursor, allow_nested: bool) -> Option<Vec<
                     tag_off: rhs_span.start,
                     end: cur.tokens[close].span.end,
                     bindings: Some(inner),
+                    list: Some(Span {
+                        start: cur.tokens[open].span.start,
+                        end: cur.tokens[close].span.end,
+                    }),
                 });
             } else {
                 alias = Some(rhs.to_string());

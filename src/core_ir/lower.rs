@@ -484,6 +484,7 @@ impl Lowering<'_> {
             Pat::Instance {
                 constructor,
                 fields,
+                list,
                 ..
             } => {
                 let mut parts = vec![PatternPlan::Test(Test::InstanceOf {
@@ -505,11 +506,18 @@ impl Lowering<'_> {
                         source: field_place,
                         source_field: None,
                         binding,
+                        list: *list,
                     }));
                 }
                 PatternPlan::AllOf(parts)
             }
-            Pat::Constructor { path, fields } => {
+            Pat::Constructor { path, fields, list } => {
+                let list = list.filter(|_| {
+                    fields
+                        .iter()
+                        .flatten()
+                        .all(|field| matches!(field.binding, FieldBinding::Named { .. }))
+                });
                 let constructor = match self.semantic.resolution.uses.get(&path.node) {
                     Some(Res::Variant(reference)) => Constructor::Resolved {
                         reference: *reference,
@@ -547,6 +555,7 @@ impl Lowering<'_> {
                                     field.node,
                                 ),
                                 binding,
+                                list,
                             }));
                         }
                         FieldBinding::Nested(inner) => {

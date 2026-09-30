@@ -244,6 +244,51 @@ not rename is an error naming it; any other refusal is null. The service
 client returns a server's error answer apart from a failed conversation
 (`Service::answer`), so TypeScript's refusal is not an engine failure.
 
+**Update (TASK-629)**: a completion entry is identified by its label and
+the service's `source` (TypeScript's `CompletionEntry.source`, tsgo's
+`data.source`), as TypeScript identifies an entry to resolve. The engine
+answers the source with each item, and the adapter keeps it in the item's
+`data` for `completionItem/resolve`, so two exports of one name from
+different modules each import from their own module.
+
+**Update (TASK-630)**: when the user's call names its callee with a name
+the emission wrote (a callee stored ahead of a lowered argument, `const
+$tt_v1 = (two); ... $tt_v1(...)`), signature help is asked in a question
+served for the request, with the source call's callee name in the stored
+name's place, so TypeScript labels the signature by the symbol the source
+names (`services/signatureHelp.ts` labels by the callee expression's
+symbol).
+
+**Update (TASK-631)**: the adapter advertises TypeScript's completion
+trigger characters (tsgo's `.`, `"`, `'`, backtick, `/`, `@`, `<`, `#`,
+space, and `*`) beside tt's pattern
+triggers (`( | { ,`), and signature help's `( , <`. A request a TypeScript
+trigger character sent is forwarded with its LSP 3.17 `CompletionContext`
+(`triggerKind: TriggerCharacter`, `triggerCharacter`) through the engine
+(`Project::triggered_completion`) to the service, which decides whether the
+character begins a completion there (`services/completions.ts`,
+`isValidTrigger`): nothing after a space outside an `import`, a JSDoc tag
+after `@`, a module path after `/`. Signature help forwards its
+`SignatureHelpContext` the same way (`Project::triggered_signature_help`).
+tt's own trigger characters keep their pattern-only behaviour. An entry
+carries the service's `detail` (a path entry's file name), and a `.tt`
+module entry its file name.
+
+**Update (TASK-632)**: a position whose preceding token is `=>` is never
+a pattern position: a body begins there, as TypeScript classifies a
+completion position by its preceding token (`getCompletionData`'s
+`contextToken`). An arm whose body is not written yet (TASK-605) is
+completed with expressions from the first keystroke.
+
+**Update (TASK-633)**: the emission records each object pattern it writes
+for a whole field list (`DestructuredList`: `{ x, y }` stands for the
+source's `(x, y)`), and a service diagnostic whose span is exactly such a
+pattern maps to the list as an exact origin. TypeScript's 6198 "All
+destructured elements are unused" then fades `(x, y)` with its
+`Unnecessary` tag. A destructuring of part of a list (a nested pattern) or
+of several lists (an or-pattern) records nothing, and a suggestion there is
+still dropped (TASK-515).
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

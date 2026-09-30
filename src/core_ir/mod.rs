@@ -320,6 +320,7 @@ pub(crate) struct Bind {
     pub source: Place,
     pub source_field: Option<FieldId>,
     pub binding: NodeId,
+    pub list: Option<NodeId>,
 }
 
 #[derive(Debug)]
