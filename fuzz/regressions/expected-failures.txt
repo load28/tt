@@ -1,0 +1,12 @@
+# Crash inputs under fuzz/regressions/ that still crash.
+#
+# One line per input: <target>/<file>, a tab, the task that fixes it (or,
+# while no fix is planned, the task that found it), a tab, and the crash it
+# produces now: the panicking source file and the first line of the panic
+# message, with each run of decimal numerals written as N.
+# tests/fuzz_regressions.rs fails when a listed input no longer crashes or
+# crashes differently, so the change that fixes one removes its line. The
+# mutation pass tolerates a crash only when its signature is listed here.
+compile_any_bytes/arm-guard-not-written.tt	TASK-621	src/parser/matches.rs: byte range starts at N but ends at N
+compile_any_bytes/mixed-patterns-in-a-call-argument.tt	TASK-637	src/codegen/core/emitter/pattern.rs: switch variant alternative is not constructor
+compile_any_bytes/result-return-template-literal.tt	TASK-622	src/codegen/rope.rs: Result return start has no matching end

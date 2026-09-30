@@ -634,7 +634,8 @@
 | TASK-634 | Run case files against multi-artifact baselines | Complete | 2026-09-30 | 2026-09-30 | [TASK-634](./TASK-634-case-runner-baselines.md) |
 | TASK-635 | Fail on missing, modified, and unused baselines locally and in CI | Complete | 2026-09-30 | 2026-09-30 | [TASK-635](./TASK-635-baseline-tracking-and-ci.md) |
 | TASK-636 | Require a test that fails before the fix, and reviewed baselines | Complete | 2026-09-30 | 2026-09-30 | [TASK-636](./TASK-636-contribution-regression-rules.md) |
+| TASK-637 | Replay fuzz crashers as permanent regressions, and mutate the case corpus | Complete | 2026-09-30 | 2026-09-30 | [TASK-637](./TASK-637-fuzz-crashers-as-regressions.md) |
 
 ## Next task number
 
-**TASK-637**
+**TASK-638**

@@ -1,0 +1,88 @@
+#!/usr/bin/env node
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const SOURCES = ["tests/cases", "tests/fixtures"];
+const TARGET = "compile_any_bytes";
+
+function walk(dir, out) {
+  if (!existsSync(dir)) return out;
+  for (const name of readdirSync(dir).sort()) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) walk(path, out);
+    else out.push(path);
+  }
+  return out;
+}
+
+function isTt(name) {
+  return name.endsWith(".tt") || name.endsWith(".ttx");
+}
+
+function filename(line) {
+  const match = /^\/\/\s*@filename\s*:\s*(.*)$/i.exec(line);
+  return match ? match[1].trim() : null;
+}
+
+function units(text, name) {
+  const out = [];
+  let current = null;
+  for (const line of text.split("\n")) {
+    const unit = filename(line);
+    if (unit !== null) {
+      if (current) out.push(current);
+      current = { name: unit, lines: [] };
+    } else if (current) {
+      current.lines.push(line);
+    }
+  }
+  if (current) out.push(current);
+  if (out.length === 0) return [{ name, text }];
+  return out.map((unit) => ({ name: unit.name, text: unit.lines.join("\n") }));
+}
+
+function seeds() {
+  const out = new Map();
+  for (const source of SOURCES) {
+    for (const path of walk(join(ROOT, source), [])) {
+      if (!isTt(path)) continue;
+      const text = readFileSync(path, "utf8");
+      for (const unit of units(text, path)) {
+        if (!isTt(unit.name)) continue;
+        const name = createHash("sha1").update(unit.text).digest("hex");
+        out.set(name, { text: unit.text, from: relative(ROOT, path).split(sep).join("/") });
+      }
+    }
+  }
+  return out;
+}
+
+const argv = process.argv.slice(2);
+if (argv.length > 1 || (argv.length === 1 && argv[0] !== "--list")) {
+  console.error(
+    [
+      "usage:",
+      `  node scripts/fuzz-seed-corpus          write every .tt/.ttx unit of ${SOURCES.join(" and ")} to fuzz/corpus/${TARGET}/<sha1>`,
+      "  node scripts/fuzz-seed-corpus --list   print the seeds and where each comes from, writing nothing",
+    ].join("\n"),
+  );
+  process.exit(2);
+}
+const all = seeds();
+if (argv[0] === "--list") {
+  for (const [name, seed] of [...all].sort()) console.log(`${name} ${seed.from}`);
+  process.exit(0);
+}
+const dir = join(ROOT, "fuzz/corpus", TARGET);
+mkdirSync(dir, { recursive: true });
+let written = 0;
+for (const [name, seed] of all) {
+  const path = join(dir, name);
+  if (existsSync(path)) continue;
+  writeFileSync(path, seed.text);
+  written += 1;
+}
+console.log(`fuzz/corpus/${TARGET}: ${all.size} seed(s), ${written} new`);

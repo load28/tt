@@ -1,0 +1,3 @@
+variant Shape { Circle(radius: number), Rect(width: number) }
+declare const s: Shape;
+const a = match (s) { Circle(radius) => radius, Rect(width) if };

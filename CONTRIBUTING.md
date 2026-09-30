@@ -212,6 +212,34 @@ tree differs from the commit, listing missing, modified, and unused
 baselines and uploading the difference as the `fix_baselines.patch`
 artifact. `git apply fix_baselines.patch` reproduces it locally.
 
+### Fuzz findings and the mutation pass
+
+A crash input is a regression test. The fuzz targets' bodies live in
+`fuzz/src/lib.rs`, and `tests/fuzz_regressions.rs` replays every file under
+`fuzz/regressions/<target>/` through them on the stable toolchain, the way
+typescript-go replays `testdata/fuzz/FuzzParser/` on every `go test`. Save a
+minimized crash input there with the fix that makes it pass. An input that
+still crashes is listed in `fuzz/regressions/expected-failures.txt` with the
+task that fixes it and the crash it produces; the test fails when a listed
+input stops crashing or crashes differently, so the fix removes its line.
+
+The same test types every `.tt` and `.ttx` unit of `tests/cases` and
+`tests/fixtures` prefix by prefix and deletes each of its characters, then
+runs each mutant through the `--check`, emission, emit-map, projection, and
+text-only editor pipelines. A crash whose signature is not listed fails with
+a minimized input and the file name to save it under.
+
+```sh
+cargo test --test fuzz_regressions                                   # a fixed sample of 1000 mutants
+TT_MUTATIONS=all cargo test --release --test fuzz_regressions        # every mutant (about a minute)
+TT_MUTATIONS=5000 TT_MUTATION_SEED=7 cargo test --test fuzz_regressions  # another sample
+node scripts/fuzz-seed-corpus                                        # seed fuzz/corpus/compile_any_bytes
+```
+
+CI runs the sample in `cargo test`, and every mutant in the scheduled run's
+`exhaustive` job. The `Soak` workflow fuzzes each target for two minutes a
+night from the seeded corpus and the committed crash inputs.
+
 언어 표면(구문, 판별 규칙, 에러 메시지, CLI 동작)을 바꾸는 변경은 컴파일러에
 내장되는 [`docs/ai/tt.md`](./docs/ai/tt.md)를 함께 갱신해야 합니다. 사용자가
 처음 접하는 기능이면 영문·한글 README에도 반영하세요. 공개 Rust API를 바꾸면

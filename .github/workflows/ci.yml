@@ -308,6 +308,25 @@ jobs:
           # declarations — so a skip means the wiring broke.
           grep -q "^# skipped 0$" /tmp/extension-native.log
 
+  exhaustive:
+    name: exhaustive regression sweeps (nightly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Every deletion and every prefix of the case corpus
+        env:
+          TT_MUTATIONS: all
+        run: cargo test --release --test fuzz_regressions -- --nocapture
+
   release-version:
     name: release artifact version
     if: >-
