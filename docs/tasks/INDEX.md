@@ -610,7 +610,8 @@
 | TASK-609 | Offer `.tt` and `.ttx` modules in import path completion | Complete | 2026-09-30 | 2026-09-30 | [TASK-609](./TASK-609-tt-modules-in-import-path-completion.md) |
 | TASK-610 | Go to a built-in tag's or field's declaration in the standard library | Complete | 2026-09-30 | 2026-09-30 | [TASK-610](./TASK-610-builtin-names-go-to-the-standard-library.md) |
 | TASK-611 | Answer `textDocument/prepareRename` by the rules rename refuses by | Complete | 2026-09-30 | 2026-09-30 | [TASK-611](./TASK-611-prepare-rename.md) |
+| TASK-612 | Name the module an auto-import entry imports from | Complete | 2026-09-30 | 2026-09-30 | [TASK-612](./TASK-612-auto-import-label-details.md) |
 
 ## Next task number
 
-**TASK-612**
+**TASK-613**

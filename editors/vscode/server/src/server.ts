@@ -87,6 +87,7 @@ const documents = new TextDocuments(TextDocument);
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
 let hasVersionedWorkspaceEditCapability = false;
+let hasLabelDetailsCapability = false;
 let workspaceRoots: string[] = [];
 /** What the server has already told the user it cannot do (notices.ts). */
 const notices = new NoticeLedger();
@@ -100,6 +101,9 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   );
   hasVersionedWorkspaceEditCapability = Boolean(
     params.capabilities.workspace?.workspaceEdit?.documentChanges,
+  );
+  hasLabelDetailsCapability = Boolean(
+    params.capabilities.textDocument?.completion?.completionItem?.labelDetailsSupport,
   );
   workspaceRoots = folderRoots(params.workspaceFolders);
 
@@ -1212,6 +1216,12 @@ async function tsCompletions(
       ? { range: entry.range, newText: entry.insertText ?? entry.label }
       : undefined,
     filterText: entry.filterText ?? undefined,
+    labelDetails: hasLabelDetailsCapability && entry.labelDetails
+      ? {
+          detail: entry.labelDetails.detail ?? undefined,
+          description: entry.labelDetails.description ?? undefined,
+        }
+      : undefined,
     insertTextFormat: entry.snippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
     data: {
       uri: doc.uri,

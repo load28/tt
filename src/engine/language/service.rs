@@ -211,6 +211,10 @@ pub(super) fn ts_completions(
             filter_text: item["filterText"].as_str().map(str::to_owned),
             snippet: item["insertTextFormat"].as_u64() == Some(2),
             range: replaced.map(|edit| edit.range),
+            label_detail: item["labelDetails"]["detail"].as_str().map(str::to_owned),
+            description: item["labelDetails"]["description"]
+                .as_str()
+                .map(str::to_owned),
             label,
         });
     }
@@ -314,6 +318,8 @@ pub(super) fn tt_module_entries(
                 filter_text: None,
                 snippet: false,
                 range: Some(range),
+                label_detail: None,
+                description: None,
             })
         })
         .collect()

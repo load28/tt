@@ -279,6 +279,11 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                     "filterText": item.filter_text,
                     "snippet": item.snippet,
                     "range": item.range.map(range_json),
+                    "labelDetails": (item.label_detail.is_some() || item.description.is_some())
+                        .then(|| json!({
+                            "detail": item.label_detail,
+                            "description": item.description,
+                        })),
                 })).collect::<Vec<_>>(),
                 "member": member,
                 "probe": probe,

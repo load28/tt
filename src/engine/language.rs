@@ -105,6 +105,12 @@ pub struct CompletionItem {
     /// The source range the entry replaces, when it is not the word at the
     /// position.
     pub range: Option<Range>,
+    /// What the service shows right after the label (LSP 3.17
+    /// `CompletionItemLabelDetails.detail`).
+    pub label_detail: Option<String>,
+    /// What the service shows after that, the module an auto-import entry
+    /// imports from (`CompletionItemLabelDetails.description`).
+    pub description: Option<String>,
 }
 
 /// A completion answer.

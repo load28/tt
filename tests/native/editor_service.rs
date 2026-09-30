@@ -504,3 +504,34 @@ export function f(s: Shape, scale: number) {\n\
         assert_eq!(renamed.is_some(), expected.is_some(), "{needle} #{nth}");
     }
 }
+
+#[test]
+fn an_auto_import_entry_names_the_module_it_imports_from() {
+    require_tsgo!();
+    let (source, position) = at_cursor("export const z = kkVa@@;\n");
+    let dir = project(&[
+        ("src/main.tt", &source),
+        ("src/shapes.tt", "export const kkValue = 1;\n"),
+        ("src/lib.ts", "export const kkValueLib = 1;\n"),
+    ]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let completion = project.completion(&file, position, false).unwrap();
+    let described = |label: &str| {
+        completion
+            .items
+            .iter()
+            .find(|item| item.label == label)
+            .and_then(|item| item.description.clone())
+    };
+    assert_eq!(described("kkValue").as_deref(), Some("./shapes.tt"));
+    assert_eq!(described("kkValueLib").as_deref(), Some("./lib"));
+    let detail = project
+        .completion_resolve(&file, position, "kkValue", completion.probe)
+        .unwrap()
+        .expect("the entry resolves");
+    assert_eq!(
+        detail.additional_edits[0].new_text,
+        "import { kkValue } from \"./shapes.tt\";\n\n"
+    );
+}

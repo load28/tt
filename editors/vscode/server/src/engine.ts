@@ -49,6 +49,7 @@ export interface EngineHover {
 
 export interface EngineCompletionItem {
   range?: EngineRange | null;
+  labelDetails?: { detail?: string | null; description?: string | null } | null;
   label: string;
   /** The element-kind string the editor has always mapped. */
   kind: string;
