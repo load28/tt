@@ -1059,6 +1059,21 @@ fn types_type_a_value_with_no_contextual_type_as_at_its_source_position() {
 }
 
 #[test]
+fn types_type_a_recursive_anonymous_join_whole() {
+    require_types_toolchain!();
+    // TASK-586: the join's annotation would write the cycle one level down
+    // as `any` and hide the second call's missing property.
+    let err = types_stderr(
+        "export function f(n: number) {\n\
+         \x20 const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };\n\
+         \x20 return b.m().m().zzz;\n\
+         }\n",
+    );
+    assert!(err.contains("error[ts2339]"), "{err}");
+    assert!(err.contains("--> src/main.tt:3:20"), "{err}");
+}
+
+#[test]
 fn types_reports_nothing_for_storage_inside_a_shadowing_scope() {
     require_types_toolchain!();
     // TASK-575: `T` at the storage is `inner`'s own type parameter, not the

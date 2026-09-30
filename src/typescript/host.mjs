@@ -745,7 +745,7 @@ async function main() {
         const generated = storageOf(slot.module, source);
         const annotation = (type) => {
           const node = typeNode(checker, type, declaration, NodeBuilderFlags.NoTruncation);
-          return node && denotes(checker, node, type, declaration, generated, { SyntaxKind, SymbolFlags })
+          return node && denotes(checker, node, type, declaration, generated, { SyntaxKind, SymbolFlags, TypeFlags })
             ? node : undefined;
         };
         let expected;
@@ -1068,14 +1068,15 @@ function typeNode(checker, type, location, flags) {
  * type it was written for: the type parameter's own symbol, the alias or
  * declaration a type reference instantiates, the value a type query names.
  * A name that resolves to a symbol in `excluded` (generated storage) denotes
- * nothing. A part of the node that uses a name and cannot be paired with a
+ * nothing. An `any` keyword must be written for the `any` type: the node
+ * builder writes the cycle of a recursive anonymous type as `any` too. A part of the node that uses a name and cannot be paired with a
  * part of the type is not proven to denote it, so the node does not either.
  */
-function denotes(checker, node, type, location, excluded, { SyntaxKind, SymbolFlags }) {
+function denotes(checker, node, type, location, excluded, { SyntaxKind, SymbolFlags, TypeFlags }) {
   const K = SyntaxKind;
   const named = (n) => {
     if (n.kind === K.TypeReference || n.kind === K.TypeQuery || n.kind === K.ImportType ||
-        n.kind === K.ComputedPropertyName) return true;
+        n.kind === K.ComputedPropertyName || n.kind === K.AnyKeyword) return true;
     let found = false;
     n.forEachChild((child) => { found ||= named(child); });
     return found;
@@ -1143,6 +1144,8 @@ function denotes(checker, node, type, location, excluded, { SyntaxKind, SymbolFl
     if (!named(n)) return true;
     if (!t) return false;
     switch (n.kind) {
+      case K.AnyKeyword:
+        return !!(t.flags & TypeFlags.Any);
       case K.ParenthesizedType:
         return walk(n.type, t, scope);
       case K.TypeReference: {

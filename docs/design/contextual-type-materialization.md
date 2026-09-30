@@ -31,7 +31,13 @@ TypeScript infers its type from its assignments.
 
 An annotation is the whole type: the node builder is asked with
 `NoTruncation` (TASK-553), since its default shortens a long type to
-`... N more ...`, which is neither the type nor TypeScript.
+`... N more ...`, which is neither the type nor TypeScript. With it, the
+node builder writes the cycle of a recursive anonymous type (the object
+literal `{ k: 1, m() { return this; } }`) as `any` one level down, where its
+default writes `...` (TASK-586). The walk that pairs the node's names with
+the type's symbols therefore pairs each `any` keyword too, and takes the
+node only when every `any` stands for the `any` type; otherwise the storage
+is typed from its values, which TASK-570 types as at their source position.
 
 Nor may an annotation name storage the lowering declared (TASK-552).
 TypeScript names a class expression after the binding it is assigned to, so
