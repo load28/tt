@@ -93,6 +93,17 @@ standard TypeScript library.") before the box opens.
   failure channel.
 - **Resolution**: Decision 2.
 
+### Issue 2: A unit test pinned the error text at the wrong layer
+
+- **Symptom**: The full gate, run with TASK-613, failed
+  `a_protocol_error_is_not_an_empty_type_answer`: `wait_for_response` now
+  returns the server's message, and `request` adds the method prefix.
+- **Cause**: Decision 2 moved the prefix from `wait_for_response` to
+  `request`; the test asserted the prefixed text on the lower function.
+- **Resolution**: The test asserts the server's own message, which is what
+  the protocol-failure variant carries. It is still an error, not an empty
+  answer. Fixed in the TASK-613 commit.
+
 ## Verification
 
 - [x] `cargo fmt --check`

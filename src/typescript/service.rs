@@ -726,10 +726,7 @@ mod tests {
         let ResponseFailure::Protocol(error) = error else {
             panic!("the service is still connected");
         };
-        assert_eq!(
-            error,
-            "TypeScript language service request `textDocument/hover` failed: project graph could not be loaded"
-        );
+        assert_eq!(error, "project graph could not be loaded");
     }
 
     #[test]

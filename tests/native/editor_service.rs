@@ -535,3 +535,56 @@ fn an_auto_import_entry_names_the_module_it_imports_from() {
         "import { kkValue } from \"./shapes.tt\";\n\n"
     );
 }
+
+#[test]
+fn a_pipeline_step_being_typed_answers_as_its_typescript_equivalent_does() {
+    require_tsgo!();
+    let head = "const half = (n: number) => n / 2;\n\
+const obj = { twice(n: number) { return n * 2; } };\n";
+    for (step, equivalent) in [
+        ("4 |> o@@", "o@@(4)"),
+        ("4 |> obj@@", "obj@@(4)"),
+        ("4 |> obj.tw@@", "obj.tw@@(4)"),
+        ("4 |> obj.twice@@", "obj.twice@@(4)"),
+    ] {
+        let (tt, at_tt) = at_cursor(&format!("{head}export const a = {step}\nexport const z = half(2);\n"));
+        let (ts, at_ts) =
+            at_cursor(&format!("{head}export const a = {equivalent}\nexport const z = half(2);\n"));
+        let dir = project(&[("src/main.tt", &tt), ("src/equivalent.ts", &ts)]);
+        let tt_file = dir.join("src/main.tt").canonicalize().unwrap();
+        let ts_file = dir.join("src/equivalent.ts").canonicalize().unwrap();
+        let mut project = open_service(&tt_file);
+        project.open_document(ts_file.clone(), ts.clone());
+        let before = |at: ttc::engine::Position| ttc::engine::Position {
+            character: at.character - 1,
+            ..at
+        };
+        let hover = |project: &mut ttc::engine::Project, file: &Path, at| {
+            project
+                .hover(file, before(at))
+                .unwrap()
+                .map(|info| info.signature)
+        };
+        assert_eq!(
+            hover(&mut project, &tt_file, at_tt),
+            hover(&mut project, &ts_file, at_ts),
+            "{step}"
+        );
+        let labels = |project: &mut ttc::engine::Project, file: &Path, at| {
+            let mut labels: Vec<String> = project
+                .completion(file, at, false)
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|item| item.label)
+                .collect();
+            labels.sort();
+            labels
+        };
+        assert_eq!(
+            labels(&mut project, &tt_file, at_tt),
+            labels(&mut project, &ts_file, at_ts),
+            "{step}"
+        );
+    }
+}

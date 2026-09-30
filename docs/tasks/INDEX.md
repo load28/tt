@@ -611,7 +611,8 @@
 | TASK-610 | Go to a built-in tag's or field's declaration in the standard library | Complete | 2026-09-30 | 2026-09-30 | [TASK-610](./TASK-610-builtin-names-go-to-the-standard-library.md) |
 | TASK-611 | Answer `textDocument/prepareRename` by the rules rename refuses by | Complete | 2026-09-30 | 2026-09-30 | [TASK-611](./TASK-611-prepare-rename.md) |
 | TASK-612 | Name the module an auto-import entry imports from | Complete | 2026-09-30 | 2026-09-30 | [TASK-612](./TASK-612-auto-import-label-details.md) |
+| TASK-613 | Pin that a pipeline step being typed answers as its TypeScript equivalent does | Complete | 2026-09-30 | 2026-09-30 | [TASK-613](./TASK-613-pipeline-step-typing-matches-typescript.md) |
 
 ## Next task number
 
-**TASK-613**
+**TASK-614**
