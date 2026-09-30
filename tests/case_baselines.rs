@@ -15,20 +15,8 @@ use ttc::engine::{Engine, ProjectOptions};
 
 mod common;
 use common::baseline::{expect, expect_absent, updating};
+use common::cases::{self, Unit, is_tt};
 use common::{Workspace, toolchain, toolchain_installed};
-
-const DEFAULT_TSCONFIG: &str = r#"{
-  "compilerOptions": {
-    "target": "es2022",
-    "module": "preserve",
-    "moduleResolution": "bundler",
-    "jsx": "preserve",
-    "strict": true,
-    "skipLibCheck": true,
-    "noEmit": true
-  }
-}
-"#;
 
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -45,42 +33,16 @@ struct Case {
     settings: Settings,
 }
 
-struct Unit {
-    name: String,
-    content: String,
-}
-
 #[derive(Default)]
 struct Settings {
     rewrite_imports: Option<String>,
     no_verify: bool,
 }
 
-fn case_files(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return;
-    };
-    for entry in entries {
-        let path = entry.expect("readable case entry").path();
-        if path.is_dir() {
-            case_files(&path, out);
-        } else if is_tt(&path) {
-            out.push(path);
-        }
-    }
-}
-
-fn is_tt(path: &Path) -> bool {
-    matches!(
-        path.extension().and_then(|e| e.to_str()),
-        Some("tt" | "ttx")
-    )
-}
-
 fn cases() -> Vec<Case> {
     let mut files = Vec::new();
     for suite in ["compiler", "conformance"] {
-        case_files(&root().join("tests/cases").join(suite), &mut files);
+        cases::files(&root().join("tests/cases").join(suite), &mut files);
     }
     files.sort();
     assert!(
@@ -108,7 +70,9 @@ fn cases() -> Vec<Case> {
         }
         let text = fs::read_to_string(&path).expect("readable case");
         let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
-        let (units, settings) = parse(&text, &file_name, &path);
+        let parsed = cases::parse(&text, &file_name, &path);
+        let settings = settings(&parsed.directives, &path);
+        let units = parsed.units;
         out.push(Case {
             name,
             path,
@@ -119,58 +83,17 @@ fn cases() -> Vec<Case> {
     out
 }
 
-fn directive(line: &str) -> Option<(&str, &str)> {
-    let rest = line.strip_prefix("//")?.trim_start().strip_prefix('@')?;
-    let end = rest
-        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
-        .unwrap_or(rest.len());
-    if end == 0 {
-        return None;
-    }
-    let (name, tail) = rest.split_at(end);
-    let value = tail.trim_start().strip_prefix(':')?;
-    Some((name, value.trim()))
-}
-
-fn parse(text: &str, file_name: &str, path: &Path) -> (Vec<Unit>, Settings) {
+fn settings(directives: &[(String, String)], path: &Path) -> Settings {
     let mut settings = Settings::default();
-    let mut units = Vec::new();
-    let mut current: Option<(String, Vec<&str>)> = None;
-    let mut preamble: Vec<&str> = Vec::new();
-    for line in text.split('\n') {
-        let Some((name, value)) = directive(line) else {
-            match &mut current {
-                Some((_, lines)) => lines.push(line),
-                None => preamble.push(line),
-            }
-            continue;
-        };
-        match name.to_ascii_lowercase().as_str() {
-            "filename" => {
-                if let Some((name, lines)) = current.take() {
-                    units.push(Unit {
-                        name,
-                        content: lines.join("\n"),
-                    });
-                } else {
-                    assert!(
-                        preamble.iter().all(|l| {
-                            let l = l.trim();
-                            l.is_empty() || l.starts_with("//")
-                        }),
-                        "{}: non-comment content appears before the first `// @filename`",
-                        path.display()
-                    );
-                }
-                current = Some((value.to_string(), Vec::new()));
-            }
+    for (name, value) in directives {
+        match name.as_str() {
             "rewriteimports" => {
                 assert!(
-                    matches!(value, "js" | "ts" | "off"),
+                    matches!(value.as_str(), "js" | "ts" | "off"),
                     "{}: @rewriteImports takes js, ts, or off",
                     path.display()
                 );
-                settings.rewrite_imports = Some(value.to_string());
+                settings.rewrite_imports = Some(value.clone());
             }
             "noverify" => settings.no_verify = value == "true",
             other => panic!(
@@ -179,17 +102,7 @@ fn parse(text: &str, file_name: &str, path: &Path) -> (Vec<Unit>, Settings) {
             ),
         }
     }
-    match current {
-        Some((name, lines)) => units.push(Unit {
-            name,
-            content: lines.join("\n"),
-        }),
-        None => units.push(Unit {
-            name: file_name.to_string(),
-            content: preamble.join("\n"),
-        }),
-    }
-    (units, settings)
+    settings
 }
 
 struct Artifacts {
@@ -451,7 +364,8 @@ fn run(case: &Case, typed: bool) {
         fs::write(&path, &unit.content).expect("writable unit");
     }
     if !project.join("tsconfig.json").exists() {
-        fs::write(project.join("tsconfig.json"), DEFAULT_TSCONFIG).expect("writable tsconfig");
+        fs::write(project.join("tsconfig.json"), cases::DEFAULT_TSCONFIG)
+            .expect("writable tsconfig");
     }
 
     let base = reference().join(&case.name);

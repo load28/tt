@@ -313,6 +313,26 @@ CI runs the sample in `cargo test`, and every mutant in the scheduled run's
 `exhaustive` job. The `Soak` workflow fuzzes each target for two minutes a
 night from the seeded corpus and the committed crash inputs.
 
+### Incremental answers equal fresh ones
+
+`tests/incremental.rs` holds the engine to TypeScript's incremental-parser
+rule (`compareTrees` in `src/testRunner/unittests/incrementalParser.ts`): a
+project edited one keystroke at a time answers exactly as a project opened
+fresh on the final text. Each sample opens a case or fixture unit in an
+engine `Workspace`, retypes, replaces, or pastes text as seeded, asks the
+engine a question between some edits, and then compares the diagnostics,
+emitted TypeScript and declarations, service diagnostics, semantic tokens,
+and hover, definition, and completion at fixed points with a fresh
+workspace's. A difference is an engine defect, reported with the edit script
+and the command that reruns that one sample.
+
+```sh
+cargo test --test incremental                                        # 8 samples, fixed seed (PR CI)
+TT_INCREMENTAL=all cargo test --release --test incremental          # every sample (nightly)
+TT_INCREMENTAL=40 TT_INCREMENTAL_SEED=7 cargo test --test incremental  # another sample
+TT_INCREMENTAL_ONLY='<sample>' cargo test --test incremental         # the sample a failure names
+```
+
 언어 표면(구문, 판별 규칙, 에러 메시지, CLI 동작)을 바꾸는 변경은 컴파일러에
 내장되는 [`docs/ai/tt.md`](./docs/ai/tt.md)를 함께 갱신해야 합니다. 사용자가
 처음 접하는 기능이면 영문·한글 README에도 반영하세요. 공개 Rust API를 바꾸면

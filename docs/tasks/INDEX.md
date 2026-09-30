@@ -648,7 +648,8 @@
 | TASK-644 | Go to a user variant's tag or field declaration through the engine's definition | Complete | 2026-09-30 | 2026-09-30 | [TASK-644](./TASK-644-engine-definition-of-tt-names.md) |
 | TASK-645 | Leave the discriminant out of every completion answer in a payload pattern | Complete | 2026-09-30 | 2026-09-30 | [TASK-645](./TASK-645-payload-completion-without-the-discriminant.md) |
 | TASK-646 | Color tt keywords as TypeScript's, with semantic tokens only where the grammar cannot decide | Complete | 2026-09-30 | 2026-09-30 | [TASK-646](./TASK-646-tt-keywords-in-semantic-tokens.md) |
+| TASK-647 | Hold an edited project to the answers of a fresh one | Complete | 2026-09-30 | 2026-09-30 | [TASK-647](./TASK-647-incremental-equals-fresh.md) |
 
 ## Next task number
 
-**TASK-647**
+**TASK-652**

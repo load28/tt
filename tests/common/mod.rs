@@ -1,6 +1,7 @@
 #![allow(dead_code)] // each suite uses the part of this it needs
 
 pub mod baseline;
+pub mod cases;
 
 #[path = "../../src/test_workspace.rs"]
 mod workspace;

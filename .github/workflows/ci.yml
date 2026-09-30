@@ -339,6 +339,12 @@ jobs:
           TT_MUTATIONS: all
         run: cargo test --release --test fuzz_regressions -- --nocapture
 
+      - name: Every edit sequence answers as a fresh project
+        env:
+          TTC_REQUIRE_TSGO: "1"
+          TT_INCREMENTAL: all
+        run: cargo test --release --test incremental -- --nocapture
+
       - name: Fetch TypeScript's test cases at the pinned commit
         run: scripts/fetch-typescript-cases
 

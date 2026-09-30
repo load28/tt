@@ -80,6 +80,12 @@ pub struct ProjectedDocument {
 }
 
 impl ProjectedDocument {
+    /// The TypeScript this document lowered to: the text the checker and
+    /// the language service read in its place.
+    pub fn code(&self) -> &str {
+        &self.emit.code
+    }
+
     /// The variants the file exports ([`crate::exported_variant_symbols`]),
     /// computed on first use and pinned to this projection's content version.
     pub(crate) fn exported_variant_symbols(&self) -> &[crate::VariantSymbol] {
