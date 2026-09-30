@@ -647,7 +647,8 @@
 | TASK-639 | Pin editor behaviour with fourslash-style cases over both transports | Complete | 2026-09-30 | 2026-09-30 | [TASK-639](./TASK-639-fourslash-style-editor-cases.md) |
 | TASK-644 | Go to a user variant's tag or field declaration through the engine's definition | Complete | 2026-09-30 | 2026-09-30 | [TASK-644](./TASK-644-engine-definition-of-tt-names.md) |
 | TASK-645 | Leave the discriminant out of every completion answer in a payload pattern | Complete | 2026-09-30 | 2026-09-30 | [TASK-645](./TASK-645-payload-completion-without-the-discriminant.md) |
+| TASK-646 | Color tt keywords as TypeScript's, with semantic tokens only where the grammar cannot decide | Complete | 2026-09-30 | 2026-09-30 | [TASK-646](./TASK-646-tt-keywords-in-semantic-tokens.md) |
 
 ## Next task number
 
-**TASK-646**
+**TASK-647**

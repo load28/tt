@@ -1048,11 +1048,22 @@ pub(super) fn merge_tokens(
         .into_iter()
         .map(|token| {
             let token_type = token.kind.as_str().to_string();
-            let modifiers = service
+            let mut modifiers: Vec<String> = token
+                .kind
+                .modifiers()
+                .iter()
+                .map(|m| m.to_string())
+                .collect();
+            if let Some(other) = service
                 .iter()
                 .find(|other| other.range == token.range && other.token_type == token_type)
-                .map(|other| other.modifiers.clone())
-                .unwrap_or_default();
+            {
+                for modifier in &other.modifiers {
+                    if !modifiers.contains(modifier) {
+                        modifiers.push(modifier.clone());
+                    }
+                }
+            }
             ClassifiedToken {
                 range: token.range,
                 token_type,

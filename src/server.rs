@@ -30,7 +30,7 @@
 //! diagnostics are its tt-level ones alone.
 //!
 //! → { "id": 4, "method": "semanticTokens", "params": { "text" } }
-//! ← { "id": 4, "result": { "tokens": [{ "range", "kind" }] } }
+//! ← { "id": 4, "result": { "tokens": [{ "range", "kind", "modifiers" }] } }
 //!
 //! → { "method": "prepareRename", "params": { "path", "position" } }
 //! ← { "result": { "range" } | { "range": null, "refusal": string | null } }
@@ -855,6 +855,7 @@ fn semantic_tokens(params: &serde_json::Value) -> Result<serde_json::Value, Stri
             json!({
                 "range": range_json(token.range),
                 "kind": token.kind.as_str(),
+                "modifiers": token.kind.modifiers(),
             })
         })
         .collect();

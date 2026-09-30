@@ -1,5 +1,6 @@
 === semanticTokens semanticTokensOverTtConstructs.tt ===
-semanticTokens: 35 token(s)
+semanticTokens: 36 token(s)
+  2:8-2:15 "variant" keyword [declaration]
   2:16-2:21 "Shape" enum
   2:24-2:30 "Circle" enumMember
   2:31-2:37 "radius" property

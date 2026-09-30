@@ -90,7 +90,7 @@ HEAD `c6b013f5`(로컬 클론·빌드)와 TASK-086 완료 시점의 main이다.
 `parseEnums`/`parseMatches`/`visibleEnums`/`BUILTIN_ENUMS`는 삭제됐다.
 Node에 남은 것은 **텍스트 형태** 유틸뿐이다 — 마스킹, 커서의 단어, 멤버
 접근 판정.
-| semantic tokens (하이라이팅 정밀화) | **TT 자체** (`engine/tokens.rs`, 파스 전용·무상태) | TextMate 문법이 못 하는 판별(파서가 청구한/안 한 `match`·`result`·`flow`)의 단일 원천은 파서; 툴체인 없이도 답해야 하므로 text 기반 요청 (TASK-093) |
+| semantic tokens (highlighting refinement) | **tt itself** (`engine/tokens.rs`, parse-only and stateless) | The parser is the single source for what a line-based TextMate grammar cannot decide (a `match`, `result`, `flow`, or `variant` the parser did or did not claim); keywords are otherwise the grammar's, as TypeScript's are, and the extension's `semanticTokenScopes` styles each reported keyword with the grammar's scope for it (TASK-093, TASK-646). Text-based, because it must answer without a toolchain |
 
 핵심: 이 표는 전부 **엔진 내부**의 세부다. Node LSP는 어느 백엔드가
 답했는지 모른다 — 이중 LSP는 public architecture에서 제거됐고(§34),
