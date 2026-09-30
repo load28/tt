@@ -1,0 +1,23 @@
+// A relative import may name a tt module only as tt writes it (`./x.tt`):
+// the lowered module `x.tt.ts` exists only while ttc serves the project,
+// and its output is `x.ts`, so `./x.tt.js` names no file in either.
+// @filename: tsconfig.json
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  }
+}
+// @filename: package.json
+{ "name": "case", "private": true, "type": "module" }
+// @filename: shapes.tt
+export const shapeK = 1;
+// @filename: main.tt
+import { shapeK } from "./shapes.tt.js";
+import { shapeK as again } from "./shapes.tt";
+export const y = shapeK + again;
+export const later = import("./shapes.tt.js");

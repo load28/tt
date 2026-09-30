@@ -289,6 +289,17 @@ destructured elements are unused" then fades `(x, y)` with its
 of several lists (an or-pattern) records nothing, and a suggestion there is
 still dropped (TASK-515).
 
+**Update (TASK-667)**: the service names a served tt module by its
+lowered name, so an auto-import from `shapes.tt` was written
+`./shapes.tt.ts` (TypeScript's `.ts` ending) or `./shapes.tt.js` (its
+`.js` ending). The engine writes every specifier TypeScript produces for
+a served tt module in tt's form, `./shapes.tt` (`tt_module_specifier`):
+an entry's `labelDetails.description` and the string literals of its
+resolved `additionalTextEdits`. The entry's `source` stays TypeScript's,
+since it identifies the entry to resolve (TASK-629). The typed check
+reports TS2307 for a specifier that reaches a tt module only through its
+served name (`./shapes.tt.js`), as `tsc` does on the output.
+
 **Update (TASK-669)**: an arm whose pattern is still being written (no `=>`
 yet) stays unparsed (TASK-605 Decision 2), so its projection has no
 destructuring at the payload list, and the completion probe there answers

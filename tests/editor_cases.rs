@@ -777,6 +777,35 @@ fn engine_answer(workspace: &mut ttc::engine::Workspace, request: &Request) -> V
                 .collect();
             Ok(json!({ "diagnostics": diagnostics, "restates": restates }))
         }),
+        "completionResolve" => workspace.project_for(path).and_then(|project| {
+            Ok(
+                match project.completion_resolve(
+                    path,
+                    position,
+                    params["label"].as_str().unwrap_or_default(),
+                    params["source"].as_str(),
+                    params["probe"].as_u64(),
+                )? {
+                    None => Value::Null,
+                    Some(detail) => {
+                        let mut answer = json!({
+                            "signature": detail.signature,
+                            "documentation": detail.documentation,
+                        });
+                        if !detail.additional_edits.is_empty() {
+                            answer["additionalEdits"] = detail
+                                .additional_edits
+                                .into_iter()
+                                .map(|edit| {
+                                    json!({ "range": range_json(edit.range), "newText": edit.new_text })
+                                })
+                                .collect();
+                        }
+                        answer
+                    }
+                },
+            )
+        }),
         other => panic!("no engine mirror for {other}"),
     };
     match result {
@@ -1593,6 +1622,50 @@ fn diagnostic_line(files: &Files<'_>, d: &Value) -> String {
     line
 }
 
+/// The entries of a completion answer that import their name from a
+/// module: an auto-import, whose `source` is the module specifier.
+fn imported_entries(answer: &Value) -> Vec<(String, String)> {
+    let mut entries: Vec<(String, String)> = answer["result"]["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|item| item["labelDetails"]["description"].is_string())
+        .filter_map(|item| {
+            Some((
+                item["label"].as_str()?.to_string(),
+                item["source"].as_str()?.to_string(),
+            ))
+        })
+        .collect();
+    entries.sort();
+    entries
+}
+
+fn render_resolve(files: &Files<'_>, label: &str, source: &str, answer: &Value, out: &mut String) {
+    let result = &answer["result"];
+    if let Some(error) = answer.get("error") {
+        out.push_str(&format!(
+            "  resolve {label} from {source:?}: error {error}\n"
+        ));
+        return;
+    }
+    let edits = result["additionalEdits"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    out.push_str(&format!(
+        "  resolve {label} from {source:?}: {} edit(s)\n",
+        edits.len()
+    ));
+    for edit in edits {
+        out.push_str(&format!(
+            "    {} -> {:?}\n",
+            files.span_of_answer(&edit),
+            edit["newText"].as_str().unwrap_or_default()
+        ));
+    }
+}
+
 fn lsp_completion_kind(kind: &Value) -> String {
     const KINDS: [&str; 25] = [
         "Text",
@@ -1985,6 +2058,37 @@ fn run(case: &Case) -> Outcome {
                 ));
             }
             render(&files, request.method, &from_server, &mut baseline);
+            if request.method == "completion" {
+                for (label, source) in imported_entries(&from_server) {
+                    let resolve = |answer: &Value| Request {
+                        method: "completionResolve",
+                        params: json!({
+                            "path": request.params["path"],
+                            "position": request.params["position"],
+                            "label": label,
+                            "source": source,
+                            "probe": answer["result"]["probe"],
+                        }),
+                    };
+                    let (engine_request, server_request) =
+                        (resolve(&from_engine), resolve(&from_server));
+                    let resolved_engine = engine_answer(&mut engine, &engine_request);
+                    let resolved_server = server.ask(server_request.method, &server_request.params);
+                    let (engine_view, server_view) = (
+                        normalized(&resolved_engine, &dir_text),
+                        normalized(&resolved_server, &dir_text),
+                    );
+                    if engine_view != server_view {
+                        transport.push(format!(
+                            "{}: completionResolve {label} for /*{}*/ differs between the transports\n{}",
+                            case.path.display(),
+                            question.target,
+                            difference(&engine_view, &server_view)
+                        ));
+                    }
+                    render_resolve(&files, &label, &source, &resolved_server, &mut baseline);
+                }
+            }
             answered.push((request.method.to_string(), from_server));
         }
         if let Some(editor) = editor.as_mut() {

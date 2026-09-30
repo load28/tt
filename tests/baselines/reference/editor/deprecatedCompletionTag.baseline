@@ -10,6 +10,8 @@ completion: 1047 item(s), member false, probe no
   v (Variable, 11)
   oldAdd (Function, 16) [deprecated] from "./util" source "./util"
   ... 1040 global or keyword item(s) (sortText 15, no source)
+  resolve oldAdd from "./util": 1 edit(s)
+    1:13-1:13 "" -> ", oldAdd"
 ttCompletions: pattern false, member null
   keywords: match (15), flow (15), result (15)
 patternCompletions: null

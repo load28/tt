@@ -134,7 +134,7 @@ defect; TASK-670, TASK-672, and TASK-674 use the new sections for theirs.
   (57 s and 52 s): no change.
 - [x] `cargo fmt --check`; `cargo clippy --test editor_cases -- -D warnings`.
 - [x] Baseline changes reviewed and committed with the change. The full
-  gate is recorded in TASK-676.
+  gate is recorded in TASK-667.
 
 ## Result
 

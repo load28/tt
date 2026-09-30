@@ -95,6 +95,7 @@ function publishFile(file, text) {
   fs.renameSync(staging, file);
 }
 const CANNOT_READ_FILE = 5083;
+const CANNOT_FIND_MODULE = 2307;
 const LOWERED = /\.(?:tt\.ts|ttx\.tsx)$/;
 const TT_SOURCE = /\.ttx?$/;
 const MAPPED_DECLARATION = /\.d\.(ttx?)\.ts$/;
@@ -912,6 +913,20 @@ async function main() {
           ...(related.length > 0 ? { related } : {}),
         });
       }
+      const ttSources = new Set((job.modules ?? []).map((module) => loweredSource(module.path)));
+      for (const member of members) {
+        const sourceFile = program.getSourceFile(member);
+        if (!sourceFile) continue;
+        for (const literal of loweredModuleSpecifiers(sourceFile, ttSources, SyntaxKind)) {
+          out.diagnostics.push({
+            file: sourceFile.fileName,
+            start: literal.getStart(sourceFile),
+            end: literal.end,
+            code: CANNOT_FIND_MODULE,
+            message: `Cannot find module '${literal.text}' or its corresponding type declarations.`,
+          });
+        }
+      }
       /**
        * Whether a declaration lives in one of TypeScript's own lib files.
        * Answered from the program's per-file metadata when the client has it
@@ -1614,6 +1629,49 @@ function smallestExpressionCovering(sourceFile, start, end, isExpression) {
   const visit = (node) => {
     if (node.getStart(sourceFile) > start || node.end < end) return;
     if (isExpression(node)) found = node;
+    node.forEachChild(visit);
+  };
+  visit(sourceFile);
+  return found;
+}
+
+/** The `.tt`/`.ttx` source a lowered module's engine name stands for. */
+function loweredSource(file) {
+  return LOWERED.test(file) ? file.slice(0, file.lastIndexOf(".")) : file;
+}
+
+/**
+ * The relative module specifiers of `sourceFile` that reach a served tt
+ * module only through the name ttc serves it under.
+ *
+ * A tt module `x.tt` is served as `x.tt.ts` (`x.ttx` as `x.ttx.tsx`), and
+ * TypeScript's resolution of a relative specifier appends or substitutes a
+ * TypeScript extension (`./x.tt` → `x.tt.ts`; `./x.tt.js` → `x.tt.ts`, the
+ * `.js` → `.ts` substitution of TypeScript's module resolution reference;
+ * `./x.tt.ts` with `allowImportingTsExtensions`). Only `./x.tt` names the
+ * module outside ttc: the source is `x.tt` and its output is `x.ts`, so a
+ * specifier naming `x.tt.js` or `x.tt.ts` names no file on disk or in the
+ * output, where TypeScript reports TS2307 for it. A file of that name that
+ * does exist on disk is the user's own and is left alone.
+ */
+function loweredModuleSpecifiers(sourceFile, ttSources, SyntaxKind) {
+  const found = [];
+  const consider = (literal) => {
+    if (!literal || literal.kind !== SyntaxKind.StringLiteral) return;
+    const specifier = literal.text;
+    if (!specifier.startsWith("./") && !specifier.startsWith("../")) return;
+    const target = path.resolve(path.dirname(sourceFile.fileName), specifier);
+    const match = /^(.*\.tt)\.(?:ts|js)$|^(.*\.ttx)\.(?:tsx|jsx|js)$/.exec(target);
+    const source = match && (match[1] ?? match[2]);
+    if (!source || !ttSources.has(source) || fs.existsSync(target)) return;
+    found.push(literal);
+  };
+  const visit = (node) => {
+    if (node.kind === SyntaxKind.ImportDeclaration || node.kind === SyntaxKind.ExportDeclaration) {
+      consider(node.moduleSpecifier);
+    } else if (node.kind === SyntaxKind.CallExpression && node.expression.kind === SyntaxKind.ImportKeyword) {
+      consider(node.arguments[0]);
+    }
     node.forEachChild(visit);
   };
   visit(sourceFile);

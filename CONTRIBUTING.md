@@ -245,6 +245,10 @@ answer to `tests/baselines/reference/editor/<name>.baseline`. When a
 `references` or `rename` marker sits inside a range, the answer must be
 exactly the case's ranges.
 
+A completion entry that imports its name from a module (an auto-import,
+shown with `from "..."`) is also resolved through both transports, and the
+edits accepting it makes are shown under it (`resolve <label> from ...`).
+
 `diagnostics` and `completions` are also asked of the VS Code adapter
 (`editors/vscode/server/out/server.js`, over LSP), because what an editor
 shows is what the adapter makes of the engine's answers. A `diagnostics`

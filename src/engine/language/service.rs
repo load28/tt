@@ -235,7 +235,10 @@ pub(super) fn ts_completions(
             label_detail: item["labelDetails"]["detail"].as_str().map(str::to_owned),
             description: item["labelDetails"]["description"]
                 .as_str()
-                .map(str::to_owned),
+                .map(|description| {
+                    tt_module_specifier(session, path, description)
+                        .unwrap_or_else(|| description.to_owned())
+                }),
             detail: item["detail"].as_str().map(str::to_owned),
             source,
             label,
@@ -1330,6 +1333,65 @@ fn source_link(
         location.range.end.line + 1,
         location.range.end.character + 1
     ))
+}
+
+/// The specifier tt writes for the module TypeScript names `specifier`
+/// from `importer`, when that module is a tt source the session serves
+/// under its lowered name ([`crate::engine::projection::module_path_of`]):
+/// TypeScript writes the lowered `shapes.tt.ts` as `./shapes.tt`,
+/// `./shapes.tt.ts` (with `allowImportingTsExtensions`), or `./shapes.tt.js`
+/// (a `.js` ending, as `nodenext` requires), and tt imports the source as
+/// `./shapes.tt` in every case, as import-path completion offers it
+/// (TASK-609). `None` for any other specifier, already tt's included.
+pub(super) fn tt_module_specifier(
+    session: &ServiceSession,
+    importer: &Path,
+    specifier: &str,
+) -> Option<String> {
+    if !(specifier.starts_with("./") || specifier.starts_with("../")) {
+        return None;
+    }
+    let directory = importer.parent()?;
+    [".ts", ".tsx", ".js", ".jsx"]
+        .into_iter()
+        .find_map(|ending| {
+            let written = specifier.strip_suffix(ending)?;
+            let source = crate::engine::normalize_document_path(&directory.join(written)).ok()?;
+            let kind = crate::SourceKind::from_tt_path(&source)?;
+            let lowered = format!(".{}", kind.output_extension());
+            let javascript: &[&str] = if lowered == ".tsx" {
+                &[".js", ".jsx"]
+            } else {
+                &[".js"]
+            };
+            let served = session.served.contains_key(&source) || source.is_file();
+            (served && (ending == lowered || javascript.contains(&ending)))
+                .then(|| written.to_string())
+        })
+}
+
+/// `text` (TypeScript an edit inserts) with each string literal naming a
+/// served tt module in TypeScript's form written in tt's
+/// ([`tt_module_specifier`]).
+pub(super) fn tt_specifiers_in(session: &ServiceSession, importer: &Path, text: &str) -> String {
+    let tokens = crate::lexer::lex(text, 0, text.len());
+    let mut out = String::with_capacity(text.len());
+    let mut copied = 0;
+    for token in &tokens {
+        if !matches!(token.kind, crate::lexer::TokenKind::Str)
+            || token.span.end - token.span.start < 2
+        {
+            continue;
+        }
+        let (start, end) = (token.span.start + 1, token.span.end - 1);
+        if let Some(specifier) = tt_module_specifier(session, importer, &text[start..end]) {
+            out.push_str(&text[copied..start]);
+            out.push_str(&specifier);
+            copied = end;
+        }
+    }
+    out.push_str(&text[copied..]);
+    out
 }
 
 /// Documentation as plain text, whichever shape the server used.

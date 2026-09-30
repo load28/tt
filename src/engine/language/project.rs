@@ -872,7 +872,14 @@ impl Project {
             .as_array()
             .into_iter()
             .flatten()
-            .map(|edit| source_edit(&code, mappings, inserted, &doc.source, splice, edit))
+            .map(|edit| {
+                source_edit(&code, mappings, inserted, &doc.source, splice, edit).map(|edit| {
+                    TextEdit {
+                        new_text: tt_specifiers_in(session, &path, &edit.new_text),
+                        ..edit
+                    }
+                })
+            })
             .collect::<Option<Vec<_>>>()
             .unwrap_or_default();
         let documentation = docs_text(&resolved["documentation"]);
