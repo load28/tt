@@ -98,6 +98,14 @@ two lists of the same kind.
   reports no semantic diagnostic while any file has a syntactic one. Of
   15,383 TypeScript units, 12,779 pass.
 
+  A batch is one program, so the units of different cases share a global
+  scope there, and whether the checker reports a grammar error in one file
+  can depend on another file's reference to the same global being checked
+  first (Issue 4). Every unit the run would report, a difference or a
+  listed unit the batch rejected, is therefore judged again with only its
+  own case's units, as TypeScript's harness compiles a case, and that
+  verdict decides.
+
 ### Decision 3: The passthrough verdict is the CLI's and the editor's
 
 - **Decision and rationale**: Each unit goes through `ttc::compile_report`
@@ -126,7 +134,8 @@ two lists of the same kind.
   runs; the `check` job fetches the corpus first and sets
   `TTC_REQUIRE_TYPESCRIPT_CASES=1` so a missing corpus fails. The scheduled
   `exhaustive` job runs every case in a release build
-  (`TTC_TYPESCRIPT_CASES=all`; 77 to 123 seconds in a debug build here).
+  (`TTC_TYPESCRIPT_CASES=all`; about 120 seconds in a debug build here,
+  45 of them re-judging reported units alone).
   `scripts/ci rust` fetches the corpus and warns, rather than failing, when
   it cannot (offline).
 
@@ -147,8 +156,10 @@ two lists of the same kind.
   `verify-failed` is ttc's documented answer for invalid TypeScript passed
   through. Three `with` statements are accepted too: TypeScript 7 is always
   strict (`alwaysStrict=false` is TS5108), and TS1101 is hidden there only
-  by the case's `// @ts-ignore`. The other 44 are triaged: TypeScript
-  reports nothing about the construct.
+  by the case's `// @ts-ignore`. The other 44 were triaged: TypeScript
+  reports nothing about the construct. After the merge of TASK-624, which
+  accepts `using` declarations in a `for` head, two of them pass through and
+  left the list: 147 accepted, 42 triaged.
 
 ## Work log
 
@@ -162,10 +173,16 @@ two lists of the same kind.
   command line.
 - 2026-09-30: Wired the `check` and `exhaustive` jobs and `scripts/ci`, and
   documented "TypeScript's own test cases" in `CONTRIBUTING.md`.
+- 2026-09-30: Merged `claude/ecstatic-dijkstra-qw5pf9` (TASK-621 to
+  TASK-628); the full run reported `usingDeclarationsInFor.ts` and
+  `awaitUsingDeclarationsInFor.ts` as "now comes back unchanged", and both
+  lines were removed.
+- 2026-09-30: Found the batch interference of Issue 4 in repeated full runs
+  and added the re-judging of Decision 2.
 
 ## Issues and resolutions
 
-### Issue 1: 44 valid TypeScript units that ttc rejects (contract 1)
+### Issue 1: 42 valid TypeScript units that ttc rejects (contract 1)
 
 - **Symptom**: `ttc` reports `verify-failed` for TypeScript the pinned
   `tsc` accepts. Each reproduces with `ttc --check` on a `.tt` file, and
@@ -174,21 +191,22 @@ two lists of the same kind.
   - `declare const readonly: unknown;` then
     `export const a4 = (readonly as number);` (read as a parameter property)
   - `export { type "x" as "c d" } from "./m";`
-  - `declare const d6: Disposable;` then `for (using d1 = d6;;) { break; }`
   - `<div className= "foo` / `bar" />` (a JSX attribute string over two lines)
   - `export class C9 { #a = 1; b: typeof this.#a = 1; }`
   - `function f1(await: number) { return await; }` in a script
 - **Cause**: Two classes. (a) 29 units: the self-check applies module and
   strict-mode rules TypeScript does not apply to the file (`await` as an
   identifier in a script, a call of a function named `await`, `static` and
-  `eval` in declarations). (b) 15 units: the vendored `swc_ecma_parser`
-  45.0.0 does not parse syntax TypeScript 7.1 parses (`typeof this.#a`,
-  `export { type "…" as "…" }`, `using`/`await using` in `for` heads,
+  `eval` in declarations). (b) 13 units: the vendored `swc_ecma_parser`
+  does not parse syntax TypeScript 7.1 parses (`typeof this.#a`,
+  `export { type "…" as "…" }`, `await using of` in `for...of` heads,
   `export @dec abstract class`, `import await = …`, import attributes
   after a line break, `throw await` across a line break, a JSX attribute
   string across lines, and `a ? b ? c : (d) : e => f`).
 - **Resolution**: Listed in `tests/passthrough-triaged.txt` under TASK-638
   with the construct each rejects; fixing them needs task numbers. Reported.
+  Two more of class (b), `using` and `await using` declarations in a
+  `for (;;)` head, were fixed by TASK-624 and left the list.
 
 ### Issue 2: 147 units ttc rejects before TypeScript can (contract 2)
 
@@ -211,6 +229,23 @@ two lists of the same kind.
   file accepts what a `.ts` file does not.
 - **Resolution**: Decision 2's second run and the `.ts`/`.tsx` names.
 
+### Issue 4: A unit's grammar verdict depended on the rest of its batch
+
+- **Symptom**: Three full runs of the same tree counted 12,779, 12,779 and
+  12,778 units that parse; the unit that moved was
+  `conformance/types/spread/objectSpreadNegative.ts`, whose TS1117
+  (duplicate property in an object literal) twelve runs of `tsc` on the
+  file alone all report. `--singleThreaded` did not change it.
+- **Cause**: The batch is one program, the unit is a script, and its
+  globals (`o`, `o2`, `duplicated`) merge with other units' globals. The
+  likely mechanism, not traced into the checker: when another file's check
+  resolves the literal's type first, the grammar check that reports TS1117
+  is not run for it again.
+- **Resolution**: Decision 2's re-judging. The count of units that parse
+  may still move by one between runs, because a unit that passes through
+  unchanged is not re-judged; what the run reports does not, and three
+  runs after the change reported the same 189 listed differences.
+
 ## Regression test (fails before the fix)
 
 Not applicable: this task adds a differential test and its lists and fixes
@@ -222,7 +257,9 @@ passes, and a listed unit that does not exist each fail the run.
 
 - [x] `TTC_TYPESCRIPT_CASES=all cargo test --test corpus typescript_test_cases`:
   "all 12831 cases; 15383 TypeScript unit(s), 12779 parse, 191 differ (191
-  listed)", passing, 77 to 123 seconds in a debug build.
+  listed)", passing, 77 to 123 seconds in a debug build; after the merge and
+  Issue 4's change, three runs: "189 differ (189 listed)", about 120
+  seconds each.
 - [x] `cargo test --test corpus`: both tests pass in 5.3 seconds; "400 of
   12831 cases ... 430 parse, 4 differ (4 listed)".
 - [x] Negative checks in one full run: `compiler/2dArrays.ts` listed as
