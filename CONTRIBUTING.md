@@ -212,6 +212,36 @@ tree differs from the commit, listing missing, modified, and unused
 baselines and uploading the difference as the `fix_baselines.patch`
 artifact. `git apply fix_baselines.patch` reproduces it locally.
 
+### TypeScript's own test cases
+
+Contract 1 is checked against TypeScript's test suite. `tests/typescript-cases.json`
+pins the microsoft/TypeScript commit the pinned `typescript` package was
+built from (its `gitHead`) and the tree ids of `tests/cases/compiler` and
+`tests/cases/conformance` there; `scripts/fetch-typescript-cases` makes a
+sparse, blobless checkout of exactly those into `target/typescript-cases/`
+(about 55 MB, a few seconds) and verifies the tree ids. Nothing from it is
+committed; the checkout keeps TypeScript's `LICENSE.txt` and `NOTICE.txt`
+(Apache-2.0).
+
+`tests/corpus.rs` splits each case into units by `// @filename`, asks the
+pinned `tsc` which `.ts`/`.tsx` units parse (and have no TS1xxx grammar
+error), and requires each of those to come back from `ttc` byte for byte
+with no diagnostic. A unit that does not is listed in
+`tests/passthrough-triaged.txt` (a bug, with its task) or, when the
+difference is intended, `tests/passthrough-accepted.txt` (with the reason).
+A unit may not be in both, and a listed unit that passes through again fails
+the run until its line is removed.
+
+```sh
+scripts/fetch-typescript-cases
+cargo test --test corpus typescript_test_cases                     # 400 cases, fixed seed (PR CI)
+TTC_TYPESCRIPT_CASES=all cargo test --release --test corpus typescript_test_cases   # every case (nightly)
+```
+
+When `package.json` moves to another TypeScript, update the manifest's
+`typescript`, `commit` (the new package's `gitHead`), and tree ids in the
+same change; the test fails while they disagree.
+
 ### Fuzz findings and the mutation pass
 
 A crash input is a regression test. The fuzz targets' bodies live in

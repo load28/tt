@@ -83,10 +83,14 @@ jobs:
       - name: Clippy (warnings are errors)
         run: cargo clippy --all-targets -- -D warnings
 
+      - name: Fetch TypeScript's test cases at the pinned commit
+        run: scripts/fetch-typescript-cases
+
       - name: Test
         id: test
         env:
           TTC_REQUIRE_TSGO: "1"
+          TTC_REQUIRE_TYPESCRIPT_CASES: "1"
           TT_BASELINE_TRACKING_DIR: ${{ runner.temp }}/baseline-tracking
         run: cargo test
 
@@ -322,10 +326,28 @@ jobs:
       - name: Cache cargo build
         uses: Swatinem/rust-cache@v2
 
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install TypeScript
+        run: npm ci
+
       - name: Every deletion and every prefix of the case corpus
         env:
           TT_MUTATIONS: all
         run: cargo test --release --test fuzz_regressions -- --nocapture
+
+      - name: Fetch TypeScript's test cases at the pinned commit
+        run: scripts/fetch-typescript-cases
+
+      - name: Every TypeScript test case comes back unchanged
+        env:
+          TTC_REQUIRE_TSGO: "1"
+          TTC_REQUIRE_TYPESCRIPT_CASES: "1"
+          TTC_TYPESCRIPT_CASES: all
+        run: cargo test --release --test corpus typescript_test_cases -- --nocapture
 
   release-version:
     name: release artifact version

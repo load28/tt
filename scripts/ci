@@ -221,8 +221,13 @@ stage_rust() {
   # The emit fixtures pin the artifact a configured checkout produces,
   # annotations included, so without a TypeScript they skip — and a skipped
   # contract is green in every other way. The gate says one must be there.
+  cases_required=1
+  run scripts/fetch-typescript-cases > /dev/null || {
+    warn "TypeScript's test cases could not be fetched: the passthrough parity sample in tests/corpus.rs will skip"
+    cases_required=0
+  }
   tracking="$(mktemp -d)"
-  run env TTC_REQUIRE_TSGO=1 TT_BASELINE_TRACKING_DIR="$tracking" cargo test || {
+  run env TTC_REQUIRE_TSGO=1 TTC_REQUIRE_TYPESCRIPT_CASES="$cases_required" TT_BASELINE_TRACKING_DIR="$tracking" cargo test || {
     rm -rf "$tracking"
     return 1
   }
