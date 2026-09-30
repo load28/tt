@@ -30,8 +30,9 @@ impl<I: Tokens> Parser<I> {
             unexpected!(self, "a string literal")
         };
         let with = if self.input().syntax().import_attributes()
-            && !self.input().had_line_break_before_cur()
-            && (self.input_mut().eat(Token::Assert) || self.input_mut().eat(Token::With))
+            && (self.input_mut().eat(Token::With)
+                || (!self.input().had_line_break_before_cur()
+                    && self.input_mut().eat(Token::Assert)))
         {
             match self.parse_object_expr()? {
                 Expr::Object(v) => Some(Box::new(v)),
@@ -58,7 +59,18 @@ impl<I: Tokens> Parser<I> {
                 // `export { type as }`
                 // `export { type as as }`
                 // `export { type as as as }`
+                // `export { type "xx" as "yy" } from 'mod'`
                 if self.syntax().typescript()
+                    && orig_token == Token::Type
+                    && self.input().cur() == Token::Str
+                {
+                    if type_only {
+                        self.emit_err(orig_ident.span, SyntaxError::TS2207);
+                    }
+
+                    is_type_only = true;
+                    self.parse_module_export_name()?
+                } else if self.syntax().typescript()
                     && orig_token == Token::Type
                     && self.input().cur().is_word()
                 {
@@ -629,6 +641,15 @@ impl<I: Tokens> Parser<I> {
             let class_start = self.cur_pos();
             self.parse_class_decl(start, class_start, decorators, false)?
         } else if !type_only
+            && self.input().syntax().typescript()
+            && self.input().is(Token::Abstract)
+            && peek!(self).is_some_and(|cur| cur == Token::Class)
+            && !self.input_mut().has_linebreak_between_cur_and_peeked()
+        {
+            let class_start = self.cur_pos();
+            self.assert_and_bump(Token::Abstract);
+            self.parse_class_decl(start, class_start, decorators, true)?
+        } else if !type_only
             && self.input().is(Token::Async)
             && peek!(self).is_some_and(|cur| cur == Token::Function)
             && !self.input_mut().has_linebreak_between_cur_and_peeked()
@@ -905,8 +926,9 @@ impl<I: Tokens> Parser<I> {
         if self.input().cur() == Token::Str {
             let src = Box::new(self.parse_str_lit());
             let with = if self.input().syntax().import_attributes()
-                && !self.input().had_line_break_before_cur()
-                && (self.input_mut().eat(Token::Assert) || self.input_mut().eat(Token::With))
+                && (self.input_mut().eat(Token::With)
+                    || (!self.input().had_line_break_before_cur()
+                        && self.input_mut().eat(Token::Assert)))
             {
                 match self.parse_object_expr()? {
                     Expr::Object(v) => Some(Box::new(v)),
@@ -1070,8 +1092,9 @@ impl<I: Tokens> Parser<I> {
         };
 
         let with = if self.input().syntax().import_attributes()
-            && !self.input().had_line_break_before_cur()
-            && (self.input_mut().eat(Token::Assert) || self.input_mut().eat(Token::With))
+            && (self.input_mut().eat(Token::With)
+                || (!self.input().had_line_break_before_cur()
+                    && self.input_mut().eat(Token::Assert)))
         {
             match self.parse_object_expr()? {
                 Expr::Object(v) => Some(Box::new(v)),

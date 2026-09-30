@@ -2339,7 +2339,18 @@ impl<I: Tokens> Parser<I> {
             self.state_mut().potential_arrow_start = start;
             let modifier_start = start;
 
-            let has_modifier = self.eat_any_ts_modifier()?;
+            let has_modifier = if items.is_empty()
+                && self.input().syntax().typescript()
+                && matches!(
+                    self.input().cur(),
+                    Token::Public | Token::Protected | Token::Private | Token::Readonly
+                )
+                && peek!(self).is_some_and(|t| t == Token::As)
+            {
+                false
+            } else {
+                self.eat_any_ts_modifier()?
+            };
             let pat_start = self.cur_pos();
 
             let mut arg = {

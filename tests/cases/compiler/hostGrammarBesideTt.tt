@@ -1,0 +1,11 @@
+// Repro from TASK-641
+export variant Flag { On, Off }
+declare const dec: any;
+declare const readonly: unknown;
+export @dec abstract class Base {}
+export const n = (readonly as number);
+export const label = (f: Flag) => match (f) {
+  On => <string>"on",
+  Off => "off",
+};
+export { type Flag as "flag type" };

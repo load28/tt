@@ -646,7 +646,8 @@
 | TASK-638 | Hold TypeScript's own test cases to byte-identical passthrough | Complete | 2026-09-30 | 2026-09-30 | [TASK-638](./TASK-638-typescript-case-passthrough-parity.md) |
 | TASK-639 | Pin editor behaviour with fourslash-style cases over both transports | Complete | 2026-09-30 | 2026-09-30 | [TASK-639](./TASK-639-fourslash-style-editor-cases.md) |
 | TASK-640 | Leave the rules TypeScript checks after parsing to TypeScript | Complete | 2026-09-30 | 2026-09-30 | [TASK-640](./TASK-640-verbatim-errors-left-to-typescript.md) |
+| TASK-641 | Read five TypeScript forms the vendored swc parser rejected | Complete | 2026-09-30 | 2026-09-30 | [TASK-641](./TASK-641-swc-typescript-grammar-gaps.md) |
 
 ## Next task number
 
-**TASK-641**
+**TASK-642**

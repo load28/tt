@@ -474,7 +474,7 @@ impl<I: Tokens> Parser<I> {
             }
 
             if maybe_using_decl
-                && !self.input().is(Token::Of)
+                && (maybe_await_using_decl || !self.input().is(Token::Of))
                 && (peek!(self).is_some_and(|peek| peek == Token::Of || peek == Token::In))
             {
                 is_using_decl = maybe_using_decl;
@@ -489,9 +489,8 @@ impl<I: Tokens> Parser<I> {
                 .filter(|e| e.arg.is_ident_ref_to("using"))
                 .is_some();
             let cur = self.input().cur();
-            if (is_await || init.is_ident_ref_to("using"))
+            if (is_await || (init.is_ident_ref_to("using") && cur != Token::Of))
                 && !self.input().had_line_break_before_cur()
-                && cur != Token::Of
                 && cur != Token::In
                 && self.is_ident_ref()
             {
