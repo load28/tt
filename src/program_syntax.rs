@@ -999,6 +999,7 @@ pub(crate) struct EvaluationContext {
     /// Async functions contextually type their returned expression with the
     /// awaited form of the authored Promise return type.
     pub(crate) contextual_type_awaited: bool,
+    pub(crate) contextual_type_asserted: bool,
     /// The owning statement is the unbraced body of an `if`, loop, label, or
     /// `with`, so a statement lowering has to open its own block there.
     pub(crate) requires_block: bool,
@@ -1013,6 +1014,7 @@ pub(crate) struct OverlayFacts {
     pub(crate) contextual_type: Option<SourceSpan>,
     pub(crate) function_return_type: Option<SourceSpan>,
     pub(crate) function_return_awaited: bool,
+    pub(crate) assertion: Option<Option<SourceSpan>>,
     pub(crate) ambient: bool,
     pub(crate) decorated_classes: Vec<usize>,
     pub(crate) value_is_owner: bool,
@@ -1034,6 +1036,7 @@ impl EvaluationContext {
             contextual_type,
             function_return_type,
             function_return_awaited,
+            assertion,
             ambient,
             decorated_classes,
             value_is_owner,
@@ -1062,6 +1065,7 @@ impl EvaluationContext {
                 continuation: HostContinuation::Discard,
                 contextual_type,
                 contextual_type_awaited: false,
+                contextual_type_asserted: false,
                 requires_block,
                 ambient,
                 loop_head_declarator: false,
@@ -1079,10 +1083,18 @@ impl EvaluationContext {
             continuation,
             HostContinuation::Return | HostContinuation::ArrowReturn
         );
-        let contextual_type = if uses_function_return {
-            function_return_type
-        } else {
-            contextual_type
+        let asserted = local_path
+            .iter()
+            .rev()
+            .take_while(|parent| is_transparent_expression_edge(parent))
+            .any(is_assertion_edge);
+        let (contextual_type, contextual_type_awaited) = match assertion {
+            Some(assertion) if asserted => (assertion, false),
+            _ if uses_function_return => (
+                function_return_type,
+                function_return_type.is_some() && function_return_awaited,
+            ),
+            _ => (contextual_type, false),
         };
         Self {
             frequency,
@@ -1091,9 +1103,8 @@ impl EvaluationContext {
             value_role,
             continuation,
             contextual_type,
-            contextual_type_awaited: uses_function_return
-                && function_return_type.is_some()
-                && function_return_awaited,
+            contextual_type_awaited,
+            contextual_type_asserted: asserted,
             requires_block,
             ambient,
             loop_head_declarator: loop_head_declarator(local_path),
@@ -1362,6 +1373,15 @@ fn host_continuation(parents: &[AstParentKind]) -> HostContinuation {
         Some(AstParentKind::ExprStmt(fields::ExprStmtField::Expr)) => HostContinuation::Discard,
         _ => HostContinuation::Compose,
     }
+}
+
+fn is_assertion_edge(parent: &AstParentKind) -> bool {
+    matches!(
+        parent,
+        AstParentKind::TsAsExpr(fields::TsAsExprField::Expr)
+            | AstParentKind::TsSatisfiesExpr(fields::TsSatisfiesExprField::Expr)
+            | AstParentKind::TsTypeAssertion(fields::TsTypeAssertionField::Expr)
+    )
 }
 
 fn is_transparent_expression_edge(parent: &AstParentKind) -> bool {

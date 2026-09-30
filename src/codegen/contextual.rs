@@ -20,6 +20,8 @@ pub(crate) struct SlotRefinement {
     /// is then first the property of an object literal a `const` of its own
     /// holds, where TypeScript types it without one, as at that position.
     pub detached: bool,
+    pub provisional: bool,
+    pub cleared: bool,
 }
 
 /// Where the refined emission declares its storage.
@@ -50,13 +52,24 @@ pub(crate) fn refine(
     }
     let mut edits: Vec<Edit> = Vec::new();
     for (&end, slot) in emit.contextual_slots.iter().zip(slots) {
-        if let Some(annotation) = &slot.annotation {
-            edits.push(Edit {
-                start: end,
-                end,
-                text: format!(": {annotation}"),
-            });
+        let written = emit
+            .asserted_slots
+            .iter()
+            .find(|(slot_end, _)| *slot_end == end)
+            .map_or(end, |&(_, annotation_end)| annotation_end);
+        let text = match &slot.annotation {
+            Some(annotation) => format!(": {annotation}"),
+            None if slot.cleared => String::new(),
+            None => continue,
+        };
+        if text.is_empty() && written == end {
+            continue;
         }
+        edits.push(Edit {
+            start: end,
+            end: written,
+            text,
+        });
     }
     let mut locals = Vec::new();
     let detached: Vec<usize> = emit
@@ -136,9 +149,11 @@ pub(crate) fn refine(
         .contextual_slots
         .iter()
         .zip(slots)
-        .filter(|(_, slot)| slot.annotation.is_none())
+        .filter(|(_, slot)| slot.annotation.is_none() && !slot.cleared)
         .map(|(&end, _)| end)
         .collect();
+    emit.asserted_slots
+        .retain(|(end, _)| unannotated.contains(end));
     emit.contextual_slots = unannotated;
     apply(emit, &edits);
     Refined {
@@ -205,6 +220,10 @@ fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
     for anchor in &mut emit.anchors {
         anchor.out = shifted(edits, anchor.out, true);
         anchor.end = shifted(edits, anchor.end, false);
+    }
+    for (slot, annotation) in &mut emit.asserted_slots {
+        *slot = shifted(edits, *slot, true);
+        *annotation = shifted(edits, *annotation, false);
     }
     for position in emit
         .contextual_slots

@@ -84,21 +84,39 @@ impl<'a> Emitter<'a> {
                 crate::ice::bug!("initializer rewrite is not structurally emit-able")
             });
         let mut out = Rope::new();
-        if rewrite.contextual_type.is_none() {
-            out.push_value_declaration(&rewrite.slot);
-        } else {
-            out.push_lit(format!("let {}", rewrite.slot));
-            self.push_contextual_type(
-                &mut out,
-                rewrite.contextual_type,
-                rewrite.contextual_type_awaited,
-            );
-            out.push_lit(";");
-        }
+        self.push_slot_declaration(
+            &mut out,
+            &rewrite.slot,
+            rewrite.contextual_type,
+            rewrite.contextual_type_awaited,
+            rewrite.contextual_type_asserted,
+        );
         out.push_break(0);
         out.append(anchored);
         out.push_break(0);
         Rope::scoped(out)
+    }
+
+    fn push_slot_declaration(
+        &self,
+        out: &mut Rope<'a>,
+        slot: &str,
+        contextual_type: Option<SourceSpan>,
+        awaited: bool,
+        asserted: bool,
+    ) {
+        match contextual_type {
+            None => out.push_value_declaration(slot),
+            Some(annotation) if asserted => out.push_asserted_declaration(
+                slot,
+                format!(": {}", &self.source[annotation.start..annotation.end]),
+            ),
+            Some(_) => {
+                out.push_lit(format!("let {slot}"));
+                self.push_contextual_type(out, contextual_type, awaited);
+                out.push_lit(";");
+            }
+        }
     }
 
     pub(super) fn push_contextual_type(
@@ -1680,17 +1698,13 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         out.push_lit("{");
         out.push_break(1);
-        if rewrite.contextual_type.is_some() {
-            out.push_lit(format!("let {}", rewrite.slot));
-            self.push_contextual_type(
-                &mut out,
-                rewrite.contextual_type,
-                rewrite.contextual_type_awaited,
-            );
-            out.push_lit(";");
-        } else {
-            out.push_value_declaration(&rewrite.slot);
-        }
+        self.push_slot_declaration(
+            &mut out,
+            &rewrite.slot,
+            rewrite.contextual_type,
+            rewrite.contextual_type_awaited,
+            rewrite.contextual_type_asserted,
+        );
         out.push_break(1);
         out.append(Rope::indented(1, anchored));
         out.push_break(1);

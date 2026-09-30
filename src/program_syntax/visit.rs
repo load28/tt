@@ -86,6 +86,7 @@ impl ParentCollector {
             function_depth: 0,
             function_targets: Vec::new(),
             contextual_types: Vec::new(),
+            assertions: Vec::new(),
             function_return_types: Vec::new(),
             function_return_async: Vec::new(),
             break_capture_depth: 0,
@@ -124,6 +125,7 @@ impl ParentCollector {
                     exits: Vec::new(),
                     function_target: self.function_targets.last().copied(),
                     contextual_type: self.contextual_types.last().copied().flatten(),
+                    assertion: self.assertions.last().copied(),
                     function_return_type: self.function_return_types.last().copied().flatten(),
                     function_return_awaited: self
                         .function_return_async
@@ -265,6 +267,13 @@ impl ParentCollector {
                         function_return_type: found
                             .function_return_type
                             .map(|span| map_evaluation_span(&self.source_segments, span))
+                            .transpose()?,
+                        assertion: found
+                            .assertion
+                            .map(|span| {
+                                span.map(|span| map_evaluation_span(&self.source_segments, span))
+                                    .transpose()
+                            })
                             .transpose()?,
                         function_return_awaited: found.function_return_awaited,
                         ambient: found.ambient,
@@ -800,6 +809,45 @@ impl VisitAstPath for ParentCollector {
         self.contextual_types.pop();
         self.function_targets.pop();
         self.function_depth -= 1;
+    }
+
+    fn visit_ts_as_expr<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::TsAsExpr,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.assertions.push(None);
+        <swc_ecma_ast::TsAsExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.assertions.pop();
+    }
+
+    fn visit_ts_type_assertion<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::TsTypeAssertion,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.assertions.push(None);
+        <swc_ecma_ast::TsTypeAssertion as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.assertions.pop();
+    }
+
+    fn visit_ts_satisfies_expr<'ast: 'r, 'r>(
+        &mut self,
+        node: &'ast swc_ecma_ast::TsSatisfiesExpr,
+        path: &mut AstNodePath<'r>,
+    ) {
+        self.assertions.push(Some(projected_span(
+            node.type_ann.span(),
+            self.source_start,
+        )));
+        <swc_ecma_ast::TsSatisfiesExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(
+            node, self, path,
+        );
+        self.assertions.pop();
     }
 
     fn visit_function<'ast: 'r, 'r>(&mut self, node: &'ast Function, path: &mut AstNodePath<'r>) {

@@ -129,6 +129,20 @@ impl<'a> Rope<'a> {
         self.push_lit(";");
     }
 
+    pub(crate) fn push_asserted_declaration(&mut self, name: &str, annotation: String) {
+        self.push_lit(format!("let {name}"));
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::ContextualSlot,
+        });
+        self.push_lit(annotation);
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::AssertedAnnotationEnd,
+        });
+        self.push_lit(";");
+    }
+
     pub(crate) fn push_operand_declaration(&mut self, name: &str) {
         self.push_lit(format!("let {name}"));
         self.pieces.push(Piece::Mark {
@@ -551,6 +565,7 @@ pub(crate) struct Flat {
     pub contextual_slots: Vec<usize>,
     pub selector_slots: Vec<usize>,
     pub operand_slots: Vec<usize>,
+    pub asserted_slots: Vec<(usize, usize)>,
     pub generated_names: std::collections::HashSet<String>,
     pub declared_names: Vec<DeclaredName>,
     pub shared_bindings: Vec<SharedBinding>,

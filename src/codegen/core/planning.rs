@@ -376,6 +376,7 @@ pub(super) struct OwnerSlotRewrite {
     pub(super) continuation: HostContinuation,
     pub(super) contextual_type: Option<SourceSpan>,
     pub(super) contextual_type_awaited: bool,
+    pub(super) contextual_type_asserted: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -392,6 +393,7 @@ pub(super) struct ArrowReturnRewrite {
     pub(super) slot: String,
     pub(super) contextual_type: Option<SourceSpan>,
     pub(super) contextual_type_awaited: bool,
+    pub(super) contextual_type_asserted: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -1007,6 +1009,7 @@ impl TargetRewritePlan {
                         continuation: value.context.continuation,
                         contextual_type: value.context.contextual_type,
                         contextual_type_awaited: value.context.contextual_type_awaited,
+                        contextual_type_asserted: value.context.contextual_type_asserted,
                     })
             })
             .collect();
@@ -1026,6 +1029,7 @@ impl TargetRewritePlan {
                         slot: lowering.slot_name(slot).to_owned(),
                         contextual_type: value.context.contextual_type,
                         contextual_type_awaited: value.context.contextual_type_awaited,
+                        contextual_type_asserted: value.context.contextual_type_asserted,
                     })
             })
             .collect();

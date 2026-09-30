@@ -52,11 +52,14 @@ pub(crate) fn materialize(
                 path: path.clone(),
                 text: emit.code.clone(),
             });
-            let at = |position: usize, settled: bool, operand: bool| ContextualSlotQuery {
-                module: path.clone(),
-                declaration_end: mapper::to_utf16(&emit.code, position),
-                settled,
-                operand,
+            let at = |position: usize, settled: bool, operand: bool, asserted: bool| {
+                ContextualSlotQuery {
+                    module: path.clone(),
+                    declaration_end: mapper::to_utf16(&emit.code, position),
+                    settled,
+                    operand,
+                    asserted,
+                }
             };
             for (index, (&position, slot)) in refined
                 .declarations
@@ -64,19 +67,27 @@ pub(crate) fn materialize(
                 .zip(&slots[module_index])
                 .enumerate()
             {
-                if slot.annotation.is_some() {
-                    settled.push(at(position, true, false));
+                let declared = base.contextual_slots[index];
+                let asserted = slot.provisional
+                    || base
+                        .asserted_slots
+                        .iter()
+                        .any(|&(slot_end, _)| slot_end == declared);
+                if slot.cleared || (slot.annotation.is_some() && !slot.provisional) {
+                    settled.push(at(position, true, false, false));
                 } else {
                     sites.push((module_index, index));
-                    let operand = base.operand_slots.contains(&base.contextual_slots[index]);
-                    query.contextual_slots.push(at(position, false, operand));
+                    let operand = base.operand_slots.contains(&declared);
+                    query
+                        .contextual_slots
+                        .push(at(position, false, operand, asserted));
                 }
             }
             settled.extend(
                 refined
                     .locals
                     .iter()
-                    .map(|&position| at(position, true, false)),
+                    .map(|&position| at(position, true, false, false)),
             );
         }
         // After every slot an answer can name, so an answer's index is its
@@ -92,7 +103,14 @@ pub(crate) fn materialize(
                 return Ok(slots);
             }
             for &(module, index) in &sites {
-                slots[module][index].detached = true;
+                let asserted = slots[module][index].provisional
+                    || bases[module]
+                        .asserted_slots
+                        .iter()
+                        .any(|&(slot_end, _)| slot_end == bases[module].contextual_slots[index]);
+                if !asserted {
+                    slots[module][index].detached = true;
+                }
             }
             infer_joins = true;
             continue;
@@ -105,10 +123,12 @@ pub(crate) fn materialize(
                 Failure::internal("contextual answer names an unknown value slot")
             })?;
             let slot = &mut slots[module][index];
-            if slot.annotation.is_some() {
+            if slot.annotation.is_some() && !slot.provisional {
                 return Err(Failure::internal("contextual answer repeats a value slot"));
             }
-            slot.annotation = Some(answer.annotation);
+            slot.cleared = answer.annotation.is_none();
+            slot.annotation = answer.annotation;
+            slot.provisional = answer.provisional;
             if !answer.inferred {
                 slot.detached = false;
             }
@@ -386,6 +406,8 @@ pub(crate) fn standalone(
         refinements.push(SlotRefinement {
             annotation,
             detached: slot.detached,
+            provisional: slot.provisional,
+            cleared: slot.cleared,
         });
     }
     refine(&mut emit, options.source_kind, &refinements);

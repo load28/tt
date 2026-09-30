@@ -692,3 +692,48 @@ fn a_conditional_operation_tests_its_condition_where_it_evaluates_it() {
         assert_eq!(out.matches("cfg.name").count(), 1, "{value}: {out}");
     }
 }
+
+#[test]
+fn an_assertion_operand_takes_no_storage_type_from_outside_the_assertion() {
+    let prelude = "variant O { A, B }\ndeclare const o: O;\ntype Ev = { kind: \"a\" } | { kind: \"b\" };\n";
+    let syntactic = |src: &str| {
+        compile(
+            &format!("{prelude}{src}"),
+            &Options {
+                defer_to_checker: true,
+                ..Options::default()
+            },
+        )
+        .expect("compile failed")
+    };
+    let cases: &[(&str, &str)] = &[
+        (
+            "export const q: string = match (o) { A => 1, B => 2 } as unknown as string;\n",
+            "let $tt_v0;",
+        ),
+        (
+            "export function h(): number { return match (o) { A => 1, B => 2 } as any; }\n",
+            "let $tt_v0;",
+        ),
+        (
+            "export const n: number = <number>match (o) { A => 1, B => 2 };\n",
+            "let $tt_v0;",
+        ),
+        (
+            "export const e = match (o) { A => ({ kind: \"a\" }), B => ({ kind: \"b\" }) } satisfies Ev;\n",
+            "let $tt_v0: Ev;",
+        ),
+        (
+            "export function r(): unknown { return match (o) { A => ({ kind: \"a\" }), B => ({ kind: \"b\" }) } satisfies Ev; }\n",
+            "let $tt_v0: Ev;",
+        ),
+        (
+            "export const k: number = match (o) { A => 1, B => 2 };\n",
+            "let $tt_v0: number;",
+        ),
+    ];
+    for (src, declaration) in cases {
+        let out = syntactic(src);
+        assert!(out.contains(declaration), "{src}: {out}");
+    }
+}

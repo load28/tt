@@ -383,6 +383,7 @@ fn job_json(query: &Query) -> serde_json::Value {
                 "declarationEnd": v.declaration_end,
                 "settled": v.settled,
                 "operand": v.operand,
+                "asserted": v.asserted,
             }))
             .collect::<Vec<_>>(),
         "contextualOnly": query.contextual_only,
@@ -444,17 +445,25 @@ fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
             .as_u64()
             .ok_or_else(|| Failure::internal("contextual slot answer omitted index"))?
             as usize;
-        let annotation = slot["annotation"]
-            .as_str()
-            .filter(|text| !text.is_empty())
-            .ok_or_else(|| Failure::internal("contextual slot answer omitted annotation"))?;
+        let annotation = match &slot["annotation"] {
+            serde_json::Value::Null => None,
+            annotation => Some(
+                annotation
+                    .as_str()
+                    .filter(|text| !text.is_empty())
+                    .ok_or_else(|| Failure::internal("contextual slot answer omitted annotation"))?
+                    .to_owned(),
+            ),
+        };
         let inferred = slot["inferred"]
             .as_bool()
             .ok_or_else(|| Failure::internal("contextual slot answer omitted its kind"))?;
+        let provisional = slot["provisional"].as_bool().unwrap_or(false);
         answers.contextual_slots.push(ContextualSlotType {
             index,
-            annotation: annotation.into(),
+            annotation,
             inferred,
+            provisional,
         });
     }
     for d in array(&value, "diagnostics") {
@@ -678,6 +687,7 @@ const result = consume(slot);
                 declaration_end: text.find("let slot;").unwrap() + "let slot".len(),
                 settled: false,
                 operand: false,
+                asserted: false,
             }],
             ..Query::default()
         };
@@ -686,8 +696,9 @@ const result = consume(slot);
             answer.contextual_slots,
             vec![ContextualSlotType {
                 index: 0,
-                annotation: "Item".into(),
+                annotation: Some("Item".into()),
                 inferred: false,
+                provisional: false,
             }]
         );
         let mut typed = query;

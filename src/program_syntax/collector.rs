@@ -145,6 +145,7 @@ pub(super) struct ParentCollector {
     pub(super) function_depth: usize,
     pub(super) function_targets: Vec<EvaluationOwner>,
     pub(super) contextual_types: Vec<Option<ProjectedSpan>>,
+    pub(super) assertions: Vec<Option<ProjectedSpan>>,
     pub(super) function_return_types: Vec<Option<ProjectedSpan>>,
     pub(super) function_return_async: Vec<bool>,
     /// How many enclosing statements consume an unlabeled `break`
@@ -176,6 +177,7 @@ pub(super) struct FoundOverlay {
     pub(super) exits: Vec<ProjectedHostExit>,
     pub(super) function_target: Option<EvaluationOwner>,
     pub(super) contextual_type: Option<ProjectedSpan>,
+    pub(super) assertion: Option<Option<ProjectedSpan>>,
     pub(super) function_return_type: Option<ProjectedSpan>,
     pub(super) function_return_awaited: bool,
 }

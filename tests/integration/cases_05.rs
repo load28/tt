@@ -1599,3 +1599,47 @@ console.log(a, b, c, d, e, f, g, h, i, reads);
 "#);
     assert_eq!(out, ["2 3 4 abc 0 6 7 1 1 9"]);
 }
+
+#[test]
+fn an_asserted_value_type_checks_without_a_checker_at_compile_time() {
+    if !common::tsc_available() {
+        return;
+    }
+    // TASK-596: without the checker, the storage of a `satisfies T`
+    // operand is annotated with `T`, so its object-literal arms keep their
+    // literal tags, and the operand of `as T` is annotated with nothing
+    // from outside the assertion.
+    let source = as_module(
+        r#"
+variant O { A, B }
+type Ev = { kind: "click"; x: number } | { kind: "key"; code: string };
+declare const o: O;
+declare const x: unknown;
+export const e = match (o) { A => ({ kind: "click", x: 1 }), B => ({ kind: "key", code: "z" }) } satisfies Ev;
+export const q: string = match (o) { A => 1, B => 2 } as unknown as string;
+export function h(): number { return match (o) { A => x, B => 0 } as number; }
+"#,
+    );
+    let code = compile(
+        &source,
+        &Options {
+            defer_to_checker: true,
+            ..options_with_runtime("./runtime.js")
+        },
+    )
+    .expect("tt compile failed");
+    let dir = tmpdir();
+    let ts = dir.join("main.ts");
+    fs::write(&ts, &code).unwrap();
+    let out = common::tsc()
+        .arg(&ts)
+        .arg("--noEmit")
+        .args(TSC_FLAGS)
+        .output()
+        .expect("failed to run tsc");
+    assert!(
+        out.status.success(),
+        "{}\n---compiled---\n{code}",
+        tsc_report(&out)
+    );
+}

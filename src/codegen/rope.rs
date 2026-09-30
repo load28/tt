@@ -40,6 +40,7 @@ pub(crate) enum MarkKind {
     /// selected rather than a value.
     SelectorSlot,
     OperandSlot,
+    AssertedAnnotationEnd,
     /// The receiver a nested pattern tests ([`crate::PayloadTemp`]).
     Payload,
     /// Start of a value explicitly returned from a `result` block.
@@ -611,6 +612,7 @@ impl<'a> TargetFile<'a> {
         let mut contextual_slots = Vec::new();
         let mut selector_slots = Vec::new();
         let mut operand_slots = Vec::new();
+        let mut asserted_slots = Vec::new();
         let mut declared_names: Vec<DeclaredName> = Vec::new();
         let mut shared_bindings: Vec<SharedBinding> = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
@@ -688,6 +690,15 @@ impl<'a> TargetFile<'a> {
                 } => {
                     contextual_slots.push(out.len());
                     operand_slots.push(out.len());
+                }
+                TargetPiece::Mark {
+                    kind: MarkKind::AssertedAnnotationEnd,
+                    ..
+                } => {
+                    let slot = *contextual_slots.last().unwrap_or_else(|| {
+                        crate::ice::bug!("an asserted annotation follows no value slot")
+                    });
+                    asserted_slots.push((slot, out.len()));
                 }
                 TargetPiece::Mark {
                     src,
@@ -833,6 +844,7 @@ impl<'a> TargetFile<'a> {
             contextual_slots,
             selector_slots,
             operand_slots,
+            asserted_slots,
             generated_names: std::collections::HashSet::new(),
             declared_names,
             shared_bindings,

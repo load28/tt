@@ -163,6 +163,41 @@ value piped into each step to a slot of its own and only its result to the
 pipeline's value slot (TASK-505), so no annotation has to cover the values of
 several steps.
 
+## Values under an assertion (TASK-596)
+
+TypeScript gives the operand of `as T`, `<T>e`, and `satisfies T` the
+contextual type `T` (through parentheses and `!`; `as const` passes the
+outer context on instead), so object-literal arms keep literal tags and
+callbacks get typed parameters. Neither is an assignment: `as T` only asks
+that the operand and `T` be comparable, and `satisfies T` asks that the
+operand be assignable to `T` while its type stays the operand's own
+(TypeScript handbook, "Type Assertions"; TypeScript 4.9 release notes,
+"The `satisfies` Operator"). Storage annotated with `T` would make both an
+assignment: `match … { A => x … } as number` with `x: unknown` reports
+TS2322, and `match … satisfies { a?: number }` reads back as `{ a?: number }`.
+
+Storage whose contextual type comes from such a read is therefore asserted
+storage. The backend answers the contextual type it found as provisional:
+the storage is annotated with `T` for one round, so the arms are typed
+under `T`. Once contextual propagation has settled (the join phase), the
+backend replaces it with the join of the arms' types under `T`: each is
+widened as TypeScript widens at a mutable location (a literal is kept only
+where `T` has a literal type of its kind, `isLiteralOfContextualType`, and
+fresh object literals are widened), subsumed constituents are removed as
+for any join, and the result is written if every part denotes its type at
+the declaration. A join that is `any`, `unknown`, or not writable clears the
+annotation, and the storage is typed from its assignments.
+
+Without the checker, codegen's syntactic annotation (the declared type of a
+declarator or a function's return type, for a value that is the whole
+initializer or returned expression) stops at an assertion: an outer
+declared type never reaches its operand (`const q: string = match … as
+unknown as string` leaves the storage unannotated). A `satisfies T` operand
+annotates its storage with `T` itself, which accepts exactly the values the
+operator accepts; the declaration is marked (`MarkKind::AssertedAnnotationEnd`),
+so when the checker is present that annotation is asserted storage too and
+is replaced in the same way.
+
 ## Project and output coordinates
 
 Project snapshots include lowered tt files, TypeScript sources and unsaved host

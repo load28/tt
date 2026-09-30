@@ -141,16 +141,18 @@ pub(crate) struct ContextualSlotQuery {
     /// slot, never named by another slot's annotation.
     pub settled: bool,
     pub operand: bool,
+    pub asserted: bool,
 }
 
 /// A type expressed in the lexical scope of the generated declaration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ContextualSlotType {
     pub index: usize,
-    pub annotation: String,
+    pub annotation: Option<String>,
     /// Joined from the values assigned to the storage, rather than the
     /// contextual type at its uses.
     pub inferred: bool,
+    pub provisional: bool,
 }
 
 /// Everything asked of one project graph, in one round trip.

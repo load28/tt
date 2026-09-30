@@ -546,3 +546,42 @@ fn a_value_under_a_conditional_operation_keeps_the_conditions_narrowing() {
     let out = check(&dir);
     assert!(!out.contains("error"), "{out}");
 }
+
+/// TASK-596: a value under `as T`, `<T>`, or `satisfies T` gets `T` as its
+/// contextual type, but its storage keeps the value's own type: an
+/// assertion is not an assignment, and `satisfies` does not change the
+/// type of its operand.
+#[test]
+fn an_asserted_value_keeps_its_own_type() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/asserted.tt",
+        "variant O { A, B }\n\
+         type Ev = { kind: \"click\"; x: number } | { kind: \"key\"; code: string };\n\
+         declare function read(): string;\n\
+         declare const x0: unknown;\n\
+         export function f(o: O, x: unknown) {\n\
+         \x20 const n = match (o) { A => x, B => 0 } as number;\n\
+         \x20 const m = match (o) { A => ({ a: 1 }), B => ({ a: 2 }) } satisfies { a?: number };\n\
+         \x20 return n + m.a.toFixed(1).length;\n\
+         }\n\
+         export function g(o: O) {\n\
+         \x20 const k = match (o) { A => read(), B => \"b\" } as \"a\" | \"b\";\n\
+         \x20 const e = match (o) { A => ({ kind: \"click\", x: 1 }), B => ({ kind: \"key\", code: \"z\" }) } satisfies Ev;\n\
+         \x20 const l = match (o) { A => 1, B => 2 } satisfies 1 | 2;\n\
+         \x20 let w = match (o) { A => 1, B => 2 } satisfies number;\n\
+         \x20 w = 5;\n\
+         \x20 const q: string = match (o) { A => 1, B => 2 } as unknown as string;\n\
+         \x20 const c = <number>match (o) { A => x0, B => 0 };\n\
+         \x20 return [k, e.kind, l, w, q, c];\n\
+         }\n\
+         export function h(o: O): number {\n\
+         \x20 return match (o) { A => x0, B => 0 } as number;\n\
+         }\n\
+         export function i(o: O) {\n\
+         \x20 return String(match (o) { A => ({ a: 1 }), B => ({ a: 2 }) } satisfies { a?: number });\n\
+         }\n",
+    )]);
+    let out = check(&dir);
+    assert!(!out.contains("error"), "{out}");
+}

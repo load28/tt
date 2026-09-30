@@ -738,7 +738,7 @@ async function main() {
         const assignments = [];
         const visit = (node) => {
           if (isVariableDeclaration(node) && isIdentifier(node.name) &&
-              node.name.end === slot.declarationEnd && !node.type) declaration = node;
+              node.name.end === slot.declarationEnd && (!node.type || slot.asserted)) declaration = node;
           if (isIdentifier(node)) identifiers.push(node);
           if (isBinaryExpression(node) && node.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(node.left)) assignments.push(node);
           node.forEachChild(visit);
@@ -764,11 +764,33 @@ async function main() {
           return node && denotes(checker, node, type, declaration, generated, { SyntaxKind, SymbolFlags, TypeFlags })
             ? node : undefined;
         };
+        const incomingOf = () => assignments.filter(assignment =>
+          assignment.left.text === declaration.name.text &&
+          checker.getSymbolAtLocation(assignment.left)?.id === symbol.id);
+        const joinOf = (types) => types.flatMap((type, index) => types.some((other, otherIndex) =>
+          index !== otherIndex && checker.isTypeAssignableTo(type, other) &&
+          (!checker.isTypeAssignableTo(other, type) || otherIndex < index)) ? [] : [index]);
+        const indefinite = (type) => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType();
+        if (slot.asserted) {
+          if (!job.inferJoinTypes || !declaration.type || declaration.initializer) continue;
+          const context = checker.getTypeFromTypeNode(declaration.type);
+          const incoming = incomingOf();
+          if (!incoming.length) continue;
+          const types = incoming.map(assignment =>
+            widenedIn(checker, checker.getTypeAtLocation(assignment.right), context, TypeFlags));
+          const cleared = { index, inferred: true, annotation: null };
+          if (types.some(indefinite)) { out.contextualSlots.push(cleared); continue; }
+          const annotations = joinOf(types).map(index => annotation(types[index]));
+          if (!annotations.length || !annotations.every(Boolean)) { out.contextualSlots.push(cleared); continue; }
+          if (annotations.some(writesAny) && incoming.some((assignment) => readsPending(assignment.right, symbol.id))) continue;
+          const texts = annotations.map((node) => project.emitter.printNode(node));
+          out.contextualSlots.push({ index, inferred: true, annotation: texts.length === 1
+            ? texts[0] : texts.map(t => `(${t})`).join(" | ") });
+          continue;
+        }
         if (slot.operand) {
           if (!job.inferJoinTypes || declaration.initializer) continue;
-          const incoming = assignments.filter(assignment =>
-            assignment.left.text === declaration.name.text &&
-            checker.getSymbolAtLocation(assignment.left)?.id === symbol.id);
+          const incoming = incomingOf();
           if (incoming.length !== 1) continue;
           const type = checker.getWidenedType(checker.getTypeAtLocation(incoming[0].right));
           if ((type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType()) continue;
@@ -779,6 +801,7 @@ async function main() {
         }
         let expected;
         let ambiguous = false;
+        let provisional = true;
         for (const identifier of identifiers) {
           if (identifier === declaration.name || identifier.text !== declaration.name.text) continue;
           if (checker.getSymbolAtLocation(identifier)?.id !== symbol.id) continue;
@@ -789,23 +812,20 @@ async function main() {
           if (!context || (context.flags & (TypeFlags.Any | TypeFlags.Unknown)) || context.isErrorType()) continue;
           if (expected && expected.id !== context.id) { ambiguous = true; break; }
           expected = context;
+          provisional &&= assertionOperand(identifier, SyntaxKind);
         }
         if (job.inferJoinTypes && !expected && !ambiguous && !declaration.initializer) {
           // A statement join must have the union of its incoming value types.
           // In particular, TS's evolving-array inference at assignment sites is
           // not expression inference. Ask for each RHS type in its branch scope
           // and serialize it at the declaration; never infer from diagnostic text.
-          const incoming = assignments.filter(assignment =>
-            assignment.left.text === declaration.name.text &&
-            checker.getSymbolAtLocation(assignment.left)?.id === symbol.id);
+          const incoming = incomingOf();
           const types = incoming.map(assignment =>
             checker.getWidenedType(checker.getBaseTypeOfLiteralType(checker.getTypeAtLocation(assignment.right))));
           if (!types.length || types.some(type => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType())) continue;
           // Remove constituents subsumed by another incoming type. This is the
           // checker's assignability relation, including never[] <: number[].
-          const joined = types.flatMap((type, index) => types.some((other, otherIndex) =>
-            index !== otherIndex && checker.isTypeAssignableTo(type, other) &&
-            (!checker.isTypeAssignableTo(other, type) || otherIndex < index)) ? [] : [index]);
+          const joined = joinOf(types);
           const annotations = joined.map(index => annotation(types[index]));
           if (!annotations.length || !annotations.every(Boolean)) continue;
           // An incoming value that reads storage no round has settled yet
@@ -823,7 +843,7 @@ async function main() {
         }
         if (!expected || ambiguous) continue;
         const node = annotation(expected);
-        if (node) out.contextualSlots.push({ index, inferred: false, annotation: project.emitter.printNode(node) });
+        if (node) out.contextualSlots.push({ index, inferred: false, provisional, annotation: project.emitter.printNode(node) });
       }
     };
     for (const group of groups) contextual(group);
@@ -1078,6 +1098,43 @@ async function main() {
  * question about the same type, which tells that answer apart from a
  * session that stopped answering; a session failure propagates.
  */
+function assertionOperand(node, SyntaxKind) {
+  let operand = node;
+  while (operand.parent && (operand.parent.kind === SyntaxKind.ParenthesizedExpression ||
+      operand.parent.kind === SyntaxKind.NonNullExpression)) operand = operand.parent;
+  const parent = operand.parent;
+  if (!parent || parent.expression !== operand) return false;
+  if (parent.kind === SyntaxKind.SatisfiesExpression) return true;
+  if (parent.kind !== SyntaxKind.AsExpression && parent.kind !== SyntaxKind.TypeAssertionExpression) return false;
+  const type = parent.type;
+  return !(type.kind === SyntaxKind.TypeReference && type.typeName.kind === SyntaxKind.Identifier &&
+    type.typeName.text === "const" && !type.typeArguments);
+}
+
+function widenedIn(checker, type, context, TypeFlags) {
+  const kinds = (candidate, flags) => !!(candidate.flags & flags) ||
+    ((candidate.isUnionType() || candidate.isIntersectionType()) && candidate.getTypes().some((t) => kinds(t, flags)));
+  const literalOf = (candidate, target) => {
+    if (target.isUnionType() || target.isIntersectionType()) return target.getTypes().some((t) => literalOf(candidate, t));
+    if (target.flags & TypeFlags.InstantiableNonPrimitive) {
+      const constraint = checker.getBaseConstraintOfType(target);
+      if (!constraint) return false;
+      return kinds(constraint, TypeFlags.String) && kinds(candidate, TypeFlags.StringLiteral) ||
+        kinds(constraint, TypeFlags.Number) && kinds(candidate, TypeFlags.NumberLiteral) ||
+        kinds(constraint, TypeFlags.BigInt) && kinds(candidate, TypeFlags.BigIntLiteral) ||
+        kinds(constraint, TypeFlags.ESSymbol) && kinds(candidate, TypeFlags.UniqueESSymbol) ||
+        literalOf(candidate, constraint);
+    }
+    return !!(target.flags & (TypeFlags.StringLiteral | TypeFlags.Index | TypeFlags.TemplateLiteral | TypeFlags.StringMapping)) && kinds(candidate, TypeFlags.StringLiteral) ||
+      !!(target.flags & TypeFlags.NumberLiteral) && kinds(candidate, TypeFlags.NumberLiteral) ||
+      !!(target.flags & TypeFlags.BigIntLiteral) && kinds(candidate, TypeFlags.BigIntLiteral) ||
+      !!(target.flags & TypeFlags.BooleanLiteral) && kinds(candidate, TypeFlags.BooleanLiteral) ||
+      !!(target.flags & TypeFlags.UniqueESSymbol) && kinds(candidate, TypeFlags.UniqueESSymbol);
+  };
+  const kept = literalOf(type, context) ? type : checker.getBaseTypeOfLiteralType(type);
+  return checker.getWidenedType(kept);
+}
+
 function typeNode(checker, type, location, flags) {
   try {
     return checker.typeToTypeNode(type, location, flags);
