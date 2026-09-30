@@ -627,6 +627,7 @@
 | TASK-619 | Derive `tt:build` from the configured source roots | Complete | 2026-09-30 | 2026-09-30 | [TASK-619](./TASK-619-derived-build-roots.md) |
 | TASK-620 | Report an impossible match case at its pattern | Complete | 2026-09-30 | 2026-09-30 | [TASK-620](./TASK-620-impossible-case-at-its-pattern.md) |
 | TASK-634 | Run case files against multi-artifact baselines | Complete | 2026-09-30 | 2026-09-30 | [TASK-634](./TASK-634-case-runner-baselines.md) |
+| TASK-635 | Fail on missing, modified, and unused baselines locally and in CI | Complete | 2026-09-30 | 2026-09-30 | [TASK-635](./TASK-635-baseline-tracking-and-ci.md) |
 
 ## Next task number
 

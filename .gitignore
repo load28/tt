@@ -9,6 +9,7 @@ npm/*
 !npm/tt-lang/
 !npm/tt-lang/**
 *.tsbuildinfo
+fix_baselines.patch
 *.log
 
 # ttc sidecar output (ttc --types)

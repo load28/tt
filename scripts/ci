@@ -11,7 +11,7 @@
 # The stages, in the order they run:
 #
 #   agents      the agent entrypoint contract (CLAUDE.md, doctor)
-#   rust        cargo fmt --check, clippy -D warnings, cargo test
+#   rust        cargo fmt --check, clippy -D warnings, cargo test, unused baselines
 #   npm         the npm release tooling and project initializer tests
 #   website     the typed and statically rendered public site
 #   native      the type checking modes against TypeScript 7
@@ -221,7 +221,16 @@ stage_rust() {
   # The emit fixtures pin the artifact a configured checkout produces,
   # annotations included, so without a TypeScript they skip — and a skipped
   # contract is green in every other way. The gate says one must be there.
-  run env TTC_REQUIRE_TSGO=1 cargo test || return 1
+  tracking="$(mktemp -d)"
+  run env TTC_REQUIRE_TSGO=1 TT_BASELINE_TRACKING_DIR="$tracking" cargo test || {
+    rm -rf "$tracking"
+    return 1
+  }
+  run node scripts/check-baselines --tracking "$tracking" || {
+    rm -rf "$tracking"
+    return 1
+  }
+  rm -rf "$tracking"
   run cargo check --manifest-path fuzz/Cargo.toml --all-targets --locked || return 1
 }
 

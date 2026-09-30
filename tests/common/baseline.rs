@@ -1,5 +1,7 @@
 use std::fs;
+use std::io::Write;
 use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 
 pub fn updating() -> bool {
     std::env::var_os("UPDATE_EXPECT").is_some()
@@ -12,7 +14,53 @@ fn regenerate() -> String {
     )
 }
 
+fn filtered() -> bool {
+    if std::env::var_os("TT_CASES").is_some_and(|value| !value.is_empty()) {
+        return true;
+    }
+    let mut args = std::env::args().skip(1);
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--skip" | "--ignored" | "--list" => return true,
+            "--test-threads" | "--color" | "--format" | "--logfile" | "--shuffle-seed" | "-Z" => {
+                args.next();
+            }
+            _ if arg.starts_with('-') => {}
+            _ => return true,
+        }
+    }
+    false
+}
+
+fn record(path: &Path, state: &str) {
+    let Some(dir) = std::env::var_os("TT_BASELINE_TRACKING_DIR").filter(|dir| !dir.is_empty())
+    else {
+        return;
+    };
+    static LOG: OnceLock<Mutex<fs::File>> = OnceLock::new();
+    let log = LOG.get_or_init(|| {
+        let dir = Path::new(&dir);
+        fs::create_dir_all(dir).expect("a writable baseline tracking directory");
+        let binary = env!("CARGO_CRATE_NAME");
+        let mut file = fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(dir.join(format!("{binary}-{}.txt", std::process::id())))
+            .expect("a writable baseline tracking file");
+        writeln!(file, "binary {binary} filtered {}", filtered()).expect("tracking header");
+        Mutex::new(file)
+    });
+    let relative = path
+        .strip_prefix(env!("CARGO_MANIFEST_DIR"))
+        .unwrap_or(path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    let mut file = log.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    writeln!(file, "{state} {relative}").expect("tracking entry");
+}
+
 pub fn expect(path: &Path, actual: &str) {
+    record(path, "present");
     if updating() {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).expect("writable baseline directory");
@@ -39,6 +87,7 @@ pub fn expect(path: &Path, actual: &str) {
 }
 
 pub fn expect_absent(path: &Path) {
+    record(path, "absent");
     if !path.exists() {
         return;
     }

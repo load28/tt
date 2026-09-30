@@ -69,7 +69,7 @@ PR을 열기 전에 먼저 실행해야 합니다.
 | 단계 | 내용 |
 | --- | --- |
 | `agents` | 에이전트 진입점 계약(`CLAUDE.md`, `scripts/doctor`) |
-| `rust` | `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test` |
+| `rust` | `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, `cargo test`, unused baselines (`scripts/check-baselines`) |
 | `npm` | npm 릴리스 도구, 프로젝트 초기화기, unplugin 어댑터, 심의 도구 테스트 |
 | `website` | 공개 사이트의 타입 검사와 정적 렌더 (Bun 필요) |
 | `native` | TypeScript 7을 실제로 구동하는 타입 검사 모드 |
@@ -159,6 +159,34 @@ TT_CASES=<name fragment> cargo test --test case_baselines   # a few cases while 
 The `.ts`, `.errors.txt`, and `.types` baselines need the pinned TypeScript
 (`npm ci`). Without it they are skipped, `TTC_REQUIRE_TSGO=1` turns the skip
 into a failure, and `UPDATE_EXPECT=1` refuses to run.
+
+### Managing the baselines
+
+Every reference file is a baseline some test compares: everything under
+`tests/baselines/reference/`, and the `expected.*` files under
+`tests/fixtures/emit/`, `tests/fixtures/diagnostic/`, and
+`tests/fixtures/practical-diagnostics/`. A test fails on a **missing**
+baseline and on a **modified** one, with the diff and the
+`UPDATE_EXPECT=1 cargo test --test <suite>` command that regenerates it.
+
+An **unused** baseline, one no test compared, fails too. Each comparison
+records its path when `TT_BASELINE_TRACKING_DIR` is set, and
+`scripts/check-baselines` compares the recorded paths with the files on
+disk. It only judges a suite that ran unfiltered (no test name, `--skip`, or
+`TT_CASES`), so a filtered run is reported as incomplete rather than
+flagging the baselines it did not reach.
+
+```sh
+node scripts/check-baselines --run            # the baseline suites, then the check
+node scripts/check-baselines --run --accept   # regenerate, and delete unused baselines
+git diff -- tests/baselines tests/fixtures    # review before committing
+```
+
+`./scripts/ci rust` runs `cargo test` with tracking and then the check. The
+hosted `CI` does the same, then regenerates every baseline and fails when the
+tree differs from the commit, listing missing, modified, and unused
+baselines and uploading the difference as the `fix_baselines.patch`
+artifact. `git apply fix_baselines.patch` reproduces it locally.
 
 언어 표면(구문, 판별 규칙, 에러 메시지, CLI 동작)을 바꾸는 변경은 컴파일러에
 내장되는 [`docs/ai/tt.md`](./docs/ai/tt.md)를 함께 갱신해야 합니다. 사용자가
