@@ -241,13 +241,16 @@ impl WatchPasses {
     }
 }
 
+/// The configuration is named: a discovered one that is deleted leaves the
+/// inputs in an inferred project instead, as a fresh run finds them
+/// (TASK-588).
 #[test]
 fn a_typed_watch_reports_a_missing_configuration_and_recovers_when_it_returns() {
     require_tsgo!();
     let dir = project(&[("src/a.tt", "export const a: number = 1;\n")]);
     let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
     command
-        .args(["--check-types", "-w", "src"])
+        .args(["--check-types", "--project", "tsconfig.json", "-w", "src"])
         .current_dir(&dir)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped());

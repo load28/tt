@@ -1074,6 +1074,64 @@ fn types_type_a_recursive_anonymous_join_whole() {
 }
 
 #[test]
+fn types_keep_declarations_written_before_a_variant_stopped_parsing() {
+    require_types_toolchain!();
+    // TASK-590: a malformed variant is reported once, its importers get no
+    // follow-on errors from its placeholder, and neither its declarations nor
+    // its importers' are replaced by ones emitted against the placeholder.
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"noEmit":true,"module":"esnext","moduleResolution":"bundler","target":"es2022"},"include":["src"]}"#,
+    )
+    .unwrap();
+    fs::write(dir.join("src/x.tt"), "export variant X { A, B }\n").unwrap();
+    fs::write(
+        dir.join("src/use.tt"),
+        "import { X } from \"./x.tt\";\nexport const a = X.A;\nexport const k: X = a;\n",
+    )
+    .unwrap();
+    fs::write(dir.join("src/ok.tt"), "export const ok = 1;\n").unwrap();
+    let types = || {
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["--types", "--json-report", "src"])
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc")
+    };
+    let first = types();
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let sidecar = |name: &str| fs::read_to_string(dir.join(".tt-types").join(name)).unwrap();
+    let (x, uses) = (sidecar("x.tt.d.ts"), sidecar("use.tt.d.ts"));
+    fs::write(dir.join("src/x.tt"), "export variant X { A, 1 }\n").unwrap();
+    let second = types();
+    let err = String::from_utf8_lossy(&second.stderr);
+    assert_eq!(err.matches("error[").count(), 1, "{err}");
+    assert!(err.contains("error[malformed-variant]"), "{err}");
+    assert_eq!(sidecar("x.tt.d.ts"), x);
+    assert_eq!(sidecar("use.tt.d.ts"), uses);
+    let report: serde_json::Value = serde_json::from_slice(&second.stdout).unwrap();
+    let written: Vec<&str> = report["written"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|path| path.as_str())
+        .collect();
+    assert!(
+        written.iter().any(|path| path.ends_with("ok.tt.d.ts"))
+            && !written
+                .iter()
+                .any(|path| path.ends_with("x.tt.d.ts") || path.ends_with("use.tt.d.ts")),
+        "{written:?}"
+    );
+}
+
+#[test]
 fn types_reports_nothing_for_storage_inside_a_shadowing_scope() {
     require_types_toolchain!();
     // TASK-575: `T` at the storage is `inner`'s own type parameter, not the

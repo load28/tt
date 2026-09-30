@@ -74,6 +74,7 @@ mod lexer;
 pub mod lines;
 #[path = "lib/mapped.rs"]
 mod mapped;
+pub mod ownership;
 mod parser;
 mod probe;
 mod program_syntax;

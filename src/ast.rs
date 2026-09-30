@@ -150,7 +150,12 @@ pub(crate) enum RecoveryKind {
     /// Replace an invalid TypeScript type fragment with a literal type.
     Type,
     /// Replace an invalid variant declaration with a value-and-type placeholder.
-    VariantDecl { name: String, exported: bool },
+    /// `generics` is its type parameter list as written (`<T>`), or empty.
+    VariantDecl {
+        name: String,
+        generics: String,
+        exported: bool,
+    },
 }
 
 /// One top-level piece of a [`Program`], in source order.

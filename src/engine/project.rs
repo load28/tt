@@ -58,7 +58,8 @@ pub struct CheckRequest {
 /// them: a file by its content, a directory by the entries it lists.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Dependencies {
-    /// Files whose content the compile reads, sorted.
+    /// Files whose content the compile reads, sorted, and the configuration
+    /// paths whose absence it relies on.
     pub files: Vec<PathBuf>,
     /// Directories whose entries the compile lists, sorted.
     pub directories: Vec<PathBuf>,
@@ -77,6 +78,9 @@ impl Dependencies {
 pub struct Project {
     pub(crate) root: PathBuf,
     tsconfig: Option<PathBuf>,
+    /// Whether `tsconfig` was found by discovery from the inputs rather
+    /// than named.
+    pub(super) discovers_config: bool,
     /// The output tree a scan must not descend into (`--types`'s sidecar
     /// directory).
     out_dir: Option<PathBuf>,
@@ -141,6 +145,7 @@ impl Project {
         Project {
             root,
             tsconfig,
+            discovers_config: false,
             out_dir,
             requested: collected.into_iter().collect(),
             input_roots: Vec::new(),
@@ -172,6 +177,12 @@ impl Project {
     /// The project root — the directory the compiler runs in.
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// The `(tsconfig, root)` pair this project was opened as — what
+    /// [`super::Engine::project_identity`] answers for its inputs.
+    pub fn identity(&self) -> (Option<&Path>, &Path) {
+        (self.tsconfig.as_deref(), &self.root)
     }
 
     /// The inputs' own `.tt` files: what an emitting pass writes for.
@@ -234,8 +245,12 @@ impl Project {
     /// compiler-resolved files it reads, and the directories whose listing
     /// it reads — a file added to or removed from one can change the
     /// program, while the directory is not itself an input.
+    ///
+    /// A project without a configuration takes its program from the walk
+    /// of its root, so the directories that walk listed are dependencies
+    /// too.
     pub fn dependencies(&self) -> std::io::Result<Dependencies> {
-        let mut files = project_sources(
+        let (mut files, walked) = project_tree(
             &self.root,
             self.out_dir.as_deref(),
             &["tt", "ttx", "ts", "tsx", "mts", "cts", "json"],
@@ -249,7 +264,11 @@ impl Project {
         files.sort();
         files.dedup();
         let mut directories: Vec<_> = self.directories.borrow().iter().cloned().collect();
+        if self.tsconfig.is_none() {
+            directories.extend(walked);
+        }
         directories.sort();
+        directories.dedup();
         Ok(Dependencies { files, directories })
     }
 
@@ -298,6 +317,12 @@ impl Project {
         );
         if self.tsconfig.is_none() {
             self.sources = project_sources(&self.root, self.out_dir.as_deref(), TS_EXTENSIONS)
+                .map(|sources| {
+                    sources
+                        .into_iter()
+                        .filter(|source| !crate::ownership::owned_output(source))
+                        .collect()
+                })
                 .map_err(|error| {
                     Box::new(Blocked {
                         path: self.root.clone(),
@@ -568,6 +593,29 @@ impl Project {
     /// depends on. The command line and the server's `dependencies` both
     /// answer through this.
     pub fn dependencies_of(&mut self, inputs: &super::Inputs) -> Result<Dependencies, String> {
+        self.check_for_dependencies(inputs)?;
+        self.dependencies_for(inputs)
+            .map_err(|error| error.to_string())
+    }
+
+    /// [`Project::dependencies`], with what deciding `inputs`' project read:
+    /// the `tsconfig.json` paths configuration discovery probed for them,
+    /// existing or not, as tsserver watches them for an inferred project.
+    /// Creating one of them, or deleting the one found, puts the inputs in
+    /// another project.
+    pub fn dependencies_for(&self, inputs: &super::Inputs) -> std::io::Result<Dependencies> {
+        let mut dependencies = self.dependencies()?;
+        if self.discovers_config {
+            dependencies
+                .files
+                .extend(tsconfig_lookup(&inputs.collected));
+            dependencies.files.sort();
+            dependencies.files.dedup();
+        }
+        Ok(dependencies)
+    }
+
+    fn check_for_dependencies(&mut self, inputs: &super::Inputs) -> Result<(), String> {
         let files = self.candidates(inputs).map_err(|error| error.to_string())?;
         let snapshot = self
             .update(&files)
@@ -578,7 +626,7 @@ impl Project {
         {
             return Err(error.message);
         }
-        self.dependencies().map_err(|error| error.to_string())
+        Ok(())
     }
 
     /// Whether the last check covered `path`: its TypeScript programs
@@ -705,13 +753,24 @@ pub(crate) fn project_sources(
     out_dir: Option<&Path>,
     extensions: &[&str],
 ) -> std::io::Result<Vec<PathBuf>> {
+    project_tree(root, out_dir, extensions).map(|(files, _)| files)
+}
+
+/// [`project_sources`], with the directories the walk listed to find them.
+fn project_tree(
+    root: &Path,
+    out_dir: Option<&Path>,
+    extensions: &[&str],
+) -> std::io::Result<(Vec<PathBuf>, Vec<PathBuf>)> {
     let mut directories = SourceDirectories::new(out_dir);
     let mut files = Vec::new();
+    let mut listed = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
         if !directories.enter(&dir)? {
             continue;
         }
+        listed.push(super::paths::canonical(&dir)?);
         for entry in std::fs::read_dir(&dir)? {
             let entry = entry?;
             let path = entry.path();
@@ -735,24 +794,40 @@ pub(crate) fn project_sources(
     files.sort();
     // File symlinks can share an identity even when directories were visited once.
     files.dedup();
-    Ok(files)
+    listed.sort();
+    Ok((files, listed))
 }
 
 /// The nearest `tsconfig.json` at or above the inputs' common directory.
 pub(crate) fn find_tsconfig(files: &[PathBuf]) -> Option<PathBuf> {
-    let mut dir = files.first()?.parent()?.to_path_buf();
+    tsconfig_lookup(files)
+        .pop()
+        .filter(|candidate| candidate.is_file())
+}
+
+/// Every `tsconfig.json` path [`find_tsconfig`] probes, nearest first, up
+/// to the one it finds: creating one of the others, or deleting the last,
+/// changes which configuration the inputs belong to.
+pub(crate) fn tsconfig_lookup(files: &[PathBuf]) -> Vec<PathBuf> {
+    let mut probed = Vec::new();
+    let Some(mut dir) = files
+        .first()
+        .and_then(|file| file.parent())
+        .map(Path::to_path_buf)
+    else {
+        return probed;
+    };
     while !files.iter().all(|file| file.starts_with(&dir)) {
         if !dir.pop() {
-            return None;
+            return probed;
         }
     }
     loop {
         let candidate = dir.join("tsconfig.json");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-        if !dir.pop() {
-            return None;
+        let found = candidate.is_file();
+        probed.push(candidate);
+        if found || !dir.pop() {
+            return probed;
         }
     }
 }

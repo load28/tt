@@ -592,6 +592,12 @@
 | TASK-584 | Infer a join only from values typed by settled storage | Complete | 2026-09-29 | 2026-09-29 | [TASK-584](./TASK-584-joins-wait-for-settled-inputs.md) |
 | TASK-585 | Render only TypeScript's assignability diagnostics as type mismatches, about their own subject | Complete | 2026-09-29 | 2026-09-30 | [TASK-585](./TASK-585-assignability-facts-only-for-assignability.md) |
 | TASK-586 | Never annotate storage with a type whose cycle the node builder elided | Complete | 2026-09-30 | 2026-09-30 | [TASK-586](./TASK-586-no-elided-cycles-in-annotations.md) |
+| TASK-587 | Leave ttc's published outputs out of the TypeScript program | Complete | 2026-09-30 | 2026-09-30 | [TASK-587](./TASK-587-published-outputs-out-of-the-program.md) |
+| TASK-588 | Follow configuration discovery in typed watch and dependencies | Complete | 2026-09-30 | 2026-09-30 | [TASK-588](./TASK-588-follow-configuration-discovery.md) |
+| TASK-589 | Let an input take over the unedited output its vanished predecessor left | Complete | 2026-09-30 | 2026-09-30 | [TASK-589](./TASK-589-orphaned-output-takeover.md) |
+| TASK-590 | Write no declarations from placeholders, and type a malformed variant as the error type | Complete | 2026-09-30 | 2026-09-30 | [TASK-590](./TASK-590-no-declarations-from-placeholders.md) |
+| TASK-591 | Forward termination signals from the npm launcher to ttc | Complete | 2026-09-30 | 2026-09-30 | [TASK-591](./TASK-591-launcher-forwards-signals.md) |
+| TASK-592 | Draw diagnostic carets at each character's display width | Complete | 2026-09-30 | 2026-09-30 | [TASK-592](./TASK-592-caret-display-width.md) |
 | TASK-593 | Run earlier declarators before a later declarator's value | Complete | 2026-09-30 | 2026-09-30 | [TASK-593](./TASK-593-declarator-order-and-scope.md) |
 | TASK-594 | Reject a statement value in an enum member initializer | Complete | 2026-09-30 | 2026-09-30 | [TASK-594](./TASK-594-enum-member-initializer-placement.md) |
 

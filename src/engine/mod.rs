@@ -278,6 +278,7 @@ impl Engine {
             backend,
         );
         project.overlays = self.documents.clone();
+        project.discovers_config = options.tsconfig.is_none();
         Ok(project)
     }
 

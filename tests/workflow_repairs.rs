@@ -225,11 +225,21 @@ fn dependencies_of_a_configured_project_are_only_its_inputs() {
         "{dependencies:?}"
     );
     // The project and the TypeScript it resolves both live in this
-    // repository; a file the compiler wrote for itself does not.
+    // repository; a file the compiler wrote for itself does not. The
+    // configuration discovery probed and did not find is there too.
     let repository = fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap();
+    let src = fs::canonicalize(root.join("src")).unwrap();
+    assert!(
+        dependencies.contains(&src.join("tsconfig.json")),
+        "{dependencies:?}"
+    );
     let outside: Vec<_> = dependencies
         .iter()
-        .filter(|path| !fs::canonicalize(path).is_ok_and(|path| path.starts_with(&repository)))
+        .filter(|path| {
+            !fs::canonicalize(path)
+                .unwrap_or_else(|_| path.to_path_buf())
+                .starts_with(&repository)
+        })
         .collect();
     assert!(outside.is_empty(), "{outside:?}");
 }
@@ -411,4 +421,178 @@ fn types_written_beside_the_sources_keep_the_sources_as_inputs() {
         assert!(root.join("src/u.tt.d.ts").is_file());
         assert!(root.join("src/m.tt.d.ts").is_file());
     }
+}
+
+/// TASK-587: the outputs a build published beside its sources, or into an
+/// output directory the configuration globs, are ttc's own and never inputs
+/// of the TypeScript program — the rule `tsc` applies to its outputs. An
+/// output someone edited is theirs again, and an input.
+#[test]
+fn check_types_leaves_published_outputs_out_of_the_program() {
+    if !common::toolchain() {
+        return;
+    }
+    let root = Workspace::in_repo_with_subdir("check-types-owned-outputs", "src");
+    fs::write(root.join("src/m.tt"), "export const m: number = \"x\";\n").unwrap();
+    fs::write(root.join("src/s.tt"), "let dup = 1;\n").unwrap();
+    success(run(&root, &["src"]));
+    success(run(&root, &["-o", "build", "src"]));
+    assert!(root.join("src/m.ts").is_file() && root.join("build/s.ts").is_file());
+    let check = |root: &Path| {
+        let output = run(root, &["--check-types", "src"]);
+        assert!(!output.status.success());
+        String::from_utf8_lossy(&output.stderr).into_owned()
+    };
+    for config in [None, Some(r#"{"compilerOptions":{"strict":true}}"#)] {
+        if let Some(config) = config {
+            fs::write(root.join("tsconfig.json"), config).unwrap();
+        }
+        let stderr = check(&root);
+        assert_eq!(stderr.matches("error[").count(), 1, "{stderr}");
+        assert!(stderr.contains("src/m.tt:1:26"), "{stderr}");
+        assert!(
+            !stderr.contains("m.ts") && !stderr.contains("ts2451"),
+            "{stderr}"
+        );
+    }
+    fs::write(root.join("src/s.ts"), "let dup = 2;\n").unwrap();
+    let stderr = check(&root);
+    assert!(stderr.contains("ts2451"), "{stderr}");
+}
+
+/// TASK-588: which configuration the inputs belong to is decided by
+/// discovery, and a watch reaches the result a fresh run would when a
+/// `tsconfig.json` is created or deleted.
+#[test]
+fn typed_watch_follows_configuration_discovery() {
+    if !common::toolchain() {
+        return;
+    }
+    let root = Workspace::in_repo_with_subdir("typed-watch-discovery", "src");
+    fs::write(
+        root.join("src/a.tt"),
+        "export function f(x) { return x; }\n",
+    )
+    .unwrap();
+    let log = root.join("watch.log");
+    let _watch = Watch(
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .current_dir(&root)
+            .args(["--check-types", "--watch", "src"])
+            .stdout(std::process::Stdio::null())
+            .stderr(fs::File::create(&log).unwrap())
+            .spawn()
+            .unwrap(),
+    );
+    let passes = |reported: &str| {
+        fs::read_to_string(&log)
+            .unwrap()
+            .matches(&format!("{reported} reported"))
+            .count()
+    };
+    wait_for(|| fs::read_to_string(&log).unwrap().contains("Ctrl-C"));
+    assert_eq!(passes("1"), 1);
+    fs::write(
+        root.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":false},"include":["src"]}"#,
+    )
+    .unwrap();
+    wait_for(|| passes("0") == 1);
+    fs::remove_file(root.join("tsconfig.json")).unwrap();
+    wait_for(|| passes("1") == 2);
+    let log = fs::read_to_string(&log).unwrap();
+    assert_eq!(log.matches("ts7006").count(), 2, "{log}");
+    assert!(!log.contains("ts5083"), "{log}");
+}
+
+/// TASK-588: without a configuration, the program is the walk of the
+/// inputs' directory, and discovery read every `tsconfig.json` path it
+/// probed; both are what `--dependencies` answers.
+#[test]
+fn dependencies_of_an_inferred_project_name_discovery_and_the_walk() {
+    if !common::toolchain() {
+        return;
+    }
+    let root = Workspace::in_repo_with_subdir("inferred-dependencies", "src/sub");
+    fs::write(root.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    let output = run(&root, &["--dependencies", "src"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let printed: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let paths = |key: &str| -> Vec<std::path::PathBuf> {
+        serde_json::from_value(printed[key].clone()).unwrap()
+    };
+    let src = fs::canonicalize(root.join("src")).unwrap();
+    let directories = paths("directories");
+    assert!(
+        directories.contains(&src) && directories.contains(&src.join("sub")),
+        "{directories:?}"
+    );
+    let files = paths("files");
+    for dir in src.ancestors() {
+        assert!(files.contains(&dir.join("tsconfig.json")), "{files:?}");
+    }
+}
+
+/// TASK-589: an unedited output whose recorded input no longer exists
+/// belongs to the input that now maps to it (`a.ts` renamed to `a.tt`). An
+/// edited output, or one whose input still exists, stays protected.
+#[test]
+fn a_renamed_input_takes_over_the_output_its_predecessor_left() {
+    let root = Workspace::new("output-takeover");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::create_dir_all(root.join("other")).unwrap();
+    fs::write(root.join("src/a.ts"), "export const a = 1;\n").unwrap();
+    fs::write(root.join("src/b.ts"), "export const b = 1;\n").unwrap();
+    fs::write(root.join("other/c.ts"), "export const c = 1;\n").unwrap();
+    success(run(&root, &["-o", "out", "src"]));
+    success(run(&root, &["-o", "out", "other"]));
+    fs::rename(root.join("src/a.ts"), root.join("src/a.tt")).unwrap();
+    fs::write(root.join("src/a.tt"), "export const a: number = 2;\n").unwrap();
+    success(run(&root, &["-o", "out", "src"]));
+    let out = fs::read_to_string(root.join("out/a.ts")).unwrap();
+    assert!(out.contains("export const a: number = 2;"), "{out}");
+
+    fs::write(root.join("out/b.ts"), "// edited\n").unwrap();
+    fs::rename(root.join("src/b.ts"), root.join("src/b.tt")).unwrap();
+    assert!(!run(&root, &["-o", "out", "src/b.tt"]).status.success());
+    assert_eq!(
+        fs::read_to_string(root.join("out/b.ts")).unwrap(),
+        "// edited\n"
+    );
+
+    fs::write(root.join("src/c.tt"), "export const c = 2;\n").unwrap();
+    assert!(!run(&root, &["-o", "out", "src/c.tt"]).status.success());
+    assert_eq!(
+        fs::read_to_string(root.join("out/c.ts")).unwrap(),
+        "export const c = 1;\n"
+    );
+}
+
+/// TASK-589: the same takeover lets a build watch recover from the rename.
+#[test]
+fn build_watch_recovers_from_a_renamed_input() {
+    let root = Workspace::new("output-takeover-watch");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/a.ts"), "export const a = 1;\n").unwrap();
+    let log = root.join("watch.log");
+    let _watch = Watch(
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .current_dir(&root)
+            .args(["-w", "-o", "out", "src"])
+            .stdout(std::process::Stdio::null())
+            .stderr(fs::File::create(&log).unwrap())
+            .spawn()
+            .unwrap(),
+    );
+    wait_for(|| fs::read_to_string(&log).unwrap().contains("Ctrl-C"));
+    fs::rename(root.join("src/a.ts"), root.join("src/a.tt")).unwrap();
+    wait_for(|| {
+        fs::read_to_string(root.join("out/a.ts")).is_ok_and(|out| out.contains("from a.tt"))
+    });
+    let log = fs::read_to_string(&log).unwrap();
+    assert!(!log.contains("not owned"), "{log}");
 }

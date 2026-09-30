@@ -498,8 +498,10 @@ fn shown_line(lines: &[&str], line: usize) -> String {
 }
 
 /// The display column a 1-based character column sits at, once tabs are
-/// expanded. Columns past the end of the line clamp to just past it, so a
-/// span that outruns a stale buffer still points somewhere real.
+/// expanded and each character takes its terminal width (UAX #11: two
+/// columns for a wide or fullwidth character, none for a combining mark).
+/// Columns past the end of the line clamp to just past it, so a span that
+/// outruns a stale buffer still points somewhere real.
 fn display_col(lines: &[&str], line: usize, col: usize) -> usize {
     let raw = lines.get(line.wrapping_sub(1)).copied().unwrap_or("");
     let mut at = 1;
@@ -507,7 +509,11 @@ fn display_col(lines: &[&str], line: usize, col: usize) -> usize {
         if index + 1 >= col {
             return at;
         }
-        at += if ch == '\t' { TAB_WIDTH } else { 1 };
+        at += if ch == '\t' {
+            TAB_WIDTH
+        } else {
+            unicode_width::UnicodeWidthChar::width(ch).unwrap_or(1)
+        };
     }
     at
 }

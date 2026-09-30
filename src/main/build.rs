@@ -152,7 +152,7 @@ pub(super) fn build_jobs(
             files.retain(|file| !path_is_within(file, dir));
         }
         for file in files {
-            if is_dir && owned_output(&file) {
+            if is_dir && ttc::ownership::owned_output(&file) {
                 continue;
             }
             let out_name = if let Some(kind) = ttc::SourceKind::from_tt_path(&file) {
