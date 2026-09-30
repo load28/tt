@@ -1,0 +1,98 @@
+=== completions /*payloadFirstArm*/ patternCompletionBeforeArrow.tt:3:57 ===
+  | export function a(s: Shape) { return match (s) { Circle() }; }
+  |                                                         ^ /*payloadFirstArm*/
+completion: 1009 item(s), member false, probe no
+  Shape (var, 11)
+  a (function, 11)
+  arguments (var, 11)
+  b (function, 11)
+  c (function, 11)
+  d (function, 11)
+  e (function, 11)
+  g (function, 11)
+  s (var, 11)
+  ... 1000 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern true, member null
+  radius (field) "radius: number"
+patternCompletions:
+  radius (field) "radius: number"
+editor completion: 1 item(s)
+  radius (Field, 0radius)
+
+=== completions /*payloadFirstArmMultiline*/ patternCompletionBeforeArrow.tt:6:12 ===
+  |     Circle()
+  |            ^ /*payloadFirstArmMultiline*/
+completion: 1009 item(s), member false, probe no
+  Shape (var, 11)
+  a (function, 11)
+  arguments (var, 11)
+  b (function, 11)
+  c (function, 11)
+  d (function, 11)
+  e (function, 11)
+  g (function, 11)
+  s (var, 11)
+  ... 1000 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern true, member null
+  radius (field) "radius: number"
+patternCompletions:
+  radius (field) "radius: number"
+editor completion: 1 item(s)
+  radius (Field, 0radius)
+
+=== completions /*payloadSecondArm*/ patternCompletionBeforeArrow.tt:10:69 ===
+  | export function c(s: Shape) { return match (s) { Point => 0, Circle() }; }
+  |                                                                     ^ /*payloadSecondArm*/
+completion: 0 item(s), member false, probe no
+ttCompletions: pattern true, member null
+  radius (field) "radius: number"
+patternCompletions:
+  radius (field) "radius: number"
+editor completion: 1 item(s)
+  radius (Field, 0radius)
+
+=== completions /*literalFirstArm*/ patternCompletionBeforeArrow.tt:11:49 ===
+  | export function d(x: Dir) { return match (x) { "" }; }
+  |                                                 ^ /*literalFirstArm*/
+completion: 0 item(s), member false, probe no
+ttCompletions: pattern true, member null
+patternCompletions:
+  "east" (literal) "literal \"east\"" replaces 11:48-11:50
+  "north" (literal) "literal \"north\"" replaces 11:48-11:50
+  "south" (literal) "literal \"south\"" replaces 11:48-11:50
+editor completion: 3 item(s)
+  "east" (Constant, 0"east")
+  "north" (Constant, 0"north")
+  "south" (Constant, 0"south")
+
+=== completions /*literalSecondArm*/ patternCompletionBeforeArrow.tt:12:63 ===
+  | export function e(x: Dir) { return match (x) { "north" => 1, "" }; }
+  |                                                               ^ /*literalSecondArm*/
+completion: 0 item(s), member false, probe no
+ttCompletions: pattern true, member null
+patternCompletions:
+  "east" (literal) "literal \"east\"" replaces 12:62-12:64
+  "north" (literal) "literal \"north\"" covered replaces 12:62-12:64
+  "south" (literal) "literal \"south\"" replaces 12:62-12:64
+editor completion: 3 item(s)
+  "east" (Constant, 0"east")
+  "south" (Constant, 0"south")
+  "north" (Constant, 1"north")
+
+=== completions /*literalWithArrow*/ patternCompletionBeforeArrow.tt:13:49 ===
+  | export function g(x: Dir) { return match (x) { "" => 1, _ => 0 }; }
+  |                                                 ^ /*literalWithArrow*/
+completion: 3 item(s), member false, probe no
+  east (const, 11)
+  north (const, 11)
+  south (const, 11)
+ttCompletions: pattern true, member null
+patternCompletions:
+  "east" (literal) "literal \"east\"" replaces 13:48-13:50
+  "north" (literal) "literal \"north\"" replaces 13:48-13:50
+  "south" (literal) "literal \"south\"" replaces 13:48-13:50
+editor completion: 3 item(s)
+  "east" (Constant, 0"east")
+  "north" (Constant, 0"north")
+  "south" (Constant, 0"south")
+

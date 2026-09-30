@@ -1,0 +1,14 @@
+// @completions: payloadFirstArm, payloadFirstArmMultiline, payloadSecondArm, literalFirstArm, literalSecondArm, literalWithArrow
+type Dir = "north" | "south" | "east";
+export variant Shape { Circle(radius: number), Square(side: number), Point }
+export function a(s: Shape) { return match (s) { Circle(/*payloadFirstArm*/) }; }
+export function b(s: Shape) {
+  return match (s) {
+    Circle(/*payloadFirstArmMultiline*/)
+    Point => 0,
+  };
+}
+export function c(s: Shape) { return match (s) { Point => 0, Circle(/*payloadSecondArm*/) }; }
+export function d(x: Dir) { return match (x) { "/*literalFirstArm*/" }; }
+export function e(x: Dir) { return match (x) { "north" => 1, "/*literalSecondArm*/" }; }
+export function g(x: Dir) { return match (x) { "/*literalWithArrow*/" => 1, _ => 0 }; }

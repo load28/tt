@@ -426,6 +426,7 @@ params read: banner, filename, includeTypes, isRetrigger, label, member, path, p
         detail: string
         kind: string
         label: string
+        range: null
       }]
     }
   }

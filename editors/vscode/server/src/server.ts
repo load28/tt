@@ -81,6 +81,7 @@ import * as sidecar from "./sidecar";
 
 const TYPESCRIPT_TRIGGER_CHARACTERS = [".", '"', "'", "`", "/", "@", "<", "#", " ", "*"];
 const PATTERN_TRIGGER_CHARACTERS = ["(", "|", "{", ","];
+const STRING_TRIGGER_CHARACTERS = ['"', "'"];
 const TYPESCRIPT_SIGNATURE_TRIGGER_CHARACTERS = ["(", ",", "<"];
 
 const connection = createConnection(ProposedFeatures.all);
@@ -1193,10 +1194,20 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     const tags = new Set(items.map((i) => i.label));
     return items.concat(members.filter((i) => !tags.has(i.label)));
   }
-  if (trigger !== undefined && TYPESCRIPT_TRIGGER_CHARACTERS.includes(trigger)) {
+  const literalPattern =
+    trigger !== undefined && STRING_TRIGGER_CHARACTERS.includes(trigger) && here.pattern;
+  if (
+    trigger !== undefined &&
+    TYPESCRIPT_TRIGGER_CHARACTERS.includes(trigger) &&
+    !literalPattern
+  ) {
     return tsCompletions(doc, offset, false, trigger);
   }
-  if (trigger !== undefined && !PATTERN_TRIGGER_CHARACTERS.includes(trigger)) {
+  if (
+    trigger !== undefined &&
+    !PATTERN_TRIGGER_CHARACTERS.includes(trigger) &&
+    !literalPattern
+  ) {
     return [];
   }
 
@@ -1216,6 +1227,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
       label: item.label,
       kind: PATTERN_COMPLETION_KINDS[item.kind],
       detail: item.detail,
+      textEdit: item.range ? { range: item.range, newText: item.label } : undefined,
       // An arm already written stays in the list — a guard may repeat a
       // tag — but sorts after the ones still missing.
       sortText: `${item.covered ? 1 : 0}${item.label}`,

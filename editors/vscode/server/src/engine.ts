@@ -134,6 +134,9 @@ export interface EngineTtCompletion {
   detail: string;
   /** True when an arm of this match already covers the case. */
   covered: boolean;
+  /** The source range the item replaces when it is not the word at the
+   * position: the string literal a literal pattern is written in. */
+  range?: EngineRange | null;
 }
 
 /** What completion at a position is, read from the buffer's tokens. */

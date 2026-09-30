@@ -554,7 +554,7 @@ impl Project {
             }
         }
         if let Some(crate::engine::completions::PatternQuestion {
-            typed: Some(crate::engine::completions::TypedSite::Field { written }),
+            typed: Some(crate::engine::completions::TypedSite::Field { written, .. }),
             ..
         }) = crate::engine::completions::pattern_question(
             &path,
@@ -645,6 +645,7 @@ impl Project {
         else {
             return Ok(None);
         };
+        let finish = question.finisher();
         let items = match question.typed {
             Some(TypedSite::Arm {
                 prefix,
@@ -665,13 +666,16 @@ impl Project {
                     None => question.items,
                 }
             }
-            Some(TypedSite::Field { written }) => {
+            Some(TypedSite::Field {
+                written,
+                claimed: true,
+            }) => {
                 let fields = self.field_candidates(&doc, &path, position)?;
                 field_candidates(question.items, fields, &written)
             }
-            None => question.items,
+            Some(TypedSite::Field { claimed: false, .. }) | None => question.items,
         };
-        Ok(Some(items))
+        Ok(Some(finish.finish(items)))
     }
 
     fn discriminant_candidates(

@@ -289,6 +289,19 @@ destructured elements are unused" then fades `(x, y)` with its
 of several lists (an or-pattern) records nothing, and a suggestion there is
 still dropped (TASK-515).
 
+**Update (TASK-669)**: an arm whose pattern is still being written (no `=>`
+yet) stays unparsed (TASK-605 Decision 2), so its projection has no
+destructuring at the payload list, and the completion probe there answers
+with the globals of whatever expression the recovery leaves. The payload
+list's field names are then answered by tt's declarations alone; the
+probe is asked only where a parsed construct holds the payload. A string
+literal that starts an arm's pattern (`match (x) { "|" }`, `"north" => 1,
+"|"`) is a literal pattern being written: the engine answers the literals
+the scrutinee's type admits (TASK-607's question), each replacing the
+whole literal written so far (`TtCompletion::range`), as TypeScript
+answers a `case "|"` with the switch expression's literals. The adapter
+routes a `"` or `'` trigger at such a position to this answer.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

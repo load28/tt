@@ -1429,12 +1429,14 @@ pub(super) fn arm_candidates(
                     covered: covered.contains(&candidate.label),
                     label: candidate.label,
                     kind: TtCompletionKind::Case,
+                    range: None,
                 }),
             _ => crate::engine::TtCompletion {
                 detail: format!("literal {}", candidate.written),
                 covered: literals.contains(&candidate.value),
                 label: candidate.label,
                 kind: TtCompletionKind::Literal,
+                range: None,
             },
         };
         out.push(item);
@@ -1472,6 +1474,7 @@ pub(super) fn field_candidates(
             label: name,
             kind: crate::engine::TtCompletionKind::Field,
             covered: false,
+            range: None,
         });
     }
     out

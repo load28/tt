@@ -1107,6 +1107,7 @@ pub struct TtCompletion {
     pub kind: TtCompletionKind,
     pub detail: String,
     pub covered: bool,
+    pub range: Option<Range>,
 }
 impl Clone for TtCompletion
 impl Debug for TtCompletion

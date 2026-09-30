@@ -665,6 +665,7 @@
 | TASK-664 | Keep a binding pattern's implied type off generated storage | Complete | 2026-09-30 | 2026-09-30 | [TASK-664](./TASK-664-binding-pattern-default-storage.md) |
 | TASK-665 | Keep a comment directive's line and a statement's JSDoc where TypeScript reads them | Complete | 2026-09-30 | 2026-09-30 | [TASK-665](./TASK-665-directives-and-jsdoc-before-lowered-statements.md) |
 | TASK-666 | Decide three reported behaviours: let-else placement, the `if let` head, and payload reads | Complete | 2026-09-30 | 2026-09-30 | [TASK-666](./TASK-666-let-else-placement-if-let-head-payload-reads.md) |
+| TASK-669 | Complete an arm's pattern before its `=>` is written | Complete | 2026-09-30 | 2026-09-30 | [TASK-669](./TASK-669-pattern-completion-before-the-arrow.md) |
 | TASK-670 | Publish every typed diagnostic that states a rule no other layer states | Complete | 2026-09-30 | 2026-09-30 | [TASK-670](./TASK-670-publish-every-typed-diagnostic.md) |
 | TASK-675 | Baseline what the editor adapter publishes and offers in the editor cases | Complete | 2026-09-30 | 2026-09-30 | [TASK-675](./TASK-675-editor-cases-ask-the-adapter.md) |
 

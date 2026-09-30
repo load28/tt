@@ -69,6 +69,10 @@ pub struct TtCompletion {
     /// Whether an arm already covers this case (an editor sorts these
     /// last, or dims them). Always false for fields.
     pub covered: bool,
+    /// The source range the item replaces, when it is not the word at the
+    /// position: the whole string literal a literal pattern is being
+    /// written in.
+    pub range: Option<super::language::Range>,
 }
 
 /// What can be written at `position`, or an empty list when the position is
@@ -91,13 +95,45 @@ pub(super) fn completions_at(
     texts: Texts<'_>,
 ) -> Vec<TtCompletion> {
     pattern_question(path, source, position, texts)
-        .map(|question| question.items)
+        .map(|question| question.finisher().finish(question.items))
         .unwrap_or_default()
 }
 
 pub(super) struct PatternQuestion {
     pub(super) items: Vec<TtCompletion>,
     pub(super) typed: Option<TypedSite>,
+    literal: Option<super::language::Range>,
+}
+
+impl PatternQuestion {
+    pub(super) fn finisher(&self) -> Finisher {
+        Finisher {
+            literal: self.literal,
+        }
+    }
+}
+
+/// What the position asks of the items once they are gathered.
+pub(super) struct Finisher {
+    literal: Option<super::language::Range>,
+}
+
+impl Finisher {
+    /// The items as offered: inside a string literal, only the literals,
+    /// each replacing the whole literal written so far.
+    pub(super) fn finish(&self, items: Vec<TtCompletion>) -> Vec<TtCompletion> {
+        match self.literal {
+            None => items,
+            Some(range) => items
+                .into_iter()
+                .filter(|item| item.kind == TtCompletionKind::Literal)
+                .map(|item| TtCompletion {
+                    range: Some(range),
+                    ..item
+                })
+                .collect(),
+        }
+    }
 }
 
 pub(super) enum TypedSite {
@@ -109,6 +145,7 @@ pub(super) enum TypedSite {
     },
     Field {
         written: Vec<String>,
+        claimed: bool,
     },
 }
 
@@ -133,7 +170,20 @@ pub(super) fn pattern_question(
             .find(|&index| index < tokens.len() && is_prefix(&tokens, index, offset))
             .map(|index| (tokens[index].span.start, tokens[index].span.end))
     };
+    let mut literal = None;
     let (items, typed) = match context {
+        Context::Literal { arms, span } => {
+            literal = Some(super::language::span_range(source, span.0, span.1));
+            (
+                Vec::new(),
+                Some(TypedSite::Arm {
+                    prefix: Some(span),
+                    family: Some(PatternFamily::Literals),
+                    covered: arms.covered,
+                    literals: arms.literals,
+                }),
+            )
+        }
         Context::Case { of: Some(arms) } => {
             let mut items = match arms.family {
                 Some(PatternFamily::Literals) => Vec::new(),
@@ -159,12 +209,16 @@ pub(super) fn pattern_question(
                 .collect(),
             None,
         ),
-        Context::Field { tag, written } => (
+        Context::Field {
+            tag,
+            written,
+            claimed,
+        } => (
             resolve_all(&declarations, std::slice::from_ref(&tag))
                 .flat_map(|declared| fields(declared, &tag))
                 .filter(|field| !written.contains(&field.label))
                 .collect(),
-            Some(TypedSite::Field { written }),
+            Some(TypedSite::Field { written, claimed }),
         ),
         Context::Nested { tag, field } => (
             resolve_all(&declarations, std::slice::from_ref(&tag))
@@ -185,6 +239,7 @@ pub(super) fn pattern_question(
     Some(PatternQuestion {
         items: merge_candidates(items),
         typed,
+        literal,
     })
 }
 
@@ -194,6 +249,7 @@ pub(super) fn wildcard() -> TtCompletion {
         kind: TtCompletionKind::Wildcard,
         detail: "wildcard arm — every remaining case (must be last)".to_string(),
         covered: false,
+        range: None,
     }
 }
 
@@ -435,12 +491,26 @@ enum Context {
     Case { of: Option<ArmTags> },
     /// A payload field name of `tag` is expected; `written` are the fields
     /// the same payload already binds, which a pattern may not repeat.
-    Field { tag: String, written: Vec<String> },
+    /// `claimed` says a parsed construct holds the payload, so its
+    /// projection destructures the case and TypeScript can be asked for
+    /// the case's properties there.
+    Field {
+        tag: String,
+        written: Vec<String>,
+        claimed: bool,
+    },
+    /// A literal pattern is being written in the string literal at bytes
+    /// `span`, at the top level of an arm of the match whose finished arms
+    /// are `arms`.
+    Literal { arms: ArmTags, span: (usize, usize) },
     /// A nested pattern's tag is expected, in `tag`'s field `field`.
     Nested { tag: String, field: String },
 }
 
 fn context(source: &str, program: &Program, tokens: &[Token], offset: usize) -> Option<Context> {
+    if let Some(literal) = string_at(source, tokens, offset) {
+        return literal_context(source, program, tokens, literal);
+    }
     if inside_text(source, tokens, offset) {
         return None;
     }
@@ -462,7 +532,8 @@ fn context(source: &str, program: &Program, tokens: &[Token], offset: usize) -> 
     if before == 0 || matches!(tokens[before - 1].kind, TokenKind::Arrow) {
         return None;
     }
-    let site = match parsed_at(program, offset) {
+    let parsed = parsed_at(program, offset);
+    let site = match parsed {
         Some(Parsed::Arm { open, from }) => PatternSite::Arm {
             open: token_at(tokens, open),
             start: from.map_or(before, |from| token_at(tokens, from)),
@@ -473,7 +544,53 @@ fn context(source: &str, program: &Program, tokens: &[Token], offset: usize) -> 
         Some(Parsed::Expression) => return None,
         None => crate::parser::pattern_site_at(source, tokens, before)?,
     };
-    site_context(source, tokens, site, before, prefix)
+    site_context(source, tokens, site, before, prefix, parsed.is_some())
+}
+
+/// The string literal token the cursor is inside: after its opening quote
+/// and before its closing one, or at the end of one not closed yet.
+fn string_at(source: &str, tokens: &[Token], offset: usize) -> Option<usize> {
+    let index = token_at(tokens, offset).checked_sub(1)?;
+    let token = &tokens[index];
+    if !matches!(token.kind, TokenKind::Str) || offset <= token.span.start {
+        return None;
+    }
+    let bytes = &source.as_bytes()[token.span.start..token.span.end];
+    let closed = bytes.len() >= 2 && bytes[bytes.len() - 1] == bytes[0];
+    (offset < token.span.end || (offset == token.span.end && !closed)).then_some(index)
+}
+
+/// A string literal the cursor is in is a literal pattern being written
+/// when it starts an alternative at the top level of a match arm's
+/// pattern, the place a finished literal arm's pattern would be.
+fn literal_context(
+    source: &str,
+    program: &Program,
+    tokens: &[Token],
+    index: usize,
+) -> Option<Context> {
+    let token = &tokens[index];
+    let (open, start) = match parsed_at(program, token.span.start) {
+        Some(Parsed::Arm { open, from }) => (
+            token_at(tokens, open),
+            from.map_or(index, |from| token_at(tokens, from)),
+        ),
+        Some(_) => return None,
+        None => match crate::parser::pattern_site_at(source, tokens, index)? {
+            PatternSite::Arm { open, start } => (open, start),
+            PatternSite::Single { .. } => return None,
+        },
+    };
+    if index < start
+        || innermost_paren(tokens, start, index)?.is_some()
+        || (index != start && !matches!(tokens[index - 1].kind, TokenKind::Punct(b'|')))
+    {
+        return None;
+    }
+    Some(Context::Literal {
+        arms: arm_tags(source, tokens, open, None),
+        span: (token.span.start, token.span.end),
+    })
 }
 
 /// What the pattern grammar expects at `before`, inside `site`'s pattern.
@@ -483,6 +600,7 @@ fn site_context(
     site: PatternSite,
     before: usize,
     prefix: Option<usize>,
+    claimed: bool,
 ) -> Option<Context> {
     let (PatternSite::Arm { start, .. } | PatternSite::Single { start }) = site;
     if before < start {
@@ -517,6 +635,7 @@ fn site_context(
             return Some(Context::Field {
                 tag,
                 written: written_fields(source, tokens, open, prefix),
+                claimed,
             });
         }
         return None;
@@ -903,6 +1022,7 @@ fn cases(declared: &DeclaredVariant, covered: &[String]) -> Vec<TtCompletion> {
             kind: TtCompletionKind::Case,
             detail: super::names::case_signature(&declared.name, constructor),
             covered: covered.contains(&constructor.tag),
+            range: None,
         })
         .collect()
 }
@@ -920,6 +1040,7 @@ fn fields(declared: &DeclaredVariant, tag: &str) -> Vec<TtCompletion> {
             kind: TtCompletionKind::Field,
             detail: super::names::field_signature(field),
             covered: false,
+            range: None,
         })
         .collect()
 }

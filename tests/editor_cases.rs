@@ -552,6 +552,7 @@ fn tt_items_json(items: &[TtCompletion]) -> Vec<Value> {
                 },
                 "detail": item.detail,
                 "covered": item.covered,
+                "range": item.range.map(range_json),
             })
         })
         .collect()
@@ -1500,8 +1501,9 @@ fn completion_line(item: &Value) -> String {
 }
 
 fn tt_item_line(item: &Value) -> String {
+    let range = &item["range"];
     format!(
-        "{} ({}){}{}",
+        "{} ({}){}{}{}",
         item["label"].as_str().unwrap_or_default(),
         item["kind"].as_str().unwrap_or_default(),
         item["detail"]
@@ -1513,6 +1515,17 @@ fn tt_item_line(item: &Value) -> String {
             " covered"
         } else {
             ""
+        },
+        if range.is_object() {
+            format!(
+                " replaces {}:{}-{}:{}",
+                range["start"]["line"].as_u64().unwrap_or(0) + 1,
+                range["start"]["character"].as_u64().unwrap_or(0) + 1,
+                range["end"]["line"].as_u64().unwrap_or(0) + 1,
+                range["end"]["character"].as_u64().unwrap_or(0) + 1
+            )
+        } else {
+            String::new()
         }
     )
 }
