@@ -816,6 +816,7 @@ async function main() {
           // A use narrowed by control flow cannot supply the declaration's
           // type: doing so would reject the initializer's other constituents.
           if (declaredType && checker.getTypeAtLocation(identifier).id !== declaredType.id) continue;
+          if (impliedByBindingPattern(identifier, SyntaxKind)) continue;
           const context = checker.getContextualType(identifier);
           if (!context || (context.flags & (TypeFlags.Any | TypeFlags.Unknown)) || context.isErrorType()) continue;
           if (expected && expected.id !== context.id) { ambiguous = true; break; }
@@ -1109,6 +1110,39 @@ async function main() {
  * question about the same type, which tells that answer apart from a
  * session that stopped answering; a session failure propagates.
  */
+function impliedByBindingPattern(node, SyntaxKind) {
+  for (let current = node; ;) {
+    const parent = current.parent;
+    if (!parent) return false;
+    switch (parent.kind) {
+      case SyntaxKind.ParenthesizedExpression:
+      case SyntaxKind.ArrayLiteralExpression:
+      case SyntaxKind.ObjectLiteralExpression:
+        break;
+      case SyntaxKind.PropertyAssignment:
+        if (parent.initializer !== current) return false;
+        break;
+      case SyntaxKind.ConditionalExpression:
+        if (parent.condition === current) return false;
+        break;
+      case SyntaxKind.BinaryExpression: {
+        const operator = parent.operatorToken.kind;
+        if (operator !== SyntaxKind.BarBarToken && operator !== SyntaxKind.QuestionQuestionToken &&
+            !((operator === SyntaxKind.AmpersandAmpersandToken || operator === SyntaxKind.CommaToken) &&
+              parent.right === current)) return false;
+        break;
+      }
+      case SyntaxKind.VariableDeclaration:
+        return parent.initializer === current && !parent.type &&
+          (parent.name.kind === SyntaxKind.ObjectBindingPattern ||
+            parent.name.kind === SyntaxKind.ArrayBindingPattern);
+      default:
+        return false;
+    }
+    current = parent;
+  }
+}
+
 function assertionOperand(node, SyntaxKind) {
   let operand = node;
   while (operand.parent && (operand.parent.kind === SyntaxKind.ParenthesizedExpression ||
