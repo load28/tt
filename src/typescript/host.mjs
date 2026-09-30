@@ -776,8 +776,9 @@ async function main() {
           const context = checker.getTypeFromTypeNode(declaration.type);
           const incoming = incomingOf();
           if (!incoming.length) continue;
-          const types = incoming.map(assignment =>
-            widenedIn(checker, checker.getTypeAtLocation(assignment.right), context, TypeFlags));
+          const types = incoming.flatMap(assignment =>
+            widenedIn(checker, checker.getTypeAtLocation(assignment.right), context, TypeFlags,
+              freshLiterals(checker, assignment.right, SyntaxKind, TypeFlags)));
           const cleared = { index, inferred: true, annotation: null };
           if (types.some(indefinite)) { out.contextualSlots.push(cleared); continue; }
           const annotations = joinOf(types).map(index => annotation(types[index]));
@@ -820,8 +821,9 @@ async function main() {
           // not expression inference. Ask for each RHS type in its branch scope
           // and serialize it at the declaration; never infer from diagnostic text.
           const incoming = incomingOf();
-          const types = incoming.map(assignment =>
-            checker.getWidenedType(checker.getBaseTypeOfLiteralType(checker.getTypeAtLocation(assignment.right))));
+          const types = incoming.flatMap(assignment =>
+            widenedAtMutable(checker, checker.getTypeAtLocation(assignment.right),
+              freshLiterals(checker, assignment.right, SyntaxKind, TypeFlags)));
           if (!types.length || types.some(type => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType())) continue;
           // Remove constituents subsumed by another incoming type. This is the
           // checker's assignability relation, including never[] <: number[].
@@ -1111,7 +1113,7 @@ function assertionOperand(node, SyntaxKind) {
     type.typeName.text === "const" && !type.typeArguments);
 }
 
-function widenedIn(checker, type, context, TypeFlags) {
+function widenedIn(checker, type, context, TypeFlags, fresh) {
   const kinds = (candidate, flags) => !!(candidate.flags & flags) ||
     ((candidate.isUnionType() || candidate.isIntersectionType()) && candidate.getTypes().some((t) => kinds(t, flags)));
   const literalOf = (candidate, target) => {
@@ -1131,8 +1133,87 @@ function widenedIn(checker, type, context, TypeFlags) {
       !!(target.flags & TypeFlags.BooleanLiteral) && kinds(candidate, TypeFlags.BooleanLiteral) ||
       !!(target.flags & TypeFlags.UniqueESSymbol) && kinds(candidate, TypeFlags.UniqueESSymbol);
   };
-  const kept = literalOf(type, context) ? type : checker.getBaseTypeOfLiteralType(type);
-  return checker.getWidenedType(kept);
+  return literalOf(type, context) ? [checker.getWidenedType(type)] : widenedAtMutable(checker, type, fresh);
+}
+
+function freshLiterals(checker, node, SyntaxKind, TypeFlags) {
+  const literal = TypeFlags.StringLiteral | TypeFlags.NumberLiteral | TypeFlags.BigIntLiteral |
+    TypeFlags.BooleanLiteral | TypeFlags.EnumLiteral;
+  const fresh = new Set();
+  const addFresh = (type) => {
+    if (!type) return;
+    if (type.isUnionType()) { for (const constituent of type.getTypes()) addFresh(constituent); return; }
+    const regular = (type.flags & literal) ? type.getRegularType() : undefined;
+    if (regular && regular.id !== type.id) fresh.add(regular.id);
+  };
+  const addRegular = (type) => {
+    if (!type) return;
+    if (type.isUnionType()) { for (const constituent of type.getTypes()) addRegular(constituent); return; }
+    if (type.flags & literal) fresh.add(type.id);
+  };
+  const visit = (expression) => {
+    switch (expression.kind) {
+      case SyntaxKind.StringLiteral:
+      case SyntaxKind.NoSubstitutionTemplateLiteral:
+      case SyntaxKind.NumericLiteral:
+      case SyntaxKind.BigIntLiteral:
+      case SyntaxKind.TrueKeyword:
+      case SyntaxKind.FalseKeyword:
+        addRegular(checker.getTypeAtLocation(expression));
+        return;
+      case SyntaxKind.PrefixUnaryExpression:
+        if ((expression.operator === SyntaxKind.MinusToken || expression.operator === SyntaxKind.PlusToken) &&
+            (expression.operand.kind === SyntaxKind.NumericLiteral || expression.operand.kind === SyntaxKind.BigIntLiteral)) {
+          addRegular(checker.getTypeAtLocation(expression));
+        }
+        return;
+      case SyntaxKind.ParenthesizedExpression:
+      case SyntaxKind.SatisfiesExpression:
+      case SyntaxKind.NonNullExpression:
+        visit(expression.expression);
+        return;
+      case SyntaxKind.ConditionalExpression:
+        visit(expression.whenTrue);
+        visit(expression.whenFalse);
+        return;
+      case SyntaxKind.BinaryExpression: {
+        const operator = expression.operatorToken.kind;
+        if (operator === SyntaxKind.CommaToken) visit(expression.right);
+        if (operator === SyntaxKind.AmpersandAmpersandToken || operator === SyntaxKind.BarBarToken ||
+            operator === SyntaxKind.QuestionQuestionToken) {
+          visit(expression.left);
+          visit(expression.right);
+        }
+        return;
+      }
+      case SyntaxKind.Identifier:
+      case SyntaxKind.PropertyAccessExpression: {
+        const name = expression.kind === SyntaxKind.Identifier ? expression : expression.name;
+        const symbol = checker.getSymbolAtLocation(name);
+        if (symbol) addFresh(checker.getTypeOfSymbolAtLocation(symbol, name));
+        return;
+      }
+      case SyntaxKind.CallExpression:
+      case SyntaxKind.NewExpression:
+      case SyntaxKind.TaggedTemplateExpression: {
+        const signature = checker.getResolvedSignature(expression);
+        if (signature) addFresh(checker.getReturnTypeOfSignature(signature));
+        return;
+      }
+      default:
+    }
+  };
+  visit(node);
+  return fresh;
+}
+
+function widenedAtMutable(checker, type, fresh) {
+  const holdsFresh = (candidate) => candidate.isUnionType()
+    ? candidate.getTypes().some(holdsFresh) : fresh.has(candidate.id);
+  if (type.isUnionType() && holdsFresh(type)) {
+    return type.getTypes().flatMap((constituent) => widenedAtMutable(checker, constituent, fresh));
+  }
+  return [checker.getWidenedType(fresh.has(type.id) ? checker.getBaseTypeOfLiteralType(type) : type)];
 }
 
 function typeNode(checker, type, location, flags) {

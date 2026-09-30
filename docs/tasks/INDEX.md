@@ -621,6 +621,7 @@
 | TASK-613 | Pin that a pipeline step being typed answers as its TypeScript equivalent does | Complete | 2026-09-30 | 2026-09-30 | [TASK-613](./TASK-613-pipeline-step-typing-matches-typescript.md) |
 | TASK-621 | Read an arm whose guard is not written yet as a malformed arm | Complete | 2026-09-30 | 2026-09-30 | [TASK-621](./TASK-621-arm-guard-not-written-yet.md) |
 | TASK-622 | Write a return's suffix after a template literal that ends its statement | Complete | 2026-09-30 | 2026-09-30 | [TASK-622](./TASK-622-return-suffix-after-a-template-literal.md) |
+| TASK-623 | Widen only fresh literal types in a value's storage | Complete | 2026-09-30 | 2026-09-30 | [TASK-623](./TASK-623-storage-widens-only-fresh-literals.md) |
 
 ## Next task number
 
