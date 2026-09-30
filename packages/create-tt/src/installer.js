@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { lstat, mkdir, readFile, readdir, readlink, realpath, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -158,9 +158,9 @@ export async function initializeExisting(options) {
   const typeConfig = 'tsconfig.tt.json'
   const generated = []
   const realRoot = await realpath(root)
-  const references = existsSync(join(root, 'tsconfig.json'))
+  const { references, roots } = existsSync(join(root, 'tsconfig.json'))
     ? await typeConfigGraph(realRoot, await projectConfig(realRoot, join(root, 'tsconfig.json')), generated)
-    : (generated.push([typeConfig, `${JSON.stringify(tsconfig(), null, '  ')}\n`]), false)
+    : defaultTypeConfig(realRoot, typeConfig, generated)
   const typeCheck = `tsc ${references ? '-b' : '-p'} ${typeConfig} --runExternalCode`
   manifest.scripts['tt:check'] ??= typeCheck
 
@@ -180,7 +180,7 @@ export async function initializeExisting(options) {
       manifest.scripts['tt:build'] ??= `${typeCheck} && ${adapter.commands.build} --config ${adapter.wrapper}`
     }
   } else {
-    manifest.scripts['tt:build'] ??= 'ttc -o .tt-build src'
+    manifest.scripts['tt:build'] ??= buildScript(roots)
   }
 
   // Validate the complete output set before changing any project files.
@@ -220,7 +220,84 @@ async function typeConfigGraph(root, configPath, generated) {
     }
     generated.push([relative(root, counterpart), `${JSON.stringify(content, null, '  ')}\n`])
   }
-  return Array.isArray(projects.get(configPath).config.references)
+  const inputs = []
+  for (const [path, { config }] of projects) {
+    if (!solutionStyle(config)) inputs.push(...await configInputs(path, config))
+  }
+  return {
+    references: Array.isArray(projects.get(configPath).config.references),
+    roots: sourceRoots(root, inputs),
+  }
+}
+
+function defaultTypeConfig(root, typeConfig, generated) {
+  const config = tsconfig()
+  generated.push([typeConfig, `${JSON.stringify(config, null, '  ')}\n`])
+  return {
+    references: false,
+    roots: sourceRoots(root, config.include.map((entry) => inputBase(root, entry))),
+  }
+}
+
+async function configInputs(path, config) {
+  const { files, include } = await declaredInputs(path, config, new Set())
+  if (!files && !include) return [dirname(path)]
+  return [...(files ?? []), ...(include ?? [])]
+}
+
+async function declaredInputs(path, config, seen) {
+  seen.add(path)
+  const directory = dirname(path)
+  const own = (key) => Array.isArray(config[key])
+    ? config[key].filter((entry) => typeof entry === 'string').map((entry) => inputBase(directory, entry))
+    : undefined
+  let files = own('files')
+  let include = own('include')
+  const bases = (Array.isArray(config.extends) ? config.extends : [config.extends])
+    .filter((base) => typeof base === 'string' && (base.startsWith('./') || base.startsWith('../') || isAbsolute(base)))
+    .map((base) => resolve(directory, base))
+    .map((base) => (existsSync(base) || base.endsWith('.json') ? base : `${base}.json`))
+    .reverse()
+  for (const base of bases) {
+    if ((files && include) || seen.has(base) || !existsSync(base)) continue
+    let inherited
+    try {
+      inherited = parseJsonc(await readFile(base, 'utf8'))
+    } catch (error) {
+      throw new Error(`cannot read ${base}: ${error.message}`)
+    }
+    const from = await declaredInputs(base, inherited, seen)
+    files ??= from.files
+    include ??= from.include
+  }
+  return { files, include }
+}
+
+function inputBase(directory, entry) {
+  const segments = entry.split(/[\\/]/)
+  const wildcard = segments.findIndex((segment) => /[*?]/.test(segment))
+  return resolve(directory, ...(wildcard === -1 ? segments : segments.slice(0, wildcard)))
+}
+
+function sourceRoots(root, inputs) {
+  const unique = [...new Set(inputs)].filter((input) => input === root || insideRoot(root, input))
+  const existing = unique.filter((input) => existsSync(input))
+  const chosen = existing.length > 0 ? existing : unique
+  const posix = (path) => relative(root, path).split('\\').join('/') || '.'
+  return chosen
+    .filter((input) => !chosen.some((other) => other !== input && (other === root || insideRoot(other, input))))
+    .map((input) => ({
+      input: posix(input),
+      mirror: posix(existsSync(input) && !statSync(input).isDirectory() ? dirname(input) : input),
+    }))
+    .sort((left, right) => (left.input < right.input ? -1 : left.input > right.input ? 1 : 0))
+}
+
+function buildScript(roots) {
+  if (roots.length === 1) return `ttc -o .tt-build ${shellQuote(roots[0].input)}`
+  return roots
+    .map(({ input, mirror }) => `ttc -o ${shellQuote(mirror === '.' ? '.tt-build' : `.tt-build/${mirror}`)} ${shellQuote(input)}`)
+    .join(' && ')
 }
 
 async function readConfigGraph(root, configPath, projects) {

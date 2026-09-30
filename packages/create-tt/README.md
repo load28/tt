@@ -28,7 +28,11 @@ generated scripts check them with `tsc -b`. TypeScript does not let a
 referenced project disable emit (TS6310), so a generated config that another
 compiled config references emits declarations only, into
 `node_modules/.cache/tt/`, instead of setting `noEmit`; every other generated
-config sets `noEmit`. The initializer sets `typescript` to
+config sets `noEmit`. Without a bundler, the generated `tt:build` runs
+`ttc -o .tt-build` over the source roots the configurations include (the
+directory part of each `include` pattern before its first wildcard, and each
+`files` entry); several roots each keep their own path under `.tt-build`, so
+relative imports between them still resolve. The initializer sets `typescript` to
 the TypeScript 7.1 build tt is verified with; when the project named another
 version, it replaces it and prints the change. Existing scripts and config files
 stay intact. Re-running init accepts unchanged generated configs;

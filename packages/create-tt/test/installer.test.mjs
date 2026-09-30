@@ -386,6 +386,44 @@ test('the generated graph builds when a referenced project is referenced by anot
   assert.equal(existsSync(join(root, 'a/dist')), false)
 })
 
+const repositoryCompiler = fileURLToPath(new URL(`../../../target/debug/${process.platform === 'win32' ? 'ttc.exe' : 'ttc'}`, import.meta.url))
+
+test('init derives tt:build from the source roots the configuration includes', async () => {
+  const graph = await referencedProjectGraph()
+  await initializeExisting({ directory: graph, bundler: 'none' })
+  const script = (root) => readFile(join(root, 'package.json'), 'utf8').then((text) => JSON.parse(text).scripts['tt:build'])
+  assert.equal(await script(graph), 'ttc -o .tt-build/a/src a/src && ttc -o .tt-build/b/src b/src')
+
+  const inherited = testDir('create-tt-build-extends-')
+  await writeFile(join(inherited, 'package.json'), '{}\n')
+  await writeFile(join(inherited, 'tsconfig.base.json'), '{ "include": ["lib/**/*"] }\n')
+  await writeFile(join(inherited, 'tsconfig.json'), '{ "extends": "./tsconfig.base.json", "compilerOptions": { "strict": true } }\n')
+  await mkdir(join(inherited, 'lib'))
+  await initializeExisting({ directory: inherited, bundler: 'none' })
+  assert.equal(await script(inherited), 'ttc -o .tt-build lib')
+
+  const unconfigured = testDir('create-tt-build-default-')
+  await writeFile(join(unconfigured, 'package.json'), '{}\n')
+  await mkdir(join(unconfigured, 'src'))
+  await initializeExisting({ directory: unconfigured, bundler: 'none' })
+  assert.equal(await script(unconfigured), 'ttc -o .tt-build src')
+})
+
+test('a derived multi-root tt:build keeps imports between the roots', { skip: !existsSync(repositoryCompiler) && 'the repository compiler is not built' }, async () => {
+  const root = await referencedProjectGraph()
+  await writeFile(join(root, 'a/src/t.tt'), 'export const t = 1 |> ((x: number) => x)\n')
+  await writeFile(join(root, 'b/src/u.tt'), "import { t } from '../../a/src/t.tt'\nexport const u = t\n")
+  await initializeExisting({ directory: root, bundler: 'none' })
+  const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+  for (const command of manifest.scripts['tt:build'].split(' && ')) {
+    const [, ...args] = command.split(' ')
+    const built = spawnSync(repositoryCompiler, args, { cwd: root, encoding: 'utf8' })
+    assert.equal(built.status, 0, built.stderr)
+  }
+  assert.match(await readFile(join(root, '.tt-build/b/src/u.ts'), 'utf8'), /from '\.\.\/\.\.\/a\/src\/t\.js'/)
+  assert.equal(existsSync(join(root, '.tt-build/a/src/t.ts')), true)
+})
+
 test('init replaces an incompatible TypeScript and reports it', async () => {
   for (const section of ['devDependencies', 'dependencies']) {
     const root = testDir('create-tt-typescript-')

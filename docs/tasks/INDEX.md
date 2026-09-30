@@ -624,6 +624,7 @@
 | TASK-616 | Keep TypeScript's `exclude` semantics for an owned output reached by import | Complete | 2026-09-30 | 2026-09-30 | [TASK-616](./TASK-616-owned-outputs-reached-by-import.md) |
 | TASK-617 | Import the standard library in CommonJS syntax from a CommonJS module | Complete | 2026-09-30 | 2026-09-30 | [TASK-617](./TASK-617-commonjs-standard-library.md) |
 | TASK-618 | Let a referenced type-check config emit declarations into a cache | Complete | 2026-09-30 | 2026-09-30 | [TASK-618](./TASK-618-referenced-type-configs-emit.md) |
+| TASK-619 | Derive `tt:build` from the configured source roots | Complete | 2026-09-30 | 2026-09-30 | [TASK-619](./TASK-619-derived-build-roots.md) |
 
 ## Next task number
 
