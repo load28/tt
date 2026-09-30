@@ -107,6 +107,19 @@ arms, block arms, `return match` in an unannotated function, and
 - **Resolution**: Taken up with the other left-part differences of logical
   operations in TASK-626.
 
+### Issue 2: The TASK-634 case baseline changed when this task was merged
+
+- **Symptom**: After this task was merged next to TASK-634,
+  `tests/baselines/reference/conditionalOperationNarrowing.ts` failed: the
+  storage of `u !== undefined && u.v > 0 && match …` changed from
+  `(number) | (boolean)` to `(number) | (false)`.
+- **Cause**: The baseline was written before this task existed, when the
+  storage join widened the `false` the `&&` operation contributes to
+  `boolean`. `false` is the type TypeScript gives that left part of `&&`
+  for a `boolean` operand.
+- **Resolution**: Accepted the regenerated baseline; that one line is its
+  only change.
+
 ## Verification
 
 - [x] `cargo fmt --check`
