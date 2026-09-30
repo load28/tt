@@ -672,9 +672,6 @@ impl Checker<'_> {
                 .help("split them into two matches")
                 .owner(expr.keyword_off, expr.body_close + 1),
             );
-            // A mixed match has no one discriminant, so its coverage answer
-            // is not worth asking — report the cause, not its effects.
-            self.coverage_suppressed.push(expr.keyword_off);
         }
 
         let has_instances = expr
@@ -683,9 +680,8 @@ impl Checker<'_> {
             .any(|arm| matches!(arm.pattern, Pattern::Instances(_)));
         if has_instances {
             // Class hierarchies are open; wildcard presence is the complete
-            // exhaustiveness rule and the variant/literal coverage engines
-            // must not infer anything else for this site.
-            self.coverage_suppressed.push(expr.keyword_off);
+            // exhaustiveness rule, and the coverage question a match with an
+            // `is` arm asks is none (`analysis::coverage_question`).
             if !expr
                 .arms
                 .iter()

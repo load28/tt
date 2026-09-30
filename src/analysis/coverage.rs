@@ -2,10 +2,10 @@
 
 use super::*;
 
-/// [`Coverage`] of a single match, when the question means something: a tag
-/// match with no wildcard arm whose tags identify a known variant — and,
-/// whenever the tags identify one, wildcard or not, the arms that match
-/// nothing an earlier arm has not.
+/// [`Coverage`] of a single match, when the question means something: a
+/// match that asks [`CoverageQuestion::Tags`] and whose tags identify a
+/// known variant — and, whenever the tags identify one, whatever the
+/// question, the arms that match nothing an earlier arm has not.
 ///
 /// The arms become a one-column matrix and the algorithm answers
 /// ([`usefulness`]). Guarded arms stay out of it — a guard may be false —
@@ -36,7 +36,7 @@ pub(super) fn coverage_of(expr: &MatchExpr, table: &Table) -> (Option<Coverage>,
         return (None, Vec::new());
     };
     let unreachable = unreachable_arms(&rows.arm_rows, &[ColTy::Variant(entry)], &cx);
-    let coverage = (!rows.wildcard)
+    let coverage = (coverage_question(expr) == CoverageQuestion::Tags)
         .then(|| Coverage::of(vec![Some(entry.covered_variant())], rows.covered, missing));
     (coverage, unreachable)
 }
@@ -69,7 +69,10 @@ pub(crate) fn checked_coverage(
             continue;
         };
         let entry = table.entry_of_members(tags);
-        let Some(rows) = match_rows(expr).filter(|rows| !rows.wildcard) else {
+        if coverage_question(expr) != CoverageQuestion::Tags {
+            continue;
+        }
+        let Some(rows) = match_rows(expr) else {
             continue;
         };
         let cx = Alphabets {
@@ -285,23 +288,53 @@ fn collect_if_let_matches_grown<'a>(
     }
 }
 
+/// The exhaustiveness question a single-scrutinee match asks. The untyped
+/// coverage ([`coverage_of`]) and the typed probes ([`crate::probe`]) both
+/// answer only the question this names, so a match is never checked for
+/// coverage by one pass and exempt in the other.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CoverageQuestion {
+    /// No question: a `_` arm covers every value; an `is` arm makes the
+    /// final wildcard the whole rule (class hierarchies are open); tag
+    /// patterns mixed with literal or `is` patterns have no one
+    /// discriminant, and `match-mixed-patterns` reports the cause rather
+    /// than its effects; or no arm has a pattern at all.
+    None,
+    /// Which literals of the scrutinee's type the arms leave out.
+    Literals,
+    /// Which constructors of the variant the arms leave out.
+    Tags,
+}
+
+/// The [`CoverageQuestion`] `expr`'s arms ask.
+pub(crate) fn coverage_question(expr: &MatchExpr) -> CoverageQuestion {
+    let (mut tags, mut literals) = (false, false);
+    for arm in &expr.arms {
+        match arm.pattern {
+            Pattern::Wildcard | Pattern::Instances(_) => return CoverageQuestion::None,
+            Pattern::Tags(_) => tags = true,
+            Pattern::Literals(_) => literals = true,
+        }
+    }
+    match (tags, literals) {
+        (true, false) => CoverageQuestion::Tags,
+        (false, true) => CoverageQuestion::Literals,
+        (true, true) | (false, false) => CoverageQuestion::None,
+    }
+}
+
 /// One match's arms as the algorithm's input: the tags they name, the tags
 /// they cover outright, the matrix, the per-arm rows reachability needs
-/// (an unguarded wildcard arm among them), and whether the match has a
-/// wildcard arm. `None` when no arm carries a tag pattern.
+/// (an unguarded wildcard arm among them). `None` when no arm carries a tag
+/// pattern.
 pub(super) struct MatchRows<'a> {
     tags: Vec<&'a str>,
     covered: Vec<String>,
     rows: Vec<Vec<Cell<'a>>>,
     arm_rows: Vec<(usize, Vec<Vec<Cell<'a>>>)>,
-    wildcard: bool,
 }
 
 pub(super) fn match_rows(expr: &MatchExpr) -> Option<MatchRows<'_>> {
-    let wildcard = expr
-        .arms
-        .iter()
-        .any(|a| matches!(a.pattern, Pattern::Wildcard));
     // Identification uses every arm's tags, guarded ones included.
     let mut tags: Vec<&str> = Vec::new();
     let mut covered: Vec<String> = Vec::new();
@@ -343,7 +376,6 @@ pub(super) fn match_rows(expr: &MatchExpr) -> Option<MatchRows<'_>> {
         covered,
         rows,
         arm_rows,
-        wildcard,
     })
 }
 

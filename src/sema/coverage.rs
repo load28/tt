@@ -6,16 +6,12 @@ use super::*;
 pub(crate) fn report_coverage(
     source: &str,
     analyses: &crate::analysis::PatternAnalyses,
-    suppressed: &[usize],
     errors: &mut Vec<TtError>,
 ) {
     let uncovered = analyses
         .matches
         .iter()
-        .filter(|m| {
-            !analyses.match_has_resolution_error(m.keyword_off)
-                && !suppressed.contains(&m.keyword_off)
-        })
+        .filter(|m| !analyses.match_has_resolution_error(m.keyword_off))
         .filter_map(|m| m.coverage.as_ref().map(|c| (m, c)))
         .filter(|(_, c)| !c.missing.is_empty());
 

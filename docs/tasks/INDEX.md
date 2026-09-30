@@ -693,6 +693,7 @@
 | TASK-685 | Generate editor cases from the case matrix, each asked against a TypeScript twin | Complete | 2026-09-30 | 2026-09-30 | [TASK-685](./TASK-685-editor-matrix-infrastructure.md) |
 | TASK-686 | Populate the editor matrix for every construct and triage each difference from TypeScript | Complete | 2026-09-30 | 2026-09-30 | [TASK-686](./TASK-686-editor-matrix-populate.md) |
 | TASK-691 | End the optional chain of a pipeline head before a postfix step | Complete | 2026-09-30 | 2026-09-30 | [TASK-691](./TASK-691-postfix-step-ends-optional-chain.md) |
+| TASK-693 | Decide once which coverage question a match asks | Complete | 2026-09-30 | 2026-09-30 | [TASK-693](./TASK-693-one-coverage-question-per-match.md) |
 
 ## Next task number
 

@@ -50,8 +50,8 @@ mod tests;
 use crate::ast::*;
 use crate::{ExternVariant, VariantSymbol};
 
-pub(crate) use coverage::checked_coverage;
 use coverage::*;
+pub(crate) use coverage::{CoverageQuestion, checked_coverage, coverage_question};
 pub(crate) use patterns::has_nested;
 use patterns::*;
 use usefulness::{Alphabets, Cell, ColTy};

@@ -79,7 +79,7 @@ listed the input in `fuzz/regressions/expected-failures.txt`.
   that suppression.
 - **Cause**: Not traced further; it is independent of this crash.
 - **Resolution**: Left open and reported; the new case's `.errors.txt` pins
-  the current output so a fix shows as a baseline change.
+  the current output so a fix shows as a baseline change. Fixed by TASK-693.
 
 ## Regression test (fails before the fix)
 
