@@ -180,6 +180,7 @@ fn cli_reports_every_practical_diagnostic_at_its_source() {
         return;
     }
 
+    let mut failures = Vec::new();
     for fixture in cases() {
         let project = Workspace::in_repo("practical-diagnostics");
         copy_project(&fixture, project.path());
@@ -236,7 +237,9 @@ fn cli_reports_every_practical_diagnostic_at_its_source() {
                 annotation.message
             );
         }
-        common::baseline::expect(&fixture.join("expected.stderr"), &normalized_stderr);
+        failures.extend(
+            common::baseline::compare(&fixture.join("expected.stderr"), &normalized_stderr).err(),
+        );
 
         for diagnostic in &manifest.diagnostics {
             let line = source.lines().nth(diagnostic.line - 1).unwrap_or_else(|| {
@@ -319,4 +322,5 @@ fn cli_reports_every_practical_diagnostic_at_its_source() {
             }
         }
     }
+    common::baseline::finish(failures);
 }

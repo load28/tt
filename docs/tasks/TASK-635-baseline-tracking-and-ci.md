@@ -1,5 +1,10 @@
 # TASK-635: Fail on missing, modified, and unused baselines locally and in CI
 
+> **Superseded in part by TASK-650**: unused baselines are no longer
+> deleted by `check-baselines`; it writes `.delete` markers into
+> `tests/baselines/local/`, and `--run --accept` and `--ci` rerun the suites
+> without `UPDATE_EXPECT` and accept with `scripts/baseline-accept`.
+
 - **Status**: Complete
 - **Started**: 2026-09-30
 - **Completed**: 2026-09-30

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const LOCAL = "tests/baselines/local";
 
 const OWNERS = [
   {
@@ -67,6 +68,12 @@ function readTracking(dir) {
   return { runs, present, absent };
 }
 
+function localPath(path) {
+  const reference = "tests/baselines/reference/";
+  const inside = path.startsWith(reference) ? path.slice(reference.length) : path;
+  return join(ROOT, LOCAL, inside);
+}
+
 function check(dir, { accept }) {
   const { runs, present, absent } = readTracking(dir);
   const problems = [];
@@ -88,9 +95,10 @@ function check(dir, { accept }) {
   const unowned = [...present].filter((path) => !OWNERS.some((owner) => path.startsWith(`${owner.root}/`) && owner.reference(path)));
   const missing = [...present].filter((path) => !existsSync(join(ROOT, path)));
 
-  if (accept) {
-    for (const path of unused) unlinkSync(join(ROOT, path));
-    if (unused.length > 0) console.log(`deleted ${unused.length} unused baseline(s):\n  ${unused.join("\n  ")}`);
+  for (const path of unused) {
+    const marker = `${localPath(path)}.delete`;
+    mkdirSync(dirname(marker), { recursive: true });
+    writeFileSync(marker, "");
   }
 
   let ok = true;
@@ -98,11 +106,11 @@ function check(dir, { accept }) {
     report(
       `${unused.length} unused baseline(s): no test compared them`,
       unused,
-      "Delete them, or run `node scripts/check-baselines --run --accept`, and review the diff.",
+      "A .delete marker for each is in tests/baselines/local: run scripts/baseline-accept, and review the diff.",
     );
     ok = false;
   }
-  if (missing.length > 0) {
+  if (!accept && missing.length > 0) {
     report(
       `${missing.length} missing baseline(s): a test compared against a file that does not exist`,
       missing,
@@ -118,7 +126,11 @@ function check(dir, { accept }) {
     );
     ok = false;
   }
-  if (ok) console.log(`baselines: ${present.size + absent.size} compared, none unused`);
+  if (ok && accept && unused.length > 0) {
+    console.log(`baselines: ${present.size + absent.size} compared, ${unused.length} unused marked for deletion`);
+  } else if (ok) {
+    console.log(`baselines: ${present.size + absent.size} compared, none unused`);
+  }
   return ok;
 }
 
@@ -133,13 +145,21 @@ function run({ accept }) {
   try {
     const env = { ...process.env, TT_BASELINE_TRACKING_DIR: dir, TTC_REQUIRE_TSGO: "1", TT_REQUIRE_EXTENSION: "1" };
     delete env.TT_CASES;
-    if (accept) env.UPDATE_EXPECT = "1";
-    else delete env.UPDATE_EXPECT;
-    const args = ["test", ...BINARIES.flatMap((binary) => ["--test", binary])];
-    console.log(`$ ${accept ? "UPDATE_EXPECT=1 " : ""}cargo ${args.join(" ")}`);
+    delete env.UPDATE_EXPECT;
+    rmSync(join(ROOT, LOCAL), { recursive: true, force: true });
+    const args = ["test", "--no-fail-fast", ...BINARIES.flatMap((binary) => ["--test", binary])];
+    console.log(`$ cargo ${args.join(" ")}`);
     const tests = spawnSync("cargo", args, { cwd: ROOT, env, stdio: "inherit" });
     const checked = check(dir, { accept });
-    return tests.status === 0 && checked;
+    if (!accept) return tests.status === 0 && checked;
+    if (tests.status !== 0) {
+      console.error(
+        "warning: the suites failed; a failure other than a baseline difference can stop a test before it compares, so read the accepted diff",
+      );
+    }
+    console.log("$ scripts/baseline-accept");
+    const accepted = spawnSync(process.execPath, [join(ROOT, "scripts/baseline-accept")], { cwd: ROOT, stdio: "inherit" });
+    return checked && accepted.status === 0;
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -190,7 +210,7 @@ if (argv[0] === "--tracking" && argv[1]) {
     [
       "usage:",
       "  node scripts/check-baselines --tracking <dir>   check what cargo test recorded with TT_BASELINE_TRACKING_DIR=<dir>",
-      "  node scripts/check-baselines --run [--accept]   run the baseline suites with tracking; --accept regenerates and deletes unused baselines",
+      "  node scripts/check-baselines --run [--accept]   run the baseline suites with tracking; --accept then runs scripts/baseline-accept",
       "  node scripts/check-baselines --ci               --run --accept, then fail on any difference and write fix_baselines.patch",
     ].join("\n"),
   );

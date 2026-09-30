@@ -14,7 +14,7 @@ use ttc::SourceKind;
 use ttc::engine::{Engine, ProjectOptions};
 
 mod common;
-use common::baseline::{expect, expect_absent, updating};
+use common::baseline::{compare, compare_absent, finish, updating};
 use common::cases::{self, Unit, is_tt};
 use common::{Workspace, toolchain, toolchain_installed};
 
@@ -469,17 +469,19 @@ fn run(case: &Case, typed: bool) {
 
     let base = reference().join(&case.name);
     let with = |extension: &str| base.with_file_name(format!("{}.{extension}", case.name));
-    expect(&with("map.txt"), &map_table(case));
-    if !typed {
-        return;
+    let mut failures = Vec::new();
+    failures.extend(compare(&with("map.txt"), &map_table(case)).err());
+    if typed {
+        let artifacts = run_typed(case, &dir, &project);
+        failures.extend(compare(&with("ts"), &artifacts.emit).err());
+        let errors = match &artifacts.errors {
+            Some(errors) => compare(&with("errors.txt"), errors),
+            None => compare_absent(&with("errors.txt")),
+        };
+        failures.extend(errors.err());
+        failures.extend(compare(&with("types"), &artifacts.types).err());
     }
-    let artifacts = run_typed(case, &dir, &project);
-    expect(&with("ts"), &artifacts.emit);
-    match &artifacts.errors {
-        Some(errors) => expect(&with("errors.txt"), errors),
-        None => expect_absent(&with("errors.txt")),
-    }
-    expect(&with("types"), &artifacts.types);
+    finish(failures);
 }
 
 #[test]

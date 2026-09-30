@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 pub fn updating() -> bool {
@@ -9,7 +9,8 @@ pub fn updating() -> bool {
 
 fn regenerate() -> String {
     format!(
-        "Run `UPDATE_EXPECT=1 cargo test --test {}` and review the diff.",
+        "Run `scripts/baseline-diff` to review this run's new baselines and `scripts/baseline-accept` \
+         to accept them (or `UPDATE_EXPECT=1 cargo test --test {}`).",
         env!("CARGO_CRATE_NAME")
     )
 }
@@ -60,46 +61,112 @@ fn record(path: &Path, state: &str) {
 }
 
 pub fn expect(path: &Path, actual: &str) {
+    if let Err(message) = compare(path, actual) {
+        panic!("{message}");
+    }
+}
+
+pub fn expect_absent(path: &Path) {
+    if let Err(message) = compare_absent(path) {
+        panic!("{message}");
+    }
+}
+
+pub fn finish(failures: Vec<String>) {
+    assert!(
+        failures.is_empty(),
+        "{} baseline(s) differ:\n\n{}",
+        failures.len(),
+        failures.join("\n\n")
+    );
+}
+
+fn root() -> &'static Path {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+}
+
+pub fn local_path(path: &Path) -> PathBuf {
+    let reference = root().join("tests/baselines/reference");
+    let local = root().join("tests/baselines/local");
+    if let Ok(inside) = path.strip_prefix(&reference) {
+        assert!(
+            !inside.starts_with("tests"),
+            "{}: a reference baseline under a `tests` directory would share its local path with a fixture's",
+            path.display()
+        );
+        return local.join(inside);
+    }
+    local.join(path.strip_prefix(root()).unwrap_or(path))
+}
+
+fn marker(local: &Path) -> PathBuf {
+    let mut name = local.as_os_str().to_owned();
+    name.push(".delete");
+    PathBuf::from(name)
+}
+
+fn clear_local(local: &Path) {
+    let _ = fs::remove_file(local);
+    let _ = fs::remove_file(marker(local));
+}
+
+fn write_local(path: &Path, contents: &str) {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).expect("writable local baseline directory");
+    }
+    fs::write(path, contents).expect("writable local baseline");
+}
+
+pub fn compare(path: &Path, actual: &str) -> Result<(), String> {
     record(path, "present");
+    let local = local_path(path);
+    clear_local(&local);
     if updating() {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).expect("writable baseline directory");
         }
         fs::write(path, actual).expect("writable baseline");
-        return;
+        return Ok(());
     }
-    let expected = fs::read_to_string(path).unwrap_or_else(|_| {
-        panic!(
-            "missing baseline: {} does not exist yet.\n{}",
+    let Ok(expected) = fs::read_to_string(path) else {
+        write_local(&local, actual);
+        return Err(format!(
+            "missing baseline: {} does not exist yet; the new one is at {}.\n{}",
             path.display(),
+            local.display(),
             regenerate()
-        )
-    });
+        ));
+    };
     if expected == actual {
-        return;
+        return Ok(());
     }
-    panic!(
-        "modified baseline: {} is out of date\n\n{}\n{}",
+    write_local(&local, actual);
+    Err(format!(
+        "modified baseline: {} is out of date; the new one is at {}\n\n{}\n{}",
         path.display(),
+        local.display(),
         diff(&expected, actual),
         regenerate()
-    );
+    ))
 }
 
-pub fn expect_absent(path: &Path) {
+pub fn compare_absent(path: &Path) -> Result<(), String> {
     record(path, "absent");
+    let local = local_path(path);
+    clear_local(&local);
     if !path.exists() {
-        return;
+        return Ok(());
     }
     if updating() {
         fs::remove_file(path).expect("removable baseline");
-        return;
+        return Ok(());
     }
-    panic!(
+    write_local(&marker(&local), "");
+    Err(format!(
         "stale baseline: {} exists, but the run produced nothing for it.\n{}",
         path.display(),
         regenerate()
-    );
+    ))
 }
 
 pub fn diff(expected: &str, actual: &str) -> String {

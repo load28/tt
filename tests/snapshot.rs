@@ -58,7 +58,7 @@ use std::process::{Child, Command, Stdio};
 use ttc::{Options, SourceKind, compile_report};
 
 mod common;
-use common::baseline::{expect, updating};
+use common::baseline::{compare, finish, updating};
 use common::{toolchain, toolchain_installed};
 
 fn fixtures() -> PathBuf {
@@ -125,6 +125,7 @@ fn emitted_typescript_matches_its_fixture() {
         );
         return;
     }
+    let mut failures = Vec::new();
     for case in cases("emit") {
         let (path, source) = input(&case);
         let report = compile_report(&source, &options(&path));
@@ -135,12 +136,14 @@ fn emitted_typescript_matches_its_fixture() {
                 report.diagnostics
             )
         });
-        expect(&case.join(emitted_name(&path)), &emit.code);
+        failures.extend(compare(&case.join(emitted_name(&path)), &emit.code).err());
     }
+    finish(failures);
 }
 
 #[test]
 fn rendered_diagnostics_match_their_fixture() {
+    let mut failures = Vec::new();
     for case in cases("diagnostic") {
         let (path, source) = input(&case);
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
@@ -159,11 +162,15 @@ fn rendered_diagnostics_match_their_fixture() {
             // bytes it has always written (TASK-220).
             .map(|d| ttc::render::diagnostic(d, &source, &name, ttc::render::Styles::PLAIN))
             .collect();
-        expect(
-            &case.join("expected.stderr"),
-            &format!("{}\n", rendered.join("\n\n")),
+        failures.extend(
+            compare(
+                &case.join("expected.stderr"),
+                &format!("{}\n", rendered.join("\n\n")),
+            )
+            .err(),
         );
     }
+    finish(failures);
 }
 
 /// One `ttc --server` process, driven line by line.
@@ -208,6 +215,7 @@ impl Drop for Server {
 #[test]
 fn the_wire_format_matches_its_fixture() {
     let mut server = Server::start();
+    let mut failures = Vec::new();
     for case in cases("diagnostic") {
         let (path, source) = input(&case);
         let name = path.file_name().unwrap().to_string_lossy().into_owned();
@@ -223,8 +231,9 @@ fn the_wire_format_matches_its_fixture() {
             case.display()
         );
         let pretty = serde_json::to_string_pretty(&diagnostics).expect("serializable");
-        expect(&case.join("expected.json"), &format!("{pretty}\n"));
+        failures.extend(compare(&case.join("expected.json"), &format!("{pretty}\n")).err());
     }
+    finish(failures);
 }
 
 #[test]

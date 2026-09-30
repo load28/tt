@@ -1,5 +1,10 @@
 # TASK-634: Run case files against multi-artifact baselines
 
+> **Superseded in part by TASK-650**: Decision 4 (one mechanism, reference
+> files written in place) is reversed. A failing comparison now writes to
+> `tests/baselines/local/` and `scripts/baseline-accept` accepts it;
+> `UPDATE_EXPECT=1` remains as a shortcut.
+
 - **Status**: Complete
 - **Started**: 2026-09-30
 - **Completed**: 2026-09-30

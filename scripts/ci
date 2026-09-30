@@ -230,6 +230,9 @@ stage_rust() {
   # capabilities it advertises, so the server has to be built first.
   (cd "$TT_ROOT/editors/vscode" && npm_install_if_stale) || return 1
   (cd "$TT_ROOT/editors/vscode" && run npm run compile) || return 1
+  # The last run's new baselines, as TypeScript's runner clears
+  # tests/baselines/local before a run.
+  rm -rf "$TT_ROOT/tests/baselines/local"
   tracking="$(mktemp -d)"
   run env TTC_REQUIRE_TSGO=1 TT_REQUIRE_EXTENSION=1 TTC_REQUIRE_TYPESCRIPT_CASES="$cases_required" TT_BASELINE_TRACKING_DIR="$tracking" cargo test || {
     rm -rf "$tracking"

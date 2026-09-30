@@ -249,15 +249,31 @@ disk. It only judges a suite that ran unfiltered (no test name, `--skip`, or
 `TT_CASES`), so a filtered run is reported as incomplete rather than
 flagging the baselines it did not reach.
 
+A failing comparison leaves the committed baseline alone and writes what the
+run produced to `tests/baselines/local/` (ignored by git), as TypeScript's
+runner does: a baseline under `tests/baselines/reference/` at the same
+relative path, a fixture's `expected.*` at its repository path
+(`tests/baselines/local/tests/fixtures/...`), and an empty `<path>.delete`
+marker for a baseline that should no longer exist, stale or unused. A
+comparison that matches removes its local file.
+
 ```sh
-node scripts/check-baselines --run            # the baseline suites, then the check
-node scripts/check-baselines --run --accept   # regenerate, and delete unused baselines
-git diff -- tests/baselines tests/fixtures    # review before committing
+scripts/baseline-diff                          # the last run's new baselines against the committed ones (DIFF=<tool> to use your own)
+scripts/baseline-accept                        # copy them over the committed ones, apply the .delete markers, empty tests/baselines/local
+node scripts/check-baselines --run             # the baseline suites from a clean tests/baselines/local, then the unused check
+node scripts/check-baselines --run --accept    # the same, then scripts/baseline-accept
+git diff -- tests/baselines tests/fixtures     # review before committing
 ```
 
-`./scripts/ci rust` runs `cargo test` with tracking and then the check. The
-hosted `CI` does the same, then regenerates every baseline and fails when the
-tree differs from the commit, listing missing, modified, and unused
+`UPDATE_EXPECT=1 cargo test --test <suite>` still writes the committed
+baselines directly; it is the one-suite shortcut for the run-and-accept
+cycle.
+
+`./scripts/ci rust` clears `tests/baselines/local/`, runs `cargo test` with
+tracking, and then the check. The hosted `CI` does the same, then runs
+`node scripts/check-baselines --ci`: the baseline suites again, the unused
+check's `.delete` markers, and `scripts/baseline-accept`; it fails when the
+tree then differs from the commit, listing missing, modified, and unused
 baselines and uploading the difference as the `fix_baselines.patch`
 artifact. `git apply fix_baselines.patch` reproduces it locally.
 
