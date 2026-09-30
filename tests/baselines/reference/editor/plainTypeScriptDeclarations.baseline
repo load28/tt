@@ -23,13 +23,13 @@ ttSymbol: null
   | export const c = Color.Green;
   |                        ^ /*member*/
 completion: 2 item(s), member true, probe no
-  Green (property, 11)
-  Red (property, 11)
+  Green (EnumMember, 11)
+  Red (EnumMember, 11)
 ttCompletions: pattern false, member {"receiver":"Color"}
 patternCompletions: null
 editor completion: 2 item(s)
-  Green (Property, 211)
-  Red (Property, 211)
+  Green (EnumMember, 211)
+  Red (EnumMember, 211)
 
 === signatureHelp /*overload*/ plainTypeScriptDeclarations.tt:13:33 ===
   | export const s = Geometry.scale(2);

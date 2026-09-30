@@ -630,7 +630,7 @@ fn engine_answer(workspace: &mut ttc::engine::Workspace, request: &Request) -> V
             Ok(json!({
                 "items": items.iter().map(|item| json!({
                     "label": item.label,
-                    "kind": item.kind,
+                    "kind": item.kind.map(|kind| kind.lsp()),
                     "sortText": item.sort_text,
                     "insertText": item.insert_text,
                     "filterText": item.filter_text,
@@ -1477,7 +1477,7 @@ fn completion_line(item: &Value) -> String {
     let mut line = format!(
         "{} ({}, {})",
         item["label"].as_str().unwrap_or_default(),
-        item["kind"].as_str().unwrap_or_default(),
+        lsp_completion_kind(&item["kind"]),
         item["sortText"].as_str().unwrap_or_default()
     );
     if let Some(insert) = item["insertText"].as_str()
@@ -2252,8 +2252,8 @@ fn answer_of<'a>(answers: &'a [(String, Value)], method: &str) -> &'a Value {
 ///   outside the case is its file name and position;
 /// - hover is the signature and documentation, split out of TypeScript's
 ///   markdown the way the engine splits it;
-/// - completion is the sorted set of labels, since kinds are numbers in LSP
-///   and strings in the engine, and the ranking layer is the adapter's;
+/// - completion is the sorted set of labels with their LSP kinds, since the
+///   ranking layer is the adapter's;
 /// - signature help is each label with its parameters, and the active
 ///   signature and parameter;
 /// - semantic tokens are compared only when the twin's text is the source's
@@ -2314,7 +2314,11 @@ fn parity_view(
             };
             let labels: BTreeSet<String> = items
                 .iter()
-                .filter_map(|item| item["label"].as_str().map(String::from))
+                .filter_map(|item| {
+                    item["label"]
+                        .as_str()
+                        .map(|label| format!("{label} ({})", lsp_completion_kind(&item["kind"])))
+                })
                 .collect();
             labels.into_iter().collect::<Vec<_>>().join("\n")
         }

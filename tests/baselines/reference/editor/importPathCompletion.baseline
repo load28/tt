@@ -2,11 +2,11 @@
   | import { kk } from "./sh";
   |                         ^ /*specifier*/
 completion: 5 item(s), member false, probe no
-  lib (script, 11)
-  node_modules (directory, 11)
-  shapes.tt (script, 11)
-  tsconfig.json (script, 11)
-  view.ttx (script, 11)
+  lib (File, 11)
+  node_modules (Folder, 11)
+  shapes.tt (File, 11)
+  tsconfig.json (File, 11)
+  view.ttx (File, 11)
 ttCompletions: pattern false, member null
 patternCompletions: null
 editor completion: 5 item(s)

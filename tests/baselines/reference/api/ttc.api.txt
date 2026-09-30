@@ -64,6 +64,52 @@ impl Unpin for BackendErrorKind
 impl UnsafeUnpin for BackendErrorKind
 impl UnwindSafe for BackendErrorKind
 
+// enum ttc::engine::CompletionItemKind
+pub enum CompletionItemKind {
+Show 25 variants    Text,
+    Method,
+    Function,
+    Constructor,
+    Field,
+    Variable,
+    Class,
+    Interface,
+    Module,
+    Property,
+    Unit,
+    Value,
+    Enum,
+    Keyword,
+    Snippet,
+    Color,
+    File,
+    Reference,
+    Folder,
+    EnumMember,
+    Constant,
+    Struct,
+    Event,
+    Operator,
+    TypeParameter,
+}
+impl CompletionItemKind
+    pub fn from_lsp(value: u64) -> Option<CompletionItemKind>
+    pub fn lsp(self) -> u8
+impl Clone for CompletionItemKind
+impl Copy for CompletionItemKind
+impl Debug for CompletionItemKind
+impl Eq for CompletionItemKind
+impl Hash for CompletionItemKind
+impl PartialEq for CompletionItemKind
+impl StructuralPartialEq for CompletionItemKind
+impl Freeze for CompletionItemKind
+impl RefUnwindSafe for CompletionItemKind
+impl Send for CompletionItemKind
+impl Sync for CompletionItemKind
+impl Unpin for CompletionItemKind
+impl UnsafeUnpin for CompletionItemKind
+impl UnwindSafe for CompletionItemKind
+
 // enum ttc::engine::PrepareRename
 pub enum PrepareRename {
     Range(Range),
@@ -461,7 +507,7 @@ impl UnwindSafe for CompletionDetail
 // struct ttc::engine::CompletionItem
 pub struct CompletionItem {
     pub label: String,
-    pub kind: String,
+    pub kind: Option<CompletionItemKind>,
     pub sort_text: String,
     pub insert_text: Option<String>,
     pub filter_text: Option<String>,

@@ -2,15 +2,15 @@
   | export function a(s: Shape) { return match (s) { Circle() }; }
   |                                                         ^ /*payloadFirstArm*/
 completion: 1009 item(s), member false, probe no
-  Shape (var, 11)
-  a (function, 11)
-  arguments (var, 11)
-  b (function, 11)
-  c (function, 11)
-  d (function, 11)
-  e (function, 11)
-  g (function, 11)
-  s (var, 11)
+  Shape (Variable, 11)
+  a (Function, 11)
+  arguments (Variable, 11)
+  b (Function, 11)
+  c (Function, 11)
+  d (Function, 11)
+  e (Function, 11)
+  g (Function, 11)
+  s (Variable, 11)
   ... 1000 global or keyword item(s) (sortText 15, no source)
 ttCompletions: pattern true, member null
   radius (field) "radius: number"
@@ -23,15 +23,15 @@ editor completion: 1 item(s)
   |     Circle()
   |            ^ /*payloadFirstArmMultiline*/
 completion: 1009 item(s), member false, probe no
-  Shape (var, 11)
-  a (function, 11)
-  arguments (var, 11)
-  b (function, 11)
-  c (function, 11)
-  d (function, 11)
-  e (function, 11)
-  g (function, 11)
-  s (var, 11)
+  Shape (Variable, 11)
+  a (Function, 11)
+  arguments (Variable, 11)
+  b (Function, 11)
+  c (Function, 11)
+  d (Function, 11)
+  e (Function, 11)
+  g (Function, 11)
+  s (Variable, 11)
   ... 1000 global or keyword item(s) (sortText 15, no source)
 ttCompletions: pattern true, member null
   radius (field) "radius: number"
@@ -83,9 +83,9 @@ editor completion: 3 item(s)
   | export function g(x: Dir) { return match (x) { "" => 1, _ => 0 }; }
   |                                                 ^ /*literalWithArrow*/
 completion: 3 item(s), member false, probe no
-  east (const, 11)
-  north (const, 11)
-  south (const, 11)
+  east (Constant, 11)
+  north (Constant, 11)
+  south (Constant, 11)
 ttCompletions: pattern true, member null
 patternCompletions:
   "east" (literal) "literal \"east\"" replaces 13:48-13:50

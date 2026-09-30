@@ -212,7 +212,9 @@ pub(super) fn ts_completions(
                 )
             });
         entries.push(CompletionItem {
-            kind: completion_kind(item["kind"].as_u64()),
+            kind: item["kind"]
+                .as_u64()
+                .and_then(crate::engine::CompletionItemKind::from_lsp),
             sort_text: item["sortText"].as_str().unwrap_or(&label).to_string(),
             insert_text: item["insertText"]
                 .as_str()
@@ -325,7 +327,7 @@ pub(super) fn tt_module_entries(
             Some(CompletionItem {
                 detail: Some(name.clone()),
                 label: name,
-                kind: "script".to_string(),
+                kind: Some(crate::engine::CompletionItemKind::File),
                 sort_text: "11".to_string(),
                 insert_text: None,
                 filter_text: None,
@@ -1295,28 +1297,6 @@ pub(super) fn parameter_span(signature: &str, label: &serde_json::Value) -> (u32
         }
         None => (0, 0),
     }
-}
-
-/// The LSP completion kinds the server answers with, as the element-kind
-/// strings the editor has always mapped. Anything else is a plain property.
-pub(super) fn completion_kind(kind: Option<u64>) -> String {
-    match kind {
-        Some(3) => "function",
-        Some(2) | Some(4) => "method",
-        Some(5) => "property",
-        Some(6) => "var",
-        Some(7) | Some(22) => "class",
-        Some(8) => "interface",
-        Some(9) => "module",
-        Some(13) => "enum",
-        Some(14) => "keyword",
-        Some(17) => "script",
-        Some(19) => "directory",
-        Some(21) => "const",
-        Some(25) => "type",
-        _ => "property",
-    }
-    .to_string()
 }
 
 /// A [`Position`] as the JSON the protocol speaks.

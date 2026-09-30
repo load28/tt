@@ -274,7 +274,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
             Ok(json!({
                 "items": items.iter().map(|item| json!({
                     "label": item.label,
-                    "kind": item.kind,
+                    "kind": item.kind.map(|kind| kind.lsp()),
                     "sortText": item.sort_text,
                     "insertText": item.insert_text,
                     "filterText": item.filter_text,

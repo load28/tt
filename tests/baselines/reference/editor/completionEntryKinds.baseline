@@ -1,0 +1,26 @@
+=== completions /*enumMember*/ completionEntryKinds.tt:4:19 ===
+  |   const c = Color.Red;
+  |                   ^ /*enumMember*/
+completion: 2 item(s), member true, probe no
+  Green (EnumMember, 11)
+  Red (EnumMember, 11)
+ttCompletions: pattern false, member {"receiver":"Color"}
+patternCompletions: null
+editor completion: 2 item(s)
+  Green (EnumMember, 211)
+  Red (EnumMember, 211)
+
+=== completions /*field*/ completionEntryKinds.tt:5:12 ===
+  |   return {  };
+  |            ^ /*field*/
+completion: 1 item(s), member false, probe no
+  verbose (Field, 11)
+ttCompletions: pattern false, member null
+patternCompletions: null
+editor completion: 1 item(s)
+  verbose (Field, 211)
+
+=== parity with the TypeScript twin ===
+completions enumMember: same
+completions field: same
+

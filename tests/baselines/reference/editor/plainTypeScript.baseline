@@ -18,13 +18,13 @@ ttSymbol: null
   | export const label = origin.x.toFixed(1);
   |                             ^ /*member*/
 completion: 2 item(s), member true, probe no
-  x (property, 11)
-  y (property, 11)
+  x (Field, 11)
+  y (Field, 11)
 ttCompletions: pattern false, member {"receiver":"origin"}
 patternCompletions: null
 editor completion: 2 item(s)
-  x (Property, 211)
-  y (Property, 211)
+  x (Field, 211)
+  y (Field, 211)
 
 === definition /*call*/ plainTypeScript.tt:7:18 ===
   | export const d = distance(origin, { x: 3, y: 4 });

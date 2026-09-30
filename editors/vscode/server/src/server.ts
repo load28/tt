@@ -1062,32 +1062,6 @@ const PATTERN_COMPLETION_KINDS: Record<engine.EngineTtCompletion["kind"], Comple
   wildcard: CompletionItemKind.Keyword,
 };
 
-/** TypeScript element-kind strings → LSP completion kinds. */
-const TS_COMPLETION_KINDS: Record<string, CompletionItemKind> = {
-  var: CompletionItemKind.Variable,
-  let: CompletionItemKind.Variable,
-  const: CompletionItemKind.Variable,
-  "local var": CompletionItemKind.Variable,
-  parameter: CompletionItemKind.Variable,
-  alias: CompletionItemKind.Reference,
-  function: CompletionItemKind.Function,
-  "local function": CompletionItemKind.Function,
-  method: CompletionItemKind.Method,
-  property: CompletionItemKind.Property,
-  getter: CompletionItemKind.Property,
-  setter: CompletionItemKind.Property,
-  class: CompletionItemKind.Class,
-  interface: CompletionItemKind.Interface,
-  type: CompletionItemKind.TypeParameter,
-  enum: CompletionItemKind.Enum,
-  "enum member": CompletionItemKind.EnumMember,
-  module: CompletionItemKind.Module,
-  keyword: CompletionItemKind.Keyword,
-  string: CompletionItemKind.Constant,
-  script: CompletionItemKind.File,
-  directory: CompletionItemKind.Folder,
-};
-
 /** What a TS-delegated completion item carries so its signature and
  * documentation can be fetched when the editor asks for that one entry
  * (`completionItem/resolve`). Positions are in source coordinates and the
@@ -1129,7 +1103,7 @@ async function tsCompletions(
   if (!list) return [];
   return list.items.map((entry) => ({
     label: entry.label,
-    kind: TS_COMPLETION_KINDS[entry.kind] ?? CompletionItemKind.Text,
+    kind: entry.kind ?? undefined,
     detail: entry.detail ?? undefined,
     sortText: `2${entry.sortText}`,
     insertText: entry.range ? undefined : (entry.insertText ?? undefined),

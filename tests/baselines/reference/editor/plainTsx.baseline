@@ -16,11 +16,11 @@ ttSymbol: null
   |   return <button label={props.label} onClick={() => console.log(props.label)} />;
   |                               ^ /*member*/
 completion: 1 item(s), member true, probe no
-  label (property, 11)
+  label (Field, 11)
 ttCompletions: pattern false, member {"receiver":"props"}
 patternCompletions: null
 editor completion: 1 item(s)
-  label (Property, 211)
+  label (Field, 211)
 
 === references /*prop*/ plainTsx.ttx:3:33 ===
   | export function Button(props: { label: string }) {

@@ -749,7 +749,7 @@ impl Project {
             let candidates: Vec<Discriminant> = answer?
                 .items
                 .iter()
-                .filter(|item| item.kind != "keyword")
+                .filter(|item| item.kind != Some(crate::engine::CompletionItemKind::Keyword))
                 .filter_map(|item| discriminant(&item.label, family))
                 .collect();
             if !candidates.is_empty() {
