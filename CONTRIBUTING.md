@@ -230,7 +230,7 @@ TT_CASES=<name fragment> cargo test --test editor_cases   # a few cases while it
 ### Managing the baselines
 
 Every reference file is a baseline some test compares: everything under
-`tests/baselines/reference/` (the editor cases own `editor/`), and the `expected.*` files under
+`tests/baselines/reference/` (the editor cases own `editor/`, `tests/public_api.rs` owns `api/`), and the `expected.*` files under
 `tests/fixtures/emit/`, `tests/fixtures/diagnostic/`, and
 `tests/fixtures/practical-diagnostics/`. A test fails on a **missing**
 baseline and on a **modified** one, with the diff and the
@@ -254,6 +254,29 @@ hosted `CI` does the same, then regenerates every baseline and fails when the
 tree differs from the commit, listing missing, modified, and unused
 baselines and uploading the difference as the `fix_baselines.patch`
 artifact. `git apply fix_baselines.patch` reproduces it locally.
+
+### The public surface
+
+`tests/public_api.rs` holds three surfaces to baselines under
+`tests/baselines/reference/api/`, the way TypeScript holds its API to
+`tests/baselines/reference/api/typescript.d.ts`:
+
+- `ttc.api.txt`: the library's public API as rustdoc renders it on the
+  pinned toolchain (`cargo doc --no-deps --lib`): every item's declaration,
+  inherent methods, trait implementations, and auto-trait implementations.
+- `server-protocol.txt`: the `ttc --server` protocol. One example request
+  per method goes to a server over a small project; the baseline shows the
+  shape of each request and answer (keys and JSON types). The test fails
+  when `src/server.rs` dispatches a method with no example or reads a
+  parameter no example sends.
+- `lsp-capabilities.json`: the `initialize` result of the VS Code
+  extension's language server. It needs the server built
+  (`npm ci --prefix editors/vscode && npm --prefix editors/vscode run
+  compile`); without it the test skips, and `TT_REQUIRE_EXTENSION=1`, which
+  `./scripts/ci rust` and CI set, makes the skip a failure.
+
+A change to any of them is a surface change: read the diff, and regenerate
+with `UPDATE_EXPECT=1 cargo test --test public_api`.
 
 ### TypeScript's own test cases
 

@@ -8,8 +8,13 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const OWNERS = [
-  { root: "tests/baselines/reference", binary: "case_baselines", reference: (path) => !path.startsWith("tests/baselines/reference/editor/") },
+  {
+    root: "tests/baselines/reference",
+    binary: "case_baselines",
+    reference: (path) => !path.startsWith("tests/baselines/reference/editor/") && !path.startsWith("tests/baselines/reference/api/"),
+  },
   { root: "tests/baselines/reference/editor", binary: "editor_cases", reference: () => true },
+  { root: "tests/baselines/reference/api", binary: "public_api", reference: () => true },
   { root: "tests/fixtures/emit", binary: "snapshot", reference: isExpected },
   { root: "tests/fixtures/diagnostic", binary: "snapshot", reference: isExpected },
   { root: "tests/fixtures/practical-diagnostics", binary: "practical_diagnostics", reference: isExpected },
@@ -126,7 +131,7 @@ function report(title, items, hint) {
 function run({ accept }) {
   const dir = mkdtempSync(join(tmpdir(), "tt-baseline-tracking-"));
   try {
-    const env = { ...process.env, TT_BASELINE_TRACKING_DIR: dir, TTC_REQUIRE_TSGO: "1" };
+    const env = { ...process.env, TT_BASELINE_TRACKING_DIR: dir, TTC_REQUIRE_TSGO: "1", TT_REQUIRE_EXTENSION: "1" };
     delete env.TT_CASES;
     if (accept) env.UPDATE_EXPECT = "1";
     else delete env.UPDATE_EXPECT;

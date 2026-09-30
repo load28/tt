@@ -86,10 +86,18 @@ jobs:
       - name: Fetch TypeScript's test cases at the pinned commit
         run: scripts/fetch-typescript-cases
 
+      # tests/public_api.rs baselines the capabilities the extension's
+      # language server advertises, by asking the built server.
+      - name: Build the extension's language server
+        run: |
+          npm ci --prefix editors/vscode
+          npm --prefix editors/vscode run compile
+
       - name: Test
         id: test
         env:
           TTC_REQUIRE_TSGO: "1"
+          TT_REQUIRE_EXTENSION: "1"
           TTC_REQUIRE_TYPESCRIPT_CASES: "1"
           TT_BASELINE_TRACKING_DIR: ${{ runner.temp }}/baseline-tracking
         run: cargo test

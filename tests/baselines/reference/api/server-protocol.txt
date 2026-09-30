@@ -1,0 +1,620 @@
+methods: check, closeDocument, completion, completionResolve, declarations, definition, dependencies, documentSemanticTokens, documentSymbols, emitMap, hover, openDocument, patternCompletions, prepareRename, print, references, reloadProjects, rename, semanticTokens, signatureHelp, tsDiagnostics, ttCompletions, ttHints, ttSymbol, typedCheck, updateDocument
+params read: banner, filename, includeTypes, isRetrigger, label, member, path, position, probe, rewriteImports, source, sourceMap, text, triggerCharacter, triggerKind, verify
+
+→ check {
+    filename: string
+    text: string
+    verify: boolean
+  }
+← {
+    id: number
+    result: {
+      diagnostics: []
+    }
+  }
+
+→ check {
+    filename: string
+    text: string
+  }
+← {
+    id: number
+    result: {
+      diagnostics: [{
+        code: string
+        col: number
+        endCol: number
+        endLine: number
+        line: number
+        message: string
+        suggestions: []
+      }]
+    }
+  }
+
+→ emitMap {
+    filename: string
+    text: string
+  }
+← {
+    id: number
+    result: {
+      code: string
+      mappings: [{
+        len: number
+        out: number
+        src: number
+      }]
+    }
+  }
+
+→ semanticTokens {
+    text: string
+  }
+← {
+    id: number
+    result: {
+      tokens: [{
+        kind: string
+        modifiers: [string]
+        range: {
+          end: {
+            character: number
+            line: number
+          }
+          start: {
+            character: number
+            line: number
+          }
+        }
+      }]
+    }
+  }
+
+→ openDocument {
+    path: string
+    text: string
+  }
+← {
+    id: number
+    result: {}
+  }
+
+→ updateDocument {
+    path: string
+    text: string
+  }
+← {
+    id: number
+    result: {}
+  }
+
+→ typedCheck {
+    includeTypes: boolean
+    path: string
+    text: string
+  }
+← {
+    id: number
+    result: {
+      backendError: null
+      blocked: boolean
+      diagnostics: [{
+        code: string
+        col: number
+        endCol: number
+        endLine: number
+        line: number
+        message: string
+        path: string
+        suggestions: []
+      }]
+    }
+  }
+
+→ print {
+    banner: boolean
+    path: string
+    rewriteImports: string
+    sourceMap: string
+    verify: boolean
+  }
+← {
+    id: number
+    result: {
+      code: string
+      messages: []
+    }
+  }
+
+→ dependencies {
+    path: string
+  }
+← {
+    id: number
+    result: {
+      directories: [string]
+      files: [string]
+    }
+  }
+
+→ hover {
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+  }
+← {
+    id: number
+    result: {
+      documentation: string
+      range: {
+        end: {
+          character: number
+          line: number
+        }
+        start: {
+          character: number
+          line: number
+        }
+      }
+      signature: string
+    }
+  }
+
+→ hover {
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+  }
+← {
+    id: number
+    result: null
+  }
+
+→ definition {
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+  }
+← {
+    id: number
+    result: {
+      locations: [{
+        path: string
+        range: {
+          end: {
+            character: number
+            line: number
+          }
+          start: {
+            character: number
+            line: number
+          }
+        }
+      }]
+    }
+  }
+
+→ references {
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+  }
+← {
+    id: number
+    result: {
+      locations: [{
+        isDefinition: boolean
+        path: string
+        range: {
+          end: {
+            character: number
+            line: number
+          }
+          start: {
+            character: number
+            line: number
+          }
+        }
+      }]
+    }
+  }
+
+→ completion {
+    member: boolean
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+    triggerCharacter: string
+  }
+← {
+    id: number
+    result: {
+      items: [{
+        detail: null
+        filterText: null
+        insertText: null
+        kind: string
+        label: string
+        labelDetails: null
+        range: null
+        snippet: boolean
+        sortText: string
+        source: null
+      }]
+      member: boolean
+      probe: null
+    }
+  }
+
+→ completionResolve {
+    label: string
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+    probe: null
+    source: null
+  }
+← {
+    id: number
+    result: {
+      documentation: string
+      signature: string
+    }
+  }
+
+→ prepareRename {
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+  }
+← {
+    id: number
+    result: {
+      range: {
+        end: {
+          character: number
+          line: number
+        }
+        start: {
+          character: number
+          line: number
+        }
+      }
+    }
+  }
+
+→ rename {
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+  }
+← {
+    id: number
+    result: {
+      edits: [{
+        newText: string
+        path: string
+        range: {
+          end: {
+            character: number
+            line: number
+          }
+          start: {
+            character: number
+            line: number
+          }
+        }
+      }]
+    }
+  }
+
+→ documentSymbols {
+    path: string
+  }
+← {
+    id: number
+    result: {
+      symbols: [{
+        children: [{
+          children: []
+          detail: string
+          kind: number
+          name: string
+          range: {
+            end: {
+              character: number
+              line: number
+            }
+            start: {
+              character: number
+              line: number
+            }
+          }
+          selectionRange: {
+            end: {
+              character: number
+              line: number
+            }
+            start: {
+              character: number
+              line: number
+            }
+          }
+        }]
+        detail: string
+        kind: number
+        name: string
+        range: {
+          end: {
+            character: number
+            line: number
+          }
+          start: {
+            character: number
+            line: number
+          }
+        }
+        selectionRange: {
+          end: {
+            character: number
+            line: number
+          }
+          start: {
+            character: number
+            line: number
+          }
+        }
+      }]
+    }
+  }
+
+→ signatureHelp {
+    isRetrigger: boolean
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+    triggerCharacter: string
+    triggerKind: number
+  }
+← {
+    id: number
+    result: {
+      activeParameter: number
+      activeSignature: number
+      signatures: [{
+        documentation: string
+        label: string
+        parameters: [{
+          documentation: string
+          label: [number]
+        }]
+      }]
+    }
+  }
+
+→ patternCompletions {
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+  }
+← {
+    id: number
+    result: {
+      items: [{
+        covered: boolean
+        detail: string
+        kind: string
+        label: string
+      }]
+    }
+  }
+
+→ documentSemanticTokens {
+    path: string
+  }
+← {
+    id: number
+    result: {
+      tokens: [{
+        modifiers: [string]
+        range: {
+          end: {
+            character: number
+            line: number
+          }
+          start: {
+            character: number
+            line: number
+          }
+        }
+        type: string
+      }]
+    }
+  }
+
+→ tsDiagnostics {
+    path: string
+  }
+← {
+    id: number
+    result: {
+      diagnostics: [{
+        code: number
+        message: string
+        range: {
+          end: {
+            character: number
+            line: number
+          }
+          start: {
+            character: number
+            line: number
+          }
+        }
+        severity: string
+        tags?: [string]
+      }]
+      restates: []
+    }
+  }
+
+→ declarations {
+    path: string
+    text: string
+  }
+← {
+    id: number
+    result: {
+      matches: [{
+        bodyClose: number
+        bodyOpen: number
+        keyword: number
+      }]
+      variants: [{
+        cases: [{
+          fields: [{
+            name: string
+            optional: boolean
+            ty: string
+          }]
+          nameSpan: {
+            end: number
+            start: number
+          } | null
+          span: {
+            end: number
+            start: number
+          } | null
+          tag: string
+          unit: boolean
+        }]
+        generics: string
+        name: string
+        nameSpan: {
+          end: number
+          start: number
+        } | null
+        origin: string
+        span: {
+          end: number
+          start: number
+        } | null
+        specifier: null
+      }]
+    }
+  }
+
+→ ttSymbol {
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+    text: string
+  }
+← {
+    id: number
+    result: {
+      binds: boolean
+      definition: {
+        path: string
+        range: {
+          end: {
+            character: number
+            line: number
+          }
+          start: {
+            character: number
+            line: number
+          }
+        }
+      }
+      detail: string
+      kind: string
+      name: string
+      range: {
+        end: {
+          character: number
+          line: number
+        }
+        start: {
+          character: number
+          line: number
+        }
+      }
+      signature: string
+      variantName: string
+    }
+  }
+
+→ ttCompletions {
+    path: string
+    position: {
+      character: number
+      line: number
+    }
+    text: string
+  }
+← {
+    id: number
+    result: {
+      items: []
+      keywords: []
+      member: {
+        receiver: string
+      }
+      pattern: boolean
+    }
+  }
+
+→ ttHints {
+    path: string
+    text: string
+  }
+← {
+    id: number
+    result: {
+      hints: []
+    }
+  }
+
+→ closeDocument {
+    path: string
+  }
+← {
+    id: number
+    result: {}
+  }
+
+→ reloadProjects {}
+← {
+    id: number
+    result: {}
+  }
+
+→ noSuchMethod {}
+← {
+    error: string
+    id: number
+  }
