@@ -509,8 +509,9 @@ A `try` was written where its propagation could not go anywhere.
 a value only where the TypeScript host can preserve that exit and the
 original evaluation order. It is rejected at module or namespace top level
 and at expression boundaries with no equivalent statement position, such as
-loop headers, parameter defaults, class field initializers, decorators,
-computed member names, and the heritage of a decorated class.
+loop headers, a later declarator of a C-style `for` head, parameter
+defaults, class field initializers, decorators, computed member names, and
+the heritage of a decorated class.
 
 Some functions cannot be a Result scope at all. In a constructor, returning
 an `Err` object would replace the constructed instance. In a generator or
@@ -790,7 +791,14 @@ A class definition evaluates its decorators, heritage, and computed member
 names itself, in an order that depends on the TypeScript decorator mode, so
 a match in a decorator, a computed member name, or the heritage of a
 decorated class is rejected. The heritage of an undecorated class is
-evaluated first under every mode and lowers before the class."
+evaluated first under every mode and lowers before the class.
+
+A match in a later declarator of a C-style `for` head is rejected too. The
+head's declarators run in order in the loop's own scope, and statements
+written before the loop would run before the earlier declarators and could
+not see the bindings they declare. Declare the value before the loop, or
+make it the head's first declarator. Outside a loop head, a declaration is
+split before such a declarator, so the declarators before it run first."
             }
             DiagnosticCode::MatchControlCrossing => {
                 r#"A `break`, `continue`, or `yield` in a match arm may target only control flow written inside that arm.

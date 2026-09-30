@@ -515,3 +515,113 @@ fn an_optional_call_tests_the_link_its_chain_is_skipped_at() {
         );
     }
 }
+
+#[test]
+fn a_value_in_a_later_declarator_splits_the_declaration_before_its_prelude() {
+    let prelude = "import * as Result from \"@tt/std/result\";\n\
+                   import type { TResult } from \"@tt/std\";\n\
+                   variant O { A(n: number), B }\n\
+                   declare const o: O;\n\
+                   declare function t(s: string): number;\n\
+                   declare function r(n: number): TResult<number, string>;\n";
+    for (declaration, head, tail) in [
+        (
+            "const a = t(\"a\"), b = match (o) { A(n) => a + n, B => 0 };",
+            "const a = t(\"a\");",
+            "const b = $tt_v0;",
+        ),
+        (
+            "var a = t(\"a\"), b = match (o) { A(n) => a + n, B => 0 }, c = b;",
+            "var a = t(\"a\");",
+            "var b = $tt_v0, c = b;",
+        ),
+        (
+            "let a = t(\"a\"), b = 1 + try r(a);",
+            "let a = t(\"a\");",
+            "let b = 1 + $tt_v0;",
+        ),
+        (
+            "const a = t(\"a\"), b = result { const x = try r(a); return x; };",
+            "const a = t(\"a\");",
+            "const b = $tt_v0;",
+        ),
+    ] {
+        let out = ok(&format!(
+            "{prelude}export function f(): TResult<number, string> {{\n  {declaration}\n  return Result.Ok(0);\n}}\n"
+        ));
+        let text = compact(&out);
+        let head_at = text
+            .find(head)
+            .unwrap_or_else(|| panic!("{declaration}\n{out}"));
+        let slot_at = text
+            .find("let $tt_v0")
+            .unwrap_or_else(|| panic!("{declaration}\n{out}"));
+        let tail_at = text
+            .find(tail)
+            .unwrap_or_else(|| panic!("{declaration}\n{out}"));
+        assert!(
+            head_at < slot_at && slot_at < tail_at,
+            "{declaration}\n{out}"
+        );
+    }
+    let out = ok(&format!(
+        "{prelude}export const a = t(\"a\"), b = match (o) {{ A(n) => a + n, B => 0 }};\n"
+    ));
+    assert!(out.contains("export const a = t(\"a\");\n"), "{out}");
+    assert!(out.contains("export const b = $tt_v0;"), "{out}");
+    let out = ok(&format!(
+        "{prelude}export function g(c: boolean) {{\n  if (c) var a = t(\"a\"), b = match (o) {{ A(n) => a + n, B => 0 }};\n  return b;\n}}\n"
+    ));
+    assert!(
+        compact(&out).contains("if (c) { var a = t(\"a\"); let $tt_v0"),
+        "{out}"
+    );
+    assert!(compact(&out).contains("var b = $tt_v0; } return b;"), "{out}");
+}
+
+#[test]
+fn a_statement_value_in_a_later_loop_head_declarator_is_a_placement_error() {
+    let prelude = "import * as Result from \"@tt/std/result\";\n\
+                   import type { TResult } from \"@tt/std\";\n\
+                   variant O { A(n: number), B }\n\
+                   declare const o: O;\n\
+                   declare function r(n: number): TResult<number, string>;\n";
+    for (head, code) in [
+        (
+            "let i = 0, j = match (o) { A(n) => i + n, B => 0 }",
+            DiagnosticCode::MatchPlacement,
+        ),
+        (
+            "var i = 0, j = match (o) { A(n) => i + n, B => 0 }",
+            DiagnosticCode::MatchPlacement,
+        ),
+        (
+            "const i = 0, j = [match (o) { A(n) => i + n, B => 0 }]",
+            DiagnosticCode::MatchPlacement,
+        ),
+        ("let i = 0, j = try r(i)", DiagnosticCode::TryPlacement),
+    ] {
+        let diagnostics = ttc::analyze(
+            &format!(
+                "{prelude}export function f(): TResult<number, string> {{\n  for ({head}; i < 1; ) break;\n  return Result.Ok(0);\n}}\n"
+            ),
+            &Options::default(),
+        );
+        assert_eq!(
+            diagnostics.iter().map(|d| d.code).collect::<Vec<_>>(),
+            [code],
+            "{head}: {diagnostics:#?}"
+        );
+        assert!(
+            diagnostics[0]
+                .message
+                .contains("later declarator of a `for` loop head"),
+            "{head}: {diagnostics:#?}"
+        );
+    }
+    let out = ok(&format!(
+        "{prelude}export function f() {{\n  for (let i = 0, j = result {{ const x = try r(i); return x; }}; i < 1; ) return j;\n  for (let k = match (o) {{ A(n) => n, B => 0 }}, m = 1; k < m; ) return k;\n}}\n"
+    ));
+    assert!(out.contains("for (let i = 0, j = $tt_expr(() => {"), "{out}");
+    assert!(out.contains("for (let k = $tt_v1, m = 1; k < m; )"), "{out}");
+}

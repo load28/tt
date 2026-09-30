@@ -174,7 +174,7 @@ impl ProgramSyntax {
             let CoreRoot::Decision(extent) = entry.core_root else {
                 continue;
             };
-            let Some(global) = globals.get_mut(&entry.host_owner.anchor()) else {
+            let Some(global) = globals.get_mut(&entry.host_owner.statement()) else {
                 continue;
             };
             if let Some(binding) = let_else_global_binding(semantic, core, source, extent) {

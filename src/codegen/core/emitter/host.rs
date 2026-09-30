@@ -29,6 +29,27 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    pub(super) fn open_declaration_blocks_at(&self, at: usize, out: &mut Rope<'a>) {
+        for block in self
+            .declarator_splits
+            .iter()
+            .filter_map(|split| split.block)
+            .filter(|block| block.start == at)
+        {
+            if self.opened_owner_blocks.claim(block) {
+                out.push_scope_open();
+                out.push_lit("{");
+                out.push_break(1);
+            }
+        }
+        for split in &self.declarator_splits {
+            if split.statement.start == at && self.opened_declaration_scopes.claim(split.statement)
+            {
+                out.push_scope_open();
+            }
+        }
+    }
+
     /// Closes, innermost first, every opened owner block whose owner ends at
     /// `at`, unless that owner's own prelude is the one reaching its end.
     pub(super) fn close_owner_blocks_at(&self, at: usize, out: &mut Rope<'a>) {

@@ -185,6 +185,30 @@ impl<'a> Emitter<'a> {
             {
                 rope.append(self.emit_compose_suffix(rewrite));
             }
+            self.open_declaration_blocks_at(cursor, &mut rope);
+            if let Some(split) = self.declarator_splits.iter().find(|split| {
+                split.separator.start == cursor
+                    && self.emitted_declarator_separators.claim(split.separator)
+            }) {
+                rope.push_lit(";");
+                cursor = split.separator.end;
+                continue;
+            }
+            let split_head = self.declarator_splits.iter().find(|split| {
+                split.at == cursor
+                    && self.emitted_declarator_separators.contains(split.separator)
+                    && self.emitted_declarator_heads.claim(split.separator)
+            });
+            if let Some(split) = split_head {
+                rope = rope.trim_end();
+                if self.opened_declaration_scopes.contains(split.statement) {
+                    rope.push_break(0);
+                } else {
+                    let mut separation = Rope::new();
+                    separation.push_break(0);
+                    rope.append(Rope::scoped(separation));
+                }
+            }
             while let Some(rewrite) = insertions.next_if(|rewrite| rewrite.owner.start == cursor) {
                 if !self.emitted_owner_rewrites.contains(rewrite.expr) {
                     self.emitted_owner_rewrites.mark(rewrite.expr);
@@ -201,6 +225,15 @@ impl<'a> Emitter<'a> {
             {
                 if self.emitted_compose_rewrites.claim(rewrite.owner) {
                     rope.append(self.emit_compose_rewrite(rewrite));
+                }
+            }
+            if let Some(split) = split_head {
+                rope.push_lit(split.head.clone());
+                if split.last
+                    && self.opened_declaration_scopes.contains(split.statement)
+                    && self.closed_declaration_scopes.claim(split.statement)
+                {
+                    rope.push_scope_close();
                 }
             }
             if let Some(rewrite) = self.loop_test_rewrites.iter().find(|rewrite| {
@@ -337,7 +370,19 @@ impl<'a> Emitter<'a> {
                 .range(cursor.saturating_add(1)..span.end.max(cursor.saturating_add(1)))
                 .next()
                 .map_or(span.end, |(end, _)| *end);
+            let next_split = self
+                .declarator_splits
+                .iter()
+                .flat_map(|split| {
+                    [split.statement.start, split.separator.start, split.at]
+                        .into_iter()
+                        .chain(split.block.map(|block| block.start))
+                })
+                .filter(|boundary| cursor < *boundary && *boundary < span.end)
+                .min()
+                .unwrap_or(span.end);
             let next = next_insertion
+                .min(next_split)
                 .min(next_owner_end)
                 .min(next_compose)
                 .min(next_propagation)
@@ -1083,7 +1128,9 @@ impl<'a> Emitter<'a> {
                 // The Core body retains a trailing statement/module frame
                 // (normally the authored semicolon) outside the direct
                 // expression and emits it after this value.
-                HostOwnerKind::Statement | HostOwnerKind::ModuleItem => {}
+                HostOwnerKind::Statement
+                | HostOwnerKind::ModuleItem
+                | HostOwnerKind::Declarator => {}
             }
             return out;
         }

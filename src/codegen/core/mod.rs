@@ -255,6 +255,11 @@ pub(crate) fn emit_with_map<'a>(
         for_initializer_propagations: target.for_initializer_propagations,
         compose_index: span_index(target.composes.iter().map(|rewrite| rewrite.owner)),
         compose_rewrites: target.composes,
+        declarator_splits: target.declarator_splits,
+        emitted_declarator_separators: ClosedComposeBlocks::default(),
+        emitted_declarator_heads: ClosedComposeBlocks::default(),
+        opened_declaration_scopes: ClosedComposeBlocks::default(),
+        closed_declaration_scopes: ClosedComposeBlocks::default(),
         loop_body_index: span_index(target.loop_tests.iter().map(|rewrite| rewrite.body)),
         loop_test_rewrites: target.loop_tests,
         replacement_index: span_index(

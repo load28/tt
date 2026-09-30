@@ -75,7 +75,7 @@ impl EvaluationFile {
         let mut region = region;
         loop {
             match &region.placement {
-                RegionPlacement::Host { host_owner, .. } => return Some(host_owner.anchor()),
+                RegionPlacement::Host { host_owner, .. } => return Some(host_owner.statement()),
                 RegionPlacement::Nested { parent, .. } => {
                     region = &self.regions[parent.0 as usize];
                 }
@@ -444,7 +444,7 @@ impl EvaluationFile {
                     );
                 }
             }
-            slot_anchors.resize(slot_names.len(), Some(owner.anchor()));
+            slot_anchors.resize(slot_names.len(), Some(owner.statement()));
             rewrites.push(HostRewrite {
                 owner,
                 values,
@@ -647,7 +647,9 @@ impl EvaluationFile {
             else {
                 continue;
             };
-            if context.continuation == HostContinuation::ForInitialize {
+            if context.continuation == HostContinuation::ForInitialize
+                && !context.loop_head_declarator
+            {
                 return Err(EvaluationError::UnsupportedForInitializer { source: *source });
             }
         }
@@ -919,7 +921,7 @@ impl EvaluationFile {
         let mut match_subject_names = HashMap::new();
         let mut taken_subject_names = 0;
         for rewrite in &rewrites {
-            let binding = global_bindings.get(&rewrite.owner.anchor()).copied();
+            let binding = global_bindings.get(&rewrite.owner.statement()).copied();
             for value in &rewrite.values {
                 if let Expr::Decision(decision) = &core.exprs[value.expr.index()] {
                     let names = decision
@@ -1048,7 +1050,7 @@ impl EvaluationFile {
             else {
                 continue;
             };
-            let Some(global) = self.globals.get(&host_owner.anchor()) else {
+            let Some(global) = self.globals.get(&host_owner.statement()) else {
                 continue;
             };
             let Some(decision) = statement_decision(core, extent) else {
@@ -1154,7 +1156,7 @@ impl EvaluationFile {
                             ..
                         },
                     ) if (context.requires_block
-                        || self.globals.get(&host_owner.anchor())
+                        || self.globals.get(&host_owner.statement())
                             == Some(&GlobalStatement::Enclose))
                         && match root {
                             CoreRoot::Expr(_) => true,
@@ -1164,7 +1166,7 @@ impl EvaluationFile {
                             CoreRoot::Adt(_) | CoreRoot::Decision(_) => false,
                         } =>
                     {
-                        Some(host_owner.anchor())
+                        Some(host_owner.statement())
                     }
                     _ => None,
                 })

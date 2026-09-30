@@ -488,6 +488,9 @@ pub(super) fn target_capability(
     if !core.has_statement_form(expr) {
         return TargetCapability::ExpressionBoundary(Reason::ValueHasNoStatementForm);
     }
+    if context.loop_head_declarator {
+        return TargetCapability::ExpressionBoundary(Reason::LoopHeadDeclarator);
+    }
     match context.owner_reach {
         OwnerReach::Same => {}
         OwnerReach::Repeated => {

@@ -489,3 +489,24 @@ fn a_postfix_pipeline_result_mismatch_is_reported_on_the_pipeline() {
     let argument = block(&out, "src/postfix.tt:6:20");
     assert!(argument.contains("error[ts2345]"), "{out}");
 }
+
+#[test]
+fn a_later_declarator_reading_an_earlier_one_checks_clean() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/declarators.tt",
+        "variant O { A(n: number), B }\n\
+         declare const o: O;\n\
+         declare function t(s: string): number;\n\
+         export function f() {\n\
+         \x20 const a = t(\"a\"), b = match (o) { A(n) => a + n, B => 0 };\n\
+         \x20 return b;\n\
+         }\n\
+         export function g() {\n\
+         \x20 var a = 10, b = match (o) { A(n) => a + n, B => 0 };\n\
+         \x20 return b;\n\
+         }\n",
+    )]);
+    let out = check(&dir);
+    assert!(!out.contains("error"), "{out}");
+}

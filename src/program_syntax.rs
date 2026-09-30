@@ -668,6 +668,42 @@ pub(crate) struct HostOwner {
     /// Where the statement a prelude hoisted to this owner is written
     /// before begins; it ends where the owner does. See [`HostOwner::anchor`].
     anchor_start: usize,
+    statement: SourceSpan,
+    pub(crate) split: Option<DeclaratorSplit>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct DeclaratorSplit {
+    pub(crate) previous_end: usize,
+    pub(crate) kind: DeclarationKind,
+    pub(crate) exported: bool,
+    pub(crate) declared: bool,
+}
+
+impl DeclaratorSplit {
+    pub(crate) fn head(&self) -> String {
+        let keyword = match self.kind {
+            DeclarationKind::Var => "var",
+            DeclarationKind::Let => "let",
+            DeclarationKind::Const => "const",
+            DeclarationKind::Using => "using",
+            DeclarationKind::AwaitUsing => "await using",
+        };
+        format!(
+            "{}{}{keyword} ",
+            if self.exported { "export " } else { "" },
+            if self.declared { "declare " } else { "" },
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum DeclarationKind {
+    Var,
+    Let,
+    Const,
+    Using,
+    AwaitUsing,
 }
 
 impl HostOwner {
@@ -683,6 +719,10 @@ impl HostOwner {
             start: self.anchor_start,
             end: self.span.end,
         }
+    }
+
+    pub(crate) fn statement(&self) -> SourceSpan {
+        self.statement
     }
 }
 
@@ -862,6 +902,7 @@ pub(crate) enum HostOwnerKind {
     /// The expression body of a concise arrow function. Lowering rewrites
     /// this expression to a block when a nested tt value needs statements.
     ArrowExpression,
+    Declarator,
 }
 
 /// The Core IR node that owns one TypeScript host placeholder.
@@ -963,6 +1004,7 @@ pub(crate) struct EvaluationContext {
     /// The construct sits inside an ambient (`declare`) module, where only
     /// declarations without initializers are TypeScript.
     pub(crate) ambient: bool,
+    pub(crate) loop_head_declarator: bool,
 }
 
 pub(crate) struct OverlayFacts {
@@ -1021,6 +1063,7 @@ impl EvaluationContext {
                 contextual_type_awaited: false,
                 requires_block,
                 ambient,
+                loop_head_declarator: false,
             };
         }
 
@@ -1052,8 +1095,23 @@ impl EvaluationContext {
                 && function_return_awaited,
             requires_block,
             ambient,
+            loop_head_declarator: loop_head_declarator(local_path),
         }
     }
+}
+
+fn loop_head_declarator(parents: &[AstParentKind]) -> bool {
+    parents
+        .iter()
+        .position(|parent| matches!(parent, AstParentKind::ForStmt(fields::ForStmtField::Init)))
+        .and_then(|head| {
+            parents[head..].iter().find_map(|parent| match parent {
+                AstParentKind::VarDecl(fields::VarDeclField::Decls(index))
+                | AstParentKind::UsingDecl(fields::UsingDeclField::Decls(index)) => Some(*index),
+                _ => None,
+            })
+        })
+        .is_some_and(|index| index > 0)
 }
 
 /// Whether the statement the path `above` leads into is the unbraced body

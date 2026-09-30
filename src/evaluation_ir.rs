@@ -376,6 +376,7 @@ pub(crate) enum ExpressionBoundaryReason {
     ReferenceNotPreservable,
     /// The Core value has no statement form ([`CoreFile::has_statement_form`]).
     ValueHasNoStatementForm,
+    LoopHeadDeclarator,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

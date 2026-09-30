@@ -373,6 +373,10 @@ fn match_placement_message(
             "`match` cannot be lowered from this repeated loop position without changing how often it evaluates",
             help,
         ),
+        (_, Reason::LoopHeadDeclarator) => (
+            "`match` cannot be lowered from a later declarator of a `for` loop head — its statements would run before the earlier declarators and outside the bindings the head declares",
+            "move the declaration before the loop, or make this declarator the first one",
+        ),
         (_, Reason::ConditionalInOwner | Reason::ConditionalOperationNotStructurable) => (
             "`match` cannot be lowered from this conditional expression position without evaluating a skipped branch",
             help,
@@ -458,6 +462,12 @@ fn try_placement_message(
             "`try` cannot be used in a repeated loop position — propagating its `Err` \
              across this TypeScript control-flow boundary would run once per iteration",
             help,
+        ),
+        (_, Reason::LoopHeadDeclarator) => (
+            "`try` cannot be used in a later declarator of a `for` loop head — its \
+             propagation would run before the earlier declarators and outside the bindings \
+             the head declares",
+            "move the declaration before the loop, or make this declarator the first one",
         ),
         (EvaluationOwner::ParameterInitializer, Reason::OwnerTakesNoStatements) => (
             "`try` cannot be used in a parameter initializer — this TypeScript control-flow \

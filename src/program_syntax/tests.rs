@@ -462,7 +462,7 @@ fn a_script_classifies_each_global_statement_by_the_bindings_it_declares() {
         .overlay
         .iter()
         .filter(|entry| entry.category == SyntaxCategory::Expression)
-        .map(|entry| script.globals().get(&entry.host_owner.anchor()).cloned())
+        .map(|entry| script.globals().get(&entry.host_owner.statement()).cloned())
         .collect();
     assert_eq!(
         classes,

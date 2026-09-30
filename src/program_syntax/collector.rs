@@ -331,6 +331,15 @@ pub(super) struct ProjectedHostOwner {
     /// a value's parent path here leaves exactly the edges between the owner
     /// and the value ([`owner_reach`]).
     pub(super) edge: usize,
+    pub(super) split: Option<ProjectedDeclaratorSplit>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) struct ProjectedDeclaratorSplit {
+    pub(super) previous: ProjectedSpan,
+    pub(super) kind: DeclarationKind,
+    pub(super) exported: bool,
+    pub(super) declared: bool,
 }
 
 pub(super) fn object_evaluation_positions(

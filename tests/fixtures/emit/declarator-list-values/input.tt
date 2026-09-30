@@ -1,0 +1,19 @@
+variant Shape { Circle(r: number), Square(side: number) }
+
+declare function scale(): number;
+
+export function area(shape: Shape) {
+  const k = scale(), value = match (shape) {
+    Circle(r) => k * r * r,
+    Square(side) => k * side * side,
+  };
+  return value;
+}
+
+export const unit = scale(),
+  // the second declarator reads the first
+  doubled = match (Shape.Circle(unit)) {
+    Circle(r) => r * 2,
+    Square(side) => side,
+  },
+  label = `${doubled}`;

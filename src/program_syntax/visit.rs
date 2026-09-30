@@ -181,9 +181,31 @@ impl ParentCollector {
                 prelude_anchor(&found.host_owners[..=owner_index], &found.parents);
             let anchor = source_span_for_projection(&self.source_segments, projected_anchor.span)
                 .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
-            let requires_block = projected_anchor.kind == HostOwnerKind::Statement
+            let statement_index = found.host_owners[..=owner_index]
+                .iter()
+                .rposition(|owner| owner.kind != HostOwnerKind::Declarator)
+                .unwrap_or(owner_index);
+            let projected_statement =
+                prelude_anchor(&found.host_owners[..=statement_index], &found.parents);
+            let statement =
+                source_span_for_projection(&self.source_segments, projected_statement.span)
+                    .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
+            let split = projected_owner
+                .split
+                .map(|split| {
+                    source_span_for_projection(&self.source_segments, split.previous)
+                        .map(|previous| DeclaratorSplit {
+                            previous_end: previous.end,
+                            kind: split.kind,
+                            exported: split.exported,
+                            declared: split.declared,
+                        })
+                        .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })
+                })
+                .transpose()?;
+            let requires_block = projected_statement.kind == HostOwnerKind::Statement
                 && is_unbraced_body(
-                    &found.parents[..projected_anchor.edge.min(found.parents.len())],
+                    &found.parents[..projected_statement.edge.min(found.parents.len())],
                 );
             let owner_id = if let Some(owner_id) = owner_ids.get(&projected_owner).copied() {
                 owner_id
@@ -199,14 +221,19 @@ impl ParentCollector {
                         kind,
                         span,
                         anchor_start: anchor.start,
+                        statement,
+                        split,
                     },
                     roots: Vec::new(),
                 });
                 owner_id
             };
             owners[owner_id.0 as usize].roots.push(entry.id);
-            if let Some(global) = self.global_statements.get(&projected_anchor.span) {
-                globals.insert(owners[owner_id.0 as usize].owner.anchor(), global.clone());
+            if let Some(global) = self.global_statements.get(&projected_statement.span) {
+                globals.insert(
+                    owners[owner_id.0 as usize].owner.statement(),
+                    global.clone(),
+                );
             }
             let enclosing_overlay = overlay_index
                 .covering(entry.projected.start.0, entry.projected.end.0)
@@ -356,7 +383,19 @@ impl VisitAstPath for ParentCollector {
         }
         .map(|annotation| projected_span(annotation.span, self.source_start));
         self.contextual_types.push(annotation);
+        let split = declarator_split(path, self.source_start);
+        if let Some(split) = split {
+            self.host_owners.push(ProjectedHostOwner {
+                kind: HostOwnerKind::Declarator,
+                span: projected_span(node.span, self.source_start),
+                edge: path.kinds().len(),
+                split: Some(split),
+            });
+        }
         <VarDeclarator as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+        if split.is_some() {
+            self.host_owners.pop();
+        }
         self.contextual_types.pop();
     }
 
@@ -369,6 +408,7 @@ impl VisitAstPath for ParentCollector {
             kind: HostOwnerKind::ModuleItem,
             span: projected_span(item.span(), self.source_start),
             edge: path.kinds().len(),
+            split: None,
         });
         <ModuleItem as VisitWithAstPath<Self>>::visit_children_with_ast_path(item, self, path);
         self.host_owners.pop();
@@ -379,6 +419,7 @@ impl VisitAstPath for ParentCollector {
             kind: HostOwnerKind::Statement,
             span: projected_span(statement.span(), self.source_start),
             edge: path.kinds().len(),
+            split: None,
         });
         <Stmt as VisitWithAstPath<Self>>::visit_children_with_ast_path(statement, self, path);
         self.host_owners.pop();
@@ -750,6 +791,7 @@ impl VisitAstPath for ParentCollector {
             kind: HostOwnerKind::ArrowExpression,
             span: projected_span(node.body.span(), self.source_start),
             edge: path.kinds().len(),
+            split: None,
         });
         <ArrowExpr as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
         self.host_owners.pop();
@@ -1125,4 +1167,62 @@ fn statement_is_cleanup_free(statement: &Stmt) -> bool {
             .iter()
             .all(|case| statements_are_cleanup_free(&case.cons)),
     }
+}
+
+fn declarator_split(
+    path: &AstNodePath<'_>,
+    source_start: HostOrigin,
+) -> Option<ProjectedDeclaratorSplit> {
+    use swc_ecma_ast::VarDeclKind;
+    use swc_ecma_visit::AstParentNodeRef;
+
+    let mut parents = path.iter().rev();
+    let (previous, kind, declared, field) = match parents.next()? {
+        AstParentNodeRef::VarDecl(declaration, fields::VarDeclField::Decls(index))
+            if *index > 0 =>
+        {
+            (
+                declaration.decls[*index - 1].span,
+                match declaration.kind {
+                    VarDeclKind::Var => DeclarationKind::Var,
+                    VarDeclKind::Let => DeclarationKind::Let,
+                    VarDeclKind::Const => DeclarationKind::Const,
+                },
+                declaration.declare,
+                fields::DeclField::Var,
+            )
+        }
+        AstParentNodeRef::UsingDecl(declaration, fields::UsingDeclField::Decls(index))
+            if *index > 0 =>
+        {
+            (
+                declaration.decls[*index - 1].span,
+                if declaration.is_await {
+                    DeclarationKind::AwaitUsing
+                } else {
+                    DeclarationKind::Using
+                },
+                false,
+                fields::DeclField::Using,
+            )
+        }
+        _ => return None,
+    };
+    match parents.next()? {
+        AstParentNodeRef::Decl(_, parent) if *parent == field => {}
+        _ => return None,
+    }
+    let exported = matches!(
+        parents.next(),
+        Some(AstParentNodeRef::ExportDecl(
+            _,
+            fields::ExportDeclField::Decl
+        ))
+    );
+    Some(ProjectedDeclaratorSplit {
+        previous: projected_span(previous, source_start),
+        kind,
+        exported,
+        declared,
+    })
 }

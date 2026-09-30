@@ -467,6 +467,42 @@ its test is on the member's value, so the member is captured, tested, and
 called through `.call(receiver, ...)`, and that form still loses a generic
 method's inference and the receiver's narrowing.
 
+### 7.9 Declaration lists (TASK-593)
+
+A declaration list evaluates its declarators in order, each in the scope
+the declaration binds into (ECMA-262 §14.3.1.2 and §14.3.2.1: a
+`LexicalDeclaration` evaluates its `BindingList` and a `VariableStatement`
+its `VariableDeclarationList` element by element; an earlier `let`/`const`
+binding is initialized before a later initializer runs, and a later one is
+still in its TDZ). A prelude written before the whole statement would run
+before the earlier declarators and, for a lexical declaration, read their
+bindings in the TDZ. So every declarator after the first is its own host
+owner (`HostOwnerKind::Declarator`, `DeclaratorSplit`): a value in it
+writes its prelude at the declarator, and the target splits the
+declaration there. The comma before the declarator becomes `;`, the
+prelude follows on its own line, and the rest of the list continues under
+a repeated head (`export`, `declare`, and `var`/`let`/`const`/`using`/
+`await using`). Splitting changes nothing observable: separate
+declarations in one statement list bind in the same scope and run in the
+same order, and `using` declarations still dispose in reverse order at the
+end of the block. The owner keeps the statement it splits
+(`HostOwner::statement`) for everything that belongs to the statement
+rather than the declarator: the block an unbraced body or a script's
+enclosed `var` needs, opened at the statement's start, and the global
+binding a script's generated names derive from.
+
+A C-style `for` head is the exception. Its declarators run in the loop's
+own scope (ECMA-262 §14.7.4.2 `ForLoopEvaluation`), which also holds the
+per-iteration copies of `let` bindings (`CreatePerIterationEnvironment`),
+and the head has no statement position between declarators. A value in a
+later declarator there needs statements that would run before the earlier
+declarators and outside the bindings the head declares, and no lowering
+keeps both without renaming authored bindings, so the Evaluation IR gives
+it `ExpressionBoundaryReason::LoopHeadDeclarator`: a `match` or `try`
+reports `match-placement` or `try-placement`, and a `result` block uses the
+expression boundary, which runs in place. A value in the first declarator
+still lowers before the loop.
+
 
 
 | Core primitive | tt 표면 | Evaluation IR 동작 |

@@ -1508,3 +1508,43 @@ console.log(repo(K.A, new Repo()), optional(obj, K.A), optional(undefined, K.A),
         [r#"x o undefined 3 2 ["pick","pick","first","pick","getO","key","pick"]"#]
     );
 }
+
+#[test]
+fn runtime_a_later_declarator_value_runs_after_earlier_declarators_in_their_scope() {
+    require_toolchain!();
+    let out = run_with_std(
+        r#"
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
+variant O { A(n: number), B }
+const o = O.A(1) as O;
+const log: string[] = [];
+function t<T>(s: string, v: T): T { log.push(s); return v; }
+function r(n: number): TResult<number, string> { log.push("r" + n); return Result.Ok(n); }
+function take(): string { const line = log.join(" "); log.length = 0; return line; }
+const a = 100;
+function f() {
+  const a = t("a", 10), b = match (t("m", o)) { A(n) => a + n, B => 0 };
+  return b;
+}
+function g() { var a = 10, b = match (o) { A(n) => a + n, B => 0 }; return b; }
+function h(): TResult<number, string> {
+  let a = t("a", 1), b = 1 + try r(a), c = t("c", b);
+  const d = t("d", 2), e = result { const x = try r(d); return x + c; };
+  return Result.Ok(e.kind === "Ok" ? e.value : 0);
+}
+export const x = t("x", 3), y = match (o) { A(n) => x + n, B => 0 };
+console.log(f(), take(), g(), take());
+console.log(JSON.stringify(h()), take());
+console.log(y, a);
+"#,
+    );
+    assert_eq!(
+        out,
+        [
+            "11 x a m 11 ",
+            r#"{"kind":"Ok","value":4} a r1 c d r2"#,
+            "4 100",
+        ]
+    );
+}

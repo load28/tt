@@ -322,6 +322,7 @@ pub(super) struct TargetRewritePlan {
     pub(super) owner_slots: Vec<OwnerSlotRewrite>,
     pub(super) for_initializer_propagations: Vec<ForInitializerPropagationRewrite>,
     pub(super) composes: Vec<ComposeRewrite>,
+    pub(super) declarator_splits: Vec<DeclaratorSplitRewrite>,
     pub(super) loop_tests: Vec<LoopTestRewrite>,
     pub(super) source_replacements: Vec<SourceReplacement>,
     /// The source spans of values whose lowering moves them into a prelude
@@ -391,6 +392,28 @@ pub(super) struct ArrowReturnRewrite {
     pub(super) slot: String,
     pub(super) contextual_type: Option<SourceSpan>,
     pub(super) contextual_type_awaited: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct DeclaratorSplitRewrite {
+    pub(super) separator: SourceSpan,
+    pub(super) at: usize,
+    pub(super) head: String,
+    pub(super) block: Option<SourceSpan>,
+    pub(super) statement: SourceSpan,
+    pub(super) last: bool,
+}
+
+pub(super) fn declarator_separator(source: &str, previous_end: usize) -> SourceSpan {
+    let bytes = source.as_bytes();
+    let (comma, _) = crate::scanner::skip_trivia(bytes, previous_end, bytes.len());
+    if bytes.get(comma) != Some(&b',') {
+        crate::ice::bug!("a declarator is not preceded by its comma");
+    }
+    SourceSpan {
+        start: comma,
+        end: comma + 1,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -1187,6 +1210,38 @@ impl TargetRewritePlan {
                 })
             })
             .collect();
+        let mut declarator_splits: Vec<_> = lowering
+            .owners()
+            .filter_map(|rewrite| {
+                let split = rewrite.owner.split?;
+                let anchor = rewrite.owner.anchor();
+                let hoisted = owner_slots.iter().any(|slot| slot.owner == anchor)
+                    || composes.iter().any(|compose| compose.owner == anchor);
+                let statement = rewrite.owner.statement();
+                hoisted.then(|| DeclaratorSplitRewrite {
+                    separator: declarator_separator(source, split.previous_end),
+                    at: anchor.start,
+                    head: split.head(),
+                    block: lowering
+                        .block_required_owners()
+                        .contains(&statement)
+                        .then_some(statement),
+                    statement,
+                    last: false,
+                })
+            })
+            .collect();
+        let last_splits: HashMap<SourceSpan, usize> = declarator_splits.iter().fold(
+            HashMap::new(),
+            |mut last, split: &DeclaratorSplitRewrite| {
+                let at = last.entry(split.statement).or_insert(split.at);
+                *at = (*at).max(split.at);
+                last
+            },
+        );
+        for split in &mut declarator_splits {
+            split.last = last_splits.get(&split.statement) == Some(&split.at);
+        }
         let compose_values = || {
             composes.iter().flat_map(|rewrite| {
                 rewrite.actions.iter().filter_map(|action| match action {
@@ -1451,6 +1506,7 @@ impl TargetRewritePlan {
                     .map(|operation| operation.parent),
             )
             .chain(call_frames().map(|(span, _)| span))
+            .chain(declarator_splits.iter().map(|split| split.separator))
             .chain(loop_tests.iter().flat_map(|rewrite| {
                 let prefix = (rewrite.kind == LoopTestKind::While).then_some(SourceSpan {
                     start: rewrite.owner.start,
@@ -1746,6 +1802,7 @@ impl TargetRewritePlan {
             owner_slots,
             for_initializer_propagations,
             composes,
+            declarator_splits,
             loop_tests,
             source_replacements,
             relocated_values,
