@@ -604,7 +604,32 @@ impl<'a> TargetFile<'a> {
         Ok(())
     }
 
-    fn print(self, newline: &str) -> Flat {
+    fn print(self, newline: &str, governed: &[GovernedStatement]) -> Flat {
+        let governed_line = |at: usize| {
+            governed
+                .iter()
+                .any(|statement| statement.start <= at && at <= statement.line_end)
+        };
+        let mut next_source = vec![None; self.pieces.len()];
+        let mut next_governed = vec![None; self.pieces.len()];
+        let mut following = None;
+        let mut following_governed = None;
+        for (index, piece) in self.pieces.iter().enumerate().rev() {
+            next_source[index] = following;
+            next_governed[index] = following_governed;
+            if let TargetPiece::Source {
+                origin: ExactOrigin { start, .. },
+                ..
+            } = piece
+            {
+                following = Some(*start);
+                if governed_line(*start) {
+                    following_governed = Some(*start);
+                }
+            }
+        }
+        let mut previous_source_end: Option<usize> = None;
+        let mut single_line_breaks = Vec::new();
         let mut out = String::with_capacity(self.len + self.len / 8);
         let mut scopes: Vec<String> = Vec::new();
         let mut mappings: Vec<EmitMapping> = Vec::new();
@@ -621,7 +646,22 @@ impl<'a> TargetFile<'a> {
         let mut anchors: Vec<EmitAnchor> = Vec::new();
         let mut inserted: Vec<crate::InsertedGlue> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
-        for piece in &self.pieces {
+        for (index, piece) in self.pieces.iter().enumerate() {
+            let single_line = match (
+                previous_source_end,
+                next_source[index],
+                next_governed[index],
+            ) {
+                (Some(previous), Some(next), Some(line)) => governed.iter().any(|statement| {
+                    statement.start <= previous
+                        && previous <= statement.end
+                        && statement.start <= next
+                        && next <= statement.end
+                        && statement.start <= line
+                        && line <= statement.line_end
+                }),
+                _ => false,
+            };
             match piece {
                 TargetPiece::Mark {
                     src,
@@ -822,6 +862,12 @@ impl<'a> TargetFile<'a> {
                 TargetPiece::ScopeClose => {
                     scopes.pop();
                 }
+                TargetPiece::Break { .. } if single_line => {
+                    single_line_breaks.push(out.len());
+                    if !out.ends_with(' ') {
+                        out.push(' ');
+                    }
+                }
                 TargetPiece::Break { depth } => {
                     out.push_str(newline);
                     if let Some(base) = scopes.last() {
@@ -831,11 +877,16 @@ impl<'a> TargetFile<'a> {
                         out.push_str(INDENT);
                     }
                 }
+                TargetPiece::Generated { text, .. } if single_line && text.contains('\n') => {
+                    single_line_breaks.push(out.len());
+                    out.push_str(&single_line_text(text));
+                }
                 TargetPiece::Generated { text, .. } => push_generated(&mut out, text, newline),
                 TargetPiece::Source {
                     text,
                     origin: ExactOrigin { start, .. },
                 } => {
+                    previous_source_end = Some(start + text.len());
                     let at = out.len();
                     if let Some(last) = mappings.last_mut()
                         && last.src + last.len == *start
@@ -877,6 +928,7 @@ impl<'a> TargetFile<'a> {
             inserted,
             support_imports: Vec::new(),
             commonjs: false,
+            single_line_breaks,
         }
     }
 }
@@ -894,6 +946,37 @@ struct OpenAnchor {
 
 /// One level of generated indentation.
 const INDENT: &str = "  ";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GovernedStatement {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) line_end: usize,
+}
+
+pub(crate) fn single_line_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut lines = text.split('\n');
+    if let Some(first) = lines.next() {
+        out.push_str(
+            first
+                .strip_suffix('\r')
+                .unwrap_or(first)
+                .trim_end_matches([' ', '\t']),
+        );
+    }
+    for line in lines {
+        let line = line
+            .strip_suffix('\r')
+            .unwrap_or(line)
+            .trim_matches([' ', '\t']);
+        if !out.ends_with(' ') {
+            out.push(' ');
+        }
+        out.push_str(line);
+    }
+    out
+}
 
 fn push_generated(out: &mut String, text: &str, newline: &str) {
     if newline == "\n" {

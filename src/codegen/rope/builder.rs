@@ -551,6 +551,7 @@ impl<'a> Rope<'a> {
         source_kind: SourceKind,
         boundaries: &[usize],
         preservation: &SourcePreservation,
+        governed: &[super::GovernedStatement],
     ) -> Flat {
         let mut target = TargetFile::from_rope(self, source.len());
         target.source = Some(source);
@@ -561,7 +562,7 @@ impl<'a> Rope<'a> {
         if let Err(error) = target.validate_source_preservation(preservation) {
             error.raise();
         }
-        target.print(crate::line_ending(source))
+        target.print(crate::line_ending(source), governed)
     }
 }
 
@@ -587,4 +588,5 @@ pub(crate) struct Flat {
     pub inserted: Vec<crate::InsertedGlue>,
     pub support_imports: Vec<crate::StdModule>,
     pub commonjs: bool,
+    pub single_line_breaks: Vec<usize>,
 }

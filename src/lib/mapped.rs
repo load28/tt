@@ -228,6 +228,7 @@ pub struct MappedEmit {
     pub(crate) destructured_lists: Vec<DestructuredList>,
     /// Glue written at a source point, ordered by output offset.
     pub(crate) inserted: Vec<InsertedGlue>,
+    pub(crate) single_line_breaks: Vec<usize>,
     /// The compiler support modules the emitted code imports, in
     /// [`StdModule::ALL`](crate::StdModule::ALL) order: the standard-library
     /// modules the source imports, and the pipeline runtime when the
@@ -338,6 +339,7 @@ pub(crate) fn emit_mapped_parsed(
             crate::evaluation_ir::LoweringPlan::without_owner_model(source, source_kind)
         });
     let automatic_semicolons = crate::lexer::automatic_semicolons(tokens);
+    let comments = crate::lexer::comments(source, tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
@@ -345,6 +347,7 @@ pub(crate) fn emit_mapped_parsed(
             text: source,
             kind: source_kind,
             automatic_semicolons: &automatic_semicolons,
+            comments: &comments,
         },
         &plan,
         options.rewrite_imports,
@@ -366,6 +369,7 @@ pub(crate) fn emit_mapped_parsed(
         shared_bindings: flat.shared_bindings,
         destructured_lists: flat.destructured_lists,
         inserted: flat.inserted,
+        single_line_breaks: flat.single_line_breaks,
         support_imports: flat.support_imports,
         commonjs: flat.commonjs,
     }

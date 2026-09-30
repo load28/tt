@@ -58,6 +58,9 @@ pub(crate) fn refine(
             .find(|(slot_end, _)| *slot_end == end)
             .map_or(end, |&(_, annotation_end)| annotation_end);
         let text = match &slot.annotation {
+            Some(annotation) if on_single_line(emit, end) => {
+                format!(": {}", crate::codegen::single_line_text(annotation))
+            }
             Some(annotation) => format!(": {annotation}"),
             None if slot.cleared => String::new(),
             None => continue,
@@ -160,6 +163,17 @@ pub(crate) fn refine(
         declarations,
         locals,
     }
+}
+
+fn on_single_line(emit: &MappedEmit, at: usize) -> bool {
+    let start = crate::lines::line_start_before(&emit.code, at);
+    let end = emit.code[at..]
+        .find('\n')
+        .map_or(emit.code.len(), |line| at + line);
+    let first = emit.single_line_breaks.partition_point(|&out| out < start);
+    emit.single_line_breaks
+        .get(first)
+        .is_some_and(|&out| out <= end)
 }
 
 /// Where `p` lands once `edits` are applied. A position at an insertion

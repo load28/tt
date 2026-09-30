@@ -1,0 +1,233 @@
+=== tsDirectiveBeforeLoweredStatement.tt ===
+variant S { A(n: number), B }
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => S
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function matchValue(s: S) {
+>matchValue : function matchValue(s: S): number
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const x: number = match (s) { A(n) => "a" + n, B => "b" };
+>x : const x: number
+>s : (parameter) s: S
+>n : const n: number
+>n : const n: number
+  return x;
+>x : const x: number
+function matchOperand(s: S) {
+>matchOperand : function matchOperand(s: S): string
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const y: string = match (s) { A(n) => n, B => 0 } + 1;
+>y : const y: string
+>s : (parameter) s: S
+>n : const n: number
+>n : const n: number
+  return y;
+>y : const y: string
+function tryValue(r: TResult<string, string>): TResult<number, string> {
+>tryValue : function tryValue(r: TResult<string, string>): TResult<number, string>
+>r : (parameter) r: TResult<string, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const z: number = try r;
+>z : const z: number
+>r : (parameter) r: TResult<string, string>
+  return Result.Ok(z);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>z : const z: number
+function tryOperand(r: (n: number) => TResult<string, string>): TResult<string, string> {
+>tryOperand : function tryOperand(r: (n: number) => TResult<string, string>): TResult<string, string>
+>r : (parameter) r: (n: number) => TResult<string, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const z = try r("1");
+>z : const z: string
+>r : (parameter) r: (n: number) => TResult<string, string>
+  return Result.Ok(z);
+>Ok : const Ok: <string>(value: string) => Result.TOk<string>
+>z : const z: string
+const block = (r: TResult<string, string>) => {
+>block : const block: (r: TResult<string, string>) => number
+>r : (parameter) r: TResult<string, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const w: number = result { const v = try r; return v; }.kind === "Ok" ? "ok" : 0;
+>w : const w: number
+>v : const v: string
+>r : (parameter) r: TResult<string, string>
+>v : const v: string
+>kind : (property) kind: "Err" | "Ok"
+  return w;
+>w : const w: number
+function letElse(s: S) {
+>letElse : function letElse(s: S): string
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const A(n: m) = s else { return "none"; }; const t: string = m;
+>n : (property) n: number
+>m : const m: number
+>s : (parameter) s: S
+>t : const t: string
+>m : const m: number
+  return t;
+>t : const t: string
+function laterLine(s: S) {
+>laterLine : function laterLine(s: S): number
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const u: number = match (s) {
+>u : const u: number
+>s : (parameter) s: S
+    A(n) => n,
+>n : const n: number
+>n : const n: number
+  return u;
+>u : const u: number
+export const documented = match (S.A(2) as S) { A(n) => n, B => 0 };
+>documented : const documented: number
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>n : const n: number
+>n : const n: number
+const A(n: documentedBinding) = S.A(3) as S else { throw new Error("B"); };
+>n : (property) n: number
+>documentedBinding : const documentedBinding: number
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+export const plain = match (S.B as S) { A(n) => n, B => -1 };
+>plain : const plain: number
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>n : const n: number
+>n : const n: number
+console.log(documented, documentedBinding, plain, matchValue(S.A(1)), matchOperand(S.B), laterLine(S.A(4)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>documented : const documented: number
+>documentedBinding : const documentedBinding: number
+>plain : const plain: number
+>matchValue : function matchValue(s: S): number
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>matchOperand : function matchOperand(s: S): string
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>laterLine : function laterLine(s: S): number
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+console.log(JSON.stringify(tryValue(Result.Ok("s"))), JSON.stringify(tryOperand((n) => Result.Ok(`${n}`))), block(Result.Ok("t")), letElse(S.A(5)), letElse(S.B));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>tryValue : function tryValue(r: TResult<string, string>): TResult<number, string>
+>Ok : const Ok: <string>(value: string) => Result.TOk<string>
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>tryOperand : function tryOperand(r: (n: number) => TResult<string, string>): TResult<string, string>
+>n : (parameter) n: number
+>Ok : const Ok: <string>(value: string) => Result.TOk<string>
+>n : (parameter) n: number
+>block : const block: (r: TResult<string, string>) => number
+>Ok : const Ok: <string>(value: string) => Result.TOk<string>
+>letElse : function letElse(s: S): string
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>letElse : function letElse(s: S): string
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+

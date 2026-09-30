@@ -496,6 +496,10 @@ impl<'a> Emitter<'a> {
         out.push_lit("}");
         let mut recovery = BindingRecovery::new(self, &arm.pattern);
         out.push_break(0);
+        if let Some(documentation) = self.relocated_documentation(self.span(decision.extent).start)
+        {
+            out.append(documentation);
+        }
         out.append(
             self.emit_bindings(&arm.pattern, decision, Some(mode), &mut recovery, Some(0))
                 .trim(),

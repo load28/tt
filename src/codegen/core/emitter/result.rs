@@ -59,6 +59,11 @@ impl<'a> Emitter<'a> {
         out.push_lit("}");
         if let Some(binding) = propagate.binding {
             out.push_break(0);
+            if let Some(documentation) =
+                self.relocated_documentation(self.span(propagate.owner).start)
+            {
+                out.append(documentation);
+            }
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
             out.append(self.source_rope(binding.node));
             out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));
@@ -624,6 +629,11 @@ impl<'a> Emitter<'a> {
         out.push_lit("}");
         if let Some(binding) = propagate.binding {
             out.push_break(0);
+            if let Some(documentation) =
+                self.relocated_documentation(self.span(propagate.owner).start)
+            {
+                out.append(documentation);
+            }
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
             out.append(self.source_rope(binding.node));
             out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));

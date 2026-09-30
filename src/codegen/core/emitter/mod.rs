@@ -61,6 +61,9 @@ pub(super) struct Emitter<'a> {
     pub(super) host_string: String,
     pub(super) inline_subjects: HashMap<NodeId, Vec<String>>,
     pub(super) block_required_statements: HashSet<NodeId>,
+    pub(super) relocated_documentation: HashMap<usize, SourceSpan>,
+    pub(super) documentation_starts: std::collections::BTreeMap<usize, SourceSpan>,
+    pub(super) emitted_documentation: ClosedComposeBlocks,
     /// Statement owners that must open a block before their first hoisted
     /// prelude and close it after their last byte. Several entry points can
     /// write a prelude, and the owner's end can be reached by more than one
@@ -108,6 +111,17 @@ pub(super) struct Emitter<'a> {
     pub(super) imported_std: RefCell<Vec<crate::StdModule>>,
     pub(super) generated_names: RefCell<crate::generated_names::GeneratedNames>,
     pub(super) global_temps: HashMap<TempId, String>,
+}
+
+impl<'a> Emitter<'a> {
+    pub(super) fn relocated_documentation(&self, statement: usize) -> Option<Rope<'a>> {
+        let span = *self.relocated_documentation.get(&statement)?;
+        self.emitted_documentation.claim(span).then(|| {
+            let mut out = Rope::new();
+            out.push_src(&self.source[span.start..span.end], span.start);
+            out
+        })
+    }
 }
 
 impl Emitter<'_> {

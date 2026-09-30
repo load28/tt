@@ -13,3 +13,4 @@ mod rope;
 pub(crate) use core::{
     EmitSource, LoweringFailure, emit_with_map, lowering_plan, lowering_plan_with,
 };
+pub(crate) use rope::single_line_text;

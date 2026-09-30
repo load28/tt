@@ -38,7 +38,7 @@ fn target_assigns_exact_construct_and_file_origins() {
             ..
         }
     ));
-    let flat = target.print("\n");
+    let flat = target.print("\n", &[]);
     assert_eq!(flat.code, "const value;\n");
     assert_eq!(
         flat.mappings,
@@ -267,7 +267,7 @@ fn separated(source: &str, boundary: usize, pieces: &[(&'static str, bool)]) -> 
     let mut target = TargetFile::from_rope(rope, source.len());
     target.separate_statements(&[boundary], SourceKind::TypeScript);
     assert_eq!(target.validate(), Ok(()));
-    target.print("\n").code
+    target.print("\n", &[]).code
 }
 
 #[test]
@@ -300,5 +300,5 @@ fn a_source_piece_without_the_separating_line_break_is_not_a_boundary() {
     rope.push_lit("(c)");
     let mut target = TargetFile::from_rope(rope, source.len());
     target.separate_statements(&[3], SourceKind::TypeScript);
-    assert_eq!(target.print("\n").code, "b(c)");
+    assert_eq!(target.print("\n", &[]).code, "b(c)");
 }

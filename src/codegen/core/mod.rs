@@ -10,7 +10,7 @@ mod planning;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 
-use super::rope::{Flat, Rope, SourcePreservation};
+use super::rope::{Flat, GovernedStatement, Rope, SourcePreservation};
 use crate::analysis::SemanticFile;
 use crate::core_ir::*;
 use crate::evaluation_ir::{
@@ -141,6 +141,64 @@ pub(crate) fn lowering_plan_with(
     Ok(plan)
 }
 
+fn governed_statements(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    target: &TargetRewritePlan,
+    governed: &[crate::ast::Span],
+) -> Vec<GovernedStatement> {
+    if governed.is_empty() {
+        return Vec::new();
+    }
+    let node_span = |node| {
+        semantic
+            .hir
+            .source_map
+            .node_span(node)
+            .map(SourceSpan::from)
+    };
+    let lowered = core
+        .bodies
+        .iter()
+        .flat_map(|body| &body.statements)
+        .filter_map(|statement| match statement {
+            Statement::Propagate(propagate) => node_span(propagate.owner),
+            Statement::Decision(decision) => node_span(decision.extent),
+            Statement::Expr(expr) => structured_expr_span(semantic, core, *expr),
+            Statement::Adt(adt) => node_span(adt.node),
+            Statement::Opaque(_) | Statement::Import(_) => None,
+        });
+    let owners = target
+        .owner_slots
+        .iter()
+        .map(|rewrite| rewrite.owner)
+        .chain(target.composes.iter().map(|rewrite| rewrite.owner))
+        .chain(
+            target
+                .for_initializer_propagations
+                .iter()
+                .map(|rewrite| rewrite.owner),
+        )
+        .chain(target.loop_tests.iter().map(|rewrite| rewrite.owner))
+        .chain(target.declarator_splits.iter().map(|split| split.statement));
+    let mut statements: Vec<GovernedStatement> = lowered
+        .chain(owners)
+        .filter_map(|span| {
+            let line = governed
+                .iter()
+                .find(|line| line.start <= span.start && span.start <= line.end)?;
+            Some(GovernedStatement {
+                start: span.start,
+                end: span.end.max(line.end),
+                line_end: line.end,
+            })
+        })
+        .collect();
+    statements.sort_unstable_by_key(|statement| (statement.start, statement.end));
+    statements.dedup();
+    statements
+}
+
 fn span_index(spans: impl Iterator<Item = SourceSpan>) -> crate::span_index::SpanIndex {
     crate::span_index::SpanIndex::new(spans.map(|span| (span.start, span.end)))
 }
@@ -171,6 +229,7 @@ pub(crate) struct EmitSource<'a> {
     pub(crate) text: &'a str,
     pub(crate) kind: SourceKind,
     pub(crate) automatic_semicolons: &'a [crate::lexer::AutomaticSemicolon],
+    pub(crate) comments: &'a [crate::ast::Span],
 }
 
 pub(crate) fn emit_with_map<'a>(
@@ -185,7 +244,9 @@ pub(crate) fn emit_with_map<'a>(
         text: source,
         kind: source_kind,
         automatic_semicolons,
+        comments,
     } = emit_source;
+    let governed = crate::lexer::directive_governed_lines(source, comments);
     let target = TargetRewritePlan::build(semantic, core, source, lowering_plan);
     let script = target.script;
     let std_imports = match std_imports.commonjs {
@@ -235,6 +296,59 @@ pub(crate) fn emit_with_map<'a>(
         .chain(&target.recovered_matches)
         .map(|(_, span)| *span)
         .collect();
+    let governed_statements = governed_statements(semantic, core, &target, &governed);
+    let for_initializer_nodes: HashSet<NodeId> = target
+        .for_initializer_propagations
+        .iter()
+        .map(|rewrite| rewrite.node)
+        .collect();
+    let rebuilt_statements = core
+        .bodies
+        .iter()
+        .flat_map(|body| &body.statements)
+        .filter_map(|statement| match statement {
+            Statement::Propagate(propagate)
+                if propagate.binding.is_some()
+                    && !for_initializer_nodes.contains(&propagate.node) =>
+            {
+                Some(propagate.owner)
+            }
+            Statement::Decision(decision)
+                if matches!(decision.kind, DecisionKind::LetElse { .. }) =>
+            {
+                Some(decision.extent)
+            }
+            _ => None,
+        })
+        .filter_map(|node| semantic.hir.source_map.node_span(node))
+        .map(|span| span.start);
+    let relocated_documentation: HashMap<usize, SourceSpan> = target
+        .owner_slots
+        .iter()
+        .map(|rewrite| rewrite.owner.start)
+        .chain(
+            target
+                .for_initializer_propagations
+                .iter()
+                .map(|rewrite| rewrite.owner.start),
+        )
+        .chain(target.composes.iter().map(|rewrite| rewrite.owner.start))
+        .chain(rebuilt_statements)
+        .filter_map(|statement| {
+            crate::lexer::leading_documentation(source, comments, &governed, statement).map(
+                |span| {
+                    (
+                        statement,
+                        SourceSpan {
+                            start: span.start,
+                            end: span.end,
+                        },
+                    )
+                },
+            )
+        })
+        .collect();
+    relocated.extend(relocated_documentation.values().copied());
     let emitter = Emitter {
         semantic,
         core,
@@ -316,6 +430,12 @@ pub(crate) fn emit_with_map<'a>(
         host_string: target.host_string,
         inline_subjects: target.inline_subjects,
         block_required_statements: target.block_required_statements,
+        documentation_starts: relocated_documentation
+            .values()
+            .map(|span| (span.start, *span))
+            .collect(),
+        relocated_documentation,
+        emitted_documentation: ClosedComposeBlocks::default(),
         block_required_by_end: target.block_required_owners.iter().fold(
             std::collections::BTreeMap::new(),
             |mut by_end: std::collections::BTreeMap<usize, Vec<SourceSpan>>, owner| {
@@ -522,7 +642,13 @@ pub(crate) fn emit_with_map<'a>(
         .iter()
         .map(|boundary| boundary.next)
         .collect();
-    let mut flat = output.flatten(source, source_kind, &boundaries, &preservation);
+    let mut flat = output.flatten(
+        source,
+        source_kind,
+        &boundaries,
+        &preservation,
+        &governed_statements,
+    );
     for result_return in &mut flat.result_return_temps {
         result_return.src_end = result_return_args
             .iter()

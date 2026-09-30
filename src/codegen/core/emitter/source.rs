@@ -199,6 +199,13 @@ impl<'a> Emitter<'a> {
             {
                 rope.append(self.emit_compose_suffix(rewrite));
             }
+            if let Some(documentation) = self.documentation_starts.get(&cursor)
+                && documentation.end <= span.end
+                && !self.emitted_documentation.contains(*documentation)
+            {
+                cursor = documentation.end;
+                continue;
+            }
             self.open_declaration_blocks_at(cursor, &mut rope);
             if let Some(split) = self.declarator_splits.iter().find(|split| {
                 split.separator.start == cursor
@@ -240,6 +247,9 @@ impl<'a> Emitter<'a> {
                 if self.emitted_compose_rewrites.claim(rewrite.owner) {
                     rope.append(self.emit_compose_rewrite(rewrite));
                 }
+            }
+            if let Some(documentation) = self.relocated_documentation(cursor) {
+                rope.append(documentation);
             }
             if let Some(split) = split_head {
                 rope.push_lit(split.head.clone());
@@ -395,7 +405,13 @@ impl<'a> Emitter<'a> {
                 .filter(|boundary| cursor < *boundary && *boundary < span.end)
                 .min()
                 .unwrap_or(span.end);
+            let next_documentation = self
+                .documentation_starts
+                .range(cursor.saturating_add(1)..span.end.max(cursor.saturating_add(1)))
+                .next()
+                .map_or(span.end, |(start, _)| *start);
             let next = next_insertion
+                .min(next_documentation)
                 .min(next_split)
                 .min(next_owner_end)
                 .min(next_compose)

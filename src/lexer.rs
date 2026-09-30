@@ -28,11 +28,13 @@ use crate::SourceKind;
 use crate::ast::Span;
 use crate::scanner::*;
 
+mod comments;
 mod facts;
 mod names;
 pub(crate) mod pragmas;
 mod queries;
 mod validation;
+pub(crate) use comments::{comments, directive_governed_lines, leading_documentation};
 pub(crate) use facts::{TokenFacts, statement_only_keyword};
 pub(crate) use names::identifier_names_with_prefix;
 pub(crate) use queries::{

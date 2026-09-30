@@ -187,6 +187,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         );
     }
     let automatic_semicolons = crate::lexer::automatic_semicolons(&tokens);
+    let comments = crate::lexer::comments(source, &tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
@@ -194,6 +195,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             text: source,
             kind: options.source_kind,
             automatic_semicolons: &automatic_semicolons,
+            comments: &comments,
         },
         &plan,
         options.rewrite_imports,
@@ -240,6 +242,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         shared_bindings: flat.shared_bindings,
         destructured_lists: flat.destructured_lists,
         inserted: flat.inserted,
+        single_line_breaks: flat.single_line_breaks,
         support_imports: flat.support_imports,
         commonjs: flat.commonjs,
     };
@@ -1029,6 +1032,7 @@ fn report_parsed(
         };
     }
     let automatic_semicolons = crate::lexer::automatic_semicolons(tokens);
+    let comments = crate::lexer::comments(source, tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
@@ -1036,6 +1040,7 @@ fn report_parsed(
             text: source,
             kind: options.source_kind,
             automatic_semicolons: &automatic_semicolons,
+            comments: &comments,
         },
         &plan,
         options.rewrite_imports,
@@ -1057,6 +1062,7 @@ fn report_parsed(
         shared_bindings: flat.shared_bindings,
         destructured_lists: flat.destructured_lists,
         inserted: flat.inserted,
+        single_line_breaks: flat.single_line_breaks,
         support_imports: flat.support_imports,
         commonjs: flat.commonjs,
     };
