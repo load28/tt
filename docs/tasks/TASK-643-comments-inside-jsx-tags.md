@@ -78,7 +78,24 @@ None.
 
 ## Verification
 
-See the gate recorded at the end of this record.
+The gate over TASK-640 to TASK-643 and the merged TASK-644 to TASK-646, run
+serialized with `CARGO_BUILD_JOBS=2`:
+
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`: no warnings.
+- [x] `RUST_TEST_THREADS=2 TTC_REQUIRE_TSGO=1 TTC_REQUIRE_TYPESCRIPT_CASES=1
+  TT_BASELINE_TRACKING_DIR=<dir> cargo test`: 1,771 passed, 0 failed, 0
+  ignored.
+- [x] `node scripts/check-baselines --tracking <dir>`: "141 compared, none
+  unused".
+- [x] `./scripts/ci agents`: "local CI passed" (warnings only: `rolldown` not
+  on PATH, and `scripts/doctor` reporting the checkout not set up).
+- [x] `TTC_TYPESCRIPT_CASES=all cargo test --test corpus typescript_test_cases`
+  before the merge: "12779 parse, 45 differ (45 listed)".
+- [x] Baseline changes reviewed: `plainTsx.baseline` regains the eight lines
+  of the `attribute` hover TASK-639 removed.
+- Not run: the VS Code extension tests; none of TASK-640 to TASK-643 changes
+  the engine, the server, or the extension.
 
 ## Result
 
