@@ -613,6 +613,9 @@ pub struct ProjectionReport {
     pub diagnostics: Vec<Diagnostic>,
     /// Source byte ranges occupied by parser recovery nodes.
     pub recovered: Vec<(usize, usize)>,
+    /// Those of `recovered` that stood for a declaration (a malformed
+    /// variant), whose name the projection declares with the error type.
+    pub recovered_declarations: Vec<(usize, usize)>,
     /// The emission `emit` withholds from the typed program when the only
     /// thing wrong with the (recovered) file is its TypeScript: it does not
     /// parse, or its lowering plan could not be built over it. It is
@@ -674,6 +677,7 @@ pub(crate) fn compile_projection_report_parsed(
             emit: ordinary.emit,
             diagnostics: ordinary.diagnostics,
             recovered: Vec::new(),
+            recovered_declarations: Vec::new(),
             withheld: None,
         };
     }
@@ -693,6 +697,7 @@ pub(crate) fn compile_projection_report_parsed(
                 withheld: withheld_emit(source, options, program, tokens, &ordinary.diagnostics),
                 diagnostics: ordinary.diagnostics,
                 recovered: Vec::new(),
+                recovered_declarations: Vec::new(),
             };
         }
         let recovered_source = recover_source(source, &selected);
@@ -733,6 +738,11 @@ pub(crate) fn compile_projection_report_parsed(
                     .map(|emit| declare_recovered_variants(emit, &selected)),
                 withheld: withheld.map(|emit| declare_recovered_variants(emit, &selected)),
                 diagnostics: ordinary.diagnostics,
+                recovered_declarations: selected
+                    .iter()
+                    .filter(|node| matches!(node.kind, ast::RecoveryKind::VariantDecl { .. }))
+                    .map(|node| (node.span.start, node.span.end))
+                    .collect(),
                 recovered: selected
                     .into_iter()
                     .map(|node| (node.span.start, node.span.end))

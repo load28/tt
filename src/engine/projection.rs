@@ -60,6 +60,10 @@ pub struct ProjectedDocument {
     /// typed projection. Diagnostics originating inside these ranges are
     /// recovery effects; diagnostics elsewhere remain reportable.
     pub(crate) recovered: Vec<(usize, usize)>,
+    /// Whether a recovery stands for one of the file's declarations
+    /// ([`crate::ProjectionReport::recovered_declarations`]): the
+    /// declarations emitted from this projection are not the file's own.
+    pub(crate) recovered_declaration: bool,
     /// Whether `emit` is the faithful projection of a document whose
     /// TypeScript does not parse ([`crate::ProjectionReport::withheld`]).
     /// Only a document held open is checked through one, as an editor
@@ -168,6 +172,7 @@ impl ProjectedDocument {
             emit,
             tt_diagnostics: report.diagnostics,
             recovered: report.recovered,
+            recovered_declaration: !report.recovered_declarations.is_empty(),
             unparsed,
             exported_variant_symbols: std::sync::OnceLock::new(),
             imports: scan.imports,

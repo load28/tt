@@ -44,16 +44,17 @@ pub(crate) fn match_declarations(
 }
 
 /// The files whose declarations the compiler emitted against a placeholder:
-/// a projection that is not the file's own account of itself (an unparsed
-/// one, one with recovery placeholders, or a blocked file served as an empty
-/// module), and every file whose `.tt` imports reach one. Their
+/// a projection whose declarations are not the file's own (an unparsed one,
+/// one where a recovery stands for a declaration, or a blocked file served
+/// as an empty module), and every file whose `.tt` imports reach one. Their
 /// declarations are not written, so the previous ones stand until the
-/// source is fixed.
+/// source is fixed. A recovered expression leaves the declarations around
+/// it the file's own.
 fn reaches_placeholders(snapshot: &Snapshot) -> HashSet<PathBuf> {
     let mut reached: HashSet<PathBuf> = snapshot
         .files()
         .iter()
-        .filter(|file| file.unparsed || !file.recovered.is_empty())
+        .filter(|file| file.unparsed || file.recovered_declaration)
         .map(|file| file.source_path.clone())
         .chain(
             snapshot

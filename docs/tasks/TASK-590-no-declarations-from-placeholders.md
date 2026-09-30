@@ -67,7 +67,9 @@ type 'typeof X'`) and `any` in their own declarations
   run whenever any file has a placeholder: keeps unrelated files' sidecars
   stale for no reason, against the per-file write contract (TASK-509).
 - **Decision and rationale**: `match_declarations` leaves out every file
-  that is unparsed, has recovery placeholders, or is blocked, and every
+  that is unparsed, has a recovery standing for a declaration
+  (`ProjectionReport::recovered_declarations`, a malformed variant), or is
+  blocked, and every
   file whose `.tt` imports reach one (the language's own module graph,
   as `typed_member_sources` walks it). Their previous sidecars stand, and
   `--json-report` does not list them as written. A `.ts` file between two
@@ -98,6 +100,21 @@ type 'typeof X'`) and `any` in their own declarations
 - **Resolution**: `RecoveryKind::VariantDecl` carries the parameter list
   as written when it is balanced, and the type alias takes it.
 
+### Issue 2: A recovered expression stopped the editor's sidecar refresh
+
+- **Symptom**: The extension suite's "a recoverable malformed node
+  refreshes declarations around it" failed: `const broken = ready ? 1 : 2
+  |> f;` left the sidecar unwritten.
+- **Cause**: The first version withheld declarations for any projection
+  with recovery placeholders. An expression placeholder (`undefined as
+  any`) stands for a value inside code the user wrote; the declarations
+  around it are still the file's own, which is the extension's contract
+  (TASK-527's editor projection).
+- **Resolution**: Only a recovery that stands for a declaration withholds
+  them. `ProjectionReport` carries those ranges
+  (`recovered_declarations`) and the projected document records whether it
+  has one (`ProjectedDocument::recovered_declaration`).
+
 ## Remaining debt
 
 - A declaration of a file that reaches a placeholder only through
@@ -108,11 +125,12 @@ type 'typeof X'`) and `any` in their own declarations
 
 - [x] `cargo test --lib --test content_mapper --test snapshot --test compile`
 - [x] `cargo test --test cli types_keep_declarations` (with `TTC_REQUIRE_TSGO=1`)
+- [x] `editors/vscode`: server and client tests (222 passed) after Issue 2
 - [x] Full gate and extension tests run once at the end of the
   TASK-587–592 series; see TASK-592.
 
 ## Result
 
 Changed `src/ast.rs`, `src/parser/variants.rs`, `src/lib/compile.rs`,
-`src/engine/semantics/declarations.rs`, `docs/ai/tt.md`, and
+`src/engine/projection.rs`, `src/engine/semantics/declarations.rs`, `docs/ai/tt.md`, and
 `tests/cli.rs`.
