@@ -376,6 +376,8 @@ struct ProbeDoc {
 /// it cannot collide with the name the user is in the middle of typing.
 pub(super) const PROBE_NAME: &str = "$tt_probe";
 
+const WILDCARD_ARM: &str = "_ =>";
+
 use service::*;
 pub(super) use service::{
     analyses_for, externs_from, externs_of, imported_variants, source_byte, span_range,

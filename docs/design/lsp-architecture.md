@@ -189,6 +189,28 @@ The adapter's legend is the LSP 3.17 standard types and modifiers plus
 TypeScript's `local`; an untitled buffer or a session without a toolchain
 still gets the parse-only tokens.
 
+**Update (TASK-607)**: an arm's pattern is completed from what the
+scrutinee's type admits, as TypeScript completes a `case` of the switch the
+match lowers to. The parse-only answer knows tt's declarations only: a
+literal match offered every visible variant's tags and no literal, and a
+hand-written `kind` union offered nothing but `_`. A literal arm now says
+the match is over literals (literal and tag arms never mix), so no variant
+tag is offered there. At an arm slot the engine (`patternCompletions`)
+lowers the buffer without the word being typed (with a wildcard arm in the
+slot when the match has no arm yet, so that it lowers), finds the output
+the scrutinee was copied to by the emit mapping, and asks the service to
+complete the right operand of `(scrutinee).kind === ` (a tag match, the
+variant ABI's discriminant) or `(scrutinee) === ` (a literal match; both
+when no arm says which). TypeScript answers a comparison's right operand
+with the literals of the left operand's type, narrowing included
+(`services/completions.ts`, `getContextualType` for an equality operator,
+and the `literals` of the completion data). An entry is kept only when its
+label parses with tt's arm pattern grammar as one literal (for a tag match,
+a string literal whose value is a tag); TypeScript's keywords are not
+literal entries. A candidate an unguarded arm already covers stays in the
+list and sorts after the rest, as a covered tag always has; `_` is always
+offered.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

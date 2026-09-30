@@ -1087,3 +1087,89 @@ pub(super) fn ensure_std_module(root: &Path) {
 pub(super) fn ensure_runtime_module(root: &Path) {
     let _ = crate::StdPackage::Runtime.materialize(root);
 }
+
+pub(super) struct Discriminant {
+    label: String,
+    written: String,
+    value: crate::ast::LiteralValue,
+}
+
+pub(super) fn discriminant(
+    label: &str,
+    family: crate::engine::completions::PatternFamily,
+) -> Option<Discriminant> {
+    use crate::ast::{LiteralValue, Pattern};
+    use crate::engine::completions::PatternFamily;
+    let Some(Pattern::Literals(mut literals)) = crate::parser::pattern_of(label) else {
+        return None;
+    };
+    if literals.len() != 1 {
+        return None;
+    }
+    let value = literals.remove(0).value;
+    match family {
+        PatternFamily::Literals => Some(Discriminant {
+            label: label.to_string(),
+            written: label.to_string(),
+            value,
+        }),
+        PatternFamily::Tags => {
+            let LiteralValue::Str(tag) = value.clone() else {
+                return None;
+            };
+            let Some(Pattern::Tags(tags)) = crate::parser::pattern_of(&tag) else {
+                return None;
+            };
+            (tags.len() == 1 && tags[0].bindings.is_none() && tags[0].tag == tag).then(|| {
+                Discriminant {
+                    label: tag,
+                    written: label.to_string(),
+                    value,
+                }
+            })
+        }
+        PatternFamily::Instances => None,
+    }
+}
+
+pub(super) fn arm_candidates(
+    parsed: Vec<crate::engine::TtCompletion>,
+    family: crate::engine::completions::PatternFamily,
+    typed: Vec<Discriminant>,
+    covered: &[String],
+    literals: &[crate::ast::LiteralValue],
+) -> Vec<crate::engine::TtCompletion> {
+    use crate::engine::TtCompletionKind;
+    use crate::engine::completions::PatternFamily;
+    let mut out: Vec<crate::engine::TtCompletion> = Vec::new();
+    for candidate in typed {
+        if out.iter().any(|item| item.label == candidate.label) {
+            continue;
+        }
+        let item = match family {
+            PatternFamily::Tags => parsed
+                .iter()
+                .find(|item| item.kind == TtCompletionKind::Case && item.label == candidate.label)
+                .cloned()
+                .unwrap_or_else(|| crate::engine::TtCompletion {
+                    detail: format!(
+                        "{}: {}",
+                        crate::core_ir::VARIANT_TAG_FIELD,
+                        candidate.written
+                    ),
+                    covered: covered.contains(&candidate.label),
+                    label: candidate.label,
+                    kind: TtCompletionKind::Case,
+                }),
+            _ => crate::engine::TtCompletion {
+                detail: format!("literal {}", candidate.written),
+                covered: literals.contains(&candidate.value),
+                label: candidate.label,
+                kind: TtCompletionKind::Literal,
+            },
+        };
+        out.push(item);
+    }
+    out.push(crate::engine::completions::wildcard());
+    out
+}

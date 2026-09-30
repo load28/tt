@@ -1132,6 +1132,13 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
   },
 ];
 
+const PATTERN_COMPLETION_KINDS: Record<engine.EngineTtCompletion["kind"], CompletionItemKind> = {
+  case: CompletionItemKind.EnumMember,
+  field: CompletionItemKind.Field,
+  literal: CompletionItemKind.Constant,
+  wildcard: CompletionItemKind.Keyword,
+};
+
 /** TypeScript element-kind strings → LSP completion kinds. */
 const TS_COMPLETION_KINDS: Record<string, CompletionItemKind> = {
   var: CompletionItemKind.Variable,
@@ -1253,21 +1260,20 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   }
 
   // A pattern position — an arm, an `if let`, a payload field list, a
-  // nested pattern — is tt's alone: case tags and field names exist
-  // nowhere in the emitted TypeScript, so the service has nothing to
-  // complete there. The engine answers from the compiler's own
+  // nested pattern — is tt's: the engine answers from the compiler's own
   // declaration table, under the same shadowing the compiler resolves
-  // with, and knows the positions this server never did (`if let`,
-  // let-else payloads, nested patterns).
-  if (here.items.length > 0) {
-    return here.items.map((item) => ({
+  // with, and asks TypeScript what the scrutinee's type admits (the tags
+  // or literals of its discriminant, the properties of the selected case).
+  // Without a served file the declaration table answers alone.
+  if (here.pattern) {
+    const fsPath = enginePath(doc);
+    const typed =
+      fsPath === null
+        ? null
+        : await engine.patternCompletions(await compilerOf(doc), fsPath, params.position, logEngine);
+    return (typed ?? here.items).map((item) => ({
       label: item.label,
-      kind:
-        item.kind === "case"
-          ? CompletionItemKind.EnumMember
-          : item.kind === "field"
-            ? CompletionItemKind.Field
-            : CompletionItemKind.Keyword,
+      kind: PATTERN_COMPLETION_KINDS[item.kind],
       detail: item.detail,
       // An arm already written stays in the list — a guard may repeat a
       // tag — but sorts after the ones still missing.

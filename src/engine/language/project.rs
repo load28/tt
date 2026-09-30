@@ -500,6 +500,119 @@ impl Project {
         })
     }
 
+    /// What can be written at a pattern position, typed by TypeScript where
+    /// it can answer: `None` when `position` is not a pattern position.
+    pub fn pattern_completions(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Option<Vec<crate::engine::TtCompletion>>, String> {
+        use crate::engine::completions::{TypedSite, pattern_question};
+        let (doc, path) = self.serve(path)?;
+        let Some(question) =
+            pattern_question(&path, &doc.source, position, Texts::Open(&self.overlays))
+        else {
+            return Ok(None);
+        };
+        let items = match question.typed {
+            Some(TypedSite::Arm {
+                prefix,
+                family,
+                covered,
+                literals,
+            }) => {
+                let at =
+                    prefix.map_or_else(|| source_byte(&doc.source, position), |(start, _)| start);
+                let source = match prefix {
+                    Some((start, end)) => format!("{}{}", &doc.source[..start], &doc.source[end..]),
+                    None => doc.source.clone(),
+                };
+                match self.discriminant_candidates(&doc, &path, &source, at, family)? {
+                    Some((family, candidates)) => {
+                        arm_candidates(question.items, family, candidates, &covered, &literals)
+                    }
+                    None => question.items,
+                }
+            }
+            None => question.items,
+        };
+        Ok(Some(items))
+    }
+
+    fn discriminant_candidates(
+        &mut self,
+        doc: &Arc<ServiceDoc>,
+        path: &Path,
+        source: &str,
+        at: usize,
+        family: Option<crate::engine::completions::PatternFamily>,
+    ) -> Result<Option<(crate::engine::completions::PatternFamily, Vec<Discriminant>)>, String>
+    {
+        use crate::engine::completions::PatternFamily;
+        let kind = crate::SourceKind::from_path(path).unwrap_or_default();
+        let lowered = |text: &str| {
+            let (start, end) = crate::engine::declarations::scrutinee_at(text, kind, at)?;
+            let report = crate::compile_projection_report(
+                text,
+                &crate::Options {
+                    filename: path.to_str(),
+                    source_kind: kind,
+                    defer_to_checker: true,
+                    rewrite_imports: crate::ImportRewrite::Off,
+                    ..crate::Options::default()
+                },
+            );
+            let emit = report.emit.or(report.withheld)?;
+            let out_start = mapper::to_output(&emit.mappings, start)?;
+            let out_end = out_start + (end - start);
+            (mapper::to_source_span(&emit.mappings, out_start, out_end) == Some((start, end)))
+                .then_some((emit, out_start, out_end))
+        };
+        let Some((emit, out_start, out_end)) = lowered(source)
+            .or_else(|| lowered(&format!("{}{WILDCARD_ARM}{}", &source[..at], &source[at..])))
+        else {
+            return Ok(None);
+        };
+        let families: &[PatternFamily] = match family {
+            Some(PatternFamily::Tags) => &[PatternFamily::Tags],
+            Some(PatternFamily::Literals) => &[PatternFamily::Literals],
+            Some(PatternFamily::Instances) => &[],
+            None => &[PatternFamily::Tags, PatternFamily::Literals],
+        };
+        for &family in families {
+            let access = match family {
+                PatternFamily::Tags => format!(".{}", crate::core_ir::VARIANT_TAG_FIELD),
+                _ => String::new(),
+            };
+            let head = format!(
+                "{}({}){access} === ",
+                &emit.code[..out_start],
+                &emit.code[out_start..out_end]
+            );
+            let code = format!("{head}{PROBE_NAME}{}", &emit.code[out_end..]);
+            let session = self.session();
+            open_served(session, path, &code);
+            let answer = ts_completions(
+                session,
+                path,
+                mapper::to_utf16(&code, head.len()),
+                &code,
+                &emit.generated_names,
+            );
+            open_served(session, path, &doc.code);
+            let candidates: Vec<Discriminant> = answer?
+                .items
+                .iter()
+                .filter(|item| item.kind != "keyword")
+                .filter_map(|item| discriminant(&item.label, family))
+                .collect();
+            if !candidates.is_empty() {
+                return Ok(Some((family, candidates)));
+            }
+        }
+        Ok(None)
+    }
+
     /// The signature and documentation behind one completion entry, fetched
     /// when the consumer asks about the one entry the user is looking at.
     /// `probe` re-installs the probed text the entry was listed from;

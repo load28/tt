@@ -650,6 +650,33 @@ test(
   },
 );
 
+test(
+  "pattern completion offers what the scrutinee's type admits",
+  { skip: skipTyped, timeout },
+  async () => {
+    const source = [
+      "variant Shape { Circle(radius: number), Point }",
+      'type Dir = "north" | "south";',
+      'type K = { kind: "Alpha"; x: number } | { kind: "Beta" };',
+      "export function f(d: Dir, k: K) {",
+      '  const a = match (d) { "north" => 1, };',
+      "  const b = match (k) { Alpha => 1, };",
+      "  return [a, b];",
+      "}",
+      "",
+    ].join("\n");
+    const { completion, stop } = await open(source);
+    try {
+      const literal = await completion('"north" => 1, ');
+      assert.deepEqual(literal.labels.sort(), ['"north"', '"south"', "_"]);
+      const tags = await completion("Alpha => 1, ");
+      assert.deepEqual(tags.labels.sort(), ["Alpha", "Beta", "_"]);
+    } finally {
+      stop();
+    }
+  },
+);
+
 const SUGGESTION_SOURCE = [
   "/** @deprecated */",
   "declare function old(): void;",

@@ -103,6 +103,11 @@ impl Workspace {
         super::completions::completions_at(path, source, position, self.texts())
     }
 
+    /// Whether `position` is a pattern position tt completes.
+    pub fn is_pattern_position(&self, path: &Path, source: &str, position: Position) -> bool {
+        super::completions::pattern_question(path, source, position, self.texts()).is_some()
+    }
+
     /// [`super::tt_hints`], with the files `source` imports read as this
     /// workspace holds them open.
     pub fn tt_hints(&self, path: &Path, source: &str) -> Vec<TtHint> {

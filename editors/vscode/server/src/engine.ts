@@ -126,7 +126,7 @@ export interface EngineTtHint {
 
 export interface EngineTtCompletion {
   label: string;
-  kind: "case" | "field" | "wildcard";
+  kind: "case" | "field" | "literal" | "wildcard";
   detail: string;
   /** True when an arm of this match already covers the case. */
   covered: boolean;
@@ -143,6 +143,7 @@ export interface EngineTtCompletions {
   /** The tt keywords whose construct can be written there, with
    * TypeScript's rank for a keyword. */
   keywords: EngineTtKeyword[];
+  pattern: boolean;
 }
 
 /** A tt keyword the engine found valid at a position. */
@@ -634,7 +635,23 @@ export async function ttCompletions(
     items: result?.items ?? [],
     member: result?.member ?? null,
     keywords: result?.keywords ?? [],
+    pattern: result?.pattern ?? false,
   };
+}
+
+export async function patternCompletions(
+  compiler: string,
+  path: string,
+  position: EnginePosition,
+  onError?: (message: string) => void,
+): Promise<EngineTtCompletion[] | null> {
+  const result = await semantic<{ items: EngineTtCompletion[] }>(
+    compiler,
+    "patternCompletions",
+    { path, position },
+    onError,
+  );
+  return result?.items ?? null;
 }
 
 /** What tt has to say about a buffer that is not an error — today, the

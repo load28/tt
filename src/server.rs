@@ -44,11 +44,17 @@
 //! → { "id": 6, "method": "ttCompletions", "params": { "path", "text", "position" } }
 //! ← { "id": 6, "result": { "items": [{ "label", "kind", "detail", "covered" }],
 //!                          "member": { "receiver" } | null,
-//!                          "keywords": [{ "label", "sortText" }] } }
+//!                          "keywords": [{ "label", "sortText" }], "pattern" } }
 //! `member`: the cursor completes a member name; `receiver` is the path of
 //! names before the `.` (`Result`, `ns.Shape`), or null for any other
 //! expression. `keywords`: the tt keywords whose construct can be written
-//! at the position, with TypeScript's rank for a keyword.
+//! at the position, with TypeScript's rank for a keyword. `pattern`: the
+//! position is a pattern position tt completes.
+//!
+//! → { "method": "patternCompletions", "params": { "path", "position" } }
+//! ← { "result": { "items": [{ "label", "kind", "detail", "covered" }] } | null }
+//! The pattern completions at a pattern position with what the scrutinee's
+//! type admits, from the project's TypeScript; null elsewhere.
 //!
 //! → { "id": 7, "method": "ttHints", "params": { "path", "text" } }
 //! ← { "id": 7, "result": { "hints": [{ "kind", "range", "message" }] } }
@@ -338,6 +344,12 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
             })
         }),
         "semanticTokens" => semantic_tokens(params),
+        "patternCompletions" => semantic(workspace, params, |project, path, position| {
+            Ok(match project.pattern_completions(path, position)? {
+                None => serde_json::Value::Null,
+                Some(items) => json!({ "items": pattern_items_json(&items) }),
+            })
+        }),
         "documentSemanticTokens" => semantic(workspace, params, |project, path, _position| {
             let tokens: Vec<_> = project
                 .semantic_tokens(path)?
@@ -708,6 +720,25 @@ fn tt_symbol(
     }))
 }
 
+fn pattern_items_json(items: &[ttc::engine::TtCompletion]) -> Vec<serde_json::Value> {
+    items
+        .iter()
+        .map(|item| {
+            serde_json::json!({
+                "label": item.label,
+                "kind": match item.kind {
+                    ttc::engine::TtCompletionKind::Case => "case",
+                    ttc::engine::TtCompletionKind::Field => "field",
+                    ttc::engine::TtCompletionKind::Literal => "literal",
+                    ttc::engine::TtCompletionKind::Wildcard => "wildcard",
+                },
+                "detail": item.detail,
+                "covered": item.covered,
+            })
+        })
+        .collect()
+}
+
 /// What can be written at a pattern position — case tags, payload field
 /// names. Text-only, for the same reason [`tt_symbol`] is.
 fn tt_completions(
@@ -733,6 +764,7 @@ fn tt_completions(
                 "kind": match item.kind {
                     ttc::engine::TtCompletionKind::Case => "case",
                     ttc::engine::TtCompletionKind::Field => "field",
+                    ttc::engine::TtCompletionKind::Literal => "literal",
                     ttc::engine::TtCompletionKind::Wildcard => "wildcard",
                 },
                 "detail": item.detail,
@@ -740,12 +772,13 @@ fn tt_completions(
             })
         })
         .collect();
+    let pattern = workspace.is_pattern_position(Path::new(path), text_param(params)?, position);
     let keywords: Vec<_> =
         ttc::engine::tt_keywords_at(Path::new(path), text_param(params)?, position)
             .into_iter()
             .map(|keyword| json!({ "label": keyword.label(), "sortText": keyword.sort_text() }))
             .collect();
-    Ok(json!({ "items": items, "member": member, "keywords": keywords }))
+    Ok(json!({ "items": items, "member": member, "keywords": keywords, "pattern": pattern }))
 }
 
 /// What tt has to say about a buffer that is not an error — today, the

@@ -67,7 +67,7 @@ pub(crate) use parse::{
     Parser, lex_and_parse_with_kind, parse, parse_with_kind, projection_recoveries,
     unclaimed_candidates, val_modifiers,
 };
-pub(crate) use partial::{PatternSite, arm_headers, pattern_site_at};
+pub(crate) use partial::{PatternSite, arm_headers, pattern_of, pattern_site_at};
 pub(crate) use vals::is_param_modifier;
 
 pub(super) enum Claim<T> {

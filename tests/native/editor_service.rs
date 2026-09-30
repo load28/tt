@@ -283,3 +283,45 @@ export function area(s: Shape): number {\n\
             .collect::<Vec<_>>()
     );
 }
+
+fn pattern_labels(project: &mut ttc::engine::Project, file: &Path, position: ttc::engine::Position) -> Vec<String> {
+    project
+        .pattern_completions(file, position)
+        .unwrap()
+        .expect("a pattern position")
+        .into_iter()
+        .map(|item| {
+            format!(
+                "{}{}",
+                item.label,
+                if item.covered { " (covered)" } else { "" }
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn pattern_completion_offers_what_the_scrutinee_type_admits() {
+    require_tsgo!();
+    let head = "type Dir = \"north\" | \"south\";\n\
+type K = { kind: \"Alpha\"; x: number } | { kind: \"Beta\" };\n\
+variant Shape { Circle(radius: number), Point }\n\
+export function f(d: Dir, k: K, n: 1 | 2 | 3, s: Shape, text: string) {\n";
+    for (arm, expected) in [
+        ("match (d) { \"north\" => 1, @@ }", &["\"north\" (covered)", "\"south\"", "_"][..]),
+        ("match (d) { @@ }", &["\"north\"", "\"south\"", "_"][..]),
+        ("match (n) { 1 => 1, @@ }", &["1 (covered)", "2", "3", "_"][..]),
+        ("match (text) { \"a\" => 1, @@ }", &["_"][..]),
+        ("match (k) { Alpha => 1, @@ }", &["Alpha (covered)", "Beta", "_"][..]),
+        ("match (k) { Alpha => 1, Be@@ }", &["Alpha (covered)", "Beta", "_"][..]),
+        ("match (k) { @@ }", &["Alpha", "Beta", "_"][..]),
+        ("match (k) { Alpha if k.x > 0 => 1, @@ }", &["Alpha", "Beta", "_"][..]),
+        ("match (s) { Circle(radius) => radius, @@ }", &["Circle (covered)", "Point", "_"][..]),
+    ] {
+        let (source, position) = at_cursor(&format!("{head}  const b = {arm};\n  return b;\n}}\n"));
+        let dir = project(&[("src/main.tt", &source)]);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        let mut project = open_service(&file);
+        assert_eq!(pattern_labels(&mut project, &file, position), expected, "{arm}");
+    }
+}
