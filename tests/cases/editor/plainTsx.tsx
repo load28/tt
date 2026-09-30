@@ -3,5 +3,5 @@ declare global { namespace JSX { interface IntrinsicElements { button: { label?:
 export function Button(props: { /*prop*/label: string }) {
   return <button label={props./*member*/label} onClick={() => /*arrow*/console.log(props.label)} />;
 }
-export const view = <Button /*attribute*/label="ok" />;
+export const view = <Button label="ok" />;
 const unused = <button label={1} />;

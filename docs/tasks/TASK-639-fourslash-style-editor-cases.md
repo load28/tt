@@ -186,6 +186,21 @@ a list its runs keep current. This task brings both to tt.
 - **Resolution**: Recorded in the baselines, so a change to any of them is
   a reviewed diff. Candidate follow-ups.
 
+### Issue 4: A comment inside a JSX tag hides the element from the lexer facts
+
+- **Symptom**: With `plainTsx` committed, the library test
+  `lexer::facts::tests::the_machine_reads_the_corpus_as_swc_does`, which
+  reads every file under `tests/`, failed for `plainTsx.ttx` and
+  `plainTsx.tsx`: `jsx swc only: 439..474 "<Button /*attribute*/label=\"ok\" />;"`.
+  The raw case file has a marker comment between the tag name and its
+  attribute; swc reads the JSX element there and ttc's lexer facts do not.
+- **Cause**: A defect in the lexer facts' JSX recognition when a comment
+  sits inside an opening tag (`export const view = <Button /*c*/label="ok" />;`
+  in a `.tsx` or `.ttx` file). Not fixed here.
+- **Resolution**: The `attribute` marker was removed from the case (its
+  hover is covered by `prop`), so the existing test passes; the defect is
+  reported as a follow-up with that repro.
+
 ## Regression test (fails before the fix)
 
 Not applicable: this task adds a test runner and seed cases and fixes no
@@ -202,11 +217,23 @@ compiler bug. The runner's own failures are shown under Verification.
   of Issue 1; a range that the answer does not match fails with "the
   references at /*binding*/ are not the case's [|ranges|]".
 - [x] `cargo clippy --test editor_cases --test case_baselines -- -D warnings`.
-- [x] Full gate over TASK-637 to TASK-639 (below).
+- [x] Full gate over TASK-637 to TASK-639, after merging
+  `claude/ecstatic-dijkstra-qw5pf9` at `f656b15` (TASK-621 to TASK-628):
+  `cargo fmt --check`; `cargo clippy --all-targets -- -D warnings`;
+  `RUST_TEST_THREADS=2 TTC_REQUIRE_TSGO=1 TTC_REQUIRE_TYPESCRIPT_CASES=1
+  TT_BASELINE_TRACKING_DIR=<dir> cargo test` (46 test binaries, 1762
+  passed, 0 failed, no `SKIP`, 401 seconds); `node scripts/check-baselines
+  --tracking <dir>` ("127 compared, none unused"); `cargo check
+  --manifest-path fuzz/Cargo.toml --all-targets --locked`; `./scripts/ci
+  agents` passed (warnings: rolldown not on PATH, doctor reports the
+  checkout not ready, both environmental). The first run of this gate
+  failed on Issue 4 and on the fuzz lock file (TASK-637 Issue 3). The
+  extension suite was not run: no extension file changed.
 
 ## Result
 
 Changed files: `tests/editor_cases.rs`, `tests/cases/editor/**`,
 `tests/baselines/reference/editor/**`, `tests/case_baselines.rs`,
 `scripts/check-baselines`, `CONTRIBUTING.md`, `AGENTS.md`,
-`docs/tasks/INDEX.md`, and this record.
+`docs/tasks/INDEX.md`, and this record. Follow-ups: the lexer facts defect
+of Issue 4 and the findings of Issue 3.
