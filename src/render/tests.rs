@@ -384,6 +384,40 @@ fn tabs_expand_so_the_caret_lands_under_its_construct() {
 }
 
 #[test]
+fn wide_characters_take_their_display_width_before_and_under_the_carets() {
+    // TASK-592: UAX #11 widths — two columns for Hangul and an astral
+    // emoji, none for a combining mark — while the location keeps
+    // counting characters.
+    let source = "const s = \"한글🎉e\u{301}\"; Circel(r);\n";
+    let start = source[..source.find("Circel").unwrap()].chars().count() + 1;
+    let span = Span {
+        start: at(1, start),
+        end: Some(at(1, start + 6)),
+    };
+    let out = render(&report(Some(span), &[]), Some(source), Styles::PLAIN);
+    assert!(out.contains(&format!("--> shapes.tt:1:{start}")), "{out}");
+    let lines: Vec<&str> = out.lines().collect();
+    let text = lines.iter().find(|l| l.starts_with("1 |")).unwrap();
+    let carets = lines.iter().find(|l| l.contains('^')).unwrap();
+    let width = |s: &str| unicode_width::UnicodeWidthStr::width(s);
+    let construct = text.find("Circel").unwrap();
+    assert_eq!(
+        width(&text[..construct]),
+        width(&carets[..carets.find('^').unwrap()]),
+        "caret and construct must start in the same column\n{out}",
+    );
+    assert_eq!(carets.matches('^').count(), "Circel".len(), "{out}");
+
+    let span = Span {
+        start: at(1, 12),
+        end: Some(at(1, 14)),
+    };
+    let out = render(&report(Some(span), &[]), Some(source), Styles::PLAIN);
+    let carets = out.lines().find(|l| l.contains('^')).unwrap();
+    assert_eq!(carets.matches('^').count(), 4, "{out}");
+}
+
+#[test]
 fn an_end_before_its_start_still_renders_one_caret() {
     let span = Span {
         start: at(4, 3),
