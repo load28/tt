@@ -205,6 +205,7 @@ fn parse_variant_complete<'t>(
                 start: owner_start,
                 end: byte_end,
             },
+            keyword_off: cur.tokens[keyword_index].span.start,
             name: name.to_string(),
             name_off: name_span.start,
             exported,

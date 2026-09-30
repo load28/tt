@@ -23,8 +23,7 @@ patternCompletions:
 === completions /*field*/ patternCompletion.tt:7:31 ===
   |   const c = match (k) { Alpha() => 1, _ => 0 };
   |                               ^ /*field*/
-completion: 2 item(s), member false, probe yes
-  kind (property, 11)
+completion: 1 item(s), member false, probe yes
   x (property, 11)
 ttCompletions: pattern true, member null
 patternCompletions:
@@ -33,11 +32,26 @@ patternCompletions:
 === completions /*payload*/ patternCompletion.tt:8:32 ===
   |   const e = match (s) { Circle() => 1, _ => 0 };
   |                                ^ /*payload*/
-completion: 2 item(s), member false, probe yes
-  kind (property, 11)
+completion: 1 item(s), member false, probe yes
   radius (property, 11)
 ttCompletions: pattern true, member null
   radius (field) "radius: number"
 patternCompletions:
   radius (field) "radius: number"
+
+=== completions /*written*/ patternCompletion.tt:9:34 ===
+  |   const g = match (k) { Alpha(x, ) => x, _ => 0 };
+  |                                  ^ /*written*/
+completion: 0 item(s), member false, probe yes
+ttCompletions: pattern true, member null
+patternCompletions:
+
+=== completions /*ifLet*/ patternCompletion.tt:10:16 ===
+  |   if let Alpha() = k { return [g]; }
+  |                ^ /*ifLet*/
+completion: 1 item(s), member false, probe yes
+  x (property, 11)
+ttCompletions: pattern true, member null
+patternCompletions:
+  x (field) "x"
 

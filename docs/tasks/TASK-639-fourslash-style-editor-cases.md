@@ -5,7 +5,6 @@
 - **Completed**: 2026-09-30
 - **Commit**: see `git log --grep TASK-639`
 
-
 > TASK-643 fixed Issue 4's lexer defect and restored the `attribute`
 > marker inside the JSX tag of `plainTsx`.
 

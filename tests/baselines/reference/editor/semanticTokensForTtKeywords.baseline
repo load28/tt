@@ -1,0 +1,53 @@
+=== semanticTokens semanticTokensForTtKeywords.tt ===
+semanticTokens: 50 token(s)
+  2:8-2:15 "variant" keyword [declaration]
+  2:16-2:21 "Shape" enum
+  3:3-3:9 "Circle" enumMember
+  3:10-3:16 "radius" property
+  3:27-3:32 "Point" enumMember
+  4:18-4:22 "load" function [declaration]
+  4:23-4:25 "id" parameter [declaration]
+  4:36-4:43 "TResult" type
+  5:18-5:22 "trim" function [declaration]
+  5:23-5:27 "text" parameter [declaration]
+  6:17-6:21 "area" function [declaration]
+  6:22-6:23 "s" parameter [declaration]
+  6:25-6:30 "Shape" type [readonly]
+  6:32-6:33 "e" parameter [declaration]
+  6:44-6:46 "id" parameter [declaration]
+  6:57-6:64 "TResult" type
+  7:13-7:18 "scale" variable [declaration, readonly, local]
+  8:9-8:14 "clean" function [declaration, readonly, local]
+  8:17-8:21 "flow" keyword
+  9:8-9:12 "trim" function
+  10:9-10:13 "kind" variable [declaration, readonly, local]
+  10:16-10:21 "match" keyword
+  10:23-10:24 "e" parameter
+  10:28-10:30 "is" operator
+  10:31-10:36 "Error" class [defaultLibrary]
+  11:10-11:16 "Circle" enumMember
+  11:17-11:23 "radius" variable [declaration, readonly, local]
+  11:27-11:28 "s" parameter
+  11:38-11:44 "result" keyword
+  11:53-11:54 "n" variable [declaration, readonly, local]
+  11:61-11:65 "load" function
+  11:66-11:71 "clean" function [readonly, local]
+  11:72-11:74 "id" parameter
+  11:85-11:86 "n" variable [readonly, local]
+  11:89-11:95 "radius" variable [readonly, local]
+  11:98-11:103 "scale" variable [readonly, local]
+  12:7-12:13 "Circle" enumMember
+  12:14-12:20 "radius" property
+  12:22-12:23 "r" variable [declaration, local]
+  12:27-12:28 "s" parameter
+  12:43-12:49 "result" keyword
+  12:56-12:60 "load" function
+  12:61-12:63 "id" parameter
+  12:73-12:77 "kind" variable [readonly, local]
+  13:10-13:16 "result" keyword
+  14:11-14:12 "n" variable [declaration, readonly, local]
+  14:19-14:23 "load" function
+  14:24-14:26 "id" parameter
+  15:12-15:13 "n" variable [readonly, local]
+  15:16-15:17 "r" variable [local]
+

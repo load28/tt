@@ -373,6 +373,7 @@ export function area(s: Shape): number {\n\
     let tokens = project.semantic_tokens(&file).unwrap();
     let named = token_names(source, &tokens);
     let expected = [
+        ("variant", "keyword.declaration"),
         ("Shape", "enum"),
         ("Circle", "enumMember"),
         ("radius", "property"),

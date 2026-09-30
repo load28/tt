@@ -160,6 +160,9 @@ export interface EngineSemanticToken {
   range: EngineRange;
   /** An LSP standard token-type string ("keyword", "enumMember", ...). */
   kind: string;
+  /** LSP standard token-modifier strings ("declaration", ...); absent from
+   * a compiler that predates them. */
+  modifiers?: string[];
 }
 
 /** How a request ended: an engine result, an engine error (the session is

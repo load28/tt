@@ -1,4 +1,4 @@
-// @completions: literal, tag, field, payload
+// @completions: literal, tag, field, payload, written, ifLet
 type Dir = "north" | "south";
 type K = { kind: "Alpha"; x: number } | { kind: "Beta" };
 variant Shape { Circle(radius: number), Point }
@@ -7,5 +7,7 @@ export function f(d: Dir, k: K, s: Shape) {
   const b = match (k) { Alpha => 1, /*tag*/ };
   const c = match (k) { Alpha(/*field*/) => 1, _ => 0 };
   const e = match (s) { Circle(/*payload*/) => 1, _ => 0 };
-  return [a, b, c, e];
+  const g = match (k) { Alpha(x, /*written*/) => x, _ => 0 };
+  if let Alpha(/*ifLet*/) = k { return [g]; }
+  return [a, b, c, e, g];
 }

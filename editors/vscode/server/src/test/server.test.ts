@@ -1198,6 +1198,7 @@ test(
           `${lines[t.line].slice(t.character, t.character + t.length)}:${[t.type, ...t.modifiers].join(".")}`,
       );
       assert.deepEqual(named, [
+        "variant:keyword.declaration",
         "Shape:enum",
         "Circle:enumMember",
         "radius:property",
@@ -1262,6 +1263,8 @@ test(
       assert.equal(at(7, 11)?.type, "variable");
       // tt's Variant concept stays on the standard LSP `enum` wire token.
       assert.equal(at(11, 8)?.type, "enum");
+      assert.equal(at(11, 0)?.type, "keyword");
+      assert.deepEqual(at(11, 0)?.modifiers, ["declaration"]);
     } finally {
       stop();
     }

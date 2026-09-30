@@ -649,7 +649,10 @@
 | TASK-641 | Read five TypeScript forms the vendored swc parser rejected | Complete | 2026-09-30 | 2026-09-30 | [TASK-641](./TASK-641-swc-typescript-grammar-gaps.md) |
 | TASK-642 | Give a match that mixes tag and literal patterns no single-discriminant dispatch | Complete | 2026-09-30 | 2026-09-30 | [TASK-642](./TASK-642-mixed-pattern-match-dispatch.md) |
 | TASK-643 | Read a comment inside a JSX tag as trivia in the lexer facts | Complete | 2026-09-30 | 2026-09-30 | [TASK-643](./TASK-643-comments-inside-jsx-tags.md) |
+| TASK-644 | Go to a user variant's tag or field declaration through the engine's definition | Complete | 2026-09-30 | 2026-09-30 | [TASK-644](./TASK-644-engine-definition-of-tt-names.md) |
+| TASK-645 | Leave the discriminant out of every completion answer in a payload pattern | Complete | 2026-09-30 | 2026-09-30 | [TASK-645](./TASK-645-payload-completion-without-the-discriminant.md) |
+| TASK-646 | Color tt keywords as TypeScript's, with semantic tokens only where the grammar cannot decide | Complete | 2026-09-30 | 2026-09-30 | [TASK-646](./TASK-646-tt-keywords-in-semantic-tokens.md) |
 
 ## Next task number
 
-**TASK-644**
+**TASK-647**

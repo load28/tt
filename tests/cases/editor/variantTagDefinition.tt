@@ -1,0 +1,12 @@
+// @definition: imported, field, ifLet, letElse, local, alias
+// @filename: shapes.tt
+export variant Shape { Circle(radius: number), Point }
+// @filename: main.tt
+import { Shape } from "./shapes.tt";
+variant Local { One(value: number), Two }
+export function f(s: Shape, l: Local): number {
+  if let /*ifLet*/Circle(radius) = s { return radius; }
+  let /*letElse*/Circle(/*field*/radius: r) = s else { return 0; };
+  const n = match (l) { /*local*/One(/*alias*/value: v) => v, Two => 0 };
+  return match (s) { /*imported*/Circle(radius) => radius + r + n, Point => 0 };
+}

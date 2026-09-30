@@ -491,6 +491,8 @@ pub(crate) struct VariantDecl {
     /// Complete source owner from `variant` or `export` through the closing
     /// brace.
     pub span: Span,
+    /// Byte offset of the `variant` keyword.
+    pub keyword_off: usize,
     pub name: String,
     /// Byte offset of the name, for error reporting and the symbol API.
     pub name_off: usize,

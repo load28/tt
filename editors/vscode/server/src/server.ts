@@ -1871,7 +1871,13 @@ async function classifiedTokens(doc: TextDocument): Promise<engine.EngineClassif
     fsPath === null ? null : await engine.documentSemanticTokens(compiler, fsPath, logEngine);
   if (served) return served;
   const parsed = await engine.semanticTokens(compiler, doc.getText(), bufferPath(doc), logEngine);
-  return parsed?.map((token) => ({ range: token.range, type: token.kind, modifiers: [] })) ?? null;
+  return (
+    parsed?.map((token) => ({
+      range: token.range,
+      type: token.kind,
+      modifiers: token.modifiers ?? [],
+    })) ?? null
+  );
 }
 
 connection.languages.semanticTokens.on(async (params) => {

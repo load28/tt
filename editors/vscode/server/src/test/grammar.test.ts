@@ -523,3 +523,61 @@ test("a plain match(...) call is not the tt keyword; the construct shape is", as
   assertScope(lines, 3, "match", "keyword.control.match.tt");
   assertScope(lines, 4, "match", "keyword.control.match.tt");
 });
+
+/**
+ * The scope VS Code styles a semantic token with: the extension's
+ * language-specific `semanticTokenScopes` entry whose selector matches the
+ * most modifiers, else the default map of
+ * `src/vs/platform/theme/common/tokenClassificationRegistry.ts`.
+ */
+function semanticScope(
+  pkg: { contributes: { semanticTokenScopes?: { language: string; scopes: Record<string, string[]> }[] } },
+  language: string,
+  type: string,
+  modifiers: string[],
+): string | undefined {
+  const contributed = (pkg.contributes.semanticTokenScopes ?? [])
+    .filter((entry) => entry.language === language)
+    .flatMap((entry) => Object.entries(entry.scopes))
+    .map(([selector, scopes]) => {
+      const [selectorType, ...selectorModifiers] = selector.split(".");
+      return { selectorType, selectorModifiers, scope: scopes[0] };
+    })
+    .filter(
+      ({ selectorType, selectorModifiers }) =>
+        selectorType === type && selectorModifiers.every((m) => modifiers.includes(m)),
+    )
+    .sort((a, b) => b.selectorModifiers.length - a.selectorModifiers.length);
+  if (contributed.length > 0) return contributed[0].scope;
+  return ({ keyword: "keyword.control", operator: "keyword.operator" } as Record<string, string>)[type];
+}
+
+test("a tt keyword's semantic token is styled as the grammar scopes the same word", async () => {
+  const pkg = JSON.parse(fs.readFileSync(path.join(syntaxesDir, "..", "package.json"), "utf8"));
+  const source = [
+    "export variant Shape { Circle(r: number), Point }",
+    "const f = flow |> trim;",
+    "const k = match (e) { is Error => 1, _ => 0 };",
+    "function g() { return result { const n = try get(); return n; }; }",
+    "",
+  ].join("\n");
+  const reported: [number, string, string, string[]][] = [
+    [1, "variant", "keyword", ["declaration"]],
+    [2, "flow", "keyword", []],
+    [3, "match", "keyword", []],
+    [3, "is", "operator", []],
+    [4, "result", "keyword", []],
+  ];
+  for (const [language, scopeName] of [["tt", "source.tt"], ["ttx", "source.ttx"]]) {
+    const lines = await tokenize(scopeName, source);
+    for (const [line, text, type, modifiers] of reported) {
+      const scope = semanticScope(pkg, language, type, modifiers);
+      assert.ok(scope, `${language}: no scope for ${type}`);
+      const grammar = tokenAt(lines, line, text).scopes.at(-1) ?? "";
+      assert.ok(
+        grammar === scope || grammar.startsWith(`${scope}.`),
+        `${language}: ${text} is ${[type, ...modifiers].join(".")} → ${scope}, but the grammar scopes it ${grammar}`,
+      );
+    }
+  }
+});
