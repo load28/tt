@@ -283,6 +283,15 @@ tsgo project:
 > configuration names a content mapper for another extension, because running
 > external code would also run that mapper, and an inferred project.
 
+> **Update (TASK-614)**: the identity mapper exists in the served
+> configuration only while the host can read that configuration; a malformed
+> `tsconfig.json` is served as written, without it. TypeScript keeps the
+> content it mapped before, and a module edited while the mapper was absent
+> came back with that old content once the configuration was fixed. The
+> served arrangement is therefore "mapped, and the served configuration
+> carries the mapper"; when it changes the host opens the project on a fresh
+> compiler, as it already did when the mapped/unmapped choice changed.
+
 > **Update (TASK-484)**: the editor language service (`tsgo --lsp` over the
 > real disk, `src/engine/language/`) has the same gap and cannot use an
 > identity mapper, because a language server reads a mapper package only from

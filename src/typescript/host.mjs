@@ -316,6 +316,7 @@ async function main() {
   const pendingDisk = { created: [], changed: [], deleted: [] };
   let diskGeneration = 0;
   let mapped = false;
+  let carried = false;
   const mapperPackage = path.join(
     path.dirname(fileURLToPath(import.meta.url)),
     `typed-engine-mapper-${createHash("sha256").update(process.execPath).digest("hex").slice(0, 16)}`,
@@ -573,6 +574,9 @@ async function main() {
         }
         if (changed) configFiles.set(file, JSON.stringify(config));
       }
+      const carries = mapped && configFiles.has(open.tsconfig);
+      if (opened && carries !== carried) reconnect();
+      carried = carries;
       for (const file of new Set([...previous.keys(), ...configFiles.keys()])) {
         if (previous.get(file) !== configFiles.get(file)) changes.changed.push(file);
       }

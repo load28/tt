@@ -505,6 +505,54 @@ fn typed_watch_follows_configuration_discovery() {
     assert!(!log.contains("ts5083"), "{log}");
 }
 
+/// TASK-614: an edit made while the configuration cannot be parsed reaches
+/// the program once it can be again, whether the fix lands in a later pass
+/// or in the same one.
+#[test]
+fn typed_watch_checks_edits_made_while_the_configuration_was_malformed() {
+    if !common::toolchain() {
+        return;
+    }
+    let root = Workspace::in_repo_with_subdir("typed-watch-malformed-config", "src");
+    let good = r#"{"compilerOptions":{"strict":true,"noEmit":true,"types":[]},"include":["src"]}"#;
+    let broken = r#"{"compilerOptions":{"strict":true,,}"#;
+    fs::write(root.join("tsconfig.json"), good).unwrap();
+    fs::write(root.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    let log = root.join("watch.log");
+    let _watch = Watch(
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .current_dir(&root)
+            .args(["--check-types", "--watch", "src"])
+            .stdout(std::process::Stdio::null())
+            .stderr(fs::File::create(&log).unwrap())
+            .spawn()
+            .unwrap(),
+    );
+    let read = || fs::read_to_string(&log).unwrap();
+    let passes = || read().matches(" reported in ").count();
+    let settled_on = |message: &str| {
+        let log = read();
+        log.contains(message) && log.trim_end().ends_with("watching")
+    };
+    let last = || read().trim_end().lines().last().unwrap_or("").to_owned();
+    wait_for(|| read().contains("Ctrl-C"));
+    fs::write(root.join("tsconfig.json"), broken).unwrap();
+    wait_for(|| read().contains("ts1136"));
+    let before = passes();
+    fs::write(root.join("src/a.tt"), "export const a: string = 1;\n").unwrap();
+    wait_for(|| passes() > before);
+    fs::write(root.join("tsconfig.json"), good).unwrap();
+    wait_for(|| settled_on("expected `string`"));
+    assert!(last().contains(" 1 reported in "), "{}", read());
+
+    fs::write(root.join("tsconfig.json"), broken).unwrap();
+    wait_for(|| read().matches("ts1136").count() > 1);
+    fs::write(root.join("src/a.tt"), "export const a: number = \"x\";\n").unwrap();
+    fs::write(root.join("tsconfig.json"), good).unwrap();
+    wait_for(|| settled_on("expected `number`"));
+    assert!(last().contains(" 1 reported in "), "{}", read());
+}
+
 /// TASK-588: without a configuration, the program is the walk of the
 /// inputs' directory, and discovery read every `tsconfig.json` path it
 /// probed; both are what `--dependencies` answers.

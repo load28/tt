@@ -619,7 +619,8 @@
 | TASK-611 | Answer `textDocument/prepareRename` by the rules rename refuses by | Complete | 2026-09-30 | 2026-09-30 | [TASK-611](./TASK-611-prepare-rename.md) |
 | TASK-612 | Name the module an auto-import entry imports from | Complete | 2026-09-30 | 2026-09-30 | [TASK-612](./TASK-612-auto-import-label-details.md) |
 | TASK-613 | Pin that a pipeline step being typed answers as its TypeScript equivalent does | Complete | 2026-09-30 | 2026-09-30 | [TASK-613](./TASK-613-pipeline-step-typing-matches-typescript.md) |
+| TASK-614 | Check edits made while the configuration was malformed | Complete | 2026-09-30 | 2026-09-30 | [TASK-614](./TASK-614-edits-under-a-malformed-configuration.md) |
 
 ## Next task number
 
-**TASK-614**
+**TASK-621**
