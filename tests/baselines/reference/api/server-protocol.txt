@@ -251,6 +251,7 @@ params read: banner, filename, includeTypes, isRetrigger, label, member, path, p
         snippet: boolean
         sortText: string
         source: null
+        tags: []
       }]
       member: boolean
       probe: null

@@ -39,6 +39,7 @@ import {
   CodeActionKind,
   CompletionItem,
   CompletionItemKind,
+  CompletionItemTag,
   CompletionTriggerKind,
   createConnection,
   Diagnostic,
@@ -91,6 +92,7 @@ let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
 let hasVersionedWorkspaceEditCapability = false;
 let hasLabelDetailsCapability = false;
+let completionTagSupport: CompletionItemTag[] = [];
 let workspaceRoots: string[] = [];
 /** What the server has already told the user it cannot do (notices.ts). */
 const notices = new NoticeLedger();
@@ -108,6 +110,8 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   hasLabelDetailsCapability = Boolean(
     params.capabilities.textDocument?.completion?.completionItem?.labelDetailsSupport,
   );
+  completionTagSupport =
+    params.capabilities.textDocument?.completion?.completionItem?.tagSupport?.valueSet ?? [];
   workspaceRoots = folderRoots(params.workspaceFolders);
 
   return {
@@ -1062,6 +1066,13 @@ const PATTERN_COMPLETION_KINDS: Record<engine.EngineTtCompletion["kind"], Comple
   wildcard: CompletionItemKind.Keyword,
 };
 
+/** The tags of an entry the client said it renders (LSP 3.17
+ * `CompletionClientCapabilities.completionItem.tagSupport`), or none. */
+function supportedTags(tags: CompletionItemTag[] | undefined): CompletionItemTag[] | undefined {
+  const shown = (tags ?? []).filter((tag) => completionTagSupport.includes(tag));
+  return shown.length > 0 ? shown : undefined;
+}
+
 /** What a TS-delegated completion item carries so its signature and
  * documentation can be fetched when the editor asks for that one entry
  * (`completionItem/resolve`). Positions are in source coordinates and the
@@ -1104,6 +1115,7 @@ async function tsCompletions(
   return list.items.map((entry) => ({
     label: entry.label,
     kind: entry.kind ?? undefined,
+    tags: supportedTags(entry.tags),
     detail: entry.detail ?? undefined,
     sortText: `2${entry.sortText}`,
     insertText: entry.range ? undefined : (entry.insertText ?? undefined),

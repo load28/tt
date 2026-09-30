@@ -188,6 +188,32 @@ impl CompletionItemKind {
     }
 }
 
+/// Extra information about how a completion entry is rendered: LSP 3.17's
+/// `CompletionItemTag`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompletionItemTag {
+    /// `Deprecated` (1): the entry is shown struck through.
+    Deprecated,
+}
+
+impl CompletionItemTag {
+    /// The tag an LSP `CompletionItemTag` value names, `None` for a value
+    /// LSP 3.17 does not define.
+    pub fn from_lsp(value: u64) -> Option<CompletionItemTag> {
+        match value {
+            1 => Some(CompletionItemTag::Deprecated),
+            _ => None,
+        }
+    }
+
+    /// The tag's LSP `CompletionItemTag` value.
+    pub fn lsp(self) -> u8 {
+        match self {
+            CompletionItemTag::Deprecated => 1,
+        }
+    }
+}
+
 /// One completion entry, in the raw terms the adapter ranks and renders.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompletionItem {
@@ -196,6 +222,9 @@ pub struct CompletionItem {
     /// What the entry offers, as the service classified it; `None` when it
     /// did not say.
     pub kind: Option<CompletionItemKind>,
+    /// How the service says to render the entry: `Deprecated` for a
+    /// declaration marked `@deprecated`.
+    pub tags: Vec<CompletionItemTag>,
     /// The service's own sort text (the adapter adds its layer prefix).
     pub sort_text: String,
     /// Insertion text, independent of the decorated display label.

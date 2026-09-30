@@ -215,6 +215,15 @@ pub(super) fn ts_completions(
             kind: item["kind"]
                 .as_u64()
                 .and_then(crate::engine::CompletionItemKind::from_lsp),
+            tags: item["tags"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|tag| {
+                    tag.as_u64()
+                        .and_then(crate::engine::CompletionItemTag::from_lsp)
+                })
+                .collect(),
             sort_text: item["sortText"].as_str().unwrap_or(&label).to_string(),
             insert_text: item["insertText"]
                 .as_str()
@@ -328,6 +337,7 @@ pub(super) fn tt_module_entries(
                 detail: Some(name.clone()),
                 label: name,
                 kind: Some(crate::engine::CompletionItemKind::File),
+                tags: Vec::new(),
                 sort_text: "11".to_string(),
                 insert_text: None,
                 filter_text: None,

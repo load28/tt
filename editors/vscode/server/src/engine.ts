@@ -19,7 +19,7 @@
  * one-shot commands.
  * ----------------------------------------------------------------------- */
 import { ChildProcess, spawn } from "child_process";
-import type { CompletionItemKind } from "vscode-languageserver/node";
+import type { CompletionItemKind, CompletionItemTag } from "vscode-languageserver/node";
 
 
 /** The name a rename asks the engine for, standing in for the new name in
@@ -57,6 +57,8 @@ export interface EngineCompletionItem {
   /** LSP 3.17 `CompletionItemKind`, as the service classified the entry;
    * null when it did not say. */
   kind?: CompletionItemKind | null;
+  /** LSP 3.17 `CompletionItemTag`s: `1` (deprecated). */
+  tags?: CompletionItemTag[];
   sortText: string;
   insertText?: string | null;
   filterText?: string | null;

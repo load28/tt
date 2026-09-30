@@ -110,6 +110,28 @@ impl Unpin for CompletionItemKind
 impl UnsafeUnpin for CompletionItemKind
 impl UnwindSafe for CompletionItemKind
 
+// enum ttc::engine::CompletionItemTag
+pub enum CompletionItemTag {
+    Deprecated,
+}
+impl CompletionItemTag
+    pub fn from_lsp(value: u64) -> Option<CompletionItemTag>
+    pub fn lsp(self) -> u8
+impl Clone for CompletionItemTag
+impl Copy for CompletionItemTag
+impl Debug for CompletionItemTag
+impl Eq for CompletionItemTag
+impl Hash for CompletionItemTag
+impl PartialEq for CompletionItemTag
+impl StructuralPartialEq for CompletionItemTag
+impl Freeze for CompletionItemTag
+impl RefUnwindSafe for CompletionItemTag
+impl Send for CompletionItemTag
+impl Sync for CompletionItemTag
+impl Unpin for CompletionItemTag
+impl UnsafeUnpin for CompletionItemTag
+impl UnwindSafe for CompletionItemTag
+
 // enum ttc::engine::PrepareRename
 pub enum PrepareRename {
     Range(Range),
@@ -508,6 +530,7 @@ impl UnwindSafe for CompletionDetail
 pub struct CompletionItem {
     pub label: String,
     pub kind: Option<CompletionItemKind>,
+    pub tags: Vec<CompletionItemTag>,
     pub sort_text: String,
     pub insert_text: Option<String>,
     pub filter_text: Option<String>,

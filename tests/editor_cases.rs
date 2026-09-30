@@ -631,6 +631,7 @@ fn engine_answer(workspace: &mut ttc::engine::Workspace, request: &Request) -> V
                 "items": items.iter().map(|item| json!({
                     "label": item.label,
                     "kind": item.kind.map(|kind| kind.lsp()),
+                    "tags": item.tags.iter().map(|tag| tag.lsp()).collect::<Vec<_>>(),
                     "sortText": item.sort_text,
                     "insertText": item.insert_text,
                     "filterText": item.filter_text,
@@ -1019,7 +1020,10 @@ impl Lsp {
                         "hover": { "contentFormat": ["markdown", "plaintext"] },
                         "definition": {},
                         "references": {},
-                        "completion": { "completionItem": { "labelDetailsSupport": true } },
+                        "completion": { "completionItem": {
+                            "labelDetailsSupport": true,
+                            "tagSupport": { "valueSet": [1] },
+                        } },
                         "signatureHelp": {},
                         "rename": { "prepareSupport": true },
                         "semanticTokens": {
@@ -1475,10 +1479,11 @@ impl Files<'_> {
 
 fn completion_line(item: &Value) -> String {
     let mut line = format!(
-        "{} ({}, {})",
+        "{} ({}, {}){}",
         item["label"].as_str().unwrap_or_default(),
         lsp_completion_kind(&item["kind"]),
-        item["sortText"].as_str().unwrap_or_default()
+        item["sortText"].as_str().unwrap_or_default(),
+        lsp_completion_tags(item)
     );
     if let Some(insert) = item["insertText"].as_str()
         && Some(insert) != item["label"].as_str()
@@ -2315,9 +2320,13 @@ fn parity_view(
             let labels: BTreeSet<String> = items
                 .iter()
                 .filter_map(|item| {
-                    item["label"]
-                        .as_str()
-                        .map(|label| format!("{label} ({})", lsp_completion_kind(&item["kind"])))
+                    item["label"].as_str().map(|label| {
+                        format!(
+                            "{label} ({}){}",
+                            lsp_completion_kind(&item["kind"]),
+                            lsp_completion_tags(item)
+                        )
+                    })
                 })
                 .collect();
             labels.into_iter().collect::<Vec<_>>().join("\n")

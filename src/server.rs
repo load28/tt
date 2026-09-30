@@ -275,6 +275,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                 "items": items.iter().map(|item| json!({
                     "label": item.label,
                     "kind": item.kind.map(|kind| kind.lsp()),
+                    "tags": item.tags.iter().map(|tag| tag.lsp()).collect::<Vec<_>>(),
                     "sortText": item.sort_text,
                     "insertText": item.insert_text,
                     "filterText": item.filter_text,
