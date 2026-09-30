@@ -111,6 +111,17 @@ written after `export`.
   beside the property the union's member already maps there; that needs
   its own task with editor cases for each.
 
+### Issue 3: The Rust API baseline was committed without the new field
+
+- **Symptom**: The full gate (recorded in TASK-667) failed
+  `public_api::the_rust_api_matches_its_baseline` with `+ pub exported:
+  bool,` in `pub struct LetElseStmt` (`ttc::hir`).
+- **Cause**: `hir::LetElseStmt` is public API (TASK-648's baseline), and
+  the suites run before the commit did not include `public_api`.
+- **Resolution**: The baseline is updated in a second TASK-676 commit;
+  `git rebase` is not available in this workspace to fold it into the
+  first, and the series is squash-merged.
+
 ## Regression test (fails before the fix)
 
 - **Path**: `tests/cases/compiler/exportedLetElse.tt`
@@ -139,4 +150,5 @@ Changed files: `src/ast.rs`, `src/parser/lets.rs`, `src/parser/parse.rs`,
 `src/core_ir/lower.rs`, `src/codegen/core/emitter/{helpers,expression,pattern}.rs`,
 `src/program_syntax/projection.rs`, `docs/ai/tt.md`,
 `tests/cases/compiler/exportedLetElse.tt` and its baselines,
+`tests/baselines/reference/api/ttc.api.txt` (Issue 3),
 `docs/tasks/INDEX.md`, and this record. Follow-up: Issue 2.

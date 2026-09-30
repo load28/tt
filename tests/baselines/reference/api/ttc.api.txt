@@ -2677,6 +2677,7 @@ pub struct LetElseStmt {
     pub node: NodeId,
     pub site: PatternSiteId,
     pub binding_mode: BindingMode,
+    pub exported: bool,
     pub else_body: BodyId,
     pub else_diverges: bool,
 }
