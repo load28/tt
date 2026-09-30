@@ -13,6 +13,7 @@ pub(crate) struct ProgramSyntax {
     pub(super) occupied_names: HashSet<String>,
     pub(super) directive_prologue_end: Option<usize>,
     pub(super) script: bool,
+    pub(super) commonjs: bool,
     pub(super) globals: HashMap<SourceSpan, GlobalStatement>,
 }
 
@@ -158,6 +159,7 @@ impl ProgramSyntax {
             &projection.arm_blocks,
         );
         let script = is_script(&parsed.module);
+        let commonjs = uses_commonjs_syntax(&parsed.module);
         if script {
             collector.global_statements = global_statements(&parsed.module, parsed.start);
         }
@@ -190,6 +192,7 @@ impl ProgramSyntax {
             owners: collected.owners,
             occupied_names: collected.occupied_names,
             script,
+            commonjs,
             globals,
         };
         syntax.validate()?;
@@ -233,6 +236,10 @@ impl ProgramSyntax {
 
     pub(crate) fn is_script(&self) -> bool {
         self.script
+    }
+
+    pub(crate) fn uses_commonjs_syntax(&self) -> bool {
+        self.commonjs
     }
 
     pub(crate) fn globals(&self) -> &HashMap<SourceSpan, GlobalStatement> {

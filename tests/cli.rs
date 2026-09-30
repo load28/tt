@@ -2756,3 +2756,95 @@ fn json_report_belongs_to_one_types_run() {
         assert!(err.contains(expected), "{args:?}:\n{err}");
     }
 }
+
+const TASK_598_MODULE: &str = "declare const path: { basename(s: string): string };\n\
+                               declare const input: string;\n\
+                               const f = flow |> ((s: string) => s.trim()) |> path.basename;\n\
+                               const g = input |> f;\n\
+                               export = { f, g };\n";
+
+/// TASK-598: a module written with CommonJS module syntax (`export =`,
+/// `import x = require(...)`) cannot import with ECMAScript syntax under
+/// `verbatimModuleSyntax`, so it declares its pipeline helpers itself, as
+/// a script does, and imports no runtime.
+#[test]
+fn a_commonjs_module_declares_its_pipeline_helpers() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("m.tt"), TASK_598_MODULE).unwrap();
+    fs::write(
+        source.join("r.tt"),
+        "import m = require(\"./m.js\");\n\
+         declare const step: (value: string) => string;\n\
+         export const value = m.g |> step;\n",
+    )
+    .unwrap();
+    let output = ttc(&[
+        "--no-banner",
+        "-o",
+        out_dir.to_str().unwrap(),
+        source.to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for name in ["m", "r"] {
+        let code = fs::read_to_string(out_dir.join(format!("{name}.ts"))).unwrap();
+        assert!(!code.contains("runtime"), "{code}");
+        assert!(code.contains("var $tt_"), "{code}");
+    }
+    assert!(!out_dir.join("tt").exists());
+}
+
+#[test]
+fn a_commonjs_module_type_checks_under_verbatim_module_syntax() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    let source = dir.join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(dir.join("package.json"), "{ \"type\": \"commonjs\" }\n").unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        "{ \"compilerOptions\": { \"strict\": true, \"target\": \"es2022\", \"module\": \"nodenext\", \
+         \"verbatimModuleSyntax\": true, \"noEmit\": true, \"types\": [] }, \"include\": [\"src\", \"out\"] }\n",
+    )
+    .unwrap();
+    fs::write(source.join("m.tt"), TASK_598_MODULE).unwrap();
+    let checked = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let built = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["-o", "out", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    if !common::tsc_available() {
+        return;
+    }
+    let tsc = common::tsc()
+        .args(["-p", "tsconfig.json"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run tsc");
+    assert!(
+        tsc.status.success(),
+        "{}",
+        String::from_utf8_lossy(&tsc.stdout)
+    );
+}

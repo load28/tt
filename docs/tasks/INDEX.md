@@ -603,6 +603,7 @@
 | TASK-595 | Test a conditional operation's condition where it is evaluated | Complete | 2026-09-30 | 2026-09-30 | [TASK-595](./TASK-595-conditional-operation-narrowing.md) |
 | TASK-596 | Keep an asserted value's own type in its storage | Complete | 2026-09-30 | 2026-09-30 | [TASK-596](./TASK-596-asserted-value-storage.md) |
 | TASK-597 | Find a `result` block's `try` inside a template interpolation | Complete | 2026-09-30 | 2026-09-30 | [TASK-597](./TASK-597-result-claim-in-template-interpolations.md) |
+| TASK-598 | Declare pipeline helpers in a module written with CommonJS syntax | Complete | 2026-09-30 | 2026-09-30 | [TASK-598](./TASK-598-commonjs-module-runtime-helpers.md) |
 | TASK-602 | Recover an unfinished `if let` only as far as TypeScript reads its statement | Complete | 2026-09-30 | 2026-09-30 | [TASK-602](./TASK-602-stray-if-let-stays-local.md) |
 | TASK-603 | Answer signature help for the source call, never for a generated one | Complete | 2026-09-30 | 2026-09-30 | [TASK-603](./TASK-603-signature-help-for-source-calls.md) |
 | TASK-604 | Keep a `try`'s signature help the same while the file has a syntax error | Complete | 2026-09-30 | 2026-09-30 | [TASK-604](./TASK-604-try-signature-help-with-syntax-errors.md) |

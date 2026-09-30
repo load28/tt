@@ -732,6 +732,17 @@ pub(crate) enum GlobalStatement {
     Binding(String),
 }
 
+fn uses_commonjs_syntax(module: &Module) -> bool {
+    use swc_ecma_ast::{ModuleDecl, TsModuleRef};
+    module.body.iter().any(|item| match item {
+        ModuleItem::ModuleDecl(ModuleDecl::TsExportAssignment(_)) => true,
+        ModuleItem::ModuleDecl(ModuleDecl::TsImportEquals(import)) => {
+            !import.is_type_only && matches!(import.module_ref, TsModuleRef::TsExternalModuleRef(_))
+        }
+        _ => false,
+    })
+}
+
 fn is_script(module: &Module) -> bool {
     use swc_ecma_ast::{ForOfStmt, MetaPropExpr, MetaPropKind, ModuleDecl, TsModuleRef, UsingDecl};
     use swc_ecma_visit::{Visit, VisitWith};

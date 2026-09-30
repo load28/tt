@@ -364,6 +364,7 @@ pub(super) struct TargetRewritePlan {
     pub(super) block_required_owners: HashSet<SourceSpan>,
     pub(super) ambient_items: HashSet<NodeId>,
     pub(super) script: bool,
+    pub(super) commonjs: bool,
     pub(super) global_temps: HashMap<crate::core_ir::TempId, String>,
 }
 
@@ -1797,6 +1798,7 @@ impl TargetRewritePlan {
             block_required_owners: lowering.block_required_owners().clone(),
             ambient_items: lowering.ambient_items().clone(),
             script: lowering.is_script(),
+            commonjs: lowering.uses_commonjs_syntax(),
             global_temps: lowering.global_temps().clone(),
             match_raise_name: lowering.match_raise_name().to_owned(),
             match_show_name: lowering.match_show_name().to_owned(),

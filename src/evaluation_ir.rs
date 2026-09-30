@@ -122,6 +122,7 @@ pub(crate) struct EvaluationFile {
     /// and a tt node inside them is lowered elsewhere.
     tt_spans: Vec<SourceSpan>,
     script: bool,
+    commonjs: bool,
     globals: HashMap<SourceSpan, GlobalStatement>,
 }
 
@@ -155,6 +156,7 @@ pub(crate) struct LoweringPlan {
     lexical_declaration_bodies: Vec<LexicalDeclarationBody>,
     ambient_items: HashSet<NodeId>,
     script: bool,
+    commonjs: bool,
     global_temps: HashMap<crate::core_ir::TempId, String>,
     owner_model_unavailable: bool,
 }
@@ -667,6 +669,10 @@ impl LoweringPlan {
 
     pub(crate) fn is_script(&self) -> bool {
         self.script
+    }
+
+    pub(crate) fn uses_commonjs_syntax(&self) -> bool {
+        self.commonjs
     }
 
     pub(crate) fn global_temps(&self) -> &HashMap<crate::core_ir::TempId, String> {

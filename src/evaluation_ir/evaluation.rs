@@ -65,6 +65,7 @@ impl EvaluationFile {
                 .map(|(_, _, _, _, source, _, _)| source)
                 .collect(),
             script: syntax.is_script(),
+            commonjs: syntax.uses_commonjs_syntax(),
             globals: syntax.globals().clone(),
         };
         file.validate()?;
@@ -1073,6 +1074,7 @@ impl EvaluationFile {
         }
         Ok(LoweringPlan {
             script: self.script,
+            commonjs: self.commonjs,
             global_temps,
             shadowed_globals,
             host_global_aliases,

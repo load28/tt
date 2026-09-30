@@ -180,6 +180,21 @@ left open at the end of the file cannot take them into its own syntax
 (TASK-527). A function declaration is hoisted, so its place in the module
 does not change what it means.
 
+A module written with CommonJS module syntax is the exception to the
+runtime import (TASK-598). `export =` and a non-type `import x =
+require("...")` are TypeScript's CommonJS module forms: under
+`verbatimModuleSyntax` a CommonJS-format file has to use them, and an
+ECMAScript `import` there is TS1295 (TypeScript handbook, "Modules -
+Reference", `verbatimModuleSyntax`; the file's format follows Node's
+module-format detection, the nearest `package.json` `"type"` for a `.ts`
+file under `node16`/`nodenext`). `ProgramSyntax` records that a module uses
+these forms (`uses_commonjs_syntax`), as it records that a file is a
+script, and such a module declares `$tt_ap`/`$tt_fl` as the typed `var`s a
+script uses, module-scoped here, instead of importing `@tt/runtime`, so
+its output imports no support module in either format. A module that
+declares nothing but type-only imports and exports gives no such evidence
+and still imports the runtime.
+
 ## 5. Evaluation IR
 
 Core IR은 tt 표면을 `Decision`, `Propagate`, `Apply`, `Adt`로 이미 정규화한다. 새

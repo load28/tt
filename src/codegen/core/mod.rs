@@ -186,6 +186,7 @@ pub(crate) fn emit_with_map<'a>(
     } = emit_source;
     let target = TargetRewritePlan::build(semantic, core, source, lowering_plan);
     let script = target.script;
+    let local_runtime = script || target.commonjs;
     let direct_apply_inputs = direct_apply_inputs(semantic, core, source, source_kind);
     let member_apply_steps = member_apply_steps(semantic, core, source, source_kind);
     let mut relocated: Vec<SourceSpan> = target
@@ -360,6 +361,11 @@ pub(crate) fn emit_with_map<'a>(
         .collect();
     let show = used_show.then(|| match_show_body(&emitter.host_json, &emitter.host_string));
     let mut prelude: Vec<String> = Vec::new();
+    if target.commonjs && !script {
+        for (export, local) in &runtime_helpers {
+            prelude.push(script_runtime_helper(export, local));
+        }
+    }
     if script {
         for alias in &aliases {
             prelude.push(format!("var {} = {};\n", alias.name, alias.capture));
@@ -386,7 +392,7 @@ pub(crate) fn emit_with_map<'a>(
             ));
         }
     } else {
-        if !runtime_helpers.is_empty() {
+        if !local_runtime && !runtime_helpers.is_empty() {
             let names = runtime_helpers
                 .iter()
                 .map(|(export, local)| {
@@ -518,8 +524,7 @@ pub(crate) fn emit_with_map<'a>(
             .map_or(result_return.src, |argument| argument.end);
     }
     flat.generated_names = emitter.generated_names.into_inner().into_allocated();
-    // A script inlines its runtime helpers; only a module imports them.
-    let imports_runtime = !script && !runtime_helpers.is_empty();
+    let imports_runtime = !local_runtime && !runtime_helpers.is_empty();
     let imported_std = emitter.imported_std.into_inner();
     flat.support_imports = crate::StdModule::ALL
         .into_iter()
