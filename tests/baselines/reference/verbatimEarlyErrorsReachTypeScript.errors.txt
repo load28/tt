@@ -1,0 +1,13 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./script.tt → $DIR/out/script.ts
+ttc: ./shapes.tt → $DIR/out/shapes.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2369]: A parameter property is only allowed in a constructor implementation.
+ --> shapes.tt:3:10
+  |
+3 |   resize(public size: number) {}
+  |          ^^^^^^^^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+shapes.ts(27,10): error TS2369: A parameter property is only allowed in a constructor implementation.

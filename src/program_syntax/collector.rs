@@ -24,19 +24,44 @@ pub(super) fn parse_module(
     let input = HostInput::new(code);
     let start = input.origin();
     let mut parser = input.parser(source_kind);
-    let result = parser.parse_module();
-    let mut errors = parser.take_errors();
+    let result = parser.parse_program().map(|program| match program {
+        swc_ecma_ast::Program::Module(module) => module,
+        swc_ecma_ast::Program::Script(script) => Module {
+            span: script.span,
+            body: script.body.into_iter().map(ModuleItem::Stmt).collect(),
+            shebang: script.shebang,
+        },
+    });
+    let recovered = parser.take_errors();
+    let left_to_typescript = |error: &swc_ecma_parser::error::Error| {
+        if !crate::verify::checked_after_parsing(error.kind()) {
+            return false;
+        }
+        let span = error.span();
+        let (lo, hi) = (start.byte(span.lo()), start.byte(span.hi()));
+        segments.iter().any(|segment| {
+            segment.kind == ProjectionSegmentKind::Copied
+                && segment.projected.start.0 <= lo
+                && hi <= segment.projected.end.0
+                && lo < segment.projected.end.0
+        })
+    };
+    let reported = recovered.iter().find(|error| !left_to_typescript(error));
     let module = match result {
         Ok(module) => module,
         Err(error) => {
-            errors.push(error);
-            return Err(parse_failure(code, segments, start, &errors[0]));
+            return Err(parse_failure(
+                code,
+                segments,
+                start,
+                reported.unwrap_or(&error),
+            ));
         }
     };
-    if let Some(error) = errors.into_iter().next()
+    if let Some(error) = reported
         && !tolerant
     {
-        return Err(parse_failure(code, segments, start, &error));
+        return Err(parse_failure(code, segments, start, error));
     }
     Ok(ParsedModule { module, start })
 }

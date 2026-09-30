@@ -5,6 +5,11 @@
 - **Completed**: 2026-09-30
 - **Commit**: see `git log --grep TASK-638`
 
+> TASK-640 settled Issue 2's design question and reclassified Issue 1:
+> the rules TypeScript checks after parsing are left to TypeScript, and a
+> file without module syntax is parsed as a script. 136 of the 189 listed
+> units left the lists; the counts below are this task's.
+
 ## Purpose
 
 Contract 1 says every valid TypeScript file is a valid `.tt` file that comes
