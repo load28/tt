@@ -122,6 +122,10 @@ impl Lowering<'_> {
     }
 
     fn lower_body(&mut self, body: &hir::Body) -> Body {
+        crate::stack::grow(|| self.lower_body_grown(body))
+    }
+
+    fn lower_body_grown(&mut self, body: &hir::Body) -> Body {
         let statements: Vec<_> = body
             .stmts
             .iter()
@@ -400,6 +404,10 @@ impl Lowering<'_> {
     }
 
     fn lower_if_let(&mut self, stmt: &hir::IfLetStmt) -> Decision {
+        crate::stack::grow(|| self.lower_if_let_grown(stmt))
+    }
+
+    fn lower_if_let_grown(&mut self, stmt: &hir::IfLetStmt) -> Decision {
         let miss = match &stmt.else_part {
             Some(hir::IfLetElse::Block(body)) => MissAction::Execute(*body),
             Some(hir::IfLetElse::IfLet(inner)) => {
@@ -436,6 +444,15 @@ impl Lowering<'_> {
     }
 
     fn pattern_at(&self, pattern: hir::PatternId, place: Place, subjects: usize) -> PatternPlan {
+        crate::stack::grow(|| self.pattern_at_grown(pattern, place, subjects))
+    }
+
+    fn pattern_at_grown(
+        &self,
+        pattern: hir::PatternId,
+        place: Place,
+        subjects: usize,
+    ) -> PatternPlan {
         match &self.semantic.hir.patterns[pattern] {
             Pat::Wildcard => PatternPlan::Any,
             Pat::Or(alternatives) => PatternPlan::AnyOf(
@@ -577,6 +594,10 @@ impl Lowering<'_> {
     }
 
     fn expr_subject_depth(&self, expr: ExprId) -> u32 {
+        crate::stack::grow(|| self.expr_subject_depth_grown(expr))
+    }
+
+    fn expr_subject_depth_grown(&self, expr: ExprId) -> u32 {
         match &self.semantic.hir.exprs[expr] {
             hir::Expr::Match { site, .. } => {
                 1 + self.subject_depth(&self.semantic.hir.sites[*site])
@@ -623,6 +644,10 @@ impl Lowering<'_> {
 
 fn temp_ordinals(semantic: &SemanticFile) -> HashMap<NodeId, u32> {
     fn if_let_nodes(stmt: &hir::IfLetStmt, out: &mut Vec<NodeId>) {
+        crate::stack::grow(|| if_let_nodes_grown(stmt, out));
+    }
+
+    fn if_let_nodes_grown(stmt: &hir::IfLetStmt, out: &mut Vec<NodeId>) {
         out.push(stmt.node);
         if let Some(hir::IfLetElse::IfLet(inner)) = &stmt.else_part {
             if_let_nodes(inner, out);
@@ -680,6 +705,10 @@ fn resolved_hir_field(resolution: &Resolution, node: NodeId) -> Option<FieldId> 
 }
 
 fn pattern_has_literal(hir: &hir::HirFile, pattern: hir::PatternId) -> bool {
+    crate::stack::grow(|| pattern_has_literal_grown(hir, pattern))
+}
+
+fn pattern_has_literal_grown(hir: &hir::HirFile, pattern: hir::PatternId) -> bool {
     match &hir.patterns[pattern] {
         Pat::Literal(_) => true,
         Pat::Or(parts) | Pat::Tuple(parts) => {
@@ -863,6 +892,10 @@ fn validate_statement(statement: &Statement, file: &CoreFile, semantic: &Semanti
 }
 
 fn validate_decision(decision: &Decision, file: &CoreFile, semantic: &SemanticFile) {
+    crate::stack::grow(|| validate_decision_grown(decision, file, semantic));
+}
+
+fn validate_decision_grown(decision: &Decision, file: &CoreFile, semantic: &SemanticFile) {
     assert!(
         !decision.subjects.is_empty(),
         "Core IR decision has no subject"
@@ -912,6 +945,10 @@ fn validate_decision(decision: &Decision, file: &CoreFile, semantic: &SemanticFi
 }
 
 fn validate_pattern_plan(plan: &PatternPlan, semantic: &SemanticFile) {
+    crate::stack::grow(|| validate_pattern_plan_grown(plan, semantic));
+}
+
+fn validate_pattern_plan_grown(plan: &PatternPlan, semantic: &SemanticFile) {
     match plan {
         PatternPlan::Any => {}
         PatternPlan::Test(test) => validate_test(test, semantic),
@@ -940,6 +977,10 @@ fn validate_pattern_plan(plan: &PatternPlan, semantic: &SemanticFile) {
 /// caught here, at the boundary that owns the invariant, rather than as an
 /// index panic inside emission.
 fn validate_plan_subjects(plan: &PatternPlan, subjects: usize) {
+    crate::stack::grow(|| validate_plan_subjects_grown(plan, subjects));
+}
+
+fn validate_plan_subjects_grown(plan: &PatternPlan, subjects: usize) {
     match plan {
         PatternPlan::Any => {}
         PatternPlan::Test(

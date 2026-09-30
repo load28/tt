@@ -404,6 +404,14 @@ impl<'a> Emitter<'a> {
         operation: &PlannedConditionalOperation,
         captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
     ) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_conditional_operation_grown(operation, captured))
+    }
+
+    fn emit_conditional_operation_grown(
+        &self,
+        operation: &PlannedConditionalOperation,
+        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+    ) -> Rope<'a> {
         self.conditional_region_depth
             .set(self.conditional_region_depth.get() + 1);
         let result = self.value_slot_name(operation.result);
@@ -1393,6 +1401,15 @@ impl<'a> Emitter<'a> {
         action: Rope<'a>,
         captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
     ) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_scheduled_step_grown(step, action, captured))
+    }
+
+    fn emit_scheduled_step_grown(
+        &self,
+        step: &PlannedEvaluationStep,
+        action: Rope<'a>,
+        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+    ) -> Rope<'a> {
         let optional_reference = matches!(
             step.operation,
             HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(_))
@@ -1579,6 +1596,10 @@ impl<'a> Emitter<'a> {
     /// its values (`f(match ...)`) has none, since that slot holds the
     /// inner value.
     pub(super) fn structured_value_slot(&self, expr: ExprId) -> Option<&String> {
+        crate::stack::grow(|| self.structured_value_slot_grown(expr))
+    }
+
+    fn structured_value_slot_grown(&self, expr: ExprId) -> Option<&String> {
         self.value_slots.get(&expr).or_else(|| {
             let Expr::Sequence(body) = &self.core.exprs[expr.index()] else {
                 return None;
@@ -1626,6 +1647,10 @@ impl<'a> Emitter<'a> {
     /// nested function also has a slot, but is deliberately absent from
     /// `nested_values`; its own host rewrite must consume that slot instead.
     pub(super) fn nested_structured_value_slot(&self, expr: ExprId) -> Option<&String> {
+        crate::stack::grow(|| self.nested_structured_value_slot_grown(expr))
+    }
+
+    fn nested_structured_value_slot_grown(&self, expr: ExprId) -> Option<&String> {
         if self.structurally_nested_values.contains(&expr)
             && !matches!(self.core.exprs[expr.index()], Expr::ResultRegion(_))
         {
@@ -1640,6 +1665,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn value_anchor(&self, expr: ExprId) -> (AnchorKind, usize, usize, usize) {
+        crate::stack::grow(|| self.value_anchor_grown(expr))
+    }
+
+    fn value_anchor_grown(&self, expr: ExprId) -> (AnchorKind, usize, usize, usize) {
         crate::work::tick("value anchors");
         match &self.core.exprs[expr.index()] {
             Expr::Decision(decision) => {

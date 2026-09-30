@@ -1899,6 +1899,14 @@ impl<I: Tokens> Parser<I> {
         include_decl: bool,
         handle_import_export: impl Fn(&mut Self, Vec<Decorator>) -> PResult<Type>,
     ) -> PResult<Type> {
+        crate::maybe_grow(256 * 1024, 1024 * 1024, || self.parse_stmt_like_grown(include_decl, handle_import_export))
+    }
+
+    fn parse_stmt_like_grown<Type: From<Stmt>>(
+        &mut self,
+        include_decl: bool,
+        handle_import_export: impl Fn(&mut Self, Vec<Decorator>) -> PResult<Type>,
+    ) -> PResult<Type> {
         trace_cur!(self, parse_stmt_like);
 
         debug_tracing!(self, "parse_stmt_like");

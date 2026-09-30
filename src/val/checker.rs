@@ -53,6 +53,10 @@ impl<'a> Checker<'a> {
     /// dropped on the way out, so an interpolation cannot leak scopes into
     /// the stream that contains it.
     pub(super) fn walk(&self, tokens: &'a [Token], frames: &mut Vec<Frame<'a>>) {
+        crate::stack::grow(|| self.walk_grown(tokens, frames));
+    }
+
+    fn walk_grown(&self, tokens: &'a [Token], frames: &mut Vec<Frame<'a>>) {
         let writes = targets::writes(self.src, self.source_kind, tokens);
         let arms = self.arm_arrows(tokens);
         let base = frames.len();

@@ -28,6 +28,10 @@ pub(super) fn unwrapped(mut expr: &Expr) -> &Expr {
 /// steps (`.p`, `?.p`, `[k]`) from it, with wrappers read through at every
 /// depth: `(x as T).a!.b` is `x` with two steps.
 pub(super) fn access_path(expr: &Expr) -> Option<(&Ident, usize)> {
+    crate::stack::grow(|| access_path_grown(expr))
+}
+
+fn access_path_grown(expr: &Expr) -> Option<(&Ident, usize)> {
     let object = match unwrapped(expr) {
         Expr::Ident(ident) => return Some((ident, 0)),
         Expr::Member(member) => &member.obj,

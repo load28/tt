@@ -482,6 +482,15 @@ fn collect_declarations<'a>(
     modifiers: &Modifiers,
     out: &mut Vec<FnDecl<'a>>,
 ) {
+    crate::stack::grow(|| collect_declarations_grown(src, tokens, modifiers, out));
+}
+
+fn collect_declarations_grown<'a>(
+    src: &'a str,
+    tokens: &'a [Token],
+    modifiers: &Modifiers,
+    out: &mut Vec<FnDecl<'a>>,
+) {
     let ident_at = |idx: usize| match tokens.get(idx) {
         Some(t) if matches!(t.kind, TokenKind::Ident) => {
             Some((&src[t.span.start..t.span.end], t.span.start))
@@ -709,6 +718,15 @@ fn parse_params(src: &str, tokens: &[Token], modifiers: &Modifiers, open: usize)
 /// `[x, , y]`) and tt let-else patterns (`Tag(a, b: c)`), and returns the
 /// token index just past the target.
 fn collect_pattern_names<'a>(
+    src: &'a str,
+    tokens: &[Token],
+    start: usize,
+    out: &mut Vec<&'a str>,
+) -> usize {
+    crate::stack::grow(|| collect_pattern_names_grown(src, tokens, start, out))
+}
+
+fn collect_pattern_names_grown<'a>(
     src: &'a str,
     tokens: &[Token],
     start: usize,

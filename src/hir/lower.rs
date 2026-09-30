@@ -70,6 +70,10 @@ impl Lower<'_> {
 
     /// A statement stream: one [`Body`] per `Program`.
     fn lower_body(&mut self, program: &ast::Program) -> BodyId {
+        crate::stack::grow(|| self.lower_body_grown(program))
+    }
+
+    fn lower_body_grown(&mut self, program: &ast::Program) -> BodyId {
         let mut stmts = Vec::with_capacity(program.segments.len());
         for segment in &program.segments {
             match segment {
@@ -126,6 +130,10 @@ impl Lower<'_> {
     /// richer (tt constructs inside the expression) becomes a [`Expr::Seq`]
     /// wrapping the lowered stream.
     fn lower_expr_program(&mut self, program: &ast::Program, span: Span) -> ExprId {
+        crate::stack::grow(|| self.lower_expr_program_grown(program, span))
+    }
+
+    fn lower_expr_program_grown(&mut self, program: &ast::Program, span: Span) -> ExprId {
         if let [ast::Segment::Verbatim(inner)] = program.segments.as_slice() {
             let node = self.node(Self::span(*inner), AstOrigin::OpaqueExpr);
             return self.hir.exprs.alloc(Expr::OpaqueTs(node));
@@ -394,6 +402,10 @@ impl Lower<'_> {
     }
 
     fn lower_tag_pattern(&mut self, alt: &ast::TagPattern) -> PatternId {
+        crate::stack::grow(|| self.lower_tag_pattern_grown(alt))
+    }
+
+    fn lower_tag_pattern_grown(&mut self, alt: &ast::TagPattern) -> PatternId {
         let path_node = self.node(
             Span::new(alt.tag_off, alt.tag_off + alt.tag.len()),
             AstOrigin::Pattern,
@@ -443,6 +455,10 @@ impl Lower<'_> {
     }
 
     fn lower_field_pat(&mut self, binding: &ast::Binding) -> FieldPat {
+        crate::stack::grow(|| self.lower_field_pat_grown(binding))
+    }
+
+    fn lower_field_pat_grown(&mut self, binding: &ast::Binding) -> FieldPat {
         let node = self.node(Self::span(binding.name_span), AstOrigin::PatternField);
         let field_binding = match &binding.nested {
             Some(inner) => FieldBinding::Nested(self.lower_tag_pattern(inner)),
@@ -537,6 +553,10 @@ impl Lower<'_> {
     }
 
     fn lower_if_let(&mut self, stmt: &ast::IfLetStmt) -> IfLetStmt {
+        crate::stack::grow(|| self.lower_if_let_grown(stmt))
+    }
+
+    fn lower_if_let_grown(&mut self, stmt: &ast::IfLetStmt) -> IfLetStmt {
         let node = self.node(Self::span(stmt.head_span), AstOrigin::IfLet);
         self.hir
             .source_map

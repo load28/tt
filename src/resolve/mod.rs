@@ -584,6 +584,20 @@ impl Resolver {
         positions: usize,
         variant_def: DefId,
     ) {
+        crate::stack::grow(|| {
+            self.resolve_position_grown(hir, site, pattern, position, positions, variant_def)
+        });
+    }
+
+    fn resolve_position_grown(
+        &mut self,
+        hir: &HirFile,
+        site: PatternSiteId,
+        pattern: PatternId,
+        position: usize,
+        positions: usize,
+        variant_def: DefId,
+    ) {
         match &hir.patterns[pattern] {
             Pat::Wildcard | Pat::Literal(_) | Pat::Instance { .. } => {}
             Pat::Or(alts) => {
@@ -668,6 +682,16 @@ impl Resolver {
     }
 
     fn resolve_fields(
+        &mut self,
+        hir: &HirFile,
+        site: PatternSiteId,
+        fields: &[hir::FieldPat],
+        variant: VariantRef,
+    ) {
+        crate::stack::grow(|| self.resolve_fields_grown(hir, site, fields, variant));
+    }
+
+    fn resolve_fields_grown(
         &mut self,
         hir: &HirFile,
         site: PatternSiteId,
@@ -769,6 +793,16 @@ impl Resolver {
 /// each tuple element speaks for its own position and a wildcard arm for
 /// none.
 fn collect_position_tags<'h>(
+    hir: &'h HirFile,
+    pattern: PatternId,
+    position: usize,
+    positions: usize,
+    out: &mut Vec<&'h str>,
+) {
+    crate::stack::grow(|| collect_position_tags_grown(hir, pattern, position, positions, out));
+}
+
+fn collect_position_tags_grown<'h>(
     hir: &'h HirFile,
     pattern: PatternId,
     position: usize,

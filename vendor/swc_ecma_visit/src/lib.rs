@@ -15,6 +15,11 @@ use swc_visit::{Repeat, Repeated};
 pub use crate::generated::*;
 mod generated;
 
+#[inline(always)]
+fn maybe_grow<R>(callback: impl FnOnce() -> R) -> R {
+    stacker::maybe_grow(128 * 1024, 2 * 1024 * 1024, callback)
+}
+
 pub fn fold_pass<V>(pass: V) -> FoldPass<V>
 where
     V: Fold,

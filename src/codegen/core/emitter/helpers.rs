@@ -42,6 +42,7 @@ pub(super) fn push_receiver<'a>(out: &mut Rope<'a>, value: Rope<'a>, kind: Sourc
 /// Whether a value delivered to one of those positions has to keep the
 /// parentheses codegen wraps it in. See [`push_grouped`].
 pub(super) fn needs_grouping(value: &Rope<'_>, kind: SourceKind) -> bool {
+    crate::work::tick("grouping checks");
     match value.resolved_text() {
         Some(text) => grouping_required(&text, kind),
         None => true,
@@ -125,6 +126,14 @@ pub(super) fn collect_binding_groups<'a>(
     shared: Option<&'a PatternPlan>,
     groups: &mut Vec<BindingGroup<'a>>,
 ) {
+    crate::stack::grow(|| collect_binding_groups_grown(plan, shared, groups));
+}
+
+fn collect_binding_groups_grown<'a>(
+    plan: &'a PatternPlan,
+    shared: Option<&'a PatternPlan>,
+    groups: &mut Vec<BindingGroup<'a>>,
+) {
     match plan {
         PatternPlan::Bind(binding) => {
             let mut receiver = binding.source.clone();
@@ -162,6 +171,10 @@ pub(super) fn collect_binding_groups<'a>(
 }
 
 pub(super) fn every_binding<'a>(plan: &'a PatternPlan, out: &mut Vec<&'a Bind>) {
+    crate::stack::grow(|| every_binding_grown(plan, out));
+}
+
+fn every_binding_grown<'a>(plan: &'a PatternPlan, out: &mut Vec<&'a Bind>) {
     match plan {
         PatternPlan::Bind(binding) => out.push(binding),
         PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => {

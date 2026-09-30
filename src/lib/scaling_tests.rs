@@ -50,6 +50,24 @@ fn every_request_does_linear_work_in_the_number_of_expression_matches() {
     assert!(large["concise arrow scans"] > 0);
 }
 
+fn nested_matches(depth: usize) -> String {
+    format!(
+        "export variant V {{ A(v: V), B }}\ndeclare const a: V;\nexport const x = {}1{};\nexport function f() {{ {}g();{} }}\n",
+        "match (a) { A(v) => ".repeat(depth),
+        ", B => 2 }".repeat(depth),
+        "if let A(v) = a { ".repeat(depth),
+        " }".repeat(depth),
+    )
+}
+
+#[test]
+fn every_request_does_linear_work_in_the_nesting_depth_of_matches() {
+    let small = measure(|| every_request(&nested_matches(60)));
+    let large = measure(|| every_request(&nested_matches(120)));
+    assert_linear(&small, &large);
+    assert!(large["arm outline steps"] > 0);
+}
+
 #[test]
 fn tt_matches_never_need_more_host_parses_as_they_multiply() {
     let small = measure(|| crate::parser::parse(&statement_matches(150)));

@@ -743,6 +743,10 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn emit_body(&mut self, body: BodyId) -> Result<(), ProgramSyntaxError> {
+        crate::stack::grow(|| self.emit_body_grown(body))
+    }
+
+    fn emit_body_grown(&mut self, body: BodyId) -> Result<(), ProgramSyntaxError> {
         for statement in &self.core.bodies[body.index()].statements {
             if let Some(start) = self.statement_source_start(statement)? {
                 self.preserve_statement_boundary(start);
@@ -940,6 +944,13 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn emit_statement_decision(&mut self, decision: &Decision) -> Result<(), ProgramSyntaxError> {
+        crate::stack::grow(|| self.emit_statement_decision_grown(decision))
+    }
+
+    fn emit_statement_decision_grown(
+        &mut self,
+        decision: &Decision,
+    ) -> Result<(), ProgramSyntaxError> {
         // The source decision is one statement, so its projection is one
         // block: as the unbraced body of an `if`, loop, or label, the
         // placeholder and the bodies below stay together under that parent,
@@ -980,6 +991,10 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn emit_expr(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
+        crate::stack::grow(|| self.emit_expr_grown(expr))
+    }
+
+    fn emit_expr_grown(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
         match &self.core.exprs[expr.index()] {
             Expr::Opaque(node) => self.push_source(*node),
             Expr::Sequence(body) => self.emit_body(*body),
@@ -1094,6 +1109,10 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn expr_contains_propagation(&self, expr: ExprId) -> bool {
+        crate::stack::grow(|| self.expr_contains_propagation_grown(expr))
+    }
+
+    fn expr_contains_propagation_grown(&self, expr: ExprId) -> bool {
         match &self.core.exprs[expr.index()] {
             Expr::Propagate(_) => true,
             Expr::Sequence(body) => self.body_contains_propagation(*body),
@@ -1123,6 +1142,10 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn body_contains_propagation(&self, body: BodyId) -> bool {
+        crate::stack::grow(|| self.body_contains_propagation_grown(body))
+    }
+
+    fn body_contains_propagation_grown(&self, body: BodyId) -> bool {
         self.core.bodies[body.index()]
             .statements
             .iter()
@@ -1147,6 +1170,10 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn expr_contains_value_region(&self, expr: ExprId) -> bool {
+        crate::stack::grow(|| self.expr_contains_value_region_grown(expr))
+    }
+
+    fn expr_contains_value_region_grown(&self, expr: ExprId) -> bool {
         match &self.core.exprs[expr.index()] {
             Expr::Decision(_) => true,
             Expr::Sequence(body) => self.core.bodies[body.index()].statements.iter().any(

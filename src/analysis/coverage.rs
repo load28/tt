@@ -192,6 +192,14 @@ pub(super) fn collect_matches<'a>(
     out: &mut Vec<&'a MatchExpr>,
     tuples: &mut Vec<&'a TupleMatchExpr>,
 ) {
+    crate::stack::grow(|| collect_matches_grown(program, out, tuples));
+}
+
+fn collect_matches_grown<'a>(
+    program: &'a Program,
+    out: &mut Vec<&'a MatchExpr>,
+    tuples: &mut Vec<&'a TupleMatchExpr>,
+) {
     for segment in &program.segments {
         match segment {
             Segment::Match(expr) => {
@@ -256,6 +264,14 @@ pub(super) fn collect_matches<'a>(
 }
 
 pub(super) fn collect_if_let_matches<'a>(
+    stmt: &'a IfLetStmt,
+    out: &mut Vec<&'a MatchExpr>,
+    tuples: &mut Vec<&'a TupleMatchExpr>,
+) {
+    crate::stack::grow(|| collect_if_let_matches_grown(stmt, out, tuples));
+}
+
+fn collect_if_let_matches_grown<'a>(
     stmt: &'a IfLetStmt,
     out: &mut Vec<&'a MatchExpr>,
     tuples: &mut Vec<&'a TupleMatchExpr>,

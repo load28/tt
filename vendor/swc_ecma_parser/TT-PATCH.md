@@ -20,6 +20,16 @@ through `maybe_grow` the way `parse_stmt` already does, so expression nesting
 rather than by the calling thread's stack. `tests/cli.rs` in the parent
 repository covers deeply nested input end to end.
 
+Local change (TASK-654): `src/parser/stmt.rs` `parse_stmt_like`,
+`src/parser/typescript.rs` `parse_ts_type`, `src/parser/jsx.rs`
+`parse_jsx_element`, and `src/parser/pat.rs` `parse_binding_pat_or_ident`
+grow the stack through `maybe_grow` as `parse_assignment_expr` does, so
+nested blocks, types (a function type returning a function type), JSX
+elements, and binding patterns are bounded by memory rather than by the
+calling thread's stack. Each is the entry every recursion through its
+grammar passes. `src/stack.rs` in the parent repository tests them on a
+1 MiB thread.
+
 Local change: `src/parser/expr.rs`, `parse_paren_expr_or_arrow_fn` continues
 a block-bodied arrow function with a binary operator (reporting TS1005, as
 TypeScript does for `() => {} / 2`) only when no line break precedes the

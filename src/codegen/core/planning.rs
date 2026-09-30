@@ -130,6 +130,15 @@ pub(super) fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Ve
         body: hir::BodyId,
         out: &mut Vec<SourceSpan>,
     ) {
+        crate::stack::grow(|| walk_body_grown(semantic, core, body, out));
+    }
+
+    fn walk_body_grown(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        body: hir::BodyId,
+        out: &mut Vec<SourceSpan>,
+    ) {
         for statement in &core.bodies[body.index()].statements {
             match statement {
                 Statement::Opaque(node) => span(semantic, *node, out),
@@ -144,6 +153,15 @@ pub(super) fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Ve
     }
 
     pub(super) fn walk_decision(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        decision: &Decision,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        crate::stack::grow(|| walk_decision_grown(semantic, core, decision, out));
+    }
+
+    fn walk_decision_grown(
         semantic: &SemanticFile,
         core: &CoreFile,
         decision: &Decision,
@@ -171,6 +189,15 @@ pub(super) fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Ve
     }
 
     pub(super) fn walk_expr(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        expr: ExprId,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        crate::stack::grow(|| walk_expr_grown(semantic, core, expr, out));
+    }
+
+    fn walk_expr_grown(
         semantic: &SemanticFile,
         core: &CoreFile,
         expr: ExprId,
@@ -221,6 +248,14 @@ pub(super) fn structured_expr_span(
     core: &CoreFile,
     expr: ExprId,
 ) -> Option<SourceSpan> {
+    crate::stack::grow(|| structured_expr_span_grown(semantic, core, expr))
+}
+
+fn structured_expr_span_grown(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    expr: ExprId,
+) -> Option<SourceSpan> {
     let node_span = |node| {
         semantic
             .hir
@@ -266,6 +301,16 @@ pub(super) fn structured_grouping_frames(
     expr: ExprId,
 ) -> Vec<SourceSpan> {
     pub(super) fn walk(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        source: &str,
+        expr: ExprId,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        crate::stack::grow(|| walk_grown(semantic, core, source, expr, out));
+    }
+
+    fn walk_grown(
         semantic: &SemanticFile,
         core: &CoreFile,
         source: &str,
@@ -727,6 +772,10 @@ fn can_defer_arm_values(
         return false;
     };
     fn has_bindings(pattern: &PatternPlan) -> bool {
+        crate::stack::grow(|| has_bindings_grown(pattern))
+    }
+
+    fn has_bindings_grown(pattern: &PatternPlan) -> bool {
         match pattern {
             PatternPlan::Bind(_) => true,
             PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => parts.iter().any(has_bindings),

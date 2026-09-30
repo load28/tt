@@ -189,12 +189,14 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
                 operand_end = Some(token.span.end);
                 operand_token_end = k;
             }
-        } else if crate::lexer::is_primary_expression(
-            cur.parser.src,
-            operand_start,
-            token.span.end,
-            cur.parser.source_kind,
-        ) {
+        } else if open.is_empty()
+            && crate::lexer::is_primary_expression(
+                cur.parser.src,
+                operand_start,
+                token.span.end,
+                cur.parser.source_kind,
+            )
+        {
             operand_end = Some(token.span.end);
             operand_token_end = k;
         }

@@ -512,6 +512,10 @@ impl<I: Tokens> Parser<I> {
     }
 
     pub(crate) fn parse_binding_pat_or_ident(&mut self, disallow_let: bool) -> PResult<Pat> {
+        crate::maybe_grow(256 * 1024, 1024 * 1024, || self.parse_binding_pat_or_ident_grown(disallow_let))
+    }
+
+    fn parse_binding_pat_or_ident_grown(&mut self, disallow_let: bool) -> PResult<Pat> {
         trace_cur!(self, parse_binding_pat_or_ident);
 
         let cur = self.input().cur();

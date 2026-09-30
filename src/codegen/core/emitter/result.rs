@@ -106,6 +106,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_result_region(&self, expr: ExprId, region: &ResultRegion) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_result_region_grown(expr, region))
+    }
+
+    fn emit_result_region_grown(&self, expr: ExprId, region: &ResultRegion) -> Rope<'a> {
         let failure = ValueContinuation::returning();
         let _failure_scope = self.enter_result_failure(region.id, &failure, None);
         let mut out = Rope::new();
@@ -154,6 +158,19 @@ impl<'a> Emitter<'a> {
     /// its lexical arrow. They must therefore wrap `Ok`, unlike ordinary
     /// function returns and unlike the statement-host continuation below.
     pub(super) fn emit_result_body_with_exits(
+        &self,
+        body: hir::BodyId,
+        exits: &[HostExit],
+        failure: &ValueContinuation<'_>,
+        success: &ValueContinuation<'_>,
+        exit_label: Option<&str>,
+    ) -> Rope<'a> {
+        crate::stack::grow(|| {
+            self.emit_result_body_with_exits_grown(body, exits, failure, success, exit_label)
+        })
+    }
+
+    fn emit_result_body_with_exits_grown(
         &self,
         body: hir::BodyId,
         exits: &[HostExit],
@@ -327,6 +344,14 @@ impl<'a> Emitter<'a> {
         argument: SourceSpan,
     ) -> Option<(ExprId, &Propagate)> {
         fn find<'a>(
+            emitter: &'a Emitter<'a>,
+            expr: ExprId,
+            argument: SourceSpan,
+        ) -> Option<(ExprId, &'a Propagate)> {
+            crate::stack::grow(|| find_grown(emitter, expr, argument))
+        }
+
+        fn find_grown<'a>(
             emitter: &'a Emitter<'a>,
             expr: ExprId,
             argument: SourceSpan,

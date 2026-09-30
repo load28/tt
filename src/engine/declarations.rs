@@ -224,6 +224,13 @@ fn collect_matches(
     program: &crate::ast::Program,
     out: &mut Vec<(TtMatchSite, Option<crate::ast::Span>)>,
 ) {
+    crate::stack::grow(|| collect_matches_grown(program, out));
+}
+
+fn collect_matches_grown(
+    program: &crate::ast::Program,
+    out: &mut Vec<(TtMatchSite, Option<crate::ast::Span>)>,
+) {
     use crate::ast::{IfLetElse, ResultItem, Segment, TemplateChunk};
     for segment in &program.segments {
         match segment {

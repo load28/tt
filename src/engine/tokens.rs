@@ -141,6 +141,15 @@ fn walk(
     program: &Program,
     out: &mut Vec<(usize, usize, SemanticTokenKind)>,
 ) {
+    crate::stack::grow(|| walk_grown(src, tokens, program, out));
+}
+
+fn walk_grown(
+    src: &str,
+    tokens: &[Token],
+    program: &Program,
+    out: &mut Vec<(usize, usize, SemanticTokenKind)>,
+) {
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(span) => deny_in(src, tokens, (span.start, span.end), out),
@@ -246,6 +255,15 @@ fn if_let(
     stmt: &crate::ast::IfLetStmt,
     out: &mut Vec<(usize, usize, SemanticTokenKind)>,
 ) {
+    crate::stack::grow(|| if_let_grown(src, tokens, stmt, out));
+}
+
+fn if_let_grown(
+    src: &str,
+    tokens: &[Token],
+    stmt: &crate::ast::IfLetStmt,
+    out: &mut Vec<(usize, usize, SemanticTokenKind)>,
+) {
     for alt in &stmt.alternatives {
         tag_pattern(alt, out);
     }
@@ -283,6 +301,10 @@ fn instance_pattern(instance: &InstancePattern, out: &mut Vec<(usize, usize, Sem
 }
 
 fn tag_pattern(tag: &TagPattern, out: &mut Vec<(usize, usize, SemanticTokenKind)>) {
+    crate::stack::grow(|| tag_pattern_grown(tag, out));
+}
+
+fn tag_pattern_grown(tag: &TagPattern, out: &mut Vec<(usize, usize, SemanticTokenKind)>) {
     out.push((tag.tag_off, tag.tag.len(), SemanticTokenKind::VariantCase));
     if let Some(list) = &tag.bindings {
         bindings(list, out);
@@ -333,6 +355,15 @@ fn bindings(list: &[Binding], out: &mut Vec<(usize, usize, SemanticTokenKind)>) 
 /// under its surface kind — occurrences inside strings, comments, templates,
 /// regexes and JSX text never reach it as identifiers.
 fn deny_in(
+    src: &str,
+    tokens: &[Token],
+    (start, end): (usize, usize),
+    out: &mut Vec<(usize, usize, SemanticTokenKind)>,
+) {
+    crate::stack::grow(|| deny_in_grown(src, tokens, (start, end), out));
+}
+
+fn deny_in_grown(
     src: &str,
     tokens: &[Token],
     (start, end): (usize, usize),

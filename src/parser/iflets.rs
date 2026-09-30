@@ -59,6 +59,13 @@ pub(super) fn parse_if_let<'t>(
     cur: Cursor<'t>,
     kw_span: Span,
 ) -> Result<(Cursor<'t>, usize, IfLetStmt), StrayIfLet> {
+    crate::stack::grow(|| parse_if_let_grown(cur, kw_span))
+}
+
+fn parse_if_let_grown<'t>(
+    cur: Cursor<'t>,
+    kw_span: Span,
+) -> Result<(Cursor<'t>, usize, IfLetStmt), StrayIfLet> {
     let head = StrayIfLet {
         span: kw_span,
         kind: StrayIfLetKind::Head,
@@ -111,6 +118,13 @@ pub(super) fn parse_if_let<'t>(
 }
 
 fn parse_if_let_link<'t>(
+    cur: Cursor<'t>,
+    kw_span: Span,
+) -> Option<(Cursor<'t>, usize, IfLetStmt, Option<Span>)> {
+    crate::stack::grow(|| parse_if_let_link_grown(cur, kw_span))
+}
+
+fn parse_if_let_link_grown<'t>(
     mut cur: Cursor<'t>,
     kw_span: Span,
 ) -> Option<(Cursor<'t>, usize, IfLetStmt, Option<Span>)> {

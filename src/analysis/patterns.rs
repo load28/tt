@@ -191,6 +191,10 @@ impl Entry {
 }
 
 pub(super) fn walk(program: &Program, table: &Table, depth: Depth, out: &mut PatternAnalyses) {
+    crate::stack::grow(|| walk_grown(program, table, depth, out));
+}
+
+fn walk_grown(program: &Program, table: &Table, depth: Depth, out: &mut PatternAnalyses) {
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_)
@@ -264,6 +268,10 @@ pub(super) fn walk_if_let(
     depth: Depth,
     out: &mut PatternAnalyses,
 ) {
+    crate::stack::grow(|| walk_if_let_grown(stmt, table, depth, out));
+}
+
+fn walk_if_let_grown(stmt: &IfLetStmt, table: &Table, depth: Depth, out: &mut PatternAnalyses) {
     let site = analyze_if_let(stmt, table, depth);
     out.sites.push(site);
     walk(&stmt.expr, table, depth, out);
@@ -527,6 +535,16 @@ pub(super) fn analyze_group(
 /// [`PatternBinding`] per leaf. `constructor` is `(variant name, constructor)`
 /// when the expected type is known; group fields are filled by the caller.
 pub(super) fn collect_bindings(
+    bindings: &[Binding],
+    constructor: Option<(&str, &MatchConstructor)>,
+    tag: &str,
+    table: &Table,
+    out: &mut Vec<PatternBinding>,
+) {
+    crate::stack::grow(|| collect_bindings_grown(bindings, constructor, tag, table, out));
+}
+
+fn collect_bindings_grown(
     bindings: &[Binding],
     constructor: Option<(&str, &MatchConstructor)>,
     tag: &str,

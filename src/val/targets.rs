@@ -99,6 +99,15 @@ fn target(
     tokens: &[Token],
     start: usize,
 ) -> Option<(usize, Vec<Target>)> {
+    crate::stack::grow(|| target_grown(src, source_kind, tokens, start))
+}
+
+fn target_grown(
+    src: &str,
+    source_kind: SourceKind,
+    tokens: &[Token],
+    start: usize,
+) -> Option<(usize, Vec<Target>)> {
     if !matches!(tokens.get(start)?.kind, TokenKind::Punct(b'[' | b'{')) {
         return reference(src, source_kind, tokens, start);
     }

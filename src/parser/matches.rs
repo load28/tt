@@ -553,12 +553,14 @@ pub(super) fn outline_arms(src: &str, tokens: &[Token]) -> Vec<ArmOutline> {
     };
     let mut arms = Vec::new();
     let mut arm = open_arm(0);
-    let mut depth = 0usize;
-    for (index, token) in tokens.iter().enumerate() {
+    let mut index = 0;
+    while let Some(token) = tokens.get(index) {
+        crate::work::tick("arm outline steps");
         match token.kind {
-            _ if token.opens_bracket() => depth += 1,
-            _ if token.closes_bracket() => depth = depth.saturating_sub(1),
-            _ if depth > 0 => {}
+            _ if token.opens_bracket() => match Token::balancing_close(tokens, index) {
+                Some(close) => index = close,
+                None => break,
+            },
             TokenKind::Punct(b',') => {
                 arm.end = index;
                 arms.push(arm);
@@ -574,6 +576,7 @@ pub(super) fn outline_arms(src: &str, tokens: &[Token]) -> Vec<ArmOutline> {
             }
             _ => {}
         }
+        index += 1;
     }
     arms.push(arm);
     arms
@@ -1147,7 +1150,11 @@ pub(super) fn parse_alternative(cur: &mut Cursor, allow_nested: bool) -> Option<
 /// identifier directly followed by parens — is a nested tag pattern
 /// instead of an alias (match patterns only; let-else keeps aliases only).
 /// None on failure.
-pub(super) fn parse_bindings(mut cur: Cursor, allow_nested: bool) -> Option<Vec<Binding>> {
+pub(super) fn parse_bindings(cur: Cursor, allow_nested: bool) -> Option<Vec<Binding>> {
+    crate::stack::grow(|| parse_bindings_grown(cur, allow_nested))
+}
+
+fn parse_bindings_grown(mut cur: Cursor, allow_nested: bool) -> Option<Vec<Binding>> {
     let mut bindings = Vec::new();
     loop {
         if cur.peek().is_none() {
@@ -1252,19 +1259,16 @@ fn guard_runs_to_end(cur: &Cursor) -> bool {
 /// closing bracket, returning the stopping token index and byte offset
 /// (the region end when the tokens run out).
 fn expr_body_end(cur: &Cursor) -> (usize, usize) {
-    let mut depth = 0usize;
     let mut k = cur.idx;
     while k < cur.tokens.len() {
         let t = &cur.tokens[k];
         match t.kind {
-            _ if t.opens_bracket() => depth += 1,
-            _ if t.closes_bracket() => {
-                if depth == 0 {
-                    return (k, t.span.start);
-                }
-                depth -= 1;
-            }
-            TokenKind::Punct(b',') if depth == 0 => return (k, t.span.start),
+            _ if t.opens_bracket() => match Token::balancing_close(cur.tokens, k) {
+                Some(close) => k = close,
+                None => return (cur.tokens.len(), cur.range_end),
+            },
+            _ if t.closes_bracket() => return (k, t.span.start),
+            TokenKind::Punct(b',') => return (k, t.span.start),
             _ => {}
         }
         k += 1;

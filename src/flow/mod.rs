@@ -332,6 +332,10 @@ fn collect_if_let_heads(program: &Program, out: &mut IfLetHeads) {
 }
 
 fn collect_if_let(stmt: &IfLetStmt, out: &mut IfLetHeads) {
+    crate::stack::grow(|| collect_if_let_grown(stmt, out));
+}
+
+fn collect_if_let_grown(stmt: &IfLetStmt, out: &mut IfLetHeads) {
     out.insert(stmt.keyword_off, stmt.head_span.end);
     collect_if_let_heads(&stmt.body, out);
     match &stmt.else_part {

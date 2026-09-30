@@ -10,4 +10,13 @@ form the generator writes for `ForHead::UsingDecl`; `fields::VarDeclOrExprField`
 has a `UsingDecl` field and the node iterator yields the declaration. The file
 is upstream's generated code with exactly these arms added.
 
+Local change (TASK-654): `src/generated.rs`, `visit_with`, `visit_mut_with`
+and their `_ast_path` forms for `Expr`, `Stmt`, `Pat`, `TsType` and
+`JSXElementChild` call the visitor through `maybe_grow` (`src/lib.rs`, over
+`stacker`, the crate `swc_ecma_parser` already uses for the same purpose).
+Every recursion of a generated traversal over nested syntax passes one of
+these five nodes, so a visitor walks a tree of any depth the parser accepts
+without the caller's stack bounding it. `src/stack.rs` in the parent
+repository tests it.
+
 Remove this vendored copy together with `vendor/swc_ecma_ast`.

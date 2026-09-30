@@ -404,6 +404,15 @@ impl<'a> Emitter<'a> {
         out: &mut Rope<'a>,
         body: &dyn Fn(hir::BodyId) -> Rope<'a>,
     ) {
+        crate::stack::grow(|| self.emit_statement_decision_grown(decision, out, body));
+    }
+
+    fn emit_statement_decision_grown(
+        &self,
+        decision: &Decision,
+        out: &mut Rope<'a>,
+        body: &dyn Fn(hir::BodyId) -> Rope<'a>,
+    ) {
         let span = self.span(decision.head);
         let (kind, inner) = match &decision.kind {
             DecisionKind::LetElse { binding_mode, .. } => {
@@ -512,6 +521,14 @@ impl<'a> Emitter<'a> {
         decision: &Decision,
         emit_body: &dyn Fn(hir::BodyId) -> Rope<'a>,
     ) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_if_let_grown(decision, emit_body))
+    }
+
+    fn emit_if_let_grown(
+        &self,
+        decision: &Decision,
+        emit_body: &dyn Fn(hir::BodyId) -> Rope<'a>,
+    ) -> Rope<'a> {
         let subject = &decision.subjects[0];
         let temp = self.temp_name(subject.temporary);
         let arm = &decision.arms[0];
@@ -559,6 +576,15 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_value_decision(
+        &self,
+        decision: &Decision,
+        continuation: &ValueContinuation<'_>,
+        exits: &[HostExit],
+    ) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_value_decision_grown(decision, continuation, exits))
+    }
+
+    fn emit_value_decision_grown(
         &self,
         decision: &Decision,
         continuation: &ValueContinuation<'_>,
@@ -612,6 +638,14 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_continued_expr(
+        &self,
+        expr: ExprId,
+        continuation: &ValueContinuation<'_>,
+    ) -> Option<Rope<'a>> {
+        crate::stack::grow(|| self.emit_continued_expr_grown(expr, continuation))
+    }
+
+    fn emit_continued_expr_grown(
         &self,
         expr: ExprId,
         continuation: &ValueContinuation<'_>,

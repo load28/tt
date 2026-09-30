@@ -60,6 +60,9 @@ version = "1.0.225"
 features = ["derive"]
 optional = true
 
+[dependencies.stacker]
+version = "0.1.15"
+
 [dependencies.swc_atoms]
 version = "10.0.0"
 

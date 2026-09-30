@@ -37,6 +37,7 @@ pub(super) fn parse_result_block<'t>(
     mut cur: Cursor<'t>,
     kw_span: Span,
 ) -> (Attempt<'t>, Vec<Span>) {
+    crate::work::tick("result block attempts");
     let open = cur.idx;
     let Some(close) = cur.find_close() else {
         return (Attempt::Pass, Vec::new()); // unbalanced braces — nothing to claim
@@ -86,6 +87,16 @@ fn nearest_result_try_spans(program: &Program, cur: &Cursor<'_>, open: usize) ->
         return Vec::new();
     };
     fn collect(
+        program: &Program,
+        cur: &Cursor<'_>,
+        baseline: usize,
+        depth: &dyn Fn(usize) -> Option<usize>,
+        spans: &mut Vec<Span>,
+    ) {
+        crate::stack::grow(|| collect_grown(program, cur, baseline, depth, spans));
+    }
+
+    fn collect_grown(
         program: &Program,
         cur: &Cursor<'_>,
         baseline: usize,
@@ -159,6 +170,16 @@ fn nearest_result_try_spans(program: &Program, cur: &Cursor<'_>, open: usize) ->
         depth: &dyn Fn(usize) -> Option<usize>,
         spans: &mut Vec<Span>,
     ) {
+        crate::stack::grow(|| collect_if_let_grown(stmt, cur, baseline, depth, spans));
+    }
+
+    fn collect_if_let_grown(
+        stmt: &crate::ast::IfLetStmt,
+        cur: &Cursor<'_>,
+        baseline: usize,
+        depth: &dyn Fn(usize) -> Option<usize>,
+        spans: &mut Vec<Span>,
+    ) {
         collect(&stmt.expr, cur, baseline, depth, spans);
         collect(&stmt.body, cur, baseline, depth, spans);
         if let Some(else_part) = &stmt.else_part {
@@ -174,6 +195,14 @@ fn nearest_result_try_spans(program: &Program, cur: &Cursor<'_>, open: usize) ->
 }
 
 fn tt_owned_tokens(
+    program: &Program,
+    cur: &Cursor<'_>,
+    arrows: &mut std::collections::HashSet<usize>,
+) {
+    crate::stack::grow(|| tt_owned_tokens_grown(program, cur, arrows));
+}
+
+fn tt_owned_tokens_grown(
     program: &Program,
     cur: &Cursor<'_>,
     arrows: &mut std::collections::HashSet<usize>,
@@ -283,6 +312,13 @@ fn function_depth_at(
 }
 
 fn tokens_within<'t>(tokens: &'t [crate::lexer::Token], out: &mut Vec<&'t crate::lexer::Token>) {
+    crate::stack::grow(|| tokens_within_grown(tokens, out));
+}
+
+fn tokens_within_grown<'t>(
+    tokens: &'t [crate::lexer::Token],
+    out: &mut Vec<&'t crate::lexer::Token>,
+) {
     for token in tokens {
         out.push(token);
         if let crate::lexer::TokenKind::Template(parts) = &token.kind {
@@ -315,6 +351,14 @@ fn arm_arrow(
 }
 
 fn tt_owned_if_let(
+    stmt: &crate::ast::IfLetStmt,
+    cur: &Cursor<'_>,
+    arrows: &mut std::collections::HashSet<usize>,
+) {
+    crate::stack::grow(|| tt_owned_if_let_grown(stmt, cur, arrows));
+}
+
+fn tt_owned_if_let_grown(
     stmt: &crate::ast::IfLetStmt,
     cur: &Cursor<'_>,
     arrows: &mut std::collections::HashSet<usize>,

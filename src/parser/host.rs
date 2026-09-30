@@ -227,6 +227,14 @@ fn candidate_at_error(candidates: &[Span], restored: &[Span], error: usize) -> O
 }
 
 fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &mut Vec<Span>) {
+    crate::stack::grow(|| collect_region_facts_grown(program, masks, candidates));
+}
+
+fn collect_region_facts_grown(
+    program: &Program,
+    masks: &mut Vec<Mask>,
+    candidates: &mut Vec<Span>,
+) {
     candidates.extend(program.host_match_candidates().iter().copied());
     let region_candidates: HashSet<(usize, usize)> = program
         .host_match_candidates()

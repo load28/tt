@@ -123,6 +123,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn source_range_rope(&self, span: hir::Span) -> Rope<'a> {
+        crate::stack::grow(|| self.source_range_rope_grown(span))
+    }
+
+    fn source_range_rope_grown(&self, span: hir::Span) -> Rope<'a> {
         let mut rope = Rope::new();
         let mut insertions = self
             .owner_slot_index
@@ -489,10 +493,27 @@ impl<'a> Emitter<'a> {
     }
 
     pub(in super::super) fn emit_body(&self, body: hir::BodyId) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_body_grown(body))
+    }
+
+    fn emit_body_grown(&self, body: hir::BodyId) -> Rope<'a> {
         self.emit_statements(&self.core.bodies[body.index()].statements)
     }
 
     pub(super) fn emit_body_with_exits(
+        &self,
+        body: hir::BodyId,
+        exits: &[HostExit],
+        continuation: &ValueContinuation<'_>,
+        label: Option<&str>,
+        generated_indent: &str,
+    ) -> Rope<'a> {
+        crate::stack::grow(|| {
+            self.emit_body_with_exits_grown(body, exits, continuation, label, generated_indent)
+        })
+    }
+
+    fn emit_body_with_exits_grown(
         &self,
         body: hir::BodyId,
         exits: &[HostExit],
@@ -677,6 +698,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_statements(&self, statements: &[Statement]) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_statements_grown(statements))
+    }
+
+    fn emit_statements_grown(&self, statements: &[Statement]) -> Rope<'a> {
         self.emit_statements_with_edits(statements, &[])
     }
 
@@ -1047,6 +1072,10 @@ impl<'a> Emitter<'a> {
     }
 
     fn collect_operand_value(&self, expr: ExprId, out: &mut Vec<(ExprId, String)>) {
+        crate::stack::grow(|| self.collect_operand_value_grown(expr, out));
+    }
+
+    fn collect_operand_value_grown(&self, expr: ExprId, out: &mut Vec<(ExprId, String)>) {
         if !self.core.has_statement_form(expr) || self.slot_exprs.contains_key(&expr) {
             return;
         }
@@ -1071,6 +1100,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_expr(&self, expr: ExprId) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_expr_grown(expr))
+    }
+
+    fn emit_expr_grown(&self, expr: ExprId) -> Rope<'a> {
         // A structured expression can own the first byte of a host region.
         // Enter that region before substituting any captured source inside it,
         // just as the opaque-source traversal does at the same boundary.

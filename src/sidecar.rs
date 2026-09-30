@@ -307,6 +307,10 @@ fn declared_identifiers(declaration: &Decl) -> Vec<&Ident> {
 }
 
 fn pattern_identifiers<'a>(pattern: &'a Pat, out: &mut Vec<&'a Ident>) {
+    crate::stack::grow(|| pattern_identifiers_grown(pattern, out));
+}
+
+fn pattern_identifiers_grown<'a>(pattern: &'a Pat, out: &mut Vec<&'a Ident>) {
     match pattern {
         Pat::Ident(binding) => out.push(&binding.id),
         Pat::Array(array) => {

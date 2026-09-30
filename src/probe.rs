@@ -140,6 +140,10 @@ pub(crate) fn payload_probes_of(program: &Program) -> Vec<PayloadProbe> {
 /// let-else bindings are alias-only — but the walk visits every construct
 /// so a nested match inside an arm body is reached too.
 fn payload_walk(program: &Program, out: &mut Vec<PayloadProbe>) {
+    crate::stack::grow(|| payload_walk_grown(program, out));
+}
+
+fn payload_walk_grown(program: &Program, out: &mut Vec<PayloadProbe>) {
     for segment in &program.segments {
         match segment {
             Segment::Match(expr) => {
@@ -216,6 +220,10 @@ fn payload_walk(program: &Program, out: &mut Vec<PayloadProbe>) {
 }
 
 fn payload_if_let(stmt: &IfLetStmt, out: &mut Vec<PayloadProbe>) {
+    crate::stack::grow(|| payload_if_let_grown(stmt, out));
+}
+
+fn payload_if_let_grown(stmt: &IfLetStmt, out: &mut Vec<PayloadProbe>) {
     for alt in &stmt.alternatives {
         payload_of(alt, out);
     }
@@ -230,6 +238,10 @@ fn payload_if_let(stmt: &IfLetStmt, out: &mut Vec<PayloadProbe>) {
 
 /// One alternative's nested patterns, recursively.
 fn payload_of(alt: &TagPattern, out: &mut Vec<PayloadProbe>) {
+    crate::stack::grow(|| payload_of_grown(alt, out));
+}
+
+fn payload_of_grown(alt: &TagPattern, out: &mut Vec<PayloadProbe>) {
     for binding in alt.bindings.as_deref().unwrap_or_default() {
         let Some(inner) = &binding.nested else {
             continue;
@@ -324,6 +336,10 @@ enum Kind {
 }
 
 fn walk(program: &Program, src: &str, out: &mut Probes) {
+    crate::stack::grow(|| walk_grown(program, src, out));
+}
+
+fn walk_grown(program: &Program, src: &str, out: &mut Probes) {
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_)
@@ -388,6 +404,10 @@ fn walk(program: &Program, src: &str, out: &mut Probes) {
 }
 
 fn walk_if_let(stmt: &IfLetStmt, src: &str, out: &mut Probes) {
+    crate::stack::grow(|| walk_if_let_grown(stmt, src, out));
+}
+
+fn walk_if_let_grown(stmt: &IfLetStmt, src: &str, out: &mut Probes) {
     walk(&stmt.expr, src, out);
     walk(&stmt.body, src, out);
     match &stmt.else_part {

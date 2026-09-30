@@ -49,6 +49,17 @@ pub(crate) struct Token {
     pub kind: TokenKind,
     pub span: Span,
     pub facts: TokenFacts,
+    pub(crate) pairs: BracketPairs,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct BracketPairs {
+    any: usize,
+    same: usize,
+}
+
+impl BracketPairs {
+    const NONE: BracketPairs = BracketPairs { any: 0, same: 0 };
 }
 
 impl Token {
@@ -62,6 +73,20 @@ impl Token {
             TokenKind::Punct(b'<') => self.facts.opens_type_arguments(),
             _ => false,
         }
+    }
+
+    pub(crate) fn balancing_close(tokens: &[Token], open: usize) -> Option<usize> {
+        let distance = tokens.get(open)?.pairs.any;
+        (distance > 0)
+            .then_some(open + distance)
+            .filter(|&close| close < tokens.len())
+    }
+
+    pub(crate) fn matching_close(tokens: &[Token], open: usize) -> Option<usize> {
+        let distance = tokens.get(open)?.pairs.same;
+        (distance > 0)
+            .then_some(open + distance)
+            .filter(|&close| close < tokens.len())
     }
 
     /// Whether this token closes a bracket pair: `)`, `]`, `}`, or the `>`
@@ -306,6 +331,18 @@ fn lex_region(
     source_kind: SourceKind,
     mode: facts::Start,
     braced: bool,
+    trace: TraceSink<'_>,
+) -> (Vec<Token>, usize) {
+    crate::stack::grow(|| lex_region_grown(src_str, start, end, source_kind, mode, braced, trace))
+}
+
+fn lex_region_grown(
+    src_str: &str,
+    start: usize,
+    end: usize,
+    source_kind: SourceKind,
+    mode: facts::Start,
+    braced: bool,
     mut trace: TraceSink<'_>,
 ) -> (Vec<Token>, usize) {
     let src = src_str.as_bytes();
@@ -355,6 +392,7 @@ fn lex_region(
                 kind,
                 span: span(i, e),
                 facts: machine.continuation(span(i, e)),
+                pairs: BracketPairs::NONE,
             });
             i = e;
             continue;
@@ -367,6 +405,7 @@ fn lex_region(
                 kind: TokenKind::Str,
                 span: span(i, e),
                 facts,
+                pairs: BracketPairs::NONE,
             });
             i = e;
             continue;
@@ -379,6 +418,7 @@ fn lex_region(
                 kind: TokenKind::Template(parts.into_boxed_slice()),
                 span: span(i, e),
                 facts,
+                pairs: BracketPairs::NONE,
             });
             i = e;
             continue;
@@ -417,6 +457,7 @@ fn lex_region(
                 kind: TokenKind::Regex,
                 span: span(i, e),
                 facts,
+                pairs: BracketPairs::NONE,
             });
             i = e;
             continue;
@@ -429,6 +470,7 @@ fn lex_region(
                 kind: TokenKind::Ident,
                 span: span(i, j),
                 facts,
+                pairs: BracketPairs::NONE,
             });
             i = j;
             continue;
@@ -445,6 +487,7 @@ fn lex_region(
                 kind: TokenKind::Punct(c),
                 span: span(i, i + 1),
                 facts,
+                pairs: BracketPairs::NONE,
             });
             i += 1;
             continue;
@@ -473,6 +516,7 @@ fn lex_region(
             kind,
             span: span(i, i + len),
             facts,
+            pairs: BracketPairs::NONE,
         });
         i += len;
     };
@@ -480,7 +524,34 @@ fn lex_region(
     if let Some(trace) = trace {
         trace.statements.extend(statements);
     }
+    pair_brackets(&mut tokens);
     (tokens, close)
+}
+
+fn pair_brackets(tokens: &mut [Token]) {
+    let slot = |token: &Token| match token.kind {
+        TokenKind::Punct(b'(' | b')') => 0,
+        TokenKind::Punct(b'[' | b']') => 1,
+        TokenKind::Punct(b'{' | b'}') => 2,
+        _ => 3,
+    };
+    let mut any: Vec<usize> = Vec::new();
+    let mut same: [Vec<usize>; 4] = Default::default();
+    for index in 0..tokens.len() {
+        let token = &tokens[index];
+        if token.opens_bracket() {
+            any.push(index);
+            same[slot(token)].push(index);
+        } else if token.closes_bracket() {
+            let kind = slot(token);
+            if let Some(opener) = any.pop() {
+                tokens[opener].pairs.any = index - opener;
+            }
+            if let Some(opener) = same[kind].pop() {
+                tokens[opener].pairs.same = index - opener;
+            }
+        }
+    }
 }
 
 struct JsxExpression {
@@ -522,6 +593,10 @@ fn jsx_expression(
 /// appear as punctuation tokens.
 pub(crate) fn invalid_jsx_namespace_member(tokens: &[Token]) -> Option<Span> {
     fn in_tokens(tokens: &[Token]) -> Option<Span> {
+        crate::stack::grow(|| in_tokens_grown(tokens))
+    }
+
+    fn in_tokens_grown(tokens: &[Token]) -> Option<Span> {
         for (index, token) in tokens.iter().enumerate() {
             if let TokenKind::Template(parts) = &token.kind {
                 for part in parts.iter() {
@@ -597,6 +672,16 @@ fn lex_template(
     start: usize,
     end: usize,
     source_kind: SourceKind,
+    trace: TraceSink<'_>,
+) -> (usize, Vec<TplPart>) {
+    crate::stack::grow(|| lex_template_grown(src_str, start, end, source_kind, trace))
+}
+
+fn lex_template_grown(
+    src_str: &str,
+    start: usize,
+    end: usize,
+    source_kind: SourceKind,
     mut trace: TraceSink<'_>,
 ) -> (usize, Vec<TplPart>) {
     let src = src_str.as_bytes();
@@ -664,6 +749,16 @@ fn scan_jsx(
     start: usize,
     end: usize,
     source_kind: SourceKind,
+    trace: TraceSink<'_>,
+) -> Option<ScannedJsx> {
+    crate::stack::grow(|| scan_jsx_grown(src_str, start, end, source_kind, trace))
+}
+
+fn scan_jsx_grown(
+    src_str: &str,
+    start: usize,
+    end: usize,
+    source_kind: SourceKind,
     mut trace: TraceSink<'_>,
 ) -> Option<ScannedJsx> {
     let src = src_str.as_bytes();
@@ -688,6 +783,7 @@ fn scan_jsx(
                     end: close_end,
                 },
                 facts: TokenFacts::default(),
+                pairs: BracketPairs::NONE,
             });
             return Some(ScannedJsx {
                 end: close_end,
@@ -704,6 +800,7 @@ fn scan_jsx(
                         end: i,
                     },
                     facts: TokenFacts::default(),
+                    pairs: BracketPairs::NONE,
                 });
             }
             tokens.extend(child.tokens);
@@ -722,6 +819,7 @@ fn scan_jsx(
                         end: i + 1,
                     },
                     facts: TokenFacts::default(),
+                    pairs: BracketPairs::NONE,
                 });
             }
             tokens.extend(expression.tokens);
@@ -732,6 +830,7 @@ fn scan_jsx(
                     end: close + 1,
                 },
                 facts: TokenFacts::default(),
+                pairs: BracketPairs::NONE,
             });
             i = close + 1;
             raw_start = i;
@@ -757,6 +856,7 @@ fn jsx_region_tokens(start: usize, end: usize, expressions: Vec<JsxExpression>) 
                 end: open + 1,
             },
             facts: TokenFacts::default(),
+            pairs: BracketPairs::NONE,
         });
         tokens.extend(expression_tokens);
         tokens.push(Token {
@@ -766,6 +866,7 @@ fn jsx_region_tokens(start: usize, end: usize, expressions: Vec<JsxExpression>) 
                 end: close + 1,
             },
             facts: TokenFacts::default(),
+            pairs: BracketPairs::NONE,
         });
         raw_start = close + 1;
     }
@@ -777,6 +878,7 @@ fn jsx_region_tokens(start: usize, end: usize, expressions: Vec<JsxExpression>) 
                 end,
             },
             facts: TokenFacts::default(),
+            pairs: BracketPairs::NONE,
         });
     }
     tokens

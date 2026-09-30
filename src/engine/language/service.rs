@@ -631,6 +631,10 @@ pub(super) fn signature_question(
 }
 
 fn tokens_holding(tokens: &[crate::lexer::Token], at: usize) -> &[crate::lexer::Token] {
+    crate::stack::grow(|| tokens_holding_grown(tokens, at))
+}
+
+fn tokens_holding_grown(tokens: &[crate::lexer::Token], at: usize) -> &[crate::lexer::Token] {
     use crate::lexer::{TokenKind, TplPart};
     for token in tokens {
         if let TokenKind::Template(parts) = &token.kind
@@ -686,6 +690,14 @@ fn innermost_invocation(tokens: &[crate::lexer::Token], at: usize) -> Option<usi
 }
 
 fn open_brackets_before(tokens: &[crate::lexer::Token], at: usize, open: &mut Vec<(usize, bool)>) {
+    crate::stack::grow(|| open_brackets_before_grown(tokens, at, open));
+}
+
+fn open_brackets_before_grown(
+    tokens: &[crate::lexer::Token],
+    at: usize,
+    open: &mut Vec<(usize, bool)>,
+) {
     use crate::lexer::{TokenKind, TplPart};
     for (index, token) in tokens.iter().enumerate() {
         if token.span.start >= at {
@@ -931,6 +943,10 @@ pub(super) fn map_shared_target(
 /// ttc wrote (a generated binding, the type and constructor a `variant`
 /// becomes) is not the user's, and its mapped children take its place.
 pub(super) fn source_symbols(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<DocumentSymbol> {
+    crate::stack::grow(|| source_symbols_grown(doc, items))
+}
+
+fn source_symbols_grown(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<DocumentSymbol> {
     let mut out = Vec::new();
     for item in items {
         let children = source_symbols(

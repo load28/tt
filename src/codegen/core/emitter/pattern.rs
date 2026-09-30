@@ -647,6 +647,40 @@ impl<'a> Emitter<'a> {
         self.emit_value_delivery_control(body, close, continuation, break_label, exit_depth, true)
     }
 
+    fn wrapped_delivery(&self, body: Rope<'a>, wrappers: &[ValueWrapper]) -> (Rope<'a>, bool) {
+        let body_grouped = needs_grouping(&body, self.source_kind);
+        let Some(innermost) = wrappers.len().checked_sub(1) else {
+            return (body, body_grouped);
+        };
+        let layout = !body.is_resolved();
+        let grouped_at = |index: usize| {
+            if index == innermost {
+                body_grouped
+            } else {
+                layout
+            }
+        };
+        let mut out = Rope::new();
+        for (index, wrapper) in wrappers.iter().enumerate() {
+            match wrapper {
+                ValueWrapper::ResultOk => out.push_lit("{ kind: \"Ok\" as const, value: "),
+            }
+            if grouped_at(index) {
+                out.push_lit("(");
+            }
+        }
+        out.append(body);
+        for (index, wrapper) in wrappers.iter().enumerate().rev() {
+            if grouped_at(index) {
+                out.push_lit(")");
+            }
+            match wrapper {
+                ValueWrapper::ResultOk => out.push_lit(" }"),
+            }
+        }
+        (out, layout)
+    }
+
     pub(super) fn emit_value_delivery_control(
         &self,
         body: Rope<'a>,
@@ -656,19 +690,7 @@ impl<'a> Emitter<'a> {
         exit_depth: Option<u16>,
         exit_after_assignment: bool,
     ) -> Rope<'a> {
-        let mut value = body;
-        for wrapper in continuation.wrappers.iter().rev() {
-            match wrapper {
-                ValueWrapper::ResultOk => {
-                    let mut wrapped = Rope::new();
-                    wrapped.push_lit("{ kind: \"Ok\" as const, value: ");
-                    push_grouped(&mut wrapped, value, self.source_kind);
-                    wrapped.push_lit(" }");
-                    value = wrapped;
-                }
-            }
-        }
-        let grouped = needs_grouping(&value, self.source_kind);
+        let (value, grouped) = self.wrapped_delivery(body, &continuation.wrappers);
         let mut out = Rope::new();
         match continuation.destination {
             ValueDestination::Expression | ValueDestination::Return => out.push_lit("return "),
@@ -738,6 +760,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_condition(&self, plan: &PatternPlan, decision: &Decision) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_condition_grown(plan, decision))
+    }
+
+    fn emit_condition_grown(&self, plan: &PatternPlan, decision: &Decision) -> Rope<'a> {
         match plan {
             PatternPlan::Any | PatternPlan::Bind(_) => Rope::new(),
             PatternPlan::Test(test) => self.emit_test(test, decision),

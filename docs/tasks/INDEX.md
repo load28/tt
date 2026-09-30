@@ -659,6 +659,7 @@
 | TASK-651 | Compare the merge base's diagnostics and output with the change's, over real tt programs | Complete | 2026-09-30 | 2026-09-30 | [TASK-651](./TASK-651-real-world-diagnostic-delta.md) |
 | TASK-652 | Execute case programs and hold their output to runtime baselines | Complete | 2026-09-30 | 2026-09-30 | [TASK-652](./TASK-652-runtime-execution-baselines.md) |
 | TASK-653 | Reuse a project's contextual materialization while its inputs are unchanged | Complete | 2026-09-30 | 2026-09-30 | [TASK-653](./TASK-653-contextual-materialization-reuse.md) |
+| TASK-654 | Read, check, and emit tt syntax of any nesting depth without overflowing the stack, in work linear in the input and output | Complete | 2026-09-30 | 2026-09-30 | [TASK-654](./TASK-654-deeply-nested-tt-syntax.md) |
 | TASK-661 | Read `val` after a parameter property's modifiers the same way in both checks | Complete | 2026-09-30 | 2026-09-30 | [TASK-661](./TASK-661-val-after-parameter-property-modifier.md) |
 | TASK-662 | Make a `flow` optional-chain step the optional call a pipeline makes | Complete | 2026-09-30 | 2026-09-30 | [TASK-662](./TASK-662-flow-optional-member-step.md) |
 | TASK-663 | Open a block for a `result` block's statements in an unbraced body | Complete | 2026-09-30 | 2026-09-30 | [TASK-663](./TASK-663-result-block-unbraced-body-try.md) |

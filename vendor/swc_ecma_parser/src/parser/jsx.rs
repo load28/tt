@@ -359,6 +359,13 @@ impl<I: Tokens> Parser<I> {
         &mut self,
         in_expr_context: bool,
     ) -> PResult<either::Either<JSXFragment, JSXElement>> {
+        crate::maybe_grow(256 * 1024, 1024 * 1024, || self.parse_jsx_element_grown(in_expr_context))
+    }
+
+    fn parse_jsx_element_grown(
+        &mut self,
+        in_expr_context: bool,
+    ) -> PResult<either::Either<JSXFragment, JSXElement>> {
         debug_assert!(self.input().syntax().jsx());
         trace_cur!(self, parse_jsx_element);
 

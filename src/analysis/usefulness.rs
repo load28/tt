@@ -162,6 +162,10 @@ impl Witness {
     }
 
     fn write(&self, nested: bool) -> String {
+        crate::stack::grow(|| self.write_grown(nested))
+    }
+
+    fn write_grown(&self, nested: bool) -> String {
         match self {
             Witness::Wild | Witness::Unknown => "_".to_string(),
             Witness::Ctor { tag, args } => {
@@ -313,6 +317,16 @@ fn usefulness<'a>(
     cx: &'a Alphabets<'a>,
     search: &mut Search,
 ) -> Missing {
+    crate::stack::grow(|| usefulness_grown(rows, query, types, cx, search))
+}
+
+fn usefulness_grown<'a>(
+    rows: &[Vec<Cell<'a>>],
+    query: &[Cell<'a>],
+    types: &[ColTy<'a>],
+    cx: &'a Alphabets<'a>,
+    search: &mut Search,
+) -> Missing {
     search.steps += 1;
     if rows
         .iter()
@@ -395,6 +409,17 @@ fn usefulness<'a>(
 }
 
 fn split<'a>(
+    rows: &[Vec<Cell<'a>>],
+    sub_query: &[Cell<'a>],
+    constructor: &MatchConstructor,
+    types: &[ColTy<'a>],
+    cx: &'a Alphabets<'a>,
+    search: &mut Search,
+) -> Missing {
+    crate::stack::grow(|| split_grown(rows, sub_query, constructor, types, cx, search))
+}
+
+fn split_grown<'a>(
     rows: &[Vec<Cell<'a>>],
     sub_query: &[Cell<'a>],
     constructor: &MatchConstructor,

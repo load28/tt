@@ -720,6 +720,7 @@ version = "29.0.0"
 dependencies = [
  "new_debug_unreachable",
  "num-bigint",
+ "stacker",
  "swc_atoms",
  "swc_common",
  "swc_ecma_ast",

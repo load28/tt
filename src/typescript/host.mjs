@@ -658,14 +658,12 @@ async function main() {
           .filter((slot) => slot.module === module)
           .map((slot) => slot.declarationEnd));
         symbols = new Set();
-        const collect = (node) => {
+        walkTree(source, (node) => {
           if (isVariableDeclaration(node) && isIdentifier(node.name) && ends.has(node.name.end)) {
             const declared = checker.getSymbolAtLocation(node.name);
             if (declared) symbols.add(declared.id);
           }
-          node.forEachChild(collect);
-        };
-        collect(source);
+        });
         storage.set(module, symbols);
         return symbols;
       };
@@ -686,15 +684,14 @@ async function main() {
           ends.get(slot.module).add(slot.declarationEnd);
         }
         for (const [module, declared] of ends) {
-          const collect = (node) => {
+          const source = project.program.getSourceFile(module);
+          if (!source) continue;
+          walkTree(source, (node) => {
             if (isVariableDeclaration(node) && isIdentifier(node.name) && declared.has(node.name.end)) {
               const symbol = checker.getSymbolAtLocation(node.name);
               if (symbol) pending.add(symbol.id);
             }
-            node.forEachChild(collect);
-          };
-          const source = project.program.getSourceFile(module);
-          if (source) collect(source);
+          });
         }
         return pending;
       };
@@ -702,11 +699,9 @@ async function main() {
         const followed = new Set([own]);
         const reads = (node) => {
           const names = [];
-          const collect = (child) => {
+          walkTree(node, (child) => {
             if (isIdentifier(child)) names.push(child);
-            child.forEachChild(collect);
-          };
-          collect(node);
+          });
           if (!names.length) return false;
           for (let symbol of checker.getSymbolAtLocation(names)) {
             if (!symbol) continue;
@@ -727,11 +722,26 @@ async function main() {
         };
         return reads(node);
       };
-      const writesAny = (node) => {
-        if (node.kind === SyntaxKind.AnyKeyword) return true;
-        let found = false;
-        node.forEachChild((child) => { found ||= writesAny(child); });
-        return found;
+      const writesAny = (node) => walkTree(node, (child) => child.kind === SyntaxKind.AnyKeyword || undefined);
+      const syntaxIndexes = new Map();
+      const syntaxOf = (module, source) => {
+        let syntax = syntaxIndexes.get(module);
+        if (syntax) return syntax;
+        syntax = { declarations: new Map(), identifiers: new Map(), assignments: new Map() };
+        const add = (map, key, node) => {
+          const nodes = map.get(key);
+          if (nodes) nodes.push(node);
+          else map.set(key, [node]);
+        };
+        walkTree(source, (node) => {
+          if (isVariableDeclaration(node) && isIdentifier(node.name)) syntax.declarations.set(node.name.end, node);
+          if (isIdentifier(node)) add(syntax.identifiers, node.text, node);
+          if (isBinaryExpression(node) && node.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(node.left)) {
+            add(syntax.assignments, node.left.text, node);
+          }
+        });
+        syntaxIndexes.set(module, syntax);
+        return syntax;
       };
       const entries = [...(job.contextualSlots ?? []).entries()];
       let operandsSettling = false;
@@ -739,18 +749,11 @@ async function main() {
         if (slot.settled || !members.has(slot.module)) continue;
         const source = project.program.getSourceFile(slot.module);
         if (!source) continue;
-        let declaration;
-        const identifiers = [];
-        const assignments = [];
-        const visit = (node) => {
-          if (isVariableDeclaration(node) && isIdentifier(node.name) &&
-              node.name.end === slot.declarationEnd && (!node.type || slot.asserted)) declaration = node;
-          if (isIdentifier(node)) identifiers.push(node);
-          if (isBinaryExpression(node) && node.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(node.left)) assignments.push(node);
-          node.forEachChild(visit);
-        };
-        visit(source);
-        if (!declaration) continue;
+        const syntax = syntaxOf(slot.module, source);
+        const declaration = syntax.declarations.get(slot.declarationEnd);
+        if (!declaration || (declaration.type && !slot.asserted)) continue;
+        const identifiers = syntax.identifiers.get(declaration.name.text) ?? [];
+        const assignments = syntax.assignments.get(declaration.name.text) ?? [];
         const symbol = checker.getSymbolAtLocation(declaration.name);
         if (!symbol) continue;
         const declaredType = declaration.initializer ? checker.getTypeAtLocation(declaration.name) : undefined;
@@ -1194,7 +1197,9 @@ function freshLiterals(checker, node, SyntaxKind, TypeFlags) {
     if (type.isUnionType()) { for (const constituent of type.getTypes()) addRegular(constituent); return; }
     if (type.flags & literal) fresh.add(type.id);
   };
-  const visit = (expression) => {
+  const pending = [node];
+  while (pending.length > 0) {
+    const expression = pending.pop();
     switch (expression.kind) {
       case SyntaxKind.StringLiteral:
       case SyntaxKind.NoSubstitutionTemplateLiteral:
@@ -1203,50 +1208,47 @@ function freshLiterals(checker, node, SyntaxKind, TypeFlags) {
       case SyntaxKind.TrueKeyword:
       case SyntaxKind.FalseKeyword:
         addRegular(checker.getTypeAtLocation(expression));
-        return;
+        continue;
       case SyntaxKind.PrefixUnaryExpression:
         if ((expression.operator === SyntaxKind.MinusToken || expression.operator === SyntaxKind.PlusToken) &&
             (expression.operand.kind === SyntaxKind.NumericLiteral || expression.operand.kind === SyntaxKind.BigIntLiteral)) {
           addRegular(checker.getTypeAtLocation(expression));
         }
-        return;
+        continue;
       case SyntaxKind.ParenthesizedExpression:
       case SyntaxKind.SatisfiesExpression:
       case SyntaxKind.NonNullExpression:
-        visit(expression.expression);
-        return;
+        pending.push(expression.expression);
+        continue;
       case SyntaxKind.ConditionalExpression:
-        visit(expression.whenTrue);
-        visit(expression.whenFalse);
-        return;
+        pending.push(expression.whenFalse, expression.whenTrue);
+        continue;
       case SyntaxKind.BinaryExpression: {
         const operator = expression.operatorToken.kind;
-        if (operator === SyntaxKind.CommaToken) visit(expression.right);
+        if (operator === SyntaxKind.CommaToken) pending.push(expression.right);
         if (operator === SyntaxKind.AmpersandAmpersandToken || operator === SyntaxKind.BarBarToken ||
             operator === SyntaxKind.QuestionQuestionToken) {
-          visit(expression.left);
-          visit(expression.right);
+          pending.push(expression.right, expression.left);
         }
-        return;
+        continue;
       }
       case SyntaxKind.Identifier:
       case SyntaxKind.PropertyAccessExpression: {
         const name = expression.kind === SyntaxKind.Identifier ? expression : expression.name;
         const symbol = checker.getSymbolAtLocation(name);
         if (symbol) addFresh(checker.getTypeOfSymbolAtLocation(symbol, name));
-        return;
+        continue;
       }
       case SyntaxKind.CallExpression:
       case SyntaxKind.NewExpression:
       case SyntaxKind.TaggedTemplateExpression: {
         const signature = checker.getResolvedSignature(expression);
         if (signature) addFresh(checker.getReturnTypeOfSignature(signature));
-        return;
+        continue;
       }
       default:
     }
-  };
-  visit(node);
+  }
   return fresh;
 }
 
@@ -1284,13 +1286,9 @@ function typeNode(checker, type, location, flags) {
  */
 function denotes(checker, node, type, location, excluded, { SyntaxKind, SymbolFlags, TypeFlags }) {
   const K = SyntaxKind;
-  const named = (n) => {
-    if (n.kind === K.TypeReference || n.kind === K.TypeQuery || n.kind === K.ImportType ||
-        n.kind === K.ComputedPropertyName || n.kind === K.AnyKeyword) return true;
-    let found = false;
-    n.forEachChild((child) => { found ||= named(child); });
-    return found;
-  };
+  const named = (n) => walkTree(n, (child) =>
+    child.kind === K.TypeReference || child.kind === K.TypeQuery || child.kind === K.ImportType ||
+    child.kind === K.ComputedPropertyName || child.kind === K.AnyKeyword || undefined);
   const aliased = (symbol) => (symbol.flags & SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol);
   const entity = (name, meaning) => {
     const members = [];
@@ -1503,12 +1501,10 @@ function contextualMismatch(project, checker, diagnostic, isExpression, SyntaxKi
   const K = SyntaxKind;
 
   const starting = [];
-  const visit = (node) => {
-    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return;
+  walkTree(sourceFile, (node) => {
+    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return false;
     if (node.getStart(sourceFile) === diagnostic.pos) starting.push(node);
-    node.forEachChild(visit);
-  };
-  visit(sourceFile);
+  });
 
   const same = (left, right) => !!left && !!right && left.kind === right.kind && left.pos === right.pos && left.end === right.end;
   const valueOf = (node) => {
@@ -1590,12 +1586,10 @@ function lookupReceiver(project, diagnostic, SyntaxKind) {
   if (!sourceFile) return null;
   const K = SyntaxKind;
   let name;
-  const visit = (node) => {
-    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return;
+  walkTree(sourceFile, (node) => {
+    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return false;
     if (node.getStart(sourceFile) === diagnostic.pos && node.end === diagnostic.end) name = node;
-    node.forEachChild(visit);
-  };
-  visit(sourceFile);
+  });
   const parent = name?.parent;
   let receiver;
   if ((parent?.kind === K.PropertyAccessExpression && parent.name === name) ||
@@ -1611,13 +1605,27 @@ function lookupReceiver(project, diagnostic, SyntaxKind) {
 /** The innermost expression whose source range contains the emitted value. */
 function smallestExpressionCovering(sourceFile, start, end, isExpression) {
   let found = null;
-  const visit = (node) => {
-    if (node.getStart(sourceFile) > start || node.end < end) return;
+  walkTree(sourceFile, (node) => {
+    if (node.getStart(sourceFile) > start || node.end < end) return false;
     if (isExpression(node)) found = node;
-    node.forEachChild(visit);
-  };
-  visit(sourceFile);
+  });
   return found;
+}
+
+function walkTree(root, enter) {
+  const pending = [root];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    const entered = enter(node);
+    if (entered === true) return true;
+    if (entered === false) continue;
+    const children = [];
+    node.forEachChild((child) => {
+      children.push(child);
+    });
+    for (let index = children.length - 1; index >= 0; index--) pending.push(children[index]);
+  }
+  return false;
 }
 
 /** The union constituents of a type, or the type itself as one constituent. */

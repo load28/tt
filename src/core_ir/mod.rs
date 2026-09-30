@@ -50,6 +50,10 @@ impl CoreFile {
     }
 
     fn body_requires_host(&self, body: BodyId) -> bool {
+        crate::stack::grow(|| self.body_requires_host_grown(body))
+    }
+
+    fn body_requires_host_grown(&self, body: BodyId) -> bool {
         self.bodies[body.index()]
             .statements
             .iter()
@@ -69,6 +73,10 @@ impl CoreFile {
     /// lowering (structuring a nested value under its parent's
     /// continuation) read it from here instead of each deciding it again.
     pub(crate) fn has_statement_form(&self, expr: ExprId) -> bool {
+        crate::stack::grow(|| self.has_statement_form_grown(expr))
+    }
+
+    fn has_statement_form_grown(&self, expr: ExprId) -> bool {
         match &self.exprs[expr.index()] {
             // Every arm must be able to deliver a value to a continuation.
             Expr::Decision(decision) => decision
@@ -121,6 +129,10 @@ impl CoreFile {
     }
 
     fn expr_requires_host(&self, expr: ExprId) -> bool {
+        crate::stack::grow(|| self.expr_requires_host_grown(expr))
+    }
+
+    fn expr_requires_host_grown(&self, expr: ExprId) -> bool {
         match &self.exprs[expr.index()] {
             Expr::Opaque(_) => false,
             Expr::Sequence(body) => self.body_requires_host(*body),

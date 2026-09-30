@@ -11151,7 +11151,7 @@ impl<V: ?Sized + Visit> VisitWith<V> for ExportSpecifier {
 impl<V: ?Sized + Visit> VisitWith<V> for Expr {
     #[doc = "Calls [Visit`::visit_expr`] with `self`."]
     fn visit_with(&self, visitor: &mut V) {
-        <V as Visit>::visit_expr(visitor, self)
+        crate::maybe_grow(|| <V as Visit>::visit_expr(visitor, self))
     }
 
     fn visit_children_with(&self, visitor: &mut V) {
@@ -12005,7 +12005,7 @@ impl<V: ?Sized + Visit> VisitWith<V> for JSXElement {
 impl<V: ?Sized + Visit> VisitWith<V> for JSXElementChild {
     #[doc = "Calls [Visit`::visit_jsx_element_child`] with `self`."]
     fn visit_with(&self, visitor: &mut V) {
-        <V as Visit>::visit_jsx_element_child(visitor, self)
+        crate::maybe_grow(|| <V as Visit>::visit_jsx_element_child(visitor, self))
     }
 
     fn visit_children_with(&self, visitor: &mut V) {
@@ -12934,7 +12934,7 @@ impl<V: ?Sized + Visit> VisitWith<V> for ParenExpr {
 impl<V: ?Sized + Visit> VisitWith<V> for Pat {
     #[doc = "Calls [Visit`::visit_pat`] with `self`."]
     fn visit_with(&self, visitor: &mut V) {
-        <V as Visit>::visit_pat(visitor, self)
+        crate::maybe_grow(|| <V as Visit>::visit_pat(visitor, self))
     }
 
     fn visit_children_with(&self, visitor: &mut V) {
@@ -13395,7 +13395,7 @@ impl<V: ?Sized + Visit> VisitWith<V> for StaticBlock {
 impl<V: ?Sized + Visit> VisitWith<V> for Stmt {
     #[doc = "Calls [Visit`::visit_stmt`] with `self`."]
     fn visit_with(&self, visitor: &mut V) {
-        <V as Visit>::visit_stmt(visitor, self)
+        crate::maybe_grow(|| <V as Visit>::visit_stmt(visitor, self))
     }
 
     fn visit_children_with(&self, visitor: &mut V) {
@@ -15144,7 +15144,7 @@ impl<V: ?Sized + Visit> VisitWith<V> for TsTupleType {
 impl<V: ?Sized + Visit> VisitWith<V> for TsType {
     #[doc = "Calls [Visit`::visit_ts_type`] with `self`."]
     fn visit_with(&self, visitor: &mut V) {
-        <V as Visit>::visit_ts_type(visitor, self)
+        crate::maybe_grow(|| <V as Visit>::visit_ts_type(visitor, self))
     }
 
     fn visit_children_with(&self, visitor: &mut V) {
@@ -36586,7 +36586,7 @@ impl<V: ?Sized + VisitAstPath> VisitWithAstPath<V> for Expr {
         visitor: &mut V,
         __ast_path: &mut AstNodePath<'r>,
     ) {
-        <V as VisitAstPath>::visit_expr(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as VisitAstPath>::visit_expr(visitor, self, __ast_path))
     }
 
     fn visit_children_with_ast_path<'ast: 'r, 'r>(
@@ -38724,7 +38724,7 @@ impl<V: ?Sized + VisitAstPath> VisitWithAstPath<V> for JSXElementChild {
         visitor: &mut V,
         __ast_path: &mut AstNodePath<'r>,
     ) {
-        <V as VisitAstPath>::visit_jsx_element_child(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as VisitAstPath>::visit_jsx_element_child(visitor, self, __ast_path))
     }
 
     fn visit_children_with_ast_path<'ast: 'r, 'r>(
@@ -40935,7 +40935,7 @@ impl<V: ?Sized + VisitAstPath> VisitWithAstPath<V> for Pat {
         visitor: &mut V,
         __ast_path: &mut AstNodePath<'r>,
     ) {
-        <V as VisitAstPath>::visit_pat(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as VisitAstPath>::visit_pat(visitor, self, __ast_path))
     }
 
     fn visit_children_with_ast_path<'ast: 'r, 'r>(
@@ -42094,7 +42094,7 @@ impl<V: ?Sized + VisitAstPath> VisitWithAstPath<V> for Stmt {
         visitor: &mut V,
         __ast_path: &mut AstNodePath<'r>,
     ) {
-        <V as VisitAstPath>::visit_stmt(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as VisitAstPath>::visit_stmt(visitor, self, __ast_path))
     }
 
     fn visit_children_with_ast_path<'ast: 'r, 'r>(
@@ -46254,7 +46254,7 @@ impl<V: ?Sized + VisitAstPath> VisitWithAstPath<V> for TsType {
         visitor: &mut V,
         __ast_path: &mut AstNodePath<'r>,
     ) {
-        <V as VisitAstPath>::visit_ts_type(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as VisitAstPath>::visit_ts_type(visitor, self, __ast_path))
     }
 
     fn visit_children_with_ast_path<'ast: 'r, 'r>(
@@ -61199,7 +61199,7 @@ impl<V: ?Sized + VisitMut> VisitMutWith<V> for ExportSpecifier {
 impl<V: ?Sized + VisitMut> VisitMutWith<V> for Expr {
     #[doc = "Calls [VisitMut`::visit_mut_expr`] with `self`."]
     fn visit_mut_with(&mut self, visitor: &mut V) {
-        <V as VisitMut>::visit_mut_expr(visitor, self)
+        crate::maybe_grow(|| <V as VisitMut>::visit_mut_expr(visitor, self))
     }
 
     fn visit_mut_children_with(&mut self, visitor: &mut V) {
@@ -62061,7 +62061,7 @@ impl<V: ?Sized + VisitMut> VisitMutWith<V> for JSXElement {
 impl<V: ?Sized + VisitMut> VisitMutWith<V> for JSXElementChild {
     #[doc = "Calls [VisitMut`::visit_mut_jsx_element_child`] with `self`."]
     fn visit_mut_with(&mut self, visitor: &mut V) {
-        <V as VisitMut>::visit_mut_jsx_element_child(visitor, self)
+        crate::maybe_grow(|| <V as VisitMut>::visit_mut_jsx_element_child(visitor, self))
     }
 
     fn visit_mut_children_with(&mut self, visitor: &mut V) {
@@ -62990,7 +62990,7 @@ impl<V: ?Sized + VisitMut> VisitMutWith<V> for ParenExpr {
 impl<V: ?Sized + VisitMut> VisitMutWith<V> for Pat {
     #[doc = "Calls [VisitMut`::visit_mut_pat`] with `self`."]
     fn visit_mut_with(&mut self, visitor: &mut V) {
-        <V as VisitMut>::visit_mut_pat(visitor, self)
+        crate::maybe_grow(|| <V as VisitMut>::visit_mut_pat(visitor, self))
     }
 
     fn visit_mut_children_with(&mut self, visitor: &mut V) {
@@ -63457,7 +63457,7 @@ impl<V: ?Sized + VisitMut> VisitMutWith<V> for StaticBlock {
 impl<V: ?Sized + VisitMut> VisitMutWith<V> for Stmt {
     #[doc = "Calls [VisitMut`::visit_mut_stmt`] with `self`."]
     fn visit_mut_with(&mut self, visitor: &mut V) {
-        <V as VisitMut>::visit_mut_stmt(visitor, self)
+        crate::maybe_grow(|| <V as VisitMut>::visit_mut_stmt(visitor, self))
     }
 
     fn visit_mut_children_with(&mut self, visitor: &mut V) {
@@ -65235,7 +65235,7 @@ impl<V: ?Sized + VisitMut> VisitMutWith<V> for TsTupleType {
 impl<V: ?Sized + VisitMut> VisitMutWith<V> for TsType {
     #[doc = "Calls [VisitMut`::visit_mut_ts_type`] with `self`."]
     fn visit_mut_with(&mut self, visitor: &mut V) {
-        <V as VisitMut>::visit_mut_ts_type(visitor, self)
+        crate::maybe_grow(|| <V as VisitMut>::visit_mut_ts_type(visitor, self))
     }
 
     fn visit_mut_children_with(&mut self, visitor: &mut V) {
@@ -83539,7 +83539,7 @@ impl<V: ?Sized + VisitMutAstPath> VisitMutWithAstPath<V> for ExportSpecifier {
 impl<V: ?Sized + VisitMutAstPath> VisitMutWithAstPath<V> for Expr {
     #[doc = "Calls [VisitMutAstPath`::visit_mut_expr`] with `self`."]
     fn visit_mut_with_ast_path(&mut self, visitor: &mut V, __ast_path: &mut AstKindPath) {
-        <V as VisitMutAstPath>::visit_mut_expr(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as VisitMutAstPath>::visit_mut_expr(visitor, self, __ast_path))
     }
 
     fn visit_mut_children_with_ast_path(&mut self, visitor: &mut V, __ast_path: &mut AstKindPath) {
@@ -85257,7 +85257,7 @@ impl<V: ?Sized + VisitMutAstPath> VisitMutWithAstPath<V> for JSXElement {
 impl<V: ?Sized + VisitMutAstPath> VisitMutWithAstPath<V> for JSXElementChild {
     #[doc = "Calls [VisitMutAstPath`::visit_mut_jsx_element_child`] with `self`."]
     fn visit_mut_with_ast_path(&mut self, visitor: &mut V, __ast_path: &mut AstKindPath) {
-        <V as VisitMutAstPath>::visit_mut_jsx_element_child(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as VisitMutAstPath>::visit_mut_jsx_element_child(visitor, self, __ast_path))
     }
 
     fn visit_mut_children_with_ast_path(&mut self, visitor: &mut V, __ast_path: &mut AstKindPath) {
@@ -87009,7 +87009,7 @@ impl<V: ?Sized + VisitMutAstPath> VisitMutWithAstPath<V> for ParenExpr {
 impl<V: ?Sized + VisitMutAstPath> VisitMutWithAstPath<V> for Pat {
     #[doc = "Calls [VisitMutAstPath`::visit_mut_pat`] with `self`."]
     fn visit_mut_with_ast_path(&mut self, visitor: &mut V, __ast_path: &mut AstKindPath) {
-        <V as VisitMutAstPath>::visit_mut_pat(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as VisitMutAstPath>::visit_mut_pat(visitor, self, __ast_path))
     }
 
     fn visit_mut_children_with_ast_path(&mut self, visitor: &mut V, __ast_path: &mut AstKindPath) {
@@ -87952,7 +87952,7 @@ impl<V: ?Sized + VisitMutAstPath> VisitMutWithAstPath<V> for StaticBlock {
 impl<V: ?Sized + VisitMutAstPath> VisitMutWithAstPath<V> for Stmt {
     #[doc = "Calls [VisitMutAstPath`::visit_mut_stmt`] with `self`."]
     fn visit_mut_with_ast_path(&mut self, visitor: &mut V, __ast_path: &mut AstKindPath) {
-        <V as VisitMutAstPath>::visit_mut_stmt(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as VisitMutAstPath>::visit_mut_stmt(visitor, self, __ast_path))
     }
 
     fn visit_mut_children_with_ast_path(&mut self, visitor: &mut V, __ast_path: &mut AstKindPath) {
@@ -91247,7 +91247,7 @@ impl<V: ?Sized + VisitMutAstPath> VisitMutWithAstPath<V> for TsTupleType {
 impl<V: ?Sized + VisitMutAstPath> VisitMutWithAstPath<V> for TsType {
     #[doc = "Calls [VisitMutAstPath`::visit_mut_ts_type`] with `self`."]
     fn visit_mut_with_ast_path(&mut self, visitor: &mut V, __ast_path: &mut AstKindPath) {
-        <V as VisitMutAstPath>::visit_mut_ts_type(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as VisitMutAstPath>::visit_mut_ts_type(visitor, self, __ast_path))
     }
 
     fn visit_mut_children_with_ast_path(&mut self, visitor: &mut V, __ast_path: &mut AstKindPath) {
@@ -105534,7 +105534,7 @@ impl<V: ?Sized + Fold> FoldWith<V> for ExportSpecifier {
 impl<V: ?Sized + Fold> FoldWith<V> for Expr {
     #[doc = "Calls [Fold`::fold_expr`] with `self`."]
     fn fold_with(self, visitor: &mut V) -> Self {
-        <V as Fold>::fold_expr(visitor, self)
+        crate::maybe_grow(|| <V as Fold>::fold_expr(visitor, self))
     }
 
     fn fold_children_with(self, visitor: &mut V) -> Self {
@@ -106395,7 +106395,7 @@ impl<V: ?Sized + Fold> FoldWith<V> for JSXElement {
 impl<V: ?Sized + Fold> FoldWith<V> for JSXElementChild {
     #[doc = "Calls [Fold`::fold_jsx_element_child`] with `self`."]
     fn fold_with(self, visitor: &mut V) -> Self {
-        <V as Fold>::fold_jsx_element_child(visitor, self)
+        crate::maybe_grow(|| <V as Fold>::fold_jsx_element_child(visitor, self))
     }
 
     fn fold_children_with(self, visitor: &mut V) -> Self {
@@ -107314,7 +107314,7 @@ impl<V: ?Sized + Fold> FoldWith<V> for ParenExpr {
 impl<V: ?Sized + Fold> FoldWith<V> for Pat {
     #[doc = "Calls [Fold`::fold_pat`] with `self`."]
     fn fold_with(self, visitor: &mut V) -> Self {
-        <V as Fold>::fold_pat(visitor, self)
+        crate::maybe_grow(|| <V as Fold>::fold_pat(visitor, self))
     }
 
     fn fold_children_with(self, visitor: &mut V) -> Self {
@@ -107793,7 +107793,7 @@ impl<V: ?Sized + Fold> FoldWith<V> for StaticBlock {
 impl<V: ?Sized + Fold> FoldWith<V> for Stmt {
     #[doc = "Calls [Fold`::fold_stmt`] with `self`."]
     fn fold_with(self, visitor: &mut V) -> Self {
-        <V as Fold>::fold_stmt(visitor, self)
+        crate::maybe_grow(|| <V as Fold>::fold_stmt(visitor, self))
     }
 
     fn fold_children_with(self, visitor: &mut V) -> Self {
@@ -109518,7 +109518,7 @@ impl<V: ?Sized + Fold> FoldWith<V> for TsTupleType {
 impl<V: ?Sized + Fold> FoldWith<V> for TsType {
     #[doc = "Calls [Fold`::fold_ts_type`] with `self`."]
     fn fold_with(self, visitor: &mut V) -> Self {
-        <V as Fold>::fold_ts_type(visitor, self)
+        crate::maybe_grow(|| <V as Fold>::fold_ts_type(visitor, self))
     }
 
     fn fold_children_with(self, visitor: &mut V) -> Self {
@@ -128800,7 +128800,7 @@ impl<V: ?Sized + FoldAstPath> FoldWithAstPath<V> for ExportSpecifier {
 impl<V: ?Sized + FoldAstPath> FoldWithAstPath<V> for Expr {
     #[doc = "Calls [FoldAstPath`::fold_expr`] with `self`."]
     fn fold_with_ast_path(self, visitor: &mut V, __ast_path: &mut AstKindPath) -> Self {
-        <V as FoldAstPath>::fold_expr(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as FoldAstPath>::fold_expr(visitor, self, __ast_path))
     }
 
     fn fold_children_with_ast_path(self, visitor: &mut V, __ast_path: &mut AstKindPath) -> Self {
@@ -130662,7 +130662,7 @@ impl<V: ?Sized + FoldAstPath> FoldWithAstPath<V> for JSXElement {
 impl<V: ?Sized + FoldAstPath> FoldWithAstPath<V> for JSXElementChild {
     #[doc = "Calls [FoldAstPath`::fold_jsx_element_child`] with `self`."]
     fn fold_with_ast_path(self, visitor: &mut V, __ast_path: &mut AstKindPath) -> Self {
-        <V as FoldAstPath>::fold_jsx_element_child(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as FoldAstPath>::fold_jsx_element_child(visitor, self, __ast_path))
     }
 
     fn fold_children_with_ast_path(self, visitor: &mut V, __ast_path: &mut AstKindPath) -> Self {
@@ -132526,7 +132526,7 @@ impl<V: ?Sized + FoldAstPath> FoldWithAstPath<V> for ParenExpr {
 impl<V: ?Sized + FoldAstPath> FoldWithAstPath<V> for Pat {
     #[doc = "Calls [FoldAstPath`::fold_pat`] with `self`."]
     fn fold_with_ast_path(self, visitor: &mut V, __ast_path: &mut AstKindPath) -> Self {
-        <V as FoldAstPath>::fold_pat(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as FoldAstPath>::fold_pat(visitor, self, __ast_path))
     }
 
     fn fold_children_with_ast_path(self, visitor: &mut V, __ast_path: &mut AstKindPath) -> Self {
@@ -133549,7 +133549,7 @@ impl<V: ?Sized + FoldAstPath> FoldWithAstPath<V> for StaticBlock {
 impl<V: ?Sized + FoldAstPath> FoldWithAstPath<V> for Stmt {
     #[doc = "Calls [FoldAstPath`::fold_stmt`] with `self`."]
     fn fold_with_ast_path(self, visitor: &mut V, __ast_path: &mut AstKindPath) -> Self {
-        <V as FoldAstPath>::fold_stmt(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as FoldAstPath>::fold_stmt(visitor, self, __ast_path))
     }
 
     fn fold_children_with_ast_path(self, visitor: &mut V, __ast_path: &mut AstKindPath) -> Self {
@@ -137111,7 +137111,7 @@ impl<V: ?Sized + FoldAstPath> FoldWithAstPath<V> for TsTupleType {
 impl<V: ?Sized + FoldAstPath> FoldWithAstPath<V> for TsType {
     #[doc = "Calls [FoldAstPath`::fold_ts_type`] with `self`."]
     fn fold_with_ast_path(self, visitor: &mut V, __ast_path: &mut AstKindPath) -> Self {
-        <V as FoldAstPath>::fold_ts_type(visitor, self, __ast_path)
+        crate::maybe_grow(|| <V as FoldAstPath>::fold_ts_type(visitor, self, __ast_path))
     }
 
     fn fold_children_with_ast_path(self, visitor: &mut V, __ast_path: &mut AstKindPath) -> Self {

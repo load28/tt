@@ -277,6 +277,10 @@ fn binding_mismatch(first: &TagPattern, other: &TagPattern) -> String {
 /// Collects every variable name the alternative binds, nested patterns
 /// included, in source order.
 fn leaf_bindings<'a>(alt: &'a TagPattern, out: &mut Vec<&'a str>) {
+    crate::stack::grow(|| leaf_bindings_grown(alt, out));
+}
+
+fn leaf_bindings_grown<'a>(alt: &'a TagPattern, out: &mut Vec<&'a str>) {
     for b in alt.bindings.as_deref().unwrap_or_default() {
         match &b.nested {
             Some(inner) => leaf_bindings(inner, out),

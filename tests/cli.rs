@@ -2600,13 +2600,11 @@ fn server_lines(input: &[u8]) -> (Vec<String>, std::process::ExitStatus) {
         .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("failed to run ttc");
-    child
-        .stdin
-        .take()
-        .expect("stdin piped")
-        .write_all(input)
-        .unwrap();
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let input = input.to_vec();
+    let writer = std::thread::spawn(move || stdin.write_all(&input));
     let out = child.wait_with_output().expect("failed to run ttc");
+    writer.join().unwrap().unwrap();
     let lines = String::from_utf8_lossy(&out.stdout)
         .lines()
         .map(str::to_owned)
@@ -2635,6 +2633,37 @@ fn a_server_line_that_is_not_utf8_is_answered_and_the_session_continues() {
         lines[1]
     );
     assert!(lines[2].contains("\"id\":3"), "{}", lines[2]);
+}
+
+#[test]
+fn a_deeply_nested_match_is_answered_and_the_session_continues() {
+    let depth = 10_000;
+    let text = format!(
+        "export const x = {}1{};\n",
+        "match (a) { A => ".repeat(depth),
+        " }".repeat(depth)
+    );
+    let mut input = String::new();
+    for (id, method) in [(1, "ttHints"), (2, "semanticTokens"), (3, "declarations")] {
+        input.push_str(
+            &serde_json::json!({
+                "id": id,
+                "method": method,
+                "params": { "path": "/deep/main.tt", "text": text },
+            })
+            .to_string(),
+        );
+        input.push('\n');
+    }
+    input.push_str("{\"id\":4,\"method\":\"check\",\"params\":{\"text\":\"const a = 1;\\n\"}}\n");
+    let (lines, status) = server_lines(input.as_bytes());
+    assert!(status.success(), "{status}");
+    assert_eq!(lines.len(), 4, "{lines:#?}");
+    for (line, id) in lines.iter().zip(1..) {
+        let answer: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(answer["id"], id, "{line}");
+        assert!(answer["error"].is_null(), "{line}");
+    }
 }
 
 #[test]

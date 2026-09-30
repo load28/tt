@@ -117,28 +117,7 @@ impl<'t> Cursor<'t> {
 
 /// See [`Cursor::find_close`].
 pub(crate) fn find_close_at(tokens: &[Token], open_idx: usize) -> Option<usize> {
-    let opener = tokens.get(open_idx)?;
-    let (open, close) = match opener.kind {
-        TokenKind::Punct(b'(') => (b'(', b')'),
-        TokenKind::Punct(b'[') => (b'[', b']'),
-        TokenKind::Punct(b'{') => (b'{', b'}'),
-        TokenKind::Punct(b'<') if opener.opens_bracket() => (b'<', b'>'),
-        _ => return None,
-    };
-    let mut depth = 0usize;
-    for (k, t) in tokens.iter().enumerate().skip(open_idx) {
-        match t.kind {
-            TokenKind::Punct(x) if x == open && t.opens_bracket() => depth += 1,
-            TokenKind::Punct(x) if x == close && t.closes_bracket() => {
-                depth -= 1;
-                if depth == 0 {
-                    return Some(k);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
+    Token::matching_close(tokens, open_idx)
 }
 
 /// Whether the `{` at `k`, in an expression scan that started at `from`,

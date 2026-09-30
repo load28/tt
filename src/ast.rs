@@ -58,6 +58,13 @@ pub(crate) struct Program {
     pub stray_results: Vec<usize>,
 }
 
+impl Drop for Program {
+    fn drop(&mut self) {
+        let segments = std::mem::take(&mut self.segments);
+        crate::stack::grow(|| drop(segments));
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct StrayIfLet {
     pub span: Span,

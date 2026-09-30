@@ -8,6 +8,10 @@ impl Checker<'_> {
     }
 
     pub(super) fn visit_program(&mut self, program: &Program, ctx: Ctx, place: Place) {
+        crate::stack::grow(|| self.visit_program_segments(program, ctx, place));
+    }
+
+    fn visit_program_segments(&mut self, program: &Program, ctx: Ctx, place: Place) {
         for error in &program.malformed {
             self.error(error.clone());
         }
@@ -338,6 +342,10 @@ impl Checker<'_> {
     /// places `try`, judged from the other side: no value boundary to escape, just
     /// a statement stream to stand in).
     fn check_if_let(&mut self, stmt: &IfLetStmt, ctx: Ctx, place: Place) {
+        crate::stack::grow(|| self.check_if_let_grown(stmt, ctx, place));
+    }
+
+    fn check_if_let_grown(&mut self, stmt: &IfLetStmt, ctx: Ctx, place: Place) {
         if stmt.expression_position || (ctx == Ctx::Expr && !stmt.in_function) {
             self.error(
                 TtError::span(

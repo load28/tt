@@ -269,6 +269,10 @@ pub(crate) fn scan_module_of(source: &str, program: &ast::Program) -> ModuleScan
 }
 
 fn program_uses_pipeline(program: &ast::Program) -> bool {
+    crate::stack::grow(|| program_uses_pipeline_grown(program))
+}
+
+fn program_uses_pipeline_grown(program: &ast::Program) -> bool {
     program.segments.iter().any(|segment| match segment {
         ast::Segment::Pipe(_) => true,
         ast::Segment::Match(expr) => {
@@ -315,6 +319,10 @@ fn program_uses_pipeline(program: &ast::Program) -> bool {
 }
 
 fn if_let_uses_pipeline(stmt: &ast::IfLetStmt) -> bool {
+    crate::stack::grow(|| if_let_uses_pipeline_grown(stmt))
+}
+
+fn if_let_uses_pipeline_grown(stmt: &ast::IfLetStmt) -> bool {
     program_uses_pipeline(&stmt.expr)
         || program_uses_pipeline(&stmt.body)
         || stmt.else_part.as_ref().is_some_and(|part| match part {

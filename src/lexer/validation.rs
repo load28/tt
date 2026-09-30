@@ -99,6 +99,10 @@ fn lexical_error(
 /// delimiters inside strings, comments, templates, regexes, or JSX text.
 fn unbalanced_delimiter(tokens: &[Token]) -> Option<Span> {
     fn walk(tokens: &[Token], stack: &mut Vec<(u8, Span)>) -> Option<Span> {
+        crate::stack::grow(|| walk_grown(tokens, stack))
+    }
+
+    fn walk_grown(tokens: &[Token], stack: &mut Vec<(u8, Span)>) -> Option<Span> {
         for token in tokens {
             match &token.kind {
                 TokenKind::Punct(byte @ (b'(' | b'[' | b'{')) => stack.push((*byte, token.span)),
@@ -146,6 +150,10 @@ fn unbalanced_delimiter(tokens: &[Token]) -> Option<Span> {
 }
 
 fn conflict_marker(src: &str, tokens: &[Token]) -> Option<Span> {
+    crate::stack::grow(|| conflict_marker_grown(src, tokens))
+}
+
+fn conflict_marker_grown(src: &str, tokens: &[Token]) -> Option<Span> {
     for (index, token) in tokens.iter().enumerate() {
         if let TokenKind::Template(parts) = &token.kind {
             for part in parts.iter() {

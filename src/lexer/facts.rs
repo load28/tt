@@ -431,6 +431,7 @@ impl<'s> Machine<'s> {
             return self.facts.with(TokenFacts::ENDS_EXPRESSION);
         }
         let mut guard = 0usize;
+        let mut lowest = self.stack.len();
         loop {
             let Some(frame) = self.stack.pop() else {
                 self.stack.push(Frame::top_level());
@@ -438,6 +439,10 @@ impl<'s> Machine<'s> {
             };
             match self.step(frame, &tok) {
                 Out::Consumed => break,
+                Out::Retry if self.stack.len() < lowest => {
+                    lowest = self.stack.len();
+                    guard = 0;
+                }
                 Out::Retry => {
                     guard += 1;
                     debug_assert!(guard < 4096, "the facts machine made no progress");

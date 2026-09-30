@@ -371,6 +371,10 @@ fn word_facts(
 /// The tokens of the innermost template interpolation around `offset`, or
 /// `tokens` when it is in none.
 fn innermost_tokens(tokens: &[Token], offset: usize) -> &[Token] {
+    crate::stack::grow(|| innermost_tokens_grown(tokens, offset))
+}
+
+fn innermost_tokens_grown(tokens: &[Token], offset: usize) -> &[Token] {
     for token in tokens {
         if let TokenKind::Template(parts) = &token.kind {
             for part in parts.iter() {
@@ -649,6 +653,10 @@ enum Parsed {
 /// The answer of the innermost parsed tt construct containing `offset`, or
 /// `None` when no construct claims it.
 fn parsed_at(program: &Program, offset: usize) -> Option<Parsed> {
+    crate::stack::grow(|| parsed_at_grown(program, offset))
+}
+
+fn parsed_at_grown(program: &Program, offset: usize) -> Option<Parsed> {
     program
         .segments
         .iter()
@@ -656,6 +664,10 @@ fn parsed_at(program: &Program, offset: usize) -> Option<Parsed> {
 }
 
 fn segment_at(segment: &Segment, offset: usize) -> Option<Parsed> {
+    crate::stack::grow(|| segment_at_grown(segment, offset))
+}
+
+fn segment_at_grown(segment: &Segment, offset: usize) -> Option<Parsed> {
     match segment {
         Segment::Match(expr) => {
             if offset < expr.keyword_off || offset > expr.body_close {
@@ -776,6 +788,10 @@ fn arms_at<'a>(
 }
 
 fn if_let_at(stmt: &IfLetStmt, offset: usize) -> Option<Parsed> {
+    crate::stack::grow(|| if_let_at_grown(stmt, offset))
+}
+
+fn if_let_at_grown(stmt: &IfLetStmt, offset: usize) -> Option<Parsed> {
     if offset < stmt.owner_span.start || offset >= stmt.owner_span.end {
         return None;
     }

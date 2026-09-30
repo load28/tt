@@ -189,6 +189,7 @@ impl ParentCollector {
         let mut owners: Vec<HostOwnerSyntax> = Vec::new();
         let mut globals = HashMap::new();
         let mut overlay: Vec<OverlayEntry> = Vec::with_capacity(pending.len());
+        let mut owner_sources: HashMap<ProjectedSpan, Option<SourceSpan>> = HashMap::new();
         let overlay_spans: Vec<_> = pending
             .iter()
             .map(|entry| (entry.id, entry.projected))
@@ -213,23 +214,30 @@ impl ParentCollector {
                         && entry.projected.end <= owner.span.end
                 })
                 .find_map(|(index, owner)| {
-                    source_span_for_projection(&self.source_segments, owner.span)
+                    owner_source(&mut owner_sources, &self.source_segments, owner.span)
                         .map(|span| (index, *owner, owner.kind, span))
                 })
                 .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
             let projected_anchor =
                 prelude_anchor(&found.host_owners[..=owner_index], &found.parents);
-            let anchor = source_span_for_projection(&self.source_segments, projected_anchor.span)
-                .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
+            let anchor = owner_source(
+                &mut owner_sources,
+                &self.source_segments,
+                projected_anchor.span,
+            )
+            .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
             let statement_index = found.host_owners[..=owner_index]
                 .iter()
                 .rposition(|owner| owner.kind != HostOwnerKind::Declarator)
                 .unwrap_or(owner_index);
             let projected_statement =
                 prelude_anchor(&found.host_owners[..=statement_index], &found.parents);
-            let statement =
-                source_span_for_projection(&self.source_segments, projected_statement.span)
-                    .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
+            let statement = owner_source(
+                &mut owner_sources,
+                &self.source_segments,
+                projected_statement.span,
+            )
+            .ok_or(ProgramSyntaxError::MissingOverlay { id: entry.id })?;
             let split = projected_owner
                 .split
                 .map(|split| {
@@ -395,6 +403,16 @@ impl ParentCollector {
             globals,
         })
     }
+}
+
+fn owner_source(
+    cache: &mut HashMap<ProjectedSpan, Option<SourceSpan>>,
+    segments: &ProjectionSegments,
+    owner: ProjectedSpan,
+) -> Option<SourceSpan> {
+    *cache
+        .entry(owner)
+        .or_insert_with(|| source_span_for_projection(segments, owner))
 }
 
 impl VisitAstPath for ParentCollector {

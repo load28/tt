@@ -661,6 +661,12 @@ pub(super) fn optional_call_test(own_link: bool, callee: &swc_ecma_ast::Expr) ->
 pub(super) fn call_callee_mode(
     expression: &swc_ecma_ast::Expr,
 ) -> (EvaluationInputMode, [Option<&swc_ecma_ast::Expr>; 2]) {
+    crate::stack::grow(|| call_callee_mode_grown(expression))
+}
+
+fn call_callee_mode_grown(
+    expression: &swc_ecma_ast::Expr,
+) -> (EvaluationInputMode, [Option<&swc_ecma_ast::Expr>; 2]) {
     use swc_ecma_ast::{Expr as SwcExpr, OptChainBase};
 
     match expression {
@@ -721,6 +727,10 @@ pub(super) fn simple_copiable(expression: &swc_ecma_ast::Expr) -> bool {
 }
 
 fn peel_parens(expression: &swc_ecma_ast::Expr) -> &swc_ecma_ast::Expr {
+    crate::stack::grow(|| peel_parens_grown(expression))
+}
+
+fn peel_parens_grown(expression: &swc_ecma_ast::Expr) -> &swc_ecma_ast::Expr {
     match expression {
         swc_ecma_ast::Expr::Paren(inner) => peel_parens(&inner.expr),
         _ => expression,
@@ -749,6 +759,10 @@ fn target_reference(target: &swc_ecma_ast::AssignTarget) -> [Option<&swc_ecma_as
 }
 
 fn expression_reference(expression: &swc_ecma_ast::Expr) -> [Option<&swc_ecma_ast::Expr>; 2] {
+    crate::stack::grow(|| expression_reference_grown(expression))
+}
+
+fn expression_reference_grown(expression: &swc_ecma_ast::Expr) -> [Option<&swc_ecma_ast::Expr>; 2] {
     use swc_ecma_ast::Expr as SwcExpr;
 
     match expression {
@@ -807,6 +821,10 @@ pub(super) fn operand_span(
 }
 
 pub(super) fn reference_value_span(expression: &swc_ecma_ast::Expr) -> swc_common::Span {
+    crate::stack::grow(|| reference_value_span_grown(expression))
+}
+
+fn reference_value_span_grown(expression: &swc_ecma_ast::Expr) -> swc_common::Span {
     use swc_ecma_ast::Expr as SwcExpr;
 
     match expression {
@@ -894,6 +912,7 @@ pub(super) fn source_span_for_projection(
     segments: &ProjectionSegments,
     projected: ProjectedSpan,
 ) -> Option<SourceSpan> {
+    crate::work::tick("projection span lookups");
     if let Some(segment) = segments
         .starting_at(projected.start)
         .into_iter()

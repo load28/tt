@@ -381,7 +381,7 @@ impl<'a> Rope<'a> {
     /// is printed, and a caller inspecting text is deciding something the
     /// layout must not change.
     pub(crate) fn resolved_text(&self) -> Option<Cow<'_, str>> {
-        if self.pieces.iter().any(|piece| piece.is_break()) {
+        if !self.is_resolved() {
             return None;
         }
         let mut texts = self
@@ -400,6 +400,10 @@ impl<'a> Rope<'a> {
                 Some(Cow::Owned(out))
             }
         }
+    }
+
+    pub(crate) fn is_resolved(&self) -> bool {
+        !self.pieces.iter().any(|piece| piece.is_break())
     }
 
     pub(crate) fn ends_with_newline(&self) -> bool {

@@ -12,6 +12,10 @@ use swc_ecma_visit::{Visit, VisitWith};
 use super::projection::TtBindings;
 
 pub(super) fn pattern_names(pattern: &Pat, names: &mut Vec<String>) {
+    crate::stack::grow(|| pattern_names_grown(pattern, names));
+}
+
+fn pattern_names_grown(pattern: &Pat, names: &mut Vec<String>) {
     match pattern {
         Pat::Ident(binding) => names.push(binding.id.sym.to_string()),
         Pat::Array(array) => {

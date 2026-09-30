@@ -284,6 +284,10 @@ struct StorageWrite {
 /// remaining expressions type themselves: a literal is not kept literal by
 /// `any`, and a call infers nothing from a contextual `any` return type.
 fn typed_by_context(value: &Expr) -> bool {
+    crate::stack::grow(|| typed_by_context_grown(value))
+}
+
+fn typed_by_context_grown(value: &Expr) -> bool {
     use swc_ecma_ast::BinaryOp;
     match value {
         Expr::Object(_) | Expr::Array(_) | Expr::Fn(_) | Expr::Arrow(_) => true,

@@ -8,20 +8,7 @@ use crate::SourceKind;
 /// The index of the token closing the bracket opened at `open`, counting
 /// every bracket kind.
 fn close_of(tokens: &[Token], open: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    for (index, token) in tokens.iter().enumerate().skip(open) {
-        match token.kind {
-            _ if token.opens_bracket() => depth += 1,
-            _ if token.closes_bracket() => {
-                depth = depth.checked_sub(1)?;
-                if depth == 0 {
-                    return Some(index);
-                }
-            }
-            _ => {}
-        }
-    }
-    None
+    Token::balancing_close(tokens, open)
 }
 
 /// True when `src[from..end]` has a `,` outside every bracket, string,
@@ -69,6 +56,7 @@ pub(crate) fn has_top_level_comma(src: &str, from: usize, end: usize, kind: Sour
 /// `new C`, `x as T`) is not primary — `(await x).f` and `await x.f` are
 /// different expressions.
 pub(crate) fn is_primary_expression(src: &str, from: usize, end: usize, kind: SourceKind) -> bool {
+    crate::work::tick("primary expression checks");
     let tokens = lex_with_kind(src, from, end, kind);
     let word = |index: usize| {
         let token = &tokens[index];
@@ -166,6 +154,10 @@ pub(crate) fn contains_await(src: &str, from: usize, end: usize) -> bool {
         return false;
     }
     fn scan(src: &str, tokens: &[Token]) -> bool {
+        crate::stack::grow(|| scan_grown(src, tokens))
+    }
+
+    fn scan_grown(src: &str, tokens: &[Token]) -> bool {
         let mut at = 0usize;
         while let Some(token) = tokens.get(at) {
             match &token.kind {
@@ -244,6 +236,10 @@ pub(crate) fn automatic_semicolons(tokens: &[Token]) -> Vec<AutomaticSemicolon> 
 }
 
 fn collect_automatic_semicolons(tokens: &[Token], found: &mut Vec<AutomaticSemicolon>) {
+    crate::stack::grow(|| collect_automatic_semicolons_grown(tokens, found));
+}
+
+fn collect_automatic_semicolons_grown(tokens: &[Token], found: &mut Vec<AutomaticSemicolon>) {
     for (index, token) in tokens.iter().enumerate() {
         if index > 0 && token.facts.asi_before() && token.facts.statement_start() {
             found.push(AutomaticSemicolon {

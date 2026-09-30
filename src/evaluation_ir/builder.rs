@@ -20,6 +20,14 @@ impl EvaluationBuilder<'_> {
         body: BodyId,
         parent: Option<RegionId>,
     ) -> Result<(), EvaluationError> {
+        crate::stack::grow(|| self.walk_body_grown(body, parent))
+    }
+
+    fn walk_body_grown(
+        &mut self,
+        body: BodyId,
+        parent: Option<RegionId>,
+    ) -> Result<(), EvaluationError> {
         for statement in &self.core.bodies[body.index()].statements {
             match statement {
                 Statement::Opaque(_) => {}
@@ -55,6 +63,14 @@ impl EvaluationBuilder<'_> {
     }
 
     fn walk_expr(&mut self, expr: ExprId, parent: Option<RegionId>) -> Result<(), EvaluationError> {
+        crate::stack::grow(|| self.walk_expr_grown(expr, parent))
+    }
+
+    fn walk_expr_grown(
+        &mut self,
+        expr: ExprId,
+        parent: Option<RegionId>,
+    ) -> Result<(), EvaluationError> {
         self.walk_expr_with_placement(expr, parent, false)
     }
 
@@ -140,6 +156,14 @@ impl EvaluationBuilder<'_> {
     }
 
     fn walk_decision(
+        &mut self,
+        decision: &Decision,
+        parent: RegionId,
+    ) -> Result<(), EvaluationError> {
+        crate::stack::grow(|| self.walk_decision_grown(decision, parent))
+    }
+
+    fn walk_decision_grown(
         &mut self,
         decision: &Decision,
         parent: RegionId,

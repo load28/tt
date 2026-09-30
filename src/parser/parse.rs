@@ -1,6 +1,7 @@
 //! Whole-file parsing, recovery collection, and parser implementation.
 
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 
 use super::*;
 
@@ -34,6 +35,7 @@ pub(crate) fn lex_and_parse_with_kind(
             host_owned_matches,
             host_rejected_vals: host_rejected_vals.to_vec(),
             flow_queries: crate::flow::FlowBodyQueries::default(),
+            passed_results: RefCell::default(),
         }
         .parse_tokens(&tokens, 0, src.len())
     };
@@ -69,6 +71,10 @@ pub(crate) fn val_modifiers(program: &Program) -> HashMap<usize, ValModifier> {
 /// Parser side tables use one structural traversal so adding a new nested
 /// [`Program`] shape cannot make recovery and rollback collection drift.
 pub(super) fn visit_programs(program: &Program, visit: &mut impl FnMut(&Program)) {
+    crate::stack::grow(|| visit_programs_grown(program, visit));
+}
+
+fn visit_programs_grown(program: &Program, visit: &mut impl FnMut(&Program)) {
     visit(program);
     for segment in &program.segments {
         match segment {
@@ -192,6 +198,7 @@ pub(crate) struct Parser<'a> {
     /// the host grammar does not read as a formal parameter, sorted.
     host_rejected_vals: Vec<usize>,
     flow_queries: crate::flow::FlowBodyQueries,
+    passed_results: RefCell<HashSet<usize>>,
 }
 
 impl<'a> Parser<'a> {
@@ -203,6 +210,7 @@ impl<'a> Parser<'a> {
             host_owned_matches: Vec::new(),
             host_rejected_vals: Vec::new(),
             flow_queries: crate::flow::FlowBodyQueries::default(),
+            passed_results: RefCell::default(),
         }
     }
 }
@@ -441,6 +449,16 @@ impl Parser<'_> {
     }
 
     fn parse_tokens_with_context(
+        &self,
+        tokens: &[Token],
+        start: usize,
+        end: usize,
+        expression_root: bool,
+    ) -> Program {
+        crate::stack::grow(|| self.parse_token_range(tokens, start, end, expression_root))
+    }
+
+    fn parse_token_range(
         &self,
         tokens: &[Token],
         start: usize,
@@ -799,6 +817,10 @@ impl Parser<'_> {
             if !dotted
                 && word == "result"
                 && matches!(tokens.get(i + 1), Some(t) if matches!(t.kind, TokenKind::Punct(b'{')))
+                && !self
+                    .passed_results
+                    .borrow()
+                    .contains(&tokens[i + 1].span.start)
             {
                 let (attempt, nested) =
                     results::parse_result_block(Cursor::new(self, tokens, i + 1, end), tok.span);
@@ -811,7 +833,11 @@ impl Parser<'_> {
                         i = cur.idx;
                         continue;
                     }
-                    results::Attempt::Pass => {}
+                    results::Attempt::Pass => {
+                        self.passed_results
+                            .borrow_mut()
+                            .insert(tokens[i + 1].span.start);
+                    }
                 }
             }
 
