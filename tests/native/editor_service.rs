@@ -216,3 +216,70 @@ const limit = 1;\n";
     }
 }
 
+
+fn token_names(
+    source: &str,
+    tokens: &[ttc::engine::ClassifiedToken],
+) -> Vec<(String, String)> {
+    let lines: Vec<&str> = source.lines().collect();
+    tokens
+        .iter()
+        .map(|token| {
+            let line: Vec<u16> = lines[token.range.start.line as usize].encode_utf16().collect();
+            let text = String::from_utf16(
+                &line[token.range.start.character as usize..token.range.end.character as usize],
+            )
+            .unwrap();
+            let mut name = token.token_type.clone();
+            for modifier in &token.modifiers {
+                name.push('.');
+                name.push_str(modifier);
+            }
+            (text, name)
+        })
+        .collect()
+}
+
+#[test]
+fn semantic_tokens_classify_the_source_as_typescript_does_with_tt_constructs_over_it() {
+    require_tsgo!();
+    let source = "variant Shape { Circle(radius: number), Point }\n\
+export function area(s: Shape): number {\n\
+  const scale = 2;\n\
+  return match (s) {\n\
+    Circle(radius) => radius * scale,\n\
+    Point => Math.PI,\n\
+  };\n\
+}\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let tokens = project.semantic_tokens(&file).unwrap();
+    let named = token_names(source, &tokens);
+    let expected = [
+        ("Shape", "enum"),
+        ("Circle", "enumMember"),
+        ("radius", "property"),
+        ("Point", "enumMember"),
+        ("area", "function.declaration"),
+        ("s", "parameter.declaration"),
+        ("Shape", "type.readonly"),
+        ("scale", "variable.declaration.readonly.local"),
+        ("match", "keyword"),
+        ("s", "parameter"),
+        ("Circle", "enumMember"),
+        ("radius", "variable.declaration.readonly.local"),
+        ("radius", "variable.readonly.local"),
+        ("scale", "variable.readonly.local"),
+        ("Point", "enumMember"),
+        ("Math", "variable.defaultLibrary"),
+        ("PI", "property.readonly.defaultLibrary"),
+    ];
+    assert_eq!(
+        named,
+        expected
+            .iter()
+            .map(|(text, name)| (text.to_string(), name.to_string()))
+            .collect::<Vec<_>>()
+    );
+}

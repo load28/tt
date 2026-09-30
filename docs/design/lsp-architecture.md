@@ -172,6 +172,23 @@ a general position is TypeScript's entry: the emission declares it, so the
 service lists it wherever it is in scope and valid, and a built-in that is
 not imported is not in scope.
 
+**Update (TASK-606)**: semantic tokens are TypeScript's classification of
+the source under tt's own. `semanticTokens` is tt-owned, so the native
+TypeScript provider does not run for a `.tt` file, and the parse-only
+answer alone left every function, parameter, type and `readonly` or
+`defaultLibrary` name uncolored. The engine's `documentSemanticTokens`
+asks the service for `textDocument/semanticTokens/full` over the served
+projection, decodes it against the legend the service returned from
+`initialize` (LSP 3.17 `SemanticTokensLegend`), and keeps a token only
+when every byte of it was copied from the source; glue (a scrutinee
+temporary, a variant's generated declarations) has no token. The parser's
+tokens for tt constructs replace any service token they overlap, and keep
+the service's modifiers where both name the same range and type (a pattern
+binding is `variable.declaration.readonly.local`, as `const { x } = o` is).
+The adapter's legend is the LSP 3.17 standard types and modifiers plus
+TypeScript's `local`; an untitled buffer or a session without a toolchain
+still gets the parse-only tokens.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

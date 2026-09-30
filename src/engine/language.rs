@@ -207,6 +207,19 @@ pub struct SignatureHelp {
     pub active_parameter: u32,
 }
 
+/// One classified token of a file, in its own source coordinates (never
+/// spans lines). The type and modifiers are LSP 3.17 names
+/// (`SemanticTokenTypes`, `SemanticTokenModifiers`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClassifiedToken {
+    /// Where, in the source.
+    pub range: Range,
+    /// The token type.
+    pub token_type: String,
+    /// The token modifiers.
+    pub modifiers: Vec<String>,
+}
+
 /// One TypeScript diagnostic, mapped onto the `.tt` source.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceDiagnostic {

@@ -691,6 +691,31 @@ impl Project {
         ))
     }
 
+    /// The file's semantic tokens: TypeScript's classification of the text
+    /// the emission copied from the source, on the source, with tt's own
+    /// classification of its constructs over it. A token TypeScript gives
+    /// compiler-written text is not the user's and is not reported.
+    pub fn semantic_tokens(&mut self, path: &Path) -> Result<Vec<ClassifiedToken>, String> {
+        let (doc, path) = self.serve(path)?;
+        let session = self.session();
+        let answer = session.client.request(
+            "textDocument/semanticTokens/full",
+            serde_json::json!({ "textDocument": { "uri": served_uri(session, &path) } }),
+        )?;
+        let data: Vec<u64> = answer["data"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_u64)
+            .collect();
+        let service = source_tokens(&doc, session.client.semantic_legend(), &data);
+        let own = crate::engine::tokens::semantic_tokens_with_kind(
+            &doc.source,
+            crate::SourceKind::from_path(&path).unwrap_or_default(),
+        );
+        Ok(merge_tokens(own, service))
+    }
+
     /// Signature help at a call site.
     pub fn signature_help(
         &mut self,

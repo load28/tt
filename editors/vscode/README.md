@@ -64,8 +64,9 @@ for the content-mapper setup.
 
 ## Language features
 
-- TypeScript/TSX-derived grammars, tt semantic tokens, Markdown/MDX tt fences,
-  and file icons supported by the active icon theme.
+- TypeScript/TSX-derived grammars, semantic highlighting (TypeScript's
+  classification of the source with tt's own over tt constructs), Markdown/MDX
+  tt fences, and file icons supported by the active icon theme.
 - Source-located tt and TypeScript diagnostics, including typed exhaustiveness
   and `val` checks. Quick fixes carry compiler-authored suggestions.
 - Completion for tt patterns, constructors, snippets, and TypeScript members;

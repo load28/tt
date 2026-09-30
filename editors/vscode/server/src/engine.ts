@@ -575,6 +575,26 @@ export async function semanticTokens(
   return result?.tokens ?? null;
 }
 
+export interface EngineClassifiedToken {
+  range: EngineRange;
+  type: string;
+  modifiers: string[];
+}
+
+export async function documentSemanticTokens(
+  compiler: string,
+  path: string,
+  onError?: (message: string) => void,
+): Promise<EngineClassifiedToken[] | null> {
+  const result = await semantic<{ tokens: EngineClassifiedToken[] }>(
+    compiler,
+    "documentSemanticTokens",
+    { path },
+    onError,
+  );
+  return result?.tokens ?? null;
+}
+
 /** A tt name — a variant, a case tag, a payload field — at a position.
  *
  * These three name spaces exist only in `.tt` source (a variant declaration

@@ -882,19 +882,49 @@ test(
 
 /** The legend the server declares — mirrored here to decode the response. */
 const TOKEN_TYPES = [
-  "keyword",
+  "namespace",
+  "type",
+  "class",
   "enum",
-  "enumMember",
+  "interface",
+  "struct",
+  "typeParameter",
+  "parameter",
   "variable",
   "property",
+  "enumMember",
+  "event",
   "function",
+  "method",
+  "macro",
+  "keyword",
+  "modifier",
+  "comment",
+  "string",
+  "number",
+  "regexp",
   "operator",
+  "decorator",
+];
+
+const TOKEN_MODIFIERS = [
+  "declaration",
+  "definition",
+  "readonly",
+  "static",
+  "deprecated",
+  "abstract",
+  "async",
+  "modification",
+  "documentation",
+  "defaultLibrary",
+  "local",
 ];
 
 /** Decodes the LSP delta-encoded quintuples into absolute tokens. */
 function decodeTokens(
   data: number[],
-): { line: number; character: number; length: number; type: string }[] {
+): { line: number; character: number; length: number; type: string; modifiers: string[] }[] {
   const out = [];
   let line = 0;
   let character = 0;
@@ -906,10 +936,62 @@ function decodeTokens(
       character,
       length: data[i + 2],
       type: TOKEN_TYPES[data[i + 3]],
+      modifiers: TOKEN_MODIFIERS.filter((_, bit) => data[i + 4] & (1 << bit)),
     });
   }
   return out;
 }
+
+test(
+  "semantic tokens carry TypeScript's classification of the source under tt's",
+  { skip: skipTyped, timeout },
+  async () => {
+    const source = [
+      "variant Shape { Circle(radius: number), Point }",
+      "export function area(s: Shape): number {",
+      "  const scale = 2;",
+      "  return match (s) {",
+      "    Circle(radius) => radius * scale,",
+      "    Point => Math.PI,",
+      "  };",
+      "}",
+      "",
+    ].join("\n");
+    const { client, uri, stop } = await open(source);
+    try {
+      const response = await client.request("textDocument/semanticTokens/full", {
+        textDocument: { uri },
+      });
+      const tokens = decodeTokens(response.result?.data ?? []);
+      const lines = source.split("\n");
+      const named = tokens.map(
+        (t) =>
+          `${lines[t.line].slice(t.character, t.character + t.length)}:${[t.type, ...t.modifiers].join(".")}`,
+      );
+      assert.deepEqual(named, [
+        "Shape:enum",
+        "Circle:enumMember",
+        "radius:property",
+        "Point:enumMember",
+        "area:function.declaration",
+        "s:parameter.declaration",
+        "Shape:type.readonly",
+        "scale:variable.declaration.readonly.local",
+        "match:keyword",
+        "s:parameter",
+        "Circle:enumMember",
+        "radius:variable.declaration.readonly.local",
+        "radius:variable.readonly.local",
+        "scale:variable.readonly.local",
+        "Point:enumMember",
+        "Math:variable.defaultLibrary",
+        "PI:property.readonly.defaultLibrary",
+      ]);
+    } finally {
+      stop();
+    }
+  },
+);
 
 test(
   "semantic tokens carry the parser's own classification",

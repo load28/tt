@@ -135,11 +135,12 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       renameProvider: true,
       documentSymbolProvider: true,
       codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
-      // The parser's own classification of the ambiguous surface (a `flow`
-      // head split across lines, a plain function named `match`), layered
-      // over the TextMate grammar per the LSP semantic-tokens contract.
+      // TypeScript's classification of the source text, with the parser's
+      // own classification of tt's constructs over it (a `flow` head split
+      // across lines, a plain function named `match`), layered over the
+      // TextMate grammar per the LSP semantic-tokens contract.
       semanticTokensProvider: {
-        legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: [] },
+        legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: SEMANTIC_TOKEN_MODIFIERS },
         full: true,
         range: false,
       },
@@ -1757,32 +1758,64 @@ connection.onCodeAction(async (params): Promise<CodeAction[]> => {
 
 // -------------------------------------------------------- semantic tokens
 
-/** The legend, fixed at initialize: the LSP standard token types the engine
- * reports (engine.ts `EngineSemanticToken.kind`), in the order the encoded
- * data indexes them. */
+/** The legend, fixed at initialize: the LSP 3.17 standard token types and
+ * modifiers, and TypeScript's own `local` modifier, in the order the encoded
+ * data indexes them. TypeScript's classification and tt's both name tokens
+ * from these lists. */
 const SEMANTIC_TOKEN_TYPES = [
-  "keyword",
+  "namespace",
+  "type",
+  "class",
   "enum",
-  "enumMember",
+  "interface",
+  "struct",
+  "typeParameter",
+  "parameter",
   "variable",
   "property",
+  "enumMember",
+  "event",
   "function",
+  "method",
+  "macro",
+  "keyword",
+  "modifier",
+  "comment",
+  "string",
+  "number",
+  "regexp",
   "operator",
+  "decorator",
 ];
+
+const SEMANTIC_TOKEN_MODIFIERS = [
+  "declaration",
+  "definition",
+  "readonly",
+  "static",
+  "deprecated",
+  "abstract",
+  "async",
+  "modification",
+  "documentation",
+  "defaultLibrary",
+  "local",
+];
+
+async function classifiedTokens(doc: TextDocument): Promise<engine.EngineClassifiedToken[] | null> {
+  const compiler = await compilerOf(doc);
+  const fsPath = enginePath(doc);
+  const served =
+    fsPath === null ? null : await engine.documentSemanticTokens(compiler, fsPath, logEngine);
+  if (served) return served;
+  const parsed = await engine.semanticTokens(compiler, doc.getText(), bufferPath(doc), logEngine);
+  return parsed?.map((token) => ({ range: token.range, type: token.kind, modifiers: [] })) ?? null;
+}
 
 connection.languages.semanticTokens.on(async (params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return { data: [] };
-  // Text-based and parse-only on the engine side: it answers for unsaved
-  // and untitled buffers alike, with or without a TypeScript toolchain.
-  const tokens = await engine.semanticTokens(
-    await compilerOf(doc),
-    doc.getText(),
-    bufferPath(doc),
-    logEngine,
-  );
-  // Engine unavailable: no answer beats a wrong empty one — the grammar's
-  // colors stand alone, exactly as they do for every other engine feature.
+  const tokens = await classifiedTokens(doc);
   if (!tokens) return { data: [] };
 
   const builder = new SemanticTokensBuilder();
@@ -1791,12 +1824,16 @@ connection.languages.semanticTokens.on(async (params) => {
       line: token.range.start.line,
       character: token.range.start.character,
       length: token.range.end.character - token.range.start.character,
-      type: SEMANTIC_TOKEN_TYPES.indexOf(token.kind),
+      type: SEMANTIC_TOKEN_TYPES.indexOf(token.type),
+      modifiers: token.modifiers.reduce((bits, name) => {
+        const index = SEMANTIC_TOKEN_MODIFIERS.indexOf(name);
+        return index < 0 ? bits : bits | (1 << index);
+      }, 0),
     }))
     .filter((token) => token.type >= 0 && token.length > 0)
     .sort((a, b) => a.line - b.line || a.character - b.character);
   for (const token of ordered) {
-    builder.push(token.line, token.character, token.length, token.type, 0);
+    builder.push(token.line, token.character, token.length, token.type, token.modifiers);
   }
   return builder.build();
 });

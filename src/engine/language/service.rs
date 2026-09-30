@@ -728,6 +728,105 @@ pub(super) fn source_symbols(doc: &ServiceDoc, items: &[serde_json::Value]) -> V
     out
 }
 
+pub(super) fn source_tokens(
+    doc: &ServiceDoc,
+    legend: &crate::typescript::service::SemanticLegend,
+    data: &[u64],
+) -> Vec<ClassifiedToken> {
+    let code_lines = LineMap::lsp(&doc.code);
+    let source_lines = LineMap::lsp(&doc.source);
+    let mut out: Vec<ClassifiedToken> = Vec::new();
+    let (mut line, mut character) = (0u64, 0u64);
+    for &[delta_line, delta_start, length, kind, bits] in data.as_chunks::<5>().0 {
+        if delta_line > 0 {
+            line += delta_line;
+            character = delta_start;
+        } else {
+            character += delta_start;
+        }
+        let Some(token_type) = legend.types.get(kind as usize) else {
+            continue;
+        };
+        let start = byte_at(
+            &code_lines,
+            Position {
+                line: line as u32,
+                character: character as u32,
+            },
+        );
+        let end = byte_at(
+            &code_lines,
+            Position {
+                line: line as u32,
+                character: (character + length) as u32,
+            },
+        );
+        let Some((from, to)) = mapper::to_source_span(&doc.mappings, start, end) else {
+            continue;
+        };
+        if to <= from {
+            continue;
+        }
+        let modifiers = legend
+            .modifiers
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| *index < 64 && bits & (1 << index) != 0)
+            .map(|(_, name)| name.clone())
+            .collect();
+        let classified = ClassifiedToken {
+            range: Range {
+                start: byte_position(&source_lines, from),
+                end: byte_position(&source_lines, to),
+            },
+            token_type: token_type.clone(),
+            modifiers,
+        };
+        if !out.contains(&classified) {
+            out.push(classified);
+        }
+    }
+    out
+}
+
+pub(super) fn merge_tokens(
+    own: Vec<crate::engine::tokens::SemanticToken>,
+    service: Vec<ClassifiedToken>,
+) -> Vec<ClassifiedToken> {
+    let overlaps = |a: &Range, b: &Range| {
+        a.start.line == b.start.line
+            && a.start.character < b.end.character
+            && b.start.character < a.end.character
+    };
+    let mut out: Vec<ClassifiedToken> = own
+        .into_iter()
+        .map(|token| {
+            let token_type = token.kind.as_str().to_string();
+            let modifiers = service
+                .iter()
+                .find(|other| other.range == token.range && other.token_type == token_type)
+                .map(|other| other.modifiers.clone())
+                .unwrap_or_default();
+            ClassifiedToken {
+                range: token.range,
+                token_type,
+                modifiers,
+            }
+        })
+        .collect();
+    let owned = out.len();
+    for token in service {
+        if !out[..owned]
+            .iter()
+            .any(|own| overlaps(&own.range, &token.range))
+        {
+            out.push(token);
+        }
+    }
+    out.sort_by_key(|token| (token.range.start.line, token.range.start.character));
+    out
+}
+
 /// A service span translated back to source UTF-16 offsets, or `None` when
 /// any byte of it was not copied verbatim from the source.
 pub(super) fn from_service_span(

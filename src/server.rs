@@ -32,6 +32,11 @@
 //! → { "id": 4, "method": "semanticTokens", "params": { "text" } }
 //! ← { "id": 4, "result": { "tokens": [{ "range", "kind" }] } }
 //!
+//! → { "method": "documentSemanticTokens", "params": { "path" } }
+//! ← { "result": { "tokens": [{ "range", "type", "modifiers" }] } }
+//! TypeScript's classification of the source text the emission copied,
+//! with the parser's classification of tt's constructs over it.
+//!
 //! → { "id": 5, "method": "ttSymbol", "params": { "path", "text", "position" } }
 //! ← { "id": 5, "result": { "kind", "range", "name", "variantName",
 //!                          "signature", "detail", "definition", "binds" } | null }
@@ -333,6 +338,20 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
             })
         }),
         "semanticTokens" => semantic_tokens(params),
+        "documentSemanticTokens" => semantic(workspace, params, |project, path, _position| {
+            let tokens: Vec<_> = project
+                .semantic_tokens(path)?
+                .into_iter()
+                .map(|token| {
+                    json!({
+                        "range": range_json(token.range),
+                        "type": token.token_type,
+                        "modifiers": token.modifiers,
+                    })
+                })
+                .collect();
+            Ok(json!({ "tokens": tokens }))
+        }),
         "declarations" => declarations(workspace, params),
         "ttSymbol" => tt_symbol(workspace, params),
         "ttCompletions" => tt_completions(workspace, params),
