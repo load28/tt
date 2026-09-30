@@ -98,7 +98,7 @@ impl<'a> Emitter<'a> {
                     if dispatch == MatchDispatch::LiteralSwitch {
                         out.append(self.literal_label(alternative));
                     } else {
-                        out.push_lit(format!("\"{}\"", self.variant_label(alternative)));
+                        out.append(self.variant_label(alternative, decision));
                     }
                 }
             }
@@ -302,7 +302,7 @@ impl<'a> Emitter<'a> {
                     if pattern_has_literal_test(alternative) {
                         out.append(self.literal_label(alternative));
                     } else {
-                        out.push_lit(format!("\"{}\"", self.variant_label(alternative)));
+                        out.append(self.variant_label(alternative, decision));
                     }
                 }
             }
@@ -964,7 +964,7 @@ impl<'a> Emitter<'a> {
         out
     }
 
-    pub(super) fn variant_label(&self, plan: &PatternPlan) -> String {
+    pub(super) fn variant_label(&self, plan: &PatternPlan, decision: &Decision) -> Rope<'a> {
         let PatternPlan::AllOf(parts) = plan else {
             crate::ice::bug!("switch variant alternative is not constructor")
         };
@@ -978,7 +978,20 @@ impl<'a> Emitter<'a> {
         let Some(constructor) = constructor else {
             crate::ice::bug!("switch variant alternative tests no constructor")
         };
-        self.constructor_name(constructor)
+        let (tag, at) = self.source_node(constructor_node(constructor));
+        let head = self.span(decision.head);
+        let mut label = Rope::new();
+        label.push_lit(format!("\"{tag}\""));
+        let mut out = Rope::new();
+        out.anchored_with_context(
+            AnchorKind::Match,
+            head.start,
+            head.end,
+            self.span(decision.extent).end,
+            Some((at, at + tag.len())),
+            label,
+        );
+        out
     }
 
     fn subject_reference(&self, decision: &Decision, subject: usize) -> String {

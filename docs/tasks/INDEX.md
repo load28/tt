@@ -625,6 +625,7 @@
 | TASK-617 | Import the standard library in CommonJS syntax from a CommonJS module | Complete | 2026-09-30 | 2026-09-30 | [TASK-617](./TASK-617-commonjs-standard-library.md) |
 | TASK-618 | Let a referenced type-check config emit declarations into a cache | Complete | 2026-09-30 | 2026-09-30 | [TASK-618](./TASK-618-referenced-type-configs-emit.md) |
 | TASK-619 | Derive `tt:build` from the configured source roots | Complete | 2026-09-30 | 2026-09-30 | [TASK-619](./TASK-619-derived-build-roots.md) |
+| TASK-620 | Report an impossible match case at its pattern | Complete | 2026-09-30 | 2026-09-30 | [TASK-620](./TASK-620-impossible-case-at-its-pattern.md) |
 
 ## Next task number
 

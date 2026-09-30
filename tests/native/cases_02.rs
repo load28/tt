@@ -226,6 +226,37 @@ fn an_imported_case_without_declaration_ownership_uses_checker_evidence() {
     );
 }
 
+/// TASK-620: a case the scrutinee cannot be is reported at the pattern that
+/// names it, one diagnostic per pattern, while the missing case stays at
+/// the match.
+#[test]
+fn an_impossible_case_is_reported_at_its_pattern() {
+    require_tsgo!();
+    let source = "variant S { A, B }\n\
+        declare const s: S;\n\
+        export const r = match (s) { A => 1, Zzz => 2 };\n\
+        match (s) { A => {}, B => {}, Yyy | Www => {} }\n";
+    let dir = project(&[("src/m.tt", source)]);
+
+    let out = check(&dir);
+    for (line, column) in [(3, 38), (4, 31), (4, 37)] {
+        assert!(
+            out.contains(&format!("src/m.tt:{line}:{column}")),
+            "the impossible case is underlined where it is written: {out}"
+        );
+    }
+    assert!(out.contains("missing \"B\""), "{out}");
+
+    let answer = typed_server(&dir, "src/m.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    let cases: Vec<&str> = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic["code"] == "ts2678")
+        .map(|diagnostic| source_slice(source, diagnostic))
+        .collect();
+    assert_eq!(cases, ["Zzz", "Yyy", "Www"], "{answer}");
+}
+
 #[test]
 fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
     require_tsgo!();

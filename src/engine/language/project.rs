@@ -1166,7 +1166,7 @@ impl Project {
             if let Some((anchor, class)) = glue.filter(translates).and_then(|anchor| {
                 crate::engine::semantics::translation_class(anchor.kind, code)
                     .map(|class| (anchor, class))
-            }) && !translated_seen.insert((anchor.src, anchor.kind, class))
+            }) && !translated_seen.insert((anchor.display().0, anchor.kind, class))
             {
                 continue;
             }
@@ -1175,8 +1175,9 @@ impl Project {
             // meant it says that instead — the same table the CLI reports
             // through, so the two surfaces cannot drift.
             if !exact && let Some(anchor) = glue {
-                let from = mapper::to_utf16(&doc.source, anchor.src);
-                let to = mapper::to_utf16(&doc.source, anchor.src_end).max(from + 1);
+                let (display_start, display_end) = anchor.display();
+                let from = mapper::to_utf16(&doc.source, display_start);
+                let to = mapper::to_utf16(&doc.source, display_end).max(from + 1);
                 let range = source_range(&doc.source, from, to);
                 let declared = declarations.get_or_insert_with(|| {
                     self.semantic_analyses(&path, &doc.source)

@@ -154,10 +154,21 @@ pub struct EmitAnchor {
     /// where the emitter alone knows the relationship. A pipeline's
     /// per-step anchor names the step that produced the rejected value
     /// here, so a reporter can label it ("the piped value comes from this
-    /// step"). `None` when the construct has no such companion place.
+    /// step"). A `match`'s case label names the pattern it was written for,
+    /// and a diagnostic on the label is shown there. `None` when the
+    /// construct has no such companion place.
     pub context: Option<(usize, usize)>,
     /// What kind of construct wrote it.
     pub kind: AnchorKind,
+}
+
+impl EmitAnchor {
+    pub(crate) fn display(&self) -> (usize, usize) {
+        match (self.kind, self.context) {
+            (AnchorKind::Match, Some(pattern)) => pattern,
+            _ => (self.src, self.src_end),
+        }
+    }
 }
 
 /// Where a nested pattern's **receiver** landed in the emitted output.

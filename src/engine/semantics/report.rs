@@ -324,8 +324,8 @@ pub(crate) fn report(
                     .unwrap_or_default();
                 out.push(Diagnostic {
                     path: file.source_path.clone(),
-                    position: Some(crate::line_col(&file.source, anchor.src)),
-                    end: Some(crate::line_col(&file.source, anchor.src_end)),
+                    position: Some(crate::line_col(&file.source, anchor.display().0)),
+                    end: Some(crate::line_col(&file.source, anchor.display().1)),
                     message: anchored_diagnostic_message(&anchor, diagnostic, declared),
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
@@ -341,7 +341,7 @@ pub(crate) fn report(
                 && let Some(class) = translation_class(anchor.kind, diagnostic.code)
                 && !translated_seen.insert((
                     file.source_path.clone(),
-                    anchor.src,
+                    anchor.display().0,
                     anchor.kind,
                     class,
                 ))
@@ -358,8 +358,8 @@ pub(crate) fn report(
             {
                 let entry = Diagnostic {
                     path: file.source_path.clone(),
-                    position: Some(crate::line_col(&file.source, anchor.src)),
-                    end: Some(crate::line_col(&file.source, anchor.src_end)),
+                    position: Some(crate::line_col(&file.source, anchor.display().0)),
+                    end: Some(crate::line_col(&file.source, anchor.display().1)),
                     message: said,
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
@@ -392,8 +392,8 @@ pub(crate) fn report(
             }
             DiagnosticOrigin::Anchor(anchor) => out.push(Diagnostic {
                 path: file.source_path.clone(),
-                position: Some(crate::line_col(&file.source, anchor.src)),
-                end: Some(crate::line_col(&file.source, anchor.src_end)),
+                position: Some(crate::line_col(&file.source, anchor.display().0)),
+                end: Some(crate::line_col(&file.source, anchor.display().1)),
                 message: format!(
                     "{} (in code ttc generated for this construct)",
                     diagnostic_message(diagnostic, declared)
