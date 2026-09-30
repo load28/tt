@@ -1,0 +1,33 @@
+=== completions /*guard*/ armGuardWithoutBody.tt:6:30 ===
+  |     Rect(width) if width > li
+  |                              ^ /*guard*/
+completion: 1046 item(s), member false, probe no
+  Shape (var, 11)
+  arguments (var, 11)
+  g (function, 11)
+  limit (var, 11)
+  s (var, 11)
+  width (var, 11)
+  ... 1040 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+  keywords: match (15), flow (15), result (15)
+patternCompletions: null
+
+=== hover /*width*/ armGuardWithoutBody.tt:6:20 ===
+  |     Rect(width) if width > li
+  |                    ^ /*width*/
+hover: 6:20-6:25 "width"
+    const width: number
+ttSymbol: null
+
+=== definition /*width*/ armGuardWithoutBody.tt:6:20 ===
+  |     Rect(width) if width > li
+  |                    ^ /*width*/
+definition: 1 location(s)
+  armGuardWithoutBody.tt 6:10-6:15 "width"
+
+=== diagnostics armGuardWithoutBody.tt ===
+diagnostics: 2 diagnostic(s)
+  6:28-6:30 "li" error TS2304: Cannot find name 'li'.
+  2:7-2:12 "limit" hint TS6133: 'limit' is declared but its value is never read. [unnecessary]
+

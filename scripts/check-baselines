@@ -8,7 +8,8 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const OWNERS = [
-  { root: "tests/baselines/reference", binary: "case_baselines", reference: () => true },
+  { root: "tests/baselines/reference", binary: "case_baselines", reference: (path) => !path.startsWith("tests/baselines/reference/editor/") },
+  { root: "tests/baselines/reference/editor", binary: "editor_cases", reference: () => true },
   { root: "tests/fixtures/emit", binary: "snapshot", reference: isExpected },
   { root: "tests/fixtures/diagnostic", binary: "snapshot", reference: isExpected },
   { root: "tests/fixtures/practical-diagnostics", binary: "practical_diagnostics", reference: isExpected },

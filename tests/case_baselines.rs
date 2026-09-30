@@ -1,5 +1,7 @@
-//! The case runner: every file under `tests/cases/` is a compilation whose
-//! artifacts are held to baselines under `tests/baselines/reference/`.
+//! The case runner: every file under `tests/cases/compiler/` and
+//! `tests/cases/conformance/` is a compilation whose artifacts are held to
+//! baselines under `tests/baselines/reference/`. Editor cases, under
+//! `tests/cases/editor/`, have their own runner (`tests/editor_cases.rs`).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -77,9 +79,14 @@ fn is_tt(path: &Path) -> bool {
 
 fn cases() -> Vec<Case> {
     let mut files = Vec::new();
-    case_files(&root().join("tests/cases"), &mut files);
+    for suite in ["compiler", "conformance"] {
+        case_files(&root().join("tests/cases").join(suite), &mut files);
+    }
     files.sort();
-    assert!(!files.is_empty(), "no case files under tests/cases");
+    assert!(
+        !files.is_empty(),
+        "no case files under tests/cases/compiler or tests/cases/conformance"
+    );
     let filter = std::env::var("TT_CASES").ok().filter(|f| !f.is_empty());
     let mut seen: BTreeMap<String, PathBuf> = BTreeMap::new();
     let mut out = Vec::new();

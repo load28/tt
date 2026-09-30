@@ -1,0 +1,17 @@
+// @semanticTokens: *
+import type { TResult } from "@tt/std";
+export variant Shape { Circle(radius: number), Point }
+declare function load(id: string): TResult<number, string>;
+const half = (n: number) => n / 2;
+export function area(s: Shape, id: string): TResult<number, string> {
+  val const scale = 2;
+  const r = match (s) {
+    Circle(radius) if radius > scale => radius |> half,
+    Circle(radius) => radius,
+    Point => 0,
+  };
+  return result {
+    const n = try load(id);
+    n + r
+  };
+}

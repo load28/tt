@@ -1,0 +1,17 @@
+=== signatureHelp /*operand*/ signatureHelpInTry.tt:4:25 ===
+  |   const q = try getUser(id);
+  |                         ^ /*operand*/
+signatureHelp: active signature 0, active parameter 0
+  getUser(id: string): TResult<{ name: string; }, string>
+    parameters: id: string
+
+=== signatureHelp /*afterCall*/ signatureHelpInTry.tt:8:44 ===
+  |   return result { const v = try getUser(id); v.name.length };
+  |                                            ^ /*afterCall*/
+signatureHelp: null
+
+=== diagnostics signatureHelpInTry.tt ===
+diagnostics: 1 diagnostic(s)
+  10:13-10:14 ";" error TS1109: Expression expected.
+  restates: source-not-typescript
+

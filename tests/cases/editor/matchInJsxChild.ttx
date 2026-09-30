@@ -1,0 +1,9 @@
+// @hover: flag, total
+// @diagnostics: *
+declare global { namespace JSX { interface IntrinsicElements { section: {}; strong: {} } } }
+declare const flag: boolean;
+export const total = 3;
+export const view = <section>{match (/*flag*/flag) {
+  true => <strong>{/*total*/total}</strong>,
+  false => null,
+}}</section>;

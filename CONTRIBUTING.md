@@ -184,10 +184,53 @@ The `.ts`, `.errors.txt`, and `.types` baselines need the pinned TypeScript
 (`npm ci`). Without it they are skipped, `TTC_REQUIRE_TSGO=1` turns the skip
 into a failure, and `UPDATE_EXPECT=1` refuses to run.
 
+### Adding an editor case
+
+An editor behaviour is pinned by one file under `tests/cases/editor/`, in the
+spirit of TypeScript's fourslash tests. The file is a `.tt` or `.ttx` source
+(or several `// @filename:` units) with named markers `/*name*/` and ranges
+`[|text|]`, both removed before the file is written, and verb lines that say
+what to ask where:
+
+```ts
+// @hover: use
+// @completions: body
+// @references: binding
+// @semanticTokens: *
+export variant Shape { Circle([|radius|]: number), Point }
+export const area = (s: Shape) => match (s) {
+  Circle([|/*binding*/radius|]) => /*use*/[|radius|] * 2,
+  Point => /*body*/0,
+};
+```
+
+The verbs are `hover`, `completions`, `definition`, `references`, `rename`
+and `signatureHelp` (followed by marker names) and `semanticTokens` and
+`diagnostics` (followed by unit names, or `*` for every `.tt`/`.ttx` unit).
+`tests/editor_cases.rs` asks each question through the engine API and
+through `ttc --server`, fails when the two answers differ, and writes the
+answer to `tests/baselines/reference/editor/<name>.baseline`. When a
+`references` or `rename` marker sits inside a range, the answer must be
+exactly the case's ranges.
+
+A TypeScript twin, the same name with `.ts` or `.tsx` and the same units
+with `.ts`/`.tsx` for `.tt`/`.ttx`, is asked the same questions at the same
+markers through `tsgo --lsp`. The per-file verbs are compared only when the
+twin's text is the source's. Every answer that differs from TypeScript's is
+shown in the case's baseline and listed in
+`tests/baselines/reference/editor/failingParity.txt`, which is a baseline
+too: a new difference and a fixed one both change it.
+
+```sh
+UPDATE_EXPECT=1 cargo test --test editor_cases
+git diff -- tests/baselines/reference/editor
+TT_CASES=<name fragment> cargo test --test editor_cases   # a few cases while iterating
+```
+
 ### Managing the baselines
 
 Every reference file is a baseline some test compares: everything under
-`tests/baselines/reference/`, and the `expected.*` files under
+`tests/baselines/reference/` (the editor cases own `editor/`), and the `expected.*` files under
 `tests/fixtures/emit/`, `tests/fixtures/diagnostic/`, and
 `tests/fixtures/practical-diagnostics/`. A test fails on a **missing**
 baseline and on a **modified** one, with the diff and the

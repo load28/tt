@@ -1,0 +1,23 @@
+=== hover /*kind*/ unfinishedIfLet.tt:6:12 ===
+  |   return b.kind;
+  |            ^ /*kind*/
+hover: 6:12-6:16 "kind"
+    (property) kind: "None" | "Some"
+ttSymbol: null
+
+=== completions /*later*/ unfinishedIfLet.tt:8:43 ===
+  | export function g(n: number) { return n.toFixed(); }
+  |                                           ^ /*later*/
+completion: 6 item(s), member true, probe no
+  toExponential (method, 11)
+  toFixed (method, 11)
+  toLocaleString (method, 11)
+  toPrecision (method, 11)
+  toString (method, 11)
+  valueOf (method, 11)
+ttCompletions: pattern false, member {"receiver":"n"}
+patternCompletions: null
+
+=== diagnostics unfinishedIfLet.tt ===
+diagnostics: 0 diagnostic(s)
+

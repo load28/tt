@@ -1,0 +1,96 @@
+=== hover /*green*/ plainTypeScriptDeclarations.tt:1:26 ===
+  | export enum Color { Red, Green = 4 }
+  |                          ^ /*green*/
+hover: 1:26-1:31 "Green"
+    (enum member) Color.Green = 4
+ttSymbol: null
+
+=== hover /*scale*/ plainTypeScriptDeclarations.tt:13:27 ===
+  | export const s = Geometry.scale(2);
+  |                           ^ /*scale*/
+hover: 13:27-13:32 "scale"
+    function Geometry.scale(n: number): number
+ttSymbol: null
+
+=== hover /*member*/ plainTypeScriptDeclarations.tt:14:24 ===
+  | export const c = Color.Green;
+  |                        ^ /*member*/
+hover: 14:24-14:29 "Green"
+    (enum member) Color.Green = 4
+ttSymbol: null
+
+=== completions /*member*/ plainTypeScriptDeclarations.tt:14:24 ===
+  | export const c = Color.Green;
+  |                        ^ /*member*/
+completion: 2 item(s), member true, probe no
+  Green (property, 11)
+  Red (property, 11)
+ttCompletions: pattern false, member {"receiver":"Color"}
+patternCompletions: null
+
+=== signatureHelp /*overload*/ plainTypeScriptDeclarations.tt:13:33 ===
+  | export const s = Geometry.scale(2);
+  |                                 ^ /*overload*/
+signatureHelp: active signature 0, active parameter 0
+  scale(n: number): number
+    parameters: n: number
+  scale(n: string): string
+    parameters: n: string
+
+=== rename /*assigned*/ plainTypeScriptDeclarations.tt:16:9 ===
+  | later = later + Geometry.unit;
+  |         ^ /*assigned*/
+prepareRename: 16:9-16:14 "later"
+rename: 3 edit(s)
+  plainTypeScriptDeclarations.tt 15:5-15:10 "later" -> "ttRenamePlaceholder"
+  plainTypeScriptDeclarations.tt 16:1-16:6 "later" -> "ttRenamePlaceholder"
+  plainTypeScriptDeclarations.tt 16:9-16:14 "later" -> "ttRenamePlaceholder"
+
+=== semanticTokens plainTypeScriptDeclarations.tt ===
+semanticTokens: 32 token(s)
+  1:13-1:18 "Color" enum [declaration]
+  1:21-1:24 "Red" enumMember [declaration, readonly]
+  1:26-1:31 "Green" enumMember [declaration, readonly]
+  2:18-2:26 "Geometry" namespace [declaration]
+  3:16-3:20 "unit" variable [declaration, readonly, local]
+  4:19-4:24 "scale" function [declaration, local]
+  4:25-4:26 "n" parameter [declaration]
+  5:19-5:24 "scale" function [declaration, local]
+  5:25-5:26 "n" parameter [declaration]
+  6:19-6:24 "scale" function [declaration, local]
+  6:25-6:26 "n" parameter [declaration]
+  6:54-6:55 "n" parameter
+  8:23-8:27 "Base" class [declaration]
+  8:28-8:29 "T" typeParameter [declaration]
+  9:22-9:26 "read" method [declaration]
+  9:30-9:31 "T" typeParameter
+  10:10-10:16 "create" method [declaration, static]
+  12:14-12:18 "pair" variable [declaration, readonly]
+  12:23-12:24 "a" property [declaration]
+  12:29-12:30 "b" property [declaration]
+  12:48-12:54 "Record" type [defaultLibrary]
+  13:14-13:15 "s" variable [declaration, readonly]
+  13:18-13:26 "Geometry" namespace
+  13:27-13:32 "scale" function [local]
+  14:14-14:15 "c" variable [declaration, readonly]
+  14:18-14:23 "Color" enum
+  14:24-14:29 "Green" enumMember [readonly]
+  15:5-15:10 "later" variable [declaration]
+  16:1-16:6 "later" variable
+  16:9-16:14 "later" variable
+  16:17-16:25 "Geometry" namespace
+  16:26-16:30 "unit" variable [readonly, local]
+
+=== diagnostics plainTypeScriptDeclarations.tt ===
+diagnostics: 0 diagnostic(s)
+
+=== parity with the TypeScript twin ===
+hover green: same
+hover scale: same
+hover member: same
+completions member: same
+signatureHelp overload: same
+rename assigned: same
+semanticTokens plainTypeScriptDeclarations.tt: same
+diagnostics plainTypeScriptDeclarations.tt: same
+

@@ -1,0 +1,38 @@
+=== semanticTokens semanticTokensOverTtConstructs.tt ===
+semanticTokens: 35 token(s)
+  2:16-2:21 "Shape" enum
+  2:24-2:30 "Circle" enumMember
+  2:31-2:37 "radius" property
+  2:48-2:53 "Point" enumMember
+  3:18-3:22 "load" function [declaration]
+  3:23-3:25 "id" parameter [declaration]
+  3:36-3:43 "TResult" type
+  4:7-4:11 "half" function [declaration, readonly]
+  4:15-4:16 "n" parameter [declaration]
+  4:29-4:30 "n" parameter
+  5:17-5:21 "area" function [declaration]
+  5:22-5:23 "s" parameter [declaration]
+  5:25-5:30 "Shape" type [readonly]
+  5:32-5:34 "id" parameter [declaration]
+  5:45-5:52 "TResult" type
+  6:13-6:18 "scale" variable [declaration, readonly, local]
+  7:9-7:10 "r" variable [declaration, readonly, local]
+  7:13-7:18 "match" keyword
+  7:20-7:21 "s" parameter
+  8:5-8:11 "Circle" enumMember
+  8:12-8:18 "radius" variable [declaration, readonly, local]
+  8:23-8:29 "radius" variable [readonly, local]
+  8:32-8:37 "scale" variable [readonly, local]
+  8:41-8:47 "radius" variable [readonly, local]
+  8:51-8:55 "half" function [readonly]
+  9:5-9:11 "Circle" enumMember
+  9:12-9:18 "radius" variable [declaration, readonly, local]
+  9:23-9:29 "radius" variable [readonly, local]
+  10:5-10:10 "Point" enumMember
+  12:10-12:16 "result" keyword
+  13:11-13:12 "n" variable [declaration, readonly, local]
+  13:19-13:23 "load" function
+  13:24-13:26 "id" parameter
+  14:5-14:6 "n" variable [readonly, local]
+  14:9-14:10 "r" variable [readonly, local]
+

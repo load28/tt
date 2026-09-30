@@ -1,0 +1,17 @@
+=== hover /*flag*/ matchInJsxChild.ttx:4:38 ===
+  | export const view = <section>{match (flag) {
+  |                                      ^ /*flag*/
+hover: 4:38-4:42 "flag"
+    const flag: boolean
+ttSymbol: null
+
+=== hover /*total*/ matchInJsxChild.ttx:5:20 ===
+  |   true => <strong>{total}</strong>,
+  |                    ^ /*total*/
+hover: 5:20-5:25 "total"
+    const total: 3
+ttSymbol: null
+
+=== diagnostics matchInJsxChild.ttx ===
+diagnostics: 0 diagnostic(s)
+

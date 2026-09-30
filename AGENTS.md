@@ -136,7 +136,10 @@ Nightly와 Beta·RC·Stable·Patch의 개발자 절차 및 운영 기준은 [`do
   `// @filename:` units when the bug needs several files. Its baselines in
   `tests/baselines/reference/` (`.ts`, `.errors.txt`, `.map.txt`, `.types`)
   are generated with `UPDATE_EXPECT=1 cargo test --test case_baselines`;
-  see "Adding a test case" in `CONTRIBUTING.md`.
+  see "Adding a test case" in `CONTRIBUTING.md`. An editor fix is pinned by
+  a case under `tests/cases/editor/` with `/*marker*/`s and verb lines
+  (`UPDATE_EXPECT=1 cargo test --test editor_cases`); see "Adding an editor
+  case".
 - Every bug fix includes at least one test that fails without the fix's
   non-test changes. Run it against the unfixed code, and record its path
   and the failure it reported in the task record's "Regression test (fails

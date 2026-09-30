@@ -1,0 +1,7 @@
+// @completions: typed
+// @filename: main.tt
+export const z = kkVa/*typed*/;
+// @filename: shapes.tt
+export const kkValue = 1;
+// @filename: lib.ts
+export const kkValueLib = 1;

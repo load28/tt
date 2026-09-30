@@ -1,0 +1,6 @@
+// @hover: mid
+// @completions: end
+const half = (n: number) => n / 2;
+const obj = { twice(n: number) { return n * 2; } };
+export const a = 4 |> obj.t/*mid*/w/*end*/
+export const z = half(2);

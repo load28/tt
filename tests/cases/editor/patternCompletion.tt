@@ -1,0 +1,11 @@
+// @completions: literal, tag, field, payload
+type Dir = "north" | "south";
+type K = { kind: "Alpha"; x: number } | { kind: "Beta" };
+variant Shape { Circle(radius: number), Point }
+export function f(d: Dir, k: K, s: Shape) {
+  const a = match (d) { "north" => 1, /*literal*/ };
+  const b = match (k) { Alpha => 1, /*tag*/ };
+  const c = match (k) { Alpha(/*field*/) => 1, _ => 0 };
+  const e = match (s) { Circle(/*payload*/) => 1, _ => 0 };
+  return [a, b, c, e];
+}

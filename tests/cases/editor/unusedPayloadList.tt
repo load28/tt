@@ -1,0 +1,14 @@
+// @diagnostics: *
+export variant S { A, B(x: number, y: string), C(v: S, w: number) }
+export class Failure extends Error { code = 1; }
+export function f(s: S, e: unknown): number {
+  const a = match (s) {
+    B(x, y) => 1,
+    C(v: B(x, y), w) => w,
+    C(v, w) => 2,
+    A => 3,
+  };
+  if let B(x: p, y: q) = s { console.log(1); }
+  const b = match (e) { is Failure { code, message } => 1, _ => 2 };
+  return a + b;
+}

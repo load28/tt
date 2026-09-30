@@ -1,0 +1,12 @@
+=== completions /*typed*/ main.tt:1:22 ===
+  | export const z = kkVa;
+  |                      ^ /*typed*/
+completion: 1061 item(s), member false, probe no
+  z (var, 11)
+  kkValue (var, 16) from "./shapes.tt" source "./shapes.tt"
+  kkValueLib (var, 16) from "./lib" source "./lib"
+  ... 1058 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+  keywords: match (15), flow (15), result (15)
+patternCompletions: null
+

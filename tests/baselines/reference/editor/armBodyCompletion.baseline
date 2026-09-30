@@ -1,0 +1,38 @@
+=== completions /*body*/ armBodyCompletion.tt:6:20 ===
+  |     Rect(width) => 
+  |                    ^ /*body*/
+completion: 1048 item(s), member false, probe yes
+  Shape (var, 11)
+  a (var, 11)
+  arguments (var, 11)
+  b (var, 11)
+  g (function, 11)
+  limit (var, 11)
+  s (var, 11)
+  width (var, 11)
+  ... 1040 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+  keywords: match (15), flow (15), result (15)
+patternCompletions: null
+
+=== completions /*afterComma*/ armBodyCompletion.tt:10:20 ===
+  |     Rect(width) => ,
+  |                    ^ /*afterComma*/
+completion: 1048 item(s), member false, probe yes
+  Shape (var, 11)
+  a (var, 11)
+  arguments (var, 11)
+  b (var, 11)
+  g (function, 11)
+  limit (var, 11)
+  s (var, 11)
+  width (var, 11)
+  ... 1040 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+  keywords: match (15), flow (15), result (15)
+patternCompletions: null
+
+=== parity with the TypeScript twin ===
+completions body: same
+completions afterComma: same
+

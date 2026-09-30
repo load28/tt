@@ -1,0 +1,49 @@
+=== definition /*ok*/ standardLibraryTags.tt:4:30 ===
+  | export const a = match (r) { Ok(value) => value, Err(error) => error.length };
+  |                              ^ /*ok*/
+definition: 1 location(s)
+  node_modules/@tt/std/result.ts 19:14-19:16
+
+=== definition /*err*/ standardLibraryTags.tt:4:50 ===
+  | export const a = match (r) { Ok(value) => value, Err(error) => error.length };
+  |                                                  ^ /*err*/
+definition: 1 location(s)
+  node_modules/@tt/std/result.ts 22:14-22:17
+
+=== definition /*some*/ standardLibraryTags.tt:5:30 ===
+  | export const b = match (o) { Some(value: x) => x, None => 0 };
+  |                              ^ /*some*/
+definition: 1 location(s)
+  node_modules/@tt/std/option.ts 12:14-12:18
+
+=== definition /*none*/ standardLibraryTags.tt:5:51 ===
+  | export const b = match (o) { Some(value: x) => x, None => 0 };
+  |                                                   ^ /*none*/
+definition: 1 location(s)
+  node_modules/@tt/std/option.ts 15:14-15:18
+
+=== definition /*value*/ standardLibraryTags.tt:4:33 ===
+  | export const a = match (r) { Ok(value) => value, Err(error) => error.length };
+  |                                 ^ /*value*/
+definition: 1 location(s)
+  node_modules/@tt/std/result.ts 7:36-7:41
+
+=== hover /*ok*/ standardLibraryTags.tt:4:30 ===
+  | export const a = match (r) { Ok(value) => value, Err(error) => error.length };
+  |                              ^ /*ok*/
+hover: null
+ttSymbol: case Ok of Result at 4:30-4:32 "Ok"
+    Result.Ok(value: T)
+  detail:
+    payload case — compiles to a constructor function of built-in `variant Result`
+
+=== hover /*value*/ standardLibraryTags.tt:4:33 ===
+  | export const a = match (r) { Ok(value) => value, Err(error) => error.length };
+  |                                 ^ /*value*/
+hover: 4:33-4:38 "value"
+    const value: number
+ttSymbol: field value of Result at 4:33-4:38 "value", binds
+    value: T
+  detail:
+    payload field of `Result.Ok` — the pattern binds it by name
+

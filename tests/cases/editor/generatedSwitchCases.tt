@@ -1,0 +1,12 @@
+// @completions: generated, written
+type K = { kind: "Alpha"; x: number } | { kind: "Beta" };
+export function f(k: K) {
+  const b = match (k) { Alpha(x) => { /*generated*/ }, _ => 0 };
+  return b;
+}
+export function g(k: K) {
+  switch (k.kind) {
+    case "Alpha": break;
+    /*written*/
+  }
+}

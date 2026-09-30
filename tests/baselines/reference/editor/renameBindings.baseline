@@ -1,0 +1,31 @@
+=== rename /*scale*/ renameBindings.tt:2:29 ===
+  | export function f(s: Shape, scale: number) {
+  |                             ^ /*scale*/
+prepareRename: 2:29-2:34 "scale"
+rename: 3 edit(s)
+  renameBindings.tt 2:29-2:34 "scale" -> "ttRenamePlaceholder"
+  renameBindings.tt 3:15-3:20 "scale" -> "ttRenamePlaceholder"
+  renameBindings.tt 4:49-4:54 "scale" -> "ttRenamePlaceholder"
+
+=== rename /*binding*/ renameBindings.tt:4:29 ===
+  |   return match (s) { Circle(radius) => radius * scale, Point => 0 };
+  |                             ^ /*binding*/
+prepareRename: 4:29-4:35 "radius"
+rename: 2 edit(s)
+  renameBindings.tt 4:29-4:35 "radius" -> "radius: ttRenamePlaceholder"
+  renameBindings.tt 4:40-4:46 "radius" -> "ttRenamePlaceholder"
+
+=== rename /*library*/ renameBindings.tt:3:11 ===
+  |   console.log(scale);
+  |           ^ /*library*/
+prepareRename: refused "You cannot rename elements that are defined in the standard TypeScript library."
+rename: no edits
+
+=== references /*scale*/ renameBindings.tt:2:29 ===
+  | export function f(s: Shape, scale: number) {
+  |                             ^ /*scale*/
+references: 3 location(s)
+  renameBindings.tt 2:29-2:34 "scale" (definition)
+  renameBindings.tt 3:15-3:20 "scale"
+  renameBindings.tt 4:49-4:54 "scale"
+
