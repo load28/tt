@@ -5,6 +5,3 @@ differences from tryStatement_declaration_matchBlockArm_finally at the questions
   |                                                  ^ /*operand*/
   tt only: checked (Variable)
 
-=== diagnostics main.tt ===
-  tt only: main "try read(note(\"operand\", input))" error TS"try-placement": `try` cannot be used here, in an isolated value region — it compiles to a `return`, which would complete this construct's value instead of returning from the enclosing function
-

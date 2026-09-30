@@ -1,5 +1,0 @@
-differences from tryStatement_propagate_matchBlockArm_optionalChain at the questions listed in tests/editor-matrix-differences.txt
-
-=== diagnostics main.tt ===
-  tt only: main "try read(box(input)?.inner.value!)" error TS"try-placement": `try` cannot be used here, in an isolated value region — it compiles to a `return`, which would complete this construct's value instead of returning from the enclosing function
-

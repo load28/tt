@@ -143,6 +143,14 @@ is declared (`variant`); and, in every row, the companion's operand.
   cases, most from twin errors (Issues 5 to 8). Second run (1,466 s):
   709 differing questions; the rest of the twin errors fixed. Third run
   (1,458 s): 643 differing questions in 363 cases, all classified.
+- 2026-09-30: Merged `claude/ecstatic-dijkstra-qw5pf9` at `5772cc7`
+  (TASK-681 to TASK-684, which fix TASK-679 Issues 1 to 4). The 59
+  questions listed as TASK-679 Issues 3 and 4 now agree with their twins,
+  as the list predicted: removed their 53 lines; 11 difference baselines
+  were deleted and `tryStatement_declaration_matchBlockArm_finally` keeps
+  only its Issue 1 difference. After the merge 585 questions in 352 cases
+  differ (281 by design, 304 defects: Issue 1 193, Issue 2 35, Issue 3 68,
+  Issue 4 5, TASK-685 Issue 3 3), in 40 list lines.
 - 2026-09-30: Re-ran the compiled `flow` matrix after renaming its twin
   parameter (`TT_CASES=flow_ cargo test --test case_baselines`, 162 s,
   passes). Confirmed Issue 4's cause with a plain-TypeScript probe.
@@ -281,6 +289,16 @@ defect; the defects it finds are listed, not fixed.
   passed, 0 skipped; `./scripts/ci agents`: passed, with the environmental
   warnings TASK-639 recorded (rolldown not on PATH, doctor reports the
   checkout not ready).
+- [x] After merging `5772cc7`: `node scripts/generate-cases --check`
+  passes with no regeneration (the `flow` twins' `head` still matches the
+  merged compiled cases); `cargo fmt --check`; `cargo clippy --all-targets
+  -- -D warnings`; the tracked `cargo test --no-fail-fast` with the same
+  variables: 1,798 passed, 0 failed, no `SKIP`, 583 s; `check-baselines`:
+  "697 compared, 3508 of unsampled matrix cases left unjudged, none
+  unused"; `TT_MATRIX_CASES=all cargo test --test case_baselines`: passes,
+  1,004 s; `TT_MATRIX_CASES=all cargo test --test editor_cases` (without
+  `UPDATE_EXPECT`): passes, 798 s; extension suite 238 passed, 0 skipped;
+  `./scripts/ci agents` passed.
 - CI cost: a pull request's editor suite goes from about 18 s to about
   60 s (TASK-685); the nightly `exhaustive` job adds the adapter build and
   about 24 minutes for every case (it runs `--release`, which only speeds
