@@ -24,7 +24,11 @@ the existing TypeScript config and declares the content mapper. A config with
 project `references` (such as Vite's solution-style `tsconfig.json`) gets a
 `*.tt.json` counterpart for every referenced config inside the project, the
 generated configs reference each other the way the originals do, and the
-generated scripts check them with `tsc -b`. The initializer sets `typescript` to
+generated scripts check them with `tsc -b`. TypeScript does not let a
+referenced project disable emit (TS6310), so a generated config that another
+compiled config references emits declarations only, into
+`node_modules/.cache/tt/`, instead of setting `noEmit`; every other generated
+config sets `noEmit`. The initializer sets `typescript` to
 the TypeScript 7.1 build tt is verified with; when the project named another
 version, it replaces it and prints the change. Existing scripts and config files
 stay intact. Re-running init accepts unchanged generated configs;

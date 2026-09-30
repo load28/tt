@@ -323,6 +323,69 @@ test('the generated solution check reaches the referenced sources', { skip: !rep
   assert.match(check.stdout, /src\/main\.ts\(1,14\): error TS2322/)
 })
 
+async function referencedProjectGraph() {
+  const root = testDir('create-tt-references-')
+  await writeFile(join(root, 'package.json'), '{}\n')
+  await writeFile(join(root, 'tsconfig.json'), JSON.stringify({ files: [], references: [{ path: './a' }, { path: './b' }] }))
+  for (const [name, config, source] of [
+    ['a', { compilerOptions: { composite: true, strict: true, outDir: 'dist', tsBuildInfoFile: 'dist/a.tsbuildinfo', types: [] }, include: ['src'] }, 'export const a = 1\n'],
+    ['b', { compilerOptions: { composite: true, strict: true, outDir: 'dist', types: [] }, include: ['src'], references: [{ path: '../a' }] }, "import { a } from '../../a/src/a.js'\nexport const b: string = a\n"],
+  ]) {
+    await mkdir(join(root, name, 'src'), { recursive: true })
+    await writeFile(join(root, name, 'tsconfig.json'), JSON.stringify(config))
+    await writeFile(join(root, name, 'src', `${name}.ts`), source)
+  }
+  return root
+}
+
+test('init lets a project another project references emit declarations into a cache', async () => {
+  const root = await referencedProjectGraph()
+  await initializeExisting({ directory: root, bundler: 'none' })
+  const mapper = [{ package: '@openload28/tt-lang', extensions: ['.tt', '.ttx'] }]
+  assert.deepEqual(JSON.parse(await readFile(join(root, 'a/tsconfig.tt.json'), 'utf8')), {
+    extends: './tsconfig.json',
+    compilerOptions: {
+      noEmit: false,
+      emitDeclarationOnly: true,
+      outDir: '../node_modules/.cache/tt/a',
+      declarationDir: '../node_modules/.cache/tt/a',
+      tsBuildInfoFile: '../node_modules/.cache/tt/a/tsconfig.tt.tsbuildinfo',
+    },
+    contentMappers: mapper,
+  })
+  assert.deepEqual(JSON.parse(await readFile(join(root, 'b/tsconfig.tt.json'), 'utf8')), {
+    extends: './tsconfig.json',
+    compilerOptions: { noEmit: true },
+    contentMappers: mapper,
+    references: [{ path: '../a/tsconfig.tt.json' }],
+  })
+  await initializeExisting({ directory: root, bundler: 'none' })
+})
+
+test('the generated graph builds when a referenced project is referenced by another', { skip: !repositoryTypeScript && 'the repository TypeScript is not installed' }, async () => {
+  const root = await referencedProjectGraph()
+  await initializeExisting({ directory: root, bundler: 'none' })
+  const mapperPackage = join(root, 'node_modules/@openload28/tt-lang')
+  await mkdir(mapperPackage, { recursive: true })
+  await writeFile(join(mapperPackage, 'package.json'), JSON.stringify({
+    name: '@openload28/tt-lang',
+    version: '0.0.0',
+    typescript: { contentMapper: { exec: ['ttc', '--content-mapper'] } },
+  }))
+  const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+  const [, ...args] = manifest.scripts['tt:check'].split(' ')
+  assert.deepEqual(args, ['-b', 'tsconfig.tt.json', '--runExternalCode'])
+  const check = () => spawnSync(process.execPath, [repositoryTypeScript, ...args], { cwd: root, encoding: 'utf8' })
+  const failed = check()
+  assert.notEqual(failed.status, 0, failed.stdout + failed.stderr)
+  assert.doesNotMatch(failed.stdout, /TS6310/)
+  assert.match(failed.stdout, /b\/src\/b\.ts\(2,14\): error TS2322/)
+  await writeFile(join(root, 'b/src/b.ts'), "import { a } from '../../a/src/a.js'\nexport const b: number = a\n")
+  const passed = check()
+  assert.equal(passed.status, 0, passed.stdout + passed.stderr)
+  assert.equal(existsSync(join(root, 'a/dist')), false)
+})
+
 test('init replaces an incompatible TypeScript and reports it', async () => {
   for (const section of ['devDependencies', 'dependencies']) {
     const root = testDir('create-tt-typescript-')

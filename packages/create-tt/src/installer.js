@@ -199,36 +199,65 @@ export async function initializeExisting(options) {
   return { root, packageManager, mode: 'init', bundler: bundler ?? 'none', files, manualModule, updated }
 }
 
-async function typeConfigGraph(root, configPath, generated, visited = new Set()) {
-  visited.add(configPath)
+async function typeConfigGraph(root, configPath, generated) {
+  const projects = new Map()
+  await readConfigGraph(root, configPath, projects)
+  const emitting = new Set(
+    [...projects.values()]
+      .filter((project) => !solutionStyle(project.config))
+      .flatMap((project) => project.references.map((reference) => reference.target).filter(Boolean)),
+  )
+  for (const [path, { config, references }] of projects) {
+    const directory = dirname(path)
+    const counterpart = typeConfigPath(path)
+    const content = tsconfig(
+      `./${basename(path)}`,
+      emitting.has(path) ? declarationOutput(root, counterpart, config) : undefined,
+    )
+    if (Array.isArray(config.references)) {
+      content.references = references.map(({ reference, target }) =>
+        target ? { ...reference, path: relativePath(directory, typeConfigPath(target)) } : reference)
+    }
+    generated.push([relative(root, counterpart), `${JSON.stringify(content, null, '  ')}\n`])
+  }
+  return Array.isArray(projects.get(configPath).config.references)
+}
+
+async function readConfigGraph(root, configPath, projects) {
   let config
   try {
     config = parseJsonc(await readFile(configPath, 'utf8'))
   } catch (error) {
     throw new Error(`cannot read ${configPath}: ${error.message}`)
   }
+  const project = { config, references: [] }
+  projects.set(configPath, project)
   const directory = dirname(configPath)
-  const counterpart = configPath.replace(/\.json$/, '') + '.tt.json'
-  const slot = generated.push(undefined) - 1
-  const content = tsconfig(`./${basename(configPath)}`)
-  const hasReferences = Array.isArray(config.references)
-  if (hasReferences) {
-    const references = []
-    for (const reference of config.references) {
-      const lexical = typeof reference?.path === 'string' && referencedConfig(directory, reference.path)
-      const target = lexical && existsSync(lexical) && await realpath(lexical)
-      if (!target || !insideRoot(root, target)) {
-        references.push(reference)
-        continue
-      }
-      if (!visited.has(target)) await typeConfigGraph(root, target, generated, visited)
-      const referenced = target.replace(/\.json$/, '') + '.tt.json'
-      references.push({ ...reference, path: relativePath(directory, referenced) })
-    }
-    content.references = references
+  for (const reference of Array.isArray(config.references) ? config.references : []) {
+    const lexical = typeof reference?.path === 'string' && referencedConfig(directory, reference.path)
+    const resolved = lexical && existsSync(lexical) && await realpath(lexical)
+    const target = resolved && insideRoot(root, resolved) ? resolved : undefined
+    project.references.push({ reference, target })
+    if (target && !projects.has(target)) await readConfigGraph(root, target, projects)
   }
-  generated[slot] = [relative(root, counterpart), `${JSON.stringify(content, null, '  ')}\n`]
-  return hasReferences
+}
+
+function typeConfigPath(configPath) {
+  return configPath.replace(/\.json$/, '') + '.tt.json'
+}
+
+function solutionStyle(config) {
+  return Array.isArray(config.files) && config.files.length === 0 && config.include === undefined
+}
+
+function declarationOutput(root, counterpart, config) {
+  const directory = dirname(counterpart)
+  const cache = relativePath(directory, join(root, 'node_modules', '.cache', 'tt', relative(root, directory)))
+  const options = { noEmit: false, emitDeclarationOnly: true, outDir: cache, declarationDir: cache }
+  if (config.compilerOptions?.tsBuildInfoFile !== undefined) {
+    options.tsBuildInfoFile = `${cache}/${basename(counterpart, '.json')}.tsbuildinfo`
+  }
+  return options
 }
 
 async function projectConfig(root, path) {
@@ -410,10 +439,10 @@ export default typeof base === 'function'
 `
 }
 
-function tsconfig(extendsConfig) {
+function tsconfig(extendsConfig, compilerOptions = { noEmit: true }) {
   const config = {
     ...(extendsConfig
-      ? { extends: extendsConfig, compilerOptions: { noEmit: true } }
+      ? { extends: extendsConfig, compilerOptions }
       : {
           compilerOptions: {
             target: 'ES2022',
