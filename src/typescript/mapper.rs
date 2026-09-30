@@ -63,9 +63,18 @@ pub(crate) fn diagnostic_origin(
         let at = chunk.src + chunk.len;
         return Some(DiagnosticOrigin::Exact { start: at, end: at });
     }
+    // A lowering owns a diagnostic whose whole span lies in its output. An
+    // anchor that holds only where the span starts (a pipeline step's input
+    // at the head of `head.m()`) is part of a larger construct the checker
+    // is speaking about.
     if let Some(anchor) = anchors
         .iter()
-        .find(|anchor| anchor.out <= start && start < anchor.end)
+        .find(|anchor| anchor.out <= start && end <= anchor.end)
+        .or_else(|| {
+            anchors
+                .iter()
+                .find(|anchor| anchor.out <= start && start < anchor.end)
+        })
         .or_else(|| {
             anchors
                 .iter()
@@ -268,6 +277,38 @@ mod tests {
         assert_eq!(
             diagnostic_origin(&mappings, &[anchor], 101, 104),
             Some(DiagnosticOrigin::Exact { start: 21, end: 24 })
+        );
+    }
+
+    #[test]
+    fn a_diagnostic_belongs_to_the_anchor_that_holds_its_whole_span() {
+        // `"a".trim()`: the step anchor holds only the piped value at the
+        // start; the whole pipeline's anchor holds the whole call.
+        let step = EmitAnchor {
+            out: 100,
+            end: 103,
+            src: 30,
+            src_end: 37,
+            owner_end: 37,
+            context: Some((20, 23)),
+            kind: AnchorKind::Pipe,
+        };
+        let pipeline = EmitAnchor {
+            out: 100,
+            end: 110,
+            src: 20,
+            src_end: 37,
+            owner_end: 37,
+            context: None,
+            kind: AnchorKind::Pipe,
+        };
+        assert_eq!(
+            diagnostic_origin(&[], &[step, pipeline], 100, 110),
+            Some(DiagnosticOrigin::Anchor(pipeline))
+        );
+        assert_eq!(
+            diagnostic_origin(&[], &[step, pipeline], 100, 103),
+            Some(DiagnosticOrigin::Anchor(step))
         );
     }
 

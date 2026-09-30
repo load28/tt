@@ -281,6 +281,12 @@ value, while verbatim spans keep resolving exactly. The whole pipeline
 remains anchored for context errors (e.g. the pipeline's result not fitting
 an annotation).
 
+A diagnostic belongs to the anchor whose output holds its whole span
+(TASK-574). A postfix step writes its tail after the piped value
+(`"a".trim()`), so the step's input anchor covers the start of a result
+mismatch on the whole call without covering the call; such a mismatch
+stays on the whole-pipeline anchor, as it does for a function step.
+
 The shared CLI/editor translation table renders the boundary as
 
 ```

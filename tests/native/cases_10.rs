@@ -461,3 +461,31 @@ fn a_method_call_around_a_value_keeps_inference_and_narrowing() {
     let out = check(&dir);
     assert!(!out.contains("error["), "{out}");
 }
+
+/// TASK-574: a result, annotation, or argument mismatch of a pipeline
+/// whose last step is a postfix tail belongs to the whole pipeline, as it
+/// does for a function step; only a step's input speaks as a step.
+#[test]
+fn a_postfix_pipeline_result_mismatch_is_reported_on_the_pipeline() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/postfix.tt",
+        "export function g(): number {\n\
+         \x20 return \"a\" |> .trim();\n\
+         }\n\
+         export const x: number = \"a\" |> .trim() |> .toUpperCase();\n\
+         declare function f(n: number): number;\n\
+         export const y = f(\"a\" |> .toUpperCase());\n",
+    )]);
+    let out = check(&dir);
+    assert!(!out.contains("this pipeline step expects"), "{out}");
+    let result = block(&out, "src/postfix.tt:2:10");
+    assert!(
+        result.contains("error[ts2322]: type mismatch: expected `number`, found `string`"),
+        "{out}"
+    );
+    let annotation = block(&out, "src/postfix.tt:4:26");
+    assert!(annotation.contains("error[ts2322]"), "{out}");
+    let argument = block(&out, "src/postfix.tt:6:20");
+    assert!(argument.contains("error[ts2345]"), "{out}");
+}
