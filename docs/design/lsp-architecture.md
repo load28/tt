@@ -236,6 +236,14 @@ built-in case through the standard library export that constructs it
 (`typeof import("@tt/std/result").Ok`, asked in a question served for the
 request only).
 
+**Update (TASK-611)**: the server answers `textDocument/prepareRename`
+(LSP 3.17 `renameProvider.prepareProvider`) by running the rename itself:
+the range of its edit at the position, or a refusal. A refusal TypeScript
+gives a reason for is an error with that reason; a tt name the adapter does
+not rename is an error naming it; any other refusal is null. The service
+client returns a server's error answer apart from a failed conversation
+(`Service::answer`), so TypeScript's refusal is not an engine failure.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

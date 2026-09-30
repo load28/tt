@@ -49,10 +49,12 @@ import {
   InitializeResult,
   InsertTextFormat,
   Location,
+  LSPErrorCodes,
   MarkupKind,
   ParameterInformation,
   ProposedFeatures,
   Range,
+  ResponseError,
   SemanticTokensBuilder,
   SignatureHelp,
   SignatureInformation,
@@ -132,7 +134,7 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       hoverProvider: true,
       definitionProvider: true,
       referencesProvider: true,
-      renameProvider: true,
+      renameProvider: { prepareProvider: true },
       documentSymbolProvider: true,
       codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
       // TypeScript's classification of the source text, with the parser's
@@ -1567,6 +1569,37 @@ connection.onReferences(async (params): Promise<Location[] | null> => {
   return references.map((r) =>
     Location.create(editorUri(r.path), r.range),
   );
+});
+
+connection.onPrepareRename(async (params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return null;
+  const fsPath = enginePath(doc);
+  if (fsPath === null) return null;
+  const sym = await engine.ttSymbol(
+    await compilerOf(doc),
+    fsPath,
+    doc.getText(),
+    params.position,
+    logEngine,
+  );
+  if (sym && !sym.binds) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `A tt ${sym.kind === "variant" ? "variant" : sym.kind === "case" ? "case tag" : "payload field"} cannot be renamed.`,
+    );
+  }
+  const prepared = await engine.prepareRename(
+    await compilerOf(doc),
+    fsPath,
+    params.position,
+    logEngine,
+  );
+  if (prepared?.refusal) {
+    throw new ResponseError(LSPErrorCodes.RequestFailed, prepared.refusal);
+  }
+  if (!prepared?.range) return null;
+  return { range: prepared.range, placeholder: doc.getText(prepared.range) };
 });
 
 connection.onRenameRequest(async (params) => {

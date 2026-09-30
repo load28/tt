@@ -1233,6 +1233,25 @@ test("a built-in tag and field go to the standard library", { skip: skipTyped, t
   }
 });
 
+test("prepare rename answers the name, refuses a tt name with a reason", { skip: skipTyped, timeout }, async () => {
+  const { client, uri, stop } = await open(SHAPE_SOURCE);
+  try {
+    const binding = await client.request("textDocument/prepareRename", {
+      textDocument: { uri },
+      position: positionOf(SHAPE_SOURCE, "  Rect(w, h) => w"),
+    });
+    assert.equal(binding.result?.placeholder, "w", JSON.stringify(binding));
+    const tag = await client.request("textDocument/prepareRename", {
+      textDocument: { uri },
+      position: positionOf(SHAPE_SOURCE, "  Poi"),
+    });
+    assert.equal(tag.result ?? null, null, JSON.stringify(tag));
+    assert.match(String(tag.error?.message), /cannot be renamed/);
+  } finally {
+    stop();
+  }
+});
+
 test("pattern positions complete cases and fields", { skip, timeout }, async () => {
   const { completion, stop } = await open(SHAPE_SOURCE);
   try {

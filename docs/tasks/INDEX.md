@@ -609,7 +609,8 @@
 | TASK-608 | Complete a hand-written `kind` union's tags and fields, never a generated switch's cases | Complete | 2026-09-30 | 2026-09-30 | [TASK-608](./TASK-608-kind-union-patterns-and-generated-switch-cases.md) |
 | TASK-609 | Offer `.tt` and `.ttx` modules in import path completion | Complete | 2026-09-30 | 2026-09-30 | [TASK-609](./TASK-609-tt-modules-in-import-path-completion.md) |
 | TASK-610 | Go to a built-in tag's or field's declaration in the standard library | Complete | 2026-09-30 | 2026-09-30 | [TASK-610](./TASK-610-builtin-names-go-to-the-standard-library.md) |
+| TASK-611 | Answer `textDocument/prepareRename` by the rules rename refuses by | Complete | 2026-09-30 | 2026-09-30 | [TASK-611](./TASK-611-prepare-rename.md) |
 
 ## Next task number
 
-**TASK-611**
+**TASK-612**

@@ -32,6 +32,11 @@
 //! → { "id": 4, "method": "semanticTokens", "params": { "text" } }
 //! ← { "id": 4, "result": { "tokens": [{ "range", "kind" }] } }
 //!
+//! → { "method": "prepareRename", "params": { "path", "position" } }
+//! ← { "result": { "range" } | { "range": null, "refusal": string | null } }
+//! What the rename at the position replaces, or its refusal, with
+//! TypeScript's reason when it gave one.
+//!
 //! → { "method": "documentSemanticTokens", "params": { "path" } }
 //! ← { "result": { "tokens": [{ "range", "type", "modifiers" }] } }
 //! TypeScript's classification of the source text the emission copied,
@@ -320,6 +325,14 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                         value
                     }).collect::<Vec<_>>(),
                 }),
+            })
+        }),
+        "prepareRename" => spanning(workspace, params, |workspace, path, position| {
+            Ok(match workspace.prepare_rename(path, position)? {
+                ttc::engine::PrepareRename::Range(range) => json!({ "range": range_json(range) }),
+                ttc::engine::PrepareRename::Refused(reason) => {
+                    json!({ "range": null, "refusal": reason })
+                }
             })
         }),
         "documentSymbols" => semantic(workspace, params, |project, path, _position| {

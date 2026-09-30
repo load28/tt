@@ -175,6 +175,16 @@ pub struct RenameEdit {
     pub new_text: Option<String>,
 }
 
+/// What a rename at a position would replace, or why it is refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PrepareRename {
+    /// The range of the name the rename replaces there.
+    Range(Range),
+    /// The rename cannot be done whole there, with TypeScript's reason
+    /// when it gave one.
+    Refused(Option<String>),
+}
+
 /// The name a rename asks the service for, so every edit's text can be read
 /// as "the new name, in whatever shape this location needs it".
 pub const RENAME_PLACEHOLDER: &str = "ttRenamePlaceholder";

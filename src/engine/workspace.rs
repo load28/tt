@@ -217,6 +217,37 @@ impl Workspace {
         Ok(Some(edits))
     }
 
+    /// The range a rename at `position` replaces in `path`, when the rename
+    /// can be done whole: the edit of [`Workspace::rename`] that covers the
+    /// position. Refused, with TypeScript's reason when it gave one, when
+    /// the rename is refused or covers nothing there.
+    pub fn prepare_rename(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<super::language::PrepareRename, String> {
+        use super::language::PrepareRename;
+        let document = normalize_document_path(path)?;
+        if let Err(reason) = self.project_for(path)?.rename_answer(path, position)? {
+            return Ok(PrepareRename::Refused(reason));
+        }
+        let Some(edits) = self.rename(path, position)? else {
+            return Ok(PrepareRename::Refused(None));
+        };
+        let before = |a: Position, b: Position| (a.line, a.character) <= (b.line, b.character);
+        Ok(edits
+            .into_iter()
+            .map(|edit| edit.location)
+            .find(|location| {
+                normalize_document_path(&location.path).is_ok_and(|found| found == document)
+                    && before(location.range.start, position)
+                    && before(position, location.range.end)
+            })
+            .map_or(PrepareRename::Refused(None), |location| {
+                PrepareRename::Range(location.range)
+            }))
+    }
+
     /// The identity `path` answers under: the project its open document
     /// landed in, else the one its location names.
     fn identity_for(&self, path: &Path) -> Result<ProjectIdentity, String> {

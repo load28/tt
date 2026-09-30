@@ -453,3 +453,54 @@ export function d() {\n  if let Some(value) = o { return value; }\n  return 0;\n
         assert_eq!(targets, vec![expected], "{position:?}");
     }
 }
+
+#[test]
+fn prepare_rename_answers_the_range_a_rename_would_replace_or_refuses_as_it_would() {
+    require_tsgo!();
+    let source = "variant Shape { Circle(radius: number), Point }\n\
+export function f(s: Shape, scale: number) {\n\
+  console.log(scale);\n\
+  return match (s) { Circle(radius) => radius * scale, Point => 0 };\n\
+}\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut workspace = ttc::engine::Workspace::new(ttc::engine::Engine::new(None));
+    workspace.open_document(&file, source.to_string()).unwrap();
+    let inside = |needle: &str, nth: usize| {
+        let at = source.match_indices(needle).nth(nth).unwrap().0 + 1;
+        let line_start = source[..at].rfind('\n').map_or(0, |newline| newline + 1);
+        ttc::engine::Position {
+            line: source[..at].matches('\n').count() as u32,
+            character: source[line_start..at].encode_utf16().count() as u32,
+        }
+    };
+    let covered = |range: ttc::engine::Range| {
+        let line = source.lines().nth(range.start.line as usize).unwrap();
+        line[range.start.character as usize..range.end.character as usize].to_string()
+    };
+    for (needle, nth, expected) in [
+        ("scale", 0, Some("scale")),
+        ("scale", 1, Some("scale")),
+        ("radius)", 0, Some("radius")),
+        ("radius *", 0, Some("radius")),
+        ("log", 0, None),
+    ] {
+        let prepared = match workspace.prepare_rename(&file, inside(needle, nth)).unwrap() {
+            ttc::engine::PrepareRename::Range(range) => Ok(covered(range)),
+            ttc::engine::PrepareRename::Refused(reason) => Err(reason),
+        };
+        match expected {
+            Some(name) => assert_eq!(prepared, Ok(name.to_string()), "{needle} #{nth}"),
+            None => assert_eq!(
+                prepared,
+                Err(Some(
+                    "You cannot rename elements that are defined in the standard TypeScript library."
+                        .to_string()
+                )),
+                "{needle} #{nth}"
+            ),
+        }
+        let renamed = workspace.rename(&file, inside(needle, nth)).unwrap();
+        assert_eq!(renamed.is_some(), expected.is_some(), "{needle} #{nth}");
+    }
+}

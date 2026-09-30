@@ -827,12 +827,22 @@ impl Project {
         path: &Path,
         position: Position,
     ) -> Result<Option<Vec<RenameEdit>>, String> {
+        Ok(self.rename_answer(path, position)?.ok())
+    }
+
+    /// [`Project::rename`], with TypeScript's reason when it refuses the
+    /// rename at `position` itself.
+    pub fn rename_answer(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Result<Vec<RenameEdit>, Option<String>>, String> {
         let (doc, path) = self.serve(path)?;
         let documents = self.overlays.clone();
         let overlays = &*documents.read();
         let session = self.session();
         let Some(at) = to_service_name(&doc, position) else {
-            return Ok(None);
+            return Ok(Err(None));
         };
         let uri = served_uri(session, &path);
         let lsp_at = lsp_position(u16_position(&doc.code, at));
@@ -840,12 +850,15 @@ impl Project {
         // The server's own "can this be renamed?" — a keyword or a literal
         // answers null, and forcing it would rename nothing while looking
         // like it worked.
-        let prepared = session.client.request(
+        let prepared = match session.client.answer(
             "textDocument/prepareRename",
             serde_json::json!({ "textDocument": { "uri": uri }, "position": lsp_at }),
-        )?;
+        )? {
+            Ok(prepared) => prepared,
+            Err(reason) => return Ok(Err(Some(reason))),
+        };
         if prepared.is_null() {
-            return Ok(None);
+            return Ok(Err(None));
         }
 
         let edit = session.client.request(
@@ -857,14 +870,14 @@ impl Project {
             }),
         )?;
         let Some(changes) = edit["changes"].as_object() else {
-            return Ok(None);
+            return Ok(Err(None));
         };
 
         let changes = changes.clone();
         let mut out = Vec::new();
         for (edited_uri, edits) in &changes {
             let Some(edits) = edits.as_array() else {
-                return Ok(None);
+                return Ok(Err(None));
             };
             for one in edits {
                 let Some(location) = map_target(
@@ -877,13 +890,13 @@ impl Project {
                     let Some((generated, targets)) =
                         map_shared_target(session, overlays, edited_uri, &one["range"])
                     else {
-                        return Ok(None);
+                        return Ok(Err(None));
                     };
                     let text = one["newText"].as_str().unwrap_or(RENAME_PLACEHOLDER);
                     if text != RENAME_PLACEHOLDER
                         && text != format!("{generated}: {RENAME_PLACEHOLDER}")
                     {
-                        return Ok(None);
+                        return Ok(Err(None));
                     }
                     for target in targets {
                         out.push(RenameEdit {
@@ -904,7 +917,7 @@ impl Project {
                 {
                     // A shape we cannot account for — refusing beats
                     // silently rebinding a different field.
-                    return Ok(None);
+                    return Ok(Err(None));
                 }
                 // Text a lowering writes more than once (a variant field's
                 // type, in its union and its constructor) is one place in
@@ -915,7 +928,7 @@ impl Project {
                 }
             }
         }
-        Ok(if out.is_empty() { None } else { Some(out) })
+        Ok(if out.is_empty() { Err(None) } else { Ok(out) })
     }
 
     /// The file's outline as TypeScript sees its declarations, on the source.

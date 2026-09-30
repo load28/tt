@@ -373,6 +373,16 @@ impl Service {
         method: &str,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, String> {
+        self.answer(method, params)?.map_err(|error| {
+            format!("TypeScript language service request `{method}` failed: {error}")
+        })
+    }
+
+    pub(crate) fn answer(
+        &mut self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<Result<serde_json::Value, String>, String> {
         if !self.alive {
             return Err("the TypeScript server is not running".to_string());
         }
@@ -383,7 +393,7 @@ impl Service {
         }))?;
 
         match wait_for_response(&self.responses, id, method, REQUEST_TIMEOUT) {
-            Ok(result) => Ok(result),
+            Ok(result) => Ok(Ok(result)),
             Err(ResponseFailure::Disconnected) => {
                 self.alive = false;
                 Err("the TypeScript server exited".to_string())
@@ -396,7 +406,7 @@ impl Service {
                 self.alive = false;
                 Err(error)
             }
-            Err(ResponseFailure::Protocol(error)) => Err(error),
+            Err(ResponseFailure::Protocol(error)) => Ok(Err(error)),
         }
     }
 
@@ -435,9 +445,7 @@ fn wait_for_response(
         match responses.recv_timeout(remaining) {
             Ok(response) if response.id == id => {
                 return match response.error {
-                    Some(error) => Err(ResponseFailure::Protocol(format!(
-                        "TypeScript language service request `{method}` failed: {error}"
-                    ))),
+                    Some(error) => Err(ResponseFailure::Protocol(error)),
                     None => Ok(response.result),
                 };
             }

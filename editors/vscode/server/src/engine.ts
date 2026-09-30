@@ -521,6 +521,15 @@ export async function rename(
   return result?.edits ?? null;
 }
 
+export async function prepareRename(
+  compiler: string,
+  path: string,
+  position: EnginePosition,
+  onError?: (message: string) => void,
+): Promise<{ range: EngineRange | null; refusal?: string | null } | null> {
+  return semantic(compiler, "prepareRename", { path, position }, onError);
+}
+
 export interface EngineDocumentSymbol {
   name: string;
   detail: string;
