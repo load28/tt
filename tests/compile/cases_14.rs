@@ -625,3 +625,51 @@ fn a_statement_value_in_a_later_loop_head_declarator_is_a_placement_error() {
     assert!(out.contains("for (let i = 0, j = $tt_expr(() => {"), "{out}");
     assert!(out.contains("for (let k = $tt_v1, m = 1; k < m; )"), "{out}");
 }
+
+#[test]
+fn a_statement_value_in_an_enum_member_initializer_is_a_placement_error() {
+    let prelude = "import * as Result from \"@tt/std/result\";\n\
+                   import type { TResult } from \"@tt/std\";\n\
+                   variant O { A(n: number), B }\n\
+                   declare const o: O;\n\
+                   declare function r(n: number): TResult<number, string>;\n\
+                   const P = 100;\n";
+    for (member, code) in [
+        (
+            "Q = match (o) { A(n) => P + n, B => 0 }",
+            DiagnosticCode::MatchPlacement,
+        ),
+        (
+            "Q = 1 + match (o) { A(n) => P + n, B => 0 }",
+            DiagnosticCode::MatchPlacement,
+        ),
+        ("Q = try r(P)", DiagnosticCode::TryPlacement),
+    ] {
+        let diagnostics = ttc::analyze(
+            &format!(
+                "{prelude}export function f(): TResult<number, string> {{\n  enum F {{ P = 7, {member} }}\n  return Result.Ok(F.Q);\n}}\n"
+            ),
+            &Options::default(),
+        );
+        assert_eq!(
+            diagnostics.iter().map(|d| d.code).collect::<Vec<_>>(),
+            [code],
+            "{member}: {diagnostics:#?}"
+        );
+        assert!(
+            diagnostics[0].message.contains("enum member initializer"),
+            "{member}: {diagnostics:#?}"
+        );
+    }
+    let out = ok(&format!(
+        "{prelude}enum F {{ P = 7, Q = (result {{ const x = try r(P); return x; }}).kind === \"Ok\" ? 1 : 2, R = [0].map(() => match (o) {{ A(n) => n, B => 0 }})[0]! }}\n"
+    ));
+    assert!(
+        out.contains("enum F { P = 7, Q = ($tt_expr(() => {"),
+        "{out}"
+    );
+    assert!(
+        compact(&out).contains("R = [0].map(() => { let $tt_v"),
+        "{out}"
+    );
+}

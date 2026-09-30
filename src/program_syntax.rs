@@ -959,6 +959,7 @@ pub(crate) enum EvaluationOwner {
     ClassInitializer,
     ClassDefinition,
     StaticBlock,
+    EnumInitializer,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1268,6 +1269,9 @@ fn evaluation_owner(
             }
             AstParentKind::StaticBlock(fields::StaticBlockField::Body) => {
                 return (EvaluationOwner::StaticBlock, index + 1);
+            }
+            AstParentKind::TsEnumMember(fields::TsEnumMemberField::Init) => {
+                return (EvaluationOwner::EnumInitializer, index + 1);
             }
             _ => {}
         }

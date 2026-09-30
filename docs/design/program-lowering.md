@@ -327,6 +327,15 @@ boundary는 분석 실패 fallback이 아니라 `EvaluationOwner`가 선택하�
 capability다. 이름은 전체 SWC identifier 집합과 충돌하지 않으며 실제 사용 파일에 한 번만
 방출한다.
 
+An enum member initializer is an expression-only owner as well
+(`EvaluationOwner::EnumInitializer`, TASK-594). TypeScript evaluates an
+enum's members in declaration order, and inside an initializer a member's
+unqualified name denotes that member (TypeScript emits it as `E.member`),
+so statements hoisted before the enum would run before the earlier members
+and read an outer binding of the same name. A `match` or `try` there is
+`match-placement`/`try-placement`; a `result` block runs in place through
+`$tt_expr`, where TypeScript still resolves member names.
+
 ### 7.5 Values inside an operand of an enclosing tt value (TASK-501)
 
 A tt value can sit inside an operand that another tt value lowers

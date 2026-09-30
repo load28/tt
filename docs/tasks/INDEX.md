@@ -593,6 +593,7 @@
 | TASK-585 | Render only TypeScript's assignability diagnostics as type mismatches, about their own subject | Complete | 2026-09-29 | 2026-09-30 | [TASK-585](./TASK-585-assignability-facts-only-for-assignability.md) |
 | TASK-586 | Never annotate storage with a type whose cycle the node builder elided | Complete | 2026-09-30 | 2026-09-30 | [TASK-586](./TASK-586-no-elided-cycles-in-annotations.md) |
 | TASK-593 | Run earlier declarators before a later declarator's value | Complete | 2026-09-30 | 2026-09-30 | [TASK-593](./TASK-593-declarator-order-and-scope.md) |
+| TASK-594 | Reject a statement value in an enum member initializer | Complete | 2026-09-30 | 2026-09-30 | [TASK-594](./TASK-594-enum-member-initializer-placement.md) |
 
 ## Next task number
 

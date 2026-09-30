@@ -675,6 +675,7 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
             EvaluationOwner::ClassInitializer => "class-field",
             EvaluationOwner::ClassDefinition => "class-definition",
             EvaluationOwner::StaticBlock => "static-block",
+            EvaluationOwner::EnumInitializer => "enum-member",
         }
     }
 
@@ -849,6 +850,10 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
             crate::SourceKind::TypeScript,
             format!("switch (value) {{ case {expression}: break; }}"),
         ),
+        (
+            crate::SourceKind::TypeScript,
+            format!("enum E {{ P = 1, Q = {expression} }}"),
+        ),
     ];
 
     let mut operations = BTreeSet::new();
@@ -912,6 +917,7 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
             "class-definition",
             "class-field",
             "constructor",
+            "enum-member",
             "function",
             "generator",
             "module",

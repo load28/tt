@@ -482,6 +482,7 @@ pub(super) fn target_capability(
         EvaluationOwner::ParameterInitializer
             | EvaluationOwner::ClassInitializer
             | EvaluationOwner::ClassDefinition
+            | EvaluationOwner::EnumInitializer
     ) {
         return TargetCapability::ExpressionBoundary(Reason::OwnerTakesNoStatements);
     }

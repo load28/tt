@@ -1548,3 +1548,27 @@ console.log(y, a);
         ]
     );
 }
+
+#[test]
+fn runtime_a_result_block_in_an_enum_member_reads_the_members_in_order() {
+    require_toolchain!();
+    let out = run_with_std(
+        r#"
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
+variant O { A(n: number), B }
+const o = O.A(1) as O;
+const log: string[] = [];
+function r(n: number): TResult<number, string> { log.push("r" + n); return Result.Ok(n); }
+const P = 100;
+enum F {
+  P = 7,
+  Q = (result { const x = try r(P); return x + 1; }).kind === "Ok" ? P + 1 : 0,
+  R = [P].map((p) => match (o) { A(n) => p + n, B => 0 })[0]!,
+  S = (log.push("S"), 3),
+}
+console.log(F.Q, F.R, F.S, log.join(" "));
+"#,
+    );
+    assert_eq!(out, ["8 8 3 r7 S"]);
+}

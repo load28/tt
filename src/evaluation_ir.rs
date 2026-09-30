@@ -345,12 +345,14 @@ pub(crate) enum TargetCapability {
 /// Why a value cannot be lowered to statements in its host owner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExpressionBoundaryReason {
-    /// A parameter default, class field initializer, or class definition
+    /// A parameter default, class field initializer, class definition
     /// position (a decorator, a computed member name, or a decorated class's
-    /// heritage): standard TypeScript has no statement position in the
-    /// owner, and moving the value out of it would change the parameter
-    /// scope, `this`, `arguments`, the function's `length`, or the field or
-    /// class definition evaluation order.
+    /// heritage), or enum member initializer: standard TypeScript has no
+    /// statement position in the owner, and moving the value out of it would
+    /// change the parameter scope, `this`, `arguments`, the function's
+    /// `length`, the field or class definition evaluation order, or which
+    /// binding an enum member's name denotes and when the member is
+    /// evaluated.
     OwnerTakesNoStatements,
     /// The value runs once per iteration but its owner runs once per loop —
     /// it sits in a loop header, so hoisting to the owner would change how

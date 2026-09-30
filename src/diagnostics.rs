@@ -510,8 +510,8 @@ a value only where the TypeScript host can preserve that exit and the
 original evaluation order. It is rejected at module or namespace top level
 and at expression boundaries with no equivalent statement position, such as
 loop headers, a later declarator of a C-style `for` head, parameter
-defaults, class field initializers, decorators, computed member names, and
-the heritage of a decorated class.
+defaults, class field initializers, enum member initializers, decorators,
+computed member names, and the heritage of a decorated class.
 
 Some functions cannot be a Result scope at all. In a constructor, returning
 an `Err` object would replace the constructed instance. In a generator or
@@ -792,6 +792,12 @@ names itself, in an order that depends on the TypeScript decorator mode, so
 a match in a decorator, a computed member name, or the heritage of a
 decorated class is rejected. The heritage of an undecorated class is
 evaluated first under every mode and lowers before the class.
+
+An enum member initializer is rejected for the same reason. The enum
+evaluates its members in order, and inside an initializer a member's name
+denotes that member rather than an outer binding of the same name.
+Statements written before the enum would run before the earlier members and
+read the outer binding.
 
 A match in a later declarator of a C-style `for` head is rejected too. The
 head's declarators run in order in the loop's own scope, and statements

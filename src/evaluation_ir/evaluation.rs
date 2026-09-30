@@ -877,7 +877,8 @@ impl EvaluationFile {
                 None => match context.owner {
                     EvaluationOwner::ParameterInitializer
                     | EvaluationOwner::ClassInitializer
-                    | EvaluationOwner::ClassDefinition => {
+                    | EvaluationOwner::ClassDefinition
+                    | EvaluationOwner::EnumInitializer => {
                         ExpressionBoundaryReason::OwnerTakesNoStatements
                     }
                     _ => ExpressionBoundaryReason::ValueHasNoStatementForm,

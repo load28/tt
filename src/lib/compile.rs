@@ -369,6 +369,10 @@ fn match_placement_message(
             "`match` cannot be used in a decorator, a computed member name, or a decorated class's heritage — the class definition evaluates it with no statement position",
             help,
         ),
+        (EvaluationOwner::EnumInitializer, Reason::OwnerTakesNoStatements) => (
+            "`match` cannot be used in an enum member initializer — the enum evaluates its members in order, in a scope where member names denote members, with no statement position",
+            help,
+        ),
         (_, Reason::RepeatedInOwner) => (
             "`match` cannot be lowered from this repeated loop position without changing how often it evaluates",
             help,
@@ -483,6 +487,11 @@ fn try_placement_message(
             "`try` cannot be used in a decorator, a computed member name, or a decorated \
              class's heritage — the class definition evaluates it with no statement position \
              for its `Err` propagation",
+            help,
+        ),
+        (EvaluationOwner::EnumInitializer, Reason::OwnerTakesNoStatements) => (
+            "`try` cannot be used in an enum member initializer — the enum evaluates its \
+             members with no statement position for its `Err` propagation",
             help,
         ),
         (EvaluationOwner::Constructor, _) => (
