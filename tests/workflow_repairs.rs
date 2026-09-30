@@ -225,11 +225,21 @@ fn dependencies_of_a_configured_project_are_only_its_inputs() {
         "{dependencies:?}"
     );
     // The project and the TypeScript it resolves both live in this
-    // repository; a file the compiler wrote for itself does not.
+    // repository; a file the compiler wrote for itself does not. The
+    // configuration discovery probed and did not find is there too.
     let repository = fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap();
+    let src = fs::canonicalize(root.join("src")).unwrap();
+    assert!(
+        dependencies.contains(&src.join("tsconfig.json")),
+        "{dependencies:?}"
+    );
     let outside: Vec<_> = dependencies
         .iter()
-        .filter(|path| !fs::canonicalize(path).is_ok_and(|path| path.starts_with(&repository)))
+        .filter(|path| {
+            !fs::canonicalize(path)
+                .unwrap_or_else(|_| path.to_path_buf())
+                .starts_with(&repository)
+        })
         .collect();
     assert!(outside.is_empty(), "{outside:?}");
 }
@@ -448,4 +458,81 @@ fn check_types_leaves_published_outputs_out_of_the_program() {
     fs::write(root.join("src/s.ts"), "let dup = 2;\n").unwrap();
     let stderr = check(&root);
     assert!(stderr.contains("ts2451"), "{stderr}");
+}
+
+/// TASK-588: which configuration the inputs belong to is decided by
+/// discovery, and a watch reaches the result a fresh run would when a
+/// `tsconfig.json` is created or deleted.
+#[test]
+fn typed_watch_follows_configuration_discovery() {
+    if !common::toolchain() {
+        return;
+    }
+    let root = Workspace::in_repo_with_subdir("typed-watch-discovery", "src");
+    fs::write(
+        root.join("src/a.tt"),
+        "export function f(x) { return x; }\n",
+    )
+    .unwrap();
+    let log = root.join("watch.log");
+    let _watch = Watch(
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .current_dir(&root)
+            .args(["--check-types", "--watch", "src"])
+            .stdout(std::process::Stdio::null())
+            .stderr(fs::File::create(&log).unwrap())
+            .spawn()
+            .unwrap(),
+    );
+    let passes = |reported: &str| {
+        fs::read_to_string(&log)
+            .unwrap()
+            .matches(&format!("{reported} reported"))
+            .count()
+    };
+    wait_for(|| fs::read_to_string(&log).unwrap().contains("Ctrl-C"));
+    assert_eq!(passes("1"), 1);
+    fs::write(
+        root.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":false},"include":["src"]}"#,
+    )
+    .unwrap();
+    wait_for(|| passes("0") == 1);
+    fs::remove_file(root.join("tsconfig.json")).unwrap();
+    wait_for(|| passes("1") == 2);
+    let log = fs::read_to_string(&log).unwrap();
+    assert_eq!(log.matches("ts7006").count(), 2, "{log}");
+    assert!(!log.contains("ts5083"), "{log}");
+}
+
+/// TASK-588: without a configuration, the program is the walk of the
+/// inputs' directory, and discovery read every `tsconfig.json` path it
+/// probed; both are what `--dependencies` answers.
+#[test]
+fn dependencies_of_an_inferred_project_name_discovery_and_the_walk() {
+    if !common::toolchain() {
+        return;
+    }
+    let root = Workspace::in_repo_with_subdir("inferred-dependencies", "src/sub");
+    fs::write(root.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    let output = run(&root, &["--dependencies", "src"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let printed: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let paths = |key: &str| -> Vec<std::path::PathBuf> {
+        serde_json::from_value(printed[key].clone()).unwrap()
+    };
+    let src = fs::canonicalize(root.join("src")).unwrap();
+    let directories = paths("directories");
+    assert!(
+        directories.contains(&src) && directories.contains(&src.join("sub")),
+        "{directories:?}"
+    );
+    let files = paths("files");
+    for dir in src.ancestors() {
+        assert!(files.contains(&dir.join("tsconfig.json")), "{files:?}");
+    }
 }

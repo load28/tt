@@ -593,7 +593,8 @@
 | TASK-585 | Render only TypeScript's assignability diagnostics as type mismatches, about their own subject | Complete | 2026-09-29 | 2026-09-30 | [TASK-585](./TASK-585-assignability-facts-only-for-assignability.md) |
 | TASK-586 | Never annotate storage with a type whose cycle the node builder elided | Complete | 2026-09-30 | 2026-09-30 | [TASK-586](./TASK-586-no-elided-cycles-in-annotations.md) |
 | TASK-587 | Leave ttc's published outputs out of the TypeScript program | Complete | 2026-09-30 | 2026-09-30 | [TASK-587](./TASK-587-published-outputs-out-of-the-program.md) |
+| TASK-588 | Follow configuration discovery in typed watch and dependencies | Complete | 2026-09-30 | 2026-09-30 | [TASK-588](./TASK-588-follow-configuration-discovery.md) |
 
 ## Next task number
 
-**TASK-588**
+**TASK-589**

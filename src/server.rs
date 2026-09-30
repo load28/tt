@@ -872,7 +872,7 @@ fn dependencies(
         && inputs.named().iter().all(|file| project.checked(file))
     {
         return project
-            .dependencies()
+            .dependencies_for(&inputs)
             .map(|dependencies| dependencies.to_json())
             .map_err(|error| error.to_string());
     }
