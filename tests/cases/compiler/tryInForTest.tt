@@ -1,0 +1,21 @@
+// A `try` in a C-style `for` test is the value form, as it is in a `while`
+// test, and is rejected where it stands: the test runs once per iteration,
+// so its propagation cannot be hoisted before the loop. Whether it is the
+// whole test, an operand of `&&`, or a branch of `? :`, the diagnostic is
+// `try-placement` at the `try`.
+// @expectErrors: try-placement
+// @baselines: errors.txt
+import type { TResult } from "@tt/std";
+declare function read(n: number): TResult<number, string>;
+export function whole(): TResult<number, string> {
+  for (; try read(1); ) { break; }
+  return { kind: "Ok", value: 1 };
+}
+export function operand(flag: boolean): TResult<number, string> {
+  for (; flag && try read(2); ) { break; }
+  return { kind: "Ok", value: 2 };
+}
+export function branch(flag: boolean): TResult<number, string> {
+  for (let i = 0; flag ? try read(3) : i < 1; i++) { break; }
+  return { kind: "Ok", value: 3 };
+}

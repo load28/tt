@@ -651,37 +651,6 @@ impl EvaluationFile {
             }
         }
         let mut unsupported_expression_propagations = Vec::new();
-        // Core arm bodies are flat arena entries, so build their ownership
-        // index once. Propagation placement then answers by ExprId instead of
-        // rescanning every decision and arm for every value region.
-        let isolated_arm_values: HashSet<_> = core
-            .exprs
-            .iter()
-            .filter_map(|candidate| {
-                let Expr::Decision(decision) = candidate else {
-                    return None;
-                };
-                Some(decision)
-            })
-            .flat_map(|decision| &decision.arms)
-            .filter_map(|arm| match arm.action {
-                ArmAction::Yield {
-                    body,
-                    kind: ArmBodyKind::Block { .. },
-                }
-                | ArmAction::Execute(body) => Some(body),
-                ArmAction::Yield {
-                    kind: ArmBodyKind::Expression | ArmBodyKind::Missing,
-                    ..
-                }
-                | ArmAction::BindThrough(_) => None,
-            })
-            .flat_map(|body| &core.bodies[body.index()].statements)
-            .filter_map(|statement| match statement {
-                Statement::Expr(value) => Some(*value),
-                _ => None,
-            })
-            .collect();
         for region in &self.regions {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
@@ -694,11 +663,6 @@ impl EvaluationFile {
             }
             let mut host_region = region;
             let mut covered_by_parent_propagation = false;
-            // A value-form propagation emitted directly by a decision arm
-            // cannot use the enclosing function's failure edge: the arm is
-            // an isolated value region even when SWC identifies the nested
-            // `return` statement as its own host owner.
-            let crossed_value_region = isolated_arm_values.contains(&expr);
             while let RegionPlacement::Nested { parent, .. } = host_region.placement {
                 host_region = &self.regions[parent.0 as usize];
                 covered_by_parent_propagation |= host_region.root.is_some_and(|root| {
@@ -726,13 +690,12 @@ impl EvaluationFile {
                     .unwrap_or(TargetCapability::StatementRegion),
                 _ => TargetCapability::StatementRegion,
             };
-            let reason = match (crossed_value_region, context.owner, capability) {
-                (true, _, _) => ExpressionBoundaryReason::OwnerTakesNoStatements,
-                (false, EvaluationOwner::FunctionBody, TargetCapability::StatementRegion) => {
+            let reason = match (context.owner, capability) {
+                (EvaluationOwner::FunctionBody, TargetCapability::StatementRegion) => {
                     continue;
                 }
-                (false, _, TargetCapability::ExpressionBoundary(reason)) => reason,
-                (false, _, TargetCapability::StatementRegion) => {
+                (_, TargetCapability::ExpressionBoundary(reason)) => reason,
+                (_, TargetCapability::StatementRegion) => {
                     ExpressionBoundaryReason::OwnerTakesNoStatements
                 }
             };

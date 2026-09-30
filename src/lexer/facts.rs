@@ -58,6 +58,8 @@ impl TokenFacts {
     const DECLARATION: u16 = 1 << 11;
     const OPERAND_START: u16 = 1 << 12;
     const MODIFIED: u16 = 1 << 13;
+    const CLASS_BODY: u16 = 1 << 14;
+    const STATIC_BLOCK: u16 = 1 << 15;
 
     /// A line terminator (ECMA-262 §12.3: LF, CR, U+2028, U+2029), possibly
     /// inside a comment, separates this token from the previous one.
@@ -134,6 +136,22 @@ impl TokenFacts {
         self.0 & Self::CONSTRUCTOR_BODY != 0
     }
 
+    /// This `{` opens a class body (ECMA-262 §15.7, `ClassBody`). What it
+    /// holds outside a method's body, a field initializer or a computed
+    /// member name, is evaluated by the class definition or by its own
+    /// initializer function (§15.7.10, §15.7.14), never by the function the
+    /// class is written in, so a `return` there cannot leave that function.
+    pub(crate) fn class_body(self) -> bool {
+        self.0 & Self::CLASS_BODY != 0
+    }
+
+    /// This `{` opens a class static block (ECMA-262 §15.7,
+    /// `ClassStaticBlock`). Its statement list is parsed with `[~Return]`,
+    /// so it has no function to return from.
+    pub(crate) fn static_block(self) -> bool {
+        self.0 & Self::STATIC_BLOCK != 0
+    }
+
     /// This `<` opens a list of type arguments or type parameters
     /// (`f<A, B>(x)`, `new Map<K, V>()`, `function g<T>()`, `Array<T>`),
     /// which its matching `>` closes: a bracket pair, not a comparison.
@@ -180,6 +198,8 @@ impl std::fmt::Debug for TokenFacts {
             (Self::DECLARATION, "declaration"),
             (Self::OPERAND_START, "operand-start"),
             (Self::MODIFIED, "modified"),
+            (Self::CLASS_BODY, "class-body"),
+            (Self::STATIC_BLOCK, "static-block"),
         ];
         let set: Vec<&str> = names
             .iter()

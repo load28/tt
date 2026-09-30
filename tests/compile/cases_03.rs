@@ -289,7 +289,6 @@ fn placement_matrix_prerequisite_gate() {
     enum Expected {
         Accepted,
         Placement,
-        LoweringPlan,
     }
 
     let cases = [
@@ -348,7 +347,7 @@ fn placement_matrix_prerequisite_gate() {
         ),
         (
             "function f() { for (; try ready(); ) {} }\n",
-            Expected::LoweringPlan,
+            Expected::Placement,
         ),
         (
             "function f() { for (let i = 0; i < 1; try advance()) {} }\n",
@@ -391,14 +390,6 @@ fn placement_matrix_prerequisite_gate() {
                     diagnostics
                         .iter()
                         .any(|diagnostic| diagnostic.start == Some(try_at)),
-                    "{source}\n{diagnostics:#?}"
-                );
-            }
-            Expected::LoweringPlan => {
-                assert!(
-                    diagnostics.iter().any(|diagnostic| {
-                        diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed
-                    }),
                     "{source}\n{diagnostics:#?}"
                 );
             }

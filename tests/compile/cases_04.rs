@@ -345,19 +345,28 @@ fn discarded_result_reports_a_named_diagnostic_without_unwinding() {
 }
 
 #[test]
-fn try_in_repeated_for_test_reports_a_located_lowering_diagnostic() {
-    let source = "function f() { for (; try next(); ) {} }\n";
-    let diagnostics = std::panic::catch_unwind(|| ttc::analyze(source, &Options::default()))
-        .expect("repeated for-test propagation must not reach output verification");
-    let diagnostic = diagnostics
-        .iter()
-        .find(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed)
-        .unwrap_or_else(|| panic!("{diagnostics:#?}"));
-    assert_eq!(
-        diagnostic.start,
-        Some(source.find("try").unwrap()),
-        "{diagnostics:#?}"
-    );
+fn try_in_a_for_test_is_a_repeated_loop_placement_at_the_try() {
+    for source in [
+        "function f() { for (; try next(); ) {} }\n",
+        "function f(flag: boolean) { for (; flag && try next(); ) {} }\n",
+        "function f(flag: boolean) { for (; flag ? try next() : 0; ) {} }\n",
+    ] {
+        let diagnostics = ttc::analyze(source, &Options::default());
+        let diagnostic = diagnostics
+            .iter()
+            .find(|diagnostic| diagnostic.code == ttc::DiagnosticCode::TryPlacement)
+            .unwrap_or_else(|| panic!("{source}\n{diagnostics:#?}"));
+        assert!(
+            diagnostic.message.contains("repeated loop position"),
+            "{diagnostics:#?}"
+        );
+        assert_eq!(
+            diagnostic.start,
+            Some(source.find("try").unwrap()),
+            "{diagnostics:#?}"
+        );
+        assert_eq!(diagnostics.len(), 1, "{source}\n{diagnostics:#?}");
+    }
 }
 
 #[test]

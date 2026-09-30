@@ -96,6 +96,61 @@ pub struct HirSourceMap {
     pattern_spans: HashMap<PatternId, Span>,
 }
 
+impl HirFile {
+    /// The token indices of every match body's `{` and every arm's `=>` in
+    /// `tokens`. The lexer's function-body facts mark an arm block's `{`
+    /// like a function body, and an arm's `=>` like an arrow, but neither
+    /// opens a function: a boundary query skips them
+    /// ([`crate::flow::FunctionTargets`]).
+    pub(crate) fn match_owned_tokens(
+        &self,
+        tokens: &[crate::lexer::Token],
+    ) -> std::collections::HashSet<usize> {
+        let hir = self;
+        let first_from = |offset: usize, wanted: fn(&crate::lexer::TokenKind) -> bool| {
+            let from = tokens.partition_point(|token| token.span.start < offset);
+            tokens[from..]
+                .iter()
+                .position(|token| wanted(&token.kind))
+                .map(|index| from + index)
+        };
+        let span = |node: NodeId| {
+            hir.source_map
+                .node_span(node)
+                .unwrap_or_else(|| crate::ice::bug!("match syntax has no source span"))
+        };
+        let mut owned = std::collections::HashSet::new();
+        for (_, expr) in hir.exprs.iter() {
+            let Expr::Match { node, site, .. } = expr else {
+                continue;
+            };
+            owned.extend(first_from(span(*node).end, |kind| {
+                matches!(kind, crate::lexer::TokenKind::Punct(b'{'))
+            }));
+            for arm in &hir.sites[*site].arms {
+                if arm.body.is_none() {
+                    continue;
+                }
+                let pattern_end = hir
+                    .source_map
+                    .pattern_span(arm.pattern)
+                    .unwrap_or_else(|| crate::ice::bug!("match arm pattern has no source span"))
+                    .end;
+                let guard_end = arm
+                    .guard
+                    .map_or(pattern_end, |guard| match &hir.exprs[guard] {
+                        Expr::OpaqueTs(node) | Expr::Seq { node, .. } => span(*node).end,
+                        _ => crate::ice::bug!("match guard is not an expression program"),
+                    });
+                owned.extend(first_from(pattern_end.max(guard_end), |kind| {
+                    matches!(kind, crate::lexer::TokenKind::Arrow)
+                }));
+            }
+        }
+        owned
+    }
+}
+
 impl HirSourceMap {
     /// The earliest tt node span in source order, for a diagnostic emitted
     /// before a later lowering phase can identify a narrower construct.

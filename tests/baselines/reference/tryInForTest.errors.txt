@@ -1,0 +1,51 @@
+==== ttc --out-dir (exit 1) ====
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> ./tryInForTest.tt:9:10
+  |
+9 |   for (; try read(1); ) { break; }
+  |          ^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+  --> ./tryInForTest.tt:13:18
+   |
+13 |   for (; flag && try read(2); ) { break; }
+   |                  ^^^^^^^^^^^
+   |
+   = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+  --> ./tryInForTest.tt:17:26
+   |
+17 |   for (let i = 0; flag ? try read(3) : i < 1; i++) { break; }
+   |                          ^^^^^^^^^^^
+   |
+   = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> tryInForTest.tt:9:10
+  |
+9 |   for (; try read(1); ) { break; }
+  |          ^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+  --> tryInForTest.tt:13:18
+   |
+13 |   for (; flag && try read(2); ) { break; }
+   |                  ^^^^^^^^^^^
+   |
+   = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+  --> tryInForTest.tt:17:26
+   |
+17 |   for (let i = 0; flag ? try read(3) : i < 1; i++) { break; }
+   |                          ^^^^^^^^^^^
+   |
+   = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

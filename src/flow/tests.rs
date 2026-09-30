@@ -35,6 +35,34 @@ fn semicolon_free_concise_arrow_does_not_own_the_next_try_statement() {
 }
 
 #[test]
+fn class_code_outside_methods_is_its_own_function_target() {
+    let source =
+        "function outer() { class H { static { A; } f = B; [C] = 1; m() { D; } g = () => E; } }";
+    let tokens = crate::lexer::lex(source, 0, source.len());
+    let at = |name: &str| {
+        tokens
+            .iter()
+            .position(|token| &source[token.span.start..token.span.end] == name)
+            .expect("marker token")
+    };
+    let targets = FunctionTargets::new(&tokens, &std::collections::HashSet::new());
+    for (name, target) in [
+        ("A", FunctionTarget::StaticBlock),
+        ("B", FunctionTarget::ClassElement),
+        ("C", FunctionTarget::ClassElement),
+        ("D", FunctionTarget::Ordinary),
+        ("E", FunctionTarget::Ordinary),
+    ] {
+        assert_eq!(
+            function_target_at(&tokens, at(name)),
+            Some(target),
+            "{name}"
+        );
+        assert_eq!(targets.at(at(name)), Some(target), "{name}");
+    }
+}
+
+#[test]
 fn match_body_braces_and_arm_arrows_open_no_function_target() {
     let source = "function* outer() { const r = match (s) { A => match (yield 1) { B => { const k = match (s) { C => 1 }; } } }; }";
     let tokens = crate::lexer::lex(source, 0, source.len());

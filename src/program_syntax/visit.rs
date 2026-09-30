@@ -60,6 +60,11 @@ impl ParentCollector {
             })
             .map(|entry| entry.id)
             .collect();
+        let decision_calls = pending
+            .iter()
+            .filter(|entry| entry.marker == OverlayMarker::DecisionCallExpression)
+            .map(|entry| entry.projected)
+            .collect();
         let synthetic_returns = pending
             .iter()
             .filter_map(|entry| entry.synthetic_return)
@@ -87,6 +92,8 @@ impl ParentCollector {
             occupied_names: HashSet::new(),
             function_depth: 0,
             function_targets: Vec::new(),
+            decision_calls,
+            decision_functions: HashSet::new(),
             contextual_types: Vec::new(),
             assertions: Vec::new(),
             function_return_types: Vec::new(),
@@ -122,6 +129,19 @@ impl ParentCollector {
         })
     }
 
+    /// The function target a function's body gives what it holds: its own,
+    /// or for a decision's stand-in function, the target around the match.
+    fn function_target_of(&self, span: swc_common::Span, own: EvaluationOwner) -> EvaluationOwner {
+        if self
+            .decision_functions
+            .contains(&projected_span(span, self.source_start))
+        {
+            self.function_targets.last().copied().unwrap_or(own)
+        } else {
+            own
+        }
+    }
+
     pub(super) fn record_overlay(&mut self, id: TtNodeId, path: &AstNodePath<'_>) {
         let ambient = path.iter().any(|parent| {
             matches!(parent, swc_ecma_visit::AstParentNodeRef::TsModuleDecl(decl, _) if decl.declare)
@@ -136,6 +156,26 @@ impl ParentCollector {
                     Some(index)
                 }
                 _ => None,
+            })
+            .collect();
+        let decision_functions = path
+            .iter()
+            .enumerate()
+            .filter_map(|(index, parent)| {
+                let span = match parent {
+                    swc_ecma_visit::AstParentNodeRef::ArrowExpr(
+                        arrow,
+                        swc_ecma_visit::fields::ArrowExprField::Body,
+                    ) => arrow.span,
+                    swc_ecma_visit::AstParentNodeRef::Function(
+                        function,
+                        swc_ecma_visit::fields::FunctionField::Body,
+                    ) => function.span,
+                    _ => return None,
+                };
+                self.decision_functions
+                    .contains(&projected_span(span, self.source_start))
+                    .then_some(index)
             })
             .collect();
         let loop_head_reads = path
@@ -157,6 +197,7 @@ impl ParentCollector {
                     loop_head_reads,
                     ambient,
                     decorated_classes,
+                    decision_functions,
                     parents: path.kinds().to_vec(),
                     host_owners: self.host_owners.clone(),
                     protocol_frames: self.protocol_frames.clone(),
@@ -325,6 +366,7 @@ impl ParentCollector {
                         function_return_awaited: found.function_return_awaited,
                         ambient: found.ambient,
                         decorated_classes: found.decorated_classes,
+                        decision_functions: found.decision_functions,
                         value_is_owner: span == entry.source,
                     },
                 ),
@@ -678,6 +720,25 @@ impl VisitAstPath for ParentCollector {
 
     fn visit_call_expr<'ast: 'r, 'r>(&mut self, node: &'ast CallExpr, path: &mut AstNodePath<'r>) {
         let span = projected_span(node.span, self.source_start);
+        if self.decision_calls.contains(&span)
+            && let swc_ecma_ast::Callee::Expr(callee) = &node.callee
+        {
+            let mut callee = &**callee;
+            while let swc_ecma_ast::Expr::Paren(inner) = callee {
+                callee = &inner.expr;
+            }
+            match callee {
+                swc_ecma_ast::Expr::Arrow(arrow) => {
+                    self.decision_functions
+                        .insert(projected_span(arrow.span, self.source_start));
+                }
+                swc_ecma_ast::Expr::Fn(function) => {
+                    self.decision_functions
+                        .insert(projected_span(function.function.span, self.source_start));
+                }
+                _ => {}
+            }
+        }
         if let Some(id) = self.expected_calls.get(&span).copied() {
             self.record_overlay(id, path);
             let collects_exits = self.expected_exit_calls.contains(&id);
@@ -848,7 +909,8 @@ impl VisitAstPath for ParentCollector {
         path: &mut AstNodePath<'r>,
     ) {
         self.function_depth += 1;
-        self.function_targets.push(EvaluationOwner::FunctionBody);
+        let target = self.function_target_of(node.span, EvaluationOwner::FunctionBody);
+        self.function_targets.push(target);
         self.contextual_types.push(None);
         self.function_return_types
             .push(self.returned_value_type(node.return_type.as_deref(), false));
@@ -909,11 +971,15 @@ impl VisitAstPath for ParentCollector {
 
     fn visit_function<'ast: 'r, 'r>(&mut self, node: &'ast Function, path: &mut AstNodePath<'r>) {
         self.function_depth += 1;
-        self.function_targets.push(if node.is_generator {
-            EvaluationOwner::Generator
-        } else {
-            EvaluationOwner::FunctionBody
-        });
+        let target = self.function_target_of(
+            node.span,
+            if node.is_generator {
+                EvaluationOwner::Generator
+            } else {
+                EvaluationOwner::FunctionBody
+            },
+        );
+        self.function_targets.push(target);
         self.contextual_types.push(None);
         self.function_return_types
             .push(self.returned_value_type(node.return_type.as_deref(), node.is_generator));

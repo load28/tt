@@ -804,11 +804,23 @@ impl<'a> Emitter<'a> {
     pub(super) fn emit_test(&self, test: &Test, decision: &Decision) -> Rope<'a> {
         match test {
             Test::Variant { place, constructor } => {
-                let mut out = self.emit_place(place, decision, Some(constructor_node(constructor)));
-                out.push_lit(format!(
+                let mut test =
+                    self.emit_place(place, decision, Some(constructor_node(constructor)));
+                test.push_lit(format!(
                     ".kind === \"{}\"",
                     self.constructor_name(constructor)
                 ));
+                let (tag, at) = self.source_node(constructor_node(constructor));
+                let head = self.span(decision.head);
+                let mut out = Rope::new();
+                out.anchored_with_context(
+                    AnchorKind::Match,
+                    head.start,
+                    head.end,
+                    self.span(decision.extent).end,
+                    Some((at, at + tag.len())),
+                    test,
+                );
                 out
             }
             Test::Literal { place, pattern } => {

@@ -1,21 +1,21 @@
 ==== ttc --out-dir (exit 1) ====
 ttc: ./harness.ts → $DIR/out/harness.ts
-error[lowering-plan-failed]: tt host lowering could not plan this construct: the evaluation position 226..259 maps to no source
- --> ./main.tt:1:1
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> ./main.tt:7:24
   |
-1 |   import { note, resource, read, drive } from "./harness.js";
-  |  _^
-2 | | import * as Result from "@tt/std/result";
-  | |________________________^
+7 |   for (; rounds < 1 && try read(note("operand", input)); ) {
+  |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
 
 
 ==== ttc --check-types (exit 1) ====
-error[lowering-plan-failed]: tt host lowering could not plan this construct: the evaluation position 226..259 maps to no source
- --> main.tt:1:1
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> main.tt:7:24
   |
-1 |   import { note, resource, read, drive } from "./harness.js";
-  |  _^
-2 | | import * as Result from "@tt/std/result";
-  | |________________________^
+7 |   for (; rounds < 1 && try read(note("operand", input)); ) {
+  |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
 
 ==== tsc on the emitted TypeScript (exit 0) ====

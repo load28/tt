@@ -404,7 +404,13 @@ impl<'a> Emitter<'a> {
         operation: &PlannedConditionalOperation,
         captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
     ) -> Rope<'a> {
-        crate::stack::grow(|| self.emit_conditional_operation_grown(operation, captured))
+        let emitted =
+            crate::stack::grow(|| self.emit_conditional_operation_grown(operation, captured));
+        let mut delivered = self.delivered_conditional_values.borrow_mut();
+        for value in &operation.values {
+            delivered.remove(value);
+        }
+        emitted
     }
 
     fn emit_conditional_operation_grown(
@@ -426,7 +432,6 @@ impl<'a> Emitter<'a> {
             PlannedConditionalKind::LogicalAnd
             | PlannedConditionalKind::LogicalOr
             | PlannedConditionalKind::Nullish => {
-                let value = operation.values[0];
                 let (test, left) = self.condition_operand(&operation.condition, captured, &mut out);
                 let nullish = matches!(operation.kind, PlannedConditionalKind::Nullish);
                 if nullish {
@@ -444,7 +449,12 @@ impl<'a> Emitter<'a> {
                 assign_left.push_lit(";");
                 let active = Rope::indented(
                     1,
-                    self.emit_conditional_active_branch(operation, value, result, captured),
+                    self.emit_conditional_active_branch(
+                        operation,
+                        &operation.values,
+                        result,
+                        captured,
+                    ),
                 );
                 let (first, second) = if matches!(operation.kind, PlannedConditionalKind::LogicalOr)
                 {
@@ -467,10 +477,12 @@ impl<'a> Emitter<'a> {
             } => {
                 let test = self.condition_test(&operation.condition, captured);
                 let mut branch = |out: &mut Rope<'a>, content: &PlannedBranch| match content {
-                    PlannedBranch::Value(expr) => {
+                    PlannedBranch::Values(values) => {
                         out.append(Rope::indented(
                             1,
-                            self.emit_conditional_active_branch(operation, *expr, result, captured),
+                            self.emit_conditional_active_branch(
+                                operation, values, result, captured,
+                            ),
                         ));
                     }
                     PlannedBranch::Source(span) => {
@@ -625,6 +637,11 @@ impl<'a> Emitter<'a> {
                                 body.push_break(0);
                             }
                         }
+                        PlannedOperand::Composed { values, .. } => {
+                            body.append(
+                                self.emit_conditional_active_values(operation, values, captured),
+                            );
+                        }
                         PlannedOperand::Source { capture: None, .. } => {}
                     }
                 }
@@ -638,7 +655,7 @@ impl<'a> Emitter<'a> {
                         self.push_planned_receiver(&receiver, false, &mut body);
                         for argument in arguments {
                             body.push_lit(", ");
-                            self.push_operand(argument, &mut body);
+                            self.push_operand(operation, argument, &mut body);
                         }
                         body.push_lit(");");
                     }
@@ -648,7 +665,7 @@ impl<'a> Emitter<'a> {
                             if index > 0 {
                                 body.push_lit(", ");
                             }
-                            self.push_operand(argument, &mut body);
+                            self.push_operand(operation, argument, &mut body);
                         }
                         body.push_lit(");");
                     }
@@ -681,44 +698,85 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    /// One branch of a conditional operation: a value that is the whole
+    /// branch delivers straight into the result slot; otherwise the branch's
+    /// values run in source order and the branch is rebuilt around them.
     pub(super) fn emit_conditional_active_branch(
         &self,
         operation: &PlannedConditionalOperation,
-        value: ExprId,
+        values: &[ExprId],
         result: &str,
         captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
     ) -> Rope<'a> {
-        let _active = self.active_structured_exprs.enter(value);
-        let Some(active) = operation.active.iter().find(|active| active.value == value) else {
+        let entries: Vec<_> = values
+            .iter()
+            .filter_map(|value| {
+                operation
+                    .active
+                    .iter()
+                    .find(|active| active.value == *value)
+            })
+            .collect();
+        let Some(first) = entries.first() else {
+            let [value] = values else {
+                crate::ice::bug!("a conditional branch of several values has no active plan")
+            };
+            let _active = self.active_structured_exprs.enter(*value);
             return self
-                .emit_continued_expr(value, &ValueContinuation::assign(result))
+                .emit_continued_expr(*value, &ValueContinuation::assign(result))
                 .unwrap_or_else(|| {
                     crate::ice::bug!("conditional operation value is not structurally emit-able")
                 });
         };
-        let branch = active.branch;
-        let value_slot = self.value_name_of(value);
-        let mut out = Rope::new();
-        out.push_value_declaration(value_slot);
-        out.push_break(0);
-        let mut lowered = self
-            .emit_continued_expr(value, &ValueContinuation::assign(value_slot))
-            .unwrap_or_else(|| {
-                crate::ice::bug!("conditional branch value is not structurally emit-able")
-            });
-        for step in &active.steps {
-            lowered = self.emit_scheduled_step(step, lowered, captured);
-        }
-        out.append(lowered);
-        out.push_break(0);
+        let branch = first.branch;
+        let mut out = self.emit_conditional_active_values(operation, values, captured);
         out.push_lit(format!("{result} = "));
-        let steps: Vec<_> = active.steps.iter().collect();
+        let steps: Vec<_> = entries.iter().flat_map(|active| &active.steps).collect();
         push_grouped(
             &mut out,
             self.source_range_with_scheduled_values(branch, &operation.values, &steps, &[]),
             self.source_kind,
         );
         out.push_lit(";");
+        out
+    }
+
+    /// Evaluates the given values of a conditional operation, in source
+    /// order, each into its own slot followed by the evaluation steps between
+    /// it and the branch or argument that holds it.
+    pub(super) fn emit_conditional_active_values(
+        &self,
+        operation: &PlannedConditionalOperation,
+        values: &[ExprId],
+        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        for value in values {
+            let _active = self.active_structured_exprs.enter(*value);
+            let Some(active) = operation
+                .active
+                .iter()
+                .find(|active| active.value == *value)
+            else {
+                crate::ice::bug!("a composed conditional value has no active plan")
+            };
+            let value_slot = self.value_name_of(*value);
+            out.push_value_declaration(value_slot);
+            out.push_break(0);
+            let mut lowered = self
+                .emit_continued_expr(*value, &ValueContinuation::assign(value_slot))
+                .unwrap_or_else(|| {
+                    crate::ice::bug!("conditional branch value is not structurally emit-able")
+                });
+            for step in &active.steps {
+                lowered = self.emit_scheduled_step(step, lowered, captured);
+            }
+            out.append(lowered);
+            out.push_break(0);
+            self.delivered_conditional_values
+                .borrow_mut()
+                .insert(*value);
+        }
         out
     }
 
@@ -908,7 +966,12 @@ impl<'a> Emitter<'a> {
                 }
                 Part::Value(expr) => {
                     let (kind, start, head_end, extent) = self.value_anchor(expr);
-                    if let Some(name) = self.slot_exprs.get(&expr) {
+                    let delivered = self.delivered_conditional_values.borrow().contains(&expr);
+                    if let Some(name) = self
+                        .slot_exprs
+                        .get(&expr)
+                        .or_else(|| delivered.then(|| &self.value_slots[&expr]))
+                    {
                         let mut slot = Rope::new();
                         slot.push_lit(name.clone());
                         out.anchored(kind, start, head_end, extent, slot);
@@ -1128,10 +1191,36 @@ impl<'a> Emitter<'a> {
     }
 
     /// One rebuilt argument of an optional call.
-    pub(super) fn push_operand(&self, operand: &PlannedOperand, out: &mut Rope<'a>) {
+    pub(super) fn push_operand(
+        &self,
+        operation: &PlannedConditionalOperation,
+        operand: &PlannedOperand,
+        out: &mut Rope<'a>,
+    ) {
         match operand {
             PlannedOperand::Value(expr) => {
                 out.push_lit(self.value_name_of(*expr).to_owned());
+            }
+            PlannedOperand::Composed {
+                span,
+                spread,
+                values,
+            } => {
+                if *spread {
+                    out.push_lit("...");
+                }
+                let steps: Vec<_> = operation
+                    .active
+                    .iter()
+                    .filter(|active| values.contains(&active.value))
+                    .flat_map(|active| &active.steps)
+                    .collect();
+                out.append(self.source_range_with_scheduled_values(
+                    *span,
+                    &operation.values,
+                    &steps,
+                    &[],
+                ));
             }
             PlannedOperand::Source {
                 spread,

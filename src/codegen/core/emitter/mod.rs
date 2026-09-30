@@ -34,6 +34,11 @@ pub(super) struct Emitter<'a> {
     pub(super) loop_test_rewrites: Vec<LoopTestRewrite>,
     pub(super) loop_body_index: crate::span_index::SpanIndex,
     pub(super) active_capture_sources: RefCell<Vec<SourceSpan>>,
+    /// The values of the conditional operation being written that are
+    /// already in their slots: a later capture in the same branch reads a
+    /// value there instead of evaluating it again. Outside the operation its
+    /// result slot stands for them.
+    pub(super) delivered_conditional_values: RefCell<HashSet<ExprId>>,
     pub(super) source_replacements: Vec<SourceReplacement>,
     pub(super) replacement_index: crate::span_index::SpanIndex,
     pub(super) consumed_exprs: HashSet<ExprId>,

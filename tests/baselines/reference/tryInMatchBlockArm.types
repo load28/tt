@@ -1,0 +1,224 @@
+=== tryInMatchBlockArm.tt ===
+const log: string[] = [];
+>log : const log: string[]
+const on = (): boolean => true;
+>on : const on: () => boolean
+function read(n: number): TResult<number, string> {
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  log.push(`read ${n}`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+  return n >= 0 ? { kind: "Ok", value: n } : { kind: "Err", error: `bad ${n}` };
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+>n : (parameter) n: number
+function declared(flag: boolean, n: number): TResult<number, string> {
+>declared : function declared(flag: boolean, n: number): TResult<number, string>
+>flag : (parameter) flag: boolean
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const b = match (flag) { true => { const v = try read(n); return v + 1; }, false => 0 };
+>b : const b: number
+>flag : (parameter) flag: boolean
+>v : const v: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>v : const v: number
+  log.push("after declared");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return { kind: "Ok", value: b };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>b : const b: number
+function propagated(n: number): TResult<string, string> {
+>propagated : function propagated(n: number): TResult<string, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const b = match (n > -10) { true => { try read(n); return "checked"; }, false => "skipped" };
+>b : const b: string
+>n : (parameter) n: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+  return { kind: "Ok", value: b };
+>kind : (property) kind: "Ok"
+>value : (property) value: string
+>b : const b: string
+function valueForm(n: number): TResult<number, string> {
+>valueForm : function valueForm(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const b = match (n) { 0 => { return try read(n); }, _ => { const k = 1 + try read(n); return k; } };
+>b : const b: number
+>n : (parameter) n: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>k : const k: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>k : const k: number
+  return { kind: "Ok", value: b };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>b : const b: number
+function templated(n: number): TResult<string, string> {
+>templated : function templated(n: number): TResult<string, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const s = `<${match (on()) { true => { const v = try read(n); return v; }, false => 0 }}>`;
+>s : const s: string
+>on : const on: () => boolean
+>v : const v: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>v : const v: number
+  return { kind: "Ok", value: s };
+>kind : (property) kind: "Ok"
+>value : (property) value: string
+>s : const s: string
+function branch(flag: boolean, n: number): TResult<number, string> {
+>branch : function branch(flag: boolean, n: number): TResult<number, string>
+>flag : (parameter) flag: boolean
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const b = flag ? match (on()) { true => { const v = try read(n); return v; }, false => 0 } : -1;
+>b : const b: number
+>flag : (parameter) flag: boolean
+>on : const on: () => boolean
+>v : const v: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>v : const v: number
+  return { kind: "Ok", value: b };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>b : const b: number
+function arrow(ns: number[]): TResult<number[], string> {
+>arrow : function arrow(ns: number[]): TResult<number[], string>
+>ns : (parameter) ns: number[]
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const inner = (x: number): TResult<number, string> => ({
+>inner : const inner: (x: number) => TResult<number, string>
+>x : (parameter) x: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+    kind: "Ok",
+>kind : (property) kind: "Ok"
+    value: match (x > -100) { true => { const v = try read(x); return v * 2; }, false => 0 },
+>value : (property) value: number
+>x : (parameter) x: number
+>v : const v: number
+>read : function read(n: number): TResult<number, string>
+>x : (parameter) x: number
+>v : const v: number
+  const out: number[] = [];
+>out : const out: number[]
+  for (const x of ns) {
+>x : const x: number
+>ns : (parameter) ns: number[]
+    const r = inner(x);
+>r : const r: TResult<number, string>
+>inner : const inner: (x: number) => TResult<number, string>
+>x : const x: number
+    if (r.kind === "Err") return r;
+>r : const r: TResult<number, string>
+>kind : (property) kind: "Err" | "Ok"
+>r : const r: TErr<string>
+    out.push(r.value);
+>out : const out: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>r : const r: TOk<number>
+>value : (property) value: number
+  return { kind: "Ok", value: out };
+>kind : (property) kind: "Ok"
+>value : (property) value: number[]
+>out : const out: number[]
+function looped(n: number): TResult<number, string> {
+>looped : function looped(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  let i = 0;
+>i : let i: number
+  while (i < 2 && match (on()) { true => { const v = try read(n); return v >= 0; }, false => false }) {
+>i : let i: number
+>on : const on: () => boolean
+>v : const v: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>v : const v: number
+    i++;
+>i : let i: number
+  return { kind: "Ok", value: i };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>i : let i: number
+function nested(n: number): TResult<number, string> {
+>nested : function nested(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const b = match (on()) {
+>b : const b: number
+>on : const on: () => boolean
+    true => match (n) { 7 => { const v = try read(n); return v; }, _ => { const w = try read(n); return -w; } },
+>n : (parameter) n: number
+>v : const v: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>v : const v: number
+>w : const w: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>w : const w: number
+  return { kind: "Ok", value: b };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>b : const b: number
+for (const n of [3, -1]) {
+>n : const n: number
+  log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+  console.log(JSON.stringify([declared(true, n), declared(false, n), propagated(n), valueForm(n)]), log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>declared : function declared(flag: boolean, n: number): TResult<number, string>
+>n : const n: number
+>declared : function declared(flag: boolean, n: number): TResult<number, string>
+>n : const n: number
+>propagated : function propagated(n: number): TResult<string, string>
+>n : const n: number
+>valueForm : function valueForm(n: number): TResult<number, string>
+>n : const n: number
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+  log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+  console.log(JSON.stringify([templated(n), branch(true, n), branch(false, n), arrow([n, 1]), looped(n), nested(n)]), log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>templated : function templated(n: number): TResult<string, string>
+>n : const n: number
+>branch : function branch(flag: boolean, n: number): TResult<number, string>
+>n : const n: number
+>branch : function branch(flag: boolean, n: number): TResult<number, string>
+>n : const n: number
+>arrow : function arrow(ns: number[]): TResult<number[], string>
+>n : const n: number
+>looped : function looped(n: number): TResult<number, string>
+>n : const n: number
+>nested : function nested(n: number): TResult<number, string>
+>n : const n: number
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

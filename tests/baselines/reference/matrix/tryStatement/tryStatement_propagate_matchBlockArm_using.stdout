@@ -1,0 +1,2 @@
+matchBlockArm(2) => {"kind":"Ok","value":"checked"} | open res; arm true; operand 2; read 2; dispose res
+matchBlockArm(-1) => {"kind":"Err","error":"negative -1"} | open res; arm true; operand -1; read -1; dispose res

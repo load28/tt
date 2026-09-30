@@ -1,14 +1,21 @@
-==== ttc --out-dir (exit 0) ====
-ttc: std → $DIR/out/tt
+==== ttc --out-dir (exit 1) ====
 ttc: ./harness.ts → $DIR/out/harness.ts
-ttc: ./main.tt → $DIR/out/main.ts
+error[try-placement]: `try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation
+ --> ./main.tt:9:9
+  |
+9 |         try read(note("operand", input));
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into an ordinary function, or handle the Result explicitly
+
 
 ==== ttc --check-types (exit 1) ====
-error[ts18041]: A 'return' statement cannot be used inside a class static block. (in code ttc generated for this construct)
+error[try-placement]: `try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation
  --> main.tt:9:9
   |
 9 |         try read(note("operand", input));
   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into an ordinary function, or handle the Result explicitly
 
-==== tsc on the emitted TypeScript (exit 2) ====
-main.ts(11,11): error TS18041: A 'return' statement cannot be used inside a class static block.
+==== tsc on the emitted TypeScript (exit 0) ====

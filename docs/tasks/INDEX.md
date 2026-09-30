@@ -686,6 +686,10 @@
 | TASK-678 | Generate a case matrix of tt constructs in host positions, each run against a TypeScript twin | Complete | 2026-09-30 | 2026-09-30 | [TASK-678](./TASK-678-case-matrix-generator.md) |
 | TASK-679 | Populate the case matrix for match, try, result, let-else, and if-let | Complete | 2026-09-30 | 2026-09-30 | [TASK-679](./TASK-679-matrix-match-try-result-let-else-if-let.md) |
 | TASK-680 | Populate the case matrix for pipelines, flow, val, variant, and .ttx positions | Complete | 2026-09-30 | 2026-09-30 | [TASK-680](./TASK-680-matrix-pipelines-flow-val-variant-ttx.md) |
+| TASK-681 | Reject a statement `try` in class code of a class written inside a function | Complete | 2026-09-30 | 2026-09-30 | [TASK-681](./TASK-681-try-in-class-code-inside-function.md) |
+| TASK-682 | Report a `try` in a C-style `for` test as try-placement at the `try` | Complete | 2026-09-30 | 2026-09-30 | [TASK-682](./TASK-682-try-in-for-test.md) |
+| TASK-683 | Keep the function target of a `try` in a match block arm | Complete | 2026-09-30 | 2026-09-30 | [TASK-683](./TASK-683-try-in-match-block-arm.md) |
+| TASK-684 | Lower a `try` nested in an operand of a conditional operation | Complete | 2026-09-30 | 2026-09-30 | [TASK-684](./TASK-684-try-in-conditional-operands.md) |
 | TASK-685 | Generate editor cases from the case matrix, each asked against a TypeScript twin | Complete | 2026-09-30 | 2026-09-30 | [TASK-685](./TASK-685-editor-matrix-infrastructure.md) |
 | TASK-686 | Populate the editor matrix for every construct and triage each difference from TypeScript | Complete | 2026-09-30 | 2026-09-30 | [TASK-686](./TASK-686-editor-matrix-populate.md) |
 

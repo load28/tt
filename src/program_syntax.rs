@@ -1031,6 +1031,9 @@ pub(crate) struct OverlayFacts {
     pub(crate) loop_head_reads: bool,
     pub(crate) ambient: bool,
     pub(crate) decorated_classes: Vec<usize>,
+    /// Indices in the path of the body edges of decision stand-in
+    /// functions, which [`evaluation_owner`] looks through.
+    pub(crate) decision_functions: Vec<usize>,
     pub(crate) value_is_owner: bool,
 }
 
@@ -1054,9 +1057,11 @@ impl EvaluationContext {
             loop_head_reads,
             ambient,
             decorated_classes,
+            decision_functions,
             value_is_owner,
         } = facts;
-        let (mut owner, owner_edge) = evaluation_owner(parents, &decorated_classes);
+        let (mut owner, owner_edge) =
+            evaluation_owner(parents, &decorated_classes, &decision_functions);
         // The AST path owns local positions such as parameters and class
         // initializers. Function-target metadata only refines a function
         // body into the return contracts that differ from an ordinary
@@ -1270,8 +1275,12 @@ fn owner_reach(local_path: &[AstParentKind]) -> OwnerReach {
 fn evaluation_owner(
     parents: &[AstParentKind],
     decorated_classes: &[usize],
+    decision_functions: &[usize],
 ) -> (EvaluationOwner, usize) {
     for (index, parent) in parents.iter().enumerate().rev() {
+        if decision_functions.contains(&index) {
+            continue;
+        }
         match parent {
             AstParentKind::Class(
                 fields::ClassField::Decorators(_) | fields::ClassField::Body(_),
