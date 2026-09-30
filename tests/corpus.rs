@@ -417,8 +417,10 @@ fn case_selection(all: Vec<TestCase>) -> (Vec<TestCase>, bool, String) {
     )
 }
 
+#[derive(Clone)]
 struct TsUnit {
     key: String,
+    case: usize,
     name: String,
     text: String,
 }
@@ -440,7 +442,7 @@ fn link_line(line: &str) -> bool {
     option_line(line).is_some_and(|(name, value)| name == "link" && value.contains("->"))
 }
 
-fn units_of(case: &TestCase, code: &str) -> Vec<TsUnit> {
+fn units_of(case: &TestCase, index: usize, code: &str) -> Vec<TsUnit> {
     let mut units: Vec<(String, String)> = Vec::new();
     let mut name: Option<String> = None;
     let mut content = String::new();
@@ -478,6 +480,7 @@ fn units_of(case: &TestCase, code: &str) -> Vec<TsUnit> {
         .into_iter()
         .filter(|(name, _)| is_typescript_unit(name))
         .map(|(name, text)| TsUnit {
+            case: index,
             key: if single {
                 case.key.clone()
             } else {
@@ -548,6 +551,12 @@ fn typescript_accepts(units: &[TsUnit]) -> Vec<bool> {
                 .current_dir(&dir)
                 .output()
                 .expect("the pinned tsc runs");
+            assert!(
+                matches!(output.status.code(), Some(0..=2)),
+                "the pinned tsc failed on {tsconfig}: {}\n{}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            );
             let stdout = String::from_utf8_lossy(&output.stdout);
             for line in stdout.lines() {
                 let Some(at) = line.find("): error TS") else {
@@ -744,14 +753,14 @@ fn typescript_test_cases_come_back_unchanged() {
 
     let (cases, full, description) = case_selection(test_cases(&manifest, &checkout));
     let mut units = Vec::new();
-    for case in &cases {
+    for (index, case) in cases.iter().enumerate() {
         let bytes = std::fs::read(&case.path).expect("a readable case");
         let Ok(code) = String::from_utf8(bytes) else {
             continue;
         };
-        units.extend(units_of(case, &code));
+        units.extend(units_of(case, index, &code));
     }
-    let valid = typescript_accepts(&units);
+    let mut valid = typescript_accepts(&units);
     let parsed: Vec<&TsUnit> = units
         .iter()
         .zip(&valid)
@@ -779,7 +788,40 @@ fn typescript_test_cases_come_back_unchanged() {
             });
         }
     });
-    let verdicts = verdicts.into_inner().unwrap();
+    let mut verdicts = verdicts.into_inner().unwrap();
+
+    let listed_key = |key: &str| accepted.contains_key(key) || triaged.contains_key(key);
+    let recheck: BTreeSet<usize> = units
+        .iter()
+        .zip(&valid)
+        .filter(|(unit, valid)| {
+            verdicts.contains_key(&unit.key) || (!**valid && listed_key(&unit.key))
+        })
+        .map(|(unit, _)| unit.case)
+        .collect();
+    for case in recheck {
+        let members: Vec<usize> = (0..units.len())
+            .filter(|i| units[*i].case == case)
+            .collect();
+        let alone: Vec<TsUnit> = members.iter().map(|i| units[*i].clone()).collect();
+        for (index, accepted_alone) in members.into_iter().zip(typescript_accepts(&alone)) {
+            let unit = &units[index];
+            if !accepted_alone {
+                verdicts.remove(&unit.key);
+            } else if !valid[index]
+                && let Some(verdict) = passthrough_verdict(unit)
+            {
+                verdicts.insert(unit.key.clone(), verdict);
+            }
+            valid[index] = accepted_alone;
+        }
+    }
+    let parsed: Vec<&TsUnit> = units
+        .iter()
+        .zip(&valid)
+        .filter(|(_, valid)| **valid)
+        .map(|(unit, _)| unit)
+        .collect();
 
     let ran: BTreeSet<&str> = parsed.iter().map(|unit| unit.key.as_str()).collect();
     let mut problems = Vec::new();
