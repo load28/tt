@@ -165,6 +165,11 @@ request.
   committed the three crash inputs with their list entries.
 - 2026-09-30: Added the `exhaustive` job to `ci.yml`, the schedule to
   `soak.yml`, and the documentation.
+- 2026-09-30: Merged `claude/ecstatic-dijkstra-qw5pf9` (TASK-621 to
+  TASK-628). The replay then failed with "arm-guard-not-written.tt no longer
+  crashes (TASK-621 fixed it?)" and the same for
+  `result-return-template-literal.tt` (TASK-622), so both lines left
+  `expected-failures.txt`; the inputs stay as regressions.
 
 ## Issues and resolutions
 
@@ -190,11 +195,13 @@ request.
   panics in `src/parser/matches.rs` ("byte range starts at N but ends at
   N"); `result { const x = try r(); return \`v\`};` panics in
   `src/codegen/rope.rs` ("Result return start has no matching end").
-- **Cause**: Known; fixed by TASK-621 and TASK-622 on a paused branch.
+- **Cause**: Known; fixed by TASK-621 and TASK-622, then on a paused branch.
 - **Resolution**: Committed as `arm-guard-not-written.tt` and
-  `result-return-template-literal.tt`, listed under TASK-621 and TASK-622.
-  Neither shape occurs in the case corpus, so the mutation pass does not
-  reach them; the committed inputs do.
+  `result-return-template-literal.tt`, first listed under TASK-621 and
+  TASK-622; after those tasks were merged the replay reported both as no
+  longer crashing and the lines were removed, which is the list shrinking as
+  designed. Neither shape occurs in the case corpus, so the mutation pass
+  does not reach them; the committed inputs do.
 
 ### Issue 3: `fuzz/Cargo.lock` was stale before this task
 
@@ -204,7 +211,11 @@ request.
   passed".
 - **Cause**: `ttc` gained `unicode-width` without the fuzz lock file being
   refreshed.
-- **Resolution**: The lock file now lists it; the check passes.
+- **Resolution**: The lock file now lists it; the check passes. The merge
+  of TASK-621 to TASK-628 vendored `swc_ecma_ast` and `swc_ecma_visit` as
+  path dependencies and left the fuzz lock file naming their registry
+  sources, which failed the same check again; the lock file was refreshed
+  after the merge.
 
 ## Regression test (fails before the fix)
 
@@ -221,6 +232,8 @@ not exist.
   generated programs (66 render) under a second.
 - [x] `TT_MUTATIONS=all cargo test --release --test fuzz_regressions`: every
   mutant in about 58 seconds; the only crash signature is the listed one.
+  After the merge and TASK-639's editor cases: "all 72856 mutants, 94
+  source(s), 42.5s", 27 of them the listed crash of Issue 1.
 - [x] Negative checks: an unlisted crash input fails with "crashes: ... fix
   it, or list it"; a listed input that does not crash fails with "no longer
   crashes"; applying `git show fe50e9a -- src/parser/matches.rs` (TASK-621)
