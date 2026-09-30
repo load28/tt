@@ -1,0 +1,13 @@
+differences from pipeline_chain_nullish_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call2*/ main.tt:5:88 ===
+  |   return (flip() ? null : note("left", "set")) ?? (note("operand", input) |> double |> String |> .padStart(4, "*"));
+  |                                                                                        ^ /*call2*/
+  tt only: var String: StringConstructor
+  ts only: var String: (value?: any) => string
+
+=== definition /*call2*/ main.tt:5:88 ===
+  |   return (flip() ? null : note("left", "set")) ?? (note("operand", input) |> double |> String |> .padStart(4, "*"));
+  |                                                                                        ^ /*call2*/
+  ts only: <external>/lib.es5.d.ts 534:5-534:27
+

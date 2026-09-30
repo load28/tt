@@ -423,7 +423,7 @@ export const jsxPositions = [
   {
     id: "jsxAttribute",
     title: "a JSX attribute value",
-    host: (c) => c.probe(`return ${c.ret(`<div data-value={${c.v}} />`)};`),
+    host: (c) => c.probe(`return ${c.ret(`<div /*@attrHost*/data-value={${c.v}} />`)};`),
   },
   {
     id: "jsxChild",
@@ -450,12 +450,13 @@ export const jsxPositions = [
   {
     id: "jsxSpreadAttribute",
     title: "a JSX spread attribute's object",
+    editorWithholds: ["semanticTokens"],
     host: (c) => c.probe(`return ${c.ret(`<div {...{ value: ${c.v} }} />`)};`),
   },
   {
     id: "jsxComponentProp",
     title: "a component's prop",
-    host: (c) => c.probe(`return ${c.ret(`<Show value={${c.v}} />`)};`),
+    host: (c) => c.probe(`return ${c.ret(`<Show /*@attrHost*/value={${c.v}} />`)};`),
   },
   {
     id: "jsxNested",
@@ -472,7 +473,7 @@ export const jsxStatementPositions = [
     target: "inner",
     host: (c) =>
       c.probe(
-        `${c.head}function Card(props: { input: ${c.In} }) {\n${c.fn(`const input = props.input;\n${c.s(`return ${c.ret("<p>diverged</p>")};`)}\nreturn ${c.ret(`<p>{text(${c.result})}</p>`)};`)}\n}\nreturn Card({ input });`,
+        `${c.head}function Card(props: { input: ${c.In} }) {\n${c.fn(`const input = props./*@memberProps*/input;\n${c.s(`return ${c.ret("<p>diverged</p>")};`)}\nreturn ${c.ret(`<p>{text(${c.result})}</p>`)};`)}\n}\nreturn Card({ input });`,
         { target: false, head: false },
       ),
   },

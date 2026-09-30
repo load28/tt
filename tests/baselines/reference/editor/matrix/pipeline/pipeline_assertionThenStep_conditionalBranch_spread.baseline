@@ -1,0 +1,13 @@
+differences from pipeline_assertionThenStep_conditionalBranch_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:4:41 ===
+  |   return flip() ? (first(...[input]) |> String as string |> .length) : note("else", "skipped");
+  |                                         ^ /*call*/
+  tt only: var String: StringConstructor
+  ts only: var String: (value?: any) => string
+
+=== definition /*call*/ main.tt:4:41 ===
+  |   return flip() ? (first(...[input]) |> String as string |> .length) : note("else", "skipped");
+  |                                         ^ /*call*/
+  ts only: <external>/lib.es5.d.ts 534:5-534:27
+

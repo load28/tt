@@ -1,0 +1,13 @@
+differences from pipeline_assertionThenStep_jsxNested_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.ttx:5:74 ===
+  |     return <ul><li>{note("first", 1)}</li><li>{note("operand", input) |> String as string |> .length}</li></ul>;
+  |                                                                          ^ /*call*/
+  tt only: var String: StringConstructor
+  ts only: var String: (value?: any) => string
+
+=== definition /*call*/ main.ttx:5:74 ===
+  |     return <ul><li>{note("first", 1)}</li><li>{note("operand", input) |> String as string |> .length}</li></ul>;
+  |                                                                          ^ /*call*/
+  ts only: <external>/lib.es5.d.ts 534:5-534:27
+

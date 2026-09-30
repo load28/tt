@@ -2,6 +2,7 @@
 
 pub mod baseline;
 pub mod cases;
+pub mod matrix;
 
 #[path = "../../src/test_workspace.rs"]
 mod workspace;

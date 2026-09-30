@@ -289,6 +289,38 @@ regressions, the incremental suite, and the fuzz seed corpus leave the
 matrix out: its programs are one spec's repetitions, and it has its own
 runner.
 
+The same rows also become editor cases under
+`tests/cases/editor/matrix/<construct>/`, for the constructs and host positions
+`tests/matrix/editor.mjs` lists: the case's program with fourslash
+markers, and a `.ts`/`.tsx` twin with the same markers at the
+corresponding points. A spec template marks a point with `/*@name*/`
+(stripped from the compiled cases); the name's leading lowercase letters
+are its kind, and `tests/matrix/editor.mjs` says which verbs each kind
+asks (`bind`: a name a pattern or declaration introduces; `use`: a read of
+one; `call`, `arg`, `member`, `field`, `attr`, and `operand`, the input
+each companion feeds the construct). Every case also asks for semantic
+tokens and for what the VS Code adapter publishes. A form's twin is its
+`ts` template unless it has an `edit` template: the twin an editor is held
+to must declare what the tt program binds (`const { r } = s` for
+`Circle(r)`), which a runtime twin that reads `s.r` does not, and
+`tests/matrix/editor-harness.ts` types the harness's `unwrap` as a `try`
+is typed. The generator fails when a marker is on one side only. The
+twin's answers are the oracle, after the normalizations "Adding an editor
+case" describes; a generated case keeps a baseline only when it differs
+from its twin, holding just the differing questions, and every difference
+is listed in `tests/editor-matrix-differences.txt` as `by-design` (citing
+where `docs/ai/tt.md` documents it) or `defect` (with the task that
+records it). A case name there may contain `*`. The suite fails on a
+difference the file does not list, on a listed question that agrees with
+its twin, and, unfiltered, on a line that names no question. A pull
+request runs a fixed-seed sample of the editor matrix too, and the nightly
+job runs all of it with `TT_MATRIX_CASES=all`.
+
+```sh
+node scripts/generate-cases                        # also rewrites tests/cases/editor/matrix
+UPDATE_EXPECT=1 TT_MATRIX_CASES=all cargo test --test editor_cases
+```
+
 ### Adding an editor case
 
 An editor behaviour is pinned by one file under `tests/cases/editor/`, in the
@@ -335,12 +367,21 @@ suite skips, and `TT_REQUIRE_EXTENSION=1` turns the skip into a failure.
 
 A TypeScript twin, the same name with `.ts` or `.tsx` and the same units
 with `.ts`/`.tsx` for `.tt`/`.ttx`, is asked the same questions at the same
-markers through `tsgo --lsp`. The per-file verbs are compared only when the
-twin's text is the source's; the diagnostics compared are the published
-list. Every answer that differs from TypeScript's is
+markers through `tsgo --lsp`; a unit that is not `.tt`/`.ttx` may be left
+out of the twin, which then shares the case's. Answers are compared as
+`parity_view` in `tests/editor_cases.rs` reduces them: a location is its
+unit's stem, the marker it starts at if any, and the text it covers; a
+completion list is its labels and kinds, without the labels a
+`// @parityIgnores: <labels>` line in the case names (a name only one
+side declares, such as a twin's temporary). When the twin's text is the
+source's, semantic tokens and diagnostics are compared whole; otherwise
+the tokens are compared at each marker both files have, and diagnostics by
+location instead of coordinates. The diagnostics compared are the
+published list. Every answer that differs from TypeScript's is
 shown in the case's baseline and listed in
 `tests/baselines/reference/editor/failingParity.txt`, which is a baseline
-too: a new difference and a fixed one both change it.
+too: a new difference and a fixed one both change it. (The generated
+editor cases of "The case matrix" keep their own list.)
 
 ```sh
 UPDATE_EXPECT=1 cargo test --test editor_cases

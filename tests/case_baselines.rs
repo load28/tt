@@ -26,6 +26,7 @@ use ttc::engine::{Engine, ProjectOptions};
 mod common;
 use common::baseline::{compare, compare_absent, diff, filtered_by, not_sampled, updating};
 use common::cases::{self, Unit, is_tt};
+use common::matrix;
 use common::{Workspace, toolchain, toolchain_installed};
 
 fn root() -> PathBuf {
@@ -122,7 +123,11 @@ fn cases() -> Selection {
             chosen.push((name, path));
         }
     }
-    let (sampled, unsampled, summary) = sample(matrix);
+    let matrix::Sample {
+        sampled,
+        unsampled,
+        summary,
+    } = matrix::sample(matrix, MATRIX_SAMPLE, MATRIX_SEED);
     chosen.extend(sampled);
     let mut out = Vec::new();
     for (name, path) in &chosen {
@@ -163,71 +168,6 @@ fn expand(name: &str, path: &Path, names: &mut BTreeSet<String>) -> Vec<Case> {
         });
     }
     out
-}
-
-type Named = (String, PathBuf);
-
-fn sample(matrix: Vec<Named>) -> (Vec<Named>, Vec<Named>, Option<String>) {
-    let total = matrix.len();
-    if total == 0 {
-        return (matrix, Vec::new(), None);
-    }
-    let requested = std::env::var("TT_MATRIX_CASES").unwrap_or_default();
-    if requested == "all" {
-        return (
-            matrix,
-            Vec::new(),
-            Some(format!("all {total} matrix cases")),
-        );
-    }
-    let count = if requested.is_empty() {
-        MATRIX_SAMPLE
-    } else {
-        requested
-            .parse()
-            .unwrap_or_else(|_| panic!("TT_MATRIX_CASES takes a count or `all`, not `{requested}`"))
-    }
-    .min(total);
-    let seed = std::env::var("TT_MATRIX_SEED")
-        .ok()
-        .filter(|value| !value.is_empty())
-        .map(|value| {
-            value
-                .parse()
-                .unwrap_or_else(|_| panic!("TT_MATRIX_SEED takes a number, not `{value}`"))
-        })
-        .unwrap_or(MATRIX_SEED);
-    let mut state = seed;
-    let mut indices: Vec<usize> = (0..total).collect();
-    for i in 0..count {
-        let j = i + (splitmix(&mut state) % (total - i) as u64) as usize;
-        indices.swap(i, j);
-    }
-    let picked: BTreeSet<usize> = indices[..count].iter().copied().collect();
-    let mut sampled = Vec::new();
-    let mut unsampled = Vec::new();
-    for (index, case) in matrix.into_iter().enumerate() {
-        if picked.contains(&index) {
-            sampled.push(case);
-        } else {
-            unsampled.push(case);
-        }
-    }
-    (
-        sampled,
-        unsampled,
-        Some(format!(
-            "{count} of {total} matrix cases, seed {seed} (TT_MATRIX_CASES=all for every one)"
-        )),
-    )
-}
-
-fn splitmix(state: &mut u64) -> u64 {
-    *state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
-    let mut z = *state;
-    z = (z ^ (z >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
-    z ^ (z >> 31)
 }
 
 fn single<'a>(directives: &'a [(String, String)], name: &str, path: &Path) -> Option<&'a str> {

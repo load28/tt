@@ -1,0 +1,13 @@
+differences from pipeline_chain_jsxTernary_yield at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call2*/ main.ttx:4:51 ===
+  |   return <p>{flip() ? ((yield input) |> double |> String |> .padStart(4, "*")) : <i>none</i>}</p>;
+  |                                                   ^ /*call2*/
+  tt only: var String: StringConstructor
+  ts only: var String: (value?: any) => string
+
+=== definition /*call2*/ main.ttx:4:51 ===
+  |   return <p>{flip() ? ((yield input) |> double |> String |> .padStart(4, "*")) : <i>none</i>}</p>;
+  |                                                   ^ /*call2*/
+  ts only: <external>/lib.es5.d.ts 534:5-534:27
+

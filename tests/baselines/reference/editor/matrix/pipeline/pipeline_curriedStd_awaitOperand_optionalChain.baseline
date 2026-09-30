@@ -1,0 +1,5 @@
+differences from pipeline_curriedStd_awaitOperand_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await ((t0 = box(input)?.inner.value! || null, t0 === null ? -1 : ((n: number) => note(\"map\", n * 3))(t0)))" hint TS80007: 'await' has no effect on the type of this expression.
+

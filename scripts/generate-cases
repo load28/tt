@@ -6,21 +6,38 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SPEC = join(ROOT, "tests/matrix");
 const OUT = join(ROOT, "tests/cases/conformance/matrix");
+const EDITOR_OUT = join(ROOT, "tests/cases/editor/matrix");
 
-const plain = () => `note("operand", input)`;
+const plain = () => `note("operand", /*@operand*/input)`;
 
 const COMPANIONS = [
   { id: "plain", title: "nothing around it", operand: plain },
-  { id: "await", title: "an await in its operand", operand: () => "await later(input)" },
-  { id: "yield", title: "a yield in its operand", operand: () => "(yield input)" },
-  { id: "optionalChain", title: "an optional chain in its operand", operand: () => "box(input)?.inner.value!" },
-  { id: "spread", title: "a spread argument in its operand", operand: () => "first(...[input])" },
-  { id: "exception", title: "an operand that throws, caught around it", operand: () => "risky(input)", wrap: "catch" },
+  { id: "await", title: "an await in its operand", operand: () => "await later(/*@operand*/input)" },
+  { id: "yield", title: "a yield in its operand", operand: () => "(yield /*@operand*/input)", uncalled: true },
+  { id: "optionalChain", title: "an optional chain in its operand", operand: () => "box(/*@operand*/input)?.inner.value!" },
+  { id: "spread", title: "a spread argument in its operand", operand: () => "first(...[/*@operand*/input])" },
+  { id: "exception", title: "an operand that throws, caught around it", operand: () => "risky(/*@operand*/input)", wrap: "catch" },
   { id: "using", title: "a using declaration around it", operand: plain, pre: 'using res = resource("res");' },
   { id: "finally", title: "a finally block around it", operand: plain, wrap: "finally" },
 ];
 
 const TOP_LEVEL = new Set(["plain", "await", "optionalChain", "spread", "using"]);
+
+const MARKER = /\/\*@(\w+)\*\//g;
+
+function unmark(code) {
+  return code.replace(MARKER, "");
+}
+
+function mark(code) {
+  const names = [];
+  const text = code.replace(MARKER, (_, name) => {
+    if (names.includes(name)) return "";
+    names.push(name);
+    return `/*${name}*/`;
+  });
+  return { text, names };
+}
 
 function chunks(harness) {
   const out = [];
@@ -247,13 +264,14 @@ function rows(construct, forms, positions) {
   return out;
 }
 
-function build(parts, construct, form, position, companion, side, surface) {
+function build(parts, construct, form, position, companion, side, surface, editor = false) {
   let count = 0;
   const alloc = (n) => Array.from({ length: n }, () => `t${count++}`);
   const isAsync = companion.id === "await" || position.forces === "await";
   const isGenerator = companion.id === "yield" || position.forces === "yield";
   const target = Boolean(construct.target);
   const twin = side === "ts";
+  const template = twin && editor && form.edit ? form.edit : form[side];
   const operand = companion.operand();
   const c = {
     side,
@@ -284,12 +302,12 @@ function build(parts, construct, form, position, companion, side, surface) {
   };
   const temps = () => alloc(form.temps ?? 1);
   const grouped = (text) => (construct.lowPrecedence && position.operand ? `(${text})` : text);
-  const instance = () => (twin ? form.ts(operand, temps(), c) : grouped(form.tt(operand, temps(), c)));
+  const instance = () => (twin ? template(operand, temps(), c) : grouped(template(operand, temps(), c)));
   if (construct.kind === "value") {
     c.v = instance();
     c.again = instance;
   } else {
-    c.s = (exit) => (twin ? form.ts(operand, temps(), exit, c) : form.tt(operand, temps(), exit, c));
+    c.s = (exit) => template(operand, temps(), exit, c);
     c.result = form.result;
     c.hoisted = form.hoisted;
   }
@@ -310,21 +328,24 @@ function build(parts, construct, form, position, companion, side, surface) {
     }
     host = lines.join("\n");
   } else {
-    host = `${position.host(c)}\nawait drive("${position.id}", probe, inputs);`;
+    host = editor ? position.host(c) : `${position.host(c)}\nawait drive("${position.id}", probe, inputs);`;
   }
-  const decls = (form.decls ?? []).map((d) => d[side]).join("\n");
+  const decls = (form.decls ?? []).map((d) => (twin && editor ? (d.edit ?? d.ts) : d[side])).join("\n");
   const lines = [];
   if (target && !twin) lines.push('import * as Result from "@tt/std/result";');
   if (decls) lines.push(decls);
-  if (twin && construct.kind === "value" && count > 0) {
-    lines.push(`let ${Array.from({ length: count }, (_, i) => `t${i}: any`).join(", ")};`);
+  const declaredTemps = Array.from({ length: count }, (_, i) => `t${i}`).filter((t) => !editor || new RegExp(`\\b${t} = `).test(host));
+  if (twin && construct.kind === "value" && declaredTemps.length > 0 && (editor || template === form.ts)) {
+    lines.push(`let ${declaredTemps.map((t) => `${t}: any`).join(", ")};`);
   }
   lines.push(`const inputs: ${form.In}[] = ${form.inputs.replace(/\s+as\s+[\w[\]]+$/, "")};`);
   lines.push(host);
   const code = lines.join("\n");
-  const names = used(parts, code);
+  const names = used(parts, unmark(code));
   if (surface === "ttx") names.push("element", "Fragment");
-  return { code: indent(`import { ${names.join(", ")} } from "./harness.js";\n${code}`), names };
+  const temporaries = Array.from({ length: count }, (_, i) => `t${i}`);
+  const imports = editor && names.length === 0 ? "" : `import { ${names.join(", ")} } from "./harness.js";\n`;
+  return { code: `${imports}${code}`, names, temporaries };
 }
 
 function caseText(spec, construct, form, position, companion, codes, parts, surface) {
@@ -345,15 +366,79 @@ function caseText(spec, construct, form, position, companion, codes, parts, surf
     parts,
     programs.flatMap(([, program]) => program.names),
   );
-  const units = [["tsconfig.json", tsconfig(surface)], ["harness.ts", harness], ...programs.map(([file, program]) => [file, program.code])];
+  const units = [["tsconfig.json", tsconfig(surface)], ["harness.ts", harness], ...programs.map(([file, program]) => [file, indent(unmark(program.code))])];
   const body = units.map(([file, text]) => `// @filename: ${file}\n${text}\n`).join("");
   return { name, text: `${header.join("\n")}\n${body}` };
 }
 
+function declared(code) {
+  const out = new Set();
+  for (const match of code.matchAll(/\b(?:const|let|var|function\*?|class|type|interface|variant)\s+(\w+)/g)) out.add(match[1]);
+  for (const match of code.matchAll(/^import \* as (\w+)/gm)) out.add(match[1]);
+  for (const match of code.matchAll(/^import \{ ([^}]*) \}/gm)) {
+    for (const name of match[1].split(",")) out.add(name.trim());
+  }
+  return out;
+}
+
+function editorCaseText(spec, construct, form, position, companion, parts, surface, editor) {
+  const { main } = SURFACES[surface];
+  const name = `${construct.construct}_${form.id}_${position.id}_${companion.id}`;
+  const twin = main.replace(/\.tt(x?)$/, ".ts$1");
+  const source = build(parts, construct, form, position, companion, "tt", surface, true);
+  const lowered = build(parts, construct, form, position, companion, "ts", surface, true);
+  const tt = mark(source.code);
+  const ts = mark(lowered.code);
+  const missing = [...tt.names.filter((m) => !ts.names.includes(m)), ...ts.names.filter((m) => !tt.names.includes(m))];
+  if (missing.length > 0) throw new Error(`${name}: the markers ${missing.join(", ")} are not on both sides of the twin`);
+  const questions = new Map();
+  for (const marker of tt.names) {
+    const kind = /^[a-z]+/.exec(marker)[0];
+    if (!editor.verbs[kind]) throw new Error(`${name}: /*@${marker}*/ is of no kind tests/matrix/editor.mjs names`);
+    const withheld = construct.editorWithholds?.[marker] ?? [];
+    const asked = editor.verbs[kind].filter(
+      (verb) => !withheld.includes(verb) && !(kind === "operand" && companion.uncalled && verb === "signatureHelp"),
+    );
+    for (const verb of asked) questions.set(verb, [...(questions.get(verb) ?? []), marker]);
+  }
+  const sides = [declared(unmark(source.code)), declared(unmark(lowered.code))];
+  const ignored = new Set(lowered.temporaries);
+  for (const [one, other] of [sides, [...sides].reverse()]) {
+    for (const label of one) if (!other.has(label)) ignored.add(label);
+  }
+  const header = [
+    `// Generated by scripts/generate-cases from tests/matrix/${spec} and tests/matrix/editor.mjs; edit the spec, not this file.`,
+    `// ${construct.construct}: ${form.title}, in ${position.title}, with ${companion.title}; asked at its markers against ${twin}.`,
+    ...[...questions].map(([verb, markers]) => `// @${verb}: ${markers.join(", ")}`),
+    ...editor.fileVerbs.filter((verb) => !(position.editorWithholds ?? []).includes(verb)).map((verb) => `// @${verb}: *`),
+  ];
+  if (ignored.size > 0) header.push(`// @parityIgnores: ${[...ignored].sort().join(", ")}`);
+  const harness = closure(parts, [...source.names, ...lowered.names]);
+  const units = (list) => list.map(([unit, body]) => `// @filename: ${unit}\n${body}\n`).join("");
+  const twinHeader = [
+    `// Generated by scripts/generate-cases from tests/matrix/${spec} and tests/matrix/editor.mjs; edit the spec, not this file.`,
+    `// The TypeScript twin of ${name}.${surface}; it shares the case's other units.`,
+  ];
+  return {
+    name,
+    text: `${header.join("\n")}\n${units([["tsconfig.json", tsconfig(surface)], ["harness.ts", harness], [main, indent(tt.text)]])}`,
+    twin: `${twinHeader.join("\n")}\n${units([[main.replace(/\.tt(x?)$/, ".ts$1"), indent(ts.text)]])}`,
+  };
+}
+
+function editorPositions(editor, surface, construct) {
+  const chosen = editor.positions[surface][construct.kind];
+  return (position) => chosen === "all" || chosen.includes(position.id);
+}
+
 async function generate() {
   const positions = await import(pathToFileURL(join(SPEC, "positions.mjs")).href);
+  const editor = await import(pathToFileURL(join(SPEC, "editor.mjs")).href);
   const parts = chunks(readFileSync(join(SPEC, "harness.ts"), "utf8"));
+  const overrides = chunks(readFileSync(join(SPEC, "editor-harness.ts"), "utf8"));
+  const editorParts = parts.map((part) => overrides.find((other) => other.name === part.name) ?? part);
   const files = new Map();
+  const editorFiles = new Map();
   const stats = [];
   const specs = readdirSync(SPEC)
     .filter((name) => name.endsWith(".mjs"))
@@ -363,6 +448,7 @@ async function generate() {
     if (loaded === undefined) continue;
     for (const construct of Array.isArray(loaded) ? loaded : [loaded]) {
       for (const { surface, positions: hosts, forms } of surfacesFor(construct, positions)) {
+        const edited = editorPositions(editor, surface, construct);
         for (const [f, p, c] of rows(construct, forms, hosts)) {
           const form = forms[f];
           const position = hosts[p];
@@ -372,12 +458,19 @@ async function generate() {
           const path = join(OUT, construct.construct, `${name}.${surface}`);
           if (files.has(path)) throw new Error(`two rows generate ${name}`);
           files.set(path, text);
-          stats.push({ construct: construct.construct, surface, position: position.id, companion: companion.id, rejected: codes.length > 0 });
+          const asked = codes.length === 0 && edited(position) && editor.constructs.includes(construct.construct);
+          if (asked) {
+            const made = editorCaseText(spec, construct, form, position, companion, editorParts, surface, editor);
+            const base = join(EDITOR_OUT, construct.construct, made.name);
+            editorFiles.set(`${base}.${surface}`, made.text);
+            editorFiles.set(`${base}.${SURFACES[surface].twin.split(".").pop()}`, made.twin);
+          }
+          stats.push({ construct: construct.construct, surface, position: position.id, companion: companion.id, rejected: codes.length > 0, asked });
         }
       }
     }
   }
-  return { files, stats };
+  return { files, editorFiles, stats };
 }
 
 function existing(dir, out = []) {
@@ -394,58 +487,69 @@ function show(path) {
   return relative(ROOT, path).split(sep).join("/");
 }
 
-const { files, stats } = await generate();
+const { files, editorFiles, stats } = await generate();
+const trees = [
+  { dir: OUT, files, what: "cases" },
+  { dir: EDITOR_OUT, files: editorFiles, what: "editor case files" },
+];
 const mode = process.argv[2];
 if (mode === "--stats") {
   const table = new Map();
   for (const row of stats) {
     const key = `${row.construct} (.${row.surface})`;
-    const entry = table.get(key) ?? { run: 0, rejected: 0, positions: new Set(), companions: new Set() };
+    const entry = table.get(key) ?? { run: 0, rejected: 0, asked: 0, positions: new Set(), companions: new Set() };
     entry[row.rejected ? "rejected" : "run"]++;
+    if (row.asked) entry.asked++;
     entry.positions.add(row.position);
     entry.companions.add(row.companion);
     table.set(key, entry);
   }
   let total = 0;
+  let asked = 0;
   for (const [construct, entry] of table) {
     total += entry.run + entry.rejected;
+    asked += entry.asked;
     console.log(
-      `${construct}: ${entry.run + entry.rejected} cases (${entry.run} run against a twin, ${entry.rejected} expect a diagnostic), ${entry.positions.size} positions, ${entry.companions.size} companions`,
+      `${construct}: ${entry.run + entry.rejected} cases (${entry.run} run against a twin, ${entry.rejected} expect a diagnostic), ${entry.positions.size} positions, ${entry.companions.size} companions; ${entry.asked} editor cases`,
     );
   }
-  console.log(`total: ${total}`);
+  console.log(`total: ${total}; editor cases: ${asked}`);
 } else if (mode === "--check") {
   const problems = [];
-  for (const [path, text] of files) {
-    if (!existsSync(path)) problems.push(`missing ${show(path)}`);
-    else if (readFileSync(path, "utf8") !== text) problems.push(`modified ${show(path)}`);
-  }
-  for (const path of existing(OUT)) {
-    if (!files.has(path)) problems.push(`stale ${show(path)}`);
+  for (const tree of trees) {
+    for (const [path, text] of tree.files) {
+      if (!existsSync(path)) problems.push(`missing ${show(path)}`);
+      else if (readFileSync(path, "utf8") !== text) problems.push(`modified ${show(path)}`);
+    }
+    for (const path of existing(tree.dir)) {
+      if (!tree.files.has(path)) problems.push(`stale ${show(path)}`);
+    }
   }
   if (problems.length > 0) {
-    console.error(`${problems.length} generated case(s) differ from tests/matrix:`);
+    console.error(`${problems.length} generated file(s) differ from tests/matrix:`);
     for (const problem of problems.slice(0, 50)) console.error(`  ${problem}`);
     if (problems.length > 50) console.error(`  ... and ${problems.length - 50} more`);
     process.exit(1);
   }
-  console.log(`${files.size} generated cases match tests/matrix`);
+  console.log(trees.map((tree) => `${tree.files.size} generated ${tree.what}`).join(" and ") + " match tests/matrix");
 } else if (mode === undefined) {
-  let written = 0;
-  let removed = 0;
-  for (const path of existing(OUT)) {
-    if (!files.has(path)) {
-      rmSync(path);
-      removed++;
+  for (const tree of trees) {
+    let written = 0;
+    let removed = 0;
+    for (const path of existing(tree.dir)) {
+      if (!tree.files.has(path)) {
+        rmSync(path);
+        removed++;
+      }
     }
+    for (const [path, text] of tree.files) {
+      if (existsSync(path) && readFileSync(path, "utf8") === text) continue;
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, text);
+      written++;
+    }
+    console.log(`${tree.files.size} ${tree.what}: ${written} written, ${removed} removed`);
   }
-  for (const [path, text] of files) {
-    if (existsSync(path) && readFileSync(path, "utf8") === text) continue;
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, text);
-    written++;
-  }
-  console.log(`${files.size} cases: ${written} written, ${removed} removed`);
 } else {
   console.error("usage: node scripts/generate-cases [--check | --stats]");
   process.exit(2);

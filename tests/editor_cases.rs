@@ -33,7 +33,8 @@ use ttc::engine::{
 };
 
 mod common;
-use common::baseline::{expect, expect_absent, updating};
+use common::baseline::{expect, expect_absent, not_sampled, updating};
+use common::matrix;
 use common::{Workspace, toolchain, toolchain_installed};
 
 const TSCONFIG: &str = r#"{
@@ -50,6 +51,8 @@ const TSCONFIG: &str = r#"{
 "#;
 
 const GLOBALS_OR_KEYWORDS: &str = "15";
+
+const STANDARD_LIBRARY: &str = "@tt/std";
 
 const TOKEN_TYPES: [&str; 23] = [
     "namespace",
@@ -144,6 +147,7 @@ impl Verb {
     }
 }
 
+#[derive(Clone)]
 struct Unit {
     name: String,
     text: String,
@@ -156,7 +160,15 @@ struct Case {
     path: PathBuf,
     units: Vec<Unit>,
     verbs: Vec<(Verb, Vec<String>)>,
+    ignores: BTreeSet<String>,
     twin: Option<Vec<Unit>>,
+    matrix: Option<PathBuf>,
+}
+
+#[derive(Default)]
+struct Directives {
+    verbs: Vec<(Verb, Vec<String>)>,
+    ignores: BTreeSet<String>,
 }
 
 fn directive(line: &str) -> Option<(String, &str)> {
@@ -230,9 +242,9 @@ fn parse_units(
     text: &str,
     default_name: &str,
     path: &Path,
-    verbs: Option<&mut Vec<(Verb, Vec<String>)>>,
+    directives: Option<&mut Directives>,
 ) -> Vec<Unit> {
-    let mut verbs = verbs;
+    let mut directives = directives;
     let mut units: Vec<(String, Vec<&str>)> = Vec::new();
     let mut current: Option<(String, Vec<&str>)> = None;
     let mut preamble: Vec<&str> = Vec::new();
@@ -260,24 +272,27 @@ fn parse_units(
             current = Some((value.to_string(), Vec::new()));
             continue;
         }
-        let verb = Verb::parse(&name).unwrap_or_else(|| {
-            panic!(
-                "{}: unknown directive `@{name}`; an editor case takes @filename and the verbs \
-                 hover, completions, definition, references, rename, signatureHelp, \
-                 semanticTokens, diagnostics",
-                path.display()
-            )
-        });
-        let Some(verbs) = verbs.as_deref_mut() else {
+        let Some(directives) = directives.as_deref_mut() else {
             panic!("{}: a TypeScript twin takes no verbs", path.display());
         };
         let targets = value
             .split(',')
             .map(str::trim)
             .filter(|target| !target.is_empty())
-            .map(String::from)
-            .collect();
-        verbs.push((verb, targets));
+            .map(String::from);
+        if name == "parityignores" {
+            directives.ignores.extend(targets);
+            continue;
+        }
+        let verb = Verb::parse(&name).unwrap_or_else(|| {
+            panic!(
+                "{}: unknown directive `@{name}`; an editor case takes @filename, @parityIgnores, \
+                 and the verbs hover, completions, definition, references, rename, \
+                 signatureHelp, semanticTokens, diagnostics",
+                path.display()
+            )
+        });
+        directives.verbs.push((verb, targets.collect()));
     }
     match current {
         Some(unit) => units.push(unit),
@@ -303,84 +318,151 @@ fn twin_name(name: &str) -> String {
     }
 }
 
-fn cases() -> Vec<Case> {
+const MATRIX: &str = "tests/cases/editor/matrix";
+
+const MATRIX_SAMPLE: usize = 40;
+
+const MATRIX_SEED: u64 = 0x7474_6564_6974_6f72;
+
+fn case_files(dir: &Path, out: &mut Vec<PathBuf>) {
+    let Ok(entries) = fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries {
+        let path = entry.expect("a readable case entry").path();
+        if path.is_dir() {
+            case_files(&path, out);
+        } else if path.extension().is_some_and(|e| e == "tt" || e == "ttx") {
+            out.push(path);
+        }
+    }
+}
+
+struct Selection {
+    cases: Vec<Case>,
+    unsampled: Vec<Case>,
+    summary: Option<String>,
+}
+
+fn cases() -> Selection {
     let dir = root().join("tests/cases/editor");
-    let mut files: Vec<PathBuf> = fs::read_dir(&dir)
-        .expect("tests/cases/editor")
-        .map(|entry| entry.expect("a readable case entry").path())
-        .filter(|path| path.extension().is_some_and(|e| e == "tt" || e == "ttx"))
-        .collect();
+    let mut files = Vec::new();
+    case_files(&dir, &mut files);
     files.sort();
     assert!(
         !files.is_empty(),
         "no editor cases under tests/cases/editor"
     );
     let filter = std::env::var("TT_CASES").ok().filter(|f| !f.is_empty());
-    let mut out = Vec::new();
+    let generated = root().join(MATRIX);
+    let mut seen: BTreeMap<String, PathBuf> = BTreeMap::new();
+    let mut chosen = Vec::new();
+    let mut matrix_cases = Vec::new();
     for path in files {
         let name = path.file_stem().unwrap().to_string_lossy().into_owned();
-        if filter.as_deref().is_some_and(|f| !name.contains(f)) {
-            continue;
-        }
-        let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
-        let text = fs::read_to_string(&path).expect("a readable editor case");
-        let mut verbs = Vec::new();
-        let units = parse_units(&text, &file_name, &path, Some(&mut verbs));
-        assert!(
-            !verbs.is_empty(),
-            "{}: the case asks nothing",
-            path.display()
-        );
-        let twin = ["ts", "tsx"]
-            .iter()
-            .map(|extension| path.with_extension(extension))
-            .find(|twin| twin.exists())
-            .map(|twin| {
-                let text = fs::read_to_string(&twin).expect("a readable twin");
-                let twin_file = twin.file_name().unwrap().to_string_lossy().into_owned();
-                parse_units(&text, &twin_file, &twin, None)
-            });
-        if let Some(twin) = &twin {
-            let expected: BTreeSet<String> = units.iter().map(|u| twin_name(&u.name)).collect();
-            let actual: BTreeSet<String> = twin.iter().map(|u| u.name.clone()).collect();
-            assert_eq!(
-                expected,
-                actual,
-                "{}: the twin's units must be the case's, with .ts/.tsx for .tt/.ttx",
+        if let Some(other) = seen.insert(name.clone(), path.clone()) {
+            panic!(
+                "editor case names must be distinct, because baselines are named by them: {} and {}",
+                other.display(),
                 path.display()
             );
         }
-        for (verb, targets) in &verbs {
-            for target in targets {
-                let known = if verb.per_file() {
-                    target == "*" || units.iter().any(|u| u.name == *target && is_tt(&u.name))
-                } else {
-                    units
-                        .iter()
-                        .any(|u| u.markers.iter().any(|(marker, _)| marker == target))
-                };
-                assert!(
-                    known,
-                    "{}: @{} names `{target}`, which is not {}",
-                    path.display(),
-                    verb.name(),
-                    if verb.per_file() {
-                        "a .tt/.ttx unit or *"
-                    } else {
-                        "a marker"
-                    }
-                );
-            }
+        if filter.as_deref().is_some_and(|f| !name.contains(f)) {
+            continue;
         }
-        out.push(Case {
-            name,
-            path,
-            units,
-            verbs,
-            twin,
-        });
+        if filter.is_none() && path.starts_with(&generated) {
+            matrix_cases.push((name, path));
+        } else {
+            chosen.push((name, path));
+        }
     }
-    out
+    let matrix::Sample {
+        sampled,
+        unsampled,
+        summary,
+    } = matrix::sample(matrix_cases, MATRIX_SAMPLE, MATRIX_SEED);
+    chosen.extend(sampled);
+    let parse = |(name, path): (String, PathBuf)| parse_case(name, path, &generated);
+    Selection {
+        cases: chosen.into_iter().map(parse).collect(),
+        unsampled: unsampled.into_iter().map(parse).collect(),
+        summary,
+    }
+}
+
+fn parse_case(name: String, path: PathBuf, generated: &Path) -> Case {
+    let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
+    let text = fs::read_to_string(&path).expect("a readable editor case");
+    let mut directives = Directives::default();
+    let units = parse_units(&text, &file_name, &path, Some(&mut directives));
+    let Directives { verbs, ignores } = directives;
+    assert!(
+        !verbs.is_empty(),
+        "{}: the case asks nothing",
+        path.display()
+    );
+    let twin = ["ts", "tsx"]
+        .iter()
+        .map(|extension| path.with_extension(extension))
+        .find(|twin| twin.exists())
+        .map(|twin| {
+            let text = fs::read_to_string(&twin).expect("a readable twin");
+            let twin_file = twin.file_name().unwrap().to_string_lossy().into_owned();
+            let mut own = parse_units(&text, &twin_file, &twin, None);
+            let expected: BTreeSet<String> = units.iter().map(|u| twin_name(&u.name)).collect();
+            let actual: BTreeSet<String> = own.iter().map(|u| u.name.clone()).collect();
+            assert!(
+                actual.is_subset(&expected)
+                    && units
+                        .iter()
+                        .filter(|u| is_tt(&u.name))
+                        .all(|u| actual.contains(&twin_name(&u.name))),
+                "{}: the twin's units must be the case's, with .ts/.tsx for .tt/.ttx; a unit that is not .tt/.ttx may be left out to share the case's",
+                path.display()
+            );
+            own.extend(
+                units
+                    .iter()
+                    .filter(|u| !actual.contains(&u.name))
+                    .cloned(),
+            );
+            own
+        });
+    for (verb, targets) in &verbs {
+        for target in targets {
+            let known = if verb.per_file() {
+                target == "*" || units.iter().any(|u| u.name == *target && is_tt(&u.name))
+            } else {
+                units
+                    .iter()
+                    .any(|u| u.markers.iter().any(|(marker, _)| marker == target))
+            };
+            assert!(
+                known,
+                "{}: @{} names `{target}`, which is not {}",
+                path.display(),
+                verb.name(),
+                if verb.per_file() {
+                    "a .tt/.ttx unit or *"
+                } else {
+                    "a marker"
+                }
+            );
+        }
+    }
+    let matrix = path
+        .strip_prefix(generated)
+        .ok()
+        .map(|inside| inside.parent().unwrap_or(Path::new("")).to_path_buf());
+    Case {
+        name,
+        path,
+        units,
+        verbs,
+        ignores,
+        twin,
+        matrix,
+    }
 }
 
 fn lsp_position(text: &str, offset: usize) -> Position {
@@ -1230,7 +1312,9 @@ impl Files<'_> {
             .unwrap_or_default();
         let name = self.name(path);
         let range = &location["range"];
-        let text = self.text(&name).and_then(|text| {
+        let unit = self.units.iter().find(|unit| unit.name == name);
+        let text = unit.and_then(|unit| {
+            let text = &unit.text;
             let start = offset_of(
                 text,
                 range["start"]["line"].as_u64()?,
@@ -1241,10 +1325,15 @@ impl Files<'_> {
                 range["end"]["line"].as_u64()?,
                 range["end"]["character"].as_u64()?,
             )?;
-            (start <= end).then(|| text[start..end].to_string())
+            let anchor = unit
+                .markers
+                .iter()
+                .find(|(_, offset)| *offset == start)
+                .map_or_else(String::new, |(marker, _)| format!("/*{marker}*/ "));
+            (start <= end).then(|| format!("{anchor}{:?}", &text[start..end]))
         });
         match text {
-            Some(text) => format!("{} {text:?}", stem(&name)),
+            Some(text) => format!("{} {text}", stem(&name)),
             None => format!(
                 "{} {}",
                 name,
@@ -1503,6 +1592,35 @@ impl Files<'_> {
     fn span_of_answer(&self, answer: &Value) -> String {
         let current = self.current.borrow().clone();
         self.span(&current, &answer["range"])
+    }
+
+    fn diagnostic_place(&self, answer: &Value, as_location: bool) -> String {
+        if !as_location {
+            return self.span_of_answer(answer);
+        }
+        let current = self.current.borrow().clone();
+        let path = self.dir.join(&current);
+        self.covered(&json!({ "path": path.to_string_lossy(), "range": answer["range"] }))
+    }
+}
+
+struct Token {
+    line: u64,
+    start: u64,
+    length: u64,
+    kind: String,
+    modifiers: Vec<String>,
+}
+
+impl Token {
+    fn shown(&self) -> String {
+        format!("{} [{}]", self.kind, self.modifiers.join(", "))
+    }
+
+    fn covers(&self, at: Position) -> bool {
+        self.line == u64::from(at.line)
+            && self.start <= u64::from(at.character)
+            && u64::from(at.character) < self.start + self.length
     }
 }
 
@@ -1902,7 +2020,32 @@ fn difference(engine: &Value, server: &Value) -> String {
 struct Outcome {
     baseline: String,
     parity: Vec<String>,
+    compared: Vec<Compared>,
     transport: Vec<String>,
+}
+
+struct Compared {
+    question: String,
+    heading: String,
+    difference: Option<String>,
+}
+
+fn heading(question: &Question, unit: &Unit) -> String {
+    match question.offset {
+        Some(offset) => {
+            let at = lsp_position(&unit.text, offset);
+            format!(
+                "=== {} /*{}*/ {}:{}:{} ===\n{}",
+                question.verb.name(),
+                question.target,
+                unit.name,
+                at.line + 1,
+                at.character + 1,
+                caret(unit, offset, &question.target)
+            )
+        }
+        None => format!("=== {} {} ===\n", question.verb.name(), unit.name),
+    }
 }
 
 fn range_check(
@@ -1979,19 +2122,35 @@ fn run(case: &Case) -> Outcome {
     };
     let questions = questions(case, &project);
 
-    let mut engine = ttc::engine::Workspace::new(Engine::new(None));
+    let asks_editor = case.verbs.iter().any(|(verb, _)| {
+        *verb == Verb::Diagnostics || (*verb == Verb::Completions && case.matrix.is_none())
+    });
+    let mut editor = asks_editor.then(|| {
+        let server = extension_server().expect("a built extension server, checked before the run");
+        let mut editor = Lsp::editor(&server, &project);
+        for unit in case.units.iter().filter(|unit| is_tt(&unit.name)) {
+            editor.open(&project.join(&unit.name), &unit.text);
+        }
+        editor
+    });
+    let mut engine = case
+        .matrix
+        .is_none()
+        .then(|| ttc::engine::Workspace::new(Engine::new(None)));
     let mut server = Server::start(&project);
     for unit in case.units.iter().filter(|unit| is_tt(&unit.name)) {
         let path = project.join(&unit.name);
-        engine
-            .open_document(&path, unit.text.clone())
-            .unwrap_or_else(|e| {
-                panic!(
-                    "{}: the engine did not open {}: {e}",
-                    case.path.display(),
-                    unit.name
-                )
-            });
+        if let Some(engine) = engine.as_mut() {
+            engine
+                .open_document(&path, unit.text.clone())
+                .unwrap_or_else(|e| {
+                    panic!(
+                        "{}: the engine did not open {}: {e}",
+                        case.path.display(),
+                        unit.name
+                    )
+                });
+        }
         let opened = server.ask(
             "openDocument",
             &json!({ "path": path.to_string_lossy(), "text": unit.text }),
@@ -2004,18 +2163,6 @@ fn run(case: &Case) -> Outcome {
         );
     }
 
-    let asks_editor = case
-        .verbs
-        .iter()
-        .any(|(verb, _)| matches!(verb, Verb::Diagnostics | Verb::Completions));
-    let mut editor = asks_editor.then(|| {
-        let server = extension_server().expect("a built extension server, checked before the run");
-        let mut editor = Lsp::editor(&server, &project);
-        for unit in case.units.iter().filter(|unit| is_tt(&unit.name)) {
-            editor.open(&project.join(&unit.name), &unit.text);
-        }
-        editor
-    });
     let mut published: Option<BTreeMap<String, Value>> = None;
 
     let dir_text = project.to_string_lossy().into_owned();
@@ -2025,25 +2172,15 @@ fn run(case: &Case) -> Outcome {
     for question in &questions {
         let unit = &case.units[question.unit];
         files.current.replace(unit.name.clone());
-        match question.offset {
-            Some(offset) => {
-                let at = lsp_position(&unit.text, offset);
-                baseline.push_str(&format!(
-                    "=== {} /*{}*/ {}:{}:{} ===\n{}",
-                    question.verb.name(),
-                    question.target,
-                    unit.name,
-                    at.line + 1,
-                    at.character + 1,
-                    caret(unit, offset, &question.target)
-                ));
-            }
-            None => baseline.push_str(&format!("=== {} {} ===\n", question.verb.name(), unit.name)),
-        }
+        baseline.push_str(&heading(question, unit));
         let mut answered = Vec::new();
         for request in &question.requests {
-            let from_engine = engine_answer(&mut engine, request);
             let from_server = server.ask(request.method, &request.params);
+            let Some(engine) = engine.as_mut() else {
+                answered.push((request.method.to_string(), from_server));
+                continue;
+            };
+            let from_engine = engine_answer(engine, request);
             let (engine_view, server_view) = (
                 normalized(&from_engine, &dir_text),
                 normalized(&from_server, &dir_text),
@@ -2072,7 +2209,7 @@ fn run(case: &Case) -> Outcome {
                     };
                     let (engine_request, server_request) =
                         (resolve(&from_engine), resolve(&from_server));
-                    let resolved_engine = engine_answer(&mut engine, &engine_request);
+                    let resolved_engine = engine_answer(engine, &engine_request);
                     let resolved_server = server.ask(server_request.method, &server_request.params);
                     let (engine_view, server_view) = (
                         normalized(&resolved_engine, &dir_text),
@@ -2108,7 +2245,7 @@ fn run(case: &Case) -> Outcome {
                     render_published(&files, &list, &mut baseline);
                     answered.push(("published".to_string(), list));
                 }
-                Verb::Completions => {
+                Verb::Completions if case.matrix.is_none() => {
                     let offset = question.offset.expect("a marker");
                     let at = lsp_position(&unit.text, offset);
                     let answer = editor.request(
@@ -2143,6 +2280,7 @@ fn run(case: &Case) -> Outcome {
     drop(editor);
 
     let mut parity = Vec::new();
+    let mut compared = Vec::new();
     if let Some(twin) = &case.twin {
         let twin_dir = dir.join("twin");
         fs::create_dir_all(&twin_dir).expect("a writable twin project");
@@ -2176,11 +2314,20 @@ fn run(case: &Case) -> Outcome {
                     Some((_, offset)) => Some(*offset),
                     None => continue,
                 },
-                None if twin_unit.text == unit.text => None,
-                None => continue,
+                None => None,
+            };
+            let shared: BTreeSet<String> = unit
+                .markers
+                .iter()
+                .filter(|(marker, _)| twin_unit.markers.iter().any(|(other, _)| other == marker))
+                .map(|(marker, _)| marker.clone())
+                .collect();
+            let context = Parity {
+                ignores: &case.ignores,
+                shared: (twin_unit.text != unit.text).then_some(&shared),
             };
             files.current.replace(unit.name.clone());
-            let tt_view = parity_view(question.verb, &files, answered, None);
+            let tt_view = parity_view(question.verb, &files, answered, None, &context);
             let ts_answer = twin_answer(
                 &mut lsp,
                 question.verb,
@@ -2189,29 +2336,34 @@ fn run(case: &Case) -> Outcome {
                 twin_offset,
             );
             twin_files.current.replace(twin_unit.name.clone());
-            let ts_view = parity_view(question.verb, &twin_files, &ts_answer, Some(&lsp.legend));
-            let label = format!("{} {} {}", case.name, question.verb.name(), question.target);
-            if tt_view == ts_view {
-                baseline.push_str(&format!(
-                    "{} {}: same\n",
-                    question.verb.name(),
-                    question.target
-                ));
-            } else {
-                baseline.push_str(&format!(
-                    "{} {}: differs\n{}",
-                    question.verb.name(),
-                    question.target,
-                    parity_difference(&tt_view, &ts_view)
-                ));
-                parity.push(label);
+            let ts_view = parity_view(
+                question.verb,
+                &twin_files,
+                &ts_answer,
+                Some(&lsp.legend),
+                &context,
+            );
+            let asked = format!("{} {}", question.verb.name(), question.target);
+            let difference = (tt_view != ts_view).then(|| parity_difference(&tt_view, &ts_view));
+            match &difference {
+                None => baseline.push_str(&format!("{asked}: same\n")),
+                Some(lines) => {
+                    baseline.push_str(&format!("{asked}: differs\n{lines}"));
+                    parity.push(format!("{} {asked}", case.name));
+                }
             }
+            compared.push(Compared {
+                question: asked,
+                heading: heading(question, unit),
+                difference,
+            });
         }
         baseline.push('\n');
     }
     Outcome {
         baseline: baseline.replace(&dir_text, "$DIR"),
         parity,
+        compared,
         transport,
     }
 }
@@ -2390,25 +2542,38 @@ fn answer_of<'a>(answers: &'a [(String, Value)], method: &str) -> &'a Value {
 /// the `.tt` source and `tsgo --lsp`'s on the TypeScript twin:
 ///
 /// - a location is its file's stem and the text it covers (`main "x"`), so
-///   the two files' different lengths and extensions do not count; a place
+///   the two files' different lengths and extensions do not count, led by
+///   the marker it starts at when there is one (`main /*use*/ "x"`), so the
+///   case's markers tell apart two places with the same text; a place
 ///   outside the case is its file name and position;
 /// - hover is the signature and documentation, split out of TypeScript's
 ///   markdown the way the engine splits it;
 /// - completion is the sorted set of labels with their LSP kinds, since the
-///   ranking layer is the adapter's;
+///   ranking layer is the adapter's, without the labels the case's
+///   `@parityIgnores` names and without entries that import from
+///   `@tt/std`, a package a twin's project does not have;
 /// - signature help is each label with its parameters, and the active
 ///   signature and parameter;
-/// - semantic tokens are compared only when the twin's text is the source's
-///   (a `.tt` file with no tt syntax), decoded through TypeScript's legend;
-/// - diagnostics likewise, the adapter's published list against
-///   TypeScript's pull answer, as range, code, severity, and message;
+/// - semantic tokens, decoded through TypeScript's legend, are every token
+///   when the twin's text is the source's, and otherwise the token at each
+///   marker the two files share;
+/// - diagnostics are the adapter's published list against TypeScript's pull
+///   answer, as range, code, severity, and message (the project's directory
+///   written `$DIR`), the range written as a location when the twin's text
+///   is not the source's;
 /// - rename is the set of edited spans with their text; references are the
 ///   set of referenced spans.
+struct Parity<'a> {
+    ignores: &'a BTreeSet<String>,
+    shared: Option<&'a BTreeSet<String>>,
+}
+
 fn parity_view(
     verb: Verb,
     files: &Files<'_>,
     answers: &[(String, Value)],
     legend: Option<&(Vec<String>, Vec<String>)>,
+    parity: &Parity<'_>,
 ) -> String {
     let lsp = legend.is_some();
     let result = |method: &str| -> Value {
@@ -2456,6 +2621,14 @@ fn parity_view(
             };
             let labels: BTreeSet<String> = items
                 .iter()
+                .filter(|item| {
+                    item["label"]
+                        .as_str()
+                        .is_none_or(|label| !parity.ignores.contains(label))
+                        && !item["source"]
+                            .as_str()
+                            .is_some_and(|source| source.starts_with(STANDARD_LIBRARY))
+                })
                 .filter_map(|item| {
                     item["label"].as_str().map(|label| {
                         format!(
@@ -2570,8 +2743,7 @@ fn parity_view(
             out
         }
         Verb::SemanticTokens => {
-            let tokens = result("documentSemanticTokens");
-            let mut lines = Vec::new();
+            let mut tokens: Vec<Token> = Vec::new();
             if let Some((types, modifiers)) = legend {
                 let data = result("semanticTokens")["data"]
                     .as_array()
@@ -2587,63 +2759,87 @@ fn parity_view(
                     } else {
                         delta_start
                     };
-                    let length = chunk[2].as_u64().unwrap_or(0);
                     let kind = types
                         .get(chunk[3].as_u64().unwrap_or(0) as usize)
                         .cloned()
                         .unwrap_or_default();
                     let bits = chunk[4].as_u64().unwrap_or(0);
-                    let mods: Vec<&str> = modifiers
+                    let modifiers = modifiers
                         .iter()
                         .enumerate()
                         .filter(|(i, _)| bits & (1 << i) != 0)
-                        .map(|(_, m)| m.as_str())
+                        .map(|(_, m)| m.clone())
                         .collect();
-                    lines.push(format!(
-                        "{}:{}+{} {kind} [{}]",
-                        line + 1,
-                        character + 1,
-                        length,
-                        mods.join(", ")
-                    ));
+                    tokens.push(Token {
+                        line,
+                        start: character,
+                        length: chunk[2].as_u64().unwrap_or(0),
+                        kind,
+                        modifiers,
+                    });
                 }
             } else {
-                for token in tokens["tokens"].as_array().into_iter().flatten() {
+                for token in result("documentSemanticTokens")["tokens"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                {
                     let range = &token["range"];
-                    let mut mods: Vec<&str> = token["modifiers"]
-                        .as_array()
-                        .into_iter()
-                        .flatten()
-                        .filter_map(Value::as_str)
-                        .collect();
-                    mods.sort_unstable();
-                    lines.push(format!(
-                        "{}:{}+{} {} [{}]",
-                        range["start"]["line"].as_u64().unwrap_or(0) + 1,
-                        range["start"]["character"].as_u64().unwrap_or(0) + 1,
-                        range["end"]["character"].as_u64().unwrap_or(0)
-                            - range["start"]["character"].as_u64().unwrap_or(0),
-                        token["type"].as_str().unwrap_or_default(),
-                        mods.join(", ")
-                    ));
+                    let start = range["start"]["character"].as_u64().unwrap_or(0);
+                    tokens.push(Token {
+                        line: range["start"]["line"].as_u64().unwrap_or(0),
+                        start,
+                        length: range["end"]["character"].as_u64().unwrap_or(0) - start,
+                        kind: token["type"].as_str().unwrap_or_default().to_string(),
+                        modifiers: token["modifiers"]
+                            .as_array()
+                            .into_iter()
+                            .flatten()
+                            .filter_map(|m| m.as_str().map(String::from))
+                            .collect(),
+                    });
                 }
             }
-            if lsp {
-                lines = lines
-                    .into_iter()
-                    .map(|line| {
-                        let (head, mods) = line.split_once(" [").unwrap_or((&line, "]"));
-                        let mut mods: Vec<&str> = mods
-                            .trim_end_matches(']')
-                            .split(", ")
-                            .filter(|m| !m.is_empty())
-                            .collect();
-                        mods.sort_unstable();
-                        format!("{head} [{}]", mods.join(", "))
-                    })
-                    .collect();
+            for token in &mut tokens {
+                token.modifiers.sort_unstable();
             }
-            lines.join("\n")
+            match parity.shared {
+                None => tokens
+                    .iter()
+                    .map(|token| {
+                        format!(
+                            "{}:{}+{} {}",
+                            token.line + 1,
+                            token.start + 1,
+                            token.length,
+                            token.shown()
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+                Some(shared) => {
+                    let current = files.current.borrow().clone();
+                    let unit = files.units.iter().find(|unit| unit.name == current);
+                    shared
+                        .iter()
+                        .map(|marker| {
+                            let at = unit.and_then(|unit| {
+                                unit.markers
+                                    .iter()
+                                    .find(|(name, _)| name == marker)
+                                    .map(|(_, offset)| lsp_position(&unit.text, *offset))
+                            });
+                            let token =
+                                at.and_then(|at| tokens.iter().find(|token| token.covers(at)));
+                            format!(
+                                "/*{marker}*/ {}",
+                                token.map_or_else(|| "none".to_string(), Token::shown)
+                            )
+                        })
+                        .collect::<Vec<_>>()
+                        .join("\n")
+                }
+            }
         }
         Verb::Diagnostics => {
             let mut lines = Vec::new();
@@ -2658,9 +2854,12 @@ fn parity_view(
                     };
                     lines.push(format!(
                         "{} {severity} TS{}: {}",
-                        files.span_of_answer(d),
+                        files.diagnostic_place(d, parity.shared.is_some()),
                         d["code"],
-                        d["message"].as_str().unwrap_or_default()
+                        d["message"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .replace(&files.dir.to_string_lossy().into_owned(), "$DIR")
                     ));
                 }
             } else {
@@ -2684,8 +2883,11 @@ fn parity_view(
                     };
                     lines.push(format!(
                         "{} {severity} TS{code}: {}",
-                        files.span_of_answer(d),
-                        d["message"].as_str().unwrap_or_default()
+                        files.diagnostic_place(d, parity.shared.is_some()),
+                        d["message"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .replace(&files.dir.to_string_lossy().into_owned(), "$DIR")
                     ));
                 }
             }
@@ -2693,6 +2895,176 @@ fn parity_view(
             lines.join("\n")
         }
     }
+}
+
+const DIFFERENCES: &str = "tests/editor-matrix-differences.txt";
+
+struct Listed {
+    pattern: String,
+    question: String,
+    line: usize,
+}
+
+fn listed_differences() -> Vec<Listed> {
+    let text = fs::read_to_string(root().join(DIFFERENCES)).unwrap_or_default();
+    let mut out: Vec<Listed> = Vec::new();
+    for (index, line) in text.lines().enumerate() {
+        if line.trim().is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let fields: Vec<&str> = line.split('\t').collect();
+        let [pattern, question, class, reason] = fields[..] else {
+            panic!(
+                "{DIFFERENCES}:{}: a line is a case name (`*` matches any text), a tab, the verb and \
+                 marker, a tab, `by-design` or `defect`, a tab, and the reason",
+                index + 1
+            );
+        };
+        match class {
+            "by-design" => assert!(
+                reason.contains("docs/ai/tt.md"),
+                "{DIFFERENCES}:{}: a by-design difference cites where docs/ai/tt.md documents it",
+                index + 1
+            ),
+            "defect" => assert!(
+                reason.starts_with("TASK-"),
+                "{DIFFERENCES}:{}: a defect names the TASK-NNN that records it",
+                index + 1
+            ),
+            other => panic!(
+                "{DIFFERENCES}:{}: `{other}` is neither `by-design` nor `defect`",
+                index + 1
+            ),
+        }
+        assert!(
+            !out.iter()
+                .any(|entry| entry.pattern == pattern && entry.question == question),
+            "{DIFFERENCES}:{}: `{pattern}` `{question}` is listed twice",
+            index + 1
+        );
+        out.push(Listed {
+            pattern: pattern.to_string(),
+            question: question.to_string(),
+            line: index + 1,
+        });
+    }
+    out
+}
+
+fn glob(pattern: &str, name: &str) -> bool {
+    let mut parts = pattern.split('*');
+    let first = parts.next().unwrap_or_default();
+    let Some(mut rest) = name.strip_prefix(first) else {
+        return false;
+    };
+    let parts: Vec<&str> = parts.collect();
+    for (index, part) in parts.iter().enumerate() {
+        if index + 1 == parts.len() {
+            return rest.ends_with(part);
+        }
+        match rest.find(part) {
+            Some(at) => rest = &rest[at + part.len()..],
+            None => return false,
+        }
+    }
+    rest.is_empty()
+}
+
+fn asked(case: &Case) -> Vec<String> {
+    let mut out = Vec::new();
+    for (verb, targets) in &case.verbs {
+        for target in targets {
+            if verb.per_file() {
+                for unit in case.units.iter().filter(|unit| is_tt(&unit.name)) {
+                    if target == "*" || *target == unit.name {
+                        out.push(format!("{} {}", verb.name(), unit.name));
+                    }
+                }
+            } else {
+                out.push(format!("{} {target}", verb.name()));
+            }
+        }
+    }
+    out
+}
+
+fn matrix_baseline(case: &Case) -> Option<PathBuf> {
+    case.matrix.as_ref().map(|dir| {
+        reference()
+            .join("matrix")
+            .join(dir)
+            .join(format!("{}.baseline", case.name))
+    })
+}
+
+fn matrix_differences(case: &Case, compared: &[Compared]) -> String {
+    let mut out = String::new();
+    for entry in compared {
+        if let Some(lines) = &entry.difference {
+            out.push_str(&entry.heading);
+            out.push_str(lines);
+            out.push('\n');
+        }
+    }
+    if out.is_empty() {
+        return out;
+    }
+    format!(
+        "differences from {} at the questions listed in {DIFFERENCES}\n\n{out}",
+        case.name
+    )
+}
+
+fn judge_matrix(
+    selection: &Selection,
+    results: &BTreeMap<String, Vec<(String, bool)>>,
+    unfiltered: bool,
+) -> Vec<String> {
+    let listed = listed_differences();
+    let mut failures = Vec::new();
+    for (name, questions) in results {
+        for (question, differs) in questions {
+            let covering: Vec<&Listed> = listed
+                .iter()
+                .filter(|entry| entry.question == *question && glob(&entry.pattern, name))
+                .collect();
+            match (differs, covering.first()) {
+                (true, None) => failures.push(format!(
+                    "{name}: {question} differs from the TypeScript twin, and {DIFFERENCES} does not \
+                     list it; the difference is in the case's baseline. A twin error is fixed in \
+                     tests/matrix; a tt difference is listed with its class and reason: \
+                     `{name}<TAB>{question}<TAB>by-design|defect<TAB>...`"
+                )),
+                (false, Some(entry)) => failures.push(format!(
+                    "{DIFFERENCES}:{}: {name} {question} agrees with the TypeScript twin now; narrow \
+                     or remove the line",
+                    entry.line
+                )),
+                _ => {}
+            }
+        }
+    }
+    if unfiltered {
+        let every: Vec<(&String, Vec<String>)> = selection
+            .cases
+            .iter()
+            .chain(&selection.unsampled)
+            .filter(|case| case.matrix.is_some())
+            .map(|case| (&case.name, asked(case)))
+            .collect();
+        for entry in &listed {
+            let names_one = every.iter().any(|(name, questions)| {
+                glob(&entry.pattern, name) && questions.contains(&entry.question)
+            });
+            if !names_one {
+                failures.push(format!(
+                    "{DIFFERENCES}:{}: `{}` `{}` names no question of a matrix case; remove the line",
+                    entry.line, entry.pattern, entry.question
+                ));
+            }
+        }
+    }
+    failures
 }
 
 #[test]
@@ -2719,14 +3091,26 @@ fn every_editor_case_matches_its_baseline() {
         );
         return;
     }
-    let cases = cases();
+    let selection = cases();
+    if let Some(summary) = &selection.summary {
+        eprintln!("editor case matrix: {summary}");
+    }
+    for case in &selection.unsampled {
+        if let Some(path) = matrix_baseline(case)
+            && path.exists()
+        {
+            not_sampled(&path);
+        }
+    }
+    let cases = &selection.cases;
     let filtered = std::env::var("TT_CASES").is_ok_and(|f| !f.is_empty());
     let next = AtomicUsize::new(0);
     let failures: Mutex<Vec<String>> = Mutex::new(Vec::new());
     let parity: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
+    let matrix_results: Mutex<BTreeMap<String, Vec<(String, bool)>>> = Mutex::new(BTreeMap::new());
     let workers = std::thread::available_parallelism()
-        .map_or(1, |n| n.get())
-        .min(4);
+        .map_or(1, |n| n.get() * 2)
+        .min(8);
     std::thread::scope(|scope| {
         for _ in 0..workers {
             scope.spawn(|| {
@@ -2737,18 +3121,39 @@ fn every_editor_case_matches_its_baseline() {
                     };
                     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         let outcome = run(case);
-                        expect(
-                            &reference().join(format!("{}.baseline", case.name)),
-                            &outcome.baseline,
-                        );
+                        match matrix_baseline(case) {
+                            Some(path) => {
+                                let differences = matrix_differences(case, &outcome.compared);
+                                if differences.is_empty() {
+                                    expect_absent(&path);
+                                } else {
+                                    expect(&path, &differences);
+                                }
+                            }
+                            None => expect(
+                                &reference().join(format!("{}.baseline", case.name)),
+                                &outcome.baseline,
+                            ),
+                        }
                         outcome
                     }));
                     match outcome {
                         Ok(outcome) => {
-                            parity
-                                .lock()
-                                .unwrap()
-                                .insert(case.name.clone(), outcome.parity);
+                            if case.matrix.is_some() {
+                                matrix_results.lock().unwrap().insert(
+                                    case.name.clone(),
+                                    outcome
+                                        .compared
+                                        .iter()
+                                        .map(|c| (c.question.clone(), c.difference.is_some()))
+                                        .collect(),
+                                );
+                            } else {
+                                parity
+                                    .lock()
+                                    .unwrap()
+                                    .insert(case.name.clone(), outcome.parity);
+                            }
                             if !outcome.transport.is_empty() {
                                 failures
                                     .lock()
@@ -2772,7 +3177,12 @@ fn every_editor_case_matches_its_baseline() {
             });
         }
     });
-    let failures = failures.into_inner().unwrap();
+    let mut failures = failures.into_inner().unwrap();
+    failures.extend(judge_matrix(
+        &selection,
+        &matrix_results.into_inner().unwrap(),
+        !filtered,
+    ));
     assert!(
         failures.is_empty(),
         "{} editor case(s) failed:\n\n{}",

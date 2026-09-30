@@ -1,0 +1,5 @@
+differences from pipeline_arrowStep_awaitOperand_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await ((t0 = await later(input), ((n: number) => note(\"arrow\", n + 1))(t0)))" hint TS80007: 'await' has no effect on the type of this expression.
+
