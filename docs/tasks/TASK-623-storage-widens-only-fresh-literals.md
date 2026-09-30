@@ -105,7 +105,7 @@ arms, block arms, `return match` in an unannotated function, and
   there (`NaN` is falsy too), while the checker's `&&` result type takes the
   left part from `extractDefinitelyFalsyTypes`, which maps `number` to `0`.
 - **Resolution**: Taken up with the other left-part differences of logical
-  operations in TASK-626.
+  operations in TASK-626, which leaves this one open (its Issue 2).
 
 ## Verification
 

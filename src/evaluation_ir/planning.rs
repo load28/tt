@@ -436,12 +436,28 @@ pub(super) fn plan_one_operation(
         _ => return Ok(None),
     };
     let result = allocate_value_slot(next_slot, slot_names, occupied_names)?;
-    if matches!(
+    let logical = matches!(
         &kind,
         PlannedConditionalKind::LogicalAnd
             | PlannedConditionalKind::LogicalOr
             | PlannedConditionalKind::Nullish
-    ) {
+    );
+    let condition = match condition {
+        PlannedEvaluationInput::Stable { source, reserved } if logical => {
+            PlannedEvaluationInput::Source {
+                source,
+                mode: EvaluationInputMode::Value,
+                target: match reserved {
+                    Some(slot) => slot,
+                    None => allocate_value_slot(next_slot, slot_names, occupied_names)?,
+                },
+                receiver: None,
+                key: None,
+            }
+        }
+        condition => condition,
+    };
+    if logical {
         active.push(PlannedActiveBranch {
             value: first.expr,
             branch: facts.branch,

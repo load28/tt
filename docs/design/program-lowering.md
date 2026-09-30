@@ -604,9 +604,19 @@ The condition is therefore tested where it is evaluated:
 
 A condition that was already captured by an earlier step (its slot is in
 the captured set), or that is itself a tt value, is tested through its
-slot, and a provably inert condition is written in place, parenthesized
-(`if ((false))`) as before, so TypeScript does not take a literal `false`
-for an unreachable branch. Storage writes are then either statements of a
+slot. A provably inert ternary condition is written in place,
+parenthesized (`if ((false))`) as before, so TypeScript does not take a
+literal `false` for an unreachable branch. An inert left operand of `&&`,
+`||`, or `??` (a literal such as `false`, `0`, or `null`) is stored in
+operand storage like any other (TASK-626): it is the result when the
+right operand does not run, and TypeScript types the operation from the
+operand's type narrowed by the test (`removeDefinitelyFalsyTypes` for
+`||`, `extractDefinitelyFalsyTypes` for `&&`, `getNonNullableType` for
+`??` in the checker's `checkBinaryLikeExpressionWorker`), so
+`false || v` has the type of `v`. A literal written again in the branch
+(`if ((false)) { $r = (false); }`) is not a reference, so nothing narrows
+it and its type joined the result; `let $l: false; if ($l = false)`
+narrows `$l` to `never` in that branch. Storage writes are then either statements of a
 block or the test of an `if`; a detached slot's value TypeScript types
 from its context is carried as `({ value: l }).value` in a test, where no
 `const` can be declared (`docs/design/contextual-type-materialization.md`).

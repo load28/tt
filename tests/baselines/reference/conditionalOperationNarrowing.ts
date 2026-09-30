@@ -163,7 +163,7 @@ export function l(o: O, init: { v: number } | undefined) {
   }
   
   const b = $tt_v11;
-  let $tt_v14: (number) | (boolean);
+  let $tt_v14: (number) | (false);
   let $tt_v13: boolean;
   if ($tt_v13 = u !== undefined && u.v > 0) {
     let $tt_v12: number;

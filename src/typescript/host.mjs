@@ -733,7 +733,9 @@ async function main() {
         node.forEachChild((child) => { found ||= writesAny(child); });
         return found;
       };
-      for (const [index, slot] of (job.contextualSlots ?? []).entries()) {
+      const entries = [...(job.contextualSlots ?? []).entries()];
+      let operandsSettling = false;
+      for (const [index, slot] of [...entries.filter(([, slot]) => slot.operand), ...entries.filter(([, slot]) => !slot.operand)]) {
         if (slot.settled || !members.has(slot.module)) continue;
         const source = project.program.getSourceFile(slot.module);
         if (!source) continue;
@@ -776,7 +778,7 @@ async function main() {
           (!checker.isTypeAssignableTo(other, type) || otherIndex < index)) ? [] : [index]);
         const indefinite = (type) => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType();
         if (slot.asserted) {
-          if (!job.inferJoinTypes || !declaration.type || declaration.initializer) continue;
+          if (!job.inferJoinTypes || operandsSettling || !declaration.type || declaration.initializer) continue;
           const context = checker.getTypeFromTypeNode(declaration.type);
           const incoming = incomingOf();
           if (!incoming.length) continue;
@@ -801,6 +803,7 @@ async function main() {
           if ((type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType()) continue;
           const node = annotation(type);
           if (!node || (writesAny(node) && readsPending(incoming[0].right, symbol.id))) continue;
+          operandsSettling = true;
           out.contextualSlots.push({ index, inferred: true, annotation: project.emitter.printNode(node) });
           continue;
         }
@@ -819,7 +822,7 @@ async function main() {
           expected = context;
           provisional &&= assertionOperand(identifier, SyntaxKind);
         }
-        if (job.inferJoinTypes && !expected && !ambiguous && !declaration.initializer) {
+        if (job.inferJoinTypes && !operandsSettling && !expected && !ambiguous && !declaration.initializer) {
           // A statement join must have the union of its incoming value types.
           // In particular, TS's evolving-array inference at assignment sites is
           // not expression inference. Ask for each RHS type in its branch scope
