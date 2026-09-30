@@ -243,10 +243,11 @@ pub(super) fn typed_watch(
     let mut first = true;
     let mut reopen_error = None;
     loop {
-        // A configuration created or deleted since the last pass puts the
-        // inputs in another project, as a fresh run would find them.
+        // A discovered configuration created or deleted since the last pass
+        // puts the inputs in another project, as a fresh run would find them.
         let identity = ttc::engine::Engine::project_identity(inputs, project_options);
-        if let Ok((tsconfig, root)) = &identity
+        if project_options.tsconfig.is_none()
+            && let Ok((tsconfig, root)) = &identity
             && (tsconfig.as_deref(), root.as_path()) != project.identity()
         {
             match open_typed_project(engine, inputs, project_options, options) {

@@ -103,6 +103,22 @@ neither a new configuration nor a new file.
 - **Resolution**: The list is computed from each request's inputs
   (`dependencies_for`).
 
+### Issue 2: The TASK-540 watch regression expected TS5083 for a deleted, discovered configuration
+
+- **Symptom**: `a_typed_watch_reports_a_missing_configuration_and_recovers_when_it_returns`
+  (`tests/native/cases_07.rs`) failed in the full gate: after the rename,
+  the pass reported nothing instead of `error[ts5083]`.
+- **Cause**: That is this task's intended change for a discovered
+  configuration: a fresh run finds none and checks an inferred project.
+  Running the test with `--project tsconfig.json` then exposed a defect of
+  the first version: the watch re-ran discovery for a named configuration
+  too, and a missing named file resolved to a different identity whose
+  reopen failed, so the watch never passed again.
+- **Resolution**: The watch re-runs discovery only when the configuration
+  was not named; a named configuration that disappears keeps TASK-540's
+  TS5083 and recovery. The regression now names its configuration, and
+  the TASK-540 record says so at the top.
+
 ## Verification
 
 - [x] `cargo test --test workflow_repairs --test cli --test cli_outputs --test integration dependenc`

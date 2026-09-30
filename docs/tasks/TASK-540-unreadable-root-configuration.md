@@ -1,5 +1,11 @@
 # TASK-540: Report an unreadable root configuration as TS5083 and recover
 
+> **Narrowed by [TASK-588](./TASK-588-follow-configuration-discovery.md):**
+> a typed watch whose configuration was discovered, not named with
+> `--project`, reopens as the project a fresh run finds when that
+> configuration is deleted (an inferred one, or the next one up) instead of
+> reporting TS5083. A named configuration keeps this record's behavior.
+
 - **Status**: Complete
 - **Started**: 2026-09-29
 - **Completed**: 2026-09-29
