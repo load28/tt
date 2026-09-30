@@ -460,6 +460,45 @@ fn check_types_leaves_published_outputs_out_of_the_program() {
     assert!(stderr.contains("ts2451"), "{stderr}");
 }
 
+/// TASK-616: owned outputs are left out of globbing only, as `exclude`
+/// leaves files out for `tsc`. An import that names the source reaches its
+/// projection once; an import that names the output reaches the output.
+#[test]
+fn an_import_decides_whether_an_owned_output_joins_the_program() {
+    if !common::toolchain() {
+        return;
+    }
+    let root = Workspace::in_repo_with_subdir("owned-output-imports", "src");
+    fs::write(root.join("package.json"), r#"{"type":"module"}"#).unwrap();
+    fs::write(
+        root.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"module":"nodenext","noEmit":true,"types":[]},"include":["src"]}"#,
+    )
+    .unwrap();
+    fs::write(
+        root.join("src/m.tt"),
+        "export const m = 1;\nconst bad: string = 3;\n",
+    )
+    .unwrap();
+    success(run(&root, &["src"]));
+    let check = |specifier: &str| {
+        fs::write(
+            root.join("src/h.ts"),
+            format!("import {{ m }} from \"{specifier}\";\nexport const h: number = m;\n"),
+        )
+        .unwrap();
+        let output = run(&root, &["--check-types", "src"]);
+        assert!(!output.status.success());
+        String::from_utf8_lossy(&output.stderr).into_owned()
+    };
+    let stderr = check("./m.tt");
+    assert_eq!(stderr.matches("error[").count(), 1, "{stderr}");
+    assert!(stderr.contains("src/m.tt:2:21"), "{stderr}");
+    let stderr = check("./m.js");
+    assert!(stderr.contains("src/m.tt:2:21"), "{stderr}");
+    assert!(stderr.contains("src/m.ts:"), "{stderr}");
+}
+
 /// TASK-588: which configuration the inputs belong to is decided by
 /// discovery, and a watch reaches the result a fresh run would when a
 /// `tsconfig.json` is created or deleted.

@@ -621,6 +621,7 @@
 | TASK-613 | Pin that a pipeline step being typed answers as its TypeScript equivalent does | Complete | 2026-09-30 | 2026-09-30 | [TASK-613](./TASK-613-pipeline-step-typing-matches-typescript.md) |
 | TASK-614 | Check edits made while the configuration was malformed | Complete | 2026-09-30 | 2026-09-30 | [TASK-614](./TASK-614-edits-under-a-malformed-configuration.md) |
 | TASK-615 | Refuse a non-Unicode input path before writing, and publish the record first | Complete | 2026-09-30 | 2026-09-30 | [TASK-615](./TASK-615-non-unicode-input-paths.md) |
+| TASK-616 | Keep TypeScript's `exclude` semantics for an owned output reached by import | Complete | 2026-09-30 | 2026-09-30 | [TASK-616](./TASK-616-owned-outputs-reached-by-import.md) |
 
 ## Next task number
 
