@@ -45,7 +45,8 @@ ttSymbol: null
 === definition /*tag*/ matchHoverAndDefinition.tt:4:5 ===
   |     Circle(radius) => Math.PI * radius ** 2,
   |     ^ /*tag*/
-definition: 0 location(s)
+definition: 1 location(s)
+  matchHoverAndDefinition.tt 1:24-1:30 "Circle"
 
 === definition /*use*/ matchHoverAndDefinition.tt:4:33 ===
   |     Circle(radius) => Math.PI * radius ** 2,
@@ -63,10 +64,8 @@ references: 3 location(s)
 
 === parity with the TypeScript twin ===
 hover variantName: same
-hover tag: same
 hover binding: same
 hover use: same
-definition tag: same
 definition use: same
 references binding: same
 

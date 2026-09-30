@@ -202,6 +202,9 @@ impl Project {
 
     /// Go to definition, every target already in its own file's coordinates.
     pub fn definition(&mut self, path: &Path, position: Position) -> Result<Vec<Location>, String> {
+        if let Some(declared) = self.tt_name_declaration(path, position) {
+            return Ok(vec![declared]);
+        }
         let found = self.locations(
             path,
             position,
@@ -424,6 +427,18 @@ impl Project {
             }
         }
         Ok(None)
+    }
+
+    /// Where the tt name at `position` is declared, when tt resolves it and
+    /// the declaration is a place the editor can open: a variant, a case tag
+    /// or a payload field, in a declaration or a pattern of a `.tt`/`.ttx`
+    /// file. A built-in case has none; its declaration is the standard
+    /// library's, which [`Self::builtin_case_definition`] asks for.
+    fn tt_name_declaration(&self, path: &Path, position: Position) -> Option<Location> {
+        crate::SourceKind::from_tt_path(path)?;
+        let text = self.text_of(path)?;
+        crate::engine::names::symbol_at(path, &text, position, Texts::Open(&self.overlays))?
+            .definition
     }
 
     /// The project's `.tt`/`.ttx` files, the documents opened through it
