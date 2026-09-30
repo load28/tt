@@ -369,6 +369,7 @@ pub(crate) fn assemble(
             query.symbols.push(SymbolQuery {
                 module: file.module_path.clone(),
                 position,
+                binding: true,
             });
             probes.val_bindings.push(ValBindingAnchor {
                 root: query.symbols.len() - 1,
@@ -404,6 +405,7 @@ pub(crate) fn assemble(
                         query.symbols.push(SymbolQuery {
                             module: file.module_path.clone(),
                             position,
+                            binding: false,
                         });
                         Some(query.symbols.len() - 1)
                     }
@@ -414,6 +416,7 @@ pub(crate) fn assemble(
             query.symbols.push(SymbolQuery {
                 module: file.module_path.clone(),
                 position: root,
+                binding: false,
             });
             probes.mutations.push(MutationAnchor {
                 anchor: SourceAnchor {
@@ -437,6 +440,7 @@ pub(crate) fn assemble(
             query.symbols.push(SymbolQuery {
                 module: file.module_path.clone(),
                 position,
+                binding: false,
             });
             probes.functions.push(FnAnchor {
                 root: query.symbols.len() - 1,
@@ -453,11 +457,13 @@ pub(crate) fn assemble(
             query.symbols.push(SymbolQuery {
                 module: file.module_path.clone(),
                 position,
+                binding: false,
             });
             let root = query.symbols.len() - 1;
             query.symbols.push(SymbolQuery {
                 module: file.module_path.clone(),
                 position: callee_position,
+                binding: false,
             });
             probes.passes.push(PassAnchor {
                 anchor: SourceAnchor {

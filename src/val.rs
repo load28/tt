@@ -246,7 +246,13 @@ struct Frame<'a> {
 struct ParamSig {
     /// `None` for a destructuring pattern, which has no single name.
     name: Option<String>,
-    is_val: bool,
+    val_at: Option<usize>,
+}
+
+impl ParamSig {
+    fn is_val(&self) -> bool {
+        self.val_at.is_some()
+    }
 }
 
 /// One `val` binding, as a node a checker can resolve — half of the
@@ -435,7 +441,7 @@ fn run(src: &str, source_kind: SourceKind, tokens: &[Token], modifiers: &Modifie
                         .iter()
                         .map(|param| ValParam {
                             name: param.name.clone(),
-                            is_val: param.is_val,
+                            is_val: param.is_val(),
                         })
                         .collect(),
                 }
@@ -663,13 +669,13 @@ fn parse_params(src: &str, tokens: &[Token], modifiers: &Modifiers, open: usize)
         .into_iter()
         .map(|(start, end)| {
             let mut k = start;
-            let mut is_val = false;
+            let mut val_at = None;
             while k < end {
                 match &tokens[k].kind {
                     TokenKind::Ident => {
                         let word = &src[tokens[k].span.start..tokens[k].span.end];
                         if modifier_of(modifiers, &tokens[k]).is_some() {
-                            is_val = true;
+                            val_at = Some(tokens[k].span.start);
                             k += 1;
                             continue;
                         }
@@ -693,7 +699,7 @@ fn parse_params(src: &str, tokens: &[Token], modifiers: &Modifiers, open: usize)
                 }
                 _ => None,
             };
-            ParamSig { name, is_val }
+            ParamSig { name, val_at }
         })
         .collect()
 }

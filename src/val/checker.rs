@@ -462,7 +462,7 @@ impl<'a> Checker<'a> {
             .into_iter()
             .zip(list_entries(tokens, open))
             .flat_map(|(param, (start, end))| {
-                let val_at = param.is_val.then(|| tokens[start].span.start);
+                let val_at = param.val_at;
                 let mut names = Vec::new();
                 let mut k = start;
                 while k < end
@@ -630,7 +630,7 @@ impl<'a> Checker<'a> {
             let Some(param) = params.get(idx) else {
                 continue;
             };
-            if param.is_val {
+            if param.is_val() {
                 continue;
             }
             let described = match &param.name {

@@ -116,6 +116,7 @@ pub(crate) struct SymbolQuery {
     pub module: PathBuf,
     /// UTF-16 offset of the identifier in that module.
     pub position: usize,
+    pub binding: bool,
 }
 
 /// Whether the type at a position is definitely the two-case Result shape.

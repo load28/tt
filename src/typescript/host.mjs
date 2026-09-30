@@ -26,7 +26,7 @@
  *            roots: [path],               // requested and open modules
  *            literalChecks: [{ module, start, covered: [...] }],
  *            tagChecks: [{ module, start, covered: [...] }],
- *            symbolChecks: [{ module, start }],
+ *            symbolChecks: [{ module, start, binding }],
  *            resultShapeChecks: [{ module, start, end }],
  *            emitDeclarations: boolean }
  *       →  { diagnostics: [{ file, start, end, code, message, mismatch? }],
@@ -1056,7 +1056,9 @@ async function main() {
           () => positions.map((p) => checker.getSymbolAtPosition(module, p)),
         ));
       symbolChecks.forEach((entry, at) => {
-        const symbol = symbols[at];
+        const symbol = entry.check.binding
+          ? declaredBinding(checker, symbols[at], entry.check, { SyntaxKind, SymbolFlags })
+          : symbols[at];
         if (!symbol) return; // `any`, unresolved — never a verdict
         const declarations = symbol.declarations ?? [];
         out.symbols.push({
@@ -1811,6 +1813,20 @@ function isDefiniteResult(type, constituentsOf, kindSymbolOf, checker) {
     tags.add(tag);
   }
   return tags.size === 2;
+}
+
+function declaredBinding(checker, symbol, check, { SyntaxKind, SymbolFlags }) {
+  if (!symbol || !(symbol.flags & SymbolFlags.Property) ||
+      symbol.valueDeclaration?.kind !== SyntaxKind.Parameter) {
+    return symbol;
+  }
+  const parameter = checker.resolveName(
+    symbol.name,
+    SymbolFlags.FunctionScopedVariable,
+    { document: check.module, position: check.start },
+    true,
+  );
+  return parameter?.valueDeclaration?.kind === SyntaxKind.Parameter ? parameter : symbol;
 }
 
 /**
