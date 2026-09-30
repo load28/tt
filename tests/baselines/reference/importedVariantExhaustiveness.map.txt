@@ -1,0 +1,24 @@
+//// [shapes.tt] 7 mapping(s)
+1:39 -> 2:31 len 6  "number"
+1:39 -> 5:20 len 6  "number"
+1:60 -> 3:28 len 6  "number"
+1:60 -> 6:17 len 6  "number"
+1:76 -> 3:44 len 6  "number"
+1:76 -> 6:33 len 6  "number"
+1:85 -> 7:3 len 1  "\n"
+
+//// [area.tt] 13 mapping(s)
+1:1 -> 19:1 len 80  "import { Shape } from \"./shapes.tt\";\nexport func"...
+3:3 -> 40:3 len 7  "return "
+3:17 -> 23:19 len 1  "s"
+4:12 -> 26:17 len 6  "radius"
+4:23 -> 27:18 len 25  "Math.PI * radius * radius"
+5:10 -> 31:17 len 5  "width"
+5:17 -> 31:24 len 6  "height"
+5:28 -> 32:18 len 14  "width * height"
+6:4 -> 40:16 len 43  ";\n}\nexport const perimeter = (s: Shape) => "
+8:47 -> 45:19 len 1  "s"
+8:59 -> 48:17 len 6  "radius"
+8:70 -> 49:18 len 20  "2 * Math.PI * radius"
+8:92 -> 58:2 len 2  ";\n"
+

@@ -1,0 +1,11 @@
+// Repro from TASK-594
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+variant O { A(n: number), B }
+declare const o: O;
+declare function r(n: number): TResult<number, string>;
+const P = 100;
+export function f(): TResult<number, string> {
+  enum F { P = 7, Q = 1 + match (o) { A(n) => P + n, B => 0 }, R = try r(P) }
+  return Result.Ok(F.Q);
+}

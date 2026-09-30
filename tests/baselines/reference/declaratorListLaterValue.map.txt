@@ -1,0 +1,18 @@
+//// [declaratorListLaterValue.tt] 16 mapping(s)
+1:1 -> 19:1 len 23  "// Repro from TASK-593\n"
+2:18 -> 21:21 len 6  "number"
+2:18 -> 24:10 len 6  "number"
+2:30 -> 26:3 len 100  "\ndeclare const o: O;\ndeclare function t(s: strin"...
+6:21 -> 49:9 len 4  "b = "
+6:32 -> 33:19 len 1  "o"
+6:39 -> 36:17 len 1  "n"
+6:45 -> 37:18 len 5  "a + n"
+6:57 -> 41:18 len 1  "0"
+6:60 -> 49:19 len 50  ";\n  return b;\n}\nexport function g() {\n  var a = "...
+10:15 -> 72:7 len 4  "b = "
+10:26 -> 56:19 len 1  "o"
+10:33 -> 59:17 len 1  "n"
+10:39 -> 60:18 len 5  "a + n"
+10:51 -> 64:18 len 1  "0"
+10:54 -> 72:17 len 16  ";\n  return b;\n}\n"
+

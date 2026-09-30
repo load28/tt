@@ -58,14 +58,11 @@ use std::process::{Child, Command, Stdio};
 use ttc::{Options, SourceKind, compile_report};
 
 mod common;
+use common::baseline::{expect, updating};
 use common::{toolchain, toolchain_installed};
 
 fn fixtures() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
-}
-
-fn updating() -> bool {
-    std::env::var_os("UPDATE_EXPECT").is_some()
 }
 
 /// The fixture directories under `group`, in name order.
@@ -108,81 +105,6 @@ fn options(path: &Path) -> Options<'_> {
         source_kind: SourceKind::from_path(path).unwrap_or_default(),
         ..Options::default()
     }
-}
-
-/// Compares `actual` against the file at `path`, or writes it there when
-/// the run was asked to update.
-fn expect(path: &Path, actual: &str) {
-    if updating() {
-        fs::write(path, actual).expect("writable expectation");
-        return;
-    }
-    let expected = fs::read_to_string(path).unwrap_or_else(|_| {
-        panic!(
-            "{} does not exist yet — run `UPDATE_EXPECT=1 cargo test --test snapshot`",
-            path.display()
-        )
-    });
-    if expected == actual {
-        return;
-    }
-    panic!(
-        "{} is out of date\n\n{}\n\
-         Run `UPDATE_EXPECT=1 cargo test --test snapshot` and read the diff.",
-        path.display(),
-        diff(&expected, actual),
-    );
-}
-
-/// The lines that differ, with a little of what surrounds them.
-///
-/// Not a real diff — no dependency here does that — but comparing line by
-/// line from the top is worse than nothing: one inserted line makes the
-/// whole rest of the file look changed, and the reader has to find the
-/// actual edit by eye. Trimming the matching head and tail first leaves
-/// exactly the region that moved, which is what an insertion or a
-/// rewritten block really is.
-fn diff(expected: &str, actual: &str) -> String {
-    const CONTEXT: usize = 3;
-    let expected: Vec<&str> = expected.lines().collect();
-    let actual: Vec<&str> = actual.lines().collect();
-
-    let head = expected
-        .iter()
-        .zip(&actual)
-        .take_while(|(left, right)| left == right)
-        .count();
-    // The tail may not reach back into the head on either side.
-    let tail = expected[head..]
-        .iter()
-        .rev()
-        .zip(actual[head..].iter().rev())
-        .take_while(|(left, right)| left == right)
-        .count();
-
-    let mut out = String::new();
-    let from = head.saturating_sub(CONTEXT);
-    if from > 0 {
-        out.push_str(&format!("  ... {from} identical line(s)\n"));
-    }
-    for line in &expected[from..head] {
-        out.push_str(&format!("  {line}\n"));
-    }
-    for line in &expected[head..expected.len() - tail] {
-        out.push_str(&format!("- {line}\n"));
-    }
-    for line in &actual[head..actual.len() - tail] {
-        out.push_str(&format!("+ {line}\n"));
-    }
-    let after = expected.len() - tail;
-    let shown = tail.min(CONTEXT);
-    for line in &expected[after..after + shown] {
-        out.push_str(&format!("  {line}\n"));
-    }
-    if tail > shown {
-        out.push_str(&format!("  ... {} identical line(s)\n", tail - shown));
-    }
-    out
 }
 
 #[test]

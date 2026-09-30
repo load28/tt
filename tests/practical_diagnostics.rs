@@ -167,25 +167,6 @@ fn annotated_source(path: &Path) -> (String, Vec<ErrorAnnotation>) {
     (source, annotations)
 }
 
-fn expect_baseline(path: &Path, actual: &str) {
-    if std::env::var_os("UPDATE_EXPECT").is_some() {
-        fs::write(path, actual).expect("writable practical diagnostic baseline");
-        return;
-    }
-    let expected = fs::read_to_string(path).unwrap_or_else(|_| {
-        panic!(
-            "{} does not exist — run `UPDATE_EXPECT=1 cargo test --test practical_diagnostics`",
-            path.display()
-        )
-    });
-    assert_eq!(
-        actual,
-        expected,
-        "{} is out of date; regenerate it with UPDATE_EXPECT=1 and review the diff",
-        path.display()
-    );
-}
-
 fn codes(stderr: &str) -> Vec<&str> {
     stderr
         .lines()
@@ -255,7 +236,7 @@ fn cli_reports_every_practical_diagnostic_at_its_source() {
                 annotation.message
             );
         }
-        expect_baseline(&fixture.join("expected.stderr"), &normalized_stderr);
+        common::baseline::expect(&fixture.join("expected.stderr"), &normalized_stderr);
 
         for diagnostic in &manifest.diagnostics {
             let line = source.lines().nth(diagnostic.line - 1).unwrap_or_else(|| {

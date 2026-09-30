@@ -1,0 +1,12 @@
+// Repro from TASK-593
+variant O { A(n: number), B }
+declare const o: O;
+declare function t(s: string): number;
+export function f() {
+  const a = t("a"), b = match (o) { A(n) => a + n, B => 0 };
+  return b;
+}
+export function g() {
+  var a = 10, b = match (o) { A(n) => a + n, B => 0 };
+  return b;
+}

@@ -1,0 +1,21 @@
+// Repro from TASK-595
+import type { TResult } from "@tt/std";
+variant O { A(n: number), B }
+declare function g(n: number): TResult<number, string>;
+export function h(o: O, cfg: { name?: string }) {
+  return cfg.name ? match (o) { A(n) => cfg.name.slice(n), B => cfg.name } : "anon";
+}
+export function k(o: O, s: string | null) {
+  return s && match (o) { A(n) => s.charAt(n), B => s };
+}
+export function l(o: O, init: { v: number } | undefined) {
+  let u = init;
+  u = init;
+  const a = u ? match (o) { A(n) => u.v + n, B => u.v } : 0;
+  const b = !u || match (o) { A(n) => u.v > n, B => u.v > 0 };
+  const c = u !== undefined && u.v > 0 && match (o) { A(n) => u.v + n, B => 1 };
+  return [a, b, c];
+}
+export function m(s: string | null) {
+  return result { const x = s && try g(s.length); return x; };
+}

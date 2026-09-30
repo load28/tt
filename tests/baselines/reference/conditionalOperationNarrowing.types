@@ -1,0 +1,162 @@
+=== conditionalOperationNarrowing.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare function g(n: number): TResult<number, string>;
+>g : function g(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+export function h(o: O, cfg: { name?: string }) {
+>h : function h(o: O, cfg: {
+>       name?: string;
+>   }): string
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>cfg : (parameter) cfg: {
+>       name?: string;
+>   }
+>name : (property) name?: string | undefined
+  return cfg.name ? match (o) { A(n) => cfg.name.slice(n), B => cfg.name } : "anon";
+>cfg : (parameter) cfg: {
+>       name?: string;
+>   }
+>name : (property) name?: string | undefined
+>o : (parameter) o: O
+>n : const n: number
+>cfg : (parameter) cfg: {
+>       name?: string;
+>   }
+>name : (property) name?: string
+>slice : (method) String.slice(start?: number, end?: number): string
+>n : const n: number
+>cfg : (parameter) cfg: {
+>       name?: string;
+>   }
+>name : (property) name?: string
+export function k(o: O, s: string | null) {
+>k : function k(o: O, s: string | null): string | null
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>s : (parameter) s: string | null
+  return s && match (o) { A(n) => s.charAt(n), B => s };
+>s : (parameter) s: string | null
+>o : (parameter) o: O
+>n : const n: number
+>s : (parameter) s: string
+>charAt : (method) String.charAt(pos: number): string
+>n : const n: number
+>s : (parameter) s: string
+export function l(o: O, init: { v: number } | undefined) {
+>l : function l(o: O, init: {
+>       v: number;
+>   } | undefined): (number | boolean)[]
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>init : (parameter) init: {
+>       v: number;
+>   } | undefined
+>v : (property) v: number
+  let u = init;
+>u : let u: {
+>       v: number;
+>   } | undefined
+>init : (parameter) init: {
+>       v: number;
+>   } | undefined
+  u = init;
+>u : let u: {
+>       v: number;
+>   } | undefined
+>init : (parameter) init: {
+>       v: number;
+>   } | undefined
+  const a = u ? match (o) { A(n) => u.v + n, B => u.v } : 0;
+>a : const a: number
+>u : let u: {
+>       v: number;
+>   } | undefined
+>o : (parameter) o: O
+>n : const n: number
+>u : let u: {
+>       v: number;
+>   }
+>v : (property) v: number
+>n : const n: number
+>u : let u: {
+>       v: number;
+>   }
+>v : (property) v: number
+  const b = !u || match (o) { A(n) => u.v > n, B => u.v > 0 };
+>b : const b: boolean
+>u : let u: {
+>       v: number;
+>   } | undefined
+>o : (parameter) o: O
+>n : const n: number
+>u : let u: {
+>       v: number;
+>   }
+>v : (property) v: number
+>n : const n: number
+>u : let u: {
+>       v: number;
+>   }
+>v : (property) v: number
+  const c = u !== undefined && u.v > 0 && match (o) { A(n) => u.v + n, B => 1 };
+>c : const c: number | false
+>u : let u: {
+>       v: number;
+>   } | undefined
+>u : let u: {
+>       v: number;
+>   }
+>v : (property) v: number
+>o : (parameter) o: O
+>n : const n: number
+>u : let u: {
+>       v: number;
+>   }
+>v : (property) v: number
+>n : const n: number
+  return [a, b, c];
+>a : const a: number
+>b : const b: boolean
+>c : const c: number | false
+export function m(s: string | null) {
+>m : function m(s: string | null): TErr<string> | {
+>       kind: "Ok";
+>       value: string | number | null;
+>   }
+>s : (parameter) s: string | null
+  return result { const x = s && try g(s.length); return x; };
+>x : const x: string | number | null
+>s : (parameter) s: string | null
+>g : function g(n: number): TResult<number, string>
+>s : (parameter) s: string
+>length : (property) String.length: number
+>x : const x: string | number | null
+

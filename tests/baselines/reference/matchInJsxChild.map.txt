@@ -1,0 +1,13 @@
+//// [matchInJsxChild.ttx] 11 mapping(s)
+1:1 -> 19:1 len 89  "declare global {\n  namespace JSX { interface Int"...
+5:30 -> 24:29 len 6  "string"
+5:30 -> 27:18 len 6  "string"
+5:46 -> 29:3 len 41  "\nexport const render = (state: State) => "
+6:41 -> 49:10 len 7  "<main>{"
+6:55 -> 33:19 len 5  "state"
+7:9 -> 36:17 len 5  "value"
+7:19 -> 37:18 len 14  "<b>{value}</b>"
+8:12 -> 41:18 len 4  "null"
+9:2 -> 49:23 len 8  "}</main>"
+9:10 -> 50:2 len 2  ";\n"
+

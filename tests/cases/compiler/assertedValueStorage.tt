@@ -1,0 +1,23 @@
+// Repro from TASK-596
+variant O { A, B }
+type Ev = { kind: "click"; x: number } | { kind: "key"; code: string };
+declare function read(): string;
+declare const x0: unknown;
+export function f(o: O, x: unknown) {
+  const n = match (o) { A => x, B => 0 } as number;
+  const m = match (o) { A => ({ a: 1 }), B => ({ a: 2 }) } satisfies { a?: number };
+  return n + m.a.toFixed(1).length;
+}
+export function g(o: O) {
+  const k = match (o) { A => read(), B => "b" } as "a" | "b";
+  const e = match (o) { A => ({ kind: "click", x: 1 }), B => ({ kind: "key", code: "z" }) } satisfies Ev;
+  const l = match (o) { A => 1, B => 2 } satisfies 1 | 2;
+  let w = match (o) { A => 1, B => 2 } satisfies number;
+  w = 5;
+  const q: string = match (o) { A => 1, B => 2 } as unknown as string;
+  const c = <number>match (o) { A => x0, B => 0 };
+  return [k, e.kind, l, w, q, c];
+}
+export function h(o: O): number {
+  return match (o) { A => x0, B => 0 } as number;
+}

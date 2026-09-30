@@ -1,0 +1,58 @@
+=== shapes.tt ===
+export variant Shape { Circle(radius: number), Rect(width: number, height: number) }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       width: number;
+>       height: number;
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Rect : (property) Rect: (width: number, height: number) => Shape
+>width : (property) width: number
+>height : (property) height: number
+
+=== area.tt ===
+export function area(s: Shape): number {
+>area : function area(s: Shape): number
+>s : (parameter) s: Shape
+>Shape : (alias) type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       width: number;
+>       height: number;
+>   }
+  return match (s) {
+>s : (parameter) s: Shape
+    Circle(radius) => Math.PI * radius * radius,
+>radius : const radius: number
+>Math : var Math: Math
+>PI : (property) Math.PI: number
+>radius : const radius: number
+>radius : const radius: number
+    Rect(width, height) => width * height,
+>width : const width: number
+>height : const height: number
+>width : const width: number
+>height : const height: number
+export const perimeter = (s: Shape) => match (s) { Circle(radius) => 2 * Math.PI * radius };
+>perimeter : const perimeter: (s: Shape) => number
+>s : (parameter) s: Shape
+>Shape : (alias) type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       width: number;
+>       height: number;
+>   }
+>s : (parameter) s: Shape
+>radius : const radius: number
+>Math : var Math: Math
+>PI : (property) Math.PI: number
+>radius : const radius: number
+

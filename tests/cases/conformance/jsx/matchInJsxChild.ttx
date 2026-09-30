@@ -1,0 +1,9 @@
+declare global {
+  namespace JSX { interface IntrinsicElements { main: {}; b: {}; } }
+}
+
+variant State { Ready(value: string), Empty }
+export const render = (state: State) => <main>{match (state) {
+  Ready(value) => <b>{value}</b>,
+  Empty => null,
+}}</main>;

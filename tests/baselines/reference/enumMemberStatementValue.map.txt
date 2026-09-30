@@ -1,0 +1,8 @@
+//// [enumMemberStatementValue.tt] 6 mapping(s)
+1:1 -> 1:1 len 105  "// Repro from TASK-594\nimport * as Result from \""...
+4:18 -> 5:21 len 6  "number"
+4:18 -> 8:10 len 6  "number"
+4:30 -> 10:3 len 165  "\ndeclare const o: O;\ndeclare function r(n: numbe"...
+9:62 -> 15:45 len 6  ", R = "
+9:76 -> 15:69 len 30  " }\n  return Result.Ok(F.Q);\n}\n"
+

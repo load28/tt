@@ -1,0 +1,131 @@
+=== assertedValueStorage.tt ===
+variant O { A, B }
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+type Ev = { kind: "click"; x: number } | { kind: "key"; code: string };
+>Ev : type Ev = {
+>       kind: "click";
+>       x: number;
+>   } | {
+>       kind: "key";
+>       code: string;
+>   }
+>kind : (property) kind: "click"
+>x : (property) x: number
+>kind : (property) kind: "key"
+>code : (property) code: string
+declare function read(): string;
+>read : function read(): string
+declare const x0: unknown;
+>x0 : const x0: unknown
+export function f(o: O, x: unknown) {
+>f : function f(o: O, x: unknown): number
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>x : (parameter) x: unknown
+  const n = match (o) { A => x, B => 0 } as number;
+>n : const n: number
+>o : (parameter) o: O
+>x : (parameter) x: unknown
+  const m = match (o) { A => ({ a: 1 }), B => ({ a: 2 }) } satisfies { a?: number };
+>m : const m: {
+>       a: number;
+>   }
+>o : (parameter) o: O
+>a : (property) a: number
+>a : (property) a: number
+>a : (property) a?: number | undefined
+  return n + m.a.toFixed(1).length;
+>n : const n: number
+>m : const m: {
+>       a: number;
+>   }
+>a : (property) a: number
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+>length : (property) String.length: number
+export function g(o: O) {
+>g : function g(o: O): (string | number)[]
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  const k = match (o) { A => read(), B => "b" } as "a" | "b";
+>k : const k: "a" | "b"
+>o : (parameter) o: O
+>read : function read(): string
+  const e = match (o) { A => ({ kind: "click", x: 1 }), B => ({ kind: "key", code: "z" }) } satisfies Ev;
+>e : const e: {
+>       kind: "click";
+>       x: number;
+>   } | {
+>       kind: "key";
+>       code: string;
+>   }
+>o : (parameter) o: O
+>kind : (property) kind: "click"
+>x : (property) x: number
+>kind : (property) kind: "key"
+>code : (property) code: string
+>Ev : type Ev = {
+>       kind: "click";
+>       x: number;
+>   } | {
+>       kind: "key";
+>       code: string;
+>   }
+  const l = match (o) { A => 1, B => 2 } satisfies 1 | 2;
+>l : const l: 1 | 2
+>o : (parameter) o: O
+  let w = match (o) { A => 1, B => 2 } satisfies number;
+>w : let w: number
+>o : (parameter) o: O
+  w = 5;
+>w : let w: number
+  const q: string = match (o) { A => 1, B => 2 } as unknown as string;
+>q : const q: string
+>o : (parameter) o: O
+  const c = <number>match (o) { A => x0, B => 0 };
+>c : const c: number
+>o : (parameter) o: O
+>x0 : const x0: unknown
+  return [k, e.kind, l, w, q, c];
+>k : const k: "a" | "b"
+>e : const e: {
+>       kind: "click";
+>       x: number;
+>   } | {
+>       kind: "key";
+>       code: string;
+>   }
+>kind : (property) kind: "click" | "key"
+>l : const l: 1 | 2
+>w : let w: number
+>q : const q: string
+>c : const c: number
+export function h(o: O): number {
+>h : function h(o: O): number
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  return match (o) { A => x0, B => 0 } as number;
+>o : (parameter) o: O
+>x0 : const x0: unknown
+

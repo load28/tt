@@ -1,0 +1,32 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./impossibleCaseAtPattern.tt → $DIR/out/impossibleCaseAtPattern.ts
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match is not exhaustive: missing "B"
+ --> impossibleCaseAtPattern.tt:4:18
+  |
+4 | export const r = match (s) { A => 1, Zzz => 2 };
+  |                  ^^^^^^^^^
+  |
+  = help: add the missing arms: `, B => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+error[ts2678]: this pattern's case is not one the value can be (ts2678: Type '"Zzz"' is not comparable to type '"A" | "B"'.)
+ --> impossibleCaseAtPattern.tt:4:38
+  |
+4 | export const r = match (s) { A => 1, Zzz => 2 };
+  |                                      ^^^
+error[ts2678]: this pattern's case is not one the value can be (ts2678: Type '"Yyy"' is not comparable to type '"A" | "B"'.)
+ --> impossibleCaseAtPattern.tt:5:31
+  |
+5 | match (s) { A => {}, B => {}, Yyy | Www => {} }
+  |                               ^^^
+error[ts2678]: this pattern's case is not one the value can be (ts2678: Type '"Www"' is not comparable to type '"A" | "B"'.)
+ --> impossibleCaseAtPattern.tt:5:37
+  |
+5 | match (s) { A => {}, B => {}, Yyy | Www => {} }
+  |                                     ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+impossibleCaseAtPattern.ts(36,10): error TS2678: Type '"Zzz"' is not comparable to type '"A" | "B"'.
+impossibleCaseAtPattern.ts(60,10): error TS2678: Type '"Yyy"' is not comparable to type '"A" | "B"'.
+impossibleCaseAtPattern.ts(60,22): error TS2678: Type '"Www"' is not comparable to type '"A" | "B"'.

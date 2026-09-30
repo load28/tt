@@ -97,6 +97,8 @@ path is the reason that stage exists.
 시작할 수 있습니다.
 새 기능에는 반드시 테스트를 추가하세요:
 
+- A bug fix → one case file under `tests/cases/` (see "Adding a test case"
+  below)
 - 출력 형태 → `tests/compile.rs`
 - TS 통과 계약 → `tests/passthrough.rs`
 - 타입/런타임 의미 → `tests/integration.rs`
@@ -114,6 +116,49 @@ path is the reason that stage exists.
   Compiler-owned standard-library modules are provided to contextual analysis
   in memory; running an editor or installing a generated `@tt/std` package is
   not a fixture prerequisite.
+
+### Adding a test case
+
+The default regression test for a bug fix is one case file. Add a `.tt` or
+`.ttx` file under `tests/cases/compiler/` with the code that shows the bug is
+fixed, or under `tests/cases/conformance/<feature>/` when it pins one area of
+the language. This follows TypeScript's own "Adding a Test" rule
+(`tests/cases/compiler`, `tests/cases/conformance`, and
+`tests/baselines/reference` in microsoft/TypeScript).
+
+Case files take metadata lines in the form `// @name: value`:
+
+- `// @filename: <path>` starts a new compilation unit, so one case can hold
+  several `.tt`, `.ttx`, `.ts`, `.tsx`, or `tsconfig.json` files that import
+  each other. Only comments may appear before the first one. A case without
+  it is one unit named after the case file. Without a `tsconfig.json` unit,
+  the case gets a strict ES2022 bundler configuration.
+- `// @rewriteImports: js|ts|off` and `// @noVerify: true` are ttc's
+  `--rewrite-imports` and `--no-verify`. There are no other options; an
+  unknown directive fails the case.
+
+Case names must be distinct across `tests/cases`, because each case writes
+its baselines as `tests/baselines/reference/<name>.<kind>`:
+
+| Baseline | Contents |
+| --- | --- |
+| `<name>.ts` | every unit, then every file `ttc --out-dir` wrote (support modules by name only) |
+| `<name>.errors.txt` | what `ttc --out-dir` and `ttc --check-types` report, then what `tsc` reports on the emitted TypeScript; absent when all three succeed |
+| `<name>.map.txt` | the source-to-output mappings of the editor projection (`ttc::emit_mapped`) |
+| `<name>.types` | the engine's hover for each classified identifier, under its source line |
+
+Create or refresh the baselines, then read the diff before committing it with
+the change:
+
+```sh
+UPDATE_EXPECT=1 cargo test --test case_baselines
+git diff -- tests/baselines
+TT_CASES=<name fragment> cargo test --test case_baselines   # a few cases while iterating
+```
+
+The `.ts`, `.errors.txt`, and `.types` baselines need the pinned TypeScript
+(`npm ci`). Without it they are skipped, `TTC_REQUIRE_TSGO=1` turns the skip
+into a failure, and `UPDATE_EXPECT=1` refuses to run.
 
 언어 표면(구문, 판별 규칙, 에러 메시지, CLI 동작)을 바꾸는 변경은 컴파일러에
 내장되는 [`docs/ai/tt.md`](./docs/ai/tt.md)를 함께 갱신해야 합니다. 사용자가

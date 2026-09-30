@@ -1,0 +1,34 @@
+=== matchInJsxChild.ttx ===
+declare global {
+>global : namespace global
+  namespace JSX { interface IntrinsicElements { main: {}; b: {}; } }
+>JSX : namespace JSX
+>IntrinsicElements : interface IntrinsicElements
+>main : (property) IntrinsicElements.main: {}
+>b : (property) IntrinsicElements.b: {}
+variant State { Ready(value: string), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: string;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: string) => State
+>value : (property) value: string
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+export const render = (state: State) => <main>{match (state) {
+>render : const render: (state: State) => any
+>state : (parameter) state: State
+>State : type State = {
+>       kind: "Ready";
+>       value: string;
+>   } | {
+>       kind: "Empty";
+>   }
+>state : (parameter) state: State
+  Ready(value) => <b>{value}</b>,
+>value : const value: string
+>value : const value: string
+

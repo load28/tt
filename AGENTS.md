@@ -131,6 +131,12 @@ Nightly와 Beta·RC·Stable·Patch의 개발자 절차 및 운영 기준은 [`do
   방출된 TypeScript나 렌더된 진단처럼 **산출물 전체**가 계약인 것은
   `tests/fixtures/` 스냅샷으로 고정하고(`UPDATE_EXPECT=1 cargo test --test
   snapshot`), 갱신된 diff를 읽고 검토합니다.
+- The default regression test for a bug fix is one case file under
+  `tests/cases/compiler/` (or `tests/cases/conformance/<feature>/`), with
+  `// @filename:` units when the bug needs several files. Its baselines in
+  `tests/baselines/reference/` (`.ts`, `.errors.txt`, `.map.txt`, `.types`)
+  are generated with `UPDATE_EXPECT=1 cargo test --test case_baselines`;
+  see "Adding a test case" in `CONTRIBUTING.md`.
 - 기존 사용자 변경을 보존하고 관련 없는 dirty 파일을 수정하지 않습니다.
 
 변경 완료 전 로컬 게이트를 실행합니다. GitHub Actions의 `CI`도 `main`과

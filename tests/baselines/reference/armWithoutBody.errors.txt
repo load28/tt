@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[missing-arm-body]: match: this arm has no body
+ --> ./armWithoutBody.tt:4:56
+  |
+4 | export const a = match (s) { Circle(radius) => radius, Rect(width) if width > 0, _ => 0 };
+  |                                                        ^^^^^^^^^^^
+  |
+  = help: write `=> <body>` after the guard, or the body after `=>`
+
+
+==== ttc --check-types (exit 1) ====
+error[missing-arm-body]: match: this arm has no body
+ --> armWithoutBody.tt:4:56
+  |
+4 | export const a = match (s) { Circle(radius) => radius, Rect(width) if width > 0, _ => 0 };
+  |                                                        ^^^^^^^^^^^
+  |
+  = help: write `=> <body>` after the guard, or the body after `=>`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted
