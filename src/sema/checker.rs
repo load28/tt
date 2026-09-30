@@ -105,6 +105,34 @@ impl Checker<'_> {
                             ),
                         );
                     }
+                    if pipe.head.is_none()
+                        && let Some(first) = pipe.steps.first()
+                        && matches!(first.kind, PipeStepKind::Call)
+                        && crate::program_syntax::source_member_callee(
+                            self.source,
+                            crate::hir::Span {
+                                start: first.span.start,
+                                end: first.span.end,
+                            },
+                            self.source_kind,
+                        )
+                        .is_some_and(|member| member.optional)
+                    {
+                        self.error(
+                            TtError::span(
+                                first.span.start,
+                                first.span.end,
+                                "`flow`: the first step cannot be an optional-chain step — it is \
+                                 the composed function's input, so it must be a function"
+                                    .to_string(),
+                            )
+                            .code(DiagnosticCode::FlowFirstStepMethod)
+                            .help(
+                                "write the step as a function — \
+                                 `flow |> ((n: number) => o?.m(n)) |> ...`",
+                            ),
+                        );
+                    }
                     if pipe.head_kind == PipeHeadKind::BareSuper
                         && pipe.steps.first().is_some_and(|step| {
                             matches!(step.kind, PipeStepKind::Postfix { optional: true })

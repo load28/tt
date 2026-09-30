@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+error[flow-first-step-method]: `flow`: the first step cannot be an optional-chain step — it is the composed function's input, so it must be a function
+ --> ./flowFirstStepOptionalChain.tt:5:24
+  |
+5 | const direct = flow |> scale?.by |> String;
+  |                        ^^^^^^^^^
+  |
+  = help: write the step as a function — `flow |> ((n: number) => o?.m(n)) |> ...`
+
+error[flow-first-step-method]: `flow`: the first step cannot be an optional-chain step — it is the composed function's input, so it must be a function
+ --> ./flowFirstStepOptionalChain.tt:6:24
+  |
+6 | const nested = flow |> scale?.["by"];
+  |                        ^^^^^^^^^^^^^
+  |
+  = help: write the step as a function — `flow |> ((n: number) => o?.m(n)) |> ...`
+
+
+==== ttc --check-types (exit 1) ====
+error[flow-first-step-method]: `flow`: the first step cannot be an optional-chain step — it is the composed function's input, so it must be a function
+ --> flowFirstStepOptionalChain.tt:5:24
+  |
+5 | const direct = flow |> scale?.by |> String;
+  |                        ^^^^^^^^^
+  |
+  = help: write the step as a function — `flow |> ((n: number) => o?.m(n)) |> ...`
+error[flow-first-step-method]: `flow`: the first step cannot be an optional-chain step — it is the composed function's input, so it must be a function
+ --> flowFirstStepOptionalChain.tt:6:24
+  |
+6 | const nested = flow |> scale?.["by"];
+  |                        ^^^^^^^^^^^^^
+  |
+  = help: write the step as a function — `flow |> ((n: number) => o?.m(n)) |> ...`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,12 @@
+member 20 30
+nested 6 9
+computed 20 30
+asserted 20 30
+absentMember undefined undefined
+absentNested undefined undefined
+absentComputed undefined undefined
+bound 20 30
+later 20 30
+once 20 30
+receiver
+pipeline 20 6 undefined

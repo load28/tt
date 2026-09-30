@@ -274,6 +274,7 @@ fn tt_errors(
 ) -> Vec<TtError> {
     let mut errors = sema::check_all(
         source,
+        options.source_kind,
         program,
         options.verify,
         options.defer_to_checker,

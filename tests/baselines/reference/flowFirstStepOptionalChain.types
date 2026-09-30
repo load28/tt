@@ -1,0 +1,32 @@
+=== flowFirstStepOptionalChain.tt ===
+declare const scale: { by(n: number): number } | undefined;
+>scale : const scale: {
+>       by(n: number): number;
+>   } | undefined
+>by : (method) by(n: number): number
+>n : (parameter) n: number
+const direct = flow |> scale?.by |> String;
+>direct : const direct: (n: number) => string
+>scale : const scale: {
+>       by(n: number): number;
+>   } | undefined
+>by : (method) by(n: number): number
+>String : var String: StringConstructor
+const nested = flow |> scale?.["by"];
+>nested : const nested: ((n: number) => number) | undefined
+>flow : const scale: {
+>       by(n: number): number;
+>   } | undefined
+>scale : const scale: {
+>       by(n: number): number;
+>   } | undefined
+const wrapped = flow |> ((n: number) => scale?.by(n)) |> String;
+>wrapped : const wrapped: (n: number) => string
+>n : (parameter) n: number
+>scale : const scale: {
+>       by(n: number): number;
+>   } | undefined
+>by : (method) by(n: number): number
+>n : (parameter) n: number
+>String : var String: StringConstructor
+

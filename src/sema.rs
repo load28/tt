@@ -81,6 +81,7 @@ use coverage::*;
 /// checked either way.
 pub(crate) fn check_all(
     source: &str,
+    source_kind: crate::SourceKind,
     program: &Program,
     verify: bool,
     defer_to_checker: bool,
@@ -104,6 +105,7 @@ pub(crate) fn check_all(
         .collect();
     let mut checker = Checker {
         source,
+        source_kind,
         tokens,
         verify,
         errors: Vec::new(),
@@ -201,6 +203,7 @@ pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> 
 
 struct Checker<'a> {
     source: &'a str,
+    source_kind: crate::SourceKind,
     tokens: &'a [crate::lexer::Token],
     verify: bool,
     /// Every violation found so far — the walk keeps going after each one.

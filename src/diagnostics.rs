@@ -512,14 +512,16 @@ arm."
             DiagnosticCode::FlowFirstStepMethod => {
                 "\
 A `flow` composition's first step is a method step (one starting with
-`.`).
+`.`) or an optional-chain step (`o?.m`).
 
 `flow` composes functions rather than piping a value, so the first step is
 what fixes the composed function's input type — and a method step has no
-input type of its own to give. Put a named or parenthesized function
-first:
+input type of its own to give. An optional-chain step is the optional call
+`o?.m(v)`, whose function may be absent, so it cannot be the composed
+function either. Put a named or parenthesized function first:
 
-    const label = flow |> half |> .toFixed(1);"
+    const label = flow |> half |> .toFixed(1);
+    const scaled = flow |> ((n: number) => scale?.by(n)) |> String;"
             }
 
             DiagnosticCode::TryPlacement => {

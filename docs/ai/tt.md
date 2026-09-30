@@ -124,7 +124,7 @@ const label = half(4) |> Option.mapP(x => x + 1) |> Option.unwrapOrP(0) |> .toFi
 - Malformed `|>` = located compile error. Ambiguous head (no-semicolon style, `in`/`instanceof`) → parenthesize head.
 - `flow` head = compose FUNCTIONS instead of piping a value: `const label = flow |> half |> Option.mapP(x => x + 1) |> .toFixed(1);` then `label(4)`. Same step rules; nothing runs until the composed fn is called.
 - `flow` is contextual — only a head that is exactly `flow`; a `flow` VARIABLE pipes when parenthesized (`(flow) |> f`). `flow |> f` (one step) = `f`.
-- flow's FIRST step fixes the input type and cannot be a method step (compile error). Generic/curried first step → `unknown`; give type args (`flow |> wrap<number> |> ...`, `flow |> Option.mapP((x: number) => x + 1) |> ...`). Later steps infer from the previous step.
+- flow's FIRST step fixes the input type and cannot be a method step or an optional-chain step (`flow |> o?.m`, whose function may be absent) (compile error `flow-first-step-method`). A later optional-chain step (`flow |> f |> o?.m`) is the optional call `o?.m(v)` on each input, like the pipeline's: its receiver is evaluated where the step is written, as a member step's is, and the composed function gives `undefined` when the chain short-circuits. Generic/curried first step → `unknown`; give type args (`flow |> wrap<number> |> ...`, `flow |> Option.mapP((x: number) => x + 1) |> ...`). Later steps infer from the previous step.
 
 ## result block
 

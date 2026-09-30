@@ -137,6 +137,21 @@ impl<'a> Emitter<'a> {
         let mut names = vec![input_name.clone()];
         names.extend(self.member_operand_names(member));
         out.push_lit(format!("(({}) => ", names.join(", ")));
+        out.append(self.member_call(value, member, &input_name));
+        out.push_lit(")(");
+        out.append(input);
+        self.push_member_operands(&mut out, member, true);
+        out.push_lit(")");
+        out
+    }
+
+    fn member_call(
+        &self,
+        value: ExprId,
+        member: crate::program_syntax::MemberCallee,
+        input: &str,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
         if member.grouped {
             out.push_lit("(");
             out.append(self.member_callee_body(value, member));
@@ -144,8 +159,29 @@ impl<'a> Emitter<'a> {
         } else {
             out.append(self.member_callee_body(value, member));
         }
-        out.push_lit(format!("({input_name}))("));
-        out.append(input);
+        out.push_lit(format!("({input})"));
+        out
+    }
+
+    fn emit_optional_flow_step(
+        &self,
+        value: ExprId,
+        member: crate::program_syntax::MemberCallee,
+        composed: Rope<'a>,
+    ) -> Rope<'a> {
+        let composed_name = self.generated_name("$tt_f");
+        let input_name = self.generated_name("$tt_v");
+        let mut names = vec![composed_name.clone()];
+        names.extend(self.member_operand_names(member));
+        let mut out = Rope::new();
+        out.push_lit(format!(
+            "(({}) => {}({composed_name}, ({input_name}) => ",
+            names.join(", "),
+            self.generated_name("$tt_fl"),
+        ));
+        out.append(self.member_call(value, member, &input_name));
+        out.push_lit("))(");
+        out.append(composed);
         self.push_member_operands(&mut out, member, true);
         out.push_lit(")");
         out
@@ -265,13 +301,11 @@ impl<'a> Emitter<'a> {
         for step in steps {
             self.used_flow.set(true);
             let step_span = self.span(step.node);
-            let body = self.emit_flow_function(step.value);
-            let mut next = Rope::new();
-            next.push_lit(format!("{}(", self.generated_name("$tt_fl")));
             // The composition built so far is what this step composes onto;
             // a mismatch on it means this step rejected it (see
             // `emit_apply`).
-            next.anchored_with_context(
+            let mut composed = Rope::new();
+            composed.anchored_with_context(
                 AnchorKind::Pipe,
                 step_span.start,
                 step_span.end,
@@ -279,6 +313,20 @@ impl<'a> Emitter<'a> {
                 Some((produced.start, produced.end)),
                 acc,
             );
+            let optional_member = self
+                .member_apply_steps
+                .get(&step.value)
+                .copied()
+                .filter(|member| member.optional && matches!(step.mode, ApplyMode::Call));
+            if let Some(member) = optional_member {
+                acc = self.emit_optional_flow_step(step.value, member, composed);
+                produced = step_span;
+                continue;
+            }
+            let body = self.emit_flow_function(step.value);
+            let mut next = Rope::new();
+            next.push_lit(format!("{}(", self.generated_name("$tt_fl")));
+            next.append(composed);
             match step.mode {
                 ApplyMode::Postfix { .. } => {
                     let input_name = self.generated_name("$tt_v");

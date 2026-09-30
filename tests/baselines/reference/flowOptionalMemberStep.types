@@ -1,0 +1,175 @@
+=== flowOptionalMemberStep.tt ===
+const inc = (n: number) => n + 1;
+>inc : const inc: (n: number) => number
+>n : (parameter) n: number
+>n : (parameter) n: number
+class Scale {
+>Scale : class Scale
+  constructor(readonly k: number) {}
+>k : (property) Scale.k: number
+  by(n: number) { return n * this.k; }
+>by : (method) Scale.by(n: number): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+>k : (property) Scale.k: number
+  inner = { k: 3, by(n: number) { return n * this.k; } };
+>inner : (property) Scale.inner: {
+>       k: number;
+>       by(n: number): number;
+>   }
+>k : (property) k: number
+>by : (method) by(n: number): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+>k : (property) k: number
+const present = new Scale(10) as Scale | undefined;
+>present : const present: Scale | undefined
+>Scale : constructor Scale(k: number): Scale
+>Scale : class Scale
+const absent = undefined as Scale | undefined;
+>absent : const absent: Scale | undefined
+>Scale : class Scale
+const key = "by" as const;
+>key : const key: "by"
+>const : type const = "by"
+const seen: string[] = [];
+>seen : const seen: string[]
+function receiver(scale: Scale | undefined) {
+>receiver : function receiver(scale: Scale | undefined): Scale | undefined
+>scale : (parameter) scale: Scale | undefined
+>Scale : class Scale
+  seen.push("receiver");
+>seen : const seen: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return scale;
+>scale : (parameter) scale: Scale | undefined
+const steps = {
+>steps : const steps: {
+>       member: (n: number) => number | undefined;
+>       nested: (n: number) => number | undefined;
+>       computed: (n: number) => number | undefined;
+>       asserted: (n: number) => number;
+>       absentMember: (n: number) => number | undefined;
+>       absentNested: (n: number) => number | undefined;
+>       absentComputed: (n: number) => number | undefined;
+>       bound: (n: number) => number;
+>       later: (n: number) => string;
+>       once: (n: number) => number | undefined;
+>   }
+  member: flow |> inc |> present?.by,
+>member : (property) member: (n: number) => number | undefined
+>inc : const inc: (n: number) => number
+>present : const present: Scale | undefined
+>by : (method) Scale.by(n: number): number
+  nested: flow |> inc |> present?.inner.by,
+>nested : (property) nested: (n: number) => number | undefined
+>inc : const inc: (n: number) => number
+>present : const present: Scale | undefined
+>inner : (property) Scale.inner: {
+>       k: number;
+>       by(n: number): number;
+>   }
+>by : (method) by(n: number): number
+  computed: flow |> inc |> present?.[key],
+>computed : (property) computed: (n: number) => number | undefined
+>inc : const inc: (n: number) => number
+>present : const present: Scale | undefined
+>key : const key: "by"
+  asserted: flow |> inc |> (present?.by as (n: number) => number),
+>asserted : (property) asserted: (n: number) => number
+>inc : const inc: (n: number) => number
+>present : const present: Scale | undefined
+>by : (method) Scale.by(n: number): number
+>n : (parameter) n: number
+  absentMember: flow |> inc |> absent?.by,
+>absentMember : (property) absentMember: (n: number) => number | undefined
+>inc : const inc: (n: number) => number
+>absent : const absent: Scale | undefined
+>by : (method) Scale.by(n: number): number
+  absentNested: flow |> inc |> absent?.inner.by,
+>absentNested : (property) absentNested: (n: number) => number | undefined
+>inc : const inc: (n: number) => number
+>absent : const absent: Scale | undefined
+>inner : (property) Scale.inner: {
+>       k: number;
+>       by(n: number): number;
+>   }
+>by : (method) by(n: number): number
+  absentComputed: flow |> inc |> absent?.[key],
+>absentComputed : (property) absentComputed: (n: number) => number | undefined
+>inc : const inc: (n: number) => number
+>absent : const absent: Scale | undefined
+>key : const key: "by"
+  bound: flow |> inc |> present!.by,
+>bound : (property) bound: (n: number) => number
+>inc : const inc: (n: number) => number
+>present : const present: Scale | undefined
+>by : (method) Scale.by(n: number): number
+  later: flow |> inc |> present?.by |> String,
+>later : (property) later: (n: number) => string
+>inc : const inc: (n: number) => number
+>present : const present: Scale | undefined
+>by : (method) Scale.by(n: number): number
+>String : var String: StringConstructor
+  once: flow |> inc |> receiver(present)?.by,
+>once : (property) once: (n: number) => number | undefined
+>inc : const inc: (n: number) => number
+>receiver : function receiver(scale: Scale | undefined): Scale | undefined
+>present : const present: Scale | undefined
+>by : (method) Scale.by(n: number): number
+for (const [name, composed] of Object.entries(steps)) {
+>name : const name: string
+>composed : const composed: ((n: number) => string) | ((n: number) => number) | ((n: number) => number | undefined)
+>Object : var Object: ObjectConstructor
+>entries : (method) ObjectConstructor.entries<((n: number) => string) | ((n: number) => number) | ((n: number) => number | undefined)>(o: ArrayLike<((n: number) => string) | ((n: number) => number) | ((n: number) => number | undefined)> | {
+>       [s: string]: ((n: number) => string) | ((n: number) => number) | ((n: number) => number | undefined);
+>   }): [string, ((n: number) => string) | ((n: number) => number) | ((n: number) => number | undefined)][]
+>steps : const steps: {
+>       member: (n: number) => number | undefined;
+>       nested: (n: number) => number | undefined;
+>       computed: (n: number) => number | undefined;
+>       asserted: (n: number) => number;
+>       absentMember: (n: number) => number | undefined;
+>       absentNested: (n: number) => number | undefined;
+>       absentComputed: (n: number) => number | undefined;
+>       bound: (n: number) => number;
+>       later: (n: number) => string;
+>       once: (n: number) => number | undefined;
+>   }
+    console.log(name, composed(1), composed(2));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>name : const name: string
+>composed : const composed: (n: number) => string | number | undefined
+>composed : const composed: (n: number) => string | number | undefined
+  } catch (error) {
+>error : var error: unknown
+    console.log(name, "threw", (error as Error).message);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>name : const name: string
+>error : var error: unknown
+>Error : interface Error
+>message : (property) Error.message: string
+console.log(seen.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>seen : const seen: string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log("pipeline", 1 |> inc |> present?.by, 1 |> inc |> present?.inner.by, 1 |> inc |> absent?.by);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>inc : const inc: (n: number) => number
+>present : const present: Scale | undefined
+>by : (method) Scale.by(n: number): number
+>inc : const inc: (n: number) => number
+>present : const present: Scale | undefined
+>inner : (property) Scale.inner: {
+>       k: number;
+>       by(n: number): number;
+>   }
+>by : (method) by(n: number): number
+>inc : const inc: (n: number) => number
+>absent : const absent: Scale | undefined
+>by : (method) Scale.by(n: number): number
+
