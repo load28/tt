@@ -1432,6 +1432,20 @@ pub(super) fn arm_candidates(
     out
 }
 
+/// Whether a property TypeScript offers for the case a payload pattern
+/// selects is a field name that payload can still bind: a name tt's pattern
+/// grammar reads as a bare field, not the discriminant the tag already tests
+/// (`VARIANT_TAG_FIELD`), and not one the payload already binds.
+pub(super) fn is_payload_field(label: &str, written: &[String]) -> bool {
+    label != crate::core_ir::VARIANT_TAG_FIELD
+        && !written.iter().any(|name| name == label)
+        && matches!(
+            crate::parser::pattern_of(label),
+            Some(crate::ast::Pattern::Tags(tags))
+                if tags.len() == 1 && tags[0].bindings.is_none() && tags[0].tag == label
+        )
+}
+
 pub(super) fn field_candidates(
     parsed: Vec<crate::engine::TtCompletion>,
     typed: Vec<String>,
@@ -1439,10 +1453,7 @@ pub(super) fn field_candidates(
 ) -> Vec<crate::engine::TtCompletion> {
     let mut out = parsed;
     for name in typed {
-        if name == crate::core_ir::VARIANT_TAG_FIELD
-            || written.contains(&name)
-            || out.iter().any(|item| item.label == name)
-        {
+        if !is_payload_field(&name, written) || out.iter().any(|item| item.label == name) {
             continue;
         }
         out.push(crate::engine::TtCompletion {

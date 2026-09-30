@@ -553,6 +553,19 @@ impl Project {
                 answer.items.push(entry);
             }
         }
+        if let Some(crate::engine::completions::PatternQuestion {
+            typed: Some(crate::engine::completions::TypedSite::Field { written }),
+            ..
+        }) = crate::engine::completions::pattern_question(
+            &path,
+            &doc.source,
+            position,
+            Texts::Open(&self.overlays),
+        ) {
+            answer
+                .items
+                .retain(|item| is_payload_field(&item.label, &written));
+        }
         Ok(answer)
     }
 
@@ -764,18 +777,7 @@ impl Project {
             None,
         );
         open_served(session, path, &doc.code);
-        Ok(answer?
-            .items
-            .into_iter()
-            .filter(|item| {
-                matches!(
-                    crate::parser::pattern_of(&item.label),
-                    Some(crate::ast::Pattern::Tags(tags))
-                        if tags.len() == 1 && tags[0].bindings.is_none() && tags[0].tag == item.label
-                )
-            })
-            .map(|item| item.label)
-            .collect())
+        Ok(answer?.items.into_iter().map(|item| item.label).collect())
     }
 
     /// The signature and documentation behind one completion entry, fetched
