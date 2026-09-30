@@ -1532,9 +1532,6 @@ connection.onDefinition(async (params) => {
           : editorUri(sym.definition.path);
       return Location.create(target, sym.definition.range);
     }
-    // A built-in case has no declaration to open; nothing else does either
-    // once the engine has claimed the position.
-    if (sym) return null;
   }
 
   // Everything else — ordinary TypeScript symbols, and built-in variant

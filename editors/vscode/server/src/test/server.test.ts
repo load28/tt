@@ -1204,6 +1204,35 @@ test("a pattern tag goes to its declaration", { skip, timeout }, async () => {
   }
 });
 
+test("a built-in tag and field go to the standard library", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    'import type { TResult } from "@tt/std";',
+    "declare const r: TResult<number, string>;",
+    "export const n = match (r) { Ok(value) => value, Err(error) => error.length };",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  try {
+    for (const [marker, file] of [
+      ["Er", "result.ts"],
+      ["Err(err", "result.ts"],
+    ]) {
+      const answer = await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionOf(source, marker),
+      });
+      const locations = Array.isArray(answer.result) ? answer.result : [answer.result];
+      assert.equal(locations.length, 1, JSON.stringify(answer.result));
+      assert.ok(
+        decodeURIComponent(String(locations[0]?.uri)).endsWith(`/node_modules/@tt/std/${file}`),
+        JSON.stringify(answer.result),
+      );
+    }
+  } finally {
+    stop();
+  }
+});
+
 test("pattern positions complete cases and fields", { skip, timeout }, async () => {
   const { completion, stop } = await open(SHAPE_SOURCE);
   try {

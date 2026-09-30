@@ -402,3 +402,54 @@ fn a_module_specifier_completes_the_sibling_tt_modules_as_tt_imports_them() {
     let items = project.completion(&file, position, false).unwrap().items;
     assert!(items.iter().all(|item| !item.label.ends_with(".tt")));
 }
+
+#[test]
+fn a_builtin_tag_or_field_goes_to_its_declaration_in_the_standard_library() {
+    require_tsgo!();
+    let source = "import type { TResult, TOption } from \"@tt/std\";\n\
+declare const r: TResult<number, string>;\n\
+declare const o: TOption<number>;\n\
+export const a = match (r) { Ok(value) => value, Err(error) => error.length };\n\
+export const b = match (o) { Some(value: x) => x, None => 0 };\n\
+export function c() {\n  const Err(error) = r else { return 0; };\n  return error;\n}\n\
+export function d() {\n  if let Some(value) = o { return value; }\n  return 0;\n}\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let std = dir.join("node_modules/@tt/std");
+    let declared = |module: &'static str, needle: &'static str| (module, needle);
+    let at = |needle: &str, nth: usize| {
+        let at = source.match_indices(needle).nth(nth).unwrap().0;
+        let line_start = source[..at].rfind('\n').map_or(0, |newline| newline + 1);
+        ttc::engine::Position {
+            line: source[..at].matches('\n').count() as u32,
+            character: source[line_start..at].encode_utf16().count() as u32 + 1,
+        }
+    };
+    for (position, expected) in [
+        (at("Ok(", 0), declared("result.ts", "Ok = ")),
+        (at("Err(", 0), declared("result.ts", "Err = ")),
+        (at("Some(", 0), declared("option.ts", "Some = ")),
+        (at("None =>", 0), declared("option.ts", "None = ")),
+        (at("value)", 0), declared("result.ts", "value: T }")),
+        (at("error)", 0), declared("result.ts", "error: E }")),
+        (at("value: x", 0), declared("option.ts", "value: T }")),
+        (at("error)", 1), declared("result.ts", "error: E }")),
+        (at("value)", 1), declared("option.ts", "value: T }")),
+    ] {
+        let found = project.definition(&file, position).unwrap();
+        let (module, needle) = expected;
+        let text = std::fs::read_to_string(std.join(module)).unwrap();
+        let expected = (module.to_string(), utf16_position(&text, needle));
+        let targets: Vec<(String, ttc::engine::Position)> = found
+            .iter()
+            .map(|location| {
+                (
+                    location.path.file_name().unwrap().to_string_lossy().into_owned(),
+                    location.range.start,
+                )
+            })
+            .collect();
+        assert_eq!(targets, vec![expected], "{position:?}");
+    }
+}

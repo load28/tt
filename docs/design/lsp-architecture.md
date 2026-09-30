@@ -229,6 +229,13 @@ replaces when the service names one (`textEdit`, mapped like an
 auto-import edit), which a path entry needs when the fragment after the
 last `/` is not a word.
 
+**Update (TASK-610)**: a tt name whose declaration `ttSymbol` cannot open
+(a built-in `Option`/`Result` tag or field) is the engine's definition
+question. A field is answered through the destructuring it lowers to; a
+built-in case through the standard library export that constructs it
+(`typeof import("@tt/std/result").Ok`, asked in a question served for the
+request only).
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

@@ -211,10 +211,73 @@ impl Project {
         if !found.is_empty() {
             return Ok(found);
         }
+        let found = self.builtin_case_definition(path, position)?;
+        if !found.is_empty() {
+            return Ok(found);
+        }
         // The service found nothing mappable. The match analysis knows the
         // spans the user actually wrote: a body reference goes to every
         // alternative's binding; a binding is its own declaration.
         self.match_binding_definitions(path, position)
+    }
+
+    fn builtin_case_definition(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Vec<Location>, String> {
+        let (doc, path) = self.serve(path)?;
+        let byte = source_byte(&doc.source, position);
+        let semantics = self.semantic_analyses(&path, &doc.source);
+        let Some(resolved) = semantics.analyses.resolved.iter().find(|resolved| {
+            resolved.kind == crate::analysis::NameKind::Case
+                && resolved.origin == crate::analysis::Origin::Builtin
+                && resolved.start <= byte
+                && byte <= resolved.end
+        }) else {
+            return Ok(Vec::new());
+        };
+        let Some(module) = crate::StdModule::constructing(&resolved.variant_name) else {
+            return Ok(Vec::new());
+        };
+        let head = format!(
+            "{}\ntype {PROBE_NAME} = typeof import(\"{}\").",
+            doc.code,
+            module.specifier()
+        );
+        let question = format!("{head}{};\n", resolved.name);
+        let documents = self.overlays.clone();
+        let overlays = &*documents.read();
+        let session = self.session();
+        open_served(session, &path, &question);
+        let answer = session.client.request(
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": served_uri(session, &path) },
+                "position": lsp_position(u16_position(&question, mapper::to_utf16(&question, head.len()))),
+            }),
+        );
+        open_served(session, &path, &doc.code);
+        let targets = match answer? {
+            serde_json::Value::Array(items) => items,
+            serde_json::Value::Null => Vec::new(),
+            one => vec![one],
+        };
+        Ok(targets
+            .iter()
+            .filter_map(|target| {
+                let uri = target["uri"]
+                    .as_str()
+                    .or_else(|| target["targetUri"].as_str())?;
+                let range = if target["targetSelectionRange"].is_object() {
+                    &target["targetSelectionRange"]
+                } else {
+                    &target["range"]
+                };
+                map_target(session, overlays, uri, range, TargetUse::Navigation)
+            })
+            .filter(|location| location.path != path)
+            .collect())
     }
 
     /// Definition targets from the match analysis — the fallback for names
