@@ -620,6 +620,7 @@
 | TASK-612 | Name the module an auto-import entry imports from | Complete | 2026-09-30 | 2026-09-30 | [TASK-612](./TASK-612-auto-import-label-details.md) |
 | TASK-613 | Pin that a pipeline step being typed answers as its TypeScript equivalent does | Complete | 2026-09-30 | 2026-09-30 | [TASK-613](./TASK-613-pipeline-step-typing-matches-typescript.md) |
 | TASK-614 | Check edits made while the configuration was malformed | Complete | 2026-09-30 | 2026-09-30 | [TASK-614](./TASK-614-edits-under-a-malformed-configuration.md) |
+| TASK-615 | Refuse a non-Unicode input path before writing, and publish the record first | Complete | 2026-09-30 | 2026-09-30 | [TASK-615](./TASK-615-non-unicode-input-paths.md) |
 
 ## Next task number
 

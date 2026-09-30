@@ -337,6 +337,9 @@ impl Project {
                     })
                 })?;
         }
+        if let Some(unnamed) = self.sources.iter().find(|path| path.to_str().is_none()) {
+            return Err(unnameable(unnamed));
+        }
         let mut projected = Vec::with_capacity(files.len());
         let mut blocked_files = Vec::new();
         let mut cache = HashMap::with_capacity(files.len());
@@ -345,6 +348,9 @@ impl Project {
         // once for discovery and again for projection.
         let documents = self.overlays.clone();
         let overlays = documents.read();
+        if let Some(unnamed) = overlays.keys().find(|path| path.to_str().is_none()) {
+            return Err(unnameable(unnamed));
+        }
         let mut pending = files.to_vec();
         let mut seen: HashSet<_> = files.iter().cloned().collect();
         let mut cursor = 0;
@@ -352,6 +358,9 @@ impl Project {
             let file = pending[cursor].clone();
             cursor += 1;
             let file = &file;
+            if file.to_str().is_none() {
+                return Err(unnameable(file));
+            }
             let text = match overlays.get(file) {
                 Some(text) => text.clone(),
                 None => std::fs::read_to_string(file).map_err(|e| {
@@ -728,6 +737,20 @@ impl Project {
             backend_error,
         })
     }
+}
+
+fn unnameable(path: &Path) -> Box<Blocked> {
+    Box::new(Blocked {
+        path: path.to_path_buf(),
+        error: CompileError {
+            message: "path is not valid UTF-8, so TypeScript cannot name this file".to_string(),
+            filename: Some(path.display().to_string()),
+            line: 0,
+            col: 0,
+            end_line: 0,
+            end_col: 0,
+        },
+    })
 }
 
 /// Host files retain their original paths and syntax in backend overlays.

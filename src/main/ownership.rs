@@ -18,6 +18,18 @@ fn source_identity(path: &Path) -> PathBuf {
     fs::canonicalize(path).unwrap_or_else(|_| normalized_absolute(path))
 }
 
+fn recorded_source(source: &Path) -> Result<String, String> {
+    source_identity(source)
+        .into_os_string()
+        .into_string()
+        .map_err(|_| {
+            format!(
+                "ttc: {}: input path is not valid UTF-8, so its output cannot record its owner — rename the input",
+                source.display()
+            )
+        })
+}
+
 fn support_identity(module: StdModule) -> String {
     format!("@tt/std/{}", module.file_name())
 }
@@ -52,6 +64,9 @@ fn orphaned(record: &serde_json::Value) -> bool {
 }
 
 pub(super) fn check_output_owner(output: &Path, owner: OutputOwner) -> Result<(), String> {
+    if let OutputOwner::Source(source) = owner {
+        recorded_source(source)?;
+    }
     if let OutputOwner::Source(source) = owner
         && same_file(output, source)
     {
@@ -80,14 +95,26 @@ pub(super) fn write_owned_output(
     code: &str,
 ) -> Result<(), String> {
     check_output_owner(output, owner)?;
-    write_output(output, code)?;
     let record = match owner {
         OutputOwner::Source(source) => {
-            serde_json::json!({ "version": 1, "source": source_identity(source), "content": code })
+            serde_json::json!({ "version": 1, "source": recorded_source(source)?, "content": code })
         }
         OutputOwner::Support(module) => {
             serde_json::json!({ "version": 1, "support": support_identity(module), "content": code })
         }
     };
-    write_output(&record_path(output), &record.to_string())
+    let replaced = owned_output(output)
+        .then(|| fs::read_to_string(output).ok())
+        .flatten()
+        .filter(|replaced| replaced != code);
+    let mut publishing = record.clone();
+    if let Some(replaced) = &replaced {
+        publishing["replaced"] = serde_json::Value::from(replaced.as_str());
+    }
+    write_output(&record_path(output), &publishing.to_string())?;
+    write_output(output, code)?;
+    if replaced.is_some() {
+        write_output(&record_path(output), &record.to_string())?;
+    }
+    Ok(())
 }

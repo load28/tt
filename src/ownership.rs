@@ -1,7 +1,8 @@
 //! Which files on disk are ttc's own outputs.
 //!
 //! Every file a build writes has a private sibling record,
-//! `.<name>.ttc-output.json`, holding the exact bytes last published. A file
+//! `.<name>.ttc-output.json`, holding the exact bytes last published (and,
+//! while a publication is in flight, the bytes it replaces). A file
 //! is ttc's output while its record says so and its content is still those
 //! bytes; an edited file is the user's. The build driver consults this before
 //! overwriting a file or taking one as an input, and the typed engine before
@@ -13,10 +14,10 @@ use std::path::{Path, PathBuf};
 
 /// The record that says who published `output`.
 pub fn record_path(output: &Path) -> PathBuf {
-    output.with_file_name(format!(
-        ".{}.ttc-output.json",
-        output.file_name().unwrap_or_default().to_string_lossy()
-    ))
+    let mut name = std::ffi::OsString::from(".");
+    name.push(output.file_name().unwrap_or_default());
+    name.push(".ttc-output.json");
+    output.with_file_name(name)
 }
 
 /// The parsed record of `output`, when there is a readable one.
@@ -30,7 +31,27 @@ pub fn owned_output(output: &Path) -> bool {
         return false;
     };
     record["version"] == 1
-        && record["content"].as_str().is_some_and(|expected| {
-            fs::read_to_string(output).is_ok_and(|actual| actual == expected)
+        && fs::read_to_string(output).is_ok_and(|actual| {
+            ["content", "replaced"]
+                .iter()
+                .any(|key| record[*key].as_str() == Some(actual.as_str()))
         })
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::ffi::OsStr;
+    use std::os::unix::ffi::OsStrExt;
+
+    #[test]
+    fn a_record_names_its_output_byte_for_byte() {
+        let first = record_path(Path::new(OsStr::from_bytes(b"out/a\xff.ts")));
+        let second = record_path(Path::new(OsStr::from_bytes(b"out/a\xfe.ts")));
+        assert_eq!(
+            first.file_name().unwrap().as_bytes(),
+            b".a\xff.ts.ttc-output.json"
+        );
+        assert_ne!(first, second);
+    }
 }

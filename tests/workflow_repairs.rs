@@ -644,3 +644,59 @@ fn build_watch_recovers_from_a_renamed_input() {
     let log = fs::read_to_string(&log).unwrap();
     assert!(!log.contains("not owned"), "{log}");
 }
+
+/// TASK-615: a source whose path is not Unicode cannot be named by an
+/// ownership record, nor by TypeScript; the build refuses it before it
+/// writes anything, and the typed check reports it rather than failing.
+#[cfg(unix)]
+#[test]
+fn an_input_path_that_is_not_unicode_is_refused_before_anything_is_written() {
+    use std::os::unix::ffi::OsStrExt;
+    let root = Workspace::in_repo_with_subdir("non-unicode-input", "src");
+    let bad = root
+        .join("src")
+        .join(std::ffi::OsStr::from_bytes(b"bad\xff.tt"));
+    fs::write(&bad, "export const bad = 1;\n").unwrap();
+    fs::write(root.join("src/good.tt"), "export const good = 1;\n").unwrap();
+    for args in [&["-o", "out", "src"][..], &["src"][..]] {
+        let output = run(&root, args);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{stderr}");
+        assert!(stderr.contains("input path is not valid UTF-8"), "{stderr}");
+        assert!(!root.join("out").exists() && !root.join("src/good.ts").exists());
+    }
+    if common::toolchain() {
+        let output = run(&root, &["--check-types", "src"]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{stderr}");
+        assert!(stderr.contains("path is not valid UTF-8"), "{stderr}");
+    }
+}
+
+/// TASK-615: a publication writes the record first, naming the bytes it
+/// replaces, so an output interrupted before its new bytes landed is still
+/// ttc's, and the next build completes it.
+#[test]
+fn an_interrupted_publication_leaves_the_output_owned() {
+    let root = Workspace::new("interrupted-publication");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    success(run(&root, &["--no-banner", "-o", "out", "src"]));
+    let record_path = root.join("out/.a.ts.ttc-output.json");
+    let published = fs::read_to_string(root.join("out/a.ts")).unwrap();
+    let mut record: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&record_path).unwrap()).unwrap();
+    record["replaced"] = serde_json::Value::from(published.as_str());
+    record["content"] = serde_json::Value::from("export const a = 2;\n");
+    fs::write(&record_path, record.to_string()).unwrap();
+    fs::write(root.join("src/a.tt"), "export const a = 3;\n").unwrap();
+    success(run(&root, &["--no-banner", "-o", "out", "src"]));
+    assert_eq!(
+        fs::read_to_string(root.join("out/a.ts")).unwrap(),
+        "export const a = 3;\n"
+    );
+    let record: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&record_path).unwrap()).unwrap();
+    assert!(record["replaced"].is_null(), "{record}");
+    assert_eq!(record["content"], "export const a = 3;\n");
+}
