@@ -19,7 +19,7 @@ export variant Shape { Circle(radius: number), Rect(width: number, height: numbe
 variant Status { Active, Inactive }
 variant Tree<T> { Leaf(value: T), Node(left: Tree<T>, right: Tree<T>) }
 ```
-→ emits type alias `Shape` = union of `{ kind: "Tag"; ...fields }` + constructor object `Shape` (both exported if `export`).
+→ emits type alias `Shape` = union of `{ kind: "Tag"; ...fields }` + constructor object `Shape` (both exported if `export`). A variant with one case aliases that case's object type itself (`variant Pub { Item(n: number) }` → `type Pub = { kind: "Item"; n: number }`, laid out on the next line), not a one-member union, so TypeScript names it `Pub` in hovers, signatures, and messages.
 - Use: `Shape.Circle(1)`; unit case is a VALUE not fn: `Shape.Point`. Empty-paren cases remain zero-argument constructor functions when explicitly written.
 - The tag lives in `kind`, so no case may declare a payload field named `kind` — the property would be written twice and the constructor would put the payload over the tag (`variant-field-shadows-tag`). Any other field name is free; a case tag may be `kind`.
 - Optional fields: `variant Http { Get(url: string, timeout?: number) }` → `{ kind: "Get"; url: string; timeout?: number }`, constructor `(url: string, timeout?: number)`. The constructor sets an optional field only when its argument is not `undefined` (`Http.Get("u")` has no `timeout` property), so it type-checks under `exactOptionalPropertyTypes`. Fields are the constructor's parameters in order, so a required field after an optional one is an error (`variant-required-after-optional`).

@@ -102,8 +102,8 @@ None.
 - [x] The default editor suite (`cargo test --test editor_cases`, the
   hand-written cases and the sampled matrix) passes.
 - [x] Baseline changes reviewed and committed with the change.
-- The full gate is recorded in TASK-690's record, which ran it once for
-  TASK-687 to TASK-690.
+- The full gate for TASK-687 to TASK-690 is recorded in TASK-688's record,
+  which ran it once after the last of them.
 
 ## Result
 

@@ -31,7 +31,7 @@ error[ts2322]: Type 'string' is not assignable to type '"A"'. (in code ttc gener
   |
 7 |       variant Bad { A(kind: string) }
   |               ^^^
-  |               --- The expected type comes from property 'kind' which is declared here on type '{ kind: "A"; }'
+  |               --- The expected type comes from property 'kind' which is declared here on type 'Bad'
 error[variant-field-shadows-tag]: variant Bad: case "A" cannot have a field named `kind` — that is where the case tag lives
  --> main.ttx:7:23
   |

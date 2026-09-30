@@ -1,8 +1,0 @@
-differences from variant_exported_topLevel_await at the questions listed in tests/editor-matrix-differences.txt
-
-=== signatureHelp /*arg*/ main.tt:5:24 ===
-  | const seen = [Pub.Item(await later(input))];
-  |                        ^ /*arg*/
-  tt only: Item(n: number): { kind: "Item"; n: number; } [n: number]
-  ts only: Item(n: number): Pub [n: number]
-
