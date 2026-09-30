@@ -870,7 +870,7 @@ fn parse_arm_tail<'t>(
             Some(end) => end,
             None if open && guard_runs_to_end(cur) => (
                 cur.tokens.len(),
-                cur.tokens.last().map_or(g_start, |t| t.span.end),
+                cur.tokens[cur.idx..].last().map_or(g_start, |t| t.span.end),
             ),
             None => return None,
         };

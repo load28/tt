@@ -720,6 +720,26 @@ fn an_arm_with_no_body_keeps_its_pattern_and_guard() {
 }
 
 #[test]
+fn an_arm_whose_guard_is_not_written_yet_is_a_malformed_arm() {
+    let decl = "variant Shape { Circle(radius: number), Rect(width: number) }\ndeclare const s: Shape;\ndeclare const t: string;\n";
+    for statement in [
+        "const a = match (s) { Circle(radius) => radius, Rect(width) if };",
+        "const a = match (s) { Circle(radius) => radius, Rect(width) if  };",
+        "const a = match (s) { Circle(radius) => radius, Rect(width) if, _ => 0 };",
+        "const a = match (s, s) { (Circle(r), _) => r, (Rect(w), _) if };",
+        "const a = match (t) { \"a\" => 1, \"b\" if };",
+    ] {
+        let src = format!("{decl}{statement}\n");
+        let codes: Vec<_> = ttc::analyze(&src, &Options::default())
+            .iter()
+            .map(|d| d.code)
+            .collect();
+        assert_eq!(codes, [DiagnosticCode::MalformedMatch], "{src}");
+        err(&src);
+    }
+}
+
+#[test]
 fn a_method_named_match_with_an_arm_shaped_body_stays_typescript() {
     let src = "class C {\n  match(x: number) { x }\n  other(y: boolean) { if (y) return 1; }\n}\n";
     assert_eq!(ok(src), src);
