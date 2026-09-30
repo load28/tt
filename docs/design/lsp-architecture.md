@@ -211,6 +211,15 @@ literal entries. A candidate an unguarded arm already covers stays in the
 list and sorts after the rest, as a covered tag always has; `_` is always
 offered.
 
+**Update (TASK-608)**: a payload field list is completed through the
+completion probe, whose destructuring TypeScript completes with the
+selected case's properties; the discriminant `kind` and the fields already
+bound are left out. A completion entry TypeScript derives from a switch
+(`source: "SwitchCases/"`, its exhaustive-case snippet) is kept only when
+the innermost case block around the position belongs to a `switch` the
+emission copied from the source: the switch a match lowers to is not the
+user's to extend.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

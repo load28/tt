@@ -457,7 +457,14 @@ impl Project {
         let session = self.session();
         let plain = match to_service_typed(&doc, position) {
             Some(at) => {
-                let plain = ts_completions(session, &path, at, &doc.code, &doc.generated_names)?;
+                let plain = ts_completions(
+                    session,
+                    &path,
+                    at,
+                    &doc.code,
+                    &doc.mappings,
+                    &doc.generated_names,
+                )?;
                 if !member || (plain.member && !plain.items.is_empty()) {
                     return Ok(plain);
                 }
@@ -489,6 +496,7 @@ impl Project {
             &path,
             probe.offset,
             &probe.code,
+            &probe.mappings,
             &probe.generated_names,
         )?;
         probed.probe = Some(probe.version);
@@ -533,6 +541,10 @@ impl Project {
                     }
                     None => question.items,
                 }
+            }
+            Some(TypedSite::Field { written }) => {
+                let fields = self.field_candidates(&doc, &path, position)?;
+                field_candidates(question.items, fields, &written)
             }
             None => question.items,
         };
@@ -597,6 +609,7 @@ impl Project {
                 path,
                 mapper::to_utf16(&code, head.len()),
                 &code,
+                &[],
                 &emit.generated_names,
             );
             open_served(session, path, &doc.code);
@@ -611,6 +624,42 @@ impl Project {
             }
         }
         Ok(None)
+    }
+
+    fn field_candidates(
+        &mut self,
+        doc: &Arc<ServiceDoc>,
+        path: &Path,
+        position: Position,
+    ) -> Result<Vec<String>, String> {
+        let at = source_byte(&doc.source, position);
+        let session = self.session();
+        let Some(probe) = build_probe(path, &doc.source, at, session.probe_count + 1) else {
+            return Ok(Vec::new());
+        };
+        session.probe_count += 1;
+        open_served(session, path, &probe.code);
+        let answer = ts_completions(
+            session,
+            path,
+            probe.offset,
+            &probe.code,
+            &probe.mappings,
+            &probe.generated_names,
+        );
+        open_served(session, path, &doc.code);
+        Ok(answer?
+            .items
+            .into_iter()
+            .filter(|item| {
+                matches!(
+                    crate::parser::pattern_of(&item.label),
+                    Some(crate::ast::Pattern::Tags(tags))
+                        if tags.len() == 1 && tags[0].bindings.is_none() && tags[0].tag == item.label
+                )
+            })
+            .map(|item| item.label)
+            .collect())
     }
 
     /// The signature and documentation behind one completion entry, fetched
@@ -640,10 +689,14 @@ impl Project {
                 }
                 None => None,
             };
-        let (at, generated_names) = match &installed {
-            Some(installed) => (installed.offset, installed.generated_names.clone()),
+        let (at, generated_names, mappings) = match &installed {
+            Some(installed) => (
+                installed.offset,
+                installed.generated_names.clone(),
+                installed.mappings.clone(),
+            ),
             None => match to_service_typed(&doc, position) {
-                Some(at) => (at, doc.generated_names.clone()),
+                Some(at) => (at, doc.generated_names.clone(), doc.mappings.clone()),
                 None => return Ok(None),
             },
         };
@@ -657,7 +710,7 @@ impl Project {
         if !session.last_completion.contains_key(&key) {
             // The server resolves the item *it* produced, not a name, so the
             // list has to have been asked for first.
-            let _ = ts_completions(session, &path, at, &code, &generated_names)?;
+            let _ = ts_completions(session, &path, at, &code, &mappings, &generated_names)?;
         }
         let Some(item) = session.last_completion.get(&key).cloned() else {
             return Ok(None);

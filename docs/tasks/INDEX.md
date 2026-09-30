@@ -606,7 +606,8 @@
 | TASK-605 | Keep a match arm whose body is not written yet | Complete | 2026-09-30 | 2026-09-30 | [TASK-605](./TASK-605-arm-without-body.md) |
 | TASK-606 | Classify a `.tt` file's source as TypeScript does, with tt's tokens over its constructs | Complete | 2026-09-30 | 2026-09-30 | [TASK-606](./TASK-606-typescript-semantic-tokens.md) |
 | TASK-607 | Complete an arm's pattern with what the scrutinee's type admits | Complete | 2026-09-30 | 2026-09-30 | [TASK-607](./TASK-607-pattern-completion-from-the-scrutinee-type.md) |
+| TASK-608 | Complete a hand-written `kind` union's tags and fields, never a generated switch's cases | Complete | 2026-09-30 | 2026-09-30 | [TASK-608](./TASK-608-kind-union-patterns-and-generated-switch-cases.md) |
 
 ## Next task number
 
-**TASK-608**
+**TASK-609**

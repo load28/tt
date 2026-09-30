@@ -155,6 +155,7 @@ pub(super) fn ts_completions(
     path: &Path,
     at: usize,
     code: &str,
+    mappings: &[EmitMapping],
     generated_names: &HashSet<String>,
 ) -> Result<CompletionAnswer, String> {
     let answer = session.client.request(
@@ -170,9 +171,17 @@ pub(super) fn ts_completions(
     };
     session.last_completion.clear();
     let mut entries = Vec::with_capacity(items.len());
+    let kind = crate::SourceKind::from_path(path).unwrap_or_default();
+    let generated_switch = || {
+        enclosing_switch(code, kind, mapper::from_utf16(code, at))
+            .is_some_and(|keyword| mapper::to_source(mappings, keyword).is_none())
+    };
     for item in items {
         let label = item["label"].as_str().unwrap_or_default().to_string();
-        if generated_names.contains(&label) || imports_from_runtime(&item) {
+        if generated_names.contains(&label)
+            || imports_from_runtime(&item)
+            || (item["data"]["source"].as_str() == Some(SWITCH_CASES_SOURCE) && generated_switch())
+        {
             continue;
         }
         session
@@ -194,6 +203,38 @@ pub(super) fn ts_completions(
         member: is_member_context(code, at),
         probe: None,
     })
+}
+
+const SWITCH_CASES_SOURCE: &str = "SwitchCases/";
+
+fn enclosing_switch(code: &str, kind: crate::SourceKind, at: usize) -> Option<usize> {
+    use crate::lexer::TokenKind;
+    let tokens = crate::lexer::lex_with_kind(code, 0, code.len(), kind);
+    let mut open: Vec<(usize, Option<usize>)> = Vec::new();
+    let mut openers: HashMap<usize, usize> = HashMap::new();
+    for (index, token) in tokens.iter().enumerate() {
+        if token.span.start >= at {
+            break;
+        }
+        if token.opens_bracket() {
+            let keyword = (matches!(token.kind, TokenKind::Punct(b'{')) && index > 0)
+                .then(|| openers.get(&(index - 1)))
+                .flatten()
+                .and_then(|&paren| paren.checked_sub(1))
+                .map(|keyword| &tokens[keyword])
+                .filter(|keyword| {
+                    matches!(keyword.kind, TokenKind::Ident)
+                        && &code[keyword.span.start..keyword.span.end] == "switch"
+                })
+                .map(|keyword| keyword.span.start);
+            open.push((index, keyword));
+        } else if token.closes_bracket()
+            && let Some((opener, _)) = open.pop()
+        {
+            openers.insert(index, opener);
+        }
+    }
+    open.into_iter().rev().find_map(|(_, keyword)| keyword)
 }
 
 /// Whether a completion entry imports an export of the pipeline runtime.
@@ -1171,5 +1212,28 @@ pub(super) fn arm_candidates(
         out.push(item);
     }
     out.push(crate::engine::completions::wildcard());
+    out
+}
+
+pub(super) fn field_candidates(
+    parsed: Vec<crate::engine::TtCompletion>,
+    typed: Vec<String>,
+    written: &[String],
+) -> Vec<crate::engine::TtCompletion> {
+    let mut out = parsed;
+    for name in typed {
+        if name == crate::core_ir::VARIANT_TAG_FIELD
+            || written.contains(&name)
+            || out.iter().any(|item| item.label == name)
+        {
+            continue;
+        }
+        out.push(crate::engine::TtCompletion {
+            detail: name.clone(),
+            label: name,
+            kind: crate::engine::TtCompletionKind::Field,
+            covered: false,
+        });
+    }
     out
 }

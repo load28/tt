@@ -661,7 +661,8 @@ test(
       "export function f(d: Dir, k: K) {",
       '  const a = match (d) { "north" => 1, };',
       "  const b = match (k) { Alpha => 1, };",
-      "  return [a, b];",
+      "  const c = match (k) { Alpha() => 1, _ => 0 };",
+      "  return [a, b, c];",
       "}",
       "",
     ].join("\n");
@@ -671,6 +672,8 @@ test(
       assert.deepEqual(literal.labels.sort(), ['"north"', '"south"', "_"]);
       const tags = await completion("Alpha => 1, ");
       assert.deepEqual(tags.labels.sort(), ["Alpha", "Beta", "_"]);
+      const fields = await completion("Alpha(");
+      assert.deepEqual(fields.labels, ["x"]);
     } finally {
       stop();
     }

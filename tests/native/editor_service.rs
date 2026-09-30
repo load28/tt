@@ -317,6 +317,8 @@ export function f(d: Dir, k: K, n: 1 | 2 | 3, s: Shape, text: string) {\n";
         ("match (k) { @@ }", &["Alpha", "Beta", "_"][..]),
         ("match (k) { Alpha if k.x > 0 => 1, @@ }", &["Alpha", "Beta", "_"][..]),
         ("match (s) { Circle(radius) => radius, @@ }", &["Circle (covered)", "Point", "_"][..]),
+        ("match (k) { Alpha(@@) => 1, _ => 0 }", &["x"][..]),
+        ("match (s) { Circle(@@) => 1, _ => 0 }", &["radius"][..]),
     ] {
         let (source, position) = at_cursor(&format!("{head}  const b = {arm};\n  return b;\n}}\n"));
         let dir = project(&[("src/main.tt", &source)]);
@@ -324,4 +326,31 @@ export function f(d: Dir, k: K, n: 1 | 2 | 3, s: Shape, text: string) {\n";
         let mut project = open_service(&file);
         assert_eq!(pattern_labels(&mut project, &file, position), expected, "{arm}");
     }
+}
+
+#[test]
+fn completion_never_offers_the_cases_of_a_generated_switch() {
+    require_tsgo!();
+    let (source, position) = at_cursor(
+        "type K = { kind: \"Alpha\"; x: number } | { kind: \"Beta\" };\n\
+export function f(k: K) {\n  const b = match (k) { Alpha(x) => { @@ }, _ => 0 };\n  return b;\n}\n\
+export function g(k: K) {\n  switch (k.kind) {\n    case \"Alpha\": break;\n    ##\n  }\n}\n",
+    );
+    let user = utf16_position(&source.replace("@@", ""), "##");
+    let source = source.replace("##", "");
+    let dir = project(&[("src/main.tt", &source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let generated = project.completion(&file, position, false).unwrap();
+    assert!(
+        generated.items.iter().all(|item| !item.label.starts_with("case ")),
+        "{:?}",
+        generated.items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+    let written = project.completion(&file, user, false).unwrap();
+    assert!(
+        written.items.iter().any(|item| item.label == "case \"Beta\": ..."),
+        "{:?}",
+        written.items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
 }

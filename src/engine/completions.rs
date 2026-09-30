@@ -107,6 +107,9 @@ pub(super) enum TypedSite {
         covered: Vec<String>,
         literals: Vec<crate::ast::LiteralValue>,
     },
+    Field {
+        written: Vec<String>,
+    },
 }
 
 pub(super) fn pattern_question(
@@ -161,7 +164,7 @@ pub(super) fn pattern_question(
                 .flat_map(|declared| fields(declared, &tag))
                 .filter(|field| !written.contains(&field.label))
                 .collect(),
-            None,
+            Some(TypedSite::Field { written }),
         ),
         Context::Nested { tag, field } => (
             resolve_all(&declarations, std::slice::from_ref(&tag))
