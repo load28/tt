@@ -596,7 +596,8 @@
 | TASK-588 | Follow configuration discovery in typed watch and dependencies | Complete | 2026-09-30 | 2026-09-30 | [TASK-588](./TASK-588-follow-configuration-discovery.md) |
 | TASK-589 | Let an input take over the unedited output its vanished predecessor left | Complete | 2026-09-30 | 2026-09-30 | [TASK-589](./TASK-589-orphaned-output-takeover.md) |
 | TASK-590 | Write no declarations from placeholders, and type a malformed variant as the error type | Complete | 2026-09-30 | 2026-09-30 | [TASK-590](./TASK-590-no-declarations-from-placeholders.md) |
+| TASK-591 | Forward termination signals from the npm launcher to ttc | Complete | 2026-09-30 | 2026-09-30 | [TASK-591](./TASK-591-launcher-forwards-signals.md) |
 
 ## Next task number
 
-**TASK-591**
+**TASK-592**
