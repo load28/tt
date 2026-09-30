@@ -148,13 +148,12 @@ impl NativeBackend {
         writeln!(stdin, "{open}")
             .map_err(|e| Failure::unavailable(format!("cannot start the host: {e}")))?;
 
-        let mut ack = String::new();
-        if stdout
-            .read_line(&mut ack)
-            .map_err(|e| Failure::unavailable(e.to_string()))?
-            == 0
-        {
-            return Err(host_died(&mut child, Phase::Starting));
+        match read_answer(&mut stdin, &mut stdout) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                return Err(host_died(&mut child, Phase::Starting));
+            }
+            Err(e) => return Err(Failure::unavailable(e.to_string())),
         }
         Ok(Session {
             child,
@@ -319,11 +318,34 @@ impl TypeScriptBackend for NativeBackend {
 fn exchange(session: &mut Session, request: &str) -> std::io::Result<String> {
     writeln!(session.stdin, "{request}")?;
     session.stdin.flush()?;
-    let mut line = String::new();
-    if session.stdout.read_line(&mut line)? == 0 {
-        return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
+    read_answer(&mut session.stdin, &mut session.stdout)
+}
+
+/// The host's answer to the request in flight, after answering the
+/// questions it asks ttc on the way (see `host.mjs`).
+fn read_answer(
+    stdin: &mut ChildStdin,
+    stdout: &mut BufReader<ChildStdout>,
+) -> std::io::Result<String> {
+    loop {
+        let mut line = String::new();
+        if stdout.read_line(&mut line)? == 0 {
+            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
+        }
+        if !line.starts_with(r#"{"ownedOutputs":"#) {
+            return Ok(line);
+        }
+        let question: serde_json::Value = serde_json::from_str(line.trim())?;
+        let owned: Vec<&str> = question["ownedOutputs"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+            .filter(|path| crate::ownership::owned_output(Path::new(path)))
+            .collect();
+        writeln!(stdin, "{}", serde_json::json!({ "owned": owned }))?;
+        stdin.flush()?;
     }
-    Ok(line)
 }
 
 /// One `ask` — see `host.mjs` for the protocol.

@@ -5,27 +5,7 @@
 //! private siblings, so directory scans never treat them as project inputs.
 
 use super::*;
-
-fn record_path(output: &Path) -> PathBuf {
-    output.with_file_name(format!(
-        ".{}.ttc-output.json",
-        output.file_name().unwrap_or_default().to_string_lossy()
-    ))
-}
-
-fn record(output: &Path) -> Option<serde_json::Value> {
-    serde_json::from_slice(&fs::read(record_path(output)).ok()?).ok()
-}
-
-pub(super) fn owned_output(output: &Path) -> bool {
-    let Some(record) = record(output) else {
-        return false;
-    };
-    record["version"] == 1
-        && record["content"].as_str().is_some_and(|expected| {
-            fs::read_to_string(output).is_ok_and(|actual| actual == expected)
-        })
-}
+use ttc::ownership::{owned_output, record, record_path};
 
 #[derive(Clone, Copy)]
 pub(super) enum OutputOwner<'a> {

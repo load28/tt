@@ -412,3 +412,40 @@ fn types_written_beside_the_sources_keep_the_sources_as_inputs() {
         assert!(root.join("src/m.tt.d.ts").is_file());
     }
 }
+
+/// TASK-587: the outputs a build published beside its sources, or into an
+/// output directory the configuration globs, are ttc's own and never inputs
+/// of the TypeScript program — the rule `tsc` applies to its outputs. An
+/// output someone edited is theirs again, and an input.
+#[test]
+fn check_types_leaves_published_outputs_out_of_the_program() {
+    if !common::toolchain() {
+        return;
+    }
+    let root = Workspace::in_repo_with_subdir("check-types-owned-outputs", "src");
+    fs::write(root.join("src/m.tt"), "export const m: number = \"x\";\n").unwrap();
+    fs::write(root.join("src/s.tt"), "let dup = 1;\n").unwrap();
+    success(run(&root, &["src"]));
+    success(run(&root, &["-o", "build", "src"]));
+    assert!(root.join("src/m.ts").is_file() && root.join("build/s.ts").is_file());
+    let check = |root: &Path| {
+        let output = run(root, &["--check-types", "src"]);
+        assert!(!output.status.success());
+        String::from_utf8_lossy(&output.stderr).into_owned()
+    };
+    for config in [None, Some(r#"{"compilerOptions":{"strict":true}}"#)] {
+        if let Some(config) = config {
+            fs::write(root.join("tsconfig.json"), config).unwrap();
+        }
+        let stderr = check(&root);
+        assert_eq!(stderr.matches("error[").count(), 1, "{stderr}");
+        assert!(stderr.contains("src/m.tt:1:26"), "{stderr}");
+        assert!(
+            !stderr.contains("m.ts") && !stderr.contains("ts2451"),
+            "{stderr}"
+        );
+    }
+    fs::write(root.join("src/s.ts"), "let dup = 2;\n").unwrap();
+    let stderr = check(&root);
+    assert!(stderr.contains("ts2451"), "{stderr}");
+}

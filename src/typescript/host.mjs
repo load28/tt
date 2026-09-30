@@ -40,6 +40,12 @@
  * An `ask` may also answer `{ error: "..." }`, which fails that request
  * without ending the session. EOF on stdin ends it.
  *
+ * While it answers a request, the host may ask ttc which listed files are
+ * ttc's own outputs, which no directory listing admits to the program:
+ *
+ *   ←  { ownedOutputs: [path] }
+ *   →  { owned: [path] }
+ *
  * `start`/`end` are UTF-16 code-unit offsets — TypeScript's own coordinate
  * space. Mapping them back to `.tt` byte positions is ttc's job (`mapper`),
  * not this host's.
@@ -185,7 +191,7 @@ function diskVersion(file) {
   catch { return null; }
 }
 
-function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links, outputs) {
+function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links, outputs, ownedOutputs) {
   // The packages this host publishes and links into the project are its
   // own, not project inputs: they are neither dependencies nor listings.
   const published = (p) => [...links].some(([link, target]) =>
@@ -240,6 +246,10 @@ function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, list
         if (!dirs.has(d)) return undefined;
       }
       if (!published(d)) listings.set(d, new Set([...real.files, ...real.directories]));
+      if (!published(d) && real.files.length > 0) {
+        const owned = ownedOutputs(real.files.map((name) => path.join(d, name)));
+        real.files = real.files.filter((name) => !owned.has(path.join(d, name)));
+      }
       const here = [...files.keys()].filter((f) => path.dirname(f) === d && !aliases.has(f));
       const names = new Set(real.files.map((f) => f));
       for (const f of here) {
@@ -315,8 +325,14 @@ async function main() {
   const connect = () => new API({
     cwd: open.cwd,
     runExternalCode: mapped,
-    fs: layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links, outputs),
+    fs: layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links, outputs, ownedOutputs),
   });
+  function ownedOutputs(paths) {
+    writeLine(JSON.stringify({ ownedOutputs: paths }));
+    const line = readLine();
+    if (line === null) throw new Error("ttc closed the session while the host asked about its outputs");
+    return new Set(JSON.parse(line).owned);
+  }
   let api = connect();
   writeLine(JSON.stringify({ ok: true }));
 

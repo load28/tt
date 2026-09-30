@@ -298,6 +298,12 @@ impl Project {
         );
         if self.tsconfig.is_none() {
             self.sources = project_sources(&self.root, self.out_dir.as_deref(), TS_EXTENSIONS)
+                .map(|sources| {
+                    sources
+                        .into_iter()
+                        .filter(|source| !crate::ownership::owned_output(source))
+                        .collect()
+                })
                 .map_err(|error| {
                     Box::new(Blocked {
                         path: self.root.clone(),
