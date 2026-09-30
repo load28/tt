@@ -49,10 +49,12 @@ import {
   InitializeResult,
   InsertTextFormat,
   Location,
+  LSPErrorCodes,
   MarkupKind,
   ParameterInformation,
   ProposedFeatures,
   Range,
+  ResponseError,
   SemanticTokensBuilder,
   SignatureHelp,
   SignatureInformation,
@@ -85,6 +87,7 @@ const documents = new TextDocuments(TextDocument);
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
 let hasVersionedWorkspaceEditCapability = false;
+let hasLabelDetailsCapability = false;
 let workspaceRoots: string[] = [];
 /** What the server has already told the user it cannot do (notices.ts). */
 const notices = new NoticeLedger();
@@ -98,6 +101,9 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   );
   hasVersionedWorkspaceEditCapability = Boolean(
     params.capabilities.workspace?.workspaceEdit?.documentChanges,
+  );
+  hasLabelDetailsCapability = Boolean(
+    params.capabilities.textDocument?.completion?.completionItem?.labelDetailsSupport,
   );
   workspaceRoots = folderRoots(params.workspaceFolders);
 
@@ -132,14 +138,15 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
       hoverProvider: true,
       definitionProvider: true,
       referencesProvider: true,
-      renameProvider: true,
+      renameProvider: { prepareProvider: true },
       documentSymbolProvider: true,
       codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
-      // The parser's own classification of the ambiguous surface (a `flow`
-      // head split across lines, a plain function named `match`), layered
-      // over the TextMate grammar per the LSP semantic-tokens contract.
+      // TypeScript's classification of the source text, with the parser's
+      // own classification of tt's constructs over it (a `flow` head split
+      // across lines, a plain function named `match`), layered over the
+      // TextMate grammar per the LSP semantic-tokens contract.
       semanticTokensProvider: {
-        legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: [] },
+        legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: SEMANTIC_TOKEN_MODIFIERS },
         full: true,
         range: false,
       },
@@ -1131,6 +1138,13 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
   },
 ];
 
+const PATTERN_COMPLETION_KINDS: Record<engine.EngineTtCompletion["kind"], CompletionItemKind> = {
+  case: CompletionItemKind.EnumMember,
+  field: CompletionItemKind.Field,
+  literal: CompletionItemKind.Constant,
+  wildcard: CompletionItemKind.Keyword,
+};
+
 /** TypeScript element-kind strings → LSP completion kinds. */
 const TS_COMPLETION_KINDS: Record<string, CompletionItemKind> = {
   var: CompletionItemKind.Variable,
@@ -1153,6 +1167,8 @@ const TS_COMPLETION_KINDS: Record<string, CompletionItemKind> = {
   module: CompletionItemKind.Module,
   keyword: CompletionItemKind.Keyword,
   string: CompletionItemKind.Constant,
+  script: CompletionItemKind.File,
+  directory: CompletionItemKind.Folder,
 };
 
 /** What a TS-delegated completion item carries so its signature and
@@ -1195,8 +1211,17 @@ async function tsCompletions(
     label: entry.label,
     kind: TS_COMPLETION_KINDS[entry.kind] ?? CompletionItemKind.Text,
     sortText: `2${entry.sortText}`,
-    insertText: entry.insertText ?? undefined,
+    insertText: entry.range ? undefined : (entry.insertText ?? undefined),
+    textEdit: entry.range
+      ? { range: entry.range, newText: entry.insertText ?? entry.label }
+      : undefined,
     filterText: entry.filterText ?? undefined,
+    labelDetails: hasLabelDetailsCapability && entry.labelDetails
+      ? {
+          detail: entry.labelDetails.detail ?? undefined,
+          description: entry.labelDetails.description ?? undefined,
+        }
+      : undefined,
     insertTextFormat: entry.snippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
     data: {
       uri: doc.uri,
@@ -1252,21 +1277,20 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   }
 
   // A pattern position — an arm, an `if let`, a payload field list, a
-  // nested pattern — is tt's alone: case tags and field names exist
-  // nowhere in the emitted TypeScript, so the service has nothing to
-  // complete there. The engine answers from the compiler's own
+  // nested pattern — is tt's: the engine answers from the compiler's own
   // declaration table, under the same shadowing the compiler resolves
-  // with, and knows the positions this server never did (`if let`,
-  // let-else payloads, nested patterns).
-  if (here.items.length > 0) {
-    return here.items.map((item) => ({
+  // with, and asks TypeScript what the scrutinee's type admits (the tags
+  // or literals of its discriminant, the properties of the selected case).
+  // Without a served file the declaration table answers alone.
+  if (here.pattern) {
+    const fsPath = enginePath(doc);
+    const typed =
+      fsPath === null
+        ? null
+        : await engine.patternCompletions(await compilerOf(doc), fsPath, params.position, logEngine);
+    return (typed ?? here.items).map((item) => ({
       label: item.label,
-      kind:
-        item.kind === "case"
-          ? CompletionItemKind.EnumMember
-          : item.kind === "field"
-            ? CompletionItemKind.Field
-            : CompletionItemKind.Keyword,
+      kind: PATTERN_COMPLETION_KINDS[item.kind],
       detail: item.detail,
       // An arm already written stays in the list — a guard may repeat a
       // tag — but sorts after the ones still missing.
@@ -1520,9 +1544,6 @@ connection.onDefinition(async (params) => {
           : editorUri(sym.definition.path);
       return Location.create(target, sym.definition.range);
     }
-    // A built-in case has no declaration to open; nothing else does either
-    // once the engine has claimed the position.
-    if (sym) return null;
   }
 
   // Everything else — ordinary TypeScript symbols, and built-in variant
@@ -1558,6 +1579,37 @@ connection.onReferences(async (params): Promise<Location[] | null> => {
   return references.map((r) =>
     Location.create(editorUri(r.path), r.range),
   );
+});
+
+connection.onPrepareRename(async (params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return null;
+  const fsPath = enginePath(doc);
+  if (fsPath === null) return null;
+  const sym = await engine.ttSymbol(
+    await compilerOf(doc),
+    fsPath,
+    doc.getText(),
+    params.position,
+    logEngine,
+  );
+  if (sym && !sym.binds) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `A tt ${sym.kind === "variant" ? "variant" : sym.kind === "case" ? "case tag" : "payload field"} cannot be renamed.`,
+    );
+  }
+  const prepared = await engine.prepareRename(
+    await compilerOf(doc),
+    fsPath,
+    params.position,
+    logEngine,
+  );
+  if (prepared?.refusal) {
+    throw new ResponseError(LSPErrorCodes.RequestFailed, prepared.refusal);
+  }
+  if (!prepared?.range) return null;
+  return { range: prepared.range, placeholder: doc.getText(prepared.range) };
 });
 
 connection.onRenameRequest(async (params) => {
@@ -1757,32 +1809,64 @@ connection.onCodeAction(async (params): Promise<CodeAction[]> => {
 
 // -------------------------------------------------------- semantic tokens
 
-/** The legend, fixed at initialize: the LSP standard token types the engine
- * reports (engine.ts `EngineSemanticToken.kind`), in the order the encoded
- * data indexes them. */
+/** The legend, fixed at initialize: the LSP 3.17 standard token types and
+ * modifiers, and TypeScript's own `local` modifier, in the order the encoded
+ * data indexes them. TypeScript's classification and tt's both name tokens
+ * from these lists. */
 const SEMANTIC_TOKEN_TYPES = [
-  "keyword",
+  "namespace",
+  "type",
+  "class",
   "enum",
-  "enumMember",
+  "interface",
+  "struct",
+  "typeParameter",
+  "parameter",
   "variable",
   "property",
+  "enumMember",
+  "event",
   "function",
+  "method",
+  "macro",
+  "keyword",
+  "modifier",
+  "comment",
+  "string",
+  "number",
+  "regexp",
   "operator",
+  "decorator",
 ];
+
+const SEMANTIC_TOKEN_MODIFIERS = [
+  "declaration",
+  "definition",
+  "readonly",
+  "static",
+  "deprecated",
+  "abstract",
+  "async",
+  "modification",
+  "documentation",
+  "defaultLibrary",
+  "local",
+];
+
+async function classifiedTokens(doc: TextDocument): Promise<engine.EngineClassifiedToken[] | null> {
+  const compiler = await compilerOf(doc);
+  const fsPath = enginePath(doc);
+  const served =
+    fsPath === null ? null : await engine.documentSemanticTokens(compiler, fsPath, logEngine);
+  if (served) return served;
+  const parsed = await engine.semanticTokens(compiler, doc.getText(), bufferPath(doc), logEngine);
+  return parsed?.map((token) => ({ range: token.range, type: token.kind, modifiers: [] })) ?? null;
+}
 
 connection.languages.semanticTokens.on(async (params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return { data: [] };
-  // Text-based and parse-only on the engine side: it answers for unsaved
-  // and untitled buffers alike, with or without a TypeScript toolchain.
-  const tokens = await engine.semanticTokens(
-    await compilerOf(doc),
-    doc.getText(),
-    bufferPath(doc),
-    logEngine,
-  );
-  // Engine unavailable: no answer beats a wrong empty one — the grammar's
-  // colors stand alone, exactly as they do for every other engine feature.
+  const tokens = await classifiedTokens(doc);
   if (!tokens) return { data: [] };
 
   const builder = new SemanticTokensBuilder();
@@ -1791,12 +1875,16 @@ connection.languages.semanticTokens.on(async (params) => {
       line: token.range.start.line,
       character: token.range.start.character,
       length: token.range.end.character - token.range.start.character,
-      type: SEMANTIC_TOKEN_TYPES.indexOf(token.kind),
+      type: SEMANTIC_TOKEN_TYPES.indexOf(token.type),
+      modifiers: token.modifiers.reduce((bits, name) => {
+        const index = SEMANTIC_TOKEN_MODIFIERS.indexOf(name);
+        return index < 0 ? bits : bits | (1 << index);
+      }, 0),
     }))
     .filter((token) => token.type >= 0 && token.length > 0)
     .sort((a, b) => a.line - b.line || a.character - b.character);
   for (const token of ordered) {
-    builder.push(token.line, token.character, token.length, token.type, 0);
+    builder.push(token.line, token.character, token.length, token.type, token.modifiers);
   }
   return builder.build();
 });

@@ -611,7 +611,15 @@
 | TASK-603 | Answer signature help for the source call, never for a generated one | Complete | 2026-09-30 | 2026-09-30 | [TASK-603](./TASK-603-signature-help-for-source-calls.md) |
 | TASK-604 | Keep a `try`'s signature help the same while the file has a syntax error | Complete | 2026-09-30 | 2026-09-30 | [TASK-604](./TASK-604-try-signature-help-with-syntax-errors.md) |
 | TASK-605 | Keep a match arm whose body is not written yet | Complete | 2026-09-30 | 2026-09-30 | [TASK-605](./TASK-605-arm-without-body.md) |
+| TASK-606 | Classify a `.tt` file's source as TypeScript does, with tt's tokens over its constructs | Complete | 2026-09-30 | 2026-09-30 | [TASK-606](./TASK-606-typescript-semantic-tokens.md) |
+| TASK-607 | Complete an arm's pattern with what the scrutinee's type admits | Complete | 2026-09-30 | 2026-09-30 | [TASK-607](./TASK-607-pattern-completion-from-the-scrutinee-type.md) |
+| TASK-608 | Complete a hand-written `kind` union's tags and fields, never a generated switch's cases | Complete | 2026-09-30 | 2026-09-30 | [TASK-608](./TASK-608-kind-union-patterns-and-generated-switch-cases.md) |
+| TASK-609 | Offer `.tt` and `.ttx` modules in import path completion | Complete | 2026-09-30 | 2026-09-30 | [TASK-609](./TASK-609-tt-modules-in-import-path-completion.md) |
+| TASK-610 | Go to a built-in tag's or field's declaration in the standard library | Complete | 2026-09-30 | 2026-09-30 | [TASK-610](./TASK-610-builtin-names-go-to-the-standard-library.md) |
+| TASK-611 | Answer `textDocument/prepareRename` by the rules rename refuses by | Complete | 2026-09-30 | 2026-09-30 | [TASK-611](./TASK-611-prepare-rename.md) |
+| TASK-612 | Name the module an auto-import entry imports from | Complete | 2026-09-30 | 2026-09-30 | [TASK-612](./TASK-612-auto-import-label-details.md) |
+| TASK-613 | Pin that a pipeline step being typed answers as its TypeScript equivalent does | Complete | 2026-09-30 | 2026-09-30 | [TASK-613](./TASK-613-pipeline-step-typing-matches-typescript.md) |
 
 ## Next task number
 
-**TASK-606**
+**TASK-614**

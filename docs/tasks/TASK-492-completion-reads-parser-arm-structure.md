@@ -1,5 +1,10 @@
 # TASK-492: Completion reads the parser's arm structure
 
+> **Superseded in part by TASK-607**: a finished literal arm is evidence
+> after all. Literal and tag arms never mix in one match, so a literal arm
+> says the match is over literals and no variant tag is offered in it. An
+> `is` arm still names no tag and constrains nothing, as below.
+
 - **Status**: Complete
 - **Started**: 2026-09-28
 - **Completed**: 2026-09-28

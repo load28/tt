@@ -650,6 +650,36 @@ test(
   },
 );
 
+test(
+  "pattern completion offers what the scrutinee's type admits",
+  { skip: skipTyped, timeout },
+  async () => {
+    const source = [
+      "variant Shape { Circle(radius: number), Point }",
+      'type Dir = "north" | "south";',
+      'type K = { kind: "Alpha"; x: number } | { kind: "Beta" };',
+      "export function f(d: Dir, k: K) {",
+      '  const a = match (d) { "north" => 1, };',
+      "  const b = match (k) { Alpha => 1, };",
+      "  const c = match (k) { Alpha() => 1, _ => 0 };",
+      "  return [a, b, c];",
+      "}",
+      "",
+    ].join("\n");
+    const { completion, stop } = await open(source);
+    try {
+      const literal = await completion('"north" => 1, ');
+      assert.deepEqual(literal.labels.sort(), ['"north"', '"south"', "_"]);
+      const tags = await completion("Alpha => 1, ");
+      assert.deepEqual(tags.labels.sort(), ["Alpha", "Beta", "_"]);
+      const fields = await completion("Alpha(");
+      assert.deepEqual(fields.labels, ["x"]);
+    } finally {
+      stop();
+    }
+  },
+);
+
 const SUGGESTION_SOURCE = [
   "/** @deprecated */",
   "declare function old(): void;",
@@ -882,19 +912,49 @@ test(
 
 /** The legend the server declares — mirrored here to decode the response. */
 const TOKEN_TYPES = [
-  "keyword",
+  "namespace",
+  "type",
+  "class",
   "enum",
-  "enumMember",
+  "interface",
+  "struct",
+  "typeParameter",
+  "parameter",
   "variable",
   "property",
+  "enumMember",
+  "event",
   "function",
+  "method",
+  "macro",
+  "keyword",
+  "modifier",
+  "comment",
+  "string",
+  "number",
+  "regexp",
   "operator",
+  "decorator",
+];
+
+const TOKEN_MODIFIERS = [
+  "declaration",
+  "definition",
+  "readonly",
+  "static",
+  "deprecated",
+  "abstract",
+  "async",
+  "modification",
+  "documentation",
+  "defaultLibrary",
+  "local",
 ];
 
 /** Decodes the LSP delta-encoded quintuples into absolute tokens. */
 function decodeTokens(
   data: number[],
-): { line: number; character: number; length: number; type: string }[] {
+): { line: number; character: number; length: number; type: string; modifiers: string[] }[] {
   const out = [];
   let line = 0;
   let character = 0;
@@ -906,10 +966,62 @@ function decodeTokens(
       character,
       length: data[i + 2],
       type: TOKEN_TYPES[data[i + 3]],
+      modifiers: TOKEN_MODIFIERS.filter((_, bit) => data[i + 4] & (1 << bit)),
     });
   }
   return out;
 }
+
+test(
+  "semantic tokens carry TypeScript's classification of the source under tt's",
+  { skip: skipTyped, timeout },
+  async () => {
+    const source = [
+      "variant Shape { Circle(radius: number), Point }",
+      "export function area(s: Shape): number {",
+      "  const scale = 2;",
+      "  return match (s) {",
+      "    Circle(radius) => radius * scale,",
+      "    Point => Math.PI,",
+      "  };",
+      "}",
+      "",
+    ].join("\n");
+    const { client, uri, stop } = await open(source);
+    try {
+      const response = await client.request("textDocument/semanticTokens/full", {
+        textDocument: { uri },
+      });
+      const tokens = decodeTokens(response.result?.data ?? []);
+      const lines = source.split("\n");
+      const named = tokens.map(
+        (t) =>
+          `${lines[t.line].slice(t.character, t.character + t.length)}:${[t.type, ...t.modifiers].join(".")}`,
+      );
+      assert.deepEqual(named, [
+        "Shape:enum",
+        "Circle:enumMember",
+        "radius:property",
+        "Point:enumMember",
+        "area:function.declaration",
+        "s:parameter.declaration",
+        "Shape:type.readonly",
+        "scale:variable.declaration.readonly.local",
+        "match:keyword",
+        "s:parameter",
+        "Circle:enumMember",
+        "radius:variable.declaration.readonly.local",
+        "radius:variable.readonly.local",
+        "scale:variable.readonly.local",
+        "Point:enumMember",
+        "Math:variable.defaultLibrary",
+        "PI:property.readonly.defaultLibrary",
+      ]);
+    } finally {
+      stop();
+    }
+  },
+);
 
 test(
   "semantic tokens carry the parser's own classification",
@@ -1087,6 +1199,54 @@ test("a pattern tag goes to its declaration", { skip, timeout }, async () => {
       : answer.result;
     assert.equal(location?.range?.start?.line, 0, "the declaration is line 0");
     assert.equal(location?.uri, uri);
+  } finally {
+    stop();
+  }
+});
+
+test("a built-in tag and field go to the standard library", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    'import type { TResult } from "@tt/std";',
+    "declare const r: TResult<number, string>;",
+    "export const n = match (r) { Ok(value) => value, Err(error) => error.length };",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  try {
+    for (const [marker, file] of [
+      ["Er", "result.ts"],
+      ["Err(err", "result.ts"],
+    ]) {
+      const answer = await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionOf(source, marker),
+      });
+      const locations = Array.isArray(answer.result) ? answer.result : [answer.result];
+      assert.equal(locations.length, 1, JSON.stringify(answer.result));
+      assert.ok(
+        decodeURIComponent(String(locations[0]?.uri)).endsWith(`/node_modules/@tt/std/${file}`),
+        JSON.stringify(answer.result),
+      );
+    }
+  } finally {
+    stop();
+  }
+});
+
+test("prepare rename answers the name, refuses a tt name with a reason", { skip: skipTyped, timeout }, async () => {
+  const { client, uri, stop } = await open(SHAPE_SOURCE);
+  try {
+    const binding = await client.request("textDocument/prepareRename", {
+      textDocument: { uri },
+      position: positionOf(SHAPE_SOURCE, "  Rect(w, h) => w"),
+    });
+    assert.equal(binding.result?.placeholder, "w", JSON.stringify(binding));
+    const tag = await client.request("textDocument/prepareRename", {
+      textDocument: { uri },
+      position: positionOf(SHAPE_SOURCE, "  Poi"),
+    });
+    assert.equal(tag.result ?? null, null, JSON.stringify(tag));
+    assert.match(String(tag.error?.message), /cannot be renamed/);
   } finally {
     stop();
   }

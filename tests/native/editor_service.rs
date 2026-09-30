@@ -216,3 +216,375 @@ const limit = 1;\n";
     }
 }
 
+
+fn token_names(
+    source: &str,
+    tokens: &[ttc::engine::ClassifiedToken],
+) -> Vec<(String, String)> {
+    let lines: Vec<&str> = source.lines().collect();
+    tokens
+        .iter()
+        .map(|token| {
+            let line: Vec<u16> = lines[token.range.start.line as usize].encode_utf16().collect();
+            let text = String::from_utf16(
+                &line[token.range.start.character as usize..token.range.end.character as usize],
+            )
+            .unwrap();
+            let mut name = token.token_type.clone();
+            for modifier in &token.modifiers {
+                name.push('.');
+                name.push_str(modifier);
+            }
+            (text, name)
+        })
+        .collect()
+}
+
+#[test]
+fn semantic_tokens_classify_the_source_as_typescript_does_with_tt_constructs_over_it() {
+    require_tsgo!();
+    let source = "variant Shape { Circle(radius: number), Point }\n\
+export function area(s: Shape): number {\n\
+  const scale = 2;\n\
+  return match (s) {\n\
+    Circle(radius) => radius * scale,\n\
+    Point => Math.PI,\n\
+  };\n\
+}\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let tokens = project.semantic_tokens(&file).unwrap();
+    let named = token_names(source, &tokens);
+    let expected = [
+        ("Shape", "enum"),
+        ("Circle", "enumMember"),
+        ("radius", "property"),
+        ("Point", "enumMember"),
+        ("area", "function.declaration"),
+        ("s", "parameter.declaration"),
+        ("Shape", "type.readonly"),
+        ("scale", "variable.declaration.readonly.local"),
+        ("match", "keyword"),
+        ("s", "parameter"),
+        ("Circle", "enumMember"),
+        ("radius", "variable.declaration.readonly.local"),
+        ("radius", "variable.readonly.local"),
+        ("scale", "variable.readonly.local"),
+        ("Point", "enumMember"),
+        ("Math", "variable.defaultLibrary"),
+        ("PI", "property.readonly.defaultLibrary"),
+    ];
+    assert_eq!(
+        named,
+        expected
+            .iter()
+            .map(|(text, name)| (text.to_string(), name.to_string()))
+            .collect::<Vec<_>>()
+    );
+}
+
+fn pattern_labels(project: &mut ttc::engine::Project, file: &Path, position: ttc::engine::Position) -> Vec<String> {
+    project
+        .pattern_completions(file, position)
+        .unwrap()
+        .expect("a pattern position")
+        .into_iter()
+        .map(|item| {
+            format!(
+                "{}{}",
+                item.label,
+                if item.covered { " (covered)" } else { "" }
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn pattern_completion_offers_what_the_scrutinee_type_admits() {
+    require_tsgo!();
+    let head = "type Dir = \"north\" | \"south\";\n\
+type K = { kind: \"Alpha\"; x: number } | { kind: \"Beta\" };\n\
+variant Shape { Circle(radius: number), Point }\n\
+export function f(d: Dir, k: K, n: 1 | 2 | 3, s: Shape, text: string) {\n";
+    for (arm, expected) in [
+        ("match (d) { \"north\" => 1, @@ }", &["\"north\" (covered)", "\"south\"", "_"][..]),
+        ("match (d) { @@ }", &["\"north\"", "\"south\"", "_"][..]),
+        ("match (n) { 1 => 1, @@ }", &["1 (covered)", "2", "3", "_"][..]),
+        ("match (text) { \"a\" => 1, @@ }", &["_"][..]),
+        ("match (k) { Alpha => 1, @@ }", &["Alpha (covered)", "Beta", "_"][..]),
+        ("match (k) { Alpha => 1, Be@@ }", &["Alpha (covered)", "Beta", "_"][..]),
+        ("match (k) { @@ }", &["Alpha", "Beta", "_"][..]),
+        ("match (k) { Alpha if k.x > 0 => 1, @@ }", &["Alpha", "Beta", "_"][..]),
+        ("match (s) { Circle(radius) => radius, @@ }", &["Circle (covered)", "Point", "_"][..]),
+        ("match (k) { Alpha(@@) => 1, _ => 0 }", &["x"][..]),
+        ("match (s) { Circle(@@) => 1, _ => 0 }", &["radius"][..]),
+    ] {
+        let (source, position) = at_cursor(&format!("{head}  const b = {arm};\n  return b;\n}}\n"));
+        let dir = project(&[("src/main.tt", &source)]);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        let mut project = open_service(&file);
+        assert_eq!(pattern_labels(&mut project, &file, position), expected, "{arm}");
+    }
+}
+
+#[test]
+fn completion_never_offers_the_cases_of_a_generated_switch() {
+    require_tsgo!();
+    let (source, position) = at_cursor(
+        "type K = { kind: \"Alpha\"; x: number } | { kind: \"Beta\" };\n\
+export function f(k: K) {\n  const b = match (k) { Alpha(x) => { @@ }, _ => 0 };\n  return b;\n}\n\
+export function g(k: K) {\n  switch (k.kind) {\n    case \"Alpha\": break;\n    ##\n  }\n}\n",
+    );
+    let user = utf16_position(&source.replace("@@", ""), "##");
+    let source = source.replace("##", "");
+    let dir = project(&[("src/main.tt", &source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let generated = project.completion(&file, position, false).unwrap();
+    assert!(
+        generated.items.iter().all(|item| !item.label.starts_with("case ")),
+        "{:?}",
+        generated.items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+    let written = project.completion(&file, user, false).unwrap();
+    assert!(
+        written.items.iter().any(|item| item.label == "case \"Beta\": ..."),
+        "{:?}",
+        written.items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn a_module_specifier_completes_the_sibling_tt_modules_as_tt_imports_them() {
+    require_tsgo!();
+    for (marked, typed) in [
+        ("import { kk } from \"./@@\";\nexport const z = kk;\n", ""),
+        ("import { kk } from \"./sh@@\";\nexport const z = kk;\n", "sh"),
+        ("export * from \"./@@\";\n", ""),
+        ("export const m = import(\"./@@\");\n", ""),
+    ] {
+        let (source, position) = at_cursor(marked);
+        let dir = project(&[
+            ("src/main.tt", &source),
+            ("src/shapes.tt", "export const kk = 1;\n"),
+            ("src/view.ttx", "export const vv = 1;\n"),
+            ("src/lib.ts", "export const ll = 1;\n"),
+        ]);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        let mut project = open_service(&file);
+        let items = project.completion(&file, position, false).unwrap().items;
+        let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+        for expected in ["lib", "shapes.tt", "view.ttx"] {
+            assert!(labels.contains(&expected), "{marked}: {labels:?}");
+        }
+        assert!(!labels.contains(&"main.tt"), "{marked}: {labels:?}");
+        let shapes = items.iter().find(|item| item.label == "shapes.tt").unwrap();
+        assert_eq!(shapes.kind, "script");
+        let start = ttc::engine::Position {
+            character: position.character - typed.len() as u32,
+            ..position
+        };
+        assert_eq!(
+            shapes.range,
+            Some(ttc::engine::Range {
+                start,
+                end: position
+            }),
+            "{marked}"
+        );
+    }
+
+    let (source, position) = at_cursor("import { x } from \"@tt/@@\";\n");
+    let dir = project(&[("src/main.tt", &source), ("src/shapes.tt", "export const kk = 1;\n")]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let items = project.completion(&file, position, false).unwrap().items;
+    assert!(items.iter().all(|item| !item.label.ends_with(".tt")));
+}
+
+#[test]
+fn a_builtin_tag_or_field_goes_to_its_declaration_in_the_standard_library() {
+    require_tsgo!();
+    let source = "import type { TResult, TOption } from \"@tt/std\";\n\
+declare const r: TResult<number, string>;\n\
+declare const o: TOption<number>;\n\
+export const a = match (r) { Ok(value) => value, Err(error) => error.length };\n\
+export const b = match (o) { Some(value: x) => x, None => 0 };\n\
+export function c() {\n  const Err(error) = r else { return 0; };\n  return error;\n}\n\
+export function d() {\n  if let Some(value) = o { return value; }\n  return 0;\n}\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let std = dir.join("node_modules/@tt/std");
+    let declared = |module: &'static str, needle: &'static str| (module, needle);
+    let at = |needle: &str, nth: usize| {
+        let at = source.match_indices(needle).nth(nth).unwrap().0;
+        let line_start = source[..at].rfind('\n').map_or(0, |newline| newline + 1);
+        ttc::engine::Position {
+            line: source[..at].matches('\n').count() as u32,
+            character: source[line_start..at].encode_utf16().count() as u32 + 1,
+        }
+    };
+    for (position, expected) in [
+        (at("Ok(", 0), declared("result.ts", "Ok = ")),
+        (at("Err(", 0), declared("result.ts", "Err = ")),
+        (at("Some(", 0), declared("option.ts", "Some = ")),
+        (at("None =>", 0), declared("option.ts", "None = ")),
+        (at("value)", 0), declared("result.ts", "value: T }")),
+        (at("error)", 0), declared("result.ts", "error: E }")),
+        (at("value: x", 0), declared("option.ts", "value: T }")),
+        (at("error)", 1), declared("result.ts", "error: E }")),
+        (at("value)", 1), declared("option.ts", "value: T }")),
+    ] {
+        let found = project.definition(&file, position).unwrap();
+        let (module, needle) = expected;
+        let text = std::fs::read_to_string(std.join(module)).unwrap();
+        let expected = (module.to_string(), utf16_position(&text, needle));
+        let targets: Vec<(String, ttc::engine::Position)> = found
+            .iter()
+            .map(|location| {
+                (
+                    location.path.file_name().unwrap().to_string_lossy().into_owned(),
+                    location.range.start,
+                )
+            })
+            .collect();
+        assert_eq!(targets, vec![expected], "{position:?}");
+    }
+}
+
+#[test]
+fn prepare_rename_answers_the_range_a_rename_would_replace_or_refuses_as_it_would() {
+    require_tsgo!();
+    let source = "variant Shape { Circle(radius: number), Point }\n\
+export function f(s: Shape, scale: number) {\n\
+  console.log(scale);\n\
+  return match (s) { Circle(radius) => radius * scale, Point => 0 };\n\
+}\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut workspace = ttc::engine::Workspace::new(ttc::engine::Engine::new(None));
+    workspace.open_document(&file, source.to_string()).unwrap();
+    let inside = |needle: &str, nth: usize| {
+        let at = source.match_indices(needle).nth(nth).unwrap().0 + 1;
+        let line_start = source[..at].rfind('\n').map_or(0, |newline| newline + 1);
+        ttc::engine::Position {
+            line: source[..at].matches('\n').count() as u32,
+            character: source[line_start..at].encode_utf16().count() as u32,
+        }
+    };
+    let covered = |range: ttc::engine::Range| {
+        let line = source.lines().nth(range.start.line as usize).unwrap();
+        line[range.start.character as usize..range.end.character as usize].to_string()
+    };
+    for (needle, nth, expected) in [
+        ("scale", 0, Some("scale")),
+        ("scale", 1, Some("scale")),
+        ("radius)", 0, Some("radius")),
+        ("radius *", 0, Some("radius")),
+        ("log", 0, None),
+    ] {
+        let prepared = match workspace.prepare_rename(&file, inside(needle, nth)).unwrap() {
+            ttc::engine::PrepareRename::Range(range) => Ok(covered(range)),
+            ttc::engine::PrepareRename::Refused(reason) => Err(reason),
+        };
+        match expected {
+            Some(name) => assert_eq!(prepared, Ok(name.to_string()), "{needle} #{nth}"),
+            None => assert_eq!(
+                prepared,
+                Err(Some(
+                    "You cannot rename elements that are defined in the standard TypeScript library."
+                        .to_string()
+                )),
+                "{needle} #{nth}"
+            ),
+        }
+        let renamed = workspace.rename(&file, inside(needle, nth)).unwrap();
+        assert_eq!(renamed.is_some(), expected.is_some(), "{needle} #{nth}");
+    }
+}
+
+#[test]
+fn an_auto_import_entry_names_the_module_it_imports_from() {
+    require_tsgo!();
+    let (source, position) = at_cursor("export const z = kkVa@@;\n");
+    let dir = project(&[
+        ("src/main.tt", &source),
+        ("src/shapes.tt", "export const kkValue = 1;\n"),
+        ("src/lib.ts", "export const kkValueLib = 1;\n"),
+    ]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let completion = project.completion(&file, position, false).unwrap();
+    let described = |label: &str| {
+        completion
+            .items
+            .iter()
+            .find(|item| item.label == label)
+            .and_then(|item| item.description.clone())
+    };
+    assert_eq!(described("kkValue").as_deref(), Some("./shapes.tt"));
+    assert_eq!(described("kkValueLib").as_deref(), Some("./lib"));
+    let detail = project
+        .completion_resolve(&file, position, "kkValue", completion.probe)
+        .unwrap()
+        .expect("the entry resolves");
+    assert_eq!(
+        detail.additional_edits[0].new_text,
+        "import { kkValue } from \"./shapes.tt\";\n\n"
+    );
+}
+
+#[test]
+fn a_pipeline_step_being_typed_answers_as_its_typescript_equivalent_does() {
+    require_tsgo!();
+    let head = "const half = (n: number) => n / 2;\n\
+const obj = { twice(n: number) { return n * 2; } };\n";
+    for (step, equivalent) in [
+        ("4 |> o@@", "o@@(4)"),
+        ("4 |> obj@@", "obj@@(4)"),
+        ("4 |> obj.tw@@", "obj.tw@@(4)"),
+        ("4 |> obj.twice@@", "obj.twice@@(4)"),
+    ] {
+        let (tt, at_tt) = at_cursor(&format!("{head}export const a = {step}\nexport const z = half(2);\n"));
+        let (ts, at_ts) =
+            at_cursor(&format!("{head}export const a = {equivalent}\nexport const z = half(2);\n"));
+        let dir = project(&[("src/main.tt", &tt), ("src/equivalent.ts", &ts)]);
+        let tt_file = dir.join("src/main.tt").canonicalize().unwrap();
+        let ts_file = dir.join("src/equivalent.ts").canonicalize().unwrap();
+        let mut project = open_service(&tt_file);
+        project.open_document(ts_file.clone(), ts.clone());
+        let before = |at: ttc::engine::Position| ttc::engine::Position {
+            character: at.character - 1,
+            ..at
+        };
+        let hover = |project: &mut ttc::engine::Project, file: &Path, at| {
+            project
+                .hover(file, before(at))
+                .unwrap()
+                .map(|info| info.signature)
+        };
+        assert_eq!(
+            hover(&mut project, &tt_file, at_tt),
+            hover(&mut project, &ts_file, at_ts),
+            "{step}"
+        );
+        let labels = |project: &mut ttc::engine::Project, file: &Path, at| {
+            let mut labels: Vec<String> = project
+                .completion(file, at, false)
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|item| item.label)
+                .collect();
+            labels.sort();
+            labels
+        };
+        assert_eq!(
+            labels(&mut project, &tt_file, at_tt),
+            labels(&mut project, &ts_file, at_ts),
+            "{step}"
+        );
+    }
+}

@@ -172,6 +172,78 @@ a general position is TypeScript's entry: the emission declares it, so the
 service lists it wherever it is in scope and valid, and a built-in that is
 not imported is not in scope.
 
+**Update (TASK-606)**: semantic tokens are TypeScript's classification of
+the source under tt's own. `semanticTokens` is tt-owned, so the native
+TypeScript provider does not run for a `.tt` file, and the parse-only
+answer alone left every function, parameter, type and `readonly` or
+`defaultLibrary` name uncolored. The engine's `documentSemanticTokens`
+asks the service for `textDocument/semanticTokens/full` over the served
+projection, decodes it against the legend the service returned from
+`initialize` (LSP 3.17 `SemanticTokensLegend`), and keeps a token only
+when every byte of it was copied from the source; glue (a scrutinee
+temporary, a variant's generated declarations) has no token. The parser's
+tokens for tt constructs replace any service token they overlap, and keep
+the service's modifiers where both name the same range and type (a pattern
+binding is `variable.declaration.readonly.local`, as `const { x } = o` is).
+The adapter's legend is the LSP 3.17 standard types and modifiers plus
+TypeScript's `local`; an untitled buffer or a session without a toolchain
+still gets the parse-only tokens.
+
+**Update (TASK-607)**: an arm's pattern is completed from what the
+scrutinee's type admits, as TypeScript completes a `case` of the switch the
+match lowers to. The parse-only answer knows tt's declarations only: a
+literal match offered every visible variant's tags and no literal, and a
+hand-written `kind` union offered nothing but `_`. A literal arm now says
+the match is over literals (literal and tag arms never mix), so no variant
+tag is offered there. At an arm slot the engine (`patternCompletions`)
+lowers the buffer without the word being typed (with a wildcard arm in the
+slot when the match has no arm yet, so that it lowers), finds the output
+the scrutinee was copied to by the emit mapping, and asks the service to
+complete the right operand of `(scrutinee).kind === ` (a tag match, the
+variant ABI's discriminant) or `(scrutinee) === ` (a literal match; both
+when no arm says which). TypeScript answers a comparison's right operand
+with the literals of the left operand's type, narrowing included
+(`services/completions.ts`, `getContextualType` for an equality operator,
+and the `literals` of the completion data). An entry is kept only when its
+label parses with tt's arm pattern grammar as one literal (for a tag match,
+a string literal whose value is a tag); TypeScript's keywords are not
+literal entries. A candidate an unguarded arm already covers stays in the
+list and sorts after the rest, as a covered tag always has; `_` is always
+offered.
+
+**Update (TASK-608)**: a payload field list is completed through the
+completion probe, whose destructuring TypeScript completes with the
+selected case's properties; the discriminant `kind` and the fields already
+bound are left out. A completion entry TypeScript derives from a switch
+(`source: "SwitchCases/"`, its exhaustive-case snippet) is kept only when
+the innermost case block around the position belongs to a `switch` the
+emission copied from the source: the switch a match lowers to is not the
+user's to extend.
+
+**Update (TASK-609)**: a relative module specifier also completes the
+`.tt` and `.ttx` modules of the directory it names, under their file names
+(`./shapes.tt`, the form tt's imports write). The service lists a
+directory from the file system, where the `.tt.ts` documents the engine
+serves do not exist. A completion entry now carries the source range it
+replaces when the service names one (`textEdit`, mapped like an
+auto-import edit), which a path entry needs when the fragment after the
+last `/` is not a word.
+
+**Update (TASK-610)**: a tt name whose declaration `ttSymbol` cannot open
+(a built-in `Option`/`Result` tag or field) is the engine's definition
+question. A field is answered through the destructuring it lowers to; a
+built-in case through the standard library export that constructs it
+(`typeof import("@tt/std/result").Ok`, asked in a question served for the
+request only).
+
+**Update (TASK-611)**: the server answers `textDocument/prepareRename`
+(LSP 3.17 `renameProvider.prepareProvider`) by running the rename itself:
+the range of its edit at the position, or a refusal. A refusal TypeScript
+gives a reason for is an error with that reason; a tt name the adapter does
+not rename is an error naming it; any other refusal is null. The service
+client returns a server's error answer apart from a failed conversation
+(`Service::answer`), so TypeScript's refusal is not an engine failure.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

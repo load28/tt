@@ -623,3 +623,48 @@ fn signature_help_is_asked_outside_every_generated_argument_list() {
     }];
     assert_eq!(signature_position("foo(a, b)", &copied, kind, 6), 6);
 }
+
+#[test]
+fn tt_tokens_replace_the_service_tokens_they_overlap() {
+    let range = |line: u32, start: u32, end: u32| Range {
+        start: Position {
+            line,
+            character: start,
+        },
+        end: Position {
+            line,
+            character: end,
+        },
+    };
+    let service = |range: Range, token_type: &str, modifiers: &[&str]| ClassifiedToken {
+        range,
+        token_type: token_type.to_string(),
+        modifiers: modifiers.iter().map(|m| m.to_string()).collect(),
+    };
+    let own = vec![
+        crate::engine::tokens::SemanticToken {
+            range: range(1, 4, 10),
+            kind: crate::engine::tokens::SemanticTokenKind::Variable,
+        },
+        crate::engine::tokens::SemanticToken {
+            range: range(0, 0, 5),
+            kind: crate::engine::tokens::SemanticTokenKind::Keyword,
+        },
+    ];
+    let merged = merge_tokens(
+        own,
+        vec![
+            service(range(0, 2, 4), "function", &[]),
+            service(range(0, 6, 7), "parameter", &["declaration"]),
+            service(range(1, 4, 10), "variable", &["declaration", "readonly"]),
+        ],
+    );
+    assert_eq!(
+        merged,
+        vec![
+            service(range(0, 0, 5), "keyword", &[]),
+            service(range(0, 6, 7), "parameter", &["declaration"]),
+            service(range(1, 4, 10), "variable", &["declaration", "readonly"]),
+        ]
+    );
+}

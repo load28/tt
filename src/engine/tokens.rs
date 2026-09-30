@@ -38,7 +38,8 @@ pub enum SemanticTokenKind {
     VariantCase,
     /// A binding a tt pattern introduces (alias included).
     Variable,
-    /// A field name in a pattern's `field: alias` binding.
+    /// A field name in a pattern's `field: alias` binding, or in a variant
+    /// case's declaration.
     Property,
     /// An identifier that looks like a tt keyword but is a call —
     /// `match(...)` naming a plain function. Reported so the editor
@@ -126,6 +127,13 @@ fn walk(
                 out.push((decl.name_off, decl.name.len(), SemanticTokenKind::Variant));
                 for case in &decl.cases {
                     out.push((case.tag_off, case.tag.len(), SemanticTokenKind::VariantCase));
+                    for field in case.fields.iter().flatten() {
+                        out.push((
+                            field.name_off,
+                            field.name.len(),
+                            SemanticTokenKind::Property,
+                        ));
+                    }
                 }
             }
             Segment::Match(m) => {
@@ -394,6 +402,7 @@ mod tests {
         assert!(tokens.contains(&("Shape".into(), SemanticTokenKind::Variant)));
         assert!(tokens.contains(&("Circle".into(), SemanticTokenKind::VariantCase)));
         assert!(tokens.contains(&("Dot".into(), SemanticTokenKind::VariantCase)));
+        assert!(tokens.contains(&("r".into(), SemanticTokenKind::Property)));
         assert!(tokens.contains(&("match".into(), SemanticTokenKind::Keyword)));
         assert!(tokens.contains(&("r".into(), SemanticTokenKind::Variable)));
         assert!(tokens.contains(&("value".into(), SemanticTokenKind::Property)));

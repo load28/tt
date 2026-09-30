@@ -102,6 +102,15 @@ pub struct CompletionItem {
     pub filter_text: Option<String>,
     /// Whether insertion text uses snippet syntax.
     pub snippet: bool,
+    /// The source range the entry replaces, when it is not the word at the
+    /// position.
+    pub range: Option<Range>,
+    /// What the service shows right after the label (LSP 3.17
+    /// `CompletionItemLabelDetails.detail`).
+    pub label_detail: Option<String>,
+    /// What the service shows after that, the module an auto-import entry
+    /// imports from (`CompletionItemLabelDetails.description`).
+    pub description: Option<String>,
 }
 
 /// A completion answer.
@@ -172,6 +181,16 @@ pub struct RenameEdit {
     pub new_text: Option<String>,
 }
 
+/// What a rename at a position would replace, or why it is refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PrepareRename {
+    /// The range of the name the rename replaces there.
+    Range(Range),
+    /// The rename cannot be done whole there, with TypeScript's reason
+    /// when it gave one.
+    Refused(Option<String>),
+}
+
 /// The name a rename asks the service for, so every edit's text can be read
 /// as "the new name, in whatever shape this location needs it".
 pub const RENAME_PLACEHOLDER: &str = "ttRenamePlaceholder";
@@ -205,6 +224,19 @@ pub struct SignatureHelp {
     pub active_signature: u32,
     /// Which parameter the cursor is at.
     pub active_parameter: u32,
+}
+
+/// One classified token of a file, in its own source coordinates (never
+/// spans lines). The type and modifiers are LSP 3.17 names
+/// (`SemanticTokenTypes`, `SemanticTokenModifiers`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClassifiedToken {
+    /// Where, in the source.
+    pub range: Range,
+    /// The token type.
+    pub token_type: String,
+    /// The token modifiers.
+    pub modifiers: Vec<String>,
 }
 
 /// One TypeScript diagnostic, mapped onto the `.tt` source.
@@ -359,9 +391,44 @@ struct ProbeDoc {
     inserted: Vec<crate::InsertedGlue>,
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct ServedText<'a> {
+    code: &'a str,
+    mappings: &'a [EmitMapping],
+    inserted: &'a [crate::InsertedGlue],
+    source: &'a str,
+    splice: Option<usize>,
+}
+
+impl ServiceDoc {
+    fn served(&self) -> ServedText<'_> {
+        ServedText {
+            code: &self.code,
+            mappings: &self.mappings,
+            inserted: &self.inserted,
+            source: &self.source,
+            splice: None,
+        }
+    }
+}
+
+impl ProbeDoc {
+    fn served(&self) -> ServedText<'_> {
+        ServedText {
+            code: &self.code,
+            mappings: &self.mappings,
+            inserted: &self.inserted,
+            source: &self.source,
+            splice: Some(self.splice),
+        }
+    }
+}
+
 /// Inserted at the cursor to complete the construct being typed. `$`-led so
 /// it cannot collide with the name the user is in the middle of typing.
 pub(super) const PROBE_NAME: &str = "$tt_probe";
+
+const WILDCARD_ARM: &str = "_ =>";
 
 use service::*;
 pub(super) use service::{

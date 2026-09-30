@@ -105,6 +105,14 @@ impl StdModule {
         }
     }
 
+    pub(crate) fn constructing(variant: &str) -> Option<Self> {
+        match variant {
+            "Option" => Some(StdModule::Option),
+            "Result" => Some(StdModule::Result),
+            _ => None,
+        }
+    }
+
     pub(crate) fn from_specifier(specifier: &[u8]) -> Option<Self> {
         Self::ALL
             .into_iter()

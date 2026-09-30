@@ -50,6 +50,8 @@ pub enum TtCompletionKind {
     Case,
     /// A payload field name.
     Field,
+    /// A literal the scrutinee's type admits.
+    Literal,
     /// The wildcard arm `_`. Offered where an arm may be written, and
     /// nowhere else — `if let _ = x` is not tt syntax.
     Wildcard,
@@ -88,41 +90,83 @@ pub(super) fn completions_at(
     position: Position,
     texts: Texts<'_>,
 ) -> Vec<TtCompletion> {
+    pattern_question(path, source, position, texts)
+        .map(|question| question.items)
+        .unwrap_or_default()
+}
+
+pub(super) struct PatternQuestion {
+    pub(super) items: Vec<TtCompletion>,
+    pub(super) typed: Option<TypedSite>,
+}
+
+pub(super) enum TypedSite {
+    Arm {
+        prefix: Option<(usize, usize)>,
+        family: Option<PatternFamily>,
+        covered: Vec<String>,
+        literals: Vec<crate::ast::LiteralValue>,
+    },
+    Field {
+        written: Vec<String>,
+    },
+}
+
+pub(super) fn pattern_question(
+    path: &Path,
+    source: &str,
+    position: Position,
+    texts: Texts<'_>,
+) -> Option<PatternQuestion> {
     let offset = super::language::source_byte(source, position);
     let (program, tokens) = crate::parser::lex_and_parse_with_kind(
         source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
     );
+    let context = context(source, &program, &tokens, offset)?;
     let declarations = super::language::analyses_for(path, source, texts).declarations;
-    let items = match context(source, &program, &tokens, offset) {
-        Some(Context::Case { of: Some(arms) }) => {
-            let mut items = resolve_all(&declarations, &arms.tags)
-                .flat_map(|declared| cases(declared, &arms.covered))
-                .collect::<Vec<_>>();
-            // An arm position always admits the wildcard, whether or not
-            // the subject resolved.
-            items.push(TtCompletion {
-                label: "_".to_string(),
-                kind: TtCompletionKind::Wildcard,
-                detail: "wildcard arm — every remaining case (must be last)".to_string(),
-                covered: false,
+    let prefix = {
+        let next = token_at(&tokens, offset);
+        [Some(next), next.checked_sub(1)]
+            .into_iter()
+            .flatten()
+            .find(|&index| index < tokens.len() && is_prefix(&tokens, index, offset))
+            .map(|index| (tokens[index].span.start, tokens[index].span.end))
+    };
+    let (items, typed) = match context {
+        Context::Case { of: Some(arms) } => {
+            let mut items = match arms.family {
+                Some(PatternFamily::Literals) => Vec::new(),
+                Some(PatternFamily::Tags | PatternFamily::Instances) | None => {
+                    resolve_all(&declarations, &arms.tags)
+                        .flat_map(|declared| cases(declared, &arms.covered))
+                        .collect::<Vec<_>>()
+                }
+            };
+            items.push(wildcard());
+            let typed = arms.single.then_some(TypedSite::Arm {
+                prefix,
+                family: arms.family,
+                covered: arms.covered,
+                literals: arms.literals,
             });
-            items
+            (items, typed)
         }
-        // A pattern position with nothing to say which variant it is over —
-        // an `if let` names its variant only by the tag being typed. Every
-        // visible case is a candidate, and the editor filters by prefix.
-        Some(Context::Case { of: None }) => declarations
-            .iter()
-            .flat_map(|declared| cases(declared, &[]))
-            .collect(),
-        Some(Context::Field { tag, written }) => {
+        Context::Case { of: None } => (
+            declarations
+                .iter()
+                .flat_map(|declared| cases(declared, &[]))
+                .collect(),
+            None,
+        ),
+        Context::Field { tag, written } => (
             resolve_all(&declarations, std::slice::from_ref(&tag))
                 .flat_map(|declared| fields(declared, &tag))
                 .filter(|field| !written.contains(&field.label))
-                .collect()
-        }
-        Some(Context::Nested { tag, field }) => {
+                .collect(),
+            Some(TypedSite::Field { written }),
+        ),
+        Context::Nested { tag, field } => (
             resolve_all(&declarations, std::slice::from_ref(&tag))
                 .filter_map(|declared| {
                     declared
@@ -134,11 +178,23 @@ pub(super) fn completions_at(
                         .and_then(|f| type_variant(&declarations, &f.ty))
                 })
                 .flat_map(|inner| cases(inner, &[]))
-                .collect()
-        }
-        None => Vec::new(),
+                .collect(),
+            None,
+        ),
     };
-    merge_candidates(items)
+    Some(PatternQuestion {
+        items: merge_candidates(items),
+        typed,
+    })
+}
+
+pub(super) fn wildcard() -> TtCompletion {
+    TtCompletion {
+        label: "_".to_string(),
+        kind: TtCompletionKind::Wildcard,
+        detail: "wildcard arm — every remaining case (must be last)".to_string(),
+        covered: false,
+    }
 }
 
 /// A member access whose name the cursor completes: the cursor ends the
@@ -371,7 +427,7 @@ fn merge_candidates(items: Vec<TtCompletion>) -> Vec<TtCompletion> {
 }
 
 /// The pattern position the cursor is in.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 enum Context {
     /// A tag is expected. `of` carries the tags already written in the same
     /// match, which is what says *which* variant — `None` when the position
@@ -477,6 +533,9 @@ fn site_context(
             of: Some(ArmTags {
                 tags: Vec::new(),
                 covered: Vec::new(),
+                family: None,
+                literals: Vec::new(),
+                single: false,
             }),
         });
     }
@@ -743,10 +802,20 @@ fn single_at(alternatives: &[TagPattern], offset: usize) -> Option<Parsed> {
 /// Completed arm headers provide variant evidence. An unfinished sibling and
 /// a wildcard do not identify a variant; expression-body identifiers and pipes
 /// are outside the pattern grammar and must never constrain its candidates.
-#[derive(Debug, PartialEq, Eq)]
-struct ArmTags {
+#[derive(Debug, PartialEq)]
+pub(super) struct ArmTags {
     tags: Vec<String>,
     covered: Vec<String>,
+    family: Option<PatternFamily>,
+    literals: Vec<crate::ast::LiteralValue>,
+    single: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PatternFamily {
+    Tags,
+    Literals,
+    Instances,
 }
 
 /// The tags the finished arms of the match body at `open` name, as the
@@ -757,10 +826,27 @@ fn arm_tags(source: &str, tokens: &[Token], open: usize, prefix: Option<usize>) 
     let prefix = prefix.map(|index| tokens[index].span.start);
     let mut tags = Vec::new();
     let mut covered: Vec<String> = Vec::new();
+    let mut family = None;
+    let mut literals = Vec::new();
     for header in crate::parser::arm_headers(source, tokens, open) {
-        let Some(Pattern::Tags(alternatives)) = header.pattern else {
-            continue;
+        let alternatives = match header.pattern {
+            Some(Pattern::Tags(alternatives)) => alternatives,
+            Some(Pattern::Literals(alternatives)) => {
+                family = Some(PatternFamily::Literals);
+                if !header.guarded {
+                    literals.extend(alternatives.into_iter().map(|literal| literal.value));
+                }
+                continue;
+            }
+            Some(Pattern::Instances(_)) => {
+                family.get_or_insert(PatternFamily::Instances);
+                continue;
+            }
+            Some(Pattern::Wildcard) | None => continue,
         };
+        if family != Some(PatternFamily::Literals) {
+            family = Some(PatternFamily::Tags);
+        }
         let nested = alternatives
             .iter()
             .flat_map(|alternative| alternative.bindings.iter().flatten())
@@ -777,7 +863,13 @@ fn arm_tags(source: &str, tokens: &[Token], open: usize, prefix: Option<usize>) 
             }
         }
     }
-    ArmTags { tags, covered }
+    ArmTags {
+        tags,
+        covered,
+        family,
+        literals,
+        single: true,
+    }
 }
 
 /// Keep every declaration consistent with the known tags. With no evidence,
@@ -854,6 +946,38 @@ mod tests {
             .into_iter()
             .map(|item| item.label)
             .collect()
+    }
+
+    #[test]
+    fn a_match_over_literals_offers_no_variant_tags() {
+        let source = "variant Shape { Circle(r: number), Point }\n\
+type Dir = \"north\" | \"south\";\n\
+declare const d: Dir;\n\
+const a = match (d) { \"north\" => 1, ‸ };\n\
+const b = match (d) { 200 | 404 => 1, ‸ };\n\
+const c = match (d) { is Error => 1, \"x\" => 2, ‸ };\n";
+        for nth in 0..3 {
+            let offset = source.match_indices('‸').nth(nth).unwrap().0;
+            let text = source.replace('‸', "");
+            let offset = offset - nth * '‸'.len_utf8();
+            let (line, character) = crate::lines::LineMap::lsp(&text).utf16_position(offset);
+            let position = Position {
+                line: line as u32,
+                character: character as u32,
+            };
+            let labels: Vec<String> = tt_completions_at(Path::new("/p/a.tt"), &text, position)
+                .into_iter()
+                .map(|item| item.label)
+                .collect();
+            assert_eq!(labels, vec!["_"], "arm {nth}");
+        }
+        assert_eq!(
+            labels(
+                "variant Shape { Circle(r: number), Point }\nconst e = match (s) { Circle(r) => r, ",
+                "Circle(r) => r, "
+            ),
+            vec!["Circle", "Point", "_"]
+        );
     }
 
     /// The member access at the end of `source`.
@@ -1435,8 +1559,8 @@ mod tests {
 
     #[test]
     fn only_tag_patterns_are_arm_evidence() {
-        let src = format!("{DECL}const a = match (s) {{ is Circle => 1, 1 | 2 => 2, Po");
-        let found = labels(&src, "2 => 2, ");
+        let src = format!("{DECL}const a = match (s) {{ is Circle => 1, Po");
+        let found = labels(&src, "1, ");
         assert!(found.contains(&"Circle".to_string()), "{found:?}");
         assert!(found.contains(&"Point".to_string()), "{found:?}");
     }

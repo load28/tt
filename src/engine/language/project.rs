@@ -211,10 +211,73 @@ impl Project {
         if !found.is_empty() {
             return Ok(found);
         }
+        let found = self.builtin_case_definition(path, position)?;
+        if !found.is_empty() {
+            return Ok(found);
+        }
         // The service found nothing mappable. The match analysis knows the
         // spans the user actually wrote: a body reference goes to every
         // alternative's binding; a binding is its own declaration.
         self.match_binding_definitions(path, position)
+    }
+
+    fn builtin_case_definition(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Vec<Location>, String> {
+        let (doc, path) = self.serve(path)?;
+        let byte = source_byte(&doc.source, position);
+        let semantics = self.semantic_analyses(&path, &doc.source);
+        let Some(resolved) = semantics.analyses.resolved.iter().find(|resolved| {
+            resolved.kind == crate::analysis::NameKind::Case
+                && resolved.origin == crate::analysis::Origin::Builtin
+                && resolved.start <= byte
+                && byte <= resolved.end
+        }) else {
+            return Ok(Vec::new());
+        };
+        let Some(module) = crate::StdModule::constructing(&resolved.variant_name) else {
+            return Ok(Vec::new());
+        };
+        let head = format!(
+            "{}\ntype {PROBE_NAME} = typeof import(\"{}\").",
+            doc.code,
+            module.specifier()
+        );
+        let question = format!("{head}{};\n", resolved.name);
+        let documents = self.overlays.clone();
+        let overlays = &*documents.read();
+        let session = self.session();
+        open_served(session, &path, &question);
+        let answer = session.client.request(
+            "textDocument/definition",
+            serde_json::json!({
+                "textDocument": { "uri": served_uri(session, &path) },
+                "position": lsp_position(u16_position(&question, mapper::to_utf16(&question, head.len()))),
+            }),
+        );
+        open_served(session, &path, &doc.code);
+        let targets = match answer? {
+            serde_json::Value::Array(items) => items,
+            serde_json::Value::Null => Vec::new(),
+            one => vec![one],
+        };
+        Ok(targets
+            .iter()
+            .filter_map(|target| {
+                let uri = target["uri"]
+                    .as_str()
+                    .or_else(|| target["targetUri"].as_str())?;
+                let range = if target["targetSelectionRange"].is_object() {
+                    &target["targetSelectionRange"]
+                } else {
+                    &target["range"]
+                };
+                map_target(session, overlays, uri, range, TargetUse::Navigation)
+            })
+            .filter(|location| location.path != path)
+            .collect())
     }
 
     /// Definition targets from the match analysis — the fallback for names
@@ -453,11 +516,28 @@ impl Project {
         position: Position,
         member: bool,
     ) -> Result<CompletionAnswer, String> {
+        let mut answer = self.service_completion(path, position, member)?;
+        let (doc, path) = self.serve(path)?;
+        let documents = self.overlays.clone();
+        for entry in tt_module_entries(&path, &doc.source, position, &documents.read()) {
+            if !answer.items.iter().any(|item| item.label == entry.label) {
+                answer.items.push(entry);
+            }
+        }
+        Ok(answer)
+    }
+
+    fn service_completion(
+        &mut self,
+        path: &Path,
+        position: Position,
+        member: bool,
+    ) -> Result<CompletionAnswer, String> {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
         let plain = match to_service_typed(&doc, position) {
             Some(at) => {
-                let plain = ts_completions(session, &path, at, &doc.code, &doc.generated_names)?;
+                let plain = ts_completions(session, &path, at, doc.served(), &doc.generated_names)?;
                 if !member || (plain.member && !plain.items.is_empty()) {
                     return Ok(plain);
                 }
@@ -488,7 +568,7 @@ impl Project {
             session,
             &path,
             probe.offset,
-            &probe.code,
+            probe.served(),
             &probe.generated_names,
         )?;
         probed.probe = Some(probe.version);
@@ -498,6 +578,164 @@ impl Project {
         } else {
             CompletionAnswer::default()
         })
+    }
+
+    /// What can be written at a pattern position, typed by TypeScript where
+    /// it can answer: `None` when `position` is not a pattern position.
+    pub fn pattern_completions(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Option<Vec<crate::engine::TtCompletion>>, String> {
+        use crate::engine::completions::{TypedSite, pattern_question};
+        let (doc, path) = self.serve(path)?;
+        let Some(question) =
+            pattern_question(&path, &doc.source, position, Texts::Open(&self.overlays))
+        else {
+            return Ok(None);
+        };
+        let items = match question.typed {
+            Some(TypedSite::Arm {
+                prefix,
+                family,
+                covered,
+                literals,
+            }) => {
+                let at =
+                    prefix.map_or_else(|| source_byte(&doc.source, position), |(start, _)| start);
+                let source = match prefix {
+                    Some((start, end)) => format!("{}{}", &doc.source[..start], &doc.source[end..]),
+                    None => doc.source.clone(),
+                };
+                match self.discriminant_candidates(&doc, &path, &source, at, family)? {
+                    Some((family, candidates)) => {
+                        arm_candidates(question.items, family, candidates, &covered, &literals)
+                    }
+                    None => question.items,
+                }
+            }
+            Some(TypedSite::Field { written }) => {
+                let fields = self.field_candidates(&doc, &path, position)?;
+                field_candidates(question.items, fields, &written)
+            }
+            None => question.items,
+        };
+        Ok(Some(items))
+    }
+
+    fn discriminant_candidates(
+        &mut self,
+        doc: &Arc<ServiceDoc>,
+        path: &Path,
+        source: &str,
+        at: usize,
+        family: Option<crate::engine::completions::PatternFamily>,
+    ) -> Result<Option<(crate::engine::completions::PatternFamily, Vec<Discriminant>)>, String>
+    {
+        use crate::engine::completions::PatternFamily;
+        let kind = crate::SourceKind::from_path(path).unwrap_or_default();
+        let lowered = |text: &str| {
+            let (start, end) = crate::engine::declarations::scrutinee_at(text, kind, at)?;
+            let report = crate::compile_projection_report(
+                text,
+                &crate::Options {
+                    filename: path.to_str(),
+                    source_kind: kind,
+                    defer_to_checker: true,
+                    rewrite_imports: crate::ImportRewrite::Off,
+                    ..crate::Options::default()
+                },
+            );
+            let emit = report.emit.or(report.withheld)?;
+            let out_start = mapper::to_output(&emit.mappings, start)?;
+            let out_end = out_start + (end - start);
+            (mapper::to_source_span(&emit.mappings, out_start, out_end) == Some((start, end)))
+                .then_some((emit, out_start, out_end))
+        };
+        let Some((emit, out_start, out_end)) = lowered(source)
+            .or_else(|| lowered(&format!("{}{WILDCARD_ARM}{}", &source[..at], &source[at..])))
+        else {
+            return Ok(None);
+        };
+        let families: &[PatternFamily] = match family {
+            Some(PatternFamily::Tags) => &[PatternFamily::Tags],
+            Some(PatternFamily::Literals) => &[PatternFamily::Literals],
+            Some(PatternFamily::Instances) => &[],
+            None => &[PatternFamily::Tags, PatternFamily::Literals],
+        };
+        for &family in families {
+            let access = match family {
+                PatternFamily::Tags => format!(".{}", crate::core_ir::VARIANT_TAG_FIELD),
+                _ => String::new(),
+            };
+            let head = format!(
+                "{}({}){access} === ",
+                &emit.code[..out_start],
+                &emit.code[out_start..out_end]
+            );
+            let code = format!("{head}{PROBE_NAME}{}", &emit.code[out_end..]);
+            let session = self.session();
+            open_served(session, path, &code);
+            let answer = ts_completions(
+                session,
+                path,
+                mapper::to_utf16(&code, head.len()),
+                ServedText {
+                    code: &code,
+                    mappings: &[],
+                    inserted: &[],
+                    source: "",
+                    splice: None,
+                },
+                &emit.generated_names,
+            );
+            open_served(session, path, &doc.code);
+            let candidates: Vec<Discriminant> = answer?
+                .items
+                .iter()
+                .filter(|item| item.kind != "keyword")
+                .filter_map(|item| discriminant(&item.label, family))
+                .collect();
+            if !candidates.is_empty() {
+                return Ok(Some((family, candidates)));
+            }
+        }
+        Ok(None)
+    }
+
+    fn field_candidates(
+        &mut self,
+        doc: &Arc<ServiceDoc>,
+        path: &Path,
+        position: Position,
+    ) -> Result<Vec<String>, String> {
+        let at = source_byte(&doc.source, position);
+        let session = self.session();
+        let Some(probe) = build_probe(path, &doc.source, at, session.probe_count + 1) else {
+            return Ok(Vec::new());
+        };
+        session.probe_count += 1;
+        open_served(session, path, &probe.code);
+        let answer = ts_completions(
+            session,
+            path,
+            probe.offset,
+            probe.served(),
+            &probe.generated_names,
+        );
+        open_served(session, path, &doc.code);
+        Ok(answer?
+            .items
+            .into_iter()
+            .filter(|item| {
+                matches!(
+                    crate::parser::pattern_of(&item.label),
+                    Some(crate::ast::Pattern::Tags(tags))
+                        if tags.len() == 1 && tags[0].bindings.is_none() && tags[0].tag == item.label
+                )
+            })
+            .map(|item| item.label)
+            .collect())
     }
 
     /// The signature and documentation behind one completion entry, fetched
@@ -544,7 +782,11 @@ impl Project {
         if !session.last_completion.contains_key(&key) {
             // The server resolves the item *it* produced, not a name, so the
             // list has to have been asked for first.
-            let _ = ts_completions(session, &path, at, &code, &generated_names)?;
+            let text = match &installed {
+                Some(installed) => installed.served(),
+                None => doc.served(),
+            };
+            let _ = ts_completions(session, &path, at, text, &generated_names)?;
         }
         let Some(item) = session.last_completion.get(&key).cloned() else {
             return Ok(None);
@@ -585,12 +827,22 @@ impl Project {
         path: &Path,
         position: Position,
     ) -> Result<Option<Vec<RenameEdit>>, String> {
+        Ok(self.rename_answer(path, position)?.ok())
+    }
+
+    /// [`Project::rename`], with TypeScript's reason when it refuses the
+    /// rename at `position` itself.
+    pub fn rename_answer(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Result<Vec<RenameEdit>, Option<String>>, String> {
         let (doc, path) = self.serve(path)?;
         let documents = self.overlays.clone();
         let overlays = &*documents.read();
         let session = self.session();
         let Some(at) = to_service_name(&doc, position) else {
-            return Ok(None);
+            return Ok(Err(None));
         };
         let uri = served_uri(session, &path);
         let lsp_at = lsp_position(u16_position(&doc.code, at));
@@ -598,12 +850,15 @@ impl Project {
         // The server's own "can this be renamed?" — a keyword or a literal
         // answers null, and forcing it would rename nothing while looking
         // like it worked.
-        let prepared = session.client.request(
+        let prepared = match session.client.answer(
             "textDocument/prepareRename",
             serde_json::json!({ "textDocument": { "uri": uri }, "position": lsp_at }),
-        )?;
+        )? {
+            Ok(prepared) => prepared,
+            Err(reason) => return Ok(Err(Some(reason))),
+        };
         if prepared.is_null() {
-            return Ok(None);
+            return Ok(Err(None));
         }
 
         let edit = session.client.request(
@@ -615,14 +870,14 @@ impl Project {
             }),
         )?;
         let Some(changes) = edit["changes"].as_object() else {
-            return Ok(None);
+            return Ok(Err(None));
         };
 
         let changes = changes.clone();
         let mut out = Vec::new();
         for (edited_uri, edits) in &changes {
             let Some(edits) = edits.as_array() else {
-                return Ok(None);
+                return Ok(Err(None));
             };
             for one in edits {
                 let Some(location) = map_target(
@@ -635,13 +890,13 @@ impl Project {
                     let Some((generated, targets)) =
                         map_shared_target(session, overlays, edited_uri, &one["range"])
                     else {
-                        return Ok(None);
+                        return Ok(Err(None));
                     };
                     let text = one["newText"].as_str().unwrap_or(RENAME_PLACEHOLDER);
                     if text != RENAME_PLACEHOLDER
                         && text != format!("{generated}: {RENAME_PLACEHOLDER}")
                     {
-                        return Ok(None);
+                        return Ok(Err(None));
                     }
                     for target in targets {
                         out.push(RenameEdit {
@@ -662,7 +917,7 @@ impl Project {
                 {
                     // A shape we cannot account for — refusing beats
                     // silently rebinding a different field.
-                    return Ok(None);
+                    return Ok(Err(None));
                 }
                 // Text a lowering writes more than once (a variant field's
                 // type, in its union and its constructor) is one place in
@@ -673,7 +928,7 @@ impl Project {
                 }
             }
         }
-        Ok(if out.is_empty() { None } else { Some(out) })
+        Ok(if out.is_empty() { Err(None) } else { Ok(out) })
     }
 
     /// The file's outline as TypeScript sees its declarations, on the source.
@@ -689,6 +944,31 @@ impl Project {
             &doc,
             answer.as_array().map(Vec::as_slice).unwrap_or_default(),
         ))
+    }
+
+    /// The file's semantic tokens: TypeScript's classification of the text
+    /// the emission copied from the source, on the source, with tt's own
+    /// classification of its constructs over it. A token TypeScript gives
+    /// compiler-written text is not the user's and is not reported.
+    pub fn semantic_tokens(&mut self, path: &Path) -> Result<Vec<ClassifiedToken>, String> {
+        let (doc, path) = self.serve(path)?;
+        let session = self.session();
+        let answer = session.client.request(
+            "textDocument/semanticTokens/full",
+            serde_json::json!({ "textDocument": { "uri": served_uri(session, &path) } }),
+        )?;
+        let data: Vec<u64> = answer["data"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_u64)
+            .collect();
+        let service = source_tokens(&doc, session.client.semantic_legend(), &data);
+        let own = crate::engine::tokens::semantic_tokens_with_kind(
+            &doc.source,
+            crate::SourceKind::from_path(&path).unwrap_or_default(),
+        );
+        Ok(merge_tokens(own, service))
     }
 
     /// Signature help at a call site.

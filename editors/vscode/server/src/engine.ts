@@ -48,6 +48,8 @@ export interface EngineHover {
 }
 
 export interface EngineCompletionItem {
+  range?: EngineRange | null;
+  labelDetails?: { detail?: string | null; description?: string | null } | null;
   label: string;
   /** The element-kind string the editor has always mapped. */
   kind: string;
@@ -126,7 +128,7 @@ export interface EngineTtHint {
 
 export interface EngineTtCompletion {
   label: string;
-  kind: "case" | "field" | "wildcard";
+  kind: "case" | "field" | "literal" | "wildcard";
   detail: string;
   /** True when an arm of this match already covers the case. */
   covered: boolean;
@@ -143,6 +145,7 @@ export interface EngineTtCompletions {
   /** The tt keywords whose construct can be written there, with
    * TypeScript's rank for a keyword. */
   keywords: EngineTtKeyword[];
+  pattern: boolean;
 }
 
 /** A tt keyword the engine found valid at a position. */
@@ -519,6 +522,15 @@ export async function rename(
   return result?.edits ?? null;
 }
 
+export async function prepareRename(
+  compiler: string,
+  path: string,
+  position: EnginePosition,
+  onError?: (message: string) => void,
+): Promise<{ range: EngineRange | null; refusal?: string | null } | null> {
+  return semantic(compiler, "prepareRename", { path, position }, onError);
+}
+
 export interface EngineDocumentSymbol {
   name: string;
   detail: string;
@@ -575,6 +587,26 @@ export async function semanticTokens(
   return result?.tokens ?? null;
 }
 
+export interface EngineClassifiedToken {
+  range: EngineRange;
+  type: string;
+  modifiers: string[];
+}
+
+export async function documentSemanticTokens(
+  compiler: string,
+  path: string,
+  onError?: (message: string) => void,
+): Promise<EngineClassifiedToken[] | null> {
+  const result = await semantic<{ tokens: EngineClassifiedToken[] }>(
+    compiler,
+    "documentSemanticTokens",
+    { path },
+    onError,
+  );
+  return result?.tokens ?? null;
+}
+
 /** A tt name — a variant, a case tag, a payload field — at a position.
  *
  * These three name spaces exist only in `.tt` source (a variant declaration
@@ -614,7 +646,23 @@ export async function ttCompletions(
     items: result?.items ?? [],
     member: result?.member ?? null,
     keywords: result?.keywords ?? [],
+    pattern: result?.pattern ?? false,
   };
+}
+
+export async function patternCompletions(
+  compiler: string,
+  path: string,
+  position: EnginePosition,
+  onError?: (message: string) => void,
+): Promise<EngineTtCompletion[] | null> {
+  const result = await semantic<{ items: EngineTtCompletion[] }>(
+    compiler,
+    "patternCompletions",
+    { path, position },
+    onError,
+  );
+  return result?.items ?? null;
 }
 
 /** What tt has to say about a buffer that is not an error — today, the
