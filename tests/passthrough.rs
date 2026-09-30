@@ -921,3 +921,14 @@ fn a_line_after_an_import_type_is_not_its_type_arguments() {
         assert_tsx_passthrough(source);
     }
 }
+
+#[test]
+fn a_using_declaration_in_a_for_statement_and_a_function_as_an_if_clause() {
+    for source in [
+        "declare function res(): { [Symbol.dispose](): void };\nexport function f() {\n  for (using q = res(); ; ) { break; }\n  for (using q = res(), p = res(); q; ) { break; }\n}\n",
+        "declare function res(): { [Symbol.asyncDispose](): Promise<void> };\nexport async function f() {\n  for (await using q = res(); ;) { break; }\n}\n",
+        "if (Math.random()) function f() {}\nif (Math.random()) {} else function g() {}\n",
+    ] {
+        assert_passthrough(source);
+    }
+}

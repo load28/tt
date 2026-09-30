@@ -650,3 +650,32 @@ fn variant_field_types_and_type_parameters_are_mapped_where_they_are_written() {
         }
     }
 }
+
+#[test]
+fn every_prefix_of_an_arm_being_typed_is_served() {
+    let tag = "variant O { A(n: number), B, C(x: number) }\ndeclare const o: O;\n";
+    let text = "declare const s: string;\n";
+    let single = "export const r = match (o) { A(n) => n, ";
+    let tuple = "export const r = match (o, o) { (A(n), _) => n, ";
+    let literal = "export const r = match (s) { \"a\" => 1, ";
+    for (prelude, head, arm) in [
+        (tag, single, "B if o.kind === \"B\" => 1"),
+        (tag, single, "C(x) if x > 0 => { return x; }"),
+        (tag, single, "B | C(x) => 2"),
+        (tag, tuple, "(B, _) if o.kind === \"B\" => 2"),
+        (tag, tuple, "(C(x), A(n)) if x > n => x"),
+        (text, literal, "\"b\" | \"c\" if s.length > 0 => 2"),
+        (text, literal, "_ => 3"),
+    ] {
+        for tail in [" };\n", ", _ => 0 };\n", ""] {
+            for end in (0..=arm.len()).filter(|&end| arm.is_char_boundary(end)) {
+                let src = format!("{prelude}{head}{}{tail}", &arm[..end]);
+                let mapped = std::panic::catch_unwind(|| emit_mapped(&src));
+                let m = mapped.unwrap_or_else(|_| panic!("the editor feed failed on {src:?}"));
+                assert_mapping_invariants(&src, &m);
+                let compiled = std::panic::catch_unwind(|| compile(&src, &Options::default()));
+                assert!(compiled.is_ok(), "compile failed on {src:?}");
+            }
+        }
+    }
+}

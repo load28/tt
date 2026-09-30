@@ -143,6 +143,30 @@ before the remaining union is serialized at the declaration. For example,
 inference without evolving an implicit `any[]`. Unresolved, error, `any`, and
 `unknown` inputs do not provide a definite annotation in that round.
 
+Each right-hand side is widened as TypeScript widens a value written to a
+mutable location (TASK-623): the checker's `getWidenedLiteralType` widens
+only a *fresh* literal type, the type of a literal expression, and keeps a
+*regular* one, the type of a declared literal, of `as const`, or of a
+narrowing (`checker.ts`, `getWidenedLiteralType` and
+`checkExpressionForMutableLocation`; TypeScript 2.1 release notes,
+"Better inference for literal types"). The API answers only regular types
+for expressions (`getTypeAtLocation` is `getRegularTypeOfExpression`), so
+the host reads freshness where the checker keeps it: a literal token (and
+`-`/`+` before a numeric one) is fresh, a name or property is as fresh as
+`getTypeOfSymbolAtLocation` says (a `const c = "a"` is), a call as fresh
+as its resolved signature's return type, and parentheses, `satisfies`, `!`,
+a conditional's branches, a comma's right operand, and the operands of
+`&&`, `||`, and `??` pass their operands' freshness through. With
+`a, b: "north" | "south"`, `match (o) { A => a, B => b }` is stored as
+`"north" | "south"`, and `match (o) { A => "x", B => "y" }` as `string`,
+as `let v = c ? "x" : "y"` is typed. A union with a fresh constituent is
+widened constituent by constituent, since the API builds no unions, and
+the constituents join as incoming types do. Storage is a mutable location
+even where the source's value is not: a `const d = match … { A => "x" … }`
+reads the widened `string`, where TypeScript keeps the fresh `"x"` for a
+`const`; no written annotation can carry freshness, which a later
+`let e = d` would widen again.
+
 Nor does an input typed through storage no round has settled yet (TASK-584).
 Such storage has no type of its own: without `noImplicitAny` it reads as
 `any`, and so does an evolving variable read in a closure. In

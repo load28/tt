@@ -478,17 +478,26 @@ impl Reuse {
                 _ => {
                     changed = true;
                     crate::work::tick("contextual projections");
-                    crate::compile_projection_report(
-                        &source,
-                        &crate::Options {
-                            source_kind: crate::SourceKind::from_path(&candidate)
-                                .unwrap_or_default(),
-                            defer_to_checker: true,
-                            rewrite_imports: crate::ImportRewrite::Off,
-                            ..crate::Options::default()
-                        },
-                    )
-                    .emit
+                    crate::ice::catching(|| {
+                        crate::ice::working_on(&candidate, || {
+                            crate::ice::panic_for_test(&format!(
+                                "projection:{}",
+                                candidate.file_name().unwrap_or_default().to_string_lossy()
+                            ));
+                            crate::compile_projection_report(
+                                &source,
+                                &crate::Options {
+                                    source_kind: crate::SourceKind::from_path(&candidate)
+                                        .unwrap_or_default(),
+                                    defer_to_checker: true,
+                                    rewrite_imports: crate::ImportRewrite::Off,
+                                    ..crate::Options::default()
+                                },
+                            )
+                            .emit
+                        })
+                    })
+                    .unwrap_or(None)
                 }
             };
             self.projections.insert(candidate, (source, emit));

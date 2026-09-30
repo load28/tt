@@ -7,6 +7,20 @@ use super::*;
 /// The typed projection's recovery writes the same expression.
 pub(super) const RECOVERED_VALUE: &str = "(undefined as any)";
 
+fn push_source_edit<'a>(out: &mut Rope<'a>, edit: &LocalSourceEdit) {
+    match edit.result_return_mark {
+        Some((mark, ResultReturnBoundary::Start)) => {
+            out.push_lit(edit.text.clone());
+            out.push_result_return_start(mark.start);
+        }
+        Some((mark, ResultReturnBoundary::End)) => {
+            out.push_result_return_end(mark.start);
+            out.push_lit(edit.text.clone());
+        }
+        None => out.push_lit(edit.text.clone()),
+    }
+}
+
 impl<'a> Emitter<'a> {
     pub(super) fn exits_for_expr(&self, expr: ExprId) -> Vec<HostExit> {
         self.value_exits.get(&expr).cloned().unwrap_or_default()
@@ -430,19 +444,7 @@ impl<'a> Emitter<'a> {
                 self.emitted_compose_rewrites.claim(rewrite.owner);
                 out.append(self.emit_compose_rewrite(rewrite));
             }
-            match edit.result_return_mark {
-                Some((mark, ResultReturnBoundary::Start)) => {
-                    // The prefix ends immediately before the authored value.
-                    out.push_lit(edit.text.clone());
-                    out.push_result_return_start(mark.start);
-                }
-                Some((mark, ResultReturnBoundary::End)) => {
-                    // The suffix begins immediately after the authored value.
-                    out.push_result_return_end(mark.start);
-                    out.push_lit(edit.text.clone());
-                }
-                None => out.push_lit(edit.text.clone()),
-            }
+            push_source_edit(&mut out, edit);
             cursor = edit.span.end;
         }
         if cursor < span.end {
@@ -562,7 +564,8 @@ impl<'a> Emitter<'a> {
         }
         edits.sort_unstable_by_key(|edit| edit.span.start);
         let mut out = Rope::new();
-        for statement in &self.core.bodies[body.index()].statements {
+        let statements = &self.core.bodies[body.index()].statements;
+        for (index, statement) in statements.iter().enumerate() {
             match statement {
                 Statement::Opaque(node) if !structured_returns.is_empty() => {
                     let span = self.span(*node);
@@ -617,9 +620,11 @@ impl<'a> Emitter<'a> {
                         )
                     })
                 }
-                _ => out.append(
-                    self.emit_statements_with_edits(std::slice::from_ref(statement), &edits),
-                ),
+                _ => {
+                    if self.emit_statement_with_edits(statement, &edits, &mut out) {
+                        out.append(self.edits_after_statement(statements, index, &edits));
+                    }
+                }
             }
         }
         out
@@ -665,7 +670,21 @@ impl<'a> Emitter<'a> {
         edits: &[LocalSourceEdit],
     ) -> Rope<'a> {
         let mut out = Rope::new();
-        for statement in statements {
+        for (index, statement) in statements.iter().enumerate() {
+            if self.emit_statement_with_edits(statement, edits, &mut out) {
+                out.append(self.edits_after_statement(statements, index, edits));
+            }
+        }
+        out
+    }
+
+    pub(super) fn emit_statement_with_edits(
+        &self,
+        statement: &Statement,
+        edits: &[LocalSourceEdit],
+        out: &mut Rope<'a>,
+    ) -> bool {
+        {
             let relocated_node = match statement {
                 Statement::Decision(decision) => Some(decision.extent),
                 Statement::Propagate(propagate) => Some(propagate.owner),
@@ -695,7 +714,7 @@ impl<'a> Emitter<'a> {
                                 .is_some_and(|expr| self.active_structured_exprs.contains(expr))
                     })
                 {
-                    continue;
+                    return false;
                 }
             }
             match statement {
@@ -719,7 +738,7 @@ impl<'a> Emitter<'a> {
                         ),
                     );
                 }
-                Statement::Import(import) => self.emit_import(import, &mut out),
+                Statement::Import(import) => self.emit_import(import, out),
                 Statement::Propagate(propagate) => {
                     out.append(self.emit_propagate_owner_prelude(propagate));
                     let span = self.span(propagate.node);
@@ -734,7 +753,7 @@ impl<'a> Emitter<'a> {
                     out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
                 Statement::Decision(decision) => {
-                    self.emit_statement_decision(decision, &mut out, &|body| {
+                    self.emit_statement_decision(decision, out, &|body| {
                         self.emit_statements_with_edits(
                             &self.core.bodies[body.index()].statements,
                             edits,
@@ -742,10 +761,46 @@ impl<'a> Emitter<'a> {
                     })
                 }
                 Statement::Expr(expr) if self.statement_expr_requires_lowering(*expr) => {
-                    self.emit_statement_expr(*expr, &mut out);
+                    self.emit_statement_expr(*expr, out);
                 }
                 Statement::Expr(expr) => out.append(self.emit_expr(*expr)),
             }
+        }
+        true
+    }
+
+    pub(super) fn edits_after_statement(
+        &self,
+        statements: &[Statement],
+        index: usize,
+        edits: &[LocalSourceEdit],
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        let end = match &statements[index] {
+            Statement::Expr(expr) => structured_expr_span(self.semantic, self.core, *expr),
+            Statement::Decision(decision) => Some(self.span(decision.extent).into()),
+            Statement::Propagate(propagate) => Some(self.span(propagate.owner).into()),
+            Statement::Adt(adt) => Some(self.span(adt.node).into()),
+            Statement::Opaque(_) | Statement::Import(_) => None,
+        }
+        .map(|span: SourceSpan| span.end);
+        let Some(end) = end else {
+            return out;
+        };
+        let held = statements.iter().any(|statement| {
+            matches!(statement, Statement::Opaque(node) if {
+                let span = self.span(*node);
+                span.start <= end && end <= span.end
+            })
+        });
+        if held {
+            return out;
+        }
+        for edit in edits
+            .iter()
+            .filter(|edit| edit.span.start == end && edit.span.end == end)
+        {
+            push_source_edit(&mut out, edit);
         }
         out
     }

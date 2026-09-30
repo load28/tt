@@ -585,3 +585,44 @@ fn an_asserted_value_keeps_its_own_type() {
     let out = check(&dir);
     assert!(!out.contains("error"), "{out}");
 }
+
+#[test]
+fn a_values_storage_widens_only_fresh_literal_types() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/literals.tt",
+        "variant O { A, B }\n\
+         type Dir = \"north\" | \"south\";\n\
+         declare function take(d: Dir): void;\n\
+         declare function dir(): Dir;\n\
+         declare function id<T>(v: T): T;\n\
+         enum E { X, Y }\n\
+         export function f(o: O, a: Dir, b: Dir) {\n\
+         \x20 const d = match (o) { A => a, B => b };\n\
+         \x20 const c = match (o) { A => \"north\" as const, B => \"south\" as const };\n\
+         \x20 const t = match (o) { A => `north` as const, B => `south` as const };\n\
+         \x20 const k = match (o) { A => { const x = a; return x; }, B => b };\n\
+         \x20 const g = match (o) { A => dir(), B => a! };\n\
+         \x20 const s = match (o) { A => a, B => b } satisfies string;\n\
+         \x20 take(d); take(c); take(t); take(k); take(g); take(s);\n\
+         }\n\
+         export function r(o: O, a: Dir, b: Dir) { return match (o) { A => a, B => b }; }\n\
+         export function u(o: O, a: Dir) { take(r(o, a, a)); }\n\
+         export function w(o: O, a: Dir) {\n\
+         \x20 const cc = \"north\";\n\
+         \x20 let p = match (o) { A => \"x\", B => \"y\" };\n\
+         \x20 p = \"z\";\n\
+         \x20 let q = match (o) { A => cc, B => id(\"p\") };\n\
+         \x20 q = \"z\";\n\
+         \x20 let n = match (o) { A => -1, B => (true) ? 2 : 3 };\n\
+         \x20 n = 7;\n\
+         \x20 let e = match (o) { A => E.X, B => E.Y };\n\
+         \x20 e = E.Y;\n\
+         \x20 let m = match (o) { A => false, B => a };\n\
+         \x20 m = true; m = \"south\";\n\
+         \x20 return [p, q, n, e, m];\n\
+         }\n",
+    )]);
+    let out = check(&dir);
+    assert!(!out.contains("error"), "{out}");
+}
