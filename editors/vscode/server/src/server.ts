@@ -69,6 +69,7 @@ import { isExternalChange } from "./watch";
 import { URI } from "vscode-uri";
 
 import * as analysis from "./analysis";
+import { publishedDiagnostics } from "./diagnostics";
 import * as engine from "./engine";
 import { NoticeLedger } from "./notices";
 import { applyFolderChange, containingRoot, folderRoots, sidecarLocation } from "./roots";
@@ -511,66 +512,6 @@ interface TypedDiagnostics {
   diagnostics: Diagnostic[];
   replacesTypes: boolean;
 }
-/**
- * Adds the typed diagnostics that say something new.
- *
- * The two passes overlap: variant exhaustiveness is decided from the text by
- * `--check` and from the type by the typed pass, and both report it at the
- * same place. One squiggle per position: the authoritative compiler result
- * replaces the matching provisional checker result before the generation is
- * published.
- */
-function mergeTyped(
-  into: Diagnostic[],
-  typed: Diagnostic[],
-  replacesTypes = false,
-): void {
-  if (replacesTypes) {
-    // Language-service diagnostics are the fast provisional layer. Once the
-    // compiler answers with its structured checker diagnostics, replace that
-    // layer's errors and warnings as a whole so consequences suppressed by
-    // the compiler cannot remain visible in the editor. Suggestions (unused,
-    // deprecated) are the service's alone: the compiler reports none.
-    for (let i = into.length - 1; i >= 0; i--) {
-      if (into[i].source === "ts" && isProblem(into[i])) into.splice(i, 1);
-    }
-  }
-  const positionKey = (d: Diagnostic) =>
-    `${d.range.start.line}:${d.range.start.character}`;
-  const codeKey = (d: Diagnostic) => String(d.code ?? "").replace(/^ts/, "");
-  // A suggestion shares its range with whatever error is there without
-  // standing for it: only problems compete for a position.
-  for (const d of typed) {
-    const sameDiagnostic = into.findIndex(
-      (base) =>
-        isProblem(base) &&
-        positionKey(base) === positionKey(d) &&
-        codeKey(base) !== "" &&
-        codeKey(base) === codeKey(d),
-    );
-    if (sameDiagnostic >= 0) {
-      // The service answer is provisional. The compiler pass carries the
-      // structured TT rendering and replaces the same checker diagnostic.
-      into[sameDiagnostic] = d;
-      continue;
-    }
-    if (into.some((base) => isProblem(base) && positionKey(base) === positionKey(d))) {
-      continue;
-    }
-    into.push(d);
-  }
-}
-
-/** An error or a warning — what the Problems panel counts — as opposed to
- * a suggestion the editor only fades or strikes through. */
-function isProblem(d: Diagnostic): boolean {
-  return (
-    d.severity === undefined ||
-    d.severity === DiagnosticSeverity.Error ||
-    d.severity === DiagnosticSeverity.Warning
-  );
-}
-
 async function typedDiagnosticsFor(
   doc: TextDocument,
   compiler: string,
@@ -714,7 +655,6 @@ async function validate(
     return;
   }
 
-  const diagnostics = result.diagnostics.map((d) => toDiagnostic(current, d));
   const typed =
     settings.typedChecks || settings.typeDiagnostics
       ? typedDiagnosticsFor(
@@ -765,37 +705,12 @@ async function validate(
     typeResults = { diagnostics: [], restates: [] };
   }
 
-  // A syntax error in the TypeScript the user wrote is TypeScript's to
-  // report, in its own words, as it is in a `.ts` file. The compiler's
-  // layers state the same fact as the reason the file has no output; once
-  // TypeScript has stated it, they would only state it twice. They go
-  // before the typed merge, whose TypeScript statement of the error is at
-  // the same position.
-  const restated = new Set(typeResults.restates);
-  const stated = (d: Diagnostic) => d.source === "ts" || !restated.has(String(d.code ?? ""));
-  diagnostics.splice(0, diagnostics.length, ...diagnostics.filter(stated));
-  diagnostics.push(...typeResults.diagnostics, ...hints);
-  if (typedResult !== null) {
-    mergeTyped(
-      diagnostics,
-      typedResult.diagnostics.filter(stated),
-      typedResult.replacesTypes,
-    );
-  }
-  // The layers finish independently and typed diagnostics are merged last,
-  // but the user reads and fixes one file from top to bottom. Restore the
-  // compiler's source-order contract after the final merge so the Problems
-  // panel agrees with the CLI regardless of which layer authored a rule.
-  diagnostics.sort((left, right) => {
-    const start =
-      left.range.start.line - right.range.start.line ||
-      left.range.start.character - right.range.start.character;
-    if (start !== 0) return start;
-    const end =
-      left.range.end.line - right.range.end.line ||
-      left.range.end.character - right.range.end.character;
-    if (end !== 0) return end;
-    return String(left.code ?? "").localeCompare(String(right.code ?? ""));
+  const diagnostics = publishedDiagnostics({
+    text: result.diagnostics.map((d) => toDiagnostic(current, d)),
+    service: typeResults.diagnostics,
+    restates: typeResults.restates,
+    hints,
+    typed: typedResult,
   });
   void connection.sendDiagnostics({
     uri: doc.uri,
