@@ -1,0 +1,61 @@
+// A tt value on the right of `&&`, `||`, `??`, `? :`, or an optional call is
+// evaluated only when JavaScript reaches it; the left operand is evaluated once.
+// @run: shortCircuitTtOperands.tt
+import type { TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
+variant Flag { On, Off }
+function flag(on: boolean): Flag {
+  return on ? Flag.On : Flag.Off;
+}
+const log: string[] = [];
+function note<T>(label: string, value: T): T {
+  log.push(label);
+  return value;
+}
+function flush(title: string, value: unknown) {
+  console.log(`${title}: ${JSON.stringify(value)} after ${log.join(" ")}`);
+  log.length = 0;
+}
+function read(label: string): TResult<number, string> {
+  log.push(label);
+  return Result.Ok(7);
+}
+for (const left of [0, 1]) {
+  flush(`${left} && match`, note("left", left) && match (note("scrutinee", flag(true))) { On => note("on", 2), Off => 3 });
+  flush(`${left} || match`, note("left", left) || match (note("scrutinee", flag(false))) { On => 2, Off => note("off", 3) });
+}
+for (const left of [null, 0]) {
+  flush(`${left} ?? match`, note("left", left) ?? match (note("scrutinee", flag(true))) { On => note("on", 4), Off => 5 });
+}
+for (const test of [true, false]) {
+  flush(
+    `${test} ? match : other`,
+    note("test", test) ? match (note("scrutinee", flag(false))) { On => 1, Off => note("off", 2) } : note("otherwise", 0),
+  );
+}
+class Runner {
+  run(n: number) {
+    log.push(this === runner ? "this is the runner" : "this lost");
+    return n;
+  }
+}
+const runner = new Runner();
+const absent: { run?: (n: number) => number } = {};
+const present: { run?: (n: number) => number } = runner;
+flush("absent?.()", absent.run?.(match (note("argument scrutinee", flag(true))) { On => 1, Off => 2 }));
+flush("present?.()", present.run?.(match (note("argument scrutinee", flag(true))) { On => 1, Off => 2 }));
+const holder: { runner?: Runner } = {};
+flush("missing receiver?.m()", holder.runner?.run(match (note("argument scrutinee", flag(false))) { On => 1, Off => 2 }));
+function tries(left: number | null): TResult<number, string> {
+  const value = note("left", left) ?? try read("read");
+  return Result.Ok(value);
+}
+flush("null ?? try", tries(null));
+flush("1 ?? try", tries(1));
+function chain(a: boolean, b: boolean) {
+  return note("a", a) && note("b", b) && match (note("scrutinee", flag(true))) { On => note("on", "reached"), Off => "off" };
+}
+flush("true && true && match", chain(true, true));
+flush("true && false && match", chain(true, false));
+flush("false && ... && match", chain(false, true));
+export {};

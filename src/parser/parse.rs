@@ -336,9 +336,8 @@ fn recovery_expression_span(
     for (idx, token) in tokens.iter().enumerate().skip(operator_idx + 1) {
         if depth == 0
             && (token.facts.boundary_before()
-                || matches!(token.kind, TokenKind::Ident)
-                    && !cursor::dotted_at(tokens, operator_idx + 1, idx)
-                    && crate::lexer::statement_only_keyword(&src[token.span.start..token.span.end])
+                || !cursor::dotted_at(tokens, operator_idx + 1, idx)
+                    && crate::lexer::statement_keyword_at(src, tokens, idx)
                     && &src[token.span.start..token.span.end] != "try")
         {
             break;

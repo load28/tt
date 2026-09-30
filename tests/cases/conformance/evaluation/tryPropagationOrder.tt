@@ -1,0 +1,67 @@
+// A try evaluates its operand once and, on Err, leaves its Result scope
+// before anything written after it runs; sibling trys run left to right.
+// @run: tryPropagationOrder.tt
+import type { TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
+const log: string[] = [];
+function step(label: string, ok: boolean): TResult<number, string> {
+  log.push(label);
+  return ok ? Result.Ok(label.length) : Result.Err(`${label} failed`);
+}
+function flush(title: string, value: unknown) {
+  console.log(`${title}: ${JSON.stringify(value)} after ${log.join(" ")}`);
+  log.length = 0;
+}
+function add(a: number, b: number, c: number) {
+  log.push("add");
+  return a + b + c;
+}
+function operands(first: boolean, second: boolean): TResult<number, string> {
+  const total = (try step("a", first)) + (try step("bb", second));
+  log.push("after");
+  return Result.Ok(total);
+}
+flush("operands ok", operands(true, true));
+flush("first fails", operands(false, true));
+flush("second fails", operands(true, false));
+function args(fail: boolean): TResult<number, string> {
+  return Result.Ok(add(try step("x", true), try step("yy", !fail), try step("zzz", true)));
+}
+flush("arguments ok", args(false));
+flush("arguments fail", args(true));
+const block = (ok: boolean) => result {
+  const a = try step("first", true);
+  const b = try step("second", ok);
+  log.push("tail");
+  return a * b;
+};
+flush("block ok", block(true));
+flush("block fail", block(false));
+function statement(ok: boolean): TResult<string, string> {
+  try step("check", ok);
+  log.push("checked");
+  return Result.Ok("done");
+}
+flush("statement ok", statement(true));
+flush("statement fail", statement(false));
+function inner(ok: boolean): TResult<number, string> {
+  const outcome = result {
+    const v = try step("inner", ok);
+    return v;
+  };
+  log.push(`outcome ${outcome.kind}`);
+  const w = try outcome;
+  log.push("unwrapped");
+  return Result.Ok(w);
+}
+flush("nested scope ok", inner(true));
+flush("nested scope fail", inner(false));
+function scaled(ok: boolean): TResult<number, string> {
+  return Result.Ok(try step("scaled", ok) * 1.5);
+}
+flush("binds tightly", scaled(true));
+function asserted(): TResult<number, string> {
+  return Result.Ok(try step(("asserted" as const), true));
+}
+flush("as const in the operand", asserted());
+export {};

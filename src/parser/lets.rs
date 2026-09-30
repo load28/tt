@@ -174,7 +174,7 @@ fn expr_until_else(cur: &Cursor) -> Option<(usize, usize)> {
                         None
                     };
                 }
-                if crate::lexer::statement_only_keyword(word) {
+                if crate::lexer::statement_keyword_at(cur.parser.src, cur.tokens, k) {
                     return None;
                 }
                 // Skip a whole `match ( ... ) { ... }` or `result { ... }`

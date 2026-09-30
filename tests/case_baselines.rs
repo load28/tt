@@ -6,9 +6,10 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 
 use ttc::SourceKind;
 use ttc::engine::{Engine, ProjectOptions};
@@ -37,6 +38,7 @@ struct Case {
 struct Settings {
     rewrite_imports: Option<String>,
     no_verify: bool,
+    run: Option<String>,
 }
 
 fn cases() -> Vec<Case> {
@@ -71,7 +73,9 @@ fn cases() -> Vec<Case> {
         let text = fs::read_to_string(&path).expect("readable case");
         let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
         let parsed = cases::parse(&text, &file_name, &path);
-        for (suffix, settings) in configurations(&parsed.directives, &path) {
+        let run = run_entry(&parsed.directives, &parsed.units, &path);
+        for (suffix, mut settings) in configurations(&parsed.directives, &path) {
+            settings.run = run.clone();
             out.push(Case {
                 name: format!("{name}{suffix}"),
                 path: path.clone(),
@@ -89,6 +93,46 @@ const OPTIONS: [(&str, &[&str]); 2] = [
 ];
 
 const MAX_VARIATIONS: usize = 25;
+
+const RUN_TIMEOUT: Duration = Duration::from_secs(10);
+
+fn run_entry(directives: &[(String, String)], units: &[Unit], path: &Path) -> Option<String> {
+    let mut entries = directives.iter().filter(|(name, _)| name == "run");
+    let (_, entry) = entries.next()?;
+    assert!(
+        entries.next().is_none(),
+        "{}: a case has at most one @run",
+        path.display()
+    );
+    assert!(
+        units.iter().any(|unit| unit.name == *entry),
+        "{}: @run names `{entry}`, which is not one of the case's units ({})",
+        path.display(),
+        units
+            .iter()
+            .map(|unit| unit.name.as_str())
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    script_of(entry, path);
+    Some(entry.clone())
+}
+
+fn script_of(entry: &str, path: &Path) -> String {
+    let unit = Path::new(entry);
+    let extension = match unit.extension().and_then(|e| e.to_str()) {
+        Some("tt" | "ts") => "js",
+        Some("mts") => "mjs",
+        Some("cts") => "cjs",
+        _ => panic!(
+            "{}: @run takes a .tt, .ts, .mts, or .cts unit, which the emitted tree compiles to a script node runs; `{entry}` is not one",
+            path.display()
+        ),
+    };
+    unit.with_extension(extension)
+        .to_string_lossy()
+        .replace('\\', "/")
+}
 
 fn option_values(option: &str, text: &str, path: &Path) -> (Vec<String>, bool) {
     let allowed = OPTIONS
@@ -150,9 +194,12 @@ fn option_values(option: &str, text: &str, path: &Path) -> (Vec<String>, bool) {
 fn configurations(directives: &[(String, String)], path: &Path) -> Vec<(String, Settings)> {
     let mut chosen: BTreeMap<&str, (Vec<String>, bool)> = BTreeMap::new();
     for (name, value) in directives {
+        if name == "run" {
+            continue;
+        }
         let Some((option, _)) = OPTIONS.iter().find(|(option, _)| option == name) else {
             panic!(
-                "{}: unknown directive `@{name}`; a case takes @filename and the ttc options @rewriteImports and @noVerify",
+                "{}: unknown directive `@{name}`; a case takes @filename, @run, and the ttc options @rewriteImports and @noVerify",
                 path.display()
             );
         };
@@ -208,6 +255,12 @@ struct Artifacts {
     types: String,
     errors: Option<String>,
     emit: String,
+    execution: Option<Execution>,
+}
+
+struct Execution {
+    stdout: String,
+    stderr: Option<String>,
 }
 
 fn normalize(text: &str, dir: &Path) -> String {
@@ -446,11 +499,133 @@ fn run_typed(case: &Case, dir: &Path, project: &Path) -> Artifacts {
         normalize(&text, dir)
     });
 
+    let execution = case
+        .settings
+        .run
+        .as_deref()
+        .map(|entry| execute(case, entry, dir, &out_dir, errors.is_none()));
+
     Artifacts {
         types: type_baseline(case, project, dir),
         errors,
         emit: normalize(&emit, dir),
+        execution,
     }
+}
+
+fn execute(case: &Case, entry: &str, dir: &Path, out_dir: &Path, clean: bool) -> Execution {
+    if !clean {
+        return Execution {
+            stdout: String::new(),
+            stderr: Some(format!(
+                "==== not run: the case does not compile cleanly (see {}.errors.txt) ====\n",
+                case.name
+            )),
+        };
+    }
+    let run_dir = dir.join("run");
+    let emit = common::tsc()
+        .args([
+            "-p",
+            "tsconfig.json",
+            "--pretty",
+            "false",
+            "--noEmit",
+            "false",
+            "--rewriteRelativeImportExtensions",
+            "--rootDir",
+            ".",
+            "--outDir",
+        ])
+        .arg(&run_dir)
+        .current_dir(out_dir)
+        .output()
+        .expect("tsc runs");
+    if !emit.status.success() {
+        return Execution {
+            stdout: String::new(),
+            stderr: Some(normalize(
+                &format!(
+                    "==== tsc emitting JavaScript (exit {}) ====\n{}",
+                    emit.status.code().unwrap_or(-1),
+                    report(&emit)
+                ),
+                dir,
+            )),
+        };
+    }
+    fs::write(run_dir.join("package.json"), "{ \"type\": \"module\" }\n")
+        .expect("writable package.json");
+    let script = script_of(entry, &case.path);
+    let stdout_path = dir.join("run.stdout");
+    let stderr_path = dir.join("run.stderr");
+    let mut command = Command::new("node");
+    command.env_clear().env("TZ", "UTC");
+    for inherited in ["PATH", "SYSTEMROOT"] {
+        if let Some(value) = std::env::var_os(inherited) {
+            command.env(inherited, value);
+        }
+    }
+    let mut child = command
+        .arg("--permission")
+        .arg(format!("--allow-fs-read={}", run_dir.display()))
+        .arg(&script)
+        .current_dir(&run_dir)
+        .stdin(Stdio::null())
+        .stdout(fs::File::create(&stdout_path).expect("writable stdout capture"))
+        .stderr(fs::File::create(&stderr_path).expect("writable stderr capture"))
+        .spawn()
+        .expect("node runs");
+    let deadline = Instant::now() + RUN_TIMEOUT;
+    let status = loop {
+        if let Some(status) = child.try_wait().expect("a waitable node") {
+            break Some(status);
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            break None;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    };
+    let stdout = normalize(
+        &String::from_utf8_lossy(&fs::read(&stdout_path).expect("readable stdout capture")),
+        dir,
+    );
+    let stderr = node_report(
+        &String::from_utf8_lossy(&fs::read(&stderr_path).expect("readable stderr capture")),
+        dir,
+    );
+    let heading = match status {
+        None => Some(format!(
+            "node {script} timed out after {} s",
+            RUN_TIMEOUT.as_secs()
+        )),
+        Some(status) if !status.success() || !stderr.is_empty() => Some(format!(
+            "node {script} (exit {})",
+            status.code().unwrap_or(-1)
+        )),
+        Some(_) => None,
+    };
+    Execution {
+        stdout,
+        stderr: heading.map(|heading| format!("==== {heading} ====\n{stderr}")),
+    }
+}
+
+fn node_report(text: &str, dir: &Path) -> String {
+    let mut out = String::new();
+    for line in normalize(text, dir).lines() {
+        let frame = line.trim_start();
+        if (frame.starts_with("at ") && frame.contains("node:internal"))
+            || line.starts_with("Node.js v")
+        {
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
 }
 
 fn run(case: &Case, typed: bool) {
@@ -480,6 +655,21 @@ fn run(case: &Case, typed: bool) {
         };
         failures.extend(errors.err());
         failures.extend(compare(&with("types"), &artifacts.types).err());
+        let (stdout, stderr) = match &artifacts.execution {
+            Some(execution) => (
+                compare(&with("stdout"), &execution.stdout),
+                match &execution.stderr {
+                    Some(stderr) => compare(&with("stderr"), stderr),
+                    None => compare_absent(&with("stderr")),
+                },
+            ),
+            None => (
+                compare_absent(&with("stdout")),
+                compare_absent(&with("stderr")),
+            ),
+        };
+        failures.extend(stdout.err());
+        failures.extend(stderr.err());
     }
     finish(failures);
 }

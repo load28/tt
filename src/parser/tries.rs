@@ -158,9 +158,8 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
         }
         if matches!(open.last(), None | Some(b')' | b']'))
             && k > cur.idx
-            && matches!(token.kind, TokenKind::Ident)
             && !dotted_at(cur.tokens, cur.idx, k)
-            && crate::lexer::statement_only_keyword(cur.text(token))
+            && crate::lexer::statement_keyword_at(cur.parser.src, cur.tokens, k)
             && (open.is_empty() || cur.text(token) != "try")
         {
             break;
@@ -230,9 +229,8 @@ fn unclaimed_try_extent(cur: &Cursor, kw_span: Span) -> Span {
                 break;
             }
             if k > cur.idx
-                && matches!(token.kind, TokenKind::Ident)
                 && !dotted_at(cur.tokens, cur.idx, k)
-                && crate::lexer::statement_only_keyword(cur.text(token))
+                && crate::lexer::statement_keyword_at(cur.parser.src, cur.tokens, k)
             {
                 break;
             }
@@ -396,7 +394,7 @@ fn stmt_expr_end(cur: &Cursor) -> Option<(usize, usize)> {
         if let TokenKind::Ident = t.kind {
             if depth == 0 && !dotted_at(cur.tokens, cur.idx, k) {
                 let word = cur.text(t);
-                if crate::lexer::statement_only_keyword(word) {
+                if crate::lexer::statement_keyword_at(cur.parser.src, cur.tokens, k) {
                     return None;
                 }
                 // A match expression and a `result` block carry their own

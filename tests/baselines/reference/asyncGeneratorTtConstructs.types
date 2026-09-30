@@ -1,0 +1,349 @@
+=== asyncGeneratorTtConstructs.tt ===
+variant Job { Fetch(id: number), Skip }
+>Job : type Job = {
+>       kind: "Fetch";
+>       id: number;
+>   } | {
+>       kind: "Skip";
+>   }
+>Fetch : (property) Fetch: (id: number) => Job
+>id : (property) id: number
+>Skip : (property) Skip: {
+>       readonly kind: "Skip";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+function flush(title: string, value: unknown) {
+>flush : function flush(title: string, value: unknown): void
+>title : (parameter) title: string
+>value : (parameter) value: unknown
+  console.log(`${title}: ${JSON.stringify(value)} after ${log.join(" ")}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>title : (parameter) title: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>value : (parameter) value: unknown
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+  log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+async function later<T>(label: string, value: T): Promise<T> {
+>later : function later<T>(label: string, value: T): Promise<T>
+>T : (type parameter) T in later<T>(label: string, value: T): Promise<T>
+>label : (parameter) label: string
+>value : (parameter) value: T
+>T : (type parameter) T in later<T>(label: string, value: T): Promise<T>
+>Promise : interface Promise<T>
+>T : (type parameter) T in later<T>(label: string, value: T): Promise<T>
+  log.push(`${label} start`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+  log.push(`${label} end`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+  return value;
+>value : (parameter) value: T
+async function run(job: Job) {
+>run : function run(job: Job): Promise<string | number>
+>job : (parameter) job: Job
+>Job : type Job = {
+>       kind: "Fetch";
+>       id: number;
+>   } | {
+>       kind: "Skip";
+>   }
+  return match (await later("scrutinee", job)) {
+>later : function later<Job>(label: string, value: Job): Promise<Job>
+>job : (parameter) job: Job
+    Fetch(id) if await later("guard", id > 1) => await later("big", id * 100),
+>id : const id: number
+>later : function later<boolean>(label: string, value: boolean): Promise<boolean>
+>id : const id: number
+>later : function later<number>(label: string, value: number): Promise<number>
+>id : const id: number
+    Fetch(id) => await later("small", id),
+>id : const id: number
+>later : function later<number>(label: string, value: number): Promise<number>
+>id : const id: number
+async function load(ok: boolean): Promise<TResult<number, string>> {
+>load : function load(ok: boolean): Promise<TResult<number, string>>
+>ok : (parameter) ok: boolean
+>Promise : interface Promise<T>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const n = try await later("load", ok ? Result.Ok(1) : Result.Err("no"));
+>n : const n: number
+>later : function later<Result.TErr<string> | Result.TOk<number>>(label: string, value: Result.TErr<string> | Result.TOk<number>): Promise<Result.TErr<string> | Result.TOk<number>>
+>ok : (parameter) ok: boolean
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+  log.push("after load");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return Result.Ok(n + 1);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : const n: number
+function* totals(jobs: Job[]): Generator<string, number, number> {
+>totals : function totals(jobs: Job[]): Generator<string, number, number>
+>jobs : (parameter) jobs: Job[]
+>Job : type Job = {
+>       kind: "Fetch";
+>       id: number;
+>   } | {
+>       kind: "Skip";
+>   }
+>Generator : interface Generator<T = unknown, TReturn = any, TNext = any>
+  let total = 0;
+>total : let total: number
+  for (const job of jobs) {
+>job : const job: Job
+>jobs : (parameter) jobs: Job[]
+    total += match (job) {
+>total : let total: number
+>job : const job: Job
+      Fetch(id) => yield `fetch ${id}`,
+>id : const id: number
+>id : const id: number
+  return total;
+>total : let total: number
+function* scrutinees(): Generator<string, string[], Job> {
+>scrutinees : function scrutinees(): Generator<string, string[], Job>
+>Generator : interface Generator<T = unknown, TReturn = any, TNext = any>
+>Job : type Job = {
+>       kind: "Fetch";
+>       id: number;
+>   } | {
+>       kind: "Skip";
+>   }
+  const seen: string[] = [];
+>seen : const seen: string[]
+  for (let i = 0; i < 2; i++) {
+>i : let i: number
+>i : let i: number
+>i : let i: number
+    seen.push(match (yield `ask ${i}`) { Fetch(id) => `got ${id}`, Skip => "got skip" });
+>seen : const seen: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>i : let i: number
+>id : const id: number
+>id : const id: number
+  return seen;
+>seen : const seen: string[]
+async function* stream(jobs: Job[]) {
+>stream : function stream(jobs: Job[]): AsyncGenerator<number, void, unknown>
+>jobs : (parameter) jobs: Job[]
+>Job : type Job = {
+>       kind: "Fetch";
+>       id: number;
+>   } | {
+>       kind: "Skip";
+>   }
+  for (const job of jobs) {
+>job : const job: Job
+>jobs : (parameter) jobs: Job[]
+    yield match (job) { Fetch(id) => await later(`fetch ${id}`, id), Skip => -1 };
+>job : const job: Job
+>id : const id: number
+>later : function later<number>(label: string, value: number): Promise<number>
+>id : const id: number
+>id : const id: number
+flush("run Fetch(2)", await run(Job.Fetch(2)));
+>flush : function flush(title: string, value: unknown): void
+>run : function run(job: Job): Promise<string | number>
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Fetch : (property) Fetch: (id: number) => Job
+flush("run Fetch(1)", await run(Job.Fetch(1)));
+>flush : function flush(title: string, value: unknown): void
+>run : function run(job: Job): Promise<string | number>
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Fetch : (property) Fetch: (id: number) => Job
+flush("run Skip", await run(Job.Skip));
+>flush : function flush(title: string, value: unknown): void
+>run : function run(job: Job): Promise<string | number>
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Skip : (property) Skip: {
+>       readonly kind: "Skip";
+>   }
+const tick = Promise.resolve().then(() => log.push("tick"));
+>tick : const tick: Promise<number>
+>Promise : var Promise: PromiseConstructor
+>resolve : (method) PromiseConstructor.resolve(): Promise<void>
+>then : (method) Promise<void>.then<number, never>(onfulfilled?: ((value: void) => number | PromiseLike<number>) | null | undefined, onrejected?: ((reason: any) => PromiseLike<never>) | null | undefined): Promise<number>
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+flush("interleaved", await Promise.all([run(Job.Fetch(3)), tick, run(Job.Skip)]));
+>flush : function flush(title: string, value: unknown): void
+>Promise : var Promise: PromiseConstructor
+>all : (method) PromiseConstructor.all<[Promise<string | number>, Promise<number>, Promise<string | number>]>(values: [Promise<string | number>, Promise<number>, Promise<string | number>]): Promise<[string | number, number, string | number]>
+>run : function run(job: Job): Promise<string | number>
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Fetch : (property) Fetch: (id: number) => Job
+>tick : const tick: Promise<number>
+>run : function run(job: Job): Promise<string | number>
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Skip : (property) Skip: {
+>       readonly kind: "Skip";
+>   }
+flush("load ok", await load(true));
+>flush : function flush(title: string, value: unknown): void
+>load : function load(ok: boolean): Promise<TResult<number, string>>
+flush("load err", await load(false));
+>flush : function flush(title: string, value: unknown): void
+>load : function load(ok: boolean): Promise<TResult<number, string>>
+const generator = totals([Job.Fetch(1), Job.Skip, Job.Fetch(2)]);
+>generator : const generator: Generator<string, number, number>
+>totals : function totals(jobs: Job[]): Generator<string, number, number>
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Fetch : (property) Fetch: (id: number) => Job
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Skip : (property) Skip: {
+>       readonly kind: "Skip";
+>   }
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Fetch : (property) Fetch: (id: number) => Job
+let next = generator.next(0);
+>next : let next: IteratorResult<string, number>
+>generator : const generator: Generator<string, number, number>
+>next : (method) Generator<string, number, number>.next(...[value]: [] | [number]): IteratorResult<string, number>
+while (!next.done) {
+>next : let next: IteratorResult<string, number>
+>done : (property) done?: boolean | undefined
+  log.push(next.value);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>next : let next: IteratorYieldResult<string>
+>value : (property) IteratorYieldResult<string>.value: string
+  next = generator.next(10);
+>next : let next: IteratorResult<string, number>
+>generator : const generator: Generator<string, number, number>
+>next : (method) Generator<string, number, number>.next(...[value]: [] | [number]): IteratorResult<string, number>
+flush("generator total", next.value);
+>flush : function flush(title: string, value: unknown): void
+>next : let next: IteratorReturnResult<number>
+>value : (property) IteratorReturnResult<number>.value: number
+const asker = scrutinees();
+>asker : const asker: Generator<string, string[], Job>
+>scrutinees : function scrutinees(): Generator<string, string[], Job>
+log.push(String(asker.next(Job.Skip).value));
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>String : var String: (value?: any) => string
+>asker : const asker: Generator<string, string[], Job>
+>next : (method) Generator<string, string[], Job>.next(...[value]: [] | [Job]): IteratorResult<string, string[]>
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Skip : (property) Skip: {
+>       readonly kind: "Skip";
+>   }
+>value : (property) value: string | string[]
+log.push(String(asker.next(Job.Fetch(5)).value));
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>String : var String: (value?: any) => string
+>asker : const asker: Generator<string, string[], Job>
+>next : (method) Generator<string, string[], Job>.next(...[value]: [] | [Job]): IteratorResult<string, string[]>
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Fetch : (property) Fetch: (id: number) => Job
+>value : (property) value: string | string[]
+flush("yield in scrutinee", asker.next(Job.Skip).value);
+>flush : function flush(title: string, value: unknown): void
+>asker : const asker: Generator<string, string[], Job>
+>next : (method) Generator<string, string[], Job>.next(...[value]: [] | [Job]): IteratorResult<string, string[]>
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Skip : (property) Skip: {
+>       readonly kind: "Skip";
+>   }
+>value : (property) value: string | string[]
+const streamed: number[] = [];
+>streamed : const streamed: number[]
+for await (const n of stream([Job.Fetch(7), Job.Skip, Job.Fetch(8)])) {
+>n : const n: number
+>stream : function stream(jobs: Job[]): AsyncGenerator<number, void, unknown>
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Fetch : (property) Fetch: (id: number) => Job
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Skip : (property) Skip: {
+>       readonly kind: "Skip";
+>   }
+>Job : const Job: {
+>       Fetch: (id: number) => Job;
+>       Skip: {
+>           readonly kind: "Skip";
+>       };
+>   }
+>Fetch : (property) Fetch: (id: number) => Job
+  streamed.push(n);
+>streamed : const streamed: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>n : const n: number
+flush("async generator", streamed);
+>flush : function flush(title: string, value: unknown): void
+>streamed : const streamed: number[]
+

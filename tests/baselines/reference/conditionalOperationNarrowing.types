@@ -11,10 +11,16 @@ variant O { A(n: number), B }
 >B : (property) B: {
 >       readonly kind: "B";
 >   }
-declare function g(n: number): TResult<number, string>;
+function g(n: number): TResult<number, string> {
 >g : function g(n: number): TResult<number, string>
 >n : (parameter) n: number
->TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  return n > 2 ? Result.Ok(n) : Result.Err(`short ${n}`);
+>n : (parameter) n: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+>n : (parameter) n: number
 export function h(o: O, cfg: { name?: string }) {
 >h : function h(o: O, cfg: {
 >       name?: string;
@@ -147,7 +153,7 @@ export function l(o: O, init: { v: number } | undefined) {
 >b : const b: boolean
 >c : const c: number | false
 export function m(s: string | null) {
->m : function m(s: string | null): TErr<string> | {
+>m : function m(s: string | null): Result.TErr<string> | {
 >       kind: "Ok";
 >       value: string | number | null;
 >   }
@@ -159,4 +165,139 @@ export function m(s: string | null) {
 >s : (parameter) s: string
 >length : (property) String.length: number
 >x : const x: string | number | null
+let reads = 0;
+>reads : let reads: number
+const counted = {
+>counted : const counted: {
+>       readonly name: string;
+>   }
+  get name() {
+>name : (accessor) name: string
+    reads += 1;
+>reads : let reads: number
+const log = (label: string, value: unknown) => {
+>log : const log: (label: string, value: unknown) => void
+>label : (parameter) label: string
+>value : (parameter) value: unknown
+  console.log(`${label}: ${JSON.stringify(value)} (name read ${reads} time(s))`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>label : (parameter) label: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>value : (parameter) value: unknown
+>reads : let reads: number
+  reads = 0;
+>reads : let reads: number
+log("h A(2) counted", h(O.A(2), counted));
+>log : const log: (label: string, value: unknown) => void
+>h : function h(o: O, cfg: {
+>       name?: string;
+>   }): string
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+>counted : const counted: {
+>       readonly name: string;
+>   }
+log("h B counted", h(O.B, counted));
+>log : const log: (label: string, value: unknown) => void
+>h : function h(o: O, cfg: {
+>       name?: string;
+>   }): string
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>counted : const counted: {
+>       readonly name: string;
+>   }
+log("h A(1) unnamed", h(O.A(1), {}));
+>log : const log: (label: string, value: unknown) => void
+>h : function h(o: O, cfg: {
+>       name?: string;
+>   }): string
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+log("k A(1) text", k(O.A(1), "text"));
+>log : const log: (label: string, value: unknown) => void
+>k : function k(o: O, s: string | null): string | null
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+log("k B null", k(O.B, null));
+>log : const log: (label: string, value: unknown) => void
+>k : function k(o: O, s: string | null): string | null
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+log("l A(1) v=2", l(O.A(1), { v: 2 }));
+>log : const log: (label: string, value: unknown) => void
+>l : function l(o: O, init: {
+>       v: number;
+>   } | undefined): (number | boolean)[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+>v : (property) v: number
+log("l B undefined", l(O.B, undefined));
+>log : const log: (label: string, value: unknown) => void
+>l : function l(o: O, init: {
+>       v: number;
+>   } | undefined): (number | boolean)[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+log("m long", m("long"));
+>log : const log: (label: string, value: unknown) => void
+>m : function m(s: string | null): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: string | number | null;
+>   }
+log("m short", m("ab"));
+>log : const log: (label: string, value: unknown) => void
+>m : function m(s: string | null): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: string | number | null;
+>   }
+log("m null", m(null));
+>log : const log: (label: string, value: unknown) => void
+>m : function m(s: string | null): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: string | number | null;
+>   }
 

@@ -1,0 +1,224 @@
+=== shortCircuitTtOperands.tt ===
+variant Flag { On, Off }
+>Flag : type Flag = {
+>       kind: "On";
+>   } | {
+>       kind: "Off";
+>   }
+>On : (property) On: {
+>       readonly kind: "On";
+>   }
+>Off : (property) Off: {
+>       readonly kind: "Off";
+>   }
+function flag(on: boolean): Flag {
+>flag : function flag(on: boolean): Flag
+>on : (parameter) on: boolean
+>Flag : type Flag = {
+>       kind: "On";
+>   } | {
+>       kind: "Off";
+>   }
+  return on ? Flag.On : Flag.Off;
+>on : (parameter) on: boolean
+>Flag : const Flag: {
+>       On: {
+>           readonly kind: "On";
+>       };
+>       Off: {
+>           readonly kind: "Off";
+>       };
+>   }
+>On : (property) On: {
+>       readonly kind: "On";
+>   }
+>Flag : const Flag: {
+>       On: {
+>           readonly kind: "On";
+>       };
+>       Off: {
+>           readonly kind: "Off";
+>       };
+>   }
+>Off : (property) Off: {
+>       readonly kind: "Off";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+function note<T>(label: string, value: T): T {
+>note : function note<T>(label: string, value: T): T
+>T : (type parameter) T in note<T>(label: string, value: T): T
+>label : (parameter) label: string
+>value : (parameter) value: T
+>T : (type parameter) T in note<T>(label: string, value: T): T
+>T : (type parameter) T in note<T>(label: string, value: T): T
+  log.push(label);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+  return value;
+>value : (parameter) value: T
+function flush(title: string, value: unknown) {
+>flush : function flush(title: string, value: unknown): void
+>title : (parameter) title: string
+>value : (parameter) value: unknown
+  console.log(`${title}: ${JSON.stringify(value)} after ${log.join(" ")}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>title : (parameter) title: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>value : (parameter) value: unknown
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+  log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+function read(label: string): TResult<number, string> {
+>read : function read(label: string): TResult<number, string>
+>label : (parameter) label: string
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  log.push(label);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+  return Result.Ok(7);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+for (const left of [0, 1]) {
+>left : const left: number
+  flush(`${left} && match`, note("left", left) && match (note("scrutinee", flag(true))) { On => note("on", 2), Off => 3 });
+>flush : function flush(title: string, value: unknown): void
+>left : const left: number
+>note : function note<number>(label: string, value: number): number
+>left : const left: number
+>note : function note<Flag>(label: string, value: Flag): Flag
+>flag : function flag(on: boolean): Flag
+>note : function note<2>(label: string, value: 2): 2
+  flush(`${left} || match`, note("left", left) || match (note("scrutinee", flag(false))) { On => 2, Off => note("off", 3) });
+>flush : function flush(title: string, value: unknown): void
+>left : const left: number
+>note : function note<number>(label: string, value: number): number
+>left : const left: number
+>note : function note<Flag>(label: string, value: Flag): Flag
+>flag : function flag(on: boolean): Flag
+>note : function note<3>(label: string, value: 3): 3
+for (const left of [null, 0]) {
+>left : const left: number | null
+  flush(`${left} ?? match`, note("left", left) ?? match (note("scrutinee", flag(true))) { On => note("on", 4), Off => 5 });
+>flush : function flush(title: string, value: unknown): void
+>left : const left: number | null
+>note : function note<number | null>(label: string, value: number | null): number | null
+>left : const left: number | null
+>note : function note<Flag>(label: string, value: Flag): Flag
+>flag : function flag(on: boolean): Flag
+>note : function note<4>(label: string, value: 4): 4
+for (const test of [true, false]) {
+>test : const test: boolean
+  flush(
+>flush : function flush(title: string, value: unknown): void
+    `${test} ? match : other`,
+>test : const test: boolean
+    note("test", test) ? match (note("scrutinee", flag(false))) { On => 1, Off => note("off", 2) } : note("otherwise", 0),
+>note : function note<boolean>(label: string, value: boolean): boolean
+>test : const test: boolean
+>note : function note<Flag>(label: string, value: Flag): Flag
+>flag : function flag(on: boolean): Flag
+>note : function note<2>(label: string, value: 2): 2
+>note : function note<0>(label: string, value: 0): 0
+class Runner {
+>Runner : class Runner
+  run(n: number) {
+>run : (method) Runner.run(n: number): number
+>n : (parameter) n: number
+    log.push(this === runner ? "this is the runner" : "this lost");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>runner : const runner: Runner
+    return n;
+>n : (parameter) n: number
+const runner = new Runner();
+>runner : const runner: Runner
+>Runner : constructor Runner(): Runner
+const absent: { run?: (n: number) => number } = {};
+>absent : const absent: {
+>       run?: (n: number) => number;
+>   }
+>run : (property) run?: ((n: number) => number) | undefined
+>n : (parameter) n: number
+const present: { run?: (n: number) => number } = runner;
+>present : const present: {
+>       run?: (n: number) => number;
+>   }
+>run : (property) run?: ((n: number) => number) | undefined
+>n : (parameter) n: number
+>runner : const runner: Runner
+flush("absent?.()", absent.run?.(match (note("argument scrutinee", flag(true))) { On => 1, Off => 2 }));
+>flush : function flush(title: string, value: unknown): void
+>absent : const absent: {
+>       run?: (n: number) => number;
+>   }
+>run : (property) run?: ((n: number) => number) | undefined
+>note : function note<Flag>(label: string, value: Flag): Flag
+>flag : function flag(on: boolean): Flag
+flush("present?.()", present.run?.(match (note("argument scrutinee", flag(true))) { On => 1, Off => 2 }));
+>flush : function flush(title: string, value: unknown): void
+>present : const present: {
+>       run?: (n: number) => number;
+>   }
+>run : (property) run?: ((n: number) => number) | undefined
+>note : function note<Flag>(label: string, value: Flag): Flag
+>flag : function flag(on: boolean): Flag
+const holder: { runner?: Runner } = {};
+>holder : const holder: {
+>       runner?: Runner;
+>   }
+>runner : (property) runner?: Runner | undefined
+>Runner : class Runner
+flush("missing receiver?.m()", holder.runner?.run(match (note("argument scrutinee", flag(false))) { On => 1, Off => 2 }));
+>flush : function flush(title: string, value: unknown): void
+>holder : const holder: {
+>       runner?: Runner;
+>   }
+>runner : (property) runner?: Runner | undefined
+>note : function note<Flag>(label: string, value: Flag): Flag
+>flag : function flag(on: boolean): Flag
+function tries(left: number | null): TResult<number, string> {
+>tries : function tries(left: number | null): TResult<number, string>
+>left : (parameter) left: number | null
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const value = note("left", left) ?? try read("read");
+>value : const value: number
+>note : function note<number | null>(label: string, value: number | null): number | null
+>left : (parameter) left: number | null
+>read : function read(label: string): TResult<number, string>
+  return Result.Ok(value);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>value : const value: number
+flush("null ?? try", tries(null));
+>flush : function flush(title: string, value: unknown): void
+>tries : function tries(left: number | null): TResult<number, string>
+flush("1 ?? try", tries(1));
+>flush : function flush(title: string, value: unknown): void
+>tries : function tries(left: number | null): TResult<number, string>
+function chain(a: boolean, b: boolean) {
+>chain : function chain(a: boolean, b: boolean): string | false
+>a : (parameter) a: boolean
+>b : (parameter) b: boolean
+  return note("a", a) && note("b", b) && match (note("scrutinee", flag(true))) { On => note("on", "reached"), Off => "off" };
+>note : function note<boolean>(label: string, value: boolean): boolean
+>a : (parameter) a: boolean
+>note : function note<boolean>(label: string, value: boolean): boolean
+>b : (parameter) b: boolean
+>note : function note<Flag>(label: string, value: Flag): Flag
+>flag : function flag(on: boolean): Flag
+>note : function note<"reached">(label: string, value: "reached"): "reached"
+flush("true && true && match", chain(true, true));
+>flush : function flush(title: string, value: unknown): void
+>chain : function chain(a: boolean, b: boolean): string | false
+flush("true && false && match", chain(true, false));
+>flush : function flush(title: string, value: unknown): void
+>chain : function chain(a: boolean, b: boolean): string | false
+flush("false && ... && match", chain(false, true));
+>flush : function flush(title: string, value: unknown): void
+>chain : function chain(a: boolean, b: boolean): string | false
+

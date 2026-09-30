@@ -73,6 +73,29 @@ impl Token {
     }
 }
 
+/// Whether `tokens[k]` is a statement-only keyword where it stands: an
+/// identifier spelling one ([`statement_only_keyword`]) that is not in a
+/// type position. After an `as` assertion (`x as const`) or a `<` that
+/// opens type parameters (`<const T>`), `const` is part of the type and
+/// continues the expression instead of ending it.
+pub(crate) fn statement_keyword_at(src: &str, tokens: &[Token], k: usize) -> bool {
+    let token = &tokens[k];
+    if !matches!(token.kind, TokenKind::Ident)
+        || !statement_only_keyword(&src[token.span.start..token.span.end])
+    {
+        return false;
+    }
+    let Some(previous) = k.checked_sub(1).map(|p| &tokens[p]) else {
+        return true;
+    };
+    let in_type = match previous.kind {
+        TokenKind::Ident => &src[previous.span.start..previous.span.end] == "as",
+        TokenKind::Punct(b'<') => previous.facts.opens_type_arguments(),
+        _ => false,
+    };
+    !in_type
+}
+
 /// What a [`Token`] is. Only the distinctions the parser consumes exist;
 /// everything else is a single-byte `Punct`.
 #[derive(Debug)]

@@ -2,17 +2,17 @@
 1:1 -> 19:1 len 23  "// Repro from TASK-593\n"
 2:18 -> 21:21 len 6  "number"
 2:18 -> 24:10 len 6  "number"
-2:30 -> 26:3 len 100  "\ndeclare const o: O;\ndeclare function t(s: strin"...
-6:21 -> 49:9 len 4  "b = "
-6:32 -> 33:19 len 1  "o"
-6:39 -> 36:17 len 1  "n"
-6:45 -> 37:18 len 5  "a + n"
-6:57 -> 41:18 len 1  "0"
-6:60 -> 49:19 len 50  ";\n  return b;\n}\nexport function g() {\n  var a = "...
-10:15 -> 72:7 len 4  "b = "
-10:26 -> 56:19 len 1  "o"
-10:33 -> 59:17 len 1  "n"
-10:39 -> 60:18 len 5  "a + n"
-10:51 -> 64:18 len 1  "0"
-10:54 -> 72:17 len 16  ";\n  return b;\n}\n"
+2:30 -> 26:3 len 195  "\nfunction pick(n: number): O {\n  return n > 0 ? "...
+12:21 -> 55:9 len 4  "b = "
+12:32 -> 39:19 len 1  "o"
+12:39 -> 42:17 len 1  "n"
+12:45 -> 43:18 len 5  "a + n"
+12:57 -> 47:18 len 1  "0"
+12:60 -> 55:19 len 50  ";\n  return b;\n}\nexport function g() {\n  var a = "...
+16:15 -> 78:7 len 4  "b = "
+16:26 -> 62:19 len 1  "o"
+16:33 -> 65:17 len 1  "n"
+16:39 -> 66:18 len 5  "a + n"
+16:51 -> 70:18 len 1  "0"
+16:54 -> 78:17 len 66  ";\n  return b;\n}\nconsole.log(`f ${f()}`);\nconsole"...
 

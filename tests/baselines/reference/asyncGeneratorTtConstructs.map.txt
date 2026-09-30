@@ -1,0 +1,38 @@
+//// [asyncGeneratorTtConstructs.tt] 36 mapping(s)
+1:1 -> 19:1 len 233  "// `await` and `yield` inside tt constructs susp"...
+5:25 -> 24:26 len 6  "number"
+5:25 -> 27:15 len 6  "number"
+5:40 -> 29:3 len 357  "\nconst log: string[] = [];\nfunction flush(title:"...
+18:3 -> 65:3 len 7  "return "
+18:17 -> 44:19 len 29  "await later(\"scrutinee\", job)"
+19:11 -> 47:17 len 2  "id"
+19:18 -> 48:13 len 28  "await later(\"guard\", id > 1)"
+19:50 -> 49:20 len 28  "await later(\"big\", id * 100)"
+20:11 -> 54:17 len 2  "id"
+20:18 -> 55:18 len 24  "await later(\"small\", id)"
+21:13 -> 59:18 len 9  "\"skipped\""
+22:4 -> 65:16 len 75  ";\n}\nasync function load(ok: boolean): Promise<TR"...
+25:9 -> 72:9 len 1  "n"
+25:17 -> 68:18 len 57  "await later(\"load\", ok ? Result.Ok(1) : Result.E"...
+25:75 -> 72:26 len 172  "\n  log.push(\"after load\");\n  return Result.Ok(n "...
+32:5 -> 80:19 len 5  "total"
+32:5 -> 98:5 len 6  "total "
+32:13 -> 98:22 len 1  " "
+32:21 -> 82:21 len 3  "job"
+33:13 -> 85:19 len 2  "id"
+33:20 -> 86:20 len 19  "yield `fetch ${id}`"
+34:15 -> 90:20 len 1  "0"
+35:6 -> 98:29 len 148  ";\n  }\n  return total;\n}\nfunction* scrutinees(): "...
+42:5 -> 123:5 len 10  "seen.push("
+42:22 -> 107:21 len 16  "yield `ask ${i}`"
+42:48 -> 110:19 len 2  "id"
+42:55 -> 111:20 len 11  "`got ${id}`"
+42:76 -> 115:20 len 10  "\"got skip\""
+42:88 -> 123:21 len 94  ");\n  }\n  return seen;\n}\nasync function* stream(j"...
+48:5 -> 147:5 len 6  "yield "
+48:18 -> 131:21 len 3  "job"
+48:31 -> 134:19 len 2  "id"
+48:38 -> 135:20 len 30  "await later(`fetch ${id}`, id)"
+48:78 -> 139:20 len 2  "-1"
+48:82 -> 147:17 len 925  ";\n  }\n}\nflush(\"run Fetch(2)\", await run(Job.Fetc"...
+

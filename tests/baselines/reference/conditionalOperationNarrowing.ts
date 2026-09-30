@@ -1,8 +1,11 @@
 //// [conditionalOperationNarrowing.tt] ////
 // Repro from TASK-595
 import type { TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
 variant O { A(n: number), B }
-declare function g(n: number): TResult<number, string>;
+function g(n: number): TResult<number, string> {
+  return n > 2 ? Result.Ok(n) : Result.Err(`short ${n}`);
+}
 export function h(o: O, cfg: { name?: string }) {
   return cfg.name ? match (o) { A(n) => cfg.name.slice(n), B => cfg.name } : "anon";
 }
@@ -20,6 +23,27 @@ export function l(o: O, init: { v: number } | undefined) {
 export function m(s: string | null) {
   return result { const x = s && try g(s.length); return x; };
 }
+let reads = 0;
+const counted = {
+  get name() {
+    reads += 1;
+    return "config";
+  },
+};
+const log = (label: string, value: unknown) => {
+  console.log(`${label}: ${JSON.stringify(value)} (name read ${reads} time(s))`);
+  reads = 0;
+};
+log("h A(2) counted", h(O.A(2), counted));
+log("h B counted", h(O.B, counted));
+log("h A(1) unnamed", h(O.A(1), {}));
+log("k A(1) text", k(O.A(1), "text"));
+log("k B null", k(O.B, null));
+log("l A(1) v=2", l(O.A(1), { v: 2 }));
+log("l B undefined", l(O.B, undefined));
+log("m long", m("long"));
+log("m short", m("ab"));
+log("m null", m(null));
 
 //// [tt/index.ts] support module @tt/std/index.ts
 //// [tt/option.ts] support module @tt/std/option.ts
@@ -46,6 +70,7 @@ function $tt_show(value: unknown): string {
 }
 // Repro from TASK-595
 import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
 type O =
   | { kind: "A"; n: number }
   | { kind: "B" };
@@ -53,7 +78,9 @@ const O = {
   A: (n: number): O => ({ kind: "A", n }),
   B: { kind: "B" } as const,
 };
-declare function g(n: number): TResult<number, string>;
+function g(n: number): TResult<number, string> {
+  return n > 2 ? Result.Ok(n) : Result.Err(`short ${n}`);
+}
 export function h(o: O, cfg: { name?: string }) {
   let $tt_v2: string;
   if (cfg.name) {
@@ -193,7 +220,7 @@ export function l(o: O, init: { v: number } | undefined) {
   return [a, b, c];
 }
 export function m(s: string | null) {
-  let $tt_v15: (import("./tt/index.js").TErr<string>) | ({
+  let $tt_v15: (Result.TErr<string>) | ({
     kind: "Ok";
     value: string | number | null;
 });
@@ -217,3 +244,24 @@ export function m(s: string | null) {
   }
   return $tt_v15;
 }
+let reads = 0;
+const counted = {
+  get name() {
+    reads += 1;
+    return "config";
+  },
+};
+const log = (label: string, value: unknown) => {
+  console.log(`${label}: ${JSON.stringify(value)} (name read ${reads} time(s))`);
+  reads = 0;
+};
+log("h A(2) counted", h(O.A(2), counted));
+log("h B counted", h(O.B, counted));
+log("h A(1) unnamed", h(O.A(1), {}));
+log("k A(1) text", k(O.A(1), "text"));
+log("k B null", k(O.B, null));
+log("l A(1) v=2", l(O.A(1), { v: 2 }));
+log("l B undefined", l(O.B, undefined));
+log("m long", m("long"));
+log("m short", m("ab"));
+log("m null", m(null));

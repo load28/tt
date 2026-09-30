@@ -136,7 +136,10 @@ Nightly와 Beta·RC·Stable·Patch의 개발자 절차 및 운영 기준은 [`do
   `// @filename:` units when the bug needs several files. Its baselines in
   `tests/baselines/reference/` (`.ts`, `.errors.txt`, `.map.txt`, `.types`)
   are generated with `UPDATE_EXPECT=1 cargo test --test case_baselines`;
-  see "Adding a test case" in `CONTRIBUTING.md`. An editor fix is pinned by
+  see "Adding a test case" in `CONTRIBUTING.md`. When the bug is what the
+  emitted program does at runtime (evaluation order, double evaluation,
+  `this`, short-circuiting), the case also carries `// @run: <unit>`, and
+  its `.stdout` (and `.stderr`) runtime baselines pin the behaviour. An editor fix is pinned by
   a case under `tests/cases/editor/` with `/*marker*/`s and verb lines
   (`UPDATE_EXPECT=1 cargo test --test editor_cases`); see "Adding an editor
   case".

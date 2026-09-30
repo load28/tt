@@ -1,0 +1,58 @@
+=== enumMemberResultBlock.tt ===
+const P = 100;
+>P : const P: 100
+const order: string[] = [];
+>order : const order: string[]
+function check(label: string, n: number): TResult<number, string> {
+>check : function check(label: string, n: number): TResult<number, string>
+>label : (parameter) label: string
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  order.push(label);
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+  return n < 50 ? Result.Ok(n) : Result.Err(`${label} too large: ${n}`);
+>n : (parameter) n: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+>label : (parameter) label: string
+>n : (parameter) n: number
+export enum F {
+>F : enum F
+  P = 7,
+>P : (enum member) F.P = 7
+  Q = Result.unwrapOr(result { const v = try check("Q", P); return v + 1; }, -1),
+>Q : (enum member) F.Q
+>unwrapOr : const unwrapOr: <number, string>(r: TResult<number, string>, fallback: number) => number
+>v : const v: number
+>check : function check(label: string, n: number): TResult<number, string>
+>P : (enum member) F.P = 7
+>v : const v: number
+  R = Result.unwrapOr(result { const v = try check("R", P * 10); return v; }, -1),
+>R : (enum member) F.R
+>unwrapOr : const unwrapOr: <number, string>(r: TResult<number, string>, fallback: number) => number
+>v : const v: number
+>check : function check(label: string, n: number): TResult<number, string>
+>P : (enum member) F.P = 7
+>v : const v: number
+console.log(`outer P ${P}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>P : const P: 100
+console.log(`F.P ${F.P}, F.Q ${F.Q}, F.R ${F.R}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>F : enum F
+>P : (enum member) F.P = 7
+>F : enum F
+>Q : (enum member) F.Q
+>F : enum F
+>R : (enum member) F.R
+console.log(`order ${order.join(" ")}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>order : const order: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

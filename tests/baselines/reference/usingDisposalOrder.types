@@ -1,0 +1,218 @@
+=== main.tt ===
+variant Kind { Fresh(name: string), Plain, Fail }
+>Kind : type Kind = {
+>       kind: "Fresh";
+>       name: string;
+>   } | {
+>       kind: "Plain";
+>   } | {
+>       kind: "Fail";
+>   }
+>Fresh : (property) Fresh: (name: string) => Kind
+>name : (property) name: string
+>Plain : (property) Plain: {
+>       readonly kind: "Plain";
+>   }
+>Fail : (property) Fail: {
+>       readonly kind: "Fail";
+>   }
+class Resource implements Disposable {
+>Resource : class Resource
+>Disposable : interface Disposable
+  constructor(readonly name: string) {
+>name : (property) Resource.name: string
+    console.log(`open ${name}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>name : (parameter) name: string
+  [Symbol.dispose]() {
+>Symbol : var Symbol: SymbolConstructor
+>dispose : (property) SymbolConstructor.dispose: typeof Symbol.dispose
+    console.log(`dispose ${this.name}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>name : (property) Resource.name: string
+function declarators(kind: Kind) {
+>declarators : function declarators(kind: Kind): void
+>kind : (parameter) kind: Kind
+>Kind : type Kind = {
+>       kind: "Fresh";
+>       name: string;
+>   } | {
+>       kind: "Plain";
+>   } | {
+>       kind: "Fail";
+>   }
+  console.log(`-- declarators ${kind.kind}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>kind : (parameter) kind: Kind
+>kind : (property) kind: "Fail" | "Fresh" | "Plain"
+  using first = new Resource("first"), second = match (kind) {
+>first : using first: Resource
+>Resource : constructor Resource(name: string): Resource
+>second : using second: Resource
+>kind : (parameter) kind: Kind
+    Fresh(name) => new Resource(name),
+>name : const name: string
+>Resource : constructor Resource(name: string): Resource
+>name : const name: string
+    Plain => new Resource("plain"),
+>Resource : constructor Resource(name: string): Resource
+    Fail => { throw new Error("no second"); },
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+  console.log(`body ${first.name} ${second.name}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>first : using first: Resource
+>name : (property) Resource.name: string
+>second : using second: Resource
+>name : (property) Resource.name: string
+function armScope(kind: Kind) {
+>armScope : function armScope(kind: Kind): void
+>kind : (parameter) kind: Kind
+>Kind : type Kind = {
+>       kind: "Fresh";
+>       name: string;
+>   } | {
+>       kind: "Plain";
+>   } | {
+>       kind: "Fail";
+>   }
+  console.log(`-- arm scope ${kind.kind}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>kind : (parameter) kind: Kind
+>kind : (property) kind: "Fail" | "Fresh" | "Plain"
+  using outer = new Resource("outer");
+>outer : using outer: Resource
+>Resource : constructor Resource(name: string): Resource
+  const label = match (kind) {
+>label : const label: string
+>kind : (parameter) kind: Kind
+    Fresh(name) => {
+>name : const name: string
+      using inner = new Resource(name);
+>inner : using inner: Resource
+>Resource : constructor Resource(name: string): Resource
+>name : const name: string
+      console.log(`arm ${inner.name}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>inner : using inner: Resource
+>name : (property) Resource.name: string
+      return inner.name.toUpperCase();
+>inner : using inner: Resource
+>name : (property) Resource.name: string
+>toUpperCase : (method) String.toUpperCase(): string
+    Fail => { throw new Error("arm threw"); },
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+  console.log(`label ${label} with ${outer.name}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>label : const label: string
+>outer : using outer: Resource
+>name : (property) Resource.name: string
+function propagate(ok: boolean): TResult<string, string> {
+>propagate : function propagate(ok: boolean): TResult<string, string>
+>ok : (parameter) ok: boolean
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  console.log(`-- propagate ${ok}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>ok : (parameter) ok: boolean
+  using held = new Resource("held");
+>held : using held: Resource
+>Resource : constructor Resource(name: string): Resource
+  const value = try (ok ? Result.Ok("fine") : Result.Err("bad"));
+>value : const value: string
+>ok : (parameter) ok: boolean
+>Ok : const Ok: <string>(value: string) => Result.TOk<string>
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+  console.log(`after try ${value} with ${held.name}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>value : const value: string
+>held : using held: Resource
+>name : (property) Resource.name: string
+  return Result.Ok(value);
+>Ok : const Ok: <string>(value: string) => Result.TOk<string>
+>value : const value: string
+for (const kind of [Kind.Fresh("fresh"), Kind.Plain, Kind.Fail]) {
+>kind : const kind: {
+>       kind: "Fresh";
+>       name: string;
+>   } | {
+>       readonly kind: "Plain";
+>   } | {
+>       readonly kind: "Fail";
+>   }
+>Kind : const Kind: {
+>       Fresh: (name: string) => Kind;
+>       Plain: {
+>           readonly kind: "Plain";
+>       };
+>       Fail: {
+>           readonly kind: "Fail";
+>       };
+>   }
+>Fresh : (property) Fresh: (name: string) => Kind
+>Kind : const Kind: {
+>       Fresh: (name: string) => Kind;
+>       Plain: {
+>           readonly kind: "Plain";
+>       };
+>       Fail: {
+>           readonly kind: "Fail";
+>       };
+>   }
+>Plain : (property) Plain: {
+>       readonly kind: "Plain";
+>   }
+>Kind : const Kind: {
+>       Fresh: (name: string) => Kind;
+>       Plain: {
+>           readonly kind: "Plain";
+>       };
+>       Fail: {
+>           readonly kind: "Fail";
+>       };
+>   }
+>Fail : (property) Fail: {
+>       readonly kind: "Fail";
+>   }
+  for (const body of [declarators, armScope]) {
+>body : const body: (kind: Kind) => void
+>declarators : function declarators(kind: Kind): void
+>armScope : function armScope(kind: Kind): void
+      body(kind);
+>body : const body: (kind: Kind) => void
+>kind : const kind: {
+>       kind: "Fresh";
+>       name: string;
+>   } | {
+>       readonly kind: "Plain";
+>   } | {
+>       readonly kind: "Fail";
+>   }
+    } catch (e) {
+>e : var e: unknown
+      console.log(`caught ${(e as Error).message}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>e : var e: unknown
+>Error : interface Error
+>message : (property) Error.message: string
+console.log(JSON.stringify(propagate(true)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>propagate : function propagate(ok: boolean): TResult<string, string>
+console.log(JSON.stringify(propagate(false)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>propagate : function propagate(ok: boolean): TResult<string, string>
+

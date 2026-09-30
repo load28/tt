@@ -1,0 +1,24 @@
+// Runtime companion of TASK-642: a literal match in the positions the
+// mixed-pattern repro used dispatches on the value in each of them.
+// @run: literalMatchInEveryPosition.tt
+const seen: string[] = [];
+function consume(n: number): void {
+  seen.push(`consume ${n}`);
+}
+function current(on: boolean): boolean {
+  seen.push(`read ${on}`);
+  return on;
+}
+for (const on of [true, false]) {
+  const flag = current(on);
+  consume(match (flag) { true => 1, false => 2 });
+  const held = [match (flag) { true => 1, _ => 2 }];
+  seen.push(`held ${held.join(",")}`);
+  const later = () => consume(match (flag) { true => 1, _ => 2 } + match (flag) { false => 3, true => 4 });
+  later();
+  console.log(seen.join(" | "));
+  seen.length = 0;
+}
+const codes = [200, 201, 404, 500].map((code) => match (code) { 200 | 201 => "success", 404 => "not found", _ => "other" });
+console.log(codes.join(" "));
+export {};

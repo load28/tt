@@ -1,0 +1,40 @@
+-- declarators Fresh
+open first
+open fresh
+body first fresh
+dispose fresh
+dispose first
+-- arm scope Fresh
+open outer
+open fresh
+arm fresh
+dispose fresh
+label FRESH with outer
+dispose outer
+-- declarators Plain
+open first
+open plain
+body first plain
+dispose plain
+dispose first
+-- arm scope Plain
+open outer
+label plain with outer
+dispose outer
+-- declarators Fail
+open first
+dispose first
+caught no second
+-- arm scope Fail
+open outer
+dispose outer
+caught arm threw
+-- propagate true
+open held
+after try fine with held
+dispose held
+{"kind":"Ok","value":"fine"}
+-- propagate false
+open held
+dispose held
+{"kind":"Err","error":"bad"}

@@ -1,0 +1,479 @@
+=== matchEvaluationOrder.tt ===
+variant Shape { Circle(r: number), Rect(w: number, h: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>r : (property) r: number
+>Rect : (property) Rect: (w: number, h: number) => Shape
+>w : (property) w: number
+>h : (property) h: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+function note<T>(label: string, value: T): T {
+>note : function note<T>(label: string, value: T): T
+>T : (type parameter) T in note<T>(label: string, value: T): T
+>label : (parameter) label: string
+>value : (parameter) value: T
+>T : (type parameter) T in note<T>(label: string, value: T): T
+>T : (type parameter) T in note<T>(label: string, value: T): T
+  log.push(label);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+  return value;
+>value : (parameter) value: T
+function flush(title: string, value: unknown) {
+>flush : function flush(title: string, value: unknown): void
+>title : (parameter) title: string
+>value : (parameter) value: unknown
+  console.log(`${title}: ${JSON.stringify(value)} after ${log.join(", ")}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>title : (parameter) title: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>value : (parameter) value: unknown
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+  log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+const shapes = [Shape.Circle(1), Shape.Circle(2), Shape.Rect(3, 2), Shape.Rect(1, 4), Shape.Point];
+>shapes : const shapes: ({
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Rect: (w: number, h: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Rect: (w: number, h: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Rect: (w: number, h: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Rect : (property) Rect: (w: number, h: number) => Shape
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Rect: (w: number, h: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Rect : (property) Rect: (w: number, h: number) => Shape
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Rect: (w: number, h: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+for (const shape of shapes) {
+>shape : const shape: {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }
+>shapes : const shapes: ({
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]
+  const value = match (note("scrutinee", shape)) {
+>value : const value: number
+>note : function note<{
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }>(label: string, value: {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }): {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }
+>shape : const shape: {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }
+    Circle(r) if note("guard r > 1", r > 1) => note("big circle", r),
+>r : const r: number
+>note : function note<boolean>(label: string, value: boolean): boolean
+>r : const r: number
+>note : function note<number>(label: string, value: number): number
+>r : const r: number
+    Circle(r) => note("circle", r * 10),
+>r : const r: number
+>note : function note<number>(label: string, value: number): number
+>r : const r: number
+    Rect(w, h) if note("guard w > h", w > h) => note("wide rect", w),
+>w : const w: number
+>h : const h: number
+>note : function note<boolean>(label: string, value: boolean): boolean
+>w : const w: number
+>h : const h: number
+>note : function note<number>(label: string, value: number): number
+>w : const w: number
+    Rect(w, h) => note("rect", w * h),
+>w : const w: number
+>h : const h: number
+>note : function note<number>(label: string, value: number): number
+>w : const w: number
+>h : const h: number
+    Point => note("point", 0),
+>note : function note<0>(label: string, value: 0): 0
+  flush(JSON.stringify(shape), value);
+>flush : function flush(title: string, value: unknown): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>shape : const shape: {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }
+>value : const value: number
+function triple(a: number, b: number, c: number) {
+>triple : function triple(a: number, b: number, c: number): number[]
+>a : (parameter) a: number
+>b : (parameter) b: number
+>c : (parameter) c: number
+  return [a, b, c];
+>a : (parameter) a: number
+>b : (parameter) b: number
+>c : (parameter) c: number
+flush(
+>flush : function flush(title: string, value: unknown): void
+  triple(note("argument 0", 1), match (note("argument 1 scrutinee", shapes[2])) { Rect(w) => note("argument 1 arm", w), _ => 0 }, note("argument 2", 3)),
+>triple : function triple(a: number, b: number, c: number): number[]
+>note : function note<1>(label: string, value: 1): 1
+>note : function note<{
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }>(label: string, value: {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }): {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }
+>shapes : const shapes: ({
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]
+>w : const w: number
+>note : function note<number>(label: string, value: number): number
+>w : const w: number
+>note : function note<3>(label: string, value: 3): 3
+flush(
+>flush : function flush(title: string, value: unknown): void
+  note("left", 1) + match (note("right scrutinee", shapes[1])) { Circle(r) => note("right arm", r), _ => 0 } * note("factor", 10),
+>note : function note<1>(label: string, value: 1): 1
+>note : function note<{
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }>(label: string, value: {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }): {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }
+>shapes : const shapes: ({
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]
+>r : const r: number
+>note : function note<number>(label: string, value: number): number
+>r : const r: number
+>note : function note<10>(label: string, value: 10): 10
+const box = { v: 1 };
+>box : const box: {
+>       v: number;
+>   }
+>v : (property) v: number
+function target() {
+>target : function target(): {
+>       v: number;
+>   }
+  log.push("target");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return box;
+>box : const box: {
+>       v: number;
+>   }
+target().v += match (note("assigned scrutinee", shapes[4])) { Point => note("assigned arm", (box.v = 100, 5)), _ => 0 };
+>target : function target(): {
+>       v: number;
+>   }
+>v : (property) v: number
+>note : function note<{
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }>(label: string, value: {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }): {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }
+>shapes : const shapes: ({
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]
+>note : function note<5>(label: string, value: 5): 5
+>box : const box: {
+>       v: number;
+>   }
+>v : (property) v: number
+flush("compound assignment", box.v);
+>flush : function flush(title: string, value: unknown): void
+>box : const box: {
+>       v: number;
+>   }
+>v : (property) v: number
+const nested = match (match (note("inner scrutinee", shapes[3])) { Rect(w, h) => note("inner arm", w < h), _ => false }) {
+>nested : const nested: string
+>note : function note<{
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }>(label: string, value: {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }): {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }
+>shapes : const shapes: ({
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]
+>w : const w: number
+>h : const h: number
+>note : function note<boolean>(label: string, value: boolean): boolean
+>w : const w: number
+>h : const h: number
+  true => note("outer true", "tall"),
+>note : function note<"tall">(label: string, value: "tall"): "tall"
+  false => note("outer false", "flat"),
+>note : function note<"flat">(label: string, value: "flat"): "flat"
+flush("nested", nested);
+>flush : function flush(title: string, value: unknown): void
+>nested : const nested: string
+const text = `${note("before", "<")}${match (note("template scrutinee", shapes[0])) { Circle(r) => note("template arm", r), _ => 0 }}${note("after", ">")}`;
+>text : const text: string
+>note : function note<"<">(label: string, value: "<"): "<"
+>note : function note<{
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }>(label: string, value: {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }): {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   }
+>shapes : const shapes: ({
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]
+>r : const r: number
+>note : function note<number>(label: string, value: number): number
+>r : const r: number
+>note : function note<">">(label: string, value: ">"): ">"
+flush("template", text);
+>flush : function flush(title: string, value: unknown): void
+>text : const text: string
+

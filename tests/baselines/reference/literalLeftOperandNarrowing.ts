@@ -1,8 +1,13 @@
 //// [literalLeftOperandNarrowing.tt] ////
 // Repro from TASK-626
 import type { TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
 variant M { A(n: number), B }
-declare function read(): TResult<number, string>;
+let reads = 0;
+function read(): TResult<number, string> {
+  reads += 1;
+  return reads % 2 === 1 ? Result.Ok(reads * 10) : Result.Err(`read ${reads} failed`);
+}
 export function orFalse() {
   return result { const a = false || try read(); return a; };
 }
@@ -27,6 +32,17 @@ export function parenthesized(m: M) {
   let h = (false) || match (m) { A(n) => n, B => 0 };
   return h;
 }
+const show = (label: string, value: unknown) => console.log(`${label}: ${JSON.stringify(value)}`);
+show("orFalse", orFalse());
+show("andTrue A", andTrue(M.A(1)));
+show("andTrue B", andTrue(M.B));
+show("nullishNull", nullishNull());
+show("nullishUndefined", nullishUndefined());
+show("numericLiterals A", numericLiterals(M.A(4)));
+show("numericLiterals B", numericLiterals(M.B));
+show("parenthesized A", parenthesized(M.A(9)));
+show("parenthesized B", parenthesized(M.B));
+show("reads", reads);
 
 //// [tt/index.ts] support module @tt/std/index.ts
 //// [tt/option.ts] support module @tt/std/option.ts
@@ -53,6 +69,7 @@ function $tt_show(value: unknown): string {
 }
 // Repro from TASK-626
 import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
 type M =
   | { kind: "A"; n: number }
   | { kind: "B" };
@@ -60,9 +77,13 @@ const M = {
   A: (n: number): M => ({ kind: "A", n }),
   B: { kind: "B" } as const,
 };
-declare function read(): TResult<number, string>;
+let reads = 0;
+function read(): TResult<number, string> {
+  reads += 1;
+  return reads % 2 === 1 ? Result.Ok(reads * 10) : Result.Err(`read ${reads} failed`);
+}
 export function orFalse() {
-  let $tt_v0: (import("./tt/index.js").TErr<string>) | ({
+  let $tt_v0: (Result.TErr<string>) | ({
     kind: "Ok";
     value: number;
 });
@@ -117,7 +138,7 @@ export function andTrue(m: M) {
   return b;
 }
 export function nullishNull() {
-  let $tt_v7: (import("./tt/index.js").TErr<string>) | ({
+  let $tt_v7: (Result.TErr<string>) | ({
     kind: "Ok";
     value: number;
 });
@@ -142,7 +163,7 @@ export function nullishNull() {
   return $tt_v7;
 }
 export function nullishUndefined() {
-  let $tt_v11: (import("./tt/index.js").TErr<string>) | ({
+  let $tt_v11: (Result.TErr<string>) | ({
     kind: "Ok";
     value: number;
 });
@@ -167,7 +188,7 @@ export function nullishUndefined() {
   return $tt_v11;
 }
 export function numericLiterals(m: M) {
-  let $tt_v15: (import("./tt/index.js").TErr<string>) | ({
+  let $tt_v15: (Result.TErr<string>) | ({
     kind: "Ok";
     value: readonly [
         number,
@@ -256,3 +277,14 @@ export function parenthesized(m: M) {
   let h = $tt_v23;
   return h;
 }
+const show = (label: string, value: unknown) => console.log(`${label}: ${JSON.stringify(value)}`);
+show("orFalse", orFalse());
+show("andTrue A", andTrue(M.A(1)));
+show("andTrue B", andTrue(M.B));
+show("nullishNull", nullishNull());
+show("nullishUndefined", nullishUndefined());
+show("numericLiterals A", numericLiterals(M.A(4)));
+show("numericLiterals B", numericLiterals(M.B));
+show("parenthesized A", parenthesized(M.A(9)));
+show("parenthesized B", parenthesized(M.B));
+show("reads", reads);

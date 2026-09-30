@@ -1,0 +1,10 @@
+orFalse: {"kind":"Ok","value":10}
+andTrue A: "a"
+andTrue B: "b"
+nullishNull: {"kind":"Err","error":"read 2 failed"}
+nullishUndefined: {"kind":"Ok","value":30}
+numericLiterals A: {"kind":"Err","error":"read 4 failed"}
+numericLiterals B: {"kind":"Ok","value":[50,"b"]}
+parenthesized A: 9
+parenthesized B: 0
+reads: 5

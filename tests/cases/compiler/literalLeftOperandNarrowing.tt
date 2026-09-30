@@ -1,7 +1,13 @@
 // Repro from TASK-626
+// @run: literalLeftOperandNarrowing.tt
 import type { TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
 variant M { A(n: number), B }
-declare function read(): TResult<number, string>;
+let reads = 0;
+function read(): TResult<number, string> {
+  reads += 1;
+  return reads % 2 === 1 ? Result.Ok(reads * 10) : Result.Err(`read ${reads} failed`);
+}
 export function orFalse() {
   return result { const a = false || try read(); return a; };
 }
@@ -26,3 +32,14 @@ export function parenthesized(m: M) {
   let h = (false) || match (m) { A(n) => n, B => 0 };
   return h;
 }
+const show = (label: string, value: unknown) => console.log(`${label}: ${JSON.stringify(value)}`);
+show("orFalse", orFalse());
+show("andTrue A", andTrue(M.A(1)));
+show("andTrue B", andTrue(M.B));
+show("nullishNull", nullishNull());
+show("nullishUndefined", nullishUndefined());
+show("numericLiterals A", numericLiterals(M.A(4)));
+show("numericLiterals B", numericLiterals(M.B));
+show("parenthesized A", parenthesized(M.A(9)));
+show("parenthesized B", parenthesized(M.B));
+show("reads", reads);

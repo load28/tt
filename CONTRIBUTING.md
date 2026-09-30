@@ -166,6 +166,10 @@ Case files take metadata lines in the form `// @name: value`:
   on, with every varied option in the name, sorted. `*` stands for every
   value of the option and `-value` (or `!value`) removes one. Two varied
   options run every combination, at most 25.
+- `// @run: <unit>` executes the case: a `.tt`, `.ts`, `.mts`, or `.cts`
+  unit named as in its `// @filename` (the case file's own name when it
+  has none) is the entry. Every configuration of the case runs, so a
+  varied case gets one `.stdout` per configuration.
 
 Case names must be distinct across `tests/cases`, because each case writes
 its baselines as `tests/baselines/reference/<name>.<kind>`:
@@ -176,6 +180,26 @@ its baselines as `tests/baselines/reference/<name>.<kind>`:
 | `<name>.errors.txt` | what `ttc --out-dir` and `ttc --check-types` report, then what `tsc` reports on the emitted TypeScript; absent when all three succeed |
 | `<name>.map.txt` | the source-to-output mappings of the editor projection (`ttc::emit_mapped`) |
 | `<name>.types` | the engine's hover for each classified identifier, under its source line |
+| `<name>.stdout` | with `@run`: what the program printed to stdout |
+| `<name>.stderr` | with `@run`: the exit status and stderr when the program failed, printed to stderr, timed out, or was not run; absent otherwise |
+
+A runtime baseline is the default regression test for a fix whose bug is
+what the emitted program does (evaluation order, a value evaluated twice,
+`this`, short-circuiting, disposal order) rather than what ttc reports.
+Write the case as a program that prints what it observed, as TypeScript's
+evaluation tests (`src/testRunner/unittests/evaluation/` in
+microsoft/TypeScript) push to an `output` array: log each side effect, and
+print values with `JSON.stringify` or template strings, whose text does not
+depend on the Node.js version. The case runs only when it compiles cleanly
+(no `.errors.txt`); otherwise `.stderr` says it was not run. The emitted
+tree is compiled to JavaScript by the pinned `tsc` with the case's own
+`tsconfig.json` (plus `--noEmit false`, `--rewriteRelativeImportExtensions`,
+and an output directory) and run as an ES module by `node` under the
+permission model (`--permission` with read access to that directory only),
+with an empty environment apart from `PATH` and `TZ=UTC`, stdin closed, and
+a 10-second timeout. `console` needs the `dom` library, which the default
+configuration includes; a case with its own `lib` lists it. stderr is kept
+without Node.js's own stack frames (`node:internal`) and version line.
 
 Create or refresh the baselines, then read the diff before committing it with
 the change:
@@ -186,9 +210,11 @@ git diff -- tests/baselines
 TT_CASES=<name fragment> cargo test --test case_baselines   # a few cases while iterating
 ```
 
-The `.ts`, `.errors.txt`, and `.types` baselines need the pinned TypeScript
-(`npm ci`). Without it they are skipped, `TTC_REQUIRE_TSGO=1` turns the skip
-into a failure, and `UPDATE_EXPECT=1` refuses to run.
+The `.ts`, `.errors.txt`, `.types`, `.stdout`, and `.stderr` baselines need
+the pinned TypeScript (`npm ci`), and the runtime baselines a Node.js 22
+recent enough for `--permission` (22.13 or later). Without TypeScript they
+are skipped, `TTC_REQUIRE_TSGO=1` turns the skip into a failure, and
+`UPDATE_EXPECT=1` refuses to run.
 
 ### Adding an editor case
 

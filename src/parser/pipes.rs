@@ -131,9 +131,8 @@ pub(super) fn parse_pipeline(
                 break;
             }
             if matches!(open.last(), Some(b')' | b']'))
-                && matches!(t.kind, TokenKind::Ident)
                 && !dotted_at(tokens, step_from, k)
-                && crate::lexer::statement_only_keyword(&parser.src[t.span.start..t.span.end])
+                && crate::lexer::statement_keyword_at(parser.src, tokens, k)
                 && &parser.src[t.span.start..t.span.end] != "try"
             {
                 break;
@@ -176,9 +175,7 @@ pub(super) fn parse_pipeline(
                 TokenKind::Ident
                     if depth == 0
                         && !dotted_at(tokens, step_from, k)
-                        && crate::lexer::statement_only_keyword(
-                            &parser.src[t.span.start..t.span.end],
-                        ) =>
+                        && crate::lexer::statement_keyword_at(parser.src, tokens, k) =>
                 {
                     return None;
                 }

@@ -1,8 +1,14 @@
 //// [declaratorListLaterValue.tt] ////
 // Repro from TASK-593
 variant O { A(n: number), B }
-declare const o: O;
-declare function t(s: string): number;
+function pick(n: number): O {
+  return n > 0 ? O.A(n) : O.B;
+}
+const o = pick(1);
+function t(s: string): number {
+  console.log(`t ${s}`);
+  return 10;
+}
 export function f() {
   const a = t("a"), b = match (o) { A(n) => a + n, B => 0 };
   return b;
@@ -11,6 +17,8 @@ export function g() {
   var a = 10, b = match (o) { A(n) => a + n, B => 0 };
   return b;
 }
+console.log(`f ${f()}`);
+console.log(`g ${g()}`);
 
 
 //// [declaratorListLaterValue.ts]
@@ -40,8 +48,14 @@ const O = {
   A: (n: number): O => ({ kind: "A", n }),
   B: { kind: "B" } as const,
 };
-declare const o: O;
-declare function t(s: string): number;
+function pick(n: number): O {
+  return n > 0 ? O.A(n) : O.B;
+}
+const o = pick(1);
+function t(s: string): number {
+  console.log(`t ${s}`);
+  return 10;
+}
 export function f() {
   const a = t("a");
   let $tt_v0: number;
@@ -88,3 +102,5 @@ export function g() {
   var b = $tt_v1;
   return b;
 }
+console.log(`f ${f()}`);
+console.log(`g ${g()}`);

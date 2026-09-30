@@ -1,0 +1,182 @@
+=== forInitializerOperands.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+function flush(label: string, value: unknown) {
+>flush : function flush(label: string, value: unknown): void
+>label : (parameter) label: string
+>value : (parameter) value: unknown
+  console.log(`${label}: ${JSON.stringify(value)} after ${log.join(" ")}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>label : (parameter) label: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>value : (parameter) value: unknown
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+  log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+function r(ok: boolean): TResult<number, string> {
+>r : function r(ok: boolean): TResult<number, string>
+>ok : (parameter) ok: boolean
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  log.push("r");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return ok ? Result.Ok(10) : Result.Err("r failed");
+>ok : (parameter) ok: boolean
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+function g(n: number): number {
+>g : function g(n: number): number
+>n : (parameter) n: number
+  log.push(`g(${n})`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+  return n * 2;
+>n : (parameter) n: number
+export function firstDeclarator(ok: boolean): TResult<number[], string> {
+>firstDeclarator : function firstDeclarator(ok: boolean): TResult<number[], string>
+>ok : (parameter) ok: boolean
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const out: number[] = [];
+>out : const out: number[]
+  for (let x = try r(ok), i = 0; i < 3; i++) {
+>x : let x: number
+>r : function r(ok: boolean): TResult<number, string>
+>ok : (parameter) ok: boolean
+>i : let i: number
+>i : let i: number
+>i : let i: number
+    log.push(`body ${i}`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>i : let i: number
+    out.push(x + i);
+>out : const out: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>x : let x: number
+>i : let i: number
+  return Result.Ok(out);
+>Ok : const Ok: <number[]>(value: number[]) => Result.TOk<number[]>
+>out : const out: number[]
+export function operand(o: O): number[] {
+>operand : function operand(o: O): number[]
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const out: number[] = [];
+>out : const out: number[]
+  for (let x = g(match (o) { A(n) => n, B => 0 }); x < 10; x += 3) {
+>x : let x: number
+>g : function g(n: number): number
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+>x : let x: number
+>x : let x: number
+    out.push(x);
+>out : const out: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>x : let x: number
+  return out;
+>out : const out: number[]
+export function assignment(o: O): number[] {
+>assignment : function assignment(o: O): number[]
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const out: number[] = [];
+>out : const out: number[]
+  let x: number;
+>x : let x: number
+  let i: number;
+>i : let i: number
+  for (x = match (o) { A(n) => n, B => 5 }, i = 0; i < 2; i++) {
+>x : let x: number
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+>i : let i: number
+>i : let i: number
+>i : let i: number
+    out.push(x + i);
+>out : const out: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>x : let x: number
+>i : let i: number
+  return out;
+>out : const out: number[]
+flush("firstDeclarator ok", firstDeclarator(true));
+>flush : function flush(label: string, value: unknown): void
+>firstDeclarator : function firstDeclarator(ok: boolean): TResult<number[], string>
+flush("firstDeclarator err", firstDeclarator(false));
+>flush : function flush(label: string, value: unknown): void
+>firstDeclarator : function firstDeclarator(ok: boolean): TResult<number[], string>
+flush("operand A(2)", operand(O.A(2)));
+>flush : function flush(label: string, value: unknown): void
+>operand : function operand(o: O): number[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+flush("operand B", operand(O.B));
+>flush : function flush(label: string, value: unknown): void
+>operand : function operand(o: O): number[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+flush("assignment A(7)", assignment(O.A(7)));
+>flush : function flush(label: string, value: unknown): void
+>assignment : function assignment(o: O): number[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+flush("assignment B", assignment(O.B));
+>flush : function flush(label: string, value: unknown): void
+>assignment : function assignment(o: O): number[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+

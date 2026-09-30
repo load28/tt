@@ -242,7 +242,7 @@ fn expr_until_block(cur: &Cursor) -> Option<(usize, usize)> {
         if let TokenKind::Ident = t.kind {
             if depth == 0 && !dotted_at(cur.tokens, cur.idx, k) {
                 let word = cur.text(t);
-                if crate::lexer::statement_only_keyword(word) {
+                if crate::lexer::statement_keyword_at(cur.parser.src, cur.tokens, k) {
                     return None;
                 }
                 // Skip a whole `match ( ... ) { ... }` or `result { ... }`
@@ -384,7 +384,7 @@ fn if_extent(src: &str, tokens: &[Token], k: usize, range_end: usize) -> IfExten
             }
             open.pop();
         } else if matches!(open.last(), None | Some(b')' | b']'))
-            && word(at).is_some_and(crate::lexer::statement_only_keyword)
+            && crate::lexer::statement_keyword_at(src, tokens, at)
         {
             break;
         } else if t.opens_bracket() {

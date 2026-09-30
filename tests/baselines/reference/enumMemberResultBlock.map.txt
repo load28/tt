@@ -1,0 +1,13 @@
+//// [enumMemberResultBlock.tt] 11 mapping(s)
+1:1 -> 2:1 len 482  "// Runtime companion of TASK-594: a result block"...
+13:38 -> 19:11 len 1  "v"
+13:46 -> 15:20 len 13  "check(\"Q\", P)"
+13:60 -> 19:28 len 1  " "
+13:68 -> 19:68 len 5  "v + 1"
+13:76 -> 20:7 len 29  ", -1),\n  R = Result.unwrapOr("
+14:38 -> 26:11 len 1  "v"
+14:46 -> 22:20 len 18  "check(\"R\", P * 10)"
+14:65 -> 26:28 len 1  " "
+14:73 -> 26:68 len 1  "v"
+14:77 -> 27:7 len 130  ", -1),\n}\nconsole.log(`outer P ${P}`);\nconsole.lo"...
+
