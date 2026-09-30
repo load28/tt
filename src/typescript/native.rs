@@ -708,3 +708,62 @@ const result = consume(slot);
         assert!(answer.diagnostics.is_empty(), "{:?}", answer.diagnostics);
     }
 }
+
+#[cfg(all(test, unix))]
+mod idle_tests {
+    use super::*;
+
+    fn cpu_seconds(pid: u32) -> f64 {
+        let out = Command::new("ps")
+            .args(["-o", "time=", "-p", &pid.to_string()])
+            .output()
+            .expect("ps");
+        let text = String::from_utf8(out.stdout).expect("ps prints ASCII");
+        let text = text.trim();
+        let (days, clock) = match text.split_once('-') {
+            Some((days, clock)) => (days.parse::<f64>().expect("days"), clock),
+            None => (0.0, text),
+        };
+        let fields = clock
+            .split(':')
+            .map(|field| field.parse::<f64>().expect("a time field"))
+            .fold(0.0, |total, field| total * 60.0 + field);
+        days * 86_400.0 + fields
+    }
+
+    #[test]
+    fn an_idle_host_waits_for_the_next_request_without_spending_cpu() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let backend = NativeBackend::new(None, root).expect("pinned TypeScript toolchain");
+        let query = Query {
+            modules: vec![Module {
+                path: root.join("idle-host-probe.ts"),
+                text: "export const answer: number = 42;\n".into(),
+            }],
+            ..Query::default()
+        };
+        backend.ask(None, root, &query).expect("a first answer");
+        let pid = backend
+            .session
+            .borrow()
+            .as_ref()
+            .expect("started")
+            .child
+            .id();
+
+        let window = std::time::Duration::from_secs(4);
+        let before = cpu_seconds(pid);
+        std::thread::sleep(window);
+        let spent = cpu_seconds(pid) - before;
+        assert!(
+            spent < 2.0,
+            "the host spent {spent} s of CPU in {} s with no request to answer",
+            window.as_secs()
+        );
+
+        let answer = backend
+            .ask(None, root, &query)
+            .expect("an answer after idling");
+        assert!(answer.diagnostics.is_empty(), "{:?}", answer.diagnostics);
+    }
+}

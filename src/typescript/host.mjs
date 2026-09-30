@@ -63,7 +63,6 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -171,7 +170,6 @@ function lineReader() {
       try {
         n = fs.readSync(0, buf, 0, buf.length, null);
       } catch (e) {
-        if (e.code === "EAGAIN") continue;
         if (e.code === "EOF") n = 0;
         else throw e;
       }

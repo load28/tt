@@ -682,7 +682,8 @@
 | TASK-674 | Carry each completion entry's LSP kind from TypeScript to the editor unchanged | Complete | 2026-09-30 | 2026-09-30 | [TASK-674](./TASK-674-lossless-completion-kinds.md) |
 | TASK-675 | Baseline what the editor adapter publishes and offers in the editor cases | Complete | 2026-09-30 | 2026-09-30 | [TASK-675](./TASK-675-editor-cases-ask-the-adapter.md) |
 | TASK-676 | Export a let-else's bindings when the declaration is exported | Complete | 2026-09-30 | 2026-09-30 | [TASK-676](./TASK-676-exported-let-else.md) |
+| TASK-677 | Keep the TypeScript host's stdin blocking so an idle host waits instead of spinning | Complete | 2026-09-30 | 2026-09-30 | [TASK-677](./TASK-677-idle-host-blocking-stdin.md) |
 
 ## Next task number
 
-**TASK-677**
+**TASK-681**
