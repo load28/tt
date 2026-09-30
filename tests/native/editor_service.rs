@@ -114,3 +114,43 @@ const obj = { twice(n: number) { return n * 2; } };\n";
         );
     }
 }
+
+#[test]
+fn signature_help_in_a_try_is_the_same_while_the_file_has_a_syntax_error() {
+    require_tsgo!();
+    let decl = "import type { TResult } from \"@tt/std\";\n\
+declare function getUser(id: string): TResult<{ name: string }, string>;\n";
+    let get_user = Some("getUser(id: string): TResult<{ name: string; }, string>".to_string());
+    let cases = [
+        (
+            "export function f(id: string): TResult<number, string> {\n  const q = try getUser(id)@@\n  return { kind: \"Ok\", value: q.name.length };\n}\n",
+            None,
+        ),
+        (
+            "export function f(id: string): TResult<number, string> {\n  const q = try getUser(@@id);\n  return { kind: \"Ok\", value: q.name.length };\n}\n",
+            get_user.clone(),
+        ),
+        (
+            "export function g(id: string) {\n  return result { const v = try getUser(id)@@; v.name.length };\n}\n",
+            None,
+        ),
+        (
+            "export function g(id: string) {\n  return result { const v = try getUser(@@id); v.name.length };\n}\n",
+            get_user,
+        ),
+    ];
+    for (body, expected) in cases {
+        for broken in ["", "const r3 = (;\n"] {
+            let (source, position) = at_cursor(&format!("{decl}{body}{broken}"));
+            let dir = project(&[("src/main.tt", &source)]);
+            let file = dir.join("src/main.tt").canonicalize().unwrap();
+            let mut project = open_service(&file);
+            let help = project.signature_help(&file, position).unwrap();
+            assert_eq!(
+                help.map(|help| help.signatures[help.active_signature as usize].label.clone()),
+                expected,
+                "{source}"
+            );
+        }
+    }
+}

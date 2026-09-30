@@ -602,6 +602,7 @@
 | TASK-594 | Reject a statement value in an enum member initializer | Complete | 2026-09-30 | 2026-09-30 | [TASK-594](./TASK-594-enum-member-initializer-placement.md) |
 | TASK-602 | Recover an unfinished `if let` only as far as TypeScript reads its statement | Complete | 2026-09-30 | 2026-09-30 | [TASK-602](./TASK-602-stray-if-let-stays-local.md) |
 | TASK-603 | Answer signature help for the source call, never for a generated one | Complete | 2026-09-30 | 2026-09-30 | [TASK-603](./TASK-603-signature-help-for-source-calls.md) |
+| TASK-604 | Keep a `try`'s signature help the same while the file has a syntax error | Complete | 2026-09-30 | 2026-09-30 | [TASK-604](./TASK-604-try-signature-help-with-syntax-errors.md) |
 
 ## Next task number
 
