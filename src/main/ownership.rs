@@ -1,8 +1,9 @@
 //! Persistent output ownership, independent of banners and input selection.
 //!
 //! A record keeps the exact last published bytes. This permits rebuilds while
-//! refusing to replace an authored or subsequently edited file. Records are
-//! private siblings, so directory scans never treat them as project inputs.
+//! refusing to replace an authored or subsequently edited file, or the
+//! output of another input that still exists. Records are private siblings,
+//! so directory scans never treat them as project inputs.
 
 use super::*;
 use ttc::ownership::{owned_output, record, record_path};
@@ -34,6 +35,22 @@ fn owns(record: &serde_json::Value, owner: OutputOwner) -> bool {
     }
 }
 
+/// Whether the source input `record` names as the output's owner no longer
+/// exists: an unedited output it left behind belongs to no input, and the
+/// input that now maps to the same output (a renamed or migrated source)
+/// takes it over. A support module's output always has its owner.
+fn orphaned(record: &serde_json::Value) -> bool {
+    record["support"].is_null()
+        && record["source"].as_str().is_some_and(|recorded| {
+            let recorded = Path::new(recorded);
+            !StdModule::ALL
+                .iter()
+                .any(|module| recorded.ends_with(support_identity(*module)))
+                && fs::symlink_metadata(recorded)
+                    .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+        })
+}
+
 pub(super) fn check_output_owner(output: &Path, owner: OutputOwner) -> Result<(), String> {
     if let OutputOwner::Source(source) = owner
         && same_file(output, source)
@@ -46,7 +63,9 @@ pub(super) fn check_output_owner(output: &Path, owner: OutputOwner) -> Result<()
     if !output.exists() {
         return Ok(());
     }
-    if owned_output(output) && record(output).is_some_and(|record| owns(&record, owner)) {
+    if owned_output(output)
+        && record(output).is_some_and(|record| owns(&record, owner) || orphaned(&record))
+    {
         return Ok(());
     }
     Err(format!(

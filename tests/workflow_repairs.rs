@@ -536,3 +536,63 @@ fn dependencies_of_an_inferred_project_name_discovery_and_the_walk() {
         assert!(files.contains(&dir.join("tsconfig.json")), "{files:?}");
     }
 }
+
+/// TASK-589: an unedited output whose recorded input no longer exists
+/// belongs to the input that now maps to it (`a.ts` renamed to `a.tt`). An
+/// edited output, or one whose input still exists, stays protected.
+#[test]
+fn a_renamed_input_takes_over_the_output_its_predecessor_left() {
+    let root = Workspace::new("output-takeover");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::create_dir_all(root.join("other")).unwrap();
+    fs::write(root.join("src/a.ts"), "export const a = 1;\n").unwrap();
+    fs::write(root.join("src/b.ts"), "export const b = 1;\n").unwrap();
+    fs::write(root.join("other/c.ts"), "export const c = 1;\n").unwrap();
+    success(run(&root, &["-o", "out", "src"]));
+    success(run(&root, &["-o", "out", "other"]));
+    fs::rename(root.join("src/a.ts"), root.join("src/a.tt")).unwrap();
+    fs::write(root.join("src/a.tt"), "export const a: number = 2;\n").unwrap();
+    success(run(&root, &["-o", "out", "src"]));
+    let out = fs::read_to_string(root.join("out/a.ts")).unwrap();
+    assert!(out.contains("export const a: number = 2;"), "{out}");
+
+    fs::write(root.join("out/b.ts"), "// edited\n").unwrap();
+    fs::rename(root.join("src/b.ts"), root.join("src/b.tt")).unwrap();
+    assert!(!run(&root, &["-o", "out", "src/b.tt"]).status.success());
+    assert_eq!(
+        fs::read_to_string(root.join("out/b.ts")).unwrap(),
+        "// edited\n"
+    );
+
+    fs::write(root.join("src/c.tt"), "export const c = 2;\n").unwrap();
+    assert!(!run(&root, &["-o", "out", "src/c.tt"]).status.success());
+    assert_eq!(
+        fs::read_to_string(root.join("out/c.ts")).unwrap(),
+        "export const c = 1;\n"
+    );
+}
+
+/// TASK-589: the same takeover lets a build watch recover from the rename.
+#[test]
+fn build_watch_recovers_from_a_renamed_input() {
+    let root = Workspace::new("output-takeover-watch");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/a.ts"), "export const a = 1;\n").unwrap();
+    let log = root.join("watch.log");
+    let _watch = Watch(
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .current_dir(&root)
+            .args(["-w", "-o", "out", "src"])
+            .stdout(std::process::Stdio::null())
+            .stderr(fs::File::create(&log).unwrap())
+            .spawn()
+            .unwrap(),
+    );
+    wait_for(|| fs::read_to_string(&log).unwrap().contains("Ctrl-C"));
+    fs::rename(root.join("src/a.ts"), root.join("src/a.tt")).unwrap();
+    wait_for(|| {
+        fs::read_to_string(root.join("out/a.ts")).is_ok_and(|out| out.contains("from a.tt"))
+    });
+    let log = fs::read_to_string(&log).unwrap();
+    assert!(!log.contains("not owned"), "{log}");
+}
