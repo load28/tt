@@ -575,3 +575,51 @@ fn hover_markdown_separates_signature_from_documentation_and_tags() {
         ("let v: string".to_string(), String::new())
     );
 }
+
+#[test]
+fn signature_help_is_asked_outside_every_generated_argument_list() {
+    let code = "foo(bar(m, h), `${bar(k)}`)";
+    let mappings = vec![
+        EmitMapping {
+            src: 0,
+            out: 0,
+            len: 4,
+        },
+        EmitMapping {
+            src: 4,
+            out: 8,
+            len: 1,
+        },
+        EmitMapping {
+            src: 5,
+            out: 11,
+            len: 1,
+        },
+        EmitMapping {
+            src: 6,
+            out: 13,
+            len: 5,
+        },
+        EmitMapping {
+            src: 11,
+            out: 22,
+            len: 1,
+        },
+        EmitMapping {
+            src: 12,
+            out: 24,
+            len: 3,
+        },
+    ];
+    let kind = crate::SourceKind::TypeScript;
+    assert_eq!(signature_position(code, &mappings, kind, 12), 7);
+    assert_eq!(signature_position(code, &mappings, kind, 9), 7);
+    assert_eq!(signature_position(code, &mappings, kind, 23), 21);
+    assert_eq!(signature_position(code, &mappings, kind, 2), 2);
+    let copied = [EmitMapping {
+        src: 0,
+        out: 0,
+        len: 9,
+    }];
+    assert_eq!(signature_position("foo(a, b)", &copied, kind, 6), 6);
+}

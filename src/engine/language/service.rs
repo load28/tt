@@ -414,6 +414,63 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
     })
 }
 
+pub(super) fn signature_position(
+    code: &str,
+    mappings: &[EmitMapping],
+    source_kind: crate::SourceKind,
+    at: usize,
+) -> usize {
+    let tokens = crate::lexer::lex_with_kind(code, 0, code.len(), source_kind);
+    let mut at = at;
+    while let Some(opener) = innermost_invocation(&tokens, at) {
+        if mapper::to_source(mappings, opener).is_some() {
+            break;
+        }
+        at = opener;
+    }
+    at
+}
+
+fn innermost_invocation(tokens: &[crate::lexer::Token], at: usize) -> Option<usize> {
+    let mut open = Vec::new();
+    open_brackets_before(tokens, at, &mut open);
+    open.into_iter()
+        .rev()
+        .find_map(|(start, invocation)| invocation.then_some(start))
+}
+
+fn open_brackets_before(tokens: &[crate::lexer::Token], at: usize, open: &mut Vec<(usize, bool)>) {
+    use crate::lexer::{TokenKind, TplPart};
+    for (index, token) in tokens.iter().enumerate() {
+        if token.span.start >= at {
+            return;
+        }
+        if let TokenKind::Template(parts) = &token.kind {
+            let interpolation = parts.iter().find_map(|part| match part {
+                TplPart::Interp { span, tokens } if span.start <= at && at <= span.end => {
+                    Some(tokens)
+                }
+                _ => None,
+            });
+            if let Some(tokens) = interpolation {
+                open_brackets_before(tokens, at, open);
+                return;
+            }
+            continue;
+        }
+        if token.opens_bracket() {
+            let invocation = matches!(token.kind, TokenKind::Punct(b'(' | b'<'))
+                && index.checked_sub(1).is_some_and(|previous| {
+                    let previous = &tokens[previous];
+                    previous.facts.ends_expression() || matches!(previous.kind, TokenKind::OptChain)
+                });
+            open.push((token.span.start, invocation));
+        } else if token.closes_bracket() {
+            open.pop();
+        }
+    }
+}
+
 /// An edit the service computed over served text, as an edit of `source`:
 /// `mappings` maps `source` onto `code`, with a completion probe's
 /// placeholder spliced in at `splice` when there is one. An insertion

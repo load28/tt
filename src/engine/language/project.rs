@@ -701,8 +701,8 @@ impl Project {
         let session = self.session();
         // A cursor the served text has no place for is asked through a
         // probe, as completion asks there.
-        let (code, at) = match to_service_typed(&doc, position) {
-            Some(at) => (doc.code.clone(), at),
+        let (code, mappings, at) = match to_service_typed(&doc, position) {
+            Some(at) => (doc.code.clone(), doc.mappings.clone(), at),
             None => {
                 let source_at = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
                 let Some(probe) =
@@ -712,9 +712,18 @@ impl Project {
                 };
                 session.probe_count += 1;
                 open_served(session, &path, &probe.code);
-                (probe.code, probe.offset)
+                (probe.code, probe.mappings, probe.offset)
             }
         };
+        let at = mapper::to_utf16(
+            &code,
+            signature_position(
+                &code,
+                &mappings,
+                crate::SourceKind::from_path(&path).unwrap_or_default(),
+                mapper::from_utf16(&code, at),
+            ),
+        );
         let help = session.client.request(
             "textDocument/signatureHelp",
             serde_json::json!({

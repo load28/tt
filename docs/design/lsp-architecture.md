@@ -259,6 +259,12 @@ TypeScript's syntax errors *and* its type errors; a `.tt` file must too.
   `else` continuation belong to it, and nothing after that is recovered.
   When the head has an operand, only `if let <pattern> =` becomes `void`,
   so the operand the user is typing stays served.
+- **Signature help is asked outside generated argument lists
+  (TASK-603).** TypeScript answers for the innermost argument list around
+  the position, and the LSP answer does not say which. The engine moves the
+  position to the `(` of every innermost open argument list the emission
+  did not copy from the source, so the answer is for the user's call, or
+  nothing when there is none.
 - **A cursor with no place in the served text is asked through a probe.**
   Completion and signature help splice `$tt_probe` at the cursor and ask
   at its mapped position when the served projection did not copy the

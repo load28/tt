@@ -75,3 +75,42 @@ export function f(id: string) {\n  if let Some(v) = find(id.@@)\n  return 1;\n}\
         vec![(3, 27, 1003, "Identifier expected.".to_string())]
     );
 }
+
+#[test]
+fn signature_help_answers_for_the_source_call_around_generated_calls() {
+    require_tsgo!();
+    let decl = "const half = (n: number) => n / 2;\n\
+const obj = { twice(n: number) { return n * 2; } };\n";
+    let cases: [(&str, Option<(&str, u32)>); 7] = [
+        ("console.log(m |> ha@@lf, m);", Some(("log(...data: any[]): void", 0))),
+        ("console.log(m |> half@@);", Some(("log(...data: any[]): void", 0))),
+        (
+            "Math.max(1, m |> half |> Str@@ing);",
+            Some(("max(...values: number[]): number", 0)),
+        ),
+        ("half(m |> ha@@lf);", Some(("half(n: number): number", 0))),
+        ("const x = 4 |> obj.tw@@ice;", None),
+        ("const g = flow |> half |> Str@@ing;", None),
+        ("const y = m |> (v => v@@ + 1);", None),
+    ];
+    for (statement, expected) in cases {
+        let (source, position) = at_cursor(&format!(
+            "{decl}export function f(m: number) {{\n  {statement}\n}}\n"
+        ));
+        let dir = project(&[("src/main.tt", &source)]);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        let mut project = open_service(&file);
+        let help = project.signature_help(&file, position).unwrap();
+        let answer = help.map(|help| {
+            (
+                help.signatures[help.active_signature as usize].label.clone(),
+                help.active_parameter,
+            )
+        });
+        assert_eq!(
+            answer,
+            expected.map(|(label, parameter)| (label.to_string(), parameter)),
+            "{statement}"
+        );
+    }
+}
