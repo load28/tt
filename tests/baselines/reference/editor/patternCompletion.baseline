@@ -8,6 +8,10 @@ patternCompletions:
   "north" (literal) "literal \"north\"" covered
   "south" (literal) "literal \"south\""
   _ (wildcard) "wildcard arm — every remaining case (must be last)"
+editor completion: 3 item(s)
+  "south" (Constant, 0"south")
+  _ (Keyword, 0_)
+  "north" (Constant, 1"north")
 
 === completions /*tag*/ patternCompletion.tt:6:37 ===
   |   const b = match (k) { Alpha => 1,  };
@@ -19,6 +23,10 @@ patternCompletions:
   Alpha (case) "kind: \"Alpha\"" covered
   Beta (case) "kind: \"Beta\""
   _ (wildcard) "wildcard arm — every remaining case (must be last)"
+editor completion: 3 item(s)
+  Beta (EnumMember, 0Beta)
+  _ (Keyword, 0_)
+  Alpha (EnumMember, 1Alpha)
 
 === completions /*field*/ patternCompletion.tt:7:31 ===
   |   const c = match (k) { Alpha() => 1, _ => 0 };
@@ -28,6 +36,8 @@ completion: 1 item(s), member false, probe yes
 ttCompletions: pattern true, member null
 patternCompletions:
   x (field) "x"
+editor completion: 1 item(s)
+  x (Field, 0x)
 
 === completions /*payload*/ patternCompletion.tt:8:32 ===
   |   const e = match (s) { Circle() => 1, _ => 0 };
@@ -38,6 +48,8 @@ ttCompletions: pattern true, member null
   radius (field) "radius: number"
 patternCompletions:
   radius (field) "radius: number"
+editor completion: 1 item(s)
+  radius (Field, 0radius)
 
 === completions /*written*/ patternCompletion.tt:9:34 ===
   |   const g = match (k) { Alpha(x, ) => x, _ => 0 };
@@ -45,6 +57,7 @@ patternCompletions:
 completion: 0 item(s), member false, probe yes
 ttCompletions: pattern true, member null
 patternCompletions:
+editor completion: 0 item(s)
 
 === completions /*ifLet*/ patternCompletion.tt:10:16 ===
   |   if let Alpha() = k { return [g]; }
@@ -54,4 +67,6 @@ completion: 1 item(s), member false, probe yes
 ttCompletions: pattern true, member null
 patternCompletions:
   x (field) "x"
+editor completion: 1 item(s)
+  x (Field, 0x)
 

@@ -14,6 +14,16 @@ completion: 1048 item(s), member false, probe yes
 ttCompletions: pattern false, member null
   keywords: match (15), flow (15), result (15)
 patternCompletions: null
+editor completion: 1051 item(s)
+  Shape (Variable, 211)
+  a (Variable, 211)
+  arguments (Variable, 211)
+  b (Variable, 211)
+  g (Function, 211)
+  limit (Variable, 211)
+  s (Variable, 211)
+  width (Variable, 211)
+  ... 1043 global or keyword item(s) (sortText 215, no source)
 
 === completions /*afterComma*/ armBodyCompletion.tt:10:20 ===
   |     Rect(width) => ,
@@ -31,6 +41,16 @@ completion: 1048 item(s), member false, probe yes
 ttCompletions: pattern false, member null
   keywords: match (15), flow (15), result (15)
 patternCompletions: null
+editor completion: 1051 item(s)
+  Shape (Variable, 211)
+  a (Variable, 211)
+  arguments (Variable, 211)
+  b (Variable, 211)
+  g (Function, 211)
+  limit (Variable, 211)
+  s (Variable, 211)
+  width (Variable, 211)
+  ... 1043 global or keyword item(s) (sortText 215, no source)
 
 === parity with the TypeScript twin ===
 completions body: same

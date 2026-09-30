@@ -9,4 +9,9 @@ completion: 1061 item(s), member false, probe no
 ttCompletions: pattern false, member null
   keywords: match (15), flow (15), result (15)
 patternCompletions: null
+editor completion: 1064 item(s)
+  z (Variable, 211)
+  kkValue (Variable, 216)
+  kkValueLib (Variable, 216)
+  ... 1061 global or keyword item(s) (sortText 215, no source)
 

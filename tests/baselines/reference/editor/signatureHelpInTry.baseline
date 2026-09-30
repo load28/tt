@@ -14,4 +14,7 @@ signatureHelp: null
 diagnostics: 1 diagnostic(s)
   10:13-10:14 ";" error TS1109: Expression expected.
   restates: source-not-typescript
+published: 2 diagnostic(s)
+  8:10-8:61 "result { const v = try getUser(id); v.name.length }" error result-no-success-value (ttc): `result` can reach the end of its body without a success value
+  10:13-10:14 ";" error ts1109 (ttc): Expression expected.
 

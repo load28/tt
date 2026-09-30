@@ -1,0 +1,2 @@
+plainTsx diagnostics plainTsx.ttx
+plainTypeScript diagnostics plainTypeScript.tt

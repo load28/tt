@@ -27,6 +27,9 @@ completion: 2 item(s), member true, probe no
   Red (property, 11)
 ttCompletions: pattern false, member {"receiver":"Color"}
 patternCompletions: null
+editor completion: 2 item(s)
+  Green (Property, 211)
+  Red (Property, 211)
 
 === signatureHelp /*overload*/ plainTypeScriptDeclarations.tt:13:33 ===
   | export const s = Geometry.scale(2);
@@ -83,6 +86,7 @@ semanticTokens: 32 token(s)
 
 === diagnostics plainTypeScriptDeclarations.tt ===
 diagnostics: 0 diagnostic(s)
+published: 0 diagnostic(s)
 
 === parity with the TypeScript twin ===
 hover green: same

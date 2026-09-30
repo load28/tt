@@ -9,4 +9,10 @@ completion: 5 item(s), member false, probe no
   view.ttx (script, 11)
 ttCompletions: pattern false, member null
 patternCompletions: null
+editor completion: 5 item(s)
+  lib (File, 211)
+  node_modules (Folder, 211)
+  shapes.tt (File, 211)
+  tsconfig.json (File, 211)
+  view.ttx (File, 211)
 
