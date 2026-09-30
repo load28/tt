@@ -361,7 +361,7 @@ impl<'a> Emitter<'a> {
         context: &ResultEmissionContext<'_, '_>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
-        for statement in statements {
+        for (index, statement) in statements.iter().enumerate() {
             match statement {
                 Statement::Opaque(node) => {
                     // An opaque segment may contain both a nested function
@@ -494,6 +494,7 @@ impl<'a> Emitter<'a> {
                     &mut out,
                 ),
             }
+            out.append(self.edits_after_statement(statements, index, edits));
         }
         out
     }

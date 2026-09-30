@@ -847,3 +847,53 @@ fn a_value_nested_in_a_for_head_initializer_runs_before_the_loop() {
         assert!(out.contains(head), "{body}: {out}");
     }
 }
+
+#[test]
+fn a_returned_template_literal_that_ends_its_statement_keeps_the_return_suffix() {
+    let prelude = "variant O { A(n: number), B }\ndeclare const o: O;\ndeclare function tag(s: TemplateStringsArray, ...v: unknown[]): string;\ntype R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\ndeclare function r(): R;\n";
+    let cases = [
+        (
+            "export const a = result { const x = try r(); return `v`};",
+            "value: `v` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }\n}",
+        ),
+        (
+            "export const a = result { const x = try r(); return tag`v${x}`}",
+            "value: tag`v${x}` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }\n}",
+        ),
+        (
+            "export const a = result { const x = try r(); return x + `v`}",
+            "value: x + `v` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }\n}",
+        ),
+        (
+            "export const a = result { const x = try r(); if (x > 0) return `a`\n  return `b`};",
+            "value: `a` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }\n",
+        ),
+        (
+            "export const a = match (o) { A(n) => { return `${n}`}, B => 0 };",
+            "$tt_v0 = `${n}`; break;",
+        ),
+        (
+            "export const a = match (o) { A(n) => { if (n) return `a`\n  return `${n}`}, B => 0 };",
+            "if (n) { $tt_v0 = `a`; break; }\n    $tt_v0 = `${n}`;\n    break;\n",
+        ),
+    ];
+    for (source, written) in cases {
+        let out = ok(&format!("{prelude}{source}\n"));
+        assert!(out.contains(written), "{source}: {out}");
+    }
+}
+
+#[test]
+fn a_using_for_statement_and_an_if_function_clause_host_tt_values() {
+    let prelude = "import type { TResult } from \"@tt/std\";\nvariant O { A(n: number), B }\ndeclare const o: O;\ndeclare function res(): { n: number; [Symbol.dispose](): void };\ndeclare function rr(): TResult<{ n: number; [Symbol.dispose](): void }, string>;\n";
+    let out = ok(&format!(
+        "{prelude}export function f(): TResult<number, string> {{\n  let t = 0;\n  for (using q = res(), p = res(); t < 2; t++) {{\n    t += match (o) {{ A(n) => n + q.n + p.n, B => 0 }};\n  }}\n  for (using q = try rr(); t < 3; t++) {{\n    t += q.n;\n  }}\n  return {{ kind: \"Ok\", value: t }};\n}}\nif (Math.random()) function g() {{ return match (o) {{ A(n) => n, B => 0 }}; }}\n"
+    ));
+    for written in [
+        "for (using q = res(), p = res(); t < 2; t++) {\n    let $tt_v0",
+        "$tt_v2 = $tt_t0.value;\n  for (using q = $tt_v2; t < 3; t++) {",
+        "if (Math.random()) function g() { let $tt_v3",
+    ] {
+        assert!(out.contains(written), "{written}: {out}");
+    }
+}

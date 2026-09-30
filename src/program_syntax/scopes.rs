@@ -255,10 +255,16 @@ impl Visit for Walk<'_> {
 
     fn visit_for_stmt(&mut self, node: &ForStmt) {
         let mut names = Vec::new();
-        if let Some(VarDeclOrExpr::VarDecl(declaration)) = &node.init
-            && declaration.kind != VarDeclKind::Var
-        {
-            declaration_names(declaration, &mut names);
+        match &node.init {
+            Some(VarDeclOrExpr::VarDecl(declaration)) if declaration.kind != VarDeclKind::Var => {
+                declaration_names(declaration, &mut names);
+            }
+            Some(VarDeclOrExpr::UsingDecl(declaration)) => {
+                for declarator in &declaration.decls {
+                    pattern_names(&declarator.name, &mut names);
+                }
+            }
+            _ => {}
         }
         self.scoped(names, |walk| node.visit_children_with(walk));
     }

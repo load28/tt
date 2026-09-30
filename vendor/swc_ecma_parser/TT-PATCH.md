@@ -47,8 +47,31 @@ declaration at the line break. No upstream SWC issue for this shape was
 found. `tests/swc_import_type_arguments.rs` and `tests/passthrough.rs` in
 the parent repository cover it (TASK-502).
 
-`tests/jsx_entities.rs`, `tests/swc_arrow_asi.rs`, and
-`tests/swc_import_type_arguments.rs` in the parent repository test the
+Local change: `src/parser/stmt.rs`, `parse_for_head` reads a `using` or
+`await using` declaration as a `for` statement's initializer
+(`for (using r = open(); ; )`), which ECMAScript explicit resource management
+(ES2026, `ForStatement : for ( [lookahead ≠ let [] LexicalDeclaration
+Expression ; Expression ) Statement` with `LexicalDeclaration : UsingDeclaration
+| AwaitUsingDeclaration`) and TypeScript 5.2 accept. Upstream read only the
+`for (using x of xs)` form and rejected the initializer ("Expected ';'");
+upstream's own TypeScript conformance run still excludes
+`awaitUsingDeclarationsInFor.ts`, and its AST had no initializer that holds a
+using declaration. The declaration is `VarDeclOrExpr::UsingDecl`, a variant the
+vendored `swc_ecma_ast` adds (`vendor/swc_ecma_ast/TT-PATCH.md`). `using`
+stays an identifier where no binding identifier follows it on the same line
+(`for (using; ;)`, `for (using = 1; ;)`, `for (using of xs)`).
+
+Local change: `src/parser/stmt.rs`, `parse_if_clause` reads a plain
+`FunctionDeclaration` as an `if` statement's consequent or alternative
+(`if (c) function f() {}`), the production of ECMA-262 Annex B.3.4
+("FunctionDeclarations in IfStatement Statement Clauses"). TypeScript's parser
+reads it as a function declaration in every file; upstream reported
+"Declaration is not allowed". A generator is not part of the production and is
+still rejected.
+
+`tests/jsx_entities.rs`, `tests/swc_arrow_asi.rs`,
+`tests/swc_import_type_arguments.rs`, and
+`tests/swc_for_using_and_if_function.rs` in the parent repository test the
 dependency directly.
 The direct path dependency also applies when ttc is built by the standalone
 fuzz workspace. Remove this vendored copy only after an upstream version

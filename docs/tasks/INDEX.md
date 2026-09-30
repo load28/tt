@@ -626,6 +626,11 @@
 | TASK-618 | Let a referenced type-check config emit declarations into a cache | Complete | 2026-09-30 | 2026-09-30 | [TASK-618](./TASK-618-referenced-type-configs-emit.md) |
 | TASK-619 | Derive `tt:build` from the configured source roots | Complete | 2026-09-30 | 2026-09-30 | [TASK-619](./TASK-619-derived-build-roots.md) |
 | TASK-620 | Report an impossible match case at its pattern | Complete | 2026-09-30 | 2026-09-30 | [TASK-620](./TASK-620-impossible-case-at-its-pattern.md) |
+| TASK-621 | Read an arm whose guard is not written yet as a malformed arm | Complete | 2026-09-30 | 2026-09-30 | [TASK-621](./TASK-621-arm-guard-not-written-yet.md) |
+| TASK-622 | Write a return's suffix after a template literal that ends its statement | Complete | 2026-09-30 | 2026-09-30 | [TASK-622](./TASK-622-return-suffix-after-a-template-literal.md) |
+| TASK-623 | Widen only fresh literal types in a value's storage | Complete | 2026-09-30 | 2026-09-30 | [TASK-623](./TASK-623-storage-widens-only-fresh-literals.md) |
+| TASK-624 | Accept a `using` declaration in a `for` initializer and a function as an `if` clause | Complete | 2026-09-30 | 2026-09-30 | [TASK-624](./TASK-624-for-using-and-if-function-clause.md) |
+| TASK-625 | Keep another file's compiler failure out of the printed file | Complete | 2026-09-30 | 2026-09-30 | [TASK-625](./TASK-625-sibling-projection-failure.md) |
 | TASK-629 | Resolve each auto-import entry against its own module | Complete | 2026-09-30 | 2026-09-30 | [TASK-629](./TASK-629-auto-import-entry-identity.md) |
 | TASK-630 | Name a stored callee's signature as the source call does | Complete | 2026-09-30 | 2026-09-30 | [TASK-630](./TASK-630-signature-help-for-a-stored-callee.md) |
 | TASK-631 | Open completion on TypeScript's trigger characters and let TypeScript decide | Complete | 2026-09-30 | 2026-09-30 | [TASK-631](./TASK-631-typescript-trigger-characters.md) |
