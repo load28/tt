@@ -237,8 +237,11 @@ fn expr_until_block(cur: &Cursor) -> Option<(usize, usize)> {
     let mut ternaries = 0usize;
     let mut expr_end = cur.stop_byte_at(cur.idx);
     let mut k = cur.idx;
+    let mut after_construct = false;
     while k < cur.tokens.len() {
         let t = &cur.tokens[k];
+        let operand_ended = std::mem::take(&mut after_construct)
+            || (k > cur.idx && cur.tokens[k - 1].facts.ends_expression());
         if let TokenKind::Ident = t.kind {
             if depth == 0 && !dotted_at(cur.tokens, cur.idx, k) {
                 let word = cur.text(t);
@@ -250,6 +253,7 @@ fn expr_until_block(cur: &Cursor) -> Option<(usize, usize)> {
                 if let Some(past) = skip_braced_construct(cur.tokens, word, k) {
                     expr_end = cur.tokens[past - 1].span.end;
                     k = past;
+                    after_construct = true;
                     continue;
                 }
             }
@@ -259,16 +263,16 @@ fn expr_until_block(cur: &Cursor) -> Option<(usize, usize)> {
         }
         if depth == 0 {
             match t.kind {
-                TokenKind::Punct(b'{') => {
-                    return if ternaries == 0
-                        && !matches!(
-                            k.checked_sub(1).map(|p| &cur.tokens[p].kind),
-                            Some(TokenKind::Arrow)
-                        ) {
-                        Some((expr_end, k))
-                    } else {
-                        None
-                    };
+                TokenKind::Punct(b'{')
+                    if matches!(
+                        k.checked_sub(1).map(|p| &cur.tokens[p].kind),
+                        Some(TokenKind::Arrow)
+                    ) =>
+                {
+                    return None;
+                }
+                TokenKind::Punct(b'{') if operand_ended => {
+                    return (ternaries == 0).then_some((expr_end, k));
                 }
                 TokenKind::Punct(b';' | b'}' | b')' | b']' | b',' | b'=') => return None,
                 TokenKind::Punct(b'?') => ternaries += 1,

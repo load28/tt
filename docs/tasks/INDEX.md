@@ -664,7 +664,8 @@
 | TASK-663 | Open a block for a `result` block's statements in an unbraced body | Complete | 2026-09-30 | 2026-09-30 | [TASK-663](./TASK-663-result-block-unbraced-body-try.md) |
 | TASK-664 | Keep a binding pattern's implied type off generated storage | Complete | 2026-09-30 | 2026-09-30 | [TASK-664](./TASK-664-binding-pattern-default-storage.md) |
 | TASK-665 | Keep a comment directive's line and a statement's JSDoc where TypeScript reads them | Complete | 2026-09-30 | 2026-09-30 | [TASK-665](./TASK-665-directives-and-jsdoc-before-lowered-statements.md) |
+| TASK-666 | Decide three reported behaviours: let-else placement, the `if let` head, and payload reads | Complete | 2026-09-30 | 2026-09-30 | [TASK-666](./TASK-666-let-else-placement-if-let-head-payload-reads.md) |
 
 ## Next task number
 
-**TASK-666**
+**TASK-667**
