@@ -1,0 +1,5 @@
+labeledBlock({"kind":"Circle","r":1}) => 1 | yield {"kind":"Circle","r":1}; guard big false; small 1; flip true
+labeledBlock({"kind":"Circle","r":5}) => [5] | yield {"kind":"Circle","r":5}; guard big true; big 5; flip false
+labeledBlock({"kind":"Rect","w":4,"h":2}) => 4 | yield {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4; flip true
+labeledBlock({"kind":"Rect","w":1,"h":3}) => [3] | yield {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3; flip false
+labeledBlock({"kind":"Point"}) => 0 | yield {"kind":"Point"}; point 0; flip true

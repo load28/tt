@@ -1,0 +1,4 @@
+assignment("north") => 1 | initial 0; target {"value":0}; risky "north"; n 1
+assignment("south") => 2 | initial 0; target {"value":0}; risky "south"; se 2
+assignment("east") => "risky call 3" | initial 0; target {"value":0}; caught "risky call 3"
+assignment("up") => 0 | initial 0; target {"value":0}; risky "up"; other 0

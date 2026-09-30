@@ -1,0 +1,4 @@
+switchDiscriminant({}) => "default" | operand {}; range "range"; case 0; finally 0
+switchDiscriminant({}) => "default" | operand {}; type 1; case 0; finally 0
+switchDiscriminant({}) => "default" | operand {}; error "plain"; case 0; finally 0
+switchDiscriminant("text") => "default" | operand "text"; other null; case 0; finally 0

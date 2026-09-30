@@ -1,0 +1,5 @@
+declarationInitializer(200) => true | risky 200; success true
+declarationInitializer(201) => true | risky 201; success true
+declarationInitializer(404) => "risky call 3" | caught "risky call 3"
+declarationInitializer(500) => false | risky 500; guard true; server false
+declarationInitializer(7) => null | risky 7; other null

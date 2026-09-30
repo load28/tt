@@ -1,0 +1,4 @@
+optionalCall("north") => [[1],null] | callee true; yield "north"; n 1; callee false
+optionalCall("south") => [[2],null] | callee true; yield "south"; se 2; callee false
+optionalCall("east") => [[2],null] | callee true; yield "east"; se 2; callee false
+optionalCall("up") => [[0],null] | callee true; yield "up"; other 0; callee false

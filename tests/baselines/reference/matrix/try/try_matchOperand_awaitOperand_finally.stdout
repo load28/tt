@@ -1,0 +1,3 @@
+awaitOperand(1) => {"kind":"Ok","value":10} | operand 1; one 10; read 10; finally 0
+awaitOperand(2) => {"kind":"Err","error":"negative -10"} | operand 2; other -10; read -10; finally 0
+awaitOperand(-3) => {"kind":"Err","error":"negative -10"} | operand -3; other -10; read -10; finally 0

@@ -1,0 +1,2 @@
+conditionalBranch(4) => {"kind":"Ok","value":4} | flip true; operand 4; read 4; direct 4; finally 0
+conditionalBranch(-1) => "skipped" | flip false; else "skipped"; finally 0

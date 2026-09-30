@@ -1,0 +1,4 @@
+laterDeclarator({}) => [1,"range"] | before 1; await; range "range"
+laterDeclarator({}) => [1,1] | before 1; await; type 1
+laterDeclarator({}) => [1,"plain"] | before 1; await; error "plain"
+laterDeclarator("text") => [1,null] | before 1; await; other null

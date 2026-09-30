@@ -1,0 +1,2 @@
+topLevel(2) => {"kind":"Ok"} | read 2
+topLevel(-1) => {"kind":"Err","error":"negative -1"} | read -1

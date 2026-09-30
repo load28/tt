@@ -1,0 +1,5 @@
+assignment(200) => true | initial 0; target {"value":0}; yield 200; success true
+assignment(201) => true | initial 0; target {"value":0}; yield 201; success true
+assignment(404) => false | initial 0; target {"value":0}; yield 404; missing false
+assignment(500) => false | initial 0; target {"value":0}; yield 500; guard true; server false
+assignment(7) => null | initial 0; target {"value":0}; yield 7; other null

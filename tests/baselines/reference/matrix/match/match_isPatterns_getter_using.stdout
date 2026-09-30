@@ -1,0 +1,4 @@
+getter({}) => "range" | open res; operand {}; range "range"; dispose res
+getter({}) => 1 | open res; operand {}; type 1; dispose res
+getter({}) => "plain" | open res; operand {}; error "plain"; dispose res
+getter("text") => null | open res; operand "text"; other null; dispose res

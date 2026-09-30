@@ -1,0 +1,2 @@
+throwOperand(2) => undefined | risky 2; read 2; inner {"kind":"Ok","value":3}; caught undefined
+throwOperand(-1) => undefined | risky -1; read -1; inner {"kind":"Err","error":"negative -1"}; caught undefined

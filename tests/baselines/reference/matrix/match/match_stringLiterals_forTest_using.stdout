@@ -1,0 +1,4 @@
+forTest("north") => 1 | open res; operand "north"; n 1; dispose res
+forTest("south") => 1 | open res; operand "south"; se 2; dispose res
+forTest("east") => 1 | open res; operand "east"; se 2; dispose res
+forTest("up") => 0 | open res; operand "up"; other 0; dispose res

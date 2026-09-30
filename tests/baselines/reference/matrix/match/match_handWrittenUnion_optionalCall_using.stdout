@@ -1,0 +1,2 @@
+optionalCall({"kind":"Click","x":3}) => [[3],null] | open res; callee true; operand {"kind":"Click","x":3}; click 3; callee false; dispose res
+optionalCall({"kind":"Key","key":"k"}) => [["k"],null] | open res; callee true; operand {"kind":"Key","key":"k"}; key "k"; callee false; dispose res

@@ -1,0 +1,2 @@
+switchClause(5) => 5 | discriminant 1; read 5
+switchClause(-5) => threw thrown | discriminant 1; read -5; else "thrown"

@@ -1,0 +1,2 @@
+resultBody(6) => {"kind":"Ok","value":[1,6]} | base 1; read 1; await; some 6
+resultBody(9) => {"kind":"Ok","value":[1,9]} | base 1; read 1; await; some 9

@@ -1,0 +1,2 @@
+whileBody(2) => 2 | test true; risky 2; read 2
+whileBody(-1) => "none" | test true; risky -1; read -1

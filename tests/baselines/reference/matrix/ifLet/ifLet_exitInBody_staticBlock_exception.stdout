@@ -1,0 +1,2 @@
+staticBlock(2) => "passed" | risky 2; read 2
+staticBlock(-2) => "diverged" | risky -2; read -2; error "negative -2"; caught "diverged"

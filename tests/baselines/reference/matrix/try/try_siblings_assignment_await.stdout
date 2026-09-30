@@ -1,0 +1,2 @@
+assignment(4) => {"kind":"Ok","value":9} | initial 0; target {"value":0}; await; read 4; second 5; read 5
+assignment(-4) => {"kind":"Err","error":"negative -4"} | initial 0; target {"value":0}; await; read -4

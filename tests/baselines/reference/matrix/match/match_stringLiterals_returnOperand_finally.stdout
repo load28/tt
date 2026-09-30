@@ -1,0 +1,4 @@
+returnOperand("north") => 1 | operand "north"; n 1; finally 0
+returnOperand("south") => 2 | operand "south"; se 2; finally 0
+returnOperand("east") => 2 | operand "east"; se 2; finally 0
+returnOperand("up") => 0 | operand "up"; other 0; finally 0

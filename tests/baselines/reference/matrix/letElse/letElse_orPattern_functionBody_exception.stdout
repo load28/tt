@@ -1,0 +1,3 @@
+functionBody({"kind":"Num","value":1}) => 1 | risky {"kind":"Num","value":1}
+functionBody({"kind":"Neg","value":-2}) => -2 | risky {"kind":"Neg","value":-2}
+functionBody({"kind":"Word","text":"w"}) => "risky call 3" | caught "risky call 3"

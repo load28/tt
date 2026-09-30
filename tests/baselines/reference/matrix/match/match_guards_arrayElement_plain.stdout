@@ -1,0 +1,5 @@
+arrayElement({"kind":"Circle","r":1}) => [0,1,2] | first 0; operand {"kind":"Circle","r":1}; guard big false; small 1; last 2
+arrayElement({"kind":"Circle","r":5}) => [0,5,2] | first 0; operand {"kind":"Circle","r":5}; guard big true; big 5; last 2
+arrayElement({"kind":"Rect","w":4,"h":2}) => [0,4,2] | first 0; operand {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4; last 2
+arrayElement({"kind":"Rect","w":1,"h":3}) => [0,3,2] | first 0; operand {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3; last 2
+arrayElement({"kind":"Point"}) => [0,0,2] | first 0; operand {"kind":"Point"}; point 0; last 2

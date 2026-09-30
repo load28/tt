@@ -1,0 +1,4 @@
+conditionalBranch({}) => "range" | flip true; range "range"
+conditionalBranch({}) => "skipped" | flip false; else "skipped"
+conditionalBranch({}) => "plain" | flip true; error "plain"
+conditionalBranch("text") => "skipped" | flip false; else "skipped"

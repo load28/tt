@@ -1,0 +1,2 @@
+arrowBlock(3) => 4 | read 3; reassigned 4
+arrowBlock(-3) => "diverged" | read -3

@@ -158,7 +158,7 @@ than whatever ttc happened to do. TASK-679 and TASK-680 populate it.
   behaviour; `.stderr` goes with it); diagnostic cases keep `errors.txt`.
   Their baselines live under `tests/baselines/reference/matrix/<construct>/`
   so the flat reference directory keeps the hand-written cases. With
-  TASK-679's 1,617 cases this is 1,658 files, 0.7 MB.
+  TASK-679's 1,617 cases this is 1,645 files, 0.7 MB.
 
 ### Decision 6: Pull requests run a fixed-seed sample; nightly runs all
 

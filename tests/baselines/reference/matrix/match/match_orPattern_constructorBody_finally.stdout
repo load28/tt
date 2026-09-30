@@ -1,0 +1,4 @@
+constructorBody({"kind":"Num","value":4}) => 4 | operand {"kind":"Num","value":4}; number 4; finally 0
+constructorBody({"kind":"Neg","value":-3}) => -3 | operand {"kind":"Neg","value":-3}; number -3; finally 0
+constructorBody({"kind":"Word","text":"hi"}) => "hi" | operand {"kind":"Word","text":"hi"}; word "hi"; finally 0
+constructorBody({"kind":"End"}) => "" | operand {"kind":"End"}; end ""; finally 0

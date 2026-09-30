@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-placement]: `match` cannot be used in a class field initializer — this TypeScript boundary has no statement position
+ --> ./main.tt:8:15
+  |
+8 |       field = match (note("operand", input)) { Done(value: Some(value: v)) => note("some", v), Done(value: None()) => note("none", 0), Failed(error) => note("failed", error) };
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+
+==== ttc --check-types (exit 1) ====
+error[match-placement]: `match` cannot be used in a class field initializer — this TypeScript boundary has no statement position
+ --> main.tt:8:15
+  |
+8 |       field = match (note("operand", input)) { Done(value: Some(value: v)) => note("some", v), Done(value: None()) => note("none", 0), Failed(error) => note("failed", error) };
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+==== tsc on the emitted TypeScript (exit 0) ====

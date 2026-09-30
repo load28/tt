@@ -1,0 +1,2 @@
+forTest(2) => 1 | operand 2; read 2
+forTest(-1) => 1 | operand -1; read -1

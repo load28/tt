@@ -1,0 +1,2 @@
+labeledBlock({"kind":"Click","x":3}) => 3 | await; click 3; flip true
+labeledBlock({"kind":"Key","key":"k"}) => ["k"] | await; key "k"; flip false

@@ -1,0 +1,2 @@
+catchBlock(2) => {"kind":"Ok","value":"checked"} | throw "boom"; await; read 2
+catchBlock(-1) => {"kind":"Err","error":"negative -1"} | throw "boom"; await; read -1

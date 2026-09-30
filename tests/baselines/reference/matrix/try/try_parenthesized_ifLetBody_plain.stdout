@@ -1,0 +1,2 @@
+ifLetBody(6) => {"kind":"Ok","value":[1,6]} | head 1; read 1; flip true; operand 6; read 6
+ifLetBody(-6) => {"kind":"Err","error":"negative -9"} | head 1; read 1; flip false; fallback -9; read -9

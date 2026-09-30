@@ -1,0 +1,4 @@
+yieldOperand({"kind":"Num","value":4}) => 4 | risky {"kind":"Num","value":4}; number 4; yield 4
+yieldOperand({"kind":"Neg","value":-3}) => -3 | risky {"kind":"Neg","value":-3}; number -3; yield -3
+yieldOperand({"kind":"Word","text":"hi"}) => "risky call 3" | caught "risky call 3"
+yieldOperand({"kind":"End"}) => "" | risky {"kind":"End"}; end ""; yield ""

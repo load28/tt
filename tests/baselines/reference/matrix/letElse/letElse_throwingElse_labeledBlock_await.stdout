@@ -1,0 +1,2 @@
+labeledBlock(5) => 5 | await; read 5
+labeledBlock(-5) => threw thrown | await; read -5; else "thrown"

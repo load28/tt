@@ -1,0 +1,2 @@
+catchBlock(3) => 3 | throw "boom"; operand 3; read 3; then 3; finally 0
+catchBlock(-3) => "missing" | throw "boom"; operand -3; read -3; else "missing"; finally 0

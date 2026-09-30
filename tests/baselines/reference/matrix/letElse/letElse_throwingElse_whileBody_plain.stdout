@@ -1,0 +1,2 @@
+whileBody(5) => 5 | test true; operand 5; read 5
+whileBody(-5) => threw thrown | test true; operand -5; read -5; else "thrown"

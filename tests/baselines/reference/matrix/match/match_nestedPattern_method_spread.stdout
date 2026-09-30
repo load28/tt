@@ -1,0 +1,3 @@
+method({"kind":"Done","value":{"kind":"Some","value":7}}) => 7 | this "holder"; some 7
+method({"kind":"Done","value":{"kind":"None"}}) => 0 | this "holder"; none 0
+method({"kind":"Failed","error":"lost"}) => "lost" | this "holder"; failed "lost"

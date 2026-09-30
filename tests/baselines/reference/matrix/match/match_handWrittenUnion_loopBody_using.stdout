@@ -1,0 +1,2 @@
+loopBody({"kind":"Click","x":3}) => [3,3] | open res; operand {"kind":"Click","x":3}; click 3; operand {"kind":"Click","x":3}; click 3; dispose res
+loopBody({"kind":"Key","key":"k"}) => ["k","k"] | open res; operand {"kind":"Key","key":"k"}; key "k"; operand {"kind":"Key","key":"k"}; key "k"; dispose res

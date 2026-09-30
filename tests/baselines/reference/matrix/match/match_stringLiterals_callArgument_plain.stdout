@@ -1,0 +1,4 @@
+callArgument("north") => [1,1,3] | a 1; operand "north"; n 1; c 3
+callArgument("south") => [1,2,3] | a 1; operand "south"; se 2; c 3
+callArgument("east") => [1,2,3] | a 1; operand "east"; se 2; c 3
+callArgument("up") => [1,0,3] | a 1; operand "up"; other 0; c 3

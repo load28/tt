@@ -1,0 +1,2 @@
+nestedBlock(3) => 3 | yield 3; read 3; then 3
+nestedBlock(-3) => "missing" | yield -3; read -3; else "missing"

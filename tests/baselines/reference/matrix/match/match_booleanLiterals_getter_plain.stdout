@@ -1,0 +1,2 @@
+getter(true) => 1 | operand true; yes 1
+getter(false) => 0 | operand false; no 0

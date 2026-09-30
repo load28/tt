@@ -1,0 +1,5 @@
+constructorBody(200) => true | operand 200; success true; finally 0
+constructorBody(201) => true | operand 201; success true; finally 0
+constructorBody(404) => false | operand 404; missing false; finally 0
+constructorBody(500) => false | operand 500; guard true; server false; finally 0
+constructorBody(7) => null | operand 7; other null; finally 0

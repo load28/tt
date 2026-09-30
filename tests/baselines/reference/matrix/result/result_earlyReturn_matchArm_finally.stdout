@@ -1,0 +1,3 @@
+matchArm(3) => {"kind":"Ok","value":3} | flip true; operand 3; read 3; big 3; finally 0
+matchArm(1) => 0 | flip false; other arm 0; finally 0
+matchArm(-1) => {"kind":"Err","error":"negative -1"} | flip true; operand -1; read -1; finally 0

@@ -1,0 +1,3 @@
+switchClause({"kind":"Done","value":{"kind":"Some","value":5}}) => 5 | discriminant 1; some 5
+switchClause({"kind":"Done","value":{"kind":"None"}}) => "other" | discriminant 1
+switchClause({"kind":"Failed","error":"gone"}) => "other" | discriminant 1

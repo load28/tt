@@ -1,0 +1,4 @@
+method("north") => 1 | this "holder"; n 1
+method("south") => 2 | this "holder"; se 2
+method("east") => 2 | this "holder"; se 2
+method("up") => 0 | this "holder"; other 0

@@ -1,0 +1,2 @@
+labeledBlock(2) => 2 | risky 2; read 2
+labeledBlock(-1) => "none" | risky -1; read -1

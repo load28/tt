@@ -1,0 +1,2 @@
+whileBody(2) => 2 | test true; await; read 2; then 2
+whileBody(-1) => "none" | test true; await; read -1

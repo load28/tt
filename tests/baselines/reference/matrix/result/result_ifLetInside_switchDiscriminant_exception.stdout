@@ -1,0 +1,2 @@
+switchDiscriminant(4) => "default" | risky 4; read 4; direct 4; case 0
+switchDiscriminant(-1) => "default" | risky -1; read -1; fallback -7; read -7; case 0

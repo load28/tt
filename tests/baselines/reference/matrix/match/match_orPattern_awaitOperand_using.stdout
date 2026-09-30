@@ -1,0 +1,4 @@
+awaitOperand({"kind":"Num","value":4}) => 4 | open res; operand {"kind":"Num","value":4}; number 4; dispose res
+awaitOperand({"kind":"Neg","value":-3}) => -3 | open res; operand {"kind":"Neg","value":-3}; number -3; dispose res
+awaitOperand({"kind":"Word","text":"hi"}) => "hi" | open res; operand {"kind":"Word","text":"hi"}; word "hi"; dispose res
+awaitOperand({"kind":"End"}) => "" | open res; operand {"kind":"End"}; end ""; dispose res

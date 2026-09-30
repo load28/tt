@@ -1,0 +1,3 @@
+forInitializer(2) => [{"kind":"Ok","value":"two"}] | risky 2; read 2
+forInitializer(7) => [{"kind":"Ok","value":"other"}] | risky 7; read 7
+forInitializer(-1) => "risky call 3" | caught "risky call 3"

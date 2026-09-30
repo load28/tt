@@ -1,0 +1,2 @@
+logicalOr(2) => {"kind":"Ok","value":true} | open res; flip true; dispose res
+logicalOr(-1) => {"kind":"Err","error":"negative -1"} | open res; flip false; operand -1; read -1; dispose res

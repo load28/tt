@@ -1,0 +1,2 @@
+whileBody(2) => "passed" | test true; operand 2; read 2
+whileBody(-2) => "none" | test true; operand -2; read -2; error "negative -2"

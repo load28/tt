@@ -1,0 +1,2 @@
+arrayElement({"kind":"Click","x":3}) => [0,3,2] | first 0; operand {"kind":"Click","x":3}; click 3; last 2; finally 0
+arrayElement({"kind":"Key","key":"k"}) => [0,"k",2] | first 0; operand {"kind":"Key","key":"k"}; key "k"; last 2; finally 0

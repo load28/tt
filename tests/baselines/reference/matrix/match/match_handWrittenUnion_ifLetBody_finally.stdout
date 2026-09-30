@@ -1,0 +1,2 @@
+ifLetBody({"kind":"Click","x":3}) => [1,3] | head 1; read 1; operand {"kind":"Click","x":3}; click 3; finally 0
+ifLetBody({"kind":"Key","key":"k"}) => [1,"k"] | head 1; read 1; operand {"kind":"Key","key":"k"}; key "k"; finally 0

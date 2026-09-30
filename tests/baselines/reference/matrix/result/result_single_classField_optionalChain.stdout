@@ -1,0 +1,2 @@
+classField(2) => {"kind":"Ok","value":20} | read 2
+classField(-1) => {"kind":"Err","error":"negative -1"} | read -1

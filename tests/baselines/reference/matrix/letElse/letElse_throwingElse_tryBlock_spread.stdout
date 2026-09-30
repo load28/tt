@@ -1,0 +1,2 @@
+tryBlock(5) => 5 | read 5
+tryBlock(-5) => "caught" | read -5; else "thrown"

@@ -1,0 +1,2 @@
+laterDeclarator(true) => [1,1] | before 1; await; yes 1
+laterDeclarator(false) => [1,0] | before 1; await; no 0

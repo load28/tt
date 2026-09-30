@@ -1,0 +1,2 @@
+whileTest(true) => 1 | yield true; yes 1
+whileTest(false) => 0 | yield false; no 0

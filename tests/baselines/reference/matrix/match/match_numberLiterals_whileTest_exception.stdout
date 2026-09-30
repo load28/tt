@@ -1,0 +1,5 @@
+whileTest(200) => 1 | risky 200; success true
+whileTest(201) => 1 | risky 201; success true
+whileTest(404) => "risky call 3" | caught "risky call 3"
+whileTest(500) => 0 | risky 500; guard true; server false
+whileTest(7) => 0 | risky 7; other null

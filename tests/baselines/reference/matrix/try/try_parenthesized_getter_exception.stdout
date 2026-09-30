@@ -1,0 +1,2 @@
+getter(6) => {"kind":"Ok","value":6} | flip true; risky 6; read 6
+getter(-6) => {"kind":"Err","error":"negative -9"} | flip false; fallback -9; read -9

@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[lowering-plan-failed]: tt host lowering could not plan this construct: the evaluation position 186..219 maps to no source
+ --> ./main.tt:1:1
+  |
+1 |   import { first, read, drive } from "./harness.js";
+  |  _^
+2 | | import * as Result from "@tt/std/result";
+  | |________________________^
+
+
+==== ttc --check-types (exit 1) ====
+error[lowering-plan-failed]: tt host lowering could not plan this construct: the evaluation position 186..219 maps to no source
+ --> main.tt:1:1
+  |
+1 |   import { first, read, drive } from "./harness.js";
+  |  _^
+2 | | import * as Result from "@tt/std/result";
+  | |________________________^
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,2 @@
+forOfBody(4) => [4,4] | round 0; risky 4; read 4; first 4; round 1; risky 4; read 4; first 4
+forOfBody(-4) => "risky call 3" | round 0; caught "risky call 3"

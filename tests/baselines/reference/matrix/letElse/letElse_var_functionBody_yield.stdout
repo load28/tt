@@ -1,0 +1,2 @@
+functionBody(4) => 4 | yield 4; read 4
+functionBody(-4) => "diverged" | yield -4; read -4

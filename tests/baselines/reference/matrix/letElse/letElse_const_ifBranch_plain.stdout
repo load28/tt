@@ -1,0 +1,2 @@
+ifBranch(2) => 2 | enter true; operand 2; read 2
+ifBranch(-1) => "diverged" | enter true; operand -1; read -1

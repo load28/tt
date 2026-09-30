@@ -1,0 +1,2 @@
+whileBody(6) => 6 | test true; operand 6; some 6; finally 0
+whileBody(9) => 9 | test true; operand 9; some 9; finally 0

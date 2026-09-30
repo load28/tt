@@ -1,0 +1,2 @@
+conditionalTest(2) => "truthy" | operand 2; read 2; then "truthy"; finally 0
+conditionalTest(-1) => "truthy" | operand -1; read -1; then "truthy"; finally 0

@@ -1,0 +1,4 @@
+conditionalTest({}) => "truthy" | range "range"; then "truthy"
+conditionalTest({}) => "truthy" | type 1; then "truthy"
+conditionalTest({}) => "truthy" | error "plain"; then "truthy"
+conditionalTest("text") => "falsy" | other null; else "falsy"

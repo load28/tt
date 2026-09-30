@@ -1,0 +1,2 @@
+constructorBody(4) => 4 | open res; operand 4; read 4; first 4; dispose res
+constructorBody(-4) => "negative -2" | open res; operand -4; read -4; second -2; read -2; second "negative -2"; dispose res

@@ -1,0 +1,4 @@
+conditionalTest({"kind":"Num","value":4}) => "truthy" | risky {"kind":"Num","value":4}; other -1; then "truthy"
+conditionalTest({"kind":"Neg","value":-3}) => "truthy" | risky {"kind":"Neg","value":-3}; other -1; then "truthy"
+conditionalTest({"kind":"Word","text":"hi"}) => "risky call 3" | caught "risky call 3"
+conditionalTest({"kind":"End"}) => "truthy" | risky {"kind":"End"}; other -1; then "truthy"

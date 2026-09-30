@@ -1,0 +1,2 @@
+method(3) => 3 | await; read 3; then 3
+method(-3) => "missing" | await; read -3; else "missing"

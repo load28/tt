@@ -1,0 +1,5 @@
+arrowBody(200) => true | await; success true
+arrowBody(201) => true | await; success true
+arrowBody(404) => false | await; missing false
+arrowBody(500) => false | await; guard true; server false
+arrowBody(7) => null | await; other null

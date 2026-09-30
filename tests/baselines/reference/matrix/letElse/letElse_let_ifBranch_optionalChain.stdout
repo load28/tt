@@ -1,0 +1,2 @@
+ifBranch(3) => 4 | enter true; read 3; reassigned 4
+ifBranch(-3) => "diverged" | enter true; read -3

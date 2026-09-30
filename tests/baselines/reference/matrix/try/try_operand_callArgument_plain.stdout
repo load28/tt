@@ -1,0 +1,2 @@
+callArgument(2) => {"kind":"Ok","value":[1,2,3]} | a 1; operand 2; read 2; c 3
+callArgument(-1) => {"kind":"Err","error":"negative -1"} | a 1; operand -1; read -1

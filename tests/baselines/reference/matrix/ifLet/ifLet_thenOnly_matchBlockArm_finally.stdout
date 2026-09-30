@@ -1,0 +1,2 @@
+matchBlockArm(2) => 2 | arm true; operand 2; read 2; then 2; finally 0
+matchBlockArm(-1) => "none" | arm true; operand -1; read -1; finally 0

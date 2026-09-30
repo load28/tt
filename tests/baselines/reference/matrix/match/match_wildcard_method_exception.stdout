@@ -1,0 +1,4 @@
+method({"kind":"Num","value":4}) => -1 | this "holder"; risky {"kind":"Num","value":4}; other -1
+method({"kind":"Neg","value":-3}) => -1 | this "holder"; risky {"kind":"Neg","value":-3}; other -1
+method({"kind":"Word","text":"hi"}) => "risky call 3" | this "holder"; caught "risky call 3"
+method({"kind":"End"}) => -1 | this "holder"; risky {"kind":"End"}; other -1

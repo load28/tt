@@ -1,0 +1,2 @@
+getter(3) => {"kind":"Ok","value":30} | operand 3; read 3; finally 0
+getter(-2) => {"kind":"Err","error":"negative -2"} | operand -2; read -2; finally 0

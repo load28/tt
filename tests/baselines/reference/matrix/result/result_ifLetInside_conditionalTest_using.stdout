@@ -1,0 +1,2 @@
+conditionalTest(4) => "truthy" | open res; operand 4; read 4; direct 4; then "truthy"; dispose res
+conditionalTest(-1) => "truthy" | open res; operand -1; read -1; fallback -7; read -7; then "truthy"; dispose res

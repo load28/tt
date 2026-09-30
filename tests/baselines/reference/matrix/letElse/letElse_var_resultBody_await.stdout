@@ -1,0 +1,2 @@
+resultBody(4) => {"kind":"Ok","value":[1,4]} | base 1; read 1; await; read 4
+resultBody(-4) => {"kind":"Ok","value":1} | base 1; read 1; await; read -4

@@ -1,0 +1,4 @@
+arrowBody({"kind":"Num","value":4}) => -1 | other -1
+arrowBody({"kind":"Neg","value":-3}) => -1 | other -1
+arrowBody({"kind":"Word","text":"hi"}) => 2 | word 2
+arrowBody({"kind":"End"}) => -1 | other -1

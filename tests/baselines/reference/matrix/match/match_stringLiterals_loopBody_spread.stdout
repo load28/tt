@@ -1,0 +1,4 @@
+loopBody("north") => [1,1] | n 1; n 1
+loopBody("south") => [2,2] | se 2; se 2
+loopBody("east") => [2,2] | se 2; se 2
+loopBody("up") => [0,0] | other 0; other 0

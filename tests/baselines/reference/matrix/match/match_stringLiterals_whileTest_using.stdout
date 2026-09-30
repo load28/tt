@@ -1,0 +1,4 @@
+whileTest("north") => 1 | open res; operand "north"; n 1; dispose res
+whileTest("south") => 1 | open res; operand "south"; se 2; dispose res
+whileTest("east") => 1 | open res; operand "east"; se 2; dispose res
+whileTest("up") => 0 | open res; operand "up"; other 0; dispose res

@@ -1,0 +1,2 @@
+constructorBody(2) => 2 | open res; operand 2; read 2; dispose res
+constructorBody(-1) => threw diverged | open res; operand -1; read -1; dispose res

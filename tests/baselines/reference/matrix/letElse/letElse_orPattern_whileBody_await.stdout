@@ -1,0 +1,3 @@
+whileBody({"kind":"Num","value":1}) => 1 | test true; await
+whileBody({"kind":"Neg","value":-2}) => -2 | test true; await
+whileBody({"kind":"Word","text":"w"}) => "none" | test true; await

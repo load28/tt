@@ -1,0 +1,5 @@
+templateLiteral(200) => "<L|true|R>" | open res; left "L"; operand 200; success true; right "R"; dispose res
+templateLiteral(201) => "<L|true|R>" | open res; left "L"; operand 201; success true; right "R"; dispose res
+templateLiteral(404) => "<L|false|R>" | open res; left "L"; operand 404; missing false; right "R"; dispose res
+templateLiteral(500) => "<L|false|R>" | open res; left "L"; operand 500; guard true; server false; right "R"; dispose res
+templateLiteral(7) => "<L|null|R>" | open res; left "L"; operand 7; other null; right "R"; dispose res

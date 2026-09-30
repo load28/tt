@@ -1,0 +1,2 @@
+forOfBody(3) => [3,3] | round 0; read 3; then 3; round 1; read 3; then 3
+forOfBody(-3) => ["missing","missing"] | round 0; read -3; else "missing"; round 1; read -3; else "missing"

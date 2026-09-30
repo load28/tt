@@ -1,0 +1,2 @@
+awaitOperand(2) => {"kind":"Ok","value":6} | await; read 2; inner {"kind":"Ok","value":3}
+awaitOperand(-1) => {"kind":"Err","error":"negative -1"} | await; read -1; inner {"kind":"Err","error":"negative -1"}

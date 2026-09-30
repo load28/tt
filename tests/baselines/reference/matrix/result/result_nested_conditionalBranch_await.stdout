@@ -1,0 +1,2 @@
+conditionalBranch(2) => {"kind":"Ok","value":6} | flip true; await; read 2; inner {"kind":"Ok","value":3}
+conditionalBranch(-1) => "skipped" | flip false; else "skipped"

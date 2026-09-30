@@ -1,0 +1,4 @@
+objectProperty({"kind":"Num","value":4}) => {"a":1,"value":-1,"c":3} | a 1; operand {"kind":"Num","value":4}; other -1; c 3; finally 0
+objectProperty({"kind":"Neg","value":-3}) => {"a":1,"value":-1,"c":3} | a 1; operand {"kind":"Neg","value":-3}; other -1; c 3; finally 0
+objectProperty({"kind":"Word","text":"hi"}) => {"a":1,"value":2,"c":3} | a 1; operand {"kind":"Word","text":"hi"}; word 2; c 3; finally 0
+objectProperty({"kind":"End"}) => {"a":1,"value":-1,"c":3} | a 1; operand {"kind":"End"}; other -1; c 3; finally 0

@@ -1,0 +1,4 @@
+logicalAnd("north") => 1 | flip true; operand "north"; n 1
+logicalAnd("south") => false | flip false
+logicalAnd("east") => 2 | flip true; operand "east"; se 2
+logicalAnd("up") => false | flip false

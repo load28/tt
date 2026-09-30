@@ -1,0 +1,3 @@
+logicalOr(5) => true | flip true; finally 0
+logicalOr(1) => {"kind":"Err","error":"negative -2"} | flip false; operand 1; read 1; b -2; read -2; finally 0
+logicalOr(-2) => true | flip true; finally 0

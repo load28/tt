@@ -1,0 +1,2 @@
+nestedBlock(2) => 2 | open res; operand 2; read 2; then 2; dispose res
+nestedBlock(-1) => "none" | open res; operand -1; read -1; dispose res

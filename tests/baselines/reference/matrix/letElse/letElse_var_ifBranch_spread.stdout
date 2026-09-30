@@ -1,0 +1,2 @@
+ifBranch(4) => 4 | enter true; read 4
+ifBranch(-4) => "diverged" | enter true; read -4

@@ -1,0 +1,2 @@
+matchBlockArm(2) => "passed" | arm true; read 2
+matchBlockArm(-2) => threw diverged | arm true; read -2; error "negative -2"

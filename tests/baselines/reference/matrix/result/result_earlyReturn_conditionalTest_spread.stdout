@@ -1,0 +1,3 @@
+conditionalTest(3) => "truthy" | read 3; big 3; then "truthy"
+conditionalTest(1) => "truthy" | read 1; small 1; then "truthy"
+conditionalTest(-1) => "truthy" | read -1; then "truthy"

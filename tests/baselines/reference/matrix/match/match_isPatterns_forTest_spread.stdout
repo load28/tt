@@ -1,0 +1,4 @@
+forTest({}) => 1 | range "range"
+forTest({}) => 1 | type 1
+forTest({}) => 1 | error "plain"
+forTest("text") => 0 | other null

@@ -1,0 +1,4 @@
+spreadElement("north") => [0,1] | open res; first 0; operand "north"; n 1; dispose res
+spreadElement("south") => [0,2] | open res; first 0; operand "south"; se 2; dispose res
+spreadElement("east") => [0,2] | open res; first 0; operand "east"; se 2; dispose res
+spreadElement("up") => [0,0] | open res; first 0; operand "up"; other 0; dispose res

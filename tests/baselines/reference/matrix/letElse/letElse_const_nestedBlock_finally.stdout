@@ -1,0 +1,2 @@
+nestedBlock(2) => 2 | operand 2; read 2; finally 0
+nestedBlock(-1) => "diverged" | operand -1; read -1; finally 0

@@ -1,0 +1,2 @@
+throwOperand(4) => threw 9 | await; read 4; second 5; read 5
+throwOperand(-4) => {"kind":"Err","error":"negative -4"} | await; read -4

@@ -1,0 +1,3 @@
+staticBlock(5) => {"kind":"Ok","value":[5,2]} | risky 5; read 5; b 2; read 2
+staticBlock(1) => {"kind":"Err","error":"negative -2"} | risky 1; read 1; b -2; read -2
+staticBlock(-2) => "risky call 3" | caught "risky call 3"

@@ -1,0 +1,4 @@
+matchArm({"kind":"Num","value":4}) => -1 | flip true; yield {"kind":"Num","value":4}; other -1
+matchArm({"kind":"Neg","value":-3}) => 0 | flip false; other arm 0
+matchArm({"kind":"Word","text":"hi"}) => 2 | flip true; yield {"kind":"Word","text":"hi"}; word 2
+matchArm({"kind":"End"}) => 0 | flip false; other arm 0

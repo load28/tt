@@ -1,0 +1,14 @@
+==== ttc --out-dir (exit 0) ====
+ttc: std → $DIR/out/tt
+ttc: ./harness.ts → $DIR/out/harness.ts
+ttc: ./main.tt → $DIR/out/main.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts18041]: A 'return' statement cannot be used inside a class static block. (in code ttc generated for this construct)
+ --> main.tt:8:7
+  |
+8 |       try read(first(...[input]));
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+main.ts(10,9): error TS18041: A 'return' statement cannot be used inside a class static block.

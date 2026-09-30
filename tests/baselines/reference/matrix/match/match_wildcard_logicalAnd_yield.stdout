@@ -1,0 +1,4 @@
+logicalAnd({"kind":"Num","value":4}) => -1 | flip true; yield {"kind":"Num","value":4}; other -1
+logicalAnd({"kind":"Neg","value":-3}) => false | flip false
+logicalAnd({"kind":"Word","text":"hi"}) => 2 | flip true; yield {"kind":"Word","text":"hi"}; word 2
+logicalAnd({"kind":"End"}) => false | flip false

@@ -1,0 +1,2 @@
+nullish(true) => 1 | flip true; yield true; yes 1
+nullish(false) => "set" | flip false; left "set"

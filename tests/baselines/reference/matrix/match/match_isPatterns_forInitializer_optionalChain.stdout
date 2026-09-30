@@ -1,0 +1,4 @@
+forInitializer({}) => ["range"] | range "range"
+forInitializer({}) => [1] | type 1
+forInitializer({}) => ["plain"] | error "plain"
+forInitializer("text") => [null] | other null

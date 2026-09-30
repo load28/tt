@@ -1,0 +1,2 @@
+staticBlock(2) => {"kind":"Ok","value":6} | operand 2; read 2; inner {"kind":"Ok","value":3}; finally 0
+staticBlock(-1) => {"kind":"Err","error":"negative -1"} | operand -1; read -1; inner {"kind":"Err","error":"negative -1"}; finally 0

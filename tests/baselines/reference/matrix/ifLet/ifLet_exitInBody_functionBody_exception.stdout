@@ -1,0 +1,2 @@
+functionBody(2) => "passed" | risky 2; read 2
+functionBody(-2) => "diverged" | risky -2; read -2; error "negative -2"

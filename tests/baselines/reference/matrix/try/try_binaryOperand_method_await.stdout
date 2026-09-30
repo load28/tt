@@ -1,0 +1,2 @@
+method(3) => {"kind":"Ok","value":30} | this "holder"; await; read 3
+method(-2) => {"kind":"Err","error":"negative -2"} | this "holder"; await; read -2

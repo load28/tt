@@ -1,0 +1,4 @@
+conditionalTest({"kind":"Num","value":4}) => "truthy" | await; number 4; then "truthy"
+conditionalTest({"kind":"Neg","value":-3}) => "truthy" | await; number -3; then "truthy"
+conditionalTest({"kind":"Word","text":"hi"}) => "truthy" | await; word "hi"; then "truthy"
+conditionalTest({"kind":"End"}) => "falsy" | await; end ""; else "falsy"

@@ -1,0 +1,2 @@
+arrayElement(2) => {"kind":"Ok","value":[0,2,2]} | first 0; read 2; last 2
+arrayElement(-1) => {"kind":"Err","error":"negative -1"} | first 0; read -1

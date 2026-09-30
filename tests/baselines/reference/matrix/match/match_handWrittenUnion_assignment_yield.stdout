@@ -1,0 +1,2 @@
+assignment({"kind":"Click","x":3}) => 3 | initial 0; target {"value":0}; yield {"kind":"Click","x":3}; click 3
+assignment({"kind":"Key","key":"k"}) => "k" | initial 0; target {"value":0}; yield {"kind":"Key","key":"k"}; key "k"

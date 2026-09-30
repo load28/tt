@@ -1,0 +1,2 @@
+templateLiteral({"kind":"Click","x":3}) => "<L|3|R>" | left "L"; yield {"kind":"Click","x":3}; click 3; right "R"
+templateLiteral({"kind":"Key","key":"k"}) => "<L|k|R>" | left "L"; yield {"kind":"Key","key":"k"}; key "k"; right "R"

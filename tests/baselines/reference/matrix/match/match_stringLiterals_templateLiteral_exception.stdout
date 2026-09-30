@@ -1,0 +1,4 @@
+templateLiteral("north") => "<L|1|R>" | left "L"; risky "north"; n 1; right "R"
+templateLiteral("south") => "<L|2|R>" | left "L"; risky "south"; se 2; right "R"
+templateLiteral("east") => "risky call 3" | left "L"; caught "risky call 3"
+templateLiteral("up") => "<L|0|R>" | left "L"; risky "up"; other 0; right "R"

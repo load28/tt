@@ -1,0 +1,3 @@
+switchDiscriminant(5) => "default" | open res; operand 5; read 5; b 2; read 2; case 0; dispose res
+switchDiscriminant(1) => "default" | open res; operand 1; read 1; b -2; read -2; case 0; dispose res
+switchDiscriminant(-2) => "default" | open res; operand -2; read -2; case 0; dispose res

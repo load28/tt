@@ -1,0 +1,2 @@
+tryBlock(3) => 4 | await; read 3; reassigned 4
+tryBlock(-3) => "diverged" | await; read -3

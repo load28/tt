@@ -1,0 +1,2 @@
+declarationInitializer(4) => {"kind":"Ok","value":9} | operand 4; read 4; second 5; read 5; finally 0
+declarationInitializer(-4) => {"kind":"Err","error":"negative -4"} | operand -4; read -4; finally 0

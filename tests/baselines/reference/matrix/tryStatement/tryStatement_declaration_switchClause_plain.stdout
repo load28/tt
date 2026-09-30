@@ -1,0 +1,2 @@
+switchClause(5) => {"kind":"Ok","value":5} | discriminant 1; operand 5; read 5
+switchClause(-5) => {"kind":"Err","error":"negative -5"} | discriminant 1; operand -5; read -5

@@ -1,0 +1,2 @@
+switchDiscriminant(2) => {"kind":"Ok","value":"default"} | read 2; case 0
+switchDiscriminant(-1) => {"kind":"Err","error":"negative -1"} | read -1

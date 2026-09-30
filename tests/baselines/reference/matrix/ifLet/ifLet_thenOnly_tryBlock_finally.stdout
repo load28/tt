@@ -1,0 +1,2 @@
+tryBlock(2) => 2 | operand 2; read 2; then 2; finally 0
+tryBlock(-1) => "none" | operand -1; read -1; finally 0

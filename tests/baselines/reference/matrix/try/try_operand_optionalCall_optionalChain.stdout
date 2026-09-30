@@ -1,0 +1,2 @@
+optionalCall(2) => {"kind":"Ok","value":[[2],null]} | callee true; read 2; callee false
+optionalCall(-1) => {"kind":"Err","error":"negative -1"} | callee true; read -1

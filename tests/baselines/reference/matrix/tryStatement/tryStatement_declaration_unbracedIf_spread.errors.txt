@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: a `try` statement declaring `const` or `let` cannot be the unbraced body of an `if`, loop, or label — TypeScript allows no lexical declaration there
+ --> ./main.tt:5:28
+  |
+5 |   if (note("enter", true)) const checked = try read(first(...[input]));
+  |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: wrap the statement in braces to give its binding a block
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: a `try` statement declaring `const` or `let` cannot be the unbraced body of an `if`, loop, or label — TypeScript allows no lexical declaration there
+ --> main.tt:5:28
+  |
+5 |   if (note("enter", true)) const checked = try read(first(...[input]));
+  |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: wrap the statement in braces to give its binding a block
+
+==== tsc on the emitted TypeScript (exit 0) ====

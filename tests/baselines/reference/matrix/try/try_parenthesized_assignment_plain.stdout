@@ -1,0 +1,2 @@
+assignment(6) => {"kind":"Ok","value":6} | initial 0; target {"value":0}; flip true; operand 6; read 6
+assignment(-6) => {"kind":"Err","error":"negative -9"} | initial 0; target {"value":0}; flip false; fallback -9; read -9

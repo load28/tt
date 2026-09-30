@@ -1,0 +1,2 @@
+forOfBody(4) => [4,4] | open res; round 0; operand 4; read 4; round 1; operand 4; read 4; dispose res
+forOfBody(-4) => [] | open res; round 0; operand -4; read -4; round 1; operand -4; read -4; dispose res

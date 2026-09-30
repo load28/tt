@@ -1,0 +1,2 @@
+conditionalTest(true) => "truthy" | yield true; yes 1; then "truthy"
+conditionalTest(false) => "falsy" | yield false; no 0; else "falsy"

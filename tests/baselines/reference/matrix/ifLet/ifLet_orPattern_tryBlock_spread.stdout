@@ -1,0 +1,3 @@
+tryBlock({"kind":"Num","value":1}) => 1 | number 1
+tryBlock({"kind":"Neg","value":-1}) => -1 | number -1
+tryBlock({"kind":"Word","text":"w"}) => "none" | 

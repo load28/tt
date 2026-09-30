@@ -1,0 +1,2 @@
+templateLiteral(true) => "<L|1|R>" | left "L"; yield true; yes 1; right "R"
+templateLiteral(false) => "<L|0|R>" | left "L"; yield false; no 0; right "R"

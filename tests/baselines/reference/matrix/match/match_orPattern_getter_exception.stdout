@@ -1,0 +1,4 @@
+getter({"kind":"Num","value":4}) => 4 | risky {"kind":"Num","value":4}; number 4
+getter({"kind":"Neg","value":-3}) => -3 | risky {"kind":"Neg","value":-3}; number -3
+getter({"kind":"Word","text":"hi"}) => "risky call 3" | caught "risky call 3"
+getter({"kind":"End"}) => "" | risky {"kind":"End"}; end ""

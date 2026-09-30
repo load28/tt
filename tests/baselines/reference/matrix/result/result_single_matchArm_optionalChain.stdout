@@ -1,0 +1,2 @@
+matchArm(2) => {"kind":"Ok","value":20} | flip true; read 2
+matchArm(-1) => 0 | flip false; other arm 0

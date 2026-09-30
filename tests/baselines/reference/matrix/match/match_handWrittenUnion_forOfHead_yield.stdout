@@ -1,0 +1,2 @@
+forOfHead({"kind":"Click","x":3}) => [3] | yield {"kind":"Click","x":3}; click 3
+forOfHead({"kind":"Key","key":"k"}) => ["k"] | yield {"kind":"Key","key":"k"}; key "k"

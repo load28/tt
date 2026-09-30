@@ -1,0 +1,2 @@
+unbracedIf(2) => "passed" | open res; enter true; operand 2; read 2; dispose res
+unbracedIf(-2) => "diverged" | open res; enter true; operand -2; read -2; error "negative -2"; dispose res

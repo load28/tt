@@ -1,0 +1,2 @@
+resultBody(5) => {"kind":"Ok","value":{"kind":"Ok","value":[1,5]}} | base 1; read 1; operand 5; read 5
+resultBody(-5) => {"kind":"Ok","value":{"kind":"Err","error":"negative -5"}} | base 1; read 1; operand -5; read -5

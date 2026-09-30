@@ -1,0 +1,4 @@
+arrayElement({"kind":"Num","value":4}) => [0,4,2] | first 0; risky {"kind":"Num","value":4}; number 4; last 2
+arrayElement({"kind":"Neg","value":-3}) => [0,-3,2] | first 0; risky {"kind":"Neg","value":-3}; number -3; last 2
+arrayElement({"kind":"Word","text":"hi"}) => "risky call 3" | first 0; caught "risky call 3"
+arrayElement({"kind":"End"}) => [0,"",2] | first 0; risky {"kind":"End"}; end ""; last 2

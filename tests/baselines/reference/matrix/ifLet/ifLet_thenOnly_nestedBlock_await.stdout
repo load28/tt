@@ -1,0 +1,2 @@
+nestedBlock(2) => 2 | await; read 2; then 2
+nestedBlock(-1) => "none" | await; read -1

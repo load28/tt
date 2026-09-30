@@ -1,0 +1,4 @@
+arrayElement({"kind":"Num","value":4}) => [0,-1,2] | open res; first 0; operand {"kind":"Num","value":4}; other -1; last 2; dispose res
+arrayElement({"kind":"Neg","value":-3}) => [0,-1,2] | open res; first 0; operand {"kind":"Neg","value":-3}; other -1; last 2; dispose res
+arrayElement({"kind":"Word","text":"hi"}) => [0,2,2] | open res; first 0; operand {"kind":"Word","text":"hi"}; word 2; last 2; dispose res
+arrayElement({"kind":"End"}) => [0,-1,2] | open res; first 0; operand {"kind":"End"}; other -1; last 2; dispose res

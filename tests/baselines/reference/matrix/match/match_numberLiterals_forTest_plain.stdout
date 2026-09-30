@@ -1,0 +1,5 @@
+forTest(200) => 1 | operand 200; success true
+forTest(201) => 1 | operand 201; success true
+forTest(404) => 0 | operand 404; missing false
+forTest(500) => 0 | operand 500; guard true; server false
+forTest(7) => 0 | operand 7; other null

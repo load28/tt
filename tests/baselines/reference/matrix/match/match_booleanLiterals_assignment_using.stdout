@@ -1,0 +1,2 @@
+assignment(true) => 1 | open res; initial 0; target {"value":0}; operand true; yes 1; dispose res
+assignment(false) => 0 | open res; initial 0; target {"value":0}; operand false; no 0; dispose res

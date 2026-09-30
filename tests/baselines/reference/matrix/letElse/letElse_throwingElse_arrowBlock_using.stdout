@@ -1,0 +1,2 @@
+arrowBlock(5) => 5 | open res; operand 5; read 5; dispose res
+arrowBlock(-5) => threw thrown | open res; operand -5; read -5; else "thrown"; dispose res

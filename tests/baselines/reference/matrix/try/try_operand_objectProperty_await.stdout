@@ -1,0 +1,2 @@
+objectProperty(2) => {"kind":"Ok","value":{"a":1,"value":2,"c":3}} | a 1; await; read 2; c 3
+objectProperty(-1) => {"kind":"Err","error":"negative -1"} | a 1; await; read -1

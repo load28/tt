@@ -1,0 +1,2 @@
+resultBody(4) => {"kind":"Ok","value":[1,4]} | base 1; read 1; risky 4; read 4; first 4
+resultBody(-4) => {"kind":"Ok","value":[1,"negative -2"]} | base 1; read 1; risky -4; read -4; second -2; read -2; second "negative -2"

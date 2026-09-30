@@ -1,0 +1,4 @@
+conditionalBranch({"kind":"Num","value":4}) => 4 | open res; flip true; operand {"kind":"Num","value":4}; number 4; dispose res
+conditionalBranch({"kind":"Neg","value":-3}) => "skipped" | open res; flip false; else "skipped"; dispose res
+conditionalBranch({"kind":"Word","text":"hi"}) => "hi" | open res; flip true; operand {"kind":"Word","text":"hi"}; word "hi"; dispose res
+conditionalBranch({"kind":"End"}) => "skipped" | open res; flip false; else "skipped"; dispose res

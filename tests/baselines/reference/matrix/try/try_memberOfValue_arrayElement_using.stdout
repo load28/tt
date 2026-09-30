@@ -1,0 +1,2 @@
+arrayElement(1.5) => {"kind":"Ok","value":[0,"1.50",2]} | open res; first 0; operand 1.5; read 1.5; last 2; dispose res
+arrayElement(-1) => {"kind":"Err","error":"negative -1"} | open res; first 0; operand -1; read -1; dispose res

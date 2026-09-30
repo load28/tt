@@ -1,0 +1,3 @@
+constructorBody({"kind":"Num","value":1}) => 1 | 
+constructorBody({"kind":"Neg","value":-2}) => -2 | 
+constructorBody({"kind":"Word","text":"w"}) => threw diverged | 

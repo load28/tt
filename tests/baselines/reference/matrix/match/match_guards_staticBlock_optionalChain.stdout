@@ -1,0 +1,5 @@
+staticBlock({"kind":"Circle","r":1}) => 1 | guard big false; small 1
+staticBlock({"kind":"Circle","r":5}) => 5 | guard big true; big 5
+staticBlock({"kind":"Rect","w":4,"h":2}) => 4 | guard wide true; wide 4
+staticBlock({"kind":"Rect","w":1,"h":3}) => 3 | guard wide false; tall 3
+staticBlock({"kind":"Point"}) => 0 | point 0

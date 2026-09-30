@@ -1,0 +1,5 @@
+yieldOperand(200) => true | yield 200; success true; yield true
+yieldOperand(201) => true | yield 201; success true; yield true
+yieldOperand(404) => false | yield 404; missing false; yield false
+yieldOperand(500) => false | yield 500; guard true; server false; yield false
+yieldOperand(7) => null | yield 7; other null; yield null

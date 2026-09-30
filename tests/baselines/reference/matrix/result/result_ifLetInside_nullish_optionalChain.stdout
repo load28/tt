@@ -1,0 +1,2 @@
+nullish(4) => {"kind":"Ok","value":4} | flip true; read 4; direct 4
+nullish(-1) => "set" | flip false; left "set"

@@ -1,0 +1,2 @@
+catchBlock(5) => 5 | throw "boom"; risky 5; read 5
+catchBlock(-5) => "thrown" | throw "boom"; risky -5; read -5; else "thrown"; caught "thrown"

@@ -1,0 +1,2 @@
+optionalCall(true) => [[1],null] | callee true; operand true; yes 1; callee false
+optionalCall(false) => [[0],null] | callee true; operand false; no 0; callee false

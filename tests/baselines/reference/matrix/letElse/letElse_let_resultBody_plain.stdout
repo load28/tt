@@ -1,0 +1,2 @@
+resultBody(3) => {"kind":"Ok","value":[1,4]} | base 1; read 1; operand 3; read 3; reassigned 4
+resultBody(-3) => {"kind":"Ok","value":1} | base 1; read 1; operand -3; read -3

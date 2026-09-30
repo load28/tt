@@ -1,0 +1,2 @@
+methodArgument(6) => {"kind":"Ok","value":["receiver",1,6]} | receiver {"tag":"receiver"}; a 1; flip true; operand 6; read 6; finally 0
+methodArgument(-6) => {"kind":"Err","error":"negative -9"} | receiver {"tag":"receiver"}; a 1; flip false; fallback -9; read -9; finally 0

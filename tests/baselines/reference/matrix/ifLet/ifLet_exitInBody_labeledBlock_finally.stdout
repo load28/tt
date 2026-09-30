@@ -1,0 +1,2 @@
+labeledBlock(2) => "passed" | operand 2; read 2; finally 0
+labeledBlock(-2) => "none" | operand -2; read -2; error "negative -2"; finally 0

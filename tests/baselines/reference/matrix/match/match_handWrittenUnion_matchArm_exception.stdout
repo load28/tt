@@ -1,0 +1,2 @@
+matchArm({"kind":"Click","x":3}) => 3 | flip true; risky {"kind":"Click","x":3}; click 3
+matchArm({"kind":"Key","key":"k"}) => 0 | flip false; other arm 0

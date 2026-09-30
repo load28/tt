@@ -1,0 +1,37 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+ --> ./main.tt:5:30
+  |
+5 |   return Result.Ok(flip() ? (try read(box(input)?.inner.value!)) + (try read(note("second", 5))) : note("else", "skipped"));
+  |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[try-placement]: `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+ --> ./main.tt:5:69
+  |
+5 |   return Result.Ok(flip() ? (try read(box(input)?.inner.value!)) + (try read(note("second", 5))) : note("else", "skipped"));
+  |                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+ttc: ./twin.ts → $DIR/out/twin.ts
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+ --> main.tt:5:30
+  |
+5 |   return Result.Ok(flip() ? (try read(box(input)?.inner.value!)) + (try read(note("second", 5))) : note("else", "skipped"));
+  |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[try-placement]: `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+ --> main.tt:5:69
+  |
+5 |   return Result.Ok(flip() ? (try read(box(input)?.inner.value!)) + (try read(note("second", 5))) : note("else", "skipped"));
+  |                                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript (exit 0) ====

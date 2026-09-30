@@ -1,0 +1,4 @@
+objectProperty({}) => {"a":1,"value":"range","c":3} | a 1; await; range "range"; c 3
+objectProperty({}) => {"a":1,"value":1,"c":3} | a 1; await; type 1; c 3
+objectProperty({}) => {"a":1,"value":"plain","c":3} | a 1; await; error "plain"; c 3
+objectProperty("text") => {"a":1,"value":null,"c":3} | a 1; await; other null; c 3

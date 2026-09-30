@@ -1,0 +1,2 @@
+switchClause(2) => {"kind":"Ok","value":"checked"} | open res; discriminant 1; operand 2; read 2; dispose res
+switchClause(-1) => {"kind":"Err","error":"negative -1"} | open res; discriminant 1; operand -1; read -1; dispose res

@@ -1,0 +1,5 @@
+matchArm({"kind":"Circle","r":1}) => 1 | flip true; operand {"kind":"Circle","r":1}; guard big false; small 1; finally 0
+matchArm({"kind":"Circle","r":5}) => 0 | flip false; other arm 0; finally 0
+matchArm({"kind":"Rect","w":4,"h":2}) => 4 | flip true; operand {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4; finally 0
+matchArm({"kind":"Rect","w":1,"h":3}) => 0 | flip false; other arm 0; finally 0
+matchArm({"kind":"Point"}) => 0 | flip true; operand {"kind":"Point"}; point 0; finally 0

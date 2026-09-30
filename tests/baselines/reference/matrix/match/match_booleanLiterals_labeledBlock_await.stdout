@@ -1,0 +1,2 @@
+labeledBlock(true) => 1 | await; yes 1; flip true
+labeledBlock(false) => [0] | await; no 0; flip false

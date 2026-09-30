@@ -1,0 +1,5 @@
+loopBody({"kind":"Circle","r":1}) => [1,1] | risky {"kind":"Circle","r":1}; guard big false; small 1; risky {"kind":"Circle","r":1}; guard big false; small 1
+loopBody({"kind":"Circle","r":5}) => "risky call 3" | caught "risky call 3"
+loopBody({"kind":"Rect","w":4,"h":2}) => [4,4] | risky {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4; risky {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4
+loopBody({"kind":"Rect","w":1,"h":3}) => "risky call 6" | caught "risky call 6"
+loopBody({"kind":"Point"}) => [0,0] | risky {"kind":"Point"}; point 0; risky {"kind":"Point"}; point 0

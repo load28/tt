@@ -1,0 +1,3 @@
+objectProperty(2) => {"a":1,"value":{"kind":"Ok","value":"two"},"c":3} | a 1; risky 2; read 2; c 3
+objectProperty(7) => {"a":1,"value":{"kind":"Ok","value":"other"},"c":3} | a 1; risky 7; read 7; c 3
+objectProperty(-1) => "risky call 3" | a 1; caught "risky call 3"

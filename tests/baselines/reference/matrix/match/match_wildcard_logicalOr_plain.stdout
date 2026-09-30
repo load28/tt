@@ -1,0 +1,4 @@
+logicalOr({"kind":"Num","value":4}) => true | flip true
+logicalOr({"kind":"Neg","value":-3}) => -1 | flip false; operand {"kind":"Neg","value":-3}; other -1
+logicalOr({"kind":"Word","text":"hi"}) => true | flip true
+logicalOr({"kind":"End"}) => -1 | flip false; operand {"kind":"End"}; other -1

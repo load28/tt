@@ -1,0 +1,3 @@
+forOfBody({"kind":"Done","value":{"kind":"Some","value":5}}) => [5,5] | round 0; yield {"kind":"Done","value":{"kind":"Some","value":5}}; some 5; round 1; yield {"kind":"Done","value":{"kind":"Some","value":5}}; some 5
+forOfBody({"kind":"Done","value":{"kind":"None"}}) => ["other","other"] | round 0; yield {"kind":"Done","value":{"kind":"None"}}; round 1; yield {"kind":"Done","value":{"kind":"None"}}
+forOfBody({"kind":"Failed","error":"gone"}) => ["other","other"] | round 0; yield {"kind":"Failed","error":"gone"}; round 1; yield {"kind":"Failed","error":"gone"}

@@ -1,0 +1,5 @@
+forOfHead({"kind":"Circle","r":1}) => [1] | await; guard big false; small 1
+forOfHead({"kind":"Circle","r":5}) => [5] | await; guard big true; big 5
+forOfHead({"kind":"Rect","w":4,"h":2}) => [4] | await; guard wide true; wide 4
+forOfHead({"kind":"Rect","w":1,"h":3}) => [3] | await; guard wide false; tall 3
+forOfHead({"kind":"Point"}) => [0] | await; point 0

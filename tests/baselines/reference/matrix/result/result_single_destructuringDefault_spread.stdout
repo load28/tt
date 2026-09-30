@@ -1,0 +1,2 @@
+destructuringDefault(2) => {"kind":"Ok","value":20} | source {}; read 2
+destructuringDefault(-1) => {"kind":"Err","error":"negative -1"} | source {}; read -1

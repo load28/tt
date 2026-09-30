@@ -1,0 +1,2 @@
+logicalOr({"kind":"Click","x":3}) => true | open res; flip true; dispose res
+logicalOr({"kind":"Key","key":"k"}) => "k" | open res; flip false; operand {"kind":"Key","key":"k"}; key "k"; dispose res

@@ -1,0 +1,2 @@
+yieldOperand({"kind":"Click","x":3}) => 3 | click 3; yield 3
+yieldOperand({"kind":"Key","key":"k"}) => "k" | key "k"; yield "k"

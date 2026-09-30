@@ -1,0 +1,3 @@
+method({"kind":"Num","value":1}) => 1 | operand {"kind":"Num","value":1}
+method({"kind":"Neg","value":-2}) => -2 | operand {"kind":"Neg","value":-2}
+method({"kind":"Word","text":"w"}) => "diverged" | operand {"kind":"Word","text":"w"}

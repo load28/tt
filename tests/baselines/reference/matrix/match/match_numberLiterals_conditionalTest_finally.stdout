@@ -1,0 +1,5 @@
+conditionalTest(200) => "truthy" | operand 200; success true; then "truthy"; finally 0
+conditionalTest(201) => "truthy" | operand 201; success true; then "truthy"; finally 0
+conditionalTest(404) => "falsy" | operand 404; missing false; else "falsy"; finally 0
+conditionalTest(500) => "falsy" | operand 500; guard true; server false; else "falsy"; finally 0
+conditionalTest(7) => "falsy" | operand 7; other null; else "falsy"; finally 0

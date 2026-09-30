@@ -1,0 +1,1 @@
+topLevel(3) => 4 | await; read 3; reassigned 4

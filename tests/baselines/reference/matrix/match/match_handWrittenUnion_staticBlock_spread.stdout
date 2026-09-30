@@ -1,0 +1,2 @@
+staticBlock({"kind":"Click","x":3}) => 3 | click 3
+staticBlock({"kind":"Key","key":"k"}) => "k" | key "k"

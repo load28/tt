@@ -1,0 +1,4 @@
+matchArm("north") => 1 | flip true; operand "north"; n 1
+matchArm("south") => 0 | flip false; other arm 0
+matchArm("east") => 2 | flip true; operand "east"; se 2
+matchArm("up") => 0 | flip false; other arm 0

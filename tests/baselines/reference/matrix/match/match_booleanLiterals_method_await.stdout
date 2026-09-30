@@ -1,0 +1,2 @@
+method(true) => 1 | this "holder"; await; yes 1
+method(false) => 0 | this "holder"; await; no 0

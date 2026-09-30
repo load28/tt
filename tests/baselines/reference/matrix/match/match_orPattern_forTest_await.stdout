@@ -1,0 +1,4 @@
+forTest({"kind":"Num","value":4}) => 1 | await; number 4
+forTest({"kind":"Neg","value":-3}) => 1 | await; number -3
+forTest({"kind":"Word","text":"hi"}) => 1 | await; word "hi"
+forTest({"kind":"End"}) => 0 | await; end ""

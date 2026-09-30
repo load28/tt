@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in this expression context — propagating its `Err` would require moving an evaluation across its TypeScript control-flow boundary
+ --> ./main.tt:5:15
+  |
+5 | const top0 = (try read(await later(input))).toFixed(2);
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[try-placement]: `try` cannot be used in this expression context — propagating its `Err` would require moving an evaluation across its TypeScript control-flow boundary
+ --> ./main.tt:8:15
+  |
+8 | const top1 = (try read(await later(input))).toFixed(2);
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in this expression context — propagating its `Err` would require moving an evaluation across its TypeScript control-flow boundary
+ --> main.tt:5:15
+  |
+5 | const top0 = (try read(await later(input))).toFixed(2);
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[try-placement]: `try` cannot be used in this expression context — propagating its `Err` would require moving an evaluation across its TypeScript control-flow boundary
+ --> main.tt:8:15
+  |
+8 | const top1 = (try read(await later(input))).toFixed(2);
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,4 @@
+switchDiscriminant("north") => "default" | risky "north"; n 1; case 0
+switchDiscriminant("south") => "default" | risky "south"; se 2; case 0
+switchDiscriminant("east") => "risky call 3" | caught "risky call 3"
+switchDiscriminant("up") => "zero" | risky "up"; other 0; case 0

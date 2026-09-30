@@ -1,0 +1,5 @@
+conditionalBranch(200) => true | flip true; operand 200; success true
+conditionalBranch(201) => "skipped" | flip false; else "skipped"
+conditionalBranch(404) => false | flip true; operand 404; missing false
+conditionalBranch(500) => "skipped" | flip false; else "skipped"
+conditionalBranch(7) => null | flip true; operand 7; other null

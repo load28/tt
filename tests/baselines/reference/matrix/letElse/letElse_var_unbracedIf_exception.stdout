@@ -1,0 +1,2 @@
+unbracedIf(4) => 4 | enter true; risky 4; read 4
+unbracedIf(-4) => "diverged" | enter true; risky -4; read -4

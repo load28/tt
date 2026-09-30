@@ -1,0 +1,2 @@
+catchBlock(6) => 6 | open res; throw "boom"; operand 6; some 6; dispose res
+catchBlock(9) => 9 | open res; throw "boom"; operand 9; some 9; dispose res

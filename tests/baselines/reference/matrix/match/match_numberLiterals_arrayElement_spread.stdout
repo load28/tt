@@ -1,0 +1,5 @@
+arrayElement(200) => [0,true,2] | first 0; success true; last 2
+arrayElement(201) => [0,true,2] | first 0; success true; last 2
+arrayElement(404) => [0,false,2] | first 0; missing false; last 2
+arrayElement(500) => [0,false,2] | first 0; guard true; server false; last 2
+arrayElement(7) => [0,null,2] | first 0; other null; last 2

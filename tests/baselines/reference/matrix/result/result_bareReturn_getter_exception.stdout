@@ -1,0 +1,2 @@
+getter(2) => {"kind":"Ok"} | risky 2; read 2
+getter(-1) => {"kind":"Err","error":"negative -1"} | risky -1; read -1

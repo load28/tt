@@ -1,0 +1,4 @@
+logicalOr({}) => true | open res; flip true; dispose res
+logicalOr({}) => 1 | open res; flip false; operand {}; type 1; dispose res
+logicalOr({}) => true | open res; flip true; dispose res
+logicalOr("text") => null | open res; flip false; operand "text"; other null; dispose res

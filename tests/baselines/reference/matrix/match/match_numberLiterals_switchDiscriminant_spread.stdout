@@ -1,0 +1,5 @@
+switchDiscriminant(200) => "default" | success true; case 0
+switchDiscriminant(201) => "default" | success true; case 0
+switchDiscriminant(404) => "default" | missing false; case 0
+switchDiscriminant(500) => "default" | guard true; server false; case 0
+switchDiscriminant(7) => "default" | other null; case 0

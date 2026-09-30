@@ -1,0 +1,2 @@
+callArgument(6) => {"kind":"Ok","value":[1,6,3]} | open res; a 1; flip true; operand 6; read 6; c 3; dispose res
+callArgument(-6) => {"kind":"Err","error":"negative -9"} | open res; a 1; flip false; fallback -9; read -9; dispose res

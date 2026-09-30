@@ -1,0 +1,3 @@
+labeledBlock(1) => {"kind":"Ok","value":10} | risky 1; one 10; read 10; flip true
+labeledBlock(2) => {"kind":"Err","error":"negative -10"} | risky 2; other -10; read -10
+labeledBlock(-3) => {"kind":"Ok","value":"risky call 3"} | caught "risky call 3"

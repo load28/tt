@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[if-let-placement]: `if let` cannot be used in expression position — it is a statement and produces no value
+ --> ./main.tt:4:19
+  |
+4 |   return flip() ? if let Ok(value: v) = read(box(input)?.inner.value!) { v } : note("else", "skipped");
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: `match` on the value instead, or write the `if let` as a statement (inside an expression region, in a function written there)
+
+
+==== ttc --check-types (exit 1) ====
+error[if-let-placement]: `if let` cannot be used in expression position — it is a statement and produces no value
+ --> main.tt:4:19
+  |
+4 |   return flip() ? if let Ok(value: v) = read(box(input)?.inner.value!) { v } : note("else", "skipped");
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: `match` on the value instead, or write the `if let` as a statement (inside an expression region, in a function written there)
+
+==== tsc on the emitted TypeScript (exit 0) ====

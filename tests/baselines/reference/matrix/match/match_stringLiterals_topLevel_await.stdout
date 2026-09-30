@@ -1,0 +1,4 @@
+topLevel("north") => 1 | await; n 1
+topLevel("south") => 2 | await; se 2
+topLevel("east") => 2 | await; se 2
+topLevel("up") => 0 | await; other 0

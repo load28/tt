@@ -1,0 +1,4 @@
+optionalCall({}) => [["range"],null] | open res; callee true; operand {}; range "range"; callee false; dispose res
+optionalCall({}) => [[1],null] | open res; callee true; operand {}; type 1; callee false; dispose res
+optionalCall({}) => [["plain"],null] | open res; callee true; operand {}; error "plain"; callee false; dispose res
+optionalCall("text") => [[null],null] | open res; callee true; operand "text"; other null; callee false; dispose res

@@ -1,0 +1,5 @@
+objectProperty({"kind":"Circle","r":1}) => {"a":1,"value":1,"c":3} | a 1; yield {"kind":"Circle","r":1}; guard big false; small 1; c 3
+objectProperty({"kind":"Circle","r":5}) => {"a":1,"value":5,"c":3} | a 1; yield {"kind":"Circle","r":5}; guard big true; big 5; c 3
+objectProperty({"kind":"Rect","w":4,"h":2}) => {"a":1,"value":4,"c":3} | a 1; yield {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4; c 3
+objectProperty({"kind":"Rect","w":1,"h":3}) => {"a":1,"value":3,"c":3} | a 1; yield {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3; c 3
+objectProperty({"kind":"Point"}) => {"a":1,"value":0,"c":3} | a 1; yield {"kind":"Point"}; point 0; c 3

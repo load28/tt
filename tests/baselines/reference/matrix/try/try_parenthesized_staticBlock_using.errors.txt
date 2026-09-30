@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation
+ --> ./main.tt:9:22
+  |
+9 |       Holder.field = try (flip() ? read(note("operand", input)) : read(note("fallback", -9)));
+  |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation
+ --> main.tt:9:22
+  |
+9 |       Holder.field = try (flip() ? read(note("operand", input)) : read(note("fallback", -9)));
+  |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript (exit 0) ====

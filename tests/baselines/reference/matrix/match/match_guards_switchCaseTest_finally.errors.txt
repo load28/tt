@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-placement]: `match` cannot be lowered from this conditional expression position without evaluating a skipped branch
+ --> ./main.tt:8:12
+  |
+8 |       case match (note("operand", input)) { Circle(r) if note("guard big", r > 2) => note("big", r), Circle(r) => note("small", r), Rect(w, h) if note("guard wide", w > h) => note("wide", w), Rect(w, h) => note("tall", h), Point => note("point", 0) }:
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+
+==== ttc --check-types (exit 1) ====
+error[match-placement]: `match` cannot be lowered from this conditional expression position without evaluating a skipped branch
+ --> main.tt:8:12
+  |
+8 |       case match (note("operand", input)) { Circle(r) if note("guard big", r > 2) => note("big", r), Circle(r) => note("small", r), Rect(w, h) if note("guard wide", w > h) => note("wide", w), Rect(w, h) => note("tall", h), Point => note("point", 0) }:
+  |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+==== tsc on the emitted TypeScript (exit 0) ====

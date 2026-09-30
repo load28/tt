@@ -1,0 +1,2 @@
+ifBranch(6) => 6 | enter true; risky 6; some 6
+ifBranch(9) => 9 | enter true; risky 9; some 9

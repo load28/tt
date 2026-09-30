@@ -1,0 +1,2 @@
+matchBlockArm(4) => 4 | arm true; read 4; first 4
+matchBlockArm(-4) => "negative -2" | arm true; read -4; second -2; read -2; second "negative -2"

@@ -1,0 +1,4 @@
+arrowBody({}) => "range" | operand {}; range "range"
+arrowBody({}) => 1 | operand {}; type 1
+arrowBody({}) => "plain" | operand {}; error "plain"
+arrowBody("text") => null | operand "text"; other null

@@ -1,0 +1,5 @@
+objectProperty(200) => {"a":1,"value":true,"c":3} | open res; a 1; operand 200; success true; c 3; dispose res
+objectProperty(201) => {"a":1,"value":true,"c":3} | open res; a 1; operand 201; success true; c 3; dispose res
+objectProperty(404) => {"a":1,"value":false,"c":3} | open res; a 1; operand 404; missing false; c 3; dispose res
+objectProperty(500) => {"a":1,"value":false,"c":3} | open res; a 1; operand 500; guard true; server false; c 3; dispose res
+objectProperty(7) => {"a":1,"value":null,"c":3} | open res; a 1; operand 7; other null; c 3; dispose res

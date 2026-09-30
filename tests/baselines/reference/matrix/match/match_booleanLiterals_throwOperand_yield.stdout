@@ -1,0 +1,2 @@
+throwOperand(true) => threw 1 | yield true; yes 1
+throwOperand(false) => threw 0 | yield false; no 0

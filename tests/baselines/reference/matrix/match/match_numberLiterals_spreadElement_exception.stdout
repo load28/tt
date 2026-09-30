@@ -1,0 +1,5 @@
+spreadElement(200) => [0,true] | first 0; risky 200; success true
+spreadElement(201) => [0,true] | first 0; risky 201; success true
+spreadElement(404) => "risky call 3" | first 0; caught "risky call 3"
+spreadElement(500) => [0,false] | first 0; risky 500; guard true; server false
+spreadElement(7) => [0,null] | first 0; risky 7; other null

@@ -1,0 +1,2 @@
+catchBlock(2) => 2 | throw "boom"; risky 2; read 2; then 2
+catchBlock(-1) => "none" | throw "boom"; risky -1; read -1

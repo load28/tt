@@ -1,0 +1,2 @@
+tryBlock(5) => {"kind":"Ok","value":5} | await; read 5
+tryBlock(-5) => {"kind":"Err","error":"negative -5"} | await; read -5

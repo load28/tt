@@ -1,0 +1,4 @@
+labeledBlock({"kind":"Num","value":4}) => -1 | other -1; flip true
+labeledBlock({"kind":"Neg","value":-3}) => [-1] | other -1; flip false
+labeledBlock({"kind":"Word","text":"hi"}) => 2 | word 2; flip true
+labeledBlock({"kind":"End"}) => [-1] | other -1; flip false

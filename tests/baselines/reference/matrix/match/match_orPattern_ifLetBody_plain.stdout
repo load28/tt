@@ -1,0 +1,4 @@
+ifLetBody({"kind":"Num","value":4}) => [1,4] | head 1; read 1; operand {"kind":"Num","value":4}; number 4
+ifLetBody({"kind":"Neg","value":-3}) => [1,-3] | head 1; read 1; operand {"kind":"Neg","value":-3}; number -3
+ifLetBody({"kind":"Word","text":"hi"}) => [1,"hi"] | head 1; read 1; operand {"kind":"Word","text":"hi"}; word "hi"
+ifLetBody({"kind":"End"}) => [1,""] | head 1; read 1; operand {"kind":"End"}; end ""

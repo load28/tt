@@ -1,0 +1,67 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+ --> ./main.tt:6:33
+  |
+6 |     const ran = callee(true)?.((try read(risky(input))) + (try read(note("second", 5))));
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[try-placement]: `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+ --> ./main.tt:6:60
+  |
+6 |     const ran = callee(true)?.((try read(risky(input))) + (try read(note("second", 5))));
+  |                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[try-placement]: `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+ --> ./main.tt:7:38
+  |
+7 |     const skipped = callee(false)?.((try read(risky(input))) + (try read(note("second", 5))));
+  |                                      ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[try-placement]: `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+ --> ./main.tt:7:65
+  |
+7 |     const skipped = callee(false)?.((try read(risky(input))) + (try read(note("second", 5))));
+  |                                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+ttc: ./twin.ts → $DIR/out/twin.ts
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+ --> main.tt:6:33
+  |
+6 |     const ran = callee(true)?.((try read(risky(input))) + (try read(note("second", 5))));
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[try-placement]: `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+ --> main.tt:6:60
+  |
+6 |     const ran = callee(true)?.((try read(risky(input))) + (try read(note("second", 5))));
+  |                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[try-placement]: `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+ --> main.tt:7:38
+  |
+7 |     const skipped = callee(false)?.((try read(risky(input))) + (try read(note("second", 5))));
+  |                                      ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[try-placement]: `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+ --> main.tt:7:65
+  |
+7 |     const skipped = callee(false)?.((try read(risky(input))) + (try read(note("second", 5))));
+  |                                                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript (exit 0) ====

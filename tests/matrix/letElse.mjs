@@ -1,0 +1,107 @@
+import { variant } from "./variants.mjs";
+
+const token = variant("Token", [
+  ["Num", [["value", "number"]]],
+  ["Neg", [["value", "number"]]],
+  ["Word", [["text", "string"]]],
+]);
+const shape = variant("Shape", [
+  ["Circle", [["r", "number"]]],
+  ["Rect", [["w", "number"], ["h", "number"]]],
+  ["Point", null],
+]);
+
+export default {
+  construct: "letElse",
+  kind: "statement",
+  forms: [
+    {
+      id: "const",
+      title: "a const binding with the host's exit in its else",
+      In: "number",
+      inputs: "[2, -1]",
+      tt: (x, t, exit) => `const Ok(value: v) = read(${x}) else { ${exit} };`,
+      ts: (x, [t], exit) => `const ${t} = read(${x});\nif (${t}.kind !== "Ok") { ${exit} }\nconst v = ${t}.value;`,
+      result: "v",
+      hoisted: '"bound"',
+      unbraced: "let-else-placement",
+      temps: 1,
+    },
+    {
+      id: "let",
+      title: "a let binding reassigned after the test",
+      In: "number",
+      inputs: "[3, -3]",
+      tt: (x, t, exit) => `let Ok(value: v) = read(${x}) else { ${exit} };\nv = note("reassigned", v + 1);`,
+      ts: (x, [t], exit) => `const ${t} = read(${x});\nif (${t}.kind !== "Ok") { ${exit} }\nlet v = ${t}.value;\nv = note("reassigned", v + 1);`,
+      result: "v",
+      hoisted: '"bound"',
+      unbraced: "let-else-placement",
+      temps: 1,
+    },
+    {
+      id: "var",
+      title: "a var binding, allowed as an unbraced body",
+      In: "number",
+      inputs: "[4, -4]",
+      tt: (x, t, exit) => `var Ok(value: v) = read(${x}) else { ${exit} };`,
+      ts: (x, [t], exit, c) =>
+        c.unbraced
+          ? `{ const ${t} = read(${x});\nif (${t}.kind !== "Ok") { ${exit} }\nvar v = ${t}.value; }`
+          : `const ${t} = read(${x});\nif (${t}.kind !== "Ok") { ${exit} }\nvar v = ${t}.value;`,
+      result: "v",
+      hoisted: "v!",
+      temps: 1,
+    },
+    {
+      id: "throwingElse",
+      title: "an else block that throws",
+      In: "number",
+      inputs: "[5, -5]",
+      tt: (x) => `const Ok(value: v) = read(${x}) else { throw new Error(note("else", "thrown")); };`,
+      ts: (x, [t]) => `const ${t} = read(${x});\nif (${t}.kind !== "Ok") { throw new Error(note("else", "thrown")); }\nconst v = ${t}.value;`,
+      result: "v",
+      hoisted: '"bound"',
+      unbraced: "let-else-placement",
+      temps: 1,
+    },
+    {
+      id: "orPattern",
+      title: "an or-pattern whose alternatives bind the same field",
+      decls: [token],
+      In: "Token",
+      inputs: '[Token.Num(1), Token.Neg(-2), Token.Word("w")]',
+      tt: (x, t, exit) => `const Num(value) | Neg(value) = ${x} else { ${exit} };`,
+      ts: (x, [t], exit) => `const ${t} = ${x};\nif (${t}.kind !== "Num" && ${t}.kind !== "Neg") { ${exit} }\nconst value = ${t}.value;`,
+      result: "value",
+      hoisted: '"bound"',
+      unbraced: "let-else-placement",
+      temps: 1,
+    },
+    {
+      id: "aliasedFields",
+      title: "fields bound under aliases",
+      decls: [shape],
+      In: "Shape",
+      inputs: "[Shape.Rect(2, 3), Shape.Circle(1), Shape.Point]",
+      tt: (x, t, exit) => `const Rect(h: height, w: width) = ${x} else { ${exit} };`,
+      ts: (x, [t], exit) => `const ${t} = ${x};\nif (${t}.kind !== "Rect") { ${exit} }\nconst height = ${t}.h, width = ${t}.w;`,
+      result: "[width, height]",
+      hoisted: '"bound"',
+      unbraced: "let-else-placement",
+      temps: 1,
+    },
+    {
+      id: "objectInitializer",
+      title: "an object literal initializer",
+      In: "number",
+      inputs: "[7, 8]",
+      tt: (x, t, exit) => `const Some(value: v) = { kind: "Some" as const, value: ${x} } else { ${exit} };`,
+      ts: (x, [t], exit) => `const ${t} = { kind: "Some" as const, value: ${x} };\nif (${t}.kind !== "Some") { ${exit} }\nconst v = ${t}.value;`,
+      result: "v",
+      hoisted: '"bound"',
+      unbraced: "let-else-placement",
+      temps: 1,
+    },
+  ],
+};

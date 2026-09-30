@@ -1,0 +1,2 @@
+forOfBody(7) => [7,7] | round 0; operand 7; round 1; operand 7
+forOfBody(8) => [8,8] | round 0; operand 8; round 1; operand 8

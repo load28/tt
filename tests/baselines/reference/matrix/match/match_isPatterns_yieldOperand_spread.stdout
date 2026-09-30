@@ -1,0 +1,4 @@
+yieldOperand({}) => "range" | range "range"; yield "range"
+yieldOperand({}) => 1 | type 1; yield 1
+yieldOperand({}) => "plain" | error "plain"; yield "plain"
+yieldOperand("text") => null | other null; yield null

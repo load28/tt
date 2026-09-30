@@ -1,0 +1,2 @@
+method(2) => "passed" | read 2
+method(-2) => "diverged" | read -2; error "negative -2"

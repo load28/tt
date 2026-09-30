@@ -1,0 +1,2 @@
+ifLetBody(3) => {"kind":"Ok","value":[1,30]} | head 1; read 1; risky 3; read 3
+ifLetBody(-2) => {"kind":"Err","error":"negative -2"} | head 1; read 1; risky -2; read -2

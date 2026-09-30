@@ -1,0 +1,5 @@
+switchDiscriminant({"kind":"Circle","r":1}) => "default" | operand {"kind":"Circle","r":1}; guard big false; small 1; case 0
+switchDiscriminant({"kind":"Circle","r":5}) => "default" | operand {"kind":"Circle","r":5}; guard big true; big 5; case 0
+switchDiscriminant({"kind":"Rect","w":4,"h":2}) => "default" | operand {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4; case 0
+switchDiscriminant({"kind":"Rect","w":1,"h":3}) => "default" | operand {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3; case 0
+switchDiscriminant({"kind":"Point"}) => "zero" | operand {"kind":"Point"}; point 0; case 0

@@ -1,0 +1,5 @@
+awaitOperand({"kind":"Circle","r":1}) => 1 | risky {"kind":"Circle","r":1}; guard big false; small 1
+awaitOperand({"kind":"Circle","r":5}) => 5 | risky {"kind":"Circle","r":5}; guard big true; big 5
+awaitOperand({"kind":"Rect","w":4,"h":2}) => "risky call 3" | caught "risky call 3"
+awaitOperand({"kind":"Rect","w":1,"h":3}) => 3 | risky {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3
+awaitOperand({"kind":"Point"}) => 0 | risky {"kind":"Point"}; point 0

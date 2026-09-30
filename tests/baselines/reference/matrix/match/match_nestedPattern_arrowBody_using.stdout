@@ -1,0 +1,3 @@
+arrowBody({"kind":"Done","value":{"kind":"Some","value":7}}) => 7 | open res; operand {"kind":"Done","value":{"kind":"Some","value":7}}; some 7; dispose res
+arrowBody({"kind":"Done","value":{"kind":"None"}}) => 0 | open res; operand {"kind":"Done","value":{"kind":"None"}}; none 0; dispose res
+arrowBody({"kind":"Failed","error":"lost"}) => "lost" | open res; operand {"kind":"Failed","error":"lost"}; failed "lost"; dispose res

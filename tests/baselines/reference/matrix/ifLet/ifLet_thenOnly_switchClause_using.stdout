@@ -1,0 +1,2 @@
+switchClause(2) => 2 | open res; discriminant 1; operand 2; read 2; then 2; dispose res
+switchClause(-1) => "none" | open res; discriminant 1; operand -1; read -1; dispose res

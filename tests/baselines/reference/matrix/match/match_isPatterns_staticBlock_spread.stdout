@@ -1,0 +1,4 @@
+staticBlock({}) => "range" | range "range"
+staticBlock({}) => 1 | type 1
+staticBlock({}) => "plain" | error "plain"
+staticBlock("text") => null | other null

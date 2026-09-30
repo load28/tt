@@ -1,0 +1,4 @@
+returnOperand({}) => "range" | range "range"
+returnOperand({}) => 1 | type 1
+returnOperand({}) => "plain" | error "plain"
+returnOperand("text") => null | other null

@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-placement]: `match` cannot be lowered from this conditional expression position without evaluating a skipped branch
+ --> ./main.tt:5:19
+  |
+5 |   const { value = match (note("operand", input)) { Rect(h: tall, w: wide) => note("rect", [wide, tall]), Circle(r: radius) => note("circle", radius), Point => note("point", null) } }: { value?: unknown } = note("source", {});
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+
+==== ttc --check-types (exit 1) ====
+error[match-placement]: `match` cannot be lowered from this conditional expression position without evaluating a skipped branch
+ --> main.tt:5:19
+  |
+5 |   const { value = match (note("operand", input)) { Rect(h: tall, w: wide) => note("rect", [wide, tall]), Circle(r: radius) => note("circle", radius), Point => note("point", null) } }: { value?: unknown } = note("source", {});
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+==== tsc on the emitted TypeScript (exit 0) ====

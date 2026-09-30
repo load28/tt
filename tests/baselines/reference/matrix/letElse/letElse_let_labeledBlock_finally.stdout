@@ -1,0 +1,2 @@
+labeledBlock(3) => 4 | operand 3; read 3; reassigned 4; finally 0
+labeledBlock(-3) => "none" | operand -3; read -3; finally 0

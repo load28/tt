@@ -1,0 +1,4 @@
+labeledBlock({}) => "range" | await; range "range"; flip true
+labeledBlock({}) => [1] | await; type 1; flip false
+labeledBlock({}) => "plain" | await; error "plain"; flip true
+labeledBlock("text") => [null] | await; other null; flip false

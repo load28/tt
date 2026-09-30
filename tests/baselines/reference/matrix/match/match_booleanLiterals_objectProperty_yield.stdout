@@ -1,0 +1,2 @@
+objectProperty(true) => {"a":1,"value":1,"c":3} | a 1; yield true; yes 1; c 3
+objectProperty(false) => {"a":1,"value":0,"c":3} | a 1; yield false; no 0; c 3

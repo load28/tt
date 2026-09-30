@@ -1,0 +1,2 @@
+templateLiteral(4) => {"kind":"Ok","value":"<L|9|R>"} | left "L"; await; read 4; second 5; read 5; right "R"
+templateLiteral(-4) => {"kind":"Err","error":"negative -4"} | left "L"; await; read -4

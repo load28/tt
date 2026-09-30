@@ -1,0 +1,5 @@
+awaitOperand(200) => true | await; success true
+awaitOperand(201) => true | await; success true
+awaitOperand(404) => false | await; missing false
+awaitOperand(500) => false | await; guard true; server false
+awaitOperand(7) => null | await; other null

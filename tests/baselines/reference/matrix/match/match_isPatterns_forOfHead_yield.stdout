@@ -1,0 +1,4 @@
+forOfHead({}) => ["range"] | yield {}; range "range"
+forOfHead({}) => [1] | yield {}; type 1
+forOfHead({}) => ["plain"] | yield {}; error "plain"
+forOfHead("text") => [null] | yield "text"; other null

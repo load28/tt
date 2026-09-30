@@ -1,0 +1,2 @@
+matchBlockArm(3) => 3 | open res; arm true; operand 3; read 3; then 3; dispose res
+matchBlockArm(-3) => "missing" | open res; arm true; operand -3; read -3; else "missing"; dispose res

@@ -1,0 +1,2 @@
+objectProperty(2) => {"a":1,"value":{"kind":"Ok","value":6},"c":3} | a 1; operand 2; read 2; inner {"kind":"Ok","value":3}; c 3; finally 0
+objectProperty(-1) => {"a":1,"value":{"kind":"Err","error":"negative -1"},"c":3} | a 1; operand -1; read -1; inner {"kind":"Err","error":"negative -1"}; c 3; finally 0
