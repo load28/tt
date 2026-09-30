@@ -137,7 +137,7 @@ const data = result {
 };
 ```
 - Flat replacement for nested `Result.andThen(r, user => ... )` callbacks; every earlier binding stays in scope.
-- `result` is contextual: a block is claimed only when a speculative parse finds a tt `try` whose nearest lexical Result scope is that block. A block without one stays a TypeScript identifier plus block statement.
+- `result` is contextual: a block is claimed only when a speculative parse finds a tt `try` whose nearest lexical Result scope is that block. The search reaches into match arms and template interpolations (an arrow function written there is still its own scope), so ``result { return `x${try r}`; }`` is claimed and then rejected as `try-crosses-value-region`, like a `try` in a match arm. A block without one stays a TypeScript identifier plus block statement.
 - The body is a TypeScript-shaped statement list. Use ordinary declarations with `= try expression;`; a success value requires `return value;` (or `return;` for `Ok(undefined)`). Reaching the end without a return reports `result-no-success-value`.
 - Result only (no Option/Promise do-notation). `<-` is not tt syntax; use an ordinary declaration with `= try expression;` and an explicit Result return.
 - Block is an EXPRESSION: usable anywhere, incl. pipeline heads, parameter defaults, class fields, enum member initializers, constructor assignments, generator `yield` operands, and template interpolations. Statement-capable owners use a collision-free labeled result slot and explicit failure/success edges; expression-only owners use the shared named boundary. `await` stays in the surrounding async owner or is awaited at that boundary.

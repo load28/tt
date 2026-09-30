@@ -81,24 +81,26 @@ pub(super) fn parse_result_block<'t>(
 fn nearest_result_try_spans(program: &Program, cur: &Cursor<'_>, open: usize) -> Vec<Span> {
     let mut tt_owned = std::collections::HashSet::new();
     tt_owned_tokens(program, cur, &mut tt_owned);
-    let depth = |at: usize| crate::flow::user_function_depth_at(cur.tokens, at, &tt_owned);
-    let baseline = depth(open);
+    let depth = |offset: usize| function_depth_at(cur.tokens, offset, &tt_owned);
+    let Some(baseline) = depth(cur.tokens[open].span.start) else {
+        return Vec::new();
+    };
     fn collect(
         program: &Program,
         cur: &Cursor<'_>,
         baseline: usize,
-        depth: &dyn Fn(usize) -> usize,
+        depth: &dyn Fn(usize) -> Option<usize>,
         spans: &mut Vec<Span>,
     ) {
         for segment in &program.segments {
             match segment {
                 Segment::Try(stmt) => {
-                    if token_at(cur, stmt.span.start).is_some_and(|at| depth(at) == baseline) {
+                    if depth(stmt.span.start) == Some(baseline) {
                         spans.push(stmt.span);
                     }
                 }
                 Segment::TryExpr(expr) => {
-                    if token_at(cur, expr.span.start).is_some_and(|at| depth(at) == baseline) {
+                    if depth(expr.span.start) == Some(baseline) {
                         spans.push(expr.span);
                     }
                 }
@@ -154,7 +156,7 @@ fn nearest_result_try_spans(program: &Program, cur: &Cursor<'_>, open: usize) ->
         stmt: &crate::ast::IfLetStmt,
         cur: &Cursor<'_>,
         baseline: usize,
-        depth: &dyn Fn(usize) -> usize,
+        depth: &dyn Fn(usize) -> Option<usize>,
         spans: &mut Vec<Span>,
     ) {
         collect(&stmt.expr, cur, baseline, depth, spans);
@@ -179,7 +181,7 @@ fn tt_owned_tokens(
     for segment in &program.segments {
         match segment {
             Segment::Match(expr) => {
-                owned_brace(expr.body_open, cur, arrows);
+                owned_brace(expr.body_open, arrows);
                 tt_owned_tokens(&expr.scrutinee, cur, arrows);
                 for entry in &expr.arms {
                     if let Some(guard) = &entry.guard {
@@ -195,7 +197,7 @@ fn tt_owned_tokens(
                 }
             }
             Segment::TupleMatch(expr) => {
-                owned_brace(expr.body_open, cur, arrows);
+                owned_brace(expr.body_open, arrows);
                 for (_, value) in &expr.scrutinees {
                     tt_owned_tokens(value, cur, arrows);
                 }
@@ -243,9 +245,53 @@ fn tt_owned_tokens(
     }
 }
 
-fn owned_brace(open: usize, cur: &Cursor<'_>, owned: &mut std::collections::HashSet<usize>) {
-    if let Some(index) = token_at(cur, open) {
-        owned.insert(index);
+fn owned_brace(open: usize, owned: &mut std::collections::HashSet<usize>) {
+    owned.insert(open);
+}
+
+fn function_depth_at(
+    tokens: &[crate::lexer::Token],
+    offset: usize,
+    owned: &std::collections::HashSet<usize>,
+) -> Option<usize> {
+    let depth = |index: usize| {
+        let indices = tokens
+            .iter()
+            .enumerate()
+            .filter(|(_, token)| owned.contains(&token.span.start))
+            .map(|(index, _)| index)
+            .collect();
+        crate::flow::user_function_depth_at(tokens, index, &indices)
+    };
+    tokens.iter().enumerate().find_map(|(index, token)| {
+        if token.span.start == offset {
+            return Some(depth(index));
+        }
+        let crate::lexer::TokenKind::Template(parts) = &token.kind else {
+            return None;
+        };
+        if !(token.span.start < offset && offset < token.span.end) {
+            return None;
+        }
+        parts.iter().find_map(|part| match part {
+            crate::lexer::TplPart::Interp { tokens: inner, .. } => {
+                function_depth_at(inner, offset, owned).map(|inner| depth(index) + inner)
+            }
+            crate::lexer::TplPart::Raw(_) => None,
+        })
+    })
+}
+
+fn tokens_within<'t>(tokens: &'t [crate::lexer::Token], out: &mut Vec<&'t crate::lexer::Token>) {
+    for token in tokens {
+        out.push(token);
+        if let crate::lexer::TokenKind::Template(parts) = &token.kind {
+            for part in parts.iter() {
+                if let crate::lexer::TplPart::Interp { tokens: inner, .. } = part {
+                    tokens_within(inner, out);
+                }
+            }
+        }
     }
 }
 
@@ -256,19 +302,14 @@ fn arm_arrow(
     cur: &Cursor<'_>,
     arrows: &mut std::collections::HashSet<usize>,
 ) {
-    if let Some(arrow) = cur
-        .tokens
-        .iter()
-        .enumerate()
-        .rev()
-        .find_map(|(index, token)| {
-            (matches!(token.kind, crate::lexer::TokenKind::Arrow)
-                && pattern_end <= token.span.start
-                && token.span.end <= body_start)
-                .then_some(index)
-        })
-    {
-        arrows.insert(arrow);
+    let mut tokens = Vec::new();
+    tokens_within(cur.tokens, &mut tokens);
+    if let Some(arrow) = tokens.iter().rev().find(|token| {
+        matches!(token.kind, crate::lexer::TokenKind::Arrow)
+            && pattern_end <= token.span.start
+            && token.span.end <= body_start
+    }) {
+        arrows.insert(arrow.span.start);
     }
     tt_owned_tokens(body, cur, arrows);
 }
@@ -286,10 +327,4 @@ fn tt_owned_if_let(
             IfLetElse::IfLet(next) => tt_owned_if_let(next, cur, arrows),
         }
     }
-}
-
-fn token_at(cur: &Cursor<'_>, start: usize) -> Option<usize> {
-    cur.tokens
-        .iter()
-        .position(|token| token.span.start == start)
 }

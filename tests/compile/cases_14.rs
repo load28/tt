@@ -737,3 +737,33 @@ fn an_assertion_operand_takes_no_storage_type_from_outside_the_assertion() {
         assert!(out.contains(declaration), "{src}: {out}");
     }
 }
+
+#[test]
+fn a_try_in_a_template_interpolation_claims_its_result_block() {
+    let prelude = "declare const r: { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\nvariant O { A, B }\ndeclare const o: O;\n";
+    for body in [
+        "return `x${try r}`;",
+        "return `x${`y${try r}`}`;",
+        "return `x${match (o) { A => try r, B => 0 }}`;",
+        "const v = `${(() => 1)()}${try r}`; return v;",
+    ] {
+        let source = format!("{prelude}export const b = result {{ {body} }};\n");
+        let diagnostics = ttc::analyze(&source, &Options::default());
+        assert_eq!(diagnostics.len(), 1, "{body}: {diagnostics:#?}");
+        assert_eq!(
+            diagnostics[0].code,
+            DiagnosticCode::TryCrossesValueRegion,
+            "{body}: {diagnostics:#?}"
+        );
+        assert_eq!(
+            diagnostics[0].start,
+            Some(source.rfind("try").unwrap()),
+            "{body}: {diagnostics:#?}"
+        );
+    }
+    let out = ok(&format!(
+        "{prelude}export const f = result {{ const g = () => `${{(() => 1)()}}`; const v = try r; return `${{g()}}${{v}}`; }};\n"
+    ));
+    assert!(!out.contains("result {"), "{out}");
+    assert!(out.contains("$tt_t0.value"), "{out}");
+}
