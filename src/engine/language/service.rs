@@ -594,6 +594,79 @@ pub(super) fn signature_position(
     at
 }
 
+pub(super) fn signature_question(
+    code: &str,
+    mappings: &[EmitMapping],
+    source: &str,
+    source_kind: crate::SourceKind,
+    at: usize,
+) -> Option<(String, usize)> {
+    let tokens = crate::lexer::lex_with_kind(code, 0, code.len(), source_kind);
+    let opener = innermost_invocation(&tokens, at)?;
+    let written = callee_name(tokens_holding(&tokens, opener), opener)?;
+    if mapper::to_source(mappings, written.start).is_some() {
+        return None;
+    }
+    let source_opener = mapper::to_source(mappings, opener)?;
+    let source_tokens = crate::lexer::lex_with_kind(source, 0, source.len(), source_kind);
+    let name = callee_name(tokens_holding(&source_tokens, source_opener), source_opener)?;
+    let name = &source[name.start..name.end];
+    let question = format!("{}{name}{}", &code[..written.start], &code[written.end..]);
+    let at = if at >= written.end {
+        at + name.len() - (written.end - written.start)
+    } else {
+        at
+    };
+    Some((question, at))
+}
+
+fn tokens_holding(tokens: &[crate::lexer::Token], at: usize) -> &[crate::lexer::Token] {
+    use crate::lexer::{TokenKind, TplPart};
+    for token in tokens {
+        if let TokenKind::Template(parts) = &token.kind
+            && token.span.start < at
+            && at < token.span.end
+        {
+            for part in parts.iter() {
+                if let TplPart::Interp { span, tokens } = part
+                    && span.start <= at
+                    && at <= span.end
+                {
+                    return tokens_holding(tokens, at);
+                }
+            }
+        }
+    }
+    tokens
+}
+
+fn callee_name(tokens: &[crate::lexer::Token], opener: usize) -> Option<crate::ast::Span> {
+    use crate::lexer::TokenKind;
+    let mut index = tokens
+        .iter()
+        .position(|token| token.span.start >= opener)
+        .unwrap_or(tokens.len())
+        .checked_sub(1)?;
+    if matches!(tokens[index].kind, TokenKind::Punct(b'>')) && tokens[index].closes_bracket() {
+        let mut depth = 0usize;
+        loop {
+            let token = &tokens[index];
+            if token.closes_bracket() {
+                depth += 1;
+            } else if token.opens_bracket() {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            index = index.checked_sub(1)?;
+        }
+        index = index.checked_sub(1)?;
+    }
+    let token = &tokens[index];
+    matches!(token.kind, TokenKind::Ident).then_some(token.span)
+}
+
 fn innermost_invocation(tokens: &[crate::lexer::Token], at: usize) -> Option<usize> {
     let mut open = Vec::new();
     open_brackets_before(tokens, at, &mut open);

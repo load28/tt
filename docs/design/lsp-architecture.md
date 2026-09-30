@@ -251,6 +251,14 @@ answers the source with each item, and the adapter keeps it in the item's
 `data` for `completionItem/resolve`, so two exports of one name from
 different modules each import from their own module.
 
+**Update (TASK-630)**: when the user's call names its callee with a name
+the emission wrote (a callee stored ahead of a lowered argument, `const
+$tt_v1 = (two); ... $tt_v1(...)`), signature help is asked in a question
+served for the request, with the source call's callee name in the stored
+name's place, so TypeScript labels the signature by the symbol the source
+names (`services/signatureHelp.ts` labels by the callee expression's
+symbol).
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

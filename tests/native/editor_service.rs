@@ -116,6 +116,50 @@ const obj = { twice(n: number) { return n * 2; } };\n";
 }
 
 #[test]
+fn signature_help_names_a_stored_callee_as_the_source_call_does() {
+    require_tsgo!();
+    let head = "class Cls { constructor(a: number, b: string) {} }\n\
+declare function two(a: number, b: string): number;\n";
+    let arm = "match (s) { A => 1, B(x) => x }";
+    for (call, equivalent) in [
+        (format!("two({arm}, \"q@@\")"), "two(1, \"q@@\")"),
+        (format!("two({arm}, @@)"), "two(1, @@)"),
+        (format!("new Cls({arm}, @@)"), "new Cls(1, @@)"),
+        (format!("two<number>({arm}, \"q@@\")"), "two<number>(1, \"q@@\")"),
+        (format!("(two)({arm}, \"q@@\")"), "(two)(1, \"q@@\")"),
+        (format!("`${{two({arm}, \"q@@\")}}`"), "`${two(1, \"q@@\")}`"),
+        (format!("new Cls(1, two({arm}, \"q@@\"))"), "new Cls(1, two(1, \"q@@\"))"),
+    ] {
+        let (tt, at_tt) = at_cursor(&format!(
+            "variant S {{ A, B(x: number) }}\n{head}export function f(s: S) {{\n  return {call};\n}}\n"
+        ));
+        let (ts, at_ts) = at_cursor(&format!(
+            "type S = {{ kind: \"A\" }} | {{ kind: \"B\"; x: number }};\n{head}export function f(s: S) {{\n  return {equivalent};\n}}\n"
+        ));
+        let dir = project(&[("src/main.tt", &tt), ("src/equivalent.ts", &ts)]);
+        let tt_file = dir.join("src/main.tt").canonicalize().unwrap();
+        let ts_file = dir.join("src/equivalent.ts").canonicalize().unwrap();
+        let mut project = open_service(&tt_file);
+        project.open_document(ts_file.clone(), ts.clone());
+        let answer = |help: Option<ttc::engine::SignatureHelp>| {
+            help.map(|help| {
+                (
+                    help.signatures[help.active_signature as usize].label.clone(),
+                    help.active_parameter,
+                )
+            })
+        };
+        let expected = answer(project.signature_help(&ts_file, at_ts).unwrap());
+        assert!(expected.is_some(), "{equivalent}");
+        assert_eq!(
+            answer(project.signature_help(&tt_file, at_tt).unwrap()),
+            expected,
+            "{call}"
+        );
+    }
+}
+
+#[test]
 fn signature_help_in_a_try_is_the_same_while_the_file_has_a_syntax_error() {
     require_tsgo!();
     let decl = "import type { TResult } from \"@tt/std\";\n\

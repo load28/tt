@@ -1002,22 +1002,27 @@ impl Project {
                 (probe.code, probe.mappings, probe.offset)
             }
         };
-        let at = mapper::to_utf16(
-            &code,
-            signature_position(
-                &code,
-                &mappings,
-                crate::SourceKind::from_path(&path).unwrap_or_default(),
-                mapper::from_utf16(&code, at),
-            ),
-        );
+        let kind = crate::SourceKind::from_path(&path).unwrap_or_default();
+        let at = signature_position(&code, &mappings, kind, mapper::from_utf16(&code, at));
+        let question = signature_question(&code, &mappings, &doc.source, kind, at);
+        let (asked, at) = match &question {
+            Some((question, at)) => {
+                open_served(session, &path, question);
+                (question, *at)
+            }
+            None => (&code, at),
+        };
         let help = session.client.request(
             "textDocument/signatureHelp",
             serde_json::json!({
                 "textDocument": { "uri": served_uri(session, &path) },
-                "position": lsp_position(u16_position(&code, at)),
+                "position": lsp_position(u16_position(asked, mapper::to_utf16(asked, at))),
             }),
-        )?;
+        );
+        if question.is_some() {
+            open_served(session, &path, &code);
+        }
+        let help = help?;
         let Some(signatures) = help["signatures"].as_array().filter(|s| !s.is_empty()) else {
             return Ok(None);
         };
