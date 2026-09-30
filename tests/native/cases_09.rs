@@ -319,3 +319,42 @@ fn a_document_open_in_another_project_is_not_a_root_of_this_one() {
         "{answers:?}"
     );
 }
+
+#[test]
+fn an_editor_check_keeps_each_typescript_diagnostic_in_its_own_words() {
+    require_tsgo!();
+    // TASK-585: an arity error is not an assignability report, and the
+    // assignability error at the same argument is a diagnostic of its own.
+    let source = "function g(a: number): number { return a; }\n\
+                  function f(s: string): string { return s; }\n\
+                  export const r = f(g());\n";
+    let dir = project(&[("src/a.tt", source)]);
+    let a = dir.join("src/a.tt").canonicalize().unwrap();
+    let answers = server_answers(
+        &dir,
+        &[
+            serde_json::json!({ "id": 1, "method": "openDocument",
+                "params": { "path": a, "text": source } }),
+            serde_json::json!({ "id": 2, "method": "typedCheck",
+                "params": { "path": a, "text": source, "includeTypes": true } }),
+        ],
+    );
+    let diagnostics = answers[1]["result"]["diagnostics"]
+        .as_array()
+        .unwrap_or_else(|| panic!("{answers:?}"))
+        .clone();
+    let said = |code: &str| {
+        diagnostics
+            .iter()
+            .filter(|d| d["code"] == code)
+            .map(|d| d["message"].as_str().unwrap_or_default().to_string())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(said("ts2554"), ["Expected 1 arguments, but got 0."], "{answers:?}");
+    assert_eq!(
+        said("ts2345"),
+        ["type mismatch: expected `string`, found `number`"],
+        "{answers:?}"
+    );
+    assert_eq!(diagnostics.len(), 2, "{answers:?}");
+}

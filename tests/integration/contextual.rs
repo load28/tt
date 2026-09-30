@@ -1413,3 +1413,72 @@ console.log(pick(1), pick(2));
 "#);
     assert_eq!(output, ["3 0"]);
 }
+
+#[test]
+fn an_annotation_names_the_declarations_its_type_refers_to() {
+    require_toolchain!();
+    // TASK-575: the storage sits inside the scope of a type parameter or an
+    // interface that shadows the one the arm values have; the same name
+    // there denotes the other declaration.
+    let output = run(r#"
+variant K { A, B }
+interface Item { a: number }
+function outer<T>(a: T) {
+  function inner<T>(b: T, k: K) {
+    const z = match (k) { A => a, B => a };
+    return [z, b] as const;
+  }
+  return inner("s", K.A);
+}
+function local(i: Item, k: K) {
+  interface Item { b: string }
+  const x: Item = { b: "s" };
+  const z = match (k) { A => i, B => i };
+  const y = match (k) { A => x, B => x };
+  return [z.a, y.b];
+}
+console.log(JSON.stringify([outer(1), local({ a: 2 }, K.B)]));
+"#);
+    assert_eq!(output, [r#"[[1,"s"],[2,"s"]]"#]);
+}
+
+#[test]
+fn a_recursive_anonymous_type_is_never_annotated_with_its_elided_cycle() {
+    require_toolchain!();
+    // TASK-586: the node builder writes the cycle of `m(): this` as `any`;
+    // such a join leaves the storage typed from its values, which keep the
+    // whole type.
+    let (valid, diagnostics) = typecheck(
+        r#"
+declare const n: number;
+const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };
+b.m().m().zzz;
+function mk() { return { m() { return this; } }; }
+const c = match (n) { 1 => mk(), _ => mk() };
+c.m().m().yyy;
+const d = match (n) { 1 => [JSON.parse("1")], _ => [] };
+d[0].anything;
+"#,
+    );
+    assert!(!valid, "{diagnostics}");
+    assert_eq!(diagnostics.matches("error TS").count(), 2, "{diagnostics}");
+    assert!(
+        diagnostics.contains("error TS2339: Property 'zzz' does not exist"),
+        "{diagnostics}"
+    );
+    assert!(
+        diagnostics.contains("error TS2339: Property 'yyy' does not exist"),
+        "{diagnostics}"
+    );
+    assert!(diagnostics.contains("let $tt_v2: any[];"), "{diagnostics}");
+    let output = run(r#"
+function mk(k: number) { return { k, m() { return this; } }; }
+function pick(n: number) {
+  const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };
+  const c = match (n) { 1 => mk(3), _ => mk(4) };
+  return [b.m().m().k, c.m().m().k].join(",");
+}
+console.log(pick(1), pick(2));
+"#);
+    assert_eq!(output, ["1,3 2,4"]);
+}

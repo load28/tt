@@ -1059,6 +1059,135 @@ fn types_type_a_value_with_no_contextual_type_as_at_its_source_position() {
 }
 
 #[test]
+fn types_type_a_recursive_anonymous_join_whole() {
+    require_types_toolchain!();
+    // TASK-586: the join's annotation would write the cycle one level down
+    // as `any` and hide the second call's missing property.
+    let err = types_stderr(
+        "export function f(n: number) {\n\
+         \x20 const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };\n\
+         \x20 return b.m().m().zzz;\n\
+         }\n",
+    );
+    assert!(err.contains("error[ts2339]"), "{err}");
+    assert!(err.contains("--> src/main.tt:3:20"), "{err}");
+}
+
+#[test]
+fn types_reports_nothing_for_storage_inside_a_shadowing_scope() {
+    require_types_toolchain!();
+    // TASK-575: `T` at the storage is `inner`'s own type parameter, not the
+    // `outer` one the arm values have.
+    let err = types_stderr(
+        "variant K { A, B }\n\
+         export function outer<T>(a: T) {\n\
+         \x20 function inner<T>(b: T, k: K) {\n\
+         \x20   const z = match (k) { A => a, B => a };\n\
+         \x20   return [z, b] as const;\n\
+         \x20 }\n\
+         \x20 return inner(\"s\", K.A);\n\
+         }\n",
+    );
+    assert!(!err.contains("error"), "{err}");
+}
+
+#[test]
+fn types_join_storage_after_the_storage_its_values_read() {
+    require_types_toolchain!();
+    // TASK-584: without `noImplicitAny`, storage no round has settled reads
+    // as `any`; `g`'s join waits for `f`'s storage instead of keeping
+    // `f(): any`, across modules too, and an `any` of the source stays.
+    let (ok, err) = types_project_output(
+        "{ \"compilerOptions\": { \"strict\": false, \"target\": \"es2022\", \"module\": \"esnext\", \"moduleResolution\": \"bundler\", \"noEmit\": true }, \"include\": [\"src\"] }\n",
+        &[
+            (
+                "src/a.tt",
+                "declare const flag: boolean;\n\
+                 export const f = () => match(flag) { true => [1], false => [2] };\n\
+                 export const g = match(flag) { true => [f()], false => [] };\n\
+                 export const bad = g[0]![0]!.toUpperCase();\n",
+            ),
+            (
+                "src/m.tt",
+                "declare const flag: boolean;\n\
+                 export const p = () => match(flag) { true => [JSON.parse(\"1\")], false => [JSON.parse(\"2\")] };\n",
+            ),
+            (
+                "src/b.tt",
+                "import { f } from \"./a.tt\";\n\
+                 import { p } from \"./m.tt\";\n\
+                 declare const flag: boolean;\n\
+                 export const g = match(flag) { true => [f()], false => [] };\n\
+                 export const bad = g[0]![0]!.toUpperCase();\n\
+                 export const q = match(flag) { true => [p()], false => [] };\n\
+                 export const worse = q[0]!.foo;\n",
+            ),
+        ],
+    );
+    assert!(!ok, "{err}");
+    assert_eq!(err.matches("error[").count(), 3, "{err}");
+    assert!(err.contains("--> src/a.tt:4:30"), "{err}");
+    assert!(err.contains("--> src/b.tt:5:30"), "{err}");
+    assert!(
+        err.contains("Property 'foo' does not exist on type 'any[]'"),
+        "{err}"
+    );
+}
+
+#[test]
+fn types_renders_only_assignability_reports_as_type_mismatches() {
+    require_types_toolchain!();
+    // TASK-585: an arity error, a pipeline step's arity error and a JSX
+    // element's missing props keep TypeScript's own sentence; the argument
+    // that does not fit its parameter is a mismatch of its own.
+    let (ok, err) = types_project_output(
+        "{ \"compilerOptions\": { \"strict\": true, \"target\": \"es2022\", \"module\": \"esnext\", \"moduleResolution\": \"bundler\", \"jsx\": \"preserve\", \"noEmit\": true }, \"include\": [\"src\"] }\n",
+        &[
+            (
+                "src/a.tt",
+                "function g(a: number): number { return a; }\n\
+                 function f(s: string): string { return s; }\n\
+                 export const r = f(g());\n\
+                 function scale(x: number, by: number): number { return x * by; }\n\
+                 declare const x: number;\n\
+                 export const y = x |> scale();\n",
+            ),
+            (
+                "src/b.ttx",
+                "declare global {\n\
+                 \x20 namespace JSX {\n\
+                 \x20   interface Element { readonly tag: string }\n\
+                 \x20   interface IntrinsicElements { div: {} }\n\
+                 \x20 }\n\
+                 }\n\
+                 function Row(props: { label: string }): JSX.Element { return { tag: props.label }; }\n\
+                 export const view = <Row />;\n",
+            ),
+        ],
+    );
+    assert!(!ok, "{err}");
+    assert!(
+        err.contains("error[ts2554]: Expected 1 arguments, but got 0.\n --> src/a.tt:3:20"),
+        "{err}"
+    );
+    assert!(
+        err.contains(
+            "error[ts2345]: type mismatch: expected `string`, found `number`\n --> src/a.tt:3:20"
+        ),
+        "{err}"
+    );
+    assert!(
+        err.contains("error[ts2554]: Expected 2 arguments, but got 0.\n --> src/a.tt:6:23"),
+        "{err}"
+    );
+    assert!(
+        err.contains("error[ts2741]: Property 'label' is missing in type '{}' but required in type '{ label: string; }'."),
+        "{err}"
+    );
+    assert!(!err.contains("found `(props"), "{err}");
+}
+
+#[test]
 fn types_does_not_count_a_guarded_arm_as_covering() {
     require_types_toolchain!();
     let err = types_stderr(

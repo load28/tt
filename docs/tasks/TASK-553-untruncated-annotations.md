@@ -1,5 +1,9 @@
 # TASK-553: Annotate storage with the whole type, never a truncated one
 
+> TASK-586 corrects the finding under Decision 1: with `NoTruncation` the
+> node builder does write a node for a recursive anonymous type, with its
+> cycle as `any` (TASK-570 Issue 2). Such a node is now rejected.
+
 - **Status**: Complete
 - **Started**: 2026-09-29
 - **Completed**: 2026-09-29

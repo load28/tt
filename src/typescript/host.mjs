@@ -276,9 +276,7 @@ async function main() {
   let isIdentifier;
   let isVariableDeclaration;
   let isBinaryExpression;
-  let isTypeReferenceNode;
-  let isTypeQueryNode;
-  let isQualifiedName;
+  let isStatement;
   let SyntaxKind;
   try {
     ({ API, SymbolFlags, TypeFlags, NodeBuilderFlags } = await import(open.apiModule));
@@ -287,9 +285,7 @@ async function main() {
       isIdentifier,
       isVariableDeclaration,
       isBinaryExpression,
-      isTypeReferenceNode,
-      isTypeQueryNode,
-      isQualifiedName,
+      isStatement,
       SyntaxKind,
     } = await import(path.resolve(path.dirname(open.apiModule), "../../ast/index.js")));
   } catch (e) {
@@ -653,6 +649,70 @@ async function main() {
         storage.set(module, symbols);
         return symbols;
       };
+      // The storage no round has settled yet, and whether a node reads it,
+      // directly or through a declaration whose inferred type is computed
+      // from it: an unannotated variable's initializer, an unannotated
+      // function's body, and for an unannotated parameter the statement
+      // whose context types it. Only the lowered modules declare storage,
+      // so only their declarations are followed.
+      let pending;
+      const pendingStorage = () => {
+        if (pending) return pending;
+        pending = new Set();
+        const ends = new Map();
+        for (const slot of job.contextualSlots ?? []) {
+          if (slot.settled || !members.has(slot.module)) continue;
+          if (!ends.has(slot.module)) ends.set(slot.module, new Set());
+          ends.get(slot.module).add(slot.declarationEnd);
+        }
+        for (const [module, declared] of ends) {
+          const collect = (node) => {
+            if (isVariableDeclaration(node) && isIdentifier(node.name) && declared.has(node.name.end)) {
+              const symbol = checker.getSymbolAtLocation(node.name);
+              if (symbol) pending.add(symbol.id);
+            }
+            node.forEachChild(collect);
+          };
+          const source = project.program.getSourceFile(module);
+          if (source) collect(source);
+        }
+        return pending;
+      };
+      const readsPending = (node, own) => {
+        const followed = new Set([own]);
+        const reads = (node) => {
+          const names = [];
+          const collect = (child) => {
+            if (isIdentifier(child)) names.push(child);
+            child.forEachChild(collect);
+          };
+          collect(node);
+          if (!names.length) return false;
+          for (let symbol of checker.getSymbolAtLocation(names)) {
+            if (!symbol) continue;
+            if (symbol.flags & SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
+            if (followed.has(symbol.id)) continue;
+            followed.add(symbol.id);
+            if (pendingStorage().has(symbol.id)) return true;
+            for (const handle of symbol.declarations ?? []) {
+              if (!members.has(String(handle.path))) continue;
+              let declaration = handle.resolve(project);
+              if (declaration?.kind === SyntaxKind.Parameter && !declaration.type) {
+                while (declaration.parent && !isStatement(declaration)) declaration = declaration.parent;
+              }
+              if (declaration && reads(declaration)) return true;
+            }
+          }
+          return false;
+        };
+        return reads(node);
+      };
+      const writesAny = (node) => {
+        if (node.kind === SyntaxKind.AnyKeyword) return true;
+        let found = false;
+        node.forEachChild((child) => { found ||= writesAny(child); });
+        return found;
+      };
       for (const [index, slot] of (job.contextualSlots ?? []).entries()) {
         if (slot.settled || !members.has(slot.module)) continue;
         const source = project.program.getSourceFile(slot.module);
@@ -673,41 +733,22 @@ async function main() {
         if (!symbol) continue;
         const declaredType = declaration.initializer ? checker.getTypeAtLocation(declaration.name) : undefined;
         // The annotation is written at the storage declaration, which may
-        // enclose the scope the type was observed in: a class declared in a
-        // match arm's block is out of scope there, or an outer declaration
-        // of the same name shadows it. An annotation is written only when
-        // every name it references denotes, at the declaration, the symbol
-        // it denotes where the type was observed, and that symbol is not
+        // enclose the scope the type was observed in (a class declared in a
+        // match arm's block is out of scope there) or sit in a scope where
+        // another declaration of the same name shadows the one the type
+        // refers to. An annotation is written only when the node denotes
+        // the type at the declaration: every name it references resolves
+        // there to the symbol the type itself refers to, and none to
         // storage the lowering declared. It is written without truncation:
         // a truncated type is not the type (`... 3 more ...` is not even
         // TypeScript).
         const generated = storageOf(slot.module, source);
-        const annotation = (type, observed) => {
+        const annotation = (type) => {
           const node = typeNode(checker, type, declaration, NodeBuilderFlags.NoTruncation);
-          if (!node) return undefined;
-          let accessible = true;
-          const visit = (child) => {
-            if (!accessible) return;
-            const reference = isTypeReferenceNode(child)
-              ? [child.typeName, SymbolFlags.Type]
-              : isTypeQueryNode(child) ? [child.exprName, SymbolFlags.Value] : undefined;
-            if (reference) {
-              let [name, meaning] = reference;
-              while (isQualifiedName(name)) {
-                name = name.left;
-                meaning = SymbolFlags.Namespace | SymbolFlags.Value;
-              }
-              const here = checker.resolveName(name.text, meaning, declaration);
-              const there = checker.resolveName(name.text, meaning, observed);
-              accessible = !!here && !!there && here.id === there.id && !generated.has(here.id);
-            }
-            child.forEachChild(visit);
-          };
-          visit(node);
-          return accessible ? project.emitter.printNode(node) : undefined;
+          return node && denotes(checker, node, type, declaration, generated, { SyntaxKind, SymbolFlags, TypeFlags })
+            ? node : undefined;
         };
         let expected;
-        let observedAt;
         let ambiguous = false;
         for (const identifier of identifiers) {
           if (identifier === declaration.name || identifier.text !== declaration.name.text) continue;
@@ -719,7 +760,6 @@ async function main() {
           if (!context || (context.flags & (TypeFlags.Any | TypeFlags.Unknown)) || context.isErrorType()) continue;
           if (expected && expected.id !== context.id) { ambiguous = true; break; }
           expected = context;
-          observedAt ??= identifier;
         }
         if (job.inferJoinTypes && !expected && !ambiguous && !declaration.initializer) {
           // A statement join must have the union of its incoming value types.
@@ -737,16 +777,24 @@ async function main() {
           const joined = types.flatMap((type, index) => types.some((other, otherIndex) =>
             index !== otherIndex && checker.isTypeAssignableTo(type, other) &&
             (!checker.isTypeAssignableTo(other, type) || otherIndex < index)) ? [] : [index]);
-          const annotations = joined.map(index => annotation(types[index], incoming[index].right));
-          if (annotations.length && annotations.every(Boolean)) {
-            out.contextualSlots.push({ index, inferred: true, annotation: annotations.length === 1
-              ? annotations[0] : annotations.map(t => `(${t})`).join(" | ") });
-          }
+          const annotations = joined.map(index => annotation(types[index]));
+          if (!annotations.length || !annotations.every(Boolean)) continue;
+          // An incoming value that reads storage no round has settled yet
+          // is typed by that storage's `any` where it has no type of its
+          // own (without `noImplicitAny`, or where an evolving variable is
+          // read in a closure), and a join computed from it would keep that
+          // `any` after the storage is settled. Such a join waits for a
+          // later round, when its inputs are typed by their settled
+          // storage.
+          if (annotations.some(writesAny) && incoming.some((assignment) => readsPending(assignment.right, symbol.id))) continue;
+          const texts = annotations.map((node) => project.emitter.printNode(node));
+          out.contextualSlots.push({ index, inferred: true, annotation: texts.length === 1
+            ? texts[0] : texts.map(t => `(${t})`).join(" | ") });
           continue;
         }
         if (!expected || ambiguous) continue;
-        const text = annotation(expected, observedAt);
-        if (text) out.contextualSlots.push({ index, inferred: false, annotation: text });
+        const node = annotation(expected);
+        if (node) out.contextualSlots.push({ index, inferred: false, annotation: project.emitter.printNode(node) });
       }
     };
     for (const group of groups) contextual(group);
@@ -791,7 +839,8 @@ async function main() {
           if (open.tsconfig && whole) out.projectDiagnostics.push({ file: null, code: d.code, message: d.text });
           continue;
         }
-        const mismatch = contextualMismatch(project, checker, d, isExpression);
+        const mismatch = contextualMismatch(project, checker, d, isExpression, SyntaxKind);
+        const receiver = lookupReceiver(project, d, SyntaxKind);
         const related = relatedPlaces(d);
         out.diagnostics.push({
           file: d.fileName,
@@ -800,6 +849,7 @@ async function main() {
           code: d.code,
           message: d.text,
           ...(mismatch ? { mismatch } : {}),
+          ...(receiver ? { receiver } : {}),
           ...(related.length > 0 ? { related } : {}),
         });
       }
@@ -1009,11 +1059,186 @@ function typeNode(checker, type, location, flags) {
 }
 
 /**
- * Finds the expression TypeScript compared with a contextual type for a
- * diagnostic. This is syntax-neutral: return values, annotated initializers,
- * call arguments and future lowered constructs all participate through the
- * checker’s contextual typing relation.
+ * Whether the node the node builder wrote for `type` denotes that type at
+ * `location`. The node builder writes a symbol by its name whether or not
+ * the name reaches that symbol from `location`: a type parameter or a local
+ * interface shadowing another of the same name prints as the same `T` or
+ * `Item`. So the node and the type are walked together, and each name the
+ * node uses must resolve at `location` to the symbol of the part of the
+ * type it was written for: the type parameter's own symbol, the alias or
+ * declaration a type reference instantiates, the value a type query names.
+ * A name that resolves to a symbol in `excluded` (generated storage) denotes
+ * nothing. An `any` keyword must be written for the `any` type: the node
+ * builder writes the cycle of a recursive anonymous type as `any` too. A part of the node that uses a name and cannot be paired with a
+ * part of the type is not proven to denote it, so the node does not either.
  */
+function denotes(checker, node, type, location, excluded, { SyntaxKind, SymbolFlags, TypeFlags }) {
+  const K = SyntaxKind;
+  const named = (n) => {
+    if (n.kind === K.TypeReference || n.kind === K.TypeQuery || n.kind === K.ImportType ||
+        n.kind === K.ComputedPropertyName || n.kind === K.AnyKeyword) return true;
+    let found = false;
+    n.forEachChild((child) => { found ||= named(child); });
+    return found;
+  };
+  const aliased = (symbol) => (symbol.flags & SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol);
+  const entity = (name, meaning) => {
+    const members = [];
+    while (name.kind === K.QualifiedName) {
+      members.unshift(name.right.text);
+      name = name.left;
+    }
+    let symbol = checker.resolveName(name.text, members.length ? SymbolFlags.Namespace | SymbolFlags.Value : meaning, location);
+    if (!symbol || excluded.has(symbol.id)) return undefined;
+    for (const member of members) {
+      symbol = aliased(symbol).getExports().get(member.startsWith("__") ? "_" + member : member);
+      if (!symbol) return undefined;
+    }
+    return aliased(symbol);
+  };
+  const referenceArguments = (t) => {
+    if (!t.isTypeReference()) return [];
+    const outer = t.getTarget().getOuterTypeParameters()?.length ?? 0;
+    return checker.getTypeArguments(t).slice(outer);
+  };
+  const constituents = (t) => (t.isUnionType() || t.isIntersectionType() ? t.getTypes() : [t]);
+  const pairs = (nodes, types, scope) =>
+    !nodes || nodes.every((n, i) => i < types.length && walk(n, types[i], scope));
+  const optional = (n, t, question, scope) =>
+    walk(n, t, scope) || (!!question && walk(n, t.getNonNullableType(), scope));
+  const key = (name) =>
+    name.kind === K.Identifier || name.kind === K.PrivateIdentifier || name.kind === K.StringLiteral ||
+    name.kind === K.NumericLiteral ? name.text : undefined;
+  const signature = (n, sig, scope) => {
+    if (!sig) return false;
+    const parameters = sig.getTypeParameters() ?? [];
+    const declared = n.typeParameters ?? [];
+    if (n.typeParameters && declared.length !== parameters.length) return false;
+    if (declared.length) {
+      scope = new Map(scope);
+      declared.forEach((p, i) => scope.set(p.name.text, parameters[i]));
+      for (const [i, p] of declared.entries()) {
+        if (p.constraint && !walk(p.constraint, checker.getConstraintOfTypeParameter(parameters[i]), scope)) return false;
+        if (p.default && !walk(p.default, checker.getDefaultFromTypeParameter(parameters[i]), scope)) return false;
+      }
+    }
+    let written = [...n.parameters];
+    if (written[0]?.name.kind === K.Identifier && written[0].name.text === "this") {
+      const self = sig.getThisParameter();
+      if (written[0].type && (!self || !walk(written[0].type, checker.getTypeOfSymbol(self), scope))) return false;
+      written = written.slice(1);
+    }
+    const symbols = sig.getParameters();
+    for (const [i, p] of written.entries()) {
+      if (!p.type || !named(p.type)) continue;
+      if (i >= symbols.length || !optional(p.type, checker.getTypeOfSymbol(symbols[i]), p.questionToken, scope)) return false;
+    }
+    if (!n.type || !named(n.type)) return true;
+    if (n.type.kind === K.TypePredicate) {
+      const predicate = checker.getTypePredicateOfSignature(sig);
+      return !n.type.type || (!!predicate?.type && walk(n.type.type, predicate.type, scope));
+    }
+    return walk(n.type, sig.getReturnType(), scope);
+  };
+  const walk = (n, t, scope) => {
+    if (!named(n)) return true;
+    if (!t) return false;
+    switch (n.kind) {
+      case K.AnyKeyword:
+        return !!(t.flags & TypeFlags.Any);
+      case K.ParenthesizedType:
+        return walk(n.type, t, scope);
+      case K.TypeReference: {
+        const local = n.typeName.kind === K.Identifier ? scope.get(n.typeName.text) : undefined;
+        if (local) return t.id === local.id && !n.typeArguments;
+        const symbol = entity(n.typeName, SymbolFlags.Type);
+        if (!symbol) return false;
+        const alias = t.getAliasSymbol();
+        if (alias && alias.id === symbol.id) return pairs(n.typeArguments, t.getAliasTypeArguments(), scope);
+        const own = t.getSymbol();
+        return !!own && own.id === symbol.id && pairs(n.typeArguments, referenceArguments(t), scope);
+      }
+      case K.TypeQuery: {
+        const symbol = entity(n.exprName, SymbolFlags.Value);
+        const own = t.getSymbol();
+        return !!symbol && !!own && own.id === symbol.id && !n.typeArguments;
+      }
+      case K.ImportType: {
+        if (!n.qualifier) return !n.typeArguments;
+        const name = n.qualifier.kind === K.QualifiedName ? n.qualifier.right.text : n.qualifier.text;
+        const alias = t.getAliasSymbol();
+        if (alias?.name === name) return pairs(n.typeArguments, t.getAliasTypeArguments(), scope);
+        return t.getSymbol()?.name === name && pairs(n.typeArguments, referenceArguments(t), scope);
+      }
+      case K.UnionType:
+      case K.IntersectionType:
+        return n.types.every((child) => !named(child) || constituents(t).some((c) => walk(child, c, scope)));
+      case K.ArrayType:
+        return walk(n.elementType, referenceArguments(t)[0], scope);
+      case K.TupleType: {
+        const elements = referenceArguments(t);
+        return n.elements.every((element, i) => {
+          let written = element;
+          if (written.kind === K.NamedTupleMember) written = written.type;
+          if (written.kind === K.OptionalType) written = written.type;
+          const rest = written.kind === K.RestType || element.dotDotDotToken;
+          if (written.kind === K.RestType) written = written.type;
+          if (rest && written.kind === K.ArrayType) written = written.elementType;
+          return walk(written, elements[i], scope);
+        });
+      }
+      case K.TypeOperator:
+        return n.operator === K.ReadonlyKeyword && walk(n.type, t, scope);
+      case K.IndexedAccessType:
+        return t.isIndexedAccessType() && walk(n.objectType, t.getObjectType(), scope) &&
+          walk(n.indexType, t.getIndexType(), scope);
+      case K.FunctionType:
+        return t.getCallSignatures().length === 1 && signature(n, t.getCallSignatures()[0], scope);
+      case K.ConstructorType:
+        return t.getConstructSignatures().length === 1 && signature(n, t.getConstructSignatures()[0], scope);
+      case K.TypeLiteral: {
+        const calls = t.getCallSignatures();
+        const constructs = t.getConstructSignatures();
+        const indexes = checker.getIndexInfosOfType(t);
+        const seen = { call: 0, construct: 0, index: 0, methods: new Map() };
+        return n.members.every((member) => {
+          switch (member.kind) {
+            case K.CallSignature:
+              return !named(member) || signature(member, calls[seen.call++], scope);
+            case K.ConstructSignature:
+              return !named(member) || signature(member, constructs[seen.construct++], scope);
+            case K.IndexSignature: {
+              const info = indexes[seen.index++];
+              return !named(member) || (!!info && walk(member.parameters[0].type, info.keyType, scope) &&
+                walk(member.type, info.valueType, scope));
+            }
+            default: {
+              if (!named(member)) return true;
+              const name = key(member.name);
+              const property = name === undefined ? undefined : checker.getPropertyOfType(t, name);
+              if (!property) return false;
+              const declared = checker.getTypeOfSymbol(property);
+              if (member.kind === K.MethodSignature) {
+                const index = seen.methods.get(name) ?? 0;
+                seen.methods.set(name, index + 1);
+                return signature(member, declared.getCallSignatures()[index], scope);
+              }
+              if (member.kind === K.PropertySignature || member.kind === K.GetAccessor) {
+                return optional(member.type, declared, member.questionToken, scope);
+              }
+              if (member.kind === K.SetAccessor) return walk(member.parameters[0].type, declared, scope);
+              return false;
+            }
+          }
+        });
+      }
+      default:
+        return false;
+    }
+  };
+  return walk(node, type, new Map());
+}
+
 /**
  * The checker's own related places — "the expected type comes from this
  * declaration", "first declared here" — normalized to the diagnostic item
@@ -1037,67 +1262,140 @@ function relatedPlaces(diagnostic) {
   return out;
 }
 
-function contextualMismatch(project, checker, diagnostic, isExpression) {
+/**
+ * TypeScript's diagnostics that report a source type not assignable to a
+ * target type: the head messages of its assignability relation
+ * (`Type '{0}' is not assignable to type '{1}'`, the argument, missing
+ * property, weak type, `exactOptionalPropertyTypes` and `satisfies` forms).
+ * Any other diagnostic, an arity error at an argument included, is not a
+ * statement about an expression's type and its context.
+ */
+const ASSIGNABILITY_CODES = new Set([
+  1360, 2322, 2345, 2375, 2379, 2412, 2418, 2559, 2560, 2719, 2739, 2740, 2741, 2820,
+]);
+
+/**
+ * The expression an assignability diagnostic is about, with its type and
+ * its contextual type. TypeScript reports the relation of an expression's
+ * type to its contextual type at an error node that is either that
+ * expression or stands for it: the name of the declaration, property or JSX
+ * attribute it initializes, the `return` statement it is returned by, the
+ * target it is assigned to, or the tag name of the JSX element its
+ * attributes are passed to. The subject is found from the error node by
+ * that role, never by searching the span for some expression that does not
+ * fit its context. A JSX attribute is typed by its name, which TypeScript
+ * gives the attribute's type and the attribute's contextual type.
+ */
+function contextualMismatch(project, checker, diagnostic, isExpression, SyntaxKind) {
+  if (!ASSIGNABILITY_CODES.has(diagnostic.code)) return null;
   const sourceFile = project.program.getSourceFile(diagnostic.fileName);
   if (!sourceFile) return null;
+  const K = SyntaxKind;
 
-  const chain = [];
+  const starting = [];
   const visit = (node) => {
     if (node.pos > diagnostic.pos || node.end < diagnostic.end) return;
-    chain.push(node);
+    if (node.getStart(sourceFile) === diagnostic.pos) starting.push(node);
     node.forEachChild(visit);
   };
   visit(sourceFile);
 
-  for (let i = chain.length - 1; i >= 0; i--) {
-    const node = chain[i];
-    const candidates = [];
-    if (isExpression(node)) candidates.push(node);
-    node.forEachChild((child) => {
-      if (isExpression(child)) candidates.push(child);
-    });
-    candidates.sort((left, right) => right.getWidth(sourceFile) - left.getWidth(sourceFile));
-    for (const expression of candidates) {
-      let found;
-      let expected;
-      try {
-        found = checker.getTypeAtLocation(expression);
-        expected = checker.getContextualType(expression);
-      } catch {
-        continue;
-      }
-      if (!found || !expected || found.isErrorType?.() || expected.isErrorType?.()) continue;
-      if (checker.isTypeAssignableTo(found, expected)) continue;
-      let declaration;
-      try {
-        const symbol = checker.getSymbolAtPosition(
-          sourceFile.fileName,
-          expression.getStart(sourceFile),
-        );
-        const handle = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
-        const node = handle?.resolve?.(project);
-        const file = node?.getSourceFile?.();
-        if (node && file && handle) {
-          declaration = {
-            file: file.fileName,
-            start: node.getStart(file),
-            end: node.getEnd(),
-          };
-        }
-      } catch {
-        declaration = undefined;
-      }
-      return {
-        start: expression.getStart(sourceFile),
-        end: expression.getEnd(),
-        expected: checker.typeToString(expected),
-        found: checker.typeToString(found),
-        differences: incompatibleLeaves(checker, found, expected),
-        ...(declaration ? { declaration } : {}),
+  const same = (left, right) => !!left && !!right && left.kind === right.kind && left.pos === right.pos && left.end === right.end;
+  const valueOf = (node) => {
+    const parent = node.parent;
+    if (node.kind === K.ReturnStatement) return node.expression;
+    if (!parent) return undefined;
+    if (parent.kind === K.JsxAttribute && same(parent.name, node)) return node;
+    if (same(parent.name, node) && parent.initializer) {
+      return parent.initializer;
+    }
+    if ((parent.kind === K.JsxOpeningElement || parent.kind === K.JsxSelfClosingElement) && same(parent.tagName, node)) {
+      return parent.attributes;
+    }
+    if (parent.kind === K.BinaryExpression && same(parent.left, node) && parent.operatorToken.kind === K.EqualsToken) {
+      return parent.right;
+    }
+    return undefined;
+  };
+  let expression;
+  for (let i = starting.length - 1; i >= 0 && !expression; i--) {
+    const node = starting[i];
+    expression = valueOf(node) ?? (isExpression(node) && node.end === diagnostic.end ? node : undefined);
+  }
+  if (!expression) return null;
+
+  let found;
+  let expected;
+  try {
+    found = checker.getTypeAtLocation(expression);
+    expected = checker.getContextualType(expression);
+  } catch {
+    return null;
+  }
+  if (!found || !expected || found.isErrorType?.() || expected.isErrorType?.()) return null;
+  if (checker.isTypeAssignableTo(found, expected)) return null;
+  let declaration;
+  try {
+    const symbol = checker.getSymbolAtPosition(
+      sourceFile.fileName,
+      expression.getStart(sourceFile),
+    );
+    const handle = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
+    const node = handle?.resolve?.(project);
+    const file = node?.getSourceFile?.();
+    if (node && file && handle) {
+      declaration = {
+        file: file.fileName,
+        start: node.getStart(file),
+        end: node.getEnd(),
       };
     }
+  } catch {
+    declaration = undefined;
   }
-  return null;
+  return {
+    start: expression.getStart(sourceFile),
+    end: expression.getEnd(),
+    expected: checker.typeToString(expected),
+    found: checker.typeToString(found),
+    differences: incompatibleLeaves(checker, found, expected),
+    ...(declaration ? { declaration } : {}),
+  };
+}
+
+/**
+ * TypeScript's diagnostics that say a property does not exist on a type,
+ * reported at the property's name.
+ */
+const MISSING_PROPERTY_CODES = new Set([2339, 2551]);
+
+/**
+ * The value a missing property was looked up on: the object of the
+ * property access whose name the diagnostic is at, or the value an object
+ * binding pattern destructures when the name is one of its elements.
+ */
+function lookupReceiver(project, diagnostic, SyntaxKind) {
+  if (!MISSING_PROPERTY_CODES.has(diagnostic.code)) return null;
+  const sourceFile = project.program.getSourceFile(diagnostic.fileName);
+  if (!sourceFile) return null;
+  const K = SyntaxKind;
+  let name;
+  const visit = (node) => {
+    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return;
+    if (node.getStart(sourceFile) === diagnostic.pos && node.end === diagnostic.end) name = node;
+    node.forEachChild(visit);
+  };
+  visit(sourceFile);
+  const parent = name?.parent;
+  let receiver;
+  if ((parent?.kind === K.PropertyAccessExpression && parent.name === name) ||
+      (parent?.kind === K.ElementAccessExpression && parent.argumentExpression === name)) {
+    receiver = parent.expression;
+  } else if (parent?.kind === K.BindingElement && (parent.propertyName ?? parent.name) === name &&
+      parent.parent?.kind === K.ObjectBindingPattern) {
+    receiver = parent.parent.parent?.initializer;
+  }
+  return receiver ? { start: receiver.getStart(sourceFile), end: receiver.getEnd() } : null;
 }
 
 /** The innermost expression whose source range contains the emitted value. */

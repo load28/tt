@@ -15,16 +15,29 @@ indefinite types do not produce a guessed annotation.
 
 The declaration can enclose the scope the type was observed in: a class
 declared in a match arm's block is out of scope at the storage, and an outer
-declaration of the same name shadows it there (TASK-546). Every name an
-annotation references (the head of each type reference and type query) must
-therefore resolve, at the declaration, to the symbol it resolves to where the
-type was observed: the reference that supplied the contextual type, or the
-right-hand side of the join's assignment. Otherwise the storage has no
-annotation and TypeScript infers its type from its assignments.
+declaration of the same name shadows it there (TASK-546). The declaration can
+also sit inside a scope that shadows the declaration the type refers to: a
+nested function's own type parameter `T`, or a local `interface Item`, while
+the arm values have the outer `T` or `Item` (TASK-575). The node builder
+writes both as the same name. The annotation's type node and the type are
+therefore walked together, and every name the node references (each type
+reference, type query and qualified name, resolved through its members) must
+resolve, at the declaration, to the symbol of the part of the type it was
+written for: the type parameter's own symbol, the alias or declaration a type
+reference instantiates, the value a type query names. A part of the node that
+uses a name and cannot be paired with a part of the type proves nothing, and
+the node is not taken either. Otherwise the storage has no annotation and
+TypeScript infers its type from its assignments.
 
 An annotation is the whole type: the node builder is asked with
 `NoTruncation` (TASK-553), since its default shortens a long type to
-`... N more ...`, which is neither the type nor TypeScript.
+`... N more ...`, which is neither the type nor TypeScript. With it, the
+node builder writes the cycle of a recursive anonymous type (the object
+literal `{ k: 1, m() { return this; } }`) as `any` one level down, where its
+default writes `...` (TASK-586). The walk that pairs the node's names with
+the type's symbols therefore pairs each `any` keyword too, and takes the
+node only when every `any` stands for the `any` type; otherwise the storage
+is typed from its values, which TASK-570 types as at their source position.
 
 Nor may an annotation name storage the lowering declared (TASK-552).
 TypeScript names a class expression after the binding it is assigned to, so
@@ -117,6 +130,21 @@ before the remaining union is serialized at the declaration. For example,
 `number[]` and `never[]` join as `number[]`, preserving empty-array expression
 inference without evolving an implicit `any[]`. Unresolved, error, `any`, and
 `unknown` inputs do not provide a definite annotation in that round.
+
+Nor does an input typed through storage no round has settled yet (TASK-584).
+Such storage has no type of its own: without `noImplicitAny` it reads as
+`any`, and so does an evolving variable read in a closure. In
+`const g = match (flag) { true => [f()], false => [] }`, `f()` is then `any`
+while `f`'s own join is inferred in the same round, and `g` would keep
+`any[]` after `f` is annotated. A join whose annotation writes `any` and
+one of whose incoming values reads unsettled storage (directly, or through
+the initializer or body of an unannotated declaration in a lowered module,
+or the statement that contextually types an unannotated parameter) waits
+for a later round; the slot's own storage does not count. Joins therefore
+settle in dependency order, and a join that never stops depending on
+unsettled storage (a cycle) is left unannotated and typed from its
+assignments. An `any` of the source, such as `JSON.parse`'s, is annotated
+as soon as its inputs read only settled storage.
 
 A slot therefore holds values of one type. A structured pipeline writes the
 value piped into each step to a slot of its own and only its result to the

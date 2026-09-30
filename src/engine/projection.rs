@@ -775,7 +775,9 @@ pub(crate) fn diagnostic_intersects_recovery(
 
 /// Whether a checker diagnostic covers source already owned by a direct TT
 /// cause. The mismatch span, when available, is the checker's more precise
-/// statement of where the consequence originated.
+/// statement of where the consequence originated; a property missing from
+/// a value originates where that value is, so the receiver of the lookup
+/// is owned as well.
 pub(crate) fn diagnostic_intersects_tt_error(
     file: &ProjectedDocument,
     diagnostic: &crate::typescript::backend::Diagnostic,
@@ -786,10 +788,14 @@ pub(crate) fn diagnostic_intersects_tt_error(
         .map_or((diagnostic.start, diagnostic.end), |mismatch| {
             (mismatch.start, mismatch.end)
         });
-    let Some(origin) = diagnostic_origin(file, diagnostic_start, diagnostic_end) else {
-        return false;
-    };
-    origin_intersects_tt_error(origin, &file.tt_diagnostics)
+    [
+        Some((diagnostic_start, diagnostic_end)),
+        diagnostic.receiver,
+    ]
+    .into_iter()
+    .flatten()
+    .filter_map(|(start, end)| diagnostic_origin(file, start, end))
+    .any(|origin| origin_intersects_tt_error(origin, &file.tt_diagnostics))
 }
 
 #[cfg(test)]
@@ -812,6 +818,7 @@ mod tests {
             code,
             message: message.to_string(),
             mismatch: None,
+            receiver: None,
             related: Vec::new(),
         }
     }

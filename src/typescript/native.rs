@@ -442,6 +442,10 @@ fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
             code: d["code"].as_u64().unwrap_or_default() as u32,
             message: d["message"].as_str().unwrap_or_default().to_string(),
             mismatch: parse_type_mismatch(&d["mismatch"]),
+            receiver: d["receiver"]["start"]
+                .as_u64()
+                .zip(d["receiver"]["end"].as_u64())
+                .map(|(start, end)| (start as usize, end as usize)),
             related: d["related"]
                 .as_array()
                 .map(|entries| {

@@ -588,7 +588,11 @@
 | TASK-572 | Evaluate a comma operand before a value as a statement | Complete | 2026-09-29 | 2026-09-29 | [TASK-572](./TASK-572-discarded-comma-operands.md) |
 | TASK-573 | Keep a method call around a value a member call on its receiver | Complete | 2026-09-29 | 2026-09-30 | [TASK-573](./TASK-573-method-calls-stay-member-calls.md) |
 | TASK-574 | Report a postfix pipeline's result mismatch on the whole pipeline | Complete | 2026-09-30 | 2026-09-30 | [TASK-574](./TASK-574-postfix-pipeline-result-anchor.md) |
+| TASK-575 | Annotate storage only with names that denote the type's own declarations | Complete | 2026-09-29 | 2026-09-29 | [TASK-575](./TASK-575-annotations-name-their-type-declarations.md) |
+| TASK-584 | Infer a join only from values typed by settled storage | Complete | 2026-09-29 | 2026-09-29 | [TASK-584](./TASK-584-joins-wait-for-settled-inputs.md) |
+| TASK-585 | Render only TypeScript's assignability diagnostics as type mismatches, about their own subject | Complete | 2026-09-29 | 2026-09-30 | [TASK-585](./TASK-585-assignability-facts-only-for-assignability.md) |
+| TASK-586 | Never annotate storage with a type whose cycle the node builder elided | Complete | 2026-09-30 | 2026-09-30 | [TASK-586](./TASK-586-no-elided-cycles-in-annotations.md) |
 
 ## Next task number
 
-**TASK-585**
+**TASK-587**

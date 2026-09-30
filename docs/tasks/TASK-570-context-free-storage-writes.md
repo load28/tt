@@ -193,7 +193,7 @@ help: the annotation repeats `m(): any`.
   TASK-553 assumed the node builder writes no node for such a type.
 - **Resolution**: Not resolved here: it concerns the join annotation, not
   the contextual type of the value. Left as a follow-up; the regression test
-  asserts the first level, which this task fixes.
+  asserts the first level, which this task fixes. TASK-586 resolves it.
 
 ## Verification
 

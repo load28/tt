@@ -196,7 +196,7 @@ fn an_ordinary_ts_message_also_uses_tt_names() {
 }
 
 #[test]
-fn diagnostics_are_source_sorted_and_display_duplicates_are_merged() {
+fn diagnostics_are_source_sorted_and_only_identical_duplicates_are_merged() {
     let at = |line, code: &str| Diagnostic {
         path: PathBuf::from("/p/a.tt"),
         position: Some((line, 1)),
@@ -206,8 +206,14 @@ fn diagnostics_are_source_sorted_and_display_duplicates_are_merged() {
         suggestions: Vec::new(),
         labels: Vec::new(),
     };
-    let finished = finish_diagnostics(vec![at(2, "ts9999"), at(1, "ts1000"), at(2, "ts1001")]);
-    assert_eq!(finished.len(), 2);
+    let finished = finish_diagnostics(vec![
+        at(2, "ts9999"),
+        at(1, "ts1000"),
+        at(2, "ts1001"),
+        at(2, "ts9999"),
+    ]);
+    let codes: Vec<_> = finished.iter().map(|d| d.code.as_deref()).collect();
+    assert_eq!(codes, [Some("ts1000"), Some("ts1001"), Some("ts9999")]);
     assert_eq!(finished[0].position, Some((1, 1)));
     assert_eq!(finished[1].position, Some((2, 1)));
 }
