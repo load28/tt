@@ -1,0 +1,2 @@
+forOfHead(2) => [null] | await
+forOfHead(5) => [null] | await

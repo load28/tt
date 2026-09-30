@@ -1,0 +1,4 @@
+jsxConditional({"kind":"Num","value":4}) => "<p>4</p>" | flip true; await; number 4
+jsxConditional({"kind":"Neg","value":-3}) => "<p></p>" | flip false
+jsxConditional({"kind":"Word","text":"hi"}) => "<p>hi</p>" | flip true; await; word "hi"
+jsxConditional({"kind":"End"}) => "<p></p>" | flip false

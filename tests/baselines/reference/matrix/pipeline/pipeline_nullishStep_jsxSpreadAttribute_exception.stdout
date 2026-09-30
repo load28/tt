@@ -1,0 +1,2 @@
+jsxSpreadAttribute(10) => "<div value=9></div>" | risky 10; flip true; lookup true; found 9
+jsxSpreadAttribute(20) => "<div value=40></div>" | risky 20; flip false; lookup false; double 40

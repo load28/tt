@@ -1,0 +1,2 @@
+arrayElement(10) => [0,9,2] | first 0; yield 10; flip true; lookup true; found 9; last 2
+arrayElement(20) => [0,40,2] | first 0; yield 20; flip false; lookup false; double 40; last 2

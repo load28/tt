@@ -1,0 +1,2 @@
+componentBody(3) => "<p>[3,4]</p>" | open res; operand 3; copy 4; dispose res
+componentBody(8) => "<p>[8,9]</p>" | open res; operand 8; copy 9; dispose res

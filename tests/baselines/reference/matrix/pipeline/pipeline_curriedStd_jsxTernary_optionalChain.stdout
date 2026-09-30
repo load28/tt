@@ -1,0 +1,2 @@
+jsxTernary(5) => "<p>15</p>" | flip true; map 15
+jsxTernary(0) => "<p><i>none</i></p>" | flip false

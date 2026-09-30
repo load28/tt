@@ -1,0 +1,2 @@
+forTest(2) => 1 | open res; operand 2; dispose res
+forTest(5) => 1 | open res; operand 5; dispose res

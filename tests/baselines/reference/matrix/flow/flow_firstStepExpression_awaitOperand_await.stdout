@@ -1,0 +1,2 @@
+awaitOperand(3) => "6" | await; add 6
+awaitOperand(-4) => "-8" | await; add -8

@@ -1,0 +1,2 @@
+componentBody(6) => "<p>6</p>" | risky 6; some 6
+componentBody(9) => "<p>9</p>" | risky 9; some 9

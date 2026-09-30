@@ -1,0 +1,2 @@
+logicalOr(1.25) => true | flip true
+logicalOr(7) => "7.0" | flip false; risky 7

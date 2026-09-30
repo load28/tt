@@ -1,0 +1,2 @@
+parameterDefault(2) => 4 | operand 2; double 4
+parameterDefault(5) => 10 | operand 5; double 10

@@ -1,0 +1,2 @@
+jsxSpreadAttribute({"kind":"Click","x":3}) => "<div value=3></div>" | risky {"kind":"Click","x":3}; click 3
+jsxSpreadAttribute({"kind":"Key","key":"k"}) => "<div value='k'></div>" | risky {"kind":"Key","key":"k"}; key "k"

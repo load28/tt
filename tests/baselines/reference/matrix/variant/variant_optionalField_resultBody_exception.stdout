@@ -1,0 +1,2 @@
+resultBody(4) => {"kind":"Ok","value":[1,[{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":4},{"kind":"Get","url":"c"},{"kind":"Head"}]]} | base 1; read 1; risky 4
+resultBody(9) => {"kind":"Ok","value":[1,[{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":9},{"kind":"Get","url":"c"},{"kind":"Head"}]]} | base 1; read 1; risky 9

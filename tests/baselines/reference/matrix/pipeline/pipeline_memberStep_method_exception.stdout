@@ -1,0 +1,2 @@
+method(2) => 6 | this "holder"; risky 2; receiver {"factor":3}; twice 6
+method(6) => 18 | this "holder"; risky 6; receiver {"factor":3}; twice 18

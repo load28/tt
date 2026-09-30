@@ -1,0 +1,2 @@
+ifLetBody(10) => [1,9] | head 1; read 1; operand 10; flip true; lookup true; found 9; finally 0
+ifLetBody(20) => [1,40] | head 1; read 1; operand 20; flip false; lookup false; double 40; finally 0

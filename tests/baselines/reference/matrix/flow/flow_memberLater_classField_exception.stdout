@@ -1,0 +1,2 @@
+classField(2) => 12 | risky 2; receiver {"factor":3}; add 4; twice 12
+classField(3) => 18 | risky 3; receiver {"factor":3}; add 6; twice 18

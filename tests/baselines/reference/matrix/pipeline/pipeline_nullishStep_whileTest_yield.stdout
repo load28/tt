@@ -1,0 +1,2 @@
+whileTest(10) => 1 | yield 10; flip true; lookup true; found 9
+whileTest(20) => 1 | yield 20; flip false; lookup false; double 40

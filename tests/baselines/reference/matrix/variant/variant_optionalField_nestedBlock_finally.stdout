@@ -1,0 +1,2 @@
+nestedBlock(4) => [{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":4},{"kind":"Get","url":"c"},{"kind":"Head"}] | operand 4; finally 0
+nestedBlock(9) => [{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":9},{"kind":"Get","url":"c"},{"kind":"Head"}] | operand 9; finally 0

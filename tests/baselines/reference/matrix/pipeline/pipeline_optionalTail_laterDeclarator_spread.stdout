@@ -1,0 +1,2 @@
+laterDeclarator(2.5) => [1,"2.50"] | before 1; positive 2.5
+laterDeclarator(-3) => [1,null] | before 1; positive undefined

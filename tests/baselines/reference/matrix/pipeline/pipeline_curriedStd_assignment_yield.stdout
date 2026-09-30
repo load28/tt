@@ -1,0 +1,2 @@
+assignment(5) => 15 | initial 0; target {"value":0}; yield 5; map 15
+assignment(0) => -1 | initial 0; target {"value":0}; yield 0

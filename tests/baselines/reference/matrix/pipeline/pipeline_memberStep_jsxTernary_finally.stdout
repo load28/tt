@@ -1,0 +1,2 @@
+jsxTernary(2) => "<p>6</p>" | flip true; operand 2; receiver {"factor":3}; twice 6; finally 0
+jsxTernary(6) => "<p><i>none</i></p>" | flip false; finally 0

@@ -1,0 +1,2 @@
+arrowBody(7) => 14 | open res; operand 7; dispose res; add 14
+arrowBody(1) => 2 | open res; operand 1; dispose res; add 2

@@ -1,0 +1,2 @@
+forTest(2) => 1 | receiver {"factor":3}; operand 2; finally 0
+forTest(7) => 1 | receiver {"factor":3}; operand 7; finally 0

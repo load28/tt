@@ -1,0 +1,2 @@
+declarationInitializer(2) => 8 | receiver {"factor":3}; await; twice 6; add 8
+declarationInitializer(7) => 28 | receiver {"factor":3}; await; twice 21; add 28

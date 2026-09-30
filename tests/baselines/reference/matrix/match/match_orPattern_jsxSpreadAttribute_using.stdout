@@ -1,0 +1,4 @@
+jsxSpreadAttribute({"kind":"Num","value":4}) => "<div value=4></div>" | open res; operand {"kind":"Num","value":4}; number 4; dispose res
+jsxSpreadAttribute({"kind":"Neg","value":-3}) => "<div value=-3></div>" | open res; operand {"kind":"Neg","value":-3}; number -3; dispose res
+jsxSpreadAttribute({"kind":"Word","text":"hi"}) => "<div value='hi'></div>" | open res; operand {"kind":"Word","text":"hi"}; word "hi"; dispose res
+jsxSpreadAttribute({"kind":"End"}) => "<div value=''></div>" | open res; operand {"kind":"End"}; end ""; dispose res

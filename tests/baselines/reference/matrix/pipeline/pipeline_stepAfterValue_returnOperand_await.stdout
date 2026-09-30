@@ -1,0 +1,2 @@
+returnOperand(4) => 7 | await; step 3; add 7
+returnOperand(-1) => 2 | await; step 3; add 2

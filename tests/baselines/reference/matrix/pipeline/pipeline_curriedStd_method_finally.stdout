@@ -1,0 +1,2 @@
+method(5) => 15 | this "holder"; operand 5; map 15; finally 0
+method(0) => -1 | this "holder"; operand 0; finally 0

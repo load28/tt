@@ -1,0 +1,4 @@
+jsxNested({"kind":"Num","value":4}) => "<ul><li>1</li><li>4</li></ul>" | first 1; number 4
+jsxNested({"kind":"Neg","value":-3}) => "<ul><li>1</li><li>-3</li></ul>" | first 1; number -3
+jsxNested({"kind":"Word","text":"hi"}) => "<ul><li>1</li><li>hi</li></ul>" | first 1; word "hi"
+jsxNested({"kind":"End"}) => "<ul><li>1</li><li></li></ul>" | first 1; end ""

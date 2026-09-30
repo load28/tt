@@ -1,0 +1,2 @@
+jsxNested(2) => "<ul><li>1</li><li>6</li></ul>" | first 1; receiver {"factor":3}; twice 6
+jsxNested(6) => "<ul><li>1</li><li>18</li></ul>" | first 1; receiver {"factor":3}; twice 18

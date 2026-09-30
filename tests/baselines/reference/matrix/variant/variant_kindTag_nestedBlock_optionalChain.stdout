@@ -1,0 +1,2 @@
+nestedBlock(4) => [{"kind":"kind","value":4},{"kind":"other"}] | 
+nestedBlock(9) => [{"kind":"kind","value":9},{"kind":"other"}] | 

@@ -1,0 +1,3 @@
+jsxComponentProp(5) => "<Show {'kind':'Ok','value':[5,2]}>" | operand 5; read 5; b 2; read 2; finally 0
+jsxComponentProp(1) => "<Show {'kind':'Err','error':'negative -2'}>" | operand 1; read 1; b -2; read -2; finally 0
+jsxComponentProp(-2) => "<Show {'kind':'Err','error':'negative -2'}>" | operand -2; read -2; finally 0

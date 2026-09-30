@@ -1,0 +1,2 @@
+throwOperand(5) => threw 15 | yield 5; map 15
+throwOperand(0) => threw -1 | yield 0

@@ -1,0 +1,3 @@
+matchArm(4) => undefined | flip true; operand 4; flip false; maybe false; finally 0; add 8
+matchArm(6) => undefined | flip true; operand 6; flip false; maybe false; finally 0; add 12
+matchArm(8) => undefined | flip true; operand 8; flip false; maybe false; finally 0; add 16

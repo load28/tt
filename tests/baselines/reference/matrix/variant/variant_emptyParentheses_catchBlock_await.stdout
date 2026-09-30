@@ -1,0 +1,2 @@
+catchBlock(4) => [{"kind":"Now"},{"kind":"Later","at":4}] | throw "boom"; await
+catchBlock(9) => [{"kind":"Now"},{"kind":"Later","at":9}] | throw "boom"; await

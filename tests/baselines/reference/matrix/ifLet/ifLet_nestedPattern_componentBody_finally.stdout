@@ -1,0 +1,3 @@
+componentBody({"kind":"Done","value":{"kind":"Some","value":5}}) => "<p>5</p>" | operand {"kind":"Done","value":{"kind":"Some","value":5}}; some 5; finally 0
+componentBody({"kind":"Done","value":{"kind":"None"}}) => "<p>/"other/"</p>" | operand {"kind":"Done","value":{"kind":"None"}}; finally 0
+componentBody({"kind":"Failed","error":"gone"}) => "<p>/"other/"</p>" | operand {"kind":"Failed","error":"gone"}; finally 0

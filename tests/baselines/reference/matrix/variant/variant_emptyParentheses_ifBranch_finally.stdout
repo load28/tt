@@ -1,0 +1,2 @@
+ifBranch(4) => [{"kind":"Now"},{"kind":"Later","at":4}] | enter true; operand 4; finally 0
+ifBranch(9) => [{"kind":"Now"},{"kind":"Later","at":9}] | enter true; operand 9; finally 0

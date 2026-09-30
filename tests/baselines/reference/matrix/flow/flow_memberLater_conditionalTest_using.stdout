@@ -1,0 +1,2 @@
+conditionalTest(2) => "truthy" | open res; operand 2; receiver {"factor":3}; then "truthy"; dispose res
+conditionalTest(3) => "truthy" | open res; operand 3; receiver {"factor":3}; then "truthy"; dispose res

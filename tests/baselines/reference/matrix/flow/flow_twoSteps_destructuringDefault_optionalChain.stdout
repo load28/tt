@@ -1,0 +1,2 @@
+destructuringDefault(2) => 6 | source {}; double 4; add 6
+destructuringDefault(5) => 15 | source {}; double 10; add 15

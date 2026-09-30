@@ -1,0 +1,3 @@
+componentBody({"kind":"Num","value":1}) => "<p>1</p>" | 
+componentBody({"kind":"Neg","value":-2}) => "<p>-2</p>" | 
+componentBody({"kind":"Word","text":"w"}) => "<p>diverged</p>" | 

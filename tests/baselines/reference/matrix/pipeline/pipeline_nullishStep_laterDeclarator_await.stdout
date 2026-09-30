@@ -1,0 +1,2 @@
+laterDeclarator(10) => [1,9] | before 1; await; flip true; lookup true; found 9
+laterDeclarator(20) => [1,40] | before 1; await; flip false; lookup false; double 40

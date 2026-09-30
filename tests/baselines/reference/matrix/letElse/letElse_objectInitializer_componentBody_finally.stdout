@@ -1,0 +1,2 @@
+componentBody(7) => "<p>7</p>" | operand 7; finally 0
+componentBody(8) => "<p>8</p>" | operand 8; finally 0

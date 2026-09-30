@@ -1,0 +1,2 @@
+topLevel(2) => function | receiver {"factor":3}; await
+topLevel(7) => function | receiver {"factor":3}; await

@@ -1,0 +1,2 @@
+optionalCall(10) => [[9],null] | callee true; operand 10; flip true; lookup true; found 9; callee false
+optionalCall(20) => [[40],null] | callee true; operand 20; flip false; lookup false; double 40; callee false

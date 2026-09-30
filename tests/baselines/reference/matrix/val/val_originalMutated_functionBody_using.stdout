@@ -1,0 +1,2 @@
+functionBody(3) => 13 | open res; operand 3; original 13; dispose res
+functionBody(8) => 18 | open res; operand 8; original 18; dispose res

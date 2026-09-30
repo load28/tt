@@ -1,0 +1,2 @@
+classField(10) => 9 | risky 10; flip true; lookup true; found 9
+classField(20) => 40 | risky 20; flip false; lookup false; double 40

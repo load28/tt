@@ -1,0 +1,2 @@
+jsxFragment(3) => {"kind":"Ok","value":"<>[30]</>"} | before "["; risky 3; read 3; after "]"
+jsxFragment(-2) => {"kind":"Err","error":"negative -2"} | before "["; risky -2; read -2

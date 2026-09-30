@@ -34,6 +34,23 @@ export function risky<T>(value: T): T {
 export function box<T>(value: T): { inner: { value: T } } | undefined {
   return { inner: { value } };
 }
+export const double = (n: number): number => note("double", n * 2);
+export const adder = (a: number) => (b: number): number => note("add", a + b);
+export const tools = {
+  factor: 3,
+  twice(n: number): number {
+    return note("twice", n * this.factor);
+  },
+};
+export function maybe(present: boolean): typeof tools | undefined {
+  return note("maybe", present) ? tools : undefined;
+}
+export function lookup(present: boolean): ((n: number) => number) | undefined {
+  return note("lookup", present) ? (n) => note("found", n - 1) : undefined;
+}
+export function positive(n: number): number | undefined {
+  return note("positive", n > 0 ? n : undefined);
+}
 export function resource(name: string): Disposable {
   out.push(`open ${name}`);
   return { [Symbol.dispose]: () => void out.push(`dispose ${name}`) };
@@ -81,4 +98,27 @@ export async function drive(title: string, probe: (input: any) => unknown, input
     }
     report(title, input, shown);
   }
+}
+export function element(tag: string | ((props: any) => string), props: Record<string, unknown> | null, ...children: unknown[]): string {
+  const quoted = (value: unknown) => text(value).replaceAll('"', "'");
+  const content = children
+    .map((child) => (child === null || child === undefined || typeof child === "boolean" ? "" : typeof child === "string" ? child : quoted(child)))
+    .join("");
+  if (typeof tag === "function") return tag({ ...props, children: content });
+  const attributes = Object.entries(props ?? {})
+    .map(([name, value]) => ` ${name}=${quoted(value)}`)
+    .join("");
+  return `<${tag}${attributes}>${content}</${tag}>`;
+}
+export declare namespace element {
+  namespace JSX {
+    type Element = string;
+    interface IntrinsicElements {
+      [name: string]: unknown;
+    }
+  }
+}
+export const Fragment = "";
+export function Show(props: { value: unknown }): string {
+  return `<Show ${text(props.value).replaceAll('"', "'")}>`;
 }

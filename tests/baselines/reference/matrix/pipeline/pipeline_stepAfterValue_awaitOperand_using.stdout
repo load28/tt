@@ -1,0 +1,2 @@
+awaitOperand(4) => 7 | open res; operand 4; step 3; add 7; dispose res
+awaitOperand(-1) => 2 | open res; operand -1; step 3; add 2; dispose res

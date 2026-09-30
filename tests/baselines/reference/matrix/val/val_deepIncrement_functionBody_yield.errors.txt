@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[val-mutation]: cannot mutate through val binding `cfg` (the binding is declared with `val`, so every access path from it is read-only)
+ --> ./main.tt:5:3
+  |
+5 |   cfg.a.n++;
+  |   ^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[val-mutation]: cannot mutate through val binding `cfg` (the binding is declared with `val`, so every access path from it is read-only)
+ --> main.tt:5:3
+  |
+4 |   val const cfg = { a: { n: (yield input) } };
+  |   --- the read-only binding is declared here
+5 |   cfg.a.n++;
+  |   ^^^
+  |
+  = help: remove `val` if this binding is intended to be mutable
+
+==== tsc on the emitted TypeScript (exit 0) ====

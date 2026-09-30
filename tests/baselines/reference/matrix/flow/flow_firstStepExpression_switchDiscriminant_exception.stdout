@@ -1,0 +1,2 @@
+switchDiscriminant(3) => "default" | risky 3; case 0
+switchDiscriminant(-4) => "default" | risky -4; case 0

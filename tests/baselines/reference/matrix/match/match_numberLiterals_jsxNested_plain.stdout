@@ -1,0 +1,5 @@
+jsxNested(200) => "<ul><li>1</li><li></li></ul>" | first 1; operand 200; success true
+jsxNested(201) => "<ul><li>1</li><li></li></ul>" | first 1; operand 201; success true
+jsxNested(404) => "<ul><li>1</li><li></li></ul>" | first 1; operand 404; missing false
+jsxNested(500) => "<ul><li>1</li><li></li></ul>" | first 1; operand 500; guard true; server false
+jsxNested(7) => "<ul><li>1</li><li></li></ul>" | first 1; operand 7; other null

@@ -1,0 +1,2 @@
+nullish(2) => 6 | flip true; operand 2; finally 0; double 4; add 6
+nullish(5) => "set" | flip false; left "set"; finally 0

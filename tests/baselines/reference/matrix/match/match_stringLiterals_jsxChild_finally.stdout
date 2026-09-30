@@ -1,0 +1,4 @@
+jsxChild("north") => "<p>1</p>" | operand "north"; n 1; finally 0
+jsxChild("south") => "<p>2</p>" | operand "south"; se 2; finally 0
+jsxChild("east") => "<p>2</p>" | operand "east"; se 2; finally 0
+jsxChild("up") => "<p>0</p>" | operand "up"; other 0; finally 0

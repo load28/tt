@@ -1,0 +1,2 @@
+forOfHead(2) => [4] | yield 2; double 4
+forOfHead(5) => [10] | yield 5; double 10

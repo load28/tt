@@ -1,0 +1,2 @@
+forUpdate(7) => 14 | body 0; yield 7; add 14
+forUpdate(1) => 2 | body 0; yield 1; add 2

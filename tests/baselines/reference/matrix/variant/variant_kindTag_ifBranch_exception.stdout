@@ -1,0 +1,2 @@
+ifBranch(4) => [{"kind":"kind","value":4},{"kind":"other"}] | enter true; risky 4
+ifBranch(9) => [{"kind":"kind","value":9},{"kind":"other"}] | enter true; risky 9

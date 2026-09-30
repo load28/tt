@@ -1,0 +1,2 @@
+arrowBlock(4) => [{"kind":"North"},{"kind":"South"},4] | await; operand 4
+arrowBlock(9) => [{"kind":"North"},{"kind":"South"},9] | await; operand 9

@@ -1,0 +1,2 @@
+forTest(1.25) => 1 | yield 1.25
+forTest(7) => 1 | yield 7

@@ -1,0 +1,2 @@
+forOfBody(4) => [[{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":4},{"kind":"Get","url":"c"},{"kind":"Head"}],[{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":4},{"kind":"Get","url":"c"},{"kind":"Head"}]] | round 0; risky 4; round 1; risky 4
+forOfBody(9) => "risky call 3" | round 0; caught "risky call 3"

@@ -1,0 +1,2 @@
+labeledBlock(2) => 12 | yield 2; receiver {"factor":3}; flip true; add 4; twice 12
+labeledBlock(3) => [null] | yield 3; receiver {"factor":3}; flip false

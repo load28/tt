@@ -1,0 +1,2 @@
+spreadElement(123) => [0,3] | first 0; operand 123
+spreadElement(4) => [0,1] | first 0; operand 4

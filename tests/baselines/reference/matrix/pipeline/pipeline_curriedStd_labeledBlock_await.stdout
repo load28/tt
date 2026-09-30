@@ -1,0 +1,2 @@
+labeledBlock(5) => 15 | await; map 15; flip true
+labeledBlock(0) => [-1] | await; flip false

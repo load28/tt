@@ -1,0 +1,3 @@
+matchArm(3) => undefined | flip true; await; flip false; maybe false
+matchArm(4) => undefined | flip true; await; flip false; maybe false
+matchArm(5) => undefined | flip true; await; flip false; maybe false

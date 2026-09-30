@@ -18,6 +18,7 @@ export default [
   {
     construct: "ifLet",
     kind: "statement",
+    jsx: true,
     forms: [
       {
         id: "thenOnly",

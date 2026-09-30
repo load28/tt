@@ -1,0 +1,2 @@
+conditionalBranch(10) => 20 | flip true; yield 10; flip false; lookup false; double 20
+conditionalBranch(20) => 40 | flip true; yield 20; flip false; lookup false; double 40

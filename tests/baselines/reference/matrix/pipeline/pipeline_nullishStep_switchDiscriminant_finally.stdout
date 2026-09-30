@@ -1,0 +1,2 @@
+switchDiscriminant(10) => "default" | operand 10; flip true; lookup true; found 9; case 0; finally 0
+switchDiscriminant(20) => "default" | operand 20; flip false; lookup false; double 40; case 0; finally 0

@@ -1,0 +1,2 @@
+catchBlock(4) => [{"kind":"kind","value":4},{"kind":"other"}] | open res; throw "boom"; operand 4; dispose res
+catchBlock(9) => [{"kind":"kind","value":9},{"kind":"other"}] | open res; throw "boom"; operand 9; dispose res

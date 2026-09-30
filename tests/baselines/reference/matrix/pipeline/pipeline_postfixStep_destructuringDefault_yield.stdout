@@ -1,0 +1,2 @@
+destructuringDefault(1.25) => "1.3" | source {}; yield 1.25
+destructuringDefault(7) => "7.0" | source {}; yield 7

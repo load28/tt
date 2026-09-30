@@ -1,0 +1,2 @@
+componentBody(3) => "<p>4</p>" | open res; operand 3; item 3; item 1; dispose res
+componentBody(8) => "<p>9</p>" | open res; operand 8; item 8; item 1; dispose res

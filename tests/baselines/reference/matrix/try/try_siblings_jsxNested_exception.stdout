@@ -1,0 +1,2 @@
+jsxNested(4) => {"kind":"Ok","value":"<ul><li>1</li><li>9</li></ul>"} | first 1; risky 4; read 4; second 5; read 5
+jsxNested(-4) => {"kind":"Err","error":"negative -4"} | first 1; risky -4; read -4

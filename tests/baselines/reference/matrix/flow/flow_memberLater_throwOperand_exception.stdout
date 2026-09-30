@@ -1,0 +1,2 @@
+throwOperand(2) => undefined | risky 2; receiver {"factor":3}; caught undefined
+throwOperand(3) => undefined | risky 3; receiver {"factor":3}; caught undefined

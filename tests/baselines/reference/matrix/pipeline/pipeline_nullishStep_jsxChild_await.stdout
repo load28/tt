@@ -1,0 +1,2 @@
+jsxChild(10) => "<p>9</p>" | await; flip true; lookup true; found 9
+jsxChild(20) => "<p>40</p>" | await; flip false; lookup false; double 40

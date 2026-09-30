@@ -1,0 +1,2 @@
+logicalAnd(1.25) => "1.3" | open res; flip true; operand 1.25; dispose res
+logicalAnd(7) => false | open res; flip false; dispose res

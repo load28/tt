@@ -1,0 +1,4 @@
+jsxTernary({"kind":"Num","value":4}) => "<p>-1</p>" | flip true; operand {"kind":"Num","value":4}; other -1; finally 0
+jsxTernary({"kind":"Neg","value":-3}) => "<p><i>none</i></p>" | flip false; finally 0
+jsxTernary({"kind":"Word","text":"hi"}) => "<p>2</p>" | flip true; operand {"kind":"Word","text":"hi"}; word 2; finally 0
+jsxTernary({"kind":"End"}) => "<p><i>none</i></p>" | flip false; finally 0

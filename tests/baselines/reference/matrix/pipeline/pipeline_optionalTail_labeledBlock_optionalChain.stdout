@@ -1,0 +1,2 @@
+labeledBlock(2.5) => "2.50" | positive 2.5; flip true
+labeledBlock(-3) => [null] | positive undefined; flip false

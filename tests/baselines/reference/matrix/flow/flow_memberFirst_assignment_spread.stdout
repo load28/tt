@@ -1,0 +1,2 @@
+assignment(2) => 8 | initial 0; target {"value":0}; receiver {"factor":3}; twice 6; add 8
+assignment(7) => 28 | initial 0; target {"value":0}; receiver {"factor":3}; twice 21; add 28

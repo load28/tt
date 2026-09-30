@@ -1,0 +1,2 @@
+jsxChild(8) => "<p>9</p>" | open res; operand 8; arrow 9; dispose res
+jsxChild(9) => "<p>10</p>" | open res; operand 9; arrow 10; dispose res

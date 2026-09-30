@@ -1,0 +1,2 @@
+forTest(5) => 1 | map 15
+forTest(0) => 1 | 

@@ -1,0 +1,2 @@
+destructuringDefault(123) => 3 | source {}; await
+destructuringDefault(4) => 1 | source {}; await

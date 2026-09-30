@@ -1,0 +1,2 @@
+conditionalTest(10) => "truthy" | yield 10; flip true; lookup true; found 9; then "truthy"
+conditionalTest(20) => "truthy" | yield 20; flip false; lookup false; double 40; then "truthy"

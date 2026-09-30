@@ -1,0 +1,2 @@
+ifLetBody(2.5) => [1,"2.50"] | head 1; read 1; await; positive 2.5
+ifLetBody(-3) => [1,null] | head 1; read 1; await; positive undefined

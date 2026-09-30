@@ -1,0 +1,3 @@
+jsxSpreadAttribute(3) => "<div value=9></div>" | operand 3; flip true; maybe true; twice 9
+jsxSpreadAttribute(4) => "<div value=undefined></div>" | operand 4; flip false; maybe false
+jsxSpreadAttribute(5) => "<div value=15></div>" | operand 5; flip true; maybe true; twice 15

@@ -1,0 +1,2 @@
+switchCaseTest(2) => "default" | discriminant 0; yield 2; receiver {"factor":3}
+switchCaseTest(3) => "default" | discriminant 0; yield 3; receiver {"factor":3}

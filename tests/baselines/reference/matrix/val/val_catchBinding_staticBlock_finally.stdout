@@ -1,0 +1,2 @@
+staticBlock(3) => {"n":3} | operand 3; caught {"n":3}; finally 0
+staticBlock(8) => {"n":8} | operand 8; caught {"n":8}; finally 0

@@ -1,0 +1,2 @@
+resultBody(3) => {"kind":"Ok","value":[1,{"n":3}]} | base 1; read 1; await; caught {"n":3}
+resultBody(8) => {"kind":"Ok","value":[1,{"n":8}]} | base 1; read 1; await; caught {"n":8}

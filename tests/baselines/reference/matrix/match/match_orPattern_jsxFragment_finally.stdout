@@ -1,0 +1,4 @@
+jsxFragment({"kind":"Num","value":4}) => "<>[4]</>" | before "["; operand {"kind":"Num","value":4}; number 4; after "]"; finally 0
+jsxFragment({"kind":"Neg","value":-3}) => "<>[-3]</>" | before "["; operand {"kind":"Neg","value":-3}; number -3; after "]"; finally 0
+jsxFragment({"kind":"Word","text":"hi"}) => "<>[hi]</>" | before "["; operand {"kind":"Word","text":"hi"}; word "hi"; after "]"; finally 0
+jsxFragment({"kind":"End"}) => "<>[]</>" | before "["; operand {"kind":"End"}; end ""; after "]"; finally 0

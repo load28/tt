@@ -1,0 +1,3 @@
+logicalOr(4) => true | flip true
+logicalOr(6) => 36 | flip false; operand 6; flip true; maybe true; add 12; twice 36
+logicalOr(8) => 48 | flip false; operand 8; flip true; maybe true; add 16; twice 48

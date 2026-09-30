@@ -1,0 +1,3 @@
+staticBlock(4) => 24 | risky 4; flip true; maybe true; add 8; twice 24
+staticBlock(6) => undefined | risky 6; flip false; maybe false; add 12
+staticBlock(8) => "risky call 3" | caught "risky call 3"

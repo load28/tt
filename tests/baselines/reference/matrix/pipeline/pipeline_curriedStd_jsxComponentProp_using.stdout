@@ -1,0 +1,2 @@
+jsxComponentProp(5) => "<Show 15>" | open res; operand 5; map 15; dispose res
+jsxComponentProp(0) => "<Show -1>" | open res; operand 0; dispose res

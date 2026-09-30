@@ -1,0 +1,2 @@
+getter(3) => "6" | risky 3; add 6
+getter(-4) => "-8" | risky -4; add -8

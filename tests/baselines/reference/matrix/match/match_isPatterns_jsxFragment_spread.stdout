@@ -1,0 +1,4 @@
+jsxFragment({}) => "<>[range]</>" | before "["; range "range"; after "]"
+jsxFragment({}) => "<>[1]</>" | before "["; type 1; after "]"
+jsxFragment({}) => "<>[plain]</>" | before "["; error "plain"; after "]"
+jsxFragment("text") => "<>[]</>" | before "["; other null; after "]"

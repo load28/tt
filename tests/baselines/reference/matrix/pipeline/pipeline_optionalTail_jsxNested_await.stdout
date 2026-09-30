@@ -1,0 +1,2 @@
+jsxNested(2.5) => "<ul><li>1</li><li>2.50</li></ul>" | first 1; await; positive 2.5
+jsxNested(-3) => "<ul><li>1</li><li></li></ul>" | first 1; await; positive undefined

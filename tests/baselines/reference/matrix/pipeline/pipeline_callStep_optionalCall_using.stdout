@@ -1,0 +1,2 @@
+optionalCall(2) => [[4],null] | open res; callee true; operand 2; double 4; callee false; dispose res
+optionalCall(5) => [[10],null] | open res; callee true; operand 5; double 10; callee false; dispose res

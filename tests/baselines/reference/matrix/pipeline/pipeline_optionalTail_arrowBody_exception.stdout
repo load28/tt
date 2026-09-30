@@ -1,0 +1,2 @@
+arrowBody(2.5) => "2.50" | risky 2.5; positive 2.5
+arrowBody(-3) => undefined | risky -3; positive undefined

@@ -1,0 +1,4 @@
+jsxConditional({"kind":"Num","value":4}) => "<p>-1</p>" | open res; flip true; operand {"kind":"Num","value":4}; other -1; dispose res
+jsxConditional({"kind":"Neg","value":-3}) => "<p></p>" | open res; flip false; dispose res
+jsxConditional({"kind":"Word","text":"hi"}) => "<p>2</p>" | open res; flip true; operand {"kind":"Word","text":"hi"}; word 2; dispose res
+jsxConditional({"kind":"End"}) => "<p></p>" | open res; flip false; dispose res

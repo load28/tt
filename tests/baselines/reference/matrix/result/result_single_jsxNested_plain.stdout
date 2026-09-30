@@ -1,0 +1,2 @@
+jsxNested(2) => "<ul><li>1</li><li>{'kind':'Ok','value':20}</li></ul>" | first 1; operand 2; read 2
+jsxNested(-1) => "<ul><li>1</li><li>{'kind':'Err','error':'negative -1'}</li></ul>" | first 1; operand -1; read -1

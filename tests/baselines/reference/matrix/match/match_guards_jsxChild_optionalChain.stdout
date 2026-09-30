@@ -1,0 +1,5 @@
+jsxChild({"kind":"Circle","r":1}) => "<p>1</p>" | guard big false; small 1
+jsxChild({"kind":"Circle","r":5}) => "<p>5</p>" | guard big true; big 5
+jsxChild({"kind":"Rect","w":4,"h":2}) => "<p>4</p>" | guard wide true; wide 4
+jsxChild({"kind":"Rect","w":1,"h":3}) => "<p>3</p>" | guard wide false; tall 3
+jsxChild({"kind":"Point"}) => "<p>0</p>" | point 0

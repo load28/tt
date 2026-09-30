@@ -1,0 +1,5 @@
+jsxComponentProp(200) => "<Show true>" | await; success true
+jsxComponentProp(201) => "<Show true>" | await; success true
+jsxComponentProp(404) => "<Show false>" | await; missing false
+jsxComponentProp(500) => "<Show false>" | await; guard true; server false
+jsxComponentProp(7) => "<Show null>" | await; other null

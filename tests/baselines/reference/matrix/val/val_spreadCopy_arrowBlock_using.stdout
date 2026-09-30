@@ -1,0 +1,2 @@
+arrowBlock(3) => [3,4] | open res; operand 3; copy 4; dispose res
+arrowBlock(8) => [8,9] | open res; operand 8; copy 9; dispose res

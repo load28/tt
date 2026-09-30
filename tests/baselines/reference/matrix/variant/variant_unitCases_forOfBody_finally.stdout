@@ -1,0 +1,2 @@
+forOfBody(4) => [[{"kind":"North"},{"kind":"South"},4],[{"kind":"North"},{"kind":"South"},4]] | round 0; operand 4; operand 4; round 1; operand 4; operand 4; finally 0
+forOfBody(9) => [[{"kind":"North"},{"kind":"South"},9],[{"kind":"North"},{"kind":"South"},9]] | round 0; operand 9; operand 9; round 1; operand 9; operand 9; finally 0

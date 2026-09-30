@@ -1,0 +1,2 @@
+nestedBlock(4) => [5,0] | add 5; neg 0
+nestedBlock(9) => [10,0] | add 10; neg 0

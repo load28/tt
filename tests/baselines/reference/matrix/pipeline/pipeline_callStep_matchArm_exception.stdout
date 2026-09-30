@@ -1,0 +1,2 @@
+matchArm(2) => 4 | flip true; risky 2; double 4
+matchArm(5) => 0 | flip false; other arm 0

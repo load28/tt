@@ -1,0 +1,2 @@
+logicalOr(2.5) => true | flip true
+logicalOr(-3) => undefined | flip false; yield -3; positive undefined

@@ -1,0 +1,2 @@
+arrayElement(3) => [0,null,2] | open res; first 0; operand 3; last 2; dispose res
+arrayElement(-4) => [0,null,2] | open res; first 0; operand -4; last 2; dispose res

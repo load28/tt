@@ -1,0 +1,2 @@
+arrayElement(2) => [0,null,2] | first 0; receiver {"factor":3}; await; last 2
+arrayElement(7) => [0,null,2] | first 0; receiver {"factor":3}; await; last 2

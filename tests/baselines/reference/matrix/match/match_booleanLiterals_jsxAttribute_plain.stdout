@@ -1,0 +1,2 @@
+jsxAttribute(true) => "<div data-value=1></div>" | operand true; yes 1
+jsxAttribute(false) => "<div data-value=0></div>" | operand false; no 0

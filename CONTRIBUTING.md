@@ -242,11 +242,18 @@ are skipped, `TTC_REQUIRE_TSGO=1` turns the skip into a failure, and
 way TypeScript's conformance suite covers each feature in many contexts:
 `scripts/generate-cases` reads `tests/matrix/` and writes one case per
 combination of a construct's form (a `match` with tag, literal, tuple, or
-`is` patterns, a `try`, a `result` block, a let-else, an `if let`, ...), a
-host position (a declaration initializer, a call argument, a template
-literal, a class field, a loop head, a match arm, a result block's body,
-...), and a companion feature written around it (`await`, `yield`, an
-optional chain, a spread, a throw caught around it, `using`, `finally`).
+`is` patterns, a `try`, a `result` block, a let-else, an `if let`, a
+pipeline, a `flow`, `val`, a `variant` declaration, ...), a host position
+(a declaration initializer, a call argument, a template literal, a class
+field, a loop head, a match arm, a result block's body, ...), and a
+companion feature written around it (`await`, `yield`, an optional chain,
+a spread, a throw caught around it, `using`, `finally`). Constructs that
+opt in also run in `.ttx` programs, in JSX positions (an attribute, a
+child, `&&` and `? :` conditional rendering, a fragment, a spread
+attribute, a component's prop, a nested element) and in a function
+component's body, against `.tsx` twins; their `tsconfig.json` compiles JSX
+with the harness's `element` factory, which renders an element to a
+string.
 Every form meets every position, and the companions are chosen so that
 every pair of the three factors occurs at least once (all-pairs testing,
 NIST SP 800-142).

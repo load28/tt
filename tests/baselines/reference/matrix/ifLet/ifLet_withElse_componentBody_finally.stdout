@@ -1,0 +1,2 @@
+componentBody(3) => "<p>3</p>" | operand 3; read 3; then 3; finally 0
+componentBody(-3) => "<p>/"missing/"</p>" | operand -3; read -3; else "missing"; finally 0

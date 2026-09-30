@@ -1,0 +1,2 @@
+forUpdate(10) => 9 | body 0; risky 10; flip true; lookup true; found 9
+forUpdate(20) => 40 | body 0; risky 20; flip false; lookup false; double 40

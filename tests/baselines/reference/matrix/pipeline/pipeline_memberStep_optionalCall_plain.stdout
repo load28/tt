@@ -1,0 +1,2 @@
+optionalCall(2) => [[6],null] | callee true; operand 2; receiver {"factor":3}; twice 6; callee false
+optionalCall(6) => [[18],null] | callee true; operand 6; receiver {"factor":3}; twice 18; callee false

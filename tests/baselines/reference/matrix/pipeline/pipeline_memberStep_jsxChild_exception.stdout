@@ -1,0 +1,2 @@
+jsxChild(2) => "<p>6</p>" | risky 2; receiver {"factor":3}; twice 6
+jsxChild(6) => "<p>18</p>" | risky 6; receiver {"factor":3}; twice 18

@@ -1,0 +1,2 @@
+destructuringDefault(2) => 6 | source {}; operand 2; receiver {"factor":3}; twice 6; finally 0
+destructuringDefault(6) => 18 | source {}; operand 6; receiver {"factor":3}; twice 18; finally 0

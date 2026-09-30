@@ -1,0 +1,2 @@
+returnOperand(10) => 9 | flip true; lookup true; found 9
+returnOperand(20) => 40 | flip false; lookup false; double 40

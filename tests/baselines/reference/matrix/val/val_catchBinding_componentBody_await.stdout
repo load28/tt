@@ -1,0 +1,2 @@
+componentBody(3) => "<p>{/"n/":3}</p>" | await; caught {"n":3}
+componentBody(8) => "<p>{/"n/":8}</p>" | await; caught {"n":8}

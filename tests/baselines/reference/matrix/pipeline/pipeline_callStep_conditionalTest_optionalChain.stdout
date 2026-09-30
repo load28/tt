@@ -1,0 +1,2 @@
+conditionalTest(2) => "truthy" | double 4; then "truthy"
+conditionalTest(5) => "truthy" | double 10; then "truthy"

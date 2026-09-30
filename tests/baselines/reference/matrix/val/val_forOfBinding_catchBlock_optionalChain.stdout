@@ -1,0 +1,2 @@
+catchBlock(3) => 4 | throw "boom"; item 3; item 1
+catchBlock(8) => 9 | throw "boom"; item 8; item 1

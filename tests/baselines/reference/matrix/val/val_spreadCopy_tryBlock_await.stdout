@@ -1,0 +1,2 @@
+tryBlock(3) => [3,4] | await; copy 4
+tryBlock(8) => [8,9] | await; copy 9

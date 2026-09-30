@@ -1,0 +1,4 @@
+jsxComponentProp("north") => "<Show 1>" | operand "north"; n 1
+jsxComponentProp("south") => "<Show 2>" | operand "south"; se 2
+jsxComponentProp("east") => "<Show 2>" | operand "east"; se 2
+jsxComponentProp("up") => "<Show 0>" | operand "up"; other 0

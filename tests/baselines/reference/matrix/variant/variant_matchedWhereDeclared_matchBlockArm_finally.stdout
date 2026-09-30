@@ -1,0 +1,2 @@
+matchBlockArm(4) => [5,0] | arm true; operand 4; add 5; neg 0; finally 0
+matchBlockArm(9) => [10,0] | arm true; operand 9; add 10; neg 0; finally 0

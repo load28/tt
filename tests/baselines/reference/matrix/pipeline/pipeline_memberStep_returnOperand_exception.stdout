@@ -1,0 +1,2 @@
+returnOperand(2) => 6 | risky 2; receiver {"factor":3}; twice 6
+returnOperand(6) => 18 | risky 6; receiver {"factor":3}; twice 18

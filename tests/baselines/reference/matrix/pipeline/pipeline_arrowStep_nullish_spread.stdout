@@ -1,0 +1,2 @@
+nullish(8) => 9 | flip true; arrow 9
+nullish(9) => "set" | flip false; left "set"

@@ -1,0 +1,2 @@
+loopBody(10) => [9,20] | open res; operand 10; flip true; lookup true; found 9; operand 10; flip false; lookup false; double 20; dispose res
+loopBody(20) => [19,40] | open res; operand 20; flip true; lookup true; found 19; operand 20; flip false; lookup false; double 40; dispose res

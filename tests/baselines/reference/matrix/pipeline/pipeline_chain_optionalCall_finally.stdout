@@ -1,0 +1,2 @@
+optionalCall(3) => [["***6"],null] | callee true; operand 3; double 6; callee false; finally 0
+optionalCall(12) => [["**24"],null] | callee true; operand 12; double 24; callee false; finally 0

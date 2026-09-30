@@ -1,0 +1,2 @@
+constructorBody(5) => 15 | risky 5; map 15
+constructorBody(0) => -1 | risky 0

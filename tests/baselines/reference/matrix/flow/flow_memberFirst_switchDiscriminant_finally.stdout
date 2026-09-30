@@ -1,0 +1,2 @@
+switchDiscriminant(2) => "default" | receiver {"factor":3}; operand 2; case 0; finally 0
+switchDiscriminant(7) => "default" | receiver {"factor":3}; operand 7; case 0; finally 0

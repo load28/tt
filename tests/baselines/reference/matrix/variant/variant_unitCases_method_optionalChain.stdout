@@ -1,0 +1,2 @@
+method(4) => [{"kind":"North"},{"kind":"South"},4] | operand 4
+method(9) => [{"kind":"North"},{"kind":"South"},9] | operand 9

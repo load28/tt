@@ -1,0 +1,2 @@
+componentBody(4) => "<p>[{/"kind/":/"kind/",/"value/":4},{/"kind/":/"other/"}]</p>" | 
+componentBody(9) => "<p>[{/"kind/":/"kind/",/"value/":9},{/"kind/":/"other/"}]</p>" | 

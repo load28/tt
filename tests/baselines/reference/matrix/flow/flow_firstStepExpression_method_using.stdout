@@ -1,0 +1,2 @@
+method(3) => "6" | open res; this "holder"; operand 3; dispose res; add 6
+method(-4) => "-8" | open res; this "holder"; operand -4; dispose res; add -8

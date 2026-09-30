@@ -1,0 +1,2 @@
+ifBranch(4) => {"kind":"Node","left":{"kind":"Leaf","value":4},"right":{"kind":"Node","left":{"kind":"Leaf","value":5},"right":{"kind":"Leaf","value":0}}} | open res; enter true; operand 4; operand 4; dispose res
+ifBranch(9) => {"kind":"Node","left":{"kind":"Leaf","value":9},"right":{"kind":"Node","left":{"kind":"Leaf","value":10},"right":{"kind":"Leaf","value":0}}} | open res; enter true; operand 9; operand 9; dispose res

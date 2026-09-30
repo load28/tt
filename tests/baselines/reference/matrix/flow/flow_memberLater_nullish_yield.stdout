@@ -1,0 +1,2 @@
+nullish(2) => 12 | flip true; yield 2; receiver {"factor":3}; add 4; twice 12
+nullish(3) => "set" | flip false; left "set"

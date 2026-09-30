@@ -1,0 +1,2 @@
+parameterDefault(123) => 3 | operand 123
+parameterDefault(4) => 1 | operand 4

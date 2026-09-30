@@ -1,0 +1,2 @@
+jsxSpreadAttribute(3) => "<div value='***6'></div>" | double 6
+jsxSpreadAttribute(12) => "<div value='**24'></div>" | double 24

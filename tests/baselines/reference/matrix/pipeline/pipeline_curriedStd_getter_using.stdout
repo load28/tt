@@ -1,0 +1,2 @@
+getter(5) => 15 | open res; operand 5; map 15; dispose res
+getter(0) => -1 | open res; operand 0; dispose res

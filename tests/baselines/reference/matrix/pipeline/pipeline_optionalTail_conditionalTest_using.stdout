@@ -1,0 +1,2 @@
+conditionalTest(2.5) => "truthy" | open res; operand 2.5; positive 2.5; then "truthy"; dispose res
+conditionalTest(-3) => "falsy" | open res; operand -3; positive undefined; else "falsy"; dispose res

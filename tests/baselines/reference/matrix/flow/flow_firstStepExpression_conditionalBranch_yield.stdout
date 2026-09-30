@@ -1,0 +1,2 @@
+conditionalBranch(3) => "6" | flip true; yield 3; add 6
+conditionalBranch(-4) => "skipped" | flip false; else "skipped"

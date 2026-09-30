@@ -1,0 +1,2 @@
+forTest(10) => 1 | flip true; lookup true; found 9
+forTest(20) => 1 | flip false; lookup false; double 40

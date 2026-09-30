@@ -2,6 +2,7 @@ export default [
   {
     construct: "try",
     kind: "value",
+    jsx: true,
     target: true,
     rejects: { yield: "try-placement" },
     forms: [
@@ -58,6 +59,7 @@ export default [
   {
     construct: "tryStatement",
     kind: "statement",
+    jsx: true,
     target: true,
     rejects: { yield: "try-placement" },
     forms: [

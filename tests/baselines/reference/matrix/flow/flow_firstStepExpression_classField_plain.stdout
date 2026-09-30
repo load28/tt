@@ -1,0 +1,2 @@
+classField(3) => "6" | operand 3; add 6
+classField(-4) => "-8" | operand -4; add -8

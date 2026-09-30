@@ -1,0 +1,2 @@
+staticBlock(2.5) => "2.50" | operand 2.5; positive 2.5; finally 0
+staticBlock(-3) => undefined | operand -3; positive undefined; finally 0

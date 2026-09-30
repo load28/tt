@@ -1,0 +1,2 @@
+logicalOr(3) => true | flip true; finally 0
+logicalOr(12) => "**24" | flip false; operand 12; double 24; finally 0

@@ -1,0 +1,2 @@
+conditionalTest(2) => "truthy" | risky 2; receiver {"factor":3}; twice 6; then "truthy"
+conditionalTest(6) => "truthy" | risky 6; receiver {"factor":3}; twice 18; then "truthy"

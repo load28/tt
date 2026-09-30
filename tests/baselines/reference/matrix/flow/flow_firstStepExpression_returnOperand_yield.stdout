@@ -1,0 +1,2 @@
+returnOperand(3) => "6" | yield 3; add 6
+returnOperand(-4) => "-8" | yield -4; add -8

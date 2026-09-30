@@ -1,0 +1,2 @@
+parameterDefault(3) => "6" | open res; operand 3; dispose res; add 6
+parameterDefault(-4) => "-8" | open res; operand -4; dispose res; add -8

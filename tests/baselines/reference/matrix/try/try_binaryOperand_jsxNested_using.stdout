@@ -1,0 +1,2 @@
+jsxNested(3) => {"kind":"Ok","value":"<ul><li>1</li><li>30</li></ul>"} | open res; first 1; operand 3; read 3; dispose res
+jsxNested(-2) => {"kind":"Err","error":"negative -2"} | open res; first 1; operand -2; read -2; dispose res

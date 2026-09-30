@@ -1,0 +1,2 @@
+destructuringDefault(2) => 4 | source {}; await; double 4
+destructuringDefault(5) => 10 | source {}; await; double 10

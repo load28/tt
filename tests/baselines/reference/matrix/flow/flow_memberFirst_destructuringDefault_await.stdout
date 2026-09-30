@@ -1,0 +1,2 @@
+destructuringDefault(2) => 8 | source {}; receiver {"factor":3}; await; twice 6; add 8
+destructuringDefault(7) => 28 | source {}; receiver {"factor":3}; await; twice 21; add 28

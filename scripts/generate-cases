@@ -31,7 +31,7 @@ function chunks(harness) {
   return out.map(({ lines }) => {
     const text = lines.join("\n");
     const head = lines[0];
-    const name = /^(?:export\s+)?(?:async\s+)?(?:function|const|class|type|let)\s+(\w+)/.exec(head)?.[1];
+    const name = /^(?:export\s+)?(?:declare\s+)?(?:async\s+)?(?:function|const|class|type|let|namespace)\s+(\w+)/.exec(head)?.[1];
     return { text, name, exported: head.startsWith("export ") };
   });
 }
@@ -63,17 +63,28 @@ function closure(parts, names) {
   return parts.filter((part) => needed.has(part.name)).map((part) => part.text).join("\n");
 }
 
-const TSCONFIG = `{
+function tsconfig(surface) {
+  const jsx =
+    surface === "ttx"
+      ? '\n    "jsx": "react",\n    "jsxFactory": "element",\n    "jsxFragmentFactory": "Fragment",\n    "verbatimModuleSyntax": true,'
+      : "";
+  return `{
   "compilerOptions": {
     "target": "es2022",
     "lib": ["es2022", "esnext.disposable", "dom"],
     "module": "preserve",
-    "moduleResolution": "bundler",
+    "moduleResolution": "bundler",${jsx}
     "strict": true,
     "skipLibCheck": true,
     "noEmit": true
   }
 }`;
+}
+
+const SURFACES = {
+  tt: { main: "main.tt", twin: "twin.ts" },
+  ttx: { main: "main.ttx", twin: "twin.tsx" },
+};
 
 function splitTop(list) {
   const body = list.replace(/\s+as\s+[\w[\]]+$/, "").trim();
@@ -144,12 +155,24 @@ function family(construct) {
   return construct.family ?? (construct.construct === "tryStatement" ? "try" : construct.construct);
 }
 
-function positionsFor(construct, all) {
-  const list = construct.kind === "value" ? all.valuePositions : all.statementPositions;
-  return construct.only ? list.filter((p) => construct.only.includes(p.id)) : list;
+function surfacesFor(construct, all) {
+  const only = (list) => (construct.only ? list.filter((p) => construct.only.includes(p.id)) : list);
+  const out = [{ surface: "tt", positions: only(construct.kind === "value" ? all.valuePositions : all.statementPositions) }];
+  if (construct.jsx) {
+    out.push({ surface: "ttx", positions: construct.kind === "value" ? all.jsxPositions : all.jsxStatementPositions });
+  }
+  return out
+    .map(({ surface, positions }) => ({
+      surface,
+      positions,
+      forms: construct.forms.filter((form) => (form.surfaces ?? ["tt", "ttx"]).includes(surface)),
+    }))
+    .filter(({ positions, forms }) => positions.length > 0 && forms.length > 0);
 }
 
 function feasible(construct, form, position, companion) {
+  if (form.only && !form.only.includes(position.id)) return false;
+  if (construct.skip?.includes(position.id)) return false;
   if (position.inner?.includes(companion.id)) return false;
   if (position.topLevel && !TOP_LEVEL.has(companion.id)) return false;
   if (position.unbraced && form.hoisted === undefined) return false;
@@ -162,6 +185,7 @@ function expectation(construct, form, position, companion) {
   const codes = [];
   const add = (code) => code && !codes.includes(code) && codes.push(code);
   add(construct.rejects?.all);
+  add(form.rejects?.all);
   add(position.rejects?.[family(construct)]);
   add(position.rejects?.[companion.id]);
   if (!position.retargets) add(construct.rejects?.[companion.id]);
@@ -169,8 +193,7 @@ function expectation(construct, form, position, companion) {
   return codes;
 }
 
-function rows(construct, positions) {
-  const forms = construct.forms;
+function rows(construct, forms, positions) {
   const key = (...parts) => parts.join("\u0000");
   const ok = (f, p, c) => feasible(construct, forms[f], positions[p], COMPANIONS[c]);
   const needed = new Set();
@@ -224,7 +247,7 @@ function rows(construct, positions) {
   return out;
 }
 
-function build(parts, construct, form, position, companion, side) {
+function build(parts, construct, form, position, companion, side, surface) {
   let count = 0;
   const alloc = (n) => Array.from({ length: n }, () => `t${count++}`);
   const isAsync = companion.id === "await" || position.forces === "await";
@@ -260,7 +283,8 @@ function build(parts, construct, form, position, companion, side) {
     },
   };
   const temps = () => alloc(form.temps ?? 1);
-  const instance = () => (twin ? form.ts(operand, temps(), c) : form.tt(operand, temps(), c));
+  const grouped = (text) => (construct.lowPrecedence && position.operand ? `(${text})` : text);
+  const instance = () => (twin ? form.ts(operand, temps(), c) : grouped(form.tt(operand, temps(), c)));
   if (construct.kind === "value") {
     c.v = instance();
     c.again = instance;
@@ -299,27 +323,29 @@ function build(parts, construct, form, position, companion, side) {
   lines.push(host);
   const code = lines.join("\n");
   const names = used(parts, code);
+  if (surface === "ttx") names.push("element", "Fragment");
   return { code: indent(`import { ${names.join(", ")} } from "./harness.js";\n${code}`), names };
 }
 
-function caseText(spec, construct, form, position, companion, codes, parts) {
+function caseText(spec, construct, form, position, companion, codes, parts, surface) {
+  const { main, twin } = SURFACES[surface];
   const name = `${construct.construct}_${form.id}_${position.id}_${companion.id}`;
   const header = [
     `// Generated by scripts/generate-cases from tests/matrix/${spec}; edit the spec, not this file.`,
     `// ${construct.construct}: ${form.title}, in ${position.title}, with ${companion.title}.`,
   ];
-  const programs = [["main.tt", build(parts, construct, form, position, companion, "tt")]];
+  const programs = [[main, build(parts, construct, form, position, companion, "tt", surface)]];
   if (codes.length > 0) {
     header.push(`// @expectErrors: ${codes.join(", ")}`, "// @baselines: errors.txt");
   } else {
-    header.push("// @run: main.tt", "// @twin: twin.ts", "// @baselines: errors.txt, stdout");
-    programs.push(["twin.ts", build(parts, construct, form, position, companion, "ts")]);
+    header.push(`// @run: ${main}`, `// @twin: ${twin}`, "// @baselines: errors.txt, stdout");
+    programs.push([twin, build(parts, construct, form, position, companion, "ts", surface)]);
   }
   const harness = closure(
     parts,
     programs.flatMap(([, program]) => program.names),
   );
-  const units = [["tsconfig.json", TSCONFIG], ["harness.ts", harness], ...programs.map(([file, program]) => [file, program.code])];
+  const units = [["tsconfig.json", tsconfig(surface)], ["harness.ts", harness], ...programs.map(([file, program]) => [file, program.code])];
   const body = units.map(([file, text]) => `// @filename: ${file}\n${text}\n`).join("");
   return { name, text: `${header.join("\n")}\n${body}` };
 }
@@ -336,17 +362,18 @@ async function generate() {
     const loaded = (await import(pathToFileURL(join(SPEC, spec)).href)).default;
     if (loaded === undefined) continue;
     for (const construct of Array.isArray(loaded) ? loaded : [loaded]) {
-      const hosts = positionsFor(construct, positions);
-      for (const [f, p, c] of rows(construct, hosts)) {
-        const form = construct.forms[f];
-        const position = hosts[p];
-        const companion = COMPANIONS[c];
-        const codes = expectation(construct, form, position, companion);
-        const { name, text } = caseText(spec, construct, form, position, companion, codes, parts);
-        const path = join(OUT, construct.construct, `${name}.tt`);
-        if (files.has(path)) throw new Error(`two rows generate ${name}`);
-        files.set(path, text);
-        stats.push({ construct: construct.construct, position: position.id, companion: companion.id, rejected: codes.length > 0 });
+      for (const { surface, positions: hosts, forms } of surfacesFor(construct, positions)) {
+        for (const [f, p, c] of rows(construct, forms, hosts)) {
+          const form = forms[f];
+          const position = hosts[p];
+          const companion = COMPANIONS[c];
+          const codes = expectation(construct, form, position, companion);
+          const { name, text } = caseText(spec, construct, form, position, companion, codes, parts, surface);
+          const path = join(OUT, construct.construct, `${name}.${surface}`);
+          if (files.has(path)) throw new Error(`two rows generate ${name}`);
+          files.set(path, text);
+          stats.push({ construct: construct.construct, surface, position: position.id, companion: companion.id, rejected: codes.length > 0 });
+        }
       }
     }
   }
@@ -372,11 +399,12 @@ const mode = process.argv[2];
 if (mode === "--stats") {
   const table = new Map();
   for (const row of stats) {
-    const entry = table.get(row.construct) ?? { run: 0, rejected: 0, positions: new Set(), companions: new Set() };
+    const key = `${row.construct} (.${row.surface})`;
+    const entry = table.get(key) ?? { run: 0, rejected: 0, positions: new Set(), companions: new Set() };
     entry[row.rejected ? "rejected" : "run"]++;
     entry.positions.add(row.position);
     entry.companions.add(row.companion);
-    table.set(row.construct, entry);
+    table.set(key, entry);
   }
   let total = 0;
   for (const [construct, entry] of table) {

@@ -1,0 +1,2 @@
+jsxChild(2) => {"kind":"Ok","value":"<p>2</p>"} | operand 2; read 2; finally 0
+jsxChild(-1) => {"kind":"Err","error":"negative -1"} | operand -1; read -1; finally 0

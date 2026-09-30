@@ -1,0 +1,2 @@
+resultBody(4) => {"kind":"Ok","value":[1,[{"kind":"kind","value":4},{"kind":"other"}]]} | base 1; read 1; await
+resultBody(9) => {"kind":"Ok","value":[1,[{"kind":"kind","value":9},{"kind":"other"}]]} | base 1; read 1; await

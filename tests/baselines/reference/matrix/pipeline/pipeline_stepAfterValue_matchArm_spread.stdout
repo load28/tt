@@ -1,0 +1,2 @@
+matchArm(4) => 7 | flip true; step 3; add 7
+matchArm(-1) => 0 | flip false; other arm 0

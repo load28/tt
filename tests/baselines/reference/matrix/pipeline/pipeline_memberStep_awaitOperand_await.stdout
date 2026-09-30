@@ -1,0 +1,2 @@
+awaitOperand(2) => 6 | await; receiver {"factor":3}; twice 6
+awaitOperand(6) => 18 | await; receiver {"factor":3}; twice 18

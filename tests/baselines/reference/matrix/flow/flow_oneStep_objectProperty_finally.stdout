@@ -1,0 +1,2 @@
+objectProperty(7) => {"a":1,"c":3} | a 1; operand 7; c 3; finally 0
+objectProperty(1) => {"a":1,"c":3} | a 1; operand 1; c 3; finally 0

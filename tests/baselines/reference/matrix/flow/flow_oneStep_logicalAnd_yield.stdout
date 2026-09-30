@@ -1,0 +1,2 @@
+logicalAnd(7) => 14 | flip true; yield 7; add 14
+logicalAnd(1) => false | flip false

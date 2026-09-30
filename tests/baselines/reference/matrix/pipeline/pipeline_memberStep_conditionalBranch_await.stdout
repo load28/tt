@@ -1,0 +1,2 @@
+conditionalBranch(2) => 6 | flip true; await; receiver {"factor":3}; twice 6
+conditionalBranch(6) => "skipped" | flip false; else "skipped"

@@ -1,0 +1,2 @@
+doWhileTest(2.5) => 2 | operand 2.5; positive 2.5; finally 0
+doWhileTest(-3) => 1 | operand -3; positive undefined; finally 0

@@ -1,0 +1,2 @@
+throwOperand(7) => threw function | operand 7; finally 0
+throwOperand(1) => threw function | operand 1; finally 0

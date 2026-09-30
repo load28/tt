@@ -1,0 +1,2 @@
+method(2.5) => "2.50" | this "holder"; positive 2.5
+method(-3) => undefined | this "holder"; positive undefined

@@ -29,6 +29,7 @@ const speed = variant("Speed", [["Fast", null], ["Slow", null]]);
 export default {
   construct: "match",
   kind: "value",
+  jsx: true,
   forms: [
     {
       id: "tagBindings",
@@ -165,6 +166,17 @@ export default {
       inputs: '[{ kind: "Click", x: 3 }, { kind: "Key", key: "k" }] as Event[]',
       tt: (x) => `match (${x}) { Click(x) => note("click", x), Key(key) => note("key", key) }`,
       ts: (x, [t]) => `(${t} = ${x}, ${t}.kind === "Click" ? note("click", ${t}.x) : note("key", ${t}.key))`,
+    },
+    {
+      id: "jsxArms",
+      title: "arms that render different elements",
+      surfaces: ["ttx"],
+      decls: [shape],
+      In: "Shape",
+      inputs: shapes,
+      tt: (x) => `match (${x}) { Circle(r) => <b>{note("circle", r)}</b>, Rect(w, h) => <i title={String(w)}>{h}</i>, Point => <>point</> }`,
+      ts: (x, [t]) =>
+        `(${t} = ${x}, ${t}.kind === "Circle" ? <b>{note("circle", ${t}.r)}</b> : ${t}.kind === "Rect" ? <i title={String(${t}.w)}>{${t}.h}</i> : <>point</>)`,
     },
     {
       id: "nestedMatch",

@@ -1,0 +1,2 @@
+yieldOperand(4) => 7 | risky 4; step 3; add 7; yield 7
+yieldOperand(-1) => 2 | risky -1; step 3; add 2; yield 2

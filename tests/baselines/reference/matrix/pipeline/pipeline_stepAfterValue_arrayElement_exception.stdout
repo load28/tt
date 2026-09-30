@@ -1,0 +1,2 @@
+arrayElement(4) => [0,7,2] | first 0; risky 4; step 3; add 7; last 2
+arrayElement(-1) => [0,2,2] | first 0; risky -1; step 3; add 2; last 2

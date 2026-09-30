@@ -1,0 +1,2 @@
+declarationInitializer(2.5) => "2.50" | open res; operand 2.5; positive 2.5; dispose res
+declarationInitializer(-3) => undefined | open res; operand -3; positive undefined; dispose res

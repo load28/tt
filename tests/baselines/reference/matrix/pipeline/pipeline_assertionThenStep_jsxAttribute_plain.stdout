@@ -1,0 +1,2 @@
+jsxAttribute(123) => "<div data-value=3></div>" | operand 123
+jsxAttribute(4) => "<div data-value=1></div>" | operand 4

@@ -1,0 +1,2 @@
+jsxAttribute(5) => "<div data-value=15></div>" | operand 5; map 15
+jsxAttribute(0) => "<div data-value=-1></div>" | operand 0

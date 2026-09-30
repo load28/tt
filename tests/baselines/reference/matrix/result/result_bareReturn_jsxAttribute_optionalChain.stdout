@@ -1,0 +1,2 @@
+jsxAttribute(2) => "<div data-value={'kind':'Ok'}></div>" | read 2
+jsxAttribute(-1) => "<div data-value={'kind':'Err','error':'negative -1'}></div>" | read -1

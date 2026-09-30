@@ -1,0 +1,2 @@
+awaitOperand(8) => 9 | await; arrow 9
+awaitOperand(9) => 10 | await; arrow 10

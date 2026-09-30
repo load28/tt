@@ -1,0 +1,5 @@
+jsxAttribute(200) => "<div data-value=true></div>" | operand 200; success true; finally 0
+jsxAttribute(201) => "<div data-value=true></div>" | operand 201; success true; finally 0
+jsxAttribute(404) => "<div data-value=false></div>" | operand 404; missing false; finally 0
+jsxAttribute(500) => "<div data-value=false></div>" | operand 500; guard true; server false; finally 0
+jsxAttribute(7) => "<div data-value=null></div>" | operand 7; other null; finally 0

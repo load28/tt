@@ -1,0 +1,2 @@
+whileTest(2) => 1 | risky 2; receiver {"factor":3}
+whileTest(3) => 1 | risky 3; receiver {"factor":3}

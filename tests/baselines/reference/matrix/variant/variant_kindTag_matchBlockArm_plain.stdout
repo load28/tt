@@ -1,0 +1,2 @@
+matchBlockArm(4) => [{"kind":"kind","value":4},{"kind":"other"}] | arm true; operand 4
+matchBlockArm(9) => [{"kind":"kind","value":9},{"kind":"other"}] | arm true; operand 9

@@ -1,0 +1,2 @@
+loopBody(2) => [null,null] | risky 2; risky 2
+loopBody(5) => "risky call 3" | caught "risky call 3"

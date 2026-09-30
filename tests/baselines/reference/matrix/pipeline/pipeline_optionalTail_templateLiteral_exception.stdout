@@ -1,0 +1,2 @@
+templateLiteral(2.5) => "<L|2.50|R>" | left "L"; risky 2.5; positive 2.5; right "R"
+templateLiteral(-3) => "<L|undefined|R>" | left "L"; risky -3; positive undefined; right "R"

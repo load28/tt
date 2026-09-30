@@ -1,0 +1,3 @@
+forTest(4) => 1 | risky 4; flip true; maybe true
+forTest(6) => 1 | risky 6; flip false; maybe false
+forTest(8) => "risky call 3" | caught "risky call 3"

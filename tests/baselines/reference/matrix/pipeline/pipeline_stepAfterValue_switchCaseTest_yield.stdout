@@ -1,0 +1,2 @@
+switchCaseTest(4) => "default" | discriminant 0; yield 4; step 3; add 7
+switchCaseTest(-1) => "default" | discriminant 0; yield -1; step 3; add 2

@@ -1,0 +1,2 @@
+componentBody(5) => "<p>5</p>" | open res; operand 5; read 5; dispose res
+componentBody(-5) => threw thrown | open res; operand -5; read -5; else "thrown"; dispose res

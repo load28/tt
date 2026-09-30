@@ -1,0 +1,2 @@
+matchArm(10) => 20 | flip true; risky 10; flip false; lookup false; double 20
+matchArm(20) => 40 | flip true; risky 20; flip false; lookup false; double 40

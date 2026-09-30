@@ -1,0 +1,2 @@
+nestedBlock(4) => [{"kind":"Now"},{"kind":"Later","at":4}] | operand 4
+nestedBlock(9) => [{"kind":"Now"},{"kind":"Later","at":9}] | operand 9

@@ -1,0 +1,2 @@
+parameterDefault(2) => 6 | operand 2; finally 0; double 4; add 6
+parameterDefault(5) => 15 | operand 5; finally 0; double 10; add 15

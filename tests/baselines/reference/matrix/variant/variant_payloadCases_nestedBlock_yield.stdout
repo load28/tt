@@ -1,0 +1,2 @@
+nestedBlock(4) => [{"kind":"Circle","r":4},{"kind":"Rect","w":4,"h":2}] | yield 4; yield 4
+nestedBlock(9) => [{"kind":"Circle","r":9},{"kind":"Rect","w":9,"h":2}] | yield 9; yield 9

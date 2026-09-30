@@ -1,0 +1,2 @@
+staticBlock(2) => 12 | open res; operand 2; receiver {"factor":3}; dispose res; add 4; twice 12
+staticBlock(3) => 18 | open res; operand 3; receiver {"factor":3}; dispose res; add 6; twice 18

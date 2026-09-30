@@ -1,0 +1,2 @@
+functionBody(3) => [3,4] | risky 3; copy 4
+functionBody(8) => [8,9] | risky 8; copy 9

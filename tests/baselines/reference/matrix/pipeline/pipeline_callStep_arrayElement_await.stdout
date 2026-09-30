@@ -1,0 +1,2 @@
+arrayElement(2) => [0,4,2] | first 0; await; double 4; last 2
+arrayElement(5) => [0,10,2] | first 0; await; double 10; last 2

@@ -1,0 +1,2 @@
+forInitializer(4) => [7] | await; step 3; add 7
+forInitializer(-1) => [2] | await; step 3; add 2

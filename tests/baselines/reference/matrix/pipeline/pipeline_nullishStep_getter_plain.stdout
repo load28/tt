@@ -1,0 +1,2 @@
+getter(10) => 9 | operand 10; flip true; lookup true; found 9
+getter(20) => 40 | operand 20; flip false; lookup false; double 40

@@ -1,0 +1,2 @@
+declarationInitializer(2) => 6 | operand 2; double 4; add 6
+declarationInitializer(5) => 15 | operand 5; double 10; add 15

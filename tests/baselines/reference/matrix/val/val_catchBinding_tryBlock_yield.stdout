@@ -1,0 +1,2 @@
+tryBlock(3) => {"n":3} | yield 3; caught {"n":3}
+tryBlock(8) => {"n":8} | yield 8; caught {"n":8}

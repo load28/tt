@@ -1,0 +1,2 @@
+forOfBody(3) => [3,3] | round 0; yield 3; show 3; round 1; yield 3; show 3
+forOfBody(8) => [8,8] | round 0; yield 8; show 8; round 1; yield 8; show 8

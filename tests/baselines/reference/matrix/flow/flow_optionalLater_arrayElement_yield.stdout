@@ -1,0 +1,3 @@
+arrayElement(4) => [0,null,2] | first 0; yield 4; flip true; maybe true; last 2
+arrayElement(6) => [0,null,2] | first 0; yield 6; flip false; maybe false; last 2
+arrayElement(8) => [0,null,2] | first 0; yield 8; flip true; maybe true; last 2

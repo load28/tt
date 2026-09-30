@@ -1,0 +1,2 @@
+switchClause(3) => [3,4] | discriminant 1; yield 3; copy 4
+switchClause(8) => [8,9] | discriminant 1; yield 8; copy 9

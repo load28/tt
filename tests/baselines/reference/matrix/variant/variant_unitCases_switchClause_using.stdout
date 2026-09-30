@@ -1,0 +1,2 @@
+switchClause(4) => [{"kind":"North"},{"kind":"South"},4] | open res; discriminant 1; operand 4; operand 4; dispose res
+switchClause(9) => [{"kind":"North"},{"kind":"South"},9] | open res; discriminant 1; operand 9; operand 9; dispose res

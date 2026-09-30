@@ -1,0 +1,2 @@
+returnOperand(2) => 6 | double 4; add 6
+returnOperand(5) => 15 | double 10; add 15

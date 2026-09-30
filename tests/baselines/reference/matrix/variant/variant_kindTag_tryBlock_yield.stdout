@@ -1,0 +1,2 @@
+tryBlock(4) => [{"kind":"kind","value":4},{"kind":"other"}] | yield 4
+tryBlock(9) => [{"kind":"kind","value":9},{"kind":"other"}] | yield 9

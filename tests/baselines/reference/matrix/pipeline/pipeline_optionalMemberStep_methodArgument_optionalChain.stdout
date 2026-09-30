@@ -1,0 +1,3 @@
+methodArgument(3) => ["receiver",1,9] | receiver {"tag":"receiver"}; a 1; flip true; maybe true; twice 9
+methodArgument(4) => ["receiver",1,null] | receiver {"tag":"receiver"}; a 1; flip false; maybe false
+methodArgument(5) => ["receiver",1,15] | receiver {"tag":"receiver"}; a 1; flip true; maybe true; twice 15

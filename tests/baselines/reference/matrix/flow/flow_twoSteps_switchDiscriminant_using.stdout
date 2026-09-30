@@ -1,0 +1,2 @@
+switchDiscriminant(2) => "default" | open res; operand 2; case 0; dispose res
+switchDiscriminant(5) => "default" | open res; operand 5; case 0; dispose res

@@ -1,0 +1,2 @@
+jsxAttribute(2) => {"kind":"Ok","value":"<div data-value=2></div>"} | open res; operand 2; read 2; dispose res
+jsxAttribute(-1) => {"kind":"Err","error":"negative -1"} | open res; operand -1; read -1; dispose res

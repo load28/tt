@@ -1,0 +1,2 @@
+whileTest(1.25) => 1 | await
+whileTest(7) => 1 | await

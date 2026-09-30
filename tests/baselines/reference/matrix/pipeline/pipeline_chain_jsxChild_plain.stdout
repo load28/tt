@@ -1,0 +1,2 @@
+jsxChild(3) => "<p>***6</p>" | operand 3; double 6
+jsxChild(12) => "<p>**24</p>" | operand 12; double 24

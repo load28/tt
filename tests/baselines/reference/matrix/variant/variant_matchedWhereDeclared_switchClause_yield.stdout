@@ -1,0 +1,2 @@
+switchClause(4) => [5,0] | discriminant 1; yield 4; add 5; neg 0
+switchClause(9) => [10,0] | discriminant 1; yield 9; add 10; neg 0

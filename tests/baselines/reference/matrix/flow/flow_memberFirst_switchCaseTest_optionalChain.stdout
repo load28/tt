@@ -1,0 +1,2 @@
+switchCaseTest(2) => "default" | discriminant 0; receiver {"factor":3}
+switchCaseTest(7) => "default" | discriminant 0; receiver {"factor":3}

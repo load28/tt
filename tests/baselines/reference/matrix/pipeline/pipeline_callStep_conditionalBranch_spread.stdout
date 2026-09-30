@@ -1,0 +1,2 @@
+conditionalBranch(2) => 4 | flip true; double 4
+conditionalBranch(5) => "skipped" | flip false; else "skipped"

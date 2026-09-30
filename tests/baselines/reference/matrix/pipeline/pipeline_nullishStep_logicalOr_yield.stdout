@@ -1,0 +1,2 @@
+logicalOr(10) => true | flip true
+logicalOr(20) => 19 | flip false; yield 20; flip true; lookup true; found 19

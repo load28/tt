@@ -1,0 +1,2 @@
+whileTest(4) => 1 | step 3; add 7
+whileTest(-1) => 1 | step 3; add 2

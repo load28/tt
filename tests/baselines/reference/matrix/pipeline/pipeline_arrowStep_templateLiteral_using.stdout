@@ -1,0 +1,2 @@
+templateLiteral(8) => "<L|9|R>" | open res; left "L"; operand 8; arrow 9; right "R"; dispose res
+templateLiteral(9) => "<L|10|R>" | open res; left "L"; operand 9; arrow 10; right "R"; dispose res

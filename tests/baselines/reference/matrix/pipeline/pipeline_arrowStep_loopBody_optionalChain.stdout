@@ -1,0 +1,2 @@
+loopBody(8) => [9,9] | arrow 9; arrow 9
+loopBody(9) => [10,10] | arrow 10; arrow 10

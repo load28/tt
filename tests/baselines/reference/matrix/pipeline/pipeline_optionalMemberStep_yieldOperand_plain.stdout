@@ -1,0 +1,3 @@
+yieldOperand(3) => 9 | operand 3; flip true; maybe true; twice 9; yield 9
+yieldOperand(4) => undefined | operand 4; flip false; maybe false; yield undefined
+yieldOperand(5) => 15 | operand 5; flip true; maybe true; twice 15; yield 15

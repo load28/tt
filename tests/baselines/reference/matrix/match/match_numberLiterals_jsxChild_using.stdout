@@ -1,0 +1,5 @@
+jsxChild(200) => "<p></p>" | open res; operand 200; success true; dispose res
+jsxChild(201) => "<p></p>" | open res; operand 201; success true; dispose res
+jsxChild(404) => "<p></p>" | open res; operand 404; missing false; dispose res
+jsxChild(500) => "<p></p>" | open res; operand 500; guard true; server false; dispose res
+jsxChild(7) => "<p></p>" | open res; operand 7; other null; dispose res

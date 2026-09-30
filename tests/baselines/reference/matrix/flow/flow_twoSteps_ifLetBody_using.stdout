@@ -1,0 +1,2 @@
+ifLetBody(2) => [1,null] | open res; head 1; read 1; operand 2; dispose res
+ifLetBody(5) => [1,null] | open res; head 1; read 1; operand 5; dispose res

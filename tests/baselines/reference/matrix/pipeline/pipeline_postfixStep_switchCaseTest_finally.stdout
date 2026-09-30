@@ -1,0 +1,2 @@
+switchCaseTest(1.25) => "default" | discriminant 0; operand 1.25; finally 0
+switchCaseTest(7) => "default" | discriminant 0; operand 7; finally 0

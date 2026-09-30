@@ -1,0 +1,2 @@
+returnOperand(7) => 14 | await; add 14
+returnOperand(1) => 2 | await; add 2

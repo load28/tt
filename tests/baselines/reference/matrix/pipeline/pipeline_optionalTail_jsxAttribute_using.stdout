@@ -1,0 +1,2 @@
+jsxAttribute(2.5) => "<div data-value='2.50'></div>" | open res; operand 2.5; positive 2.5; dispose res
+jsxAttribute(-3) => "<div data-value=undefined></div>" | open res; operand -3; positive undefined; dispose res

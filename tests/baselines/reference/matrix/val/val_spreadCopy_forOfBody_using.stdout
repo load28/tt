@@ -1,0 +1,2 @@
+forOfBody(3) => [[3,4],[3,4]] | open res; round 0; operand 3; copy 4; round 1; operand 3; copy 4; dispose res
+forOfBody(8) => [[8,9],[8,9]] | open res; round 0; operand 8; copy 9; round 1; operand 8; copy 9; dispose res

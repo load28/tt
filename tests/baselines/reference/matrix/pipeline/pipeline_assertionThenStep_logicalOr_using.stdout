@@ -1,0 +1,2 @@
+logicalOr(123) => true | open res; flip true; dispose res
+logicalOr(4) => 1 | open res; flip false; operand 4; dispose res

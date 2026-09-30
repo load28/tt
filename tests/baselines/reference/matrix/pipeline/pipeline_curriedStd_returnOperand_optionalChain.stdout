@@ -1,0 +1,2 @@
+returnOperand(5) => 15 | map 15
+returnOperand(0) => -1 | 

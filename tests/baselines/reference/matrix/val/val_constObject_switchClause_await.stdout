@@ -1,0 +1,2 @@
+switchClause(3) => 4 | discriminant 1; await; read 4
+switchClause(8) => 9 | discriminant 1; await; read 9

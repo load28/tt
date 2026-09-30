@@ -1,0 +1,4 @@
+jsxChild({"kind":"Num","value":4}) => "<p>-1</p>" | risky {"kind":"Num","value":4}; other -1
+jsxChild({"kind":"Neg","value":-3}) => "<p>-1</p>" | risky {"kind":"Neg","value":-3}; other -1
+jsxChild({"kind":"Word","text":"hi"}) => "risky call 3" | caught "risky call 3"
+jsxChild({"kind":"End"}) => "<p>-1</p>" | risky {"kind":"End"}; other -1

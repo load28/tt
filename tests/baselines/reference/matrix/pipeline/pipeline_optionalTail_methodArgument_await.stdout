@@ -1,0 +1,2 @@
+methodArgument(2.5) => ["receiver",1,"2.50"] | receiver {"tag":"receiver"}; a 1; await; positive 2.5
+methodArgument(-3) => ["receiver",1,null] | receiver {"tag":"receiver"}; a 1; await; positive undefined

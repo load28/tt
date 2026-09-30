@@ -1,0 +1,2 @@
+switchClause(4) => [{"kind":"North"},{"kind":"South"},4] | discriminant 1; await; operand 4
+switchClause(9) => [{"kind":"North"},{"kind":"South"},9] | discriminant 1; await; operand 9

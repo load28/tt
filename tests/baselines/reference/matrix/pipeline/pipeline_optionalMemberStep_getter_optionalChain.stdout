@@ -1,0 +1,3 @@
+getter(3) => 9 | flip true; maybe true; twice 9
+getter(4) => undefined | flip false; maybe false
+getter(5) => 15 | flip true; maybe true; twice 15

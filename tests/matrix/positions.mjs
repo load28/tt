@@ -65,26 +65,31 @@ export const valuePositions = [
   },
   {
     id: "conditionalTest",
+    operand: true,
     title: "the test of a conditional expression",
     host: (c) => c.probe(`return ${c.ret(`${c.v} ? note("then", "truthy") : note("else", "falsy")`)};`),
   },
   {
     id: "conditionalBranch",
+    operand: true,
     title: "a branch of a conditional expression",
     host: (c) => c.probe(`return ${c.ret(`flip() ? ${c.v} : note("else", "skipped")`)};`),
   },
   {
     id: "logicalAnd",
+    operand: true,
     title: "the right operand of &&",
     host: (c) => c.probe(`return ${c.ret(`flip() && ${c.v}`)};`),
   },
   {
     id: "logicalOr",
+    operand: true,
     title: "the right operand of ||",
     host: (c) => c.probe(`return ${c.ret(`flip() || ${c.v}`)};`),
   },
   {
     id: "nullish",
+    operand: true,
     title: "the right operand of ??",
     host: (c) => c.probe(`return ${c.ret(`(flip() ? null : note("left", "set")) ?? ${c.v}`)};`),
   },
@@ -153,6 +158,7 @@ export const valuePositions = [
   },
   {
     id: "whileTest",
+    operand: true,
     title: "a while loop's test",
     rejects: { try: "try-placement" },
     host: (c) =>
@@ -160,6 +166,7 @@ export const valuePositions = [
   },
   {
     id: "doWhileTest",
+    operand: true,
     title: "a do-while loop's test",
     rejects: { match: "match-placement", try: "try-placement" },
     host: (c) =>
@@ -181,6 +188,7 @@ export const valuePositions = [
   },
   {
     id: "forTest",
+    operand: true,
     title: "a C-style for loop's test",
     rejects: { try: "try-placement" },
     host: (c) =>
@@ -408,5 +416,64 @@ export const statementPositions = [
     inner: ["yield"],
     topLevel: true,
     rejects: { try: "try-placement" },
+  },
+];
+
+export const jsxPositions = [
+  {
+    id: "jsxAttribute",
+    title: "a JSX attribute value",
+    host: (c) => c.probe(`return ${c.ret(`<div data-value={${c.v}} />`)};`),
+  },
+  {
+    id: "jsxChild",
+    title: "a JSX child expression",
+    host: (c) => c.probe(`return ${c.ret(`<p>{${c.v}}</p>`)};`),
+  },
+  {
+    id: "jsxConditional",
+    operand: true,
+    title: "conditional rendering with &&",
+    host: (c) => c.probe(`return ${c.ret(`<p>{flip() && ${c.v}}</p>`)};`),
+  },
+  {
+    id: "jsxTernary",
+    operand: true,
+    title: "conditional rendering with a conditional expression",
+    host: (c) => c.probe(`return ${c.ret(`<p>{flip() ? ${c.v} : <i>none</i>}</p>`)};`),
+  },
+  {
+    id: "jsxFragment",
+    title: "a fragment child between two others",
+    host: (c) => c.probe(`return ${c.ret(`<>{note("before", "[")}{${c.v}}{note("after", "]")}</>`)};`),
+  },
+  {
+    id: "jsxSpreadAttribute",
+    title: "a JSX spread attribute's object",
+    host: (c) => c.probe(`return ${c.ret(`<div {...{ value: ${c.v} }} />`)};`),
+  },
+  {
+    id: "jsxComponentProp",
+    title: "a component's prop",
+    host: (c) => c.probe(`return ${c.ret(`<Show value={${c.v}} />`)};`),
+  },
+  {
+    id: "jsxNested",
+    title: "a nested element's child after a sibling",
+    host: (c) => c.probe(`return ${c.ret(`<ul><li>{note("first", 1)}</li><li>{${c.v}}</li></ul>`)};`),
+  },
+];
+
+export const jsxStatementPositions = [
+  {
+    id: "componentBody",
+    title: "a function component's body",
+    inner: ["yield"],
+    target: "inner",
+    host: (c) =>
+      c.probe(
+        `${c.head}function Card(props: { input: ${c.In} }) {\n${c.fn(`const input = props.input;\n${c.s(`return ${c.ret("<p>diverged</p>")};`)}\nreturn ${c.ret(`<p>{text(${c.result})}</p>`)};`)}\n}\nreturn Card({ input });`,
+        { target: false, head: false },
+      ),
   },
 ];

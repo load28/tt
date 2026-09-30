@@ -1,0 +1,2 @@
+whileBody(3) => 4 | test true; read 4
+whileBody(8) => 9 | test true; read 9

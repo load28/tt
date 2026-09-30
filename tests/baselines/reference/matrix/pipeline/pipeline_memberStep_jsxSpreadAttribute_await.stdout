@@ -1,0 +1,2 @@
+jsxSpreadAttribute(2) => "<div value=6></div>" | await; receiver {"factor":3}; twice 6
+jsxSpreadAttribute(6) => "<div value=18></div>" | await; receiver {"factor":3}; twice 18

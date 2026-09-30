@@ -1,0 +1,2 @@
+yieldOperand(10) => 9 | flip true; lookup true; found 9; yield 9
+yieldOperand(20) => 40 | flip false; lookup false; double 40; yield 40

@@ -1,0 +1,2 @@
+jsxNested(true) => "<ul><li>1</li><li>1</li></ul>" | first 1; operand true; yes 1; finally 0
+jsxNested(false) => "<ul><li>1</li><li>0</li></ul>" | first 1; operand false; no 0; finally 0

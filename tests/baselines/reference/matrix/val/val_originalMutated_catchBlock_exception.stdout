@@ -1,0 +1,2 @@
+catchBlock(3) => 13 | throw "boom"; risky 3; original 13
+catchBlock(8) => 18 | throw "boom"; risky 8; original 18

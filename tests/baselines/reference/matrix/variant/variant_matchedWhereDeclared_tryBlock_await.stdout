@@ -1,0 +1,2 @@
+tryBlock(4) => [5,0] | await; add 5; neg 0
+tryBlock(9) => [10,0] | await; add 10; neg 0

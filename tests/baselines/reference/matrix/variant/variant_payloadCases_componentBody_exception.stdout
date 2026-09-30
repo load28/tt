@@ -1,0 +1,2 @@
+componentBody(4) => "<p>[{/"kind/":/"Circle/",/"r/":4},{/"kind/":/"Rect/",/"w/":4,/"h/":2}]</p>" | risky 4; risky 4
+componentBody(9) => "risky call 3" | caught "risky call 3"

@@ -1,0 +1,5 @@
+jsxComponentProp({"kind":"Circle","r":1}) => "<Show 1>" | guard big false; small 1
+jsxComponentProp({"kind":"Circle","r":5}) => "<Show 5>" | guard big true; big 5
+jsxComponentProp({"kind":"Rect","w":4,"h":2}) => "<Show 4>" | guard wide true; wide 4
+jsxComponentProp({"kind":"Rect","w":1,"h":3}) => "<Show 3>" | guard wide false; tall 3
+jsxComponentProp({"kind":"Point"}) => "<Show 0>" | point 0

@@ -1,0 +1,2 @@
+forInitializer(2) => [null] | operand 2; receiver {"factor":3}; finally 0
+forInitializer(3) => [null] | operand 3; receiver {"factor":3}; finally 0

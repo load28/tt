@@ -1,0 +1,2 @@
+method(4) => [{"kind":"kind","value":4},{"kind":"other"}] | risky 4
+method(9) => [{"kind":"kind","value":9},{"kind":"other"}] | risky 9

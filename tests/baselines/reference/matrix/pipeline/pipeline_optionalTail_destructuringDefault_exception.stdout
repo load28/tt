@@ -1,0 +1,2 @@
+destructuringDefault(2.5) => "2.50" | source {}; risky 2.5; positive 2.5
+destructuringDefault(-3) => undefined | source {}; risky -3; positive undefined

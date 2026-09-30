@@ -14,6 +14,7 @@ const shape = variant("Shape", [
 export default {
   construct: "letElse",
   kind: "statement",
+  jsx: true,
   forms: [
     {
       id: "const",

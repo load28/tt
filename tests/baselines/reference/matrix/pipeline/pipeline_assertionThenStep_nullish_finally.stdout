@@ -1,0 +1,2 @@
+nullish(123) => 3 | flip true; operand 123; finally 0
+nullish(4) => "set" | flip false; left "set"; finally 0

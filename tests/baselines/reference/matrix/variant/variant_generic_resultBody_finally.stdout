@@ -1,0 +1,2 @@
+resultBody(4) => {"kind":"Ok","value":[1,{"kind":"Node","left":{"kind":"Leaf","value":4},"right":{"kind":"Node","left":{"kind":"Leaf","value":5},"right":{"kind":"Leaf","value":0}}}]} | base 1; read 1; operand 4; operand 4; finally 0
+resultBody(9) => {"kind":"Ok","value":[1,{"kind":"Node","left":{"kind":"Leaf","value":9},"right":{"kind":"Node","left":{"kind":"Leaf","value":10},"right":{"kind":"Leaf","value":0}}}]} | base 1; read 1; operand 9; operand 9; finally 0

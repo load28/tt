@@ -1,0 +1,2 @@
+conditionalTest(2) => "truthy" | receiver {"factor":3}; then "truthy"
+conditionalTest(7) => "truthy" | receiver {"factor":3}; then "truthy"

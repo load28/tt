@@ -1,0 +1,5 @@
+jsxAttribute({"kind":"Circle","r":1}) => "<div data-value=1></div>" | yield {"kind":"Circle","r":1}; guard big false; small 1
+jsxAttribute({"kind":"Circle","r":5}) => "<div data-value=5></div>" | yield {"kind":"Circle","r":5}; guard big true; big 5
+jsxAttribute({"kind":"Rect","w":4,"h":2}) => "<div data-value=4></div>" | yield {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4
+jsxAttribute({"kind":"Rect","w":1,"h":3}) => "<div data-value=3></div>" | yield {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3
+jsxAttribute({"kind":"Point"}) => "<div data-value=0></div>" | yield {"kind":"Point"}; point 0

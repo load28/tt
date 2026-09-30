@@ -1,0 +1,2 @@
+componentBody(4) => "<p>[5,0]</p>" | await; add 5; neg 0
+componentBody(9) => "<p>[10,0]</p>" | await; add 10; neg 0

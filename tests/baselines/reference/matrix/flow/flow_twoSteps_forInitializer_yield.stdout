@@ -1,0 +1,2 @@
+forInitializer(2) => [null] | yield 2
+forInitializer(5) => [null] | yield 5

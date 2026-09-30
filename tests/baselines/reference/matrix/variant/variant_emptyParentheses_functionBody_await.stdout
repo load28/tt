@@ -1,0 +1,2 @@
+functionBody(4) => [{"kind":"Now"},{"kind":"Later","at":4}] | await
+functionBody(9) => [{"kind":"Now"},{"kind":"Later","at":9}] | await

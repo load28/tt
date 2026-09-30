@@ -127,7 +127,7 @@ function check(dir, { accept }) {
     );
     ok = false;
   }
-  const skipped = unsampled.size > 0 ? `, ${unsampled.size} of cases the run did not sample left unjudged` : "";
+  const skipped = unsampled.size > 0 ? `, ${unsampled.size} of unsampled matrix cases left unjudged` : "";
   if (ok && accept && unused.length > 0) {
     console.log(`baselines: ${present.size + absent.size} compared${skipped}, ${unused.length} unused marked for deletion`);
   } else if (ok) {

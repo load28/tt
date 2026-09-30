@@ -1,0 +1,2 @@
+templateLiteral(5) => "<L|15|R>" | left "L"; yield 5; map 15; right "R"
+templateLiteral(0) => "<L|-1|R>" | left "L"; yield 0; right "R"

@@ -1,0 +1,2 @@
+staticBlock(10) => 9 | open res; operand 10; flip true; lookup true; found 9; dispose res
+staticBlock(20) => 40 | open res; operand 20; flip false; lookup false; double 40; dispose res

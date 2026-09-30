@@ -1,0 +1,4 @@
+jsxComponentProp({}) => "<Show 'range'>" | open res; operand {}; range "range"; dispose res
+jsxComponentProp({}) => "<Show 1>" | open res; operand {}; type 1; dispose res
+jsxComponentProp({}) => "<Show 'plain'>" | open res; operand {}; error "plain"; dispose res
+jsxComponentProp("text") => "<Show null>" | open res; operand "text"; other null; dispose res

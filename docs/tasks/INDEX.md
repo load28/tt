@@ -685,6 +685,7 @@
 | TASK-677 | Keep the TypeScript host's stdin blocking so an idle host waits instead of spinning | Complete | 2026-09-30 | 2026-09-30 | [TASK-677](./TASK-677-idle-host-blocking-stdin.md) |
 | TASK-678 | Generate a case matrix of tt constructs in host positions, each run against a TypeScript twin | Complete | 2026-09-30 | 2026-09-30 | [TASK-678](./TASK-678-case-matrix-generator.md) |
 | TASK-679 | Populate the case matrix for match, try, result, let-else, and if-let | Complete | 2026-09-30 | 2026-09-30 | [TASK-679](./TASK-679-matrix-match-try-result-let-else-if-let.md) |
+| TASK-680 | Populate the case matrix for pipelines, flow, val, variant, and .ttx positions | Complete | 2026-09-30 | 2026-09-30 | [TASK-680](./TASK-680-matrix-pipelines-flow-val-variant-ttx.md) |
 
 ## Next task number
 

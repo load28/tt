@@ -1,0 +1,3 @@
+doWhileTest(3) => 2 | flip true; maybe true; twice 9
+doWhileTest(4) => 1 | flip false; maybe false
+doWhileTest(5) => 2 | flip true; maybe true; twice 15

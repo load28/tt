@@ -1,0 +1,2 @@
+matchArm(3) => "***6" | open res; flip true; operand 3; double 6; dispose res
+matchArm(12) => 0 | open res; flip false; other arm 0; dispose res

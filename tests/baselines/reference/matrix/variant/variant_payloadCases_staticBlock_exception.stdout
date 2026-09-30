@@ -1,0 +1,2 @@
+staticBlock(4) => [{"kind":"Circle","r":4},{"kind":"Rect","w":4,"h":2}] | risky 4; risky 4
+staticBlock(9) => "risky call 3" | caught "risky call 3"

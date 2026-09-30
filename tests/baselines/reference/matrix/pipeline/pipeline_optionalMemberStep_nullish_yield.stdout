@@ -1,0 +1,3 @@
+nullish(3) => undefined | flip true; yield 3; flip false; maybe false
+nullish(4) => undefined | flip true; yield 4; flip false; maybe false
+nullish(5) => undefined | flip true; yield 5; flip false; maybe false

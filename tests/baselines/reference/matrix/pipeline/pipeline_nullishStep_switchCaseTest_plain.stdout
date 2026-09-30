@@ -1,0 +1,2 @@
+switchCaseTest(10) => "default" | discriminant 0; operand 10; flip true; lookup true; found 9
+switchCaseTest(20) => "default" | discriminant 0; operand 20; flip false; lookup false; double 40

@@ -1,6 +1,7 @@
 export default {
   construct: "result",
   kind: "value",
+  jsx: true,
   rejects: { yield: "result-yield-crossing" },
   forms: [
     {

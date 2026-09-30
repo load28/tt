@@ -1,0 +1,2 @@
+forOfBody(4) => [[{"kind":"Now"},{"kind":"Later","at":4}],[{"kind":"Now"},{"kind":"Later","at":4}]] | round 0; yield 4; round 1; yield 4
+forOfBody(9) => [[{"kind":"Now"},{"kind":"Later","at":9}],[{"kind":"Now"},{"kind":"Later","at":9}]] | round 0; yield 9; round 1; yield 9

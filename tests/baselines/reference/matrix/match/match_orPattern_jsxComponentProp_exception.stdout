@@ -1,0 +1,4 @@
+jsxComponentProp({"kind":"Num","value":4}) => "<Show 4>" | risky {"kind":"Num","value":4}; number 4
+jsxComponentProp({"kind":"Neg","value":-3}) => "<Show -3>" | risky {"kind":"Neg","value":-3}; number -3
+jsxComponentProp({"kind":"Word","text":"hi"}) => "risky call 3" | caught "risky call 3"
+jsxComponentProp({"kind":"End"}) => "<Show ''>" | risky {"kind":"End"}; end ""

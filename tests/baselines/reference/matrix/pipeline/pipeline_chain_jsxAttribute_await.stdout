@@ -1,0 +1,2 @@
+jsxAttribute(3) => "<div data-value='***6'></div>" | await; double 6
+jsxAttribute(12) => "<div data-value='**24'></div>" | await; double 24

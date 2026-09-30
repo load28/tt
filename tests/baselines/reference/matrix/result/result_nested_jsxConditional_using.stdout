@@ -1,0 +1,2 @@
+jsxConditional(2) => "<p>{'kind':'Ok','value':6}</p>" | open res; flip true; operand 2; read 2; inner {"kind":"Ok","value":3}; dispose res
+jsxConditional(-1) => "<p></p>" | open res; flip false; dispose res

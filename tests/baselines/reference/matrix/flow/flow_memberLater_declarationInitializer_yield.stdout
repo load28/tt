@@ -1,0 +1,2 @@
+declarationInitializer(2) => 12 | yield 2; receiver {"factor":3}; add 4; twice 12
+declarationInitializer(3) => 18 | yield 3; receiver {"factor":3}; add 6; twice 18

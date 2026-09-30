@@ -1,0 +1,2 @@
+whileBody(4) => [{"kind":"kind","value":4},{"kind":"other"}] | test true; operand 4; finally 0
+whileBody(9) => [{"kind":"kind","value":9},{"kind":"other"}] | test true; operand 9; finally 0

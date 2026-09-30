@@ -1,0 +1,3 @@
+jsxTernary({"kind":"Done","value":{"kind":"Some","value":7}}) => "<p>7</p>" | open res; flip true; operand {"kind":"Done","value":{"kind":"Some","value":7}}; some 7; dispose res
+jsxTernary({"kind":"Done","value":{"kind":"None"}}) => "<p><i>none</i></p>" | open res; flip false; dispose res
+jsxTernary({"kind":"Failed","error":"lost"}) => "<p>lost</p>" | open res; flip true; operand {"kind":"Failed","error":"lost"}; failed "lost"; dispose res

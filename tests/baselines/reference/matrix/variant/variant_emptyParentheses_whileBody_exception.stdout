@@ -1,0 +1,2 @@
+whileBody(4) => [{"kind":"Now"},{"kind":"Later","at":4}] | test true; risky 4
+whileBody(9) => [{"kind":"Now"},{"kind":"Later","at":9}] | test true; risky 9

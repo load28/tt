@@ -1,0 +1,2 @@
+componentBody(3) => "<p>[3,4]</p>" | operand 3; copy 4
+componentBody(8) => "<p>[8,9]</p>" | operand 8; copy 9

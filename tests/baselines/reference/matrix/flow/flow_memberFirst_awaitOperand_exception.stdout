@@ -1,0 +1,2 @@
+awaitOperand(2) => 8 | receiver {"factor":3}; risky 2; twice 6; add 8
+awaitOperand(7) => 28 | receiver {"factor":3}; risky 7; twice 21; add 28

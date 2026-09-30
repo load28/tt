@@ -1,0 +1,2 @@
+catchBlock(3) => 3 | throw "boom"; await; show 3
+catchBlock(8) => 8 | throw "boom"; await; show 8

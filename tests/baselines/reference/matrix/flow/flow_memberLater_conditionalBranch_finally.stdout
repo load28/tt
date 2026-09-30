@@ -1,0 +1,2 @@
+conditionalBranch(2) => 12 | flip true; operand 2; receiver {"factor":3}; finally 0; add 4; twice 12
+conditionalBranch(3) => "skipped" | flip false; else "skipped"; finally 0

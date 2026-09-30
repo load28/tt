@@ -1,0 +1,2 @@
+arrowBody(5) => 15 | operand 5; map 15
+arrowBody(0) => -1 | operand 0

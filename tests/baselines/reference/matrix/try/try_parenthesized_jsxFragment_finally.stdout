@@ -1,0 +1,2 @@
+jsxFragment(6) => {"kind":"Ok","value":"<>[6]</>"} | before "["; flip true; operand 6; read 6; after "]"; finally 0
+jsxFragment(-6) => {"kind":"Err","error":"negative -9"} | before "["; flip false; fallback -9; read -9; finally 0

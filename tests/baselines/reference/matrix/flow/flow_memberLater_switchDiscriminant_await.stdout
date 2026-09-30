@@ -1,0 +1,2 @@
+switchDiscriminant(2) => "default" | await; receiver {"factor":3}; case 0
+switchDiscriminant(3) => "default" | await; receiver {"factor":3}; case 0

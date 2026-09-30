@@ -1,0 +1,2 @@
+resultBody(3) => {"kind":"Ok","value":[1,4]} | open res; base 1; read 1; operand 3; read 4; dispose res
+resultBody(8) => {"kind":"Ok","value":[1,9]} | open res; base 1; read 1; operand 8; read 9; dispose res

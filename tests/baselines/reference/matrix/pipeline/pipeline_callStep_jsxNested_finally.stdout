@@ -1,0 +1,2 @@
+jsxNested(2) => "<ul><li>1</li><li>4</li></ul>" | first 1; operand 2; double 4; finally 0
+jsxNested(5) => "<ul><li>1</li><li>10</li></ul>" | first 1; operand 5; double 10; finally 0

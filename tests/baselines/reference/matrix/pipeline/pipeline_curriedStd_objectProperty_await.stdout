@@ -1,0 +1,2 @@
+objectProperty(5) => {"a":1,"value":15,"c":3} | a 1; await; map 15; c 3
+objectProperty(0) => {"a":1,"value":-1,"c":3} | a 1; await; c 3

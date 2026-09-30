@@ -1,0 +1,4 @@
+jsxAttribute("north") => "<div data-value=1></div>" | open res; operand "north"; n 1; dispose res
+jsxAttribute("south") => "<div data-value=2></div>" | open res; operand "south"; se 2; dispose res
+jsxAttribute("east") => "<div data-value=2></div>" | open res; operand "east"; se 2; dispose res
+jsxAttribute("up") => "<div data-value=0></div>" | open res; operand "up"; other 0; dispose res

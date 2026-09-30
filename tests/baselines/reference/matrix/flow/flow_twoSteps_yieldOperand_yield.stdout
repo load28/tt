@@ -1,0 +1,2 @@
+yieldOperand(2) => 6 | yield 2; yield function; double 4; add 6
+yieldOperand(5) => 15 | yield 5; yield function; double 10; add 15

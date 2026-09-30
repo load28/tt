@@ -1,0 +1,3 @@
+topLevel(3) => 9 | await; flip true; maybe true; twice 9
+topLevel(4) => undefined | await; flip false; maybe false
+topLevel(5) => 15 | await; flip true; maybe true; twice 15

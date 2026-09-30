@@ -1,0 +1,2 @@
+jsxAttribute({"kind":"Click","x":3}) => "<div data-value=3></div>" | operand {"kind":"Click","x":3}; click 3
+jsxAttribute({"kind":"Key","key":"k"}) => "<div data-value='k'></div>" | operand {"kind":"Key","key":"k"}; key "k"

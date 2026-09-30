@@ -1,0 +1,2 @@
+nullish(2) => 6 | flip true; await; receiver {"factor":3}; twice 6
+nullish(6) => "set" | flip false; left "set"

@@ -1,0 +1,2 @@
+resultBody(3) => {"kind":"Ok","value":[1,13]} | base 1; read 1; original 13
+resultBody(8) => {"kind":"Ok","value":[1,18]} | base 1; read 1; original 18

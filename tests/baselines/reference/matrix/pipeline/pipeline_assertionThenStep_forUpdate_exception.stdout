@@ -1,0 +1,2 @@
+forUpdate(123) => 3 | body 0; risky 123
+forUpdate(4) => 1 | body 0; risky 4

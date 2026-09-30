@@ -1,0 +1,3 @@
+throwOperand(4) => threw function | yield 4; flip true; maybe true
+throwOperand(6) => threw function | yield 6; flip false; maybe false
+throwOperand(8) => threw function | yield 8; flip true; maybe true

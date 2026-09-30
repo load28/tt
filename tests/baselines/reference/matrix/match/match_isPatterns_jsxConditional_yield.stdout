@@ -1,0 +1,4 @@
+jsxConditional({}) => "<p>range</p>" | flip true; yield {}; range "range"
+jsxConditional({}) => "<p></p>" | flip false
+jsxConditional({}) => "<p>plain</p>" | flip true; yield {}; error "plain"
+jsxConditional("text") => "<p></p>" | flip false

@@ -1,0 +1,4 @@
+jsxConditional("north") => "<p>1</p>" | flip true; n 1
+jsxConditional("south") => "<p></p>" | flip false
+jsxConditional("east") => "<p>2</p>" | flip true; se 2
+jsxConditional("up") => "<p></p>" | flip false

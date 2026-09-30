@@ -1,0 +1,2 @@
+method(2) => 8 | this "holder"; receiver {"factor":3}; operand 2; twice 6; add 8
+method(7) => 28 | this "holder"; receiver {"factor":3}; operand 7; twice 21; add 28

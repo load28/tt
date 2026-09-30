@@ -1,0 +1,2 @@
+switchClause(3) => 6 | discriminant 1; risky 3
+switchClause(8) => 16 | discriminant 1; risky 8

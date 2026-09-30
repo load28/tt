@@ -1,0 +1,2 @@
+staticBlock(3) => "6" | add 6
+staticBlock(-4) => "-8" | add -8

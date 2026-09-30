@@ -1,0 +1,2 @@
+switchCaseTest(2) => "default" | discriminant 0; receiver {"factor":3}; twice 6
+switchCaseTest(6) => "default" | discriminant 0; receiver {"factor":3}; twice 18

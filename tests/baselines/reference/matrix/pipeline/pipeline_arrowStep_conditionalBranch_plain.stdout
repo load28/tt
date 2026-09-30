@@ -1,0 +1,2 @@
+conditionalBranch(8) => 9 | flip true; operand 8; arrow 9
+conditionalBranch(9) => "skipped" | flip false; else "skipped"

@@ -1,0 +1,2 @@
+labeledBlock(10) => [9] | await; flip true; lookup true; found 9; flip false
+labeledBlock(20) => [19] | await; flip true; lookup true; found 19; flip false

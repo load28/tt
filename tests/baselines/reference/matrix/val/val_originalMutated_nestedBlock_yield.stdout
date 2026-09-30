@@ -1,0 +1,2 @@
+nestedBlock(3) => 13 | yield 3; original 13
+nestedBlock(8) => 18 | yield 8; original 18

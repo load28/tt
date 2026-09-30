@@ -1,0 +1,3 @@
+jsxChild(2) => "<p>{'kind':'Ok','value':'two'}</p>" | read 2
+jsxChild(7) => "<p>{'kind':'Ok','value':'other'}</p>" | read 7
+jsxChild(-1) => "<p>{'kind':'Err','error':'negative -1'}</p>" | read -1

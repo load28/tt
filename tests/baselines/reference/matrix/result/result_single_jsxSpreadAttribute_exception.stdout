@@ -1,0 +1,2 @@
+jsxSpreadAttribute(2) => "<div value={'kind':'Ok','value':20}></div>" | risky 2; read 2
+jsxSpreadAttribute(-1) => "<div value={'kind':'Err','error':'negative -1'}></div>" | risky -1; read -1

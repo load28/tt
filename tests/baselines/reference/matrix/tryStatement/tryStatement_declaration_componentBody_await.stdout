@@ -1,0 +1,2 @@
+componentBody(5) => {"kind":"Ok","value":"<p>5</p>"} | await; read 5
+componentBody(-5) => {"kind":"Err","error":"negative -5"} | await; read -5

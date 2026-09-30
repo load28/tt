@@ -1,0 +1,2 @@
+functionBody(4) => [{"kind":"North"},{"kind":"South"},4] | operand 4; operand 4
+functionBody(9) => [{"kind":"North"},{"kind":"South"},9] | operand 9; operand 9

@@ -1,0 +1,2 @@
+forUpdate(2) => 8 | body 0; receiver {"factor":3}; risky 2; twice 6; add 8
+forUpdate(7) => 28 | body 0; receiver {"factor":3}; risky 7; twice 21; add 28

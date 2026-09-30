@@ -1,0 +1,2 @@
+yieldOperand(8) => 9 | yield 8; arrow 9; yield 9
+yieldOperand(9) => 10 | yield 9; arrow 10; yield 10

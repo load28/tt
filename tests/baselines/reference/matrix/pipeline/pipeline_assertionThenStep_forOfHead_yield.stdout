@@ -1,0 +1,2 @@
+forOfHead(123) => [3] | yield 123
+forOfHead(4) => [1] | yield 4

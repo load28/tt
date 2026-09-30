@@ -1,0 +1,2 @@
+jsxAttribute(4) => "<div data-value=7></div>" | step 3; add 7
+jsxAttribute(-1) => "<div data-value=2></div>" | step 3; add 2

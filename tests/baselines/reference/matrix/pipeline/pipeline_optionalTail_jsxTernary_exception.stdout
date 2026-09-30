@@ -1,0 +1,2 @@
+jsxTernary(2.5) => "<p>2.50</p>" | flip true; risky 2.5; positive 2.5
+jsxTernary(-3) => "<p><i>none</i></p>" | flip false

@@ -1,0 +1,2 @@
+forUpdate(2) => 4 | body 0; risky 2; double 4
+forUpdate(5) => 10 | body 0; risky 5; double 10

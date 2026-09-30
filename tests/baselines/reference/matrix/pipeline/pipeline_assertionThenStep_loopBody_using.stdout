@@ -1,0 +1,2 @@
+loopBody(123) => [3,3] | open res; operand 123; operand 123; dispose res
+loopBody(4) => [1,1] | open res; operand 4; operand 4; dispose res

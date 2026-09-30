@@ -1,0 +1,2 @@
+callArgument(2) => [1,null,3] | a 1; receiver {"factor":3}; yield 2; c 3
+callArgument(7) => [1,null,3] | a 1; receiver {"factor":3}; yield 7; c 3

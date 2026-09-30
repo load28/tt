@@ -1,0 +1,2 @@
+laterDeclarator(2) => [1,6] | before 1; operand 2; receiver {"factor":3}; twice 6; finally 0
+laterDeclarator(6) => [1,18] | before 1; operand 6; receiver {"factor":3}; twice 18; finally 0

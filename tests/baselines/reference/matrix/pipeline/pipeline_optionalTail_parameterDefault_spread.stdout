@@ -1,0 +1,2 @@
+parameterDefault(2.5) => "2.50" | positive 2.5
+parameterDefault(-3) => undefined | positive undefined

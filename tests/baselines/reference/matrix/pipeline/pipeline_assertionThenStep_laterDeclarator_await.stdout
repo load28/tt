@@ -1,0 +1,2 @@
+laterDeclarator(123) => [1,3] | before 1; await
+laterDeclarator(4) => [1,1] | before 1; await

@@ -1,0 +1,2 @@
+jsxTernary(2) => "<p>{'kind':'Ok'}</p>" | flip true; operand 2; read 2
+jsxTernary(-1) => "<p><i>none</i></p>" | flip false

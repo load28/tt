@@ -1,0 +1,2 @@
+logicalOr(1.5) => true | flip true
+logicalOr(2) => "4.0" | flip false; yield 2; add 4

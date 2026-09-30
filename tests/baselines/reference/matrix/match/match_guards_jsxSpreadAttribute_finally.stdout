@@ -1,0 +1,5 @@
+jsxSpreadAttribute({"kind":"Circle","r":1}) => "<div value=1></div>" | operand {"kind":"Circle","r":1}; guard big false; small 1; finally 0
+jsxSpreadAttribute({"kind":"Circle","r":5}) => "<div value=5></div>" | operand {"kind":"Circle","r":5}; guard big true; big 5; finally 0
+jsxSpreadAttribute({"kind":"Rect","w":4,"h":2}) => "<div value=4></div>" | operand {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4; finally 0
+jsxSpreadAttribute({"kind":"Rect","w":1,"h":3}) => "<div value=3></div>" | operand {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3; finally 0
+jsxSpreadAttribute({"kind":"Point"}) => "<div value=0></div>" | operand {"kind":"Point"}; point 0; finally 0

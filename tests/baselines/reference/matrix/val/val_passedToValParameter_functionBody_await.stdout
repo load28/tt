@@ -1,0 +1,2 @@
+functionBody(3) => 3 | await; show 3
+functionBody(8) => 8 | await; show 8

@@ -1,0 +1,2 @@
+catchBlock(3) => 6 | throw "boom"; operand 3; finally 0
+catchBlock(8) => 16 | throw "boom"; operand 8; finally 0

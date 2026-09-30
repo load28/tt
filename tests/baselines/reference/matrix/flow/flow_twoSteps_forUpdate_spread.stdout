@@ -1,0 +1,2 @@
+forUpdate(2) => 6 | body 0; double 4; add 6
+forUpdate(5) => 15 | body 0; double 10; add 15

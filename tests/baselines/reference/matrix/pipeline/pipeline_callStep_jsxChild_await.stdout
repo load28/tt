@@ -1,0 +1,2 @@
+jsxChild(2) => "<p>4</p>" | await; double 4
+jsxChild(5) => "<p>10</p>" | await; double 10

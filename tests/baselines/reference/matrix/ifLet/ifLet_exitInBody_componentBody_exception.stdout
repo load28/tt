@@ -1,0 +1,2 @@
+componentBody(2) => "<p>/"passed/"</p>" | risky 2; read 2
+componentBody(-2) => "<p>diverged</p>" | risky -2; read -2; error "negative -2"

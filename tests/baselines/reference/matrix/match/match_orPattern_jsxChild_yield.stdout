@@ -1,0 +1,4 @@
+jsxChild({"kind":"Num","value":4}) => "<p>4</p>" | yield {"kind":"Num","value":4}; number 4
+jsxChild({"kind":"Neg","value":-3}) => "<p>-3</p>" | yield {"kind":"Neg","value":-3}; number -3
+jsxChild({"kind":"Word","text":"hi"}) => "<p>hi</p>" | yield {"kind":"Word","text":"hi"}; word "hi"
+jsxChild({"kind":"End"}) => "<p></p>" | yield {"kind":"End"}; end ""
