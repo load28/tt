@@ -1,0 +1,2 @@
+logicalAnd(4) => {"kind":"Ok","value":9} | open res; flip true; operand 4; read 4; second 5; read 5; dispose res
+logicalAnd(-4) => {"kind":"Ok","value":false} | open res; flip false; dispose res

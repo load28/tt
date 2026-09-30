@@ -689,6 +689,7 @@
 | TASK-681 | Reject a statement `try` in class code of a class written inside a function | Complete | 2026-09-30 | 2026-09-30 | [TASK-681](./TASK-681-try-in-class-code-inside-function.md) |
 | TASK-682 | Report a `try` in a C-style `for` test as try-placement at the `try` | Complete | 2026-09-30 | 2026-09-30 | [TASK-682](./TASK-682-try-in-for-test.md) |
 | TASK-683 | Keep the function target of a `try` in a match block arm | Complete | 2026-09-30 | 2026-09-30 | [TASK-683](./TASK-683-try-in-match-block-arm.md) |
+| TASK-684 | Lower a `try` nested in an operand of a conditional operation | Complete | 2026-09-30 | 2026-09-30 | [TASK-684](./TASK-684-try-in-conditional-operands.md) |
 
 ## Next task number
 

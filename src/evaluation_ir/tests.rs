@@ -388,11 +388,29 @@ fn both_ternary_branches_join_one_operation() {
     assert!(matches!(
         operations[0].kind,
         PlannedConditionalKind::Ternary {
-            consequent: PlannedBranch::Value(_),
-            alternate: PlannedBranch::Value(_),
+            consequent: PlannedBranch::Values(_),
+            alternate: PlannedBranch::Values(_),
         }
     ));
     assert_eq!(operations[0].values.len(), 2);
+}
+
+#[test]
+fn several_values_in_one_branch_join_one_operation() {
+    let (file, core) = evaluation(
+        "import type { TResult } from \"@tt/std\";\ndeclare const flag: boolean;\ndeclare function read(n: number): TResult<number, string>;\nexport function f(): TResult<number, string> {\n  const v = flag ? (try read(1)) + (try read(2)) : 0;\n  return { kind: \"Ok\", value: v };\n}\n",
+    );
+    let plan = plan(&file, &core);
+    let operations: Vec<_> = plan.owners().flat_map(|owner| &owner.operations).collect();
+    assert_eq!(operations.len(), 1, "{operations:#?}");
+    let PlannedConditionalKind::Ternary { consequent, .. } = &operations[0].kind else {
+        panic!("{operations:#?}");
+    };
+    assert!(
+        matches!(consequent, PlannedBranch::Values(values) if values.len() == 2),
+        "{operations:#?}"
+    );
+    assert_eq!(operations[0].active.len(), 2, "{operations:#?}");
 }
 
 #[test]

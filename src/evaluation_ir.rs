@@ -241,10 +241,12 @@ pub(crate) struct PlannedConditionalOperation {
     pub(crate) condition: PlannedEvaluationInput,
     /// The tt values the operation consumes, in source order.
     pub(crate) values: Vec<ExprId>,
-    /// For a logical operation, the complete active branch and the
-    /// evaluation steps between each consumed value and that branch. This
-    /// lets the target rebuild `condition && wrapper(match ...)` as one
-    /// region instead of requiring the match to be the entire branch.
+    /// For each consumed value that is not a whole branch or argument by
+    /// itself, the branch or argument holding it and the evaluation steps
+    /// between the value and that branch. This lets the target rebuild
+    /// `condition && wrapper(match ...)`, `c ? (try a) + (try b) : d`, and
+    /// `f?.(try r * 2)` as one region instead of requiring each value to be
+    /// the entire branch or argument.
     pub(crate) active: Vec<PlannedActiveBranch>,
     /// The evaluation steps outside this operation (its own host context),
     /// shared by every consumed value.
@@ -281,18 +283,28 @@ pub(crate) enum PlannedConditionalKind {
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PlannedBranch {
-    /// A tt value delivering straight into the result slot.
-    Value(ExprId),
+    /// The tt values of the branch, in source order: one delivering straight
+    /// into the result slot, or several (or one inside a larger branch)
+    /// evaluated in order before the branch is rebuilt from their slots.
+    Values(Vec<ExprId>),
     /// Original source, relocated into the branch.
     Source(SourceSpan),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PlannedOperand {
     /// A tt value delivering into its own slot before the call.
     Value(ExprId),
+    /// An argument holding tt values inside a larger expression: the values
+    /// evaluate, in source order, into their slots before the call, and the
+    /// argument is rebuilt from its source around them.
+    Composed {
+        span: SourceSpan,
+        spread: bool,
+        values: Vec<ExprId>,
+    },
     /// Original argument source. Arguments before the last tt value are
     /// captured (in order) before the values run; arguments after it are
     /// inlined into the rebuilt call, where they evaluate in place.

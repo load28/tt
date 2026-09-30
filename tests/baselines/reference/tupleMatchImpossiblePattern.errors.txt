@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tupleMatchImpossiblePattern.tt → $DIR/out/tupleMatchImpossiblePattern.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2367]: This comparison appears to be unintentional because the types '"Fast"' and '"Slow"' have no overlap. (in code ttc generated for this construct)
+ --> tupleMatchImpossiblePattern.tt:9:9
+  |
+9 |     (_, Slow) => 2,
+  |         ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tupleMatchImpossiblePattern.ts(22,11): error TS2367: This comparison appears to be unintentional because the types '"Fast"' and '"Slow"' have no overlap.

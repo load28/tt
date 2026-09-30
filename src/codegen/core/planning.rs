@@ -1381,7 +1381,7 @@ impl TargetRewritePlan {
                     .into_iter()
                     .filter_map(|branch| match branch {
                         PlannedBranch::Source(span) => Some(*span),
-                        PlannedBranch::Value(_) => None,
+                        PlannedBranch::Values(_) => None,
                     })
                     .collect(),
                 _ => Vec::new(),

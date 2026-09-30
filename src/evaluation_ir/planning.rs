@@ -264,9 +264,6 @@ pub(super) fn plan_one_operation(
         HostEvaluationOperation::Conditional(ConditionalBranch::LogicalAndRight)
         | HostEvaluationOperation::Conditional(ConditionalBranch::LogicalOrRight)
         | HostEvaluationOperation::Conditional(ConditionalBranch::NullishRight) => {
-            if members.len() != 1 {
-                return Ok(None);
-            }
             match step.operation {
                 HostEvaluationOperation::Conditional(ConditionalBranch::LogicalAndRight) => {
                     PlannedConditionalKind::LogicalAnd
@@ -280,8 +277,8 @@ pub(super) fn plan_one_operation(
         HostEvaluationOperation::Conditional(
             ConditionalBranch::Consequent | ConditionalBranch::Alternate,
         ) => {
-            let mut consequent = None;
-            let mut alternate = None;
+            let mut consequent: Option<(Vec<ExprId>, Option<SourceSpan>)> = None;
+            let mut alternate: Option<(Vec<ExprId>, Option<SourceSpan>)> = None;
             for member in members {
                 let value = &values[*member];
                 let Some((member_index, member_step)) = whole_operation_step(&value.schedule)
@@ -291,13 +288,11 @@ pub(super) fn plan_one_operation(
                 let Some(member_facts) = &member_step.conditional else {
                     return Ok(None);
                 };
-                if member_index > 0 {
-                    active.push(PlannedActiveBranch {
-                        value: value.expr,
-                        branch: member_facts.branch,
-                        steps: value.schedule.steps()[..member_index].to_vec(),
-                    });
-                }
+                active.push(PlannedActiveBranch {
+                    value: value.expr,
+                    branch: member_facts.branch,
+                    steps: value.schedule.steps()[..member_index].to_vec(),
+                });
                 let side = match member_step.operation {
                     HostEvaluationOperation::Conditional(ConditionalBranch::Consequent) => {
                         &mut consequent
@@ -307,30 +302,40 @@ pub(super) fn plan_one_operation(
                     }
                     _ => return Ok(None),
                 };
-                if side.is_some() {
-                    return Ok(None);
+                match side {
+                    Some((values, _)) => values.push(value.expr),
+                    None => *side = Some((vec![value.expr], member_facts.skipped)),
                 }
-                *side = Some((PlannedBranch::Value(value.expr), member_facts.skipped));
             }
-            let fill = |taken: Option<(PlannedBranch, Option<SourceSpan>)>,
-                        other: &Option<(PlannedBranch, Option<SourceSpan>)>|
+            // A branch that is exactly one value delivers it straight into
+            // the result slot; any other branch is rebuilt around its values.
+            active.retain(|entry| {
+                !entry.steps.is_empty()
+                    || [&consequent, &alternate]
+                        .into_iter()
+                        .flatten()
+                        .any(|(values, _)| values.len() > 1 && values.contains(&entry.value))
+            });
+            let fill = |taken: Option<(Vec<ExprId>, Option<SourceSpan>)>,
+                        other: Option<Option<SourceSpan>>|
              -> Option<PlannedBranch> {
                 match taken {
-                    Some((branch, _)) => Some(branch),
+                    Some((values, _)) => Some(PlannedBranch::Values(values)),
                     // The side with no tt value is the other member's
                     // skipped span — original source relocated into the
                     // branch, which must not contain tt of its own.
                     None => {
-                        let (_, skipped) = other.as_ref()?;
-                        let span = (*skipped)?;
+                        let span = other.flatten()?;
                         (!overlaps_tt(span)).then_some(PlannedBranch::Source(span))
                     }
                 }
             };
-            let Some(consequent_branch) = fill(consequent, &alternate) else {
+            let consequent_skipped = consequent.as_ref().map(|(_, skipped)| *skipped);
+            let alternate_skipped = alternate.as_ref().map(|(_, skipped)| *skipped);
+            let Some(consequent_branch) = fill(consequent, alternate_skipped) else {
                 return Ok(None);
             };
-            let Some(alternate_branch) = fill(alternate, &consequent) else {
+            let Some(alternate_branch) = fill(alternate, consequent_skipped) else {
                 return Ok(None);
             };
             PlannedConditionalKind::Ternary {
@@ -339,9 +344,6 @@ pub(super) fn plan_one_operation(
             }
         }
         HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(_)) => {
-            if conditional_index != 0 {
-                return Ok(None);
-            }
             // A member callee the chain tests is called through its
             // captured receiver (`callee.call(receiver, ...)`), which cannot
             // carry explicit type arguments.
@@ -366,18 +368,23 @@ pub(super) fn plan_one_operation(
                     return Ok(None);
                 }
             };
-            let mut value_indices: HashMap<u32, ExprId> = HashMap::new();
+            let mut value_indices: HashMap<u32, Vec<(ExprId, usize)>> = HashMap::new();
             for member in members {
                 let value = &values[*member];
-                let HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(
-                    index,
-                )) = value.schedule.steps()[0].operation
+                let Some((member_index, member_step)) = whole_operation_step(&value.schedule)
                 else {
                     return Ok(None);
                 };
-                if value_indices.insert(index, value.expr).is_some() {
+                let HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(
+                    index,
+                )) = member_step.operation
+                else {
                     return Ok(None);
-                }
+                };
+                value_indices
+                    .entry(index)
+                    .or_default()
+                    .push((value.expr, member_index));
             }
             let last_value = *value_indices.keys().max().unwrap_or(&0);
             // Argument capture slots come from the members' planned inputs:
@@ -387,8 +394,11 @@ pub(super) fn plan_one_operation(
             // `None` — the rebuilt call inlines it, which is unobservable.
             let capture_of = |span: SourceSpan| {
                 members.iter().find_map(|member| {
-                    values[*member].schedule.steps()[0].inputs.iter().find_map(
-                        |input| match input {
+                    let (member_index, _) = whole_operation_step(&values[*member].schedule)?;
+                    values[*member].schedule.steps()[member_index]
+                        .inputs
+                        .iter()
+                        .find_map(|input| match input {
                             PlannedEvaluationInput::Source { source, target, .. }
                                 if *source == span =>
                             {
@@ -398,15 +408,35 @@ pub(super) fn plan_one_operation(
                                 Some(None)
                             }
                             _ => None,
-                        },
-                    )
+                        })
                 })
             };
             let mut arguments = Vec::with_capacity(facts.operands.len());
             for (index, operand) in facts.operands.iter().enumerate() {
                 let index = u32::try_from(index).map_err(|_| EvaluationError::IdOverflow)?;
-                match value_indices.get(&index) {
-                    Some(expr) => arguments.push(PlannedOperand::Value(*expr)),
+                match value_indices.get(&index).map(Vec::as_slice) {
+                    Some(&[(expr, 0)]) => arguments.push(PlannedOperand::Value(expr)),
+                    Some(argument_values) => {
+                        for &(expr, member_index) in argument_values {
+                            let Some(value) = members
+                                .iter()
+                                .map(|member| &values[*member])
+                                .find(|value| value.expr == expr)
+                            else {
+                                return Ok(None);
+                            };
+                            active.push(PlannedActiveBranch {
+                                value: expr,
+                                branch: operand.span,
+                                steps: value.schedule.steps()[..member_index].to_vec(),
+                            });
+                        }
+                        arguments.push(PlannedOperand::Composed {
+                            span: operand.span,
+                            spread: operand.spread,
+                            values: argument_values.iter().map(|(expr, _)| *expr).collect(),
+                        });
+                    }
                     None => {
                         if overlaps_tt(operand.span) {
                             return Ok(None);
@@ -458,11 +488,17 @@ pub(super) fn plan_one_operation(
         condition => condition,
     };
     if logical {
-        active.push(PlannedActiveBranch {
-            value: first.expr,
-            branch: facts.branch,
-            steps: first_steps[..conditional_index].to_vec(),
-        });
+        for member in members {
+            let value = &values[*member];
+            let Some((member_index, _)) = whole_operation_step(&value.schedule) else {
+                return Ok(None);
+            };
+            active.push(PlannedActiveBranch {
+                value: value.expr,
+                branch: facts.branch,
+                steps: value.schedule.steps()[..member_index].to_vec(),
+            });
+        }
     }
     Ok(Some(PlannedConditionalOperation {
         parent,

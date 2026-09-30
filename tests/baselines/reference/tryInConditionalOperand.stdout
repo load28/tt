@@ -1,0 +1,12 @@
+{"kind":"Ok","value":[13,3,-3]} read 1,middle,read 2,read 1,read 3,read 1,read 4
+{"kind":"Ok","value":[3,0]} read 1,read 2,plain
+{"kind":"Ok","value":[false,true,"set"]} 
+{"kind":"Ok","value":[6,[1,1,2]]} read 3,read 1,after,read 2
+{"kind":"Err","error":"bad -2"} read -2
+{"kind":"Err","error":"bad -2"} read -2
+{"kind":"Ok","value":[false,true,"set"]} 
+{"kind":"Err","error":"bad -2"} read 0,read -2
+{"kind":"Ok","value":["1|4|3","2.0|5"]} callee some,first,read 2,last,callee some,read 2,read 2,read 3
+{"kind":"Ok","value":[null,null]} callee none,callee none
+{"kind":"Err","error":"bad -1"} callee some,first,read -1
+{"kind":"Ok","value":[null,null]} callee none,callee none
