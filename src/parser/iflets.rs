@@ -21,8 +21,8 @@
 //! `if let`; a plain `else if (...)` is not part of the statement (v1) and
 //! fails the parse.
 
-use super::cursor::{Cursor, dotted_at, skip_braced_construct};
-use crate::ast::{IfLetElse, IfLetStmt, Span, TagPattern};
+use super::cursor::{Cursor, dotted_at, find_close_at, skip_braced_construct};
+use crate::ast::{IfLetElse, IfLetStmt, RecoveryKind, RecoveryNode, Span, TagPattern};
 use crate::lexer::{Token, TokenKind};
 
 /// The token index where an `if let`'s pattern starts, when the token at
@@ -249,4 +249,182 @@ fn expr_until_block(cur: &Cursor) -> Option<(usize, usize)> {
         k += 1;
     }
     None
+}
+
+pub(super) fn stray_if_let_recoveries(
+    src: &str,
+    tokens: &[Token],
+    k: usize,
+    range_end: usize,
+) -> Vec<RecoveryNode> {
+    let extent = if_extent(src, tokens, k, range_end);
+    let start = tokens[k].span.start;
+    let end = extent.end.max(extent.head_end);
+    match extent.operand {
+        Some(eq) => {
+            let mut nodes = vec![RecoveryNode {
+                span: Span {
+                    start,
+                    end: tokens[eq].span.end,
+                },
+                kind: RecoveryKind::OperandHead,
+            }];
+            if let Some(tail) = extent.tail {
+                nodes.push(RecoveryNode {
+                    span: Span { start: tail, end },
+                    kind: RecoveryKind::Statement,
+                });
+            }
+            nodes
+        }
+        None => vec![RecoveryNode {
+            span: Span { start, end },
+            kind: RecoveryKind::Statement,
+        }],
+    }
+}
+
+struct IfExtent {
+    head_end: usize,
+    operand: Option<usize>,
+    tail: Option<usize>,
+    end: usize,
+}
+
+fn if_extent(src: &str, tokens: &[Token], k: usize, range_end: usize) -> IfExtent {
+    let token = |at: usize| tokens.get(at).filter(|t| t.span.end <= range_end);
+    let word = |at: usize| {
+        token(at)
+            .filter(|t| matches!(t.kind, TokenKind::Ident) && !dotted_at(tokens, 0, at))
+            .map(|t| &src[t.span.start..t.span.end])
+    };
+    let first = if word(k + 1) == Some("let") {
+        k + 2
+    } else {
+        k + 1
+    };
+    let mut head_end = token(first - 1).map_or(tokens[k].span.end, |t| t.span.end);
+    let mut open: Vec<u8> = Vec::new();
+    let mut eq = None;
+    let mut operand = false;
+    let mut at = first;
+    let mut block = None;
+    while let Some(t) = token(at) {
+        if open.is_empty() {
+            if matches!(t.kind, TokenKind::Punct(b'{'))
+                && !matches!(
+                    at.checked_sub(1).map(|p| &tokens[p].kind),
+                    Some(TokenKind::Arrow)
+                )
+            {
+                block = Some(at);
+                break;
+            }
+            if matches!(t.kind, TokenKind::Punct(b';')) || at > first && t.facts.boundary_before() {
+                break;
+            }
+            if let Some(past) = word(at).and_then(|w| skip_braced_construct(tokens, w, at)) {
+                operand |= eq.is_some();
+                head_end = tokens[past - 1].span.end;
+                at = past;
+                continue;
+            }
+            if eq.is_none() && is_binding_eq(src, tokens, at) {
+                eq = Some(at);
+                head_end = t.span.end;
+                at += 1;
+                continue;
+            }
+        }
+        if t.closes_bracket() {
+            if !matches!((open.last(), &t.kind), (Some(&want), TokenKind::Punct(got)) if want == *got)
+            {
+                break;
+            }
+            open.pop();
+        } else if matches!(open.last(), None | Some(b')' | b']'))
+            && word(at).is_some_and(crate::lexer::statement_only_keyword)
+        {
+            break;
+        } else if t.opens_bracket() {
+            open.push(match t.kind {
+                TokenKind::Punct(b'(') => b')',
+                TokenKind::Punct(b'[') => b']',
+                TokenKind::Punct(b'{') => b'}',
+                _ => b'>',
+            });
+        }
+        operand |= eq.is_some();
+        head_end = t.span.end;
+        at += 1;
+    }
+    let operand = eq.filter(|_| operand);
+    let Some(open_at) = block else {
+        return IfExtent {
+            head_end,
+            operand,
+            tail: None,
+            end: head_end,
+        };
+    };
+    let tail = Some(tokens[open_at].span.start);
+    let Some(close) = find_close_at(tokens, open_at).filter(|&c| token(c).is_some()) else {
+        return IfExtent {
+            head_end,
+            operand,
+            tail,
+            end: range_end,
+        };
+    };
+    let mut end = tokens[close].span.end;
+    if word(close + 1) == Some("else") {
+        end = token(close + 1).map_or(end, |t| t.span.end);
+        if matches!(
+            token(close + 2).map(|t| &t.kind),
+            Some(TokenKind::Punct(b'{'))
+        ) {
+            end = find_close_at(tokens, close + 2)
+                .and_then(token)
+                .map_or(range_end, |t| t.span.end);
+        } else if word(close + 2) == Some("if") {
+            let next = if_extent(src, tokens, close + 2, range_end);
+            end = next.end.max(next.head_end);
+        }
+    }
+    IfExtent {
+        head_end,
+        operand,
+        tail,
+        end,
+    }
+}
+
+fn is_binding_eq(src: &str, tokens: &[Token], k: usize) -> bool {
+    let t = &tokens[k];
+    if !matches!(t.kind, TokenKind::Punct(b'=')) {
+        return false;
+    }
+    let bytes = src.as_bytes();
+    let joined_after = tokens.get(k + 1).is_some_and(|next| {
+        next.span.start == t.span.end && matches!(bytes[next.span.start], b'=' | b'>')
+    });
+    let joined_before = k.checked_sub(1).map(|p| &tokens[p]).is_some_and(|prev| {
+        prev.span.end == t.span.start
+            && matches!(
+                bytes[prev.span.end - 1],
+                b'=' | b'!'
+                    | b'<'
+                    | b'>'
+                    | b'+'
+                    | b'-'
+                    | b'*'
+                    | b'/'
+                    | b'%'
+                    | b'&'
+                    | b'|'
+                    | b'^'
+                    | b'?'
+            )
+    });
+    !joined_after && !joined_before
 }

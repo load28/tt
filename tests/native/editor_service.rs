@@ -1,0 +1,77 @@
+#[test]
+fn an_unfinished_if_let_leaves_the_rest_of_the_file_served() {
+    require_tsgo!();
+    let decl = "import type { TOption } from \"@tt/std\";\n\
+declare function find(id: string): TOption<{ name: string }>;\n";
+    for head in [
+        "if let Some(value: w) = find(id)",
+        "if let Some(",
+        "if let Some(v) = find(id.)",
+        "if let Some(v) =",
+    ] {
+        let source = format!(
+            "{decl}export function f(id: string) {{\n  {head}\n  const b = find(id);\n  return b.kind;\n}}\n\
+export function g(n: number) {{ return n.toFixed(); }}\n"
+        );
+        let dir = project(&[("src/main.tt", &source)]);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        let mut project = open_service(&file);
+
+        let later = utf16_position(&source, "toFixed()");
+        let completion = project
+            .completion(&file, ttc::engine::Position { character: later.character + 3, ..later }, true)
+            .unwrap();
+        assert!(
+            completion.items.iter().any(|item| item.label == "toFixed"),
+            "{source}"
+        );
+        let hover = project
+            .hover(&file, utf16_position(&source, "kind;"))
+            .unwrap()
+            .expect("hover after the unfinished if let");
+        assert!(hover.signature.contains("kind"), "{source}");
+        let names: Vec<_> = project
+            .document_symbols(&file)
+            .unwrap()
+            .into_iter()
+            .map(|symbol| symbol.name)
+            .collect();
+        assert!(names.contains(&"g".to_string()), "{source}: {names:?}");
+        let diagnostics = listed(&project.service_diagnostics(&file).unwrap());
+        assert!(
+            diagnostics.iter().all(|d| d.3 != "'}' expected."),
+            "{source}: {diagnostics:?}"
+        );
+    }
+}
+
+#[test]
+fn the_operand_of_an_unfinished_if_let_is_served() {
+    require_tsgo!();
+    let (source, position) = at_cursor(
+        "import type { TOption } from \"@tt/std\";\n\
+declare function find(id: string): TOption<{ name: string }>;\n\
+export function f(id: string) {\n  if let Some(v) = find(id.@@)\n  return 1;\n}\n",
+    );
+    let dir = project(&[("src/main.tt", &source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let completion = project.completion(&file, position, true).unwrap();
+    assert!(
+        completion.items.iter().any(|item| item.label == "charAt"),
+        "{:?}",
+        completion.items.iter().map(|i| &i.label).collect::<Vec<_>>()
+    );
+    let help = project
+        .signature_help(&file, position)
+        .unwrap()
+        .expect("signature help in the operand");
+    assert_eq!(
+        help.signatures[0].label,
+        "find(id: string): TOption<{ name: string; }>"
+    );
+    assert_eq!(
+        listed(&project.service_diagnostics(&file).unwrap()),
+        vec![(3, 27, 1003, "Identifier expected.".to_string())]
+    );
+}

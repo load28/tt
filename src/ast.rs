@@ -147,6 +147,7 @@ pub(crate) enum RecoveryKind {
     Expression,
     /// Replace an invalid statement with an empty statement.
     Statement,
+    OperandHead,
     /// Replace an invalid TypeScript type fragment with a literal type.
     Type,
     /// Replace an invalid variant declaration with a value-and-type placeholder.

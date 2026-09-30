@@ -147,6 +147,7 @@ enum Placeholder {
     Expression,
     ProbeExpression,
     Statement,
+    OperandHead,
     Type,
     Erase,
 }
@@ -313,6 +314,7 @@ fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &m
             RecoveryKind::ListElement => Placeholder::Statement,
             RecoveryKind::Statement | RecoveryKind::VariantDecl { .. } => Placeholder::Statement,
             RecoveryKind::Type => Placeholder::Type,
+            RecoveryKind::OperandHead => Placeholder::OperandHead,
         };
         if !region_candidates.contains(&(recovery.span.start, recovery.span.end)) {
             masks.push(Mask {
@@ -365,6 +367,11 @@ fn overwrite(bytes: &mut [u8], base: usize, mask: Mask) {
             bytes[start..start + count].copy_from_slice(&replacement[..count]);
         }
         Placeholder::Statement => bytes[start] = b';',
+        Placeholder::OperandHead => {
+            let replacement = b"void";
+            let count = replacement.len().min(end - start);
+            bytes[start..start + count].copy_from_slice(&replacement[..count]);
+        }
         Placeholder::Type => {
             let replacement = b"any";
             let count = replacement.len().min(end - start);

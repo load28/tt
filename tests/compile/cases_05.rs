@@ -714,6 +714,42 @@ fn a_stray_pipe_recovers_only_to_the_end_of_its_statement() {
 }
 
 #[test]
+fn a_stray_if_let_recovers_only_the_statement_typescript_reads() {
+    let after = "  const b = 1;\n  return b;\n}\nfunction g() { return 2; }\n";
+    for (head, projected) in [
+        (
+            "if let Some(v) = find(id)",
+            "void             find(id)",
+        ),
+        (
+            "if let Some(v) = find(id.)",
+            "void             find(id.)",
+        ),
+        ("if let Some(", ";           "),
+        ("if let Some(v) =", ";               "),
+        (
+            "if let 1(x) = y { x } else if let B(z) = w { z } else { q }",
+            "void          y ;",
+        ),
+    ] {
+        let src = format!("function f(id: string) {{\n  {head}\n{after}");
+        let report = ttc::compile_projection_report(&src, &Options::default());
+        let emit = report
+            .emit
+            .or(report.withheld)
+            .expect("the projection emits");
+        assert_eq!(
+            emit.code,
+            format!(
+                "function f(id: string) {{\n  {projected:<width$}\n{after}",
+                width = head.len()
+            ),
+            "{src}"
+        );
+    }
+}
+
+#[test]
 fn optional_postfix_step_emits_the_complete_chain() {
     let out = ok("const a = x |> ?.trim();\n\
          const b = xs |> ?.[key]?.value;\n\

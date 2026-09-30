@@ -359,18 +359,6 @@ fn recovery_expression_span(
     }
 }
 
-fn recovery_statement_span(tokens: &[Token], start_idx: usize, range_end: usize) -> Span {
-    let recovery_end = (start_idx..tokens.len())
-        .find(|&idx| matches!(tokens[idx].kind, TokenKind::Punct(b'{')))
-        .and_then(|open| find_close_at(tokens, open))
-        .and_then(|close| tokens.get(close))
-        .map_or(range_end, |token| token.span.end);
-    Span {
-        start: tokens[start_idx].span.start,
-        end: recovery_end,
-    }
-}
-
 /// The clause of the enclosing C-style `for` head that token `idx` is in:
 /// its top-level `;` separators before `idx`, or `None` outside a `for`
 /// head. The test clause (1) keeps a `try` statement's grammar so Evaluation
@@ -800,10 +788,7 @@ impl Parser<'_> {
                     continue;
                 }
                 stray_if_lets.push(tok.span.start);
-                recoveries.push(RecoveryNode {
-                    span: recovery_statement_span(tokens, i, end),
-                    kind: RecoveryKind::Statement,
-                });
+                recoveries.extend(iflets::stray_if_let_recoveries(self.src, tokens, i, end));
             }
 
             // `result { ... }` is contextual: only a body with a nearest

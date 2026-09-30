@@ -600,7 +600,8 @@
 | TASK-592 | Draw diagnostic carets at each character's display width | Complete | 2026-09-30 | 2026-09-30 | [TASK-592](./TASK-592-caret-display-width.md) |
 | TASK-593 | Run earlier declarators before a later declarator's value | Complete | 2026-09-30 | 2026-09-30 | [TASK-593](./TASK-593-declarator-order-and-scope.md) |
 | TASK-594 | Reject a statement value in an enum member initializer | Complete | 2026-09-30 | 2026-09-30 | [TASK-594](./TASK-594-enum-member-initializer-placement.md) |
+| TASK-602 | Recover an unfinished `if let` only as far as TypeScript reads its statement | Complete | 2026-09-30 | 2026-09-30 | [TASK-602](./TASK-602-stray-if-let-stays-local.md) |
 
 ## Next task number
 
-**TASK-595**
+**TASK-606**

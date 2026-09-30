@@ -841,6 +841,7 @@ fn recover_source(source: &str, selected: &[ast::RecoveryNode]) -> String {
             }
             ast::RecoveryKind::Statement | ast::RecoveryKind::VariantDecl { .. } => ";",
             ast::RecoveryKind::Type => "any",
+            ast::RecoveryKind::OperandHead => "void",
         };
         overwrite_recovery(&mut recovered, node.span.start, node.span.end, replacement);
     }

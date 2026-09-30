@@ -252,6 +252,13 @@ TypeScript's syntax errors *and* its type errors; a `.tt` file must too.
   keyword directly in a parenthesis or index, or the end of the region —
   as TypeScript reads an unterminated argument list, so the operand holds
   the text being typed and the function's own `}` stays outside it.
+- **An unfinished `if let` is recovered as far as TypeScript reads its
+  statement (TASK-602).** Its head ends where an `if` condition or an open
+  list ends (a then-block, a `;`, a statement boundary, an enclosing
+  closer, a statement keyword in a parenthesis), a then-block and its
+  `else` continuation belong to it, and nothing after that is recovered.
+  When the head has an operand, only `if let <pattern> =` becomes `void`,
+  so the operand the user is typing stays served.
 - **A cursor with no place in the served text is asked through a probe.**
   Completion and signature help splice `$tt_probe` at the cursor and ask
   at its mapped position when the served projection did not copy the
