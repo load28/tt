@@ -1038,32 +1038,50 @@ pub(super) fn source_tokens(
                 character: (character + length) as u32,
             },
         );
-        let Some((from, to)) = mapper::to_source_span(&doc.mappings, start, end) else {
-            continue;
-        };
-        if to <= from {
-            continue;
-        }
-        let modifiers = legend
+        let modifiers: Vec<String> = legend
             .modifiers
             .iter()
             .enumerate()
             .filter(|(index, _)| *index < 64 && bits & (1 << index) != 0)
             .map(|(_, name)| name.clone())
             .collect();
-        let classified = ClassifiedToken {
-            range: Range {
-                start: byte_position(&source_lines, from),
-                end: byte_position(&source_lines, to),
-            },
-            token_type: token_type.clone(),
-            modifiers,
-        };
-        if !out.contains(&classified) {
-            out.push(classified);
+        for (from, to) in token_sources(doc, start, end) {
+            let classified = ClassifiedToken {
+                range: Range {
+                    start: byte_position(&source_lines, from),
+                    end: byte_position(&source_lines, to),
+                },
+                token_type: token_type.clone(),
+                modifiers: modifiers.clone(),
+            };
+            if !out.contains(&classified) {
+                out.push(classified);
+            }
         }
     }
     out
+}
+
+/// The source spans a service token over `start..end` of the served text
+/// classifies. A binding an or-pattern's alternatives share is declared
+/// once in the served text and written in every alternative, so its token
+/// is each alternative's; any other token is the source it was copied from.
+fn token_sources(doc: &ServiceDoc, start: usize, end: usize) -> Vec<(usize, usize)> {
+    if let Some(binding) = doc
+        .shared_bindings
+        .iter()
+        .find(|binding| binding.out == start && binding.out_end == end)
+    {
+        return binding
+            .occurrences
+            .iter()
+            .map(|occurrence| (occurrence.src, occurrence.src_end))
+            .collect();
+    }
+    mapper::to_source_span(&doc.mappings, start, end)
+        .filter(|(from, to)| from < to)
+        .into_iter()
+        .collect()
 }
 
 pub(super) fn merge_tokens(

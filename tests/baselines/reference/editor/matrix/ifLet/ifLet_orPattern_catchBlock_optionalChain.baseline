@@ -10,7 +10,3 @@ differences from ifLet_orPattern_catchBlock_optionalChain at the questions liste
   |                                                                                       ^ /*use*/
   tt only: main "value"
 
-=== semanticTokens main.tt ===
-  tt only: /*bind*/ variable []
-  ts only: /*bind*/ variable [declaration, local, readonly]
-

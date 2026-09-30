@@ -5,7 +5,3 @@ differences from letElse_orPattern_ifBranch_finally at the questions listed in t
   |                 ^ /*bind*/
   tt only: main "value" -> value: ttRenamePlaceholder
 
-=== semanticTokens main.tt ===
-  tt only: /*bind*/ variable []
-  ts only: /*bind*/ variable [declaration, local, readonly]
-

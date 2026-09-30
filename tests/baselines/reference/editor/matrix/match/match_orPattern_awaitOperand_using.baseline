@@ -10,10 +10,6 @@ differences from match_orPattern_awaitOperand_using at the questions listed in t
   |                                                      ^ /*bind*/
   tt only: main "value" -> value: ttRenamePlaceholder
 
-=== semanticTokens main.tt ===
-  tt only: /*bind*/ variable []
-  ts only: /*bind*/ variable [declaration, local, readonly]
-
 === diagnostics main.tt ===
   ts only: main "await (((t0: Token) => { if (t0.kind === \"Num\" || t0.kind === \"Neg\") { const { value } = t0; return note(\"number\", value); } if (t0.kind === \"Word\") { const { text } = t0; return note(\"word\", text); } return note(\"end\", \"\"); })(note(\"operand\", input)))" hint TS80007: 'await' has no effect on the type of this expression.
 

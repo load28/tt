@@ -15,7 +15,3 @@ differences from match_orPattern_declarationInitializer_yield at the questions l
   |                               ^ /*operand*/
   tt only: value (Variable)
 
-=== semanticTokens main.tt ===
-  tt only: /*bind*/ variable []
-  ts only: /*bind*/ variable [declaration, local, readonly]
-

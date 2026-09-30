@@ -59,7 +59,3 @@ differences from match_orPattern_topLevel_optionalChain at the questions listed 
   tt only: unique (Keyword)
   tt only: unknown (Keyword)
 
-=== semanticTokens main.tt ===
-  tt only: /*bind*/ variable []
-  ts only: /*bind*/ variable [declaration, local, readonly]
-
