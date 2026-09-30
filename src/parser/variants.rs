@@ -46,6 +46,15 @@ pub(super) fn parse_variant<'t>(
             .get(cur.idx)
             .map(|token| cur.text(token).to_string())
             .unwrap_or_else(|| "$tt_invalid_variant".to_string());
+        let generics = cur
+            .tokens
+            .get(cur.idx + 1)
+            .filter(|token| matches!(token.kind, TokenKind::Punct(b'<')))
+            .and_then(|open| {
+                let close = super::cursor::find_close_at(cur.tokens, cur.idx + 1)?;
+                Some(cur.parser.src[open.span.start..cur.tokens[close].span.end].to_string())
+            })
+            .unwrap_or_default();
         let end = (cur.idx + 1..cur.tokens.len())
             .find(|&idx| matches!(cur.tokens[idx].kind, TokenKind::Punct(b'{')))
             .and_then(|open| super::cursor::find_close_at(cur.tokens, open))
@@ -61,7 +70,11 @@ pub(super) fn parse_variant<'t>(
             .help("a case is `Case` or `Case(field: Type)`"),
             recovery: RecoveryNode {
                 span: Span { start, end },
-                kind: RecoveryKind::VariantDecl { name, exported },
+                kind: RecoveryKind::VariantDecl {
+                    name,
+                    generics,
+                    exported,
+                },
             },
         };
     }
@@ -108,6 +121,7 @@ pub(super) fn parse_default_variant(
                 },
                 kind: RecoveryKind::VariantDecl {
                     name: decl.name,
+                    generics: decl.generics,
                     exported: true,
                 },
             },
@@ -120,8 +134,9 @@ pub(super) fn parse_default_variant(
                     end: recovery.span.end,
                 },
                 kind: match recovery.kind {
-                    RecoveryKind::VariantDecl { name, .. } => RecoveryKind::VariantDecl {
+                    RecoveryKind::VariantDecl { name, generics, .. } => RecoveryKind::VariantDecl {
                         name,
+                        generics,
                         exported: true,
                     },
                     kind => kind,

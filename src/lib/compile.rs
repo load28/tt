@@ -728,8 +728,10 @@ pub(crate) fn compile_projection_report_parsed(
                 ),
             };
             return ProjectionReport {
-                emit: recovered_report.emit,
-                withheld,
+                emit: recovered_report
+                    .emit
+                    .map(|emit| declare_recovered_variants(emit, &selected)),
+                withheld: withheld.map(|emit| declare_recovered_variants(emit, &selected)),
                 diagnostics: ordinary.diagnostics,
                 recovered: selected
                     .into_iter()
@@ -808,23 +810,8 @@ fn recover_source(source: &str, selected: &[ast::RecoveryNode]) -> String {
             ast::RecoveryKind::MatchArms(_) => {
                 unreachable!("match recovery is flattened by the parser")
             }
-            ast::RecoveryKind::Statement => ";",
+            ast::RecoveryKind::Statement | ast::RecoveryKind::VariantDecl { .. } => ";",
             ast::RecoveryKind::Type => "any",
-            ast::RecoveryKind::VariantDecl { name, exported } => {
-                let declaration = if *exported {
-                    format!("export class {name} {{}}")
-                } else {
-                    format!("class {name} {{}}")
-                };
-                let replacement =
-                    if declaration.len() <= node.span.end.saturating_sub(node.span.start) {
-                        declaration.as_str()
-                    } else {
-                        ";"
-                    };
-                overwrite_recovery(&mut recovered, node.span.start, node.span.end, replacement);
-                continue;
-            }
         };
         overwrite_recovery(&mut recovered, node.span.start, node.span.end, replacement);
     }
@@ -832,6 +819,46 @@ fn recover_source(source: &str, selected: &[ast::RecoveryNode]) -> String {
     // a node's range is a char boundary on both ends, so what is left is
     // still the UTF-8 it started as.
     String::from_utf8(recovered).expect("recovery replaces whole nodes with ASCII")
+}
+
+/// Declares each recovered variant's name with the error type, `any`, as
+/// both the type and the value a variant declares: its cases could not be
+/// read, so nothing that uses it has a checker consequence of it, as for a
+/// recovered expression. The declarations are glue after the module, owned
+/// by the variant's source range, so the placeholder's width does not bound
+/// them.
+fn declare_recovered_variants(mut emit: MappedEmit, selected: &[ast::RecoveryNode]) -> MappedEmit {
+    for node in selected {
+        let ast::RecoveryKind::VariantDecl {
+            name,
+            generics,
+            exported,
+        } = &node.kind
+        else {
+            continue;
+        };
+        if parser::is_reserved(name) {
+            continue;
+        }
+        let export = if *exported { "export " } else { "" };
+        if !emit.code.is_empty() && !emit.code.ends_with('\n') {
+            emit.code.push('\n');
+        }
+        let out = emit.code.len();
+        emit.code.push_str(&format!(
+            "{export}declare const {name}: any;\n{export}type {name}{generics} = any;\n"
+        ));
+        emit.anchors.push(EmitAnchor {
+            out,
+            end: emit.code.len(),
+            src: node.span.start,
+            src_end: node.span.end,
+            owner_end: node.span.end,
+            context: None,
+            kind: AnchorKind::Variant,
+        });
+    }
+    emit
 }
 
 fn verified_emit(

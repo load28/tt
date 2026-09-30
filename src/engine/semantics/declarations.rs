@@ -22,6 +22,7 @@ pub(crate) fn match_declarations(
             text: module.declaration().to_string(),
         })
         .collect();
+    let placeholders = reaches_placeholders(snapshot);
     let modules = answers
         .declarations
         .iter()
@@ -30,7 +31,9 @@ pub(crate) fn match_declarations(
                 .files()
                 .iter()
                 .find(|f| projection::declaration_path_of(f) == declaration.path)
-                .filter(|f| requested.contains(&f.source_path) && !f.unparsed)?;
+                .filter(|f| {
+                    requested.contains(&f.source_path) && !placeholders.contains(&f.source_path)
+                })?;
             Some(ModuleDeclaration {
                 file: file.clone(),
                 text: declaration.text.clone(),
@@ -38,6 +41,50 @@ pub(crate) fn match_declarations(
         })
         .collect();
     Declarations { std, modules }
+}
+
+/// The files whose declarations the compiler emitted against a placeholder:
+/// a projection that is not the file's own account of itself (an unparsed
+/// one, one with recovery placeholders, or a blocked file served as an empty
+/// module), and every file whose `.tt` imports reach one. Their
+/// declarations are not written, so the previous ones stand until the
+/// source is fixed.
+fn reaches_placeholders(snapshot: &Snapshot) -> HashSet<PathBuf> {
+    let mut reached: HashSet<PathBuf> = snapshot
+        .files()
+        .iter()
+        .filter(|file| file.unparsed || !file.recovered.is_empty())
+        .map(|file| file.source_path.clone())
+        .chain(
+            snapshot
+                .blocked()
+                .iter()
+                .map(|file| file.source_path.clone()),
+        )
+        .collect();
+    loop {
+        let before = reached.len();
+        for file in snapshot.files() {
+            if reached.contains(&file.source_path) {
+                continue;
+            }
+            let directory = file
+                .source_path
+                .parent()
+                .unwrap_or(std::path::Path::new("."));
+            if file.tt_imports().iter().any(|import| {
+                directory
+                    .join(&import.specifier)
+                    .canonicalize()
+                    .is_ok_and(|target| reached.contains(&target))
+            }) {
+                reached.insert(file.source_path.clone());
+            }
+        }
+        if reached.len() == before {
+            return reached;
+        }
+    }
 }
 
 /// The variant declarations one file's direct `.tt` imports bring into scope,
