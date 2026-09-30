@@ -69,9 +69,39 @@ reads it as a function declaration in every file; upstream reported
 "Declaration is not allowed". A generator is not part of the production and is
 still rejected.
 
+Local changes from TASK-641, each a form TypeScript's parser at the pinned
+commit (`5739027c`, `tsc/internal/parser`) reads and upstream rejected:
+
+- `src/parser/stmt.rs`, `parse_for_head`: `of` is the binding of an
+  `await using` declaration (`for (await using of of xs)`). TypeScript's
+  `parseForOrForInOrForOfStatement` excludes `of` only after a plain `using`
+  (`nextTokenIsBindingIdentifierOrStartOfDestructuringOnSameLineDisallowOf`),
+  as ECMA-262's `[lookahead ≠ using of]` does. Upstream fixed the same in
+  swc-project/swc#12354.
+- `src/parser/expr.rs`, `parse_args_or_pats_inner`: a first element that is
+  an accessibility or `readonly` modifier followed by `as` is an expression,
+  not a parameter modifier (`(readonly as number)`), the check TypeScript's
+  `isParenthesizedArrowFunctionExpressionWorker` makes for
+  microsoft/TypeScript#44466.
+- `src/lexer/state.rs`, `scan_jsx_attribute_value`: whitespace, line breaks
+  included, is skipped between `=` and a JSX attribute string, so a string
+  after a space reads as a JSX string that may span lines, as TypeScript's
+  `ScanJsxAttributeValue` does.
+- `src/parser/module_item.rs`, `parse_named_export_specifier`:
+  `export { type "x" as "y" } from "m"`, the type-only form of an
+  arbitrary module namespace name, which the import side already read.
+- `src/parser/module_item.rs`, `parse_export`: `export @dec abstract class`,
+  decorators after `export` on an abstract class, as on a plain class.
+- `src/parser/module_item.rs`, the three import attribute sites: `with`
+  may follow a line break; the no-line-break restriction stays on the legacy
+  `assert` (TypeScript's `tryParseImportAttributes`; upstream
+  swc-project/swc#12356).
+
+`tests/swc_typescript_grammar_gaps.rs` in the parent repository tests them.
+
 `tests/jsx_entities.rs`, `tests/swc_arrow_asi.rs`,
-`tests/swc_import_type_arguments.rs`, and
-`tests/swc_for_using_and_if_function.rs` in the parent repository test the
+`tests/swc_import_type_arguments.rs`, `tests/swc_for_using_and_if_function.rs`,
+and `tests/swc_typescript_grammar_gaps.rs` in the parent repository test the
 dependency directly.
 The direct path dependency also applies when ttc is built by the standalone
 fuzz workspace. Remove this vendored copy only after an upstream version

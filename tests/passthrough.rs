@@ -961,3 +961,16 @@ fn a_using_declaration_in_a_for_statement_and_a_function_as_an_if_clause() {
         assert_passthrough(source);
     }
 }
+
+#[test]
+fn rules_typescript_checks_after_parsing_are_left_to_typescript() {
+    for source in [
+        "function f(await: number) { return await; }\nasync function await(): Promise<void> {}\n",
+        "declare namespace N { var static: number; }\nexport {};\n",
+        "declare function eval(): void;\nexport {};\n",
+        "export class C { m(public x: number) {} }\n",
+        "export function g(a?: number = 1) { return a; }\n",
+    ] {
+        assert_passthrough(source);
+    }
+}

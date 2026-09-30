@@ -1,0 +1,13 @@
+// Repro from TASK-640
+// @filename: script.tt
+function named(await: number) { return await; }
+declare namespace Ambient { var static: number; }
+// @filename: shapes.tt
+export variant Shape { Circle(radius: number), Point }
+export class Box {
+  resize(public size: number) {}
+}
+export const area = (s: Shape) => match (s) {
+  Circle(radius) => radius,
+  Point => 0,
+};

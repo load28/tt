@@ -1,0 +1,6 @@
+// Repro from TASK-642
+declare function consume(n: number): void;
+declare const flag: boolean;
+consume(match (flag) { e => 1, false => 2 });
+const held = [match (flag) { true => 1, e => 2 }];
+export const later = () => consume(match (flag) { e => 1, _ => 2 } + match (flag) { false => 3, e => 4 });

@@ -9,7 +9,8 @@
 //!    position in the `.tt` file.
 //! 2. `verify_output` — the fully generated TypeScript module is parsed as a
 //!    self-check that the compiler emitted valid code (and that passthrough
-//!    code was valid TS to begin with). Disabled with `--no-verify`.
+//!    code parses as TypeScript's parser reads it; the rules TypeScript
+//!    checks after parsing stay TypeScript's). Disabled with `--no-verify`.
 //!
 //! This SWC check is intentionally in the syntax pipeline. The compiler
 //! already uses a whole-program SWC AST to model TypeScript owners and
@@ -32,34 +33,167 @@ use swc_common::Spanned;
 use crate::host_input::HostInput;
 
 fn parse_ts_module(code: &str, source_kind: crate::SourceKind) -> Result<(), (String, usize)> {
-    parse_ts_module_lexed(code, source_kind, &mut None)
+    match parse_errors(code, source_kind, &mut None)
+        .into_iter()
+        .next()
+    {
+        None => Ok(()),
+        Some(error) => Err((error.message, error.at)),
+    }
 }
 
-fn parse_ts_module_lexed(
+/// One error swc reported for a module, over bytes `at..end` of it.
+struct ParseError {
+    message: String,
+    at: usize,
+    end: usize,
+    /// swc built the syntax tree past this error, and TypeScript enforces
+    /// its rule after parsing ([`checked_after_parsing`]).
+    after_parsing: bool,
+}
+
+fn parse_errors(
     code: &str,
     source_kind: crate::SourceKind,
     tokens: &mut Option<Vec<crate::lexer::Token>>,
-) -> Result<(), (String, usize)> {
+) -> Vec<ParseError> {
     let (error, lexed) = crate::lexer::host_syntax_check(code, source_kind);
     *tokens = lexed;
     if let Some((span, message)) = error {
-        return Err((message.to_string(), span.start));
+        return vec![ParseError {
+            message: message.to_string(),
+            at: span.start,
+            end: span.end,
+            after_parsing: false,
+        }];
     }
     let input = HostInput::new(code);
     let mut parser = input.parser(source_kind);
-    let result = parser.parse_module();
-    let mut errors = parser.take_errors();
-    if let Err(e) = result {
-        errors.push(e);
-    }
-    match errors.into_iter().next() {
-        None => Ok(()),
-        Some(e) => {
-            let at = input.byte(e.span().lo());
-            let msg = e.into_kind().msg().to_string();
-            Err((msg, at))
+    let result = parser.parse_program();
+    let describe = |error: swc_ecma_parser::error::Error, recovered: bool| {
+        let span = error.span();
+        ParseError {
+            at: input.byte(span.lo()),
+            end: input.byte(span.hi()),
+            after_parsing: recovered && checked_after_parsing(error.kind()),
+            message: error.into_kind().msg().to_string(),
         }
+    };
+    let mut errors: Vec<ParseError> = parser
+        .take_errors()
+        .into_iter()
+        .map(|error| describe(error, true))
+        .collect();
+    if let Err(error) = result {
+        errors.push(describe(error, false));
     }
+    errors
+}
+
+/// Whether TypeScript enforces the rule behind an swc error after it has
+/// parsed the file: in its binder or its checker, not its parser.
+///
+/// TypeScript's parser reads a file by its productions alone; the static
+/// semantics that ECMA-262 lists as early errors, and TypeScript's own
+/// grammar rules, are reported later under TypeScript's codes. The kinds
+/// listed here are those whose diagnostic the pinned TypeScript
+/// (`5739027c`, `tsc/internal`) reports only from `binder/binder.go`,
+/// `checker/checker.go`, or `checker/grammarchecks.go`, never from
+/// `parser/parser.go` or `scanner/scanner.go`. Every other kind, the ones
+/// the parser shares included, is read as a failure to parse.
+pub(crate) fn checked_after_parsing(kind: &swc_ecma_parser::error::SyntaxError) -> bool {
+    use swc_ecma_parser::error::SyntaxError as E;
+    matches!(
+        kind,
+        E::InvalidIdentInStrict(_)
+            | E::EvalAndArgumentsInStrict
+            | E::TS1100
+            | E::WithInStrict
+            | E::TS1102
+            | E::PrivateConstructor
+            | E::LabelledFunctionInStrict
+            | E::TS1009
+            | E::TS1014
+            | E::NonLastRestParam
+            | E::TS1015
+            | E::TS1029(..)
+            | E::TS1030(_)
+            | E::TS1031
+            | E::TS1038
+            | E::TS1042
+            | E::TS1047
+            | E::TS1048
+            | E::TS1089(_)
+            | E::TS1092
+            | E::TS1093
+            | E::TS1096
+            | E::TS1098
+            | E::TS1105
+            | E::TS1107
+            | E::TS1115
+            | E::TS1116
+            | E::TS1123
+            | E::TS1162
+            | E::TS1171
+            | E::TS1172
+            | E::TS1173
+            | E::TS1174
+            | E::TS1175
+            | E::TS1183
+            | E::TS1184
+            | E::TS1242
+            | E::TS1243(..)
+            | E::TS1244
+            | E::TS1273(_)
+            | E::TS1274(_)
+            | E::TS1277(_)
+            | E::TS2206
+            | E::TS2207
+            | E::TS2483
+            | E::TS18010
+            | E::AwaitParamInAsync
+            | E::AwaitInFunction
+            | E::PropertyNamedConstructor
+            | E::GetterParam
+            | E::SetterParam
+            | E::ReadOnlyMethod
+            | E::IllegalLanguageModeDirective
+            | E::ConstDeclarationsRequireInitialization
+            | E::PatVarWithoutInit
+            | E::TaggedTplInOptChain
+            | E::EmptyJSXAttr
+            | E::PrivateNameInInterface
+            | E::TS1114
+            | E::DuplicateLabel(_)
+            | E::TS1164
+            | E::TS1245
+            | E::TS1267
+            | E::TS2369
+            | E::TS2371
+            | E::TS2406
+            | E::TS2410
+            | E::TS2414
+            | E::TS2427
+            | E::TS2452
+            | E::TS2491
+            | E::TS2499
+            | E::TS2680
+            | E::TS2703
+            | E::TS4112
+            | E::ArgumentsInClassField
+            | E::InvalidNewTarget
+            | E::NotSimpleAssign
+            | E::InvalidAssignTarget
+            | E::InvalidPat
+            | E::DuplicateConstructor
+            | E::ReturnNotAllowed
+            | E::MultipleDefault { .. }
+            | E::TopLevelAwaitInScript
+            | E::InvalidSuperCall
+            | E::InvalidSuper
+            | E::TsRequiredAfterOptional
+            | E::NullishCoalescingWithLogicalOp
+    )
 }
 
 /// Validates a variant field's type annotation. Returns a plain message on error.
@@ -88,19 +222,42 @@ pub(crate) enum FailureKind {
 
 /// Validates the final generated TypeScript.
 pub(crate) fn verify_output(code: &str, source_kind: crate::SourceKind) -> Result<(), Failure> {
-    verify_output_lexed(code, source_kind, &mut None)
+    verify_output_lexed(code, source_kind, &[], &mut None)
 }
 
+/// The first error that makes the module fail the self-check.
+///
+/// Bytes the emission copied from the source are the user's TypeScript
+/// ([`crate::EmitMapping`]). There the self-check restates only what
+/// TypeScript's parser reports. An error swc recovered from inside one
+/// copied range whose rule TypeScript enforces after parsing
+/// ([`checked_after_parsing`]) is left to TypeScript's binder and checker,
+/// which report it under their own codes. An error that touches generated
+/// text is ttc's own and fails the check either way.
 fn verify_output_lexed(
     code: &str,
     source_kind: crate::SourceKind,
+    mappings: &[crate::EmitMapping],
     tokens: &mut Option<Vec<crate::lexer::Token>>,
 ) -> Result<(), Failure> {
-    parse_ts_module_lexed(code, source_kind, tokens).map_err(|(message, at)| Failure {
-        message,
-        at,
-        kind: FailureKind::Parse,
-    })
+    let copied = |error: &ParseError| {
+        mappings.iter().any(|mapping| {
+            mapping.out <= error.at
+                && error.end <= mapping.out + mapping.len
+                && error.at < mapping.out + mapping.len
+        })
+    };
+    match parse_errors(code, source_kind, tokens)
+        .into_iter()
+        .find(|error| !(error.after_parsing && copied(error)))
+    {
+        None => Ok(()),
+        Some(error) => Err(Failure {
+            message: error.message,
+            at: error.at,
+            kind: FailureKind::Parse,
+        }),
+    }
 }
 
 /// Validates the final generated TypeScript, and that it keeps the
@@ -112,7 +269,7 @@ pub(crate) fn verify_emit(
     mappings: &[crate::EmitMapping],
 ) -> Result<(), Failure> {
     let mut tokens = None;
-    verify_output_lexed(code, source_kind, &mut tokens)?;
+    verify_output_lexed(code, source_kind, mappings, &mut tokens)?;
     verify_statement_boundaries(code, source_kind, automatic_semicolons, mappings, tokens)
 }
 

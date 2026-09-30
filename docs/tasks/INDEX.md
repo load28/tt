@@ -645,6 +645,10 @@
 | TASK-637 | Replay fuzz crashers as permanent regressions, and mutate the case corpus | Complete | 2026-09-30 | 2026-09-30 | [TASK-637](./TASK-637-fuzz-crashers-as-regressions.md) |
 | TASK-638 | Hold TypeScript's own test cases to byte-identical passthrough | Complete | 2026-09-30 | 2026-09-30 | [TASK-638](./TASK-638-typescript-case-passthrough-parity.md) |
 | TASK-639 | Pin editor behaviour with fourslash-style cases over both transports | Complete | 2026-09-30 | 2026-09-30 | [TASK-639](./TASK-639-fourslash-style-editor-cases.md) |
+| TASK-640 | Leave the rules TypeScript checks after parsing to TypeScript | Complete | 2026-09-30 | 2026-09-30 | [TASK-640](./TASK-640-verbatim-errors-left-to-typescript.md) |
+| TASK-641 | Read five TypeScript forms the vendored swc parser rejected | Complete | 2026-09-30 | 2026-09-30 | [TASK-641](./TASK-641-swc-typescript-grammar-gaps.md) |
+| TASK-642 | Give a match that mixes tag and literal patterns no single-discriminant dispatch | Complete | 2026-09-30 | 2026-09-30 | [TASK-642](./TASK-642-mixed-pattern-match-dispatch.md) |
+| TASK-643 | Read a comment inside a JSX tag as trivia in the lexer facts | Complete | 2026-09-30 | 2026-09-30 | [TASK-643](./TASK-643-comments-inside-jsx-tags.md) |
 | TASK-644 | Go to a user variant's tag or field declaration through the engine's definition | Complete | 2026-09-30 | 2026-09-30 | [TASK-644](./TASK-644-engine-definition-of-tt-names.md) |
 | TASK-645 | Leave the discriminant out of every completion answer in a payload pattern | Complete | 2026-09-30 | 2026-09-30 | [TASK-645](./TASK-645-payload-completion-without-the-discriminant.md) |
 | TASK-646 | Color tt keywords as TypeScript's, with semantic tokens only where the grammar cannot decide | Complete | 2026-09-30 | 2026-09-30 | [TASK-646](./TASK-646-tt-keywords-in-semantic-tokens.md) |

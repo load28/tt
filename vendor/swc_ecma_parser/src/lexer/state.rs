@@ -329,6 +329,12 @@ impl crate::input::Tokens for Lexer<'_> {
     }
 
     fn scan_jsx_attribute_value(&mut self) -> TokenAndSpan {
+        while let Some(c) = self.cur_as_char() {
+            if !(c.is_whitespace() || c == '\u{feff}' || c == '\u{200b}') {
+                break;
+            }
+            self.bump(c.len_utf8());
+        }
         let Some(cur) = self.cur() else {
             let start = self.cur_pos();
             return TokenAndSpan {
