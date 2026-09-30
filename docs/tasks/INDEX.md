@@ -694,6 +694,7 @@
 | TASK-686 | Populate the editor matrix for every construct and triage each difference from TypeScript | Complete | 2026-09-30 | 2026-09-30 | [TASK-686](./TASK-686-editor-matrix-populate.md) |
 | TASK-691 | End the optional chain of a pipeline head before a postfix step | Complete | 2026-09-30 | 2026-09-30 | [TASK-691](./TASK-691-postfix-step-ends-optional-chain.md) |
 | TASK-693 | Decide once which coverage question a match asks | Complete | 2026-09-30 | 2026-09-30 | [TASK-693](./TASK-693-one-coverage-question-per-match.md) |
+| TASK-694 | Bound a `result` block's `try`s at class code, and name the module reason everywhere | Complete | 2026-09-30 | 2026-09-30 | [TASK-694](./TASK-694-try-in-class-code-inside-result.md) |
 
 ## Next task number
 

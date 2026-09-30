@@ -24,6 +24,17 @@ pub(crate) use suggestions::{
     non_exhaustive_suggestions,
 };
 
+/// The `try-placement` message and help for a `try` that no function
+/// encloses: a module's or a namespace's top level, directly or through a
+/// match arm or another value region there. One wording for the statement
+/// form sema rejects and the value form the lowering plan rejects.
+pub(crate) const TRY_OUTSIDE_FUNCTION: (&str, &str) = (
+    "`try` must be inside a function — it compiles to a `return` that propagates the `Err`, \
+     and at the top level of a module there is no function to return from",
+    "move the code into a function whose `Err` this can return, or `match` on the `Result` \
+     instead",
+);
+
 /// How serious a [`Diagnostic`] is.
 ///
 /// Every current tt rule is an error; the variant space leaves room for

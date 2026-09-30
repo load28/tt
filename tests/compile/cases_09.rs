@@ -326,7 +326,11 @@ fn a_misspelled_case_covers_the_name_as_written() {
 fn a_misplaced_try_covers_the_propagation() {
     let src = "const x = match (r) {\n  Ok(v) => { const y = try f(v); return y; },\n  Err(e) => 0,\n};\n";
     let e = err(src);
-    assert!(e.message.contains("`try` cannot be used"), "{}", e.message);
+    assert!(
+        e.message.contains("`try` must be inside a function"),
+        "{}",
+        e.message
+    );
     assert_eq!(covered(src, &e), "try f(v)");
 }
 

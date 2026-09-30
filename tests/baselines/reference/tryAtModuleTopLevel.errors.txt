@@ -1,0 +1,126 @@
+==== ttc --out-dir (exit 1) ====
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> ./tryAtModuleTopLevel.tt:12:35
+   |
+12 | export const x = match (v) { A => try read(1), B => 0 };
+   |                                   ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> ./tryAtModuleTopLevel.tt:13:18
+   |
+13 | export const y = try read(2);
+   |                  ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> ./tryAtModuleTopLevel.tt:14:19
+   |
+14 | export const z = [try read(3)];
+   |                   ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> ./tryAtModuleTopLevel.tt:15:47
+   |
+15 | export const w = match (v) { A => { const q = try read(4); return q; }, B => 0 };
+   |                                               ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> ./tryAtModuleTopLevel.tt:16:25
+   |
+16 | export const u = flag ? try read(5) : 0;
+   |                         ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> ./tryAtModuleTopLevel.tt:17:18
+   |
+17 | for (const i of [try read(6)]) {}
+   |                  ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> ./tryAtModuleTopLevel.tt:19:37
+   |
+19 |   export const n = match (v) { A => try read(7), B => 0 };
+   |                                     ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> ./tryAtModuleTopLevel.tt:20:13
+   |
+20 |   const m = try read(8);
+   |             ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> tryAtModuleTopLevel.tt:12:35
+   |
+12 | export const x = match (v) { A => try read(1), B => 0 };
+   |                                   ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> tryAtModuleTopLevel.tt:13:18
+   |
+13 | export const y = try read(2);
+   |                  ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> tryAtModuleTopLevel.tt:14:19
+   |
+14 | export const z = [try read(3)];
+   |                   ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> tryAtModuleTopLevel.tt:15:47
+   |
+15 | export const w = match (v) { A => { const q = try read(4); return q; }, B => 0 };
+   |                                               ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> tryAtModuleTopLevel.tt:16:25
+   |
+16 | export const u = flag ? try read(5) : 0;
+   |                         ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> tryAtModuleTopLevel.tt:17:18
+   |
+17 | for (const i of [try read(6)]) {}
+   |                  ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> tryAtModuleTopLevel.tt:19:37
+   |
+19 |   export const n = match (v) { A => try read(7), B => 0 };
+   |                                     ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+  --> tryAtModuleTopLevel.tt:20:13
+   |
+20 |   const m = try read(8);
+   |             ^^^^^^^^^^^
+   |
+   = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

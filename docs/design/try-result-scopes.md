@@ -117,6 +117,12 @@ Nearest scope is lexical:
 - `try` in a function nested inside a `result` block → leaves **that
   nested function**, not the block. Same rule as today's "a `try` inside a
   function you write there is fine."
+- `try` in a class body or a class static block nested inside a `result`
+  block → its nearest scope is that class code, not the block: code there
+  is not evaluated by the block and can neither `return` nor `break` to a
+  label outside it (ECMA-262 §15.7.1), so the `try` is rejected as it is in
+  any class code (TASK-694). A `result` block written in a static block is
+  the nearest scope of its own `try`.
 
 Nested `result` blocks are allowed. Inner `try` leaves the inner block.
 

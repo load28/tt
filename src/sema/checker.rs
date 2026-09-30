@@ -256,21 +256,10 @@ impl Checker<'_> {
                     "move the propagation into an ordinary function, or handle the Result explicitly",
                 )
             }
-            None if matches!(place, Place::Module | Place::Function) => (
-                "`try` must be inside a function — it compiles to a `return` that propagates \
-                 the `Err`, and at the top level of a module there is no function to return from"
-                    .to_string(),
-                "move the code into a function whose `Err` this can return, or `match` on the \
-                 `Result` instead",
-            ),
-            None => (
-                "`try` cannot be used here, in an isolated value region — it compiles to a \
-                 `return`, which would complete this construct's value instead of returning \
-                 from the enclosing function"
-                    .to_string(),
-                "extract the logic into a function (a `try` inside a function written here is \
-                 fine), or move the propagation into a statement-bodied `result` block",
-            ),
+            None => {
+                let (message, help) = crate::diagnostics::TRY_OUTSIDE_FUNCTION;
+                (message.to_string(), help)
+            }
         };
         self.error(
             TtError::span(stmt.span.start, stmt.span.end, message)

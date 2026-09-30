@@ -1,0 +1,56 @@
+=== tryInClassCodeInsideResult.tt ===
+declare function read(n: number): TResult<number, string>;
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+export const inStaticBlock = result {
+>inStaticBlock : const inStaticBlock: TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+  const z = try read(1);
+>z : const z: number
+>read : function read(n: number): TResult<number, string>
+  class K {
+>K : class K
+      const w = try read(2);
+>w : const w: any
+  return z;
+>z : const z: number
+export const inFieldInitializer = result {
+>inFieldInitializer : const inFieldInitializer: TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+  const z = try read(3);
+>z : const z: number
+>read : function read(n: number): TResult<number, string>
+  class F {
+>F : class F
+    x = try read(4);
+>x : (property) F.x: any
+  return z;
+>z : const z: number
+export const nestedResult = result {
+>nestedResult : const nestedResult: TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+  const z = try read(5);
+>z : const z: number
+>read : function read(n: number): TResult<number, string>
+  class S {
+>S : class S
+    static v: unknown;
+>v : (property) S.v: unknown
+      S.v = result {
+>S : class S
+>v : (property) S.v: unknown
+        const q = try read(6);
+>q : const q: number
+>read : function read(n: number): TResult<number, string>
+        return q;
+>q : const q: number
+  return z;
+>z : const z: number
+
