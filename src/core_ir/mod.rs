@@ -196,6 +196,7 @@ pub(crate) enum DecisionKind {
     IfLet,
     LetElse {
         binding_mode: BindingMode,
+        exported: bool,
         direct_variants: Option<Vec<Constructor>>,
     },
 }

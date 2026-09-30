@@ -232,6 +232,7 @@ impl Lowering<'_> {
                     true,
                     DecisionKind::LetElse {
                         binding_mode: stmt.binding_mode,
+                        exported: stmt.exported,
                         direct_variants: direct_variant_alternatives(
                             &self.lower_pattern(site.arms[0].pattern, site.subjects.len()),
                         ),

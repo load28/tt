@@ -68,6 +68,14 @@ pub(super) fn guard_line_comment(
     rope
 }
 
+/// How a pattern's bindings are declared when they outlive the decision:
+/// a let-else's `const`/`let`/`var`, exported when its source was.
+#[derive(Clone, Copy)]
+pub(super) struct Declaration {
+    pub(super) mode: BindingMode,
+    pub(super) exported: bool,
+}
+
 pub(super) fn binding_keyword(mode: BindingMode) -> &'static str {
     match mode {
         BindingMode::Const => "const",

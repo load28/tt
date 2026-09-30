@@ -671,6 +671,7 @@
 | TASK-673 | Name a found union as TypeScript names it in a type mismatch | Complete | 2026-09-30 | 2026-09-30 | [TASK-673](./TASK-673-union-named-by-typescript-in-mismatches.md) |
 | TASK-674 | Carry each completion entry's LSP kind from TypeScript to the editor unchanged | Complete | 2026-09-30 | 2026-09-30 | [TASK-674](./TASK-674-lossless-completion-kinds.md) |
 | TASK-675 | Baseline what the editor adapter publishes and offers in the editor cases | Complete | 2026-09-30 | 2026-09-30 | [TASK-675](./TASK-675-editor-cases-ask-the-adapter.md) |
+| TASK-676 | Export a let-else's bindings when the declaration is exported | Complete | 2026-09-30 | 2026-09-30 | [TASK-676](./TASK-676-exported-let-else.md) |
 
 ## Next task number
 

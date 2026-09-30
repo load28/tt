@@ -134,6 +134,7 @@ pub(super) fn parse_let_else<'t>(
                 end: expr_end,
             },
             kw: cur.parser.src[kw_span.start..kw_span.end].to_string(),
+            exported: false,
             alternatives,
             expr: cur.parser.parse_expression_tokens(
                 &cur.tokens[expr_from..else_idx],
