@@ -387,3 +387,105 @@ fn a_member_in_an_unterminated_interpolation_completes_members() {
         assert!(!labels.contains(&"match"), "{labels:?}");
     }
 }
+
+/// TASK-571: sibling `try`s in the argument of a return that leaves a
+/// `result` block lower in the return's prelude, so the block's storage
+/// and the checked program see only TypeScript.
+#[test]
+fn sibling_tries_in_a_result_return_check_clean() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/sum.tt",
+        "import type { TResult } from \"@tt/std\";\n\
+         import * as Result from \"@tt/std/result\";\n\
+         const a = (): TResult<number, string> => Result.Ok(1);\n\
+         declare function f(x: number, y: number): number;\n\
+         export function g() {\n\
+         \x20 return result { return (try a()) + (try a()); };\n\
+         }\n\
+         export function h(c: boolean) {\n\
+         \x20 return result { if (c) return f(try a(), try a()); return [try a(), try a()].length; };\n\
+         }\n\
+         export const n: number = g().kind === \"Ok\" ? 1 : 0;\n",
+    )]);
+    let out = check(&dir);
+    assert!(!out.contains("error["), "{out}");
+}
+
+/// TASK-572: an operand of a comma expression before a tt value is
+/// evaluated as a statement, so the lowered comma expression holds no
+/// unused capture (TS2695).
+#[test]
+fn a_comma_operand_before_a_value_checks_clean() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/comma.tt",
+        "variant K { A, B }\n\
+         declare function tick(): void;\n\
+         declare function tock(): number;\n\
+         export function f(k: K) {\n\
+         \x20 return (tick(), match (k) { A => 1, B => 2 });\n\
+         }\n\
+         export function g(k: K) {\n\
+         \x20 const x = (tick(), tock(), match (k) { A => 1, B => 2 });\n\
+         \x20 return x;\n\
+         }\n",
+    )]);
+    let out = check(&dir);
+    assert!(!out.contains("error["), "{out}");
+}
+
+/// TASK-573: a method call whose argument holds a tt value keeps
+/// TypeScript's facts about the call: a generic method's inference with a
+/// `this` parameter, and an optional call's narrowing of its receiver.
+#[test]
+fn a_method_call_around_a_value_keeps_inference_and_narrowing() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/methods.tt",
+        "variant K { A, B }\n\
+         class Repo {\n\
+         \x20 items = [\"x\"];\n\
+         \x20 first<T>(this: Repo, fallback: T): string | T { return this.items[0] ?? fallback; }\n\
+         }\n\
+         type O = { name: string; id<T>(x: T): T };\n\
+         export function repo(k: K, r: Repo) {\n\
+         \x20 const v: string | number = r.first(match (k) { A => 1, B => 2 });\n\
+         \x20 return v;\n\
+         }\n\
+         export function optional(obj: O | undefined, k: K) {\n\
+         \x20 const s: string | undefined = obj?.id(match (k) { A => obj.name, B => \"b\" });\n\
+         \x20 return s;\n\
+         }\n",
+    )]);
+    let out = check(&dir);
+    assert!(!out.contains("error["), "{out}");
+}
+
+/// TASK-574: a result, annotation, or argument mismatch of a pipeline
+/// whose last step is a postfix tail belongs to the whole pipeline, as it
+/// does for a function step; only a step's input speaks as a step.
+#[test]
+fn a_postfix_pipeline_result_mismatch_is_reported_on_the_pipeline() {
+    require_tsgo!();
+    let dir = project(&[(
+        "src/postfix.tt",
+        "export function g(): number {\n\
+         \x20 return \"a\" |> .trim();\n\
+         }\n\
+         export const x: number = \"a\" |> .trim() |> .toUpperCase();\n\
+         declare function f(n: number): number;\n\
+         export const y = f(\"a\" |> .toUpperCase());\n",
+    )]);
+    let out = check(&dir);
+    assert!(!out.contains("this pipeline step expects"), "{out}");
+    let result = block(&out, "src/postfix.tt:2:10");
+    assert!(
+        result.contains("error[ts2322]: type mismatch: expected `number`, found `string`"),
+        "{out}"
+    );
+    let annotation = block(&out, "src/postfix.tt:4:26");
+    assert!(annotation.contains("error[ts2322]"), "{out}");
+    let argument = block(&out, "src/postfix.tt:6:20");
+    assert!(argument.contains("error[ts2345]"), "{out}");
+}

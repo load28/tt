@@ -321,10 +321,12 @@ impl<'a> Emitter<'a> {
         ) -> Option<(ExprId, &'a Propagate)> {
             match &emitter.core.exprs[expr.index()] {
                 Expr::Propagate(propagate)
-                    if matches!(propagate.exit, ExitTarget::ResultRegion(_)) && {
-                        let span = SourceSpan::from(emitter.span(propagate.node));
-                        argument.start <= span.start && span.end <= argument.end
-                    } =>
+                    if matches!(propagate.exit, ExitTarget::ResultRegion(_))
+                        && emitter.structurally_nested_values.contains(&expr)
+                        && {
+                            let span = SourceSpan::from(emitter.span(propagate.node));
+                            argument.start <= span.start && span.end <= argument.end
+                        } =>
                 {
                     Some((expr, propagate))
                 }

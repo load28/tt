@@ -275,10 +275,27 @@ pub(crate) struct ConditionalOperand {
 pub(crate) struct HostEvaluationInput {
     pub(crate) source: SourceSpan,
     pub(crate) mode: EvaluationInputMode,
-    /// A member reference's receiver and its independent effect proof.
-    pub(crate) receiver: Option<(SourceSpan, Effects)>,
+    /// A member reference's receiver (the member's object).
+    pub(crate) receiver: Option<HostReferencePart>,
+    /// A member reference's computed key.
+    pub(crate) key: Option<HostReferencePart>,
     /// What evaluating this input may do — an optimization fact only.
     pub(crate) effects: Effects,
+}
+
+/// One part of a member reference that is evaluated before a call's
+/// arguments: the member's object or its computed key. The member itself is
+/// read where the call is made, so the call stays a member call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct HostReferencePart {
+    pub(crate) source: SourceSpan,
+    /// An optimization fact only, as [`HostEvaluationInput::effects`].
+    pub(crate) effects: Effects,
+    /// An authored identifier or `this`, read again where the call is made
+    /// instead of captured, as TypeScript's own down-level transforms read a
+    /// simple-copiable operand (`isSimpleCopiableExpression`). The call then
+    /// keeps the reference TypeScript narrows.
+    pub(crate) read_at_call: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -295,6 +312,12 @@ pub(crate) enum EvaluationInputMode {
     CompoundAssignmentTarget {
         operator: &'static str,
     },
+    /// An operand of a comma expression before the value's operand. The
+    /// comma operator evaluates it and discards its value (ECMA-262
+    /// §13.16.1: `GetValue` of the left operand, whose result is not used),
+    /// so the lowering evaluates it as an expression statement in order and
+    /// removes it, with its comma, where it was written.
+    Discarded,
 }
 
 /// What evaluating one host expression may observably do

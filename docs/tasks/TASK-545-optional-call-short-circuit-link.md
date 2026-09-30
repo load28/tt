@@ -1,5 +1,9 @@
 # TASK-545: Test an optional call at the link its chain short-circuits at
 
+> Superseded in part by TASK-573: a call tested at its receiver no longer
+> captures the callee and calls it through `.call`; it is written as the
+> member call on the tested receiver (Decision 2 below).
+
 - **Status**: Complete
 - **Started**: 2026-09-29
 - **Completed**: 2026-09-29

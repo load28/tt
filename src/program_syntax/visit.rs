@@ -584,10 +584,10 @@ impl VisitAstPath for ParentCollector {
             }
             return;
         }
-        let (callee_mode, callee_receiver) = match &node.callee {
+        let (callee_mode, callee_parts) = match &node.callee {
             swc_ecma_ast::Callee::Expr(expression) => call_callee_mode(expression),
             swc_ecma_ast::Callee::Super(_) | swc_ecma_ast::Callee::Import(_) => {
-                (EvaluationInputMode::MemberReference, None)
+                (EvaluationInputMode::MemberReference, [None, None])
             }
         };
         self.protocol_frames.push(ProjectedProtocolFrame::Call {
@@ -616,11 +616,8 @@ impl VisitAstPath for ParentCollector {
                 self.source_start,
             )),
             callee_mode,
-            callee_receiver: callee_receiver.map(|receiver| {
-                (
-                    projected_span(receiver.span(), self.source_start),
-                    expression_effects(receiver),
-                )
+            callee_reference: (callee_mode == EvaluationInputMode::MemberReference).then(|| {
+                projected_member_reference(callee_parts, self.source_start, &self.source_segments)
             }),
             arguments: argument_positions(
                 &node.args,
@@ -866,7 +863,7 @@ impl VisitAstPath for ParentCollector {
     }
 
     fn visit_opt_call<'ast: 'r, 'r>(&mut self, node: &'ast OptCall, path: &mut AstNodePath<'r>) {
-        let (callee_mode, callee_receiver) = call_callee_mode(&node.callee);
+        let (callee_mode, callee_parts) = call_callee_mode(&node.callee);
         let own_link = path.iter().rev().find_map(|parent| match parent {
             swc_ecma_visit::AstParentNodeRef::OptChainExpr(chain, _) => Some(chain.optional),
             _ => None,
@@ -880,11 +877,8 @@ impl VisitAstPath for ParentCollector {
                 self.source_start,
             )),
             callee_mode,
-            callee_receiver: callee_receiver.map(|receiver| {
-                (
-                    projected_span(receiver.span(), self.source_start),
-                    expression_effects(receiver),
-                )
+            callee_reference: (callee_mode == EvaluationInputMode::MemberReference).then(|| {
+                projected_member_reference(callee_parts, self.source_start, &self.source_segments)
             }),
             arguments: argument_positions(
                 &node.args,
@@ -952,17 +946,14 @@ impl VisitAstPath for ParentCollector {
         node: &'ast TaggedTpl,
         path: &mut AstNodePath<'r>,
     ) {
-        let (tag_mode, tag_receiver) = call_callee_mode(&node.tag);
+        let (tag_mode, tag_parts) = call_callee_mode(&node.tag);
         self.protocol_frames
             .push(ProjectedProtocolFrame::TaggedTemplate {
                 parent: projected_span(node.span, self.source_start),
                 tag: projected_span(reference_value_span(&node.tag), self.source_start),
                 tag_mode,
-                tag_receiver: tag_receiver.map(|receiver| {
-                    (
-                        projected_span(receiver.span(), self.source_start),
-                        expression_effects(receiver),
-                    )
+                tag_reference: (tag_mode == EvaluationInputMode::MemberReference).then(|| {
+                    projected_member_reference(tag_parts, self.source_start, &self.source_segments)
                 }),
                 expressions: node
                     .tpl

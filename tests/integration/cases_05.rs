@@ -908,6 +908,8 @@ report(second.kind === "Ok" ? second.value : second.error);
 #[test]
 fn a_hoisted_value_in_a_member_step_runs_after_the_piped_value_and_its_method() {
     require_toolchain!();
+    // TASK-573: the method is read by the call itself, after the argument,
+    // so a getter on it runs there; the piped value still runs first.
     let out = run(r#"
 variant E { A(value: number), B }
 type N = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
@@ -945,15 +947,15 @@ report(second.kind === "Ok" ? second.value.n : second.error);
     assert_eq!(
         out,
         [
-            "head,get,arg,call 2",
-            "head,get,one,call,get,two,call 3",
-            "head,get,call,get,arg,call 3",
+            "head,arg,get,call 2",
+            "head,one,get,call,two,get,call 3",
+            "head,get,call,arg,get,call 3",
             "head,index 20",
-            "head,get,arg,call [object Object]",
+            "head,arg,get,call [object Object]",
             "head undefined",
-            "head,get,arg,make,apply 3",
-            "head,get,try,call 5",
-            "head,get,err err",
+            "head,arg,get,make,apply 3",
+            "head,try,get,call 5",
+            "head,err err",
         ]
     );
 }
@@ -1383,4 +1385,126 @@ const piped = o |> .add(match (m()) { 1 => 1, _ => 2 });
 console.log(missing, n, o.add(match (m()) { 1 => 10, _ => 20 }), piped, JSON.stringify(trace));
 "#);
     assert_eq!(out, [r#"TypeError 10 15 6 ["m","m","m","m"]"#]);
+}
+
+#[test]
+fn runtime_several_values_in_a_result_return_argument_run_in_the_return_s_prelude() {
+    require_toolchain!();
+    // TASK-571: a `try` that an operator, an element, a call, or a
+    // conditional consumes inside a return leaving a `result` block is a
+    // value of the return statement, as a `match` there is (TASK-549), so
+    // sibling `try`s propagate left to right and the first `Err` completes
+    // the block.
+    let out = run(r#"
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const trace: string[] = [];
+function r(n: number): R {
+  trace.push("r" + n);
+  return n > 0 ? { kind: "Ok", value: n } : { kind: "Err", error: "bad" + n };
+}
+function pair(x: number, y: number): number { trace.push("pair"); return x * 10 + y; }
+function id(n: number): number { return n; }
+variant K { A, B }
+function sum(x: number, y: number) { return result { return (try r(x)) + (try r(y)); }; }
+function listed(x: number, y: number) { return result { return [try r(x), try r(y)]; }; }
+function keyed(x: number, y: number) { return result { return { x: try r(x), y: try r(y) }; }; }
+function called(x: number, y: number) { return result { return pair(try r(x), try r(y)); }; }
+function matched(k: K, y: number) { return result { return match (k) { A => 1, B => 2 } + (try r(y)); }; }
+function piped(x: number, y: number) { return result { return (x |> id) + (try r(y)); }; }
+function chosen(x: number, y: number) { return result { return (try r(x)) > 1 ? (try r(y)) : 0; }; }
+function guarded(c: boolean, x: number, y: number) {
+  return result { if (c) return (try r(x)) + (try r(y)); return 0; };
+}
+console.log(JSON.stringify([sum(1, 2), sum(0, 2), sum(1, -1)]), JSON.stringify(trace));
+trace.length = 0;
+console.log(JSON.stringify([listed(1, 2), keyed(3, 4), called(1, 2), called(-2, 1)]), JSON.stringify(trace));
+trace.length = 0;
+console.log(JSON.stringify([matched(K.B, 3), piped(4, 5), chosen(2, 7), chosen(1, 7), guarded(true, 1, 2), guarded(false, 1, 2)]), JSON.stringify(trace));
+"#);
+    assert_eq!(
+        out,
+        [
+            r#"[{"kind":"Ok","value":3},{"kind":"Err","error":"bad0"},{"kind":"Err","error":"bad-1"}] ["r1","r2","r0","r1","r-1"]"#,
+            r#"[{"kind":"Ok","value":[1,2]},{"kind":"Ok","value":{"x":3,"y":4}},{"kind":"Ok","value":12},{"kind":"Err","error":"bad-2"}] ["r1","r2","r3","r4","r1","r2","pair","r-2"]"#,
+            r#"[{"kind":"Ok","value":5},{"kind":"Ok","value":9},{"kind":"Ok","value":7},{"kind":"Ok","value":0},{"kind":"Ok","value":3},{"kind":"Ok","value":0}] ["r3","r5","r2","r7","r1","r1","r2"]"#,
+        ]
+    );
+}
+
+#[test]
+fn runtime_a_comma_operand_before_a_value_runs_once_as_a_statement() {
+    require_toolchain!();
+    // TASK-572: the comma operator discards its left operand's value
+    // (ECMA-262 §13.16.1), so an operand before a tt value runs as a
+    // statement in order and is not read again; `tsc` would reject a
+    // re-read capture (TS2695).
+    let out = run(r#"
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const trace: string[] = [];
+function tick(): void { trace.push("tick"); }
+function tock(): number { trace.push("tock"); return 7; }
+function r(n: number): R { trace.push("r"); return { kind: "Ok", value: n }; }
+variant K { A, B }
+function pick(k: K) { trace.push("pick"); return k; }
+function first(k: K) { return (tick(), match (pick(k)) { A => 1, B => 2 }); }
+function several(k: K) { const x = (tick(), tock(), match (pick(k)) { A => 1, B => 2 }); return x + tock(); }
+function guarded(c: boolean, k: K) { return c && (tick() /* effect */, match (pick(k)) { A => 1, B => 2 }); }
+function propagated(): R { return r((tick(), try r(3))); }
+console.log(first(K.B), JSON.stringify(trace));
+trace.length = 0;
+console.log(several(K.A), JSON.stringify(trace));
+trace.length = 0;
+console.log(guarded(false, K.A), guarded(true, K.B), JSON.stringify(trace));
+trace.length = 0;
+console.log(JSON.stringify(propagated()), JSON.stringify(trace));
+"#);
+    assert_eq!(
+        out,
+        [
+            r#"2 ["tick","pick"]"#,
+            r#"8 ["tick","tock","pick","tock"]"#,
+            r#"false 2 ["tick","pick"]"#,
+            r#"{"kind":"Ok","value":3} ["tick","r","r"]"#,
+        ]
+    );
+}
+
+#[test]
+fn runtime_a_method_call_around_a_value_stays_a_member_call() {
+    require_toolchain!();
+    // TASK-573: the call is written as a member call on its receiver, so a
+    // generic method keeps its inference (with or without a `this`
+    // parameter), an optional call narrows its receiver in the arguments,
+    // and a receiver or key that is not an identifier still runs before
+    // the arguments.
+    let out = run(r#"
+const trace: string[] = [];
+variant K { A, B }
+function pick(k: K): K { trace.push("pick"); return k; }
+class Repo {
+  items = ["x"];
+  first<T>(this: Repo, fallback: T): string | T { trace.push("first"); return this.items[0] ?? fallback; }
+}
+type O = { name: string; id<T>(x: T): T; add(x: number): number };
+const obj: O = { name: "o", id: (x) => x, add(x: number) { return x + 1; } };
+function getO(): O { trace.push("getO"); return obj; }
+function key(): "add" { trace.push("key"); return "add"; }
+function repo(k: K, r: Repo) {
+  const v: string | number = r.first(match (pick(k)) { A => 1, B => 2 });
+  return v;
+}
+function optional(o: O | undefined, k: K) {
+  const s: string | undefined = o?.id(match (pick(k)) { A => o.name, B => "b" });
+  return s;
+}
+function keyed(k: K) {
+  return getO()[key()](match (pick(k)) { A => 1, B => 2 });
+}
+const n: number = obj.id(match (pick(K.B)) { A => 1, B => 2 });
+console.log(repo(K.A, new Repo()), optional(obj, K.A), optional(undefined, K.A), keyed(K.B), n, JSON.stringify(trace));
+"#);
+    assert_eq!(
+        out,
+        [r#"x o undefined 3 2 ["pick","pick","first","pick","getO","key","pick"]"#]
+    );
 }

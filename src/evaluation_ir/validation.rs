@@ -324,6 +324,7 @@ impl EvaluationFile {
                                 receiver,
                                 source,
                                 target,
+                                ..
                             } => {
                                 if receiver.is_none() {
                                     return Err(InternalCompilerError::new(
@@ -335,8 +336,7 @@ impl EvaluationFile {
                                 }
                                 // A member callee of an optional call keeps
                                 // its receiver only when the whole operation
-                                // is a planned region calling through
-                                // `.call(receiver, ...)`.
+                                // is a planned region making the call.
                                 if optional_argument && !operation_values.contains(&value.expr) {
                                     return Err(InternalCompilerError::new(
                                         stage,

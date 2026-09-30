@@ -1,5 +1,9 @@
 # TASK-555: Bind a captured method at its call, after the arguments
 
+> Superseded in part by TASK-573: a method is no longer captured and bound;
+> the call reads it through its receiver where the call is made, after the
+> arguments (Decision 1 below no longer describes the lowering).
+
 - **Status**: Complete
 - **Started**: 2026-09-29
 - **Completed**: 2026-09-29

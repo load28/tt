@@ -289,9 +289,7 @@ impl EvaluationBuilder<'_> {
                                 && argument.end <= binding.owner.span.end
                                 && argument.start <= binding.source.start
                                 && binding.source.end <= argument.end
-                                && (!matches!(root, CoreRoot::Expr(expr)
-                                    if matches!(self.core.exprs[expr.index()], Expr::Decision(_)))
-                                    || delivered_by_exit(&binding.protocol, argument))
+                                && delivered_by_exit(binding, exit, argument)
                         })
                     })
                 }
@@ -399,17 +397,25 @@ impl EvaluationBuilder<'_> {
     }
 }
 
-/// Whether a return's argument delivers the value as it is: under authored
-/// wrappers, or as an interpolation of a returned template, which lowers
-/// its interpolations itself. A value that a call, an operator, or any
-/// other frame inside the argument consumes first is an ordinary value of
-/// the return statement's owner, evaluated in that owner's prelude.
-fn delivered_by_exit(protocol: &HostEvaluationProtocol, argument: SourceSpan) -> bool {
-    protocol
+/// Whether a return's argument delivers the value as it is: the argument
+/// is the value under authored wrappers, or the value is an interpolation
+/// of a returned template, which lowers its interpolations itself. A value
+/// that anything else inside the argument consumes (an operand, a call
+/// argument, a conditional's test or branch, an element) is an ordinary
+/// value of the return statement's owner, evaluated in that owner's
+/// prelude.
+fn delivered_by_exit(binding: &HostBinding, exit: &HostExit, argument: SourceSpan) -> bool {
+    if exit.value_argument == Some(binding.source) {
+        return true;
+    }
+    let mut steps = binding
+        .protocol
         .steps()
         .iter()
         .filter(|step| argument.start <= step.parent.start && step.parent.end <= argument.end)
-        .all(|step| {
+        .peekable();
+    steps.peek().is_some()
+        && steps.all(|step| {
             matches!(
                 step.operation,
                 HostEvaluationOperation::Eager(EagerPosition::TemplateInterpolation(_))

@@ -234,7 +234,8 @@ fn discarded_statement_bodied_result_is_a_named_diagnostic() {
 fn result_return_expression_propagates_to_the_result_scope() {
     let out = ok("const value = result { return Math.round(try total() * 1.1); };\n");
     assert!(out.contains("const $tt_t0 = total();"), "{out}");
-    assert!(out.contains("Math.round($tt_t0.value * 1.1)"), "{out}");
+    assert!(out.contains("$tt_v1 = $tt_t0.value;"), "{out}");
+    assert!(out.contains("($tt_v1 * 1.1)"), "{out}");
     assert!(out.contains("kind: \"Ok\" as const"), "{out}");
 }
 

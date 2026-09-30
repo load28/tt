@@ -234,7 +234,7 @@ pub(super) enum ProjectedProtocolFrame {
         parent: ProjectedSpan,
         callee: Option<ProjectedSpan>,
         callee_mode: EvaluationInputMode,
-        callee_receiver: Option<(ProjectedSpan, Effects)>,
+        callee_reference: Option<ProjectedMemberReference>,
         arguments: Vec<(ProjectedSpan, bool, Effects)>,
         type_args: Option<ProjectedSpan>,
         /// For a call in an optional chain, the link that decides whether
@@ -255,7 +255,7 @@ pub(super) enum ProjectedProtocolFrame {
         parent: ProjectedSpan,
         tag: ProjectedSpan,
         tag_mode: EvaluationInputMode,
-        tag_receiver: Option<(ProjectedSpan, Effects)>,
+        tag_reference: Option<ProjectedMemberReference>,
         expressions: Vec<(ProjectedSpan, Effects)>,
     },
     Template {
@@ -298,6 +298,21 @@ impl ProjectedProtocolFrame {
             | ProjectedProtocolFrame::LoopTest { parent, .. } => *parent,
         }
     }
+}
+
+/// The parts of a member callee's reference: its object and its computed
+/// key ([`HostReferencePart`]).
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct ProjectedMemberReference {
+    pub(super) receiver: Option<ProjectedReferencePart>,
+    pub(super) key: Option<ProjectedReferencePart>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ProjectedReferencePart {
+    pub(super) span: ProjectedSpan,
+    pub(super) effects: Effects,
+    pub(super) read_at_call: bool,
 }
 
 #[derive(Debug, Clone, Copy)]

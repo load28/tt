@@ -68,7 +68,9 @@ pub(super) fn resolve_schedule_steps(
                                 // unobservable.
                                 if matches!(
                                     input.mode,
-                                    EvaluationInputMode::Value | EvaluationInputMode::JsxChildValue
+                                    EvaluationInputMode::Value
+                                        | EvaluationInputMode::JsxChildValue
+                                        | EvaluationInputMode::Discarded
                                 ) && input.effects.is_inert()
                                 {
                                     return Ok(PlannedEvaluationInput::Stable {
@@ -90,34 +92,47 @@ pub(super) fn resolve_schedule_steps(
                                         mode: input.mode,
                                         target: slot.target,
                                         receiver: slot.receiver,
+                                        key: slot.key,
                                     });
                                 }
                                 let target =
                                     allocate_value_slot(next_slot, slot_names, occupied_names)?;
-                                let receiver = input
-                                    .receiver
-                                    .map(|(source, effects)| {
-                                        if effects.is_inert() {
-                                            Ok(PlannedReceiver::Stable { source })
-                                        } else {
-                                            Ok(PlannedReceiver::Captured {
-                                                source,
-                                                slot: allocate_value_slot(
-                                                    next_slot,
-                                                    slot_names,
-                                                    occupied_names,
-                                                )?,
-                                            })
-                                        }
-                                    })
-                                    .transpose()?;
-                                source_slots
-                                    .insert(input.source, PlannedSourceSlot { target, receiver });
+                                let mut part =
+                                    |part: Option<crate::program_syntax::HostReferencePart>| {
+                                        part.map(|part| {
+                                            if part.read_at_call || part.effects.is_inert() {
+                                                Ok(PlannedReceiver::Stable {
+                                                    source: part.source,
+                                                })
+                                            } else {
+                                                Ok(PlannedReceiver::Captured {
+                                                    source: part.source,
+                                                    slot: allocate_value_slot(
+                                                        next_slot,
+                                                        slot_names,
+                                                        occupied_names,
+                                                    )?,
+                                                })
+                                            }
+                                        })
+                                        .transpose()
+                                    };
+                                let receiver = part(input.receiver)?;
+                                let key = part(input.key)?;
+                                source_slots.insert(
+                                    input.source,
+                                    PlannedSourceSlot {
+                                        target,
+                                        receiver,
+                                        key,
+                                    },
+                                );
                                 Ok(PlannedEvaluationInput::Source {
                                     source: input.source,
                                     mode: input.mode,
                                     target,
                                     receiver,
+                                    key,
                                 })
                             },
                             |slot| {
@@ -327,9 +342,9 @@ pub(super) fn plan_one_operation(
             if conditional_index != 0 {
                 return Ok(None);
             }
-            // A member callee calls through its captured receiver
-            // (`callee.call(receiver, ...)`), which cannot carry explicit
-            // type arguments.
+            // A member callee the chain tests is called through its
+            // captured receiver (`callee.call(receiver, ...)`), which cannot
+            // carry explicit type arguments.
             let member_callee = matches!(
                 condition,
                 PlannedEvaluationInput::Source {
@@ -337,7 +352,10 @@ pub(super) fn plan_one_operation(
                     ..
                 }
             );
-            if member_callee && facts.type_args.is_some() {
+            if member_callee
+                && facts.type_args.is_some()
+                && facts.optional_test == Some(OptionalCallTest::Callee)
+            {
                 return Ok(None);
             }
             // The receiver test needs the receiver as its own input.
