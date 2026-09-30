@@ -214,6 +214,9 @@ pub struct MappedEmit {
     /// emission calls one of its helpers through an import. A build writes
     /// exactly these modules for the outputs it writes.
     pub support_imports: Vec<crate::StdModule>,
+    /// Whether the module is written with CommonJS syntax, so the support
+    /// modules it imports are the [`StdImports::commonjs`](crate::StdImports) ones.
+    pub commonjs: bool,
 }
 
 impl MappedEmit {
@@ -343,6 +346,7 @@ pub(crate) fn emit_mapped_parsed(
         shared_bindings: flat.shared_bindings,
         inserted: flat.inserted,
         support_imports: flat.support_imports,
+        commonjs: flat.commonjs,
     }
 }
 

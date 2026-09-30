@@ -170,6 +170,7 @@ fn mixed_source_fixture_emits_one_type_clean_typescript_tree() {
         option: Some("./tt/option.js"),
         result: Some("./tt/result.js"),
         runtime: Some("./tt/runtime.js"),
+        commonjs: None,
     };
     let files = [
         (

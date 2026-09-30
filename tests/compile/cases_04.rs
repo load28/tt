@@ -501,6 +501,7 @@ fn the_std_specifier_is_rewritten_when_the_caller_places_the_module() {
             option: Some("../tt/option.js"),
             result: Some("../tt/result.js"),
             runtime: Some("../tt/runtime.js"),
+            commonjs: None,
         },
         ..Options::default()
     };

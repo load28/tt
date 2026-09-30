@@ -77,7 +77,7 @@ pub(crate) fn lowering_plan_with(
     tokens: &[crate::lexer::Token],
     tolerant: bool,
 ) -> Result<LoweringPlan, LoweringFailure> {
-    if !core.requires_host_lowering() {
+    if !core.requires_host_lowering() && !core.imports_std() {
         return Ok(LoweringPlan::default());
     }
     let primary_source = || {
@@ -188,6 +188,10 @@ pub(crate) fn emit_with_map<'a>(
     } = emit_source;
     let target = TargetRewritePlan::build(semantic, core, source, lowering_plan);
     let script = target.script;
+    let std_imports = match std_imports.commonjs {
+        Some(commonjs) if target.commonjs && !script => *commonjs,
+        _ => std_imports,
+    };
     let local_runtime = script || target.commonjs;
     let direct_apply_inputs = direct_apply_inputs(semantic, core, source, source_kind);
     let member_apply_steps = member_apply_steps(semantic, core, source, source_kind);
@@ -526,6 +530,7 @@ pub(crate) fn emit_with_map<'a>(
             .map_or(result_return.src, |argument| argument.end);
     }
     flat.generated_names = emitter.generated_names.into_inner().into_allocated();
+    flat.commonjs = target.commonjs && !script;
     let imports_runtime = !local_runtime && !runtime_helpers.is_empty();
     let imported_std = emitter.imported_std.into_inner();
     flat.support_imports = crate::StdModule::ALL

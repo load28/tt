@@ -571,4 +571,5 @@ pub(crate) struct Flat {
     pub shared_bindings: Vec<SharedBinding>,
     pub inserted: Vec<crate::InsertedGlue>,
     pub support_imports: Vec<crate::StdModule>,
+    pub commonjs: bool,
 }

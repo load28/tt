@@ -55,6 +55,21 @@ pub(super) fn std_placement(root: Option<&Path>) -> Option<PathBuf> {
     Some(root?.join("tt"))
 }
 
+fn std_imports_of(specifiers: &[Option<String>; 4]) -> StdImports<'_> {
+    let [types, option, result, runtime] = specifiers;
+    StdImports {
+        types: types.as_deref(),
+        option: option.as_deref(),
+        result: result.as_deref(),
+        runtime: runtime.as_deref(),
+        commonjs: None,
+    }
+}
+
+pub(super) fn support_commonjs_dir(std_dir: &Path) -> PathBuf {
+    std_dir.join(ttc::STD_PACKAGE_COMMONJS_DIR)
+}
+
 /// The deepest directory every output shares.
 pub(super) fn common_ancestor(jobs: &[Job]) -> Option<PathBuf> {
     let shared = deepest_shared_directory(jobs.iter().map(|job| {
@@ -249,6 +264,7 @@ struct Emitted {
     map: Option<String>,
     /// The compiler support modules `code` imports.
     support_imports: Vec<StdModule>,
+    commonjs: bool,
 }
 
 /// Compiles every job. Returns true if any of them failed.
@@ -427,16 +443,20 @@ fn compile_outcomes(
                 };
                 let extern_variants =
                     collect_extern_variants(&job.file, &loaded.scan.imports, &cache);
-                let std_imports_owned = std_dir.as_ref().map(|dir| {
+                let specifiers = |dir: &Path| {
                     StdModule::ALL
                         .map(|module| std_specifier(job, dir, opts.rewrite_imports, module))
-                });
+                };
+                let std_imports_owned = std_dir
+                    .as_ref()
+                    .map(|dir| (specifiers(dir), specifiers(&support_commonjs_dir(dir))));
+                let commonjs_imports = std_imports_owned
+                    .as_ref()
+                    .map(|(_, commonjs)| std_imports_of(commonjs));
                 let std_imports = match &std_imports_owned {
-                    Some([types, option, result, runtime]) => StdImports {
-                        types: types.as_deref(),
-                        option: option.as_deref(),
-                        result: result.as_deref(),
-                        runtime: runtime.as_deref(),
+                    Some((module, _)) => StdImports {
+                        commonjs: commonjs_imports.as_ref(),
+                        ..std_imports_of(module)
                     },
                     None => StdImports::default(),
                 };
@@ -538,6 +558,7 @@ fn compile_outcomes(
                         code,
                         map: map.and_then(|rendered| rendered.document),
                         support_imports: emit.support_imports,
+                        commonjs: emit.commonjs,
                     });
                 }
                 out
@@ -562,25 +583,32 @@ fn write_outcomes(
     // source looks like: a pipeline may lower to a direct call, and a script
     // inlines its helpers. Standard-library imports materialize its three
     // public modules; the pipeline runtime is written on its own.
-    let imports = |module: StdModule| {
-        outcomes
-            .iter()
-            .filter_map(|outcome| outcome.output.as_ref())
-            .any(|output| output.support_imports.contains(&module))
-    };
-    let needs_std = StdModule::STANDARD.into_iter().any(imports);
-    let needs_runtime = imports(StdModule::Runtime);
-    let modules: Vec<_> = StdModule::ALL
-        .into_iter()
-        .filter(|module| match module {
-            StdModule::Runtime => needs_runtime,
-            _ => needs_std,
+    let forms: Vec<(PathBuf, bool, Vec<StdModule>)> = std_dir
+        .iter()
+        .flat_map(|dir| [(dir.clone(), false), (support_commonjs_dir(dir), true)])
+        .map(|(dir, commonjs)| {
+            let imports = |module: StdModule| {
+                outcomes
+                    .iter()
+                    .filter_map(|outcome| outcome.output.as_ref())
+                    .filter(|output| output.commonjs == commonjs)
+                    .any(|output| output.support_imports.contains(&module))
+            };
+            let needs_std = StdModule::STANDARD.into_iter().any(imports);
+            let needs_runtime = imports(StdModule::Runtime);
+            let modules = StdModule::ALL
+                .into_iter()
+                .filter(|module| match module {
+                    StdModule::Runtime => needs_runtime,
+                    _ => needs_std,
+                })
+                .collect();
+            (dir, commonjs, modules)
         })
+        .filter(|(_, _, modules): &(PathBuf, bool, Vec<StdModule>)| !modules.is_empty())
         .collect();
-    if let Some(dir) = &std_dir
-        && !modules.is_empty()
-    {
-        for module in &modules {
+    for (dir, _, modules) in &forms {
+        for module in modules {
             let support = dir.join(module.file_name());
             if let Err(error) = check_output_owner(&support, OutputOwner::Support(*module)) {
                 eprintln!("{error}");
@@ -605,10 +633,15 @@ fn write_outcomes(
                 }
             }
         }
-
+    }
+    for (dir, commonjs, modules) in &forms {
         let wrote = fs::create_dir_all(dir).and_then(|()| {
-            for module in &modules {
-                let mut code = module.source().to_string();
+            for module in modules {
+                let mut code = if *commonjs {
+                    module.commonjs_source().into_owned()
+                } else {
+                    module.source().to_string()
+                };
                 if opts.banner {
                     code = format!("// @generated by ttc — do not edit directly.\n{code}");
                 }

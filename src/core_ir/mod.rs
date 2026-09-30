@@ -35,6 +35,20 @@ impl CoreFile {
         self.body_requires_host(self.root)
     }
 
+    pub(crate) fn imports_std(&self) -> bool {
+        self.bodies.iter().any(|body| {
+            body.statements.iter().any(|statement| {
+                matches!(
+                    statement,
+                    Statement::Import(Import {
+                        kind: crate::hir::ImportKind::Std(_),
+                        ..
+                    })
+                )
+            })
+        })
+    }
+
     fn body_requires_host(&self, body: BodyId) -> bool {
         self.bodies[body.index()]
             .statements

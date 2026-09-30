@@ -240,6 +240,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         shared_bindings: flat.shared_bindings,
         inserted: flat.inserted,
         support_imports: flat.support_imports,
+        commonjs: flat.commonjs,
     };
     if options.defer_to_checker {
         return Ok(emit);
@@ -1054,6 +1055,7 @@ fn report_parsed(
         shared_bindings: flat.shared_bindings,
         inserted: flat.inserted,
         support_imports: flat.support_imports,
+        commonjs: flat.commonjs,
     };
     let mut emit = verified_emit(
         lowered,

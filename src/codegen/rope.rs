@@ -850,6 +850,7 @@ impl<'a> TargetFile<'a> {
             shared_bindings,
             inserted,
             support_imports: Vec::new(),
+            commonjs: false,
         }
     }
 }

@@ -622,6 +622,7 @@
 | TASK-614 | Check edits made while the configuration was malformed | Complete | 2026-09-30 | 2026-09-30 | [TASK-614](./TASK-614-edits-under-a-malformed-configuration.md) |
 | TASK-615 | Refuse a non-Unicode input path before writing, and publish the record first | Complete | 2026-09-30 | 2026-09-30 | [TASK-615](./TASK-615-non-unicode-input-paths.md) |
 | TASK-616 | Keep TypeScript's `exclude` semantics for an owned output reached by import | Complete | 2026-09-30 | 2026-09-30 | [TASK-616](./TASK-616-owned-outputs-reached-by-import.md) |
+| TASK-617 | Import the standard library in CommonJS syntax from a CommonJS module | Complete | 2026-09-30 | 2026-09-30 | [TASK-617](./TASK-617-commonjs-standard-library.md) |
 
 ## Next task number
 

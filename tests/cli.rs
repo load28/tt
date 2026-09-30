@@ -2848,3 +2848,106 @@ fn a_commonjs_module_type_checks_under_verbatim_module_syntax() {
         String::from_utf8_lossy(&tsc.stdout)
     );
 }
+
+/// TASK-617: a module written with CommonJS syntax imports the standard
+/// library in that syntax too, from `tt/cjs/`, so the materialized modules
+/// type-check where it does; a module written with ECMAScript syntax keeps
+/// importing `tt/`.
+#[test]
+fn a_commonjs_module_imports_the_standard_library_in_commonjs_syntax() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    let source = dir.join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(dir.join("package.json"), "{ \"type\": \"commonjs\" }\n").unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        "{ \"compilerOptions\": { \"strict\": true, \"target\": \"es2022\", \"module\": \"nodenext\", \
+         \"verbatimModuleSyntax\": true, \"noEmit\": true, \"types\": [] }, \"include\": [\"src\", \"out\"] }\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("types.tt"),
+        "import type { TOption } from \"@tt/std\";\n\
+         const none: TOption<number> | undefined = undefined;\n\
+         export = none;\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("values.tt"),
+        "import option = require(\"@tt/std/option\");\n\
+         import result = require(\"@tt/std/result\");\n\
+         import type { TOption, TResult } from \"@tt/std\";\n\
+         const some: TOption<number> = option.Some(1);\n\
+         const ok: TResult<number, string> = option.okOr(some, \"none\");\n\
+         export = [some, ok, result.isOk(ok)];\n",
+    )
+    .unwrap();
+    let checked = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let built = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["-o", "out", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    let values = fs::read_to_string(dir.join("out/values.ts")).unwrap();
+    assert!(
+        values.contains("require(\"./tt/cjs/option.js\")")
+            && values.contains("from \"./tt/cjs/index.js\""),
+        "{values}"
+    );
+    let option = fs::read_to_string(dir.join("out/tt/cjs/option.ts")).unwrap();
+    assert!(option.contains("export = option;"), "{option}");
+    assert!(!dir.join("out/tt/option.ts").exists());
+    if !common::tsc_available() {
+        return;
+    }
+    let tsc = common::tsc()
+        .args(["-p", "tsconfig.json"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run tsc");
+    assert!(
+        tsc.status.success(),
+        "{}",
+        String::from_utf8_lossy(&tsc.stdout)
+    );
+}
+
+/// TASK-617: a module written with ECMAScript syntax keeps the
+/// ECMAScript-syntax standard library.
+#[test]
+fn an_ecmascript_module_keeps_the_standard_library_in_tt() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("m.tt"),
+        "import { Some } from \"@tt/std/option\";\nexport const m = Some(1);\n",
+    )
+    .unwrap();
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let code = fs::read_to_string(out_dir.join("m.ts")).unwrap();
+    assert!(code.contains("from \"./tt/option.js\""), "{code}");
+    assert!(out_dir.join("tt/option.ts").is_file());
+    assert!(!out_dir.join("tt/cjs").exists());
+}

@@ -94,6 +94,30 @@ impl StdModule {
         }
     }
 
+    /// [`StdModule::source`] in CommonJS module syntax, for a module written
+    /// with it.
+    pub fn commonjs_source(self) -> std::borrow::Cow<'static, str> {
+        let source = self.source();
+        let namespace = match self {
+            StdModule::Types => return std::borrow::Cow::Borrowed(source),
+            StdModule::Option => "option",
+            StdModule::Result => "result",
+            StdModule::Runtime => "runtime",
+        };
+        let body_start = source
+            .split_inclusive('\n')
+            .take_while(|line| {
+                line.starts_with("//") || line.trim().is_empty() || line.starts_with("import type ")
+            })
+            .map(str::len)
+            .sum::<usize>();
+        let (header, body) = source.split_at(body_start);
+        let newline = if body.ends_with('\n') { "" } else { "\n" };
+        std::borrow::Cow::Owned(format!(
+            "{header}namespace {namespace} {{\n{body}{newline}}}\n\nexport = {namespace};\n"
+        ))
+    }
+
     /// TypeScript's declaration emit for [`StdModule::source`], which the
     /// package's CommonJS entry points serve.
     pub const fn declaration(self) -> &'static str {
@@ -351,6 +375,10 @@ pub struct StdImports<'a> {
     pub result: Option<&'a str>,
     /// Replacement for the compiler-generated `@tt/runtime` import.
     pub runtime: Option<&'a str>,
+    /// The replacements for a module written with CommonJS syntax, which
+    /// imports the support modules in that syntax
+    /// ([`StdModule::commonjs_source`]).
+    pub commonjs: Option<&'a StdImports<'a>>,
 }
 
 impl<'a> StdImports<'a> {
