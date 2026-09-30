@@ -629,6 +629,7 @@
 | TASK-629 | Resolve each auto-import entry against its own module | Complete | 2026-09-30 | 2026-09-30 | [TASK-629](./TASK-629-auto-import-entry-identity.md) |
 | TASK-630 | Name a stored callee's signature as the source call does | Complete | 2026-09-30 | 2026-09-30 | [TASK-630](./TASK-630-signature-help-for-a-stored-callee.md) |
 | TASK-631 | Open completion on TypeScript's trigger characters and let TypeScript decide | Complete | 2026-09-30 | 2026-09-30 | [TASK-631](./TASK-631-typescript-trigger-characters.md) |
+| TASK-632 | Complete an expression right after an arm's `=>` | Complete | 2026-09-30 | 2026-09-30 | [TASK-632](./TASK-632-arm-body-after-the-arrow.md) |
 
 ## Next task number
 

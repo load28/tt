@@ -200,6 +200,39 @@ declare function getUser(id: string): TResult<{ name: string }, string>;\n";
 }
 
 #[test]
+fn the_body_of_an_arm_written_up_to_its_arrow_completes_expressions() {
+    require_tsgo!();
+    let decl = "export variant Shape { Circle(radius: number), Rect(width: number), Point }\n\
+const limit = 1;\n";
+    for arms in [
+        "Circle(radius) => radius,\n    Rect(width) => @@",
+        "Circle(radius) => radius,\n    Rect(width) => @@,\n    _ => 0,",
+        "Circle(radius) => radius,\n    Rect(width) if width > limit => @@",
+    ] {
+        let (source, position) = at_cursor(&format!(
+            "{decl}export function g(s: Shape) {{\n  return match (s) {{\n    {arms}\n  }};\n}}\n"
+        ));
+        let dir = project(&[("src/main.tt", &source)]);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        assert!(
+            ttc::engine::tt_completions_at(&file, &source, position).is_empty(),
+            "{source}"
+        );
+        let mut project = open_service(&file);
+        let labels: Vec<_> = project
+            .completion(&file, position, false)
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|item| item.label)
+            .collect();
+        for name in ["width", "limit", "s", "Math"] {
+            assert!(labels.iter().any(|label| label == name), "{source}: {name}");
+        }
+    }
+}
+
+#[test]
 fn the_guard_of_an_arm_with_no_body_is_served() {
     require_tsgo!();
     let decl = "export variant Shape { Circle(radius: number), Rect(width: number), Point }\n\

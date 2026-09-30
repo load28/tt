@@ -274,6 +274,12 @@ tt's own trigger characters keep their pattern-only behaviour. An entry
 carries the service's `detail` (a path entry's file name), and a `.tt`
 module entry its file name.
 
+**Update (TASK-632)**: a position whose preceding token is `=>` is never
+a pattern position: a body begins there, as TypeScript classifies a
+completion position by its preceding token (`getCompletionData`'s
+`contextToken`). An arm whose body is not written yet (TASK-605) is
+completed with expressions from the first keystroke.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

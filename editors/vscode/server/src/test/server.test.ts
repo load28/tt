@@ -879,6 +879,38 @@ test(
   },
 );
 
+const ARM_BODY_SOURCE = [
+  "variant Shape { Circle(radius: number), Rect(width: number), Point }",
+  "export function g(s: Shape, extra: number) {",
+  "  return match (s) {",
+  "    Circle(radius) => radius,",
+  "    Rect(width) => ",
+  "  };",
+  "}",
+  "",
+].join("\n");
+
+test(
+  "the body of an arm written up to its arrow completes expressions",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { labels } = await (async () => {
+      const { completion, stop } = await open(ARM_BODY_SOURCE);
+      try {
+        return await completion("Rect(width) => ");
+      } finally {
+        stop();
+      }
+    })();
+    for (const name of ["width", "extra", "s", "match"]) {
+      assert.ok(labels.includes(name), `${name} in: ${labels}`);
+    }
+    for (const pattern of ["Circle", "Point", "_"]) {
+      assert.ok(!labels.includes(pattern), `${pattern} in: ${labels}`);
+    }
+  },
+);
+
 const DOCUMENTED_SOURCE = [
   "/**",
   " * Adds two numbers.",
