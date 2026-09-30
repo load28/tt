@@ -630,6 +630,75 @@ fn entries_of_one_name_from_two_modules_each_import_their_own() {
 }
 
 #[test]
+fn a_triggered_completion_answers_as_typescript_answers_its_twin() {
+    require_tsgo!();
+    let body = "import { kkTt } from \"./@@\";\n";
+    let rest = "declare global { namespace JSX { interface IntrinsicElements { main: {} } } }\n\
+/** @@@ */\n\
+export function f(n: number) { return n; }\n\
+class K { #secret = 1; read() { return this.#@@; } }\n\
+const q = @@1;\n\
+const s = '@@';\n\
+const t = 2 <@@ 3;\n\
+export const v = <main><@@</main>;\n";
+    let marked = format!("{body}{rest}");
+    let triggers = ["/", "@", "#", " ", "'", "<", "<"];
+    let dir = project(&[
+        ("src/lib.ts", "export const kkLib = 1;\n"),
+        ("src/shapes.tt", "export const kkTt = 2;\n"),
+    ]);
+    let tt_file = dir.join("src/main.ttx");
+    let ts_file = dir.join("src/equivalent.tsx");
+    let cleaned = marked.replace("@@", "");
+    std::fs::write(&tt_file, &cleaned).unwrap();
+    std::fs::write(&ts_file, &cleaned).unwrap();
+    let tt_file = tt_file.canonicalize().unwrap();
+    let ts_file = ts_file.canonicalize().unwrap();
+    let mut project = open_service(&tt_file);
+    project.open_document(ts_file.clone(), cleaned.clone());
+    let mut rest_of = marked.as_str();
+    let mut consumed = 0;
+    for trigger in triggers {
+        let found = rest_of.find("@@").unwrap();
+        let at = consumed + found;
+        let before = &cleaned[..at];
+        let position = ttc::engine::Position {
+            line: before.matches('\n').count() as u32,
+            character: before[before.rfind('\n').map_or(0, |n| n + 1)..].encode_utf16().count() as u32,
+        };
+        consumed = at;
+        rest_of = &rest_of[found + 2..];
+        let labels = |project: &mut ttc::engine::Project, file: &Path| {
+            let mut labels: Vec<String> = project
+                .triggered_completion(file, position, false, Some(trigger))
+                .unwrap()
+                .items
+                .into_iter()
+                .map(|item| item.label)
+                .collect();
+            labels.sort();
+            labels
+        };
+        let mut expected = labels(&mut project, &ts_file);
+        let mut answered = labels(&mut project, &tt_file);
+        if trigger == "/" {
+            assert!(answered.contains(&"shapes.tt".to_string()), "{answered:?}");
+            assert!(expected.contains(&"lib".to_string()), "{expected:?}");
+            let siblings = ["equivalent", "main.ttx", "shapes.tt"];
+            answered.retain(|label| !siblings.contains(&label.as_str()));
+            expected.retain(|label| !siblings.contains(&label.as_str()));
+        }
+        assert_eq!(answered, expected, "{trigger:?} at {position:?}");
+        match trigger {
+            " " | "'" => assert!(answered.is_empty(), "{trigger:?}: {answered:?}"),
+            "@" => assert!(answered.contains(&"@param".to_string()), "{answered:?}"),
+            "#" => assert!(answered.contains(&"#secret".to_string()), "{answered:?}"),
+            _ => {}
+        }
+    }
+}
+
+#[test]
 fn a_pipeline_step_being_typed_answers_as_its_typescript_equivalent_does() {
     require_tsgo!();
     let head = "const half = (n: number) => n / 2;\n\

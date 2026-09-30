@@ -52,6 +52,7 @@ export interface EngineCompletionItem {
   labelDetails?: { detail?: string | null; description?: string | null } | null;
   label: string;
   source?: string | null;
+  detail?: string | null;
   /** The element-kind string the editor has always mapped. */
   kind: string;
   sortText: string;
@@ -487,9 +488,15 @@ export function completion(
   path: string,
   position: EnginePosition,
   member: boolean,
+  triggerCharacter?: string,
   onError?: (message: string) => void,
 ): Promise<EngineCompletionList | null> {
-  return semantic(compiler, "completion", { path, position, member }, onError);
+  return semantic(
+    compiler,
+    "completion",
+    { path, position, member, triggerCharacter: triggerCharacter ?? null },
+    onError,
+  );
 }
 
 export function completionResolve(
@@ -564,9 +571,21 @@ export function signatureHelp(
   compiler: string,
   path: string,
   position: EnginePosition,
+  context?: { triggerKind: number; triggerCharacter?: string; isRetrigger: boolean },
   onError?: (message: string) => void,
 ): Promise<EngineSignatureHelp | null> {
-  return semantic(compiler, "signatureHelp", { path, position }, onError);
+  return semantic(
+    compiler,
+    "signatureHelp",
+    {
+      path,
+      position,
+      triggerKind: context?.triggerKind ?? null,
+      triggerCharacter: context?.triggerCharacter ?? null,
+      isRetrigger: context?.isRetrigger ?? false,
+    },
+    onError,
+  );
 }
 
 /** The parser's classification of the ambiguous surface — a `flow` head the

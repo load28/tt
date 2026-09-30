@@ -259,6 +259,21 @@ name's place, so TypeScript labels the signature by the symbol the source
 names (`services/signatureHelp.ts` labels by the callee expression's
 symbol).
 
+**Update (TASK-631)**: the adapter advertises TypeScript's completion
+trigger characters (tsgo's `.`, `"`, `'`, backtick, `/`, `@`, `<`, `#`,
+space, and `*`) beside tt's pattern
+triggers (`( | { ,`), and signature help's `( , <`. A request a TypeScript
+trigger character sent is forwarded with its LSP 3.17 `CompletionContext`
+(`triggerKind: TriggerCharacter`, `triggerCharacter`) through the engine
+(`Project::triggered_completion`) to the service, which decides whether the
+character begins a completion there (`services/completions.ts`,
+`isValidTrigger`): nothing after a space outside an `import`, a JSDoc tag
+after `@`, a module path after `/`. Signature help forwards its
+`SignatureHelpContext` the same way (`Project::triggered_signature_help`).
+tt's own trigger characters keep their pattern-only behaviour. An entry
+carries the service's `detail` (a path entry's file name), and a `.tt`
+module entry its file name.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

@@ -156,13 +156,19 @@ pub(super) fn ts_completions(
     at: usize,
     text: ServedText<'_>,
     generated_names: &HashSet<String>,
+    trigger: Option<&str>,
 ) -> Result<CompletionAnswer, String> {
     let code = text.code;
+    let context = match trigger {
+        Some(character) => serde_json::json!({ "triggerKind": 2, "triggerCharacter": character }),
+        None => serde_json::json!({ "triggerKind": 1 }),
+    };
     let answer = session.client.request(
         "textDocument/completion",
         serde_json::json!({
             "textDocument": { "uri": served_uri(session, path) },
             "position": lsp_position(u16_position(code, at)),
+            "context": context,
         }),
     )?;
     let items: Vec<serde_json::Value> = match answer {
@@ -217,6 +223,7 @@ pub(super) fn ts_completions(
             description: item["labelDetails"]["description"]
                 .as_str()
                 .map(str::to_owned),
+            detail: item["detail"].as_str().map(str::to_owned),
             source,
             label,
         });
@@ -314,6 +321,7 @@ pub(super) fn tt_module_entries(
         .filter_map(|file| {
             let name = file.file_name()?.to_str()?.to_string();
             Some(CompletionItem {
+                detail: Some(name.clone()),
                 label: name,
                 kind: "script".to_string(),
                 sort_text: "11".to_string(),

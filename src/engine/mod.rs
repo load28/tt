@@ -68,7 +68,7 @@ pub use language::{
     ClassifiedToken, CompletionAnswer, CompletionDetail, CompletionItem, DocumentSymbol, HoverInfo,
     Location, Position, PrepareRename, RENAME_PLACEHOLDER, Range, Reference, RenameEdit,
     ServiceDiagnostic, ServiceRelated, ServiceSeverity, ServiceTag, Signature, SignatureHelp,
-    SignatureParameter, TextEdit,
+    SignatureParameter, SignatureTrigger, TextEdit,
 };
 pub use names::{TtSymbol, TtSymbolKind, tt_symbol_at};
 pub use project::{Blocked, CheckRequest, Dependencies, Project, collect_sources};

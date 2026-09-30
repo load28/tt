@@ -78,8 +78,9 @@ import * as path from "node:path";
 
 import * as sidecar from "./sidecar";
 
-const MEMBER_TRIGGER_CHARACTERS = ["."];
+const TYPESCRIPT_TRIGGER_CHARACTERS = [".", '"', "'", "`", "/", "@", "<", "#", " ", "*"];
 const PATTERN_TRIGGER_CHARACTERS = ["(", "|", "{", ","];
+const TYPESCRIPT_SIGNATURE_TRIGGER_CHARACTERS = ["(", ",", "<"];
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -126,13 +127,13 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
         save: { includeText: false },
       },
       completionProvider: {
-        triggerCharacters: [...MEMBER_TRIGGER_CHARACTERS, ...PATTERN_TRIGGER_CHARACTERS],
+        triggerCharacters: [...TYPESCRIPT_TRIGGER_CHARACTERS, ...PATTERN_TRIGGER_CHARACTERS],
         // Signatures and documentation are fetched per entry, when the
         // editor asks for the one the user highlighted (onCompletionResolve).
         resolveProvider: true,
       },
       signatureHelpProvider: {
-        triggerCharacters: ["(", ","],
+        triggerCharacters: TYPESCRIPT_SIGNATURE_TRIGGER_CHARACTERS,
         retriggerCharacters: [")"],
       },
       hoverProvider: true,
@@ -1197,6 +1198,7 @@ async function tsCompletions(
   doc: TextDocument,
   offset: number,
   atMember: boolean,
+  trigger: string | undefined,
 ): Promise<CompletionItem[]> {
   const fsPath = enginePath(doc);
   if (fsPath === null) return [];
@@ -1205,12 +1207,14 @@ async function tsCompletions(
     fsPath,
     doc.positionAt(offset),
     atMember,
+    trigger,
     logEngine,
   );
   if (!list) return [];
   return list.items.map((entry) => ({
     label: entry.label,
     kind: TS_COMPLETION_KINDS[entry.kind] ?? CompletionItemKind.Text,
+    detail: entry.detail ?? undefined,
     sortText: `2${entry.sortText}`,
     insertText: entry.range ? undefined : (entry.insertText ?? undefined),
     textEdit: entry.range
@@ -1266,13 +1270,16 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   // hid every combinator behind `Result.`/`Option.` (TASK-062).
   if (here.member !== null) {
     const receiver = here.member.receiver;
-    const members = await tsCompletions(doc, offset, true);
+    const members = await tsCompletions(doc, offset, true, trigger);
     const visible = (await declarationsOf(doc)).variants;
     const e = visible.find((x) => x.name === receiver);
     if (!e) return members;
     const items = e.cases.map((c) => constructorItem(e, c));
     const tags = new Set(items.map((i) => i.label));
     return items.concat(members.filter((i) => !tags.has(i.label)));
+  }
+  if (trigger !== undefined && TYPESCRIPT_TRIGGER_CHARACTERS.includes(trigger)) {
+    return tsCompletions(doc, offset, false, trigger);
   }
   if (trigger !== undefined && !PATTERN_TRIGGER_CHARACTERS.includes(trigger)) {
     return [];
@@ -1319,7 +1326,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   });
   const seen = new Set(snippets.map((i) => i.label));
   return snippets.concat(
-    (await tsCompletions(doc, offset, false)).filter((i) => !seen.has(i.label)),
+    (await tsCompletions(doc, offset, false, undefined)).filter((i) => !seen.has(i.label)),
   );
 });
 
@@ -1380,6 +1387,7 @@ connection.onSignatureHelp(async (params): Promise<SignatureHelp | null> => {
     await compilerOf(doc),
     fsPath,
     params.position,
+    params.context,
     logEngine,
   );
   if (!help || help.signatures.length === 0) return null;

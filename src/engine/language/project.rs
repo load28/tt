@@ -516,7 +516,21 @@ impl Project {
         position: Position,
         member: bool,
     ) -> Result<CompletionAnswer, String> {
-        let mut answer = self.service_completion(path, position, member)?;
+        self.triggered_completion(path, position, member, None)
+    }
+
+    /// [`Project::completion`] as the editor asks for it after typing
+    /// `trigger` (LSP 3.17 `CompletionContext`, `triggerKind`
+    /// `TriggerCharacter`); `None` is an invoked completion. TypeScript
+    /// decides whether the character begins a completion there.
+    pub fn triggered_completion(
+        &mut self,
+        path: &Path,
+        position: Position,
+        member: bool,
+        trigger: Option<&str>,
+    ) -> Result<CompletionAnswer, String> {
+        let mut answer = self.service_completion(path, position, member, trigger)?;
         let (doc, path) = self.serve(path)?;
         let documents = self.overlays.clone();
         for entry in tt_module_entries(&path, &doc.source, position, &documents.read()) {
@@ -532,12 +546,20 @@ impl Project {
         path: &Path,
         position: Position,
         member: bool,
+        trigger: Option<&str>,
     ) -> Result<CompletionAnswer, String> {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
         let plain = match to_service_typed(&doc, position) {
             Some(at) => {
-                let plain = ts_completions(session, &path, at, doc.served(), &doc.generated_names)?;
+                let plain = ts_completions(
+                    session,
+                    &path,
+                    at,
+                    doc.served(),
+                    &doc.generated_names,
+                    trigger,
+                )?;
                 if !member || (plain.member && !plain.items.is_empty()) {
                     return Ok(plain);
                 }
@@ -570,6 +592,7 @@ impl Project {
             probe.offset,
             probe.served(),
             &probe.generated_names,
+            trigger,
         )?;
         probed.probe = Some(probe.version);
         session.last_probe = Some(probe);
@@ -688,6 +711,7 @@ impl Project {
                     splice: None,
                 },
                 &emit.generated_names,
+                None,
             );
             open_served(session, path, &doc.code);
             let candidates: Vec<Discriminant> = answer?
@@ -722,6 +746,7 @@ impl Project {
             probe.offset,
             probe.served(),
             &probe.generated_names,
+            None,
         );
         open_served(session, path, &doc.code);
         Ok(answer?
@@ -793,7 +818,7 @@ impl Project {
                 Some(installed) => installed.served(),
                 None => doc.served(),
             };
-            let _ = ts_completions(session, &path, at, text, &generated_names)?;
+            let _ = ts_completions(session, &path, at, text, &generated_names, None)?;
         }
         let Some(item) = session.last_completion.get(&key).cloned() else {
             return Ok(None);
@@ -984,6 +1009,20 @@ impl Project {
         path: &Path,
         position: Position,
     ) -> Result<Option<SignatureHelp>, String> {
+        self.triggered_signature_help(path, position, &SignatureTrigger::Invoked, false)
+    }
+
+    /// [`Project::signature_help`] with the editor's context: what asked
+    /// for it, and whether help was already shown (`isRetrigger`).
+    /// TypeScript decides whether a typed character begins signature help
+    /// there.
+    pub fn triggered_signature_help(
+        &mut self,
+        path: &Path,
+        position: Position,
+        trigger: &SignatureTrigger,
+        retrigger: bool,
+    ) -> Result<Option<SignatureHelp>, String> {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
         // A cursor the served text has no place for is asked through a
@@ -1017,6 +1056,21 @@ impl Project {
             serde_json::json!({
                 "textDocument": { "uri": served_uri(session, &path) },
                 "position": lsp_position(u16_position(asked, mapper::to_utf16(asked, at))),
+                "context": match trigger {
+                    SignatureTrigger::Invoked => serde_json::json!({
+                        "triggerKind": 1,
+                        "isRetrigger": retrigger,
+                    }),
+                    SignatureTrigger::Character(character) => serde_json::json!({
+                        "triggerKind": 2,
+                        "triggerCharacter": character,
+                        "isRetrigger": retrigger,
+                    }),
+                    SignatureTrigger::ContentChange => serde_json::json!({
+                        "triggerKind": 3,
+                        "isRetrigger": retrigger,
+                    }),
+                },
             }),
         );
         if question.is_some() {

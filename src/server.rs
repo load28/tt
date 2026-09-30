@@ -122,7 +122,7 @@ use ttc::lines::ProtocolPositions;
 
 use ttc::engine::{
     CheckRequest, CompletionAnswer, Engine, Location, Position, Project, Range, ServiceSeverity,
-    ServiceTag, Workspace,
+    ServiceTag, SignatureTrigger, Workspace,
 };
 
 /// Runs the server until stdin closes.
@@ -265,11 +265,12 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
         }),
         "completion" => semantic(workspace, params, |project, path, position| {
             let member = params["member"].as_bool().unwrap_or(false);
+            let trigger = params["triggerCharacter"].as_str();
             let CompletionAnswer {
                 items,
                 member,
                 probe,
-            } = project.completion(path, position, member)?;
+            } = project.triggered_completion(path, position, member, trigger)?;
             Ok(json!({
                 "items": items.iter().map(|item| json!({
                     "label": item.label,
@@ -280,6 +281,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                     "snippet": item.snippet,
                     "range": item.range.map(range_json),
                     "source": item.source,
+                    "detail": item.detail,
                     "labelDetails": (item.label_detail.is_some() || item.description.is_some())
                         .then(|| json!({
                             "detail": item.label_detail,
@@ -348,21 +350,32 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
             )
         }),
         "signatureHelp" => semantic(workspace, params, |project, path, position| {
-            Ok(match project.signature_help(path, position)? {
-                None => serde_json::Value::Null,
-                Some(help) => json!({
-                    "signatures": help.signatures.iter().map(|signature| json!({
-                        "label": signature.label,
-                        "documentation": signature.documentation,
-                        "parameters": signature.parameters.iter().map(|parameter| json!({
-                            "label": [parameter.label.0, parameter.label.1],
-                            "documentation": parameter.documentation,
+            let trigger = match (
+                params["triggerKind"].as_u64(),
+                params["triggerCharacter"].as_str(),
+            ) {
+                (Some(2), Some(character)) => SignatureTrigger::Character(character.to_string()),
+                (Some(3), _) => SignatureTrigger::ContentChange,
+                _ => SignatureTrigger::Invoked,
+            };
+            let retrigger = params["isRetrigger"].as_bool().unwrap_or(false);
+            Ok(
+                match project.triggered_signature_help(path, position, &trigger, retrigger)? {
+                    None => serde_json::Value::Null,
+                    Some(help) => json!({
+                        "signatures": help.signatures.iter().map(|signature| json!({
+                            "label": signature.label,
+                            "documentation": signature.documentation,
+                            "parameters": signature.parameters.iter().map(|parameter| json!({
+                                "label": [parameter.label.0, parameter.label.1],
+                                "documentation": parameter.documentation,
+                            })).collect::<Vec<_>>(),
                         })).collect::<Vec<_>>(),
-                    })).collect::<Vec<_>>(),
-                    "activeSignature": help.active_signature,
-                    "activeParameter": help.active_parameter,
-                }),
-            })
+                        "activeSignature": help.active_signature,
+                        "activeParameter": help.active_parameter,
+                    }),
+                },
+            )
         }),
         "semanticTokens" => semantic_tokens(params),
         "patternCompletions" => semantic(workspace, params, |project, path, position| {

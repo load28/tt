@@ -414,12 +414,14 @@ interface Client {
 
 /** The framing an LSP client speaks: `Content-Length` headers over stdio. */
 interface ConnectOptions {
+  command?: [string, string[]];
   env?: NodeJS.ProcessEnv;
   configuration?: (item: { scopeUri?: string; section?: string }) => unknown;
 }
 
 function connect(server = SERVER, options: ConnectOptions = {}): Client {
-  const child: ChildProcess = spawn(process.execPath, [server, "--stdio"], {
+  const [command, args] = options.command ?? [process.execPath, [server, "--stdio"]];
+  const child: ChildProcess = spawn(command, args, {
     stdio: ["pipe", "pipe", "pipe"],
     // The LSP case lives in a temporary project, while the test contract is
     // against the compiler built from this checkout. Cover both supported
@@ -777,6 +779,100 @@ test(
         'import { kkValue } from "./shapes.tt";\n\n',
       ]);
       assert.deepEqual(imports.slice(2), imports.slice(0, 2).reverse());
+    } finally {
+      stop();
+    }
+  },
+);
+
+test(
+  "the server advertises every trigger character TypeScript's server advertises",
+  { skip: skipTyped, timeout },
+  async () => {
+    const dir = repoTestDir("tt-trigger-characters-");
+    const initialize = {
+      processId: process.pid,
+      rootUri: pathToFileURL(dir).toString(),
+      workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }],
+      capabilities: {},
+    };
+    const typescript = connect(SERVER, { command: [findTsgo()!, ["--lsp", "--stdio"]] });
+    const tt = connect();
+    try {
+      const native = (await typescript.request("initialize", initialize)).result.capabilities;
+      const own = (await tt.request("initialize", initialize)).result.capabilities;
+      const missing = (theirs: string[] | undefined, ours: string[] | undefined) =>
+        (theirs ?? []).filter((character) => !(ours ?? []).includes(character));
+      assert.deepEqual(
+        missing(native.completionProvider.triggerCharacters, own.completionProvider.triggerCharacters),
+        [],
+      );
+      for (const character of ["(", "|", "{", ","]) {
+        assert.ok(own.completionProvider.triggerCharacters.includes(character), character);
+      }
+      assert.deepEqual(
+        missing(native.signatureHelpProvider.triggerCharacters, own.signatureHelpProvider.triggerCharacters),
+        [],
+      );
+      assert.deepEqual(
+        missing(
+          native.signatureHelpProvider.retriggerCharacters,
+          own.signatureHelpProvider.retriggerCharacters,
+        ),
+        [],
+      );
+    } finally {
+      typescript.stop();
+      tt.stop();
+    }
+  },
+);
+
+const TRIGGERED_SOURCE = [
+  'import { kkTt } from "./";',
+  'import { kkLib } from ".";',
+  "const q = 1;",
+  "",
+].join("\n");
+
+test(
+  "a TypeScript trigger character is answered as TypeScript answers it",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, uri, stop } = await open(TRIGGERED_SOURCE, "tt", {
+      "lib.ts": "export const kkLib = 1;\n",
+      "shapes.tt": "export const kkTt = 2;\n",
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", noEmit: true },
+        include: ["*"],
+      }),
+    });
+    const triggered = async (line: number, character: number, trigger: string) => {
+      const response = await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: { line, character },
+        context: { triggerKind: 2, triggerCharacter: trigger },
+      });
+      const items = (Array.isArray(response.result) ? response.result : (response.result?.items ?? [])) as any[];
+      return items;
+    };
+    try {
+      const slash = await triggered(0, 'import { kkTt } from "./'.length, "/");
+      const labels = slash.map((item) => item.label);
+      assert.ok(labels.includes("lib"), `labels: ${labels}`);
+      assert.ok(labels.includes("shapes.tt"), `labels: ${labels}`);
+      assert.equal(slash.find((item) => item.label === "lib").detail, "lib.ts");
+      assert.equal(slash.find((item) => item.label === "shapes.tt").detail, "shapes.tt");
+      const dot = await triggered(1, 'import { kkLib } from ".'.length, ".");
+      assert.ok(dot.length > 0, "a `.` in a module specifier is answered");
+      const space = await triggered(2, "const q = ".length, " ");
+      assert.deepEqual(space.map((item) => item.label), []);
+      const help = await client.request("textDocument/signatureHelp", {
+        textDocument: { uri },
+        position: { line: 2, character: "const q = ".length },
+        context: { triggerKind: 2, triggerCharacter: "<", isRetrigger: false },
+      });
+      assert.equal(help.result, null);
     } finally {
       stop();
     }

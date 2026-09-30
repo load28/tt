@@ -111,6 +111,9 @@ pub struct CompletionItem {
     /// What the service shows after that, the module an auto-import entry
     /// imports from (`CompletionItemLabelDetails.description`).
     pub description: Option<String>,
+    /// What the service shows beside the entry before it is resolved (LSP
+    /// 3.17 `CompletionItem.detail`): a path entry's file name.
+    pub detail: Option<String>,
     /// Where the service says the entry comes from (TypeScript's
     /// `CompletionEntry.source`: the module an auto-import entry imports
     /// from, or the kind of snippet it is). With the label it identifies
@@ -230,6 +233,18 @@ pub struct SignatureHelp {
     pub active_signature: u32,
     /// Which parameter the cursor is at.
     pub active_parameter: u32,
+}
+
+/// What asked for signature help (LSP 3.17 `SignatureHelpContext`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SignatureTrigger {
+    /// Invoked by the user (`SignatureHelpTriggerKind.Invoked`).
+    Invoked,
+    /// Typing this character (`SignatureHelpTriggerKind.TriggerCharacter`).
+    Character(String),
+    /// The cursor moved or the document changed while help was shown
+    /// (`SignatureHelpTriggerKind.ContentChange`).
+    ContentChange,
 }
 
 /// One classified token of a file, in its own source coordinates (never
