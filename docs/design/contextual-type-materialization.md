@@ -94,6 +94,15 @@ read: once contextual propagation has reached its fixed point, it is
 annotated with the widened type of the one value written to it, as a
 `const` initialized with that value would be typed.
 
+Operand storage settles in a round of its own, before any other join is
+inferred (TASK-626). A join that reads it through the branch it narrows
+(`$r = $l`) is typed by its declared type there: unannotated, `let $l;`
+assigned `false` evolves to `boolean`, which narrows to `true` where it is
+truthy, while its settled annotation `false` narrows to `never`. A round
+that annotates operand storage therefore infers no other join; the next
+join round reads the settled storage. Operand storage that cannot be
+annotated gives no answer, so it does not hold the joins back.
+
 An unannotated `const` initializer has no contextual type, and a property of
 an object literal that has none has none either. The value is a property
 rather than the initializer itself because TypeScript declares an unannotated

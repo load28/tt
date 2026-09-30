@@ -1,0 +1,174 @@
+==== ttc --out-dir (exit 1) ====
+error[match-not-exhaustive]: match on variant O is not exhaustive: missing "A", "B"
+ --> ./onlyArmGuardWithoutBody.tt:4:10
+  |
+4 |   return match (o) { A(n) if n > 0 };
+  |          ^^^^^^^^^
+  |
+  = help: add the missing arms: `, A(n) => undefined, B => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+error[missing-arm-body]: match: this arm has no body
+ --> ./onlyArmGuardWithoutBody.tt:4:22
+  |
+4 |   return match (o) { A(n) if n > 0 };
+  |                      ^^^^
+  |
+  = help: write `=> <body>` after the guard, or the body after `=>`
+
+error[match-not-exhaustive]: match on (O, _) is not exhaustive: missing (A, _), (B, _)
+ --> ./onlyArmGuardWithoutBody.tt:7:10
+  |
+7 |   return match (o, p) { (A(n), _) if n > 0 };
+  |          ^^^^^^^^^^^^
+  |
+  = help: add the missing arms: `, (A(n), _) => undefined, (B, _) => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+error[missing-arm-body]: match: this arm has no body
+ --> ./onlyArmGuardWithoutBody.tt:7:25
+  |
+7 |   return match (o, p) { (A(n), _) if n > 0 };
+  |                         ^^^^^^^^^
+  |
+  = help: write `=> <body>` after the guard, or the body after `=>`
+
+error[missing-arm-body]: match: this arm has no body
+  --> ./onlyArmGuardWithoutBody.tt:10:22
+   |
+10 |   return match (s) { "a" | "b" if s.length > 0 };
+   |                      ^^^^^^^^^
+   |
+   = help: write `=> <body>` after the guard, or the body after `=>`
+
+error[match-not-exhaustive]: match on variant O is not exhaustive: missing "A", "B"
+  --> ./onlyArmGuardWithoutBody.tt:13:10
+   |
+13 |   return match (o) { A(n) if n > 0, B if o.kind === "B" };
+   |          ^^^^^^^^^
+   |
+   = help: add the missing arms: `, A(n) => undefined, B => undefined,`
+   = help: or add a final `_` arm: `, _ => undefined,`
+
+error[missing-arm-body]: match: this arm has no body
+  --> ./onlyArmGuardWithoutBody.tt:13:22
+   |
+13 |   return match (o) { A(n) if n > 0, B if o.kind === "B" };
+   |                      ^^^^
+   |
+   = help: write `=> <body>` after the guard, or the body after `=>`
+
+error[missing-arm-body]: match: this arm has no body
+  --> ./onlyArmGuardWithoutBody.tt:13:37
+   |
+13 |   return match (o) { A(n) if n > 0, B if o.kind === "B" };
+   |                                     ^
+   |
+   = help: write `=> <body>` after the guard, or the body after `=>`
+
+error[match-not-exhaustive]: match on variant O is not exhaustive: missing "A", "B"
+  --> ./onlyArmGuardWithoutBody.tt:16:10
+   |
+16 |   return match (o) {
+   |          ^^^^^^^^^
+   |
+   = help: add the missing arms
+   | ,
+   |     A(n) => undefined,
+   |     B => undefined,
+   = help: or add a final `_` arm
+   | ,
+   |     _ => undefined,
+
+error[missing-arm-body]: match: this arm has no body
+  --> ./onlyArmGuardWithoutBody.tt:17:5
+   |
+17 |     A(n)
+   |     ^^^^
+   |
+   = help: write `=> <body>` after the guard, or the body after `=>`
+
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match is not exhaustive: missing "A", "B"
+ --> onlyArmGuardWithoutBody.tt:4:10
+  |
+4 |   return match (o) { A(n) if n > 0 };
+  |          ^^^^^^^^^
+  |
+  = help: add the missing arms: `, A(n) => undefined, B => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+error[missing-arm-body]: match: this arm has no body
+ --> onlyArmGuardWithoutBody.tt:4:22
+  |
+4 |   return match (o) { A(n) if n > 0 };
+  |                      ^^^^
+  |
+  = help: write `=> <body>` after the guard, or the body after `=>`
+error[match-not-exhaustive]: match is not exhaustive: missing (A, _), (B, _)
+ --> onlyArmGuardWithoutBody.tt:7:10
+  |
+7 |   return match (o, p) { (A(n), _) if n > 0 };
+  |          ^^^^^^^^^^^^
+  |
+  = help: add the missing arms: `, (A(n), _) => undefined, (B, _) => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+error[missing-arm-body]: match: this arm has no body
+ --> onlyArmGuardWithoutBody.tt:7:25
+  |
+7 |   return match (o, p) { (A(n), _) if n > 0 };
+  |                         ^^^^^^^^^
+  |
+  = help: write `=> <body>` after the guard, or the body after `=>`
+error[missing-arm-body]: match: this arm has no body
+  --> onlyArmGuardWithoutBody.tt:10:22
+   |
+10 |   return match (s) { "a" | "b" if s.length > 0 };
+   |                      ^^^^^^^^^
+   |
+   = help: write `=> <body>` after the guard, or the body after `=>`
+error[match-not-exhaustive]: match is not exhaustive: missing "A", "B"
+  --> onlyArmGuardWithoutBody.tt:13:10
+   |
+13 |   return match (o) { A(n) if n > 0, B if o.kind === "B" };
+   |          ^^^^^^^^^
+   |
+   = help: add the missing arms: `, A(n) => undefined, B => undefined,`
+   = help: or add a final `_` arm: `, _ => undefined,`
+error[missing-arm-body]: match: this arm has no body
+  --> onlyArmGuardWithoutBody.tt:13:22
+   |
+13 |   return match (o) { A(n) if n > 0, B if o.kind === "B" };
+   |                      ^^^^
+   |
+   = help: write `=> <body>` after the guard, or the body after `=>`
+error[missing-arm-body]: match: this arm has no body
+  --> onlyArmGuardWithoutBody.tt:13:37
+   |
+13 |   return match (o) { A(n) if n > 0, B if o.kind === "B" };
+   |                                     ^
+   |
+   = help: write `=> <body>` after the guard, or the body after `=>`
+error[match-not-exhaustive]: match is not exhaustive: missing "A", "B"
+  --> onlyArmGuardWithoutBody.tt:16:10
+   |
+16 |   return match (o) {
+   |          ^^^^^^^^^
+   |
+   = help: add the missing arms
+   | ,
+   |     A(n) => undefined,
+   |     B => undefined,
+   = help: or add a final `_` arm
+   | ,
+   |     _ => undefined,
+error[missing-arm-body]: match: this arm has no body
+  --> onlyArmGuardWithoutBody.tt:17:5
+   |
+17 |     A(n)
+   |     ^^^^
+   |
+   = help: write `=> <body>` after the guard, or the body after `=>`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

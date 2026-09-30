@@ -1,0 +1,99 @@
+=== literalLeftOperandNarrowing.tt ===
+variant M { A(n: number), B }
+>M : type M = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => M
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare function read(): TResult<number, string>;
+>read : function read(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+export function orFalse() {
+>orFalse : function orFalse(): TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+  return result { const a = false || try read(); return a; };
+>a : const a: number
+>read : function read(): TResult<number, string>
+>a : const a: number
+export function andTrue(m: M) {
+>andTrue : function andTrue(m: M): string
+>m : (parameter) m: M
+>M : type M = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const b = true && match (m) { A(n) => "a", B => "b" };
+>b : const b: string
+>m : (parameter) m: M
+>n : const n: number
+  return b;
+>b : const b: string
+export function nullishNull() {
+>nullishNull : function nullishNull(): TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+  return result { const c = null ?? try read(); return c; };
+>c : const c: number
+>read : function read(): TResult<number, string>
+>c : const c: number
+export function nullishUndefined() {
+>nullishUndefined : function nullishUndefined(): TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+  return result { const d = undefined ?? try read(); return d; };
+>d : const d: number
+>read : function read(): TResult<number, string>
+>d : const d: number
+export function numericLiterals(m: M) {
+>numericLiterals : function numericLiterals(m: M): TErr<string> | {
+>       kind: "Ok";
+>       value: readonly [number, string];
+>   }
+>m : (parameter) m: M
+>M : type M = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+    let e = 0 || try read();
+>e : let e: number
+>read : function read(): TResult<number, string>
+    const f = 1 && match (m) { A(n) => `${n}`, B => "b" };
+>f : const f: string
+>m : (parameter) m: M
+>n : const n: number
+>n : const n: number
+    return [e, f] as const;
+>e : let e: number
+>f : const f: string
+>const : type const = readonly [number, string]
+export function parenthesized(m: M) {
+>parenthesized : function parenthesized(m: M): number
+>m : (parameter) m: M
+>M : type M = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  let h = (false) || match (m) { A(n) => n, B => 0 };
+>h : let h: number
+>m : (parameter) m: M
+>n : const n: number
+>n : const n: number
+  return h;
+>h : let h: number
+

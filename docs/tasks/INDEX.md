@@ -631,6 +631,9 @@
 | TASK-623 | Widen only fresh literal types in a value's storage | Complete | 2026-09-30 | 2026-09-30 | [TASK-623](./TASK-623-storage-widens-only-fresh-literals.md) |
 | TASK-624 | Accept a `using` declaration in a `for` initializer and a function as an `if` clause | Complete | 2026-09-30 | 2026-09-30 | [TASK-624](./TASK-624-for-using-and-if-function-clause.md) |
 | TASK-625 | Keep another file's compiler failure out of the printed file | Complete | 2026-09-30 | 2026-09-30 | [TASK-625](./TASK-625-sibling-projection-failure.md) |
+| TASK-626 | Store a literal left operand of a logical operation so the test narrows it | Complete | 2026-09-30 | 2026-09-30 | [TASK-626](./TASK-626-literal-left-operand-narrowing.md) |
+| TASK-627 | Keep TypeScript's `unknown` for `try` on an always-failing value, and document it | Complete | 2026-09-30 | 2026-09-30 | [TASK-627](./TASK-627-try-on-an-always-failing-value.md) |
+| TASK-628 | Claim a match whose arms reach a guard before any `=>` | Complete | 2026-09-30 | 2026-09-30 | [TASK-628](./TASK-628-only-arm-guard-without-body.md) |
 | TASK-629 | Resolve each auto-import entry against its own module | Complete | 2026-09-30 | 2026-09-30 | [TASK-629](./TASK-629-auto-import-entry-identity.md) |
 | TASK-630 | Name a stored callee's signature as the source call does | Complete | 2026-09-30 | 2026-09-30 | [TASK-630](./TASK-630-signature-help-for-a-stored-callee.md) |
 | TASK-631 | Open completion on TypeScript's trigger characters and let TypeScript decide | Complete | 2026-09-30 | 2026-09-30 | [TASK-631](./TASK-631-typescript-trigger-characters.md) |

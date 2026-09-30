@@ -1,0 +1,67 @@
+=== tryAlwaysFailing.tt ===
+declare function fail(): TErr<string>;
+>fail : function fail(): TErr<string>
+>TErr : (alias) type TErr<E> = {
+>       kind: "Err";
+>       error: E;
+>   }
+declare function either(): TErr<string> | TErr<number>;
+>either : function either(): TErr<string> | TErr<number>
+>TErr : (alias) type TErr<E> = {
+>       kind: "Err";
+>       error: E;
+>   }
+>TErr : (alias) type TErr<E> = {
+>       kind: "Err";
+>       error: E;
+>   }
+declare function read(): TResult<number, string>;
+>read : function read(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | Result.TOk<T>
+export function direct(): TResult<number, string> {
+>direct : function direct(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | Result.TOk<T>
+  const x = try Result.Err("x");
+>x : const x: unknown
+>Err : const Err: <string>(error: string) => TErr<string>
+  return Result.Ok(x + 1);
+>Ok : const Ok: <any>(value: any) => Result.TOk<any>
+>x : const x: unknown
+export function declared(): TResult<number, string> {
+>declared : function declared(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | Result.TOk<T>
+  const y = try fail();
+>y : const y: unknown
+>fail : function fail(): TErr<string>
+  return Result.Ok(y);
+>Ok : const Ok: <unknown>(value: unknown) => Result.TOk<unknown>
+>y : const y: unknown
+export function joined(): TResult<number, string> {
+>joined : function joined(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | Result.TOk<T>
+  const w = (try read()) || (try fail());
+>w : const w: unknown
+>read : function read(): TResult<number, string>
+>fail : function fail(): TErr<string>
+  return Result.Ok(w + 1);
+>Ok : const Ok: <any>(value: any) => Result.TOk<any>
+>w : const w: unknown
+export function union(): TResult<string, string | number> {
+>union : function union(): TResult<string, string | number>
+>TResult : (alias) type TResult<T, E> = TErr<E> | Result.TOk<T>
+  const u = try either();
+>u : const u: unknown
+>either : function either(): TErr<string> | TErr<number>
+  return Result.Ok(u);
+>Ok : const Ok: <unknown>(value: unknown) => Result.TOk<unknown>
+>u : const u: unknown
+export function block() {
+>block : function block(): TErr<string> | {
+>       kind: "Ok";
+>       value: unknown;
+>   }
+  return result { const z = try fail(); return z; };
+>z : const z: unknown
+>fail : function fail(): TErr<string>
+>z : const z: unknown
+

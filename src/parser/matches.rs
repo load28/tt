@@ -37,7 +37,7 @@ pub(super) fn parse_match<'t>(
         return Claim::Parsed(parsed);
     }
     let body_open = match_body_open(cur.tokens, cur.idx);
-    if body_open.is_some_and(|open| body_reads_as_arms(cur.parser.src, cur.tokens, open)) {
+    if body_open.is_some_and(|open| body_reads_as_arms(&cur, open)) {
         if let Some(parsed) = parse_match_complete(cur, kw_span, true) {
             return Claim::Parsed(parsed);
         }
@@ -293,7 +293,8 @@ fn value_element(elements: Cursor) -> Option<TupleValueElement> {
 /// Depth matters: the arrow in `return f(y => y)` belongs to a call, not to
 /// the block, which is exactly why "contains an arrow anywhere" claimed
 /// every un-annotated method whose body happened to use one.
-fn body_reads_as_arms(src: &str, tokens: &[Token], open: usize) -> bool {
+fn body_reads_as_arms(cur: &Cursor<'_>, open: usize) -> bool {
+    let (src, tokens) = (cur.parser.src, cur.tokens);
     let Some(first) = tokens.get(open + 1) else {
         return false;
     };
@@ -309,7 +310,7 @@ fn body_reads_as_arms(src: &str, tokens: &[Token], open: usize) -> bool {
             _ if token.opens_bracket() => depth += 1,
             TokenKind::Punct(b'}') => {
                 if depth == 0 {
-                    return false; // the body ended with no arm in it
+                    return guard_outside_statements(cur, open);
                 }
                 depth -= 1;
             }
@@ -320,6 +321,47 @@ fn body_reads_as_arms(src: &str, tokens: &[Token], open: usize) -> bool {
         }
     }
     false
+}
+
+fn guard_outside_statements(cur: &Cursor<'_>, open: usize) -> bool {
+    let Some(close) = find_close_at(cur.tokens, open) else {
+        return false;
+    };
+    let mut arms = cur.sub(open + 1, close, cur.tokens[close].span.start);
+    loop {
+        let wildcard = if arms.at_punct(b'(') {
+            let Some(end) = arms.find_close() else {
+                return false;
+            };
+            let elements = arms.sub(arms.idx + 1, end, arms.tokens[end].span.start);
+            if parse_tuple_elems(elements).is_none() {
+                return false;
+            }
+            arms.idx = end + 1;
+            false
+        } else {
+            match parse_arm_pattern(&mut arms) {
+                Some(pattern) => matches!(pattern, Pattern::Wildcard),
+                None => return false,
+            }
+        };
+        if arms.eat_punct(b',').is_some() {
+            continue;
+        }
+        let Some(keyword) = arms.peek() else {
+            return false;
+        };
+        if wildcard || !matches!(keyword.kind, TokenKind::Ident) || arms.text(keyword) != "if" {
+            return false;
+        }
+        let same_line = !keyword.facts.line_break_before()
+            && !matches!(arms.tokens[arms.idx - 1].kind, TokenKind::Punct(b'}'));
+        let parenthesized = arms
+            .tokens
+            .get(arms.idx + 1)
+            .is_some_and(|token| matches!(token.kind, TokenKind::Punct(b'(')));
+        return same_line || !parenthesized;
+    }
 }
 
 fn parse_match_complete<'t>(

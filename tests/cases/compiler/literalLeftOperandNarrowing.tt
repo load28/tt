@@ -1,0 +1,28 @@
+// Repro from TASK-626
+import type { TResult } from "@tt/std";
+variant M { A(n: number), B }
+declare function read(): TResult<number, string>;
+export function orFalse() {
+  return result { const a = false || try read(); return a; };
+}
+export function andTrue(m: M) {
+  const b = true && match (m) { A(n) => "a", B => "b" };
+  return b;
+}
+export function nullishNull() {
+  return result { const c = null ?? try read(); return c; };
+}
+export function nullishUndefined() {
+  return result { const d = undefined ?? try read(); return d; };
+}
+export function numericLiterals(m: M) {
+  return result {
+    let e = 0 || try read();
+    const f = 1 && match (m) { A(n) => `${n}`, B => "b" };
+    return [e, f] as const;
+  };
+}
+export function parenthesized(m: M) {
+  let h = (false) || match (m) { A(n) => n, B => 0 };
+  return h;
+}

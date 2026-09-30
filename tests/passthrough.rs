@@ -229,6 +229,35 @@ class Router {
 }
 
 #[test]
+fn method_named_match_whose_statements_read_as_a_guarded_arm() {
+    assert_passthrough(
+        r#"
+declare function A(n: unknown): void;
+declare function g(): void;
+class C {
+  match(n: number) {
+    A(n)
+    if (n > 0) g()
+  }
+}
+class D {
+  match(n: number) {
+    A(n), A(n)
+    if (n > 0) g()
+  }
+}
+const o = {
+  match(n: number) {
+    A(n)
+    if (n > 0)
+      (g)()
+  },
+};
+"#,
+    );
+}
+
+#[test]
 fn object_method_named_match() {
     assert_passthrough(
         r#"

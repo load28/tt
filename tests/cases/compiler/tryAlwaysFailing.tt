@@ -1,0 +1,25 @@
+// Repro from TASK-627
+import type { TErr, TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
+declare function fail(): TErr<string>;
+declare function either(): TErr<string> | TErr<number>;
+declare function read(): TResult<number, string>;
+export function direct(): TResult<number, string> {
+  const x = try Result.Err("x");
+  return Result.Ok(x + 1);
+}
+export function declared(): TResult<number, string> {
+  const y = try fail();
+  return Result.Ok(y);
+}
+export function joined(): TResult<number, string> {
+  const w = (try read()) || (try fail());
+  return Result.Ok(w + 1);
+}
+export function union(): TResult<string, string | number> {
+  const u = try either();
+  return Result.Ok(u);
+}
+export function block() {
+  return result { const z = try fail(); return z; };
+}
