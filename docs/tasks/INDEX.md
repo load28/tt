@@ -623,6 +623,7 @@
 | TASK-622 | Write a return's suffix after a template literal that ends its statement | Complete | 2026-09-30 | 2026-09-30 | [TASK-622](./TASK-622-return-suffix-after-a-template-literal.md) |
 | TASK-623 | Widen only fresh literal types in a value's storage | Complete | 2026-09-30 | 2026-09-30 | [TASK-623](./TASK-623-storage-widens-only-fresh-literals.md) |
 | TASK-624 | Accept a `using` declaration in a `for` initializer and a function as an `if` clause | Complete | 2026-09-30 | 2026-09-30 | [TASK-624](./TASK-624-for-using-and-if-function-clause.md) |
+| TASK-625 | Keep another file's compiler failure out of the printed file | Complete | 2026-09-30 | 2026-09-30 | [TASK-625](./TASK-625-sibling-projection-failure.md) |
 
 ## Next task number
 

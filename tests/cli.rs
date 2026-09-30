@@ -2127,6 +2127,60 @@ fn watch_places_support_modules_by_the_whole_input_set() {
 /// toolchain that is not installed has to remove the refinement rather than
 /// the compilation.
 #[test]
+#[cfg(debug_assertions)]
+fn a_siblings_compiler_bug_is_its_own_and_the_printed_file_still_compiles() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::write(
+        dir.join("tsconfig.json"),
+        "{ \"compilerOptions\": { \"strict\": true, \"target\": \"esnext\", \"module\": \"esnext\", \"moduleResolution\": \"bundler\", \"noEmit\": true, \"types\": [] } }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("a.tt"),
+        "import { b } from \"./b.tt\";\n\
+         variant O { A(n: number), B }\n\
+         declare const o: O;\n\
+         export const a = match (o) { A(n) => n + b, B => b };\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("b.tt"),
+        "variant P { C(n: number), D }\n\
+         declare const p: P;\n\
+         export const b = match (p) { C(n) => n, D => 0 };\n",
+    )
+    .unwrap();
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(args)
+            .current_dir(&dir)
+            .env("TTC_PANIC_FOR_TEST", "projection:b.tt")
+            .env_remove("RUST_BACKTRACE")
+            .output()
+            .expect("failed to run ttc")
+    };
+    let printed = run(&["-p", "a.tt"]);
+    let stderr = String::from_utf8_lossy(&printed.stderr);
+    let stdout = String::from_utf8_lossy(&printed.stdout);
+    assert!(printed.status.success(), "{stderr}");
+    assert!(stdout.contains("export const a = $tt_v0"), "{stdout}");
+    assert!(
+        stderr.contains("while compiling: ") && stderr.contains("b.tt"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("a.tt"), "{stderr}");
+
+    let checked = run(&["--check-types", "."]);
+    let stderr = String::from_utf8_lossy(&checked.stderr);
+    assert_eq!(checked.status.code(), Some(101), "{stderr}");
+    assert!(
+        stderr.contains("while compiling: ") && stderr.contains("b.tt") && !stderr.contains("a.tt"),
+        "{stderr}"
+    );
+}
+
+#[test]
 fn a_missing_toolchain_does_not_stop_a_tt_level_check_or_print() {
     // Outside the repository: the toolchain is resolved by walking up from
     // the file, and every directory inside this checkout has the

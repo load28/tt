@@ -373,7 +373,13 @@ impl Project {
                 Some(cached) if cached.source == text && (open || !cached.unparsed) => {
                     Some(cached.clone())
                 }
-                _ => match ProjectedDocument::project_for_snapshot(file, text, open) {
+                _ => match crate::ice::working_on(file, || {
+                    crate::ice::panic_for_test(&format!(
+                        "projection:{}",
+                        file.file_name().unwrap_or_default().to_string_lossy()
+                    ));
+                    ProjectedDocument::project_for_snapshot(file, text, open)
+                }) {
                     Ok(doc) => Some(Arc::new(doc)),
                     Err(blocked) => {
                         discover_imports(
