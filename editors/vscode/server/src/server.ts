@@ -1161,6 +1161,8 @@ const TS_COMPLETION_KINDS: Record<string, CompletionItemKind> = {
   module: CompletionItemKind.Module,
   keyword: CompletionItemKind.Keyword,
   string: CompletionItemKind.Constant,
+  script: CompletionItemKind.File,
+  directory: CompletionItemKind.Folder,
 };
 
 /** What a TS-delegated completion item carries so its signature and
@@ -1203,7 +1205,10 @@ async function tsCompletions(
     label: entry.label,
     kind: TS_COMPLETION_KINDS[entry.kind] ?? CompletionItemKind.Text,
     sortText: `2${entry.sortText}`,
-    insertText: entry.insertText ?? undefined,
+    insertText: entry.range ? undefined : (entry.insertText ?? undefined),
+    textEdit: entry.range
+      ? { range: entry.range, newText: entry.insertText ?? entry.label }
+      : undefined,
     filterText: entry.filterText ?? undefined,
     insertTextFormat: entry.snippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
     data: {

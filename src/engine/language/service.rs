@@ -154,10 +154,10 @@ pub(super) fn ts_completions(
     session: &mut ServiceSession,
     path: &Path,
     at: usize,
-    code: &str,
-    mappings: &[EmitMapping],
+    text: ServedText<'_>,
     generated_names: &HashSet<String>,
 ) -> Result<CompletionAnswer, String> {
+    let code = text.code;
     let answer = session.client.request(
         "textDocument/completion",
         serde_json::json!({
@@ -174,7 +174,7 @@ pub(super) fn ts_completions(
     let kind = crate::SourceKind::from_path(path).unwrap_or_default();
     let generated_switch = || {
         enclosing_switch(code, kind, mapper::from_utf16(code, at))
-            .is_some_and(|keyword| mapper::to_source(mappings, keyword).is_none())
+            .is_some_and(|keyword| mapper::to_source(text.mappings, keyword).is_none())
     };
     for item in items {
         let label = item["label"].as_str().unwrap_or_default().to_string();
@@ -187,12 +187,30 @@ pub(super) fn ts_completions(
         session
             .last_completion
             .insert((path.to_path_buf(), at, label.clone()), item.clone());
+        let replaced = ["replace", "range"]
+            .iter()
+            .map(|key| &item["textEdit"][*key])
+            .find(|range| range.is_object())
+            .and_then(|range| {
+                source_edit(
+                    code,
+                    text.mappings,
+                    text.inserted,
+                    text.source,
+                    text.splice,
+                    &serde_json::json!({ "range": range, "newText": "" }),
+                )
+            });
         entries.push(CompletionItem {
             kind: completion_kind(item["kind"].as_u64()),
             sort_text: item["sortText"].as_str().unwrap_or(&label).to_string(),
-            insert_text: item["insertText"].as_str().map(str::to_owned),
+            insert_text: item["insertText"]
+                .as_str()
+                .or_else(|| item["textEdit"]["newText"].as_str())
+                .map(str::to_owned),
             filter_text: item["filterText"].as_str().map(str::to_owned),
             snippet: item["insertTextFormat"].as_u64() == Some(2),
+            range: replaced.map(|edit| edit.range),
             label,
         });
     }
@@ -206,6 +224,100 @@ pub(super) fn ts_completions(
 }
 
 const SWITCH_CASES_SOURCE: &str = "SwitchCases/";
+
+fn module_specifier_at(source: &str, kind: crate::SourceKind, at: usize) -> Option<(usize, usize)> {
+    use crate::lexer::TokenKind;
+    let tokens = crate::lexer::lex_with_kind(source, 0, source.len(), kind);
+    let index = tokens.iter().position(|token| {
+        matches!(token.kind, TokenKind::Str) && token.span.start < at && at <= token.span.end
+    })?;
+    let token = &tokens[index];
+    let quote = source.as_bytes()[token.span.start];
+    let closed =
+        token.span.end - token.span.start >= 2 && source.as_bytes()[token.span.end - 1] == quote;
+    let end = if closed {
+        token.span.end - 1
+    } else {
+        token.span.end
+    };
+    if at > end {
+        return None;
+    }
+    let word = |index: usize, text: &str| {
+        tokens.get(index).is_some_and(|token| {
+            matches!(token.kind, TokenKind::Ident)
+                && &source[token.span.start..token.span.end] == text
+        })
+    };
+    let previous = index.checked_sub(1)?;
+    let specifier = word(previous, "from")
+        || (word(previous, "import")
+            && !previous
+                .checked_sub(1)
+                .is_some_and(|dot| matches!(tokens[dot].kind, TokenKind::Punct(b'.'))))
+        || (matches!(tokens[previous].kind, TokenKind::Punct(b'('))
+            && previous
+                .checked_sub(1)
+                .is_some_and(|callee| word(callee, "import") || word(callee, "require")));
+    specifier.then_some((token.span.start + 1, end))
+}
+
+pub(super) fn tt_module_entries(
+    path: &Path,
+    source: &str,
+    position: Position,
+    overlays: &HashMap<PathBuf, String>,
+) -> Vec<CompletionItem> {
+    let at = source_byte(source, position);
+    let kind = crate::SourceKind::from_path(path).unwrap_or_default();
+    let Some((start, end)) = module_specifier_at(source, kind, at) else {
+        return Vec::new();
+    };
+    let typed = &source[start..at];
+    if !typed.starts_with("./") && !typed.starts_with("../") {
+        return Vec::new();
+    }
+    let slash = typed.rfind('/').map_or(0, |slash| slash + 1);
+    let Some(directory) = path
+        .parent()
+        .and_then(|parent| crate::engine::paths::canonical(&parent.join(&typed[..slash])).ok())
+    else {
+        return Vec::new();
+    };
+    let mut files: Vec<PathBuf> = std::fs::read_dir(&directory)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
+        .map(|entry| entry.path())
+        .chain(
+            overlays
+                .keys()
+                .filter(|open| open.parent() == Some(directory.as_path()))
+                .cloned(),
+        )
+        .filter(|file| crate::SourceKind::from_tt_path(file).is_some())
+        .filter(|file| file.file_name() != path.file_name() || file.parent() != path.parent())
+        .collect();
+    files.sort();
+    files.dedup();
+    let range = span_range(source, start + slash, end);
+    files
+        .into_iter()
+        .filter_map(|file| {
+            let name = file.file_name()?.to_str()?.to_string();
+            Some(CompletionItem {
+                label: name,
+                kind: "script".to_string(),
+                sort_text: "11".to_string(),
+                insert_text: None,
+                filter_text: None,
+                snippet: false,
+                range: Some(range),
+            })
+        })
+        .collect()
+}
 
 fn enclosing_switch(code: &str, kind: crate::SourceKind, at: usize) -> Option<usize> {
     use crate::lexer::TokenKind;
@@ -1084,6 +1196,8 @@ pub(super) fn completion_kind(kind: Option<u64>) -> String {
         Some(9) => "module",
         Some(13) => "enum",
         Some(14) => "keyword",
+        Some(17) => "script",
+        Some(19) => "directory",
         Some(21) => "const",
         Some(25) => "type",
         _ => "property",

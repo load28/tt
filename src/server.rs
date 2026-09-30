@@ -273,6 +273,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                     "insertText": item.insert_text,
                     "filterText": item.filter_text,
                     "snippet": item.snippet,
+                    "range": item.range.map(range_json),
                 })).collect::<Vec<_>>(),
                 "member": member,
                 "probe": probe,

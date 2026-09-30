@@ -102,6 +102,9 @@ pub struct CompletionItem {
     pub filter_text: Option<String>,
     /// Whether insertion text uses snippet syntax.
     pub snippet: bool,
+    /// The source range the entry replaces, when it is not the word at the
+    /// position.
+    pub range: Option<Range>,
 }
 
 /// A completion answer.
@@ -370,6 +373,39 @@ struct ProbeDoc {
     version: u64,
     generated_names: HashSet<String>,
     inserted: Vec<crate::InsertedGlue>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct ServedText<'a> {
+    code: &'a str,
+    mappings: &'a [EmitMapping],
+    inserted: &'a [crate::InsertedGlue],
+    source: &'a str,
+    splice: Option<usize>,
+}
+
+impl ServiceDoc {
+    fn served(&self) -> ServedText<'_> {
+        ServedText {
+            code: &self.code,
+            mappings: &self.mappings,
+            inserted: &self.inserted,
+            source: &self.source,
+            splice: None,
+        }
+    }
+}
+
+impl ProbeDoc {
+    fn served(&self) -> ServedText<'_> {
+        ServedText {
+            code: &self.code,
+            mappings: &self.mappings,
+            inserted: &self.inserted,
+            source: &self.source,
+            splice: Some(self.splice),
+        }
+    }
 }
 
 /// Inserted at the cursor to complete the construct being typed. `$`-led so

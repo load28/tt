@@ -220,6 +220,15 @@ the innermost case block around the position belongs to a `switch` the
 emission copied from the source: the switch a match lowers to is not the
 user's to extend.
 
+**Update (TASK-609)**: a relative module specifier also completes the
+`.tt` and `.ttx` modules of the directory it names, under their file names
+(`./shapes.tt`, the form tt's imports write). The service lists a
+directory from the file system, where the `.tt.ts` documents the engine
+serves do not exist. A completion entry now carries the source range it
+replaces when the service names one (`textEdit`, mapped like an
+auto-import edit), which a path entry needs when the fragment after the
+last `/` is not a word.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

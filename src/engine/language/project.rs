@@ -453,18 +453,28 @@ impl Project {
         position: Position,
         member: bool,
     ) -> Result<CompletionAnswer, String> {
+        let mut answer = self.service_completion(path, position, member)?;
+        let (doc, path) = self.serve(path)?;
+        let documents = self.overlays.clone();
+        for entry in tt_module_entries(&path, &doc.source, position, &documents.read()) {
+            if !answer.items.iter().any(|item| item.label == entry.label) {
+                answer.items.push(entry);
+            }
+        }
+        Ok(answer)
+    }
+
+    fn service_completion(
+        &mut self,
+        path: &Path,
+        position: Position,
+        member: bool,
+    ) -> Result<CompletionAnswer, String> {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
         let plain = match to_service_typed(&doc, position) {
             Some(at) => {
-                let plain = ts_completions(
-                    session,
-                    &path,
-                    at,
-                    &doc.code,
-                    &doc.mappings,
-                    &doc.generated_names,
-                )?;
+                let plain = ts_completions(session, &path, at, doc.served(), &doc.generated_names)?;
                 if !member || (plain.member && !plain.items.is_empty()) {
                     return Ok(plain);
                 }
@@ -495,8 +505,7 @@ impl Project {
             session,
             &path,
             probe.offset,
-            &probe.code,
-            &probe.mappings,
+            probe.served(),
             &probe.generated_names,
         )?;
         probed.probe = Some(probe.version);
@@ -608,8 +617,13 @@ impl Project {
                 session,
                 path,
                 mapper::to_utf16(&code, head.len()),
-                &code,
-                &[],
+                ServedText {
+                    code: &code,
+                    mappings: &[],
+                    inserted: &[],
+                    source: "",
+                    splice: None,
+                },
                 &emit.generated_names,
             );
             open_served(session, path, &doc.code);
@@ -643,8 +657,7 @@ impl Project {
             session,
             path,
             probe.offset,
-            &probe.code,
-            &probe.mappings,
+            probe.served(),
             &probe.generated_names,
         );
         open_served(session, path, &doc.code);
@@ -689,14 +702,10 @@ impl Project {
                 }
                 None => None,
             };
-        let (at, generated_names, mappings) = match &installed {
-            Some(installed) => (
-                installed.offset,
-                installed.generated_names.clone(),
-                installed.mappings.clone(),
-            ),
+        let (at, generated_names) = match &installed {
+            Some(installed) => (installed.offset, installed.generated_names.clone()),
             None => match to_service_typed(&doc, position) {
-                Some(at) => (at, doc.generated_names.clone(), doc.mappings.clone()),
+                Some(at) => (at, doc.generated_names.clone()),
                 None => return Ok(None),
             },
         };
@@ -710,7 +719,11 @@ impl Project {
         if !session.last_completion.contains_key(&key) {
             // The server resolves the item *it* produced, not a name, so the
             // list has to have been asked for first.
-            let _ = ts_completions(session, &path, at, &code, &mappings, &generated_names)?;
+            let text = match &installed {
+                Some(installed) => installed.served(),
+                None => doc.served(),
+            };
+            let _ = ts_completions(session, &path, at, text, &generated_names)?;
         }
         let Some(item) = session.last_completion.get(&key).cloned() else {
             return Ok(None);

@@ -354,3 +354,51 @@ export function g(k: K) {\n  switch (k.kind) {\n    case \"Alpha\": break;\n    
         written.items.iter().map(|i| &i.label).collect::<Vec<_>>()
     );
 }
+
+#[test]
+fn a_module_specifier_completes_the_sibling_tt_modules_as_tt_imports_them() {
+    require_tsgo!();
+    for (marked, typed) in [
+        ("import { kk } from \"./@@\";\nexport const z = kk;\n", ""),
+        ("import { kk } from \"./sh@@\";\nexport const z = kk;\n", "sh"),
+        ("export * from \"./@@\";\n", ""),
+        ("export const m = import(\"./@@\");\n", ""),
+    ] {
+        let (source, position) = at_cursor(marked);
+        let dir = project(&[
+            ("src/main.tt", &source),
+            ("src/shapes.tt", "export const kk = 1;\n"),
+            ("src/view.ttx", "export const vv = 1;\n"),
+            ("src/lib.ts", "export const ll = 1;\n"),
+        ]);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        let mut project = open_service(&file);
+        let items = project.completion(&file, position, false).unwrap().items;
+        let labels: Vec<&str> = items.iter().map(|item| item.label.as_str()).collect();
+        for expected in ["lib", "shapes.tt", "view.ttx"] {
+            assert!(labels.contains(&expected), "{marked}: {labels:?}");
+        }
+        assert!(!labels.contains(&"main.tt"), "{marked}: {labels:?}");
+        let shapes = items.iter().find(|item| item.label == "shapes.tt").unwrap();
+        assert_eq!(shapes.kind, "script");
+        let start = ttc::engine::Position {
+            character: position.character - typed.len() as u32,
+            ..position
+        };
+        assert_eq!(
+            shapes.range,
+            Some(ttc::engine::Range {
+                start,
+                end: position
+            }),
+            "{marked}"
+        );
+    }
+
+    let (source, position) = at_cursor("import { x } from \"@tt/@@\";\n");
+    let dir = project(&[("src/main.tt", &source), ("src/shapes.tt", "export const kk = 1;\n")]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let items = project.completion(&file, position, false).unwrap().items;
+    assert!(items.iter().all(|item| !item.label.ends_with(".tt")));
+}
