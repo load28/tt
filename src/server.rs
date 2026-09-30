@@ -9,7 +9,10 @@
 //! so a typed check after the first reuses the running compiler and every
 //! unchanged file's projection.
 //!
-//! The protocol is one JSON object per line, on stdin and stdout:
+//! The protocol is one JSON object per line, on stdin and stdout. Every
+//! non-blank line is answered by exactly one line, in the order the lines
+//! arrived, so an answer whose `id` is `null` answers the oldest line still
+//! unanswered:
 //!
 //! ```text
 //! → { "id": 1, "method": "check", "params": { "text", "filename"?, "verify"? } }
@@ -92,6 +95,7 @@
 //! its compile, and the directories where a file added or removed does.
 //!
 //! ← { "id": N, "error": "sentence" }   // the request failed; the session lives
+//! ← { "id": null, "error": "sentence" } // a line with no id the server can read
 //! ```
 //!
 //! Every answer is computed by the same code the one-shot modes run —
@@ -146,7 +150,7 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
             Ok(line) => line.trim_end_matches(['\n', '\r']),
             Err(error) => {
                 let response = serde_json::json!({
-                    "id": null,
+                    "id": request_id(&String::from_utf8_lossy(&bytes)),
                     "error": format!("malformed request: the line is not UTF-8: {error}"),
                 });
                 let mut out = stdout.lock();
@@ -190,24 +194,27 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// One request, one answer — errors included, so the session survives them.
 /// The `id` of a request the server could not answer.
 ///
 /// A response has to carry the id it answers or the consumer cannot match
-/// it to its question; when the request did not even parse, `null` is the
+/// it to its question; when the request's id cannot be read, `null` is the
 /// protocol's own answer for "no id".
 fn request_id(line: &str) -> serde_json::Value {
-    serde_json::from_str::<serde_json::Value>(line)
-        .map(|request| request["id"].clone())
+    serde_json::from_str::<HashMap<String, Box<serde_json::value::RawValue>>>(line)
+        .ok()
+        .and_then(|members| serde_json::from_str(members.get("id")?.get()).ok())
         .unwrap_or(serde_json::Value::Null)
 }
 
+/// One request, one answer — errors included, so the session survives them.
 fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_json::Value {
     use serde_json::json;
     ttc::ice::panic_for_test("server");
     let request: serde_json::Value = match serde_json::from_str(line) {
         Ok(value) => value,
-        Err(e) => return json!({ "id": null, "error": format!("malformed request: {e}") }),
+        Err(e) => {
+            return json!({ "id": request_id(line), "error": format!("malformed request: {e}") });
+        }
     };
     let id = request["id"].clone();
     let params = &request["params"];

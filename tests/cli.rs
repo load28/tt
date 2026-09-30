@@ -2628,11 +2628,36 @@ fn a_server_line_that_is_not_utf8_is_answered_and_the_session_continues() {
     assert_eq!(lines.len(), 3, "{lines:#?}");
     assert!(lines[0].contains("\"id\":1"), "{}", lines[0]);
     assert!(
-        lines[1].contains("\"id\":null") && lines[1].contains("malformed request"),
+        lines[1].contains("\"id\":2") && lines[1].contains("malformed request"),
         "{}",
         lines[1]
     );
     assert!(lines[2].contains("\"id\":3"), "{}", lines[2]);
+}
+
+#[test]
+fn a_request_whose_parameters_do_not_decode_is_answered_under_its_id() {
+    let (lines, status) = server_lines(
+        br#"{"id":7,"method":"print","params":{"path":"/x\udc00.tt"}}
+{"method":"check","id":8,"params":{"text":"\ud800"}}
+{"id":"\udc00","method":"check"}
+not json
+{"id":9,"method":"check","params":{"text":"const a = 1;\n"}}
+"#,
+    );
+    assert!(status.success());
+    assert_eq!(lines.len(), 5, "{lines:#?}");
+    for (line, id) in lines.iter().zip(["7", "8", "null", "null"]) {
+        let answer: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(answer["id"].to_string(), id, "{line}");
+        assert!(
+            answer["error"]
+                .as_str()
+                .is_some_and(|error| error.starts_with("malformed request")),
+            "{line}"
+        );
+    }
+    assert!(lines[4].contains("\"id\":9"), "{}", lines[4]);
 }
 
 #[test]

@@ -7,6 +7,7 @@ import { promisify } from 'node:util'
 
 import { testDir } from '../../../scripts/test-dirs.cjs'
 
+import { CompilerServer } from '../compiler-server.js'
 import { unpluginFactory } from '../index.js'
 
 const run = promisify(execFile)
@@ -113,6 +114,52 @@ createInterface({ input: process.stdin }).on("line", (line) => {
     )
   } finally {
     delete process.env.TT_TEST_ALWAYS_CRASH
+  }
+})
+
+function answeredWithin(promise, what) {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${what}: no answer within 10 s`)), 10_000)
+  })
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer))
+}
+
+test('an error the server could not correlate answers the oldest request', async () => {
+  const root = testDir('unplugin-tt-server-null-id-')
+  const fake = join(root, 'ttc.mjs')
+  await writeFile(fake, `#!/usr/bin/env node
+import { createInterface } from "node:readline";
+createInterface({ input: process.stdin }).on("line", () => {
+  process.stdout.write(JSON.stringify({ id: null, error: "malformed request: unreadable" }) + "\\n");
+});
+`)
+  await chmod(fake, 0o755)
+  const server = new CompilerServer(fake)
+  try {
+    const first = server.request('print', { path: join(root, 'a.tt') })
+    const second = server.request('print', { path: join(root, 'b.tt') })
+    await assert.rejects(answeredWithin(first, 'first'), /malformed request: unreadable/)
+    await assert.rejects(answeredWithin(second, 'second'), /malformed request: unreadable/)
+  } finally {
+    server.close()
+  }
+})
+
+test('a path the protocol cannot carry is answered, and the session goes on', async () => {
+  assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
+  const root = testDir('unplugin-tt-server-surrogate-')
+  const file = join(root, 'main.tt')
+  await writeFile(file, 'export const a = 1;\n')
+  const server = new CompilerServer(compiler)
+  try {
+    const unreadable = await answeredWithin(server.request('print', { path: join(root, 'x\udc00.tt') }), 'lone surrogate')
+    assert.equal(unreadable.code, null)
+    assert.match(unreadable.messages.join('\n'), /x\uFFFD\.tt/)
+    const printed = await answeredWithin(server.request('print', { path: file }), 'next request')
+    assert.match(printed.code, /export const a = 1;/)
+  } finally {
+    server.close()
   }
 })
 

@@ -19,6 +19,13 @@ const STDERR_TAIL = 16 * 1024;
 
 class ServerEnded extends Error {}
 
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+function wellFormedStrings(_key, value) {
+  if (typeof value !== "string") return value;
+  return typeof value.toWellFormed === "function" ? value.toWellFormed() : value.replace(LONE_SURROGATE, "\uFFFD");
+}
+
 class Session {
   constructor(compiler) {
     this.pending = new Map();
@@ -46,7 +53,7 @@ class Session {
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       this.busy();
-      this.child.stdin.write(`${JSON.stringify({ id, method, params })}\n`);
+      this.child.stdin.write(`${JSON.stringify({ id, method, params }, wellFormedStrings)}\n`);
     });
   }
 
@@ -59,9 +66,11 @@ class Session {
       this.child.kill();
       return;
     }
-    const waiting = this.pending.get(response.id);
+    const id =
+      response.id === null && typeof response.error === "string" ? this.pending.keys().next().value : response.id;
+    const waiting = this.pending.get(id);
     if (waiting === undefined) return;
-    this.pending.delete(response.id);
+    this.pending.delete(id);
     if (this.pending.size === 0) this.idle();
     if (response.error !== undefined) waiting.reject(new Error(response.error));
     else waiting.resolve(response.result);
