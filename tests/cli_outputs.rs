@@ -209,6 +209,58 @@ fn watch_rebuilds_importers_of_a_deleted_or_renamed_file() {
     }
 }
 
+#[test]
+fn watch_rebuilds_an_input_when_a_tt_file_it_imports_changes() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let root = Workspace::new("watch-imported-non-input");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::create_dir_all(root.join("shared")).unwrap();
+    fs::write(root.join("shared/s.tt"), "export variant S { A, B }\n").unwrap();
+    fs::write(
+        root.join("src/u.tt"),
+        "import { S } from \"../shared/s.tt\";\nexport const f = (s: S) => match (s) { A => 1, B => 2 };\n",
+    )
+    .unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
+    command
+        .current_dir(&root)
+        .args(["--watch", "-o", "out", "src"])
+        .stderr(Stdio::piped())
+        .stdout(Stdio::null());
+    root.isolate_unfinalized_child_profile(&mut command);
+    let mut child = command.spawn().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let (send, receive) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines() {
+            let _ = send.send(line.unwrap());
+        }
+    });
+    let round = || loop {
+        let line = receive.recv_timeout(Duration::from_secs(10)).unwrap();
+        if line.contains("file(s)") {
+            return line;
+        }
+    };
+    let result = std::panic::catch_unwind(|| {
+        assert_eq!(round(), "ttc: 1 file(s) ok — watching");
+        assert!(round().contains("Ctrl-C"));
+        fs::write(root.join("shared/s.tt"), "export variant S { A, B, C }\n").unwrap();
+        assert_eq!(round(), "ttc: 1 file(s) rebuilt, with errors — watching");
+        fs::write(root.join("shared/s.tt"), "export variant S { A, B }\n").unwrap();
+        assert_eq!(round(), "ttc: 1 file(s) ok — watching");
+    });
+    let _ = child.kill();
+    let _ = child.wait();
+    reader.join().unwrap();
+    if let Err(error) = result {
+        std::panic::resume_unwind(error);
+    }
+}
+
 fn have_node() -> bool {
     Command::new("node")
         .arg("--version")

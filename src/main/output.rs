@@ -190,6 +190,7 @@ pub(super) fn watch_mode(
     opts: &BuildOptions,
 ) -> ExitCode {
     let mut stamps: HashMap<PathBuf, SystemTime> = HashMap::new();
+    let mut reads: HashMap<PathBuf, (SystemTime, Vec<PathBuf>)> = HashMap::new();
     let mut placed: Option<PathBuf> = None;
     let mut first = true;
     let mut input_error = None;
@@ -212,15 +213,24 @@ pub(super) fn watch_mode(
             }
         };
 
-        let current: HashMap<PathBuf, SystemTime> = jobs
-            .iter()
-            .map(|job| {
-                let stamp = fs::metadata(&job.file)
-                    .and_then(|meta| meta.modified())
-                    .unwrap_or(SystemTime::UNIX_EPOCH);
-                (job.file.clone(), stamp)
-            })
-            .collect();
+        let stamp = |file: &Path| {
+            fs::metadata(file)
+                .and_then(|meta| meta.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH)
+        };
+        let mut current: HashMap<PathBuf, SystemTime> = HashMap::new();
+        for job in &jobs {
+            let job_stamp = stamp(&job.file);
+            let job_reads = match reads.get(&job.file) {
+                Some((read_at, files)) if *read_at == job_stamp => files.clone(),
+                _ => compile_reads(&job.file),
+            };
+            for file in &job_reads {
+                current.insert(file.clone(), stamp(file));
+            }
+            reads.insert(job.file.clone(), (job_stamp, job_reads));
+        }
+        reads.retain(|file, _| current.contains_key(file));
 
         let root = support_root(&jobs, out_dir);
         let moved = root != placed;
