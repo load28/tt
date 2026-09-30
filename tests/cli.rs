@@ -864,6 +864,39 @@ macro_rules! require_types_toolchain {
 }
 
 #[test]
+fn an_overlay_checks_a_buffer_whose_file_is_not_saved_yet() {
+    require_types_toolchain!();
+    use std::io::Write;
+    let dir = typed_workspace();
+    let src = dir.join("src");
+    fs::create_dir_all(&src).unwrap();
+    let file = src.join("new.tt");
+    let path = file.to_str().unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "--tt-only", "--overlay", path, path])
+        .current_dir(&dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"export variant V { A, B }\nexport const f = (v: V) => match (v) { A => 1 };\n")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{err}");
+    assert!(
+        err.contains("match is not exhaustive: missing \"B\""),
+        "{err}"
+    );
+    assert!(!file.exists());
+}
+
+#[test]
 fn types_reports_a_missing_literal_of_a_finite_union() {
     require_types_toolchain!();
     let err = types_stderr(

@@ -52,7 +52,24 @@ fn open_typed_project(
     project_options: &ttc::engine::ProjectOptions,
     options: &TypedCheckOptions<'_>,
 ) -> Result<ttc::engine::Project, String> {
-    let mut project = engine.open_project(inputs, project_options)?;
+    let unsaved = |input: &String| {
+        let path = Path::new(input);
+        (!path.exists())
+            .then(|| ttc::engine::normalize_document_path(path).ok())
+            .flatten()
+            .filter(|document| options.overlay.contains_key(document))
+    };
+    let on_disk: Vec<String> = inputs
+        .iter()
+        .filter(|input| unsaved(input).is_none())
+        .cloned()
+        .collect();
+    let mut project = match inputs.iter().find_map(unsaved) {
+        Some(document) if on_disk.is_empty() => {
+            engine.open_document_project(&document, project_options)?
+        }
+        _ => engine.open_project(&on_disk, project_options)?,
+    };
     for (path, text) in options.overlay {
         project.open_document(path.clone(), text.clone());
     }
