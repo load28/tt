@@ -27,7 +27,7 @@ pub(super) fn symbols_mode(jobs: &[Job]) -> ExitCode {
                 let mut o = format!("{{\"specifier\":{}", json_str(&import.specifier));
                 o.push_str(",\"names\":");
                 o.push_str(&names_json(&import.names));
-                let target = dir.join(&import.specifier);
+                let target = lexically_joined(dir, &import.specifier);
                 match fs::read_to_string(&target) {
                     Ok(imported_src) => {
                         o.push_str(&format!(
@@ -57,6 +57,23 @@ pub(super) fn symbols_mode(jobs: &[Job]) -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+fn lexically_joined(dir: &Path, specifier: &str) -> PathBuf {
+    use std::path::Component;
+    let mut joined = PathBuf::new();
+    for component in dir.join(specifier).components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir
+                if matches!(joined.components().next_back(), Some(Component::Normal(_))) =>
+            {
+                joined.pop();
+            }
+            _ => joined.push(component.as_os_str()),
+        }
+    }
+    joined
 }
 
 /// `--emit-map`: prints, as a JSON array on stdout, each input file's

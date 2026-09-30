@@ -39,6 +39,10 @@ stay intact. Re-running init accepts unchanged generated configs;
 if a generated config has been customized, init stops before writing any project
 files.
 Use `--no-install` in CI or when dependencies will be installed later.
+The package name is the directory name made valid for a new npm package
+(lowercase, no leading `.` or `_`, at most 214 characters, and `my-tt-app` in
+place of a reserved or core-module name). After `--`, every argument is the
+directory, even one that starts with `-`.
 New projects use Bun for dependency installation and scripts. Existing projects
 keep the package manager declared in `package.json` or selected by their lockfile.
 

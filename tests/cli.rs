@@ -897,6 +897,29 @@ fn an_overlay_checks_a_buffer_whose_file_is_not_saved_yet() {
 }
 
 #[test]
+fn a_type_error_in_hand_written_typescript_quotes_its_line() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/main.tt"), "export const a = 1;\n").unwrap();
+    fs::write(
+        dir.join("src/host.ts"),
+        "export const b: number = 1;\nexport const c: string = b;\n",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{err}");
+    assert!(err.contains("--> src/host.ts:2:26"), "{err}");
+    assert!(err.contains("export const c: string = b;"), "{err}");
+    assert!(err.contains('^'), "{err}");
+}
+
+#[test]
 fn types_reports_a_missing_literal_of_a_finite_union() {
     require_types_toolchain!();
     let err = types_stderr(
@@ -3091,4 +3114,80 @@ fn an_ecmascript_module_keeps_the_standard_library_in_tt() {
     assert!(code.contains("from \"./tt/option.js\""), "{code}");
     assert!(out_dir.join("tt/option.ts").is_file());
     assert!(!out_dir.join("tt/cjs").exists());
+}
+
+#[test]
+fn a_types_report_without_typescript_counts_only_what_it_printed() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/a.tt"), "export variant V { A, B }\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--types", "--json-report", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.contains("the TypeScript layer did not run"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("error["), "{stderr}");
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["checked"], false, "{report}");
+    assert_eq!(report["diagnostics"], 0, "{report}");
+}
+
+#[test]
+fn an_edited_output_written_in_place_is_one_refusal() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/a.tt"), "export variant V { A, B }\n").unwrap();
+    let build = || {
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .arg("src")
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc")
+    };
+    assert!(build().status.success());
+    let output = dir.join("src/a.ts");
+    let mut edited = fs::read_to_string(&output).unwrap();
+    edited.push_str("// edited\n");
+    fs::write(&output, &edited).unwrap();
+    let second = build();
+    let stderr = String::from_utf8_lossy(&second.stderr);
+    assert_eq!(second.status.code(), Some(1), "{stderr}");
+    assert_eq!(
+        stderr.trim_end(),
+        "ttc: src/a.ts: output is not owned by this input or has been edited; refusing to overwrite it — choose an empty output directory"
+    );
+    assert_eq!(fs::read_to_string(&output).unwrap(), edited);
+}
+
+#[test]
+fn symbols_resolve_an_import_to_a_normalized_path() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src/sub")).unwrap();
+    fs::write(dir.join("src/sub/b.tt"), "export variant B { X, Y }\n").unwrap();
+    fs::write(
+        dir.join("src/a.tt"),
+        "import { B } from \"./sub/b.tt\";\nimport { C } from \"../src/./sub/../c.tt\";\nexport const b = (v: B) => v;\n",
+    )
+    .unwrap();
+    fs::write(dir.join("src/c.tt"), "export variant C { Z }\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--symbols", "src/a.tt"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(output.status.success());
+    let symbols: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let resolved: Vec<&str> = symbols[0]["imports"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|import| import["resolved"].as_str().unwrap())
+        .collect();
+    assert_eq!(resolved, ["src/sub/b.tt", "src/c.tt"]);
 }

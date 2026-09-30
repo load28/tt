@@ -2,6 +2,7 @@ import { existsSync, statSync } from 'node:fs'
 import { lstat, mkdir, readFile, readdir, readlink, realpath, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { builtinModules } from 'node:module'
 
 const ownManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 const ttChannel = dependencyChannel(ownManifest.version)
@@ -422,14 +423,18 @@ function parseArguments(argv) {
     install: true,
     bundler: 'auto',
   }
+  let positional = false
   while (args.length) {
     const arg = args.shift()
-    if (arg === '--help' || arg === '-h') options.help = true
+    if (positional || !arg.startsWith('-')) {
+      if (options.directory) throw new Error(`unknown argument: ${arg}`)
+      options.directory = arg
+    } else if (arg === '--') positional = true
+    else if (arg === '--help' || arg === '-h') options.help = true
     else if (arg === '--no-install') options.install = false
     else if (arg === '--bundler') options.bundler = requiredValue(arg, args)
     else if (arg === '--package-manager') options.packageManager = requiredValue(arg, args)
     else if (arg === '--registry') options.registry = registryUrl(requiredValue(arg, args))
-    else if (!arg.startsWith('-') && !options.directory) options.directory = arg
     else throw new Error(`unknown argument: ${arg}`)
   }
   if (!['auto', 'none', ...Object.keys(bundlers)].includes(options.bundler)) {
@@ -538,9 +543,16 @@ function tsconfig(extendsConfig, compilerOptions = { noEmit: true }) {
   return config
 }
 
-function packageName(value) {
-  const normalized = value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
-  return normalized || 'my-tt-app'
+const RESERVED_NAMES = new Set(['node_modules', 'favicon.ico', ...builtinModules])
+
+export function packageName(value) {
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^[._-]+/, '')
+    .slice(0, 214)
+    .replace(/-+$/, '')
+  return normalized === '' || RESERVED_NAMES.has(normalized) ? 'my-tt-app' : normalized
 }
 
 function indentation(source) {
@@ -593,4 +605,5 @@ Options:
   --package-manager <npm|pnpm|yarn|bun>
   --registry <url>     install from an npm-compatible private/local registry
   --no-install
-  -h, --help`
+  -h, --help
+  --                   every argument after it is the directory, even one starting with -`

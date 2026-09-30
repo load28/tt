@@ -8,7 +8,7 @@ import test from 'node:test'
 
 import { testDir } from '../../../scripts/test-dirs.cjs'
 
-import { createProject, dependencyChannel, detectBundler, initializeExisting, parseJsonc, run, shellQuote } from '../src/installer.js'
+import { createProject, dependencyChannel, detectBundler, initializeExisting, packageName, parseJsonc, run, shellQuote } from '../src/installer.js'
 
 const ownManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 const expectedDependencyChannel = dependencyChannel(ownManifest.version)
@@ -465,4 +465,39 @@ test('reads tsconfig comments and trailing commas without touching strings', () 
     parseJsonc('{\n  // line\n  "a": "x // y, }", /* block */\n  "b": [1, 2,],\n}\n'),
     { a: 'x // y, }', b: [1, 2] },
   )
+})
+
+test('names a project with a name npm accepts for a new package', async () => {
+  const cases = [
+    ['hello-tt', 'hello-tt'],
+    ['Hello World', 'hello-world'],
+    ['.hidden', 'hidden'],
+    ['_private', 'private'],
+    ['-.-_x', 'x'],
+    ['node_modules', 'my-tt-app'],
+    ['favicon.ico', 'my-tt-app'],
+    ['http', 'my-tt-app'],
+    ['...', 'my-tt-app'],
+    ['a'.repeat(300), 'a'.repeat(214)],
+  ]
+  for (const [directory, name] of cases) assert.equal(packageName(directory), name, directory)
+  const parent = testDir('create-tt-names-')
+  const root = join(parent, '.dotted')
+  await createProject({ directory: root })
+  const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'))
+  assert.equal(manifest.name, 'dotted')
+})
+
+test('takes every argument after -- as the directory', async () => {
+  const parent = testDir('create-tt-dashdash-')
+  const cwd = process.cwd()
+  process.chdir(parent)
+  try {
+    await run(['--no-install', '--', '-dash'], { log() {} })
+    await assert.rejects(() => run(['--', 'one', 'two']), /unknown argument: two/)
+  } finally {
+    process.chdir(cwd)
+  }
+  const manifest = JSON.parse(await readFile(join(parent, '-dash', 'package.json'), 'utf8'))
+  assert.equal(manifest.name, 'dash')
 })

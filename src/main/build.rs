@@ -205,6 +205,17 @@ pub(super) fn build_jobs(
             }
         }
     }
+    let compiled_outputs: Vec<PathBuf> = jobs
+        .iter()
+        .filter(|job| !same_file(&job.file, &job.out_path))
+        .map(|job| job.out_path.clone())
+        .collect();
+    jobs.retain(|job| {
+        !(same_file(&job.file, &job.out_path)
+            && compiled_outputs
+                .iter()
+                .any(|output| same_file(output, &job.file)))
+    });
     Ok(jobs)
 }
 

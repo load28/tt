@@ -30,12 +30,12 @@ pub(super) fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_
             files.dedup();
             typed_pass(&mut project, &files, options).unwrap_or_else(|e| {
                 eprintln!("ttc: {e}");
-                TypedReport::unchecked()
+                TypedReport::unchecked(0)
             })
         }
         Err(e) => {
             eprintln!("ttc: {e}");
-            TypedReport::unchecked()
+            TypedReport::unchecked(0)
         }
     };
     if options.json_report {
@@ -105,9 +105,9 @@ pub(super) struct TypedReport {
 }
 
 impl TypedReport {
-    fn unchecked() -> Self {
+    fn unchecked(reported: usize) -> Self {
         Self {
-            reported: 1,
+            reported,
             blocked: true,
             writes: WriteOutcome::default(),
         }
@@ -179,7 +179,7 @@ pub(super) fn typed_pass(
                 "{}",
                 ttc::render::compile_error(&blocked.error, None, &shown(&blocked.path), styles())
             );
-            return Ok(TypedReport::unchecked());
+            return Ok(TypedReport::unchecked(1));
         }
     };
     let checked = project.check(
@@ -210,11 +210,16 @@ pub(super) fn typed_pass(
     // against text that was never saved, and quoting the disk would draw a
     // caret under a line the compiler did not see.
     for diagnostic in &checked.diagnostics {
+        let disk = snapshot
+            .source_of(&diagnostic.path)
+            .is_none()
+            .then(|| fs::read_to_string(&diagnostic.path).ok())
+            .flatten();
         eprintln!(
             "{}",
             ttc::render::engine_diagnostic(
                 diagnostic,
-                snapshot.source_of(&diagnostic.path),
+                snapshot.source_of(&diagnostic.path).or(disk.as_deref()),
                 &shown(&diagnostic.path),
                 styles(),
             )
@@ -231,7 +236,7 @@ pub(super) fn typed_pass(
         eprintln!("ttc: {error}");
         eprintln!("ttc: the TypeScript layer did not run — only tt-level diagnostics are shown");
         return Ok(TypedReport {
-            reported: checked.diagnostics.len().max(1),
+            reported: checked.diagnostics.len(),
             blocked: true,
             writes,
         });
