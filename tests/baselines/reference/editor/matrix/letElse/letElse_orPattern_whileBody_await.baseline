@@ -1,0 +1,11 @@
+differences from letElse_orPattern_whileBody_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== rename /*bind*/ main.tt:7:15 ===
+  |     const Num(value) | Neg(value) = await later(input) else { break; };
+  |               ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+
+=== semanticTokens main.tt ===
+  tt only: /*bind*/ variable []
+  ts only: /*bind*/ variable [declaration, local, readonly]
+

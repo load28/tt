@@ -1,0 +1,7 @@
+differences from result_single_returnOperand_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:54 ===
+  |   return result { const n = try read(note("operand", input)); return n * 10; };
+  |                                                      ^ /*operand*/
+  tt only: n (Variable)
+

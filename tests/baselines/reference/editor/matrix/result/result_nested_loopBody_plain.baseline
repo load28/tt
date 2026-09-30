@@ -1,0 +1,7 @@
+differences from result_nested_loopBody_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:6:87 ===
+  |     collected.push(result { const inner = result { const n = try read(note("operand", input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; });
+  |                                                                                       ^ /*operand*/
+  tt only: n (Variable)
+

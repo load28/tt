@@ -3,6 +3,7 @@ import { variant } from "./variants.mjs";
 const declared = (decl, use, extra = {}) => ({
   tt: (x) => `${decl.tt}\nconst seen = ${use(x)};`,
   ts: (x) => `${decl.ts}\nconst seen = ${use(x)};`,
+  edit: (x) => `${decl.edit}\nconst seen = ${use(x)};`,
   ...extra,
 });
 
@@ -41,46 +42,49 @@ export default {
     {
       id: "unitCases",
       title: "unit cases, which are values",
-      ...declared(dir, (x) => `[Dir.North, Dir.South, note("operand", ${x})]`),
+      ...declared(dir, (x) => `[/*@use*/Dir./*@member*/North, Dir.South, /*@call*/note(/*@arg*/"operand", ${x})]`),
     },
     {
       id: "payloadCases",
       title: "cases whose constructors take their fields in order",
-      ...declared(shape, (x) => `[Shape.Circle(${x}), Shape.Rect(${x}, 2)]`),
+      ...declared(shape, (x) => `[/*@use*/Shape./*@member*/Circle(/*@arg*/${x}), Shape.Rect(${x}, 2)]`),
     },
     {
       id: "optionalField",
       title: "an optional field set only when its argument is not undefined",
-      ...declared(http, (x) => `[Http.Get("a"), Http.Get("b", ${x}), Http.Get("c", undefined), Http.Head]`),
+      ...declared(http, (x) => `[/*@use*/Http./*@member*/Get("a"), Http.Get("b", /*@arg*/${x}), Http.Get("c", undefined), Http.Head]`),
     },
     {
       id: "emptyParentheses",
       title: "a case with empty parentheses, which is a function",
-      ...declared(tick, (x) => `[Tick.Now(), Tick.Later(${x})]`),
+      ...declared(tick, (x) => `[/*@use*/Tick./*@member*/Now(), Tick.Later(/*@arg*/${x})]`),
     },
     {
       id: "generic",
       title: "a generic recursive variant",
       surfaces: ["tt"],
-      ...declared(tree, (x) => `Tree.Node(Tree.Leaf(${x}), Tree.Node(Tree.Leaf(${x} + 1), Tree.Leaf(0)))`),
+      ...declared(tree, (x) => `/*@use*/Tree./*@member*/Node(Tree.Leaf(/*@arg*/${x}), Tree.Node(Tree.Leaf(${x} + 1), Tree.Leaf(0)))`),
     },
     {
       id: "kindTag",
       title: "a case tagged `kind`",
-      ...declared(meta, (x) => `[Meta.kind(${x}), Meta.other]`),
+      ...declared(meta, (x) => `[/*@use*/Meta./*@member*/kind(/*@arg*/${x}), Meta.other]`),
     },
     {
       id: "matchedWhereDeclared",
       title: "a variant matched where it is declared",
-      tt: (x) => `${op.tt}\nconst seen = [Op.Add(${x}), Op.Neg].map((o) => match (o) { Add(n) => note("add", n + 1), Neg => note("neg", 0) });`,
+      tt: (x) =>
+        `${op.tt}\nconst seen = [/*@use*/Op./*@member*/Add(${x}), Op.Neg].map((o) => match (o) { Add(/*@bind*/n) => note("add", /*@use2*/n + 1), Neg => note("neg", 0) });`,
       ts: (x, [t]) =>
         `${op.ts}\nconst seen = [Op.Add(${x}), Op.Neg].map((o) => { const ${t} = o; return ${t}.kind === "Add" ? note("add", ${t}.n + 1) : note("neg", 0); });`,
+      edit: (x, [t]) =>
+        `${op.edit}\nconst seen = [/*@use*/Op./*@member*/Add(${x}), Op.Neg].map((o) => { const ${t} = o; if (${t}.kind === "Add") { const { /*@bind*/n } = ${t}; return note("add", /*@use2*/n + 1); } return note("neg", 0); });`,
     },
     {
       id: "exported",
       title: "an exported variant",
       only: ["topLevel"],
-      ...declared(exported, (x) => `[Pub.Item(${x})]`),
+      ...declared(exported, (x) => `[/*@use*/Pub./*@member*/Item(/*@arg*/${x})]`),
     },
     {
       id: "fieldShadowsTag",

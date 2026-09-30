@@ -69,6 +69,6 @@ import { note, first, adder, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [1.5, 2];
 function probe(input: number) {
-  return [note("first", 0), ((first: (n: number) => number) => (v: number) => first(v).toFixed(1))(adder(first(...[input]))), note("last", 2)];
+  return [note("first", 0), ((head: (n: number) => number) => (v: number) => head(v).toFixed(1))(adder(first(...[input]))), note("last", 2)];
 }
 await drive("arrayElement", probe, inputs);

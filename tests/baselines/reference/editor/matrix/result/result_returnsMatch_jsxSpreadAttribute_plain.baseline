@@ -1,0 +1,7 @@
+differences from result_returnsMatch_jsxSpreadAttribute_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:4:72 ===
+  |   return <div {...{ value: result { const n = try read(note("operand", input)); return match (n) { 2 => "two", _ => "other" }; } }} />;
+  |                                                                        ^ /*operand*/
+  tt only: n (Variable)
+

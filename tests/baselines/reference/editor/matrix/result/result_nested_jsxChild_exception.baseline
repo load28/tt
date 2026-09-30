@@ -1,0 +1,7 @@
+differences from result_nested_jsxChild_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:5:73 ===
+  |     return <p>{result { const inner = result { const n = try read(risky(input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; }}</p>;
+  |                                                                         ^ /*operand*/
+  tt only: n (Variable)
+

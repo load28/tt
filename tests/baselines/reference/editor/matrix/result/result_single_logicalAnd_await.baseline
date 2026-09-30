@@ -1,0 +1,7 @@
+differences from result_single_logicalAnd_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:60 ===
+  |   return flip() && result { const n = try read(await later(input)); return n * 10; };
+  |                                                            ^ /*operand*/
+  tt only: n (Variable)
+

@@ -1,0 +1,5 @@
+differences from match_numberLiterals_awaitOperand_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await ((t0 = await later(input), t0 === 200 || t0 === 201 ? note(\"success\", true) : t0 === 404 ? note(\"missing\", false) : t0 === 500 && note(\"guard\", true) ? note(\"server\", false) : note(\"other\", null)))" hint TS80007: 'await' has no effect on the type of this expression.
+

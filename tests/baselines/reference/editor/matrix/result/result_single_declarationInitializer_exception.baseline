@@ -1,0 +1,7 @@
+differences from result_single_declarationInitializer_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:53 ===
+  |     const value = result { const n = try read(risky(input)); return n * 10; };
+  |                                                     ^ /*operand*/
+  tt only: n (Variable)
+

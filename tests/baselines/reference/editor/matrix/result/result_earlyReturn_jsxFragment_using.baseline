@@ -1,0 +1,7 @@
+differences from result_earlyReturn_jsxFragment_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:5:78 ===
+  |   return <>{note("before", "[")}{result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } return note("small", n); }}{note("after", "]")}</>;
+  |                                                                              ^ /*operand*/
+  tt only: n (Variable)
+

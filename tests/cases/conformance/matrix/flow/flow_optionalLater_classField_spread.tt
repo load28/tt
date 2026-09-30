@@ -86,7 +86,7 @@ let t0: any;
 const inputs: number[] = [4, 6, 8];
 function probe(input: number) {
   class Holder {
-    field = ((first: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(first(v)))(adder(first(...[input])), maybe(flip()));
+    field = ((head: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(head(v)))(adder(first(...[input])), maybe(flip()));
   }
   return new Holder().field;
 }

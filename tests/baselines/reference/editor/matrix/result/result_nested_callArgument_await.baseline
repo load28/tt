@@ -1,0 +1,7 @@
+differences from result_nested_callArgument_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:92 ===
+  |   return pack(note("a", 1), result { const inner = result { const n = try read(await later(input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; }, note("c", 3));
+  |                                                                                            ^ /*operand*/
+  tt only: n (Variable)
+

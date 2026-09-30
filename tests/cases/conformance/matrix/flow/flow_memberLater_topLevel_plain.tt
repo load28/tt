@@ -27,9 +27,6 @@ export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export const adder = (a: number) => (b: number): number => note("add", a + b);
 export const tools = {
   factor: 3,
@@ -51,12 +48,12 @@ input = inputs[1]!;
 const top1 = flow |> adder(note("operand", input)) |> note("receiver", tools).twice;
 report("topLevel", input, text(top1));
 // @filename: twin.ts
-import { text, note, first, adder, tools, report } from "./harness.js";
+import { text, note, adder, tools, report } from "./harness.js";
 let t0: any, t1: any;
 const inputs: number[] = [2, 3];
 let input: number = inputs[0]!;
-const top0 = ((first: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(first(v)))(adder(note("operand", input)), note("receiver", tools));
+const top0 = ((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder(note("operand", input)), note("receiver", tools));
 report("topLevel", input, text(top0));
 input = inputs[1]!;
-const top1 = ((first: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(first(v)))(adder(note("operand", input)), note("receiver", tools));
+const top1 = ((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder(note("operand", input)), note("receiver", tools));
 report("topLevel", input, text(top1));

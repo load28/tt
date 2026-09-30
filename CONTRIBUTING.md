@@ -304,7 +304,9 @@ tokens and for what the VS Code adapter publishes. A form's twin is its
 to must declare what the tt program binds (`const { r } = s` for
 `Circle(r)`), which a runtime twin that reads `s.r` does not, and
 `tests/matrix/editor-harness.ts` types the harness's `unwrap` as a `try`
-is typed. The generator fails when a marker is on one side only. The
+is typed. Where the twin cannot answer as tt promises, a construct or
+position withholds that verb (`editorWithholds`), and the task that adds
+it says why. The generator fails when a marker is on one side only. The
 twin's answers are the oracle, after the normalizations "Adding an editor
 case" describes; a generated case keeps a baseline only when it differs
 from its twin, holding just the differing questions, and every difference

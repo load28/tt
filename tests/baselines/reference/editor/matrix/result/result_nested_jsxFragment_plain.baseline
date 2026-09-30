@@ -1,0 +1,7 @@
+differences from result_nested_jsxFragment_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:4:101 ===
+  |   return <>{note("before", "[")}{result { const inner = result { const n = try read(note("operand", input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; }}{note("after", "]")}</>;
+  |                                                                                                     ^ /*operand*/
+  tt only: n (Variable)
+

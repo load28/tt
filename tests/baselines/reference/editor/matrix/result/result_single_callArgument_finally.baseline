@@ -1,0 +1,7 @@
+differences from result_single_callArgument_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:75 ===
+  |     return pack(note("a", 1), result { const n = try read(note("operand", input)); return n * 10; }, note("c", 3));
+  |                                                                           ^ /*operand*/
+  tt only: n (Variable)
+

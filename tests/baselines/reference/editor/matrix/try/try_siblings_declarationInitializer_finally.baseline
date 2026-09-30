@@ -1,0 +1,7 @@
+differences from try_siblings_declarationInitializer_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:6:45 ===
+  |     const value = (try read(note("operand", input))) + (try read(note("second", 5)));
+  |                                             ^ /*operand*/
+  tt only: value (Variable)
+

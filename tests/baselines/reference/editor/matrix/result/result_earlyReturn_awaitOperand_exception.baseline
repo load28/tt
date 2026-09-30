@@ -1,0 +1,7 @@
+differences from result_earlyReturn_awaitOperand_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:53 ===
+  |     return await (result { const n = try read(risky(input)); if (n > 2) { return note("big", n); } return note("small", n); });
+  |                                                     ^ /*operand*/
+  tt only: n (Variable)
+

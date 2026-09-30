@@ -1,0 +1,5 @@
+differences from match_guards_awaitOperand_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await (((t0: Shape) => { if (t0.kind === \"Circle\") { const { r } = t0; if (note(\"guard big\", r > 2)) return note(\"big\", r); } if (t0.kind === \"Circle\") { const { r } = t0; return note(\"small\", r); } if (t0.kind === \"Rect\") { const { w, h } = t0; if (note(\"guard wide\", w > h)) return note(\"wide\", w); } if (t0.kind === \"Rect\") { const { w, h } = t0; return note(\"tall\", h); } return note(\"point\", 0); })(risky(input)))" hint TS80007: 'await' has no effect on the type of this expression.
+

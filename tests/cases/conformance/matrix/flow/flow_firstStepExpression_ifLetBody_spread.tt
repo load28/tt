@@ -82,7 +82,7 @@ function probe(input: number) {
   const head = read(note("head", 1));
   if (head.kind === "Ok") {
     const n = head.value;
-    return [n, ((first: (n: number) => number) => (v: number) => String(first(v)))(adder(first(...[input])))];
+    return [n, ((head: (n: number) => number) => (v: number) => String(head(v)))(adder(first(...[input])))];
   }
   return null;
 }

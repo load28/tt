@@ -87,7 +87,7 @@ function probe(input: number) {
     tag = "holder";
     read(input: number) {
       note("this", this.tag);
-      return ((first: (n: number) => number) => (v: number) => first(v).toFixed(1))(adder(first(...[input])));
+      return ((head: (n: number) => number) => (v: number) => head(v).toFixed(1))(adder(first(...[input])));
     }
   }
   return new Holder().read(input);

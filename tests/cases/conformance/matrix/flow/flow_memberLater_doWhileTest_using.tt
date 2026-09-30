@@ -27,9 +27,6 @@ export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export const adder = (a: number) => (b: number): number => note("add", a + b);
 export const tools = {
   factor: 3,
@@ -80,7 +77,7 @@ function probe(input: number) {
 }
 await drive("doWhileTest", probe, inputs);
 // @filename: twin.ts
-import { note, first, adder, tools, resource, drive } from "./harness.js";
+import { note, adder, tools, resource, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [2, 3];
 function probe(input: number) {
@@ -88,7 +85,7 @@ function probe(input: number) {
   let rounds = 0;
   do {
     rounds++;
-  } while (rounds < 2 && ((first: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(first(v)))(adder(note("operand", input)), note("receiver", tools)));
+  } while (rounds < 2 && ((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder(note("operand", input)), note("receiver", tools)));
   return rounds;
 }
 await drive("doWhileTest", probe, inputs);

@@ -1,0 +1,7 @@
+differences from result_single_awaitOperand_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:49 ===
+  |   return await (result { const n = try read(box(input)?.inner.value!); return n * 10; });
+  |                                                 ^ /*operand*/
+  tt only: n (Variable)
+

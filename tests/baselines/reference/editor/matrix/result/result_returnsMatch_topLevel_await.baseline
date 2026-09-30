@@ -1,0 +1,47 @@
+differences from result_returnsMatch_topLevel_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:54 ===
+  | const top0 = result { const n = try read(await later(input)); return match (n) { 2 => "two", _ => "other" }; };
+  |                                                      ^ /*operand*/
+  tt only: abstract (Keyword)
+  tt only: any (Keyword)
+  tt only: asserts (Keyword)
+  tt only: bigint (Keyword)
+  tt only: boolean (Keyword)
+  tt only: declare (Keyword)
+  tt only: infer (Keyword)
+  tt only: keyof (Keyword)
+  tt only: module (Keyword)
+  tt only: n (Variable)
+  tt only: namespace (Keyword)
+  tt only: never (Keyword)
+  tt only: number (Keyword)
+  tt only: object (Keyword)
+  tt only: readonly (Keyword)
+  tt only: string (Keyword)
+  tt only: symbol (Keyword)
+  tt only: unique (Keyword)
+  tt only: unknown (Keyword)
+
+=== completions /*use*/ main.tt:4:77 ===
+  | const top0 = result { const n = try read(await later(input)); return match (n) { 2 => "two", _ => "other" }; };
+  |                                                                             ^ /*use*/
+  tt only: abstract (Keyword)
+  tt only: any (Keyword)
+  tt only: asserts (Keyword)
+  tt only: bigint (Keyword)
+  tt only: boolean (Keyword)
+  tt only: declare (Keyword)
+  tt only: infer (Keyword)
+  tt only: keyof (Keyword)
+  tt only: module (Keyword)
+  tt only: namespace (Keyword)
+  tt only: never (Keyword)
+  tt only: number (Keyword)
+  tt only: object (Keyword)
+  tt only: readonly (Keyword)
+  tt only: string (Keyword)
+  tt only: symbol (Keyword)
+  tt only: unique (Keyword)
+  tt only: unknown (Keyword)
+

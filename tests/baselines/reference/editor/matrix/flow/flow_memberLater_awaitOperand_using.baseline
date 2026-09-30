@@ -1,0 +1,5 @@
+differences from flow_memberLater_awaitOperand_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await (((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder(note(\"operand\", input)), note(\"receiver\", tools)))" hint TS80007: 'await' has no effect on the type of this expression.
+

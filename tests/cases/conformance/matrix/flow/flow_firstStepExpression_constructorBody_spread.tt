@@ -78,7 +78,7 @@ function probe(input: number) {
   class Holder {
     field: unknown;
     constructor() {
-      this.field = ((first: (n: number) => number) => (v: number) => String(first(v)))(adder(first(...[input])));
+      this.field = ((head: (n: number) => number) => (v: number) => String(head(v)))(adder(first(...[input])));
     }
   }
   return new Holder().field;

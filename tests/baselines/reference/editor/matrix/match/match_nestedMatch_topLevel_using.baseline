@@ -1,0 +1,29 @@
+differences from match_nestedMatch_topLevel_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:6:44 ===
+  | const top0 = match (match (note("operand", input)) { Point => note("inner point", 0), Circle(r) => note("inner circle", r), Rect(w) => note("inner rect", w) }) { 0 => note("zero", "none"), _ => match (note("again", Shape.Point)) { Point => note("point", "some"), _ => note("other", "?") } };
+  |                                            ^ /*operand*/
+  tt only: top0 (Variable)
+
+=== completions /*use*/ main.tt:6:121 ===
+  | const top0 = match (match (note("operand", input)) { Point => note("inner point", 0), Circle(r) => note("inner circle", r), Rect(w) => note("inner rect", w) }) { 0 => note("zero", "none"), _ => match (note("again", Shape.Point)) { Point => note("point", "some"), _ => note("other", "?") } };
+  |                                                                                                                         ^ /*use*/
+  tt only: abstract (Keyword)
+  tt only: any (Keyword)
+  tt only: asserts (Keyword)
+  tt only: bigint (Keyword)
+  tt only: boolean (Keyword)
+  tt only: declare (Keyword)
+  tt only: infer (Keyword)
+  tt only: keyof (Keyword)
+  tt only: module (Keyword)
+  tt only: namespace (Keyword)
+  tt only: never (Keyword)
+  tt only: number (Keyword)
+  tt only: object (Keyword)
+  tt only: readonly (Keyword)
+  tt only: string (Keyword)
+  tt only: symbol (Keyword)
+  tt only: unique (Keyword)
+  tt only: unknown (Keyword)
+

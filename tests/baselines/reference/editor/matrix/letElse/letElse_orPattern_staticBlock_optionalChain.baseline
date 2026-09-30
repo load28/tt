@@ -1,0 +1,11 @@
+differences from letElse_orPattern_staticBlock_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== rename /*bind*/ main.tt:8:17 ===
+  |       const Num(value) | Neg(value) = box(input)?.inner.value! else { throw new Error("diverged"); };
+  |                 ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+
+=== semanticTokens main.tt ===
+  tt only: /*bind*/ variable []
+  ts only: /*bind*/ variable [declaration, local, readonly]
+

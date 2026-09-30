@@ -1,0 +1,7 @@
+differences from result_single_jsxTernary_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:4:61 ===
+  |   return <p>{flip() ? result { const n = try read(first(...[input])); return n * 10; } : <i>none</i>}</p>;
+  |                                                             ^ /*operand*/
+  tt only: n (Variable)
+

@@ -1,0 +1,7 @@
+differences from result_earlyReturn_jsxComponentProp_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:4:61 ===
+  |   return <Show value={result { const n = try read(first(...[input])); if (n > 2) { return note("big", n); } return note("small", n); }} />;
+  |                                                             ^ /*operand*/
+  tt only: n (Variable)
+

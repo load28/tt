@@ -1,0 +1,5 @@
+differences from match_tuple_awaitOperand_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await (((t0: Shape, t1: Speed) => { if (t0.kind === \"Circle\" && t1.kind === \"Fast\") { const { r } = t0; return note(\"fast circle\", r); } if (t0.kind === \"Rect\") { const { w } = t0; return note(\"rect\", w); } if (t1.kind === \"Slow\") return note(\"slow\", 0); return note(\"rest\", -1); })(box(input)?.inner.value!, note<Speed>(\"second\", Speed.Fast)))" hint TS80007: 'await' has no effect on the type of this expression.
+

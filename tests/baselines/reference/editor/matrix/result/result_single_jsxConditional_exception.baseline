@@ -1,0 +1,7 @@
+differences from result_single_jsxConditional_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:5:60 ===
+  |     return <p>{flip() && result { const n = try read(risky(input)); return n * 10; }}</p>;
+  |                                                            ^ /*operand*/
+  tt only: n (Variable)
+

@@ -1,0 +1,7 @@
+differences from result_nested_templateLiteral_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:96 ===
+  |   return `<${note("left", "L")}|${result { const inner = result { const n = try read(first(...[input])); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; }}|${note("right", "R")}>`;
+  |                                                                                                ^ /*operand*/
+  tt only: n (Variable)
+

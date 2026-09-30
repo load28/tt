@@ -422,7 +422,7 @@ function editorCaseText(spec, construct, form, position, companion, parts, surfa
   return {
     name,
     text: `${header.join("\n")}\n${units([["tsconfig.json", tsconfig(surface)], ["harness.ts", harness], [main, indent(tt.text)]])}`,
-    twin: `${twinHeader.join("\n")}\n${units([[main.replace(/\.tt(x?)$/, ".ts$1"), indent(ts.text)]])}`,
+    twin: `${twinHeader.join("\n")}\n${units([[twin, indent(ts.text)]])}`,
   };
 }
 

@@ -1,0 +1,7 @@
+differences from match_numberLiterals_declarationInitializer_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:32 ===
+  |     const value = match (risky(input)) { 200 | 0xc9 => note("success", true), 404 => note("missing", false), 500 if note("guard", true) => note("server", false), _ => note("other", null) };
+  |                                ^ /*operand*/
+  tt only: value (Variable)
+

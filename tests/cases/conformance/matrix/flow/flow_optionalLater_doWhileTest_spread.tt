@@ -89,7 +89,7 @@ function probe(input: number) {
   let rounds = 0;
   do {
     rounds++;
-  } while (rounds < 2 && ((first: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(first(v)))(adder(first(...[input])), maybe(flip())));
+  } while (rounds < 2 && ((head: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(head(v)))(adder(first(...[input])), maybe(flip())));
   return rounds;
 }
 await drive("doWhileTest", probe, inputs);

@@ -31,9 +31,6 @@ export function later<T>(value: T): Promise<T> {
   out.push("await");
   return Promise.resolve(value);
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export const adder = (a: number) => (b: number): number => note("add", a + b);
 export const tools = {
   factor: 3,
@@ -79,13 +76,13 @@ async function probe(input: number) {
 }
 await drive("loopBody", probe, inputs);
 // @filename: twin.ts
-import { note, later, first, adder, tools, drive } from "./harness.js";
+import { note, later, adder, tools, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [2, 3];
 async function probe(input: number) {
   const collected: unknown[] = [];
   for (let round = 0; round < 2; round++) {
-    collected.push(((first: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(first(v)))(adder(await later(input)), note("receiver", tools)));
+    collected.push(((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder(await later(input)), note("receiver", tools)));
   }
   return collected;
 }

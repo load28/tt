@@ -1,0 +1,65 @@
+differences from match_orPattern_topLevel_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== definition /*use*/ main.tt:5:91 ===
+  | const top0 = match (box(input)?.inner.value!) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") };
+  |                                                                                           ^ /*use*/
+  tt only: main "value"
+
+=== rename /*bind*/ main.tt:5:53 ===
+  | const top0 = match (box(input)?.inner.value!) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") };
+  |                                                     ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+
+=== completions /*operand*/ main.tt:5:25 ===
+  | const top0 = match (box(input)?.inner.value!) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") };
+  |                         ^ /*operand*/
+  tt only: top0 (Variable)
+
+=== completions /*use*/ main.tt:5:91 ===
+  | const top0 = match (box(input)?.inner.value!) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") };
+  |                                                                                           ^ /*use*/
+  tt only: abstract (Keyword)
+  tt only: any (Keyword)
+  tt only: asserts (Keyword)
+  tt only: bigint (Keyword)
+  tt only: boolean (Keyword)
+  tt only: declare (Keyword)
+  tt only: infer (Keyword)
+  tt only: keyof (Keyword)
+  tt only: module (Keyword)
+  tt only: namespace (Keyword)
+  tt only: never (Keyword)
+  tt only: number (Keyword)
+  tt only: object (Keyword)
+  tt only: readonly (Keyword)
+  tt only: string (Keyword)
+  tt only: symbol (Keyword)
+  tt only: unique (Keyword)
+  tt only: unknown (Keyword)
+
+=== completions /*use2*/ main.tt:5:126 ===
+  | const top0 = match (box(input)?.inner.value!) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") };
+  |                                                                                                                              ^ /*use2*/
+  tt only: abstract (Keyword)
+  tt only: any (Keyword)
+  tt only: asserts (Keyword)
+  tt only: bigint (Keyword)
+  tt only: boolean (Keyword)
+  tt only: declare (Keyword)
+  tt only: infer (Keyword)
+  tt only: keyof (Keyword)
+  tt only: module (Keyword)
+  tt only: namespace (Keyword)
+  tt only: never (Keyword)
+  tt only: number (Keyword)
+  tt only: object (Keyword)
+  tt only: readonly (Keyword)
+  tt only: string (Keyword)
+  tt only: symbol (Keyword)
+  tt only: unique (Keyword)
+  tt only: unknown (Keyword)
+
+=== semanticTokens main.tt ===
+  tt only: /*bind*/ variable []
+  ts only: /*bind*/ variable [declaration, local, readonly]
+

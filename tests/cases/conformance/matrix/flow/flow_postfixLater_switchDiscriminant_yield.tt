@@ -27,9 +27,6 @@ export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export const adder = (a: number) => (b: number): number => note("add", a + b);
 export function report(title: string, input: unknown, shown: string): void {
   console.log(`${title}(${text(input)}) => ${shown} | ${out.join("; ")}`);
@@ -73,12 +70,12 @@ function* probe(input: number): Generator<unknown, unknown, number> {
 }
 await drive("switchDiscriminant", probe, inputs);
 // @filename: twin.ts
-import { note, first, adder, drive } from "./harness.js";
+import { note, adder, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [1.5, 2];
 function* probe(input: number): Generator<unknown, unknown, number> {
   let collected: unknown = "none";
-  switch (((first: (n: number) => number) => (v: number) => first(v).toFixed(1))(adder((yield input)))) {
+  switch (((head: (n: number) => number) => (v: number) => head(v).toFixed(1))(adder((yield input)))) {
     case note("case", 0 as unknown):
     collected = "zero";
     break;

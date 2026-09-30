@@ -27,9 +27,6 @@ export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export function box<T>(value: T): { inner: { value: T } } | undefined {
   return { inner: { value } };
 }
@@ -88,7 +85,7 @@ function probe(input: number) {
 }
 await drive("method", probe, inputs);
 // @filename: twin.ts
-import { note, first, box, adder, tools, read, drive } from "./harness.js";
+import { note, box, adder, tools, read, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [2, 3];
 function probe(input: number) {
@@ -96,7 +93,7 @@ function probe(input: number) {
     tag = "holder";
     read(input: number) {
       note("this", this.tag);
-      return ((first: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(first(v)))(adder(box(input)?.inner.value!), note("receiver", tools));
+      return ((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder(box(input)?.inner.value!), note("receiver", tools));
     }
   }
   return new Holder().read(input);

@@ -1,0 +1,8 @@
+differences from variant_exported_topLevel_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== signatureHelp /*arg*/ main.tt:6:24 ===
+  | const seen = [Pub.Item(note("operand", input))];
+  |                        ^ /*arg*/
+  tt only: Item(n: number): { kind: "Item"; n: number; } [n: number]
+  ts only: Item(n: number): Pub [n: number]
+

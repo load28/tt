@@ -79,7 +79,7 @@ const inputs: number[] = [1.5, 2];
 function probe(input: number) {
   let collected: unknown = "none";
   switch (note("discriminant", 0) as unknown) {
-    case ((first: (n: number) => number) => (v: number) => first(v).toFixed(1))(adder(first(...[input]))):
+    case ((head: (n: number) => number) => (v: number) => head(v).toFixed(1))(adder(first(...[input]))):
     collected = "matched";
     break;
     default:

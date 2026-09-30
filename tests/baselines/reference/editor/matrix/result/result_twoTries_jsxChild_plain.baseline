@@ -1,0 +1,12 @@
+differences from result_twoTries_jsxChild_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:4:58 ===
+  |   return <p>{result { const a = try read(note("operand", input)); const b = try read(note("b", a - 3)); return [a, b]; }}</p>;
+  |                                                          ^ /*operand*/
+  tt only: a (Variable)
+
+=== completions /*use*/ main.ttx:4:96 ===
+  |   return <p>{result { const a = try read(note("operand", input)); const b = try read(note("b", a - 3)); return [a, b]; }}</p>;
+  |                                                                                                ^ /*use*/
+  tt only: b (Variable)
+

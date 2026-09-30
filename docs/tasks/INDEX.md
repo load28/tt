@@ -687,6 +687,7 @@
 | TASK-679 | Populate the case matrix for match, try, result, let-else, and if-let | Complete | 2026-09-30 | 2026-09-30 | [TASK-679](./TASK-679-matrix-match-try-result-let-else-if-let.md) |
 | TASK-680 | Populate the case matrix for pipelines, flow, val, variant, and .ttx positions | Complete | 2026-09-30 | 2026-09-30 | [TASK-680](./TASK-680-matrix-pipelines-flow-val-variant-ttx.md) |
 | TASK-685 | Generate editor cases from the case matrix, each asked against a TypeScript twin | Complete | 2026-09-30 | 2026-09-30 | [TASK-685](./TASK-685-editor-matrix-infrastructure.md) |
+| TASK-686 | Populate the editor matrix for every construct and triage each difference from TypeScript | Complete | 2026-09-30 | 2026-09-30 | [TASK-686](./TASK-686-editor-matrix-populate.md) |
 
 ## Next task number
 

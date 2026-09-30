@@ -31,9 +31,6 @@ let flips = 0;
 export function flip(): boolean {
   return note("flip", flips++ % 2 === 0);
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export function box<T>(value: T): { inner: { value: T } } | undefined {
   return { inner: { value } };
 }
@@ -85,12 +82,12 @@ function probe(input: number) {
 }
 await drive("whileTest", probe, inputs);
 // @filename: twin.ts
-import { flip, first, box, adder, tools, maybe, drive } from "./harness.js";
+import { flip, box, adder, tools, maybe, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [4, 6, 8];
 function probe(input: number) {
   let rounds = 0;
-  while (rounds < 1 && ((first: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(first(v)))(adder(box(input)?.inner.value!), maybe(flip()))) {
+  while (rounds < 1 && ((head: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(head(v)))(adder(box(input)?.inner.value!), maybe(flip()))) {
     rounds++;
   }
   return rounds;

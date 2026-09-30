@@ -1,0 +1,7 @@
+differences from result_single_conditionalBranch_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:63 ===
+  |   return flip() ? result { const n = try read(note("operand", input)); return n * 10; } : note("else", "skipped");
+  |                                                               ^ /*operand*/
+  tt only: n (Variable)
+

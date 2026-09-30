@@ -1,0 +1,5 @@
+differences from match_blockArm_awaitOperand_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await (((t0: Shape) => { if (t0.kind === \"Rect\") { const { w, h } = t0; const area = note(\"area\", w * h); if (area > 10) { return note(\"large\", area); } return note(\"small\", area); } return note(\"other\", 0); })(box(input)?.inner.value!))" hint TS80007: 'await' has no effect on the type of this expression.
+

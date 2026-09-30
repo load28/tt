@@ -1,0 +1,7 @@
+differences from result_single_logicalAnd_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:56 ===
+  |     return flip() && result { const n = try read(risky(input)); return n * 10; };
+  |                                                        ^ /*operand*/
+  tt only: n (Variable)
+

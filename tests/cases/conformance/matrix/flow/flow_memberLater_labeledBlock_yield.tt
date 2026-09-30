@@ -31,9 +31,6 @@ let flips = 0;
 export function flip(): boolean {
   return note("flip", flips++ % 2 === 0);
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export const adder = (a: number) => (b: number): number => note("add", a + b);
 export const tools = {
   factor: 3,
@@ -81,13 +78,13 @@ function* probe(input: number): Generator<unknown, unknown, number> {
 }
 await drive("labeledBlock", probe, inputs);
 // @filename: twin.ts
-import { note, flip, first, adder, tools, drive } from "./harness.js";
+import { note, flip, adder, tools, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [2, 3];
 function* probe(input: number): Generator<unknown, unknown, number> {
   let collected: unknown = "none";
   found: {
-    collected = ((first: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(first(v)))(adder((yield input)), note("receiver", tools));
+    collected = ((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder((yield input)), note("receiver", tools));
     if (flip()) break found;
     collected = [collected];
   }

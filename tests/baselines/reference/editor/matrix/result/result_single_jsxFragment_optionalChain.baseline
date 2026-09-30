@@ -1,0 +1,7 @@
+differences from result_single_jsxFragment_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:4:66 ===
+  |   return <>{note("before", "[")}{result { const n = try read(box(input)?.inner.value!); return n * 10; }}{note("after", "]")}</>;
+  |                                                                  ^ /*operand*/
+  tt only: n (Variable)
+

@@ -1,0 +1,7 @@
+differences from match_nestedMatch_declarationInitializer_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:47 ===
+  |   const value = match (match (note("operand", input)) { Point => note("inner point", 0), Circle(r) => note("inner circle", r), Rect(w) => note("inner rect", w) }) { 0 => note("zero", "none"), _ => match (note("again", Shape.Point)) { Point => note("point", "some"), _ => note("other", "?") } };
+  |                                               ^ /*operand*/
+  tt only: value (Variable)
+

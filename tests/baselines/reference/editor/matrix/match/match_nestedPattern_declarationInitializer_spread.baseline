@@ -1,0 +1,7 @@
+differences from match_nestedPattern_declarationInitializer_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:6:34 ===
+  |   const value = match (first(...[input])) { Done(value: Some(value: v)) => note("some", v), Done(value: None()) => note("none", 0), Failed(error) => note("failed", error) };
+  |                                  ^ /*operand*/
+  tt only: value (Variable)
+

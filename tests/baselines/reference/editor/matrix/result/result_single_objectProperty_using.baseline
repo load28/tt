@@ -1,0 +1,7 @@
+differences from result_single_objectProperty_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:80 ===
+  |   return { a: note("a", 1), value: result { const n = try read(note("operand", input)); return n * 10; }, c: note("c", 3) };
+  |                                                                                ^ /*operand*/
+  tt only: n (Variable)
+

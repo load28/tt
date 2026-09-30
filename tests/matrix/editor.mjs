@@ -9,7 +9,7 @@ export const verbs = {
   attr: ["hover", "completions"],
 };
 
-export const constructs = ["pipeline"];
+export const constructs = ["match", "try", "tryStatement", "result", "letElse", "ifLet", "pipeline", "flow", "val", "variant"];
 
 export const fileVerbs = ["semanticTokens", "diagnostics"];
 

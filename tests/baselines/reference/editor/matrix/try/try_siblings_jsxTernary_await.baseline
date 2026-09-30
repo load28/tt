@@ -1,0 +1,65 @@
+differences from try_siblings_jsxTernary_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*operand*/ main.ttx:5:55 ===
+  |   return Result.Ok(<p>{flip() ? (try read(await later(input))) + (try read(note("second", 5))) : <i>none</i>}</p>);
+  |                                                       ^ /*operand*/
+  tt only: null
+  ts only: (parameter) input: number
+  ts only: ---
+
+=== hover /*call*/ main.ttx:5:71 ===
+  |   return Result.Ok(<p>{flip() ? (try read(await later(input))) + (try read(note("second", 5))) : <i>none</i>}</p>);
+  |                                                                       ^ /*call*/
+  tt only: (property) undefined: undefined
+  ts only: (alias) function read(input: number): Success<number> | Failure<string>
+
+=== definition /*operand*/ main.ttx:5:55 ===
+  |   return Result.Ok(<p>{flip() ? (try read(await later(input))) + (try read(note("second", 5))) : <i>none</i>}</p>);
+  |                                                       ^ /*operand*/
+  ts only: main "input"
+
+=== definition /*call*/ main.ttx:5:71 ===
+  |   return Result.Ok(<p>{flip() ? (try read(await later(input))) + (try read(note("second", 5))) : <i>none</i>}</p>);
+  |                                                                       ^ /*call*/
+  ts only: harness "read"
+
+=== references /*operand*/ main.ttx:5:55 ===
+  |   return Result.Ok(<p>{flip() ? (try read(await later(input))) + (try read(note("second", 5))) : <i>none</i>}</p>);
+  |                                                       ^ /*operand*/
+  ts only: main "input"
+  ts only: main /*operand*/ "input"
+
+=== rename /*operand*/ main.ttx:5:55 ===
+  |   return Result.Ok(<p>{flip() ? (try read(await later(input))) + (try read(note("second", 5))) : <i>none</i>}</p>);
+  |                                                       ^ /*operand*/
+  ts only: main "input" -> ttRenamePlaceholder
+  ts only: main /*operand*/ "input" -> ttRenamePlaceholder
+
+=== signatureHelp /*operand*/ main.ttx:5:55 ===
+  |   return Result.Ok(<p>{flip() ? (try read(await later(input))) + (try read(note("second", 5))) : <i>none</i>}</p>);
+  |                                                       ^ /*operand*/
+  tt only: Ok(value: string): Result.TOk<string> [value: string]
+  ts only: later(value: number): Promise<number> [value: number]
+
+=== signatureHelp /*arg*/ main.ttx:5:76 ===
+  |   return Result.Ok(<p>{flip() ? (try read(await later(input))) + (try read(note("second", 5))) : <i>none</i>}</p>);
+  |                                                                            ^ /*arg*/
+  tt only: Ok(value: string): Result.TOk<string> [value: string]
+  ts only: read(input: number): Failure<string> | Success<number> [input: number]
+
+=== semanticTokens main.ttx ===
+  tt only: /*arg*/ none
+  tt only: /*call*/ none
+  tt only: /*operand*/ none
+  ts only: /*arg*/ function []
+  ts only: /*call*/ function []
+  ts only: /*operand*/ parameter []
+
+=== diagnostics main.ttx ===
+  tt only: main "input" hint TS6133: 'input' is declared but its value is never read.
+  tt only: main "later" hint TS6133: 'later' is declared but its value is never read.
+  tt only: main "note" hint TS6133: 'note' is declared but its value is never read.
+  tt only: main "read" hint TS6133: 'read' is declared but its value is never read.
+  tt only: main "try read(await later(input))" error TS"try-placement": `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+  tt only: main "try read(note(\"second\", 5))" error TS"try-placement": `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+

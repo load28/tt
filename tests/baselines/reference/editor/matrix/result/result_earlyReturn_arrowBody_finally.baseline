@@ -1,0 +1,7 @@
+differences from result_earlyReturn_arrowBody_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:82 ===
+  |     const inner = (input: number) => result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } return note("small", n); };
+  |                                                                                  ^ /*operand*/
+  tt only: n (Variable)
+

@@ -1,0 +1,7 @@
+differences from tryStatement_declaration_switchClause_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:7:48 ===
+  |       const checked = try read(note("operand", input));
+  |                                                ^ /*operand*/
+  tt only: checked (Variable)
+

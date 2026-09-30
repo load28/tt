@@ -1,0 +1,12 @@
+differences from result_twoTries_conditionalBranch_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:55 ===
+  |     return flip() ? result { const a = try read(risky(input)); const b = try read(note("b", a - 3)); return [a, b]; } : note("else", "skipped");
+  |                                                       ^ /*operand*/
+  tt only: a (Variable)
+
+=== completions /*use*/ main.tt:5:93 ===
+  |     return flip() ? result { const a = try read(risky(input)); const b = try read(note("b", a - 3)); return [a, b]; } : note("else", "skipped");
+  |                                                                                             ^ /*use*/
+  tt only: b (Variable)
+

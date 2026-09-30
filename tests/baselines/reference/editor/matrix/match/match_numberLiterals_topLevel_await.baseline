@@ -1,0 +1,7 @@
+differences from match_numberLiterals_topLevel_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:33 ===
+  | const top0 = match (await later(input)) { 200 | 0xc9 => note("success", true), 404 => note("missing", false), 500 if note("guard", true) => note("server", false), _ => note("other", null) };
+  |                                 ^ /*operand*/
+  tt only: top0 (Variable)
+

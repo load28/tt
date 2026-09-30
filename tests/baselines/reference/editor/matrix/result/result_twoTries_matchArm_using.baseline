@@ -1,0 +1,12 @@
+differences from result_twoTries_matchArm_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:79 ===
+  |   return match (flip()) { true => result { const a = try read(note("operand", input)); const b = try read(note("b", a - 3)); return [a, b]; }, false => note("other arm", 0) };
+  |                                                                               ^ /*operand*/
+  tt only: a (Variable)
+
+=== completions /*use*/ main.tt:5:117 ===
+  |   return match (flip()) { true => result { const a = try read(note("operand", input)); const b = try read(note("b", a - 3)); return [a, b]; }, false => note("other arm", 0) };
+  |                                                                                                                     ^ /*use*/
+  tt only: b (Variable)
+

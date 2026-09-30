@@ -34,9 +34,6 @@ export function later<T>(value: T): Promise<T> {
 export function pack(...items: unknown[]): unknown[] {
   return items;
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export const adder = (a: number) => (b: number): number => note("add", a + b);
 export function report(title: string, input: unknown, shown: string): void {
   console.log(`${title}(${text(input)}) => ${shown} | ${out.join("; ")}`);
@@ -72,10 +69,10 @@ async function probe(input: number) {
 }
 await drive("callArgument", probe, inputs);
 // @filename: twin.ts
-import { note, later, pack, first, adder, drive } from "./harness.js";
+import { note, later, pack, adder, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [1.5, 2];
 async function probe(input: number) {
-  return pack(note("a", 1), ((first: (n: number) => number) => (v: number) => first(v).toFixed(1))(adder(await later(input))), note("c", 3));
+  return pack(note("a", 1), ((head: (n: number) => number) => (v: number) => head(v).toFixed(1))(adder(await later(input))), note("c", 3));
 }
 await drive("callArgument", probe, inputs);

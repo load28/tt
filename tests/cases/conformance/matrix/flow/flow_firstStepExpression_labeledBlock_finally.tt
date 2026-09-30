@@ -31,9 +31,6 @@ let flips = 0;
 export function flip(): boolean {
   return note("flip", flips++ % 2 === 0);
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export const adder = (a: number) => (b: number): number => note("add", a + b);
 export function report(title: string, input: unknown, shown: string): void {
   console.log(`${title}(${text(input)}) => ${shown} | ${out.join("; ")}`);
@@ -79,14 +76,14 @@ function probe(input: number) {
 }
 await drive("labeledBlock", probe, inputs);
 // @filename: twin.ts
-import { note, flip, first, adder, drive } from "./harness.js";
+import { note, flip, adder, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [3, -4];
 function probe(input: number) {
   try {
     let collected: unknown = "none";
     found: {
-      collected = ((first: (n: number) => number) => (v: number) => String(first(v)))(adder(note("operand", input)));
+      collected = ((head: (n: number) => number) => (v: number) => String(head(v)))(adder(note("operand", input)));
       if (flip()) break found;
       collected = [collected];
     }

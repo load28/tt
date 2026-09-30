@@ -1,0 +1,7 @@
+differences from result_single_nullish_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:89 ===
+  |   return (flip() ? null : note("left", "set")) ?? result { const n = try read(first(...[input])); return n * 10; };
+  |                                                                                         ^ /*operand*/
+  tt only: n (Variable)
+

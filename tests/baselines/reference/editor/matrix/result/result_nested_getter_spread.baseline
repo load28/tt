@@ -1,0 +1,7 @@
+differences from result_nested_getter_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:6:75 ===
+  |       return result { const inner = result { const n = try read(first(...[input])); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; };
+  |                                                                           ^ /*operand*/
+  tt only: n (Variable)
+

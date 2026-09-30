@@ -31,9 +31,6 @@ let flips = 0;
 export function flip(): boolean {
   return note("flip", flips++ % 2 === 0);
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export const adder = (a: number) => (b: number): number => note("add", a + b);
 export function report(title: string, input: unknown, shown: string): void {
   console.log(`${title}(${text(input)}) => ${shown} | ${out.join("; ")}`);
@@ -69,10 +66,10 @@ function* probe(input: number): Generator<unknown, unknown, number> {
 }
 await drive("logicalOr", probe, inputs);
 // @filename: twin.ts
-import { flip, first, adder, drive } from "./harness.js";
+import { flip, adder, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [1.5, 2];
 function* probe(input: number): Generator<unknown, unknown, number> {
-  return flip() || ((first: (n: number) => number) => (v: number) => first(v).toFixed(1))(adder((yield input)));
+  return flip() || ((head: (n: number) => number) => (v: number) => head(v).toFixed(1))(adder((yield input)));
 }
 await drive("logicalOr", probe, inputs);

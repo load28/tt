@@ -1,0 +1,12 @@
+differences from result_twoTries_logicalAnd_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:58 ===
+  |   return flip() && result { const a = try read(first(...[input])); const b = try read(note("b", a - 3)); return [a, b]; };
+  |                                                          ^ /*operand*/
+  tt only: a (Variable)
+
+=== completions /*use*/ main.tt:4:97 ===
+  |   return flip() && result { const a = try read(first(...[input])); const b = try read(note("b", a - 3)); return [a, b]; };
+  |                                                                                                 ^ /*use*/
+  tt only: b (Variable)
+

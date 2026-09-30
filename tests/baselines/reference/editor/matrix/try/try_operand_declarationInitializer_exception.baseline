@@ -1,0 +1,7 @@
+differences from try_operand_declarationInitializer_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:6:34 ===
+  |     const value = try read(risky(input));
+  |                                  ^ /*operand*/
+  tt only: value (Variable)
+

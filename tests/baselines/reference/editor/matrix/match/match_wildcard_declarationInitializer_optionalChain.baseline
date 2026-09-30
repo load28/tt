@@ -1,0 +1,7 @@
+differences from match_wildcard_declarationInitializer_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:28 ===
+  |   const value = match (box(input)?.inner.value!) { Word(text) => note("word", text.length), _ => note("other", -1) };
+  |                            ^ /*operand*/
+  tt only: value (Variable)
+

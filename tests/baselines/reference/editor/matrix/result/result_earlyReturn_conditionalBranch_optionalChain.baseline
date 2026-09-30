@@ -1,0 +1,7 @@
+differences from result_earlyReturn_conditionalBranch_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:51 ===
+  |   return flip() ? result { const n = try read(box(input)?.inner.value!); if (n > 2) { return note("big", n); } return note("small", n); } : note("else", "skipped");
+  |                                                   ^ /*operand*/
+  tt only: n (Variable)
+

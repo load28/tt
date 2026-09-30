@@ -82,6 +82,6 @@ import { flip, first, adder, tools, maybe, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [4, 6, 8];
 async function probe(input: number) {
-  return await (((first: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(first(v)))(adder(first(...[input])), maybe(flip())));
+  return await (((head: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(head(v)))(adder(first(...[input])), maybe(flip())));
 }
 await drive("awaitOperand", probe, inputs);

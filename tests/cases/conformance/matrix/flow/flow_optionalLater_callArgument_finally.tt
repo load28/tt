@@ -34,9 +34,6 @@ export function flip(): boolean {
 export function pack(...items: unknown[]): unknown[] {
   return items;
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export const adder = (a: number) => (b: number): number => note("add", a + b);
 export const tools = {
   factor: 3,
@@ -85,12 +82,12 @@ function probe(input: number) {
 }
 await drive("callArgument", probe, inputs);
 // @filename: twin.ts
-import { note, flip, pack, first, adder, tools, maybe, drive } from "./harness.js";
+import { note, flip, pack, adder, tools, maybe, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [4, 6, 8];
 function probe(input: number) {
   try {
-    return pack(note("a", 1), ((first: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(first(v)))(adder(note("operand", input)), maybe(flip())), note("c", 3));
+    return pack(note("a", 1), ((head: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(head(v)))(adder(note("operand", input)), maybe(flip())), note("c", 3));
   } finally {
     note("finally", 0);
   }

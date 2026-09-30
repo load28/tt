@@ -33,9 +33,6 @@ export function pack(...items: unknown[]): unknown[] {
 export function callee(present: boolean): typeof pack | undefined {
   return note("callee", present) ? pack : undefined;
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 let risks = 0;
 export function risky<T>(value: T): T {
   if (++risks % 3 === 0) throw new Error(`risky call ${risks}`);
@@ -82,13 +79,13 @@ function probe(input: number) {
 }
 await drive("optionalCall", probe, inputs);
 // @filename: twin.ts
-import { note, callee, first, risky, adder, drive } from "./harness.js";
+import { note, callee, risky, adder, drive } from "./harness.js";
 let t0: any, t1: any;
 const inputs: number[] = [3, -4];
 function probe(input: number) {
   try {
-    const ran = callee(true)?.(((first: (n: number) => number) => (v: number) => String(first(v)))(adder(risky(input))));
-    const skipped = callee(false)?.(((first: (n: number) => number) => (v: number) => String(first(v)))(adder(risky(input))));
+    const ran = callee(true)?.(((head: (n: number) => number) => (v: number) => String(head(v)))(adder(risky(input))));
+    const skipped = callee(false)?.(((head: (n: number) => number) => (v: number) => String(head(v)))(adder(risky(input))));
     return [ran, skipped];
   } catch (error) {
     return note("caught", (error as Error).message);

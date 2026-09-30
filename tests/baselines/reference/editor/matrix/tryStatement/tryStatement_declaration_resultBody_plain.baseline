@@ -1,0 +1,7 @@
+differences from tryStatement_declaration_resultBody_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:7:46 ===
+  |     const checked = try read(note("operand", input));
+  |                                              ^ /*operand*/
+  tt only: checked (Variable)
+

@@ -31,9 +31,6 @@ let flips = 0;
 export function flip(): boolean {
   return note("flip", flips++ % 2 === 0);
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 let risks = 0;
 export function risky<T>(value: T): T {
   if (++risks % 3 === 0) throw new Error(`risky call ${risks}`);
@@ -78,12 +75,12 @@ function probe(input: number) {
 }
 await drive("nullish", probe, inputs);
 // @filename: twin.ts
-import { note, flip, first, risky, adder, drive } from "./harness.js";
+import { note, flip, risky, adder, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [3, -4];
 function probe(input: number) {
   try {
-    return (flip() ? null : note("left", "set")) ?? ((first: (n: number) => number) => (v: number) => String(first(v)))(adder(risky(input)));
+    return (flip() ? null : note("left", "set")) ?? ((head: (n: number) => number) => (v: number) => String(head(v)))(adder(risky(input)));
   } catch (error) {
     return note("caught", (error as Error).message);
   }

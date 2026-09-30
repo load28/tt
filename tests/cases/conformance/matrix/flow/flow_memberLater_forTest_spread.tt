@@ -80,7 +80,7 @@ let t0: any;
 const inputs: number[] = [2, 3];
 function probe(input: number) {
   let rounds = 0;
-  for (; rounds < 1 && ((first: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(first(v)))(adder(first(...[input])), note("receiver", tools)); ) {
+  for (; rounds < 1 && ((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder(first(...[input])), note("receiver", tools)); ) {
     rounds++;
   }
   return rounds;

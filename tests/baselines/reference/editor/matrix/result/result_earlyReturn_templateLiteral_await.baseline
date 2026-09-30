@@ -1,0 +1,7 @@
+differences from result_earlyReturn_templateLiteral_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:75 ===
+  |   return `<${note("left", "L")}|${result { const n = try read(await later(input)); if (n > 2) { return note("big", n); } return note("small", n); }}|${note("right", "R")}>`;
+  |                                                                           ^ /*operand*/
+  tt only: n (Variable)
+

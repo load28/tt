@@ -1,0 +1,7 @@
+differences from result_nested_nullish_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:114 ===
+  |   return (flip() ? null : note("left", "set")) ?? result { const inner = result { const n = try read(await later(input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; };
+  |                                                                                                                  ^ /*operand*/
+  tt only: n (Variable)
+

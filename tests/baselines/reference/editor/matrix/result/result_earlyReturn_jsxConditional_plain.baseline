@@ -1,0 +1,7 @@
+differences from result_earlyReturn_jsxConditional_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:4:68 ===
+  |   return <p>{flip() && result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } return note("small", n); }}</p>;
+  |                                                                    ^ /*operand*/
+  tt only: n (Variable)
+

@@ -76,7 +76,7 @@ import { note, first, adder, tools, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [2, 3];
 function probe(input: number) {
-  const { value = ((first: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(first(v)))(adder(first(...[input])), note("receiver", tools)) }: { value?: unknown } = note("source", {});
+  const { value = ((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder(first(...[input])), note("receiver", tools)) }: { value?: unknown } = note("source", {});
   return value;
 }
 await drive("destructuringDefault", probe, inputs);

@@ -1,0 +1,7 @@
+differences from result_earlyReturn_jsxNested_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:5:82 ===
+  |     return <ul><li>{note("first", 1)}</li><li>{result { const n = try read(risky(input)); if (n > 2) { return note("big", n); } return note("small", n); }}</li></ul>;
+  |                                                                                  ^ /*operand*/
+  tt only: n (Variable)
+

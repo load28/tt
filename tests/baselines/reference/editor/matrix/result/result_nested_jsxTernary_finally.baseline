@@ -1,0 +1,7 @@
+differences from result_nested_jsxTernary_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:5:92 ===
+  |     return <p>{flip() ? result { const inner = result { const n = try read(note("operand", input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; } : <i>none</i>}</p>;
+  |                                                                                            ^ /*operand*/
+  tt only: n (Variable)
+

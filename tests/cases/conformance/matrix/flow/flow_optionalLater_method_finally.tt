@@ -31,9 +31,6 @@ let flips = 0;
 export function flip(): boolean {
   return note("flip", flips++ % 2 === 0);
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export const adder = (a: number) => (b: number): number => note("add", a + b);
 export const tools = {
   factor: 3,
@@ -96,7 +93,7 @@ function probe(input: number) {
 }
 await drive("method", probe, inputs);
 // @filename: twin.ts
-import { note, flip, first, adder, tools, maybe, read, drive } from "./harness.js";
+import { note, flip, adder, tools, maybe, read, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [4, 6, 8];
 function probe(input: number) {
@@ -105,7 +102,7 @@ function probe(input: number) {
       tag = "holder";
       read(input: number) {
         note("this", this.tag);
-        return ((first: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(first(v)))(adder(note("operand", input)), maybe(flip()));
+        return ((head: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(head(v)))(adder(note("operand", input)), maybe(flip()));
       }
     }
     return new Holder().read(input);

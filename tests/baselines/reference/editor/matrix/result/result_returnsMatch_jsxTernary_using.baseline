@@ -1,0 +1,7 @@
+differences from result_returnsMatch_jsxTernary_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:5:67 ===
+  |   return <p>{flip() ? result { const n = try read(note("operand", input)); return match (n) { 2 => "two", _ => "other" }; } : <i>none</i>}</p>;
+  |                                                                   ^ /*operand*/
+  tt only: n (Variable)
+

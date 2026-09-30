@@ -33,9 +33,6 @@ export function pack(...items: unknown[]): unknown[] {
 export function callee(present: boolean): typeof pack | undefined {
   return note("callee", present) ? pack : undefined;
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export const adder = (a: number) => (b: number): number => note("add", a + b);
 export const tools = {
   factor: 3,
@@ -79,12 +76,12 @@ function* probe(input: number): Generator<unknown, unknown, number> {
 }
 await drive("optionalCall", probe, inputs);
 // @filename: twin.ts
-import { note, callee, first, adder, tools, drive } from "./harness.js";
+import { note, callee, adder, tools, drive } from "./harness.js";
 let t0: any, t1: any;
 const inputs: number[] = [2, 3];
 function* probe(input: number): Generator<unknown, unknown, number> {
-  const ran = callee(true)?.(((first: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(first(v)))(adder((yield input)), note("receiver", tools)));
-  const skipped = callee(false)?.(((first: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(first(v)))(adder((yield input)), note("receiver", tools)));
+  const ran = callee(true)?.(((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder((yield input)), note("receiver", tools)));
+  const skipped = callee(false)?.(((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder((yield input)), note("receiver", tools)));
   return [ran, skipped];
 }
 await drive("optionalCall", probe, inputs);

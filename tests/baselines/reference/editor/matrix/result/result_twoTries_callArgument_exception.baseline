@@ -1,0 +1,12 @@
+differences from result_twoTries_callArgument_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:65 ===
+  |     return pack(note("a", 1), result { const a = try read(risky(input)); const b = try read(note("b", a - 3)); return [a, b]; }, note("c", 3));
+  |                                                                 ^ /*operand*/
+  tt only: a (Variable)
+
+=== completions /*use*/ main.tt:5:103 ===
+  |     return pack(note("a", 1), result { const a = try read(risky(input)); const b = try read(note("b", a - 3)); return [a, b]; }, note("c", 3));
+  |                                                                                                       ^ /*use*/
+  tt only: b (Variable)
+

@@ -27,9 +27,6 @@ export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 let risks = 0;
 export function risky<T>(value: T): T {
   if (++risks % 3 === 0) throw new Error(`risky call ${risks}`);
@@ -80,12 +77,12 @@ function probe(input: number) {
 }
 await drive("throwOperand", probe, inputs);
 // @filename: twin.ts
-import { note, first, risky, adder, tools, drive } from "./harness.js";
+import { note, risky, adder, tools, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [2, 3];
 function probe(input: number) {
   try {
-    throw ((first: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(first(v)))(adder(risky(input)), note("receiver", tools));
+    throw ((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder(risky(input)), note("receiver", tools));
   } catch (error) {
     return note("caught", (error as Error).message);
   }

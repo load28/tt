@@ -75,6 +75,6 @@ import { note, first, adder, tools, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [2, 3];
 function probe(input: number) {
-  return [note("first", 0), ...[((first: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(first(v)))(adder(first(...[input])), note("receiver", tools))]];
+  return [note("first", 0), ...[((head: (n: number) => number, receiver: typeof tools) => (v: number) => receiver.twice(head(v)))(adder(first(...[input])), note("receiver", tools))]];
 }
 await drive("spreadElement", probe, inputs);

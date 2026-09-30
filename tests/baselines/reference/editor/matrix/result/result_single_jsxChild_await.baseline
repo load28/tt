@@ -1,0 +1,7 @@
+differences from result_single_jsxChild_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:4:54 ===
+  |   return <p>{result { const n = try read(await later(input)); return n * 10; }}</p>;
+  |                                                      ^ /*operand*/
+  tt only: n (Variable)
+

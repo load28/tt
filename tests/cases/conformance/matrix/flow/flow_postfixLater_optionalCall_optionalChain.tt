@@ -33,9 +33,6 @@ export function pack(...items: unknown[]): unknown[] {
 export function callee(present: boolean): typeof pack | undefined {
   return note("callee", present) ? pack : undefined;
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export function box<T>(value: T): { inner: { value: T } } | undefined {
   return { inner: { value } };
 }
@@ -76,12 +73,12 @@ function probe(input: number) {
 }
 await drive("optionalCall", probe, inputs);
 // @filename: twin.ts
-import { callee, first, box, adder, drive } from "./harness.js";
+import { callee, box, adder, drive } from "./harness.js";
 let t0: any, t1: any;
 const inputs: number[] = [1.5, 2];
 function probe(input: number) {
-  const ran = callee(true)?.(((first: (n: number) => number) => (v: number) => first(v).toFixed(1))(adder(box(input)?.inner.value!)));
-  const skipped = callee(false)?.(((first: (n: number) => number) => (v: number) => first(v).toFixed(1))(adder(box(input)?.inner.value!)));
+  const ran = callee(true)?.(((head: (n: number) => number) => (v: number) => head(v).toFixed(1))(adder(box(input)?.inner.value!)));
+  const skipped = callee(false)?.(((head: (n: number) => number) => (v: number) => head(v).toFixed(1))(adder(box(input)?.inner.value!)));
   return [ran, skipped];
 }
 await drive("optionalCall", probe, inputs);

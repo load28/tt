@@ -1,0 +1,66 @@
+differences from try_siblings_logicalAnd_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*operand*/ main.tt:6:56 ===
+  |   return Result.Ok(flip() && (try read(note("operand", input))) + (try read(note("second", 5))));
+  |                                                        ^ /*operand*/
+  tt only: null
+  ts only: (parameter) input: number
+  ts only: ---
+
+=== hover /*call*/ main.tt:6:72 ===
+  |   return Result.Ok(flip() && (try read(note("operand", input))) + (try read(note("second", 5))));
+  |                                                                        ^ /*call*/
+  tt only: (property) undefined: undefined
+  ts only: (alias) function read(input: number): Success<number> | Failure<string>
+
+=== definition /*operand*/ main.tt:6:56 ===
+  |   return Result.Ok(flip() && (try read(note("operand", input))) + (try read(note("second", 5))));
+  |                                                        ^ /*operand*/
+  ts only: main "input"
+
+=== definition /*call*/ main.tt:6:72 ===
+  |   return Result.Ok(flip() && (try read(note("operand", input))) + (try read(note("second", 5))));
+  |                                                                        ^ /*call*/
+  ts only: harness "read"
+
+=== references /*operand*/ main.tt:6:56 ===
+  |   return Result.Ok(flip() && (try read(note("operand", input))) + (try read(note("second", 5))));
+  |                                                        ^ /*operand*/
+  ts only: main "input"
+  ts only: main /*operand*/ "input"
+
+=== rename /*operand*/ main.tt:6:56 ===
+  |   return Result.Ok(flip() && (try read(note("operand", input))) + (try read(note("second", 5))));
+  |                                                        ^ /*operand*/
+  ts only: main "input" -> ttRenamePlaceholder
+  ts only: main /*operand*/ "input" -> ttRenamePlaceholder
+
+=== signatureHelp /*operand*/ main.tt:6:56 ===
+  |   return Result.Ok(flip() && (try read(note("operand", input))) + (try read(note("second", 5))));
+  |                                                        ^ /*operand*/
+  tt only: Ok(value: any): Result.TOk<any> [value: any]
+  tt only: active 0 0
+  ts only: active 0 1
+  ts only: note(label: string, value: number): number [label: string | value: number]
+
+=== signatureHelp /*arg*/ main.tt:6:77 ===
+  |   return Result.Ok(flip() && (try read(note("operand", input))) + (try read(note("second", 5))));
+  |                                                                             ^ /*arg*/
+  tt only: Ok(value: any): Result.TOk<any> [value: any]
+  ts only: read(input: number): Failure<string> | Success<number> [input: number]
+
+=== semanticTokens main.tt ===
+  tt only: /*arg*/ none
+  tt only: /*call*/ none
+  tt only: /*operand*/ none
+  ts only: /*arg*/ function []
+  ts only: /*call*/ function []
+  ts only: /*operand*/ parameter []
+
+=== diagnostics main.tt ===
+  tt only: main "input" hint TS6133: 'input' is declared but its value is never read.
+  tt only: main "note" hint TS6133: 'note' is declared but its value is never read.
+  tt only: main "read" hint TS6133: 'read' is declared but its value is never read.
+  tt only: main "try read(note(\"operand\", input))" error TS"try-placement": `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+  tt only: main "try read(note(\"second\", 5))" error TS"try-placement": `try` cannot be used in this conditional operation — its TypeScript control-flow boundary cannot be rebuilt without changing evaluation order
+

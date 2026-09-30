@@ -1,0 +1,7 @@
+differences from result_returnsMatch_jsxAttribute_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:5:63 ===
+  |     return <div data-value={result { const n = try read(risky(input)); return match (n) { 2 => "two", _ => "other" }; }} />;
+  |                                                               ^ /*operand*/
+  tt only: n (Variable)
+

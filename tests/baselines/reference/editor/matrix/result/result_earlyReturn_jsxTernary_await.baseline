@@ -1,0 +1,7 @@
+differences from result_earlyReturn_jsxTernary_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:4:63 ===
+  |   return <p>{flip() ? result { const n = try read(await later(input)); if (n > 2) { return note("big", n); } return note("small", n); } : <i>none</i>}</p>;
+  |                                                               ^ /*operand*/
+  tt only: n (Variable)
+

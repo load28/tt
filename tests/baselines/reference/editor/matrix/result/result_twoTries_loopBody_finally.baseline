@@ -1,0 +1,12 @@
+differences from result_twoTries_loopBody_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:7:66 ===
+  |       collected.push(result { const a = try read(note("operand", input)); const b = try read(note("b", a - 3)); return [a, b]; });
+  |                                                                  ^ /*operand*/
+  tt only: a (Variable)
+
+=== completions /*use*/ main.tt:7:104 ===
+  |       collected.push(result { const a = try read(note("operand", input)); const b = try read(note("b", a - 3)); return [a, b]; });
+  |                                                                                                        ^ /*use*/
+  tt only: b (Variable)
+

@@ -1,0 +1,7 @@
+differences from tryStatement_declaration_componentBody_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:8:38 ===
+  |       const checked = try read(risky(input));
+  |                                      ^ /*operand*/
+  tt only: checked (Variable)
+

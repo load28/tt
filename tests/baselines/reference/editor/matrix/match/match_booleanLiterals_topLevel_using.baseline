@@ -1,0 +1,7 @@
+differences from match_booleanLiterals_topLevel_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:37 ===
+  | const top0 = match (note("operand", input)) { true => note("yes", 1), false => note("no", 0) };
+  |                                     ^ /*operand*/
+  tt only: top0 (Variable)
+

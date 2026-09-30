@@ -1,0 +1,47 @@
+differences from result_nested_topLevel_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:77 ===
+  | const top0 = result { const inner = result { const n = try read(await later(input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; };
+  |                                                                             ^ /*operand*/
+  tt only: abstract (Keyword)
+  tt only: any (Keyword)
+  tt only: asserts (Keyword)
+  tt only: bigint (Keyword)
+  tt only: boolean (Keyword)
+  tt only: declare (Keyword)
+  tt only: infer (Keyword)
+  tt only: keyof (Keyword)
+  tt only: module (Keyword)
+  tt only: n (Variable)
+  tt only: namespace (Keyword)
+  tt only: never (Keyword)
+  tt only: number (Keyword)
+  tt only: object (Keyword)
+  tt only: readonly (Keyword)
+  tt only: string (Keyword)
+  tt only: symbol (Keyword)
+  tt only: unique (Keyword)
+  tt only: unknown (Keyword)
+
+=== completions /*use*/ main.tt:4:93 ===
+  | const top0 = result { const inner = result { const n = try read(await later(input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; };
+  |                                                                                             ^ /*use*/
+  tt only: abstract (Keyword)
+  tt only: any (Keyword)
+  tt only: asserts (Keyword)
+  tt only: bigint (Keyword)
+  tt only: boolean (Keyword)
+  tt only: declare (Keyword)
+  tt only: infer (Keyword)
+  tt only: keyof (Keyword)
+  tt only: module (Keyword)
+  tt only: namespace (Keyword)
+  tt only: never (Keyword)
+  tt only: number (Keyword)
+  tt only: object (Keyword)
+  tt only: readonly (Keyword)
+  tt only: string (Keyword)
+  tt only: symbol (Keyword)
+  tt only: unique (Keyword)
+  tt only: unknown (Keyword)
+

@@ -71,6 +71,6 @@ let t0: any;
 const inputs: number[] = [3, -4];
 function probe(input: number) {
   const receiver = { tag: "receiver", take(...items: unknown[]) { return [this.tag, ...items]; } };
-  return note("receiver", receiver).take(note("a", 1), ((first: (n: number) => number) => (v: number) => String(first(v)))(adder(first(...[input]))));
+  return note("receiver", receiver).take(note("a", 1), ((head: (n: number) => number) => (v: number) => String(head(v)))(adder(first(...[input]))));
 }
 await drive("methodArgument", probe, inputs);

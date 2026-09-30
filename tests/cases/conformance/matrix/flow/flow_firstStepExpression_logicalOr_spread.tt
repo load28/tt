@@ -73,6 +73,6 @@ import { flip, first, adder, drive } from "./harness.js";
 let t0: any;
 const inputs: number[] = [3, -4];
 function probe(input: number) {
-  return flip() || ((first: (n: number) => number) => (v: number) => String(first(v)))(adder(first(...[input])));
+  return flip() || ((head: (n: number) => number) => (v: number) => String(head(v)))(adder(first(...[input])));
 }
 await drive("logicalOr", probe, inputs);

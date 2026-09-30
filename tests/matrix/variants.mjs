@@ -21,6 +21,8 @@ export function variant(name, cases, { exported = false, generics = "" } = {}) {
     const sets = optional.map((field) => `${field} !== undefined ? { ${field} } : {}`);
     return `  ${tag}: ${generics}(${params}): ${self} => ({ ${body}, ${sets.map((set) => `...(${set})`).join(", ")} }),`;
   });
-  const ts = `${lead}type ${name}${generics} = ${members.join(" | ")};\n${lead}const ${name} = {\n${constructors.join("\n")}\n};`;
-  return { tt, ts };
+  const object = (list) => `${lead}type ${name}${generics} = ${members.join(" | ")};\n${lead}const ${name} = {\n${list.join("\n")}\n};`;
+  const ts = object(constructors);
+  const edit = object(constructors.map((line, i) => (cases[i][1] === null ? `  ${cases[i][0]}: { kind: "${cases[i][0]}" } as const,` : line)));
+  return { tt, ts, edit };
 }

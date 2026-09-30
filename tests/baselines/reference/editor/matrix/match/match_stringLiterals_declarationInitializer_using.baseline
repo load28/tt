@@ -1,0 +1,7 @@
+differences from match_stringLiterals_declarationInitializer_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:40 ===
+  |   const value = match (note("operand", input)) { "north" => note("n", 1), "south" | "east" => note("se", 2), _ => note("other", 0) };
+  |                                        ^ /*operand*/
+  tt only: value (Variable)
+

@@ -1,0 +1,5 @@
+differences from match_tagBindings_awaitOperand_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await (((t0: Shape) => { if (t0.kind === \"Circle\") { const { r } = t0; return note(\"circle\", r * 2); } if (t0.kind === \"Rect\") { const { w, h } = t0; return note(\"rect\", w * h); } return note(\"point\", 0); })(box(input)?.inner.value!))" hint TS80007: 'await' has no effect on the type of this expression.
+

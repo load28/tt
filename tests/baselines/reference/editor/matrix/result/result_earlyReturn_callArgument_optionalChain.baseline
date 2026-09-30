@@ -1,0 +1,7 @@
+differences from result_earlyReturn_callArgument_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:4:61 ===
+  |   return pack(note("a", 1), result { const n = try read(box(input)?.inner.value!); if (n > 2) { return note("big", n); } return note("small", n); }, note("c", 3));
+  |                                                             ^ /*operand*/
+  tt only: n (Variable)
+

@@ -1,0 +1,7 @@
+differences from result_returnsMatch_jsxChild_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:4:52 ===
+  |   return <p>{result { const n = try read(first(...[input])); return match (n) { 2 => "two", _ => "other" }; }}</p>;
+  |                                                    ^ /*operand*/
+  tt only: n (Variable)
+

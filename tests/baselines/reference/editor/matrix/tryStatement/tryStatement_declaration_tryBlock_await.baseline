@@ -1,0 +1,7 @@
+differences from tryStatement_declaration_tryBlock_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:6:42 ===
+  |     const checked = try read(await later(input));
+  |                                          ^ /*operand*/
+  tt only: checked (Variable)
+

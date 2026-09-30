@@ -1,0 +1,7 @@
+differences from match_tagBindings_declarationInitializer_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:40 ===
+  |   const value = match (note("operand", input)) { Circle(r) => note("circle", r * 2), Rect(w, h) => note("rect", w * h), Point => note("point", 0) };
+  |                                        ^ /*operand*/
+  tt only: value (Variable)
+

@@ -27,9 +27,6 @@ export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
 }
-export function first<T>(...items: T[]): T {
-  return items[0]!;
-}
 export function box<T>(value: T): { inner: { value: T } } | undefined {
   return { inner: { value } };
 }
@@ -48,12 +45,12 @@ input = inputs[1]!;
 const top1 = flow |> adder(box(input)?.inner.value!) |> .toFixed(1);
 report("topLevel", input, text(top1));
 // @filename: twin.ts
-import { text, first, box, adder, report } from "./harness.js";
+import { text, box, adder, report } from "./harness.js";
 let t0: any, t1: any;
 const inputs: number[] = [1.5, 2];
 let input: number = inputs[0]!;
-const top0 = ((first: (n: number) => number) => (v: number) => first(v).toFixed(1))(adder(box(input)?.inner.value!));
+const top0 = ((head: (n: number) => number) => (v: number) => head(v).toFixed(1))(adder(box(input)?.inner.value!));
 report("topLevel", input, text(top0));
 input = inputs[1]!;
-const top1 = ((first: (n: number) => number) => (v: number) => first(v).toFixed(1))(adder(box(input)?.inner.value!));
+const top1 = ((head: (n: number) => number) => (v: number) => head(v).toFixed(1))(adder(box(input)?.inner.value!));
 report("topLevel", input, text(top1));

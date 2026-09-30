@@ -1,0 +1,7 @@
+differences from try_memberOfValue_declarationInitializer_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:31 ===
+  |   const value = (try read(box(input)?.inner.value!)).toFixed(2);
+  |                               ^ /*operand*/
+  tt only: value (Variable)
+

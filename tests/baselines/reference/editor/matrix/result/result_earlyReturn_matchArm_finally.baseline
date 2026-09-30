@@ -1,0 +1,7 @@
+differences from result_earlyReturn_matchArm_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.tt:5:81 ===
+  |     return match (flip()) { true => result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } return note("small", n); }, false => note("other arm", 0) };
+  |                                                                                 ^ /*operand*/
+  tt only: n (Variable)
+

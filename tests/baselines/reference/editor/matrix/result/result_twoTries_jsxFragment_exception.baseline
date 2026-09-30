@@ -1,0 +1,12 @@
+differences from result_twoTries_jsxFragment_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== completions /*operand*/ main.ttx:5:70 ===
+  |     return <>{note("before", "[")}{result { const a = try read(risky(input)); const b = try read(note("b", a - 3)); return [a, b]; }}{note("after", "]")}</>;
+  |                                                                      ^ /*operand*/
+  tt only: a (Variable)
+
+=== completions /*use*/ main.ttx:5:108 ===
+  |     return <>{note("before", "[")}{result { const a = try read(risky(input)); const b = try read(note("b", a - 3)); return [a, b]; }}{note("after", "]")}</>;
+  |                                                                                                            ^ /*use*/
+  tt only: b (Variable)
+

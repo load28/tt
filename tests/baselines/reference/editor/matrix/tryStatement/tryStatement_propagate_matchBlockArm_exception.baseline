@@ -1,0 +1,5 @@
+differences from tryStatement_propagate_matchBlockArm_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  tt only: main "try read(risky(input))" error TS"try-placement": `try` cannot be used here, in an isolated value region — it compiles to a `return`, which would complete this construct's value instead of returning from the enclosing function
+
