@@ -814,3 +814,36 @@ fn a_for_head_initializer_that_reads_a_head_binding_is_a_placement_error() {
         assert!(!out.contains("match ("), "{head}: {out}");
     }
 }
+
+#[test]
+fn a_value_nested_in_a_for_head_initializer_runs_before_the_loop() {
+    // TASK-601: a value that is an operand of a `for` head's initializer
+    // (an argument, the right side of an assignment, a comma operand), not
+    // the initializer itself, composes before the loop like any other
+    // operand, instead of reaching emission without a plan.
+    let prelude = "variant O { A(n: number), B }\ndeclare const o: O;\ndeclare function g(n: number): number;\ntype R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\ndeclare function r(): R;\n";
+    let cases = [
+        (
+            "for (let x = g(match (o) { A(n) => n, B => 0 }); x < 1; x++) {}",
+            "for (let x = $tt_v0; x < 1; x++) {}",
+        ),
+        (
+            "let y = 0; for (y = match (o) { A(n) => n, B => 0 }; y < 1; y++) {}",
+            "for (y = $tt_v0; y < 1; y++) {}",
+        ),
+        (
+            "let y = 0, i = 0; for (y = try r(), i = 1; y < 1; y++) {}",
+            "for (y = $tt_v0, i = 1; y < 1; y++) {}",
+        ),
+        (
+            "for (let x = try r(), i = 0; i < 1; i++) {}",
+            "for (let x = $tt_v0, i = 0; i < 1; i++) {}",
+        ),
+    ];
+    for (body, head) in cases {
+        let out = ok(&format!(
+            "{prelude}export function f(): R {{ {body} return r(); }}\n"
+        ));
+        assert!(out.contains(head), "{body}: {out}");
+    }
+}

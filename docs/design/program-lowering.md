@@ -547,6 +547,15 @@ nested destructuring target counts as a reference; a type annotation's
 name is counted as well, which can only reject, never accept wrongly. A
 `var` head binds in the function, so nothing moves out of its scope.
 
+A value that is an operand of a `for` initializer rather than the whole
+initializer (`for (let x = g(match ...); ...)`, `for (x = try r(); ...)`,
+`for (x = try r(), i = 0; ...)`) composes before the loop like an operand
+anywhere else (TASK-601): the initializer runs once, before the first test,
+and an expression initializer declares nothing, so the prelude and the
+rest of the initializer evaluate in the original order. A value-form `try`
+that is a whole first declarator (`for (let x = try r(), i = 0; ...)`)
+lowers like a match there.
+
 ### 7.10 The condition of a conditional operation (TASK-595)
 
 A conditional operation that holds a value (`c ? v : w`, `l && v`,

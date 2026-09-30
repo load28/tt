@@ -5,8 +5,10 @@
 - **Completed**: 2026-09-30
 - **Commit**: see `git log --grep TASK-593`
 
-> Follow-up: TASK-600 closes Issue 2 (a closure in the first declarator's
-> value that names a head binding is now a placement diagnostic).
+> Follow-ups: TASK-600 closes Issue 2 (a closure in the first declarator's
+> value that names a head binding is now a placement diagnostic), and
+> TASK-601 lowers the value-form `try` in the first declarator of a
+> multi-declarator head that the Scope section excludes.
 
 ## Purpose
 

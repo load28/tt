@@ -606,6 +606,7 @@
 | TASK-598 | Declare pipeline helpers in a module written with CommonJS syntax | Complete | 2026-09-30 | 2026-09-30 | [TASK-598](./TASK-598-commonjs-module-runtime-helpers.md) |
 | TASK-599 | Report a broken `if let` chain once, where it stops | Complete | 2026-09-30 | 2026-09-30 | [TASK-599](./TASK-599-stray-if-let-owner.md) |
 | TASK-600 | Reject a for-head value whose initializer reads a head binding | Complete | 2026-09-30 | 2026-09-30 | [TASK-600](./TASK-600-loop-head-binding-references.md) |
+| TASK-601 | Lower a value inside a for initializer's operands before the loop | Complete | 2026-09-30 | 2026-09-30 | [TASK-601](./TASK-601-for-initializer-operands.md) |
 | TASK-602 | Recover an unfinished `if let` only as far as TypeScript reads its statement | Complete | 2026-09-30 | 2026-09-30 | [TASK-602](./TASK-602-stray-if-let-stays-local.md) |
 | TASK-603 | Answer signature help for the source call, never for a generated one | Complete | 2026-09-30 | 2026-09-30 | [TASK-603](./TASK-603-signature-help-for-source-calls.md) |
 | TASK-604 | Keep a `try`'s signature help the same while the file has a syntax error | Complete | 2026-09-30 | 2026-09-30 | [TASK-604](./TASK-604-try-signature-help-with-syntax-errors.md) |

@@ -1129,7 +1129,9 @@ impl TargetRewritePlan {
                     .values
                     .iter()
                     .filter(|value| {
-                        value.context.continuation == HostContinuation::Compose
+                        (value.context.continuation == HostContinuation::Compose
+                            || (value.context.continuation == HostContinuation::ForInitialize
+                                && !value.schedule.steps().is_empty()))
                             && !value
                                 .schedule
                                 .steps()

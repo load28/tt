@@ -707,9 +707,6 @@ impl std::fmt::Display for EvaluationError {
             EvaluationError::RepeatedPropagation { .. } => {
                 "a propagation would repeat in its loop header"
             }
-            EvaluationError::UnsupportedForInitializer { .. } => {
-                "a `for` initializer assignment has no statement-safe rewrite"
-            }
         };
         f.write_str(reason)
     }
@@ -769,9 +766,15 @@ pub(crate) enum EvaluationError {
     RepeatedPropagation {
         source: SourceSpan,
     },
-    /// Only a declaration initializer can retain its successful payload in a
-    /// C-style `for` header. An assignment has no statement-safe rewrite.
-    UnsupportedForInitializer {
-        source: SourceSpan,
-    },
+}
+
+impl EvaluationError {
+    pub(crate) fn source(&self) -> Option<SourceSpan> {
+        match self {
+            EvaluationError::DiscardedResult { source }
+            | EvaluationError::RepeatedPropagation { source } => Some(*source),
+            EvaluationError::InvalidHostOwner { value, .. } => Some(*value),
+            _ => None,
+        }
+    }
 }

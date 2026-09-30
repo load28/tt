@@ -117,15 +117,17 @@ pub(crate) fn lowering_plan_with(
     let evaluation =
         crate::evaluation_ir::EvaluationFile::build(&syntax, core).map_err(|error| {
             LoweringFailure::Evaluation {
+                source: error.source().unwrap_or_else(primary_source),
                 error,
-                source: primary_source(),
             }
         })?;
     let plan = evaluation
         .lowering_plan(core)
         .map_err(|error| LoweringFailure::Evaluation {
+            source: error
+                .source()
+                .unwrap_or_else(|| evaluation.primary_source()),
             error,
-            source: evaluation.primary_source(),
         })?;
     // The plan validators are pipeline stages, not tests: a violated
     // evaluation contract fails the build here, before emission starts

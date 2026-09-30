@@ -361,16 +361,15 @@ fn try_in_repeated_for_test_reports_a_located_lowering_diagnostic() {
 }
 
 #[test]
-fn try_assignment_in_for_initializer_reports_a_located_lowering_diagnostic() {
-    let source = "function f() { for (i = try next();;) {} }\n";
-    let diagnostics = ttc::analyze(source, &Options::default());
+fn try_assignment_in_for_initializer_runs_before_the_loop() {
+    let output = ok("function f() { for (i = try next();;) {} }\n");
+    let prelude = output.find("const $tt_t0 = next();").unwrap();
+    let loop_header = output.find("for (i = $tt_v0;;)").unwrap();
+    assert!(prelude < loop_header, "{output}");
     assert!(
-        diagnostics
-            .iter()
-            .any(|diagnostic| diagnostic.code == ttc::DiagnosticCode::LoweringPlanFailed),
-        "{diagnostics:#?}"
+        compact(&output).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
+        "{output}"
     );
-    assert_eq!(diagnostics[0].start, Some(source.find("try").unwrap()));
 }
 
 #[test]

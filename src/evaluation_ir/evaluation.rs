@@ -636,29 +636,6 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
             };
-            let Expr::Propagate(propagate) = &core.exprs[expr.index()] else {
-                continue;
-            };
-            if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
-                continue;
-            }
-            let RegionPlacement::Host {
-                context, source, ..
-            } = &region.placement
-            else {
-                continue;
-            };
-            if context.continuation == HostContinuation::ForInitialize
-                && !context.loop_head_declarator
-                && !context.loop_head_binding
-            {
-                return Err(EvaluationError::UnsupportedForInitializer { source: *source });
-            }
-        }
-        for region in &self.regions {
-            let Some(CoreRoot::Expr(expr)) = region.root else {
-                continue;
-            };
             if !matches!(core.exprs[expr.index()], Expr::ResultRegion(_)) {
                 continue;
             }
