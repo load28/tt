@@ -5,6 +5,12 @@
 - **Completed**: 2026-09-28
 - **Commit**: —
 
+> TASK-671 reclassifies a projection parse that stops at the first byte of
+> an outermost placeholder as `source-not-typescript` at the construct:
+> `const x = variant Dir { Up, Down }` now reports that, at the variant,
+> instead of `lowering-plan-failed`. Decision 2 still holds for a failure
+> inside a placeholder.
+
 ## Purpose
 
 `export default variant Dir { Up, Down }` failed with `lowering-plan-failed: the generated TypeScript for it does not parse: Expression expected`. The error was anchored at a different variant (`Shape` on line 1 when one was declared first) or at `export default ` when the variant was alone, so the report named neither the rule nor the construct.
