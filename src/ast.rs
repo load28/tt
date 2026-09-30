@@ -731,6 +731,7 @@ pub(crate) struct InstancePattern {
     /// written. An empty list is retained so sema can issue the dedicated
     /// "remove the braces" diagnostic.
     pub bindings: Option<Vec<Binding>>,
+    pub list: Option<Span>,
 }
 
 /// One literal alternative inside a pattern.
@@ -853,6 +854,7 @@ pub(crate) struct TagPattern {
     pub end: usize,
     /// `None` = no parens at all; `Some(vec)` = a (possibly empty) binding list.
     pub bindings: Option<Vec<Binding>>,
+    pub list: Option<Span>,
 }
 
 /// One binding inside a pattern's parens: `name`, `name: alias`, or —

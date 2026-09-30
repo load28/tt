@@ -233,6 +233,45 @@ const limit = 1;\n";
 }
 
 #[test]
+fn a_payload_list_whose_bindings_are_all_unused_is_faded_whole() {
+    require_tsgo!();
+    let source = "export variant S { A, B(x: number, y: string), C(v: S, w: number) }\n\
+export class Failure extends Error { code = 1; }\n\
+export function f(s: S, e: unknown): number {\n\
+\x20 const a = match (s) {\n\
+\x20   B(x, y) => 1,\n\
+\x20   C(v: B(x, y), w) => w,\n\
+\x20   C(v, w) => 2,\n\
+\x20   A => 3,\n\
+\x20 };\n\
+\x20 if let B(x: p, y: q) = s { console.log(1); }\n\
+\x20 const b = match (e) { is Failure { code, message } => 1, _ => 2 };\n\
+\x20 return a + b;\n\
+}\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let diagnostics = project.service_diagnostics(&file).unwrap();
+    let unused: Vec<_> = diagnostics
+        .iter()
+        .filter(|d| d.code == 6198 || d.code == 6133)
+        .map(|d| (d.range.start.line, utf16_slice(source, d.range), d.code, d.tags.clone()))
+        .collect();
+    use ttc::engine::ServiceTag::Unnecessary;
+    assert_eq!(
+        unused,
+        vec![
+            (4, "(x, y)", 6198, vec![Unnecessary]),
+            (5, "(x, y)", 6198, vec![Unnecessary]),
+            (6, "(v, w)", 6198, vec![Unnecessary]),
+            (9, "(x: p, y: q)", 6198, vec![Unnecessary]),
+            (10, "{ code, message }", 6198, vec![Unnecessary]),
+        ],
+        "{diagnostics:?}"
+    );
+}
+
+#[test]
 fn the_guard_of_an_arm_with_no_body_is_served() {
     require_tsgo!();
     let decl = "export variant Shape { Circle(radius: number), Rect(width: number), Point }\n\

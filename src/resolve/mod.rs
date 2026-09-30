@@ -602,7 +602,7 @@ impl Resolver {
                     }
                 }
             }
-            Pat::Constructor { path, fields } => {
+            Pat::Constructor { path, fields, .. } => {
                 self.resolve_constructor(hir, site, path, fields.as_deref(), variant_def);
             }
         }
@@ -709,7 +709,7 @@ impl Resolver {
                     // its instantiation belongs to TypeScript and an exact tag
                     // elsewhere in scope is not proof of ownership.
                     if let FieldBinding::Nested(inner) = &field_pat.binding
-                        && let Pat::Constructor { path, fields } = &hir.patterns[*inner]
+                        && let Pat::Constructor { path, fields, .. } = &hir.patterns[*inner]
                         && let Some(nested_variant) = self.variant_of_type(&declared[index].1)
                     {
                         self.resolve_constructor(

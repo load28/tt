@@ -79,6 +79,14 @@ pub(crate) struct InsertedGlue {
     pub out_end: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DestructuredList {
+    pub src: usize,
+    pub src_end: usize,
+    pub out: usize,
+    pub out_end: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SharedBinding {
     pub out: usize,
@@ -217,6 +225,7 @@ pub struct MappedEmit {
     pub(crate) generated_names: std::collections::HashSet<String>,
     pub(crate) declared_names: Vec<DeclaredName>,
     pub(crate) shared_bindings: Vec<SharedBinding>,
+    pub(crate) destructured_lists: Vec<DestructuredList>,
     /// Glue written at a source point, ordered by output offset.
     pub(crate) inserted: Vec<InsertedGlue>,
     /// The compiler support modules the emitted code imports, in
@@ -355,6 +364,7 @@ pub(crate) fn emit_mapped_parsed(
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
+        destructured_lists: flat.destructured_lists,
         inserted: flat.inserted,
         support_imports: flat.support_imports,
         commonjs: flat.commonjs,

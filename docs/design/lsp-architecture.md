@@ -280,6 +280,15 @@ completion position by its preceding token (`getCompletionData`'s
 `contextToken`). An arm whose body is not written yet (TASK-605) is
 completed with expressions from the first keystroke.
 
+**Update (TASK-633)**: the emission records each object pattern it writes
+for a whole field list (`DestructuredList`: `{ x, y }` stands for the
+source's `(x, y)`), and a service diagnostic whose span is exactly such a
+pattern maps to the list as an exact origin. TypeScript's 6198 "All
+destructured elements are unused" then fades `(x, y)` with its
+`Unnecessary` tag. A destructuring of part of a list (a nested pattern) or
+of several lists (an or-pattern) records nothing, and a suggestion there is
+still dropped (TASK-515).
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

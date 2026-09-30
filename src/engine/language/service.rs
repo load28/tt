@@ -20,6 +20,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
             anchors: Vec::new(),
             declared_names: Vec::new(),
             shared_bindings: Vec::new(),
+            destructured_lists: Vec::new(),
             recovered: Vec::new(),
             tt_diagnostics: Vec::new(),
             generated_names: HashSet::new(),
@@ -54,6 +55,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         anchors: emit.anchors,
         declared_names: emit.declared_names,
         shared_bindings: emit.shared_bindings,
+        destructured_lists: emit.destructured_lists,
         recovered,
         tt_diagnostics: report.diagnostics,
         generated_names: emit.generated_names,
@@ -1125,7 +1127,17 @@ pub(super) fn diagnostic_source_span(
 ) -> Option<(usize, usize, mapper::DiagnosticOrigin)> {
     let sb = mapper::from_utf16(&doc.code, start);
     let eb = mapper::from_utf16(&doc.code, end);
-    let origin = mapper::diagnostic_origin(&doc.mappings, &doc.anchors, sb, eb)?;
+    let origin = match doc
+        .destructured_lists
+        .iter()
+        .find(|list| list.out == sb && list.out_end == eb)
+    {
+        Some(list) => mapper::DiagnosticOrigin::Exact {
+            start: list.src,
+            end: list.src_end,
+        },
+        None => mapper::diagnostic_origin(&doc.mappings, &doc.anchors, sb, eb)?,
+    };
     let (start, end) = match origin {
         mapper::DiagnosticOrigin::Exact { start, end } => (start, end),
         mapper::DiagnosticOrigin::Anchor(anchor) => (anchor.src, anchor.src_end),

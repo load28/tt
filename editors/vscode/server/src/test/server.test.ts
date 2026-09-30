@@ -722,6 +722,45 @@ test(
   },
 );
 
+const UNUSED_LIST_SOURCE = [
+  "variant S { A, B(x: number, y: string) }",
+  "export function run(s: S): number {",
+  "  return match (s) {",
+  "    A => 0,",
+  "    B(x, y) => 1,",
+  "  };",
+  "}",
+  'export const wrong: number = "x";',
+  "",
+].join("\n");
+
+test(
+  "a payload list whose bindings are all unused is faded whole",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, uri, stop } = await open(UNUSED_LIST_SOURCE);
+    try {
+      const published = await client.waitFor(
+        "textDocument/publishDiagnostics",
+        (params) =>
+          params.uri === uri &&
+          params.diagnostics.some((diagnostic: any) => String(diagnostic.code).endsWith("2322")),
+      );
+      const seen = published.diagnostics.map((d: any) => [
+        covered(UNUSED_LIST_SOURCE, d.range),
+        d.severity,
+        d.tags ?? [],
+      ]);
+      assert.deepEqual(seen, [
+        ["(x, y)", 4, [1]],
+        ['"x"', 1, []],
+      ]);
+    } finally {
+      stop();
+    }
+  },
+);
+
 const AUTO_IMPORT_SOURCE = [
   "export const piped = 1 |> String;",
   "export const value = help",

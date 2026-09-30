@@ -213,6 +213,10 @@ fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
         binding.out = shifted(edits, binding.out, true);
         binding.out_end = shifted(edits, binding.out_end, false);
     }
+    for list in &mut emit.destructured_lists {
+        list.out = shifted(edits, list.out, true);
+        list.out_end = shifted(edits, list.out_end, false);
+    }
     for glue in &mut emit.inserted {
         glue.out = shifted(edits, glue.out, true);
         glue.out_end = shifted(edits, glue.out_end, false);

@@ -64,6 +64,10 @@ pub(super) fn parse_let_else<'t>(
         tag_off: tag_span.start,
         end: cur.tokens[close].span.end,
         bindings: Some(bindings),
+        list: Some(crate::ast::Span {
+            start: cur.tokens[open].span.start,
+            end: cur.tokens[close].span.end,
+        }),
     }];
     while cur.at_punct(b'|') {
         cur.bump();

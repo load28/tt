@@ -205,6 +205,20 @@ impl<'a> Rope<'a> {
         });
     }
 
+    pub(crate) fn push_destructured_list_start(&mut self, src: usize) {
+        self.pieces.push(Piece::Mark {
+            src,
+            kind: MarkKind::DestructuredListStart,
+        });
+    }
+
+    pub(crate) fn push_destructured_list_end(&mut self, src_end: usize) {
+        self.pieces.push(Piece::Mark {
+            src: src_end,
+            kind: MarkKind::DestructuredListEnd,
+        });
+    }
+
     pub(crate) fn push_shared_binding(
         &mut self,
         text: impl Into<Cow<'a, str>>,
@@ -569,6 +583,7 @@ pub(crate) struct Flat {
     pub generated_names: std::collections::HashSet<String>,
     pub declared_names: Vec<DeclaredName>,
     pub shared_bindings: Vec<SharedBinding>,
+    pub destructured_lists: Vec<crate::DestructuredList>,
     pub inserted: Vec<crate::InsertedGlue>,
     pub support_imports: Vec<crate::StdModule>,
     pub commonjs: bool,

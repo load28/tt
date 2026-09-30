@@ -49,6 +49,8 @@ pub(crate) enum MarkKind {
     ResultReturnEnd,
     DeclaredNameStart,
     DeclaredNameEnd,
+    DestructuredListStart,
+    DestructuredListEnd,
     SharedBindingStart,
     SharedBindingOccurrence {
         end: usize,
@@ -615,6 +617,7 @@ impl<'a> TargetFile<'a> {
         let mut asserted_slots = Vec::new();
         let mut declared_names: Vec<DeclaredName> = Vec::new();
         let mut shared_bindings: Vec<SharedBinding> = Vec::new();
+        let mut destructured_lists: Vec<crate::DestructuredList> = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
         let mut inserted: Vec<crate::InsertedGlue> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
@@ -759,6 +762,28 @@ impl<'a> TargetFile<'a> {
                     name.out_end = out.len();
                 }
                 TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::DestructuredListStart,
+                } => destructured_lists.push(crate::DestructuredList {
+                    src: *src,
+                    src_end: *src,
+                    out: out.len(),
+                    out_end: out.len(),
+                }),
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::DestructuredListEnd,
+                } => {
+                    let list = destructured_lists
+                        .last_mut()
+                        .filter(|list| list.out_end == list.out && list.src <= *src)
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("destructured list end has no matching start")
+                        });
+                    list.src_end = *src;
+                    list.out_end = out.len();
+                }
+                TargetPiece::Mark {
                     kind: MarkKind::SharedBindingStart,
                     ..
                 } => shared_bindings.push(SharedBinding {
@@ -848,6 +873,7 @@ impl<'a> TargetFile<'a> {
             generated_names: std::collections::HashSet::new(),
             declared_names,
             shared_bindings,
+            destructured_lists,
             inserted,
             support_imports: Vec::new(),
             commonjs: false,

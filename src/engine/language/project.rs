@@ -1450,6 +1450,7 @@ impl Project {
                     anchors: projected.emit.anchors.clone(),
                     declared_names: projected.emit.declared_names.clone(),
                     shared_bindings: projected.emit.shared_bindings.clone(),
+                    destructured_lists: projected.emit.destructured_lists.clone(),
                     recovered: projected.recovered.clone(),
                     tt_diagnostics: projected.tt_diagnostics.clone(),
                     generated_names: projected.emit.generated_names.clone(),
