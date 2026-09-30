@@ -1120,6 +1120,59 @@ fn types_join_storage_after_the_storage_its_values_read() {
 }
 
 #[test]
+fn types_renders_only_assignability_reports_as_type_mismatches() {
+    require_types_toolchain!();
+    // TASK-585: an arity error, a pipeline step's arity error and a JSX
+    // element's missing props keep TypeScript's own sentence; the argument
+    // that does not fit its parameter is a mismatch of its own.
+    let (ok, err) = types_project_output(
+        "{ \"compilerOptions\": { \"strict\": true, \"target\": \"es2022\", \"module\": \"esnext\", \"moduleResolution\": \"bundler\", \"jsx\": \"preserve\", \"noEmit\": true }, \"include\": [\"src\"] }\n",
+        &[
+            (
+                "src/a.tt",
+                "function g(a: number): number { return a; }\n\
+                 function f(s: string): string { return s; }\n\
+                 export const r = f(g());\n\
+                 function scale(x: number, by: number): number { return x * by; }\n\
+                 declare const x: number;\n\
+                 export const y = x |> scale();\n",
+            ),
+            (
+                "src/b.ttx",
+                "declare global {\n\
+                 \x20 namespace JSX {\n\
+                 \x20   interface Element { readonly tag: string }\n\
+                 \x20   interface IntrinsicElements { div: {} }\n\
+                 \x20 }\n\
+                 }\n\
+                 function Row(props: { label: string }): JSX.Element { return { tag: props.label }; }\n\
+                 export const view = <Row />;\n",
+            ),
+        ],
+    );
+    assert!(!ok, "{err}");
+    assert!(
+        err.contains("error[ts2554]: Expected 1 arguments, but got 0.\n --> src/a.tt:3:20"),
+        "{err}"
+    );
+    assert!(
+        err.contains(
+            "error[ts2345]: type mismatch: expected `string`, found `number`\n --> src/a.tt:3:20"
+        ),
+        "{err}"
+    );
+    assert!(
+        err.contains("error[ts2554]: Expected 2 arguments, but got 0.\n --> src/a.tt:6:23"),
+        "{err}"
+    );
+    assert!(
+        err.contains("error[ts2741]: Property 'label' is missing in type '{}' but required in type '{ label: string; }'."),
+        "{err}"
+    );
+    assert!(!err.contains("found `(props"), "{err}");
+}
+
+#[test]
 fn types_does_not_count_a_guarded_arm_as_covering() {
     require_types_toolchain!();
     let err = types_stderr(

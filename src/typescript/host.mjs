@@ -839,7 +839,8 @@ async function main() {
           if (open.tsconfig && whole) out.projectDiagnostics.push({ file: null, code: d.code, message: d.text });
           continue;
         }
-        const mismatch = contextualMismatch(project, checker, d, isExpression);
+        const mismatch = contextualMismatch(project, checker, d, isExpression, SyntaxKind);
+        const receiver = lookupReceiver(project, d, SyntaxKind);
         const related = relatedPlaces(d);
         out.diagnostics.push({
           file: d.fileName,
@@ -848,6 +849,7 @@ async function main() {
           code: d.code,
           message: d.text,
           ...(mismatch ? { mismatch } : {}),
+          ...(receiver ? { receiver } : {}),
           ...(related.length > 0 ? { related } : {}),
         });
       }
@@ -1235,12 +1237,6 @@ function denotes(checker, node, type, location, excluded, { SyntaxKind, SymbolFl
 }
 
 /**
- * Finds the expression TypeScript compared with a contextual type for a
- * diagnostic. This is syntax-neutral: return values, annotated initializers,
- * call arguments and future lowered constructs all participate through the
- * checker’s contextual typing relation.
- */
-/**
  * The checker's own related places — "the expected type comes from this
  * declaration", "first declared here" — normalized to the diagnostic item
  * shape. The property names differ between clients, so both spellings are
@@ -1263,67 +1259,140 @@ function relatedPlaces(diagnostic) {
   return out;
 }
 
-function contextualMismatch(project, checker, diagnostic, isExpression) {
+/**
+ * TypeScript's diagnostics that report a source type not assignable to a
+ * target type: the head messages of its assignability relation
+ * (`Type '{0}' is not assignable to type '{1}'`, the argument, missing
+ * property, weak type, `exactOptionalPropertyTypes` and `satisfies` forms).
+ * Any other diagnostic, an arity error at an argument included, is not a
+ * statement about an expression's type and its context.
+ */
+const ASSIGNABILITY_CODES = new Set([
+  1360, 2322, 2345, 2375, 2379, 2412, 2418, 2559, 2560, 2719, 2739, 2740, 2741, 2820,
+]);
+
+/**
+ * The expression an assignability diagnostic is about, with its type and
+ * its contextual type. TypeScript reports the relation of an expression's
+ * type to its contextual type at an error node that is either that
+ * expression or stands for it: the name of the declaration, property or JSX
+ * attribute it initializes, the `return` statement it is returned by, the
+ * target it is assigned to, or the tag name of the JSX element its
+ * attributes are passed to. The subject is found from the error node by
+ * that role, never by searching the span for some expression that does not
+ * fit its context. A JSX attribute is typed by its name, which TypeScript
+ * gives the attribute's type and the attribute's contextual type.
+ */
+function contextualMismatch(project, checker, diagnostic, isExpression, SyntaxKind) {
+  if (!ASSIGNABILITY_CODES.has(diagnostic.code)) return null;
   const sourceFile = project.program.getSourceFile(diagnostic.fileName);
   if (!sourceFile) return null;
+  const K = SyntaxKind;
 
-  const chain = [];
+  const starting = [];
   const visit = (node) => {
     if (node.pos > diagnostic.pos || node.end < diagnostic.end) return;
-    chain.push(node);
+    if (node.getStart(sourceFile) === diagnostic.pos) starting.push(node);
     node.forEachChild(visit);
   };
   visit(sourceFile);
 
-  for (let i = chain.length - 1; i >= 0; i--) {
-    const node = chain[i];
-    const candidates = [];
-    if (isExpression(node)) candidates.push(node);
-    node.forEachChild((child) => {
-      if (isExpression(child)) candidates.push(child);
-    });
-    candidates.sort((left, right) => right.getWidth(sourceFile) - left.getWidth(sourceFile));
-    for (const expression of candidates) {
-      let found;
-      let expected;
-      try {
-        found = checker.getTypeAtLocation(expression);
-        expected = checker.getContextualType(expression);
-      } catch {
-        continue;
-      }
-      if (!found || !expected || found.isErrorType?.() || expected.isErrorType?.()) continue;
-      if (checker.isTypeAssignableTo(found, expected)) continue;
-      let declaration;
-      try {
-        const symbol = checker.getSymbolAtPosition(
-          sourceFile.fileName,
-          expression.getStart(sourceFile),
-        );
-        const handle = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
-        const node = handle?.resolve?.(project);
-        const file = node?.getSourceFile?.();
-        if (node && file && handle) {
-          declaration = {
-            file: file.fileName,
-            start: node.getStart(file),
-            end: node.getEnd(),
-          };
-        }
-      } catch {
-        declaration = undefined;
-      }
-      return {
-        start: expression.getStart(sourceFile),
-        end: expression.getEnd(),
-        expected: checker.typeToString(expected),
-        found: checker.typeToString(found),
-        differences: incompatibleLeaves(checker, found, expected),
-        ...(declaration ? { declaration } : {}),
+  const same = (left, right) => !!left && !!right && left.kind === right.kind && left.pos === right.pos && left.end === right.end;
+  const valueOf = (node) => {
+    const parent = node.parent;
+    if (node.kind === K.ReturnStatement) return node.expression;
+    if (!parent) return undefined;
+    if (parent.kind === K.JsxAttribute && same(parent.name, node)) return node;
+    if (same(parent.name, node) && parent.initializer) {
+      return parent.initializer;
+    }
+    if ((parent.kind === K.JsxOpeningElement || parent.kind === K.JsxSelfClosingElement) && same(parent.tagName, node)) {
+      return parent.attributes;
+    }
+    if (parent.kind === K.BinaryExpression && same(parent.left, node) && parent.operatorToken.kind === K.EqualsToken) {
+      return parent.right;
+    }
+    return undefined;
+  };
+  let expression;
+  for (let i = starting.length - 1; i >= 0 && !expression; i--) {
+    const node = starting[i];
+    expression = valueOf(node) ?? (isExpression(node) && node.end === diagnostic.end ? node : undefined);
+  }
+  if (!expression) return null;
+
+  let found;
+  let expected;
+  try {
+    found = checker.getTypeAtLocation(expression);
+    expected = checker.getContextualType(expression);
+  } catch {
+    return null;
+  }
+  if (!found || !expected || found.isErrorType?.() || expected.isErrorType?.()) return null;
+  if (checker.isTypeAssignableTo(found, expected)) return null;
+  let declaration;
+  try {
+    const symbol = checker.getSymbolAtPosition(
+      sourceFile.fileName,
+      expression.getStart(sourceFile),
+    );
+    const handle = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
+    const node = handle?.resolve?.(project);
+    const file = node?.getSourceFile?.();
+    if (node && file && handle) {
+      declaration = {
+        file: file.fileName,
+        start: node.getStart(file),
+        end: node.getEnd(),
       };
     }
+  } catch {
+    declaration = undefined;
   }
-  return null;
+  return {
+    start: expression.getStart(sourceFile),
+    end: expression.getEnd(),
+    expected: checker.typeToString(expected),
+    found: checker.typeToString(found),
+    differences: incompatibleLeaves(checker, found, expected),
+    ...(declaration ? { declaration } : {}),
+  };
+}
+
+/**
+ * TypeScript's diagnostics that say a property does not exist on a type,
+ * reported at the property's name.
+ */
+const MISSING_PROPERTY_CODES = new Set([2339, 2551]);
+
+/**
+ * The value a missing property was looked up on: the object of the
+ * property access whose name the diagnostic is at, or the value an object
+ * binding pattern destructures when the name is one of its elements.
+ */
+function lookupReceiver(project, diagnostic, SyntaxKind) {
+  if (!MISSING_PROPERTY_CODES.has(diagnostic.code)) return null;
+  const sourceFile = project.program.getSourceFile(diagnostic.fileName);
+  if (!sourceFile) return null;
+  const K = SyntaxKind;
+  let name;
+  const visit = (node) => {
+    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return;
+    if (node.getStart(sourceFile) === diagnostic.pos && node.end === diagnostic.end) name = node;
+    node.forEachChild(visit);
+  };
+  visit(sourceFile);
+  const parent = name?.parent;
+  let receiver;
+  if ((parent?.kind === K.PropertyAccessExpression && parent.name === name) ||
+      (parent?.kind === K.ElementAccessExpression && parent.argumentExpression === name)) {
+    receiver = parent.expression;
+  } else if (parent?.kind === K.BindingElement && (parent.propertyName ?? parent.name) === name &&
+      parent.parent?.kind === K.ObjectBindingPattern) {
+    receiver = parent.parent.parent?.initializer;
+  }
+  return receiver ? { start: receiver.getStart(sourceFile), end: receiver.getEnd() } : null;
 }
 
 /** The innermost expression whose source range contains the emitted value. */

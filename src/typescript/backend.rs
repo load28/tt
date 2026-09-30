@@ -197,6 +197,12 @@ pub(crate) struct Diagnostic {
     /// expression and its contextual type. The raw message remains the
     /// lossless fallback; renderers prefer these facts.
     pub mismatch: Option<TypeMismatch>,
+    /// UTF-16 range of the value a property lookup was made on, when the
+    /// diagnostic says a property does not exist on it: the object of
+    /// `value.name`, or the value an object binding pattern destructures.
+    /// The property is reported at its own name; the value it is missing
+    /// from is where the lookup came from.
+    pub receiver: Option<(usize, usize)>,
     /// The checker's own related places — "the expected type comes from
     /// this declaration", "first declared here" — each in the coordinates
     /// of the file it names. Empty when the checker offered none.

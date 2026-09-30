@@ -586,7 +586,8 @@
 | TASK-583 | Answer `--dependencies` and the server's `dependencies` through one implementation | Complete | 2026-09-29 | 2026-09-29 | [TASK-583](./TASK-583-one-dependencies-implementation.md) |
 | TASK-575 | Annotate storage only with names that denote the type's own declarations | Complete | 2026-09-29 | 2026-09-29 | [TASK-575](./TASK-575-annotations-name-their-type-declarations.md) |
 | TASK-584 | Infer a join only from values typed by settled storage | Complete | 2026-09-29 | 2026-09-29 | [TASK-584](./TASK-584-joins-wait-for-settled-inputs.md) |
+| TASK-585 | Render only TypeScript's assignability diagnostics as type mismatches, about their own subject | Complete | 2026-09-29 | 2026-09-30 | [TASK-585](./TASK-585-assignability-facts-only-for-assignability.md) |
 
 ## Next task number
 
-**TASK-585**
+**TASK-586**

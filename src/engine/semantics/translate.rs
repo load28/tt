@@ -303,18 +303,27 @@ pub(super) fn diagnostic_span(diagnostic: &TsDiagnostic) -> (usize, usize) {
 
 pub(super) fn finish_diagnostics(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
     diagnostics.sort_by(|left, right| {
-        (&left.path, left.position, left.end, &left.message).cmp(&(
-            &right.path,
-            right.position,
-            right.end,
-            &right.message,
-        ))
+        (
+            &left.path,
+            left.position,
+            left.end,
+            &left.message,
+            &left.code,
+        )
+            .cmp(&(
+                &right.path,
+                right.position,
+                right.end,
+                &right.message,
+                &right.code,
+            ))
     });
     diagnostics.dedup_by(|right, left| {
         left.path == right.path
             && left.position == right.position
             && left.end == right.end
             && left.message == right.message
+            && left.code == right.code
     });
     diagnostics
 }
