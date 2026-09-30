@@ -138,8 +138,20 @@ no compiler bug. Its failures are shown under Verification.
   panic was reverted.
 - [x] `node --check scripts/diagnostic-delta`; the workflow parses as YAML
   with the new `delta` job.
-- [x] The full gate ran over the final tree of TASK-647 to TASK-651 (see
-  below).
+- [x] Full gate over the final tree of TASK-647 to TASK-651, after merging
+  `claude/ecstatic-dijkstra-qw5pf9` at `f110eb9` (TASK-640 to TASK-643):
+  `cargo fmt --check`; `cargo clippy --all-targets -- -D warnings`;
+  `scripts/fetch-typescript-cases`, then `RUST_TEST_THREADS=2
+  TTC_REQUIRE_TSGO=1 TT_REQUIRE_EXTENSION=1 TTC_REQUIRE_TYPESCRIPT_CASES=1
+  TT_BASELINE_TRACKING_DIR=<dir> cargo test` with the extension's server
+  built (49 test binaries and doctests, 1775 passed, 0 failed, no `SKIP`,
+  8 minutes; `case_baselines` 28 seconds, `incremental` 13 seconds,
+  `public_api` 4 seconds); `node scripts/check-baselines --tracking <dir>`
+  ("baselines: 156 compared, none unused"; `tests/baselines/local/` stayed
+  empty); `cargo check --manifest-path fuzz/Cargo.toml --all-targets
+  --locked`; `./scripts/ci agents` passed (warnings: rolldown not on PATH,
+  doctor reports the checkout not ready, both environmental). The extension
+  suite was not run: no extension file changed.
 
 ## Result
 
