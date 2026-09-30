@@ -1,0 +1,11 @@
+=== shapes.tt ===
+export const shapeK = 1;
+>shapeK : const shapeK: 1
+
+=== main.tt ===
+export const y = shapeK + again;
+>y : const y: any
+>shapeK : (alias) const shapeK: 1
+export const later = import("./shapes.tt.js");
+>later : const later: Promise<typeof import("./shapes.tt.js")>
+

@@ -32,10 +32,22 @@ impl Project {
                 };
             }
         };
-        if let Some(info) = self.service_hover(&doc, &path, position)? {
-            return Ok(Some(info));
-        }
-        self.match_binding_hover(&doc, &path, position)
+        let info = match self.service_hover(&doc, &path, position)? {
+            Some(info) => Some(info),
+            None => self.match_binding_hover(&doc, &path, position)?,
+        };
+        Ok(info.map(|info| HoverInfo {
+            documentation: self.source_links(&info.documentation),
+            ..info
+        }))
+    }
+
+    /// `text` with each `{@link}` target TypeScript wrote into a served tt
+    /// document moved to the `.tt` source ([`service::source_links`]).
+    fn source_links(&mut self, text: &str) -> String {
+        let documents = self.overlays.clone();
+        let overlays = &*documents.read();
+        source_links(self.session(), overlays, text)
     }
 
     /// The plain service hover: the signature TypeScript shows, mapped onto
@@ -554,7 +566,7 @@ impl Project {
             }
         }
         if let Some(crate::engine::completions::PatternQuestion {
-            typed: Some(crate::engine::completions::TypedSite::Field { written }),
+            typed: Some(crate::engine::completions::TypedSite::Field { written, .. }),
             ..
         }) = crate::engine::completions::pattern_question(
             &path,
@@ -645,6 +657,7 @@ impl Project {
         else {
             return Ok(None);
         };
+        let finish = question.finisher();
         let items = match question.typed {
             Some(TypedSite::Arm {
                 prefix,
@@ -665,13 +678,16 @@ impl Project {
                     None => question.items,
                 }
             }
-            Some(TypedSite::Field { written }) => {
+            Some(TypedSite::Field {
+                written,
+                claimed: true,
+            }) => {
                 let fields = self.field_candidates(&doc, &path, position)?;
                 field_candidates(question.items, fields, &written)
             }
-            None => question.items,
+            Some(TypedSite::Field { claimed: false, .. }) | None => question.items,
         };
-        Ok(Some(items))
+        Ok(Some(finish.finish(items)))
     }
 
     fn discriminant_candidates(
@@ -745,7 +761,7 @@ impl Project {
             let candidates: Vec<Discriminant> = answer?
                 .items
                 .iter()
-                .filter(|item| item.kind != "keyword")
+                .filter(|item| item.kind != Some(crate::engine::CompletionItemKind::Keyword))
                 .filter_map(|item| discriminant(&item.label, family))
                 .collect();
             if !candidates.is_empty() {
@@ -856,12 +872,20 @@ impl Project {
             .as_array()
             .into_iter()
             .flatten()
-            .map(|edit| source_edit(&code, mappings, inserted, &doc.source, splice, edit))
+            .map(|edit| {
+                source_edit(&code, mappings, inserted, &doc.source, splice, edit).map(|edit| {
+                    TextEdit {
+                        new_text: tt_specifiers_in(session, &path, &edit.new_text),
+                        ..edit
+                    }
+                })
+            })
             .collect::<Option<Vec<_>>>()
             .unwrap_or_default();
+        let documentation = docs_text(&resolved["documentation"]);
         Ok(Some(CompletionDetail {
             signature: resolved["detail"].as_str().unwrap_or_default().to_string(),
-            documentation: docs_text(&resolved["documentation"]),
+            documentation: self.source_links(&documentation),
             additional_edits,
         }))
     }
@@ -1097,6 +1121,10 @@ impl Project {
         let Some(signatures) = help["signatures"].as_array().filter(|s| !s.is_empty()) else {
             return Ok(None);
         };
+        let mut linked = |documentation: &serde_json::Value| {
+            let text = docs_text(documentation);
+            self.source_links(&text)
+        };
         Ok(Some(SignatureHelp {
             signatures: signatures
                 .iter()
@@ -1110,12 +1138,12 @@ impl Project {
                                     .iter()
                                     .map(|parameter| SignatureParameter {
                                         label: parameter_span(&label, &parameter["label"]),
-                                        documentation: docs_text(&parameter["documentation"]),
+                                        documentation: linked(&parameter["documentation"]),
                                     })
                                     .collect()
                             })
                             .unwrap_or_default(),
-                        documentation: docs_text(&signature["documentation"]),
+                        documentation: linked(&signature["documentation"]),
                         label,
                     }
                 })

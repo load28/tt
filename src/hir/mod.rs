@@ -389,6 +389,8 @@ pub struct LetElseStmt {
     pub site: PatternSiteId,
     /// Declaration mode of the binding introduced after the decision.
     pub binding_mode: BindingMode,
+    /// Whether the bindings are exported (`export const Tag(...) = ...`).
+    pub exported: bool,
     /// The `else { ... }` block's statements.
     pub else_body: BodyId,
     /// Whether every path through the `else` block leaves it, answered on

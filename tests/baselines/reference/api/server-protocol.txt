@@ -244,13 +244,14 @@ params read: banner, filename, includeTypes, isRetrigger, label, member, path, p
         detail: null
         filterText: null
         insertText: null
-        kind: string
+        kind: number
         label: string
         labelDetails: null
         range: null
         snippet: boolean
         sortText: string
         source: null
+        tags: []
       }]
       member: boolean
       probe: null
@@ -426,6 +427,7 @@ params read: banner, filename, includeTypes, isRetrigger, label, member, path, p
         detail: string
         kind: string
         label: string
+        range: null
       }]
     }
   }

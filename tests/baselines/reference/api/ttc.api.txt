@@ -64,6 +64,74 @@ impl Unpin for BackendErrorKind
 impl UnsafeUnpin for BackendErrorKind
 impl UnwindSafe for BackendErrorKind
 
+// enum ttc::engine::CompletionItemKind
+pub enum CompletionItemKind {
+Show 25 variants    Text,
+    Method,
+    Function,
+    Constructor,
+    Field,
+    Variable,
+    Class,
+    Interface,
+    Module,
+    Property,
+    Unit,
+    Value,
+    Enum,
+    Keyword,
+    Snippet,
+    Color,
+    File,
+    Reference,
+    Folder,
+    EnumMember,
+    Constant,
+    Struct,
+    Event,
+    Operator,
+    TypeParameter,
+}
+impl CompletionItemKind
+    pub fn from_lsp(value: u64) -> Option<CompletionItemKind>
+    pub fn lsp(self) -> u8
+impl Clone for CompletionItemKind
+impl Copy for CompletionItemKind
+impl Debug for CompletionItemKind
+impl Eq for CompletionItemKind
+impl Hash for CompletionItemKind
+impl PartialEq for CompletionItemKind
+impl StructuralPartialEq for CompletionItemKind
+impl Freeze for CompletionItemKind
+impl RefUnwindSafe for CompletionItemKind
+impl Send for CompletionItemKind
+impl Sync for CompletionItemKind
+impl Unpin for CompletionItemKind
+impl UnsafeUnpin for CompletionItemKind
+impl UnwindSafe for CompletionItemKind
+
+// enum ttc::engine::CompletionItemTag
+pub enum CompletionItemTag {
+    Deprecated,
+}
+impl CompletionItemTag
+    pub fn from_lsp(value: u64) -> Option<CompletionItemTag>
+    pub fn lsp(self) -> u8
+impl Clone for CompletionItemTag
+impl Copy for CompletionItemTag
+impl Debug for CompletionItemTag
+impl Eq for CompletionItemTag
+impl Hash for CompletionItemTag
+impl PartialEq for CompletionItemTag
+impl StructuralPartialEq for CompletionItemTag
+impl Freeze for CompletionItemTag
+impl RefUnwindSafe for CompletionItemTag
+impl Send for CompletionItemTag
+impl Sync for CompletionItemTag
+impl Unpin for CompletionItemTag
+impl UnsafeUnpin for CompletionItemTag
+impl UnwindSafe for CompletionItemTag
+
 // enum ttc::engine::PrepareRename
 pub enum PrepareRename {
     Range(Range),
@@ -461,7 +529,8 @@ impl UnwindSafe for CompletionDetail
 // struct ttc::engine::CompletionItem
 pub struct CompletionItem {
     pub label: String,
-    pub kind: String,
+    pub kind: Option<CompletionItemKind>,
+    pub tags: Vec<CompletionItemTag>,
     pub sort_text: String,
     pub insert_text: Option<String>,
     pub filter_text: Option<String>,
@@ -1107,6 +1176,7 @@ pub struct TtCompletion {
     pub kind: TtCompletionKind,
     pub detail: String,
     pub covered: bool,
+    pub range: Option<Range>,
 }
 impl Clone for TtCompletion
 impl Debug for TtCompletion
@@ -2607,6 +2677,7 @@ pub struct LetElseStmt {
     pub node: NodeId,
     pub site: PatternSiteId,
     pub binding_mode: BindingMode,
+    pub exported: bool,
     pub else_body: BodyId,
     pub else_diverges: bool,
 }

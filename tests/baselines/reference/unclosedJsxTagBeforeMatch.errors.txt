@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expected '</', got '('. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./unclosedJsxTagBeforeMatch.ttx:9:8
+  |
+9 |       {match (s) { Idle => "i", Busy => "b" }}
+  |        ^
+
+
+==== ttc --check-types (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expected '</', got '('. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> unclosedJsxTagBeforeMatch.ttx:9:8
+  |
+9 |       {match (s) { Idle => "i", Busy => "b" }}
+  |        ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

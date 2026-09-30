@@ -2,11 +2,20 @@
   | export const z = kkVa;
   |                      ^ /*typed*/
 completion: 1061 item(s), member false, probe no
-  z (var, 11)
-  kkValue (var, 16) from "./shapes.tt" source "./shapes.tt"
-  kkValueLib (var, 16) from "./lib" source "./lib"
+  z (Variable, 11)
+  kkValue (Variable, 16) from "./shapes.tt" source "./shapes.tt"
+  kkValueLib (Variable, 16) from "./lib" source "./lib"
   ... 1058 global or keyword item(s) (sortText 15, no source)
+  resolve kkValue from "./shapes.tt": 1 edit(s)
+    1:1-1:1 "" -> "import { kkValue } from \"./shapes.tt\";\n\n"
+  resolve kkValueLib from "./lib": 1 edit(s)
+    1:1-1:1 "" -> "import { kkValueLib } from \"./lib\";\n\n"
 ttCompletions: pattern false, member null
   keywords: match (15), flow (15), result (15)
 patternCompletions: null
+editor completion: 1064 item(s)
+  z (Variable, 211)
+  kkValue (Variable, 216)
+  kkValueLib (Variable, 216)
+  ... 1061 global or keyword item(s) (sortText 215, no source)
 

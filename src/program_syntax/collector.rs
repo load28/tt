@@ -133,7 +133,9 @@ fn parse_failure_at(
     message: String,
 ) -> ProgramSyntaxError {
     let at = ProjectedByte(at.min(code.len().saturating_sub(1)));
-    match source_byte_for_projection(segments, at) {
+    match source_byte_for_projection(segments, at)
+        .or_else(|| outermost_placeholder_at(segments, at))
+    {
         Some(source) => ProgramSyntaxError::SourceNotTypeScript { message, source },
         None => ProgramSyntaxError::Parse {
             message,
@@ -149,6 +151,36 @@ fn parse_failure_at(
                 .map(|segment| segment.source),
         },
     }
+}
+
+/// The source start of the tt construct whose placeholder begins at `at`,
+/// when no other placeholder encloses it.
+///
+/// A placeholder stands for its construct in the syntactic category the
+/// parser claimed it in, in the smallest form of that category (a
+/// parenthesized name for a value, a block for a statement, a `const` for a
+/// declaration). When the parse stops at its first byte, and only copied
+/// source precedes it, the source admits no form of that category where
+/// the construct is written: the program as written does not parse there,
+/// whatever ttc generates. It is reported at the construct, where
+/// TypeScript's parser stops on the same text.
+fn outermost_placeholder_at(
+    segments: &[ProjectionSourceSegment],
+    at: ProjectedByte,
+) -> Option<usize> {
+    let placeholders = || {
+        segments
+            .iter()
+            .filter(|segment| segment.kind == ProjectionSegmentKind::Placeholder)
+    };
+    let starting = placeholders()
+        .filter(|segment| segment.projected.start == at)
+        .max_by_key(|segment| segment.projected.end.0)?;
+    let enclosed = placeholders().any(|other| {
+        other.projected.start < starting.projected.start
+            && starting.projected.end <= other.projected.end
+    });
+    (!enclosed).then_some(starting.source.start)
 }
 
 pub(super) struct ParentCollector {

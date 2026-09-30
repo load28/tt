@@ -859,7 +859,7 @@ impl<'a> Emitter<'a> {
         &self,
         plan: &PatternPlan,
         decision: &Decision,
-        declaration: Option<BindingMode>,
+        declaration: Option<Declaration>,
         recovery: &mut BindingRecovery,
         separator_depth: Option<u16>,
     ) -> Rope<'a> {
@@ -882,7 +882,12 @@ impl<'a> Emitter<'a> {
                 out.push_break(depth);
             }
             let keyword = match declaration {
-                Some(mode) if group_index == 0 => format!(" {} ", binding_keyword(mode)),
+                Some(Declaration { mode, exported }) if group_index == 0 => format!(
+                    " {}{} ",
+                    if exported { "export " } else { "" },
+                    binding_keyword(mode)
+                ),
+                Some(Declaration { exported: true, .. }) => "export const ".to_string(),
                 _ => "const ".to_string(),
             };
             out.push_lit(keyword);

@@ -1,0 +1,18 @@
+// An exported let-else exports its bindings, at a module's top level and
+// in a namespace; a file whose only export is one is a module.
+// @run: main.tt
+// @filename: boxes.tt
+export variant Box { Full(value: number), Half(value: number), Empty }
+const box: Box = Box.Full(3);
+export const Full(value: size) = box else { throw new Error("empty"); };
+export let Full(value: counter) | Half(value: counter) = box else { throw new Error("empty"); };
+export namespace Nested {
+  export var Full(value: inner) = box else { throw new Error("empty"); };
+}
+// @filename: only.tt
+const found: { kind: "Some"; value: string } | { kind: "None" } = { kind: "Some", value: "only" };
+export const Some(value: label) = found else { throw new Error("none"); };
+// @filename: main.tt
+import { size, counter, Nested } from "./boxes.tt";
+import { label } from "./only.tt";
+console.log(`size=${size} counter=${counter} inner=${Nested.inner} label=${label}`);

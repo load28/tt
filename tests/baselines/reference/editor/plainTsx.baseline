@@ -16,9 +16,11 @@ ttSymbol: null
   |   return <button label={props.label} onClick={() => console.log(props.label)} />;
   |                               ^ /*member*/
 completion: 1 item(s), member true, probe no
-  label (property, 11)
+  label (Field, 11)
 ttCompletions: pattern false, member {"receiver":"props"}
 patternCompletions: null
+editor completion: 1 item(s)
+  label (Field, 211)
 
 === references /*prop*/ plainTsx.ttx:3:33 ===
   | export function Button(props: { label: string }) {
@@ -54,6 +56,10 @@ diagnostics: 2 diagnostic(s)
   7:24-7:29 "label" error TS2322: Type 'number' is not assignable to type 'string'.
     related 1:74-1:79 "label": The expected type comes from property 'label' which is declared here on type '{ label?: string | undefined; onClick?: (() => void) | undefined; }'
   7:7-7:13 "unused" hint TS6133: 'unused' is declared but its value is never read. [unnecessary]
+published: 2 diagnostic(s)
+  7:7-7:13 "unused" hint TS6133 (ts): 'unused' is declared but its value is never read. [unnecessary]
+  7:24-7:29 "label" error ts2322 (ttc): type mismatch: expected `string | undefined`, found `number`
+    related plainTsx.ttx 1:74-1:79 "label": The expected type comes from property 'label' which is declared here on type '{ label?: string | undefined; onClick?: (() => void) | undefined; }'
 
 === parity with the TypeScript twin ===
 hover prop: same
@@ -61,5 +67,7 @@ hover attribute: same
 completions member: same
 references prop: same
 semanticTokens plainTsx.ttx: same
-diagnostics plainTsx.ttx: same
+diagnostics plainTsx.ttx: differs
+  tt only: 7:24-7:29 "label" error TS2322: type mismatch: expected `string | undefined`, found `number`
+  ts only: 7:24-7:29 "label" error TS2322: Type 'number' is not assignable to type 'string'.
 

@@ -39,6 +39,7 @@ import {
   CodeActionKind,
   CompletionItem,
   CompletionItemKind,
+  CompletionItemTag,
   CompletionTriggerKind,
   createConnection,
   Diagnostic,
@@ -69,6 +70,7 @@ import { isExternalChange } from "./watch";
 import { URI } from "vscode-uri";
 
 import * as analysis from "./analysis";
+import { publishedDiagnostics } from "./diagnostics";
 import * as engine from "./engine";
 import { NoticeLedger } from "./notices";
 import { applyFolderChange, containingRoot, folderRoots, sidecarLocation } from "./roots";
@@ -80,6 +82,7 @@ import * as sidecar from "./sidecar";
 
 const TYPESCRIPT_TRIGGER_CHARACTERS = [".", '"', "'", "`", "/", "@", "<", "#", " ", "*"];
 const PATTERN_TRIGGER_CHARACTERS = ["(", "|", "{", ","];
+const STRING_TRIGGER_CHARACTERS = ['"', "'"];
 const TYPESCRIPT_SIGNATURE_TRIGGER_CHARACTERS = ["(", ",", "<"];
 
 const connection = createConnection(ProposedFeatures.all);
@@ -89,6 +92,7 @@ let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
 let hasVersionedWorkspaceEditCapability = false;
 let hasLabelDetailsCapability = false;
+let completionTagSupport: CompletionItemTag[] = [];
 let workspaceRoots: string[] = [];
 /** What the server has already told the user it cannot do (notices.ts). */
 const notices = new NoticeLedger();
@@ -106,6 +110,8 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   hasLabelDetailsCapability = Boolean(
     params.capabilities.textDocument?.completion?.completionItem?.labelDetailsSupport,
   );
+  completionTagSupport =
+    params.capabilities.textDocument?.completion?.completionItem?.tagSupport?.valueSet ?? [];
   workspaceRoots = folderRoots(params.workspaceFolders);
 
   return {
@@ -511,66 +517,6 @@ interface TypedDiagnostics {
   diagnostics: Diagnostic[];
   replacesTypes: boolean;
 }
-/**
- * Adds the typed diagnostics that say something new.
- *
- * The two passes overlap: variant exhaustiveness is decided from the text by
- * `--check` and from the type by the typed pass, and both report it at the
- * same place. One squiggle per position: the authoritative compiler result
- * replaces the matching provisional checker result before the generation is
- * published.
- */
-function mergeTyped(
-  into: Diagnostic[],
-  typed: Diagnostic[],
-  replacesTypes = false,
-): void {
-  if (replacesTypes) {
-    // Language-service diagnostics are the fast provisional layer. Once the
-    // compiler answers with its structured checker diagnostics, replace that
-    // layer's errors and warnings as a whole so consequences suppressed by
-    // the compiler cannot remain visible in the editor. Suggestions (unused,
-    // deprecated) are the service's alone: the compiler reports none.
-    for (let i = into.length - 1; i >= 0; i--) {
-      if (into[i].source === "ts" && isProblem(into[i])) into.splice(i, 1);
-    }
-  }
-  const positionKey = (d: Diagnostic) =>
-    `${d.range.start.line}:${d.range.start.character}`;
-  const codeKey = (d: Diagnostic) => String(d.code ?? "").replace(/^ts/, "");
-  // A suggestion shares its range with whatever error is there without
-  // standing for it: only problems compete for a position.
-  for (const d of typed) {
-    const sameDiagnostic = into.findIndex(
-      (base) =>
-        isProblem(base) &&
-        positionKey(base) === positionKey(d) &&
-        codeKey(base) !== "" &&
-        codeKey(base) === codeKey(d),
-    );
-    if (sameDiagnostic >= 0) {
-      // The service answer is provisional. The compiler pass carries the
-      // structured TT rendering and replaces the same checker diagnostic.
-      into[sameDiagnostic] = d;
-      continue;
-    }
-    if (into.some((base) => isProblem(base) && positionKey(base) === positionKey(d))) {
-      continue;
-    }
-    into.push(d);
-  }
-}
-
-/** An error or a warning — what the Problems panel counts — as opposed to
- * a suggestion the editor only fades or strikes through. */
-function isProblem(d: Diagnostic): boolean {
-  return (
-    d.severity === undefined ||
-    d.severity === DiagnosticSeverity.Error ||
-    d.severity === DiagnosticSeverity.Warning
-  );
-}
-
 async function typedDiagnosticsFor(
   doc: TextDocument,
   compiler: string,
@@ -714,7 +660,6 @@ async function validate(
     return;
   }
 
-  const diagnostics = result.diagnostics.map((d) => toDiagnostic(current, d));
   const typed =
     settings.typedChecks || settings.typeDiagnostics
       ? typedDiagnosticsFor(
@@ -765,37 +710,12 @@ async function validate(
     typeResults = { diagnostics: [], restates: [] };
   }
 
-  // A syntax error in the TypeScript the user wrote is TypeScript's to
-  // report, in its own words, as it is in a `.ts` file. The compiler's
-  // layers state the same fact as the reason the file has no output; once
-  // TypeScript has stated it, they would only state it twice. They go
-  // before the typed merge, whose TypeScript statement of the error is at
-  // the same position.
-  const restated = new Set(typeResults.restates);
-  const stated = (d: Diagnostic) => d.source === "ts" || !restated.has(String(d.code ?? ""));
-  diagnostics.splice(0, diagnostics.length, ...diagnostics.filter(stated));
-  diagnostics.push(...typeResults.diagnostics, ...hints);
-  if (typedResult !== null) {
-    mergeTyped(
-      diagnostics,
-      typedResult.diagnostics.filter(stated),
-      typedResult.replacesTypes,
-    );
-  }
-  // The layers finish independently and typed diagnostics are merged last,
-  // but the user reads and fixes one file from top to bottom. Restore the
-  // compiler's source-order contract after the final merge so the Problems
-  // panel agrees with the CLI regardless of which layer authored a rule.
-  diagnostics.sort((left, right) => {
-    const start =
-      left.range.start.line - right.range.start.line ||
-      left.range.start.character - right.range.start.character;
-    if (start !== 0) return start;
-    const end =
-      left.range.end.line - right.range.end.line ||
-      left.range.end.character - right.range.end.character;
-    if (end !== 0) return end;
-    return String(left.code ?? "").localeCompare(String(right.code ?? ""));
+  const diagnostics = publishedDiagnostics({
+    text: result.diagnostics.map((d) => toDiagnostic(current, d)),
+    service: typeResults.diagnostics,
+    restates: typeResults.restates,
+    hints,
+    typed: typedResult,
   });
   void connection.sendDiagnostics({
     uri: doc.uri,
@@ -1146,31 +1066,12 @@ const PATTERN_COMPLETION_KINDS: Record<engine.EngineTtCompletion["kind"], Comple
   wildcard: CompletionItemKind.Keyword,
 };
 
-/** TypeScript element-kind strings → LSP completion kinds. */
-const TS_COMPLETION_KINDS: Record<string, CompletionItemKind> = {
-  var: CompletionItemKind.Variable,
-  let: CompletionItemKind.Variable,
-  const: CompletionItemKind.Variable,
-  "local var": CompletionItemKind.Variable,
-  parameter: CompletionItemKind.Variable,
-  alias: CompletionItemKind.Reference,
-  function: CompletionItemKind.Function,
-  "local function": CompletionItemKind.Function,
-  method: CompletionItemKind.Method,
-  property: CompletionItemKind.Property,
-  getter: CompletionItemKind.Property,
-  setter: CompletionItemKind.Property,
-  class: CompletionItemKind.Class,
-  interface: CompletionItemKind.Interface,
-  type: CompletionItemKind.TypeParameter,
-  enum: CompletionItemKind.Enum,
-  "enum member": CompletionItemKind.EnumMember,
-  module: CompletionItemKind.Module,
-  keyword: CompletionItemKind.Keyword,
-  string: CompletionItemKind.Constant,
-  script: CompletionItemKind.File,
-  directory: CompletionItemKind.Folder,
-};
+/** The tags of an entry the client said it renders (LSP 3.17
+ * `CompletionClientCapabilities.completionItem.tagSupport`), or none. */
+function supportedTags(tags: CompletionItemTag[] | undefined): CompletionItemTag[] | undefined {
+  const shown = (tags ?? []).filter((tag) => completionTagSupport.includes(tag));
+  return shown.length > 0 ? shown : undefined;
+}
 
 /** What a TS-delegated completion item carries so its signature and
  * documentation can be fetched when the editor asks for that one entry
@@ -1213,7 +1114,8 @@ async function tsCompletions(
   if (!list) return [];
   return list.items.map((entry) => ({
     label: entry.label,
-    kind: TS_COMPLETION_KINDS[entry.kind] ?? CompletionItemKind.Text,
+    kind: entry.kind ?? undefined,
+    tags: supportedTags(entry.tags),
     detail: entry.detail ?? undefined,
     sortText: `2${entry.sortText}`,
     insertText: entry.range ? undefined : (entry.insertText ?? undefined),
@@ -1278,10 +1180,20 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     const tags = new Set(items.map((i) => i.label));
     return items.concat(members.filter((i) => !tags.has(i.label)));
   }
-  if (trigger !== undefined && TYPESCRIPT_TRIGGER_CHARACTERS.includes(trigger)) {
+  const literalPattern =
+    trigger !== undefined && STRING_TRIGGER_CHARACTERS.includes(trigger) && here.pattern;
+  if (
+    trigger !== undefined &&
+    TYPESCRIPT_TRIGGER_CHARACTERS.includes(trigger) &&
+    !literalPattern
+  ) {
     return tsCompletions(doc, offset, false, trigger);
   }
-  if (trigger !== undefined && !PATTERN_TRIGGER_CHARACTERS.includes(trigger)) {
+  if (
+    trigger !== undefined &&
+    !PATTERN_TRIGGER_CHARACTERS.includes(trigger) &&
+    !literalPattern
+  ) {
     return [];
   }
 
@@ -1301,6 +1213,7 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
       label: item.label,
       kind: PATTERN_COMPLETION_KINDS[item.kind],
       detail: item.detail,
+      textEdit: item.range ? { range: item.range, newText: item.label } : undefined,
       // An arm already written stays in the list — a guard may repeat a
       // tag — but sorts after the ones still missing.
       sortText: `${item.covered ? 1 : 0}${item.label}`,

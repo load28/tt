@@ -1,0 +1,8 @@
+declare function total(xs: number[]): number;
+export function report(): string {
+  return total();
+}
+export function stored(): string {
+  const x: string = total();
+  return x;
+}

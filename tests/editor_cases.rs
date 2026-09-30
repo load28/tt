@@ -6,7 +6,10 @@
 //! Every question is asked twice, through the engine API
 //! (`ttc::engine::Workspace`, what an embedding reads) and through the
 //! `ttc --server` transport (what the VS Code extension reads), and the two
-//! answers must be identical. A case with a TypeScript twin (the same stem
+//! answers must be identical. `diagnostics` and `completions` are also asked
+//! of the VS Code adapter over LSP: what it publishes after merging its
+//! diagnostic layers, and its completion items with their LSP kinds and
+//! tags. A case with a TypeScript twin (the same stem
 //! with `.ts` or `.tsx`) is also asked of `tsgo --lsp` directly at the same
 //! markers, and every answer that differs from TypeScript's, after the
 //! normalizations `parity_view` documents, is listed in
@@ -549,6 +552,7 @@ fn tt_items_json(items: &[TtCompletion]) -> Vec<Value> {
                 },
                 "detail": item.detail,
                 "covered": item.covered,
+                "range": item.range.map(range_json),
             })
         })
         .collect()
@@ -626,7 +630,8 @@ fn engine_answer(workspace: &mut ttc::engine::Workspace, request: &Request) -> V
             Ok(json!({
                 "items": items.iter().map(|item| json!({
                     "label": item.label,
-                    "kind": item.kind,
+                    "kind": item.kind.map(|kind| kind.lsp()),
+                    "tags": item.tags.iter().map(|tag| tag.lsp()).collect::<Vec<_>>(),
                     "sortText": item.sort_text,
                     "insertText": item.insert_text,
                     "filterText": item.filter_text,
@@ -772,6 +777,35 @@ fn engine_answer(workspace: &mut ttc::engine::Workspace, request: &Request) -> V
                 .collect();
             Ok(json!({ "diagnostics": diagnostics, "restates": restates }))
         }),
+        "completionResolve" => workspace.project_for(path).and_then(|project| {
+            Ok(
+                match project.completion_resolve(
+                    path,
+                    position,
+                    params["label"].as_str().unwrap_or_default(),
+                    params["source"].as_str(),
+                    params["probe"].as_u64(),
+                )? {
+                    None => Value::Null,
+                    Some(detail) => {
+                        let mut answer = json!({
+                            "signature": detail.signature,
+                            "documentation": detail.documentation,
+                        });
+                        if !detail.additional_edits.is_empty() {
+                            answer["additionalEdits"] = detail
+                                .additional_edits
+                                .into_iter()
+                                .map(|edit| {
+                                    json!({ "range": range_json(edit.range), "newText": edit.new_text })
+                                })
+                                .collect();
+                        }
+                        answer
+                    }
+                },
+            )
+        }),
         other => panic!("no engine mirror for {other}"),
     };
     match result {
@@ -839,11 +873,19 @@ impl Drop for Server {
     }
 }
 
+#[derive(Default)]
+struct Published {
+    sequence: u64,
+    by_uri: BTreeMap<String, Value>,
+}
+
 struct Lsp {
     child: Child,
     stdin: Arc<Mutex<ChildStdin>>,
     responses: Receiver<(i64, Value)>,
+    published: Arc<Mutex<Published>>,
     next: i64,
+    name: &'static str,
     legend: (Vec<String>, Vec<String>),
 }
 
@@ -878,20 +920,48 @@ fn tsgo_binary() -> Option<PathBuf> {
     path.exists().then_some(path)
 }
 
+fn extension_server() -> Option<PathBuf> {
+    let server = root().join("editors/vscode/server/out/server.js");
+    let dependency = root().join("editors/vscode/server/node_modules/vscode-languageserver");
+    (server.is_file() && dependency.is_dir()).then_some(server)
+}
+
+fn extension_required() -> bool {
+    std::env::var_os("TT_REQUIRE_EXTENSION").is_some_and(|v| !v.is_empty() && v != "0")
+}
+
 impl Lsp {
     fn start(binary: &Path, dir: &Path) -> Lsp {
-        let mut child = Command::new(binary)
-            .args(["--lsp", "-stdio"])
+        let mut command = Command::new(binary);
+        command.args(["--lsp", "-stdio"]);
+        Lsp::spawn(command, "tsgo --lsp", dir, json!({}))
+    }
+
+    fn editor(server: &Path, dir: &Path) -> Lsp {
+        let mut command = Command::new("node");
+        command.arg(server).arg("--stdio");
+        Lsp::spawn(
+            command,
+            "the VS Code adapter",
+            dir,
+            json!({ "compilerPath": env!("CARGO_BIN_EXE_ttc"), "sidecar": "off" }),
+        )
+    }
+
+    fn spawn(mut command: Command, name: &'static str, dir: &Path, settings: Value) -> Lsp {
+        let mut child = command
             .current_dir(dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
-            .expect("tsgo --lsp starts");
+            .unwrap_or_else(|e| panic!("{name} starts: {e}"));
         let stdin = Arc::new(Mutex::new(child.stdin.take().expect("piped stdin")));
         let stdout = child.stdout.take().expect("piped stdout");
         let (tx, rx) = channel();
         let replies = Arc::clone(&stdin);
+        let published = Arc::new(Mutex::new(Published::default()));
+        let publishes = Arc::clone(&published);
         std::thread::spawn(move || {
             let mut reader = BufReader::new(stdout);
             loop {
@@ -934,7 +1004,7 @@ impl Lsp {
                     (Some(id), Some(method)) => {
                         let result = if method == "workspace/configuration" {
                             let count = message["params"]["items"].as_array().map_or(1, Vec::len);
-                            Value::Array(vec![json!({}); count])
+                            Value::Array(vec![settings.clone(); count])
                         } else {
                             Value::Null
                         };
@@ -942,6 +1012,16 @@ impl Lsp {
                             &replies,
                             &json!({ "jsonrpc": "2.0", "id": id, "result": result }),
                         );
+                    }
+                    (None, Some("textDocument/publishDiagnostics")) => {
+                        let params = &message["params"];
+                        if let Some(target) = params["uri"].as_str() {
+                            let mut published = publishes.lock().unwrap_or_else(|p| p.into_inner());
+                            published.sequence += 1;
+                            published
+                                .by_uri
+                                .insert(target.to_string(), params["diagnostics"].clone());
+                        }
                     }
                     _ => {}
                 }
@@ -951,7 +1031,9 @@ impl Lsp {
             child,
             stdin,
             responses: rx,
+            published,
             next: 1,
+            name,
             legend: (Vec::new(), Vec::new()),
         };
         let root_uri = uri(dir);
@@ -967,7 +1049,10 @@ impl Lsp {
                         "hover": { "contentFormat": ["markdown", "plaintext"] },
                         "definition": {},
                         "references": {},
-                        "completion": { "completionItem": { "labelDetailsSupport": true } },
+                        "completion": { "completionItem": {
+                            "labelDetailsSupport": true,
+                            "tagSupport": { "valueSet": [1] },
+                        } },
                         "signatureHelp": {},
                         "rename": { "prepareSupport": true },
                         "semanticTokens": {
@@ -1017,16 +1102,17 @@ impl Lsp {
             match self.responses.recv_timeout(Duration::from_secs(120)) {
                 Ok((answered, value)) if answered == id => return value,
                 Ok(_) => continue,
-                Err(_) => panic!("tsgo --lsp did not answer {method}"),
+                Err(_) => panic!("{} did not answer {method}", self.name),
             }
         }
     }
 
     fn open(&mut self, path: &Path, text: &str) {
-        let language = if path.extension().is_some_and(|e| e == "tsx") {
-            "typescriptreact"
-        } else {
-            "typescript"
+        let language = match path.extension().and_then(|e| e.to_str()) {
+            Some("tsx") => "typescriptreact",
+            Some("tt") => "tt",
+            Some("ttx") => "ttx",
+            _ => "typescript",
         };
         frame(
             &self.stdin,
@@ -1038,6 +1124,39 @@ impl Lsp {
                 } },
             }),
         );
+    }
+}
+
+impl Lsp {
+    fn settled_publishes(&self, paths: &[PathBuf]) -> BTreeMap<String, Value> {
+        let wanted: Vec<String> = paths.iter().map(|path| uri(path)).collect();
+        let deadline = std::time::Instant::now() + Duration::from_secs(120);
+        let mut seen = None;
+        let mut quiet_since = std::time::Instant::now();
+        loop {
+            let (sequence, complete, snapshot) = {
+                let published = self.published.lock().unwrap_or_else(|p| p.into_inner());
+                (
+                    published.sequence,
+                    wanted.iter().all(|u| published.by_uri.contains_key(u)),
+                    published.by_uri.clone(),
+                )
+            };
+            let now = std::time::Instant::now();
+            if seen != Some(sequence) {
+                seen = Some(sequence);
+                quiet_since = now;
+            }
+            if complete && now.duration_since(quiet_since) >= Duration::from_millis(1500) {
+                return snapshot;
+            }
+            assert!(
+                now < deadline,
+                "{} published no diagnostics for {wanted:?}",
+                self.name
+            );
+            std::thread::sleep(Duration::from_millis(50));
+        }
     }
 }
 
@@ -1389,10 +1508,11 @@ impl Files<'_> {
 
 fn completion_line(item: &Value) -> String {
     let mut line = format!(
-        "{} ({}, {})",
+        "{} ({}, {}){}",
         item["label"].as_str().unwrap_or_default(),
-        item["kind"].as_str().unwrap_or_default(),
-        item["sortText"].as_str().unwrap_or_default()
+        lsp_completion_kind(&item["kind"]),
+        item["sortText"].as_str().unwrap_or_default(),
+        lsp_completion_tags(item)
     );
     if let Some(insert) = item["insertText"].as_str()
         && Some(insert) != item["label"].as_str()
@@ -1415,8 +1535,9 @@ fn completion_line(item: &Value) -> String {
 }
 
 fn tt_item_line(item: &Value) -> String {
+    let range = &item["range"];
     format!(
-        "{} ({}){}{}",
+        "{} ({}){}{}{}",
         item["label"].as_str().unwrap_or_default(),
         item["kind"].as_str().unwrap_or_default(),
         item["detail"]
@@ -1428,6 +1549,17 @@ fn tt_item_line(item: &Value) -> String {
             " covered"
         } else {
             ""
+        },
+        if range.is_object() {
+            format!(
+                " replaces {}:{}-{}:{}",
+                range["start"]["line"].as_u64().unwrap_or(0) + 1,
+                range["start"]["character"].as_u64().unwrap_or(0) + 1,
+                range["end"]["line"].as_u64().unwrap_or(0) + 1,
+                range["end"]["character"].as_u64().unwrap_or(0) + 1
+            )
+        } else {
+            String::new()
         }
     )
 }
@@ -1488,6 +1620,202 @@ fn diagnostic_line(files: &Files<'_>, d: &Value) -> String {
         ));
     }
     line
+}
+
+/// The entries of a completion answer that import their name from a
+/// module: an auto-import, whose `source` is the module specifier.
+fn imported_entries(answer: &Value) -> Vec<(String, String)> {
+    let mut entries: Vec<(String, String)> = answer["result"]["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|item| item["labelDetails"]["description"].is_string())
+        .filter_map(|item| {
+            Some((
+                item["label"].as_str()?.to_string(),
+                item["source"].as_str()?.to_string(),
+            ))
+        })
+        .collect();
+    entries.sort();
+    entries
+}
+
+fn render_resolve(files: &Files<'_>, label: &str, source: &str, answer: &Value, out: &mut String) {
+    let result = &answer["result"];
+    if let Some(error) = answer.get("error") {
+        out.push_str(&format!(
+            "  resolve {label} from {source:?}: error {error}\n"
+        ));
+        return;
+    }
+    let edits = result["additionalEdits"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    out.push_str(&format!(
+        "  resolve {label} from {source:?}: {} edit(s)\n",
+        edits.len()
+    ));
+    for edit in edits {
+        out.push_str(&format!(
+            "    {} -> {:?}\n",
+            files.span_of_answer(&edit),
+            edit["newText"].as_str().unwrap_or_default()
+        ));
+    }
+}
+
+fn lsp_completion_kind(kind: &Value) -> String {
+    const KINDS: [&str; 25] = [
+        "Text",
+        "Method",
+        "Function",
+        "Constructor",
+        "Field",
+        "Variable",
+        "Class",
+        "Interface",
+        "Module",
+        "Property",
+        "Unit",
+        "Value",
+        "Enum",
+        "Keyword",
+        "Snippet",
+        "Color",
+        "File",
+        "Reference",
+        "Folder",
+        "EnumMember",
+        "Constant",
+        "Struct",
+        "Event",
+        "Operator",
+        "TypeParameter",
+    ];
+    match kind.as_u64() {
+        Some(n) if (1..=25).contains(&n) => KINDS[n as usize - 1].to_string(),
+        Some(n) => format!("kind {n}"),
+        None => "no kind".to_string(),
+    }
+}
+
+fn lsp_completion_tags(item: &Value) -> String {
+    let tags: Vec<String> = item["tags"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|tag| match tag.as_u64() {
+            Some(1) => "deprecated".to_string(),
+            _ => format!("tag {tag}"),
+        })
+        .collect();
+    if tags.is_empty() {
+        String::new()
+    } else {
+        format!(" [{}]", tags.join(", "))
+    }
+}
+
+fn render_editor_completion(answer: &Value, out: &mut String) {
+    if let Some(error) = answer.get("error") {
+        out.push_str(&format!("editor completion: error {error}\n"));
+        return;
+    }
+    let result = &answer["result"];
+    let mut items = result
+        .as_array()
+        .or_else(|| result["items"].as_array())
+        .cloned()
+        .unwrap_or_default();
+    items.sort_by_key(|item| {
+        (
+            item["sortText"].as_str().unwrap_or_default().to_string(),
+            item["label"].as_str().unwrap_or_default().to_string(),
+            item.to_string(),
+        )
+    });
+    let (local, rest): (Vec<_>, Vec<_>) = items.iter().partition(|item| {
+        item["sortText"]
+            .as_str()
+            .and_then(|sort| sort.strip_prefix('2'))
+            .map(|sort| sort.trim_start_matches('z'))
+            != Some(GLOBALS_OR_KEYWORDS)
+            || !item["data"]["source"].is_null()
+    });
+    out.push_str(&format!("editor completion: {} item(s)\n", items.len()));
+    for item in local {
+        out.push_str(&format!(
+            "  {} ({}, {}){}\n",
+            item["label"].as_str().unwrap_or_default(),
+            lsp_completion_kind(&item["kind"]),
+            item["sortText"].as_str().unwrap_or_default(),
+            lsp_completion_tags(item)
+        ));
+    }
+    if !rest.is_empty() {
+        out.push_str(&format!(
+            "  ... {} global or keyword item(s) (sortText 2{GLOBALS_OR_KEYWORDS}, no source)\n",
+            rest.len()
+        ));
+    }
+}
+
+fn published_code(code: &Value) -> String {
+    match code {
+        Value::Number(n) => format!("TS{n}"),
+        Value::String(text) => text.clone(),
+        _ => "-".to_string(),
+    }
+}
+
+fn render_published(files: &Files<'_>, list: &Value, out: &mut String) {
+    let Some(diagnostics) = list.as_array() else {
+        out.push_str("published: nothing\n");
+        return;
+    };
+    out.push_str(&format!("published: {} diagnostic(s)\n", diagnostics.len()));
+    for d in diagnostics {
+        let severity = match d["severity"].as_u64() {
+            Some(2) => "warning",
+            Some(3) => "information",
+            Some(4) => "hint",
+            _ => "error",
+        };
+        let tags: Vec<&str> = d["tags"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|tag| match tag.as_u64() {
+                Some(1) => "unnecessary",
+                Some(2) => "deprecated",
+                _ => "?",
+            })
+            .collect();
+        out.push_str(&format!(
+            "  {} {severity} {} ({}): {}{}\n",
+            files.span_of_answer(d),
+            published_code(&d["code"]),
+            d["source"].as_str().unwrap_or("-"),
+            d["message"]
+                .as_str()
+                .unwrap_or_default()
+                .replace('\n', "\n      "),
+            if tags.is_empty() {
+                String::new()
+            } else {
+                format!(" [{}]", tags.join(", "))
+            }
+        ));
+        for related in d["relatedInformation"].as_array().into_iter().flatten() {
+            out.push_str(&format!(
+                "    related {}: {}\n",
+                files.located(&related["location"]),
+                related["message"].as_str().unwrap_or_default()
+            ));
+        }
+    }
 }
 
 fn caret(unit: &Unit, offset: usize, marker: &str) -> String {
@@ -1676,6 +2004,20 @@ fn run(case: &Case) -> Outcome {
         );
     }
 
+    let asks_editor = case
+        .verbs
+        .iter()
+        .any(|(verb, _)| matches!(verb, Verb::Diagnostics | Verb::Completions));
+    let mut editor = asks_editor.then(|| {
+        let server = extension_server().expect("a built extension server, checked before the run");
+        let mut editor = Lsp::editor(&server, &project);
+        for unit in case.units.iter().filter(|unit| is_tt(&unit.name)) {
+            editor.open(&project.join(&unit.name), &unit.text);
+        }
+        editor
+    });
+    let mut published: Option<BTreeMap<String, Value>> = None;
+
     let dir_text = project.to_string_lossy().into_owned();
     let mut baseline = String::new();
     let mut transport = Vec::new();
@@ -1716,7 +2058,71 @@ fn run(case: &Case) -> Outcome {
                 ));
             }
             render(&files, request.method, &from_server, &mut baseline);
+            if request.method == "completion" {
+                for (label, source) in imported_entries(&from_server) {
+                    let resolve = |answer: &Value| Request {
+                        method: "completionResolve",
+                        params: json!({
+                            "path": request.params["path"],
+                            "position": request.params["position"],
+                            "label": label,
+                            "source": source,
+                            "probe": answer["result"]["probe"],
+                        }),
+                    };
+                    let (engine_request, server_request) =
+                        (resolve(&from_engine), resolve(&from_server));
+                    let resolved_engine = engine_answer(&mut engine, &engine_request);
+                    let resolved_server = server.ask(server_request.method, &server_request.params);
+                    let (engine_view, server_view) = (
+                        normalized(&resolved_engine, &dir_text),
+                        normalized(&resolved_server, &dir_text),
+                    );
+                    if engine_view != server_view {
+                        transport.push(format!(
+                            "{}: completionResolve {label} for /*{}*/ differs between the transports\n{}",
+                            case.path.display(),
+                            question.target,
+                            difference(&engine_view, &server_view)
+                        ));
+                    }
+                    render_resolve(&files, &label, &source, &resolved_server, &mut baseline);
+                }
+            }
             answered.push((request.method.to_string(), from_server));
+        }
+        if let Some(editor) = editor.as_mut() {
+            let path = project.join(&unit.name);
+            match question.verb {
+                Verb::Diagnostics => {
+                    let all = published.get_or_insert_with(|| {
+                        let paths: Vec<PathBuf> = case
+                            .units
+                            .iter()
+                            .filter(|unit| is_tt(&unit.name))
+                            .map(|unit| project.join(&unit.name))
+                            .collect();
+                        editor.settled_publishes(&paths)
+                    });
+                    let list = all.get(&uri(&path)).cloned().unwrap_or(Value::Null);
+                    render_published(&files, &list, &mut baseline);
+                    answered.push(("published".to_string(), list));
+                }
+                Verb::Completions => {
+                    let offset = question.offset.expect("a marker");
+                    let at = lsp_position(&unit.text, offset);
+                    let answer = editor.request(
+                        "textDocument/completion",
+                        json!({
+                            "textDocument": { "uri": uri(&path) },
+                            "position": { "line": at.line, "character": at.character },
+                            "context": { "triggerKind": 1 },
+                        }),
+                    );
+                    render_editor_completion(&answer, &mut baseline);
+                }
+                _ => {}
+            }
         }
         if matches!(question.verb, Verb::References | Verb::Rename) {
             let key = if question.verb == Verb::References {
@@ -1734,6 +2140,7 @@ fn run(case: &Case) -> Outcome {
         answers.push(answered);
     }
     drop(server);
+    drop(editor);
 
     let mut parity = Vec::new();
     if let Some(twin) = &case.twin {
@@ -1938,6 +2345,39 @@ fn docs_text(documentation: &Value) -> String {
     }
 }
 
+/// `markdown` with each link to a place in a file (`[name](file:///m.ts#l,c-l,c)`,
+/// TypeScript's `{@link}` rendering, one-based) written as the place's unit
+/// stem and covered text, the way parity compares locations.
+fn linked_places(files: &Files<'_>, markdown: &str) -> String {
+    const OPEN: &str = "](file://";
+    let mut out = String::new();
+    let mut rest = markdown;
+    while let Some(at) = rest.find(OPEN) {
+        out.push_str(&rest[..at + 2]);
+        rest = &rest[at + 2..];
+        let Some(close) = rest.find(')') else {
+            break;
+        };
+        let target = &rest[..close];
+        let place = target.split_once('#').and_then(|(uri, fragment)| {
+            let (from, to) = fragment.split_once('-')?;
+            let position = |text: &str| -> Option<Value> {
+                let (line, character) = text.split_once(',')?;
+                Some(json!({
+                    "line": line.trim().parse::<u64>().ok()?.checked_sub(1)?,
+                    "character": character.trim().parse::<u64>().ok()?.checked_sub(1)?,
+                }))
+            };
+            let range = json!({ "start": position(from)?, "end": position(to)? });
+            Some(files.covered(&json!({ "uri": uri, "range": range })))
+        });
+        out.push_str(&place.unwrap_or_else(|| target.to_string()));
+        rest = &rest[close..];
+    }
+    out.push_str(rest);
+    out
+}
+
 fn answer_of<'a>(answers: &'a [(String, Value)], method: &str) -> &'a Value {
     answers
         .iter()
@@ -1954,13 +2394,14 @@ fn answer_of<'a>(answers: &'a [(String, Value)], method: &str) -> &'a Value {
 ///   outside the case is its file name and position;
 /// - hover is the signature and documentation, split out of TypeScript's
 ///   markdown the way the engine splits it;
-/// - completion is the sorted set of labels, since kinds are numbers in LSP
-///   and strings in the engine, and the ranking layer is the adapter's;
+/// - completion is the sorted set of labels with their LSP kinds, since the
+///   ranking layer is the adapter's;
 /// - signature help is each label with its parameters, and the active
 ///   signature and parameter;
 /// - semantic tokens are compared only when the twin's text is the source's
 ///   (a `.tt` file with no tt syntax), decoded through TypeScript's legend;
-/// - diagnostics likewise, as range, code, severity, and message;
+/// - diagnostics likewise, the adapter's published list against
+///   TypeScript's pull answer, as range, code, severity, and message;
 /// - rename is the set of edited spans with their text; references are the
 ///   set of referenced spans.
 fn parity_view(
@@ -2000,7 +2441,7 @@ fn parity_view(
                         .to_string(),
                 )
             };
-            format!("{signature}\n---\n{documentation}")
+            format!("{signature}\n---\n{}", linked_places(files, &documentation))
         }
         Verb::Completions => {
             let completion = result("completion");
@@ -2015,7 +2456,15 @@ fn parity_view(
             };
             let labels: BTreeSet<String> = items
                 .iter()
-                .filter_map(|item| item["label"].as_str().map(String::from))
+                .filter_map(|item| {
+                    item["label"].as_str().map(|label| {
+                        format!(
+                            "{label} ({}){}",
+                            lsp_completion_kind(&item["kind"]),
+                            lsp_completion_tags(item)
+                        )
+                    })
+                })
                 .collect();
             labels.into_iter().collect::<Vec<_>>().join("\n")
         }
@@ -2215,13 +2664,27 @@ fn parity_view(
                     ));
                 }
             } else {
-                let report = result("tsDiagnostics");
-                for d in report["diagnostics"].as_array().into_iter().flatten() {
+                let list = answer_of(answers, "published");
+                for d in list.as_array().into_iter().flatten() {
+                    let severity = match d["severity"].as_u64() {
+                        Some(2) => "warning",
+                        Some(3) => "information",
+                        Some(4) => "hint",
+                        _ => "error",
+                    };
+                    let code = match &d["code"] {
+                        Value::String(text) => text
+                            .strip_prefix("ts")
+                            .filter(|digits| digits.bytes().all(|b| b.is_ascii_digit()))
+                            .map_or_else(
+                                || d["code"].clone(),
+                                |digits| json!(digits.parse::<u64>().unwrap_or(0)),
+                            ),
+                        code => code.clone(),
+                    };
                     lines.push(format!(
-                        "{} {} TS{}: {}",
+                        "{} {severity} TS{code}: {}",
                         files.span_of_answer(d),
-                        d["severity"].as_str().unwrap_or_default(),
-                        d["code"],
                         d["message"].as_str().unwrap_or_default()
                     ));
                 }
@@ -2241,6 +2704,19 @@ fn every_editor_case_matches_its_baseline() {
     );
     if !toolchain() {
         eprintln!("SKIP the editor cases: no TypeScript installed — run `npm ci`");
+        return;
+    }
+    if extension_server().is_none() {
+        assert!(
+            !updating() && !extension_required(),
+            "the editor cases ask the VS Code adapter what it publishes, and its language \
+             server is not built — run `npm ci --prefix editors/vscode && npm --prefix \
+             editors/vscode run compile`"
+        );
+        eprintln!(
+            "SKIP the editor cases: the VS Code adapter is not built — run `npm ci --prefix \
+             editors/vscode && npm --prefix editors/vscode run compile`"
+        );
         return;
     }
     let cases = cases();

@@ -249,7 +249,10 @@ impl Service {
                     "hover": { "contentFormat": ["markdown", "plaintext"] },
                     "definition": {},
                     "references": {},
-                    "completion": { "completionItem": { "labelDetailsSupport": true } },
+                    "completion": { "completionItem": {
+                        "labelDetailsSupport": true,
+                        "tagSupport": { "valueSet": [1] },
+                    } },
                     "signatureHelp": {},
                     "documentSymbol": { "hierarchicalDocumentSymbolSupport": true },
                     "rename": { "prepareSupport": true },

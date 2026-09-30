@@ -1,0 +1,37 @@
+=== flags.tt ===
+export const ready: boolean = true;
+>ready : const ready: boolean
+export type Dir = "north" | "south";
+>Dir : type Dir = "north" | "south"
+export declare function heading(): Dir;
+>heading : function heading(): Dir
+>Dir : type Dir = "north" | "south"
+
+=== booleanMismatchRendering.tt ===
+declare function flag(): boolean;
+>flag : function flag(): boolean
+export const x: number = flag();
+>x : const x: number
+>flag : function flag(): boolean
+export function f(): number { return flag(); }
+>f : function f(): number
+>flag : function flag(): boolean
+export const o: { n: number } = { n: flag() };
+>o : const o: {
+>       n: number;
+>   }
+>n : (property) n: number
+>n : (property) n: number
+>flag : function flag(): boolean
+export const imported: number = ready;
+>imported : const imported: number
+>ready : (alias) const ready: boolean
+export const named: number = heading();
+>named : const named: number
+>heading : (alias) function heading(): Dir
+declare function either(): number | boolean;
+>either : function either(): number | boolean
+export const partly: number = either();
+>partly : const partly: number
+>either : function either(): number | boolean
+

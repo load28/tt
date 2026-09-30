@@ -770,7 +770,17 @@ impl Parser<'_> {
                         lets::parse_let_else(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
                     stmt.in_function = crate::flow::in_function_body(tokens, i);
-                    flush_verbatim(&mut segments, seg_start, tok.span.start);
+                    if !stmt.in_function
+                        && i > 0
+                        && tokens[i - 1].span.start >= seg_start
+                        && matches!(tokens[i - 1].kind, TokenKind::Ident)
+                        && &self.src[tokens[i - 1].span.start..tokens[i - 1].span.end] == "export"
+                        && !cursor::dotted_at(tokens, 0, i - 1)
+                    {
+                        stmt.exported = true;
+                        stmt.owner_span.start = tokens[i - 1].span.start;
+                    }
+                    flush_verbatim(&mut segments, seg_start, stmt.owner_span.start);
                     segments.push(Segment::LetElse(stmt));
                     seg_start = byte_end;
                     i = cur.idx;

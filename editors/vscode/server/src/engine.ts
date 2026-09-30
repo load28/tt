@@ -19,6 +19,7 @@
  * one-shot commands.
  * ----------------------------------------------------------------------- */
 import { ChildProcess, spawn } from "child_process";
+import type { CompletionItemKind, CompletionItemTag } from "vscode-languageserver/node";
 
 
 /** The name a rename asks the engine for, standing in for the new name in
@@ -53,8 +54,11 @@ export interface EngineCompletionItem {
   label: string;
   source?: string | null;
   detail?: string | null;
-  /** The element-kind string the editor has always mapped. */
-  kind: string;
+  /** LSP 3.17 `CompletionItemKind`, as the service classified the entry;
+   * null when it did not say. */
+  kind?: CompletionItemKind | null;
+  /** LSP 3.17 `CompletionItemTag`s: `1` (deprecated). */
+  tags?: CompletionItemTag[];
   sortText: string;
   insertText?: string | null;
   filterText?: string | null;
@@ -134,6 +138,9 @@ export interface EngineTtCompletion {
   detail: string;
   /** True when an arm of this match already covers the case. */
   covered: boolean;
+  /** The source range the item replaces when it is not the word at the
+   * position: the string literal a literal pattern is written in. */
+  range?: EngineRange | null;
 }
 
 /** What completion at a position is, read from the buffer's tokens. */

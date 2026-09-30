@@ -9,9 +9,11 @@ ttSymbol: null
   | export const a = 4 |> obj.tw
   |                             ^ /*end*/
 completion: 1 item(s), member true, probe no
-  twice (method, 11)
+  twice (Method, 11)
 ttCompletions: pattern false, member {"receiver":"obj"}
 patternCompletions: null
+editor completion: 1 item(s)
+  twice (Method, 211)
 
 === parity with the TypeScript twin ===
 hover mid: same

@@ -212,7 +212,18 @@ pub(super) fn ts_completions(
                 )
             });
         entries.push(CompletionItem {
-            kind: completion_kind(item["kind"].as_u64()),
+            kind: item["kind"]
+                .as_u64()
+                .and_then(crate::engine::CompletionItemKind::from_lsp),
+            tags: item["tags"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|tag| {
+                    tag.as_u64()
+                        .and_then(crate::engine::CompletionItemTag::from_lsp)
+                })
+                .collect(),
             sort_text: item["sortText"].as_str().unwrap_or(&label).to_string(),
             insert_text: item["insertText"]
                 .as_str()
@@ -224,7 +235,10 @@ pub(super) fn ts_completions(
             label_detail: item["labelDetails"]["detail"].as_str().map(str::to_owned),
             description: item["labelDetails"]["description"]
                 .as_str()
-                .map(str::to_owned),
+                .map(|description| {
+                    tt_module_specifier(session, path, description)
+                        .unwrap_or_else(|| description.to_owned())
+                }),
             detail: item["detail"].as_str().map(str::to_owned),
             source,
             label,
@@ -325,7 +339,8 @@ pub(super) fn tt_module_entries(
             Some(CompletionItem {
                 detail: Some(name.clone()),
                 label: name,
-                kind: "script".to_string(),
+                kind: Some(crate::engine::CompletionItemKind::File),
+                tags: Vec::new(),
                 sort_text: "11".to_string(),
                 insert_text: None,
                 filter_text: None,
@@ -1276,6 +1291,125 @@ fn split_markdown_hover(markdown: &str) -> (String, String) {
     (String::new(), trimmed.to_string())
 }
 
+/// `markdown` with the target of each link TypeScript writes for a
+/// `{@link}` tag moved from a served tt document to its `.tt` source.
+///
+/// TypeScript renders a link to a declaration as a markdown link whose
+/// target is the declaring file's URI with the declaration's range as a
+/// fragment, one-based (`[name](file:///m.tt.ts#32,17-32,22)`). A served
+/// document is the emission, so the file and the range are generated ones:
+/// the range is mapped back through the emit mapping as a navigation target
+/// is ([`map_target`]), and the link names the `.tt` file at the source
+/// range. A target that is not a served tt document, or has no source
+/// counterpart, is left as TypeScript wrote it.
+pub(super) fn source_links(
+    session: &mut ServiceSession,
+    overlays: &HashMap<PathBuf, String>,
+    markdown: &str,
+) -> String {
+    const OPEN: &str = "](file://";
+    let mut out = String::with_capacity(markdown.len());
+    let mut rest = markdown;
+    while let Some(at) = rest.find(OPEN) {
+        let target_start = at + 2;
+        out.push_str(&rest[..target_start]);
+        rest = &rest[target_start..];
+        let Some(close) = rest.find(')') else {
+            break;
+        };
+        let target = &rest[..close];
+        out.push_str(&source_link(session, overlays, target).unwrap_or_else(|| target.to_string()));
+        rest = &rest[close..];
+    }
+    out.push_str(rest);
+    out
+}
+
+fn source_link(
+    session: &mut ServiceSession,
+    overlays: &HashMap<PathBuf, String>,
+    target: &str,
+) -> Option<String> {
+    let (uri, fragment) = target.split_once('#')?;
+    tt_document(&uri_path(uri)?)?;
+    let (from, to) = fragment.split_once('-')?;
+    let position = |text: &str| -> Option<serde_json::Value> {
+        let (line, character) = text.split_once(',')?;
+        let line = line.trim().parse::<u64>().ok()?.checked_sub(1)?;
+        let character = character.trim().parse::<u64>().ok()?.checked_sub(1)?;
+        Some(serde_json::json!({ "line": line, "character": character }))
+    };
+    let range = serde_json::json!({ "start": position(from)?, "end": position(to)? });
+    let location = map_target(session, overlays, uri, &range, TargetUse::Navigation)?;
+    Some(format!(
+        "{}#{},{}-{},{}",
+        file_uri(&location.path),
+        location.range.start.line + 1,
+        location.range.start.character + 1,
+        location.range.end.line + 1,
+        location.range.end.character + 1
+    ))
+}
+
+/// The specifier tt writes for the module TypeScript names `specifier`
+/// from `importer`, when that module is a tt source the session serves
+/// under its lowered name ([`crate::engine::projection::module_path_of`]):
+/// TypeScript writes the lowered `shapes.tt.ts` as `./shapes.tt`,
+/// `./shapes.tt.ts` (with `allowImportingTsExtensions`), or `./shapes.tt.js`
+/// (a `.js` ending, as `nodenext` requires), and tt imports the source as
+/// `./shapes.tt` in every case, as import-path completion offers it
+/// (TASK-609). `None` for any other specifier, already tt's included.
+pub(super) fn tt_module_specifier(
+    session: &ServiceSession,
+    importer: &Path,
+    specifier: &str,
+) -> Option<String> {
+    if !(specifier.starts_with("./") || specifier.starts_with("../")) {
+        return None;
+    }
+    let directory = importer.parent()?;
+    [".ts", ".tsx", ".js", ".jsx"]
+        .into_iter()
+        .find_map(|ending| {
+            let written = specifier.strip_suffix(ending)?;
+            let source = crate::engine::normalize_document_path(&directory.join(written)).ok()?;
+            let kind = crate::SourceKind::from_tt_path(&source)?;
+            let lowered = format!(".{}", kind.output_extension());
+            let javascript: &[&str] = if lowered == ".tsx" {
+                &[".js", ".jsx"]
+            } else {
+                &[".js"]
+            };
+            let served = session.served.contains_key(&source) || source.is_file();
+            (served && (ending == lowered || javascript.contains(&ending)))
+                .then(|| written.to_string())
+        })
+}
+
+/// `text` (TypeScript an edit inserts) with each string literal naming a
+/// served tt module in TypeScript's form written in tt's
+/// ([`tt_module_specifier`]).
+pub(super) fn tt_specifiers_in(session: &ServiceSession, importer: &Path, text: &str) -> String {
+    let tokens = crate::lexer::lex(text, 0, text.len());
+    let mut out = String::with_capacity(text.len());
+    let mut copied = 0;
+    for token in &tokens {
+        if !matches!(token.kind, crate::lexer::TokenKind::Str)
+            || token.span.end - token.span.start < 2
+        {
+            continue;
+        }
+        let (start, end) = (token.span.start + 1, token.span.end - 1);
+        if let Some(specifier) = tt_module_specifier(session, importer, &text[start..end]) {
+            out.push_str(&text[copied..start]);
+            out.push_str(&specifier);
+            copied = end;
+        }
+    }
+    out.push_str(&text[copied..]);
+    out
+}
+
 /// Documentation as plain text, whichever shape the server used.
 pub(super) fn docs_text(documentation: &serde_json::Value) -> String {
     match documentation {
@@ -1311,28 +1445,6 @@ pub(super) fn parameter_span(signature: &str, label: &serde_json::Value) -> (u32
         }
         None => (0, 0),
     }
-}
-
-/// The LSP completion kinds the server answers with, as the element-kind
-/// strings the editor has always mapped. Anything else is a plain property.
-pub(super) fn completion_kind(kind: Option<u64>) -> String {
-    match kind {
-        Some(3) => "function",
-        Some(2) | Some(4) => "method",
-        Some(5) => "property",
-        Some(6) => "var",
-        Some(7) | Some(22) => "class",
-        Some(8) => "interface",
-        Some(9) => "module",
-        Some(13) => "enum",
-        Some(14) => "keyword",
-        Some(17) => "script",
-        Some(19) => "directory",
-        Some(21) => "const",
-        Some(25) => "type",
-        _ => "property",
-    }
-    .to_string()
 }
 
 /// A [`Position`] as the JSON the protocol speaks.
@@ -1445,12 +1557,14 @@ pub(super) fn arm_candidates(
                     covered: covered.contains(&candidate.label),
                     label: candidate.label,
                     kind: TtCompletionKind::Case,
+                    range: None,
                 }),
             _ => crate::engine::TtCompletion {
                 detail: format!("literal {}", candidate.written),
                 covered: literals.contains(&candidate.value),
                 label: candidate.label,
                 kind: TtCompletionKind::Literal,
+                range: None,
             },
         };
         out.push(item);
@@ -1488,6 +1602,7 @@ pub(super) fn field_candidates(
             label: name,
             kind: crate::engine::TtCompletionKind::Field,
             covered: false,
+            range: None,
         });
     }
     out

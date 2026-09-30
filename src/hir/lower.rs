@@ -547,6 +547,7 @@ impl Lower<'_> {
             node,
             site,
             binding_mode: Self::binding_mode(&stmt.kw),
+            exported: stmt.exported,
             else_body,
             else_diverges: stmt.diverges,
         }

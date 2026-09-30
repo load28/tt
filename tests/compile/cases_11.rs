@@ -438,7 +438,7 @@ fn a_default_exported_variant_that_does_not_parse_reports_the_variant() {
 }
 
 #[test]
-fn a_generated_parse_failure_is_located_at_the_construct_that_generated_it() {
+fn a_construct_its_position_does_not_admit_is_reported_at_the_construct() {
     for source in [
         "export variant Shape { Circle(r: number) }\nconst x = variant Dir { Up, Down };\n",
         "export variant Shape { Circle(r: number) }\nf(variant Dir { Up, Down });\n",
@@ -446,7 +446,7 @@ fn a_generated_parse_failure_is_located_at_the_construct_that_generated_it() {
         let diagnostics = ttc::analyze(source, &Options::default());
         let failure = diagnostics
             .iter()
-            .find(|d| d.code == DiagnosticCode::LoweringPlanFailed)
+            .find(|d| d.code == DiagnosticCode::SourceNotTypeScript)
             .unwrap_or_else(|| panic!("{source}{diagnostics:#?}"));
         let construct = source.find("variant Dir").unwrap();
         let name = source.find("Dir").unwrap();

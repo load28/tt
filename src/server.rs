@@ -50,7 +50,7 @@
 //!                          "signature", "detail", "definition", "binds" } | null }
 //!
 //! → { "id": 6, "method": "ttCompletions", "params": { "path", "text", "position" } }
-//! ← { "id": 6, "result": { "items": [{ "label", "kind", "detail", "covered" }],
+//! ← { "id": 6, "result": { "items": [{ "label", "kind", "detail", "covered", "range" }],
 //!                          "member": { "receiver" } | null,
 //!                          "keywords": [{ "label", "sortText" }], "pattern" } }
 //! `member`: the cursor completes a member name; `receiver` is the path of
@@ -60,7 +60,7 @@
 //! position is a pattern position tt completes.
 //!
 //! → { "method": "patternCompletions", "params": { "path", "position" } }
-//! ← { "result": { "items": [{ "label", "kind", "detail", "covered" }] } | null }
+//! ← { "result": { "items": [{ "label", "kind", "detail", "covered", "range" }] } | null }
 //! The pattern completions at a pattern position with what the scrutinee's
 //! type admits, from the project's TypeScript; null elsewhere.
 //!
@@ -281,7 +281,8 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
             Ok(json!({
                 "items": items.iter().map(|item| json!({
                     "label": item.label,
-                    "kind": item.kind,
+                    "kind": item.kind.map(|kind| kind.lsp()),
+                    "tags": item.tags.iter().map(|tag| tag.lsp()).collect::<Vec<_>>(),
                     "sortText": item.sort_text,
                     "insertText": item.insert_text,
                     "filterText": item.filter_text,
@@ -775,6 +776,7 @@ fn pattern_items_json(items: &[ttc::engine::TtCompletion]) -> Vec<serde_json::Va
                 },
                 "detail": item.detail,
                 "covered": item.covered,
+                "range": item.range.map(range_json),
             })
         })
         .collect()
@@ -796,23 +798,11 @@ fn tt_completions(
     };
     let member = ttc::engine::member_access_at(Path::new(path), text_param(params)?, position)
         .map(|access| json!({ "receiver": access.receiver }));
-    let items: Vec<_> = workspace
-        .tt_completions_at(Path::new(path), text_param(params)?, position)
-        .into_iter()
-        .map(|item| {
-            json!({
-                "label": item.label,
-                "kind": match item.kind {
-                    ttc::engine::TtCompletionKind::Case => "case",
-                    ttc::engine::TtCompletionKind::Field => "field",
-                    ttc::engine::TtCompletionKind::Literal => "literal",
-                    ttc::engine::TtCompletionKind::Wildcard => "wildcard",
-                },
-                "detail": item.detail,
-                "covered": item.covered,
-            })
-        })
-        .collect();
+    let items = pattern_items_json(&workspace.tt_completions_at(
+        Path::new(path),
+        text_param(params)?,
+        position,
+    ));
     let pattern = workspace.is_pattern_position(Path::new(path), text_param(params)?, position);
     let keywords: Vec<_> =
         ttc::engine::tt_keywords_at(Path::new(path), text_param(params)?, position)

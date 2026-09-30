@@ -18,10 +18,13 @@ ttSymbol: null
   | export const label = origin.x.toFixed(1);
   |                             ^ /*member*/
 completion: 2 item(s), member true, probe no
-  x (property, 11)
-  y (property, 11)
+  x (Field, 11)
+  y (Field, 11)
 ttCompletions: pattern false, member {"receiver":"origin"}
 patternCompletions: null
+editor completion: 2 item(s)
+  x (Field, 211)
+  y (Field, 211)
 
 === definition /*call*/ plainTypeScript.tt:7:18 ===
   | export const d = distance(origin, { x: 3, y: 4 });
@@ -92,6 +95,9 @@ semanticTokens: 32 token(s)
 diagnostics: 2 diagnostic(s)
   9:7-9:13 "unused" error TS2322: Type 'number' is not assignable to type 'string'.
   9:7-9:13 "unused" hint TS6133: 'unused' is declared but its value is never read. [unnecessary]
+published: 2 diagnostic(s)
+  9:7-9:13 "unused" hint TS6133 (ts): 'unused' is declared but its value is never read. [unnecessary]
+  9:24-9:25 "1" error ts2322 (ttc): type mismatch: expected `string`, found `1`
 
 === parity with the TypeScript twin ===
 hover value: same
@@ -102,5 +108,7 @@ references decl: same
 rename decl: same
 signatureHelp args: same
 semanticTokens plainTypeScript.tt: same
-diagnostics plainTypeScript.tt: same
+diagnostics plainTypeScript.tt: differs
+  tt only: 9:24-9:25 "1" error TS2322: type mismatch: expected `string`, found `1`
+  ts only: 9:7-9:13 "unused" error TS2322: Type 'number' is not assignable to type 'string'.
 

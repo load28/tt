@@ -86,14 +86,145 @@ pub struct HoverInfo {
     pub range: Range,
 }
 
+/// What kind of thing a completion entry offers: LSP 3.17's
+/// `CompletionItemKind`, whose values the service answers with and an
+/// editor shows as an icon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompletionItemKind {
+    /// `Text` (1).
+    Text,
+    /// `Method` (2).
+    Method,
+    /// `Function` (3).
+    Function,
+    /// `Constructor` (4).
+    Constructor,
+    /// `Field` (5).
+    Field,
+    /// `Variable` (6).
+    Variable,
+    /// `Class` (7).
+    Class,
+    /// `Interface` (8).
+    Interface,
+    /// `Module` (9).
+    Module,
+    /// `Property` (10).
+    Property,
+    /// `Unit` (11).
+    Unit,
+    /// `Value` (12).
+    Value,
+    /// `Enum` (13).
+    Enum,
+    /// `Keyword` (14).
+    Keyword,
+    /// `Snippet` (15).
+    Snippet,
+    /// `Color` (16).
+    Color,
+    /// `File` (17).
+    File,
+    /// `Reference` (18).
+    Reference,
+    /// `Folder` (19).
+    Folder,
+    /// `EnumMember` (20).
+    EnumMember,
+    /// `Constant` (21).
+    Constant,
+    /// `Struct` (22).
+    Struct,
+    /// `Event` (23).
+    Event,
+    /// `Operator` (24).
+    Operator,
+    /// `TypeParameter` (25).
+    TypeParameter,
+}
+
+impl CompletionItemKind {
+    const ALL: [CompletionItemKind; 25] = [
+        CompletionItemKind::Text,
+        CompletionItemKind::Method,
+        CompletionItemKind::Function,
+        CompletionItemKind::Constructor,
+        CompletionItemKind::Field,
+        CompletionItemKind::Variable,
+        CompletionItemKind::Class,
+        CompletionItemKind::Interface,
+        CompletionItemKind::Module,
+        CompletionItemKind::Property,
+        CompletionItemKind::Unit,
+        CompletionItemKind::Value,
+        CompletionItemKind::Enum,
+        CompletionItemKind::Keyword,
+        CompletionItemKind::Snippet,
+        CompletionItemKind::Color,
+        CompletionItemKind::File,
+        CompletionItemKind::Reference,
+        CompletionItemKind::Folder,
+        CompletionItemKind::EnumMember,
+        CompletionItemKind::Constant,
+        CompletionItemKind::Struct,
+        CompletionItemKind::Event,
+        CompletionItemKind::Operator,
+        CompletionItemKind::TypeParameter,
+    ];
+
+    /// The kind an LSP `CompletionItemKind` value names, `None` for a value
+    /// LSP 3.17 does not define.
+    pub fn from_lsp(value: u64) -> Option<CompletionItemKind> {
+        let index = usize::try_from(value).ok()?.checked_sub(1)?;
+        CompletionItemKind::ALL.get(index).copied()
+    }
+
+    /// The kind's LSP `CompletionItemKind` value.
+    pub fn lsp(self) -> u8 {
+        CompletionItemKind::ALL
+            .iter()
+            .position(|kind| *kind == self)
+            .map_or(1, |index| index as u8 + 1)
+    }
+}
+
+/// Extra information about how a completion entry is rendered: LSP 3.17's
+/// `CompletionItemTag`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompletionItemTag {
+    /// `Deprecated` (1): the entry is shown struck through.
+    Deprecated,
+}
+
+impl CompletionItemTag {
+    /// The tag an LSP `CompletionItemTag` value names, `None` for a value
+    /// LSP 3.17 does not define.
+    pub fn from_lsp(value: u64) -> Option<CompletionItemTag> {
+        match value {
+            1 => Some(CompletionItemTag::Deprecated),
+            _ => None,
+        }
+    }
+
+    /// The tag's LSP `CompletionItemTag` value.
+    pub fn lsp(self) -> u8 {
+        match self {
+            CompletionItemTag::Deprecated => 1,
+        }
+    }
+}
+
 /// One completion entry, in the raw terms the adapter ranks and renders.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompletionItem {
     /// The name offered.
     pub label: String,
-    /// The service's element kind, normalized to the same strings the
-    /// editor has always mapped ("function", "method", "property", ...).
-    pub kind: String,
+    /// What the entry offers, as the service classified it; `None` when it
+    /// did not say.
+    pub kind: Option<CompletionItemKind>,
+    /// How the service says to render the entry: `Deprecated` for a
+    /// declaration marked `@deprecated`.
+    pub tags: Vec<CompletionItemTag>,
     /// The service's own sort text (the adapter adds its layer prefix).
     pub sort_text: String,
     /// Insertion text, independent of the decorated display label.

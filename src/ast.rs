@@ -386,6 +386,10 @@ pub(crate) struct LetElseStmt {
     /// `else`'s exits must not leave the construct's value region, so without a
     /// function written there the statement is rejected.
     pub in_function: bool,
+    /// Whether an `export` modifier precedes the declaration keyword
+    /// outside a function body; [`Self::owner_span`] then starts at it and
+    /// the bindings are exported.
+    pub exported: bool,
 }
 
 /// A structurally parsed tt `if let` statement:

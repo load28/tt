@@ -785,6 +785,11 @@ impl<'a> ProjectionBuilder<'a> {
                             names,
                         ));
                     }
+                    if let crate::core_ir::DecisionKind::LetElse { exported: true, .. } =
+                        decision.kind
+                    {
+                        self.code.push_str("export {};");
+                    }
                 }
                 Statement::Expr(expr) => self.emit_expr(*expr)?,
             }

@@ -497,7 +497,7 @@ fn a_module_specifier_completes_the_sibling_tt_modules_as_tt_imports_them() {
         }
         assert!(!labels.contains(&"main.tt"), "{marked}: {labels:?}");
         let shapes = items.iter().find(|item| item.label == "shapes.tt").unwrap();
-        assert_eq!(shapes.kind, "script");
+        assert_eq!(shapes.kind, Some(ttc::engine::CompletionItemKind::File));
         let start = ttc::engine::Position {
             character: position.character - typed.len() as u32,
             ..position

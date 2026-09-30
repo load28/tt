@@ -95,6 +95,7 @@ function publishFile(file, text) {
   fs.renameSync(staging, file);
 }
 const CANNOT_READ_FILE = 5083;
+const CANNOT_FIND_MODULE = 2307;
 const LOWERED = /\.(?:tt\.ts|ttx\.tsx)$/;
 const TT_SOURCE = /\.ttx?$/;
 const MAPPED_DECLARATION = /\.d\.(ttx?)\.ts$/;
@@ -915,6 +916,20 @@ async function main() {
           ...(related.length > 0 ? { related } : {}),
         });
       }
+      const ttSources = new Set((job.modules ?? []).map((module) => loweredSource(module.path)));
+      for (const member of members) {
+        const sourceFile = program.getSourceFile(member);
+        if (!sourceFile) continue;
+        for (const literal of loweredModuleSpecifiers(sourceFile, ttSources, SyntaxKind)) {
+          out.diagnostics.push({
+            file: sourceFile.fileName,
+            start: literal.getStart(sourceFile),
+            end: literal.end,
+            code: CANNOT_FIND_MODULE,
+            message: `Cannot find module '${literal.text}' or its corresponding type declarations.`,
+          });
+        }
+      }
       /**
        * Whether a declaration lives in one of TypeScript's own lib files.
        * Answered from the program's per-file metadata when the client has it
@@ -1628,6 +1643,47 @@ function walkTree(root, enter) {
   return false;
 }
 
+/** The `.tt`/`.ttx` source a lowered module's engine name stands for. */
+function loweredSource(file) {
+  return LOWERED.test(file) ? file.slice(0, file.lastIndexOf(".")) : file;
+}
+
+/**
+ * The relative module specifiers of `sourceFile` that reach a served tt
+ * module only through the name ttc serves it under.
+ *
+ * A tt module `x.tt` is served as `x.tt.ts` (`x.ttx` as `x.ttx.tsx`), and
+ * TypeScript's resolution of a relative specifier appends or substitutes a
+ * TypeScript extension (`./x.tt` → `x.tt.ts`; `./x.tt.js` → `x.tt.ts`, the
+ * `.js` → `.ts` substitution of TypeScript's module resolution reference;
+ * `./x.tt.ts` with `allowImportingTsExtensions`). Only `./x.tt` names the
+ * module outside ttc: the source is `x.tt` and its output is `x.ts`, so a
+ * specifier naming `x.tt.js` or `x.tt.ts` names no file on disk or in the
+ * output, where TypeScript reports TS2307 for it. A file of that name that
+ * does exist on disk is the user's own and is left alone.
+ */
+function loweredModuleSpecifiers(sourceFile, ttSources, SyntaxKind) {
+  const found = [];
+  const consider = (literal) => {
+    if (!literal || literal.kind !== SyntaxKind.StringLiteral) return;
+    const specifier = literal.text;
+    if (!specifier.startsWith("./") && !specifier.startsWith("../")) return;
+    const target = path.resolve(path.dirname(sourceFile.fileName), specifier);
+    const match = /^(.*\.tt)\.(?:ts|js)$|^(.*\.ttx)\.(?:tsx|jsx|js)$/.exec(target);
+    const source = match && (match[1] ?? match[2]);
+    if (!source || !ttSources.has(source) || fs.existsSync(target)) return;
+    found.push(literal);
+  };
+  walkTree(sourceFile, (node) => {
+    if (node.kind === SyntaxKind.ImportDeclaration || node.kind === SyntaxKind.ExportDeclaration) {
+      consider(node.moduleSpecifier);
+    } else if (node.kind === SyntaxKind.CallExpression && node.expression.kind === SyntaxKind.ImportKeyword) {
+      consider(node.arguments[0]);
+    }
+  });
+  return found;
+}
+
 /** The union constituents of a type, or the type itself as one constituent. */
 function typeConstituents(type) {
   return type.isUnionType?.() ? (type.getTypes?.() ?? [type]) : [type];
@@ -1755,15 +1811,28 @@ function propertyLeaf(checker, found, expected, depth) {
 function incompatibleLeaves(checker, found, expected) {
   const leaves = [];
   const seen = new Set();
-  for (const constituent of typeConstituents(found)) {
-    if (checker.isTypeAssignableTo(constituent, expected)) continue;
+  const constituents = typeConstituents(found);
+  const wholeExpected = checker.typeToString(expected);
+  let unreduced = constituents.length > 1;
+  for (const constituent of constituents) {
+    if (checker.isTypeAssignableTo(constituent, expected)) {
+      unreduced = false;
+      continue;
+    }
     const leaf = incompatibleLeaf(checker, constituent, expected);
-    if (!leaf) continue;
+    if (!leaf) {
+      unreduced = false;
+      continue;
+    }
+    if (leaf.expected !== wholeExpected || leaf.found !== checker.typeToString(constituent)) {
+      unreduced = false;
+    }
     const key = `${leaf.expected}\0${leaf.found}`;
     if (seen.has(key)) continue;
     seen.add(key);
     leaves.push(leaf);
   }
+  if (unreduced) return [{ expected: wholeExpected, found: checker.typeToString(found) }];
   return leaves;
 }
 

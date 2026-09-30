@@ -415,8 +415,12 @@ impl<'a> Emitter<'a> {
     ) {
         let span = self.span(decision.head);
         let (kind, inner) = match &decision.kind {
-            DecisionKind::LetElse { binding_mode, .. } => {
-                let mut inner = self.emit_let_else(decision, *binding_mode, body);
+            DecisionKind::LetElse {
+                binding_mode,
+                exported,
+                ..
+            } => {
+                let mut inner = self.emit_let_else(decision, *binding_mode, *exported, body);
                 if self.block_required_statements.contains(&decision.extent) {
                     inner = Rope::braced(inner);
                 }
@@ -466,6 +470,7 @@ impl<'a> Emitter<'a> {
         &self,
         decision: &Decision,
         mode: BindingMode,
+        exported: bool,
         emit_body: &dyn Fn(hir::BodyId) -> Rope<'a>,
     ) -> Rope<'a> {
         let subject = &decision.subjects[0];
@@ -510,8 +515,14 @@ impl<'a> Emitter<'a> {
             out.append(documentation);
         }
         out.append(
-            self.emit_bindings(&arm.pattern, decision, Some(mode), &mut recovery, Some(0))
-                .trim(),
+            self.emit_bindings(
+                &arm.pattern,
+                decision,
+                Some(Declaration { mode, exported }),
+                &mut recovery,
+                Some(0),
+            )
+            .trim(),
         );
         Rope::scoped(out)
     }

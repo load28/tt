@@ -1,0 +1,6 @@
+//// [shapes.tt] 1 mapping(s)
+1:1 -> 1:1 len 24  "export const shapeK = 1;"
+
+//// [main.tt] 1 mapping(s)
+1:1 -> 1:1 len 168  "import { shapeK } from \"./shapes.tt.js\";\nimport "...
+

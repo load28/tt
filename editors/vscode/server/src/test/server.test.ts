@@ -2479,6 +2479,43 @@ test("pattern completion handles delimiter triggers and incomplete prefixes", { 
   }
 });
 
+test("a literal pattern written in quotes completes the scrutinee's literals, replacing the literal", { skip: skipTyped, timeout }, async () => {
+  const prefix = 'type Dir = "north" | "south" | "east";\ndeclare const x: Dir;\n';
+  const { client, uri, stop } = await open(prefix);
+  try {
+    let version = 1;
+    for (const [pattern, trigger, expected] of [
+      ['const r = match (x) { "#" };', '"', ['"east"', '"north"', '"south"']],
+      ['const r = match (x) { "north" => 1, "#" };', undefined, ['"east"', '"north"', '"south"']],
+      ['const r = match (x) { "no#" => 1, _ => 0 };', undefined, ['"east"', '"north"', '"south"']],
+    ] as const) {
+      const source = prefix + pattern.replace('#', '');
+      const offset = prefix.length + pattern.indexOf('#');
+      const before = source.slice(0, offset);
+      const line = before.split('\n').length - 1;
+      client.notify("textDocument/didChange", { textDocument: { uri, version: ++version }, contentChanges: [{ text: source }] });
+      const response = await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: { line, character: offset - before.lastIndexOf('\n') - 1 },
+        context: trigger ? { triggerKind: 2, triggerCharacter: trigger } : { triggerKind: 1 },
+      });
+      const items = response.result?.items ?? response.result ?? [];
+      assert.deepEqual(items.map((item: any) => item.label).sort(), [...expected], pattern);
+      const quote = before.lastIndexOf('"');
+      const close = source.indexOf('"', offset);
+      for (const item of items) {
+        assert.deepEqual(item.textEdit, {
+          range: {
+            start: { line, character: quote - before.lastIndexOf('\n') - 1 },
+            end: { line, character: close + 1 - before.lastIndexOf('\n') - 1 },
+          },
+          newText: item.label,
+        }, pattern);
+      }
+    }
+  } finally { stop(); }
+});
+
 test("a trigger character completes only the context it is registered for", { skip, timeout }, async () => {
   const prefix = 'variant User { Admin(name: string, level: number), Guest }\ndeclare const user: User;\ndeclare const a: number;\n';
   for (const language of ["tt", "ttx"] as const) {

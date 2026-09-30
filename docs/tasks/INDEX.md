@@ -672,6 +672,16 @@
 | TASK-664 | Keep a binding pattern's implied type off generated storage | Complete | 2026-09-30 | 2026-09-30 | [TASK-664](./TASK-664-binding-pattern-default-storage.md) |
 | TASK-665 | Keep a comment directive's line and a statement's JSDoc where TypeScript reads them | Complete | 2026-09-30 | 2026-09-30 | [TASK-665](./TASK-665-directives-and-jsdoc-before-lowered-statements.md) |
 | TASK-666 | Decide three reported behaviours: let-else placement, the `if let` head, and payload reads | Complete | 2026-09-30 | 2026-09-30 | [TASK-666](./TASK-666-let-else-placement-if-let-head-payload-reads.md) |
+| TASK-667 | Write tt's specifier for a tt module in auto-imports, and reject its served names | Complete | 2026-09-30 | 2026-09-30 | [TASK-667](./TASK-667-tt-module-specifiers.md) |
+| TASK-668 | Point `{@link}` targets in documentation at the `.tt` source | Complete | 2026-09-30 | 2026-09-30 | [TASK-668](./TASK-668-link-targets-in-tt-sources.md) |
+| TASK-669 | Complete an arm's pattern before its `=>` is written | Complete | 2026-09-30 | 2026-09-30 | [TASK-669](./TASK-669-pattern-completion-before-the-arrow.md) |
+| TASK-670 | Publish every typed diagnostic that states a rule no other layer states | Complete | 2026-09-30 | 2026-09-30 | [TASK-670](./TASK-670-publish-every-typed-diagnostic.md) |
+| TASK-671 | Report TypeScript that stops before a tt construct as the user's TypeScript | Complete | 2026-09-30 | 2026-09-30 | [TASK-671](./TASK-671-construct-after-unparsable-typescript.md) |
+| TASK-672 | Keep TypeScript's deprecated tag on completion entries | Complete | 2026-09-30 | 2026-09-30 | [TASK-672](./TASK-672-deprecated-completion-tag.md) |
+| TASK-673 | Name a found union as TypeScript names it in a type mismatch | Complete | 2026-09-30 | 2026-09-30 | [TASK-673](./TASK-673-union-named-by-typescript-in-mismatches.md) |
+| TASK-674 | Carry each completion entry's LSP kind from TypeScript to the editor unchanged | Complete | 2026-09-30 | 2026-09-30 | [TASK-674](./TASK-674-lossless-completion-kinds.md) |
+| TASK-675 | Baseline what the editor adapter publishes and offers in the editor cases | Complete | 2026-09-30 | 2026-09-30 | [TASK-675](./TASK-675-editor-cases-ask-the-adapter.md) |
+| TASK-676 | Export a let-else's bindings when the declaration is exported | Complete | 2026-09-30 | 2026-09-30 | [TASK-676](./TASK-676-exported-let-else.md) |
 
 ## Next task number
 

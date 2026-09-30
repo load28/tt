@@ -1,0 +1,18 @@
+// @hover: local, imported
+// @signatureHelp: args
+// @filename: shapes.tt
+export variant Shape { Circle(radius: number), Point }
+/** Area. See {@link perimeter}. */
+export function area(s: Shape): number { return 1; }
+export function perimeter(s: Shape): number { return 2; }
+// @filename: main.tt
+import { area, Shape } from "./shapes.tt";
+variant S { A, B(x: number) }
+/**
+ * Scales a value.
+ * @see {@link other}
+ */
+export function scale(n: number): number { return n; }
+export function other() {}
+export const r = (s: S) => match (s) { A => /*local*/scale(1), B(x) => /*imported*/area(Shape.Point) };
+export const q = scale(/*args*/);

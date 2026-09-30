@@ -1,0 +1,18 @@
+// @completions: deprecated, member
+// @filename: util.ts
+/** @deprecated use addAll */
+export function oldAdd(a: number): number { return a; }
+export const api = {
+  /** @deprecated use next */
+  prev: 1,
+  next: 2,
+};
+// @filename: main.tt
+import { api } from "./util";
+variant R { Ok(v: number), Err(e: string) }
+export function run(r: R): number {
+  return match (r) {
+    Ok(v) => oldAd/*deprecated*/ + api./*member*/,
+    Err(e) => 0,
+  };
+}

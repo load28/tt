@@ -1,0 +1,3 @@
+plainTsx diagnostics plainTsx.ttx
+plainTypeScript diagnostics plainTypeScript.tt
+twoErrorsAtOneCall diagnostics twoErrorsAtOneCall.tt

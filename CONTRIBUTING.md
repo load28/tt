@@ -245,10 +245,26 @@ answer to `tests/baselines/reference/editor/<name>.baseline`. When a
 `references` or `rename` marker sits inside a range, the answer must be
 exactly the case's ranges.
 
+A completion entry that imports its name from a module (an auto-import,
+shown with `from "..."`) is also resolved through both transports, and the
+edits accepting it makes are shown under it (`resolve <label> from ...`).
+
+`diagnostics` and `completions` are also asked of the VS Code adapter
+(`editors/vscode/server/out/server.js`, over LSP), because what an editor
+shows is what the adapter makes of the engine's answers. A `diagnostics`
+section adds `published:`, the list the adapter publishes for the unit
+after merging the text, typed, service, and hint layers, with each entry's
+source (`ttc`, `ts`, or `tt`). A `completions` section adds `editor
+completion:`, the adapter's items with their LSP 3.17 `CompletionItemKind`
+names and `CompletionItemTag`s. The adapter must be built (`npm ci --prefix
+editors/vscode && npm --prefix editors/vscode run compile`); without it the
+suite skips, and `TT_REQUIRE_EXTENSION=1` turns the skip into a failure.
+
 A TypeScript twin, the same name with `.ts` or `.tsx` and the same units
 with `.ts`/`.tsx` for `.tt`/`.ttx`, is asked the same questions at the same
 markers through `tsgo --lsp`. The per-file verbs are compared only when the
-twin's text is the source's. Every answer that differs from TypeScript's is
+twin's text is the source's; the diagnostics compared are the published
+list. Every answer that differs from TypeScript's is
 shown in the case's baseline and listed in
 `tests/baselines/reference/editor/failingParity.txt`, which is a baseline
 too: a new difference and a fixed one both change it.
