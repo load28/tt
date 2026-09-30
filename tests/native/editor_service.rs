@@ -526,14 +526,63 @@ fn an_auto_import_entry_names_the_module_it_imports_from() {
     };
     assert_eq!(described("kkValue").as_deref(), Some("./shapes.tt"));
     assert_eq!(described("kkValueLib").as_deref(), Some("./lib"));
+    let source = completion
+        .items
+        .iter()
+        .find(|item| item.label == "kkValue")
+        .and_then(|item| item.source.clone());
     let detail = project
-        .completion_resolve(&file, position, "kkValue", completion.probe)
+        .completion_resolve(&file, position, "kkValue", source.as_deref(), completion.probe)
         .unwrap()
         .expect("the entry resolves");
     assert_eq!(
         detail.additional_edits[0].new_text,
         "import { kkValue } from \"./shapes.tt\";\n\n"
     );
+}
+
+#[test]
+fn entries_of_one_name_from_two_modules_each_import_their_own() {
+    require_tsgo!();
+    let (source, position) = at_cursor("export const z = kkVa@@;\n");
+    let dir = project(&[
+        ("src/main.tt", &source),
+        ("src/shapes.tt", "export const kkValue = 1;\n"),
+        ("src/lib.ts", "export const kkValue = 2;\n"),
+    ]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut project = open_service(&file);
+    let completion = project.completion(&file, position, false).unwrap();
+    let entries: Vec<_> = completion
+        .items
+        .iter()
+        .filter(|item| item.label == "kkValue")
+        .cloned()
+        .collect();
+    let mut modules: Vec<_> = entries
+        .iter()
+        .map(|item| item.description.clone().unwrap_or_default())
+        .collect();
+    modules.sort();
+    assert_eq!(modules, ["./lib", "./shapes.tt"]);
+    for entry in entries.iter().chain(entries.iter().rev()) {
+        let detail = project
+            .completion_resolve(
+                &file,
+                position,
+                &entry.label,
+                entry.source.as_deref(),
+                completion.probe,
+            )
+            .unwrap()
+            .expect("the entry resolves");
+        let module = entry.description.as_deref().unwrap();
+        assert_eq!(
+            detail.additional_edits[0].new_text,
+            format!("import {{ kkValue }} from \"{module}\";\n\n"),
+        );
+        assert_eq!(detail.signature, format!("Add import from \"{module}\""));
+    }
 }
 
 #[test]

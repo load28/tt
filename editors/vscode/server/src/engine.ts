@@ -51,6 +51,7 @@ export interface EngineCompletionItem {
   range?: EngineRange | null;
   labelDetails?: { detail?: string | null; description?: string | null } | null;
   label: string;
+  source?: string | null;
   /** The element-kind string the editor has always mapped. */
   kind: string;
   sortText: string;
@@ -496,13 +497,14 @@ export function completionResolve(
   path: string,
   position: EnginePosition,
   label: string,
+  source: string | undefined,
   probe: number | undefined,
   onError?: (message: string) => void,
 ): Promise<EngineCompletionDetail | null> {
   return semantic(
     compiler,
     "completionResolve",
-    { path, position, label, probe: probe ?? null },
+    { path, position, label, source: source ?? null, probe: probe ?? null },
     onError,
   );
 }

@@ -740,7 +740,8 @@ impl Project {
 
     /// The signature and documentation behind one completion entry, fetched
     /// when the consumer asks about the one entry the user is looking at.
-    /// `probe` re-installs the probed text the entry was listed from;
+    /// The entry is the one listed with `label` and `source`
+    /// ([`CompletionItem::source`]). `probe` re-installs the probed text the entry was listed from;
     /// `Ok(None)` when that probe is gone (the buffer has moved on) or the
     /// entry cannot be resolved.
     pub fn completion_resolve(
@@ -748,6 +749,7 @@ impl Project {
         path: &Path,
         position: Position,
         label: &str,
+        source: Option<&str>,
         probe: Option<u64>,
     ) -> Result<Option<CompletionDetail>, String> {
         let (doc, path) = self.serve(path)?;
@@ -778,7 +780,12 @@ impl Project {
             .cloned()
             .unwrap_or_else(|| doc.code.clone());
 
-        let key = (path.clone(), at, label.to_string());
+        let key = (
+            path.clone(),
+            at,
+            label.to_string(),
+            source.map(str::to_owned),
+        );
         if !session.last_completion.contains_key(&key) {
             // The server resolves the item *it* produced, not a name, so the
             // list has to have been asked for first.

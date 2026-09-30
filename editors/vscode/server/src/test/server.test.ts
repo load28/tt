@@ -751,6 +751,38 @@ test(
   },
 );
 
+test(
+  "each auto-import entry of a name exported by two modules imports from its own module",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, completion, stop } = await open("export const value = kkVal", "tt", {
+      "lib.ts": "export const kkValue = 1;\n",
+      "shapes.tt": "export const kkValue = 2;\n",
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", noEmit: true },
+        include: ["*"],
+      }),
+    });
+    try {
+      const { items } = await completion("value = kkVal");
+      const entries = items.filter((item) => item.label === "kkValue");
+      assert.equal(entries.length, 2, `entries: ${JSON.stringify(entries)}`);
+      const imports: string[] = [];
+      for (const entry of [...entries, ...entries.reverse()]) {
+        const resolved = (await client.request("completionItem/resolve", entry)).result;
+        imports.push(resolved.additionalTextEdits[0].newText);
+      }
+      assert.deepEqual(imports.slice(0, 2).sort(), [
+        'import { kkValue } from "./lib";\n\n',
+        'import { kkValue } from "./shapes.tt";\n\n',
+      ]);
+      assert.deepEqual(imports.slice(2), imports.slice(0, 2).reverse());
+    } finally {
+      stop();
+    }
+  },
+);
+
 const DOCUMENTED_SOURCE = [
   "/**",
   " * Adds two numbers.",

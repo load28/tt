@@ -1179,6 +1179,7 @@ interface TsCompletionData {
   uri: string;
   offset: number;
   name: string;
+  source?: string;
   /** The engine's probe the entry was listed from, when it came from one —
    * the detail must be fetched against that same text. */
   probe?: number;
@@ -1227,6 +1228,7 @@ async function tsCompletions(
       uri: doc.uri,
       offset,
       name: entry.label,
+      source: entry.source ?? undefined,
       probe: list.probe ?? undefined,
     } satisfies TsCompletionData,
   }));
@@ -1341,6 +1343,7 @@ connection.onCompletionResolve(
       fsPath,
       doc.positionAt(data.offset),
       data.name,
+      data.source,
       data.probe,
       logEngine,
     );

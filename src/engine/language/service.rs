@@ -184,9 +184,11 @@ pub(super) fn ts_completions(
         {
             continue;
         }
-        session
-            .last_completion
-            .insert((path.to_path_buf(), at, label.clone()), item.clone());
+        let source = item["data"]["source"].as_str().map(str::to_owned);
+        session.last_completion.insert(
+            (path.to_path_buf(), at, label.clone(), source.clone()),
+            item.clone(),
+        );
         let replaced = ["replace", "range"]
             .iter()
             .map(|key| &item["textEdit"][*key])
@@ -215,6 +217,7 @@ pub(super) fn ts_completions(
             description: item["labelDetails"]["description"]
                 .as_str()
                 .map(str::to_owned),
+            source,
             label,
         });
     }
@@ -320,6 +323,7 @@ pub(super) fn tt_module_entries(
                 range: Some(range),
                 label_detail: None,
                 description: None,
+                source: None,
             })
         })
         .collect()

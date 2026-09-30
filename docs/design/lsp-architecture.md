@@ -244,6 +244,13 @@ not rename is an error naming it; any other refusal is null. The service
 client returns a server's error answer apart from a failed conversation
 (`Service::answer`), so TypeScript's refusal is not an engine failure.
 
+**Update (TASK-629)**: a completion entry is identified by its label and
+the service's `source` (TypeScript's `CompletionEntry.source`, tsgo's
+`data.source`), as TypeScript identifies an entry to resolve. The engine
+answers the source with each item, and the adapter keeps it in the item's
+`data` for `completionItem/resolve`, so two exports of one name from
+different modules each import from their own module.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:

@@ -626,7 +626,8 @@
 | TASK-618 | Let a referenced type-check config emit declarations into a cache | Complete | 2026-09-30 | 2026-09-30 | [TASK-618](./TASK-618-referenced-type-configs-emit.md) |
 | TASK-619 | Derive `tt:build` from the configured source roots | Complete | 2026-09-30 | 2026-09-30 | [TASK-619](./TASK-619-derived-build-roots.md) |
 | TASK-620 | Report an impossible match case at its pattern | Complete | 2026-09-30 | 2026-09-30 | [TASK-620](./TASK-620-impossible-case-at-its-pattern.md) |
+| TASK-629 | Resolve each auto-import entry against its own module | Complete | 2026-09-30 | 2026-09-30 | [TASK-629](./TASK-629-auto-import-entry-identity.md) |
 
 ## Next task number
 
-**TASK-621**
+**TASK-634**

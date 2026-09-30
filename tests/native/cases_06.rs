@@ -124,8 +124,13 @@ fn an_auto_import_completion_carries_its_import_edit_onto_the_source() {
             answer.items.iter().any(|item| item.label == label),
             "{label} not offered"
         );
+        let source = answer
+            .items
+            .iter()
+            .find(|item| item.label == label)
+            .and_then(|item| item.source.clone());
         let detail = project
-            .completion_resolve(&file, at, label, answer.probe)
+            .completion_resolve(&file, at, label, source.as_deref(), answer.probe)
             .unwrap()
             .expect("resolved");
         // The emitted file opens with the runtime import the pipelines

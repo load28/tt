@@ -279,6 +279,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                     "filterText": item.filter_text,
                     "snippet": item.snippet,
                     "range": item.range.map(range_json),
+                    "source": item.source,
                     "labelDetails": (item.label_detail.is_some() || item.description.is_some())
                         .then(|| json!({
                             "detail": item.label_detail,
@@ -291,9 +292,10 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
         }),
         "completionResolve" => semantic(workspace, params, |project, path, position| {
             let label = params["label"].as_str().unwrap_or_default();
+            let source = params["source"].as_str();
             let probe = params["probe"].as_u64();
             Ok(
-                match project.completion_resolve(path, position, label, probe)? {
+                match project.completion_resolve(path, position, label, source, probe)? {
                     None => serde_json::Value::Null,
                     Some(detail) => {
                         let mut answer = json!({

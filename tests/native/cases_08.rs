@@ -154,8 +154,13 @@ export const d = help;\n";
         answer.items.iter().any(|item| item.label == "helperFn"),
         "helperFn not offered"
     );
+    let source = answer
+        .items
+        .iter()
+        .find(|item| item.label == "helperFn")
+        .and_then(|item| item.source.clone());
     let detail = project
-        .completion_resolve(&file, at, "helperFn", answer.probe)
+        .completion_resolve(&file, at, "helperFn", source.as_deref(), answer.probe)
         .unwrap()
         .expect("resolved");
     let start = ttc::engine::Position {
@@ -269,8 +274,13 @@ export const m = match (v) { B => 0, A(n) => parse(\"x\", @@\n};\n",
         answer.items.iter().any(|item| item.label == "helperFn"),
         "helperFn not offered"
     );
+    let source = answer
+        .items
+        .iter()
+        .find(|item| item.label == "helperFn")
+        .and_then(|item| item.source.clone());
     let detail = project
-        .completion_resolve(&file, position, "helperFn", answer.probe)
+        .completion_resolve(&file, position, "helperFn", source.as_deref(), answer.probe)
         .unwrap()
         .expect("resolved");
     let start = ttc::engine::Position {
