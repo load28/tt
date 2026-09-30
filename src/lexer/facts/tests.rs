@@ -419,6 +419,8 @@ fn braces(src: &str) -> Vec<&'static str> {
             facts if facts.constructor_body() => "constructor",
             facts if facts.generator_body() => "generator",
             facts if facts.function_body() => "function",
+            facts if facts.static_block() => "static",
+            facts if facts.class_body() => "class",
             _ => "-",
         })
         .collect()
@@ -436,19 +438,23 @@ fn a_brace_records_the_function_body_it_opens() {
         ),
         [
             "function",
-            "-",
+            "class",
             "constructor",
             "generator",
             "generator",
             "-",
             "function",
             "-",
-            "-",
+            "static",
         ]
     );
     assert_eq!(
         braces("const o = { m() {}, *g() {}, k: {} }\nfor (;;) {}\nswitch (x) {}\n"),
         ["-", "function", "generator", "-", "-", "-"]
+    );
+    assert_eq!(
+        braces("const K = class { x = { a: 1 }; static { if (x) {} } [k()] = 1 }\n"),
+        ["class", "-", "static", "-"]
     );
 }
 

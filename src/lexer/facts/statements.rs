@@ -1156,6 +1156,7 @@ impl Machine<'_> {
             ) => {
                 decl.state = DeclState::Done;
                 keep(self, decl);
+                self.mark(TokenFacts::CLASS_BODY);
                 self.push_frame(Frame::ClassBody(ClassMember::at(ClassBody::Start)));
                 Out::Consumed
             }
@@ -1311,6 +1312,7 @@ impl Machine<'_> {
                 }
                 Tk::Punct(b'{') => {
                     keep(self, ClassBody::Start);
+                    self.mark(TokenFacts::STATIC_BLOCK);
                     self.open_body(Yield::Identifier);
                     Out::Consumed
                 }

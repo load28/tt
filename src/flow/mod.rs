@@ -51,7 +51,7 @@ use scanner::*;
 use syntax::user_function_target_at;
 pub(crate) use syntax::{
     FunctionTarget, FunctionTargets, function_depth_at, function_target_at, in_function_body,
-    in_static_block, user_function_depth_at,
+    user_function_depth_at,
 };
 
 /// One body's control-flow graph.

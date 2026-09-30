@@ -686,7 +686,8 @@
 | TASK-678 | Generate a case matrix of tt constructs in host positions, each run against a TypeScript twin | Complete | 2026-09-30 | 2026-09-30 | [TASK-678](./TASK-678-case-matrix-generator.md) |
 | TASK-679 | Populate the case matrix for match, try, result, let-else, and if-let | Complete | 2026-09-30 | 2026-09-30 | [TASK-679](./TASK-679-matrix-match-try-result-let-else-if-let.md) |
 | TASK-680 | Populate the case matrix for pipelines, flow, val, variant, and .ttx positions | Complete | 2026-09-30 | 2026-09-30 | [TASK-680](./TASK-680-matrix-pipelines-flow-val-variant-ttx.md) |
+| TASK-681 | Reject a statement `try` in class code of a class written inside a function | Complete | 2026-09-30 | 2026-09-30 | [TASK-681](./TASK-681-try-in-class-code-inside-function.md) |
 
 ## Next task number
 
-**TASK-681**
+**TASK-687**

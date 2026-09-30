@@ -88,40 +88,21 @@ pub(crate) fn user_function_depth_at(
     braced + concise
 }
 
-/// Whether `at` is directly enclosed by a class static block. A nested
-/// user-written function remains its own Result scope, so callers combine
-/// this with [`function_target_at`] rather than treating every nested token
-/// as statically owned.
-pub(crate) fn in_static_block(src: &str, tokens: &[Token], at: usize) -> bool {
-    let mut stack: Vec<bool> = Vec::new();
-    for (index, token) in tokens.iter().enumerate().take(at) {
-        match token.kind {
-            TokenKind::Punct(b'{') => stack.push(
-                index
-                    .checked_sub(1)
-                    .and_then(|before| tokens.get(before))
-                    .is_some_and(|previous| {
-                        matches!(previous.kind, TokenKind::Ident)
-                            && &src[previous.span.start..previous.span.end] == "static"
-                    }),
-            ),
-            TokenKind::Punct(b'}') => {
-                stack.pop();
-            }
-            _ => {}
-        }
-    }
-    stack.into_iter().any(|is_static| is_static)
-}
-
-/// The kind of user-written function that an early `return` at a token can
-/// reach. Constructors and generators syntactically accept `return`, but a
-/// propagated Result would change their JavaScript completion contract.
+/// The innermost function-like boundary around a token: the kind of
+/// user-written function an early `return` at the token would leave, or the
+/// class code that has none. Constructors and generators syntactically
+/// accept `return`, but a propagated Result would change their JavaScript
+/// completion contract. A class static block and the rest of a class body
+/// outside its methods are boundaries too: code there is not evaluated by the
+/// function the class is written in (ECMA-262 §15.7), so a `return` written
+/// there cannot reach that function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FunctionTarget {
     Ordinary,
     Constructor,
     Generator,
+    StaticBlock,
+    ClassElement,
 }
 
 pub(crate) struct FunctionTargets {
@@ -271,19 +252,26 @@ pub(super) fn concise_arrow_end(tokens: &[Token], from: usize) -> usize {
     tokens.len()
 }
 
-/// The kind of user function the `{` at `brace` opens, if it opens one:
-/// the lexer's function-body facts ([`crate::lexer::TokenFacts`]).
+/// The function-like boundary the `{` at `brace` opens, if it opens one:
+/// the lexer's function-body, class-body, and static-block facts
+/// ([`crate::lexer::TokenFacts`]).
 pub(super) fn function_target_brace(tokens: &[Token], brace: usize) -> Option<FunctionTarget> {
     let facts = tokens.get(brace)?.facts;
-    facts
-        .function_body()
-        .then_some(if facts.constructor_body() {
+    if facts.function_body() {
+        Some(if facts.constructor_body() {
             FunctionTarget::Constructor
         } else if facts.generator_body() {
             FunctionTarget::Generator
         } else {
             FunctionTarget::Ordinary
         })
+    } else if facts.static_block() {
+        Some(FunctionTarget::StaticBlock)
+    } else if facts.class_body() {
+        Some(FunctionTarget::ClassElement)
+    } else {
+        None
+    }
 }
 
 /// Whether the `{` at token index `k` opens a function body (see

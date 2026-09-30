@@ -224,14 +224,21 @@ impl Checker<'_> {
                 .help("extract the affected expression into a nested function when doing so preserves its captures and evaluation order"),
             );
         } else if place != Place::ResultRegion
-            && function_target.is_none()
-            && crate::flow::in_static_block(self.source, self.tokens, at)
+            && let Some(
+                boundary @ (crate::flow::FunctionTarget::StaticBlock
+                | crate::flow::FunctionTarget::ClassElement),
+            ) = function_target
         {
+            let owner = if boundary == crate::flow::FunctionTarget::StaticBlock {
+                "a class static block"
+            } else {
+                "a class field initializer or computed member name"
+            };
             self.error(
                 TtError::span(
                     stmt.span.start,
                     stmt.span.end,
-                    "`try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation".to_string(),
+                    format!("`try` cannot be used in {owner} — it has no enclosing function failure edge for its `Err` propagation"),
                 )
                 .code(DiagnosticCode::TryPlacement)
                 .help("move the propagation into an ordinary function, or handle the Result explicitly"),
