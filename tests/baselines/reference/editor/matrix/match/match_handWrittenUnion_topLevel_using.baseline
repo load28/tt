@@ -1,10 +1,5 @@
 differences from match_handWrittenUnion_topLevel_using at the questions listed in tests/editor-matrix-differences.txt
 
-=== completions /*operand*/ main.tt:6:37 ===
-  | const top0 = match (note("operand", input)) { Click(x) => note("click", x), Key(key) => note("key", key) };
-  |                                     ^ /*operand*/
-  tt only: top0 (Variable)
-
 === completions /*use*/ main.tt:6:73 ===
   | const top0 = match (note("operand", input)) { Click(x) => note("click", x), Key(key) => note("key", key) };
   |                                                                         ^ /*use*/

@@ -1,7 +1,0 @@
-differences from match_guards_declarationInitializer_finally at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:6:42 ===
-  |     const value = match (note("operand", input)) { Circle(r) if note("guard big", r > 2) => note("big", r), Circle(r) => note("small", r), Rect(w, h) if note("guard wide", w > h) => note("wide", w), Rect(w, h) => note("tall", h), Point => note("point", 0) };
-  |                                          ^ /*operand*/
-  tt only: value (Variable)
-

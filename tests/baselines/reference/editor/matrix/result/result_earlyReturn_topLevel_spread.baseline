@@ -12,7 +12,6 @@ differences from result_earlyReturn_topLevel_spread at the questions listed in t
   tt only: infer (Keyword)
   tt only: keyof (Keyword)
   tt only: module (Keyword)
-  tt only: n (Variable)
   tt only: namespace (Keyword)
   tt only: never (Keyword)
   tt only: number (Keyword)

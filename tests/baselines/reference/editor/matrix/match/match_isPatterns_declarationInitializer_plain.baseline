@@ -1,7 +1,0 @@
-differences from match_isPatterns_declarationInitializer_plain at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:4:40 ===
-  |   const value = match (note("operand", input)) { is RangeError { message } => note("range", message), is TypeError | is SyntaxError => note("type", 1), is Error { message: detail } => note("error", detail), _ => note("other", null) };
-  |                                        ^ /*operand*/
-  tt only: value (Variable)
-

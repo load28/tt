@@ -1,10 +1,5 @@
 differences from match_wildcard_topLevel_await at the questions listed in tests/editor-matrix-differences.txt
 
-=== completions /*operand*/ main.tt:5:33 ===
-  | const top0 = match (await later(input)) { Word(text) => note("word", text.length), _ => note("other", -1) };
-  |                                 ^ /*operand*/
-  tt only: top0 (Variable)
-
 === completions /*use*/ main.tt:5:70 ===
   | const top0 = match (await later(input)) { Word(text) => note("word", text.length), _ => note("other", -1) };
   |                                                                      ^ /*use*/

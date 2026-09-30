@@ -1,7 +1,0 @@
-differences from result_single_jsxNested_finally at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.ttx:5:92 ===
-  |     return <ul><li>{note("first", 1)}</li><li>{result { const n = try read(note("operand", input)); return n * 10; }}</li></ul>;
-  |                                                                                            ^ /*operand*/
-  tt only: n (Variable)
-

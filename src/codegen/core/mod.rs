@@ -121,7 +121,7 @@ pub(crate) fn lowering_plan_with(
                 error,
             }
         })?;
-    let plan = evaluation
+    let mut plan = evaluation
         .lowering_plan(core)
         .map_err(|error| LoweringFailure::Evaluation {
             source: error
@@ -138,6 +138,7 @@ pub(crate) fn lowering_plan_with(
     if let Err(error) = evaluation.validate_reference(&plan) {
         error.raise();
     }
+    plan.completion_scopes = syntax.completion_scopes().to_vec();
     Ok(plan)
 }
 

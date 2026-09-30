@@ -1,7 +1,0 @@
-differences from result_single_objectProperty_await at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:4:76 ===
-  |   return { a: note("a", 1), value: result { const n = try read(await later(input)); return n * 10; }, c: note("c", 3) };
-  |                                                                            ^ /*operand*/
-  tt only: n (Variable)
-

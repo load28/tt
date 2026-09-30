@@ -1,10 +1,5 @@
 differences from match_nestedPattern_topLevel_await at the questions listed in tests/editor-matrix-differences.txt
 
-=== completions /*operand*/ main.tt:6:33 ===
-  | const top0 = match (await later(input)) { Done(value: Some(value: v)) => note("some", v), Done(value: None()) => note("none", 0), Failed(error) => note("failed", error) };
-  |                                 ^ /*operand*/
-  tt only: top0 (Variable)
-
 === completions /*use*/ main.tt:6:87 ===
   | const top0 = match (await later(input)) { Done(value: Some(value: v)) => note("some", v), Done(value: None()) => note("none", 0), Failed(error) => note("failed", error) };
   |                                                                                       ^ /*use*/

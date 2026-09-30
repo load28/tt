@@ -1,7 +1,0 @@
-differences from try_binaryOperand_declarationInitializer_await at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:5:38 ===
-  |   const value = try read(await later(input)) * 10;
-  |                                      ^ /*operand*/
-  tt only: value (Variable)
-

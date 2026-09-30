@@ -160,6 +160,9 @@ pub(crate) struct LoweringPlan {
     commonjs: bool,
     global_temps: HashMap<crate::core_ir::TempId, String>,
     owner_model_unavailable: bool,
+    /// What TypeScript's completion rules say at each construct's place,
+    /// for the editor ([`crate::program_syntax::CompletionScope`]).
+    pub(crate) completion_scopes: Vec<crate::program_syntax::CompletionScope>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

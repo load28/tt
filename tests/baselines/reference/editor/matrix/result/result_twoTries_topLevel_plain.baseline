@@ -3,7 +3,6 @@ differences from result_twoTries_topLevel_plain at the questions listed in tests
 === completions /*operand*/ main.tt:4:58 ===
   | const top0 = result { const a = try read(note("operand", input)); const b = try read(note("b", a - 3)); return [a, b]; };
   |                                                          ^ /*operand*/
-  tt only: a (Variable)
   tt only: abstract (Keyword)
   tt only: any (Keyword)
   tt only: asserts (Keyword)
@@ -29,7 +28,6 @@ differences from result_twoTries_topLevel_plain at the questions listed in tests
   tt only: abstract (Keyword)
   tt only: any (Keyword)
   tt only: asserts (Keyword)
-  tt only: b (Variable)
   tt only: bigint (Keyword)
   tt only: boolean (Keyword)
   tt only: declare (Keyword)

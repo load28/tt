@@ -590,9 +590,14 @@ impl Project {
     ) -> Result<CompletionAnswer, String> {
         let (doc, path) = self.serve(path)?;
         let session = self.session();
+        let kind = crate::SourceKind::from_path(&path).unwrap_or_default();
+        let source_at = {
+            let u16 = u16_offset(&doc.source, position);
+            mapper::from_utf16(&doc.source, u16)
+        };
         let plain = match to_service_typed(&doc, position) {
             Some(at) => {
-                let plain = ts_completions(
+                let mut plain = ts_completions(
                     session,
                     &path,
                     at,
@@ -600,6 +605,14 @@ impl Project {
                     &doc.generated_names,
                     trigger,
                 )?;
+                super::scope::restate_completions(
+                    &mut plain,
+                    &doc,
+                    doc.served(),
+                    kind,
+                    at,
+                    source_at,
+                );
                 if !member || (plain.member && !plain.items.is_empty()) {
                     return Ok(plain);
                 }
@@ -612,10 +625,6 @@ impl Project {
         // emit, and ask at its mapped position. The probe stands in for the
         // buffer only for this question — the next serve restores the real
         // text — and no diagnostic is ever computed from it.
-        let source_at = {
-            let u16 = u16_offset(&doc.source, position);
-            mapper::from_utf16(&doc.source, u16)
-        };
         let Some(probe) = build_probe(&path, &doc.source, source_at, session.probe_count + 1)
         else {
             return Ok(if plain.member {
@@ -634,6 +643,14 @@ impl Project {
             &probe.generated_names,
             trigger,
         )?;
+        super::scope::restate_completions(
+            &mut probed,
+            &doc,
+            probe.served(),
+            kind,
+            probe.offset,
+            source_at,
+        );
         probed.probe = Some(probe.version);
         session.last_probe = Some(probe);
         Ok(if !member || probed.member {
@@ -1496,6 +1513,7 @@ impl Project {
                     declared_names: projected.emit.declared_names.clone(),
                     shared_bindings: projected.emit.shared_bindings.clone(),
                     destructured_lists: projected.emit.destructured_lists.clone(),
+                    completion_scopes: projected.emit.completion_scopes.clone(),
                     recovered: projected.recovered.clone(),
                     tt_diagnostics: projected.tt_diagnostics.clone(),
                     generated_names: projected.emit.generated_names.clone(),

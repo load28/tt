@@ -1,7 +1,0 @@
-differences from try_matchOperand_declarationInitializer_spread at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:5:38 ===
-  |   const value = try match (first(...[input])) { 1 => read(note("one", 10)), _ => read(note("other", -10)) };
-  |                                      ^ /*operand*/
-  tt only: value (Variable)
-

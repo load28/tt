@@ -1,7 +1,0 @@
-differences from result_earlyReturn_returnOperand_spread at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:4:48 ===
-  |   return result { const n = try read(first(...[input])); if (n > 2) { return note("big", n); } return note("small", n); };
-  |                                                ^ /*operand*/
-  tt only: n (Variable)
-

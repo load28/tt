@@ -243,6 +243,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         destructured_lists: flat.destructured_lists,
         inserted: flat.inserted,
         single_line_breaks: flat.single_line_breaks,
+        completion_scopes: plan.completion_scopes.clone(),
         support_imports: flat.support_imports,
         commonjs: flat.commonjs,
     };
@@ -1063,6 +1064,7 @@ fn report_parsed(
         destructured_lists: flat.destructured_lists,
         inserted: flat.inserted,
         single_line_breaks: flat.single_line_breaks,
+        completion_scopes: plan.completion_scopes.clone(),
         support_imports: flat.support_imports,
         commonjs: flat.commonjs,
     };

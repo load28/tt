@@ -1,7 +1,0 @@
-differences from tryStatement_declaration_method_optionalChain at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:7:36 ===
-  |       const checked = try read(box(input)?.inner.value!);
-  |                                    ^ /*operand*/
-  tt only: checked (Variable)
-

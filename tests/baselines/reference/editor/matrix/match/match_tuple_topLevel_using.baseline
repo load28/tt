@@ -1,10 +1,5 @@
 differences from match_tuple_topLevel_using at the questions listed in tests/editor-matrix-differences.txt
 
-=== completions /*operand*/ main.tt:7:37 ===
-  | const top0 = match (note("operand", input), note<Speed>("second", Speed.Fast)) { (Circle(r), Fast) => note("fast circle", r), (Rect(w), _) => note("rect", w), (_, Slow) => note("slow", 0), (Circle | Point, _) => note("rest", -1) };
-  |                                     ^ /*operand*/
-  tt only: top0 (Variable)
-
 === completions /*use*/ main.tt:7:123 ===
   | const top0 = match (note("operand", input), note<Speed>("second", Speed.Fast)) { (Circle(r), Fast) => note("fast circle", r), (Rect(w), _) => note("rect", w), (_, Slow) => note("slow", 0), (Circle | Point, _) => note("rest", -1) };
   |                                                                                                                           ^ /*use*/

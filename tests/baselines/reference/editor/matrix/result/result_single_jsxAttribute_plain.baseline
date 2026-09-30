@@ -1,7 +1,0 @@
-differences from result_single_jsxAttribute_plain at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.ttx:4:71 ===
-  |   return <div data-value={result { const n = try read(note("operand", input)); return n * 10; }} />;
-  |                                                                       ^ /*operand*/
-  tt only: n (Variable)
-

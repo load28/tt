@@ -1,10 +1,5 @@
 differences from match_guards_topLevel_spread at the questions listed in tests/editor-matrix-differences.txt
 
-=== completions /*operand*/ main.tt:5:31 ===
-  | const top0 = match (first(...[input])) { Circle(r) if note("guard big", r > 2) => note("big", r), Circle(r) => note("small", r), Rect(w, h) if note("guard wide", w > h) => note("wide", w), Rect(w, h) => note("tall", h), Point => note("point", 0) };
-  |                               ^ /*operand*/
-  tt only: top0 (Variable)
-
 === completions /*use*/ main.tt:5:73 ===
   | const top0 = match (first(...[input])) { Circle(r) if note("guard big", r > 2) => note("big", r), Circle(r) => note("small", r), Rect(w, h) if note("guard wide", w > h) => note("wide", w), Rect(w, h) => note("tall", h), Point => note("point", 0) };
   |                                                                         ^ /*use*/

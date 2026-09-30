@@ -424,6 +424,18 @@ TypeScript's syntax errors *and* its type errors; a `.tt` file must too.
   probe is built from the projection the service would serve for the
   spliced text, the faithful projection of TypeScript that does not parse
   included, and its auto-import edits map back through it (TASK-526).
+- **A construct's place decides what the served syntax moved
+  (TASK-687).** TypeScript leaves the variable being declared out of its
+  own initializer's completions by walking up the syntax
+  (`getClosestSymbolDeclaration`). Lowering runs a construct before the
+  declaration it initializes, so the compiler's whole-program syntax
+  records, per construct, the declaration whose initializer holds it (a
+  value `match` and a `result` block are region functions there, their
+  scrutinees evaluated at the construct's place), and `MappedEmit` carries
+  it. Where TypeScript's walk from the served position stops in text the
+  user wrote, its answer stands; where it reaches compiler-written text,
+  the innermost construct around the cursor names the declaration left
+  out.
 
 ### 지운 것 (§51)
 

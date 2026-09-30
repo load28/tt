@@ -1,7 +1,0 @@
-differences from result_single_jsxTernary_optionalChain at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.ttx:4:55 ===
-  |   return <p>{flip() ? result { const n = try read(box(input)?.inner.value!); return n * 10; } : <i>none</i>}</p>;
-  |                                                       ^ /*operand*/
-  tt only: n (Variable)
-

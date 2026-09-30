@@ -692,6 +692,7 @@
 | TASK-684 | Lower a `try` nested in an operand of a conditional operation | Complete | 2026-09-30 | 2026-09-30 | [TASK-684](./TASK-684-try-in-conditional-operands.md) |
 | TASK-685 | Generate editor cases from the case matrix, each asked against a TypeScript twin | Complete | 2026-09-30 | 2026-09-30 | [TASK-685](./TASK-685-editor-matrix-infrastructure.md) |
 | TASK-686 | Populate the editor matrix for every construct and triage each difference from TypeScript | Complete | 2026-09-30 | 2026-09-30 | [TASK-686](./TASK-686-editor-matrix-populate.md) |
+| TASK-687 | Leave the declaration being initialized out of completions inside a construct | Complete | 2026-09-30 | 2026-09-30 | [TASK-687](./TASK-687-completion-own-initializer.md) |
 | TASK-689 | Classify every alternative's binding of an or-pattern as a declaration in semantic tokens | Complete | 2026-09-30 | 2026-09-30 | [TASK-689](./TASK-689-or-pattern-binding-semantic-tokens.md) |
 | TASK-690 | Emit a single-case variant as its case's object type so TypeScript names it | Complete | 2026-09-30 | 2026-09-30 | [TASK-690](./TASK-690-single-case-variant-alias.md) |
 

@@ -1,7 +1,0 @@
-differences from result_single_templateLiteral_using at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:5:79 ===
-  |   return `<${note("left", "L")}|${result { const n = try read(note("operand", input)); return n * 10; }}|${note("right", "R")}>`;
-  |                                                                               ^ /*operand*/
-  tt only: n (Variable)
-

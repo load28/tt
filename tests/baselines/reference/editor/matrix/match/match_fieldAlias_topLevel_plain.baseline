@@ -1,10 +1,5 @@
 differences from match_fieldAlias_topLevel_plain at the questions listed in tests/editor-matrix-differences.txt
 
-=== completions /*operand*/ main.tt:5:37 ===
-  | const top0 = match (note("operand", input)) { Rect(h: tall, w: wide) => note("rect", [wide, tall]), Circle(r: radius) => note("circle", radius), Point => note("point", null) };
-  |                                     ^ /*operand*/
-  tt only: top0 (Variable)
-
 === completions /*use*/ main.tt:5:93 ===
   | const top0 = match (note("operand", input)) { Rect(h: tall, w: wide) => note("rect", [wide, tall]), Circle(r: radius) => note("circle", radius), Point => note("point", null) };
   |                                                                                             ^ /*use*/

@@ -229,6 +229,8 @@ pub struct MappedEmit {
     /// Glue written at a source point, ordered by output offset.
     pub(crate) inserted: Vec<InsertedGlue>,
     pub(crate) single_line_breaks: Vec<usize>,
+    /// What TypeScript's completion rules say at each construct's place.
+    pub(crate) completion_scopes: Vec<crate::program_syntax::CompletionScope>,
     /// The compiler support modules the emitted code imports, in
     /// [`StdModule::ALL`](crate::StdModule::ALL) order: the standard-library
     /// modules the source imports, and the pipeline runtime when the
@@ -370,6 +372,7 @@ pub(crate) fn emit_mapped_parsed(
         destructured_lists: flat.destructured_lists,
         inserted: flat.inserted,
         single_line_breaks: flat.single_line_breaks,
+        completion_scopes: plan.completion_scopes.clone(),
         support_imports: flat.support_imports,
         commonjs: flat.commonjs,
     }

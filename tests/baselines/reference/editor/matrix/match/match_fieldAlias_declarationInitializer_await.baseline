@@ -1,7 +1,0 @@
-differences from match_fieldAlias_declarationInitializer_await at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:5:36 ===
-  |   const value = match (await later(input)) { Rect(h: tall, w: wide) => note("rect", [wide, tall]), Circle(r: radius) => note("circle", radius), Point => note("point", null) };
-  |                                    ^ /*operand*/
-  tt only: value (Variable)
-

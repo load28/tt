@@ -1,7 +1,0 @@
-differences from result_returnsMatch_method_spread at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:8:52 ===
-  |       return result { const n = try read(first(...[input])); return match (n) { 2 => "two", _ => "other" }; };
-  |                                                    ^ /*operand*/
-  tt only: n (Variable)
-

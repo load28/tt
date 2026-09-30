@@ -1,10 +1,5 @@
 differences from match_blockArm_topLevel_using at the questions listed in tests/editor-matrix-differences.txt
 
-=== completions /*operand*/ main.tt:6:37 ===
-  | const top0 = match (note("operand", input)) { Rect(w, h) => { const area = note("area", w * h); if (area > 10) { return note("large", area); } return note("small", area); }, _ => note("other", 0) };
-  |                                     ^ /*operand*/
-  tt only: top0 (Variable)
-
 === completions /*use*/ main.tt:6:89 ===
   | const top0 = match (note("operand", input)) { Rect(w, h) => { const area = note("area", w * h); if (area > 10) { return note("large", area); } return note("small", area); }, _ => note("other", 0) };
   |                                                                                         ^ /*use*/
