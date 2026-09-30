@@ -1747,15 +1747,28 @@ function propertyLeaf(checker, found, expected, depth) {
 function incompatibleLeaves(checker, found, expected) {
   const leaves = [];
   const seen = new Set();
-  for (const constituent of typeConstituents(found)) {
-    if (checker.isTypeAssignableTo(constituent, expected)) continue;
+  const constituents = typeConstituents(found);
+  const wholeExpected = checker.typeToString(expected);
+  let unreduced = constituents.length > 1;
+  for (const constituent of constituents) {
+    if (checker.isTypeAssignableTo(constituent, expected)) {
+      unreduced = false;
+      continue;
+    }
     const leaf = incompatibleLeaf(checker, constituent, expected);
-    if (!leaf) continue;
+    if (!leaf) {
+      unreduced = false;
+      continue;
+    }
+    if (leaf.expected !== wholeExpected || leaf.found !== checker.typeToString(constituent)) {
+      unreduced = false;
+    }
     const key = `${leaf.expected}\0${leaf.found}`;
     if (seen.has(key)) continue;
     seen.add(key);
     leaves.push(leaf);
   }
+  if (unreduced) return [{ expected: wholeExpected, found: checker.typeToString(found) }];
   return leaves;
 }
 

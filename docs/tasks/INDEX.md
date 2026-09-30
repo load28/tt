@@ -668,6 +668,7 @@
 | TASK-669 | Complete an arm's pattern before its `=>` is written | Complete | 2026-09-30 | 2026-09-30 | [TASK-669](./TASK-669-pattern-completion-before-the-arrow.md) |
 | TASK-670 | Publish every typed diagnostic that states a rule no other layer states | Complete | 2026-09-30 | 2026-09-30 | [TASK-670](./TASK-670-publish-every-typed-diagnostic.md) |
 | TASK-672 | Keep TypeScript's deprecated tag on completion entries | Complete | 2026-09-30 | 2026-09-30 | [TASK-672](./TASK-672-deprecated-completion-tag.md) |
+| TASK-673 | Name a found union as TypeScript names it in a type mismatch | Complete | 2026-09-30 | 2026-09-30 | [TASK-673](./TASK-673-union-named-by-typescript-in-mismatches.md) |
 | TASK-674 | Carry each completion entry's LSP kind from TypeScript to the editor unchanged | Complete | 2026-09-30 | 2026-09-30 | [TASK-674](./TASK-674-lossless-completion-kinds.md) |
 | TASK-675 | Baseline what the editor adapter publishes and offers in the editor cases | Complete | 2026-09-30 | 2026-09-30 | [TASK-675](./TASK-675-editor-cases-ask-the-adapter.md) |
 
