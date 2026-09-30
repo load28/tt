@@ -23,6 +23,14 @@ function referenceOf(local) {
   return inside.startsWith("tests/") ? join(ROOT, inside) : join(REFERENCE, inside);
 }
 
+function external(tool, reference, local) {
+  const options = { cwd: ROOT, stdio: "inherit" };
+  if (process.platform === "win32") {
+    return spawnSync(`${tool} "${reference}" "${local}"`, { ...options, shell: true });
+  }
+  return spawnSync("sh", ["-c", `${tool} "$@"`, tool, reference, local], options);
+}
+
 const tool = process.env.DIFF;
 const files = walk(LOCAL, []).sort();
 if (files.length === 0) {
@@ -34,13 +42,16 @@ for (const file of files) {
   const target = referenceOf(deleting ? file.slice(0, -".delete".length) : file);
   const reference = existsSync(target) ? relative(ROOT, target) : "/dev/null";
   const local = deleting ? "/dev/null" : relative(ROOT, file);
-  if (tool) {
-    spawnSync(tool, [reference, local], { stdio: "inherit" });
-    continue;
+  const run = tool
+    ? external(tool, reference, local)
+    : spawnSync("git", ["--no-pager", "diff", "--no-index", "--", reference, local], {
+        cwd: ROOT,
+        stdio: "inherit",
+      });
+  const failure = run.error?.message ?? (run.status === 126 || run.status === 127 ? `exit ${run.status}` : null);
+  if (failure !== null) {
+    console.error(`baseline-diff: cannot run ${tool ? `DIFF=${tool}` : "git diff"}: ${failure}`);
+    process.exit(1);
   }
-  spawnSync("git", ["--no-pager", "diff", "--no-index", "--", reference, local], {
-    cwd: ROOT,
-    stdio: "inherit",
-  });
 }
 console.log(`\nbaseline-diff: ${files.length} baseline(s) differ; accept them with scripts/baseline-accept`);

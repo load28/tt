@@ -27,7 +27,7 @@ function usage() {
     [
       "usage: node scripts/diagnostic-delta [--base <ref>] [--report <file>] [--keep]",
       "",
-      "Builds ttc at the merge base of HEAD and <ref> (default origin/main) and at HEAD, runs both",
+      "Builds ttc at the merge base of HEAD and <ref> (default origin/main) and from the working tree, runs both",
       "over the pinned real programs, and reports every difference in their diagnostics and output.",
       "Fails on a new internal compiler error, and on changed output when the change touches no baseline.",
     ].join("\n"),
@@ -55,10 +55,7 @@ function run(command, args, options = {}) {
 
 function must(command, args, options = {}) {
   const result = run(command, args, { stdio: ["ignore", "inherit", "inherit"], ...options });
-  if (result.status !== 0) {
-    console.error(`error: ${command} ${args.join(" ")} exited with ${result.status}`);
-    process.exit(1);
-  }
+  if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} exited with ${result.status}`);
   return result;
 }
 
@@ -176,7 +173,11 @@ function lineDiff(before, after) {
 }
 
 function baselineChanges(base) {
-  const names = git(["diff", "--name-only", `${base}..HEAD`, "--", "tests/baselines/reference", "tests/fixtures"]);
+  const paths = ["tests/baselines/reference", "tests/fixtures"];
+  const names = [
+    git(["diff", "--name-only", base, "--", ...paths]),
+    git(["ls-files", "--others", "--exclude-standard", "--", ...paths]),
+  ].join("\n");
   return names
     .split("\n")
     .filter(Boolean)
@@ -191,9 +192,10 @@ async function main() {
     console.error(`error: no merge base between HEAD and ${options.base}; fetch it or pass --base <ref>`);
     process.exit(1);
   }
-  console.log(`==> head: ${head.slice(0, 12)}`);
+  const edited = git(["status", "--porcelain"]) !== "";
+  console.log(`==> head: ${head.slice(0, 12)}${edited ? " and the working tree's changes" : ""}`);
   console.log(`==> base: ${base.slice(0, 12)} (merge base with ${options.base})`);
-  if (base === head) {
+  if (base === head && !edited) {
     console.log("head is the base revision; nothing to compare.");
     return 0;
   }
@@ -274,4 +276,9 @@ async function main() {
   return failed ? 1 : 0;
 }
 
-process.exit(await main());
+process.exit(
+  await main().catch((error) => {
+    console.error(`error: ${error.message}`);
+    return 1;
+  }),
+);
