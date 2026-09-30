@@ -7,4 +7,3 @@
 # tests/fuzz_regressions.rs fails when a listed input no longer crashes or
 # crashes differently, so the change that fixes one removes its line. The
 # mutation pass tolerates a crash only when its signature is listed here.
-compile_any_bytes/mixed-patterns-in-a-call-argument.tt	TASK-637	src/codegen/core/emitter/pattern.rs: switch variant alternative is not constructor

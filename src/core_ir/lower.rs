@@ -708,12 +708,14 @@ fn match_kind(decision: &Decision) -> DecisionKind {
         && decision.arms.iter().all(|arm| {
             !pattern_has_nested_test(&arm.pattern) && !pattern_has_instance_test(&arm.pattern)
         });
+    let literal = |arm: &&DecisionArm| pattern_has_literal_test(&arm.pattern);
+    let tested = |arm: &&DecisionArm| !matches!(arm.pattern, PatternPlan::Any);
     let dispatch = if !switch {
         MatchDispatch::Conditional
-    } else if decision.arms.iter().all(|arm| {
-        matches!(arm.pattern, PatternPlan::Any) || pattern_has_literal_test(&arm.pattern)
-    }) {
+    } else if decision.arms.iter().filter(tested).all(|arm| literal(&arm)) {
         MatchDispatch::LiteralSwitch
+    } else if decision.arms.iter().filter(tested).any(|arm| literal(&arm)) {
+        MatchDispatch::Conditional
     } else {
         MatchDispatch::VariantSwitch
     };
