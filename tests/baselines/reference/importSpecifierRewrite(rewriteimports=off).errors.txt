@@ -1,0 +1,8 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./main.tt → $DIR/out/main.ts
+ttc: ./token.tt → $DIR/out/token.ts
+
+==== ttc --check-types (exit 0) ====
+
+==== tsc on the emitted TypeScript (exit 2) ====
+main.ts(19,23): error TS2307: Cannot find module './token.tt' or its corresponding type declarations.

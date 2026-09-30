@@ -157,9 +157,15 @@ Case files take metadata lines in the form `// @name: value`:
   each other. Only comments may appear before the first one. A case without
   it is one unit named after the case file. Without a `tsconfig.json` unit,
   the case gets a strict ES2022 bundler configuration.
-- `// @rewriteImports: js|ts|off` and `// @noVerify: true` are ttc's
+- `// @rewriteImports: js|ts|off` and `// @noVerify: true|false` are ttc's
   `--rewrite-imports` and `--no-verify`. There are no other options; an
-  unknown directive fails the case.
+  unknown directive or value fails the case.
+- A comma-separated value runs the case once per value, as TypeScript's
+  compiler runner does (`varyBy`): `// @rewriteImports: js, ts, off` writes
+  three sets of baselines, named `<name>(rewriteimports=js).<kind>` and so
+  on, with every varied option in the name, sorted. `*` stands for every
+  value of the option and `-value` (or `!value`) removes one. Two varied
+  options run every combination, at most 25.
 
 Case names must be distinct across `tests/cases`, because each case writes
 its baselines as `tests/baselines/reference/<name>.<kind>`:

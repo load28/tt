@@ -14,6 +14,7 @@ pub const DEFAULT_TSCONFIG: &str = r#"{
 }
 "#;
 
+#[derive(Clone)]
 pub struct Unit {
     pub name: String,
     pub content: String,

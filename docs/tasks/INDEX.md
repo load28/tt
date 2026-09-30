@@ -650,6 +650,7 @@
 | TASK-646 | Color tt keywords as TypeScript's, with semantic tokens only where the grammar cannot decide | Complete | 2026-09-30 | 2026-09-30 | [TASK-646](./TASK-646-tt-keywords-in-semantic-tokens.md) |
 | TASK-647 | Hold an edited project to the answers of a fresh one | Complete | 2026-09-30 | 2026-09-30 | [TASK-647](./TASK-647-incremental-equals-fresh.md) |
 | TASK-648 | Baseline the Rust API, the server protocol, and the extension's capabilities | Complete | 2026-09-30 | 2026-09-30 | [TASK-648](./TASK-648-public-surface-baselines.md) |
+| TASK-649 | Run a case once per value of a comma-separated option | Complete | 2026-09-30 | 2026-09-30 | [TASK-649](./TASK-649-option-variation-fan-out.md) |
 
 ## Next task number
 

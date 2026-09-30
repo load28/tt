@@ -33,7 +33,7 @@ struct Case {
     settings: Settings,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 struct Settings {
     rewrite_imports: Option<String>,
     no_verify: bool,
@@ -71,38 +71,137 @@ fn cases() -> Vec<Case> {
         let text = fs::read_to_string(&path).expect("readable case");
         let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
         let parsed = cases::parse(&text, &file_name, &path);
-        let settings = settings(&parsed.directives, &path);
-        let units = parsed.units;
-        out.push(Case {
-            name,
-            path,
-            units,
-            settings,
-        });
+        for (suffix, settings) in configurations(&parsed.directives, &path) {
+            out.push(Case {
+                name: format!("{name}{suffix}"),
+                path: path.clone(),
+                units: parsed.units.clone(),
+                settings,
+            });
+        }
     }
     out
 }
 
-fn settings(directives: &[(String, String)], path: &Path) -> Settings {
-    let mut settings = Settings::default();
-    for (name, value) in directives {
-        match name.as_str() {
-            "rewriteimports" => {
-                assert!(
-                    matches!(value.as_str(), "js" | "ts" | "off"),
-                    "{}: @rewriteImports takes js, ts, or off",
-                    path.display()
-                );
-                settings.rewrite_imports = Some(value.clone());
-            }
-            "noverify" => settings.no_verify = value == "true",
-            other => panic!(
-                "{}: unknown directive `@{other}`; a case takes @filename and the ttc options @rewriteImports and @noVerify",
-                path.display()
-            ),
+const OPTIONS: [(&str, &[&str]); 2] = [
+    ("noverify", &["true", "false"]),
+    ("rewriteimports", &["js", "ts", "off"]),
+];
+
+const MAX_VARIATIONS: usize = 25;
+
+fn option_values(option: &str, text: &str, path: &Path) -> (Vec<String>, bool) {
+    let allowed = OPTIONS
+        .iter()
+        .find(|(name, _)| *name == option)
+        .map(|(_, values)| *values)
+        .expect("a known option");
+    let check = |value: &str| {
+        assert!(
+            allowed.contains(&value),
+            "{}: @{option} takes {}, not `{value}`",
+            path.display(),
+            allowed.join(", ")
+        );
+    };
+    let mut star = false;
+    let mut includes: Vec<String> = Vec::new();
+    let mut excludes: Vec<String> = Vec::new();
+    for entry in text.split(',') {
+        let entry = entry.trim().to_ascii_lowercase();
+        if entry.is_empty() {
+            continue;
+        }
+        if entry == "*" {
+            star = true;
+        } else if let Some(excluded) = entry.strip_prefix('-').or_else(|| entry.strip_prefix('!')) {
+            check(excluded);
+            excludes.push(excluded.to_string());
+        } else {
+            check(&entry);
+            includes.push(entry);
         }
     }
-    settings
+    if includes.len() <= 1 && !star && excludes.is_empty() {
+        return (includes, false);
+    }
+    let mut values: Vec<String> = Vec::new();
+    for include in includes {
+        if !values.contains(&include) {
+            values.push(include);
+        }
+    }
+    if star {
+        for value in allowed {
+            if !values.iter().any(|known| known == value) {
+                values.push(value.to_string());
+            }
+        }
+    }
+    values.retain(|value| !excludes.contains(value));
+    assert!(
+        !values.is_empty(),
+        "{}: the variations of @{option} are an empty set",
+        path.display()
+    );
+    (values, true)
+}
+
+fn configurations(directives: &[(String, String)], path: &Path) -> Vec<(String, Settings)> {
+    let mut chosen: BTreeMap<&str, (Vec<String>, bool)> = BTreeMap::new();
+    for (name, value) in directives {
+        let Some((option, _)) = OPTIONS.iter().find(|(option, _)| option == name) else {
+            panic!(
+                "{}: unknown directive `@{name}`; a case takes @filename and the ttc options @rewriteImports and @noVerify",
+                path.display()
+            );
+        };
+        chosen.insert(option, option_values(option, value, path));
+    }
+    let count: usize = chosen
+        .values()
+        .map(|(values, _)| values.len().max(1))
+        .product();
+    assert!(
+        count <= MAX_VARIATIONS,
+        "{}: the options' variations make {count} configurations, more than {MAX_VARIATIONS}",
+        path.display()
+    );
+    let mut out = vec![(Vec::<(&str, String)>::new(), Settings::default())];
+    for (option, (values, varied)) in &chosen {
+        let mut next = Vec::new();
+        for (name, settings) in &out {
+            for value in values {
+                let mut name = name.clone();
+                if *varied {
+                    name.push((option, value.clone()));
+                }
+                let mut settings = settings.clone();
+                match *option {
+                    "noverify" => settings.no_verify = value == "true",
+                    _ => settings.rewrite_imports = Some(value.clone()),
+                }
+                next.push((name, settings));
+            }
+        }
+        if !values.is_empty() {
+            out = next;
+        }
+    }
+    out.into_iter()
+        .map(|(name, settings)| {
+            let suffix = if name.is_empty() {
+                String::new()
+            } else {
+                let parts: Vec<String> = name
+                    .iter()
+                    .map(|(option, value)| format!("{option}={value}"))
+                    .collect();
+                format!("({})", parts.join(","))
+            };
+            (suffix, settings)
+        })
+        .collect()
 }
 
 struct Artifacts {
