@@ -1,0 +1,22 @@
+//// [onlyArmGuardWithoutBody.tt] ////
+// Repro from TASK-628
+variant O { A(n: number), B }
+export function single(o: O) {
+  return match (o) { A(n) if n > 0 };
+}
+export function tuple(o: O, p: O) {
+  return match (o, p) { (A(n), _) if n > 0 };
+}
+export function literal(s: string) {
+  return match (s) { "a" | "b" if s.length > 0 };
+}
+export function twoArms(o: O) {
+  return match (o) { A(n) if n > 0, B if o.kind === "B" };
+}
+export function nextLine(o: O) {
+  return match (o) {
+    A(n)
+      if n > 0
+  };
+}
+

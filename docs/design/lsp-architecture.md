@@ -380,7 +380,13 @@ TypeScript's syntax errors *and* its type errors; a `.tt` file must too.
   whose body reads as arms, an arm whose guard or `=>` is written but not
   its body is claimed with a missing body (`missing-arm-body`) that yields
   TypeScript's error type, so its pattern's bindings and its guard are
-  served as they would be in a finished arm.
+  served as they would be in a finished arm. A body reads as arms when a
+  `=>` appears at its level, or, with no `=>` yet, when it opens with
+  patterns one of which reaches an `if` that no statement list can hold
+  (TASK-628): after the pattern on the same line, where ECMA-262 §12.10.1
+  inserts no semicolon, or not followed by `(` (§14.6). So the only arm
+  `A(n) if n > 0` is claimed, while a method named `match` whose body is
+  `A(n)`, a line break, and `if (n > 0) g()` stays TypeScript.
 - **Signature help is asked outside generated argument lists
   (TASK-603).** TypeScript answers for the innermost argument list around
   the position, and the LSP answer does not say which. The engine moves the
