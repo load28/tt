@@ -679,6 +679,53 @@ fn a_missing_step_keeps_the_pipeline_written_before_it() {
 }
 
 #[test]
+fn an_arm_with_no_body_keeps_its_pattern_and_guard() {
+    let decl = "variant Shape { Circle(radius: number), Rect(width: number) }\ndeclare const s: Shape;\n";
+    let cases = [
+        (
+            "const a = match (s) { Circle(radius) => radius, Rect(width) if width > 0 };",
+            "if (width > 0)",
+        ),
+        (
+            "const a = match (s) { Circle(radius) => radius, Rect(width) if width > 0, _ => 0 };",
+            "if (width > 0)",
+        ),
+        (
+            "const a = match (s) { Circle(radius) => radius, Rect(width) => };",
+            "const { width } = ",
+        ),
+        (
+            "const a = match (s, s) { (Circle(r), _) => r, (Rect(w), _) if w > 0, _ => 0 };",
+            "if (w > 0)",
+        ),
+        (
+            "console.log(match (s) { Circle(radius) => radius, Rect(width) if width > 0 });",
+            "width > 0",
+        ),
+    ];
+    for (statement, kept) in cases {
+        let src = format!("{decl}{statement}\n");
+        let report = ttc::compile_projection_report(&src, &Options::default());
+        let codes: Vec<_> = report.diagnostics.iter().map(|d| d.code).collect();
+        assert!(
+            codes.contains(&DiagnosticCode::MissingArmBody)
+                && !codes.contains(&DiagnosticCode::MalformedMatch),
+            "{src}: {codes:?}"
+        );
+        let emit = report.emit.expect("the projection emits");
+        assert!(report.recovered.is_empty(), "{:?}", report.recovered);
+        assert!(emit.code.contains(kept), "{}", emit.code);
+        assert!(emit.code.contains("(undefined as any)"), "{}", emit.code);
+    }
+}
+
+#[test]
+fn a_method_named_match_with_an_arm_shaped_body_stays_typescript() {
+    let src = "class C {\n  match(x: number) { x }\n  other(y: boolean) { if (y) return 1; }\n}\n";
+    assert_eq!(ok(src), src);
+}
+
+#[test]
 fn a_step_with_an_open_list_ends_where_typescript_ends_the_list() {
     // The list runs to the next statement, as TypeScript reads `add(2, `
     // with `const` after it; the statement stays outside the step.

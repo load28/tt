@@ -573,7 +573,24 @@ impl Checker<'_> {
         }
     }
 
+    fn check_arm_body(&mut self, pattern: Span, missing: bool) {
+        if missing {
+            self.error(
+                TtError::span(
+                    pattern.start,
+                    pattern.end,
+                    "match: this arm has no body".to_string(),
+                )
+                .code(DiagnosticCode::MissingArmBody)
+                .help("write `=> <body>` after the guard, or the body after `=>`"),
+            );
+        }
+    }
+
     fn check_match(&mut self, expr: &MatchExpr, place: Place) {
+        for arm in &expr.arms {
+            self.check_arm_body(arm.pattern_span, arm.missing);
+        }
         // Class tests and literals both compare the subject value and may
         // share one ordered conditional chain. Variant tags discriminate on
         // `.kind` and therefore cannot mix with either family.
@@ -881,6 +898,9 @@ impl Checker<'_> {
     }
 
     fn check_tuple_match(&mut self, expr: &TupleMatchExpr, place: Place) {
+        for arm in &expr.arms {
+            self.check_arm_body(arm.pattern_span, arm.missing);
+        }
         let arity = expr.scrutinees.len();
         for (idx, arm) in expr.arms.iter().enumerate() {
             match &arm.pattern {

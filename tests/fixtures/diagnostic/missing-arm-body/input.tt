@@ -1,0 +1,7 @@
+export variant Shape { Circle(radius: number), Rect(width: number) }
+export function area(s: Shape): number {
+  return match (s) {
+    Rect(width) if width > 0,
+    _ => 0,
+  };
+}

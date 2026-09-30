@@ -233,7 +233,10 @@ impl Lower<'_> {
                     &arm.pattern,
                     arm.pattern_span,
                     &arm.guard,
-                    Some((&arm.body, arm.block, arm.diverges)),
+                    Some((
+                        &arm.body,
+                        arm_body_kind(arm.block, arm.diverges, arm.missing),
+                    )),
                 )
             })
             .collect();
@@ -286,7 +289,7 @@ impl Lower<'_> {
                     pattern,
                     guard,
                     body: Some(body),
-                    body_kind: Some(arm_body_kind(arm.block, arm.diverges)),
+                    body_kind: Some(arm_body_kind(arm.block, arm.diverges, arm.missing)),
                 }
             })
             .collect();
@@ -309,13 +312,13 @@ impl Lower<'_> {
         pattern: &ast::Pattern,
         pattern_span: ast::Span,
         guard: &Option<ast::GuardExpr>,
-        body: Option<(&ast::Program, bool, bool)>,
+        body: Option<(&ast::Program, ArmBodyKind)>,
     ) -> SiteArm {
         let pattern_id = self.lower_pattern(pattern, pattern_span.start);
         let node = self.node(Self::span(pattern_span), AstOrigin::Arm);
         let guard = guard.as_ref().map(|g| self.lower_guard(g));
-        let body_kind = body.map(|(_, block, diverges)| arm_body_kind(block, diverges));
-        let body = body.map(|(body, _, _)| self.lower_body(body));
+        let body_kind = body.map(|(_, kind)| kind);
+        let body = body.map(|(body, _)| self.lower_body(body));
         SiteArm {
             node,
             pattern: pattern_id,
@@ -703,8 +706,10 @@ impl Lower<'_> {
 /// The arm body's kind, carrying the parser's flow answer for a block:
 /// `completes` is false only when every path out of the block leaves it,
 /// so nothing after the body can run.
-fn arm_body_kind(block: bool, diverges: bool) -> ArmBodyKind {
-    if block {
+fn arm_body_kind(block: bool, diverges: bool, missing: bool) -> ArmBodyKind {
+    if missing {
+        ArmBodyKind::Missing
+    } else if block {
         ArmBodyKind::Block {
             completes: !diverges,
         }

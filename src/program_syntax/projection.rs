@@ -1338,6 +1338,7 @@ impl<'a> ProjectionBuilder<'a> {
                     self.emit_body(body)?;
                     self.push_source_boundary(");", segments_since);
                 }
+                hir::ArmBodyKind::Missing => {}
                 hir::ArmBodyKind::Block { .. } => {
                     let start = ProjectedByte(self.code.len());
                     self.code.push('{');

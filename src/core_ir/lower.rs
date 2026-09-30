@@ -890,7 +890,7 @@ fn validate_decision(decision: &Decision, file: &CoreFile, semantic: &SemanticFi
             ArmAction::Yield { body, kind } => {
                 validate_body(body, file);
                 match kind {
-                    ArmBodyKind::Expression | ArmBodyKind::Block { .. } => {}
+                    ArmBodyKind::Expression | ArmBodyKind::Block { .. } | ArmBodyKind::Missing => {}
                 }
             }
             ArmAction::Execute(body) => validate_body(body, file),

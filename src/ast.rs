@@ -629,6 +629,7 @@ pub(crate) struct TupleArm {
     /// Whether every path out of a block body leaves it — see
     /// [`Arm::diverges`].
     pub diverges: bool,
+    pub missing: bool,
 }
 
 /// A tuple arm's pattern.
@@ -665,6 +666,7 @@ pub(crate) struct Arm {
     /// already yielded the arm's value, so the lowering's fall-through to
     /// `undefined` can never run. False for an expression body.
     pub diverges: bool,
+    pub missing: bool,
 }
 
 /// The `if <cond>` guard of a match arm.

@@ -259,6 +259,11 @@ TypeScript's syntax errors *and* its type errors; a `.tt` file must too.
   `else` continuation belong to it, and nothing after that is recovered.
   When the head has an operand, only `if let <pattern> =` becomes `void`,
   so the operand the user is typing stays served.
+- **An arm with no body stays the arm written (TASK-605).** In a match
+  whose body reads as arms, an arm whose guard or `=>` is written but not
+  its body is claimed with a missing body (`missing-arm-body`) that yields
+  TypeScript's error type, so its pattern's bindings and its guard are
+  served as they would be in a finished arm.
 - **Signature help is asked outside generated argument lists
   (TASK-603).** TypeScript answers for the innermost argument list around
   the position, and the LSP answer does not say which. The engine moves the

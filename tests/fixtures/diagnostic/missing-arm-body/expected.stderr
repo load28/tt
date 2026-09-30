@@ -1,0 +1,7 @@
+error[missing-arm-body]: match: this arm has no body
+ --> input.tt:4:5
+  |
+4 |     Rect(width) if width > 0,
+  |     ^^^^^^^^^^^
+  |
+  = help: write `=> <body>` after the guard, or the body after `=>`

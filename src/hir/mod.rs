@@ -596,6 +596,9 @@ pub enum ArmBodyKind {
         /// that it never claims a divergence that is not there.
         completes: bool,
     },
+    /// `pattern if guard` or `pattern =>` with no body: the arm yields
+    /// TypeScript's error type.
+    Missing,
 }
 
 /// One pattern node. Or-patterns are a node with alternatives; nested

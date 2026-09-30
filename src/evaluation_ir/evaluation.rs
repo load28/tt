@@ -691,7 +691,7 @@ impl EvaluationFile {
                 }
                 | ArmAction::Execute(body) => Some(body),
                 ArmAction::Yield {
-                    kind: ArmBodyKind::Expression,
+                    kind: ArmBodyKind::Expression | ArmBodyKind::Missing,
                     ..
                 }
                 | ArmAction::BindThrough(_) => None,

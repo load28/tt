@@ -65,6 +65,8 @@ pub enum DiagnosticCode {
     MalformedVariant,
     /// A `match` committed to tt syntax but not fully parsed.
     MalformedMatch,
+    /// A match arm with no body after its pattern or guard.
+    MissingArmBody,
     /// A claimed statement-bodied Result block can fall through without an
     /// explicit successful completion.
     ResultNoSuccessValue,
@@ -164,7 +166,7 @@ enum Numbered {
 ///
 /// Append-only: a new code takes the next number, and a retired code keeps
 /// its slot so every later number stays what `tsc` has already printed.
-const NUMBERED_CODES: [Numbered; 51] = [
+const NUMBERED_CODES: [Numbered; 52] = [
     Numbered::Active(DiagnosticCode::StrayPipe),
     Numbered::Active(DiagnosticCode::MalformedPipelinePostfix),
     Numbered::Active(DiagnosticCode::InvalidOptionalReceiver),
@@ -216,6 +218,7 @@ const NUMBERED_CODES: [Numbered; 51] = [
     Numbered::Active(DiagnosticCode::VariantRequiredAfterOptional),
     Numbered::Active(DiagnosticCode::VariantDefaultExport),
     Numbered::Active(DiagnosticCode::MissingPipelineStep),
+    Numbered::Active(DiagnosticCode::MissingArmBody),
 ];
 
 /// The numbered slot a code reference names: a name, `tt<number>`, or a
@@ -244,6 +247,7 @@ impl DiagnosticCode {
             DiagnosticCode::StrayResult => "stray-result",
             DiagnosticCode::MalformedVariant => "malformed-variant",
             DiagnosticCode::MalformedMatch => "malformed-match",
+            DiagnosticCode::MissingArmBody => "missing-arm-body",
             DiagnosticCode::ResultNoSuccessValue => "result-no-success-value",
             DiagnosticCode::ResultValueDiscarded => "result-value-discarded",
             DiagnosticCode::ResultReturnNested => "result-return-nested",
@@ -301,6 +305,7 @@ impl DiagnosticCode {
         DiagnosticCode::StrayResult,
         DiagnosticCode::MalformedVariant,
         DiagnosticCode::MalformedMatch,
+        DiagnosticCode::MissingArmBody,
         DiagnosticCode::ResultNoSuccessValue,
         DiagnosticCode::ResultValueDiscarded,
         DiagnosticCode::ResultReturnNested,
@@ -485,6 +490,23 @@ The scrutinee parentheses are mandatory and may not be empty. Each arm is
 needs its own parentheses (`Tag => ({ a: 1 })`). Tuple pattern elements
 are tag patterns or `_`; a literal or `is` pattern cannot be an element, so
 test such a value in an arm guard or a nested `match`."
+            }
+
+            DiagnosticCode::MissingArmBody => {
+                "\
+A match arm has no body: its guard, or its `=>`, is written, but not the
+value after it.
+
+    match (shape) {
+      Circle(radius) => radius,
+      Rect(width) if width > 0
+    }
+
+The arm is still the arm written, as TypeScript keeps an `if` whose
+statement is missing: its pattern binds its names and its guard reads them,
+so the rest of the match and the file are checked while the arm is being
+typed. Its value is TypeScript's error type. Write the body, or remove the
+arm."
             }
 
             DiagnosticCode::FlowFirstStepMethod => {

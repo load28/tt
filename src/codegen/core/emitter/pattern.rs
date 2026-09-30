@@ -1,5 +1,6 @@
 //! Pattern decisions, arms, bindings, and tests.
 
+use super::source::RECOVERED_VALUE;
 use super::*;
 
 impl<'a> Emitter<'a> {
@@ -186,6 +187,14 @@ impl<'a> Emitter<'a> {
                     value_end,
                 )));
                 value.append(self.source_range_rope(hir::Span::new(exit.statement.end, span.end)));
+                value
+            }
+            ArmAction::Yield {
+                kind: ArmBodyKind::Missing,
+                ..
+            } => {
+                let mut value = Rope::new();
+                value.push_lit(RECOVERED_VALUE);
                 value
             }
             _ => crate::ice::bug!("deferred match arm is not an expression value"),
@@ -459,6 +468,10 @@ impl<'a> Emitter<'a> {
         let block_layout = matches!(kind, ArmBodyKind::Block { .. }) && chain;
         let body = if structured_body.is_some() {
             Rope::new()
+        } else if matches!(kind, ArmBodyKind::Missing) {
+            let mut value = Rope::new();
+            value.push_lit(RECOVERED_VALUE);
+            value
         } else if matches!(kind, ArmBodyKind::Block { .. }) && continuation.assigns() {
             // Switch arms are indented as a generated case body after their
             // source is spliced in. Conditional chains retain the authored
@@ -481,7 +494,7 @@ impl<'a> Emitter<'a> {
         };
         let mut action = Rope::new();
         match kind {
-            ArmBodyKind::Expression => {
+            ArmBodyKind::Expression | ArmBodyKind::Missing => {
                 if let Some(structured) = structured_body {
                     action.append(structured);
                     if continuation.assigns() {

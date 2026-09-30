@@ -154,3 +154,65 @@ declare function getUser(id: string): TResult<{ name: string }, string>;\n";
         }
     }
 }
+
+#[test]
+fn the_guard_of_an_arm_with_no_body_is_served() {
+    require_tsgo!();
+    let decl = "export variant Shape { Circle(radius: number), Rect(width: number), Point }\n\
+const limit = 1;\n";
+    for arms in [
+        "Circle(radius) => radius,\n    Rect(width) if width > li@@",
+        "Circle(radius) => radius,\n    Rect(width) if width > li@@,\n    _ => 0,",
+        "Circle(radius) => radius,\n    Rect(width) if width > li@@ =>",
+    ] {
+        let (source, position) = at_cursor(&format!(
+            "{decl}export function g(s: Shape) {{\n  return match (s) {{\n    {arms}\n  }};\n}}\n"
+        ));
+        let dir = project(&[("src/main.tt", &source)]);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        let mut project = open_service(&file);
+        let labels: Vec<_> = project
+            .completion(&file, position, false)
+            .unwrap()
+            .items
+            .into_iter()
+            .map(|item| item.label)
+            .collect();
+        for name in ["width", "limit", "s"] {
+            assert!(labels.iter().any(|label| label == name), "{source}: {name}");
+        }
+        let guard = utf16_position(&source, "width >");
+        let hover = project
+            .hover(&file, guard)
+            .unwrap()
+            .expect("hover on the guard");
+        assert_eq!(hover.signature, "const width: number", "{source}");
+        let definitions = project.definition(&file, guard).unwrap();
+        assert_eq!(
+            definitions
+                .iter()
+                .map(|location| location.range.start)
+                .collect::<Vec<_>>(),
+            vec![utf16_position(&source, "width)")],
+            "{source}"
+        );
+        let diagnostics = listed(&project.service_diagnostics(&file).unwrap());
+        assert!(
+            diagnostics.iter().all(|d| d.2 != 1005 && d.2 != 1128),
+            "{source}: {diagnostics:?}"
+        );
+        let typed = typed_server(&dir, "src/main.tt", &source);
+        let codes: Vec<_> = typed["result"]["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| d["code"].as_str().unwrap().to_string())
+            .collect();
+        assert!(
+            codes.contains(&"missing-arm-body".to_string())
+                && codes.iter().any(|code| code == "ts2304" || code == "ts2552"),
+            "{source}: {typed}"
+        );
+    }
+}
+
