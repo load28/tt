@@ -366,36 +366,6 @@ fn recovery_expression_span(
     }
 }
 
-/// The clause of the enclosing C-style `for` head that token `idx` is in:
-/// its top-level `;` separators before `idx`, or `None` outside a `for`
-/// head. The test clause (1) keeps a `try` statement's grammar so Evaluation
-/// IR can report the repeated evaluation; the update clause (2) is an
-/// expression position.
-fn for_head_clause(src: &str, tokens: &[Token], idx: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    let mut separators = 0usize;
-    for cursor in (0..idx).rev() {
-        match tokens[cursor].kind {
-            TokenKind::Punct(b')') => depth += 1,
-            TokenKind::Punct(b'(') => {
-                if depth == 0 {
-                    return cursor
-                        .checked_sub(1)
-                        .is_some_and(|before| {
-                            matches!(tokens[before].kind, TokenKind::Ident)
-                                && &src[tokens[before].span.start..tokens[before].span.end] == "for"
-                        })
-                        .then_some(separators);
-                }
-                depth -= 1;
-            }
-            TokenKind::Punct(b';') if depth == 0 => separators += 1,
-            _ => {}
-        }
-    }
-    None
-}
-
 /// A spread operand begins with three adjacent dot tokens. The last dot is
 /// not member access, even though the generic property-name test sees it
 /// immediately before the operand keyword.
@@ -704,9 +674,7 @@ impl Parser<'_> {
             // position (`try { ... }` blocks and member names are
             // structurally excluded by the sub-parser).
             if (!dotted || follows_spread_operator(tokens, i)) && word == "try" {
-                let misplaced = !tok.facts.member()
-                    && !(tok.facts.statement_start()
-                        || for_head_clause(self.src, tokens, i) == Some(1));
+                let misplaced = !tok.facts.member() && !tok.facts.statement_start();
                 if misplaced
                     && let Some((next_i, parsed)) =
                         tries::parse_try_expr(Cursor::new(self, tokens, i + 1, end), tok.span)
