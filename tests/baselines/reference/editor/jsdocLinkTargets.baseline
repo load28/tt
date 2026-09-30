@@ -1,0 +1,34 @@
+=== hover /*local*/ main.tt:9:45 ===
+  | export const r = (s: S) => match (s) { A => scale(1), B(x) => area(Shape.Point) };
+  |                                             ^ /*local*/
+hover: 9:45-9:50 "scale"
+    function scale(n: number): number
+  documentation:
+    Scales a value.
+    
+    *@see* — [other](file://$DIR/main.tt#8,17-8,22)
+ttSymbol: null
+
+=== hover /*imported*/ main.tt:9:63 ===
+  | export const r = (s: S) => match (s) { A => scale(1), B(x) => area(Shape.Point) };
+  |                                                               ^ /*imported*/
+hover: 9:63-9:67 "area"
+    (alias) function area(s: Shape): number
+  documentation:
+    Area. See [perimeter](file://$DIR/shapes.tt#4,17-4,26).
+ttSymbol: null
+
+=== signatureHelp /*args*/ main.tt:10:24 ===
+  | export const q = scale();
+  |                        ^ /*args*/
+signatureHelp: active signature 0, active parameter 0
+  scale(n: number): number
+    parameters: n: number
+    documentation:
+        Scales a value.
+
+=== parity with the TypeScript twin ===
+hover local: same
+hover imported: same
+signatureHelp args: same
+

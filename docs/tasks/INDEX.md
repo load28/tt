@@ -665,6 +665,7 @@
 | TASK-664 | Keep a binding pattern's implied type off generated storage | Complete | 2026-09-30 | 2026-09-30 | [TASK-664](./TASK-664-binding-pattern-default-storage.md) |
 | TASK-665 | Keep a comment directive's line and a statement's JSDoc where TypeScript reads them | Complete | 2026-09-30 | 2026-09-30 | [TASK-665](./TASK-665-directives-and-jsdoc-before-lowered-statements.md) |
 | TASK-666 | Decide three reported behaviours: let-else placement, the `if let` head, and payload reads | Complete | 2026-09-30 | 2026-09-30 | [TASK-666](./TASK-666-let-else-placement-if-let-head-payload-reads.md) |
+| TASK-668 | Point `{@link}` targets in documentation at the `.tt` source | Complete | 2026-09-30 | 2026-09-30 | [TASK-668](./TASK-668-link-targets-in-tt-sources.md) |
 | TASK-669 | Complete an arm's pattern before its `=>` is written | Complete | 2026-09-30 | 2026-09-30 | [TASK-669](./TASK-669-pattern-completion-before-the-arrow.md) |
 | TASK-670 | Publish every typed diagnostic that states a rule no other layer states | Complete | 2026-09-30 | 2026-09-30 | [TASK-670](./TASK-670-publish-every-typed-diagnostic.md) |
 | TASK-671 | Report TypeScript that stops before a tt construct as the user's TypeScript | Complete | 2026-09-30 | 2026-09-30 | [TASK-671](./TASK-671-construct-after-unparsable-typescript.md) |

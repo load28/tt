@@ -1272,6 +1272,66 @@ fn split_markdown_hover(markdown: &str) -> (String, String) {
     (String::new(), trimmed.to_string())
 }
 
+/// `markdown` with the target of each link TypeScript writes for a
+/// `{@link}` tag moved from a served tt document to its `.tt` source.
+///
+/// TypeScript renders a link to a declaration as a markdown link whose
+/// target is the declaring file's URI with the declaration's range as a
+/// fragment, one-based (`[name](file:///m.tt.ts#32,17-32,22)`). A served
+/// document is the emission, so the file and the range are generated ones:
+/// the range is mapped back through the emit mapping as a navigation target
+/// is ([`map_target`]), and the link names the `.tt` file at the source
+/// range. A target that is not a served tt document, or has no source
+/// counterpart, is left as TypeScript wrote it.
+pub(super) fn source_links(
+    session: &mut ServiceSession,
+    overlays: &HashMap<PathBuf, String>,
+    markdown: &str,
+) -> String {
+    const OPEN: &str = "](file://";
+    let mut out = String::with_capacity(markdown.len());
+    let mut rest = markdown;
+    while let Some(at) = rest.find(OPEN) {
+        let target_start = at + 2;
+        out.push_str(&rest[..target_start]);
+        rest = &rest[target_start..];
+        let Some(close) = rest.find(')') else {
+            break;
+        };
+        let target = &rest[..close];
+        out.push_str(&source_link(session, overlays, target).unwrap_or_else(|| target.to_string()));
+        rest = &rest[close..];
+    }
+    out.push_str(rest);
+    out
+}
+
+fn source_link(
+    session: &mut ServiceSession,
+    overlays: &HashMap<PathBuf, String>,
+    target: &str,
+) -> Option<String> {
+    let (uri, fragment) = target.split_once('#')?;
+    tt_document(&uri_path(uri)?)?;
+    let (from, to) = fragment.split_once('-')?;
+    let position = |text: &str| -> Option<serde_json::Value> {
+        let (line, character) = text.split_once(',')?;
+        let line = line.trim().parse::<u64>().ok()?.checked_sub(1)?;
+        let character = character.trim().parse::<u64>().ok()?.checked_sub(1)?;
+        Some(serde_json::json!({ "line": line, "character": character }))
+    };
+    let range = serde_json::json!({ "start": position(from)?, "end": position(to)? });
+    let location = map_target(session, overlays, uri, &range, TargetUse::Navigation)?;
+    Some(format!(
+        "{}#{},{}-{},{}",
+        file_uri(&location.path),
+        location.range.start.line + 1,
+        location.range.start.character + 1,
+        location.range.end.line + 1,
+        location.range.end.character + 1
+    ))
+}
+
 /// Documentation as plain text, whichever shape the server used.
 pub(super) fn docs_text(documentation: &serde_json::Value) -> String {
     match documentation {

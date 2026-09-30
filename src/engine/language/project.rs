@@ -32,10 +32,22 @@ impl Project {
                 };
             }
         };
-        if let Some(info) = self.service_hover(&doc, &path, position)? {
-            return Ok(Some(info));
-        }
-        self.match_binding_hover(&doc, &path, position)
+        let info = match self.service_hover(&doc, &path, position)? {
+            Some(info) => Some(info),
+            None => self.match_binding_hover(&doc, &path, position)?,
+        };
+        Ok(info.map(|info| HoverInfo {
+            documentation: self.source_links(&info.documentation),
+            ..info
+        }))
+    }
+
+    /// `text` with each `{@link}` target TypeScript wrote into a served tt
+    /// document moved to the `.tt` source ([`service::source_links`]).
+    fn source_links(&mut self, text: &str) -> String {
+        let documents = self.overlays.clone();
+        let overlays = &*documents.read();
+        source_links(self.session(), overlays, text)
     }
 
     /// The plain service hover: the signature TypeScript shows, mapped onto
@@ -863,9 +875,10 @@ impl Project {
             .map(|edit| source_edit(&code, mappings, inserted, &doc.source, splice, edit))
             .collect::<Option<Vec<_>>>()
             .unwrap_or_default();
+        let documentation = docs_text(&resolved["documentation"]);
         Ok(Some(CompletionDetail {
             signature: resolved["detail"].as_str().unwrap_or_default().to_string(),
-            documentation: docs_text(&resolved["documentation"]),
+            documentation: self.source_links(&documentation),
             additional_edits,
         }))
     }
@@ -1101,6 +1114,10 @@ impl Project {
         let Some(signatures) = help["signatures"].as_array().filter(|s| !s.is_empty()) else {
             return Ok(None);
         };
+        let mut linked = |documentation: &serde_json::Value| {
+            let text = docs_text(documentation);
+            self.source_links(&text)
+        };
         Ok(Some(SignatureHelp {
             signatures: signatures
                 .iter()
@@ -1114,12 +1131,12 @@ impl Project {
                                     .iter()
                                     .map(|parameter| SignatureParameter {
                                         label: parameter_span(&label, &parameter["label"]),
-                                        documentation: docs_text(&parameter["documentation"]),
+                                        documentation: linked(&parameter["documentation"]),
                                     })
                                     .collect()
                             })
                             .unwrap_or_default(),
-                        documentation: docs_text(&signature["documentation"]),
+                        documentation: linked(&signature["documentation"]),
                         label,
                     }
                 })

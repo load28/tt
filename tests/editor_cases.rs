@@ -2241,6 +2241,39 @@ fn docs_text(documentation: &Value) -> String {
     }
 }
 
+/// `markdown` with each link to a place in a file (`[name](file:///m.ts#l,c-l,c)`,
+/// TypeScript's `{@link}` rendering, one-based) written as the place's unit
+/// stem and covered text, the way parity compares locations.
+fn linked_places(files: &Files<'_>, markdown: &str) -> String {
+    const OPEN: &str = "](file://";
+    let mut out = String::new();
+    let mut rest = markdown;
+    while let Some(at) = rest.find(OPEN) {
+        out.push_str(&rest[..at + 2]);
+        rest = &rest[at + 2..];
+        let Some(close) = rest.find(')') else {
+            break;
+        };
+        let target = &rest[..close];
+        let place = target.split_once('#').and_then(|(uri, fragment)| {
+            let (from, to) = fragment.split_once('-')?;
+            let position = |text: &str| -> Option<Value> {
+                let (line, character) = text.split_once(',')?;
+                Some(json!({
+                    "line": line.trim().parse::<u64>().ok()?.checked_sub(1)?,
+                    "character": character.trim().parse::<u64>().ok()?.checked_sub(1)?,
+                }))
+            };
+            let range = json!({ "start": position(from)?, "end": position(to)? });
+            Some(files.covered(&json!({ "uri": uri, "range": range })))
+        });
+        out.push_str(&place.unwrap_or_else(|| target.to_string()));
+        rest = &rest[close..];
+    }
+    out.push_str(rest);
+    out
+}
+
 fn answer_of<'a>(answers: &'a [(String, Value)], method: &str) -> &'a Value {
     answers
         .iter()
@@ -2304,7 +2337,7 @@ fn parity_view(
                         .to_string(),
                 )
             };
-            format!("{signature}\n---\n{documentation}")
+            format!("{signature}\n---\n{}", linked_places(files, &documentation))
         }
         Verb::Completions => {
             let completion = result("completion");
