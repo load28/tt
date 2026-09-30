@@ -55,7 +55,23 @@ const TS_SUFFIX = ".ts";
 const TSX_SUFFIX = ".tsx";
 
 const TT_FILE = /\.ttx?$/;
-const cleanUrl = (id) => id.replace(/[?#][\s\S]*$/, "");
+const isFile = (file) => {
+  try {
+    return fs.statSync(file, { throwIfNoEntry: false })?.isFile() === true;
+  } catch {
+    return false;
+  }
+};
+
+const fileOf = (id, base) => {
+  for (let cut = id.length; cut > 0; cut = Math.max(id.lastIndexOf("?", cut - 1), id.lastIndexOf("#", cut - 1))) {
+    const file = id.slice(0, cut);
+    if (isFile(base === undefined ? file : path.resolve(base, file))) return file;
+  }
+  const name = Math.max(id.lastIndexOf("/"), id.lastIndexOf("\\")) + 1;
+  const postfix = id.slice(name).search(/[?#]/);
+  return postfix === -1 ? id : id.slice(0, name + postfix);
+};
 const SPECIAL_QUERY = /[?&](?:worker|sharedworker|raw|url)\b/;
 const MODULE_MARKERS = new Set([`lang${TS_SUFFIX}`, `lang${TSX_SUFFIX}`]);
 const moduleMarker = (file) => (file.endsWith(".ttx") ? `lang${TSX_SUFFIX}` : `lang${TS_SUFFIX}`);
@@ -73,7 +89,7 @@ const moduleId = (file, query) => {
 };
 
 const sourceFileOfId = (id) => {
-  const file = cleanUrl(id);
+  const file = fileOf(id);
   if (!TT_FILE.test(file)) return null;
   const params = queryOf(id, file).slice(1).split("&");
   return params[params.length - 1] === moduleMarker(file) ? file : null;
@@ -247,7 +263,7 @@ export const unpluginFactory = (options = {}, meta = {}) => {
   };
 
   const scanSource = async (id) => {
-    const file = cleanUrl(id);
+    const file = fileOf(id);
     return { code: await print(file, false), lang: file.endsWith(".ttx") ? "tsx" : "ts" };
   };
 
@@ -256,7 +272,7 @@ export const unpluginFactory = (options = {}, meta = {}) => {
     setup(build) {
       build.onLoad({ filter: SCANNED_FILE }, async (args) => {
         const { code, lang } = await scanSource(args.path);
-        return { contents: code, loader: lang, resolveDir: path.dirname(cleanUrl(args.path)) };
+        return { contents: code, loader: lang, resolveDir: path.dirname(fileOf(args.path)) };
       });
     },
   };
@@ -290,7 +306,11 @@ export const unpluginFactory = (options = {}, meta = {}) => {
           if (source === "./result.js") return stdId("result");
         }
       }
-      const file = cleanUrl(source);
+      const importerFile = importer === undefined || importer === null ? undefined : fileOf(importer);
+      const file = fileOf(
+        source,
+        importerFile !== undefined && source.startsWith(".") ? path.dirname(importerFile) : undefined,
+      );
       if (!TT_FILE.test(file)) return null;
       const query = queryOf(source, file);
       if (SPECIAL_QUERY.test(query)) return null;
@@ -298,16 +318,18 @@ export const unpluginFactory = (options = {}, meta = {}) => {
       if (typeof this?.resolve === "function") {
         // Package exports, aliases, and dev-server urls belong to the host resolver.
         return this.resolve(file, importer, { skipSelf: true }).then(resolved => {
-          if (!resolved || resolved.external || !TT_FILE.test(cleanUrl(resolved.id))) return resolved;
-          return { ...resolved, id: moduleId(cleanUrl(resolved.id), query) };
+          if (!resolved || resolved.external) return resolved;
+          const resolvedFile = fileOf(resolved.id);
+          if (!TT_FILE.test(resolvedFile)) return resolved;
+          return { ...resolved, id: moduleId(resolvedFile, query) };
         });
       }
       if (!path.isAbsolute(file) && !file.startsWith(".")) return null;
       const resolved = path.isAbsolute(file)
         ? file
-        : importer === undefined || importer === null
+        : importerFile === undefined
           ? path.resolve(file)
-          : path.resolve(path.dirname(cleanUrl(importer)), file);
+          : path.resolve(path.dirname(importerFile), file);
       return moduleId(resolved, query);
     },
 

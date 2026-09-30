@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { chmod, realpath, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, realpath, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import test from 'node:test'
 
@@ -405,4 +405,22 @@ test('esbuild watches the directories a module listed as directories', async () 
   const loaded = await esbuild.load(`${file}?lang.ts`, '@openload28/unplugin-tt')
   assert.deepEqual(loaded.watchFiles, [file, model])
   assert.deepEqual(loaded.watchDirs, [listed])
+})
+
+test('a tt file under a directory whose name holds # or ? resolves and compiles', async () => {
+  assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
+  const root = testDir('unplugin-tt-hash-path-')
+  const plugin = unpluginFactory({ compiler })
+  for (const directory of ['C#', 'what?', 'a#b?c']) {
+    const file = join(root, directory, 'm.tt')
+    const importer = join(root, directory, 'main.tt')
+    await mkdir(join(root, directory), { recursive: true })
+    await writeFile(file, 'export variant V { A, B }\n')
+    const host = { async resolve(source) { return { id: source, external: false } } }
+    assert.equal((await plugin.resolveId.call(host, file, undefined)).id, `${file}?lang.ts`)
+    assert.equal(plugin.resolveId('./m.tt?raw', importer), null)
+    assert.equal(plugin.resolveId('./m.tt', importer), `${file}?lang.ts`)
+    const output = await plugin.load.call(context(), `${file}?lang.ts`)
+    assert.match(output.code, /export type V =/)
+  }
 })

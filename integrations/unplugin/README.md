@@ -47,6 +47,12 @@ on disk. esbuild's `load` can return only JavaScript, so on esbuild the plugin
 loads `.tt`/`.ttx` modules through esbuild's own `onLoad` and names the `ts` or
 `tsx` loader that matches the source.
 
+A `?` or `#` in a directory or file name is part of the path, not a query:
+the plugin takes the longest prefix of a module id that names a file on disk
+as the file, so Rollup, Rolldown, esbuild, webpack, and Rspack build a
+project under `C#/` or `issue#12/`. Vite itself cuts a path at its first `?`
+or `#` outside `node_modules`, so such a directory still does not work there.
+
 `--rewrite-imports off`인 것도 의도입니다. 지정자 재작성은 미리 컴파일하는
 파이프라인을 위한 기능이고, 여기서는 `.tt`이 그대로 남아야 이 플러그인이
 다음 모듈도 잡습니다.
