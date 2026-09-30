@@ -358,6 +358,30 @@ CI runs the sample in `cargo test`, and every mutant in the scheduled run's
 `exhaustive` job. The `Soak` workflow fuzzes each target for two minutes a
 night from the seeded corpus and the committed crash inputs.
 
+### The real-world diagnostic delta
+
+`scripts/diagnostic-delta` is TypeScript's error-deltas check
+(microsoft/typescript-error-deltas) for tt. It builds `ttc` at the merge
+base of `HEAD` and a base branch in a temporary worktree
+(`.tt-dev/delta-base`, removed afterwards, as `scripts/bench-compare` does)
+and at `HEAD`, and runs both with `--check`, `--check-types`, and
+`--out-dir` over the same programs: each project under
+`tests/fixtures/practical-diagnostics/`, the two `tests/fixtures/mixed-source-*`
+projects, every tt example on the website (`website/src/content.json`), and
+the project `create-tt` scaffolds. It prints a report of every difference.
+It fails when a run crashes with an internal compiler error that the base
+did not, and when any output changed but the change touches no baseline
+(`tests/baselines/reference/`, `tests/fixtures/**/expected.*`): a
+behaviour change is pinned by a case.
+
+```sh
+node scripts/diagnostic-delta                          # against origin/main
+node scripts/diagnostic-delta --base release-1.2 --report delta.md
+```
+
+Pull requests run it as the `delta` job of `CI`, with the report in the job
+summary and as the `diagnostic-delta` artifact.
+
 ### Incremental answers equal fresh ones
 
 `tests/incremental.rs` holds the engine to TypeScript's incremental-parser

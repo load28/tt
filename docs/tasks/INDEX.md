@@ -652,6 +652,7 @@
 | TASK-648 | Baseline the Rust API, the server protocol, and the extension's capabilities | Complete | 2026-09-30 | 2026-09-30 | [TASK-648](./TASK-648-public-surface-baselines.md) |
 | TASK-649 | Run a case once per value of a comma-separated option | Complete | 2026-09-30 | 2026-09-30 | [TASK-649](./TASK-649-option-variation-fan-out.md) |
 | TASK-650 | Write new baselines beside the reference, and accept them with one command | Complete | 2026-09-30 | 2026-09-30 | [TASK-650](./TASK-650-local-baselines-and-accept.md) |
+| TASK-651 | Compare the merge base's diagnostics and output with the change's, over real tt programs | Complete | 2026-09-30 | 2026-09-30 | [TASK-651](./TASK-651-real-world-diagnostic-delta.md) |
 
 ## Next task number
 

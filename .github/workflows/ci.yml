@@ -86,8 +86,6 @@ jobs:
       - name: Fetch TypeScript's test cases at the pinned commit
         run: scripts/fetch-typescript-cases
 
-      # tests/public_api.rs baselines the capabilities the extension's
-      # language server advertises, by asking the built server.
       - name: Build the extension's language server
         run: |
           npm ci --prefix editors/vscode
@@ -204,6 +202,47 @@ jobs:
           path: |
             /tmp/tt-bench-head.json
             /tmp/tt-bench-base.json
+          if-no-files-found: warn
+
+  delta:
+    name: real-world diagnostic delta
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install TypeScript
+        run: npm ci
+
+      - name: Compare with the merge base
+        run: node scripts/diagnostic-delta --base "origin/$GITHUB_BASE_REF" --report "$RUNNER_TEMP/diagnostic-delta.md"
+
+      - name: Publish the report
+        if: ${{ !cancelled() }}
+        run: |
+          if [ -f "$RUNNER_TEMP/diagnostic-delta.md" ]; then
+            cat "$RUNNER_TEMP/diagnostic-delta.md" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: diagnostic-delta
+          path: ${{ runner.temp }}/diagnostic-delta.md
           if-no-files-found: warn
 
   coverage:
