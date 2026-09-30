@@ -22,7 +22,9 @@
 //! fails the parse.
 
 use super::cursor::{Cursor, dotted_at, find_close_at, skip_braced_construct};
-use crate::ast::{IfLetElse, IfLetStmt, RecoveryKind, RecoveryNode, Span, TagPattern};
+use crate::ast::{
+    IfLetElse, IfLetStmt, RecoveryKind, RecoveryNode, Span, StrayIfLet, StrayIfLetKind, TagPattern,
+};
 use crate::lexer::{Token, TokenKind};
 
 /// The token index where an `if let`'s pattern starts, when the token at
@@ -45,6 +47,7 @@ pub(super) fn if_let_end(parser: &super::Parser, tokens: &[Token], k: usize) -> 
         .last()
         .map_or(keyword.span.end, |token| token.span.end);
     parse_if_let(Cursor::new(parser, tokens, k + 1, range_end), keyword.span)
+        .ok()
         .map(|(cur, _, _)| cur.idx)
 }
 
@@ -53,9 +56,64 @@ pub(super) fn if_let_end(parser: &super::Parser, tokens: &[Token], k: usize) -> 
 /// advanced cursor, the byte just past the statement, and the parsed
 /// statement.
 pub(super) fn parse_if_let<'t>(
+    cur: Cursor<'t>,
+    kw_span: Span,
+) -> Result<(Cursor<'t>, usize, IfLetStmt), StrayIfLet> {
+    let head = StrayIfLet {
+        span: kw_span,
+        kind: StrayIfLetKind::Head,
+    };
+    let (mut cur, mut byte_end, mut stmt, else_at) = parse_if_let_link(cur, kw_span).ok_or(head)?;
+    let Some(else_span) = else_at else {
+        return Ok((cur, byte_end, stmt));
+    };
+    match cur.peek() {
+        Some(t) if matches!(t.kind, TokenKind::Punct(b'{')) => {
+            let open = cur.idx;
+            let close = cur.find_close().ok_or(head)?;
+            let range = (
+                cur.tokens[open].span.start + 1,
+                cur.tokens[close].span.start,
+            );
+            stmt.else_part = Some(IfLetElse::Block(cur.parser.parse_tokens(
+                &cur.tokens[open + 1..close],
+                range.0,
+                range.1,
+            )));
+            byte_end = cur.tokens[close].span.end;
+            cur.idx = close + 1;
+        }
+        Some(t)
+            if matches!(t.kind, TokenKind::Ident)
+                && cur.text(t) == "if"
+                && matches!(cur.tokens.get(cur.idx + 1), Some(next)
+                    if matches!(next.kind, TokenKind::Ident) && cur.text(next) == "let") =>
+        {
+            let if_span = t.span;
+            cur.bump();
+            let (next_cur, end, inner) = parse_if_let(cur, if_span)?;
+            cur = next_cur;
+            byte_end = end;
+            stmt.else_part = Some(IfLetElse::IfLet(Box::new(inner)));
+        }
+        next => {
+            return Err(StrayIfLet {
+                span: Span {
+                    start: else_span.start,
+                    end: next.map_or(else_span.end, |token| token.span.end),
+                },
+                kind: StrayIfLetKind::ElseContinuation,
+            });
+        }
+    }
+    stmt.owner_span.end = byte_end;
+    Ok((cur, byte_end, stmt))
+}
+
+fn parse_if_let_link<'t>(
     mut cur: Cursor<'t>,
     kw_span: Span,
-) -> Option<(Cursor<'t>, usize, IfLetStmt)> {
+) -> Option<(Cursor<'t>, usize, IfLetStmt, Option<Span>)> {
     match cur.peek() {
         Some(t) if matches!(t.kind, TokenKind::Ident) && cur.text(t) == "let" => {
             cur.bump();
@@ -123,40 +181,18 @@ pub(super) fn parse_if_let<'t>(
         body_range.0,
         body_range.1,
     );
-    let mut byte_end = cur.tokens[body_close].span.end;
+    let byte_end = cur.tokens[body_close].span.end;
     cur.idx = body_close + 1;
 
-    // optional `else` continuation: a block or another `if let`
-    let mut else_part = None;
-    if matches!(cur.peek(), Some(t) if matches!(t.kind, TokenKind::Ident) && cur.text(t) == "else")
+    // optional `else` continuation: a block or another `if let`, which the
+    // caller parses
+    let mut else_at = None;
+    if let Some(t) = cur.peek()
+        && matches!(t.kind, TokenKind::Ident)
+        && cur.text(t) == "else"
     {
+        else_at = Some(t.span);
         cur.bump();
-        match cur.peek() {
-            Some(t) if matches!(t.kind, TokenKind::Punct(b'{')) => {
-                let open = cur.idx;
-                let close = cur.find_close()?;
-                let range = (
-                    cur.tokens[open].span.start + 1,
-                    cur.tokens[close].span.start,
-                );
-                else_part = Some(IfLetElse::Block(cur.parser.parse_tokens(
-                    &cur.tokens[open + 1..close],
-                    range.0,
-                    range.1,
-                )));
-                byte_end = cur.tokens[close].span.end;
-                cur.idx = close + 1;
-            }
-            Some(t) if matches!(t.kind, TokenKind::Ident) && cur.text(t) == "if" => {
-                let if_span = t.span;
-                cur.bump();
-                let (next_cur, end, inner) = parse_if_let(cur, if_span)?;
-                cur = next_cur;
-                byte_end = end;
-                else_part = Some(IfLetElse::IfLet(Box::new(inner)));
-            }
-            _ => return None,
-        }
     }
 
     Some((
@@ -175,13 +211,14 @@ pub(super) fn parse_if_let<'t>(
             alternatives,
             expr,
             body,
-            else_part,
+            else_part: None,
             // Filled by the caller for the outermost statement (a chained
             // `else if let` is never in expression position, so only the
             // outer one's placement is ever judged).
             in_function: false,
             expression_position: false,
         },
+        else_at,
     ))
 }
 

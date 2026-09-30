@@ -50,12 +50,24 @@ pub(crate) struct Program {
     /// would fail the self-check without a position — the semantic phase
     /// reports these as tt errors instead (the parser stays infallible).
     pub stray_pipes: Vec<usize>,
-    /// Byte offsets of `if let` sequences that could not be claimed as an
-    /// `if let` statement — same reporting story as [`Self::stray_pipes`]
-    /// (an undotted `if` followed by `let` is never valid TypeScript).
-    pub stray_if_lets: Vec<usize>,
+    /// `if let` statements that could not be claimed, each at the place its
+    /// parse stopped — same reporting story as [`Self::stray_pipes`] (an
+    /// undotted `if` followed by `let` is never valid TypeScript).
+    pub stray_if_lets: Vec<StrayIfLet>,
     /// Byte offsets of `result { ... }` blocks that could not be claimed.
     pub stray_results: Vec<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StrayIfLet {
+    pub span: Span,
+    pub kind: StrayIfLetKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrayIfLetKind {
+    Head,
+    ElseContinuation,
 }
 
 /// A tt-shaped source region which the parser deliberately left verbatim.

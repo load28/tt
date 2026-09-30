@@ -108,7 +108,7 @@ else { prompt(); }
 ```
 - Statement position only (incl. match block-arm bodies); in expression regions only inside a function you write there (same flow rule as try). Its `if` must start a statement: an `if let` as an initializer, argument, operand, `return`/`throw` operand, concise arrow body, `try` or pipeline operand, scrutinee, guard, or expression arm body is `if-let-placement` (it produces no value; use `match`).
 - Pattern parens mandatory (first alternative); nested ok (`if let Ok(value: Some(value: v)) = r {}`); or-patterns ok (`if let Circle(r) | Square(r) = s {}` — same-binding-set rule, no nested inside or); no guards.
-- else = block or another if-let ONLY; plain `else if (cond)` must go inside an else block.
+- else = block or another if-let ONLY; plain `else if (cond)` must go inside an else block. A chain that breaks this is one `stray-if-let`, at the `else` that cannot continue it; a malformed link is one `stray-if-let` at that link's `if`.
 - Malformed if let = located compile error (not passthrough).
 
 ## |>

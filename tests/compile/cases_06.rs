@@ -725,11 +725,45 @@ fn malformed_if_let_is_an_error_with_position() {
     );
     assert_eq!((e.line, e.col), (2, 3));
 
-    let e = err("function f() {\n  if let Some(v) = o { g(); } else if (x) { h(); }\n}\n");
+    let source = "function f() {\n  if let Some(v) = o { g(); } else if (x) { h(); }\n}\n";
+    let e = err(source);
     assert!(
-        e.message.contains("`if let` could not be parsed here"),
+        e.message
+            .contains("the `else` of an `if let` must be a block or another `if let`"),
         "{}",
         e.message
+    );
+    let line = source.lines().nth(1).unwrap();
+    assert_eq!((e.line, e.col), (2, line.find("else").unwrap() + 1));
+}
+
+#[test]
+fn a_stray_else_of_an_if_let_chain_is_reported_once_where_the_chain_stops() {
+    // TASK-599: the chain is one statement, so its one failure is reported
+    // once, at the `else` that cannot continue it, not at every `if let`
+    // the parser met on the way.
+    let source = "variant O { A(n: number), B(s: string) }\ndeclare const o: O;\ndeclare const c: boolean;\nfunction f() {\n  if let A(n) = o { g(n); } else if let B(s) = o { g(s); } else if (c) { h(); }\n}\n";
+    let diagnostics = ttc::analyze(source, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(diagnostics[0].code, DiagnosticCode::StrayIfLet);
+    assert_eq!(
+        diagnostics[0].start,
+        Some(source.rfind("else if (c)").unwrap()),
+        "{diagnostics:#?}"
+    );
+    assert_eq!(
+        diagnostics[0].end,
+        Some(source.rfind("else if (c)").unwrap() + "else if".len()),
+        "{diagnostics:#?}"
+    );
+
+    let source = "variant O { A(n: number), B(s: string) }\ndeclare const o: O;\nfunction f() {\n  if let A(n) = o { g(n); } else if let B = o { h(); }\n}\n";
+    let diagnostics = ttc::analyze(source, &Options::default());
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:#?}");
+    assert_eq!(
+        diagnostics[0].start,
+        Some(source.rfind("if let B").unwrap()),
+        "{diagnostics:#?}"
     );
 }
 

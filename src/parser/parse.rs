@@ -454,7 +454,7 @@ impl Parser<'_> {
         let mut malformed = Vec::new();
         let mut host_candidates = HostCandidates::default();
         let mut stray_pipes: Vec<usize> = Vec::new();
-        let mut stray_if_lets: Vec<usize> = Vec::new();
+        let mut stray_if_lets: Vec<crate::ast::StrayIfLet> = Vec::new();
         let stray_results: Vec<usize> = Vec::new();
         let mut seg_start = start;
         let mut i = 0usize;
@@ -766,9 +766,8 @@ impl Parser<'_> {
             // valid TypeScript, so a candidate that fails to parse cannot
             // be passed through either; it is recorded for sema.
             if iflets::if_let_pattern(self.src, tokens, i).is_some() {
-                if let Some((cur, byte_end, mut stmt)) =
-                    iflets::parse_if_let(Cursor::new(self, tokens, i + 1, end), tok.span)
-                {
+                let parsed = iflets::parse_if_let(Cursor::new(self, tokens, i + 1, end), tok.span);
+                if let Ok((cur, byte_end, mut stmt)) = parsed {
                     stmt.in_function = crate::flow::in_function_body(tokens, i);
                     stmt.expression_position = !tok.facts.statement_start();
                     if stmt.expression_position {
@@ -787,7 +786,11 @@ impl Parser<'_> {
                     }
                     continue;
                 }
-                stray_if_lets.push(tok.span.start);
+                if let Err(stray) = parsed
+                    && !stray_if_lets.contains(&stray)
+                {
+                    stray_if_lets.push(stray);
+                }
                 recoveries.extend(iflets::stray_if_let_recoveries(self.src, tokens, i, end));
             }
 

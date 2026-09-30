@@ -26,18 +26,22 @@ impl Checker<'_> {
                 .help("a step is an expression — parenthesize a ternary or an arrow function"),
             );
         }
-        for &off in &program.stray_if_lets {
-            self.error(
-                TtError::span(
-                    off,
-                    off + "if".len(),
-                    "`if let` could not be parsed here".to_string(),
-                )
-                .code(DiagnosticCode::StrayIfLet)
-                .help(
+        for stray in &program.stray_if_lets {
+            let (message, help) = match stray.kind {
+                crate::ast::StrayIfLetKind::Head => (
+                    "`if let` could not be parsed here",
                     "the pattern parens are mandatory, and the `else` must be a block or \
                      another `if let`",
                 ),
+                crate::ast::StrayIfLetKind::ElseContinuation => (
+                    "the `else` of an `if let` must be a block or another `if let`",
+                    "put a plain `if (...)` inside an `else { ... }` block",
+                ),
+            };
+            self.error(
+                TtError::span(stray.span.start, stray.span.end, message.to_string())
+                    .code(DiagnosticCode::StrayIfLet)
+                    .help(help),
             );
         }
         for &off in &program.stray_results {
