@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_06.rs::nested_pattern_with_guard
+
+const n = match (r) {
+  Ok(value: Some(value: v)) if v > 0 => v,
+  _ => 0,
+};

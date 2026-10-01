@@ -1,0 +1,8 @@
+//// [tryIsAValueInDeepExpressionPositions5.tt] 6 mapping(s)
+1:1 -> 19:1 len 44  "function f(r: R): TResult<number, string> { "
+1:45 -> 40:1 len 7  "return "
+1:59 -> 21:17 len 1  "r"
+1:73 -> 24:22 len 7  "total()"
+1:87 -> 32:16 len 12  "Result.Ok(0)"
+1:101 -> 40:14 len 4  "; }\n"
+

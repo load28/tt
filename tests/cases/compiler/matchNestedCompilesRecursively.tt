@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_02.rs::match_nested_compiles_recursively
+
+const r = match (a) {
+  X(inner) => match (inner) { Y => 1, _ => 2 },
+  _ => 0,
+};

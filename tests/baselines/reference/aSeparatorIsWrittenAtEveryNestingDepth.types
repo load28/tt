@@ -1,0 +1,52 @@
+=== aSeparatorIsWrittenAtEveryNestingDepth.tt ===
+declare const o: { m(x: unknown): unknown };
+>o : const o: {
+>       m(x: unknown): unknown;
+>   }
+>m : (method) m(x: unknown): unknown
+>x : (parameter) x: unknown
+declare const k: "m";
+>k : const k: "m"
+declare const c: boolean;
+>c : const c: boolean
+declare const u: unknown;
+>u : const u: unknown
+declare function f(): void;
+>f : function f(): void
+declare const v: number;
+>v : const v: number
+export class A {
+>A : class A
+  m(x: number) { return x }
+>m : (method) A.m(x: number): number
+>x : (parameter) x: number
+>x : (parameter) x: number
+  run() {
+>run : (method) A.run(): void
+    const w = 1
+>w : const w: 1
+    w |> this.m
+>w : const w: 1
+>m : (method) A.m(x: number): number
+export const g = () => {
+>g : const g: () => void
+  const w = 2
+>w : const w: 2
+  w |> o.m
+>w : const w: 2
+>o : const o: {
+>       m(x: unknown): unknown;
+>   }
+>m : (method) m(x: unknown): unknown
+export const t = `${(() => { const w = 3
+>t : const t: string
+>w : const w: 3
+  w |> o.m
+>w : const w: 3
+>o : const o: {
+>       m(x: unknown): unknown;
+>   }
+>m : (method) m(x: unknown): unknown
+  return w })()}`
+>w : const w: 3
+

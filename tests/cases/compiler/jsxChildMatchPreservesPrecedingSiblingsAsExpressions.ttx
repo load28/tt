@@ -1,0 +1,6 @@
+// @origin: tests/compile.rs::jsx_child_match_preserves_preceding_siblings_as_expressions
+variant Maybe { Some(value: string), None }
+declare const value: Maybe;
+const view = <main><h1>title</h1><form>form</form>{match (value) {
+  Some(value) => <p>{value}</p>, None => null,
+}}</main>;

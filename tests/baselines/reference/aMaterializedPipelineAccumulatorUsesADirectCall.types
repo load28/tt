@@ -1,0 +1,26 @@
+=== aMaterializedPipelineAccumulatorUsesADirectCall.tt ===
+variant E { A(value: number), B }
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (value: number) => E
+>value : (property) value: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const value = match (E.A(1)) { A(value) => value, B => 0 } |> String;
+>value : const value: string
+>E : const E: {
+>       A: (value: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: number) => E
+>value : const value: number
+>value : const value: number
+>String : var String: (value?: any) => string
+

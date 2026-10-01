@@ -1,0 +1,10 @@
+//// [literalOrPatternIfChainTestsEachAlternative.tt] 8 mapping(s)
+1:1 -> 15:1 len 10  "const v = "
+1:18 -> 3:17 len 1  "s"
+1:23 -> 5:19 len 3  "\"a\""
+1:29 -> 5:36 len 3  "\"b\""
+1:36 -> 6:11 len 2  "ok"
+1:42 -> 7:20 len 1  "1"
+1:50 -> 11:16 len 1  "2"
+1:53 -> 15:19 len 1  ";"
+

@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryInsideAFunctionInsideATemplateInterpolationIsAllowed.tt → $DIR/out/tryInsideAFunctionInsideATemplateInterpolationIsAllowed.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'run'.
+ --> tryInsideAFunctionInsideATemplateInterpolationIsAllowed.tt:1:14
+  |
+1 | const s = `${run(() => { try g(); return h(); })}`;
+  |              ^^^
+error[ts2304]: Cannot find name 'g'.
+ --> tryInsideAFunctionInsideATemplateInterpolationIsAllowed.tt:1:30
+  |
+1 | const s = `${run(() => { try g(); return h(); })}`;
+  |                              ^
+error[ts2304]: Cannot find name 'h'.
+ --> tryInsideAFunctionInsideATemplateInterpolationIsAllowed.tt:1:42
+  |
+1 | const s = `${run(() => { try g(); return h(); })}`;
+  |                                          ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryInsideAFunctionInsideATemplateInterpolationIsAllowed.ts(1,14): error TS2304: Cannot find name 'run'.
+tryInsideAFunctionInsideATemplateInterpolationIsAllowed.ts(1,41): error TS2304: Cannot find name 'g'.
+tryInsideAFunctionInsideATemplateInterpolationIsAllowed.ts(4,10): error TS2304: Cannot find name 'h'.

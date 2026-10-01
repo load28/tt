@@ -1,0 +1,7 @@
+=== plainAliasIsStillAnAliasNotANestedPattern.tt ===
+const n = match (o) { Some(value: None) => None, _ => 0 };
+>n : const n: any
+>value : any
+>None : const None: any
+>None : const None: any
+

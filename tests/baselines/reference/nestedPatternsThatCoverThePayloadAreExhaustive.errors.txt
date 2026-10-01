@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./nestedPatternsThatCoverThePayloadAreExhaustive.tt → $DIR/out/nestedPatternsThatCoverThePayloadAreExhaustive.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'o'.
+ --> nestedPatternsThatCoverThePayloadAreExhaustive.tt:3:18
+  |
+3 | const a = match (o) {
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+nestedPatternsThatCoverThePayloadAreExhaustive.ts(35,17): error TS2304: Cannot find name 'o'.

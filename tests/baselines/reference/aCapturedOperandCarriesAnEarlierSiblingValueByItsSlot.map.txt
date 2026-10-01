@@ -1,0 +1,10 @@
+//// [aCapturedOperandCarriesAnEarlierSiblingValueByItsSlot.tt] 8 mapping(s)
+1:1 -> 1:1 len 101  "declare function a(): { kind: \"Ok\"; value: numbe"...
+2:16 -> 15:1 len 7  "return "
+2:23 -> 9:17 len 1  "("
+2:28 -> 4:16 len 3  "a()"
+2:31 -> 9:24 len 19  ").toFixed(1).length"
+2:50 -> 15:14 len 4  " + ("
+2:58 -> 10:16 len 3  "a()"
+2:61 -> 15:24 len 5  "); }\n"
+

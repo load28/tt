@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalOrPatternSharesOneBodyViaFallthrough.tt → $DIR/out/literalOrPatternSharesOneBodyViaFallthrough.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'code'.
+ --> literalOrPatternSharesOneBodyViaFallthrough.tt:2:21
+  |
+2 | const kind = match (code) {
+  |                     ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalOrPatternSharesOneBodyViaFallthrough.ts(4,17): error TS2304: Cannot find name 'code'.

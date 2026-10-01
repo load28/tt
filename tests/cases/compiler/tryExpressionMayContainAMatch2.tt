@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_02.rs::try_expression_may_contain_a_match
+function f(): X {
+  const x = try wrap(match (m) { Ok(value) => value, Err(_) => 0 });
+  return x;
+}

@@ -1,0 +1,26 @@
+=== aByteOrderMarkPassesThroughAheadOfLoweredConstructs.tt ===
+﻿variant O { Some(value: number), None }
+>  : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+> Som : (property) Some: (value: number) => O
+>(valu : (property) value: number
+> Non : (property) None: {
+>       readonly kind: "None";
+>   }
+export const f = (o: O) => match (o) { Some(value) => value, None => 0 };
+>f : const f: (o: O) => number
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>o : (parameter) o: O
+>value : const value: number
+>value : const value: number
+

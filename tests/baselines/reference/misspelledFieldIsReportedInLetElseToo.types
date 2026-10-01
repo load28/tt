@@ -1,0 +1,20 @@
+=== misspelledFieldIsReportedInLetElseToo.tt ===
+variant Shape { Circle(radius: number), Empty }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+function f(): number {
+>f : function f(): number
+  const Circle(radiuz) = s else { return 0; };
+>radiuz : const radiuz: any
+  return radiuz;
+>radiuz : const radiuz: any
+

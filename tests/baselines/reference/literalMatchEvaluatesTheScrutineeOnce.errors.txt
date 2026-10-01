@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalMatchEvaluatesTheScrutineeOnce.tt → $DIR/out/literalMatchEvaluatesTheScrutineeOnce.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'getValue'.
+ --> literalMatchEvaluatesTheScrutineeOnce.tt:1:18
+  |
+1 | const v = match (getValue()) { "a" => foo(), _ => bar() };
+  |                  ^^^^^^^^
+error[ts2304]: Cannot find name 'foo'.
+ --> literalMatchEvaluatesTheScrutineeOnce.tt:1:39
+  |
+1 | const v = match (getValue()) { "a" => foo(), _ => bar() };
+  |                                       ^^^
+error[ts2304]: Cannot find name 'bar'.
+ --> literalMatchEvaluatesTheScrutineeOnce.tt:1:51
+  |
+1 | const v = match (getValue()) { "a" => foo(), _ => bar() };
+  |                                                   ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalMatchEvaluatesTheScrutineeOnce.ts(3,17): error TS2304: Cannot find name 'getValue'.
+literalMatchEvaluatesTheScrutineeOnce.ts(6,18): error TS2304: Cannot find name 'foo'.
+literalMatchEvaluatesTheScrutineeOnce.ts(10,18): error TS2304: Cannot find name 'bar'.

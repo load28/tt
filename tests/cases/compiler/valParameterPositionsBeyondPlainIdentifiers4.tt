@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::val_parameter_positions_beyond_plain_identifiers
+class B {
+  constructor(private val inner: I) {
+    inner.a = 1;
+  }
+}

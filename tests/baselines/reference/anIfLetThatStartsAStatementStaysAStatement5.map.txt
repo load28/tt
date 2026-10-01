@@ -1,0 +1,9 @@
+//// [anIfLetThatStartsAStatementStaysAStatement5.tt] 7 mapping(s)
+1:25 -> 2:28 len 6  "number"
+1:25 -> 5:17 len 6  "number"
+1:40 -> 7:3 len 83  "\ndeclare const o: O;\ndeclare function g(x: unkno"...
+4:35 -> 13:13 len 5  "value"
+4:44 -> 11:18 len 1  "o"
+4:48 -> 14:5 len 13  "return value;"
+4:63 -> 16:2 len 19  " return 0; })()}`;\n"
+

@@ -1,0 +1,9 @@
+//// [letElseExpressionMayBeAMatch.tt] 7 mapping(s)
+1:1 -> 1:1 len 25  "function f(): number {\n  "
+2:14 -> 18:11 len 1  "v"
+2:26 -> 3:19 len 1  "x"
+2:36 -> 6:18 len 7  "some(1)"
+2:50 -> 10:18 len 6  "none()"
+2:66 -> 16:5 len 9  "return 0;"
+2:78 -> 18:24 len 15  "\n  return v;\n}\n"
+

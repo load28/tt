@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./directReturnLiteralMatchKeepsAwaitInTheHostFunction.tt → $DIR/out/directReturnLiteralMatchKeepsAwaitInTheHostFunction.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 's'.
+ --> directReturnLiteralMatchKeepsAwaitInTheHostFunction.tt:1:36
+  |
+1 | async function f() { return match (s) { "a" => await g(), _ => null }; }
+  |                                    ^
+error[ts2304]: Cannot find name 'g'.
+ --> directReturnLiteralMatchKeepsAwaitInTheHostFunction.tt:1:54
+  |
+1 | async function f() { return match (s) { "a" => await g(), _ => null }; }
+  |                                                      ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+directReturnLiteralMatchKeepsAwaitInTheHostFunction.ts(3,17): error TS2304: Cannot find name 's'.
+directReturnLiteralMatchKeepsAwaitInTheHostFunction.ts(6,22): error TS2304: Cannot find name 'g'.

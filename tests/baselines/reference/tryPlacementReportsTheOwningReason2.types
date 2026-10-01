@@ -1,0 +1,6 @@
+=== tryPlacementReportsTheOwningReason2.tt ===
+function f(value = try read()) { return value; }
+>f : function f(value?: any): any
+>value : (parameter) value: any
+>value : (parameter) value: any
+

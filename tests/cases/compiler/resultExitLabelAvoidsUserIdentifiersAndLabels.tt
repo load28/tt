@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::result_exit_label_avoids_user_identifiers_and_labels
+function run() { $tt_v0: while (ready()) { break $tt_v0; } const $tt_v1 = 0; const value = result { const item = try read(); return item; }; return value; }

@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aBlockOfLiteralsIsNotAMatch.tt → $DIR/out/aBlockOfLiteralsIsNotAMatch.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2552]: Cannot find name 'match'. Did you mean 'Math'?
+ --> aBlockOfLiteralsIsNotAMatch.tt:1:1
+  |
+1 | match (x)
+  | ^^^^^
+error[ts2304]: Cannot find name 'x'.
+ --> aBlockOfLiteralsIsNotAMatch.tt:1:8
+  |
+1 | match (x)
+  |        ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aBlockOfLiteralsIsNotAMatch.ts(1,1): error TS2552: Cannot find name 'match'. Did you mean 'Math'?
+aBlockOfLiteralsIsNotAMatch.ts(1,8): error TS2304: Cannot find name 'x'.

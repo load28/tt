@@ -1,0 +1,13 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aTryInAConciseArrowInsideAResultBlockTargetsTheArrow.tt → $DIR/out/aTryInAConciseArrowInsideAResultBlockTargetsTheArrow.ts
+
+==== ttc --check-types (exit 1) ====
+error[result-return-nested]: `return` here would wrap an already-Result value
+ --> aTryInAConciseArrowInsideAResultBlockTargetsTheArrow.tt:5:8
+  |
+5 | return f(x);
+  |        ^^^^
+  |
+  = help: propagate this Result instead: `try`
+
+==== tsc on the emitted TypeScript (exit 0) ====

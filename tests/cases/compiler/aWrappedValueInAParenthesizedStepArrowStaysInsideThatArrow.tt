@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_11.rs::a_wrapped_value_in_a_parenthesized_step_arrow_stays_inside_that_arrow
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+variant V { A(n: number), B }
+declare function next(): R<number>;
+declare const value: number;
+const f = value |> (x => (try next()));
+const h = value |> ((v: number) => (match (V.A(v)) { A(n) => n, B => 0 }) as number);

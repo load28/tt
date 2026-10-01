@@ -1,0 +1,6 @@
+//// [tryIsAValueInDeepExpressionPositions3.tt] 4 mapping(s)
+1:1 -> 1:1 len 40  "function f(): TResult<string, string> { "
+1:41 -> 7:1 len 22  "return Result.Ok(`v=${"
+1:67 -> 2:16 len 6  "read()"
+1:73 -> 7:29 len 7  "}`); }\n"
+

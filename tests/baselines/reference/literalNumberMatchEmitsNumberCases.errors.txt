@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalNumberMatchEmitsNumberCases.tt → $DIR/out/literalNumberMatchEmitsNumberCases.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2678]: Type 'number' is not comparable to type 'string'.
+ --> literalNumberMatchEmitsNumberCases.tt:3:3
+  |
+3 |   200 => "ok",
+  |   ^^^
+error[ts2678]: Type 'number' is not comparable to type 'string'.
+ --> literalNumberMatchEmitsNumberCases.tt:4:3
+  |
+4 |   404 => "not found",
+  |   ^^^
+error[ts2678]: Type 'number' is not comparable to type 'string'.
+ --> literalNumberMatchEmitsNumberCases.tt:5:3
+  |
+5 |   500 => "error",
+  |   ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalNumberMatchEmitsNumberCases.ts(6,10): error TS2678: Type 'number' is not comparable to type 'string'.
+literalNumberMatchEmitsNumberCases.ts(10,10): error TS2678: Type 'number' is not comparable to type 'string'.
+literalNumberMatchEmitsNumberCases.ts(14,10): error TS2678: Type 'number' is not comparable to type 'string'.

@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseDivergenceIsAFlowAnswerNotALastKeywordCheck5.tt → $DIR/out/letElseDivergenceIsAFlowAnswerNotALastKeywordCheck5.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseDivergenceIsAFlowAnswerNotALastKeywordCheck5.tt:2:19
+  |
+2 |   const Some(v) = find() else { return 0; log("never"); };
+  |                   ^^^^
+error[ts2304]: Cannot find name 'log'.
+ --> letElseDivergenceIsAFlowAnswerNotALastKeywordCheck5.tt:2:43
+  |
+2 |   const Some(v) = find() else { return 0; log("never"); };
+  |                                           ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseDivergenceIsAFlowAnswerNotALastKeywordCheck5.ts(2,18): error TS2304: Cannot find name 'find'.
+letElseDivergenceIsAFlowAnswerNotALastKeywordCheck5.ts(4,15): error TS2304: Cannot find name 'log'.

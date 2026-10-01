@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::try_placement_reports_the_owning_reason
+function f() { for (let i = 0; i < 1; try advance()) {} }

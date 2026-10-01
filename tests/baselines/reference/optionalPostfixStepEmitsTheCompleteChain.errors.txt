@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./optionalPostfixStepEmitsTheCompleteChain.tt → $DIR/out/optionalPostfixStepEmitsTheCompleteChain.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> optionalPostfixStepEmitsTheCompleteChain.tt:1:11
+  |
+1 | const a = x |> ?.trim();
+  |           ^
+error[ts2304]: Cannot find name 'xs'.
+ --> optionalPostfixStepEmitsTheCompleteChain.tt:2:11
+  |
+2 | const b = xs |> ?.[key]?.value;
+  |           ^^
+error[ts2304]: Cannot find name 'key'.
+ --> optionalPostfixStepEmitsTheCompleteChain.tt:2:20
+  |
+2 | const b = xs |> ?.[key]?.value;
+  |                    ^^^
+error[ts2304]: Cannot find name 'fn'.
+ --> optionalPostfixStepEmitsTheCompleteChain.tt:3:11
+  |
+3 | const c = fn |> ?.(arg).value?.();
+  |           ^^
+error[ts2304]: Cannot find name 'arg'.
+ --> optionalPostfixStepEmitsTheCompleteChain.tt:3:20
+  |
+3 | const c = fn |> ?.(arg).value?.();
+  |                    ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+optionalPostfixStepEmitsTheCompleteChain.ts(1,11): error TS2304: Cannot find name 'x'.
+optionalPostfixStepEmitsTheCompleteChain.ts(2,11): error TS2304: Cannot find name 'xs'.
+optionalPostfixStepEmitsTheCompleteChain.ts(2,16): error TS2304: Cannot find name 'key'.
+optionalPostfixStepEmitsTheCompleteChain.ts(3,11): error TS2304: Cannot find name 'fn'.
+optionalPostfixStepEmitsTheCompleteChain.ts(3,16): error TS2304: Cannot find name 'arg'.

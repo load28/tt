@@ -1,0 +1,11 @@
+=== aSpreadArgumentCaptureTakesTheExpressionNotTheDots.tt ===
+declare function sum(...xs: number[]): number;
+>sum : function sum(...xs: number[]): number
+>xs : (parameter) xs: number[]
+declare const rest: number[];
+>rest : const rest: number[]
+export const r = sum(...rest, match (1) { 1 => 3, _ => 0 });
+>r : const r: number
+>sum : function sum(...xs: number[]): number
+>rest : const rest: number[]
+

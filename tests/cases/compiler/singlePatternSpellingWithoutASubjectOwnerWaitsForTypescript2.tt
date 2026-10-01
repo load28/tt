@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_08.rs::single_pattern_spelling_without_a_subject_owner_waits_for_typescript
+variant Shape { Circle(radius: number), Empty }
+if let Circel(radius) = s { log(radius); }

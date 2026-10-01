@@ -1,0 +1,22 @@
+==== ttc --out-dir (exit 1) ====
+error[match-duplicate-arm]: match: duplicate arm "Ok"
+ --> ./plainArmBeforeNestedArmIsADuplicate.tt:1:39
+  |
+1 | const n = match (r) { Ok(value) => 1, Ok(value: Some(value: v)) => v, _ => 0 };
+  |                                       ^^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'r'.
+ --> plainArmBeforeNestedArmIsADuplicate.tt:1:18
+  |
+1 | const n = match (r) { Ok(value) => 1, Ok(value: Some(value: v)) => v, _ => 0 };
+  |                  ^
+error[match-duplicate-arm]: match: duplicate arm "Ok"
+ --> plainArmBeforeNestedArmIsADuplicate.tt:1:39
+  |
+1 | const n = match (r) { Ok(value) => 1, Ok(value: Some(value: v)) => v, _ => 0 };
+  |                                       ^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

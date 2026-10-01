@@ -1,0 +1,7 @@
+//// [ifLetInsideAFunctionInsideAnExpressionRegionIsAllowed2.tt] 5 mapping(s)
+1:1 -> 1:1 len 25  "const s = `${run(() => { "
+1:35 -> 4:13 len 1  "x"
+1:40 -> 2:18 len 1  "e"
+1:44 -> 5:5 len 7  "log(x);"
+1:53 -> 7:2 len 17  " return 1; })}`;\n"
+

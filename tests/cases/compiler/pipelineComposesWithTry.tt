@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_05.rs::pipeline_composes_with_try
+function f(): Result<number, string> {
+  const a = try readCfg() |> norm;
+  return Result.Ok(a);
+}

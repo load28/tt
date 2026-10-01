@@ -1,0 +1,13 @@
+=== theRuntimeImportNeverDisplacesADirectiveOrAShebang1.tt ===
+declare function f(n: number): number;
+>f : function f(n: number): number
+>n : (parameter) n: number
+declare function g(n: number): number;
+>g : function g(n: number): number
+>n : (parameter) n: number
+export const a = f(4) |> g |> .toFixed(1);
+>a : const a: string
+>f : function f(n: number): number
+>g : function g(n: number): number
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+

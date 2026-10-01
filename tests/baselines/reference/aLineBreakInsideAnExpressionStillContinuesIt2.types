@@ -1,0 +1,33 @@
+=== aLineBreakInsideAnExpressionStillContinuesIt2.tt ===
+variant O { Some(value: number), None }
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => O
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+declare let q: number;
+>q : let q: number
+declare const o: O;
+>o : const o: O
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+declare const p: ((x: number) => number) | undefined;
+>p : const p: ((x: number) => number) | undefined
+>x : (parameter) x: number
+const x = p!
+>x : const x: number
+>p : const p: ((x: number) => number) | undefined
+  (if let Some(value) = o { value });
+>Some : (property) undefined: undefined
+>value : const value: number
+

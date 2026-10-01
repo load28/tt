@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_14.rs::a_returned_template_literal_that_ends_its_statement_keeps_the_return_suffix
+variant O { A(n: number), B }
+declare const o: O;
+declare function tag(s: TemplateStringsArray, ...v: unknown[]): string;
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+declare function r(): R;
+export const a = result { const x = try r(); if (x > 0) return `a`
+  return `b`};

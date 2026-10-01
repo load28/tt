@@ -1,0 +1,3 @@
+//// [malformedIfLetIsAnErrorWithPosition2.tt] 1 mapping(s)
+1:1 -> 1:1 len 68  "function f() {\n  if let Some(v) = o { g(); } els"...
+

@@ -1,0 +1,3 @@
+//// [tryPlacementReportsTheOwningReason4.tt] ////
+class C { constructor() { try read(); } }
+

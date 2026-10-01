@@ -1,0 +1,12 @@
+=== letElseSharesTryTempCounter.tt ===
+function f(): X {
+>f : function f(): X
+>X : type X = /*unresolved*/ any
+  const n = try g();
+>n : const n: any
+  const Some(v) = h(n) else { return fallback(); };
+>v : const v: any
+>n : const n: any
+  return wrap(v);
+>v : const v: any
+

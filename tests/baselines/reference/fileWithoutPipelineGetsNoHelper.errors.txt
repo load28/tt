@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./fileWithoutPipelineGetsNoHelper.tt → $DIR/out/fileWithoutPipelineGetsNoHelper.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'f'.
+ --> fileWithoutPipelineGetsNoHelper.tt:1:11
+  |
+1 | const a = f(x);
+  |           ^
+error[ts2304]: Cannot find name 'x'.
+ --> fileWithoutPipelineGetsNoHelper.tt:1:13
+  |
+1 | const a = f(x);
+  |             ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+fileWithoutPipelineGetsNoHelper.ts(1,11): error TS2304: Cannot find name 'f'.
+fileWithoutPipelineGetsNoHelper.ts(1,13): error TS2304: Cannot find name 'x'.

@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalMatchWithoutAWildcardHasNoIfChainCaseGuard.tt → $DIR/out/literalMatchWithoutAWildcardHasNoIfChainCaseGuard.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'code'.
+ --> literalMatchWithoutAWildcardHasNoIfChainCaseGuard.tt:1:18
+  |
+1 | const v = match (code) { 200 if ok => 1, 404 => 2 };
+  |                  ^^^^
+error[ts2304]: Cannot find name 'ok'.
+ --> literalMatchWithoutAWildcardHasNoIfChainCaseGuard.tt:1:33
+  |
+1 | const v = match (code) { 200 if ok => 1, 404 => 2 };
+  |                                 ^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalMatchWithoutAWildcardHasNoIfChainCaseGuard.ts(21,17): error TS2304: Cannot find name 'code'.
+literalMatchWithoutAWildcardHasNoIfChainCaseGuard.ts(24,11): error TS2304: Cannot find name 'ok'.

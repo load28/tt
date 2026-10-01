@@ -208,28 +208,6 @@ fn a_hoisted_value_in_any_pipeline_operand_is_emitted_once() {
 }
 
 #[test]
-fn a_hoisted_value_in_a_pipeline_operand_keeps_the_callee_before_it() {
-    let out = ok(&format!(
-        "{TASK_501_PRELUDE}export const v = f(match (n) {{ 0 => 1, _ => 2 }}) |> String;\n"
-    ));
-    let callee = out.find("= (f);").expect("the callee is captured");
-    let region = out.find("switch (").expect("the match follows");
-    assert!(callee < region, "{out}");
-    assert_eq!(out.matches("f(").count(), 1, "{out}");
-}
-
-#[test]
-fn a_conditional_operand_owns_its_branch_in_a_pipeline_head() {
-    let out = ok(&format!(
-        "{TASK_501_PRELUDE}export const v = g() && f(match (n) {{ 0 => 1, _ => 2 }}) |> String;\n"
-    ));
-    assert!(out.contains("if ($tt_v3 = g()) {"), "{out}");
-    assert!(out.contains("$tt_v4 = $tt_v3 && $tt_v2($tt_v1);"), "{out}");
-    assert!(out.contains("$tt_v4 = $tt_v3;"), "{out}");
-    assert!(!out.contains("g() &&"), "{out}");
-}
-
-#[test]
 fn an_unstructurable_conditional_in_a_pipeline_operand_is_a_placement_diagnostic() {
     let source = format!(
         "{TASK_501_PRELUDE}export const v = g() && (g() && f(match (n) {{ 0 => 1, _ => 2 }})) |> String;\n"
@@ -293,19 +271,6 @@ fn a_hoisted_value_in_a_member_step_is_emitted_once_after_its_method() {
 }
 
 #[test]
-fn a_member_step_calls_its_method_on_the_piped_value_after_the_argument() {
-    let out = ok(&format!(
-        "{TASK_504_PRELUDE}export const v = g() |> .m(match (n) {{ 0 => 1, _ => 2 }});\n"
-    ));
-    let head = out.find("= g();").expect("the head is evaluated first");
-    let region = out.find("switch (").expect("the match follows");
-    let call = out.find(".m($tt_v1)").expect("the call reads the method");
-    assert!(head < region && region < call, "{out}");
-    assert!(!out.contains(".bind("), "{out}");
-    assert_eq!(out.matches("= g()").count(), 1, "{out}");
-}
-
-#[test]
 fn a_try_in_a_template_in_a_pipeline_operand_keeps_its_callee_before_it() {
     for expression in [
         "`${f(try r())}` |> String",
@@ -343,31 +308,6 @@ fn a_statement_match_that_ends_the_file_closes_the_block_it_hoists_into() {
             assert!(block.trim_end().ends_with("}\n  }\n}"), "{source:?}\n{out}");
         }
     }
-}
-
-#[test]
-fn an_assignment_captures_its_target_before_a_hoisted_right_operand() {
-    let prelude = "type R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n\
-         declare function read(): R;\n\
-         declare function target(): { v: number };\n\
-         declare function key(): \"v\";\n\
-         declare let state: { v: number };\n";
-    let out = ok(&format!(
-        "{prelude}export function f(): R {{\n  target()[key()] -= try read();\n  return {{ kind: \"Ok\", value: 0 }};\n}}\n"
-    ));
-    let object = out.find("= (target());").expect("the object is captured");
-    let key = out.find("= (key());").expect("the key is captured");
-    let current = out.find("= ($tt_v1[$tt_v2]);").expect("the target is read");
-    let region = out.find("= read();").expect("the right operand follows");
-    assert!(object < key && key < current && current < region, "{out}");
-    assert!(out.contains(" -= $tt_v0;"), "{out}");
-
-    let out = ok(&format!(
-        "{prelude}export function g(): R {{\n  state.v *= try read();\n  this.v = try read();\n  return {{ kind: \"Ok\", value: 0 }};\n}}\n"
-    ));
-    assert!(out.contains("let $tt_v1 = (state.v);"), "{out}");
-    assert!(out.contains("state.v = $tt_v1 *= $tt_v0;"), "{out}");
-    assert!(out.contains("this.v = $tt_v2;"), "{out}");
 }
 
 #[test]
@@ -416,22 +356,6 @@ fn a_write_to_a_call_result_is_not_a_write_to_its_argument() {
         "declare function f(val v: unknown): { y: number };\nval const cfg = { a: 1 };\nf(cfg).y = 1;\n",
     );
     assert!(probes.mutations.is_empty(), "{probes:#?}");
-}
-
-#[test]
-fn a_case_named_like_the_prototype_setter_is_an_own_constructor_property() {
-    let out = ok("variant V { __proto__(x: number), B }\nvariant U { __proto__, C }\n");
-    assert!(
-        out.contains("  [\"__proto__\"]: (x: number): V => ({ kind: \"__proto__\", x }),"),
-        "{out}"
-    );
-    assert!(
-        out.contains("  [\"__proto__\"]: { kind: \"__proto__\" } as const,"),
-        "{out}"
-    );
-    assert!(!out.contains("\n  __proto__:"), "{out}");
-    let ambient = ok("declare variant V { __proto__(x: number), B }\n");
-    assert!(ambient.contains("readonly __proto__: (x: number) => V;"), "{ambient}");
 }
 
 /// Subjects of a let-else or `if let` that contain a tt value below their
@@ -516,69 +440,6 @@ fn an_optional_call_tests_the_link_its_chain_is_skipped_at() {
             "{call}: {diagnostics:#?}"
         );
     }
-}
-
-#[test]
-fn a_value_in_a_later_declarator_splits_the_declaration_before_its_prelude() {
-    let prelude = "import * as Result from \"@tt/std/result\";\n\
-                   import type { TResult } from \"@tt/std\";\n\
-                   variant O { A(n: number), B }\n\
-                   declare const o: O;\n\
-                   declare function t(s: string): number;\n\
-                   declare function r(n: number): TResult<number, string>;\n";
-    for (declaration, head, tail) in [
-        (
-            "const a = t(\"a\"), b = match (o) { A(n) => a + n, B => 0 };",
-            "const a = t(\"a\");",
-            "const b = $tt_v0;",
-        ),
-        (
-            "var a = t(\"a\"), b = match (o) { A(n) => a + n, B => 0 }, c = b;",
-            "var a = t(\"a\");",
-            "var b = $tt_v0, c = b;",
-        ),
-        (
-            "let a = t(\"a\"), b = 1 + try r(a);",
-            "let a = t(\"a\");",
-            "let b = 1 + $tt_v0;",
-        ),
-        (
-            "const a = t(\"a\"), b = result { const x = try r(a); return x; };",
-            "const a = t(\"a\");",
-            "const b = $tt_v0;",
-        ),
-    ] {
-        let out = ok(&format!(
-            "{prelude}export function f(): TResult<number, string> {{\n  {declaration}\n  return Result.Ok(0);\n}}\n"
-        ));
-        let text = compact(&out);
-        let head_at = text
-            .find(head)
-            .unwrap_or_else(|| panic!("{declaration}\n{out}"));
-        let slot_at = text
-            .find("let $tt_v0")
-            .unwrap_or_else(|| panic!("{declaration}\n{out}"));
-        let tail_at = text
-            .find(tail)
-            .unwrap_or_else(|| panic!("{declaration}\n{out}"));
-        assert!(
-            head_at < slot_at && slot_at < tail_at,
-            "{declaration}\n{out}"
-        );
-    }
-    let out = ok(&format!(
-        "{prelude}export const a = t(\"a\"), b = match (o) {{ A(n) => a + n, B => 0 }};\n"
-    ));
-    assert!(out.contains("export const a = t(\"a\");\n"), "{out}");
-    assert!(out.contains("export const b = $tt_v0;"), "{out}");
-    let out = ok(&format!(
-        "{prelude}export function g(c: boolean) {{\n  if (c) var a = t(\"a\"), b = match (o) {{ A(n) => a + n, B => 0 }};\n  return b;\n}}\n"
-    ));
-    assert!(
-        compact(&out).contains("if (c) { var a = t(\"a\"); let $tt_v0"),
-        "{out}"
-    );
-    assert!(compact(&out).contains("var b = $tt_v0; } return b;"), "{out}");
 }
 
 #[test]
@@ -674,24 +535,6 @@ fn a_statement_value_in_an_enum_member_initializer_is_a_placement_error() {
         compact(&out).contains("R = [0].map(() => { let $tt_v"),
         "{out}"
     );
-}
-
-#[test]
-fn a_conditional_operation_tests_its_condition_where_it_evaluates_it() {
-    let prelude = "variant O { A(n: number), B }\ndeclare const o: O;\ndeclare const cfg: { name?: string };\n";
-    let cases: &[(&str, &str)] = &[
-        ("cfg.name ? match (o) { A(n) => n, B => 0 } : 1", "if (cfg.name) {"),
-        ("cfg.name && match (o) { A(n) => n, B => 0 }", "if ($tt_v1 = cfg.name) {"),
-        ("!cfg.name || match (o) { A(n) => n, B => 0 }", "if ($tt_v1 = !cfg.name) {\n  $tt_v2 = $tt_v1;\n} else {"),
-        ("cfg.name ?? match (o) { A(n) => n, B => 0 }", "if (($tt_v1 = cfg.name) == null) {"),
-        ("(cfg.name, cfg) && match (o) { A(n) => n, B => 0 }", "if ($tt_v1 = (cfg.name, cfg)) {"),
-    ];
-    for (value, test) in cases {
-        let out = ok(&format!("{prelude}export const v = {value};\n"));
-        assert!(out.contains(test), "{value}: {out}");
-        assert!(!out.contains("const $tt_v1"), "{value}: {out}");
-        assert_eq!(out.matches("cfg.name").count(), 1, "{value}: {out}");
-    }
 }
 
 #[test]
@@ -813,88 +656,5 @@ fn a_for_head_initializer_that_reads_a_head_binding_is_a_placement_error() {
             "{prelude}export function f(): R {{ {head} return r(); }}\n"
         ));
         assert!(!out.contains("match ("), "{head}: {out}");
-    }
-}
-
-#[test]
-fn a_value_nested_in_a_for_head_initializer_runs_before_the_loop() {
-    // TASK-601: a value that is an operand of a `for` head's initializer
-    // (an argument, the right side of an assignment, a comma operand), not
-    // the initializer itself, composes before the loop like any other
-    // operand, instead of reaching emission without a plan.
-    let prelude = "variant O { A(n: number), B }\ndeclare const o: O;\ndeclare function g(n: number): number;\ntype R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\ndeclare function r(): R;\n";
-    let cases = [
-        (
-            "for (let x = g(match (o) { A(n) => n, B => 0 }); x < 1; x++) {}",
-            "for (let x = $tt_v0; x < 1; x++) {}",
-        ),
-        (
-            "let y = 0; for (y = match (o) { A(n) => n, B => 0 }; y < 1; y++) {}",
-            "for (y = $tt_v0; y < 1; y++) {}",
-        ),
-        (
-            "let y = 0, i = 0; for (y = try r(), i = 1; y < 1; y++) {}",
-            "for (y = $tt_v0, i = 1; y < 1; y++) {}",
-        ),
-        (
-            "for (let x = try r(), i = 0; i < 1; i++) {}",
-            "for (let x = $tt_v0, i = 0; i < 1; i++) {}",
-        ),
-    ];
-    for (body, head) in cases {
-        let out = ok(&format!(
-            "{prelude}export function f(): R {{ {body} return r(); }}\n"
-        ));
-        assert!(out.contains(head), "{body}: {out}");
-    }
-}
-
-#[test]
-fn a_returned_template_literal_that_ends_its_statement_keeps_the_return_suffix() {
-    let prelude = "variant O { A(n: number), B }\ndeclare const o: O;\ndeclare function tag(s: TemplateStringsArray, ...v: unknown[]): string;\ntype R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\ndeclare function r(): R;\n";
-    let cases = [
-        (
-            "export const a = result { const x = try r(); return `v`};",
-            "value: `v` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }\n}",
-        ),
-        (
-            "export const a = result { const x = try r(); return tag`v${x}`}",
-            "value: tag`v${x}` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }\n}",
-        ),
-        (
-            "export const a = result { const x = try r(); return x + `v`}",
-            "value: x + `v` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }\n}",
-        ),
-        (
-            "export const a = result { const x = try r(); if (x > 0) return `a`\n  return `b`};",
-            "value: `a` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }\n",
-        ),
-        (
-            "export const a = match (o) { A(n) => { return `${n}`}, B => 0 };",
-            "$tt_v0 = `${n}`; break;",
-        ),
-        (
-            "export const a = match (o) { A(n) => { if (n) return `a`\n  return `${n}`}, B => 0 };",
-            "if (n) { $tt_v0 = `a`; break; }\n    $tt_v0 = `${n}`;\n    break;\n",
-        ),
-    ];
-    for (source, written) in cases {
-        let out = ok(&format!("{prelude}{source}\n"));
-        assert!(out.contains(written), "{source}: {out}");
-    }
-}
-
-#[test]
-fn a_using_for_statement_and_an_if_function_clause_host_tt_values() {
-    let prelude = "import type { TResult } from \"@tt/std\";\nvariant O { A(n: number), B }\ndeclare const o: O;\ndeclare function res(): { n: number; [Symbol.dispose](): void };\ndeclare function rr(): TResult<{ n: number; [Symbol.dispose](): void }, string>;\n";
-    let out = ok(&format!(
-        "{prelude}export function f(): TResult<number, string> {{\n  let t = 0;\n  for (using q = res(), p = res(); t < 2; t++) {{\n    t += match (o) {{ A(n) => n + q.n + p.n, B => 0 }};\n  }}\n  for (using q = try rr(); t < 3; t++) {{\n    t += q.n;\n  }}\n  return {{ kind: \"Ok\", value: t }};\n}}\nif (Math.random()) function g() {{ return match (o) {{ A(n) => n, B => 0 }}; }}\n"
-    ));
-    for written in [
-        "for (using q = res(), p = res(); t < 2; t++) {\n    let $tt_v0",
-        "$tt_v2 = $tt_t0.value;\n  for (using q = $tt_v2; t < 3; t++) {",
-        "if (Math.random()) function g() { let $tt_v3",
-    ] {
-        assert!(out.contains(written), "{written}: {out}");
     }
 }

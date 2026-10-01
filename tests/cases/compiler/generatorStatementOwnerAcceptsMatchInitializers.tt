@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_01.rs::generator_statement_owner_accepts_match_initializers
+function* f(code: number): Generator<string> {
+const line = match (code) { 200 => "ok", _ => "err" };
+yield line;
+}

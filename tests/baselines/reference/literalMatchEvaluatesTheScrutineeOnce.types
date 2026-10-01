@@ -1,0 +1,4 @@
+=== literalMatchEvaluatesTheScrutineeOnce.tt ===
+const v = match (getValue()) { "a" => foo(), _ => bar() };
+>v : const v: any
+

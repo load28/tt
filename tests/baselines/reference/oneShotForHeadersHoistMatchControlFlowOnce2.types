@@ -1,0 +1,8 @@
+=== oneShotForHeadersHoistMatchControlFlowOnce2.tt ===
+for (let value = match (source) { is Number => 1, _ => 0 }; value < 2; value++) { use(value); }
+>value : let value: number
+>Number : var Number: NumberConstructor
+>value : let value: number
+>value : let value: number
+>value : let value: number
+

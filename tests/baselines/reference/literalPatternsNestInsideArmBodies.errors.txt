@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalPatternsNestInsideArmBodies.tt → $DIR/out/literalPatternsNestInsideArmBodies.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'a'.
+ --> literalPatternsNestInsideArmBodies.tt:2:18
+  |
+2 | const v = match (a) {
+  |                  ^
+error[ts2304]: Cannot find name 'b'.
+ --> literalPatternsNestInsideArmBodies.tt:3:17
+  |
+3 |   "x" => match (b) { 1 => "one", _ => "other" },
+  |                 ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalPatternsNestInsideArmBodies.ts(4,17): error TS2304: Cannot find name 'a'.
+literalPatternsNestInsideArmBodies.ts(8,23): error TS2304: Cannot find name 'b'.

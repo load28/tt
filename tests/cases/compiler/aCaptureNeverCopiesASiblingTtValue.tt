@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_09.rs::a_capture_never_copies_a_sibling_tt_value
+declare function g(x: unknown, y: unknown): void;
+declare const a: boolean;
+g(a && match (a) { true => 1, _ => 0 }, match (a) { true => 2, _ => 3 });

@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryTemporariesAreUniqueAndKeepDeclarationKeyword.tt → $DIR/out/tryTemporariesAreUniqueAndKeepDeclarationKeyword.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'X'.
+ --> tryTemporariesAreUniqueAndKeepDeclarationKeyword.tt:1:15
+  |
+1 | function f(): X {
+  |               ^
+error[ts2304]: Cannot find name 'g'.
+ --> tryTemporariesAreUniqueAndKeepDeclarationKeyword.tt:2:23
+  |
+2 |   let a: number = try g();
+  |                       ^
+error[ts2304]: Cannot find name 'h'.
+ --> tryTemporariesAreUniqueAndKeepDeclarationKeyword.tt:3:15
+  |
+3 |   var b = try h(a);
+  |               ^
+error[ts2304]: Cannot find name 'k'.
+ --> tryTemporariesAreUniqueAndKeepDeclarationKeyword.tt:4:10
+  |
+4 |   return k(b);
+  |          ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryTemporariesAreUniqueAndKeepDeclarationKeyword.ts(1,15): error TS2304: Cannot find name 'X'.
+tryTemporariesAreUniqueAndKeepDeclarationKeyword.ts(2,18): error TS2304: Cannot find name 'g'.
+tryTemporariesAreUniqueAndKeepDeclarationKeyword.ts(7,18): error TS2304: Cannot find name 'h'.
+tryTemporariesAreUniqueAndKeepDeclarationKeyword.ts(12,10): error TS2304: Cannot find name 'k'.

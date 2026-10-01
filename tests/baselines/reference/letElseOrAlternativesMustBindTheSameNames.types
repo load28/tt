@@ -1,0 +1,37 @@
+=== letElseOrAlternativesMustBindTheSameNames.tt ===
+variant E { A(x: number), B(y: number), C }
+>E : type E = {
+>       kind: "A";
+>       x: number;
+>   } | {
+>       kind: "B";
+>       y: number;
+>   } | {
+>       kind: "C";
+>   }
+>A : (property) A: (x: number) => E
+>x : (property) x: number
+>B : (property) B: (y: number) => E
+>y : (property) y: number
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+function f(e: E): number {
+>f : function f(e: E): number
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>       x: number;
+>   } | {
+>       kind: "B";
+>       y: number;
+>   } | {
+>       kind: "C";
+>   }
+  const A(x) | B(y) = e else { return 0; };
+>x : const x: number
+>y : const y: number
+>e : (parameter) e: E
+  return x;
+>x : const x: any
+

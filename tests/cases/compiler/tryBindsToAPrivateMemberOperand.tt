@@ -1,0 +1,16 @@
+// @origin: tests/compile/cases_11.rs::try_binds_to_a_private_member_operand
+variant R { Ok(value: number), Err(error: string) }
+class C {
+#v: R = R.Ok(1);
+#c: C = this;
+#case: R = R.Ok(1);
+#match(): R { return R.Ok(2); }
+f(): R {
+const a = try this.#v;
+try this.#v;
+const b = try this.#c?.#v;
+try this.#case;
+const d = try this.#match() * 2;
+return R.Ok(a + b + d);
+}
+}

@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aConditionalMatchUsesOneExitTarget.tt → $DIR/out/aConditionalMatchUsesOneExitTarget.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'item'.
+ --> aConditionalMatchUsesOneExitTarget.tt:1:22
+  |
+1 | const value = match (item) {
+  |                      ^^^^
+error[ts2304]: Cannot find name 'ready'.
+ --> aConditionalMatchUsesOneExitTarget.tt:2:8
+  |
+2 |   A if ready => { consume(); },
+  |        ^^^^^
+error[ts2304]: Cannot find name 'consume'.
+ --> aConditionalMatchUsesOneExitTarget.tt:2:19
+  |
+2 |   A if ready => { consume(); },
+  |                   ^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aConditionalMatchUsesOneExitTarget.ts(3,17): error TS2304: Cannot find name 'item'.
+aConditionalMatchUsesOneExitTarget.ts(6,11): error TS2304: Cannot find name 'ready'.
+aConditionalMatchUsesOneExitTarget.ts(7,11): error TS2304: Cannot find name 'consume'.

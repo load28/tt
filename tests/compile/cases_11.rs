@@ -3,68 +3,6 @@
 /* ------------------------------------------------------------------ */
 
 #[test]
-fn a_match_under_a_conditional_operation_in_a_guard_keeps_the_short_circuit() {
-    let out = ok("variant S { A(v: number), B(w: number), C }\ndeclare const s: S;\nconst x = match (s) { A(v) if v > 0 && match (s) { B(w) => w > 0, _ => false } => 1, _ => 0 };\n");
-    assert!(out.contains("let $tt_v2: boolean;\n      if ($tt_v2 = v > 0) {"), "{out}");
-    assert!(out.contains("$tt_v3 = $tt_v2;"), "{out}");
-    assert!(out.contains("$tt_v3 = $tt_v2 && $tt_v1;"), "{out}");
-    assert!(out.contains("if ($tt_v3) {"), "{out}");
-}
-
-#[test]
-fn a_match_in_a_guard_test_with_a_pipeline_is_lowered_before_the_test() {
-    let out = ok("variant S { A(v: number), B(w: number), C }\ndeclare const s: S;\nconst z = match (s) { A(v) if match (s) { B(w) => w > 0, _ => false } |> Boolean => 1, _ => 0 };\n");
-    assert!(out.contains("if ($tt_v"), "{out}");
-}
-
-#[test]
-fn a_match_inside_an_arm_body_call_keeps_argument_order() {
-    let out = ok("variant S { A(v: number), B(w: number), C }\ndeclare const s: S;\ndeclare function eff(): number;\ndeclare function g(a: number, b: number): number;\nconst x = match (s) { A(v) => g(eff(), match (s) { B(w) => w, _ => 0 }), _ => 0 };\n");
-    let effect = out.find("= (eff());").expect("eff is captured first");
-    let inner = out.find("case \"B\"").expect("the inner match follows");
-    assert!(effect < inner, "{out}");
-    assert!(out.contains("$tt_v0$x = $tt_v2$x($tt_v3$x, $tt_v1$x);"), "{out}");
-}
-
-#[test]
-fn a_match_under_a_conditional_operation_in_an_arm_body_is_a_region() {
-    let out = ok("variant S { A(v: number), B(w: number), C }\ndeclare const s: S;\ndeclare function eff(): number;\nconst y = match (s) { A(v) => eff() > 0 && match (s) { B(w) => w > 0, _ => false }, _ => false };\n");
-    assert!(out.contains("if ($tt_v2$y = eff() > 0) {"), "{out}");
-    assert!(out.contains("$tt_v3$y = $tt_v2$y;"), "{out}");
-    assert!(out.contains("$tt_v3$y = $tt_v2$y && $tt_v1$y;"), "{out}");
-    assert!(out.contains("$tt_v0$y = $tt_v3$y;"), "{out}");
-}
-
-#[test]
-fn parenthesized_sibling_tries_both_propagate() {
-    let out = ok("declare function a(): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\nfunction g() { const x = (try a()) + (try a()); return x; }\n");
-    assert!(out.contains("const x = ($tt_v0) + ($tt_v1);"), "{out}");
-}
-
-#[test]
-fn a_captured_operand_carries_an_earlier_sibling_value_by_its_slot() {
-    let out = ok("declare function a(): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\nfunction h() { return (try a()).toFixed(1).length + (try a()); }\n");
-    assert!(out.contains("($tt_v0).toFixed(1).length"), "{out}");
-    assert!(out.contains("+ ($tt_v1)") || out.contains("+ $tt_v1"), "{out}");
-}
-
-#[test]
-fn an_ambient_module_variant_declares_its_constructor_object() {
-    let out = ok("declare namespace N { variant P { Q, R(v: number) } }\ndeclare module \"m\" { export variant P3 { Q } }\n");
-    assert!(out.contains("const P: {\n  readonly Q: { readonly kind: \"Q\" };\n  readonly R: (v: number) => P;\n};"), "{out}");
-    assert!(out.contains("export const P3: {"), "{out}");
-    assert!(!out.contains("as const"), "{out}");
-}
-
-#[test]
-fn a_declared_variant_keeps_its_modifier_on_both_declarations() {
-    let out = ok("export declare variant P2 { Q }\ndeclare variant P4<T> { W(value: T) }\n");
-    assert!(out.contains("export declare type P2 ="), "{out}");
-    assert!(out.contains("export declare const P2: {"), "{out}");
-    assert!(out.contains("declare const P4: {\n  readonly W: <T>(value: T) => P4<T>;\n};"), "{out}");
-}
-
-#[test]
 fn val_on_a_rest_parameter_guards_its_elements() {
     let diagnostics = ttc::analyze(
         "function f(val ...args: { a: number }[]) { args[0].a = 2; }\n",
@@ -72,13 +10,6 @@ fn val_on_a_rest_parameter_guards_its_elements() {
     );
     let codes: Vec<_> = diagnostics.iter().map(|d| d.code).collect();
     assert_eq!(codes, [DiagnosticCode::ValMutation], "{diagnostics:#?}");
-}
-
-#[test]
-fn a_try_statement_as_an_unbraced_body_opens_its_own_block() {
-    let out = ok("declare function a(): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\nfunction g() { if (true) try a(); return 1; }\nfunction i() { while (true) try a(); }\n");
-    assert!(out.contains("if (true) {\n  const $tt_t0 = a();"), "{out}");
-    assert!(out.contains("while (true) {\n  const $tt_t1 = a();"), "{out}");
 }
 
 #[test]
@@ -93,18 +24,6 @@ fn a_recoverable_syntax_error_still_reports_plan_diagnostics() {
         [DiagnosticCode::MatchPlacement, DiagnosticCode::SourceNotTypeScript],
         "{diagnostics:#?}"
     );
-}
-
-#[test]
-fn untyped_try_methods_survive_next_to_tt_constructs() {
-    let out = ok("variant V { A }\ninterface X { try(x); }\n");
-    assert!(out.contains("interface X { try(x); }"), "{out}");
-}
-
-#[test]
-fn sibling_matches_in_a_guard_have_one_complete_evaluation_owner() {
-    let out = ok("const x = match (1) { 1 if (match (2) { 2 => true, _ => false }) && (match (3) { 3 => true, _ => false }) => 10, _ => 20 };\n");
-    assert!(!out.contains("match ("), "{out}");
 }
 
 #[test]
@@ -180,23 +99,6 @@ fn generated_names_are_allocated_around_the_files_identifiers() {
     assert!(out.contains("x => $tt_ap_1(x, String)"), "{out}");
     assert!(out.contains("const $tt_m_1 = xs[0];"), "{out}");
     assert!(out.contains("= $tt_m;"), "{out}");
-}
-
-#[test]
-fn a_try_in_a_concise_arrow_inside_a_result_block_targets_the_arrow() {
-    let out = ok("declare function get(n: number): { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n\
-         export const r = result {\n\
-           const f = (n: number) => ({ kind: \"Ok\" as const, value: try get(n) + 1 });\n\
-           const x = try get(1);\n\
-           return f(x);\n\
-         };\n");
-    let arrow = out
-        .split("const f = ")
-        .nth(1)
-        .and_then(|rest| rest.split("\n  };").next())
-        .unwrap_or_default();
-    assert!(arrow.contains("return $tt_t0;"), "{out}");
-    assert!(!arrow.contains("break"), "{out}");
 }
 
 #[test]
@@ -326,66 +228,6 @@ fn a_yield_crossing_a_result_block_reports_only_the_crossing() {
 }
 
 #[test]
-fn a_pipeline_as_the_unbraced_body_of_a_statement_header_starts_after_the_header() {
-    let out = ok("declare const c: boolean, x: number;\n\
-         declare function g(n: number): any;\n\
-         declare const xs: AsyncIterable<number>;\n\
-         if (c) x |> g;\n\
-         if (c) x |> g; else x |> g;\n\
-         while (c) x |> g;\n\
-         for (;;) x |> g;\n\
-         for (const a of [1]) a |> g;\n\
-         async function h() { for await (const v of xs) v |> g; }\n\
-         const y = (c) |> g;\n");
-    assert!(out.contains("if (c) $tt_ap(x, g);"), "{out}");
-    assert!(
-        out.contains("if (c) $tt_ap(x, g); else $tt_ap(x, g);"),
-        "{out}"
-    );
-    assert!(out.contains("while (c) $tt_ap(x, g);"), "{out}");
-    assert!(out.contains("for (;;) $tt_ap(x, g);"), "{out}");
-    assert!(out.contains("for (const a of [1]) $tt_ap(a, g);"), "{out}");
-    assert!(
-        out.contains("for await (const v of xs) $tt_ap(v, g);"),
-        "{out}"
-    );
-    assert!(out.contains("const y = $tt_ap((c), g);"), "{out}");
-}
-
-#[test]
-fn try_binds_to_a_private_member_operand() {
-    let out = ok("variant R { Ok(value: number), Err(error: string) }\n\
-         class C {\n\
-         #v: R = R.Ok(1);\n\
-         #c: C = this;\n\
-         #case: R = R.Ok(1);\n\
-         #match(): R { return R.Ok(2); }\n\
-         f(): R {\n\
-         const a = try this.#v;\n\
-         try this.#v;\n\
-         const b = try this.#c?.#v;\n\
-         try this.#case;\n\
-         const d = try this.#match() * 2;\n\
-         return R.Ok(a + b + d);\n\
-         }\n\
-         }\n");
-    assert!(out.contains("const $tt_t0 = this.#v;"), "{out}");
-    assert!(out.contains("const $tt_t1 = this.#v;"), "{out}");
-    assert!(out.contains("const $tt_t2 = this.#c?.#v;"), "{out}");
-    assert!(out.contains("const $tt_t3 = this.#case;"), "{out}");
-    assert!(out.contains("const $tt_t4 = this.#match();"), "{out}");
-    assert!(out.contains("const d = $tt_v0 * 2;"), "{out}");
-}
-
-#[test]
-fn a_labeled_loop_keeps_its_label_on_the_loop_when_its_header_hoists_a_value() {
-    let out = compact(&ok("variant S { A(n: number), B }\ndeclare const s: S;\ndeclare const c: boolean;\nfunction f(xs: number[][]) {\n  lbl: for (const q of match (s) { A(n) => xs[n], B => [] }) { if (c) continue lbl; }\n  if (c) outer: inner: for (const q of match (s) { A(n) => xs[n], B => [] }) { continue outer; }\n}\n"));
-    assert!(out.contains("} lbl: for (const q of $tt_v0) { if (c) continue lbl; }"), "{out}");
-    assert!(out.contains("if (c) { let $tt_v1: number[];"), "{out}");
-    assert!(out.contains("} outer: inner: for (const q of $tt_v1) { continue outer; } }"), "{out}");
-}
-
-#[test]
 fn an_if_let_as_an_unbraced_body_is_projected_as_one_statement() {
     for source in [
         "variant O { Some(value: number), None }\nfunction f(xs: O[]): number {\n  let t = 0;\n  for (const x of xs) if let Some(value) = x { t += value; } else { break; }\n  return t;\n}\n",
@@ -460,52 +302,10 @@ fn a_construct_its_position_does_not_admit_is_reported_at_the_construct() {
 }
 
 #[test]
-fn a_type_assertion_after_a_pipeline_step_applies_to_the_whole_pipeline() {
-    let out = compact(&ok("declare const f: (n: number) => string;\nconst d = 1 |> String as string;\nconst e = 1 |> String satisfies string;\nconst g = 1 |> ((x: number) => x) as number;\nconst h = 1 |> f as string | undefined;\nconst k = flow |> f as (n: number) => string;\nconst m = [1 |> f as string |> .length satisfies number |> String, 2];\n"));
-    assert!(out.contains("const d = String(1) as string;"), "{out}");
-    assert!(out.contains("const e = String(1) satisfies string;"), "{out}");
-    assert!(out.contains("const g = ((x: number) => x)(1) as number;"), "{out}");
-    assert!(out.contains("const h = f(1) as string | undefined;"), "{out}");
-    assert!(out.contains("const k = f as (n: number) => string;"), "{out}");
-    assert!(
-        out.contains("const m = [$tt_ap((f(1) as string).length satisfies number, String), 2];"),
-        "{out}"
-    );
-}
-
-#[test]
-fn a_pipeline_step_that_is_not_a_primary_expression_is_called_as_a_group() {
-    let out = compact(&ok("declare const f: ((n: number) => string) | undefined;\ndeclare const g: (n: number) => string;\ndeclare const as: (n: number) => string;\nconst a = 1 |> f ?? g;\nconst b = 1 |> await Promise.resolve(g);\nconst c = 1 |> as;\nexport {};\n"));
-    assert!(out.contains("const a = (f ?? g)(1);"), "{out}");
-    assert!(out.contains("const b = (await Promise.resolve(g))(1);"), "{out}");
-    assert!(out.contains("const c = as(1);"), "{out}");
-}
-
-#[test]
 fn a_type_assertion_on_the_line_after_a_pipeline_is_rejected_as_typescript_rejects_it() {
     let report = ttc::compile_report("const d = 1 |> String\n  as string;\n", &Options::default());
     let codes: Vec<_> = report.diagnostics.iter().map(|d| d.code).collect();
     assert_eq!(codes, [DiagnosticCode::SourceNotTypeScript], "{:#?}", report.diagnostics);
-}
-
-#[test]
-fn a_wrapped_concise_arrow_value_lowers_to_a_block_body_not_an_iife() {
-    let out = compact(&ok("variant V { A(n: number), B }\nconst g = async (p: Promise<V>) => match (await p) { A(n) => n, B => 0 } as number;\nconst h = (v: V) => match (v) { A(n) => n, B => 0 } satisfies number;\nconst i = (v: V) => (match (v) { A(n) => n, B => 0 }) as number;\nconst j = (v: V) => (match (v) { A(n) => n, B => 0 });\n"));
-    assert!(!out.contains("})()"), "{out}");
-    assert!(out.contains("const g = async (p: Promise<V>) => { let $tt_v0: number; { const $tt_m = await p;"), "{out}");
-    assert!(out.contains("return $tt_v0 as number; };"), "{out}");
-    assert!(out.contains("return $tt_v1 satisfies number; };"), "{out}");
-    assert!(out.contains("return ($tt_v2) as number; };"), "{out}");
-    assert!(out.contains("return ($tt_v3); };"), "{out}");
-}
-
-#[test]
-fn a_wrapped_value_in_a_parenthesized_step_arrow_stays_inside_that_arrow() {
-    let out = compact(&ok("type R<T> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: string };\nvariant V { A(n: number), B }\ndeclare function next(): R<number>;\ndeclare const value: number;\nconst f = value |> (x => (try next()));\nconst h = value |> ((v: number) => (match (V.A(v)) { A(n) => n, B => 0 }) as number);\n"));
-    assert!(out.contains("const f = $tt_ap(value, ((x => { let $tt_v0:"), "{out}");
-    assert!(out.contains("return ($tt_v0); })));"), "{out}");
-    assert!(out.contains("const h = $tt_ap(value, (((v: number) => { let $tt_v1: number;"), "{out}");
-    assert!(out.contains("return ($tt_v1) as number; })));"), "{out}");
 }
 
 #[test]
@@ -684,13 +484,6 @@ fn explained_examples_behave_as_their_explanations_say() {
 /* ------------------------------------------------------------------ */
 
 #[test]
-fn a_guarded_all_wildcard_tuple_arm_is_tested_by_its_guard_alone() {
-    let out = ok("variant T { A, B }\nfunction f(a: T, b: T, cond: boolean): number {\n  return match (a, b) {\n    (A, _) => 1,\n    (_, _) if cond => 2,\n    _ => 3,\n  };\n}\n");
-    assert!(!out.contains("if ()"), "{out}");
-    assert!(out.contains("      if (cond) {\n        $tt_v0 = 2;\n        break;\n      }\n      $tt_v0 = 3;"), "{out}");
-}
-
-#[test]
 fn an_if_let_in_any_expression_position_reports_only_its_placement() {
     let prelude = "variant O { Some(value: number), None }\n\
                    declare const o: O;\n\
@@ -735,34 +528,6 @@ fn an_if_let_in_any_expression_position_reports_only_its_placement() {
             &source[at..]
         );
     }
-}
-
-#[test]
-fn an_if_let_that_starts_a_statement_stays_a_statement() {
-    let prelude = "variant O { Some(value: number), None }\n\
-                   declare const o: O;\n\
-                   declare function g(x: unknown): number;\n";
-    for body in [
-        "const x = 1\nif let Some(value) = o { g(value); }",
-        "const h = () => 1\nif let Some(value) = o { g(value); }",
-        "if (o) if let Some(value) = o { g(value); }",
-        "outer: if let Some(value) = o { g(value); }",
-        "const x = `${(() => { if let Some(value) = o { return value; } return 0; })()}`;",
-        "const x = match (o) { Some(value) => { if let Some(value: v) = o { g(v); } return 1; }, None => 0 };",
-    ] {
-        let source = format!("{prelude}{body}\n");
-        assert_eq!(codes(&source), vec![], "{body}");
-        let out = ok(&source);
-        assert!(out.contains(".kind === \"Some\""), "{out}");
-    }
-}
-
-#[test]
-fn a_try_operand_never_starts_with_a_statement_keyword() {
-    assert_eq!(
-        codes("declare function f(): any;\nfunction g() { const x = try if (f()) {}; }\n"),
-        codes("declare function f(): any;\nfunction g() { const x = if (f()) {}; }\n"),
-    );
 }
 
 #[test]
@@ -848,30 +613,6 @@ fn a_jump_crossing_a_result_block_reports_only_the_crossing() {
     }
 }
 
-#[test]
-fn a_jump_crossing_a_result_block_leaves_the_rest_of_the_file_planned() {
-    let source = "import type { TResult } from \"@tt/std\";\n\
-                  declare const x: TResult<number, string>;\n\
-                  function f() { for (;;) { const r = result { const v = try x; if (v) break; return v; }; } }\n\
-                  class C { y = try x; }\n";
-    assert_eq!(
-        codes(source),
-        vec![
-            DiagnosticCode::ResultBreakCrossing,
-            DiagnosticCode::TryPlacement
-        ]
-    );
-}
-
-#[test]
-fn jumps_owned_inside_a_result_block_still_compile() {
-    let out = ok("import type { TResult } from \"@tt/std\";\n\
-                  declare const x: TResult<number, string>;\n\
-                  function f() { for (;;) { const r = result { const v = try x; inner: for (;;) { if (v) break inner; continue inner; } for (;;) { break; } return v; }; } }\n");
-    assert!(out.contains("break inner;"), "{out}");
-    assert!(out.contains("continue inner;"), "{out}");
-}
-
 /* ------------------------------------------------------------------ */
 /* TASK-482 automatic semicolon boundaries after postfix and restricted */
 /* ------------------------------------------------------------------ */
@@ -903,69 +644,9 @@ fn an_if_let_after_an_automatic_semicolon_boundary_starts_a_statement() {
     assert!(out.contains(".kind === \"Some\""), "{out}");
 }
 
-#[test]
-fn a_pipeline_head_starts_after_a_postfix_or_restricted_boundary() {
-    let prelude = "declare const o: number;\n";
-    for (body, head) in [
-        ("let q = 1\nq++\no |> String;", "q++\n$tt_ap(o, String)"),
-        ("let p: number | undefined\np!\no |> String;", "p!\n$tt_ap(o, String)"),
-        ("const k = [1] as const\no |> String;", "as const\n$tt_ap(o, String)"),
-        ("function f() {\n  return\n  o |> String;\n}", "return\n  $tt_ap(o, String)"),
-    ] {
-        let out = ok(&format!("{prelude}{body}\n"));
-        assert!(out.contains(head), "{body}\n{out}");
-    }
-}
-
-#[test]
-fn a_line_break_inside_an_expression_still_continues_it() {
-    let prelude = "variant O { Some(value: number), None }\n\
-                   declare let q: number;\n\
-                   declare const o: O;\n\
-                   declare const p: ((x: number) => number) | undefined;\n";
-    for body in [
-        "const x = q++\n  + if let Some(value) = o { value };",
-        "const x = p!\n  (if let Some(value) = o { value });",
-    ] {
-        let source = format!("{prelude}{body}\n");
-        assert_eq!(codes(&source), [DiagnosticCode::IfLetPlacement], "{body}");
-    }
-}
-
 /* ------------------------------------------------------------------ */
 /* TASK-486 runtime import after the parsed directive prologue          */
 /* ------------------------------------------------------------------ */
-
-#[test]
-fn the_runtime_import_follows_a_directive_and_its_trailing_comment() {
-    let tail = "declare const o: { p: number };\nexport const a = o.p |> String;\n";
-    for (head, expected) in [
-        (
-            "\"use client\" // client component\n",
-            "\"use client\" // client component\nimport { $tt_ap } from ",
-        ),
-        (
-            "\"use client\" /* c */;\n",
-            "\"use client\" /* c */;\nimport { $tt_ap } from ",
-        ),
-        (
-            "\"use client\" /* a\n b */\n",
-            "\"use client\" /* a\n b */\nimport { $tt_ap } from ",
-        ),
-        (
-            "\"use strict\"; 'use client' // x\n'b'\n",
-            "\"use strict\"; 'use client' // x\n'b'\nimport { $tt_ap } from ",
-        ),
-        ("\"use client\";", "\"use client\";\nimport { $tt_ap } from "),
-        (
-            "\"use client\"\nvariant V { A, B }\n",
-            "\"use client\"\nimport { $tt_ap } from ",
-        ),
-    ] {
-        let out = ok(&format!("{head}{tail}"));
-        assert!(out.starts_with(expected), "{head:?}\n{out}");
-    }
-}
 
 #[test]
 fn a_string_that_continues_into_an_expression_is_not_a_directive() {
@@ -988,47 +669,6 @@ fn a_string_that_continues_into_an_expression_is_not_a_directive() {
 /* ------------------------------------------------------------------ */
 /* TASK-489 host globals past a shadowed `globalThis`                   */
 /* ------------------------------------------------------------------ */
-
-#[test]
-fn a_host_global_alias_is_captured_only_when_global_this_is_shadowed() {
-    let variant = "variant O { Some(value: number), None }\n";
-    let arms = "match (o) { Some(value) => value, None => 0 }";
-    let out = ok(&format!(
-        "\"use client\"\n{variant}export function f(o: O, globalThis: unknown) {{ const Error = 5; return {arms}; }}\n"
-    ));
-    assert!(
-        out.contains("\"use client\"\nconst $tt_Error = globalThis.Error;\n"),
-        "{out}"
-    );
-    assert!(out.contains("throw new $tt_Error("), "{out}");
-    assert!(
-        !out.contains("$tt_JSON") && !out.contains("$tt_String"),
-        "{out}"
-    );
-
-    let out = ok(&format!(
-        "{variant}const globalThis = 1;\nexport function f(o: O) {{ const Error = 5; return {arms}; }}\n"
-    ));
-    assert!(out.contains("const $tt_Error = Error;\n"), "{out}");
-    assert!(out.contains("throw new $tt_Error("), "{out}");
-
-    let out = ok(&format!(
-        "{variant}export function f(o: O, globalThis: unknown) {{ return {arms}; }}\n"
-    ));
-    assert!(out.contains("throw new Error("), "{out}");
-    assert!(!out.contains("$tt_Error"), "{out}");
-
-    let out = ok(&format!(
-        "{variant}export function f(o: O) {{ const Error = 5; return {arms}; }}\n"
-    ));
-    assert!(out.contains("throw new globalThis.Error("), "{out}");
-    assert!(!out.contains("$tt_Error"), "{out}");
-
-    let out = ok(&format!(
-        "{variant}export function f(o: O, globalThis: unknown) {{ const Error = 5; return o.kind; }}\n"
-    ));
-    assert!(!out.contains("$tt_Error"), "{out}");
-}
 
 #[test]
 fn a_tuple_hole_under_a_written_constructor_is_reported_and_fixed_in_one_step() {
@@ -1167,75 +807,6 @@ fn missing_arms_fixed(source: &str) -> (String, String) {
         &source[edit.end..]
     );
     (missing.message.clone(), fixed)
-}
-
-#[test]
-fn a_script_declaration_names_its_global_storage_after_its_binding() {
-    let out = ok("declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
-                  const total = match (o) { A => 1, B => 2 };\n\
-                  let { kind } = match (o) { A => o, B => o };\n\
-                  class Base extends (match (o) { A => Object, B => Object }) {}\n\
-                  function f(x: typeof o) { return match (x) { A => 1, B => 2 }; }\n");
-    assert!(out.contains("let $tt_v0$total: number;"), "{out}");
-    assert!(out.contains("const total = $tt_v0$total;"), "{out}");
-    assert!(out.contains("let { kind } = $tt_v1$kind;"), "{out}");
-    assert!(
-        out.contains("class Base extends (($tt_v2$Base === 0 ? Object : Object)) {}"),
-        "{out}"
-    );
-    assert!(out.contains("let $tt_v3: number;"), "{out}");
-    assert!(out.contains("return $tt_v3;"), "{out}");
-    assert!(!out.contains("(() =>"), "{out}");
-}
-
-#[test]
-fn a_script_value_keeps_a_var_it_declares_in_the_global_scope() {
-    let out = ok("declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
-                  const total = match (o) { A => { var seen = 1; return seen; }, B => 2 };\n");
-    assert!(!out.contains("(() =>"), "{out}");
-    assert!(out.contains("var seen = 1;"), "{out}");
-}
-
-#[test]
-fn a_script_statement_that_declares_no_lexical_global_is_enclosed_with_its_storage() {
-    let out = ok("declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
-                  var v = match (o) { A => 1, B => 2 };\n\
-                  console.log(match (o) { A => 1, B => 2 });\n\
-                  for (const x of match (o) { A => [1], B => [2] }) {}\n\
-                  const {} = match (o) { A => o, B => o };\n");
-    assert!(out.contains("{\n  let $tt_v0: number;\n"), "{out}");
-    assert!(out.contains("  var v = $tt_v0;\n}\n"), "{out}");
-    assert!(
-        out.contains("  console.log(($tt_v1 === 0 ? 1 : 2));\n}\n"),
-        "{out}"
-    );
-    assert!(
-        out.contains("  for (const x of ($tt_v3 === 0 ? [1] : [2])) {}\n}\n"),
-        "{out}"
-    );
-    assert!(out.contains("  const {} = $tt_v4;\n}"), "{out}");
-}
-
-#[test]
-fn a_script_let_else_keeps_its_bindings_global() {
-    let out = ok("declare const o: { kind: \"Some\"; value: number } | { kind: \"None\" };\n\
-                  const Some(value) = o else { throw new Error(); };\n\
-                  var Some(value: other) = o else { throw new Error(); };\n\
-                  let None() = o else { throw new Error(); };\n");
-    assert!(out.contains("const $tt_t0$value = o;"), "{out}");
-    assert!(out.contains("\nconst { value } = $tt_t0$value;\n"), "{out}");
-    assert!(out.contains("{\n  const $tt_t1 = o;\n"), "{out}");
-    assert!(out.contains("  var { value: other } = $tt_t1;\n}\n"), "{out}");
-    assert!(out.contains("{\n  const $tt_t2 = o;\n"), "{out}");
-}
-
-#[test]
-fn a_global_storage_name_avoids_the_files_own_identifiers() {
-    let out = ok("declare const $tt_v0$total: number;\n\
-                  declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
-                  const total = match (o) { A => $tt_v0$total, B => 2 };\n");
-    assert!(out.contains("let $tt_v0_1$total: number;"), "{out}");
-    assert!(out.contains("const total = $tt_v0_1$total;"), "{out}");
 }
 
 #[test]

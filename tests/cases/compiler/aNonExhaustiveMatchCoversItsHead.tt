@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_09.rs::a_non_exhaustive_match_covers_its_head
+variant S { A(x: number), B }
+const v = match (s) { A(x) => x };

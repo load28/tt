@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_01.rs::variant_invalid_field_type_is_rejected_by_swc_with_position
+variant X {
+  A(f: number number),
+}

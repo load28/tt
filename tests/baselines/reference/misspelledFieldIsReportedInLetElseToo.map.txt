@@ -1,0 +1,9 @@
+//// [misspelledFieldIsReportedInLetElseToo.tt] 7 mapping(s)
+1:32 -> 2:31 len 6  "number"
+1:32 -> 5:20 len 6  "number"
+1:48 -> 7:3 len 26  "\nfunction f(): number {\n  "
+3:16 -> 13:11 len 6  "radiuz"
+3:26 -> 9:18 len 1  "s"
+3:35 -> 11:5 len 9  "return 0;"
+3:47 -> 13:29 len 20  "\n  return radiuz;\n}\n"
+

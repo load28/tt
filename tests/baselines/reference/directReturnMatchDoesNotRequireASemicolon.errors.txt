@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./directReturnMatchDoesNotRequireASemicolon.tt → $DIR/out/directReturnMatchDoesNotRequireASemicolon.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'T'.
+ --> directReturnMatchDoesNotRequireASemicolon.tt:1:15
+  |
+1 | function f(x: T) {
+  |               ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+directReturnMatchDoesNotRequireASemicolon.ts(1,15): error TS2304: Cannot find name 'T'.

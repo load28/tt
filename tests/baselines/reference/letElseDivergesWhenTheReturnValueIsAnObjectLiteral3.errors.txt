@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseDivergesWhenTheReturnValueIsAnObjectLiteral3.tt → $DIR/out/letElseDivergesWhenTheReturnValueIsAnObjectLiteral3.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseDivergesWhenTheReturnValueIsAnObjectLiteral3.tt:2:19
+  |
+2 |   const Some(v) = find() else { return match (o) { A => 1, _ => 0 }; };
+  |                   ^^^^
+error[ts2304]: Cannot find name 'o'.
+ --> letElseDivergesWhenTheReturnValueIsAnObjectLiteral3.tt:2:47
+  |
+2 |   const Some(v) = find() else { return match (o) { A => 1, _ => 0 }; };
+  |                                               ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseDivergesWhenTheReturnValueIsAnObjectLiteral3.ts(2,18): error TS2304: Cannot find name 'find'.
+letElseDivergesWhenTheReturnValueIsAnObjectLiteral3.ts(6,21): error TS2304: Cannot find name 'o'.

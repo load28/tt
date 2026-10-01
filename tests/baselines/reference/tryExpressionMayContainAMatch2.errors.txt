@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryExpressionMayContainAMatch2.tt → $DIR/out/tryExpressionMayContainAMatch2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'X'.
+ --> tryExpressionMayContainAMatch2.tt:1:15
+  |
+1 | function f(): X {
+  |               ^
+error[ts2304]: Cannot find name 'wrap'.
+ --> tryExpressionMayContainAMatch2.tt:2:17
+  |
+2 |   const x = try wrap(match (m) { Ok(value) => value, Err(_) => 0 });
+  |                 ^^^^
+error[ts2304]: Cannot find name 'm'.
+ --> tryExpressionMayContainAMatch2.tt:2:29
+  |
+2 |   const x = try wrap(match (m) { Ok(value) => value, Err(_) => 0 });
+  |                             ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryExpressionMayContainAMatch2.ts(19,15): error TS2304: Cannot find name 'X'.
+tryExpressionMayContainAMatch2.ts(21,19): error TS2304: Cannot find name 'wrap'.
+tryExpressionMayContainAMatch2.ts(23,19): error TS2304: Cannot find name 'm'.

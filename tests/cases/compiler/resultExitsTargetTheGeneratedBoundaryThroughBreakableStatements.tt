@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_07.rs::result_exits_target_the_generated_boundary_through_breakable_statements
+
+const fromFor = result { for (const item of items) { return try read(item); } return 0; };
+const fromWhile = result { while (ready()) { return try read(); } return 0; };
+const fromDo = result { do { return try read(); } while (ready()); return 0; };
+const fromSwitch = result { switch (tag) { default: return try read(); } return 0; };

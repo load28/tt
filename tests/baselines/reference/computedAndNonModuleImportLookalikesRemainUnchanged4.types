@@ -1,0 +1,4 @@
+=== computedAndNonModuleImportLookalikesRemainUnchanged4.tt ===
+const load = object.import('./feature.tt');
+>load : const load: any
+

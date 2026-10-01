@@ -1,0 +1,3 @@
+//// [plainTypescriptBindingsStayMutable1.tt] 1 mapping(s)
+1:1 -> 1:1 len 70  "const x = { a: 1 };\nx.a = 2;\nlet y = { a: 1 };\ny"...
+

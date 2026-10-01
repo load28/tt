@@ -1,0 +1,3 @@
+//// [valLetForbidsMutationButAllowsRebinding2.tt] 1 mapping(s)
+1:5 -> 1:1 len 72  "let state = { count: 0 };\nstate = { ...state, co"...
+

@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_01.rs::result_region_composes_embedded_try_and_pipeline_try
+variant R { Ok(value: number), Err(error: string) }
+declare const g: () => R;
+const f = (): R => result { return Math.round(try g() * 1.1); };

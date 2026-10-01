@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_06.rs::tuple_match_over_builtin_variants
+const r = match (o, r2) {
+  (Some(value), Ok(value: v)) => value + v,
+  (None, _) => 0,
+};

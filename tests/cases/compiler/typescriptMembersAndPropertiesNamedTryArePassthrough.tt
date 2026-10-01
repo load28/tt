@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_03.rs::typescript_members_and_properties_named_try_are_passthrough
+const object = { try: 1 };
+object.try();

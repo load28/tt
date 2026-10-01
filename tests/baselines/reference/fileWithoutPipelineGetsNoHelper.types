@@ -1,0 +1,4 @@
+=== fileWithoutPipelineGetsNoHelper.tt ===
+const a = f(x);
+>a : const a: any
+

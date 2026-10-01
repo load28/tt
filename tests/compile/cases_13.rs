@@ -61,14 +61,6 @@ fn a_jsx_element_after_a_finished_statement_keeps_its_text() {
     }
 }
 
-#[test]
-fn a_match_after_a_regex_statement_after_an_if_compiles() {
-    let output = ok("declare const x: Option<number>;\n\
-         export function f(s: string) {\n  if (!s) return;\n  /`/.test(s) && s;\n  return match (x) { Some(v) => v, None => 0 };\n}\n");
-    assert!(output.contains("  /`/.test(s) && s;\n"), "{output}");
-    assert!(output.contains("switch ($tt_m.kind)"), "{output}");
-}
-
 const TASK_495_PRELUDE: &str = "declare function f<A, B>(v: any): any;\n\
                                 declare function g<A, B>(v: any): Option<number>;\n\
                                 type A = 1;\ntype B = 2;\ndeclare const x: number;\n";
@@ -111,14 +103,6 @@ fn a_comma_inside_type_arguments_stays_inside_its_construct() {
         let output = ok(&format!("{TASK_495_PRELUDE}{source}"));
         assert!(output.contains(expected), "{source}\n{output}");
     }
-}
-
-#[test]
-fn a_comparison_comma_still_separates_scrutinees() {
-    let output = ok("declare const a: number, b: number, c: number;\n\
-         export const r = match (a < b, c > a) { (_, _) => 1 };\n");
-    assert!(output.contains("const $tt_m0 = a < b;"), "{output}");
-    assert!(output.contains("const $tt_m1 = c > a;"), "{output}");
 }
 
 /* ------------------------------------------------------------------ */
@@ -169,64 +153,4 @@ fn a_lowered_statement_after_a_semicolon_free_line_starts_its_own_statement() {
             assert!(after.starts_with(';'), "{line} / {step}:\n{out}");
         }
     }
-}
-
-#[test]
-fn a_lowered_statement_that_starts_with_a_name_needs_no_separator() {
-    let source = format!("{TASK_496_PRELUDE}export function h() {{\n  const a = 1\n  v |> String\n}}\n");
-    let out = ok(&source);
-    assert!(out.contains("const a = 1\n  $tt_ap(v, String)"), "{out}");
-}
-
-#[test]
-fn an_explicit_semicolon_or_a_block_needs_no_separator() {
-    for line in ["const a = 1;", "if (c) { f() }", "{}"] {
-        let source = format!("{TASK_496_PRELUDE}export function h() {{\n  {line}\n  v |> o.m\n}}\n");
-        let out = ok(&source);
-        assert!(out.contains(&format!("{line}\n  ((")), "{line}:\n{out}");
-    }
-}
-
-#[test]
-fn a_separator_follows_a_restricted_production() {
-    for keyword in ["return", "yield"] {
-        let source = format!(
-            "{TASK_496_PRELUDE}export function* h() {{\n  {keyword}\n  v |> o.m\n}}\n"
-        );
-        let out = ok(&source);
-        assert!(out.contains(&format!("{keyword}\n  ;((")), "{keyword}:\n{out}");
-    }
-}
-
-#[test]
-fn a_separator_is_written_at_every_nesting_depth() {
-    let source = format!(
-        "{TASK_496_PRELUDE}export class A {{\n  m(x: number) {{ return x }}\n  run() {{\n    const w = 1\n    w |> this.m\n  }}\n}}\n\
-         export const g = () => {{\n  const w = 2\n  w |> o.m\n}}\n\
-         export const t = `${{(() => {{ const w = 3\n  w |> o.m\n  return w }})()}}`\n"
-    );
-    let out = ok(&source);
-    assert_eq!(out.matches("\n    ;((").count(), 1, "{out}");
-    assert_eq!(out.matches("\n  ;((").count(), 2, "{out}");
-}
-
-#[test]
-fn only_a_value_typed_by_its_context_is_carried_past_its_storage() {
-    // TASK-570: storage whose source position has no contextual type would
-    // type an object literal by its own `any`; a number or a call types
-    // itself, and is written directly.
-    let out = ok("declare const n: number;\n\
-         declare function g(): number;\n\
-         export const a = match (n) { 1 => 1, _ => g() };\n\
-         export const b = match (n) { 1 => ({ m() { return this; } }), _ => null };\n");
-    assert!(out.contains("\n      $tt_v0 = 1;\n"), "{out}");
-    assert!(out.contains("\n      $tt_v0 = g();\n"), "{out}");
-    assert!(
-        out.contains(
-            "\n      const $tt_a0 = { value: ({ m() { return this; } }) };\n      $tt_v1 = $tt_a0.value;\n"
-        ),
-        "{out}"
-    );
-    assert!(out.contains("\n      $tt_v1 = null;\n"), "{out}");
-    assert_eq!(out.matches("{ value: ").count(), 1, "{out}");
 }

@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::an_unparseable_match_help_does_not_claim_an_arity_problem
+const r = match (x) { A B => 1 };

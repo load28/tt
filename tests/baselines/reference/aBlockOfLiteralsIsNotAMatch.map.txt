@@ -1,0 +1,3 @@
+//// [aBlockOfLiteralsIsNotAMatch.tt] 1 mapping(s)
+1:1 -> 1:1 len 16  "match (x)\n{ 1 }\n"
+

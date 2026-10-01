@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_07.rs::result_allows_let_else_when_each_else_path_completes_the_result
+variant Item { Some(value: number), None }
+const value = result { const item = try read(); let Some(found) = item else { return 0; }; return found; };

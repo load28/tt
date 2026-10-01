@@ -1,0 +1,5 @@
+//// [tryPlacementReportsTheOwningReason4.tt] 3 mapping(s)
+1:1 -> 1:1 len 26  "class C { constructor() { "
+1:31 -> 1:42 len 6  "read()"
+1:38 -> 4:2 len 5  " } }\n"
+

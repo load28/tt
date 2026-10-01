@@ -1,0 +1,9 @@
+// @origin: tests/compile/cases_08.rs::repeated_guarded_case_does_not_weight_subject_identification
+variant Left { Alpha }
+variant Right { Alphx }
+const v = match (u) {
+  Alpha if first => 1,
+  Alpha => 2,
+  Alphx => 3,
+  _ => 4,
+};

@@ -1,0 +1,10 @@
+=== letElseBindingAliasAndKeyword.tt ===
+function f(): string {
+>f : function f(): string
+  let Some(value: user) = find() else { throw new Error("none"); };
+>value : any
+>user : let user: any
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+  return user;
+>user : let user: any
+

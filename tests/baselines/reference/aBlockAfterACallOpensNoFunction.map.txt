@@ -1,0 +1,7 @@
+//// [aBlockAfterACallOpensNoFunction.tt] 5 mapping(s)
+1:1 -> 1:1 len 84  "declare function f(): Option<number>;\ndeclare fu"...
+3:13 -> 6:13 len 1  "v"
+3:18 -> 4:18 len 3  "f()"
+3:28 -> 7:20 len 3  "g()"
+3:34 -> 12:2 len 1  "\n"
+

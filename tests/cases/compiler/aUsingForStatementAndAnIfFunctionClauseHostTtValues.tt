@@ -1,0 +1,17 @@
+// @origin: tests/compile/cases_14.rs::a_using_for_statement_and_an_if_function_clause_host_tt_values
+import type { TResult } from "@tt/std";
+variant O { A(n: number), B }
+declare const o: O;
+declare function res(): { n: number; [Symbol.dispose](): void };
+declare function rr(): TResult<{ n: number; [Symbol.dispose](): void }, string>;
+export function f(): TResult<number, string> {
+  let t = 0;
+  for (using q = res(), p = res(); t < 2; t++) {
+    t += match (o) { A(n) => n + q.n + p.n, B => 0 };
+  }
+  for (using q = try rr(); t < 3; t++) {
+    t += q.n;
+  }
+  return { kind: "Ok", value: t };
+}
+if (Math.random()) function g() { return match (o) { A(n) => n, B => 0 }; }

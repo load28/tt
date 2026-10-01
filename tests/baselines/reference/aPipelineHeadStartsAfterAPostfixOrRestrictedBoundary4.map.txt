@@ -1,0 +1,6 @@
+//// [aPipelineHeadStartsAfterAPostfixOrRestrictedBoundary4.tt] 4 mapping(s)
+1:1 -> 4:1 len 51  "declare const o: number;\nfunction f() {\n  return"...
+4:3 -> 7:10 len 1  "o"
+4:8 -> 7:13 len 6  "String"
+4:14 -> 7:20 len 4  ";\n}\n"
+

@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::a_static_block_does_not_capture_a_nested_function_try
+class C { static { const run = () => { try read(); }; } }

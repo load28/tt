@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_04.rs::let_else_non_diverging_else_is_error
+function f(): number {
+  const Some(v) = find() else { log(); };
+  return v;
+}

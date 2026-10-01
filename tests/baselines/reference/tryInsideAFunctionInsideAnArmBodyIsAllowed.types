@@ -1,0 +1,11 @@
+=== tryInsideAFunctionInsideAnArmBodyIsAllowed.tt ===
+const x = match (r) {
+>x : const x: any
+  Ok(value) => { const f = () => { try g(value); return 1; }; return f(); },
+>value : const value: any
+>f : const f: () => any
+>value : const value: any
+>f : const f: () => any
+  Err(error) => 0,
+>error : const error: any
+

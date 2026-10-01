@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[variant-duplicate-case]: variant X: duplicate case "A"
+ --> ./variantDuplicateCaseIsErrorWithPosition.tt:2:27
+  |
+2 | variant X { A(v: number), A }
+  |                           ^
+
+
+==== ttc --check-types (exit 1) ====
+error[variant-duplicate-case]: variant X: duplicate case "A"
+ --> variantDuplicateCaseIsErrorWithPosition.tt:2:27
+  |
+2 | variant X { A(v: number), A }
+  |                           ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

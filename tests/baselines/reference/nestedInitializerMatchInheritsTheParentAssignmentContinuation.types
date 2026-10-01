@@ -1,0 +1,20 @@
+=== nestedInitializerMatchInheritsTheParentAssignmentContinuation.tt ===
+variant Outer { A, B }
+>Outer : type Outer = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+enum Inner { X, Y }
+>Inner : enum Inner
+>X : (enum member) Inner.X = 0
+>Y : (enum member) Inner.Y = 1
+const value = match (outer) { A => match (inner) { X => 1, Y => 2 }, B => 0 };
+>value : const value: number
+

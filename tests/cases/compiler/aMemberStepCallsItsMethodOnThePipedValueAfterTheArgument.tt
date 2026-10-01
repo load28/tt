@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_14.rs::a_member_step_calls_its_method_on_the_piped_value_after_the_argument
+declare const x: any;
+declare function g(): any;
+declare const n: number;
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+declare function r(): R;
+export const v = g() |> .m(match (n) { 0 => 1, _ => 2 });

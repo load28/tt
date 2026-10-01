@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::val_capability_check_reads_annotated_declarators
+type Handler = (u: Box) => void;
+const update: Handler = (u) => { u.n = 1; };
+function f(val b: Box) {
+  update(b);
+}

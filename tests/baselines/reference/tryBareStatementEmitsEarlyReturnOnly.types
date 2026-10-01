@@ -1,0 +1,5 @@
+=== tryBareStatementEmitsEarlyReturnOnly.tt ===
+function f(): X {
+>f : function f(): X
+>X : type X = /*unresolved*/ any
+

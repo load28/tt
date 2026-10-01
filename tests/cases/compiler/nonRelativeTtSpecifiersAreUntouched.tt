@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_04.rs::non_relative_tt_specifiers_are_untouched
+import a from "pkg.tt";
+import b from "/abs/x.tt";
+import c from "@scope/p/x.tt";

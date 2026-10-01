@@ -1,0 +1,6 @@
+//// [tryIsAValueInDeepExpressionPositions1.tt] 4 mapping(s)
+1:1 -> 1:1 len 42  "function f(): TResult<number, string> {\n  "
+2:3 -> 8:3 len 28  "return Result.Ok(Math.round("
+2:35 -> 3:18 len 7  "total()"
+2:42 -> 8:37 len 12  " * 1.1));\n}\n"
+

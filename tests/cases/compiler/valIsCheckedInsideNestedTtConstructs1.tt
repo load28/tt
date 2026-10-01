@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_08.rs::val_is_checked_inside_nested_tt_constructs
+val const cfg = { a: 1 };
+const msg = `${(() => { cfg.a = 2; return 1; })()}`;

@@ -1,0 +1,9 @@
+=== loopTestRewritesComposeWithConditionalsNestingAndInitializers1.tt ===
+declare const flag: boolean; declare function next(): unknown;
+>flag : const flag: boolean
+>next : function next(): unknown
+while (flag && match (next()) { is Error => false, _ => true }) { work(); }
+>flag : const flag: boolean
+>next : function next(): unknown
+>Error : var Error: ErrorConstructor
+

@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[verify-failed]: `try` here did not parse as a tt `try`, so it was passed through as TypeScript and the generated module no longer parses: Expression expected
+ --> ./aTryOperandNeverStartsWithAStatementKeyword1.tt:2:26
+  |
+2 | function g() { const x = try if (f()) {}; }
+  |                          ^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[verify-failed]: `try` here did not parse as a tt `try`, so it was passed through as TypeScript and the generated module no longer parses: Expression expected
+ --> aTryOperandNeverStartsWithAStatementKeyword1.tt:2:26
+  |
+2 | function g() { const x = try if (f()) {}; }
+  |                          ^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

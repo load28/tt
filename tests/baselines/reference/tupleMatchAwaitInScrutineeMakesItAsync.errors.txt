@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tupleMatchAwaitInScrutineeMakesItAsync.tt → $DIR/out/tupleMatchAwaitInScrutineeMakesItAsync.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'a'.
+ --> tupleMatchAwaitInScrutineeMakesItAsync.tt:2:23
+  |
+2 |   return match (await a, b) {
+  |                       ^
+error[ts2304]: Cannot find name 'b'.
+ --> tupleMatchAwaitInScrutineeMakesItAsync.tt:2:26
+  |
+2 |   return match (await a, b) {
+  |                          ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tupleMatchAwaitInScrutineeMakesItAsync.ts(4,26): error TS2304: Cannot find name 'a'.
+tupleMatchAwaitInScrutineeMakesItAsync.ts(5,20): error TS2304: Cannot find name 'b'.

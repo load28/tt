@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_11.rs::a_jump_crossing_a_result_block_leaves_the_rest_of_the_file_planned
+import type { TResult } from "@tt/std";
+declare const x: TResult<number, string>;
+function f() { for (;;) { const r = result { const v = try x; if (v) break; return v; }; } }
+class C { y = try x; }

@@ -1,0 +1,33 @@
+==== ttc --out-dir (exit 1) ====
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+ --> ./anInlineChainBottomingOutInAnIifeStillRejectsTry.tt:3:44
+  |
+3 |   A(x) => { if let A(y) = f(x) { const n = try g(y); return n; } return 0; },
+  |                                            ^^^^^^^^
+  |
+  = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2552]: Cannot find name 'e'. Did you mean 'E'?
+ --> anInlineChainBottomingOutInAnIifeStillRejectsTry.tt:2:18
+  |
+1 | variant E { A(x: number), B }
+  |         - 'E' is declared here.
+2 | const r = match (e) {
+  |                  ^
+error[ts2304]: Cannot find name 'f'.
+ --> anInlineChainBottomingOutInAnIifeStillRejectsTry.tt:3:27
+  |
+3 |   A(x) => { if let A(y) = f(x) { const n = try g(y); return n; } return 0; },
+  |                           ^
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+ --> anInlineChainBottomingOutInAnIifeStillRejectsTry.tt:3:44
+  |
+3 |   A(x) => { if let A(y) = f(x) { const n = try g(y); return n; } return 0; },
+  |                                            ^^^^^^^^
+  |
+  = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

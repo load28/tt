@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./anInnerDeclarationShadowsAnOuterVal2.tt → $DIR/out/anInnerDeclarationShadowsAnOuterVal2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'C'.
+ --> anInnerDeclarationShadowsAnOuterVal2.tt:2:17
+  |
+2 | function f(cfg: C) {
+  |                 ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+anInnerDeclarationShadowsAnOuterVal2.ts(2,17): error TS2304: Cannot find name 'C'.

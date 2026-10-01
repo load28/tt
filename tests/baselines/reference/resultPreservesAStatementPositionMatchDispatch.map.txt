@@ -1,0 +1,13 @@
+//// [resultPreservesAStatementPositionMatchDispatch.tt] 11 mapping(s)
+1:1 -> 24:1 len 14  "const value = "
+1:30 -> 8:9 len 4  "item"
+1:41 -> 3:18 len 6  "read()"
+1:48 -> 8:29 len 1  " "
+1:56 -> 10:19 len 4  "item"
+1:64 -> 12:12 len 1  "1"
+1:69 -> 13:18 len 8  "useOne()"
+1:84 -> 17:18 len 10  "useOther()"
+1:96 -> 22:3 len 2  "; "
+1:105 -> 22:52 len 4  "item"
+1:112 -> 24:27 len 2  ";\n"
+

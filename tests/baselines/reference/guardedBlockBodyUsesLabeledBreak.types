@@ -1,0 +1,7 @@
+=== guardedBlockBodyUsesLabeledBreak.tt ===
+const r = match (x) { A(v) if v > 0 => { log(v); }, _ => 0 };
+>r : const r: number | undefined
+>v : const v: any
+>v : const v: any
+>v : const v: any
+

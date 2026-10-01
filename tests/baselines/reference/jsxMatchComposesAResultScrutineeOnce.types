@@ -1,0 +1,19 @@
+=== jsxMatchComposesAResultScrutineeOnce.ttx ===
+declare const outcome: TResult<string, string>;
+>outcome : const outcome: TResult<string, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+const view = <aside>{match (result {
+>view : const view: any
+  const value = try outcome;
+>value : const value: string
+>outcome : const outcome: TResult<string, string>
+  return value |> .toUpperCase();
+>value : const value: string
+>toUpperCase : (method) String.toUpperCase(): string
+  Ok(value) => <b>{value}</b>,
+>value : const value: string
+>value : const value: string
+  Err(error) => <code>{error}</code>,
+>error : const error: string
+>error : const error: string
+

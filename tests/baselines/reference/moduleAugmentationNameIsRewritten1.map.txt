@@ -1,0 +1,3 @@
+//// [moduleAugmentationNameIsRewritten1.tt] 1 mapping(s)
+1:1 -> 1:1 len 79  "declare module \"./token.tt\" {\n  interface Token "...
+

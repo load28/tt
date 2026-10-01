@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valDeclarationModifierIsErasedFromTheOutput1.tt → $DIR/out/valDeclarationModifierIsErasedFromTheOutput1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'getUser'.
+ --> valDeclarationModifierIsErasedFromTheOutput1.tt:1:18
+  |
+1 | val const user = getUser();
+  |                  ^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valDeclarationModifierIsErasedFromTheOutput1.ts(1,14): error TS2304: Cannot find name 'getUser'.

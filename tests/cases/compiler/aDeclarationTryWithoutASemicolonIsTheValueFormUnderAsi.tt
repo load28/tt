@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_10.rs::a_declaration_try_without_a_semicolon_is_the_value_form_under_asi
+declare function g(): { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+function f() {
+  const n = try g()
+  return n;
+}

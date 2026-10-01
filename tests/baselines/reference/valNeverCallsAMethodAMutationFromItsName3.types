@@ -1,0 +1,7 @@
+=== valNeverCallsAMethodAMutationFromItsName3.tt ===
+val const items: number[] = [];
+>items : const items: number[]
+items.push(1);
+>items : const items: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+

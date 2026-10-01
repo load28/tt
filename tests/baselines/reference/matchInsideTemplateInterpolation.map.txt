@@ -1,0 +1,7 @@
+//// [matchInsideTemplateInterpolation.tt] 5 mapping(s)
+1:1 -> 9:1 len 15  "const s = `v=${"
+1:23 -> 3:17 len 1  "x"
+1:33 -> 9:34 len 1  "1"
+1:41 -> 9:38 len 1  "0"
+1:44 -> 9:40 len 3  "}`;"
+

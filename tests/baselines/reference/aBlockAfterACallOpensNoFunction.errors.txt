@@ -1,0 +1,31 @@
+==== ttc --out-dir (exit 1) ====
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+ --> ./aBlockAfterACallOpensNoFunction.tt:3:24
+  |
+3 | if let Some(v) = f() { try g(); }
+  |                        ^^^^^^^
+  |
+  = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2749]: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'?
+ --> aBlockAfterACallOpensNoFunction.tt:1:23
+  |
+1 | declare function f(): Option<number>;
+  |                       ^^^^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> aBlockAfterACallOpensNoFunction.tt:2:23
+  |
+2 | declare function g(): Result<number, string>;
+  |                       ^^^^^^
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+ --> aBlockAfterACallOpensNoFunction.tt:3:24
+  |
+3 | if let Some(v) = f() { try g(); }
+  |                        ^^^^^^^
+  |
+  = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

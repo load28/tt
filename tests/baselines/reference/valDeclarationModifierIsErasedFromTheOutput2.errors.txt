@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valDeclarationModifierIsErasedFromTheOutput2.tt → $DIR/out/valDeclarationModifierIsErasedFromTheOutput2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'getState'.
+ --> valDeclarationModifierIsErasedFromTheOutput2.tt:1:17
+  |
+1 | val let state = getState();
+  |                 ^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valDeclarationModifierIsErasedFromTheOutput2.ts(1,13): error TS2304: Cannot find name 'getState'.

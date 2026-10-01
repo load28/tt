@@ -1,0 +1,22 @@
+=== aMutableArgumentMayReachAnyParameter.tt ===
+function read(val user: User) { log(user.name); }
+>read : function read(user: User): void
+>user : (parameter) user: User
+>User : type User = /*unresolved*/ any
+>user : (parameter) user: User
+function update(user: User) { user.name = "Lee"; }
+>update : function update(user: User): void
+>user : (parameter) user: User
+>User : type User = /*unresolved*/ any
+>user : (parameter) user: User
+function process(user: User) {
+>process : function process(user: User): void
+>user : (parameter) user: User
+>User : type User = /*unresolved*/ any
+  read(user);
+>read : function read(user: User): void
+>user : (parameter) user: User
+  update(user);
+>update : function update(user: User): void
+>user : (parameter) user: User
+

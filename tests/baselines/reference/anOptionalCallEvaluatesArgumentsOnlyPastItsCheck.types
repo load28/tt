@@ -1,0 +1,12 @@
+=== anOptionalCallEvaluatesArgumentsOnlyPastItsCheck.tt ===
+declare const f: ((v: number, w: number) => number) | undefined;
+>f : const f: ((v: number, w: number) => number) | undefined
+>v : (parameter) v: number
+>w : (parameter) w: number
+declare function pre(): number;
+>pre : function pre(): number
+export const r = f?.(pre(), match (1) { 1 => 1, _ => 0 });
+>r : const r: number | undefined
+>f : const f: ((v: number, w: number) => number) | undefined
+>pre : function pre(): number
+

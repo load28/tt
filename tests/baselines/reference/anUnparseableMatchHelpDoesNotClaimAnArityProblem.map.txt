@@ -1,0 +1,3 @@
+//// [anUnparseableMatchHelpDoesNotClaimAnArityProblem.tt] 1 mapping(s)
+1:1 -> 1:1 len 34  "const r = match (x) { A B => 1 };\n"
+

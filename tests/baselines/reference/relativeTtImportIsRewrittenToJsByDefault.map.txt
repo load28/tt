@@ -1,0 +1,3 @@
+//// [relativeTtImportIsRewrittenToJsByDefault.tt] 1 mapping(s)
+1:1 -> 1:1 len 40  "import { CalcError } from \"./error.tt\";\n"
+

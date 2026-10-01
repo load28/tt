@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_02.rs::a_candidate_the_arms_satisfy_makes_the_match_exhaustive
+variant Big { A(s: string), B, C, D }
+variant Small { A(s: string), B, C }
+const f = (v: Small) => match (v) { A(s) => s, B => "b" };

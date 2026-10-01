@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_11.rs::an_ambient_module_variant_declares_its_constructor_object
+declare namespace N { variant P { Q, R(v: number) } }
+declare module "m" { export variant P3 { Q } }

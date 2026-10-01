@@ -1,0 +1,7 @@
+//// [theRuntimeImportFollowsADirectiveAndItsTrailingComment5.tt] 5 mapping(s)
+1:1 -> 1:1 len 13  "\"use client\";"
+1:14 -> 3:1 len 49  "declare const o: { p: number };\nexport const a ="...
+2:18 -> 4:25 len 3  "o.p"
+2:25 -> 4:30 len 6  "String"
+2:31 -> 4:37 len 2  ";\n"
+

@@ -1,0 +1,10 @@
+=== siblingJsxTtValuesShareOneOwnerRewrite.ttx ===
+declare const n: number;
+>n : const n: number
+const view = () => (<aside>
+>view : const view: () => any
+  {match (n) { 0 => <b>zero</b>, _ => <b>other</b> }}
+>n : const n: number
+  {match (n) { 0 => <i>zero</i>, _ => <i>other</i> }}
+>n : const n: number
+

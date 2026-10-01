@@ -1,0 +1,9 @@
+//// [ifLetDuplicateBindingIsAnError.tt] 7 mapping(s)
+1:1 -> 1:1 len 17  "function f() {\n  "
+2:15 -> 5:15 len 1  "a"
+2:18 -> 5:18 len 1  "v"
+2:21 -> 5:21 len 1  "b"
+2:29 -> 3:20 len 1  "o"
+2:33 -> 6:7 len 5  "g(v);"
+2:40 -> 8:4 len 3  "\n}\n"
+

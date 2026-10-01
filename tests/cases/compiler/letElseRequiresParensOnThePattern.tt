@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_04.rs::let_else_requires_parens_on_the_pattern
+function f(): number {
+  const Point = find() else { return 0; };
+  return 1;
+}

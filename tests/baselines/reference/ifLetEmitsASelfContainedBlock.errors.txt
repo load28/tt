@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./ifLetEmitsASelfContainedBlock.tt → $DIR/out/ifLetEmitsASelfContainedBlock.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> ifLetEmitsASelfContainedBlock.tt:2:30
+  |
+2 |   if let Some(value: user) = find() {
+  |                              ^^^^
+error[ts2304]: Cannot find name 'greet'.
+ --> ifLetEmitsASelfContainedBlock.tt:3:5
+  |
+3 |     greet(user);
+  |     ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+ifLetEmitsASelfContainedBlock.ts(3,20): error TS2304: Cannot find name 'find'.
+ifLetEmitsASelfContainedBlock.ts(6,7): error TS2304: Cannot find name 'greet'.

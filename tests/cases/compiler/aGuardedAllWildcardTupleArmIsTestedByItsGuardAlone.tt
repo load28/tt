@@ -1,0 +1,9 @@
+// @origin: tests/compile/cases_11.rs::a_guarded_all_wildcard_tuple_arm_is_tested_by_its_guard_alone
+variant T { A, B }
+function f(a: T, b: T, cond: boolean): number {
+  return match (a, b) {
+    (A, _) => 1,
+    (_, _) if cond => 2,
+    _ => 3,
+  };
+}

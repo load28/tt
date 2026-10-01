@@ -1,0 +1,9 @@
+=== anInitializerInsideACallbackStillLowersToStatements.tt ===
+declare function f(cb: () => number): void;
+>f : function f(cb: () => number): void
+>cb : (parameter) cb: () => number
+f(() => { const x = match (1) { 1 => 1, _ => 0 }; return x; });
+>f : function f(cb: () => number): void
+>x : const x: number
+>x : const x: number
+

@@ -1,0 +1,31 @@
+=== valIsCheckedInsideNestedTtConstructs2.tt ===
+variant Shape { Circle(r: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>r : (property) r: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+val const s = Shape.Circle(1);
+>s : const s: Shape
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+const v = match (s) {
+>v : const v: number
+>s : const s: Shape
+  Circle(r) => { s.kind = "Point"; return r; },
+>r : const r: number
+>s : const s: Shape
+>kind : (property) kind: "Circle" | "Point"
+>r : const r: number
+

@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_05.rs::pipeline_head_reclaims_a_lifted_match
+variant E { A(v: number), B }
+const a = match (e) { A(v) => v, B => 0, } |> double;

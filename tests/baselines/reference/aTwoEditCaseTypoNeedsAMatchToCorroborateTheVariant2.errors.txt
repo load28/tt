@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aTwoEditCaseTypoNeedsAMatchToCorroborateTheVariant2.tt → $DIR/out/aTwoEditCaseTypoNeedsAMatchToCorroborateTheVariant2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 's'.
+ --> aTwoEditCaseTypoNeedsAMatchToCorroborateTheVariant2.tt:3:26
+  |
+3 |   const Cyrcla(radius) = s else { return 0; };
+  |                          ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aTwoEditCaseTypoNeedsAMatchToCorroborateTheVariant2.ts(9,18): error TS2304: Cannot find name 's'.

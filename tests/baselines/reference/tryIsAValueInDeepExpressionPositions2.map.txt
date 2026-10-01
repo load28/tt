@@ -1,0 +1,6 @@
+//// [tryIsAValueInDeepExpressionPositions2.tt] 4 mapping(s)
+1:1 -> 1:1 len 53  "function f(flag: boolean): TResult<number, strin"...
+1:60 -> 5:7 len 5  "value"
+1:72 -> 1:69 len 25  "(flag ? left() : right())"
+1:98 -> 5:28 len 28  " return Result.Ok(value); }\n"
+

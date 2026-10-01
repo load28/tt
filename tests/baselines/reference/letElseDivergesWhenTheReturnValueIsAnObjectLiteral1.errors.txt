@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseDivergesWhenTheReturnValueIsAnObjectLiteral1.tt → $DIR/out/letElseDivergesWhenTheReturnValueIsAnObjectLiteral1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseDivergesWhenTheReturnValueIsAnObjectLiteral1.tt:2:19
+  |
+2 |   const Some(v) = find() else { return { kind: "Err", error: "no" }; };
+  |                   ^^^^
+error[ts2322]: Type '{ kind: string; error: string; }' is not assignable to type 'number'.
+ --> letElseDivergesWhenTheReturnValueIsAnObjectLiteral1.tt:2:33
+  |
+2 |   const Some(v) = find() else { return { kind: "Err", error: "no" }; };
+  |                                 ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseDivergesWhenTheReturnValueIsAnObjectLiteral1.ts(2,18): error TS2304: Cannot find name 'find'.
+letElseDivergesWhenTheReturnValueIsAnObjectLiteral1.ts(4,5): error TS2322: Type '{ kind: string; error: string; }' is not assignable to type 'number'.

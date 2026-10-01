@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_02.rs::try_destructuring_binding_is_kept_verbatim
+function f(): X {
+  const { a, b } = try g();
+  return a + b;
+}

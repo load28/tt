@@ -1,0 +1,11 @@
+//// [aReturnedTemplateLiteralThatEndsItsStatementKeepsTheReturnSuffix5.tt] 9 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 191  "\ndeclare const o: O;\ndeclare function tag(s: Tem"...
+6:1 -> 47:1 len 17  "export const a = "
+6:25 -> 32:17 len 1  "o"
+6:32 -> 35:15 len 1  "n"
+6:47 -> 36:16 len 6  "`${n}`"
+6:61 -> 39:16 len 1  "0"
+6:64 -> 47:24 len 2  ";\n"
+

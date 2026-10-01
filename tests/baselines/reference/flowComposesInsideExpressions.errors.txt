@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./flowComposesInsideExpressions.tt → $DIR/out/flowComposesInsideExpressions.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'xs'.
+ --> flowComposesInsideExpressions.tt:1:11
+  |
+1 | const a = xs.map(flow |> parse |> double);
+  |           ^^
+error[ts2304]: Cannot find name 'parse'.
+ --> flowComposesInsideExpressions.tt:1:26
+  |
+1 | const a = xs.map(flow |> parse |> double);
+  |                          ^^^^^
+error[ts2304]: Cannot find name 'double'.
+ --> flowComposesInsideExpressions.tt:1:35
+  |
+1 | const a = xs.map(flow |> parse |> double);
+  |                                   ^^^^^^
+error[ts2304]: Cannot find name 'f'.
+ --> flowComposesInsideExpressions.tt:2:22
+  |
+2 | const b = `${flow |> f |> g}`;
+  |                      ^
+error[ts2304]: Cannot find name 'g'.
+ --> flowComposesInsideExpressions.tt:2:27
+  |
+2 | const b = `${flow |> f |> g}`;
+  |                           ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+flowComposesInsideExpressions.ts(7,11): error TS2304: Cannot find name 'xs'.
+flowComposesInsideExpressions.ts(7,25): error TS2304: Cannot find name 'parse'.
+flowComposesInsideExpressions.ts(7,32): error TS2304: Cannot find name 'double'.
+flowComposesInsideExpressions.ts(8,21): error TS2304: Cannot find name 'f'.
+flowComposesInsideExpressions.ts(8,24): error TS2304: Cannot find name 'g'.

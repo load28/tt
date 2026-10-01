@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_03.rs::try_at_module_top_level_is_an_error
+function f(): void {}
+try g();

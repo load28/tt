@@ -1,0 +1,9 @@
+=== tryDeclEmitsEarlyReturnAndBind.tt ===
+function f(): X {
+>f : function f(): X
+>X : type X = /*unresolved*/ any
+  const n = try g();
+>n : const n: any
+  return h(n);
+>n : const n: any
+

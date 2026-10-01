@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_02.rs::missing_cases_are_all_listed
+variant Dir { North, South, East, West(deg: number) }
+const f = (d: Dir) => match (d) { North => 1 };

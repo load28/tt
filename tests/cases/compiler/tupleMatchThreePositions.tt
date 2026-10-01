@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_06.rs::tuple_match_three_positions
+
+variant B { T(), F }
+const r = match (x, y, z) {
+  (T, _, _) => 1,
+  (F, T, _) => 2,
+  (F, F, T) => 3,
+};

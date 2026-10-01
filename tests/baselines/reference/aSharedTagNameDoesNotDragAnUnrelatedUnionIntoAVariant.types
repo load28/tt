@@ -1,0 +1,28 @@
+=== aSharedTagNameDoesNotDragAnUnrelatedUnionIntoAVariant.tt ===
+variant Shape { Circle(radius: number), Empty }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+type Msg = { kind: "Empty" } | { kind: "Full"; n: number };
+>Msg : type Msg = {
+>       kind: "Empty";
+>   } | {
+>       kind: "Full";
+>       n: number;
+>   }
+>kind : (property) kind: "Empty"
+>kind : (property) kind: "Full"
+>n : (property) n: number
+const a = match (m) { Empty => 0, Full(n) => n };
+>a : const a: any
+>n : const n: any
+>n : const n: any
+

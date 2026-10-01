@@ -1,0 +1,14 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./matchCompilesToSwitchWithRuntimeGuardOnly.tt → $DIR/out/matchCompilesToSwitchWithRuntimeGuardOnly.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2552]: Cannot find name 'shape'. Did you mean 'Shape'?
+ --> matchCompilesToSwitchWithRuntimeGuardOnly.tt:3:21
+  |
+2 | variant Shape { Circle(radius: number), Point }
+  |         ----- 'Shape' is declared here.
+3 | const area = match (shape) {
+  |                     ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+matchCompilesToSwitchWithRuntimeGuardOnly.ts(29,17): error TS2552: Cannot find name 'shape'. Did you mean 'Shape'?

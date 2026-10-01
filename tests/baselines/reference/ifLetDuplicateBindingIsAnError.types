@@ -1,0 +1,9 @@
+=== ifLetDuplicateBindingIsAnError.tt ===
+function f() {
+>f : function f(): void
+  if let Both(a: v, b: v) = o { g(v); }
+>a : any
+>v : const v: any
+>b : any
+>v : const v: any
+

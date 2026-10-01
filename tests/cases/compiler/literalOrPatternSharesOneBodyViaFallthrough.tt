@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_07.rs::literal_or_pattern_shares_one_body_via_fallthrough
+
+const kind = match (code) {
+  200 | 201 | 204 => "success",
+  400 | 404 => "client error",
+  _ => "unknown",
+};

@@ -1,0 +1,4 @@
+=== literalMatchIsNotCheckedAgainstVariants.tt ===
+const v = match (x) { "Some" => 1, "None" => 2 };
+>v : const v: number
+

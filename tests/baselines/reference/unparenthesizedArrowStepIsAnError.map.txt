@@ -1,0 +1,3 @@
+//// [unparenthesizedArrowStepIsAnError.tt] 1 mapping(s)
+1:1 -> 1:1 len 27  "const a = x |> n => n + 1;\n"
+

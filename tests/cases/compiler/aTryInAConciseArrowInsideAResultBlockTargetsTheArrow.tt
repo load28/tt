@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_11.rs::a_try_in_a_concise_arrow_inside_a_result_block_targets_the_arrow
+declare function get(n: number): { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+export const r = result {
+const f = (n: number) => ({ kind: "Ok" as const, value: try get(n) + 1 });
+const x = try get(1);
+return f(x);
+};

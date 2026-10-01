@@ -1,0 +1,3 @@
+//// [verifyDoesNotInventTtIntentFromStringsOrComments2.tt] 1 mapping(s)
+1:1 -> 1:1 len 35  "/* match result flow */ const = 5;\n"
+

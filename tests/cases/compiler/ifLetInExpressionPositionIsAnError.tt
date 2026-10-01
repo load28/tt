@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::if_let_in_expression_position_is_an_error
+const s = `${if let Some(value) = o { 1 }}`;

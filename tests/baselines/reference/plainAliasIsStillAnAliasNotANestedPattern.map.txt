@@ -1,0 +1,9 @@
+//// [plainAliasIsStillAnAliasNotANestedPattern.tt] 7 mapping(s)
+1:1 -> 16:1 len 10  "const n = "
+1:18 -> 3:17 len 1  "o"
+1:28 -> 6:15 len 5  "value"
+1:35 -> 6:22 len 4  "None"
+1:44 -> 7:18 len 4  "None"
+1:55 -> 11:18 len 1  "0"
+1:58 -> 16:19 len 1  ";"
+

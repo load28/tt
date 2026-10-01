@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./matchInSpreadOperandsEntersTheEvaluationProtocol3.tt → $DIR/out/matchInSpreadOperandsEntersTheEvaluationProtocol3.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'consume'.
+ --> matchInSpreadOperandsEntersTheEvaluationProtocol3.tt:1:1
+  |
+1 | consume(...match (kind) { A => [1], _ => [] });
+  | ^^^^^^^
+error[ts2304]: Cannot find name 'kind'.
+ --> matchInSpreadOperandsEntersTheEvaluationProtocol3.tt:1:19
+  |
+1 | consume(...match (kind) { A => [1], _ => [] });
+  |                   ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+matchInSpreadOperandsEntersTheEvaluationProtocol3.ts(3,19): error TS2304: Cannot find name 'consume'.
+matchInSpreadOperandsEntersTheEvaluationProtocol3.ts(5,19): error TS2304: Cannot find name 'kind'.

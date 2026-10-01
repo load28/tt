@@ -1,0 +1,27 @@
+==== ttc --out-dir (exit 1) ====
+error[match-or-binding-mismatch]: match: or-pattern alternatives must bind the same names — `value` is bound in `Some(...)` but not in `None(...)`
+ --> ./tupleMatchOrAlternativesMustBindTheSameFieldsPerElement.tt:2:18
+  |
+2 |   (Some(value) | None, _) => 1,
+  |                  ^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'a'.
+ --> tupleMatchOrAlternativesMustBindTheSameFieldsPerElement.tt:1:18
+  |
+1 | const r = match (a, b) {
+  |                  ^
+error[ts2304]: Cannot find name 'b'.
+ --> tupleMatchOrAlternativesMustBindTheSameFieldsPerElement.tt:1:21
+  |
+1 | const r = match (a, b) {
+  |                     ^
+error[match-or-binding-mismatch]: match: or-pattern alternatives must bind the same names — `value` is bound in `Some(...)` but not in `None(...)`
+ --> tupleMatchOrAlternativesMustBindTheSameFieldsPerElement.tt:2:18
+  |
+2 |   (Some(value) | None, _) => 1,
+  |                  ^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

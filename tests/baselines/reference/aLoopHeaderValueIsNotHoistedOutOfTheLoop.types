@@ -1,0 +1,12 @@
+=== aLoopHeaderValueIsNotHoistedOutOfTheLoop.tt ===
+declare function id(v: number): number;
+>id : function id(v: number): number
+>v : (parameter) v: number
+let n = 0;
+>n : let n: number
+while (id(match (n) { 0 => 1, _ => 0 })) { n = n + 1; }
+>id : function id(v: number): number
+>n : let n: number
+>n : let n: number
+>n : let n: number
+

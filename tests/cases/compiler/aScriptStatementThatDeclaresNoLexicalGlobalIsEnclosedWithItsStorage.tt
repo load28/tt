@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_11.rs::a_script_statement_that_declares_no_lexical_global_is_enclosed_with_its_storage
+declare const o: { kind: "A" } | { kind: "B" };
+var v = match (o) { A => 1, B => 2 };
+console.log(match (o) { A => 1, B => 2 });
+for (const x of match (o) { A => [1], B => [2] }) {}
+const {} = match (o) { A => o, B => o };

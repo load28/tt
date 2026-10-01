@@ -1,0 +1,5 @@
+//// [statementBodiedResultReturnsAPropagatedValue.tt] 3 mapping(s)
+1:1 -> 11:1 len 14  "const value = "
+1:35 -> 3:18 len 6  "read()"
+1:44 -> 11:27 len 2  ";\n"
+

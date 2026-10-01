@@ -1,0 +1,9 @@
+//// [valOnALetElsePatternCoversTheNamesItBinds.tt] 7 mapping(s)
+1:27 -> 2:28 len 3  "Box"
+1:27 -> 5:17 len 3  "Box"
+1:39 -> 7:3 len 24  "\nfunction f(o: Opt) {\n  "
+3:18 -> 13:11 len 5  "value"
+3:27 -> 9:18 len 1  "o"
+3:36 -> 11:5 len 7  "return;"
+3:46 -> 13:28 len 18  "\n  value.n = 1;\n}\n"
+

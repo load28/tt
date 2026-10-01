@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_04.rs::relative_tt_import_is_rewritten_to_js_by_default
+import { CalcError } from "./error.tt";

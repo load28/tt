@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_02.rs::or_pattern_counts_for_exhaustiveness
+
+variant Dir { North(), South, East, West }
+const f = (d: Dir) => match (d) {
+  North | South => 1,
+  East => 2,
+};

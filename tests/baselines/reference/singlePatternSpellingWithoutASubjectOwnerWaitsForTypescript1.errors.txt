@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript1.tt → $DIR/out/singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 's'.
+ --> singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript1.tt:3:26
+  |
+3 |   const Circel(radius) = s else { return 0; };
+  |                          ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript1.ts(9,18): error TS2304: Cannot find name 's'.

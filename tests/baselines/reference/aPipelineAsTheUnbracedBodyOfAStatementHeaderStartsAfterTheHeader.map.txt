@@ -1,0 +1,27 @@
+//// [aPipelineAsTheUnbracedBodyOfAStatementHeaderStartsAfterTheHeader.tt] 25 mapping(s)
+1:1 -> 4:1 len 121  "declare const c: boolean, x: number;\ndeclare fun"...
+4:8 -> 7:15 len 1  "x"
+4:13 -> 7:18 len 1  "g"
+4:14 -> 7:20 len 9  ";\nif (c) "
+5:8 -> 8:15 len 1  "x"
+5:13 -> 8:18 len 1  "g"
+5:14 -> 8:20 len 7  "; else "
+5:21 -> 8:34 len 1  "x"
+5:26 -> 8:37 len 1  "g"
+5:27 -> 8:39 len 12  ";\nwhile (c) "
+6:11 -> 9:18 len 1  "x"
+6:16 -> 9:21 len 1  "g"
+6:17 -> 9:23 len 11  ";\nfor (;;) "
+7:10 -> 10:17 len 1  "x"
+7:15 -> 10:20 len 1  "g"
+7:16 -> 10:22 len 23  ";\nfor (const a of [1]) "
+8:22 -> 11:29 len 1  "a"
+8:27 -> 11:32 len 1  "g"
+8:28 -> 11:34 len 49  ";\nasync function h() { for await (const v of xs)"...
+9:48 -> 12:55 len 1  "v"
+9:53 -> 12:58 len 1  "g"
+9:54 -> 12:60 len 14  "; }\nconst y = "
+10:11 -> 13:18 len 3  "(c)"
+10:18 -> 13:23 len 1  "g"
+10:19 -> 13:25 len 2  ";\n"
+

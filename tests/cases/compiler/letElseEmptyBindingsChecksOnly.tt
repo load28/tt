@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_03.rs::let_else_empty_bindings_checks_only
+function f(): number {
+  const Ok() = check() else { return -1; };
+  return 1;
+}

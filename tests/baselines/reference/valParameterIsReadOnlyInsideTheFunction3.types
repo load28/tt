@@ -1,0 +1,8 @@
+=== valParameterIsReadOnlyInsideTheFunction3.tt ===
+function update(user: User) {
+>update : function update(user: User): void
+>user : (parameter) user: User
+>User : type User = /*unresolved*/ any
+  user.name = "Lee";
+>user : (parameter) user: User
+

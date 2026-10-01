@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_05.rs::optional_postfix_uses_the_common_receiver_grouping_rule
+const a = value |> ?.member;
+const b = left + right |> ?.member;
+const c = make() |> ?.member;

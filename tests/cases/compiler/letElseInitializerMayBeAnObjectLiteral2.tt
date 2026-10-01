@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_03.rs::let_else_initializer_may_be_an_object_literal
+function f(o?: { kind: "Some"; value: number }, c = true) {
+  const Some(value) = o ?? (c ? { kind: "Some" as const, value: 1 } : { kind: "None" as const }) else { return 0; };
+  const Some(value: w) = c ? { kind: "Some" as const, value } : { kind: "None" as const } else { return 1; };
+  return w;
+}

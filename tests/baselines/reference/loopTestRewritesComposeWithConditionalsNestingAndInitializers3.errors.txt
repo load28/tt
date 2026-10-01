@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./loopTestRewritesComposeWithConditionalsNestingAndInitializers3.tt → $DIR/out/loopTestRewritesComposeWithConditionalsNestingAndInitializers3.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'work'.
+ --> loopTestRewritesComposeWithConditionalsNestingAndInitializers3.tt:2:90
+  |
+2 | while (match (a()) { 1 => true, _ => false } || match (b()) { 2 => true, _ => false }) { work(); }
+  |                                                                                          ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+loopTestRewritesComposeWithConditionalsNestingAndInitializers3.ts(37,27): error TS2304: Cannot find name 'work'.

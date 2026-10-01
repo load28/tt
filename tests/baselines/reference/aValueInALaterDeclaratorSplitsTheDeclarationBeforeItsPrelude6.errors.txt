@@ -1,0 +1,13 @@
+==== ttc --out-dir (exit 0) ====
+ttc: std → $DIR/out/tt
+ttc: ./aValueInALaterDeclaratorSplitsTheDeclarationBeforeItsPrelude6.tt → $DIR/out/aValueInALaterDeclaratorSplitsTheDeclarationBeforeItsPrelude6.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2454]: Variable 'b' is used before being assigned.
+ --> aValueInALaterDeclaratorSplitsTheDeclarationBeforeItsPrelude6.tt:9:10
+  |
+9 |   return b;
+  |          ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aValueInALaterDeclaratorSplitsTheDeclarationBeforeItsPrelude6.ts(54,10): error TS2454: Variable 'b' is used before being assigned.

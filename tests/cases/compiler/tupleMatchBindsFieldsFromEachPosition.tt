@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_06.rs::tuple_match_binds_fields_from_each_position
+
+const r = match (a, b) {
+  (Some(value: x), Some(value: y)) => x + y,
+  _ => 0,
+};

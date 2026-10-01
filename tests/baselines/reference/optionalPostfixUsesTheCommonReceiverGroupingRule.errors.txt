@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./optionalPostfixUsesTheCommonReceiverGroupingRule.tt → $DIR/out/optionalPostfixUsesTheCommonReceiverGroupingRule.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'value'.
+ --> optionalPostfixUsesTheCommonReceiverGroupingRule.tt:1:11
+  |
+1 | const a = value |> ?.member;
+  |           ^^^^^
+error[ts2304]: Cannot find name 'left'.
+ --> optionalPostfixUsesTheCommonReceiverGroupingRule.tt:2:11
+  |
+2 | const b = left + right |> ?.member;
+  |           ^^^^
+error[ts2304]: Cannot find name 'right'.
+ --> optionalPostfixUsesTheCommonReceiverGroupingRule.tt:2:18
+  |
+2 | const b = left + right |> ?.member;
+  |                  ^^^^^
+error[ts2304]: Cannot find name 'make'.
+ --> optionalPostfixUsesTheCommonReceiverGroupingRule.tt:3:11
+  |
+3 | const c = make() |> ?.member;
+  |           ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+optionalPostfixUsesTheCommonReceiverGroupingRule.ts(1,11): error TS2304: Cannot find name 'value'.
+optionalPostfixUsesTheCommonReceiverGroupingRule.ts(2,12): error TS2304: Cannot find name 'left'.
+optionalPostfixUsesTheCommonReceiverGroupingRule.ts(2,19): error TS2304: Cannot find name 'right'.
+optionalPostfixUsesTheCommonReceiverGroupingRule.ts(3,11): error TS2304: Cannot find name 'make'.

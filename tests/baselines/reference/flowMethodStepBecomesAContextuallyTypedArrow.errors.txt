@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./flowMethodStepBecomesAContextuallyTypedArrow.tt → $DIR/out/flowMethodStepBecomesAContextuallyTypedArrow.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2571]: Object is of type 'unknown'. (in code ttc generated for this construct)
+ --> flowMethodStepBecomesAContextuallyTypedArrow.tt:1:11
+  |
+1 | const f = flow |> parse |> .toFixed(1);
+  |           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+error[ts2304]: Cannot find name 'parse'.
+ --> flowMethodStepBecomesAContextuallyTypedArrow.tt:1:19
+  |
+1 | const f = flow |> parse |> .toFixed(1);
+  |                   ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+flowMethodStepBecomesAContextuallyTypedArrow.ts(7,18): error TS2304: Cannot find name 'parse'.
+flowMethodStepBecomesAContextuallyTypedArrow.ts(7,37): error TS2571: Object is of type 'unknown'.

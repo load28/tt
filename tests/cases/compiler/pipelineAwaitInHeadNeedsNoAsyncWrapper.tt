@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_05.rs::pipeline_await_in_head_needs_no_async_wrapper
+async function f(p: Promise<string>) {
+  return await p |> norm;
+}

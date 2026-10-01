@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_08.rs::nested_patterns_that_cover_the_payload_are_exhaustive
+variant Inner { Yes(n: number), No }
+variant Outer { Wrap(inner: Inner), Bare }
+const a = match (o) {
+  Wrap(inner: Yes(n)) => n,
+  Wrap(inner: No()) => 0,
+  Bare => -1,
+};

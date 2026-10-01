@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_08.rs::val_never_calls_a_method_a_mutation_from_its_name
+class Collection {
+  add(v: number): Collection {
+    return new Collection();
+  }
+}
+val const collection = new Collection();
+collection.add(1);

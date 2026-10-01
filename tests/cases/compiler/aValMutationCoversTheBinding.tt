@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_09.rs::a_val_mutation_covers_the_binding
+function f() {
+  val const cfg = { a: 1 };
+  cfg.a = 2;
+}

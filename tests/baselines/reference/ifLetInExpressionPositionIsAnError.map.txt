@@ -1,0 +1,7 @@
+//// [ifLetInExpressionPositionIsAnError.tt] 5 mapping(s)
+1:1 -> 1:1 len 13  "const s = `${"
+1:26 -> 4:13 len 5  "value"
+1:35 -> 2:18 len 1  "o"
+1:39 -> 5:5 len 1  "1"
+1:42 -> 7:2 len 4  "}`;\n"
+

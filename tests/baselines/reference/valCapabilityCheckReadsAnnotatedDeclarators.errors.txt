@@ -1,0 +1,27 @@
+==== ttc --out-dir (exit 1) ====
+error[val-pass]: cannot pass val binding `b` to mutable parameter `u` of `update` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./valCapabilityCheckReadsAnnotatedDeclarators.tt:4:10
+  |
+4 |   update(b);
+  |          ^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'Box'.
+ --> valCapabilityCheckReadsAnnotatedDeclarators.tt:1:20
+  |
+1 | type Handler = (u: Box) => void;
+  |                    ^^^
+error[ts2304]: Cannot find name 'Box'.
+ --> valCapabilityCheckReadsAnnotatedDeclarators.tt:3:19
+  |
+3 | function f(val b: Box) {
+  |                   ^^^
+error[val-pass]: cannot pass val binding `b` to mutable parameter `u` of `update` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> valCapabilityCheckReadsAnnotatedDeclarators.tt:4:10
+  |
+4 |   update(b);
+  |          ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

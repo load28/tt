@@ -1,0 +1,9 @@
+//// [resultExitLabelAvoidsUserIdentifiersAndLabels.tt] 7 mapping(s)
+1:1 -> 1:1 len 77  "function run() { $tt_v0: while (ready()) { break"...
+1:78 -> 10:1 len 14  "const value = "
+1:107 -> 8:9 len 4  "item"
+1:118 -> 3:18 len 6  "read()"
+1:125 -> 8:29 len 1  " "
+1:133 -> 8:73 len 4  "item"
+1:140 -> 10:23 len 18  "; return value; }\n"
+

@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./repeatedLoopTestsOwnTheMatchRegionPerIteration2.tt → $DIR/out/repeatedLoopTestsOwnTheMatchRegionPerIteration2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'next'.
+ --> repeatedLoopTestsOwnTheMatchRegionPerIteration2.tt:1:15
+  |
+1 | for (; match (next()) { is Error => false, _ => true }; tick()) { work(); }
+  |               ^^^^
+error[ts2304]: Cannot find name 'tick'.
+ --> repeatedLoopTestsOwnTheMatchRegionPerIteration2.tt:1:57
+  |
+1 | for (; match (next()) { is Error => false, _ => true }; tick()) { work(); }
+  |                                                         ^^^^
+error[ts2304]: Cannot find name 'work'.
+ --> repeatedLoopTestsOwnTheMatchRegionPerIteration2.tt:1:67
+  |
+1 | for (; match (next()) { is Error => false, _ => true }; tick()) { work(); }
+  |                                                                   ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+repeatedLoopTestsOwnTheMatchRegionPerIteration2.ts(1,10): error TS2304: Cannot find name 'tick'.
+repeatedLoopTestsOwnTheMatchRegionPerIteration2.ts(4,19): error TS2304: Cannot find name 'next'.
+repeatedLoopTestsOwnTheMatchRegionPerIteration2.ts(14,27): error TS2304: Cannot find name 'work'.

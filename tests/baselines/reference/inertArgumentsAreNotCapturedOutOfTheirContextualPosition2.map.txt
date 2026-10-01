@@ -1,0 +1,10 @@
+//// [inertArgumentsAreNotCapturedOutOfTheirContextualPosition2.tt] 8 mapping(s)
+1:1 -> 17:1 len 15  "const items = ["
+1:16 -> 2:23 len 6  "make()"
+1:22 -> 17:28 len 2  ", "
+1:31 -> 4:17 len 1  "x"
+1:38 -> 7:15 len 1  "v"
+1:44 -> 8:22 len 1  "v"
+1:52 -> 12:22 len 1  "0"
+1:55 -> 17:42 len 2  "];"
+

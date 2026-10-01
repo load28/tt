@@ -1,0 +1,11 @@
+// @origin: tests/compile/cases_14.rs::an_assignment_captures_its_target_before_a_hoisted_right_operand
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+declare function read(): R;
+declare function target(): { v: number };
+declare function key(): "v";
+declare let state: { v: number };
+export function g(): R {
+  state.v *= try read();
+  this.v = try read();
+  return { kind: "Ok", value: 0 };
+}

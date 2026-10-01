@@ -1,0 +1,26 @@
+=== anInertMemberReceiverNeedsNoReceiverSlot.tt ===
+variant E { A(value: string), B }
+>E : type E = {
+>       kind: "A";
+>       value: string;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (value: string) => E
+>value : (property) value: string
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const value = "abc".replace(match (E.A("a")) { A(value) => value, B => "b" },"x",);
+>value : const value: string
+>replace : (method) String.replace(searchValue: string | RegExp, replaceValue: string): string
+>E : const E: {
+>       A: (value: string) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: string) => E
+>value : const value: string
+>value : const value: string
+

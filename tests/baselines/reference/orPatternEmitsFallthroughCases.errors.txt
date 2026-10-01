@@ -1,0 +1,14 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./orPatternEmitsFallthroughCases.tt → $DIR/out/orPatternEmitsFallthroughCases.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2552]: Cannot find name 'key'. Did you mean 'Key'?
+ --> orPatternEmitsFallthroughCases.tt:3:23
+  |
+2 | variant Key { Enter(), Escape, Tab, Char(ch: string) }
+  |         --- 'Key' is declared here.
+3 | const action = match (key) {
+  |                       ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+orPatternEmitsFallthroughCases.ts(33,17): error TS2552: Cannot find name 'key'. Did you mean 'Key'?

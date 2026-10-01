@@ -1,0 +1,11 @@
+=== aBlockAfterACallOpensNoFunction.tt ===
+declare function f(): Option<number>;
+>f : function f(): Option<number>
+>Option : type Option = /*unresolved*/ any
+declare function g(): Result<number, string>;
+>g : function g(): Result<number, string>
+>Result : type Result = /*unresolved*/ any
+if let Some(v) = f() { try g(); }
+>v : const v: Option<number>
+>f : function f(): Option<number>
+

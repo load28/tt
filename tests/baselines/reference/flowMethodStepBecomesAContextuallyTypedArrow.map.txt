@@ -1,0 +1,6 @@
+//// [flowMethodStepBecomesAContextuallyTypedArrow.tt] 4 mapping(s)
+1:1 -> 7:1 len 10  "const f = "
+1:19 -> 7:18 len 5  "parse"
+1:28 -> 7:44 len 11  ".toFixed(1)"
+1:39 -> 7:57 len 2  ";\n"
+

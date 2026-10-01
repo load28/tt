@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::match_on_builtin_option_is_exhaustiveness_checked
+const f = (o: Option<number>) => match (o) { Some(value) => value };

@@ -1,0 +1,4 @@
+=== matchInSpreadOperandsEntersTheEvaluationProtocol2.tt ===
+const value = [ ...match (kind) { A => [1], _ => [] } ];
+>value : const value: number[]
+

@@ -1,0 +1,7 @@
+//// [aTryStatementAsAnUnbracedBodyOpensItsOwnBlock.tt] 5 mapping(s)
+1:1 -> 1:1 len 111  "declare function a(): { kind: \"Ok\"; value: numbe"...
+2:30 -> 3:18 len 3  "a()"
+2:34 -> 7:2 len 41  " return 1; }\nfunction i() { while (true) "
+3:33 -> 9:18 len 3  "a()"
+3:37 -> 13:2 len 3  " }\n"
+

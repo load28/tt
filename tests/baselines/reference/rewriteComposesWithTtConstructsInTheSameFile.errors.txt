@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./rewriteComposesWithTtConstructsInTheSameFile.tt → $DIR/out/rewriteComposesWithTtConstructsInTheSameFile.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2307]: Cannot find module './error.tt' or its corresponding type declarations.
+ --> rewriteComposesWithTtConstructsInTheSameFile.tt:2:27
+  |
+2 | import { CalcError } from "./error.tt";
+  |                           ^^^^^^^^^^^^
+error[ts2678]: this pattern's case is not one the value can be (ts2678: Type '"Circle"' is not comparable to type '"Point"'.)
+ --> rewriteComposesWithTtConstructsInTheSameFile.tt:5:3
+  |
+5 |   Circle(radius) => radius,
+  |   ^^^^^^
+error[ts2339]: Property 'radius' does not exist on type '{ readonly kind: "Point"; }'.
+ --> rewriteComposesWithTtConstructsInTheSameFile.tt:5:10
+  |
+5 |   Circle(radius) => radius,
+  |          ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+rewriteComposesWithTtConstructsInTheSameFile.ts(20,27): error TS2307: Cannot find module './error.js' or its corresponding type declarations.
+rewriteComposesWithTtConstructsInTheSameFile.ts(32,10): error TS2678: Type '"Circle"' is not comparable to type '"Point"'.
+rewriteComposesWithTtConstructsInTheSameFile.ts(33,15): error TS2339: Property 'radius' does not exist on type '{ readonly kind: "Point"; }'.

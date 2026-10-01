@@ -1,0 +1,6 @@
+//// [tryIsAValueInDeepExpressionPositions4.tt] 4 mapping(s)
+1:1 -> 1:1 len 52  "function f(): TResult<{ amount: number }, string"...
+1:53 -> 7:1 len 27  "return Result.Ok({ amount: "
+1:84 -> 2:16 len 7  "total()"
+1:91 -> 7:34 len 7  " }); }\n"
+

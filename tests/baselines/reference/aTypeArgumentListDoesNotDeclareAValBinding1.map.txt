@@ -1,0 +1,4 @@
+//// [aTypeArgumentListDoesNotDeclareAValBinding1.tt] 2 mapping(s)
+1:5 -> 1:1 len 37  "const m = new Map<string, number>();\n"
+2:5 -> 2:1 len 28  "const items: number[] = [];\n"
+

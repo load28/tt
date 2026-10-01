@@ -1,0 +1,11 @@
+//// [nestedPatternWithGuard.tt] 9 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:1 -> 17:1 len 10  "const n = "
+2:18 -> 4:17 len 1  "r"
+3:18 -> 7:15 len 5  "value"
+3:25 -> 7:22 len 1  "v"
+3:32 -> 8:11 len 5  "v > 0"
+3:41 -> 9:20 len 1  "v"
+4:8 -> 13:16 len 1  "0"
+5:2 -> 17:19 len 2  ";\n"
+

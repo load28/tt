@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_02.rs::try_expression_may_contain_a_match
+function f(): X {
+  try (match (m) { Ok(value) => wrap(value), Err(error) => rewrap(error) });
+}

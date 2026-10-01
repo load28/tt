@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_11.rs::a_host_global_alias_is_captured_only_when_global_this_is_shadowed
+variant O { Some(value: number), None }
+const globalThis = 1;
+export function f(o: O) { const Error = 5; return match (o) { Some(value) => value, None => 0 }; }

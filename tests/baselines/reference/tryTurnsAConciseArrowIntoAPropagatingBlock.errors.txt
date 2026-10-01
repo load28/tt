@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryTurnsAConciseArrowIntoAPropagatingBlock.tt → $DIR/out/tryTurnsAConciseArrowIntoAPropagatingBlock.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'TResult'.
+ --> tryTurnsAConciseArrowIntoAPropagatingBlock.tt:1:15
+  |
+1 | const f = (): TResult<number, string> => Result.Ok(try read());
+  |               ^^^^^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> tryTurnsAConciseArrowIntoAPropagatingBlock.tt:1:42
+  |
+1 | const f = (): TResult<number, string> => Result.Ok(try read());
+  |                                          ^^^^^^
+error[ts2304]: Cannot find name 'read'.
+ --> tryTurnsAConciseArrowIntoAPropagatingBlock.tt:1:56
+  |
+1 | const f = (): TResult<number, string> => Result.Ok(try read());
+  |                                                        ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryTurnsAConciseArrowIntoAPropagatingBlock.ts(1,15): error TS2304: Cannot find name 'TResult'.
+tryTurnsAConciseArrowIntoAPropagatingBlock.ts(3,18): error TS2304: Cannot find name 'read'.
+tryTurnsAConciseArrowIntoAPropagatingBlock.ts(8,10): error TS2304: Cannot find name 'Result'.

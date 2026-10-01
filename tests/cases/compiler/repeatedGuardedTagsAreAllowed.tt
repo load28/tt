@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::repeated_guarded_tags_are_allowed
+const r = match (x) { A(v) if v > 9 => 2, A(v) if v > 0 => 1, A => 0, _ => -1 };

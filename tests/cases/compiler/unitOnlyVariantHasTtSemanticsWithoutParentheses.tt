@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_01.rs::unit_only_variant_has_tt_semantics_without_parentheses
+variant Status { Active, Inactive }

@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./oneShotForHeadersHoistMatchControlFlowOnce1.tt → $DIR/out/oneShotForHeadersHoistMatchControlFlowOnce1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'source'.
+ --> oneShotForHeadersHoistMatchControlFlowOnce1.tt:1:28
+  |
+1 | for (const value of match (source) { is Array => source, _ => [] }) { use(value); }
+  |                            ^^^^^^
+error[ts2304]: Cannot find name 'source'.
+ --> oneShotForHeadersHoistMatchControlFlowOnce1.tt:1:50
+  |
+1 | for (const value of match (source) { is Array => source, _ => [] }) { use(value); }
+  |                                                  ^^^^^^
+error[ts2304]: Cannot find name 'use'.
+ --> oneShotForHeadersHoistMatchControlFlowOnce1.tt:1:71
+  |
+1 | for (const value of match (source) { is Array => source, _ => [] }) { use(value); }
+  |                                                                       ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+oneShotForHeadersHoistMatchControlFlowOnce1.ts(2,17): error TS2304: Cannot find name 'source'.
+oneShotForHeadersHoistMatchControlFlowOnce1.ts(4,51): error TS2304: Cannot find name 'source'.
+oneShotForHeadersHoistMatchControlFlowOnce1.ts(4,67): error TS2304: Cannot find name 'use'.

@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_03.rs::try_inside_a_function_inside_a_scrutinee_is_allowed
+const x = match (run(() => { try g(); return h(); })) {
+  Ok(value) => value,
+  Err(error) => 0,
+};

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalMatchIsNotCheckedAgainstVariants.tt → $DIR/out/literalMatchIsNotCheckedAgainstVariants.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> literalMatchIsNotCheckedAgainstVariants.tt:1:18
+  |
+1 | const v = match (x) { "Some" => 1, "None" => 2 };
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalMatchIsNotCheckedAgainstVariants.ts(21,17): error TS2304: Cannot find name 'x'.

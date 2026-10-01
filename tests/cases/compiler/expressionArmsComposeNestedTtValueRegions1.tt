@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_01.rs::expression_arms_compose_nested_tt_value_regions
+variant V { A(n: number), B }
+declare const v: V; declare const w: V;
+const text = match (v) { A(n) => `${match (w) { A(m) => m, B => n }}`, B => "" };

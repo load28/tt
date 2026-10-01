@@ -1,0 +1,10 @@
+=== letElseDivergesWhenTheReturnValueIsAnObjectLiteral1.tt ===
+function f(): number {
+>f : function f(): number
+  const Some(v) = find() else { return { kind: "Err", error: "no" }; };
+>v : const v: any
+>kind : (property) kind: string
+>error : (property) error: string
+  return v;
+>v : const v: any
+

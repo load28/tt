@@ -1,0 +1,4 @@
+//// [tryPlacementReportsTheOwningReason3.tt] 2 mapping(s)
+1:1 -> 1:1 len 41  "class C { static { const value = { item: "
+1:52 -> 1:60 len 8  " }; } }\n"
+

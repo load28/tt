@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::literal_duplicate_arm_is_error
+const v = match (x) { "a" => 1, "a" => 2 };

@@ -1,0 +1,19 @@
+=== valLetForbidsMutationButAllowsRebinding2.tt ===
+val let state = { count: 0 };
+>state : let state: {
+>       count: number;
+>   }
+>count : (property) count: number
+state = { ...state, count: state.count + 1 };
+>state : let state: {
+>       count: number;
+>   }
+>state : let state: {
+>       count: number;
+>   }
+>count : (property) count: number
+>state : let state: {
+>       count: number;
+>   }
+>count : (property) count: number
+

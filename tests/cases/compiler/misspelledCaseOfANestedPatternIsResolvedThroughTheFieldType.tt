@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_08.rs::misspelled_case_of_a_nested_pattern_is_resolved_through_the_field_type
+variant Inner { Yes(n: number), No }
+variant Outer { Wrap(inner: Inner), Bare }
+const a = match (o) { Wrap(inner: Yess(n)) => n, Bare => 0 };

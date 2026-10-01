@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_01.rs::is_patterns_may_share_an_ordered_chain_with_literals
+const value = match (x) { is Error => "error", "ok" => "ok", _ => "other" };

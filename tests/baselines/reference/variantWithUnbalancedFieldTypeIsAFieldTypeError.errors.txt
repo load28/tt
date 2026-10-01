@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[variant-invalid-field-type]: variant E: invalid type for field `value`: unbalanced TypeScript delimiter
+ --> ./variantWithUnbalancedFieldTypeIsAFieldTypeError.tt:1:22
+  |
+1 | variant E { A(value: number]) }
+  |                      ^^^^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[variant-invalid-field-type]: variant E: invalid type for field `value`: unbalanced TypeScript delimiter
+ --> variantWithUnbalancedFieldTypeIsAFieldTypeError.tt:1:22
+  |
+1 | variant E { A(value: number]) }
+  |                      ^^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aMatchAfterARegexStatementAfterAnIfCompiles.tt → $DIR/out/aMatchAfterARegexStatementAfterAnIfCompiles.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2749]: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'?
+ --> aMatchAfterARegexStatementAfterAnIfCompiles.tt:1:18
+  |
+1 | declare const x: Option<number>;
+  |                  ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aMatchAfterARegexStatementAfterAnIfCompiles.ts(19,18): error TS2749: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'?

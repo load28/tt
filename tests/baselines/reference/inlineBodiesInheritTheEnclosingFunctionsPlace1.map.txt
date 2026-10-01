@@ -1,0 +1,11 @@
+//// [inlineBodiesInheritTheEnclosingFunctionsPlace1.tt] 9 mapping(s)
+1:18 -> 2:21 len 6  "number"
+1:18 -> 5:10 len 6  "number"
+1:30 -> 7:3 len 46  "\nfunction f(e: E): Result<number, string> {\n  "
+3:12 -> 12:15 len 1  "x"
+3:17 -> 10:20 len 1  "e"
+4:11 -> 17:13 len 1  "n"
+4:19 -> 13:22 len 4  "g(x)"
+4:24 -> 17:30 len 25  "\n    return Result.Ok(n);"
+6:4 -> 20:4 len 26  "\n  return Result.Ok(0);\n}\n"
+

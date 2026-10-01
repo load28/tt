@@ -1,0 +1,22 @@
+==== ttc --out-dir (exit 1) ====
+error[match-duplicate-arm]: match: duplicate arm "A"
+ --> ./matchDuplicateArmIsError.tt:1:31
+  |
+1 | const r = match (x) { A => 1, A => 2 };
+  |                               ^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> matchDuplicateArmIsError.tt:1:18
+  |
+1 | const r = match (x) { A => 1, A => 2 };
+  |                  ^
+error[match-duplicate-arm]: match: duplicate arm "A"
+ --> matchDuplicateArmIsError.tt:1:31
+  |
+1 | const r = match (x) { A => 1, A => 2 };
+  |                               ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

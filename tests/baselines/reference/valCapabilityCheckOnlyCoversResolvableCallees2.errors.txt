@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valCapabilityCheckOnlyCoversResolvableCallees2.tt → $DIR/out/valCapabilityCheckOnlyCoversResolvableCallees2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2393]: Duplicate function implementation.
+ --> valCapabilityCheckOnlyCoversResolvableCallees2.tt:1:10
+  |
+1 | function apply(user: User) {}
+  |          ^^^^^
+error[ts2304]: Cannot find name 'User'.
+ --> valCapabilityCheckOnlyCoversResolvableCallees2.tt:1:22
+  |
+1 | function apply(user: User) {}
+  |                      ^^^^
+error[ts2393]: Duplicate function implementation.
+ --> valCapabilityCheckOnlyCoversResolvableCallees2.tt:2:10
+  |
+2 | function apply(val user: User) {}
+  |          ^^^^^
+error[ts2304]: Cannot find name 'User'.
+ --> valCapabilityCheckOnlyCoversResolvableCallees2.tt:2:26
+  |
+2 | function apply(val user: User) {}
+  |                          ^^^^
+error[ts2304]: Cannot find name 'User'.
+ --> valCapabilityCheckOnlyCoversResolvableCallees2.tt:3:22
+  |
+3 | function f(val user: User) {
+  |                      ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valCapabilityCheckOnlyCoversResolvableCallees2.ts(1,10): error TS2393: Duplicate function implementation.
+valCapabilityCheckOnlyCoversResolvableCallees2.ts(1,22): error TS2304: Cannot find name 'User'.
+valCapabilityCheckOnlyCoversResolvableCallees2.ts(2,10): error TS2393: Duplicate function implementation.
+valCapabilityCheckOnlyCoversResolvableCallees2.ts(2,22): error TS2304: Cannot find name 'User'.
+valCapabilityCheckOnlyCoversResolvableCallees2.ts(3,18): error TS2304: Cannot find name 'User'.

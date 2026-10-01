@@ -1,0 +1,8 @@
+//// [inertArgumentsAreNotCapturedOutOfTheirContextualPosition1.tt] 6 mapping(s)
+1:1 -> 16:1 len 32  "const items = [{run: (n) => n}, "
+1:40 -> 3:17 len 1  "x"
+1:47 -> 6:15 len 1  "v"
+1:53 -> 7:22 len 1  "v"
+1:61 -> 11:22 len 1  "0"
+1:64 -> 16:45 len 2  "];"
+

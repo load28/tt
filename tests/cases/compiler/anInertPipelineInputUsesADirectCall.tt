@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_05.rs::an_inert_pipeline_input_uses_a_direct_call
+const value = 1 |> String;

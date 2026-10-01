@@ -1,0 +1,26 @@
+==== ttc --out-dir (exit 1) ====
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> ./literalAndTagPatternsCannotBeMixedInEitherOrder.tt:1:23
+  |
+1 | const v = match (x) { "none" => 0, Some(v) => v };
+  |                       ^^^^^^
+  |
+  = help: split them into two matches
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> literalAndTagPatternsCannotBeMixedInEitherOrder.tt:1:18
+  |
+1 | const v = match (x) { "none" => 0, Some(v) => v };
+  |                  ^
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> literalAndTagPatternsCannotBeMixedInEitherOrder.tt:1:23
+  |
+1 | const v = match (x) { "none" => 0, Some(v) => v };
+  |                       ^^^^^^
+  |
+  = help: split them into two matches
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

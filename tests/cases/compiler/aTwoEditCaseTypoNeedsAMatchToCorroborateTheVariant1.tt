@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_08.rs::a_two_edit_case_typo_needs_a_match_to_corroborate_the_variant
+variant Shape { Circle(radius: number), Empty }
+const a = match (s) { Cyrcla(radius) => radius, Empty => 0 };

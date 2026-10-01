@@ -1,0 +1,3 @@
+//// [noSubstitutionTemplateDynamicImportIsRewritten1.tt] 1 mapping(s)
+1:1 -> 1:1 len 28  "const m = import(`./x.tt`);\n"
+

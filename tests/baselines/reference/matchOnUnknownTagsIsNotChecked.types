@@ -1,0 +1,28 @@
+=== matchOnUnknownTagsIsNotChecked.tt ===
+type AppEvent = { kind: "click"; x: number } | { kind: "key"; code: string };
+>AppEvent : type AppEvent = {
+>       kind: "click";
+>       x: number;
+>   } | {
+>       kind: "key";
+>       code: string;
+>   }
+>kind : (property) kind: "click"
+>x : (property) x: number
+>kind : (property) kind: "key"
+>code : (property) code: string
+const f = (e: AppEvent) => match (e) {
+>f : const f: (e: AppEvent) => number
+>e : (parameter) e: AppEvent
+>AppEvent : type AppEvent = {
+>       kind: "click";
+>       x: number;
+>   } | {
+>       kind: "key";
+>       code: string;
+>   }
+>e : (parameter) e: AppEvent
+  click(x) => x,
+>x : const x: number
+>x : const x: number
+

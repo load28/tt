@@ -1,0 +1,11 @@
+//// [aMatchInsideALiteralArgumentCompletesTheCallFromItsArms1.tt] 9 mapping(s)
+1:1 -> 2:19 len 7  "consume"
+1:9 -> 8:16 len 7  "{item: "
+1:9 -> 12:16 len 7  "{item: "
+1:23 -> 4:19 len 1  "x"
+1:30 -> 7:17 len 1  "v"
+1:36 -> 8:23 len 1  "v"
+1:44 -> 12:23 len 1  "0"
+1:47 -> 8:24 len 1  "}"
+1:47 -> 12:24 len 1  "}"
+

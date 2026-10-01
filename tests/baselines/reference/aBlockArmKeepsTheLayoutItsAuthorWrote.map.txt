@@ -1,0 +1,12 @@
+//// [aBlockArmKeepsTheLayoutItsAuthorWrote.tt] 10 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 21  "\ndeclare const e: E;\n"
+3:1 -> 46:1 len 10  "const v = "
+3:18 -> 29:17 len 1  "e"
+4:5 -> 32:15 len 1  "n"
+5:5 -> 33:7 len 21  "const m = n + 1;\n    "
+6:12 -> 34:18 len 1  "m"
+8:8 -> 38:18 len 1  "0"
+9:2 -> 46:19 len 2  ";\n"
+

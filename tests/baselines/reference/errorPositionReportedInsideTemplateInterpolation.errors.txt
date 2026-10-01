@@ -1,0 +1,22 @@
+==== ttc --out-dir (exit 1) ====
+error[match-duplicate-arm]: match: duplicate arm "A"
+ --> ./errorPositionReportedInsideTemplateInterpolation.tt:1:34
+  |
+1 | const s = `${match (x) { A => 1, A => 2 }}`;
+  |                                  ^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> errorPositionReportedInsideTemplateInterpolation.tt:1:21
+  |
+1 | const s = `${match (x) { A => 1, A => 2 }}`;
+  |                     ^
+error[match-duplicate-arm]: match: duplicate arm "A"
+ --> errorPositionReportedInsideTemplateInterpolation.tt:1:34
+  |
+1 | const s = `${match (x) { A => 1, A => 2 }}`;
+  |                                  ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

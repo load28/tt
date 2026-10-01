@@ -1,0 +1,13 @@
+//// [nestedPatternArmMayRepeatATag.tt] 11 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:1 -> 42:1 len 10  "const n = "
+2:18 -> 22:17 len 1  "r"
+3:18 -> 25:15 len 5  "value"
+3:25 -> 25:22 len 1  "v"
+3:32 -> 26:18 len 1  "v"
+4:6 -> 30:15 len 5  "value"
+4:16 -> 31:18 len 1  "0"
+5:7 -> 35:15 len 5  "error"
+5:17 -> 36:18 len 2  "-1"
+6:2 -> 42:19 len 2  ";\n"
+

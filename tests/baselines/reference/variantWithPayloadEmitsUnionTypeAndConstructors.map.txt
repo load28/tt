@@ -1,0 +1,10 @@
+//// [variantWithPayloadEmitsUnionTypeAndConstructors.tt] 8 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+3:18 -> 3:31 len 6  "number"
+3:18 -> 7:20 len 6  "number"
+4:15 -> 4:28 len 6  "number"
+4:15 -> 8:17 len 6  "number"
+4:31 -> 4:44 len 6  "number"
+4:31 -> 8:33 len 6  "number"
+6:2 -> 10:3 len 1  "\n"
+

@@ -1,0 +1,12 @@
+//// [pipelineHeadReclaimsALiftedMatch.tt] 10 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 1  "\n"
+2:1 -> 49:1 len 10  "const a = "
+2:18 -> 30:19 len 1  "e"
+2:25 -> 33:17 len 1  "v"
+2:31 -> 34:18 len 1  "v"
+2:39 -> 38:18 len 1  "0"
+2:47 -> 46:14 len 6  "double"
+2:53 -> 49:19 len 2  ";\n"
+

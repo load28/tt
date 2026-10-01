@@ -1,0 +1,12 @@
+=== tryExpressionMayContainAMatch2.tt ===
+function f(): X {
+>f : function f(): X
+>X : type X = /*unresolved*/ any
+  const x = try wrap(match (m) { Ok(value) => value, Err(_) => 0 });
+>x : const x: any
+>value : const value: any
+>value : const value: any
+>_ : const _: any
+  return x;
+>x : const x: any
+

@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./isPatternsLowerToHostOwnedInstanceofControlFlow.tt → $DIR/out/isPatternsLowerToHostOwnedInstanceofControlFlow.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'err'.
+ --> isPatternsLowerToHostOwnedInstanceofControlFlow.tt:1:20
+  |
+1 | const msg = match (err) {
+  |                    ^^^
+error[ts2304]: Cannot find name 'err'.
+ --> isPatternsLowerToHostOwnedInstanceofControlFlow.tt:5:13
+  |
+5 | _ => String(err),
+  |             ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+isPatternsLowerToHostOwnedInstanceofControlFlow.ts(3,17): error TS2304: Cannot find name 'err'.
+isPatternsLowerToHostOwnedInstanceofControlFlow.ts(21,25): error TS2304: Cannot find name 'err'.

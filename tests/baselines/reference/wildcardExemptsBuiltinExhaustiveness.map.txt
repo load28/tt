@@ -1,0 +1,8 @@
+//// [wildcardExemptsBuiltinExhaustiveness.tt] 6 mapping(s)
+1:1 -> 1:1 len 33  "const f = (o: Option<number>) => "
+1:41 -> 4:19 len 1  "o"
+1:51 -> 7:17 len 5  "value"
+1:61 -> 8:18 len 5  "value"
+1:73 -> 12:18 len 1  "0"
+1:76 -> 18:2 len 2  ";\n"
+

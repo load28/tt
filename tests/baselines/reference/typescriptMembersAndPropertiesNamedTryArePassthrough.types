@@ -1,0 +1,12 @@
+=== typescriptMembersAndPropertiesNamedTryArePassthrough.tt ===
+const object = { try: 1 };
+>object : const object: {
+>       try: number;
+>   }
+>try : (property) try: number
+object.try();
+>object : const object: {
+>       try: number;
+>   }
+>try : (property) try: () => any
+

@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_02.rs::direct_return_match_does_not_require_a_semicolon
+function f(x: T) {
+  return match (x) { A(value) => value, _ => 0 }
+}

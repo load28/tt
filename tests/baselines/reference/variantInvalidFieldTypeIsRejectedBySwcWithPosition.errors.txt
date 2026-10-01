@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[variant-invalid-field-type]: variant X: invalid type for field `f`: Expected ';', got 'number'
+ --> ./variantInvalidFieldTypeIsRejectedBySwcWithPosition.tt:2:8
+  |
+2 |   A(f: number number),
+  |        ^^^^^^^^^^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[variant-invalid-field-type]: variant X: invalid type for field `f`: Expected ';', got 'number'
+ --> variantInvalidFieldTypeIsRejectedBySwcWithPosition.tt:2:8
+  |
+2 |   A(f: number number),
+  |        ^^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

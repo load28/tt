@@ -1,0 +1,9 @@
+//// [guardedBlockBodyUsesLabeledBreak.tt] 7 mapping(s)
+1:1 -> 18:1 len 10  "const r = "
+1:18 -> 3:17 len 1  "x"
+1:25 -> 6:15 len 1  "v"
+1:31 -> 7:11 len 5  "v > 0"
+1:41 -> 8:10 len 8  " log(v);"
+1:58 -> 14:16 len 1  "0"
+1:61 -> 18:19 len 1  ";"
+

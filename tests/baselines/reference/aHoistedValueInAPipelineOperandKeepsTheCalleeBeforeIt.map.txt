@@ -1,0 +1,13 @@
+//// [aHoistedValueInAPipelineOperandKeepsTheCalleeBeforeIt.tt] 11 mapping(s)
+1:1 -> 1:1 len 233  "declare function f(a: any, b?: any): any;\ndeclar"...
+7:1 -> 29:1 len 17  "export const v = "
+7:18 -> 11:19 len 1  "f"
+7:19 -> 25:18 len 1  "("
+7:27 -> 13:19 len 1  "n"
+7:32 -> 15:12 len 1  "0"
+7:37 -> 16:18 len 1  "1"
+7:45 -> 20:18 len 1  "2"
+7:48 -> 25:25 len 1  ")"
+7:53 -> 26:12 len 6  "String"
+7:59 -> 29:24 len 2  ";\n"
+

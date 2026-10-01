@@ -1,0 +1,9 @@
+=== nestedPatternMixesPlainBindingsAtEachLevel.tt ===
+const n = match (r) {
+>n : const n: any
+  Both(left, right: Some(value)) => left + value,
+>left : const left: any
+>value : const value: any
+>left : const left: any
+>value : const value: any
+

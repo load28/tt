@@ -14,16 +14,6 @@ fn err(src: &str) -> ttc::CompileError {
     compile(src, &Options::default()).expect_err("expected a compile error")
 }
 
-/// Every `help:` sentence the diagnostics of `src` carry. A rule's advice
-/// lives in this channel and nowhere else (TASK-218), so a test that is
-/// about the advice reads it from here rather than from a message.
-fn advice(src: &str) -> Vec<String> {
-    ttc::analyze(src, &Options::default())
-        .iter()
-        .flat_map(|d| d.suggestions.iter().map(|s| s.message.clone()))
-        .collect()
-}
-
 fn ok_tsx(src: &str) -> String {
     compile(
         src,
@@ -38,106 +28,6 @@ fn ok_tsx(src: &str) -> String {
 /* ------------------------------------------------------------------ */
 /* TASK-311 reported composition regressions                           */
 /* ------------------------------------------------------------------ */
-
-#[test]
-fn statement_position_match_is_a_supported_owner() {
-    let output = ok("variant R { Ok(value: number), Err(error: string) }\n\
-         const f = (x: number) => { match (R.Ok(x)) {\n\
-           Ok(value) => { console.log(value); },\n\
-           Err(error) => { console.log(error); },\n\
-         }; };\n");
-    assert!(output.contains("switch ($tt_m.kind)"), "{output}");
-    assert!(output.contains("console.log(value)"), "{output}");
-}
-
-#[test]
-fn jsx_child_match_preserves_preceding_siblings_as_expressions() {
-    let output = ok_tsx(
-        r#"variant Maybe { Some(value: string), None }
-declare const value: Maybe;
-const view = <main><h1>title</h1><form>form</form>{match (value) {
-  Some(value) => <p>{value}</p>, None => null,
-}}</main>;
-"#,
-    );
-    assert!(output.contains("<h1>title</h1>"), "{output}");
-    assert!(output.contains("<form>form</form>"), "{output}");
-    assert!(!output.contains(">$tt_v"), "{output}");
-}
-
-#[test]
-fn result_region_composes_with_nested_match_once() {
-    let output = ok("variant R { Ok(value: number), Err(error: string) }\n\
-         declare const g: () => R;\n\
-         const f = (): R => result {\n\
-           const n = try g();\n\
-           const doubled = match (n) { 0 => 0, _ => n * 2 };\n\
-           return doubled;\n\
-         };\n");
-    assert_eq!(output.matches("switch (").count(), 1, "{output}");
-    assert!(!output.contains("= let "), "{output}");
-}
-
-#[test]
-fn jsx_match_composes_a_result_scrutinee_once() {
-    let output = ok_tsx(
-        r#"import type { TResult } from "@tt/std";
-declare const outcome: TResult<string, string>;
-const view = <aside>{match (result {
-  const value = try outcome;
-  return value |> .toUpperCase();
-}) {
-  Ok(value) => <b>{value}</b>,
-  Err(error) => <code>{error}</code>,
-}}</aside>;
-"#,
-    );
-    assert_eq!(output.matches("const $tt_t").count(), 1, "{output}");
-    assert_eq!(output.matches("outcome").count(), 2, "{output}");
-    assert!(
-        output.contains("const view = <aside>{$tt_v0}</aside>;"),
-        "{output}"
-    );
-    assert!(!output.contains("match (result"), "{output}");
-}
-
-#[test]
-fn sibling_jsx_tt_values_share_one_owner_rewrite() {
-    let output = ok_tsx(
-        r#"declare const n: number;
-const view = () => (<aside>
-  {match (n) { 0 => <b>zero</b>, _ => <b>other</b> }}
-  {match (n) { 0 => <i>zero</i>, _ => <i>other</i> }}
-</aside>);
-"#,
-    );
-    assert_eq!(
-        output.matches("const view = () => {").count(),
-        1,
-        "{output}"
-    );
-    assert!(
-        output.contains("<aside>\n  {($tt_subject = n,") && output.contains("{($tt_subject_1 = n,"),
-        "{output}"
-    );
-}
-
-#[test]
-fn jsx_value_inside_if_let_body_gets_its_own_host_rewrite() {
-    let output = ok_tsx(
-        r#"variant E { A(value: string), B }
-const view = (node: E) => {
-  if let A(value) = node {
-    return <section data-kind={match (node) { A => "a", B => "b" }}>{value |> .trim()}</section>;
-  } else {
-    return null;
-  }
-};
-"#,
-    );
-    assert_eq!(output.matches("switch (").count(), 1, "{output}");
-    assert!(output.contains("data-kind={$tt_v0}"), "{output}");
-}
 
 #[test]
 fn value_region_nesting_matrix_compiles_every_directed_pair() {

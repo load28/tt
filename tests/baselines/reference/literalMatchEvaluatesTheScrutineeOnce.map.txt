@@ -1,0 +1,8 @@
+//// [literalMatchEvaluatesTheScrutineeOnce.tt] 6 mapping(s)
+1:1 -> 15:1 len 10  "const v = "
+1:18 -> 3:17 len 10  "getValue()"
+1:32 -> 5:10 len 3  "\"a\""
+1:39 -> 6:18 len 5  "foo()"
+1:51 -> 10:18 len 5  "bar()"
+1:58 -> 15:19 len 1  ";"
+

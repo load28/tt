@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_02.rs::exhaustiveness_is_declaration_order_independent
+const f = (s: Shape) => match (s) {
+  Circle(radius) => radius,
+};
+variant Shape { Circle(radius: number), Point }

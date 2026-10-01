@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./fileWithoutFlowGetsNoCompositionHelper.tt → $DIR/out/fileWithoutFlowGetsNoCompositionHelper.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> fileWithoutFlowGetsNoCompositionHelper.tt:1:11
+  |
+1 | const a = x |> f;
+  |           ^
+error[ts2304]: Cannot find name 'f'.
+ --> fileWithoutFlowGetsNoCompositionHelper.tt:1:16
+  |
+1 | const a = x |> f;
+  |                ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+fileWithoutFlowGetsNoCompositionHelper.ts(4,18): error TS2304: Cannot find name 'x'.
+fileWithoutFlowGetsNoCompositionHelper.ts(4,21): error TS2304: Cannot find name 'f'.

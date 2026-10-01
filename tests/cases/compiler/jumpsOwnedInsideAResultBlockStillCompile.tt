@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_11.rs::jumps_owned_inside_a_result_block_still_compile
+import type { TResult } from "@tt/std";
+declare const x: TResult<number, string>;
+function f() { for (;;) { const r = result { const v = try x; inner: for (;;) { if (v) break inner; continue inner; } for (;;) { break; } return v; }; } }

@@ -1,0 +1,7 @@
+=== typescriptEnumIsPassthrough1.tt ===
+enum Color { Red, Green, Blue }
+>Color : enum Color
+>Red : (enum member) Color.Red = 0
+>Green : (enum member) Color.Green = 1
+>Blue : (enum member) Color.Blue = 2
+

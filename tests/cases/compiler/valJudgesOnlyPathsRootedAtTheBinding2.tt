@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_07.rs::val_judges_only_paths_rooted_at_the_binding
+val const config = { debug: false };
+class K {
+  config = { debug: false };
+  m() { this.config.debug = true; }
+}

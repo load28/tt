@@ -1,0 +1,23 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tupleMatchEmitsJointIfChain.tt → $DIR/out/tupleMatchEmitsJointIfChain.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2552]: Cannot find name 'dir'. Did you mean 'Dir'?
+ --> tupleMatchEmitsJointIfChain.tt:4:21
+  |
+2 | variant Dir { North(), South }
+  |         --- 'Dir' is declared here.
+3 | variant Speed { Fast(), Slow }
+4 | const step = match (dir, speed) {
+  |                     ^^^
+error[ts2552]: Cannot find name 'speed'. Did you mean 'Speed'?
+ --> tupleMatchEmitsJointIfChain.tt:4:26
+  |
+3 | variant Speed { Fast(), Slow }
+  |         ----- 'Speed' is declared here.
+4 | const step = match (dir, speed) {
+  |                          ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tupleMatchEmitsJointIfChain.ts(36,18): error TS2552: Cannot find name 'dir'. Did you mean 'Dir'?
+tupleMatchEmitsJointIfChain.ts(37,18): error TS2552: Cannot find name 'speed'. Did you mean 'Speed'?

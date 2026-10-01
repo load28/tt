@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_12.rs::generated_text_follows_a_line_ended_by_any_line_terminator
+"use client" // client declare const o: { p: number };
+export const a = o.p |> String;

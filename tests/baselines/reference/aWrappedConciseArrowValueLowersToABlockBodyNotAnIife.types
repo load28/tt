@@ -1,0 +1,63 @@
+=== aWrappedConciseArrowValueLowersToABlockBodyNotAnIife.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const g = async (p: Promise<V>) => match (await p) { A(n) => n, B => 0 } as number;
+>g : const g: (p: Promise<V>) => Promise<number>
+>p : (parameter) p: Promise<V>
+>Promise : interface Promise<T>
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>p : (parameter) p: Promise<V>
+>n : const n: number
+>n : const n: number
+const h = (v: V) => match (v) { A(n) => n, B => 0 } satisfies number;
+>h : const h: (v: V) => number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+const i = (v: V) => (match (v) { A(n) => n, B => 0 }) as number;
+>i : const i: (v: V) => number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+const j = (v: V) => (match (v) { A(n) => n, B => 0 });
+>j : const j: (v: V) => number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./directReturnMatchKeepsAwaitInTheHostFunction.tt → $DIR/out/directReturnMatchKeepsAwaitInTheHostFunction.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'T'.
+ --> directReturnMatchKeepsAwaitInTheHostFunction.tt:1:21
+  |
+1 | async function f(x: T) { return match (x) { A(url) => await fetch(url), _ => null }; }
+  |                     ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+directReturnMatchKeepsAwaitInTheHostFunction.ts(1,21): error TS2304: Cannot find name 'T'.

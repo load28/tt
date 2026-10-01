@@ -1,0 +1,4 @@
+=== unparenthesizedArrowStepIsAnError.tt ===
+const a = x |> n => n + 1;
+>a : const a: any
+

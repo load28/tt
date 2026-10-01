@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_04.rs::verify_rejects_invalid_passthrough_typescript
+const = 5;

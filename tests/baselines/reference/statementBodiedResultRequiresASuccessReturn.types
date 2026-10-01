@@ -1,0 +1,6 @@
+=== statementBodiedResultRequiresASuccessReturn.tt ===
+const value = result { const item = try read(); use(item); };
+>value : const value: any
+>item : const item: any
+>item : const item: any
+

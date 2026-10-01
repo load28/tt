@@ -1,0 +1,4 @@
+=== computedAndNonModuleImportLookalikesRemainUnchanged1.tt ===
+const load = import('./feature.tt' + suffix);
+>load : const load: Promise<any>
+

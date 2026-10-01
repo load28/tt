@@ -1,0 +1,9 @@
+//// [guardAfterUnguardedSameTagIsDuplicate.tt] 7 mapping(s)
+1:1 -> 19:1 len 10  "const r = "
+1:18 -> 3:17 len 1  "x"
+1:28 -> 6:18 len 1  "1"
+1:36 -> 10:11 len 1  "c"
+1:41 -> 11:20 len 1  "2"
+1:49 -> 15:16 len 1  "0"
+1:52 -> 19:19 len 1  ";"
+

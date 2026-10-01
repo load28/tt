@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./wildcardExemptsBuiltinExhaustiveness.tt → $DIR/out/wildcardExemptsBuiltinExhaustiveness.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2749]: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'?
+ --> wildcardExemptsBuiltinExhaustiveness.tt:1:15
+  |
+1 | const f = (o: Option<number>) => match (o) { Some(value) => value, _ => 0 };
+  |               ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+wildcardExemptsBuiltinExhaustiveness.ts(1,15): error TS2749: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'?

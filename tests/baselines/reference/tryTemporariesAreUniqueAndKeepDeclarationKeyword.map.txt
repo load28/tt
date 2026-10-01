@@ -1,0 +1,9 @@
+//// [tryTemporariesAreUniqueAndKeepDeclarationKeyword.tt] 7 mapping(s)
+1:1 -> 1:1 len 20  "function f(): X {\n  "
+2:7 -> 6:7 len 9  "a: number"
+2:23 -> 2:18 len 3  "g()"
+2:27 -> 6:32 len 3  "\n  "
+3:7 -> 11:7 len 1  "b"
+3:15 -> 7:18 len 4  "h(a)"
+3:20 -> 11:24 len 18  "\n  return k(b);\n}\n"
+

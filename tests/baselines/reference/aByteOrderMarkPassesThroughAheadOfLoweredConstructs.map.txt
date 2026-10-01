@@ -1,0 +1,11 @@
+//// [aByteOrderMarkPassesThroughAheadOfLoweredConstructs.tt] 9 mapping(s)
+1:1 -> 1:1 len 3  "\u{feff}"
+1:28 -> 20:28 len 6  "number"
+1:28 -> 23:17 len 6  "number"
+1:43 -> 25:3 len 28  "\nexport const f = (o: O) => "
+2:35 -> 29:19 len 1  "o"
+2:45 -> 32:17 len 5  "value"
+2:55 -> 33:18 len 5  "value"
+2:70 -> 37:18 len 1  "0"
+2:73 -> 46:2 len 2  ";\n"
+

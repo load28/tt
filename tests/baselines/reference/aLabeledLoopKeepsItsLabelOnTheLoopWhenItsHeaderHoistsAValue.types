@@ -1,0 +1,41 @@
+=== aLabeledLoopKeepsItsLabelOnTheLoopWhenItsHeaderHoistsAValue.tt ===
+variant S { A(n: number), B }
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => S
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const s: S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+declare const c: boolean;
+>c : const c: boolean
+function f(xs: number[][]) {
+>f : function f(xs: number[][]): void
+>xs : (parameter) xs: number[][]
+  lbl: for (const q of match (s) { A(n) => xs[n], B => [] }) { if (c) continue lbl; }
+>q : const q: number
+>s : const s: S
+>n : const n: number
+>xs : (parameter) xs: number[][]
+>n : const n: number
+>c : const c: boolean
+  if (c) outer: inner: for (const q of match (s) { A(n) => xs[n], B => [] }) { continue outer; }
+>c : const c: boolean
+>q : const q: number
+>s : const s: S
+>n : const n: number
+>xs : (parameter) xs: number[][]
+>n : const n: number
+

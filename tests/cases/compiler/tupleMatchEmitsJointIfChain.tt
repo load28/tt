@@ -1,0 +1,9 @@
+// @origin: tests/compile/cases_06.rs::tuple_match_emits_joint_if_chain
+
+variant Dir { North(), South }
+variant Speed { Fast(), Slow }
+const step = match (dir, speed) {
+  (North, Fast) => 2,
+  (North, Slow) => 1,
+  (South, _) => -1,
+};

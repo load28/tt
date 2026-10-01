@@ -1,0 +1,11 @@
+=== letElseDivergesViaThrowAndContinue2.tt ===
+function f(): number {
+>f : function f(): number
+  for (const x of xs) {
+>x : const x: any
+    const Some(v) = find(x) else { continue; };
+>v : const v: any
+>x : const x: any
+    use(v);
+>v : const v: any
+

@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_07.rs::val_judges_only_paths_rooted_at_the_binding
+val const o = { p: 1 };
+({ a: o.p } = { a: 2 });

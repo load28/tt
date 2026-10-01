@@ -1,0 +1,6 @@
+=== letElseWithoutSemicolonIsNotRecognized.tt ===
+function f(): number {
+>f : function f(): number
+  const Some(v) = find() else { return 0; }
+>Some : const Some: any
+

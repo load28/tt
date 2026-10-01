@@ -1,0 +1,4 @@
+=== valDeclarationModifierIsErasedFromTheOutput2.tt ===
+val let state = getState();
+>state : let state: any
+

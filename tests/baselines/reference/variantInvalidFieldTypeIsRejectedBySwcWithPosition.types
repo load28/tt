@@ -1,0 +1,10 @@
+=== variantInvalidFieldTypeIsRejectedBySwcWithPosition.tt ===
+variant X {
+>X : type X = {
+>       kind: "A";
+>       f: any;
+>   }
+  A(f: number number),
+>A : (property) A: (f: any) => X
+>f : (property) f: any
+

@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_01.rs::tuple_match_accepts_comparison_expression_subjects
+variant V { A, B }
+declare const a: number; declare const b: number; declare const v: V;
+declare const id: <T>(value: T) => T;
+const n = match (a < b, v) { (_, A) => 1, _ => 0 };
+const m = match (id<number>(0), v) { (_, A) => 1, _ => 0 };
+const k = match ((a < b), (b > (a)), v) { (_, _, A) => 1, _ => 0 };
+const j = match (a < b, (b > (a)), v) { (_, _, A) => 1, _ => 0 };

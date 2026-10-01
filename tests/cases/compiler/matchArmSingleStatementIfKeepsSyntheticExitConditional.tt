@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_01.rs::match_arm_single_statement_if_keeps_synthetic_exit_conditional
+variant V { A(n: number), B }
+const f = (v: V): number => match (v) {
+A(n) => { if (n === 0) return 100; return n; },
+B => -1,
+};

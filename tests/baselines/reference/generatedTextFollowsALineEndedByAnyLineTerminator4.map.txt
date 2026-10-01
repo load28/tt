@@ -1,0 +1,7 @@
+//// [generatedTextFollowsALineEndedByAnyLineTerminator4.tt] 5 mapping(s)
+1:1 -> 1:1 len 22  "#!/usr/bin/env node\u{2028}"
+1:23 -> 2:1 len 49  "declare const o: { p: number };\nexport const a ="...
+2:18 -> 3:25 len 3  "o.p"
+2:25 -> 3:30 len 6  "String"
+2:31 -> 3:37 len 2  ";\n"
+

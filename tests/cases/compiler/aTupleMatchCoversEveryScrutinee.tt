@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_09.rs::a_tuple_match_covers_every_scrutinee
+variant S { A(x: number), B }
+variant T { C(), D }
+const v = match (s, t) { (A(x), C) => x };

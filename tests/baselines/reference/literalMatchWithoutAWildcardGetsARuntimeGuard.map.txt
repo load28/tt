@@ -1,0 +1,9 @@
+//// [literalMatchWithoutAWildcardGetsARuntimeGuard.tt] 7 mapping(s)
+1:1 -> 36:1 len 14  "const label = "
+1:22 -> 21:17 len 3  "dir"
+1:29 -> 23:10 len 3  "\"a\""
+1:36 -> 24:22 len 1  "1"
+1:39 -> 27:10 len 3  "\"b\""
+1:46 -> 28:22 len 1  "2"
+1:49 -> 36:27 len 1  ";"
+

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./nestedPatternArmMayRepeatATag.tt → $DIR/out/nestedPatternArmMayRepeatATag.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'r'.
+ --> nestedPatternArmMayRepeatATag.tt:2:18
+  |
+2 | const n = match (r) {
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+nestedPatternArmMayRepeatATag.ts(22,17): error TS2304: Cannot find name 'r'.

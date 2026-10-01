@@ -1,0 +1,22 @@
+=== anAmbientModuleVariantDeclaresItsConstructorObject.tt ===
+declare namespace N { variant P { Q, R(v: number) } }
+>N : namespace N
+>P : type P = {
+>       kind: "Q";
+>   } | {
+>       kind: "R";
+>       v: number;
+>   }
+>Q : (property) Q: {
+>       readonly kind: "Q";
+>   }
+>R : (property) R: (v: number) => P
+>v : (property) v: number
+declare module "m" { export variant P3 { Q } }
+>P3 : type P3 = {
+>       kind: "Q";
+>   }
+>Q : (property) Q: {
+>       readonly kind: "Q";
+>   }
+

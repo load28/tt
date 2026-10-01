@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseDivergenceSeesAnInlineIfLet5.tt → $DIR/out/letElseDivergenceSeesAnInlineIfLet5.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseDivergenceSeesAnInlineIfLet5.tt:3:19
+  |
+3 |   const Some(v) = find() else { if let Ok(value) = r { while (true) { return value; } } else { return 1; } };
+  |                   ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseDivergenceSeesAnInlineIfLet5.ts(9,18): error TS2304: Cannot find name 'find'.

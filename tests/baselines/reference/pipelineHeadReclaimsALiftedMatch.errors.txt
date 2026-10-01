@@ -1,0 +1,20 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./pipelineHeadReclaimsALiftedMatch.tt → $DIR/out/pipelineHeadReclaimsALiftedMatch.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2552]: Cannot find name 'e'. Did you mean 'E'?
+ --> pipelineHeadReclaimsALiftedMatch.tt:2:18
+  |
+1 | variant E { A(v: number), B }
+  |         - 'E' is declared here.
+2 | const a = match (e) { A(v) => v, B => 0, } |> double;
+  |                  ^
+error[ts2304]: Cannot find name 'double'.
+ --> pipelineHeadReclaimsALiftedMatch.tt:2:47
+  |
+2 | const a = match (e) { A(v) => v, B => 0, } |> double;
+  |                                               ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+pipelineHeadReclaimsALiftedMatch.ts(30,19): error TS2552: Cannot find name 'e'. Did you mean 'E'?
+pipelineHeadReclaimsALiftedMatch.ts(46,14): error TS2304: Cannot find name 'double'.

@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_08.rs::tags_of_a_hand_written_union_are_not_resolution_errors
+type Msg = { kind: "Ping" } | { kind: "Pong"; n: number };
+const a = match (m) { Ping => 0, Pong(n) => n, _ => -1 };

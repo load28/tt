@@ -1,0 +1,4 @@
+=== tryAtModuleTopLevelIsAnError3.tt ===
+namespace N {
+>N : namespace N
+

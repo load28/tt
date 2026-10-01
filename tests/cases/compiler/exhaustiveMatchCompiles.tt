@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_02.rs::exhaustive_match_compiles
+
+variant Shape { Circle(radius: number), Rect(w: number, h: number), Point }
+const f = (s: Shape) => match (s) {
+  Circle(radius) => radius,
+  Rect(w, h) => w * h,
+  Point => 0,
+};

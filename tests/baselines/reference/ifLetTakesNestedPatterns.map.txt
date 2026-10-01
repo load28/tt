@@ -1,0 +1,8 @@
+//// [ifLetTakesNestedPatterns.tt] 6 mapping(s)
+1:1 -> 1:1 len 23  "function f(r: Res) {\n  "
+2:25 -> 5:15 len 5  "value"
+2:32 -> 5:22 len 1  "v"
+2:38 -> 3:20 len 1  "r"
+2:42 -> 6:7 len 7  "use(v);"
+2:51 -> 8:4 len 3  "\n}\n"
+

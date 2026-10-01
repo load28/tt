@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::literal_match_evaluates_the_scrutinee_once
+const v = match (getValue()) { "a" => foo(), _ => bar() };

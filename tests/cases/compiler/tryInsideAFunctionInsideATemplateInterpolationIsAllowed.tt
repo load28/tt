@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::try_inside_a_function_inside_a_template_interpolation_is_allowed
+const s = `${run(() => { try g(); return h(); })}`;

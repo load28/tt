@@ -1,0 +1,3 @@
+//// [valNeverCallsAMethodAMutationFromItsName3.tt] 1 mapping(s)
+1:5 -> 1:1 len 43  "const items: number[] = [];\nitems.push(1);\n"
+

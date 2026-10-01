@@ -1,0 +1,4 @@
+=== aFileWithoutTtConstructsStillReportsThroughTheOutputSelfCheck.tt ===
+const q = ;
+>q : const q: any
+

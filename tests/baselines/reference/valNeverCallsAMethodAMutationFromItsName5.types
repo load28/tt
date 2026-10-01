@@ -1,0 +1,37 @@
+=== valNeverCallsAMethodAMutationFromItsName5.tt ===
+val const s = { u: { p: { tags: [] as string[] } } };
+>s : const s: {
+>       u: {
+>           p: {
+>               tags: string[];
+>           };
+>       };
+>   }
+>u : (property) u: {
+>       p: {
+>           tags: string[];
+>       };
+>   }
+>p : (property) p: {
+>       tags: string[];
+>   }
+>tags : (property) tags: string[]
+s.u.p.tags.push("tt");
+>s : const s: {
+>       u: {
+>           p: {
+>               tags: string[];
+>           };
+>       };
+>   }
+>u : (property) u: {
+>       p: {
+>           tags: string[];
+>       };
+>   }
+>p : (property) p: {
+>       tags: string[];
+>   }
+>tags : (property) tags: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+

@@ -1,0 +1,7 @@
+//// [matchInSpreadOperandsEntersTheEvaluationProtocol2.tt] 5 mapping(s)
+1:1 -> 9:1 len 19  "const value = [ ..."
+1:27 -> 3:17 len 4  "kind"
+1:40 -> 9:42 len 3  "[1]"
+1:50 -> 9:48 len 2  "[]"
+1:54 -> 9:51 len 4  " ];\n"
+

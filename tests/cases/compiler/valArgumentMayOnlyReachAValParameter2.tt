@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::val_argument_may_only_reach_a_val_parameter
+function read(val user: User) { log(user.name); }
+function update(user: User) { user.name = "Lee"; }
+function process(val user: User) {
+  update(user);
+}

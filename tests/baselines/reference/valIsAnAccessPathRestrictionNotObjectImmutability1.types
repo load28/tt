@@ -1,0 +1,19 @@
+=== valIsAnAccessPathRestrictionNotObjectImmutability1.tt ===
+let original = { count: 0 };
+>original : let original: {
+>       count: number;
+>   }
+>count : (property) count: number
+val const view = original;
+>view : const view: {
+>       count: number;
+>   }
+>original : let original: {
+>       count: number;
+>   }
+original.count++;
+>original : let original: {
+>       count: number;
+>   }
+>count : (property) count: number
+

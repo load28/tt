@@ -123,9 +123,12 @@ path is the reason that stage exists.
 
 - A bug fix → one case file under `tests/cases/` (see "Adding a test case"
   below)
-- 출력 형태 → `tests/compile.rs`
+- Emitted output, diagnostics, type-check results, runtime behaviour → case
+  files under `tests/cases/` (see "Adding a test case" below)
+- A library API other than the emission, non-default `Options` →
+  `tests/compile.rs`; the CLI, files, or processes → `tests/integration.rs`
+  or `tests/cli*.rs`
 - TS 통과 계약 → `tests/passthrough.rs`
-- 타입/런타임 의미 → `tests/integration.rs`
 - **산출물 전체**가 계약인 것(방출된 TypeScript, 렌더된 진단) →
   `tests/fixtures/` 스냅샷. 픽스처 디렉터리에 `input.tt`를 넣고
   `UPDATE_EXPECT=1 cargo test --test snapshot`으로 기대 파일을 만든 뒤 **그 diff를

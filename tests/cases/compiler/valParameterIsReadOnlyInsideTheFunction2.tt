@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_08.rs::val_parameter_is_read_only_inside_the_function
+const read = (val user: User) => user.name = "Lee";

@@ -1,0 +1,7 @@
+//// [matchDuplicateArmIsError.tt] 5 mapping(s)
+1:1 -> 36:1 len 10  "const r = "
+1:18 -> 21:17 len 1  "x"
+1:28 -> 24:18 len 1  "1"
+1:36 -> 28:18 len 1  "2"
+1:39 -> 36:19 len 1  ";"
+

@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_10.rs::a_tuple_match_over_matches_names_each_nested_subject
+variant S { A(v: number), B(w: number), C }
+declare const s: S;
+declare const t: S;
+const mm = match (match (s) { A(v) => S.B(v), _ => S.C }, match (t) { A(v) => S.B(v), _ => S.C }) { (B(w), B) => "b" + w, _ => "x" };

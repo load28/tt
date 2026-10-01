@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_06.rs::a_nested_pattern_covers_exactly_what_it_matches
+
+const n = match (r) {
+  Ok(value: Some(value: v)) => v,
+  Err(error) => 0,
+};

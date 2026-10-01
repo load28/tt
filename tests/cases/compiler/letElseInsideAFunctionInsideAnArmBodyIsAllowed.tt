@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_04.rs::let_else_inside_a_function_inside_an_arm_body_is_allowed
+const x = match (r) {
+  Ok(value) => { const f = () => { const Some(v) = h(value) else { return 0; }; return v; }; return f(); },
+  _ => 0,
+};

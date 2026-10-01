@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseExpressionMayBeAMatch.tt → $DIR/out/letElseExpressionMayBeAMatch.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> letElseExpressionMayBeAMatch.tt:2:26
+  |
+2 |   const Some(v) = match (x) { A => some(1), _ => none() } else { return 0; };
+  |                          ^
+error[ts2304]: Cannot find name 'some'.
+ --> letElseExpressionMayBeAMatch.tt:2:36
+  |
+2 |   const Some(v) = match (x) { A => some(1), _ => none() } else { return 0; };
+  |                                    ^^^^
+error[ts2304]: Cannot find name 'none'.
+ --> letElseExpressionMayBeAMatch.tt:2:50
+  |
+2 |   const Some(v) = match (x) { A => some(1), _ => none() } else { return 0; };
+  |                                                  ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseExpressionMayBeAMatch.ts(3,19): error TS2304: Cannot find name 'x'.
+letElseExpressionMayBeAMatch.ts(6,18): error TS2304: Cannot find name 'some'.
+letElseExpressionMayBeAMatch.ts(10,18): error TS2304: Cannot find name 'none'.

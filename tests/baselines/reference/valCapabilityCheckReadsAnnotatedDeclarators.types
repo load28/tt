@@ -1,0 +1,18 @@
+=== valCapabilityCheckReadsAnnotatedDeclarators.tt ===
+type Handler = (u: Box) => void;
+>Handler : type Handler = (u: Box) => void
+>u : (parameter) u: Box
+>Box : type Box = /*unresolved*/ any
+const update: Handler = (u) => { u.n = 1; };
+>update : const update: Handler
+>Handler : type Handler = (u: Box) => void
+>u : (parameter) u: Box
+>u : (parameter) u: Box
+function f(val b: Box) {
+>f : function f(b: Box): void
+>b : (parameter) b: Box
+>Box : type Box = /*unresolved*/ any
+  update(b);
+>update : const update: (u: Box) => void
+>b : (parameter) b: Box
+

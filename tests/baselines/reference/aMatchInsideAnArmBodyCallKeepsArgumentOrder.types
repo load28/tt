@@ -1,0 +1,45 @@
+=== aMatchInsideAnArmBodyCallKeepsArgumentOrder.tt ===
+variant S { A(v: number), B(w: number), C }
+>S : type S = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>       w: number;
+>   } | {
+>       kind: "C";
+>   }
+>A : (property) A: (v: number) => S
+>v : (property) v: number
+>B : (property) B: (w: number) => S
+>w : (property) w: number
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+declare const s: S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>       w: number;
+>   } | {
+>       kind: "C";
+>   }
+declare function eff(): number;
+>eff : function eff(): number
+declare function g(a: number, b: number): number;
+>g : function g(a: number, b: number): number
+>a : (parameter) a: number
+>b : (parameter) b: number
+const x = match (s) { A(v) => g(eff(), match (s) { B(w) => w, _ => 0 }), _ => 0 };
+>x : const x: number
+>s : const s: S
+>v : const v: number
+>g : function g(a: number, b: number): number
+>eff : function eff(): number
+>s : const s: S
+>w : const w: number
+>w : const w: number
+

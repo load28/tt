@@ -1,0 +1,13 @@
+=== untypedTryMethodsSurviveNextToTtConstructs.tt ===
+variant V { A }
+>V : type V = {
+>       kind: "A";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+interface X { try(x); }
+>X : interface X
+>try : (method) X.try(x: any): any
+>x : (parameter) x: any
+

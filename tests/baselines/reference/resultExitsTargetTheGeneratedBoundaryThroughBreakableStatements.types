@@ -1,0 +1,12 @@
+=== resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.tt ===
+const fromFor = result { for (const item of items) { return try read(item); } return 0; };
+>fromFor : const fromFor: any
+>item : const item: any
+>item : const item: any
+const fromWhile = result { while (ready()) { return try read(); } return 0; };
+>fromWhile : const fromWhile: any
+const fromDo = result { do { return try read(); } while (ready()); return 0; };
+>fromDo : const fromDo: any
+const fromSwitch = result { switch (tag) { default: return try read(); } return 0; };
+>fromSwitch : const fromSwitch: any
+

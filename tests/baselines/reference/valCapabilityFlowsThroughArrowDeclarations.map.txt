@@ -1,0 +1,4 @@
+//// [valCapabilityFlowsThroughArrowDeclarations.tt] 2 mapping(s)
+1:1 -> 1:1 len 70  "const update = (user: User) => { user.name = \"x\""...
+2:22 -> 2:18 len 32  "user: User) {\n  update(user);\n}\n"
+

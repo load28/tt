@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_13.rs::a_comparison_comma_still_separates_scrutinees
+declare const a: number, b: number, c: number;
+export const r = match (a < b, c > a) { (_, _) => 1 };

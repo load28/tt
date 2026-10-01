@@ -1,0 +1,4 @@
+//// [valCapabilityCheckReadsAnnotatedDeclarators.tt] 2 mapping(s)
+1:1 -> 1:1 len 89  "type Handler = (u: Box) => void;\nconst update: H"...
+3:16 -> 3:12 len 25  "b: Box) {\n  update(b);\n}\n"
+

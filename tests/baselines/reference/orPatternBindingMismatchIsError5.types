@@ -1,0 +1,7 @@
+=== orPatternBindingMismatchIsError5.tt ===
+const r = match (x) { A(v) | B(_) => v, _ => 0 };
+>r : const r: any
+>v : const v: any
+>_ : const _: any
+>v : const v: any
+

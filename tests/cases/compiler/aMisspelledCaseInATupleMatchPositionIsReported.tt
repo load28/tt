@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_08.rs::a_misspelled_case_in_a_tuple_match_position_is_reported
+variant Dir { North(dx: number), South }
+variant Speed { Fast(v: number), Slow }
+const n = match (d, s) {
+  (North(dx), Fast(v)) => dx + v,
+  (Nrth(dx), Slow) => dx,
+  (South, _) => 3,
+};

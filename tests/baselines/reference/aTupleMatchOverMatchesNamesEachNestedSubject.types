@@ -1,0 +1,87 @@
+=== aTupleMatchOverMatchesNamesEachNestedSubject.tt ===
+variant S { A(v: number), B(w: number), C }
+>S : type S = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>       w: number;
+>   } | {
+>       kind: "C";
+>   }
+>A : (property) A: (v: number) => S
+>v : (property) v: number
+>B : (property) B: (w: number) => S
+>w : (property) w: number
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+declare const s: S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>       w: number;
+>   } | {
+>       kind: "C";
+>   }
+declare const t: S;
+>t : const t: S
+>S : type S = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>       w: number;
+>   } | {
+>       kind: "C";
+>   }
+const mm = match (match (s) { A(v) => S.B(v), _ => S.C }, match (t) { A(v) => S.B(v), _ => S.C }) { (B(w), B) => "b" + w, _ => "x" };
+>mm : const mm: string
+>s : const s: S
+>v : const v: number
+>S : const S: {
+>       A: (v: number) => S;
+>       B: (w: number) => S;
+>       C: {
+>           readonly kind: "C";
+>       };
+>   }
+>B : (property) B: (w: number) => S
+>v : const v: number
+>S : const S: {
+>       A: (v: number) => S;
+>       B: (w: number) => S;
+>       C: {
+>           readonly kind: "C";
+>       };
+>   }
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+>t : const t: S
+>v : const v: number
+>S : const S: {
+>       A: (v: number) => S;
+>       B: (w: number) => S;
+>       C: {
+>           readonly kind: "C";
+>       };
+>   }
+>B : (property) B: (w: number) => S
+>v : const v: number
+>S : const S: {
+>       A: (v: number) => S;
+>       B: (w: number) => S;
+>       C: {
+>           readonly kind: "C";
+>       };
+>   }
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+>w : const w: number
+>w : const w: number
+

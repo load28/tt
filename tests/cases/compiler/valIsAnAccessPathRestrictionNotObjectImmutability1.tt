@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_08.rs::val_is_an_access_path_restriction_not_object_immutability
+let original = { count: 0 };
+val const view = original;
+original.count++;

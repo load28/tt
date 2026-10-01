@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_08.rs::a_type_argument_list_does_not_declare_a_val_binding
+val let a, b, c;
+b.x = 1;

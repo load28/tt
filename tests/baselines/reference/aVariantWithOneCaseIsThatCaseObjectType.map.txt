@@ -1,0 +1,9 @@
+//// [aVariantWithOneCaseIsThatCaseObjectType.tt] 7 mapping(s)
+1:30 -> 2:22 len 6  "number"
+1:30 -> 4:13 len 6  "number"
+1:39 -> 5:3 len 1  "\n"
+2:22 -> 10:3 len 1  "\n"
+5:8 -> 14:8 len 6  "number"
+5:8 -> 17:13 len 6  "number"
+7:2 -> 18:3 len 1  "\n"
+

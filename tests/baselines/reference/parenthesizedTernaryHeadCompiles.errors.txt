@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./parenthesizedTernaryHeadCompiles.tt → $DIR/out/parenthesizedTernaryHeadCompiles.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'c'.
+ --> parenthesizedTernaryHeadCompiles.tt:1:12
+  |
+1 | const a = (c ? x : y) |> f;
+  |            ^
+error[ts2304]: Cannot find name 'x'.
+ --> parenthesizedTernaryHeadCompiles.tt:1:16
+  |
+1 | const a = (c ? x : y) |> f;
+  |                ^
+error[ts2304]: Cannot find name 'y'.
+ --> parenthesizedTernaryHeadCompiles.tt:1:20
+  |
+1 | const a = (c ? x : y) |> f;
+  |                    ^
+error[ts2304]: Cannot find name 'f'.
+ --> parenthesizedTernaryHeadCompiles.tt:1:26
+  |
+1 | const a = (c ? x : y) |> f;
+  |                          ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+parenthesizedTernaryHeadCompiles.ts(4,19): error TS2304: Cannot find name 'c'.
+parenthesizedTernaryHeadCompiles.ts(4,23): error TS2304: Cannot find name 'x'.
+parenthesizedTernaryHeadCompiles.ts(4,27): error TS2304: Cannot find name 'y'.
+parenthesizedTernaryHeadCompiles.ts(4,31): error TS2304: Cannot find name 'f'.

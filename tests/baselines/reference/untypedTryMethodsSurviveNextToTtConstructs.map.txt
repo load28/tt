@@ -1,0 +1,3 @@
+//// [untypedTryMethodsSurviveNextToTtConstructs.tt] 1 mapping(s)
+1:16 -> 5:3 len 25  "\ninterface X { try(x); }\n"
+

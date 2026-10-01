@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_07.rs::val_leaves_reads_and_comparisons_alone
+val const x = load();
+const r = [x.a == 1, x.a === 1, x.a != 1, x.a >= 1, x.a <= 1, x.a && 1, x.a || 1, x.a ?? 1, x.a + 1, x.a > 1];
+const y = x.a;
+const z = { ...x };

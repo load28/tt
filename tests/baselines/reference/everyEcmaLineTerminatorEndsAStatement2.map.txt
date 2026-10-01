@@ -1,0 +1,7 @@
+//// [everyEcmaLineTerminatorEndsAStatement2.tt] 5 mapping(s)
+1:1 -> 1:1 len 141  "type K = string;\ndeclare const o: unknown;\ndecla"...
+6:14 -> 11:11 len 5  "value"
+6:23 -> 6:18 len 1  "v"
+7:5 -> 8:5 len 24  "const a = 1\r\n    throw e"
+9:5 -> 11:28 len 19  "\n  return value;\n}\n"
+

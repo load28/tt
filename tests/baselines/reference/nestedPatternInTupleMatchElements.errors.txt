@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./nestedPatternInTupleMatchElements.tt → $DIR/out/nestedPatternInTupleMatchElements.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'a'.
+ --> nestedPatternInTupleMatchElements.tt:2:18
+  |
+2 | const n = match (a, b) {
+  |                  ^
+error[ts2304]: Cannot find name 'b'.
+ --> nestedPatternInTupleMatchElements.tt:2:21
+  |
+2 | const n = match (a, b) {
+  |                     ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+nestedPatternInTupleMatchElements.ts(4,18): error TS2304: Cannot find name 'a'.
+nestedPatternInTupleMatchElements.ts(5,18): error TS2304: Cannot find name 'b'.

@@ -1,0 +1,3 @@
+//// [valNeverCallsAMethodAMutationFromItsName6.tt] 1 mapping(s)
+1:5 -> 1:1 len 82  "const items: number[] = [];\nconst n = items.map("...
+

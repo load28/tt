@@ -1,0 +1,9 @@
+//// [generatedValueSlotsPreserveAuthoredContextualTypes2.tt] 7 mapping(s)
+1:1 -> 19:1 len 68  "type Toggle = \"on\" | \"off\";\nconst flip = (value:"...
+2:48 -> 23:19 len 5  "value"
+3:1 -> 25:12 len 4  "\"on\""
+3:9 -> 26:18 len 5  "\"off\""
+3:16 -> 29:12 len 5  "\"off\""
+3:25 -> 30:18 len 4  "\"on\""
+4:2 -> 39:2 len 2  ";\n"
+

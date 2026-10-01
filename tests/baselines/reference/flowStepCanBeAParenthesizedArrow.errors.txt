@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./flowStepCanBeAParenthesizedArrow.tt → $DIR/out/flowStepCanBeAParenthesizedArrow.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'parse'.
+ --> flowStepCanBeAParenthesizedArrow.tt:1:19
+  |
+1 | const f = flow |> parse |> (n => n + 1);
+  |                   ^^^^^
+error[ts18046]: 'n' is of type 'unknown'.
+ --> flowStepCanBeAParenthesizedArrow.tt:1:34
+  |
+1 | const f = flow |> parse |> (n => n + 1);
+  |                                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+flowStepCanBeAParenthesizedArrow.ts(7,18): error TS2304: Cannot find name 'parse'.
+flowStepCanBeAParenthesizedArrow.ts(7,31): error TS18046: 'n' is of type 'unknown'.

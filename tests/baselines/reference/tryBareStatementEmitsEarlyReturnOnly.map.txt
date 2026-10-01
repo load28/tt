@@ -1,0 +1,5 @@
+//// [tryBareStatementEmitsEarlyReturnOnly.tt] 3 mapping(s)
+1:1 -> 1:1 len 20  "function f(): X {\n  "
+2:7 -> 2:18 len 3  "g()"
+2:11 -> 5:4 len 17  "\n  return h();\n}\n"
+

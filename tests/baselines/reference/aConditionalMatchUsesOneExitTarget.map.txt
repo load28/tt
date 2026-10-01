@@ -1,0 +1,8 @@
+//// [aConditionalMatchUsesOneExitTarget.tt] 6 mapping(s)
+1:1 -> 17:1 len 14  "const value = "
+1:22 -> 3:17 len 4  "item"
+2:8 -> 6:11 len 5  "ready"
+2:18 -> 7:10 len 11  " consume();"
+3:8 -> 13:20 len 1  "0"
+4:2 -> 17:27 len 2  ";\n"
+

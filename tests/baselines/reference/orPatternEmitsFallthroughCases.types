@@ -1,0 +1,27 @@
+=== orPatternEmitsFallthroughCases.tt ===
+variant Key { Enter(), Escape, Tab, Char(ch: string) }
+>Key : type Key = {
+>       kind: "Enter";
+>   } | {
+>       kind: "Escape";
+>   } | {
+>       kind: "Tab";
+>   } | {
+>       kind: "Char";
+>       ch: string;
+>   }
+>Enter : (property) Enter: () => Key
+>Escape : (property) Escape: {
+>       readonly kind: "Escape";
+>   }
+>Tab : (property) Tab: {
+>       readonly kind: "Tab";
+>   }
+>Char : (property) Char: (ch: string) => Key
+>ch : (property) ch: string
+const action = match (key) {
+>action : const action: string
+  Char(ch) => "type:" + ch,
+>ch : const ch: any
+>ch : const ch: any
+

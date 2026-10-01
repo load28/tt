@@ -1,0 +1,13 @@
+//// [ttxExpressionBoundariesIgnoreDelimitersInsideRegexLiterals.ttx] 11 mapping(s)
+1:30 -> 20:29 len 6  "string"
+1:30 -> 23:18 len 6  "string"
+1:46 -> 25:3 len 29  "\ndeclare const state: State;\n"
+3:1 -> 46:1 len 29  "const view = <Panel visible={"
+3:30 -> 28:22 len 13  "/}/.test(\"}\")"
+3:43 -> 46:41 len 9  "} value={"
+3:59 -> 30:17 len 5  "state"
+4:9 -> 33:15 len 5  "value"
+4:19 -> 34:21 len 5  "value"
+5:12 -> 38:21 len 2  "\"\""
+6:2 -> 46:61 len 6  "} />;\n"
+

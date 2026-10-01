@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_11.rs::a_script_let_else_keeps_its_bindings_global
+declare const o: { kind: "Some"; value: number } | { kind: "None" };
+const Some(value) = o else { throw new Error(); };
+var Some(value: other) = o else { throw new Error(); };
+let None() = o else { throw new Error(); };

@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./finalArgumentCompletionsCallThroughCapturedEarlierArguments2.tt → $DIR/out/finalArgumentCompletionsCallThroughCapturedEarlierArguments2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'pair'.
+ --> finalArgumentCompletionsCallThroughCapturedEarlierArguments2.tt:1:1
+  |
+1 | pair(match (x) { A(v) => v, _ => 0 }, last());
+  | ^^^^
+error[ts2304]: Cannot find name 'x'.
+ --> finalArgumentCompletionsCallThroughCapturedEarlierArguments2.tt:1:13
+  |
+1 | pair(match (x) { A(v) => v, _ => 0 }, last());
+  |             ^
+error[ts2304]: Cannot find name 'last'.
+ --> finalArgumentCompletionsCallThroughCapturedEarlierArguments2.tt:1:39
+  |
+1 | pair(match (x) { A(v) => v, _ => 0 }, last());
+  |                                       ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+finalArgumentCompletionsCallThroughCapturedEarlierArguments2.ts(3,19): error TS2304: Cannot find name 'pair'.
+finalArgumentCompletionsCallThroughCapturedEarlierArguments2.ts(5,19): error TS2304: Cannot find name 'x'.
+finalArgumentCompletionsCallThroughCapturedEarlierArguments2.ts(18,18): error TS2304: Cannot find name 'last'.

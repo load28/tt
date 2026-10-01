@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_03.rs::let_else_diverges_when_the_return_value_is_an_object_literal
+function f(): number {
+  const Some(v) = find() else { return match (o) { A => 1, _ => 0 }; };
+  return v;
+}

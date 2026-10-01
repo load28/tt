@@ -1,0 +1,14 @@
+=== anInertArgumentIsNotCapturedButAnEffectfulOneIs.tt ===
+declare function g(a: number, b: number, c: number): void;
+>g : function g(a: number, b: number, c: number): void
+>a : (parameter) a: number
+>b : (parameter) b: number
+>c : (parameter) c: number
+declare function eff(): number;
+>eff : function eff(): number
+g(1, match (1) { 1 => 1, _ => 0 }, 2);
+>g : function g(a: number, b: number, c: number): void
+g(eff(), match (1) { 1 => 1, _ => 0 }, 2);
+>g : function g(a: number, b: number, c: number): void
+>eff : function eff(): number
+

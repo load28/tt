@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_04.rs::let_else_without_semicolon_is_not_recognized
+function f(): number {
+  const Some(v) = find() else { return 0; }
+  return v;
+}

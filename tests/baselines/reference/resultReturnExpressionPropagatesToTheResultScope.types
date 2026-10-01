@@ -1,0 +1,6 @@
+=== resultReturnExpressionPropagatesToTheResultScope.tt ===
+const value = result { return Math.round(try total() * 1.1); };
+>value : const value: any
+>Math : var Math: Math
+>round : (method) Math.round(x: number): number
+

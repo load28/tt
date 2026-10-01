@@ -1,0 +1,10 @@
+//// [tagsOfAHandWrittenUnionAreNotResolutionErrors.tt] 8 mapping(s)
+1:1 -> 1:1 len 59  "type Msg = { kind: \"Ping\" } | { kind: \"Pong\"; n:"...
+2:1 -> 21:1 len 10  "const a = "
+2:18 -> 4:17 len 1  "m"
+2:31 -> 7:18 len 1  "0"
+2:39 -> 11:15 len 1  "n"
+2:45 -> 12:18 len 1  "n"
+2:53 -> 16:18 len 2  "-1"
+2:57 -> 21:19 len 2  ";\n"
+

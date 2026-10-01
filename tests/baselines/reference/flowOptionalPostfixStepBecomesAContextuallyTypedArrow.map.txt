@@ -1,0 +1,6 @@
+//// [flowOptionalPostfixStepBecomesAContextuallyTypedArrow.tt] 4 mapping(s)
+1:1 -> 7:1 len 10  "const f = "
+1:19 -> 7:18 len 5  "parse"
+1:28 -> 7:44 len 19  "?.value?.toFixed(1)"
+1:47 -> 7:65 len 2  ";\n"
+

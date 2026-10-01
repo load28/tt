@@ -1,0 +1,7 @@
+//// [letElseDivergesViaThrowAndContinue2.tt] 5 mapping(s)
+1:1 -> 1:1 len 51  "function f(): number {\n  for (const x of xs) {\n "...
+3:16 -> 7:13 len 1  "v"
+3:21 -> 3:20 len 7  "find(x)"
+3:36 -> 5:7 len 9  "continue;"
+3:48 -> 7:26 len 31  "\n    use(v);\n  }\n  return 0;\n}\n"
+

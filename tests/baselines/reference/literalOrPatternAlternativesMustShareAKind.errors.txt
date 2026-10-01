@@ -1,0 +1,22 @@
+==== ttc --out-dir (exit 1) ====
+error[match-or-literal-kind-mismatch]: match: or-pattern alternatives must all be the same kind of literal (found number after string)
+ --> ./literalOrPatternAlternativesMustShareAKind.tt:1:29
+  |
+1 | const v = match (x) { "a" | 1 => 1, _ => 2 };
+  |                             ^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> literalOrPatternAlternativesMustShareAKind.tt:1:18
+  |
+1 | const v = match (x) { "a" | 1 => 1, _ => 2 };
+  |                  ^
+error[match-or-literal-kind-mismatch]: match: or-pattern alternatives must all be the same kind of literal (found number after string)
+ --> literalOrPatternAlternativesMustShareAKind.tt:1:29
+  |
+1 | const v = match (x) { "a" | 1 => 1, _ => 2 };
+  |                             ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

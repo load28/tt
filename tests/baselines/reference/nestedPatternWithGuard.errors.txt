@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./nestedPatternWithGuard.tt → $DIR/out/nestedPatternWithGuard.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'r'.
+ --> nestedPatternWithGuard.tt:2:18
+  |
+2 | const n = match (r) {
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+nestedPatternWithGuard.ts(4,17): error TS2304: Cannot find name 'r'.

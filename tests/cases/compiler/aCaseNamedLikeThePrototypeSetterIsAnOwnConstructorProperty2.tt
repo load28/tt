@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_14.rs::a_case_named_like_the_prototype_setter_is_an_own_constructor_property
+declare variant V { __proto__(x: number), B }

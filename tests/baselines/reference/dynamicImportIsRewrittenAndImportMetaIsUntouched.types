@@ -1,0 +1,7 @@
+=== dynamicImportIsRewrittenAndImportMetaIsUntouched.tt ===
+const m = import("./x.tt");
+>m : const m: Promise<any>
+const u = import.meta.url;
+>u : const u: string
+>url : (property) ImportMeta.url: string
+

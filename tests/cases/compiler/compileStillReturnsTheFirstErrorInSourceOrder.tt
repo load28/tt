@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_09.rs::compile_still_returns_the_first_error_in_source_order
+variant Shape { Circle(r: number), Square(s: number) }
+export function f(x: Shape): number {
+  return match (x) { Circle(r) => r };
+}
+export function g(x: Shape): number {
+  return match (x) { Square(s) => s };
+}

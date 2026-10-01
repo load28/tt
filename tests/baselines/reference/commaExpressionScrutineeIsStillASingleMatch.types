@@ -1,0 +1,6 @@
+=== commaExpressionScrutineeIsStillASingleMatch.tt ===
+const r = match ((a, b)) { A => 1, _ => 0 };
+>r : const r: number
+const s = match (a, b) { A => 1, _ => 0 };
+>s : const s: number
+

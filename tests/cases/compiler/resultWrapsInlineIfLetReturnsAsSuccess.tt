@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_07.rs::result_wraps_inline_if_let_returns_as_success
+variant Item { Some(value: number), None }
+const value = result { const item = try read(); if let Some(found) = item { return found; } else { return 0; } };

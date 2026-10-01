@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_07.rs::a_variant_with_one_case_is_that_case_object_type
+export variant Pub { Item(n: number) }
+variant Lone { Only }
+variant Noted {
+  Cell(
+    v: number // value
+  )
+}

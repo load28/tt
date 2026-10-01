@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_02.rs::guarded_match_compiles_to_if_chain
+
+variant Score { Graded(points: number), Pending }
+const grade = match (s) {
+  Graded(points) if points >= 90 => "A",
+  Graded(points) => "F",
+  Pending => "-",
+};

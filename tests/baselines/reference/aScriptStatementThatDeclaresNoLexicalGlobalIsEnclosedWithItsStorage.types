@@ -1,0 +1,48 @@
+=== aScriptStatementThatDeclaresNoLexicalGlobalIsEnclosedWithItsStorage.tt ===
+declare const o: { kind: "A" } | { kind: "B" };
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>kind : (property) kind: "A"
+>kind : (property) kind: "B"
+var v = match (o) { A => 1, B => 2 };
+>v : var v: number
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+console.log(match (o) { A => 1, B => 2 });
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+for (const x of match (o) { A => [1], B => [2] }) {}
+>x : const x: number
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+const {} = match (o) { A => o, B => o };
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+

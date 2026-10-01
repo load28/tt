@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::statement_bodied_result_accepts_branch_complete_success
+const value = result { const item = try read(); if (item) return item; else return 0; };

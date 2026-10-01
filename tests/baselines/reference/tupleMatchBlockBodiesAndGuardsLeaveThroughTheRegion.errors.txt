@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tupleMatchBlockBodiesAndGuardsLeaveThroughTheRegion.tt → $DIR/out/tupleMatchBlockBodiesAndGuardsLeaveThroughTheRegion.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'a'.
+ --> tupleMatchBlockBodiesAndGuardsLeaveThroughTheRegion.tt:3:18
+  |
+3 | const r = match (a, b) {
+  |                  ^
+error[ts2304]: Cannot find name 'b'.
+ --> tupleMatchBlockBodiesAndGuardsLeaveThroughTheRegion.tt:3:21
+  |
+3 | const r = match (a, b) {
+  |                     ^
+error[ts2304]: Cannot find name 'go'.
+ --> tupleMatchBlockBodiesAndGuardsLeaveThroughTheRegion.tt:4:21
+  |
+4 |   (Heads, Tails) if go() => { log(); return 1; },
+  |                     ^^
+error[ts2304]: Cannot find name 'log'.
+ --> tupleMatchBlockBodiesAndGuardsLeaveThroughTheRegion.tt:4:31
+  |
+4 |   (Heads, Tails) if go() => { log(); return 1; },
+  |                               ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tupleMatchBlockBodiesAndGuardsLeaveThroughTheRegion.ts(11,18): error TS2304: Cannot find name 'a'.
+tupleMatchBlockBodiesAndGuardsLeaveThroughTheRegion.ts(12,18): error TS2304: Cannot find name 'b'.
+tupleMatchBlockBodiesAndGuardsLeaveThroughTheRegion.ts(15,11): error TS2304: Cannot find name 'go'.
+tupleMatchBlockBodiesAndGuardsLeaveThroughTheRegion.ts(16,11): error TS2304: Cannot find name 'log'.

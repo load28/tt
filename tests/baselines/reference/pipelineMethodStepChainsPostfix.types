@@ -1,0 +1,4 @@
+=== pipelineMethodStepChainsPostfix.tt ===
+const t = s |> .trim() |> .split(",") |> f;
+>t : const t: unknown
+

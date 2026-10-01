@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_01.rs::variant_export_prefix_on_both_declarations
+export variant Shape { Circle(radius: number), Point }

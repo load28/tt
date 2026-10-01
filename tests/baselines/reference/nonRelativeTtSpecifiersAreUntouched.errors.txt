@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./nonRelativeTtSpecifiersAreUntouched.tt → $DIR/out/nonRelativeTtSpecifiersAreUntouched.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2307]: Cannot find module 'pkg.tt' or its corresponding type declarations.
+ --> nonRelativeTtSpecifiersAreUntouched.tt:1:15
+  |
+1 | import a from "pkg.tt";
+  |               ^^^^^^^^
+error[ts2307]: Cannot find module '/abs/x.tt' or its corresponding type declarations.
+ --> nonRelativeTtSpecifiersAreUntouched.tt:2:15
+  |
+2 | import b from "/abs/x.tt";
+  |               ^^^^^^^^^^^
+error[ts2307]: Cannot find module '@scope/p/x.tt' or its corresponding type declarations.
+ --> nonRelativeTtSpecifiersAreUntouched.tt:3:15
+  |
+3 | import c from "@scope/p/x.tt";
+  |               ^^^^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+nonRelativeTtSpecifiersAreUntouched.ts(1,15): error TS2307: Cannot find module 'pkg.tt' or its corresponding type declarations.
+nonRelativeTtSpecifiersAreUntouched.ts(2,15): error TS2307: Cannot find module '/abs/x.tt' or its corresponding type declarations.
+nonRelativeTtSpecifiersAreUntouched.ts(3,15): error TS2307: Cannot find module '@scope/p/x.tt' or its corresponding type declarations.

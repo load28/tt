@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_07.rs::try_takes_a_non_ascii_identifier_operand_and_never_splits_one
+declare function étry(): Result<number, string>;
+function r(): Result<number, string> {
+  const n = try étry();
+  return Ok(n);
+}

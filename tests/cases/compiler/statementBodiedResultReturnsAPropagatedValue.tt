@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::statement_bodied_result_returns_a_propagated_value
+const value = result { return try read(); };

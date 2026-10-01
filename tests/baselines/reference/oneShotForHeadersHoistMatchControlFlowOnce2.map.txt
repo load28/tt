@@ -1,0 +1,9 @@
+//// [oneShotForHeadersHoistMatchControlFlowOnce2.tt] 7 mapping(s)
+1:1 -> 14:3 len 17  "for (let value = "
+1:25 -> 4:19 len 6  "source"
+1:38 -> 6:28 len 6  "Number"
+1:48 -> 7:18 len 1  "1"
+1:56 -> 10:16 len 1  "0"
+1:59 -> 14:26 len 37  "; value < 2; value++) { use(value); }"
+1:96 -> 15:2 len 1  "\n"
+

@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valCapabilityCheckOnlyCoversResolvableCallees3.tt → $DIR/out/valCapabilityCheckOnlyCoversResolvableCallees3.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'User'.
+ --> valCapabilityCheckOnlyCoversResolvableCallees3.tt:1:23
+  |
+1 | function update(user: User) { user.name = "x"; }
+  |                       ^^^^
+error[ts2304]: Cannot find name 'User'.
+ --> valCapabilityCheckOnlyCoversResolvableCallees3.tt:2:22
+  |
+2 | function f(val user: User) {
+  |                      ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valCapabilityCheckOnlyCoversResolvableCallees3.ts(1,23): error TS2304: Cannot find name 'User'.
+valCapabilityCheckOnlyCoversResolvableCallees3.ts(2,18): error TS2304: Cannot find name 'User'.

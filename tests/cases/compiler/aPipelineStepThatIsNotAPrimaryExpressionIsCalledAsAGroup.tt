@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_11.rs::a_pipeline_step_that_is_not_a_primary_expression_is_called_as_a_group
+declare const f: ((n: number) => string) | undefined;
+declare const g: (n: number) => string;
+declare const as: (n: number) => string;
+const a = 1 |> f ?? g;
+const b = 1 |> await Promise.resolve(g);
+const c = 1 |> as;
+export {};

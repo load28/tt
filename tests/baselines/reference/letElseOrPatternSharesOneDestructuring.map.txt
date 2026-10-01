@@ -1,0 +1,10 @@
+//// [letElseOrPatternSharesOneDestructuring.tt] 8 mapping(s)
+1:18 -> 2:21 len 6  "number"
+1:18 -> 6:10 len 6  "number"
+1:32 -> 3:21 len 6  "number"
+1:32 -> 7:10 len 6  "number"
+1:44 -> 9:3 len 30  "\nfunction f(e: E): number {\n  "
+3:23 -> 11:18 len 1  "e"
+3:32 -> 13:5 len 9  "return 0;"
+3:44 -> 15:24 len 15  "\n  return x;\n}\n"
+

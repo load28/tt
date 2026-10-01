@@ -1,0 +1,8 @@
+=== plainArmBeforeNestedArmIsADuplicate.tt ===
+const n = match (r) { Ok(value) => 1, Ok(value: Some(value: v)) => v, _ => 0 };
+>n : const n: any
+>value : const value: any
+>value : any
+>v : const v: any
+>v : const v: any
+

@@ -1,0 +1,10 @@
+=== orPatternBindingOrderIsInsensitive.tt ===
+const r = match (p) { A(x, y) | B(y, x) => x + y, _ => 0 };
+>r : const r: any
+>x : const x: any
+>y : const y: any
+>y : const y: any
+>x : const x: any
+>x : const x: any
+>y : const y: any
+

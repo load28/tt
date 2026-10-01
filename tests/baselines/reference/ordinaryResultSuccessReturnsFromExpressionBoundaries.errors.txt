@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./ordinaryResultSuccessReturnsFromExpressionBoundaries.tt → $DIR/out/ordinaryResultSuccessReturnsFromExpressionBoundaries.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'read'.
+ --> ordinaryResultSuccessReturnsFromExpressionBoundaries.tt:1:48
+  |
+1 | class Box { field = result { const value = try read(); return value; }; }
+  |                                                ^^^^
+error[ts2304]: Cannot find name 'read'.
+ --> ordinaryResultSuccessReturnsFromExpressionBoundaries.tt:2:54
+  |
+2 | class SwitchBox { field = result { const value = try read(); switch (value) { case 0: return 0; default: return value; } }; }
+  |                                                      ^^^^
+error[ts2304]: Cannot find name 'read'.
+ --> ordinaryResultSuccessReturnsFromExpressionBoundaries.tt:3:56
+  |
+3 | function withDefault(value = result { const item = try read(); return item; }) { return value; }
+  |                                                        ^^^^
+error[ts2304]: Cannot find name 'read'.
+ --> ordinaryResultSuccessReturnsFromExpressionBoundaries.tt:4:54
+  |
+4 | function* values() { yield result { const item = try read(); return item; }; }
+  |                                                      ^^^^
+error[ts2304]: Cannot find name 'read'.
+ --> ordinaryResultSuccessReturnsFromExpressionBoundaries.tt:5:49
+  |
+5 | const text = `value=${result { const item = try read(); return item; }}`;
+  |                                                 ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+ordinaryResultSuccessReturnsFromExpressionBoundaries.ts(3,18): error TS2304: Cannot find name 'read'.
+ordinaryResultSuccessReturnsFromExpressionBoundaries.ts(10,18): error TS2304: Cannot find name 'read'.
+ordinaryResultSuccessReturnsFromExpressionBoundaries.ts(17,18): error TS2304: Cannot find name 'read'.
+ordinaryResultSuccessReturnsFromExpressionBoundaries.ts(25,18): error TS2304: Cannot find name 'read'.
+ordinaryResultSuccessReturnsFromExpressionBoundaries.ts(35,18): error TS2304: Cannot find name 'read'.

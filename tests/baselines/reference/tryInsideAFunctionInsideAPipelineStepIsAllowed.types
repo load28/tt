@@ -1,0 +1,8 @@
+=== tryInsideAFunctionInsideAPipelineStepIsAllowed.tt ===
+const a = x |> (n => { const b = try f(n); return b; });
+>a : const a: any
+>n : (parameter) n: any
+>b : const b: any
+>n : (parameter) n: any
+>b : const b: any
+

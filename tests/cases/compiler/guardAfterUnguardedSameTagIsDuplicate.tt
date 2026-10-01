@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::guard_after_unguarded_same_tag_is_duplicate
+const r = match (x) { A => 1, A if c => 2, _ => 0 };

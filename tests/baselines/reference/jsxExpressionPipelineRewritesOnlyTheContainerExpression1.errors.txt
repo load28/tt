@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./jsxExpressionPipelineRewritesOnlyTheContainerExpression1.ttx → $DIR/out/jsxExpressionPipelineRewritesOnlyTheContainerExpression1.tsx
+
+==== ttc --check-types (exit 1) ====
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxExpressionPipelineRewritesOnlyTheContainerExpression1.ttx:2:15
+  |
+2 | const child = <p>{raw |> up}</p>;
+  |               ^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxExpressionPipelineRewritesOnlyTheContainerExpression1.ttx:2:29
+  |
+2 | const child = <p>{raw |> up}</p>;
+  |                             ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+jsxExpressionPipelineRewritesOnlyTheContainerExpression1.tsx(5,15): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxExpressionPipelineRewritesOnlyTheContainerExpression1.tsx(5,35): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.

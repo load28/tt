@@ -1,0 +1,27 @@
+=== plainTypescriptBindingsStayMutable1.tt ===
+const x = { a: 1 };
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+x.a = 2;
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+let y = { a: 1 };
+>y : let y: {
+>       a: number;
+>   }
+>a : (property) a: number
+y.a = 2;
+>y : let y: {
+>       a: number;
+>   }
+>a : (property) a: number
+y = { a: 3 };
+>y : let y: {
+>       a: number;
+>   }
+>a : (property) a: number
+

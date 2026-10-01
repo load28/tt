@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./statementBodiedResultDeclarationTryStaysInTheResultScope.tt → $DIR/out/statementBodiedResultDeclarationTryStaysInTheResultScope.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'read'.
+ --> statementBodiedResultDeclarationTryStaysInTheResultScope.tt:1:41
+  |
+1 | const value = result { const item = try read(); return item; };
+  |                                         ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+statementBodiedResultDeclarationTryStaysInTheResultScope.ts(3,18): error TS2304: Cannot find name 'read'.

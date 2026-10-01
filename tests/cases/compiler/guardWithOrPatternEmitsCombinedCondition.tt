@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::guard_with_or_pattern_emits_combined_condition
+const r = match (x) { A(v) | B(v) if v > 0 => v, _ => 0 };

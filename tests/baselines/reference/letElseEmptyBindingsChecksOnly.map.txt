@@ -1,0 +1,6 @@
+//// [letElseEmptyBindingsChecksOnly.tt] 4 mapping(s)
+1:1 -> 1:1 len 25  "function f(): number {\n  "
+2:16 -> 2:18 len 7  "check()"
+2:31 -> 4:5 len 10  "return -1;"
+2:44 -> 6:3 len 15  "\n  return 1;\n}\n"
+

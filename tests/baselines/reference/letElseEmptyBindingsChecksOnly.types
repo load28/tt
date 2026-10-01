@@ -1,0 +1,4 @@
+=== letElseEmptyBindingsChecksOnly.tt ===
+function f(): number {
+>f : function f(): number
+

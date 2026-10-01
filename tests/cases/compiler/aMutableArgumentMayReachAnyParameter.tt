@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_08.rs::a_mutable_argument_may_reach_any_parameter
+function read(val user: User) { log(user.name); }
+function update(user: User) { user.name = "Lee"; }
+function process(user: User) {
+  read(user);
+  update(user);
+}

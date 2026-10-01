@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::statement_bodied_result_requires_success_on_every_reachable_path
+const value = result { const item = try read(); if (item) return item; log(item); };

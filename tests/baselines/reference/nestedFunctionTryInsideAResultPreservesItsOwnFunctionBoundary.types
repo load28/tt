@@ -1,0 +1,6 @@
+=== nestedFunctionTryInsideAResultPreservesItsOwnFunctionBoundary.tt ===
+const value = result { const inner = () => { return try step(); }; return try inner(); };
+>value : const value: any
+>inner : const inner: () => any
+>inner : const inner: () => any
+

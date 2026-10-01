@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_09.rs::an_initializer_inside_a_callback_still_lowers_to_statements
+declare function f(cb: () => number): void;
+f(() => { const x = match (1) { 1 => 1, _ => 0 }; return x; });

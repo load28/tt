@@ -1,0 +1,4 @@
+=== parenthesizedTernaryHeadCompiles.tt ===
+const a = (c ? x : y) |> f;
+>a : const a: unknown
+

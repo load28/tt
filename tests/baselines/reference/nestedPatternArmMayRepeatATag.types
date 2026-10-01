@@ -1,0 +1,12 @@
+=== nestedPatternArmMayRepeatATag.tt ===
+const n = match (r) {
+>n : const n: any
+  Ok(value: Some(value: v)) => v,
+>value : any
+>v : const v: any
+>v : const v: any
+  Ok(value) => 0,
+>value : const value: any
+  Err(error) => -1,
+>error : const error: any
+

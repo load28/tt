@@ -1,0 +1,35 @@
+=== parenthesizedSiblingTriesBothPropagate.tt ===
+declare function a(): { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>a : function a(): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function g() { const x = (try a()) + (try a()); return x; }
+>g : function g(): number | {
+>       kind: "Err";
+>       error: string;
+>   }
+>x : const x: number
+>a : function a(): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>a : function a(): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>x : const x: number
+

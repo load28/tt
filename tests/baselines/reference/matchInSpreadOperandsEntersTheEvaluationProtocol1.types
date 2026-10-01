@@ -1,0 +1,7 @@
+=== matchInSpreadOperandsEntersTheEvaluationProtocol1.tt ===
+const value = { ...match (kind) { A => ({ a: 1 }), _ => ({}) } };
+>value : const value: {
+>       a?: number | undefined;
+>   }
+>a : (property) a: number
+

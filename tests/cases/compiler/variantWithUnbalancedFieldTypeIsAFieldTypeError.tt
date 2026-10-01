@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_01.rs::variant_with_unbalanced_field_type_is_a_field_type_error
+variant E { A(value: number]) }

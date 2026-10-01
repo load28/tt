@@ -1,0 +1,6 @@
+=== ifLetInsideAFunctionInsideAnExpressionRegionIsAllowed2.tt ===
+const s = `${run(() => { if let A(x) = e { log(x); } return 1; })}`;
+>s : const s: string
+>x : const x: any
+>x : const x: any
+

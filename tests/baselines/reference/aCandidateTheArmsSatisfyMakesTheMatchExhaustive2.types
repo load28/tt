@@ -1,0 +1,55 @@
+=== aCandidateTheArmsSatisfyMakesTheMatchExhaustive2.tt ===
+variant Big { A(s: string), B, C, D }
+>Big : type Big = {
+>       kind: "A";
+>       s: string;
+>   } | {
+>       kind: "B";
+>   } | {
+>       kind: "C";
+>   } | {
+>       kind: "D";
+>   }
+>A : (property) A: (s: string) => Big
+>s : (property) s: string
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+>D : (property) D: {
+>       readonly kind: "D";
+>   }
+variant Small { A(s: string), B, C }
+>Small : type Small = {
+>       kind: "A";
+>       s: string;
+>   } | {
+>       kind: "B";
+>   } | {
+>       kind: "C";
+>   }
+>A : (property) A: (s: string) => Small
+>s : (property) s: string
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+const f = (v: Small) => match (v) { A(s) => s, B => "b" };
+>f : const f: (v: Small) => string
+>v : (parameter) v: Small
+>Small : type Small = {
+>       kind: "A";
+>       s: string;
+>   } | {
+>       kind: "B";
+>   } | {
+>       kind: "C";
+>   }
+>v : (parameter) v: Small
+>s : const s: string
+>s : const s: string
+

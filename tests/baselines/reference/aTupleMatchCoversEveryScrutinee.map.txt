@@ -1,0 +1,12 @@
+//// [aTupleMatchCoversEveryScrutinee.tt] 10 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 1  "\n"
+2:21 -> 32:3 len 1  "\n"
+3:1 -> 46:1 len 10  "const v = "
+3:18 -> 35:18 len 1  "s"
+3:21 -> 36:18 len 1  "t"
+3:29 -> 39:15 len 1  "x"
+3:39 -> 40:18 len 1  "x"
+3:42 -> 46:19 len 2  ";\n"
+

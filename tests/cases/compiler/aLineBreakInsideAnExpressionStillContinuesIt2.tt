@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_11.rs::a_line_break_inside_an_expression_still_continues_it
+variant O { Some(value: number), None }
+declare let q: number;
+declare const o: O;
+declare const p: ((x: number) => number) | undefined;
+const x = p!
+  (if let Some(value) = o { value });

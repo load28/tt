@@ -1,0 +1,8 @@
+=== valParameterIsReadOnlyInsideTheFunction1.tt ===
+function read(val user: User) {
+>read : function read(user: User): void
+>user : (parameter) user: User
+>User : type User = /*unresolved*/ any
+  user.name = "Lee";
+>user : (parameter) user: User
+

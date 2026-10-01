@@ -1,0 +1,23 @@
+=== aPipelineStepThatIsNotAPrimaryExpressionIsCalledAsAGroup.tt ===
+declare const f: ((n: number) => string) | undefined;
+>f : const f: ((n: number) => string) | undefined
+>n : (parameter) n: number
+declare const g: (n: number) => string;
+>g : const g: (n: number) => string
+>n : (parameter) n: number
+declare const as: (n: number) => string;
+>as : const as: (n: number) => string
+>n : (parameter) n: number
+const a = 1 |> f ?? g;
+>a : const a: string
+>f : const f: ((n: number) => string) | undefined
+>g : const g: (n: number) => string
+const b = 1 |> await Promise.resolve(g);
+>b : const b: string
+>Promise : var Promise: PromiseConstructor
+>resolve : (method) PromiseConstructor.resolve<(n: number) => string>(value: (n: number) => string): Promise<(n: number) => string>
+>g : const g: (n: number) => string
+const c = 1 |> as;
+>c : const c: string
+>as : const as: (n: number) => string
+

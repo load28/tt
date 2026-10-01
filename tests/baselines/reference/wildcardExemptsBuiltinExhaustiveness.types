@@ -1,0 +1,9 @@
+=== wildcardExemptsBuiltinExhaustiveness.tt ===
+const f = (o: Option<number>) => match (o) { Some(value) => value, _ => 0 };
+>f : const f: (o: Option<number>) => any
+>o : (parameter) o: Option<number>
+>Option : type Option = /*unresolved*/ any
+>o : (parameter) o: Option<number>
+>value : const value: Option<number>
+>value : const value: Option<number>
+

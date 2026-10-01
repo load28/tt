@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::try_turns_a_concise_arrow_into_a_propagating_block
+const f = (): TResult<number, string> => Result.Ok(try read());

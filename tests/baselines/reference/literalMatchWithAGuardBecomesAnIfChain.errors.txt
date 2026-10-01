@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalMatchWithAGuardBecomesAnIfChain.tt → $DIR/out/literalMatchWithAGuardBecomesAnIfChain.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'code'.
+ --> literalMatchWithAGuardBecomesAnIfChain.tt:1:18
+  |
+1 | const v = match (code) { 200 if ok => 1, 200 => 2, _ => 3 };
+  |                  ^^^^
+error[ts2304]: Cannot find name 'ok'.
+ --> literalMatchWithAGuardBecomesAnIfChain.tt:1:33
+  |
+1 | const v = match (code) { 200 if ok => 1, 200 => 2, _ => 3 };
+  |                                 ^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalMatchWithAGuardBecomesAnIfChain.ts(3,17): error TS2304: Cannot find name 'code'.
+literalMatchWithAGuardBecomesAnIfChain.ts(6,11): error TS2304: Cannot find name 'ok'.

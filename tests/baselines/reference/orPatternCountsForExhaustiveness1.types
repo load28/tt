@@ -1,0 +1,35 @@
+=== orPatternCountsForExhaustiveness1.tt ===
+variant Dir { North(), South, East, West }
+>Dir : type Dir = {
+>       kind: "North";
+>   } | {
+>       kind: "South";
+>   } | {
+>       kind: "East";
+>   } | {
+>       kind: "West";
+>   }
+>North : (property) North: () => Dir
+>South : (property) South: {
+>       readonly kind: "South";
+>   }
+>East : (property) East: {
+>       readonly kind: "East";
+>   }
+>West : (property) West: {
+>       readonly kind: "West";
+>   }
+const f = (d: Dir) => match (d) {
+>f : const f: (d: Dir) => number
+>d : (parameter) d: Dir
+>Dir : type Dir = {
+>       kind: "North";
+>   } | {
+>       kind: "South";
+>   } | {
+>       kind: "East";
+>   } | {
+>       kind: "West";
+>   }
+>d : (parameter) d: Dir
+

@@ -1,0 +1,4 @@
+=== literalPatternsNestInsideArmBodies.tt ===
+const v = match (a) {
+>v : const v: string
+

@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_11.rs::a_match_inside_an_arm_body_call_keeps_argument_order
+variant S { A(v: number), B(w: number), C }
+declare const s: S;
+declare function eff(): number;
+declare function g(a: number, b: number): number;
+const x = match (s) { A(v) => g(eff(), match (s) { B(w) => w, _ => 0 }), _ => 0 };

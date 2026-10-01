@@ -1,0 +1,8 @@
+//// [aGlobalStorageNameAvoidsTheFilesOwnIdentifiers.tt] 6 mapping(s)
+1:1 -> 19:1 len 84  "declare const $tt_v0$total: number;\ndeclare cons"...
+3:1 -> 38:1 len 14  "const total = "
+3:22 -> 23:17 len 1  "o"
+3:32 -> 26:24 len 12  "$tt_v0$total"
+3:51 -> 30:24 len 1  "2"
+3:54 -> 38:29 len 2  ";\n"
+

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./pipelineAwaitInHeadNeedsNoAsyncWrapper.tt → $DIR/out/pipelineAwaitInHeadNeedsNoAsyncWrapper.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'norm'.
+ --> pipelineAwaitInHeadNeedsNoAsyncWrapper.tt:2:21
+  |
+2 |   return await p |> norm;
+  |                     ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+pipelineAwaitInHeadNeedsNoAsyncWrapper.ts(5,26): error TS2304: Cannot find name 'norm'.

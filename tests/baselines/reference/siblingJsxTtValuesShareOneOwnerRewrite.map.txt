@@ -1,0 +1,15 @@
+//// [siblingJsxTtValuesShareOneOwnerRewrite.ttx] 13 mapping(s)
+1:1 -> 1:1 len 44  "declare const n: number;\nconst view = () => "
+2:20 -> 6:10 len 12  "(<aside>\n  {"
+3:11 -> 7:19 len 1  "n"
+3:16 -> 7:39 len 1  "0"
+3:21 -> 7:44 len 11  "<b>zero</b>"
+3:39 -> 7:58 len 12  "<b>other</b>"
+3:53 -> 7:71 len 5  "}\n  {"
+4:11 -> 8:21 len 1  "n"
+4:16 -> 8:43 len 1  "0"
+4:21 -> 8:48 len 11  "<i>zero</i>"
+4:39 -> 8:62 len 12  "<i>other</i>"
+4:53 -> 8:75 len 11  "}\n</aside>)"
+5:10 -> 10:2 len 2  ";\n"
+

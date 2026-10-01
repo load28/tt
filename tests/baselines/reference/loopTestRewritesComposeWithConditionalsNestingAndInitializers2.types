@@ -1,0 +1,8 @@
+=== loopTestRewritesComposeWithConditionalsNestingAndInitializers2.tt ===
+declare function a(): number; declare function b(): number;
+>a : function a(): number
+>b : function b(): number
+while (match (a()) { 1 => true, _ => false }) { while (match (b()) { 2 => true, _ => false }) { work(); } }
+>a : function a(): number
+>b : function b(): number
+

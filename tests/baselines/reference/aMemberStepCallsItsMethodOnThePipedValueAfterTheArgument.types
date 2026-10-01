@@ -1,0 +1,33 @@
+=== aMemberStepCallsItsMethodOnThePipedValueAfterTheArgument.tt ===
+declare const x: any;
+>x : const x: any
+declare function g(): any;
+>g : function g(): any
+declare const n: number;
+>n : const n: number
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+declare function r(): R;
+>r : function r(): R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+export const v = g() |> .m(match (n) { 0 => 1, _ => 2 });
+>v : const v: any
+>g : function g(): any
+>n : const n: number
+

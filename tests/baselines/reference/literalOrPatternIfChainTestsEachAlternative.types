@@ -1,0 +1,4 @@
+=== literalOrPatternIfChainTestsEachAlternative.tt ===
+const v = match (s) { "a" | "b" if ok => 1, _ => 2 };
+>v : const v: number
+

@@ -1,0 +1,7 @@
+=== aTernaryWithOneTtBranchRelocatesTheOtherBranch.tt ===
+declare const flag: boolean;
+>flag : const flag: boolean
+export const pick = flag ? match (1) { 1 => 1, _ => 0 } : 9;
+>pick : const pick: number
+>flag : const flag: boolean
+

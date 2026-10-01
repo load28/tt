@@ -1,0 +1,12 @@
+//// [aMemberStepCallsItsMethodOnThePipedValueAfterTheArgument.tt] 10 mapping(s)
+1:1 -> 1:1 len 172  "declare const x: any;\ndeclare function g(): any;"...
+6:1 -> 27:1 len 17  "export const v = "
+6:18 -> 8:18 len 3  "g()"
+6:25 -> 24:18 len 3  ".m("
+6:35 -> 12:19 len 1  "n"
+6:40 -> 14:12 len 1  "0"
+6:45 -> 15:18 len 1  "1"
+6:53 -> 19:18 len 1  "2"
+6:56 -> 24:27 len 1  ")"
+6:57 -> 27:24 len 2  ";\n"
+

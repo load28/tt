@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_05.rs::pipeline_head_reclaims_a_lifted_template
+const a = `v=${n}` |> f;

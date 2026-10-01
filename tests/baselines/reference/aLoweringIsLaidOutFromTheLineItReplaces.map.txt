@@ -1,0 +1,11 @@
+//// [aLoweringIsLaidOutFromTheLineItReplaces.tt] 9 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 62  "\ndeclare const e: E;\nfunction f(): number {\n  if"...
+5:5 -> 47:5 len 10  "const r = "
+5:22 -> 31:21 len 1  "e"
+5:29 -> 34:19 len 1  "v"
+5:35 -> 35:20 len 1  "v"
+5:43 -> 39:20 len 1  "0"
+5:46 -> 47:21 len 34  ";\n    return r;\n  }\n  return 0;\n}\n"
+

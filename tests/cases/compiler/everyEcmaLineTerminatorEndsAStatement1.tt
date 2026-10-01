@@ -1,0 +1,11 @@
+// @origin: tests/compile/cases_12.rs::every_ecma_line_terminator_ends_a_statement
+type K = string;
+declare const o: unknown;
+declare const x: object;
+declare const e: Error;
+export function f(v: Option<number>): number {
+  const Some(value) = v else {
+    const a = 1    throw e
+  };
+  return value;
+}

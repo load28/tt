@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_10.rs::a_match_whose_subject_is_a_match_keeps_both_subjects_apart
+variant S { A(v: number), B(w: number), C }
+const mm = match (match (S.A(1)) { A(v) => S.B(v), _ => S.C }) { B(w) => "b" + w, _ => "x" };

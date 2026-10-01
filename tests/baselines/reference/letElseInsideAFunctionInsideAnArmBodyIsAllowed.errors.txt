@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseInsideAFunctionInsideAnArmBodyIsAllowed.tt → $DIR/out/letElseInsideAFunctionInsideAnArmBodyIsAllowed.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'r'.
+ --> letElseInsideAFunctionInsideAnArmBodyIsAllowed.tt:1:18
+  |
+1 | const x = match (r) {
+  |                  ^
+error[ts2304]: Cannot find name 'h'.
+ --> letElseInsideAFunctionInsideAnArmBodyIsAllowed.tt:2:52
+  |
+2 |   Ok(value) => { const f = () => { const Some(v) = h(value) else { return 0; }; return v; }; return f(); },
+  |                                                    ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseInsideAFunctionInsideAnArmBodyIsAllowed.ts(3,17): error TS2304: Cannot find name 'r'.
+letElseInsideAFunctionInsideAnArmBodyIsAllowed.ts(7,40): error TS2304: Cannot find name 'h'.

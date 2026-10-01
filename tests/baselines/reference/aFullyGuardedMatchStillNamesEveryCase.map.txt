@@ -1,0 +1,8 @@
+//// [aFullyGuardedMatchStillNamesEveryCase.tt] 6 mapping(s)
+1:1 -> 19:1 len 33  "const f = (o: Option<number>) => "
+1:41 -> 22:19 len 1  "o"
+1:51 -> 25:17 len 5  "value"
+1:61 -> 26:13 len 9  "value > 0"
+1:74 -> 27:20 len 5  "value"
+1:81 -> 35:2 len 2  ";\n"
+

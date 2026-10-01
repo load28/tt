@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_06.rs::if_let_emits_a_self_contained_block
+function f() {
+  if let Some(value: user) = find() {
+    greet(user);
+  }
+}

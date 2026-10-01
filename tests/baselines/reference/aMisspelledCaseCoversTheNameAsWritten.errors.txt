@@ -1,0 +1,26 @@
+==== ttc --out-dir (exit 1) ====
+error[unknown-case]: variant Shape has no case `Circel`
+ --> ./aMisspelledCaseCoversTheNameAsWritten.tt:2:23
+  |
+2 | const v = match (s) { Circel(r) => r, Square(s) => s };
+  |                       ^^^^^^
+  |
+  = help: a case with a similar name exists: `Circle`
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 's'.
+ --> aMisspelledCaseCoversTheNameAsWritten.tt:2:18
+  |
+2 | const v = match (s) { Circel(r) => r, Square(s) => s };
+  |                  ^
+error[unknown-case]: variant Shape has no case `Circel`
+ --> aMisspelledCaseCoversTheNameAsWritten.tt:2:23
+  |
+2 | const v = match (s) { Circel(r) => r, Square(s) => s };
+  |                       ^^^^^^
+  |
+  = help: a case with a similar name exists: `Circle`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

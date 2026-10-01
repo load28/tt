@@ -1,0 +1,4 @@
+//// [valCapabilityCheckOnlyCoversResolvableCallees3.tt] 2 mapping(s)
+1:1 -> 1:1 len 60  "function update(user: User) { user.name = \"x\"; }"...
+2:16 -> 2:12 len 39  "user: User) {\n  update({ ...user });\n}\n"
+

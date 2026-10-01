@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./pipelineHeadReclaimsALiftedTemplate.tt → $DIR/out/pipelineHeadReclaimsALiftedTemplate.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'n'.
+ --> pipelineHeadReclaimsALiftedTemplate.tt:1:16
+  |
+1 | const a = `v=${n}` |> f;
+  |                ^
+error[ts2304]: Cannot find name 'f'.
+ --> pipelineHeadReclaimsALiftedTemplate.tt:1:23
+  |
+1 | const a = `v=${n}` |> f;
+  |                       ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+pipelineHeadReclaimsALiftedTemplate.ts(4,23): error TS2304: Cannot find name 'n'.
+pipelineHeadReclaimsALiftedTemplate.ts(4,28): error TS2304: Cannot find name 'f'.

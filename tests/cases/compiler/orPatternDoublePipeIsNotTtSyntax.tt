@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::or_pattern_double_pipe_is_not_tt_syntax
+const r = match (x) { A || B => 1 };

@@ -1,0 +1,22 @@
+==== ttc --out-dir (exit 1) ====
+error[match-duplicate-arm]: match: duplicate arm "a"
+ --> ./literalDuplicateComparesValuesNotSpellings2.tt:1:33
+  |
+1 | const v = match (x) { "a" => 1, '\x61' => 2 };
+  |                                 ^^^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> literalDuplicateComparesValuesNotSpellings2.tt:1:18
+  |
+1 | const v = match (x) { "a" => 1, '\x61' => 2 };
+  |                  ^
+error[match-duplicate-arm]: match: duplicate arm "a"
+ --> literalDuplicateComparesValuesNotSpellings2.tt:1:33
+  |
+1 | const v = match (x) { "a" => 1, '\x61' => 2 };
+  |                                 ^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,5 @@
+=== anInertPipelineInputUsesADirectCall.tt ===
+const value = 1 |> String;
+>value : const value: string
+>String : var String: (value?: any) => string
+

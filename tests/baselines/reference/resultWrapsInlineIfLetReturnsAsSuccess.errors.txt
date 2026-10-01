@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./resultWrapsInlineIfLetReturnsAsSuccess.tt → $DIR/out/resultWrapsInlineIfLetReturnsAsSuccess.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'read'.
+ --> resultWrapsInlineIfLetReturnsAsSuccess.tt:2:41
+  |
+2 | const value = result { const item = try read(); if let Some(found) = item { return found; } else { return 0; } };
+  |                                         ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+resultWrapsInlineIfLetReturnsAsSuccess.ts(10,18): error TS2304: Cannot find name 'read'.

@@ -1,0 +1,4 @@
+=== aConditionalMatchUsesOneExitTarget.tt ===
+const value = match (item) {
+>value : const value: number | undefined
+

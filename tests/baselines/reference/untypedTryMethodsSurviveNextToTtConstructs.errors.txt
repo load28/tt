@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./untypedTryMethodsSurviveNextToTtConstructs.tt → $DIR/out/untypedTryMethodsSurviveNextToTtConstructs.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts7010]: 'try', which lacks return-type annotation, implicitly has an 'any' return type.
+ --> untypedTryMethodsSurviveNextToTtConstructs.tt:2:15
+  |
+2 | interface X { try(x); }
+  |               ^^^^^^^
+error[ts7006]: Parameter 'x' implicitly has an 'any' type.
+ --> untypedTryMethodsSurviveNextToTtConstructs.tt:2:19
+  |
+2 | interface X { try(x); }
+  |                   ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+untypedTryMethodsSurviveNextToTtConstructs.ts(6,15): error TS7010: 'try', which lacks return-type annotation, implicitly has an 'any' return type.
+untypedTryMethodsSurviveNextToTtConstructs.ts(6,19): error TS7006: Parameter 'x' implicitly has an 'any' type.

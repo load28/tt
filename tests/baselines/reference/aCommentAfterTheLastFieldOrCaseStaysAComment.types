@@ -1,0 +1,20 @@
+=== aCommentAfterTheLastFieldOrCaseStaysAComment.tt ===
+export variant Shape {
+>Shape : type Shape = {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       kind: "Point";
+>   }
+  Rect(
+>Rect : (property) Rect: (w: number, h: number) => Shape
+    w: number,
+>w : (property) w: number
+    h: number // height
+>h : (property) h: number
+  Point // last
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+

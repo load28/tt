@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_03.rs::if_let_or_pattern_condition_is_a_disjunction
+variant E { A(x: number), B(x: number), C }
+function g(e: E): number {
+  if let A(x) | B(x) = e {
+    return x;
+  }
+  return -1;
+}

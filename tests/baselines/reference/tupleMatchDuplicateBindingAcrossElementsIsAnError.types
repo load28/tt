@@ -1,0 +1,8 @@
+=== tupleMatchDuplicateBindingAcrossElementsIsAnError.tt ===
+const r = match (a, b) {
+>r : const r: any
+  (Some(value), Some(value)) => value,
+>value : const value: any
+>value : any
+>value : const value: any
+

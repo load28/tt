@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_05.rs::optional_postfix_step_emits_the_complete_chain
+const a = x |> ?.trim();
+const b = xs |> ?.[key]?.value;
+const c = fn |> ?.(arg).value?.();

@@ -1,0 +1,47 @@
+=== ttxLowersConstructsInJsxChildrenAndAttributes.ttx ===
+variant State { Ready(value: string), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: string;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: string) => State
+>value : (property) value: string
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+declare const state: State;
+>state : const state: State
+>State : type State = {
+>       kind: "Ready";
+>       value: string;
+>   } | {
+>       kind: "Empty";
+>   }
+const child = <section>{match (state) {
+>child : const child: any
+>state : const state: State
+  Ready(value) => <strong>{value}</strong>,
+>value : const value: string
+>value : const value: string
+const prop = <Panel before={mark("before")} render={() => match (state) {
+>prop : const prop: any
+>state : const state: State
+  Ready(value) => <strong>{value}</strong>,
+>value : const value: string
+>value : const value: string
+const ordered = (state: State) => <Panel before={mark("first")} value={match (state) {
+>ordered : const ordered: (state: State) => any
+>state : (parameter) state: State
+>State : type State = {
+>       kind: "Ready";
+>       value: string;
+>   } | {
+>       kind: "Empty";
+>   }
+>state : (parameter) state: State
+  Ready(value) => value,
+>value : const value: string
+>value : const value: string
+

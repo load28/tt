@@ -1,0 +1,9 @@
+=== ifLetEmitsASelfContainedBlock.tt ===
+function f() {
+>f : function f(): void
+  if let Some(value: user) = find() {
+>value : any
+>user : const user: any
+    greet(user);
+>user : const user: any
+

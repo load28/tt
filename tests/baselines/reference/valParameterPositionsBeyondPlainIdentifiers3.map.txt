@@ -1,0 +1,4 @@
+//// [valParameterPositionsBeyondPlainIdentifiers3.tt] 2 mapping(s)
+1:1 -> 1:1 len 22  "try {\n  f();\n} catch ("
+3:14 -> 3:10 len 34  "error: any) {\n  error.code = 1;\n}\n"
+

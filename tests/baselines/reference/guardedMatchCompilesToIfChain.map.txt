@@ -1,0 +1,15 @@
+//// [guardedMatchCompilesToIfChain.tt] 13 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:32 -> 21:31 len 6  "number"
+2:32 -> 24:20 len 6  "number"
+2:50 -> 26:3 len 1  "\n"
+3:1 -> 50:1 len 14  "const grade = "
+3:22 -> 29:17 len 1  "s"
+4:10 -> 32:15 len 6  "points"
+4:21 -> 33:11 len 12  "points >= 90"
+4:37 -> 34:24 len 3  "\"A\""
+5:10 -> 39:15 len 6  "points"
+5:21 -> 40:22 len 3  "\"F\""
+6:14 -> 44:22 len 3  "\"-\""
+7:2 -> 50:27 len 2  ";\n"
+

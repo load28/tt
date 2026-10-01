@@ -1,0 +1,27 @@
+==== ttc --out-dir (exit 1) ====
+error[match-duplicate-arm]: match: duplicate arm "A"
+ --> ./guardAfterUnguardedSameTagIsDuplicate.tt:1:31
+  |
+1 | const r = match (x) { A => 1, A if c => 2, _ => 0 };
+  |                               ^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> guardAfterUnguardedSameTagIsDuplicate.tt:1:18
+  |
+1 | const r = match (x) { A => 1, A if c => 2, _ => 0 };
+  |                  ^
+error[match-duplicate-arm]: match: duplicate arm "A"
+ --> guardAfterUnguardedSameTagIsDuplicate.tt:1:31
+  |
+1 | const r = match (x) { A => 1, A if c => 2, _ => 0 };
+  |                               ^
+error[ts2304]: Cannot find name 'c'.
+ --> guardAfterUnguardedSameTagIsDuplicate.tt:1:36
+  |
+1 | const r = match (x) { A => 1, A if c => 2, _ => 0 };
+  |                                    ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

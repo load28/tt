@@ -1,0 +1,8 @@
+=== tryIsAValueInDeepExpressionPositions1.tt ===
+function f(): TResult<number, string> {
+>f : function f(): TResult<number, string>
+>TResult : type TResult = /*unresolved*/ any
+  return Result.Ok(Math.round(try total() * 1.1));
+>Math : var Math: Math
+>round : (method) Math.round(x: number): number
+

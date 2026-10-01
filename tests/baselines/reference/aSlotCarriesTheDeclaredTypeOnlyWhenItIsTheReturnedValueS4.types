@@ -1,0 +1,29 @@
+=== aSlotCarriesTheDeclaredTypeOnlyWhenItIsTheReturnedValueS4.tt ===
+variant Shape { Circle(radius: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+declare const s: Shape;
+>s : const s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+export function pred(x: unknown): x is number { return match (s) { Circle(radius) => typeof x === "number", Point => false }; }
+>pred : function pred(x: unknown): x is number
+>x : (parameter) x: unknown
+>x : (parameter) x: unknown
+>s : const s: Shape
+>radius : const radius: number
+>x : (parameter) x: unknown
+

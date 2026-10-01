@@ -1,0 +1,26 @@
+==== ttc --out-dir (exit 1) ====
+error[unknown-case]: built-in variant Option has no case `Non`
+ --> ./aMisspelledBuiltinCaseIsReported.tt:1:45
+  |
+1 | const n = match (o) { Some(value) => value, Non => 0 };
+  |                                             ^^^
+  |
+  = help: a case with a similar name exists: `None`
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'o'.
+ --> aMisspelledBuiltinCaseIsReported.tt:1:18
+  |
+1 | const n = match (o) { Some(value) => value, Non => 0 };
+  |                  ^
+error[unknown-case]: built-in variant Option has no case `Non`
+ --> aMisspelledBuiltinCaseIsReported.tt:1:45
+  |
+1 | const n = match (o) { Some(value) => value, Non => 0 };
+  |                                             ^^^
+  |
+  = help: a case with a similar name exists: `None`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

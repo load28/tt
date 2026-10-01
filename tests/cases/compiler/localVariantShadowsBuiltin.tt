@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_02.rs::local_variant_shadows_builtin
+variant Option { Some(), Stale }
+const f = (o: Option) => match (o) { Some => 1 };

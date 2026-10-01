@@ -1,0 +1,20 @@
+=== valJudgesOnlyPathsRootedAtTheBinding2.tt ===
+val const config = { debug: false };
+>config : const config: {
+>       debug: boolean;
+>   }
+>debug : (property) debug: boolean
+class K {
+>K : class K
+  config = { debug: false };
+>config : (property) K.config: {
+>       debug: boolean;
+>   }
+>debug : (property) debug: boolean
+  m() { this.config.debug = true; }
+>m : (method) K.m(): void
+>config : (property) K.config: {
+>       debug: boolean;
+>   }
+>debug : (property) debug: boolean
+

@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseDivergesWhenTheReturnValueIsAnObjectLiteral2.tt → $DIR/out/letElseDivergesWhenTheReturnValueIsAnObjectLiteral2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseDivergesWhenTheReturnValueIsAnObjectLiteral2.tt:2:19
+  |
+2 |   const Some(v) = find() else { log("x"); return { k: 1 }; };
+  |                   ^^^^
+error[ts2304]: Cannot find name 'log'.
+ --> letElseDivergesWhenTheReturnValueIsAnObjectLiteral2.tt:2:33
+  |
+2 |   const Some(v) = find() else { log("x"); return { k: 1 }; };
+  |                                 ^^^
+error[ts2322]: Type '{ k: number; }' is not assignable to type 'number'.
+ --> letElseDivergesWhenTheReturnValueIsAnObjectLiteral2.tt:2:43
+  |
+2 |   const Some(v) = find() else { log("x"); return { k: 1 }; };
+  |                                           ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseDivergesWhenTheReturnValueIsAnObjectLiteral2.ts(2,18): error TS2304: Cannot find name 'find'.
+letElseDivergesWhenTheReturnValueIsAnObjectLiteral2.ts(4,5): error TS2304: Cannot find name 'log'.
+letElseDivergesWhenTheReturnValueIsAnObjectLiteral2.ts(4,15): error TS2322: Type '{ k: number; }' is not assignable to type 'number'.

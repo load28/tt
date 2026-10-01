@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tagsOfAHandWrittenUnionAreNotResolutionErrors.tt → $DIR/out/tagsOfAHandWrittenUnionAreNotResolutionErrors.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'm'.
+ --> tagsOfAHandWrittenUnionAreNotResolutionErrors.tt:2:18
+  |
+2 | const a = match (m) { Ping => 0, Pong(n) => n, _ => -1 };
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tagsOfAHandWrittenUnionAreNotResolutionErrors.ts(4,17): error TS2304: Cannot find name 'm'.

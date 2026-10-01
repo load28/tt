@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_11.rs::a_try_operand_never_starts_with_a_statement_keyword
+declare function f(): any;
+function g() { const x = if (f()) {}; }

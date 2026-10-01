@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::comments_inside_a_field_type_stay_in_the_type
+variant Size { Px(value: /* css */ number | /* auto */ "auto") }

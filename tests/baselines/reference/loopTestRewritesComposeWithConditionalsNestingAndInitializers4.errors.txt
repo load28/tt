@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./loopTestRewritesComposeWithConditionalsNestingAndInitializers4.tt → $DIR/out/loopTestRewritesComposeWithConditionalsNestingAndInitializers4.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'use'.
+ --> loopTestRewritesComposeWithConditionalsNestingAndInitializers4.tt:1:88
+  |
+1 | for (let a = match (1) { 1 => 1, _ => 0 }; match (a) { 1 => true, _ => false }; a++) { use(a); }
+  |                                                                                        ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+loopTestRewritesComposeWithConditionalsNestingAndInitializers4.ts(31,29): error TS2304: Cannot find name 'use'.

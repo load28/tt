@@ -1,0 +1,4 @@
+=== repeatedLoopTestsOwnTheMatchRegionPerIteration2.tt ===
+for (; match (next()) { is Error => false, _ => true }; tick()) { work(); }
+>Error : var Error: ErrorConstructor
+

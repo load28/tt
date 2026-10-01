@@ -1,0 +1,6 @@
+=== noSubstitutionTemplateDynamicImportIsRewritten2.tt ===
+const m = import(`../view.ttx`, { with: { type: 'module' } });
+>m : const m: Promise<any>
+>with : (property) ImportCallOptions.with?: ImportAttributes | undefined
+>type : (property) type: string
+

@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_11.rs::a_match_under_a_conditional_operation_in_an_arm_body_is_a_region
+variant S { A(v: number), B(w: number), C }
+declare const s: S;
+declare function eff(): number;
+const y = match (s) { A(v) => eff() > 0 && match (s) { B(w) => w > 0, _ => false }, _ => false };

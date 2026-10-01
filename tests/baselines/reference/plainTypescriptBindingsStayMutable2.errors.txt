@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./plainTypescriptBindingsStayMutable2.tt → $DIR/out/plainTypescriptBindingsStayMutable2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'X'.
+ --> plainTypescriptBindingsStayMutable2.tt:1:15
+  |
+1 | function f(x: X) {
+  |               ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+plainTypescriptBindingsStayMutable2.ts(1,15): error TS2304: Cannot find name 'X'.

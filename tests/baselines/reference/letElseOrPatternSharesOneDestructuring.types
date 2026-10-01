@@ -1,0 +1,37 @@
+=== letElseOrPatternSharesOneDestructuring.tt ===
+variant E { A(x: number), B(x: number), C }
+>E : type E = {
+>       kind: "A";
+>       x: number;
+>   } | {
+>       kind: "B";
+>       x: number;
+>   } | {
+>       kind: "C";
+>   }
+>A : (property) A: (x: number) => E
+>x : (property) x: number
+>B : (property) B: (x: number) => E
+>x : (property) x: number
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+function f(e: E): number {
+>f : function f(e: E): number
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>       x: number;
+>   } | {
+>       kind: "B";
+>       x: number;
+>   } | {
+>       kind: "C";
+>   }
+  const A(x) | B(x) = e else { return 0; };
+>x : const x: number
+>x : const x: number
+>e : (parameter) e: E
+  return x;
+>x : const x: number
+

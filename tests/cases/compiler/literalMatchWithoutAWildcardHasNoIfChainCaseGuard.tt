@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::literal_match_without_a_wildcard_has_no_if_chain_case_guard
+const v = match (code) { 200 if ok => 1, 404 => 2 };

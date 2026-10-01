@@ -1,0 +1,38 @@
+=== aMatchUnderAConditionalOperationInAGuardKeepsTheShortCircuit.tt ===
+variant S { A(v: number), B(w: number), C }
+>S : type S = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>       w: number;
+>   } | {
+>       kind: "C";
+>   }
+>A : (property) A: (v: number) => S
+>v : (property) v: number
+>B : (property) B: (w: number) => S
+>w : (property) w: number
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+declare const s: S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>       w: number;
+>   } | {
+>       kind: "C";
+>   }
+const x = match (s) { A(v) if v > 0 && match (s) { B(w) => w > 0, _ => false } => 1, _ => 0 };
+>x : const x: number
+>s : const s: S
+>v : const v: number
+>v : const v: number
+>s : const s: S
+>w : const w: number
+>w : const w: number
+

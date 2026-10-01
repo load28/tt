@@ -1,0 +1,6 @@
+=== letElseRequiresParensOnThePattern.tt ===
+function f(): number {
+>f : function f(): number
+  const Point = find() else { return 0; };
+>Point : const Point: any
+

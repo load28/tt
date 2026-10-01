@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_06.rs::nested_pattern_mixes_plain_bindings_at_each_level
+
+const n = match (r) {
+  Both(left, right: Some(value)) => left + value,
+  _ => 0,
+};

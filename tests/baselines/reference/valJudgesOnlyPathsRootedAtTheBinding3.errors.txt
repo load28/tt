@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valJudgesOnlyPathsRootedAtTheBinding3.tt → $DIR/out/valJudgesOnlyPathsRootedAtTheBinding3.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2790]: The operand of a 'delete' operator must be optional.
+ --> valJudgesOnlyPathsRootedAtTheBinding3.tt:5:8
+  |
+5 | delete q.o.x;
+  |        ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valJudgesOnlyPathsRootedAtTheBinding3.ts(5,8): error TS2790: The operand of a 'delete' operator must be optional.

@@ -1,0 +1,55 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.tt → $DIR/out/resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2552]: Cannot find name 'items'. Did you mean 'item'?
+ --> resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.tt:2:45
+  |
+2 | const fromFor = result { for (const item of items) { return try read(item); } return 0; };
+  |                                             ^^^^^
+  |                                     ---- 'item' is declared here.
+error[ts2304]: Cannot find name 'read'.
+ --> resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.tt:2:65
+  |
+2 | const fromFor = result { for (const item of items) { return try read(item); } return 0; };
+  |                                                                 ^^^^
+error[ts2304]: Cannot find name 'ready'.
+ --> resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.tt:3:35
+  |
+3 | const fromWhile = result { while (ready()) { return try read(); } return 0; };
+  |                                   ^^^^^
+error[ts2304]: Cannot find name 'read'.
+ --> resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.tt:3:57
+  |
+3 | const fromWhile = result { while (ready()) { return try read(); } return 0; };
+  |                                                         ^^^^
+error[ts2304]: Cannot find name 'read'.
+ --> resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.tt:4:41
+  |
+4 | const fromDo = result { do { return try read(); } while (ready()); return 0; };
+  |                                         ^^^^
+error[ts2304]: Cannot find name 'ready'.
+ --> resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.tt:4:58
+  |
+4 | const fromDo = result { do { return try read(); } while (ready()); return 0; };
+  |                                                          ^^^^^
+error[ts2304]: Cannot find name 'tag'.
+ --> resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.tt:5:37
+  |
+5 | const fromSwitch = result { switch (tag) { default: return try read(); } return 0; };
+  |                                     ^^^
+error[ts2304]: Cannot find name 'read'.
+ --> resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.tt:5:64
+  |
+5 | const fromSwitch = result { switch (tag) { default: return try read(); } return 0; };
+  |                                                                ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.ts(4,22): error TS2552: Cannot find name 'items'. Did you mean 'item'?
+resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.ts(4,46): error TS2304: Cannot find name 'read'.
+resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.ts(16,10): error TS2304: Cannot find name 'ready'.
+resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.ts(16,36): error TS2304: Cannot find name 'read'.
+resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.ts(28,23): error TS2304: Cannot find name 'read'.
+resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.ts(35,33): error TS2304: Cannot find name 'ready'.
+resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.ts(40,11): error TS2304: Cannot find name 'tag'.
+resultExitsTargetTheGeneratedBoundaryThroughBreakableStatements.ts(40,42): error TS2304: Cannot find name 'read'.

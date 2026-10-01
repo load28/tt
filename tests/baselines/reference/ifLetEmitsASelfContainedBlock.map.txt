@@ -1,0 +1,8 @@
+//// [ifLetEmitsASelfContainedBlock.tt] 6 mapping(s)
+1:1 -> 1:1 len 17  "function f() {\n  "
+2:15 -> 5:15 len 5  "value"
+2:22 -> 5:22 len 4  "user"
+2:30 -> 3:20 len 6  "find()"
+3:5 -> 6:7 len 12  "greet(user);"
+4:4 -> 8:4 len 3  "\n}\n"
+

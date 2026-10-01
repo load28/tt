@@ -1,0 +1,7 @@
+=== valParameterIsReadOnlyInsideTheFunction2.tt ===
+const read = (val user: User) => user.name = "Lee";
+>read : const read: (user: User) => string
+>user : (parameter) user: User
+>User : type User = /*unresolved*/ any
+>user : (parameter) user: User
+

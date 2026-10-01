@@ -1,0 +1,42 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./commaExpressionScrutineeIsStillASingleMatch.tt → $DIR/out/commaExpressionScrutineeIsStillASingleMatch.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'a'.
+ --> commaExpressionScrutineeIsStillASingleMatch.tt:1:19
+  |
+1 | const r = match ((a, b)) { A => 1, _ => 0 };
+  |                   ^
+error[ts2695]: Left side of comma operator is unused and has no side effects.
+ --> commaExpressionScrutineeIsStillASingleMatch.tt:1:19
+  |
+1 | const r = match ((a, b)) { A => 1, _ => 0 };
+  |                   ^
+error[ts2304]: Cannot find name 'b'.
+ --> commaExpressionScrutineeIsStillASingleMatch.tt:1:22
+  |
+1 | const r = match ((a, b)) { A => 1, _ => 0 };
+  |                      ^
+error[ts2304]: Cannot find name 'a'.
+ --> commaExpressionScrutineeIsStillASingleMatch.tt:2:18
+  |
+2 | const s = match (a, b) { A => 1, _ => 0 };
+  |                  ^
+error[ts2695]: Left side of comma operator is unused and has no side effects.
+ --> commaExpressionScrutineeIsStillASingleMatch.tt:2:18
+  |
+2 | const s = match (a, b) { A => 1, _ => 0 };
+  |                  ^
+error[ts2304]: Cannot find name 'b'.
+ --> commaExpressionScrutineeIsStillASingleMatch.tt:2:21
+  |
+2 | const s = match (a, b) { A => 1, _ => 0 };
+  |                     ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+commaExpressionScrutineeIsStillASingleMatch.ts(3,18): error TS2304: Cannot find name 'a'.
+commaExpressionScrutineeIsStillASingleMatch.ts(3,18): error TS2695: Left side of comma operator is unused and has no side effects.
+commaExpressionScrutineeIsStillASingleMatch.ts(3,21): error TS2304: Cannot find name 'b'.
+commaExpressionScrutineeIsStillASingleMatch.ts(18,18): error TS2304: Cannot find name 'a'.
+commaExpressionScrutineeIsStillASingleMatch.ts(18,18): error TS2695: Left side of comma operator is unused and has no side effects.
+commaExpressionScrutineeIsStillASingleMatch.ts(18,21): error TS2304: Cannot find name 'b'.

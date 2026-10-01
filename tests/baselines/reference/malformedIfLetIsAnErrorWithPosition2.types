@@ -1,0 +1,4 @@
+=== malformedIfLetIsAnErrorWithPosition2.tt ===
+function f() {
+>f : function f(): void
+

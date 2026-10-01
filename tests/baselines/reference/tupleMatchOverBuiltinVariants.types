@@ -1,0 +1,10 @@
+=== tupleMatchOverBuiltinVariants.tt ===
+const r = match (o, r2) {
+>r : const r: any
+  (Some(value), Ok(value: v)) => value + v,
+>value : const value: any
+>value : any
+>v : const v: any
+>value : const value: any
+>v : const v: any
+

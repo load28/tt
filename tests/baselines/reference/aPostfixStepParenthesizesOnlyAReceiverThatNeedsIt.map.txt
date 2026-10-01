@@ -1,0 +1,7 @@
+//// [aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.tt] 5 mapping(s)
+1:1 -> 1:1 len 11  "const a = s"
+1:16 -> 1:12 len 26  ".trim();\nconst b = (x + y)"
+2:22 -> 2:18 len 23  ".toFixed(2);\nconst c = "
+3:11 -> 3:12 len 7  "await p"
+3:22 -> 3:20 len 10  ".then(g);\n"
+

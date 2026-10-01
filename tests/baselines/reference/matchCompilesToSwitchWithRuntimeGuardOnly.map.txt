@@ -1,0 +1,12 @@
+//// [matchCompilesToSwitchWithRuntimeGuardOnly.tt] 10 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:32 -> 21:31 len 6  "number"
+2:32 -> 24:20 len 6  "number"
+2:48 -> 26:3 len 1  "\n"
+3:1 -> 45:1 len 13  "const area = "
+3:21 -> 29:17 len 5  "shape"
+4:10 -> 32:15 len 6  "radius"
+4:21 -> 33:21 len 22  "3.14 * radius * radius"
+5:12 -> 37:21 len 1  "0"
+6:2 -> 45:25 len 2  ";\n"
+

@@ -1,0 +1,8 @@
+=== letElseDoesNotTakeNestedPatterns.tt ===
+function f() {
+>f : function f(): void
+  const Some(value: Ok(v)) = g() else { return; };
+>Some : const Some: any
+>value : (parameter) value: Ok
+>Ok : type Ok = /*unresolved*/ any
+

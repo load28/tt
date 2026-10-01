@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_01.rs::variant_complex_field_types
+
+variant Node {
+  Leaf(entries: Map<string, number[]>),
+  Branch(children: Array<string>, meta: { tag: string, depth: number }),
+}

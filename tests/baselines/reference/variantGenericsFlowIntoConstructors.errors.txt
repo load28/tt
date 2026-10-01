@@ -1,0 +1,19 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./variantGenericsFlowIntoConstructors.tt → $DIR/out/variantGenericsFlowIntoConstructors.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2749]: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'? (in code ttc generated for this construct)
+ --> variantGenericsFlowIntoConstructors.tt:1:9
+  |
+1 | variant Option<T> {
+  |         ^^^^^^
+error[ts2451]: Cannot redeclare block-scoped variable 'Option'. (in code ttc generated for this construct)
+ --> variantGenericsFlowIntoConstructors.tt:1:9
+  |
+1 | variant Option<T> {
+  |         ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+variantGenericsFlowIntoConstructors.ts(1,6): error TS2451: Cannot redeclare block-scoped variable 'Option'.
+variantGenericsFlowIntoConstructors.ts(4,7): error TS2451: Cannot redeclare block-scoped variable 'Option'.
+variantGenericsFlowIntoConstructors.ts(5,24): error TS2749: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'?

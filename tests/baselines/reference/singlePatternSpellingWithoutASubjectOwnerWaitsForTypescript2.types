@@ -1,0 +1,17 @@
+=== singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript2.tt ===
+variant Shape { Circle(radius: number), Empty }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+if let Circel(radius) = s { log(radius); }
+>radius : const radius: any
+>radius : const radius: any
+

@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_05.rs::a_nested_variant_declaration_is_laid_out_from_its_own_line
+function make() {
+  variant Inner { A(x: number), B }
+  return Inner.B;
+}

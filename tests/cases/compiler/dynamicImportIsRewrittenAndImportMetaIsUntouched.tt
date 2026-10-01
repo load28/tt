@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_04.rs::dynamic_import_is_rewritten_and_import_meta_is_untouched
+const m = import("./x.tt");
+const u = import.meta.url;

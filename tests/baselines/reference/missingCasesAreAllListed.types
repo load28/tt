@@ -1,0 +1,38 @@
+=== missingCasesAreAllListed.tt ===
+variant Dir { North, South, East, West(deg: number) }
+>Dir : type Dir = {
+>       kind: "North";
+>   } | {
+>       kind: "South";
+>   } | {
+>       kind: "East";
+>   } | {
+>       kind: "West";
+>       deg: number;
+>   }
+>North : (property) North: {
+>       readonly kind: "North";
+>   }
+>South : (property) South: {
+>       readonly kind: "South";
+>   }
+>East : (property) East: {
+>       readonly kind: "East";
+>   }
+>West : (property) West: (deg: number) => Dir
+>deg : (property) deg: number
+const f = (d: Dir) => match (d) { North => 1 };
+>f : const f: (d: Dir) => number
+>d : (parameter) d: Dir
+>Dir : type Dir = {
+>       kind: "North";
+>   } | {
+>       kind: "South";
+>   } | {
+>       kind: "East";
+>   } | {
+>       kind: "West";
+>       deg: number;
+>   }
+>d : (parameter) d: Dir
+

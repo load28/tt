@@ -1,0 +1,33 @@
+=== statementPositionMatchIsASupportedOwner.tt ===
+variant R { Ok(value: number), Err(error: string) }
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>Ok : (property) Ok: (value: number) => R
+>value : (property) value: number
+>Err : (property) Err: (error: string) => R
+>error : (property) error: string
+const f = (x: number) => { match (R.Ok(x)) {
+>f : const f: (x: number) => void
+>x : (parameter) x: number
+>R : const R: {
+>       Ok: (value: number) => R;
+>       Err: (error: string) => R;
+>   }
+>Ok : (property) Ok: (value: number) => R
+>x : (parameter) x: number
+Ok(value) => { console.log(value); },
+>value : const value: number
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>value : const value: number
+Err(error) => { console.log(error); },
+>error : const error: string
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>error : const error: string
+

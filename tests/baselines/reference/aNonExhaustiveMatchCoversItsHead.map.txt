@@ -1,0 +1,10 @@
+//// [aNonExhaustiveMatchCoversItsHead.tt] 8 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 1  "\n"
+2:1 -> 40:1 len 10  "const v = "
+2:18 -> 28:17 len 1  "s"
+2:25 -> 31:15 len 1  "x"
+2:31 -> 32:18 len 1  "x"
+2:34 -> 40:19 len 2  ";\n"
+

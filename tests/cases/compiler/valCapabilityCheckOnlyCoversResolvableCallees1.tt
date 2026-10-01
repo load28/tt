@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::val_capability_check_only_covers_resolvable_callees
+import { save } from "./io.js";
+function f(val user: User) {
+  save(user);
+  user.save();
+}

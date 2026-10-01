@@ -1,0 +1,14 @@
+//// [resultRegionPipelineHeadCompletesBeforeThePipelineStep.tt] 12 mapping(s)
+1:23 -> 3:26 len 6  "number"
+1:23 -> 6:15 len 6  "number"
+1:43 -> 4:27 len 6  "string"
+1:43 -> 7:16 len 6  "string"
+1:52 -> 8:3 len 93  "\ndeclare const g: () => R; declare const unwrap:"...
+3:27 -> 22:1 len 10  "const n = "
+4:7 -> 17:11 len 5  "value"
+4:19 -> 13:20 len 3  "g()"
+4:23 -> 17:32 len 1  " "
+4:31 -> 17:72 len 9  "value * 2"
+5:6 -> 19:12 len 6  "unwrap"
+5:12 -> 22:17 len 15  "; return n; };\n"
+

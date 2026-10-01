@@ -1,0 +1,3 @@
+//// [valNeverCallsAMethodAMutationFromItsName4.tt] 1 mapping(s)
+1:5 -> 1:1 len 52  "const m = new Map<string, number>();\nm.set(\"a\", "...
+

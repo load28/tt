@@ -1,0 +1,3 @@
+//// [noSubstitutionTemplateDynamicImportIsRewritten2.tt] 1 mapping(s)
+1:1 -> 1:1 len 63  "const m = import(`../view.ttx`, { with: { type: "...
+

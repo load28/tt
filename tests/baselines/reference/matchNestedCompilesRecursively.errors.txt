@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./matchNestedCompilesRecursively.tt → $DIR/out/matchNestedCompilesRecursively.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'a'.
+ --> matchNestedCompilesRecursively.tt:2:18
+  |
+2 | const r = match (a) {
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+matchNestedCompilesRecursively.ts(4,17): error TS2304: Cannot find name 'a'.

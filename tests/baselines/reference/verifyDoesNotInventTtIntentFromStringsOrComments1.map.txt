@@ -1,0 +1,3 @@
+//// [verifyDoesNotInventTtIntentFromStringsOrComments1.tt] 1 mapping(s)
+1:1 -> 1:1 len 31  "const note = 'try'; const = 5;\n"
+

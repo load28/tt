@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./parenthesizedConciseArrowKeepsTryInTheArrow.tt → $DIR/out/parenthesizedConciseArrowKeepsTryInTheArrow.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'next'.
+ --> parenthesizedConciseArrowKeepsTryInTheArrow.tt:1:22
+  |
+1 | const f = () => (try next());
+  |                      ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+parenthesizedConciseArrowKeepsTryInTheArrow.ts(3,18): error TS2304: Cannot find name 'next'.
