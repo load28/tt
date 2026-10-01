@@ -1,0 +1,3 @@
+logicalOr(3) => true | flip true; finally 0
+logicalOr(4) => 12 | flip false; operand 4; flip true; maybe true; twice 12; finally 0
+logicalOr(5) => 15 | flip false; operand 5; flip true; maybe true; twice 15; finally 0

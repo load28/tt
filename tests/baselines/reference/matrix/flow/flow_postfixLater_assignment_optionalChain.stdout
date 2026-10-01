@@ -1,0 +1,2 @@
+assignment(1.5) => "3.0" | initial 0; target {"value":0}; add 3
+assignment(2) => "NaN" | initial 0; target {"value":0}; add null

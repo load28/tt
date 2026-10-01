@@ -1,0 +1,2 @@
+nullishAssignment(3) => "6" | flip true; target {"value":null}; yield 3; add 6
+nullishAssignment(-4) => "kept" | flip false; target {"value":"kept"}

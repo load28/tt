@@ -1,2 +1,0 @@
-forOfHead(1.25) => ["1.3"] | await
-forOfHead(7) => ["7.0"] | await

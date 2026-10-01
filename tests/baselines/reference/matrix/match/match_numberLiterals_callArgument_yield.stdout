@@ -1,0 +1,5 @@
+callArgument(200) => [1,true,3] | a 1; yield 200; success true; c 3
+callArgument(201) => [1,true,3] | a 1; yield 201; success true; c 3
+callArgument(404) => [1,false,3] | a 1; yield 404; missing false; c 3
+callArgument(500) => [1,false,3] | a 1; yield 500; guard true; server false; c 3
+callArgument(7) => [1,null,3] | a 1; yield 7; other null; c 3

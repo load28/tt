@@ -1,5 +1,0 @@
-nullish({"kind":"Circle","r":1}) => 1 | flip true; operand {"kind":"Circle","r":1}; guard big false; small 1
-nullish({"kind":"Circle","r":5}) => "set" | flip false; left "set"
-nullish({"kind":"Rect","w":4,"h":2}) => 4 | flip true; operand {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4
-nullish({"kind":"Rect","w":1,"h":3}) => "set" | flip false; left "set"
-nullish({"kind":"Point"}) => 0 | flip true; operand {"kind":"Point"}; point 0

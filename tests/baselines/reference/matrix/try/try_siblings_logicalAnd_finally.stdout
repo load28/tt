@@ -1,0 +1,2 @@
+logicalAnd(4) => {"kind":"Ok","value":9} | flip true; operand 4; read 4; second 5; read 5; finally 0
+logicalAnd(-4) => {"kind":"Ok","value":false} | flip false; finally 0

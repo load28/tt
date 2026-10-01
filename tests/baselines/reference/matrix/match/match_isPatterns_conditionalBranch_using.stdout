@@ -1,0 +1,4 @@
+conditionalBranch({}) => "range" | open res; flip true; operand {}; range "range"; dispose res
+conditionalBranch({}) => "skipped" | open res; flip false; else "skipped"; dispose res
+conditionalBranch({}) => "plain" | open res; flip true; operand {}; error "plain"; dispose res
+conditionalBranch("text") => "skipped" | open res; flip false; else "skipped"; dispose res

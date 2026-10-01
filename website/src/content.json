@@ -690,12 +690,12 @@
       "code": "import { Token } from \"./token.tt\";\nimport type { TOption, TResult } from \"@tt/std\";\nimport * as Option from \"@tt/std/option\";\nimport * as Result from \"@tt/std/result\";\n\nexport { Parser } from \"./parser.tt\";",
       "works": {
         "en": [
-          "Relative .tt and .ttx imports emit as .js and .jsx by default.",
+          "Relative .tt imports emit as .js; .ttx imports emit as the file tsc writes: .jsx under \"jsx\": \"preserve\", .js otherwise.",
           "Use --rewrite-imports ts or off for TypeScript-extension or bundler workflows.",
           "Direct relative imports carry exported variant declarations into exhaustiveness checking."
         ],
         "ko": [
-          "상대 .tt과 .ttx import는 기본적으로 .js와 .jsx로 방출됩니다.",
+          "상대 .tt import는 .js로, .ttx import는 tsc가 쓰는 파일 이름으로 방출됩니다: \"jsx\": \"preserve\"에서는 .jsx, 그 밖에는 .js.",
           "TypeScript 확장자나 번들러 흐름에는 --rewrite-imports ts 또는 off를 사용합니다.",
           "직접 상대 import의 export variant 선언은 소진성 검사에 참여합니다."
         ]

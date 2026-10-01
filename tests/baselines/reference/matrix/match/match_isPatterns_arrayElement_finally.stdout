@@ -1,4 +1,0 @@
-arrayElement({}) => [0,"range",2] | first 0; operand {}; range "range"; last 2; finally 0
-arrayElement({}) => [0,1,2] | first 0; operand {}; type 1; last 2; finally 0
-arrayElement({}) => [0,"plain",2] | first 0; operand {}; error "plain"; last 2; finally 0
-arrayElement("text") => [0,null,2] | first 0; operand "text"; other null; last 2; finally 0

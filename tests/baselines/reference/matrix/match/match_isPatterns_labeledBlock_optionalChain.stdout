@@ -1,0 +1,4 @@
+labeledBlock({}) => "range" | range "range"; flip true
+labeledBlock({}) => [null] | other null; flip false
+labeledBlock({}) => "plain" | error "plain"; flip true
+labeledBlock("text") => [null] | other null; flip false

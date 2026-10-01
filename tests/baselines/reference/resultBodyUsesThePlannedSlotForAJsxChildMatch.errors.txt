@@ -30,7 +30,7 @@ error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.I
    |       ^^^^^^^^^^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx(77,18): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
-resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx(77,64): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
-resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx(77,94): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
-resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx(77,112): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx(76,18): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx(76,64): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx(76,120): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx(76,138): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.

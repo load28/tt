@@ -1,3 +1,0 @@
-forTest({"kind":"Circle","r":2}) => 1 | risky {"kind":"Circle","r":2}; circle 2
-forTest({"kind":"Rect","w":3,"h":4}) => 1 | risky {"kind":"Rect","w":3,"h":4}; rect [3,4]
-forTest({"kind":"Point"}) => "risky call 3" | caught "risky call 3"

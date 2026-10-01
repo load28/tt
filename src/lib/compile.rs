@@ -29,6 +29,14 @@ pub struct Options<'a> {
     pub verify: bool,
     /// How relative `.tt`/`.ttx` import specifiers are rewritten in the output.
     pub rewrite_imports: ImportRewrite,
+    /// Whether the project's TypeScript compiles JSX with `"jsx":
+    /// "preserve"`. TypeScript names the JavaScript it emits for a `.tsx`
+    /// file `.jsx` under `preserve` and `.js` under every other `jsx` value
+    /// or none (`GetOutputExtension` in typescript-go's
+    /// `internal/outputpaths`), so [`ImportRewrite::Js`] rewrites `./x.ttx`
+    /// to `./x.jsx` only when this is set. The CLI reads it from the
+    /// project's `tsconfig.json`. `false` by default, TypeScript's default.
+    pub jsx_preserve: bool,
     /// Variant declarations imported from other modules, included in
     /// exhaustiveness checking (shadowed by local declarations; shadowing
     /// built-ins of the same name). The `ttc` CLI fills this from the
@@ -40,15 +48,16 @@ pub struct Options<'a> {
     ///
     /// ttc answers both on its own, from its variant declarations and a lexical
     /// scope model of its own, and those answers are what [`compile`]
-    /// reports by default. Both are approximations of TypeScript's:
-    /// exhaustiveness is the *declared* type's answer, so a case an earlier
-    /// guard already removed is still demanded and a variant from another
-    /// module has to be collected ([`Options::extern_variants`]); `val`'s
+    /// reports by default. Exhaustiveness is the *declared* type's answer,
+    /// which is the language's rule on every surface: a case an earlier
+    /// guard already removed is still demanded, and a variant from another
+    /// module has to be collected ([`Options::extern_variants`]). A caller
+    /// with a checker reports that answer too, and adds what the type at
+    /// each `match` shows where the declarations cannot answer; `val`'s
     /// pairing is a scope model, so shadowing and redeclaration are ttc's
-    /// reading rather than TypeScript's. A caller with a checker asks it
-    /// instead — the narrowed type at each `match`, and symbol identity for
-    /// each binding — and reports what it says. `ttc --check-types` does
-    /// exactly that ([`tag_matches`], [`literal_matches`], [`val_probes`]).
+    /// reading rather than TypeScript's, and a caller with a checker pairs
+    /// by symbol identity instead. `ttc --check-types` does exactly that
+    /// ([`tag_matches`], [`literal_matches`], [`val_probes`]).
     ///
     /// Every other tt-level check runs either way: duplicate cases,
     /// misplaced wildcards, bad field types, `val`'s call-capability rule.
@@ -66,6 +75,7 @@ impl Default for Options<'_> {
             source_kind: SourceKind::TypeScript,
             verify: true,
             rewrite_imports: ImportRewrite::default(),
+            jsx_preserve: false,
             extern_variants: &[],
             defer_to_checker: false,
             std_imports: StdImports::default(),
@@ -190,7 +200,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             comments: &comments,
         },
         &plan,
-        options.rewrite_imports,
+        options.rewrite_imports.extensions(options.jsx_preserve),
         options.std_imports,
     );
     if options.verify
@@ -282,6 +292,7 @@ fn tt_errors(
             options.source_kind,
             tokens,
             &parser::val_modifiers(program),
+            &parser::pipeline_shapes(program),
         ));
     }
     // One order for every producer: where the reader's eye goes, top to
@@ -348,6 +359,9 @@ fn lexical_declaration_body_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<Tt
         .collect()
 }
 
+const LOGICAL_ASSIGNMENT_HELP: &str = "write the logical assignment as a statement of its own \
+     (`target ??= value;`), then read the target where its value was used";
+
 fn match_placement_message(
     owner: program_syntax::EvaluationOwner,
     reason: evaluation_ir::ExpressionBoundaryReason,
@@ -388,6 +402,10 @@ fn match_placement_message(
         (_, Reason::ConditionalInOwner | Reason::ConditionalOperationNotStructurable) => (
             "`match` cannot be lowered from this conditional expression position without evaluating a skipped branch",
             help,
+        ),
+        (_, Reason::LogicalAssignmentValue) => (
+            "`match` cannot be lowered in the right operand of a logical assignment whose value is used — the operand runs only when the target's value does not decide the result, and no statement form reads the target once, skips the operand, and keeps TypeScript's narrowing of the target",
+            LOGICAL_ASSIGNMENT_HELP,
         ),
         (_, Reason::ReferenceNotPreservable) => (
             "`match` cannot be lowered from this reference position while preserving its receiver and `this`",
@@ -525,6 +543,13 @@ fn try_placement_message(
             "`try` cannot be used in this conditional operation — its TypeScript control-flow \
              boundary cannot be rebuilt without changing evaluation order",
             help,
+        ),
+        (_, Reason::LogicalAssignmentValue) => (
+            "`try` cannot be used in the right operand of a logical assignment whose value is \
+             used — the operand runs only when the target's value does not decide the result, \
+             and no statement form reads the target once, skips the operand, and keeps \
+             TypeScript's narrowing of the target",
+            LOGICAL_ASSIGNMENT_HELP,
         ),
         (_, Reason::CaptureOverlapsValue) => (
             "`try` cannot be used in this expression context — its TypeScript control-flow \
@@ -1020,7 +1045,7 @@ fn report_parsed(
             comments: &comments,
         },
         &plan,
-        options.rewrite_imports,
+        options.rewrite_imports.extensions(options.jsx_preserve),
         options.std_imports,
     );
     let lowered = MappedEmit {

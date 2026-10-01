@@ -1,0 +1,2 @@
+objectProperty(2) => {"a":1,"c":3} | open res; a 1; operand 2; c 3; dispose res
+objectProperty(5) => {"a":1,"c":3} | open res; a 1; operand 5; c 3; dispose res

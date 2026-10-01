@@ -21,10 +21,8 @@ export function run(e: E, f: F, n: number): number {
 //// [tt/index.ts] support module @tt/std/index.ts
 //// [tt/option.ts] support module @tt/std/option.ts
 //// [tt/result.ts] support module @tt/std/result.ts
-//// [tt/runtime.ts] support module @tt/std/runtime.ts
 
 //// [resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx]
-import { $tt_ap } from "./tt/runtime.js";
 function $tt_show(value: unknown): string {
   if (typeof value === "string") {
     return JSON.stringify(value);
@@ -100,7 +98,7 @@ export function run(e: E, f: F, n: number): number {
         default: throw new Error("tt match: unexpected case " + $tt_show($tt_m));
       }
     }
-    const view = <section data-value={$tt_v4}>{($tt_v2 === 0 ? <strong>{$tt_ap(chosen, step)}</strong> : null)}</section>;
+    const view = <section data-value={$tt_v4}>{($tt_v2 === 0 ? <strong>{(($tt_v, $tt_f) => $tt_f($tt_v))(chosen, step)}</strong> : null)}</section>;
     void view;
     {
       const $tt_a0 = { value: { kind: "Ok" as const, value: first + chosen } };

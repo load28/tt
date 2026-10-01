@@ -2580,18 +2580,22 @@ impl<I: Tokens> Parser<I> {
             }
 
             // https://github.com/swc-project/swc/issues/433
-            if self.input_mut().eat(Token::Arrow) && {
-                debug_assert_eq!(items.len(), 1);
-                match items[0] {
-                    AssignTargetOrSpread::ExprOrSpread(ExprOrSpread { ref expr, .. })
-                    | AssignTargetOrSpread::Pat(Pat::Expr(ref expr)) => {
-                        matches!(**expr, Expr::Ident(..))
-                    }
-                    AssignTargetOrSpread::Pat(Pat::Ident(..)) => true,
+            if self.input().is(Token::Arrow)
+                && match items.last() {
+                    Some(
+                        AssignTargetOrSpread::ExprOrSpread(ExprOrSpread {
+                            ref expr,
+                            spread: None,
+                        })
+                        | AssignTargetOrSpread::Pat(Pat::Expr(ref expr)),
+                    ) => matches!(**expr, Expr::Ident(..)),
+                    Some(AssignTargetOrSpread::Pat(Pat::Ident(..))) => true,
                     _ => false,
                 }
-            } {
-                let params: Vec<Pat> = self.parse_paren_items_as_params(items.clone(), None)?;
+            {
+                self.bump();
+                let param = items.pop().into_iter().collect();
+                let params: Vec<Pat> = self.parse_paren_items_as_params(param, None)?;
 
                 let body: Box<ArrowFunctionBody> = self.parse_fn_block_or_expr_body(
                     false,

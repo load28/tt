@@ -1,3 +1,0 @@
-throwOperand(3) => threw {"kind":"Ok","value":3} | await; read 3; big 3
-throwOperand(1) => threw {"kind":"Ok","value":1} | await; read 1; small 1
-throwOperand(-1) => threw {"kind":"Err","error":"negative -1"} | await; read -1

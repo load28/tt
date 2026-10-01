@@ -1,2 +1,0 @@
-constructorBody(2.5) => "2.50" | operand 2.5; positive 2.5
-constructorBody(-3) => undefined | operand -3; positive undefined

@@ -1,4 +1,4 @@
 === fileWithoutFlowGetsNoCompositionHelper.tt ===
 const a = x |> f;
->a : const a: unknown
+>a : const a: any
 

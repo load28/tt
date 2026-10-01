@@ -1,4 +1,0 @@
-assignment({"kind":"Num","value":4}) => -1 | initial 0; target {"value":0}; other -1
-assignment({"kind":"Neg","value":-3}) => -1 | initial 0; target {"value":0}; other -1
-assignment({"kind":"Word","text":"hi"}) => 2 | initial 0; target {"value":0}; word 2
-assignment({"kind":"End"}) => -1 | initial 0; target {"value":0}; other -1

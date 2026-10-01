@@ -1,0 +1,2 @@
+classField(123) => 3 | operand 123; finally 0
+classField(4) => 1 | operand 4; finally 0

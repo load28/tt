@@ -1,2 +1,0 @@
-arrayElement(4) => [0,{"kind":"Ok","value":4},2] | first 0; read 4; direct 4; last 2
-arrayElement(-1) => [0,{"kind":"Err","error":"negative -7"},2] | first 0; read undefined; fallback -7; read -7; last 2

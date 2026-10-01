@@ -1,2 +1,0 @@
-yieldOperand(5) => 15 | map 15; yield 15
-yieldOperand(0) => -1 | yield -1

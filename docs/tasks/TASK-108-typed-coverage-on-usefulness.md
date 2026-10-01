@@ -1,5 +1,10 @@
 # TASK-108: typed 소진성도 usefulness 위로 (P4 계층 2, 1/2)
 
+> TASK-725 reverses part of Decision 1: the typed path no longer answers
+> variant exhaustiveness from the narrowed alphabet in place of the declared
+> cases. It reports the declared cases' holes, as every surface does, and
+> adds the holes only the checker's alphabet shows.
+
 - **상태**: 완료
 - **시작일**: 2026-08-20
 - **완료일**: 2026-08-20

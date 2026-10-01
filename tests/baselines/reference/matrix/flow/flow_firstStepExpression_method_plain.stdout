@@ -1,0 +1,2 @@
+method(3) => "6" | this "holder"; operand 3; add 6
+method(-4) => "-8" | this "holder"; operand -4; add -8

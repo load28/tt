@@ -1,0 +1,2 @@
+logicalAnd(1.5) => {"kind":"Ok","value":"1.50"} | flip true; await; read 1.5
+logicalAnd(-1) => {"kind":"Ok","value":false} | flip false

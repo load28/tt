@@ -1,6 +1,6 @@
 //// [aPipelineHeadStartsAfterAPostfixOrRestrictedBoundary2.tt] 4 mapping(s)
-1:1 -> 4:1 len 54  "declare const o: number;\nlet p: number | undefin"...
-4:1 -> 7:8 len 1  "o"
-4:6 -> 7:11 len 6  "String"
-4:12 -> 7:18 len 2  ";\n"
+1:1 -> 1:1 len 54  "declare const o: number;\nlet p: number | undefin"...
+4:1 -> 4:35 len 1  "o"
+4:6 -> 4:38 len 6  "String"
+4:12 -> 4:45 len 2  ";\n"
 

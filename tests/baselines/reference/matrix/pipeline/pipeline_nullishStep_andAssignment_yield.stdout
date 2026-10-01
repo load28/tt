@@ -1,0 +1,2 @@
+andAssignment(10) => 0 | flip true; target {"value":0}
+andAssignment(20) => 19 | flip false; target {"value":"kept"}; yield 20; flip true; lookup true; found 19

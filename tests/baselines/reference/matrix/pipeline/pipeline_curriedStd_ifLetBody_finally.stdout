@@ -1,2 +1,0 @@
-ifLetBody(5) => [1,15] | head 1; read 1; operand 5; map 15; finally 0
-ifLetBody(0) => [1,-1] | head 1; read 1; operand 0; finally 0

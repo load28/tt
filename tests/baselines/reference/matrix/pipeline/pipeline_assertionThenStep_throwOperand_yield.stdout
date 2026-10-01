@@ -1,2 +1,0 @@
-throwOperand(123) => threw 3 | yield 123
-throwOperand(4) => threw 1 | yield 4

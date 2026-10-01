@@ -1,4 +1,0 @@
-templateLiteral({}) => "<L|range|R>" | left "L"; yield {}; range "range"; right "R"
-templateLiteral({}) => "<L|1|R>" | left "L"; yield {}; type 1; right "R"
-templateLiteral({}) => "<L|plain|R>" | left "L"; yield {}; error "plain"; right "R"
-templateLiteral("text") => "<L|null|R>" | left "L"; yield "text"; other null; right "R"

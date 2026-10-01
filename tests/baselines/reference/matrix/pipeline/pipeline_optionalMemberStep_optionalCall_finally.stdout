@@ -1,0 +1,3 @@
+optionalCall(3) => [[9],null] | callee true; operand 3; flip true; maybe true; twice 9; callee false; finally 0
+optionalCall(4) => [[null],null] | callee true; operand 4; flip false; maybe false; callee false; finally 0
+optionalCall(5) => [[15],null] | callee true; operand 5; flip true; maybe true; twice 15; callee false; finally 0

@@ -1,2 +1,0 @@
-conditionalBranch(2.5) => "2.50" | flip true; operand 2.5; positive 2.5; finally 0
-conditionalBranch(-3) => "skipped" | flip false; else "skipped"; finally 0

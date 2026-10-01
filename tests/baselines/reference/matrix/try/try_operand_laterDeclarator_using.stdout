@@ -1,2 +1,0 @@
-laterDeclarator(2) => {"kind":"Ok","value":[1,2]} | open res; before 1; operand 2; read 2; dispose res
-laterDeclarator(-1) => {"kind":"Err","error":"negative -1"} | open res; before 1; operand -1; read -1; dispose res

@@ -1,3 +1,0 @@
-declarationInitializer(4) => 24 | flip true; maybe true; add 8; twice 24
-declarationInitializer(6) => undefined | flip false; maybe false; add null
-declarationInitializer(8) => 48 | flip true; maybe true; add 16; twice 48

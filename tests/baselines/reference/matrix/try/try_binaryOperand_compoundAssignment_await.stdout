@@ -1,0 +1,2 @@
+compoundAssignment(3) => {"kind":"Ok","value":"start:30"} | initial "start:"; target {"total":"start:"}; await; read 3
+compoundAssignment(-2) => {"kind":"Err","error":"negative -2"} | initial "start:"; target {"total":"start:"}; await; read -2

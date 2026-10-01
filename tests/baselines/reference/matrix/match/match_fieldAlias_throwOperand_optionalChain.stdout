@@ -1,3 +1,0 @@
-throwOperand({"kind":"Circle","r":2}) => threw 2 | circle 2
-throwOperand({"kind":"Rect","w":3,"h":4}) => threw Cannot read properties of undefined (reading 'kind') | 
-throwOperand({"kind":"Point"}) => threw null | point null

@@ -1,0 +1,2 @@
+destructuringDefault(2) => "#4" | source {}; risky 2; add 4; shape "#4"
+destructuringDefault(5) => "#10" | source {}; risky 5; add 10; shape "#10"

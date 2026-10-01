@@ -1,5 +1,4 @@
 ==== ttc --out-dir (exit 0) ====
-ttc: std → $DIR/out/tt
 ttc: ./partialUnionMismatch.tt → $DIR/out/partialUnionMismatch.ts
 
 ==== ttc --check-types (exit 1) ====
@@ -27,11 +26,11 @@ error[ts2322]: type mismatch: expected `number`, found `boolean`
    |                                                 ^^^^^^^^^^^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-partialUnionMismatch.ts(24,14): error TS2322: Type 'number | boolean' is not assignable to type 'number'.
+partialUnionMismatch.ts(23,14): error TS2322: Type 'number | boolean' is not assignable to type 'number'.
   Type 'boolean' is not assignable to type 'number'.
-partialUnionMismatch.ts(25,29): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'number'.
+partialUnionMismatch.ts(24,47): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'number'.
   Type 'boolean' is not assignable to type 'number'.
-partialUnionMismatch.ts(27,37): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'number'.
+partialUnionMismatch.ts(26,37): error TS2345: Argument of type 'number | boolean' is not assignable to parameter of type 'number'.
   Type 'boolean' is not assignable to type 'number'.
-partialUnionMismatch.ts(41,7): error TS2322: Type 'number | boolean' is not assignable to type 'number'.
+partialUnionMismatch.ts(40,7): error TS2322: Type 'number | boolean' is not assignable to type 'number'.
   Type 'boolean' is not assignable to type 'number'.

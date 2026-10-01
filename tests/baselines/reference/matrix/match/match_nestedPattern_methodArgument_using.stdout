@@ -1,0 +1,3 @@
+methodArgument({"kind":"Done","value":{"kind":"Some","value":7}}) => ["receiver",1,7] | open res; receiver {"tag":"receiver"}; a 1; operand {"kind":"Done","value":{"kind":"Some","value":7}}; some 7; dispose res
+methodArgument({"kind":"Done","value":{"kind":"None"}}) => ["receiver",1,0] | open res; receiver {"tag":"receiver"}; a 1; operand {"kind":"Done","value":{"kind":"None"}}; none 0; dispose res
+methodArgument({"kind":"Failed","error":"lost"}) => ["receiver",1,"lost"] | open res; receiver {"tag":"receiver"}; a 1; operand {"kind":"Failed","error":"lost"}; failed "lost"; dispose res

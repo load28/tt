@@ -281,6 +281,8 @@ pub(super) enum ProjectedProtocolFrame {
         operator: AssignOp,
         target: ProjectedSpan,
         reference: Vec<(ProjectedSpan, Effects)>,
+        parts: ProjectedMemberReference,
+        discarded: bool,
         right: ProjectedSpan,
     },
     Binary {

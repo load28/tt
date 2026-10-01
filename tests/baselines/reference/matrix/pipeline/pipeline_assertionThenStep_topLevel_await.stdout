@@ -1,0 +1,2 @@
+topLevel(123) => 3 | await
+topLevel(4) => 1 | await

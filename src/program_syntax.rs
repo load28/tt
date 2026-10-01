@@ -321,6 +321,7 @@ pub(crate) enum EvaluationInputMode {
     /// so the lowering evaluates it as an expression statement in order and
     /// removes it, with its comma, where it was written.
     Discarded,
+    LogicalAssignmentTarget,
 }
 
 /// What evaluating one host expression may observably do
@@ -505,14 +506,10 @@ fn simple_copiable(key: &swc_ecma_ast::Expr) -> bool {
     }
 }
 
-pub(crate) fn source_member_callee(
-    source: &str,
-    span: crate::hir::Span,
+fn step_expression(
+    text: &str,
     source_kind: crate::SourceKind,
-) -> Option<MemberCallee> {
-    use swc_ecma_ast::{Expr as SwcExpr, MemberProp, OptChainBase, SuperProp};
-
-    let text = source.get(span.start..span.end)?;
+) -> Option<(HostInput, Box<swc_ecma_ast::Expr>)> {
     if crate::lexer::host_syntax_error(text, source_kind).is_some() {
         return None;
     }
@@ -533,6 +530,46 @@ pub(crate) fn source_member_callee(
                 | swc_ecma_parser::Context::InGenerator,
         )
     })?;
+    Some((input, expression))
+}
+
+pub(crate) fn source_reference_callee(
+    source: &str,
+    span: crate::hir::Span,
+    source_kind: crate::SourceKind,
+) -> bool {
+    use swc_ecma_ast::Expr as SwcExpr;
+
+    let Some(text) = source.get(span.start..span.end) else {
+        return false;
+    };
+    let Some((_, expression)) = step_expression(text, source_kind) else {
+        return false;
+    };
+    let mut callee = &*expression;
+    loop {
+        callee = match callee {
+            SwcExpr::Paren(inner) => &inner.expr,
+            SwcExpr::TsNonNull(inner) => &inner.expr,
+            SwcExpr::TsAs(inner) => &inner.expr,
+            SwcExpr::TsSatisfies(inner) => &inner.expr,
+            SwcExpr::TsTypeAssertion(inner) => &inner.expr,
+            SwcExpr::TsInstantiation(inner) => &inner.expr,
+            _ => break,
+        };
+    }
+    matches!(callee, SwcExpr::Ident(_))
+}
+
+pub(crate) fn source_member_callee(
+    source: &str,
+    span: crate::hir::Span,
+    source_kind: crate::SourceKind,
+) -> Option<MemberCallee> {
+    use swc_ecma_ast::{Expr as SwcExpr, MemberProp, OptChainBase, SuperProp};
+
+    let text = source.get(span.start..span.end)?;
+    let (input, expression) = step_expression(text, source_kind)?;
     let at = |node: swc_common::Span| SourceSpan {
         start: span.start + input.byte(node.lo),
         end: span.start + input.byte(node.hi),
@@ -641,6 +678,17 @@ pub(crate) enum ConditionalBranch {
     Consequent,
     Alternate,
     OptionalCallArgument(u32),
+    LogicalAssignmentRight {
+        operator: LogicalAssignment,
+        consumed: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LogicalAssignment {
+    And,
+    Or,
+    Nullish,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

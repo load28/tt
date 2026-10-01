@@ -64,8 +64,8 @@ use keywords::*;
 #[cfg(test)]
 use parse::visit_programs;
 pub(crate) use parse::{
-    Parser, lex_and_parse_with_kind, parse, parse_with_kind, projection_recoveries,
-    unclaimed_candidates, val_modifiers,
+    Parser, PipelineShape, lex_and_parse_with_kind, parse, parse_with_kind, pipeline_shapes,
+    projection_recoveries, unclaimed_candidates, val_modifiers,
 };
 pub(crate) use partial::{PatternSite, arm_headers, pattern_of, pattern_site_at};
 pub(crate) use vals::is_param_modifier;

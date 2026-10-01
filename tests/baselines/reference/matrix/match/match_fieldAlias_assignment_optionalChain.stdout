@@ -1,3 +1,0 @@
-assignment({"kind":"Circle","r":2}) => 2 | initial 0; target {"value":0}; circle 2
-assignment({"kind":"Rect","w":3,"h":4}) => threw Cannot read properties of undefined (reading 'kind') | initial 0; target {"value":0}
-assignment({"kind":"Point"}) => null | initial 0; target {"value":0}; point null

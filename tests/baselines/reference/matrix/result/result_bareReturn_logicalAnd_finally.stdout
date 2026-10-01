@@ -1,2 +1,0 @@
-logicalAnd(2) => {"kind":"Ok"} | flip true; operand 2; read 2; finally 0
-logicalAnd(-1) => false | flip false; finally 0

@@ -1,0 +1,2 @@
+compoundAssignment(2) => "start:6" | initial "start:"; target {"total":"start:"}; operand 2; receiver {"factor":3}; twice 6
+compoundAssignment(6) => "start:18" | initial "start:"; target {"total":"start:"}; operand 6; receiver {"factor":3}; twice 18

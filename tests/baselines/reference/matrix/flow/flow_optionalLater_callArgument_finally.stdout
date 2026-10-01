@@ -1,3 +1,0 @@
-callArgument(4) => [1,null,3] | a 1; operand 4; flip true; maybe true; c 3; finally 0
-callArgument(6) => [1,null,3] | a 1; operand 6; flip false; maybe false; c 3; finally 0
-callArgument(8) => [1,null,3] | a 1; operand 8; flip true; maybe true; c 3; finally 0

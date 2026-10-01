@@ -1,0 +1,2 @@
+logicalAnd(2) => {"kind":"Ok"} | flip true; read 2
+logicalAnd(-1) => false | flip false

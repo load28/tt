@@ -1,2 +1,0 @@
-conditionalBranch(2) => 8 | flip true; receiver {"factor":3}; twice 6; add 8
-conditionalBranch(7) => "skipped" | flip false; else "skipped"

@@ -1,0 +1,2 @@
+loopBody(2) => [6,6] | receiver {"factor":3}; twice 6; receiver {"factor":3}; twice 6
+loopBody(6) => [18,18] | receiver {"factor":3}; twice 18; receiver {"factor":3}; twice 18

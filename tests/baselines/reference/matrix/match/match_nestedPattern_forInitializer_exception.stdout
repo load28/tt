@@ -1,3 +1,0 @@
-forInitializer({"kind":"Done","value":{"kind":"Some","value":7}}) => [7] | risky {"kind":"Done","value":{"kind":"Some","value":7}}; some 7
-forInitializer({"kind":"Done","value":{"kind":"None"}}) => [0] | risky {"kind":"Done","value":{"kind":"None"}}; none 0
-forInitializer({"kind":"Failed","error":"lost"}) => "risky call 3" | caught "risky call 3"

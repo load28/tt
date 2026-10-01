@@ -24,7 +24,10 @@ fn an_arrow_body_after_a_parenthesized_return_type_is_a_body() {
             "{TASK_499_PRELUDE}export const f = (s: number): {ty} => {{\n  const n = s |> String\n  return n as any\n}}\n"
         );
         let out = ok(&source);
-        assert!(out.contains("const n = $tt_ap(s, String)\n"), "{ty}:\n{out}");
+        assert!(
+            out.contains("const n = (($tt_v, $tt_f) => $tt_f($tt_v))(s, String)\n"),
+            "{ty}:\n{out}"
+        );
     }
     let source = format!(
         "{TASK_499_PRELUDE}export const f = (): (void) => {{ const v = 1\n v |> o.m; }}\n"

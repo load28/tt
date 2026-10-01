@@ -1,2 +1,0 @@
-methodArgument(123) => ["receiver",1,3] | receiver {"tag":"receiver"}; a 1
-methodArgument(4) => ["receiver",1,1] | receiver {"tag":"receiver"}; a 1

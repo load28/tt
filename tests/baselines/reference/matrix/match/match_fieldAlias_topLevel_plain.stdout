@@ -1,3 +1,0 @@
-topLevel({"kind":"Circle","r":2}) => 2 | operand {"kind":"Circle","r":2}; circle 2
-topLevel({"kind":"Rect","w":3,"h":4}) => [3,4] | operand {"kind":"Rect","w":3,"h":4}; rect [3,4]
-topLevel({"kind":"Point"}) => null | operand {"kind":"Point"}; point null

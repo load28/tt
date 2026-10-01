@@ -1,0 +1,2 @@
+matchBlockArmValueExit(2) => "passed" | arm true; read 2
+matchBlockArmValueExit(-2) => "three" | arm true; read undefined; error "negative undefined"; exit 3

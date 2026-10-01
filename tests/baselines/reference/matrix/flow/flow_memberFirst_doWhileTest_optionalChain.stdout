@@ -1,2 +1,0 @@
-doWhileTest(2) => 2 | receiver {"factor":3}
-doWhileTest(7) => 2 | receiver {"factor":3}

@@ -1,2 +1,0 @@
-conditionalBranch(5) => 15 | flip true; map 15
-conditionalBranch(0) => "skipped" | flip false; else "skipped"

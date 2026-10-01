@@ -1,2 +1,0 @@
-switchDiscriminant(6) => {"kind":"Ok","value":"default"} | flip true; await; read 6; case 0
-switchDiscriminant(-6) => {"kind":"Err","error":"negative -9"} | flip false; fallback -9; read -9

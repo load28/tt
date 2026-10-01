@@ -1,3 +1,0 @@
-resultBody({"kind":"Num","value":1}) => {"kind":"Ok","value":[1,1]} | open res; base 1; read 1; operand {"kind":"Num","value":1}; dispose res
-resultBody({"kind":"Neg","value":-2}) => {"kind":"Ok","value":[1,-2]} | open res; base 1; read 1; operand {"kind":"Neg","value":-2}; dispose res
-resultBody({"kind":"Word","text":"w"}) => {"kind":"Ok","value":1} | open res; base 1; read 1; operand {"kind":"Word","text":"w"}; dispose res

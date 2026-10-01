@@ -1,0 +1,4 @@
+andAssignment({"kind":"Num","value":4}) => 0 | flip true; target {"value":0}
+andAssignment({"kind":"Neg","value":-3}) => -3 | flip false; target {"value":"kept"}; operand {"kind":"Neg","value":-3}; number -3
+andAssignment({"kind":"Word","text":"hi"}) => 0 | flip true; target {"value":0}
+andAssignment({"kind":"End"}) => "" | flip false; target {"value":"kept"}; operand {"kind":"End"}; end ""

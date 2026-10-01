@@ -1,3 +1,0 @@
-nullish({"kind":"Circle","r":2}) => "some" | flip true; operand {"kind":"Circle","r":2}; inner circle 2; again {"kind":"Point"}; point "some"; finally 0
-nullish({"kind":"Rect","w":3,"h":4}) => "set" | flip false; left "set"; finally 0
-nullish({"kind":"Point"}) => "none" | flip true; operand {"kind":"Point"}; inner point 0; zero "none"; finally 0

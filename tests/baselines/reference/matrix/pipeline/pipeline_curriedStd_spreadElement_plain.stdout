@@ -1,2 +1,0 @@
-spreadElement(5) => [0,15] | first 0; operand 5; map 15
-spreadElement(0) => [0,-1] | first 0; operand 0

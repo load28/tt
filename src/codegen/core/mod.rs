@@ -24,7 +24,7 @@ use crate::program_syntax::{
     ConditionalBranch, EvaluationInputMode, HostContinuation, HostEvaluationOperation, HostExit,
     HostOwnerKind, LoopTestKind, OptionalCallTest, SourceSpan,
 };
-use crate::{AnchorKind, ImportRewrite, SourceKind, StdImports};
+use crate::{AnchorKind, RewrittenExtensions, SourceKind, StdImports};
 
 use emitter::*;
 use planning::*;
@@ -279,7 +279,7 @@ pub(crate) fn emit_with_map<'a>(
     core: &'a CoreFile,
     emit_source: EmitSource<'a>,
     lowering_plan: &LoweringPlan,
-    rewrite_imports: ImportRewrite,
+    rewrite_imports: Option<RewrittenExtensions>,
     std_imports: StdImports<'a>,
 ) -> Flat {
     let EmitSource {
@@ -298,6 +298,7 @@ pub(crate) fn emit_with_map<'a>(
     let local_runtime = script || target.commonjs;
     let direct_apply_inputs = direct_apply_inputs(semantic, core, source, source_kind);
     let member_apply_steps = member_apply_steps(semantic, core, source, source_kind);
+    let reference_apply_steps = reference_apply_steps(semantic, core, source, source_kind);
     let mut relocated: Vec<SourceSpan> = target
         .source_replacements
         .iter()
@@ -398,6 +399,7 @@ pub(crate) fn emit_with_map<'a>(
         source_kind,
         direct_apply_inputs,
         member_apply_steps,
+        reference_apply_steps,
         rewrite_imports,
         std_imports,
         owner_slot_index: span_index(target.owner_slots.iter().map(|rewrite| rewrite.owner)),

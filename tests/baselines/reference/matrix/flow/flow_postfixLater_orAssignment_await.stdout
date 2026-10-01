@@ -1,0 +1,2 @@
+orAssignment(1.5) => "3.0" | flip true; target {"value":0}; await; add 3
+orAssignment(2) => "kept" | flip false; target {"value":"kept"}

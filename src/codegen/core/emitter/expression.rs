@@ -79,6 +79,33 @@ impl<'a> Emitter<'a> {
                                     context,
                                     self.emit_member_step(step.value, member, call),
                                 );
+                            } else if self.reference_apply_steps.contains(&step.value) {
+                                let value = self.generated_name("$tt_v");
+                                let function = self.generated_name("$tt_f");
+                                next.push_lit(format!("(({value}, {function}) => {function}("));
+                                let mut piped = Rope::new();
+                                piped.push_lit(value);
+                                next.anchored_with_context(
+                                    AnchorKind::Pipe,
+                                    step_span.start,
+                                    step_span.end,
+                                    end,
+                                    context,
+                                    piped,
+                                );
+                                next.push_lit("))(");
+                                push_grouped(&mut input, acc, self.source_kind);
+                                next.anchored_with_context(
+                                    AnchorKind::Pipe,
+                                    step_span.start,
+                                    step_span.end,
+                                    end,
+                                    context,
+                                    input,
+                                );
+                                next.push_lit(", ");
+                                push_grouped(&mut next, body, self.source_kind);
+                                next.push_lit(")");
                             } else {
                                 self.used_pipe.set(true);
                                 next.push_lit(format!("{}(", self.generated_name("$tt_ap")));
@@ -325,6 +352,35 @@ impl<'a> Emitter<'a> {
             }
             let body = self.emit_flow_function(step.value);
             let mut next = Rope::new();
+            if matches!(step.mode, ApplyMode::Call)
+                && self.reference_apply_steps.contains(&step.value)
+            {
+                let prior = self.generated_name("$tt_g");
+                let function = self.generated_name("$tt_f");
+                let input_name = self.generated_name("$tt_v");
+                next.push_lit(format!(
+                    "(({prior}, {function}) => {}({prior}, ({input_name}) => {function}(",
+                    self.generated_name("$tt_fl")
+                ));
+                let mut piped = Rope::new();
+                piped.push_lit(input_name);
+                next.anchored_with_context(
+                    AnchorKind::Pipe,
+                    step_span.start,
+                    step_span.end,
+                    owner_end,
+                    Some((produced.start, produced.end)),
+                    piped,
+                );
+                next.push_lit(")))(");
+                next.append(composed);
+                next.push_lit(", ");
+                push_grouped(&mut next, body, self.source_kind);
+                next.push_lit(")");
+                acc = next;
+                produced = step_span;
+                continue;
+            }
             next.push_lit(format!("{}(", self.generated_name("$tt_fl")));
             next.append(composed);
             match step.mode {
@@ -375,27 +431,20 @@ impl<'a> Emitter<'a> {
             }
             return;
         }
-        match self.rewrite_imports {
-            ImportRewrite::Off => out.push_src(specifier, at),
-            ImportRewrite::Js => {
-                let hir::ImportKind::Relative(kind) = import.kind else {
-                    unreachable!("standard-library imports returned above")
-                };
-                let extension = if kind.is_tsx() { "jsx" } else { "js" };
-                let suffix_len = if kind.is_tsx() { 5 } else { 4 };
-                out.push_src(&specifier[..specifier.len() - suffix_len], at);
-                out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
-            }
-            ImportRewrite::Ts => {
-                let hir::ImportKind::Relative(kind) = import.kind else {
-                    unreachable!("standard-library imports returned above")
-                };
-                let extension = kind.output_extension();
-                let suffix_len = if kind.is_tsx() { 5 } else { 4 };
-                out.push_src(&specifier[..specifier.len() - suffix_len], at);
-                out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
-            }
-        }
+        let Some(extensions) = self.rewrite_imports else {
+            out.push_src(specifier, at);
+            return;
+        };
+        let hir::ImportKind::Relative(kind) = import.kind else {
+            unreachable!("standard-library imports returned above")
+        };
+        let (extension, suffix_len) = if kind.is_tsx() {
+            (extensions.ttx, 5)
+        } else {
+            (extensions.tt, 4)
+        };
+        out.push_src(&specifier[..specifier.len() - suffix_len], at);
+        out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
     }
 
     pub(super) fn emit_statement_decision(

@@ -1,0 +1,8 @@
+differences from flow_genericLater_arrowBody_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:4:72 ===
+  |   const inner = (input: number) => flow |> adder(first(...[input])) |> keep;
+  |                                                                        ^ /*call*/
+  tt only: (alias) function keep<T>(value: T): T
+  ts only: (alias) function keep<number>(value: number): number
+

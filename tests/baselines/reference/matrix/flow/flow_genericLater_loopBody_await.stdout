@@ -1,0 +1,2 @@
+loopBody(3) => [null,null] | await; await
+loopBody(-4) => [null,null] | await; await

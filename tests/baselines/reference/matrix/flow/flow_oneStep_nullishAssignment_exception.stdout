@@ -1,0 +1,2 @@
+nullishAssignment(7) => 14 | flip true; target {"value":null}; risky 7; add 14
+nullishAssignment(1) => "kept" | flip false; target {"value":"kept"}

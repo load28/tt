@@ -1,0 +1,2 @@
+logicalOr(8) => true | flip true
+logicalOr(9) => 10 | flip false; await; arrow 10

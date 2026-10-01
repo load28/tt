@@ -1,0 +1,3 @@
+ifLetBody(4) => [1,null] | head 1; read 1; risky 4; flip true; maybe true
+ifLetBody(6) => [1,null] | head 1; read 1; risky 6; flip false; maybe false
+ifLetBody(8) => "risky call 3" | head 1; read 1; caught "risky call 3"

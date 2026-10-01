@@ -1,4 +1,0 @@
-logicalOr({"kind":"Num","value":4}) => true | flip true
-logicalOr({"kind":"Neg","value":-3}) => -3 | flip false; number -3
-logicalOr({"kind":"Word","text":"hi"}) => true | flip true
-logicalOr({"kind":"End"}) => "" | flip false; end ""

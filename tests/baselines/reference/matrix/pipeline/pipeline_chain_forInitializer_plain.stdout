@@ -1,0 +1,2 @@
+forInitializer(3) => ["***6"] | operand 3; double 6
+forInitializer(12) => ["**24"] | operand 12; double 24

@@ -1,2 +1,0 @@
-templateLiteral(2) => "<L|[object Object]|R>" | open res; left "L"; operand 2; read 2; right "R"; dispose res
-templateLiteral(-1) => "<L|[object Object]|R>" | open res; left "L"; operand -1; read -1; right "R"; dispose res

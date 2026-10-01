@@ -1,2 +1,0 @@
-switchDiscriminant({"kind":"Click","x":3}) => "default" | operand {"kind":"Click","x":3}; click 3; case 0; finally 0
-switchDiscriminant({"kind":"Key","key":"k"}) => "default" | operand {"kind":"Key","key":"k"}; key "k"; case 0; finally 0

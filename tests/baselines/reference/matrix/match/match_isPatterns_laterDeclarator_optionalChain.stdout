@@ -1,0 +1,4 @@
+laterDeclarator({}) => [1,"range"] | before 1; range "range"
+laterDeclarator({}) => [1,null] | before 1; other null
+laterDeclarator({}) => [1,"plain"] | before 1; error "plain"
+laterDeclarator("text") => [1,null] | before 1; other null

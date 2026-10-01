@@ -1,3 +1,0 @@
-conditionalTest(1) => {"kind":"Ok","value":"truthy"} | operand 1; one 10; read 10; then "truthy"
-conditionalTest(2) => {"kind":"Err","error":"negative -10"} | operand 2; other -10; read -10
-conditionalTest(-3) => {"kind":"Err","error":"negative -10"} | operand -3; other -10; read -10

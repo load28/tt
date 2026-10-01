@@ -1,0 +1,2 @@
+yieldOperand(6) => 12 | operand 6; keep 6; double 12; yield 12
+yieldOperand(-2) => -4 | operand -2; keep -2; double -4; yield -4

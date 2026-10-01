@@ -1,2 +1,0 @@
-nullish(2) => {"kind":"Ok","value":2} | flip true; read 2
-nullish(-1) => {"kind":"Ok","value":"set"} | flip false; left "set"

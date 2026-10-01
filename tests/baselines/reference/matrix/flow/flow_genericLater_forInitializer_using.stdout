@@ -1,0 +1,2 @@
+forInitializer(3) => [null] | open res; operand 3; dispose res
+forInitializer(-4) => [null] | open res; operand -4; dispose res

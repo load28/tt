@@ -1,0 +1,2 @@
+forUpdate(6) => 12 | body 0; await; keep 6; double 12
+forUpdate(-2) => -4 | body 0; await; keep -2; double -4

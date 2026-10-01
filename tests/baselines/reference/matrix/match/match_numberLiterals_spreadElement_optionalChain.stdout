@@ -1,0 +1,5 @@
+spreadElement(200) => [0,true] | first 0; success true
+spreadElement(201) => [0,null] | first 0; other null
+spreadElement(404) => [0,false] | first 0; missing false
+spreadElement(500) => [0,null] | first 0; other null
+spreadElement(7) => [0,null] | first 0; other null

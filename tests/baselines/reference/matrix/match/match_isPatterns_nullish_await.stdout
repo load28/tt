@@ -1,0 +1,4 @@
+nullish({}) => "range" | flip true; await; range "range"
+nullish({}) => "set" | flip false; left "set"
+nullish({}) => "plain" | flip true; await; error "plain"
+nullish("text") => "set" | flip false; left "set"

@@ -1,3 +1,0 @@
-destructuringDefault(3) => 9 | open res; source {}; operand 3; flip true; maybe true; twice 9; dispose res
-destructuringDefault(4) => undefined | open res; source {}; operand 4; flip false; maybe false; dispose res
-destructuringDefault(5) => 15 | open res; source {}; operand 5; flip true; maybe true; twice 15; dispose res

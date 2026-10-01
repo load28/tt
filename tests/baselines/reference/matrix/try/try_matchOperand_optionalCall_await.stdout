@@ -1,3 +1,0 @@
-optionalCall(1) => {"kind":"Ok","value":[[10],null]} | callee true; await; one 10; read 10; callee false
-optionalCall(2) => {"kind":"Err","error":"negative -10"} | callee true; await; other -10; read -10
-optionalCall(-3) => {"kind":"Err","error":"negative -10"} | callee true; await; other -10; read -10

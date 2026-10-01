@@ -1,3 +1,0 @@
-topLevel(4) => function | operand 4; flip true; maybe true
-topLevel(6) => function | operand 6; flip false; maybe false
-topLevel(8) => function | operand 8; flip true; maybe true

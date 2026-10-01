@@ -1,0 +1,2 @@
+ifLetBody(5) => [1,15] | head 1; read 1; await; map 15
+ifLetBody(0) => [1,-1] | head 1; read 1; await

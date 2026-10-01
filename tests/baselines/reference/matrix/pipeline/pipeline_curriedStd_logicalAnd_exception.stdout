@@ -1,2 +1,0 @@
-logicalAnd(5) => 15 | flip true; risky 5; map 15
-logicalAnd(0) => false | flip false

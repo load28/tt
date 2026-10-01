@@ -1,2 +1,0 @@
-whileTest(1.5) => 1 | open res; operand 1.5; dispose res
-whileTest(2) => 1 | open res; operand 2; dispose res

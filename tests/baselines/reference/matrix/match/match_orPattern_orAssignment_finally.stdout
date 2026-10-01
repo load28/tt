@@ -1,0 +1,4 @@
+orAssignment({"kind":"Num","value":4}) => 4 | flip true; target {"value":0}; operand {"kind":"Num","value":4}; number 4; finally 0
+orAssignment({"kind":"Neg","value":-3}) => "kept" | flip false; target {"value":"kept"}; finally 0
+orAssignment({"kind":"Word","text":"hi"}) => "hi" | flip true; target {"value":0}; operand {"kind":"Word","text":"hi"}; word "hi"; finally 0
+orAssignment({"kind":"End"}) => "kept" | flip false; target {"value":"kept"}; finally 0

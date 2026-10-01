@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+error[try-crosses-value-region]: `try` crosses an isolated value region whose exits cannot target the enclosing `result` block
+  --> ./resultBlockTemplateTryInIfLetBodyCrossesTheRegion.tt:15:18
+   |
+15 |       return `<${try rd(b)}>`;
+   |                  ^^^^^^^^^
+   |
+   = help: extract the affected expression into a nested function when doing so preserves its captures and evaluation order
+
+error[try-crosses-value-region]: `try` crosses an isolated value region whose exits cannot target the enclosing `result` block
+  --> ./resultBlockTemplateTryInIfLetBodyCrossesTheRegion.tt:22:53
+   |
+22 |     const Some(value: b) = opt(n) else { return `<${try rd(-1)}>`; };
+   |                                                     ^^^^^^^^^^
+   |
+   = help: extract the affected expression into a nested function when doing so preserves its captures and evaluation order
+
+
+==== ttc --check-types (exit 1) ====
+error[try-crosses-value-region]: `try` crosses an isolated value region whose exits cannot target the enclosing `result` block
+  --> resultBlockTemplateTryInIfLetBodyCrossesTheRegion.tt:15:18
+   |
+15 |       return `<${try rd(b)}>`;
+   |                  ^^^^^^^^^
+   |
+   = help: extract the affected expression into a nested function when doing so preserves its captures and evaluation order
+error[try-crosses-value-region]: `try` crosses an isolated value region whose exits cannot target the enclosing `result` block
+  --> resultBlockTemplateTryInIfLetBodyCrossesTheRegion.tt:22:53
+   |
+22 |     const Some(value: b) = opt(n) else { return `<${try rd(-1)}>`; };
+   |                                                     ^^^^^^^^^^
+   |
+   = help: extract the affected expression into a nested function when doing so preserves its captures and evaluation order
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,2 @@
+nullishAssignment(3) => {"kind":"Ok","value":30} | flip true; target {"value":null}; risky 3; read 3
+nullishAssignment(-2) => {"kind":"Ok","value":"kept"} | flip false; target {"value":"kept"}

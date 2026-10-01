@@ -1,0 +1,2 @@
+yieldOperand(123) => 3 | yield 123; yield 3
+yieldOperand(4) => 1 | yield 4; yield 1

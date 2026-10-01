@@ -1,0 +1,2 @@
+logicalAnd(8) => 9 | flip true; arrow 9
+logicalAnd(9) => false | flip false

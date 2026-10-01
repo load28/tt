@@ -1,2 +1,0 @@
-spreadElement(1.5) => {"kind":"Ok","value":[0,"1.50"]} | first 0; read 1.5
-spreadElement(-1) => {"kind":"Err","error":"negative undefined"} | first 0; read undefined

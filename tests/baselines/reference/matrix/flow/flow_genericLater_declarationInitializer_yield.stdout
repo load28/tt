@@ -1,0 +1,2 @@
+declarationInitializer(3) => 6 | yield 3; add 6; keep 6
+declarationInitializer(-4) => -8 | yield -4; add -8; keep -8

@@ -1,0 +1,3 @@
+doWhileTest(3) => 2 | risky 3; flip true; maybe true; twice 9
+doWhileTest(4) => 1 | risky 4; flip false; maybe false
+doWhileTest(5) => "risky call 3" | caught "risky call 3"

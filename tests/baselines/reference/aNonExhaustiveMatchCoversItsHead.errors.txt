@@ -10,6 +10,14 @@ error[match-not-exhaustive]: match on variant S is not exhaustive: missing "B"
 
 
 ==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on variant S is not exhaustive: missing "B"
+ --> aNonExhaustiveMatchCoversItsHead.tt:2:11
+  |
+2 | const v = match (s) { A(x) => x };
+  |           ^^^^^^^^^
+  |
+  = help: add the missing arms: `, B => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
 error[ts2552]: Cannot find name 's'. Did you mean 'S'?
  --> aNonExhaustiveMatchCoversItsHead.tt:2:18
   |

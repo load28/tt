@@ -1,0 +1,3 @@
+whileBody({"kind":"Num","value":1}) => 1 | open res; test true; operand {"kind":"Num","value":1}; dispose res
+whileBody({"kind":"Neg","value":-2}) => -2 | open res; test true; operand {"kind":"Neg","value":-2}; dispose res
+whileBody({"kind":"Word","text":"w"}) => "none" | open res; test true; operand {"kind":"Word","text":"w"}; dispose res

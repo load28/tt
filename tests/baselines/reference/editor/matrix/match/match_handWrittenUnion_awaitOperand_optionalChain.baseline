@@ -1,5 +1,0 @@
-differences from match_handWrittenUnion_awaitOperand_optionalChain at the questions listed in tests/editor-matrix-differences.txt
-
-=== diagnostics main.tt ===
-  ts only: main "await (((t0: Event) => { if (t0.kind === \"Click\") { const { x } = t0; return note(\"click\", x); } { const { key } = t0; return note(\"key\", key); } })(box(input)?.inner.value!))" hint TS80007: 'await' has no effect on the type of this expression.
-

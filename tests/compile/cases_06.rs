@@ -2,7 +2,10 @@
 fn flow_emits_nested_composition_helper_calls() {
     let out = ok("const f = flow |> parse |> double |> label;\nexport {};\n");
     assert!(
-        out.contains("const f = $tt_fl($tt_fl(parse, double), label);"),
+        out.contains(
+            "const f = (($tt_g, $tt_f) => $tt_fl($tt_g, ($tt_v) => $tt_f($tt_v)))(\
+             (($tt_g, $tt_f) => $tt_fl($tt_g, ($tt_v) => $tt_f($tt_v)))(parse, double), label);"
+        ),
         "{out}"
     );
     assert!(out.contains("import { $tt_fl } from \"@tt/runtime\";"));

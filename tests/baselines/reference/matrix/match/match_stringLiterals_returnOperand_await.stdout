@@ -1,0 +1,4 @@
+returnOperand("north") => 1 | await; n 1
+returnOperand("south") => 2 | await; se 2
+returnOperand("east") => 2 | await; se 2
+returnOperand("up") => 0 | await; other 0

@@ -1,3 +1,0 @@
-destructuringDefault(2) => {"kind":"Ok","value":"two"} | open res; source {}; operand 2; read 2; dispose res
-destructuringDefault(7) => {"kind":"Ok","value":"other"} | open res; source {}; operand 7; read 7; dispose res
-destructuringDefault(-1) => {"kind":"Err","error":"negative -1"} | open res; source {}; operand -1; read -1; dispose res

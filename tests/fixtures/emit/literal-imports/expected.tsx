@@ -17,11 +17,11 @@ function $tt_show(value: unknown): string {
   return String(value);
 }
 import type { Model } from './model.js';
-export type LazyView = typeof import('./view.jsx');
+export type LazyView = typeof import('./view.js');
 export const load = () => import(/* retained */ './model.js');
 export const withOptions = () => import('./data.js', { with: { type: 'json' } });
 export const computed = (suffix: string) => import('./model.tt' + suffix);
-export const view = <button onClick={() => import('./view.jsx')}>Load</button>;
+export const view = <button onClick={() => import('./view.js')}>Load</button>;
 export async function selected(flag: boolean) {
   let $tt_v0;
   {

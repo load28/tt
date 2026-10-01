@@ -55,8 +55,9 @@ pub(crate) fn is_reserved(word: &str) -> bool {
 // the pipeline-head tracker resets there. Prefix operators that *continue*
 // an expression (`new`, `typeof`, `void`, `delete`, `await`) and
 // expression-capable keywords (`function`, `class`) are deliberately
-// absent; `in`/`of` reset for the sake of `for` heads (their rare binary
-// use next to a pipeline needs parens, documented). A `match` for the same
+// absent; `in`/`of` reset for the sake of `for` heads, and the caller
+// resets at `in` only there: elsewhere it is the relational operator, which
+// a head extends over as it does over `instanceof`. A `match` for the same
 // reason as [`is_reserved`] — every identifier in the file reaches it.
 pub(super) fn is_pipe_boundary_word(word: &str) -> bool {
     matches!(

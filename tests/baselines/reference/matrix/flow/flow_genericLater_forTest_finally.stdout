@@ -1,0 +1,2 @@
+forTest(3) => 1 | operand 3; finally 0
+forTest(-4) => 1 | operand -4; finally 0

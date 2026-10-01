@@ -1,0 +1,2 @@
+doWhileTest(2.5) => 2 | open res; operand 2.5; positive 2.5; dispose res
+doWhileTest(-3) => 1 | open res; operand -3; positive undefined; dispose res

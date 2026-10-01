@@ -1,0 +1,2 @@
+staticBlock(5) => 15 | risky 5; map 15
+staticBlock(0) => -1 | risky 0

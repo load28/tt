@@ -1,0 +1,7 @@
+differences from pipeline_overloadedStep_jsxChild_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.ttx:4:36 ===
+  |   return <p>{await later(input) |> shape |> .length}</p>;
+  |                                    ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

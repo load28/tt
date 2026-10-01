@@ -1,0 +1,4 @@
+method({}) => "range" | this "holder"; operand {}; range "range"
+method({}) => 1 | this "holder"; operand {}; type 1
+method({}) => "plain" | this "holder"; operand {}; error "plain"
+method("text") => null | this "holder"; operand "text"; other null

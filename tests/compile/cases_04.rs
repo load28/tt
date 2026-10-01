@@ -321,7 +321,7 @@ fn import_equals_require_reference_is_rewritten() {
         ),
         (
             "export import view = require('../view.ttx');\n",
-            "export import view = require('../view.jsx');\n",
+            "export import view = require('../view.js');\n",
         ),
         (
             "import type T = require(\"./types.tt\");\n",
@@ -408,17 +408,19 @@ fn literal_import_rewrite_matrix_preserves_surrounding_syntax() {
         "const load = `${import(SPEC)}`;",
     ];
     for kind in [ttc::SourceKind::TypeScript, ttc::SourceKind::Tsx] {
-        for (extension, js, ts) in [("tt", "js", "ts"), ("ttx", "jsx", "tsx")] {
+        for (extension, js, preserved_js, ts) in [("tt", "js", "js", "ts"), ("ttx", "js", "jsx", "tsx")] {
             for quote in ["'", "\""] {
                 for host in hosts {
                     let path = format!("../feature.{extension}");
                     let source = host.replace("SPEC", &format!("{quote}{path}{quote}"));
-                    for (mode, expected_extension) in [
-                        (ttc::ImportRewrite::Js, js),
-                        (ttc::ImportRewrite::Ts, ts),
-                        (ttc::ImportRewrite::Off, extension),
+                    for (mode, jsx_preserve, expected_extension) in [
+                        (ttc::ImportRewrite::Js, false, js),
+                        (ttc::ImportRewrite::Js, true, preserved_js),
+                        (ttc::ImportRewrite::Ts, false, ts),
+                        (ttc::ImportRewrite::Ts, true, ts),
+                        (ttc::ImportRewrite::Off, true, extension),
                     ] {
-                        let options = Options { source_kind: kind, rewrite_imports: mode, ..Options::default() };
+                        let options = Options { source_kind: kind, rewrite_imports: mode, jsx_preserve, ..Options::default() };
                         let output = compile(&source, &options).unwrap();
                         assert_eq!(output, source.replace(&path, &format!("../feature.{expected_extension}")), "{source}");
                     }

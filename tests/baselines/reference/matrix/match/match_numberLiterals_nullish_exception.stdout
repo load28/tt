@@ -1,0 +1,5 @@
+nullish(200) => true | flip true; risky 200; success true
+nullish(201) => "set" | flip false; left "set"
+nullish(404) => false | flip true; risky 404; missing false
+nullish(500) => "set" | flip false; left "set"
+nullish(7) => "risky call 3" | flip true; caught "risky call 3"

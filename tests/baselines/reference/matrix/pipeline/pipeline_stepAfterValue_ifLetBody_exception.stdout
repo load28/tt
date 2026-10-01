@@ -1,0 +1,2 @@
+ifLetBody(4) => [1,7] | head 1; read 1; risky 4; step 3; add 7
+ifLetBody(-1) => [1,2] | head 1; read 1; risky -1; step 3; add 2

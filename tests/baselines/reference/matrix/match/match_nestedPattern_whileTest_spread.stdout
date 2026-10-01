@@ -1,0 +1,3 @@
+whileTest({"kind":"Done","value":{"kind":"Some","value":7}}) => 1 | some 7
+whileTest({"kind":"Done","value":{"kind":"None"}}) => 0 | none 0
+whileTest({"kind":"Failed","error":"lost"}) => 1 | failed "lost"

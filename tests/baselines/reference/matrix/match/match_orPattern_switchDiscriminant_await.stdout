@@ -1,4 +1,0 @@
-switchDiscriminant({"kind":"Num","value":4}) => "default" | await; number 4; case 0
-switchDiscriminant({"kind":"Neg","value":-3}) => "default" | await; number -3; case 0
-switchDiscriminant({"kind":"Word","text":"hi"}) => "default" | await; word "hi"; case 0
-switchDiscriminant({"kind":"End"}) => "default" | await; end ""; case 0

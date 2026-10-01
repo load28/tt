@@ -1,0 +1,2 @@
+logicalAssignmentValue(3) => [null,null] | flip true; risky 3
+logicalAssignmentValue(-4) => ["kept","kept"] | flip false

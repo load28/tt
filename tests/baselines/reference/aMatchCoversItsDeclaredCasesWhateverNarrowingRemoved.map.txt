@@ -1,0 +1,18 @@
+//// [aMatchCoversItsDeclaredCasesWhateverNarrowingRemoved.tt] 16 mapping(s)
+1:1 -> 19:1 len 463  "// A match must cover its variant's declared cas"...
+8:27 -> 27:26 len 6  "number"
+8:27 -> 30:15 len 6  "number"
+8:44 -> 28:24 len 6  "number"
+8:44 -> 31:13 len 6  "number"
+8:53 -> 32:3 len 79  "\nexport function area(s: Shape): number {\n  if ("...
+11:3 -> 49:3 len 7  "return "
+11:17 -> 37:19 len 1  "s"
+11:29 -> 40:17 len 1  "r"
+11:35 -> 41:18 len 1  "r"
+11:38 -> 49:16 len 50  ";\n}\nexport function literal(n: 1 | 2): string {\n"...
+14:3 -> 65:3 len 7  "return "
+14:17 -> 54:19 len 1  "n"
+14:22 -> 56:12 len 1  "1"
+14:27 -> 57:18 len 5  "\"one\""
+14:34 -> 65:16 len 4  ";\n}\n"
+

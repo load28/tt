@@ -1,4 +1,0 @@
-returnOperand({"kind":"Num","value":4}) => -1 | risky {"kind":"Num","value":4}; other -1
-returnOperand({"kind":"Neg","value":-3}) => -1 | risky {"kind":"Neg","value":-3}; other -1
-returnOperand({"kind":"Word","text":"hi"}) => "risky call 3" | caught "risky call 3"
-returnOperand({"kind":"End"}) => -1 | risky {"kind":"End"}; other -1

@@ -1,2 +1,0 @@
-assignment(2) => 6 | initial 0; target {"value":0}; receiver {"factor":3}; twice 6
-assignment(6) => 18 | initial 0; target {"value":0}; receiver {"factor":3}; twice 18

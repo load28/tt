@@ -1,0 +1,51 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-placement]: `match` cannot be lowered from this repeated loop position without changing how often it evaluates
+ --> ./main.tt:8:26
+  |
+8 |   } while (rounds < 2 && match (match ((yield input)) { Point => note("inner point", 0), Circle(r) => note("inner circle", r), Rect(w) => note("inner rect", w) }) { 0 => note("zero", "none"), _ => match (note("again", Shape.Point)) { Point => note("point", "some"), _ => note("other", "?") } });
+  |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+error[match-placement]: `match` cannot be lowered from this repeated loop position without changing how often it evaluates
+ --> ./main.tt:8:33
+  |
+8 |   } while (rounds < 2 && match (match ((yield input)) { Point => note("inner point", 0), Circle(r) => note("inner circle", r), Rect(w) => note("inner rect", w) }) { 0 => note("zero", "none"), _ => match (note("again", Shape.Point)) { Point => note("point", "some"), _ => note("other", "?") } });
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+error[match-placement]: `match` cannot be lowered from this repeated loop position without changing how often it evaluates
+ --> ./main.tt:8:198
+  |
+8 |   } while (rounds < 2 && match (match ((yield input)) { Point => note("inner point", 0), Circle(r) => note("inner circle", r), Rect(w) => note("inner rect", w) }) { 0 => note("zero", "none"), _ => match (note("again", Shape.Point)) { Point => note("point", "some"), _ => note("other", "?") } });
+  |                                                                                                                                                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+
+==== ttc --check-types (exit 1) ====
+error[match-placement]: `match` cannot be lowered from this repeated loop position without changing how often it evaluates
+ --> main.tt:8:26
+  |
+8 |   } while (rounds < 2 && match (match ((yield input)) { Point => note("inner point", 0), Circle(r) => note("inner circle", r), Rect(w) => note("inner rect", w) }) { 0 => note("zero", "none"), _ => match (note("again", Shape.Point)) { Point => note("point", "some"), _ => note("other", "?") } });
+  |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+error[match-placement]: `match` cannot be lowered from this repeated loop position without changing how often it evaluates
+ --> main.tt:8:33
+  |
+8 |   } while (rounds < 2 && match (match ((yield input)) { Point => note("inner point", 0), Circle(r) => note("inner circle", r), Rect(w) => note("inner rect", w) }) { 0 => note("zero", "none"), _ => match (note("again", Shape.Point)) { Point => note("point", "some"), _ => note("other", "?") } });
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+error[match-placement]: `match` cannot be lowered from this repeated loop position without changing how often it evaluates
+ --> main.tt:8:198
+  |
+8 |   } while (rounds < 2 && match (match ((yield input)) { Point => note("inner point", 0), Circle(r) => note("inner circle", r), Rect(w) => note("inner rect", w) }) { 0 => note("zero", "none"), _ => match (note("again", Shape.Point)) { Point => note("point", "some"), _ => note("other", "?") } });
+  |                                                                                                                                                                                                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+==== tsc on the emitted TypeScript (exit 0) ====

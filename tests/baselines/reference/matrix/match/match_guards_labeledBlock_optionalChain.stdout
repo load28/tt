@@ -1,0 +1,5 @@
+labeledBlock({"kind":"Circle","r":1}) => 1 | guard big false; small 1; flip true
+labeledBlock({"kind":"Circle","r":5}) => threw Cannot read properties of undefined (reading 'kind') | 
+labeledBlock({"kind":"Rect","w":4,"h":2}) => [4] | guard wide true; wide 4; flip false
+labeledBlock({"kind":"Rect","w":1,"h":3}) => threw Cannot read properties of undefined (reading 'kind') | 
+labeledBlock({"kind":"Point"}) => 0 | point 0; flip true

@@ -1,0 +1,2 @@
+logicalAnd(3) => 6 | flip true; yield 3; add 6; keep 6
+logicalAnd(-4) => false | flip false

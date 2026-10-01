@@ -1,3 +1,0 @@
-awaitOperand({"kind":"Done","value":{"kind":"Some","value":7}}) => 7 | operand {"kind":"Done","value":{"kind":"Some","value":7}}; some 7; finally 0
-awaitOperand({"kind":"Done","value":{"kind":"None"}}) => 0 | operand {"kind":"Done","value":{"kind":"None"}}; none 0; finally 0
-awaitOperand({"kind":"Failed","error":"lost"}) => "lost" | operand {"kind":"Failed","error":"lost"}; failed "lost"; finally 0

@@ -1,0 +1,2 @@
+whileBody(3) => 3 | test true; await; show 3
+whileBody(8) => 8 | test true; await; show 8

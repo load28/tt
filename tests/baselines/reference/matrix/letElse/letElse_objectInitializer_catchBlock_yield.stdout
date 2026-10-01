@@ -1,0 +1,2 @@
+catchBlock(7) => 7 | throw "boom"; yield 7
+catchBlock(8) => 8 | throw "boom"; yield 8

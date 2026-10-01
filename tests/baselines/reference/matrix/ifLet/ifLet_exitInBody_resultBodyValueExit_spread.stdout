@@ -1,0 +1,2 @@
+resultBodyValueExit(2) => {"kind":"Ok","value":[1,"passed"]} | base 1; read 1; read 2
+resultBodyValueExit(-2) => {"kind":"Err","error":"negative -7"} | base 1; read 1; read -2; error "negative -2"; exit -7; read -7

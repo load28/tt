@@ -1,2 +1,0 @@
-methodArgument(2) => ["receiver",1,6] | receiver {"tag":"receiver"}; a 1; yield 2; receiver {"factor":3}; twice 6
-methodArgument(6) => ["receiver",1,18] | receiver {"tag":"receiver"}; a 1; yield 6; receiver {"factor":3}; twice 18

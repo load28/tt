@@ -25,10 +25,8 @@ console.log(log.join(","))
 
 export {};
 
-//// [tt/runtime.ts] support module @tt/std/runtime.ts
 
 //// [semicolonFreeStatementsKeepTheirAutomaticBoundaries.ts]
-import { $tt_ap } from "./tt/runtime.js";
 function $tt_show(value: unknown): string {
   if (typeof value === "string") {
     return JSON.stringify(value);
@@ -100,11 +98,11 @@ let $tt_v1: undefined;
 }
 
 const n = 1
-$tt_ap($tt_ap($tt_ap(n, inc), String), note)
+;(($tt_v, $tt_f) => $tt_f($tt_v))((($tt_v, $tt_f) => $tt_f($tt_v))((($tt_v, $tt_f) => $tt_f($tt_v))(n, inc), String), note)
 const piped = inc(1)
 log.push(String(piped))
 const next = 2
-$tt_ap($tt_ap(next, String), note)
+;(($tt_v, $tt_f) => $tt_f($tt_v))((($tt_v, $tt_f) => $tt_f($tt_v))(next, String), note)
 }
 run(O.A, O.B)
 console.log(log.join(","))

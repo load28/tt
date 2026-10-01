@@ -1,2 +1,0 @@
-assignment(2) => {"kind":"Ok","value":20} | open res; initial 0; target {"value":0}; operand 2; read 2; dispose res
-assignment(-1) => {"kind":"Err","error":"negative -1"} | open res; initial 0; target {"value":0}; operand -1; read -1; dispose res

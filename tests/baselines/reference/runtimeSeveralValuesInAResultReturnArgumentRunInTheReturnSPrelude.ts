@@ -27,10 +27,8 @@ console.log(JSON.stringify([matched(K.B, 3), piped(4, 5), chosen(2, 7), chosen(1
 
 export {};
 
-//// [tt/runtime.ts] support module @tt/std/runtime.ts
 
 //// [runtimeSeveralValuesInAResultReturnArgumentRunInTheReturnSPrelude.ts]
-import { $tt_ap } from "./tt/runtime.js";
 function $tt_show(value: unknown): string {
   if (typeof value === "string") {
     return JSON.stringify(value);
@@ -213,7 +211,7 @@ function piped(x: number, y: number) { let $tt_v16: ({
 });
 $tt_v16: {
   let $tt_v18: number;
-  const $tt_v19 = ($tt_ap(x, id));
+  const $tt_v19 = ((($tt_v, $tt_f) => $tt_f($tt_v))(x, id));
   const $tt_t9 = r(y);
   if (!("value" in $tt_t9)) {
     $tt_v16 = $tt_t9;

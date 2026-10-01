@@ -1,2 +1,0 @@
-spreadElement(3) => [0,"***6"] | first 0; await; double 6
-spreadElement(12) => [0,"**24"] | first 0; await; double 24

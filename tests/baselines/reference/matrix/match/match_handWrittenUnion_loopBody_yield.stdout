@@ -1,0 +1,2 @@
+loopBody({"kind":"Click","x":3}) => [3,3] | yield {"kind":"Click","x":3}; click 3; yield {"kind":"Click","x":3}; click 3
+loopBody({"kind":"Key","key":"k"}) => ["k","k"] | yield {"kind":"Key","key":"k"}; key "k"; yield {"kind":"Key","key":"k"}; key "k"

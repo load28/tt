@@ -1,10 +1,10 @@
 //// [flowFirstStepOptionalChain.tt] 8 mapping(s)
 1:1 -> 7:1 len 284  "// A `flow` composition's first step is the comp"...
-5:24 -> 11:23 len 9  "scale?.by"
-5:37 -> 11:34 len 6  "String"
-5:43 -> 11:41 len 17  ";\nconst nested = "
+5:24 -> 11:75 len 9  "scale?.by"
+5:37 -> 11:86 len 6  "String"
+5:43 -> 11:93 len 17  ";\nconst nested = "
 6:24 -> 12:16 len 31  "scale?.[\"by\"];\nconst wrapped = "
-7:25 -> 13:24 len 29  "((n: number) => scale?.by(n))"
-7:58 -> 13:55 len 6  "String"
-7:64 -> 13:62 len 2  ";\n"
+7:25 -> 13:76 len 29  "((n: number) => scale?.by(n))"
+7:58 -> 13:107 len 6  "String"
+7:64 -> 13:114 len 2  ";\n"
 

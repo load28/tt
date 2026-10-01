@@ -1,0 +1,2 @@
+andAssignment(3) => {"kind":"Ok","value":0} | flip true; target {"value":0}; finally 0
+andAssignment(-2) => {"kind":"Err","error":"negative -2"} | flip false; target {"value":"kept"}; operand -2; read -2; finally 0

@@ -1,2 +1,0 @@
-logicalOr(2) => true | flip true
-logicalOr(6) => 18 | flip false; operand 6; receiver {"factor":3}; twice 18

@@ -1,0 +1,4 @@
+spreadElement({"kind":"Num","value":4}) => [0,4] | first 0; operand {"kind":"Num","value":4}; number 4; finally 0
+spreadElement({"kind":"Neg","value":-3}) => [0,-3] | first 0; operand {"kind":"Neg","value":-3}; number -3; finally 0
+spreadElement({"kind":"Word","text":"hi"}) => [0,"hi"] | first 0; operand {"kind":"Word","text":"hi"}; word "hi"; finally 0
+spreadElement({"kind":"End"}) => [0,""] | first 0; operand {"kind":"End"}; end ""; finally 0

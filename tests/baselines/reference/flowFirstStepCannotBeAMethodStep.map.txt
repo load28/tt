@@ -1,6 +1,6 @@
 //// [flowFirstStepCannotBeAMethodStep.tt] 4 mapping(s)
 1:1 -> 7:1 len 10  "const f = "
-1:19 -> 7:18 len 7  ".trim()"
-1:30 -> 7:27 len 5  "lower"
-1:35 -> 7:33 len 2  ";\n"
+1:19 -> 7:70 len 7  ".trim()"
+1:30 -> 7:79 len 5  "lower"
+1:35 -> 7:85 len 2  ";\n"
 

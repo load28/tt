@@ -1,0 +1,2 @@
+throwOperand(4) => threw 7 | await; step 3; add 7
+throwOperand(-1) => threw 2 | await; step 3; add 2

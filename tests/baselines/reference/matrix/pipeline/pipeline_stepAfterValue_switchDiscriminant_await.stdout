@@ -1,2 +1,0 @@
-switchDiscriminant(4) => "default" | await; step 3; add 7; case 0
-switchDiscriminant(-1) => "default" | await; step 3; add 2; case 0

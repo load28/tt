@@ -1,2 +1,0 @@
-parameterDefault(3) => "***6" | double 6
-parameterDefault(12) => "*NaN" | double null

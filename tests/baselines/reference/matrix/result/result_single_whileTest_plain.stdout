@@ -1,0 +1,2 @@
+whileTest(2) => 1 | operand 2; read 2
+whileTest(-1) => 1 | operand -1; read -1

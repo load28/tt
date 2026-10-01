@@ -1,2 +1,0 @@
-objectProperty(4) => {"a":1,"value":7,"c":3} | a 1; step 3; add 7; c 3
-objectProperty(-1) => {"a":1,"value":null,"c":3} | a 1; step 3; add null; c 3

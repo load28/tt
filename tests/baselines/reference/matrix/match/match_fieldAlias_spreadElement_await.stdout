@@ -1,3 +1,0 @@
-spreadElement({"kind":"Circle","r":2}) => [0,2] | first 0; await; circle 2
-spreadElement({"kind":"Rect","w":3,"h":4}) => [0,[3,4]] | first 0; await; rect [3,4]
-spreadElement({"kind":"Point"}) => [0,null] | first 0; await; point null

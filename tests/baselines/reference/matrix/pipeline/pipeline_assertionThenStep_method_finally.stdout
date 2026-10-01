@@ -1,2 +1,0 @@
-method(123) => 3 | this "holder"; operand 123; finally 0
-method(4) => 1 | this "holder"; operand 4; finally 0

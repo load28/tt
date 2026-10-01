@@ -1,2 +1,0 @@
-whileTest(4) => 1 | open res; operand 4; read 4; direct 4; dispose res
-whileTest(-1) => 1 | open res; operand -1; read -1; fallback -7; read -7; dispose res

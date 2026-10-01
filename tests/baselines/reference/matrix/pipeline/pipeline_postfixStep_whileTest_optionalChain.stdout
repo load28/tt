@@ -1,0 +1,2 @@
+whileTest(1.25) => 1 | 
+whileTest(7) => threw Cannot read properties of undefined (reading 'toFixed') | 

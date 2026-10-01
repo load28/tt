@@ -1,0 +1,8 @@
+differences from pipeline_genericStep_jsxChild_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.ttx:4:36 ===
+  |   return <p>{await later(input) |> keep |> double}</p>;
+  |                                    ^ /*call*/
+  tt only: (alias) function keep<T>(value: T): T
+  ts only: (alias) function keep<number>(value: number): number
+

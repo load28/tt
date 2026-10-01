@@ -1,2 +1,0 @@
-methodArgument(10) => ["receiver",1,9] | receiver {"tag":"receiver"}; a 1; operand 10; flip true; lookup true; found 9; finally 0
-methodArgument(20) => ["receiver",1,40] | receiver {"tag":"receiver"}; a 1; operand 20; flip false; lookup false; double 40; finally 0

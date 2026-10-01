@@ -1,0 +1,2 @@
+optionalCall(2) => [[null],null] | callee true; receiver {"factor":3}; callee false
+optionalCall(7) => [[null],null] | callee true; receiver {"factor":3}; callee false

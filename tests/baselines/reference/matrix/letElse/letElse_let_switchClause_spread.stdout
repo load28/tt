@@ -1,0 +1,2 @@
+switchClause(3) => 4 | discriminant 1; read 3; reassigned 4
+switchClause(-3) => "diverged" | discriminant 1; read -3

@@ -1,2 +1,0 @@
-optionalCall(2) => [[{"kind":"Ok","value":6}],null] | callee true; operand 2; read 2; inner {"kind":"Ok","value":3}; callee false
-optionalCall(-1) => [[{"kind":"Err","error":"negative -1"}],null] | callee true; operand -1; read -1; inner {"kind":"Err","error":"negative -1"}; callee false

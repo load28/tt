@@ -1,0 +1,4 @@
+logicalOr({}) => true | flip true
+logicalOr({}) => 1 | flip false; operand {}; type 1
+logicalOr({}) => true | flip true
+logicalOr("text") => null | flip false; operand "text"; other null

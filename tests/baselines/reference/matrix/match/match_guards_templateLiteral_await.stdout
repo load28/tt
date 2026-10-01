@@ -1,5 +1,0 @@
-templateLiteral({"kind":"Circle","r":1}) => "<L|1|R>" | left "L"; await; guard big false; small 1; right "R"
-templateLiteral({"kind":"Circle","r":5}) => "<L|5|R>" | left "L"; await; guard big true; big 5; right "R"
-templateLiteral({"kind":"Rect","w":4,"h":2}) => "<L|4|R>" | left "L"; await; guard wide true; wide 4; right "R"
-templateLiteral({"kind":"Rect","w":1,"h":3}) => "<L|3|R>" | left "L"; await; guard wide false; tall 3; right "R"
-templateLiteral({"kind":"Point"}) => "<L|0|R>" | left "L"; await; point 0; right "R"

@@ -1,0 +1,2 @@
+laterDeclarator(8) => [1,9] | before 1; operand 8; arrow 9; finally 0
+laterDeclarator(9) => [1,10] | before 1; operand 9; arrow 10; finally 0

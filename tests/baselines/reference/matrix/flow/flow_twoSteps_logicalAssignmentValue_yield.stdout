@@ -1,0 +1,2 @@
+logicalAssignmentValue(2) => [null,null] | flip true; yield 2
+logicalAssignmentValue(5) => ["kept","kept"] | flip false

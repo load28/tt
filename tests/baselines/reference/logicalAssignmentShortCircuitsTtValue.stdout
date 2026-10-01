@@ -1,0 +1,11 @@
+{"kind":"Ok","value":1} 
+{"kind":"Ok","value":2} read
+true 
+true scrutinee
+{"kind":"Ok","value":0} 
+{"kind":"Err","error":"neg"} read
+{"kind":"Err","error":"neg"} get a,read
+{"kind":"Ok","value":4} get a,read,set a,get a
+{"kind":"Ok","value":4} get a,get a
+{"kind":"Ok","value":5} object,key,read
+{"kind":"Ok","value":2} object,key

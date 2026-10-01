@@ -1,2 +1,0 @@
-constructorBody(2) => 6 | receiver {"factor":3}; twice 6
-constructorBody(6) => null | receiver {"factor":3}; twice null

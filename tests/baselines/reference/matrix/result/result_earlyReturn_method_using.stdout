@@ -1,3 +1,0 @@
-method(3) => {"kind":"Ok","value":3} | open res; this "holder"; operand 3; read 3; big 3; dispose res
-method(1) => {"kind":"Ok","value":1} | open res; this "holder"; operand 1; read 1; small 1; dispose res
-method(-1) => {"kind":"Err","error":"negative -1"} | open res; this "holder"; operand -1; read -1; dispose res

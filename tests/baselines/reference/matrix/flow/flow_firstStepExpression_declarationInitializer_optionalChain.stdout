@@ -1,0 +1,2 @@
+declarationInitializer(3) => "6" | add 6
+declarationInitializer(-4) => "NaN" | add null

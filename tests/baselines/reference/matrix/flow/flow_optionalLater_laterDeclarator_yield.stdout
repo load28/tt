@@ -1,3 +1,0 @@
-laterDeclarator(4) => [1,null] | before 1; yield 4; flip true; maybe true
-laterDeclarator(6) => [1,null] | before 1; yield 6; flip false; maybe false
-laterDeclarator(8) => [1,null] | before 1; yield 8; flip true; maybe true

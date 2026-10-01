@@ -1,2 +1,0 @@
-templateLiteral(2) => {"kind":"Ok","value":"<L|2|R>"} | open res; left "L"; operand 2; read 2; right "R"; dispose res
-templateLiteral(-1) => {"kind":"Err","error":"negative -1"} | open res; left "L"; operand -1; read -1; dispose res

@@ -1,3 +1,0 @@
-objectProperty(3) => {"a":1,"value":9,"c":3} | a 1; risky 3; flip true; maybe true; twice 9; c 3
-objectProperty(4) => {"a":1,"c":3} | a 1; risky 4; flip false; maybe false; c 3
-objectProperty(5) => "risky call 3" | a 1; caught "risky call 3"

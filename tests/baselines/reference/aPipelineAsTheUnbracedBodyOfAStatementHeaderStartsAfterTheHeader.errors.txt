@@ -2,11 +2,12 @@
 ttc: ./aPipelineAsTheUnbracedBodyOfAStatementHeaderStartsAfterTheHeader.tt → $DIR/out/aPipelineAsTheUnbracedBodyOfAStatementHeaderStartsAfterTheHeader.ts
 
 ==== ttc --check-types (exit 1) ====
-error[ts2345]: Argument of type 'boolean' is not assignable to parameter of type 'number'.
-  --> aPipelineAsTheUnbracedBodyOfAStatementHeaderStartsAfterTheHeader.tt:10:12
+error[ts2345]: this pipeline step expects `number`, but receives `boolean`
+  --> aPipelineAsTheUnbracedBodyOfAStatementHeaderStartsAfterTheHeader.tt:10:18
    |
 10 | const y = (c) |> g;
-   |            ^
+   |                  ^
+   |           --- the piped value is produced here
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-aPipelineAsTheUnbracedBodyOfAStatementHeaderStartsAfterTheHeader.ts(13,19): error TS2345: Argument of type 'boolean' is not assignable to parameter of type 'number'.
+aPipelineAsTheUnbracedBodyOfAStatementHeaderStartsAfterTheHeader.ts(10,36): error TS2345: Argument of type 'boolean' is not assignable to parameter of type 'number'.

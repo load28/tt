@@ -1,0 +1,3 @@
+parameterDefault(2) => {"kind":"Ok","value":"two"} | open res; operand 2; read 2; dispose res
+parameterDefault(7) => {"kind":"Ok","value":"other"} | open res; operand 7; read 7; dispose res
+parameterDefault(-1) => {"kind":"Err","error":"negative -1"} | open res; operand -1; read -1; dispose res

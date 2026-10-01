@@ -1,4 +1,0 @@
-nullish({"kind":"Num","value":4}) => -1 | flip true; await; other -1
-nullish({"kind":"Neg","value":-3}) => "set" | flip false; left "set"
-nullish({"kind":"Word","text":"hi"}) => 2 | flip true; await; word 2
-nullish({"kind":"End"}) => "set" | flip false; left "set"

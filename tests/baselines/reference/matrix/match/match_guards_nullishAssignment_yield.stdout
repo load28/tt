@@ -1,0 +1,5 @@
+nullishAssignment({"kind":"Circle","r":1}) => 1 | flip true; target {"value":null}; yield {"kind":"Circle","r":1}; guard big false; small 1
+nullishAssignment({"kind":"Circle","r":5}) => "kept" | flip false; target {"value":"kept"}
+nullishAssignment({"kind":"Rect","w":4,"h":2}) => 4 | flip true; target {"value":null}; yield {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4
+nullishAssignment({"kind":"Rect","w":1,"h":3}) => "kept" | flip false; target {"value":"kept"}
+nullishAssignment({"kind":"Point"}) => 0 | flip true; target {"value":null}; yield {"kind":"Point"}; point 0

@@ -1,0 +1,2 @@
+logicalAnd(2) => 8 | flip true; receiver {"factor":3}; await; twice 6; add 8
+logicalAnd(7) => false | flip false

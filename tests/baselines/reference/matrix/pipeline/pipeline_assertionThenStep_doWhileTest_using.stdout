@@ -1,0 +1,2 @@
+doWhileTest(123) => 2 | open res; operand 123; dispose res
+doWhileTest(4) => 2 | open res; operand 4; dispose res

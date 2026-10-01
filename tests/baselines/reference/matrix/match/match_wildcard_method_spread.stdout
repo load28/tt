@@ -1,0 +1,4 @@
+method({"kind":"Num","value":4}) => -1 | this "holder"; other -1
+method({"kind":"Neg","value":-3}) => -1 | this "holder"; other -1
+method({"kind":"Word","text":"hi"}) => 2 | this "holder"; word 2
+method({"kind":"End"}) => -1 | this "holder"; other -1

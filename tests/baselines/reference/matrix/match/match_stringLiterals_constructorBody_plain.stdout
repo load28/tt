@@ -1,4 +1,0 @@
-constructorBody("north") => 1 | operand "north"; n 1
-constructorBody("south") => 2 | operand "south"; se 2
-constructorBody("east") => 2 | operand "east"; se 2
-constructorBody("up") => 0 | operand "up"; other 0

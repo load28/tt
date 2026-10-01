@@ -1,2 +1,0 @@
-assignment(1.5) => {"kind":"Ok","value":"1.50"} | initial 0; target {"value":0}; read 1.5
-assignment(-1) => {"kind":"Err","error":"negative -1"} | initial 0; target {"value":0}; read -1

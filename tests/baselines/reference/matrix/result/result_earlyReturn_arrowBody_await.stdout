@@ -1,0 +1,3 @@
+arrowBody(3) => {"kind":"Ok","value":3} | await; read 3; big 3
+arrowBody(1) => {"kind":"Ok","value":1} | await; read 1; small 1
+arrowBody(-1) => {"kind":"Err","error":"negative -1"} | await; read -1

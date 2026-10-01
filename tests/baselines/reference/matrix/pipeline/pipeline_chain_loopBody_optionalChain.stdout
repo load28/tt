@@ -1,0 +1,2 @@
+loopBody(3) => ["***6","*NaN"] | double 6; double null
+loopBody(12) => ["**24","*NaN"] | double 24; double null

@@ -1,0 +1,4 @@
+templateLiteral({"kind":"Num","value":4}) => "<L|4|R>" | left "L"; await; number 4; right "R"
+templateLiteral({"kind":"Neg","value":-3}) => "<L|-3|R>" | left "L"; await; number -3; right "R"
+templateLiteral({"kind":"Word","text":"hi"}) => "<L|hi|R>" | left "L"; await; word "hi"; right "R"
+templateLiteral({"kind":"End"}) => "<L||R>" | left "L"; await; end ""; right "R"

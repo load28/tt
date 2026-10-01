@@ -100,7 +100,7 @@ export const wrong: number = \"x\";\n";
 #[test]
 fn an_auto_import_completion_carries_its_import_edit_onto_the_source() {
     require_tsgo!();
-    let source = "export const a = 1 |> String;\nconst b = 2;\nexport const c = b |> String;\nexport const d = help;\nexport const e = ttHel;\n";
+    let source = "export const a = 1 |> ((n: number) => String(n));\nconst b = 2;\nexport const c = b |> ((n: number) => String(n));\nexport const d = help;\nexport const e = ttHel;\n";
     let dir = project(&[
         ("src/util.ts", "export function helperFn(n: number): number { return n; }\n"),
         ("src/lib.tt", "export function ttHelper(n: number): number { return n; }\n"),

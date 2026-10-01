@@ -2,11 +2,6 @@
 ttc: ./pipelineInsideMatchScrutineeArmAndTemplate.tt → $DIR/out/pipelineInsideMatchScrutineeArmAndTemplate.ts
 
 ==== ttc --check-types (exit 1) ====
-error[ts18046]: '$tt_m' is of type 'unknown'. (in code ttc generated for this construct)
- --> pipelineInsideMatchScrutineeArmAndTemplate.tt:2:11
-  |
-2 | const r = match (x |> norm) {
-  |           ^^^^^^^^^^^^^^^^^
 error[ts2304]: Cannot find name 'x'.
  --> pipelineInsideMatchScrutineeArmAndTemplate.tt:2:18
   |
@@ -17,11 +12,6 @@ error[ts2304]: Cannot find name 'norm'.
   |
 2 | const r = match (x |> norm) {
   |                       ^^^^
-error[ts2339]: Property 'v' does not exist on type 'unknown'.
- --> pipelineInsideMatchScrutineeArmAndTemplate.tt:3:5
-  |
-3 |   A(v) => v |> double,
-  |     ^
 error[ts2304]: Cannot find name 'double'.
  --> pipelineInsideMatchScrutineeArmAndTemplate.tt:3:16
   |
@@ -39,10 +29,8 @@ error[ts2304]: Cannot find name 'f'.
   |                     ^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-pipelineInsideMatchScrutineeArmAndTemplate.ts(31,24): error TS2304: Cannot find name 'x'.
-pipelineInsideMatchScrutineeArmAndTemplate.ts(31,27): error TS2304: Cannot find name 'norm'.
-pipelineInsideMatchScrutineeArmAndTemplate.ts(32,11): error TS18046: '$tt_m' is of type 'unknown'.
-pipelineInsideMatchScrutineeArmAndTemplate.ts(34,15): error TS2339: Property 'v' does not exist on type 'unknown'.
-pipelineInsideMatchScrutineeArmAndTemplate.ts(35,28): error TS2304: Cannot find name 'double'.
-pipelineInsideMatchScrutineeArmAndTemplate.ts(48,23): error TS2304: Cannot find name 'x'.
-pipelineInsideMatchScrutineeArmAndTemplate.ts(48,26): error TS2304: Cannot find name 'f'.
+pipelineInsideMatchScrutineeArmAndTemplate.ts(28,50): error TS2304: Cannot find name 'x'.
+pipelineInsideMatchScrutineeArmAndTemplate.ts(28,53): error TS2304: Cannot find name 'norm'.
+pipelineInsideMatchScrutineeArmAndTemplate.ts(32,54): error TS2304: Cannot find name 'double'.
+pipelineInsideMatchScrutineeArmAndTemplate.ts(45,49): error TS2304: Cannot find name 'x'.
+pipelineInsideMatchScrutineeArmAndTemplate.ts(45,52): error TS2304: Cannot find name 'f'.

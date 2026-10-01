@@ -1,5 +1,0 @@
-logicalOr(200) => true | flip true
-logicalOr(201) => true | flip false; success true
-logicalOr(404) => true | flip true
-logicalOr(500) => null | flip false; other null
-logicalOr(7) => true | flip true

@@ -1,4 +1,0 @@
-method({"kind":"Num","value":4}) => 4 | this "holder"; operand {"kind":"Num","value":4}; number 4
-method({"kind":"Neg","value":-3}) => -3 | this "holder"; operand {"kind":"Neg","value":-3}; number -3
-method({"kind":"Word","text":"hi"}) => "hi" | this "holder"; operand {"kind":"Word","text":"hi"}; word "hi"
-method({"kind":"End"}) => "" | this "holder"; operand {"kind":"End"}; end ""

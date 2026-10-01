@@ -1,2 +1,0 @@
-constructorBody(5) => 5 | read 5
-constructorBody(-5) => threw thrown | read undefined; else "thrown"

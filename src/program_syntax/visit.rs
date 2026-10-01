@@ -605,6 +605,24 @@ impl VisitAstPath for ParentCollector {
                         )
                     })
                     .collect(),
+                parts: projected_member_reference(
+                    target_reference(&node.left),
+                    self.source_start,
+                    &self.source_segments,
+                ),
+                discarded: path
+                    .kinds()
+                    .iter()
+                    .rev()
+                    .find(|kind| {
+                        !matches!(
+                            kind,
+                            AstParentKind::Expr(
+                                fields::ExprField::Assign | fields::ExprField::Paren
+                            ) | AstParentKind::ParenExpr(_)
+                        )
+                    })
+                    .is_some_and(|kind| matches!(kind, AstParentKind::ExprStmt(_))),
                 right: operand_span(
                     &node.right,
                     self.source_start,

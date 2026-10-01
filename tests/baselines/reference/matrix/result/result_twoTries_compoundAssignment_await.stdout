@@ -1,0 +1,3 @@
+compoundAssignment(5) => "start:[object Object]" | initial "start:"; target {"total":"start:"}; await; read 5; b 2; read 2
+compoundAssignment(1) => "start:[object Object]" | initial "start:"; target {"total":"start:"}; await; read 1; b -2; read -2
+compoundAssignment(-2) => "start:[object Object]" | initial "start:"; target {"total":"start:"}; await; read -2

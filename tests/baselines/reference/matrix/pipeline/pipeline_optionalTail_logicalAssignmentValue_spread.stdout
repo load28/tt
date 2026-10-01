@@ -1,0 +1,2 @@
+logicalAssignmentValue(2.5) => ["2.50","2.50"] | flip true; positive 2.5
+logicalAssignmentValue(-3) => ["kept","kept"] | flip false

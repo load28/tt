@@ -1,0 +1,2 @@
+conditionalBranch({"kind":"Click","x":3}) => 3 | flip true; operand {"kind":"Click","x":3}; click 3
+conditionalBranch({"kind":"Key","key":"k"}) => "skipped" | flip false; else "skipped"

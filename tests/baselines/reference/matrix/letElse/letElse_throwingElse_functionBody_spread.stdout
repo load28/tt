@@ -1,2 +1,0 @@
-functionBody(5) => 5 | read 5
-functionBody(-5) => threw thrown | read -5; else "thrown"

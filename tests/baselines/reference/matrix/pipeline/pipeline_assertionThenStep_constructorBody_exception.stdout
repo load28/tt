@@ -1,2 +1,0 @@
-constructorBody(123) => 3 | risky 123
-constructorBody(4) => 1 | risky 4

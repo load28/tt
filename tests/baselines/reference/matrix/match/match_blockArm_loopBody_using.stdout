@@ -1,3 +1,0 @@
-loopBody({"kind":"Circle","r":2}) => [0,0] | open res; operand {"kind":"Circle","r":2}; other 0; operand {"kind":"Circle","r":2}; other 0; dispose res
-loopBody({"kind":"Rect","w":3,"h":4}) => [12,12] | open res; operand {"kind":"Rect","w":3,"h":4}; area 12; large 12; operand {"kind":"Rect","w":3,"h":4}; area 12; large 12; dispose res
-loopBody({"kind":"Point"}) => [0,0] | open res; operand {"kind":"Point"}; other 0; operand {"kind":"Point"}; other 0; dispose res

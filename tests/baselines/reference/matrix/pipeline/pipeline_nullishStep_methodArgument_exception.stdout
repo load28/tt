@@ -1,0 +1,2 @@
+methodArgument(10) => ["receiver",1,9] | receiver {"tag":"receiver"}; a 1; risky 10; flip true; lookup true; found 9
+methodArgument(20) => ["receiver",1,40] | receiver {"tag":"receiver"}; a 1; risky 20; flip false; lookup false; double 40

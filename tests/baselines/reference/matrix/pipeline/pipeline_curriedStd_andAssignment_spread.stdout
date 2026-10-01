@@ -1,0 +1,2 @@
+andAssignment(5) => 0 | flip true; target {"value":0}
+andAssignment(0) => -1 | flip false; target {"value":"kept"}

@@ -1,2 +1,0 @@
-spreadElement(2) => [0,{"kind":"Ok","value":6}] | first 0; read 2; inner {"kind":"Ok","value":3}
-spreadElement(-1) => [0,{"kind":"Err","error":"negative undefined"}] | first 0; read undefined; inner {"kind":"Err","error":"negative undefined"}

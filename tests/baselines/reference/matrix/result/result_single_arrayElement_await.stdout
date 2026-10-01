@@ -1,2 +1,0 @@
-arrayElement(2) => [0,{"kind":"Ok","value":20},2] | first 0; await; read 2; last 2
-arrayElement(-1) => [0,{"kind":"Err","error":"negative -1"},2] | first 0; await; read -1; last 2

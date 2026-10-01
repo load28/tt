@@ -1,0 +1,5 @@
+forTest(200) => 1 | risky 200; success true
+forTest(201) => 1 | risky 201; success true
+forTest(404) => "risky call 3" | caught "risky call 3"
+forTest(500) => 0 | risky 500; guard true; server false
+forTest(7) => 0 | risky 7; other null

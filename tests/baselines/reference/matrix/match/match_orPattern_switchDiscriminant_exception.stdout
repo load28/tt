@@ -1,0 +1,4 @@
+switchDiscriminant({"kind":"Num","value":4}) => "default" | risky {"kind":"Num","value":4}; number 4; case 0
+switchDiscriminant({"kind":"Neg","value":-3}) => "default" | risky {"kind":"Neg","value":-3}; number -3; case 0
+switchDiscriminant({"kind":"Word","text":"hi"}) => "risky call 3" | caught "risky call 3"
+switchDiscriminant({"kind":"End"}) => "default" | risky {"kind":"End"}; end ""; case 0

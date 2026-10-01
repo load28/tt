@@ -1,0 +1,2 @@
+awaitOperand(3) => "6" | risky 3; add 6
+awaitOperand(-4) => "-8" | risky -4; add -8

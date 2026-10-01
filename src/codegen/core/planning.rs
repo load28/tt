@@ -84,6 +84,31 @@ pub(super) fn direct_apply_inputs(
         .collect()
 }
 
+pub(super) fn reference_apply_steps(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    source_kind: SourceKind,
+) -> HashSet<ExprId> {
+    core.exprs
+        .iter()
+        .filter_map(|expr| match expr {
+            Expr::Apply(apply) => Some(apply),
+            _ => None,
+        })
+        .flat_map(|apply| apply.steps.iter().skip(usize::from(apply.head.is_none())))
+        .filter(|step| matches!(step.mode, ApplyMode::Call))
+        .filter_map(|step| {
+            let Expr::Opaque(node) = &core.exprs[step.value.index()] else {
+                return None;
+            };
+            let span = semantic.hir.source_map.node_span(*node)?;
+            crate::program_syntax::source_reference_callee(source, span, source_kind)
+                .then_some(step.value)
+        })
+        .collect()
+}
+
 pub(super) fn member_apply_steps(
     semantic: &SemanticFile,
     core: &CoreFile,
@@ -1593,7 +1618,11 @@ impl TargetRewritePlan {
                     jsx_child: false,
                     anchor: Some(primary),
                     claim: false,
-                    rewrite: None,
+                    rewrite: matches!(
+                        operation.kind,
+                        PlannedConditionalKind::LogicalAssignment { .. }
+                    )
+                    .then(String::new),
                 }
             })
             .collect();
@@ -1686,6 +1715,31 @@ impl TargetRewritePlan {
                 rewrite: None,
             }))
             .chain(operation_replacements)
+            .chain(all_operations().flat_map(|operation| {
+                match &operation.condition {
+                    PlannedEvaluationInput::Source {
+                        mode: EvaluationInputMode::LogicalAssignmentTarget,
+                        receiver,
+                        key,
+                        ..
+                    } => [*receiver, *key]
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|part| match part {
+                            PlannedReceiver::Captured { source, slot } => Some(SourceReplacement {
+                                source,
+                                slot: lowering.slot_name(slot).to_owned(),
+                                jsx_child: false,
+                                anchor: None,
+                                claim: false,
+                                rewrite: None,
+                            }),
+                            PlannedReceiver::Stable { .. } => None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                }
+            }))
             .collect();
         // A consumed call frame owns its original occurrence; captures
         // within that frame are still emitted while the value is active.

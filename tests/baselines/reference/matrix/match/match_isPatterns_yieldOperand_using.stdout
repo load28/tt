@@ -1,0 +1,4 @@
+yieldOperand({}) => "range" | open res; operand {}; range "range"; yield "range"; dispose res
+yieldOperand({}) => 1 | open res; operand {}; type 1; yield 1; dispose res
+yieldOperand({}) => "plain" | open res; operand {}; error "plain"; yield "plain"; dispose res
+yieldOperand("text") => null | open res; operand "text"; other null; yield null; dispose res

@@ -74,8 +74,8 @@ fn a_project_writes_one_pipeline_runtime_and_imports_it() {
             source.join(format!("{name}.tt")),
             format!(
                 "declare function input_{name}(): number;\n\
-                 declare const step_{name}: (value: number) => number;\n\
-                 export const value_{name} = input_{name}() |> step_{name};\n"
+                 declare const step_{name}: () => (value: number) => number;\n\
+                 export const value_{name} = input_{name}() |> step_{name}();\n"
             ),
         )
         .unwrap();
@@ -226,8 +226,8 @@ fn a_source_cannot_claim_a_compiler_support_module_output() {
     fs::write(
         source.join("main.tt"),
         "declare function input(): number;\n\
-         const twice = (value: number): number => value * 2;\n\
-         export const result = input() |> twice;\n",
+         const twice = () => (value: number): number => value * 2;\n\
+         export const result = input() |> twice();\n",
     )
     .unwrap();
     fs::write(
@@ -640,8 +640,8 @@ fn modes_reject_options_they_would_otherwise_ignore() {
             "--types does not combine with --jobs",
         ),
         (
-            vec!["--project", "tsconfig.json", path],
-            "build mode does not combine with --project",
+            vec!["--check", "--project", "tsconfig.json", path],
+            "--check does not combine with --project",
         ),
         (
             vec!["--symbols", "--emit-map", path],
@@ -2107,12 +2107,12 @@ fn watch_places_support_modules_by_the_whole_input_set() {
     fs::create_dir_all(input.join("sub")).unwrap();
     fs::write(
         input.join("a.tt"),
-        "export const x = (n: number) => n |> String;",
+        "export const x = (n: number) => n |> ((v: number) => String(v));",
     )
     .unwrap();
     fs::write(
         input.join("sub/b.tt"),
-        "export const x = (n: number) => n |> String;",
+        "export const x = (n: number) => n |> ((v: number) => String(v));",
     )
     .unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
@@ -2149,7 +2149,7 @@ fn watch_places_support_modules_by_the_whole_input_set() {
         );
         fs::write(
             input.join("sub/b.tt"),
-            "export const x = (n: number) => n |> String;\n",
+            "export const x = (n: number) => n |> ((v: number) => String(v));\n",
         )
         .unwrap();
         next_round();
@@ -2941,8 +2941,8 @@ fn a_commonjs_module_declares_its_pipeline_helpers() {
     fs::write(
         source.join("r.tt"),
         "import m = require(\"./m.js\");\n\
-         declare const step: (value: string) => string;\n\
-         export const value = m.g |> step;\n",
+         declare const step: () => (value: string) => string;\n\
+         export const value = m.g |> step();\n",
     )
     .unwrap();
     let output = ttc(&[
@@ -3190,4 +3190,257 @@ fn symbols_resolve_an_import_to_a_normalized_path() {
         .map(|import| import["resolved"].as_str().unwrap())
         .collect();
     assert_eq!(resolved, ["src/sub/b.tt", "src/c.tt"]);
+}
+
+/// A `.ttx` import names the file tsc writes for the `.tsx` ttc emits:
+/// `.jsx` under `"jsx": "preserve"` and `.js` under every other `jsx`
+/// value or none (typescript-go `GetOutputExtension`), read from the
+/// project's configuration through `extends` (a path, a package, a list
+/// whose later entry wins) in JSON with comments, or from `--project`.
+/// The emitted tree is then compiled by the pinned `tsc` with the same
+/// configuration (except without `jsx`, where tsc refuses a `.tsx` module
+/// with TS6142): the specifier names a file it wrote, and the program runs
+/// under Node.js where its output is JavaScript.
+#[test]
+fn a_ttx_import_names_the_output_tsc_writes_under_the_projects_jsx_option() {
+    if !common::tsc_available() {
+        return;
+    }
+    let base = r#""module": "nodenext", "target": "es2022", "strict": true, "rootDir": "out", "outDir": "js""#;
+    type ProjectFiles = Vec<(&'static str, String)>;
+    let cases: [(&str, ProjectFiles, &[&str], &str); 9] = [
+        (
+            "preserve",
+            vec![(
+                "tsconfig.json",
+                format!(
+                    r#"{{"compilerOptions": {{"jsx": "preserve", {base}}}, "include": ["out"]}}"#
+                ),
+            )],
+            &[],
+            "jsx",
+        ),
+        (
+            "react",
+            vec![(
+                "tsconfig.json",
+                format!(r#"{{"compilerOptions": {{"jsx": "react", {base}}}, "include": ["out"]}}"#),
+            )],
+            &[],
+            "js",
+        ),
+        (
+            "react-jsx",
+            vec![(
+                "tsconfig.json",
+                format!(
+                    r#"{{"compilerOptions": {{"jsx": "react-jsx", {base}}}, "include": ["out"]}}"#
+                ),
+            )],
+            &[],
+            "js",
+        ),
+        (
+            "react-jsxdev",
+            vec![(
+                "tsconfig.json",
+                format!(
+                    r#"{{"compilerOptions": {{"jsx": "react-jsxdev", {base}}}, "include": ["out"]}}"#
+                ),
+            )],
+            &[],
+            "js",
+        ),
+        (
+            "react-native",
+            vec![(
+                "tsconfig.json",
+                format!(
+                    r#"{{"compilerOptions": {{"jsx": "react-native", {base}}}, "include": ["out"]}}"#
+                ),
+            )],
+            &[],
+            "js",
+        ),
+        (
+            "unset",
+            vec![(
+                "tsconfig.json",
+                format!(r#"{{"compilerOptions": {{{base}}}, "include": ["out"]}}"#),
+            )],
+            &[],
+            "js",
+        ),
+        (
+            "extends a path, with comments",
+            vec![
+                (
+                    "tsconfig.json",
+                    format!(
+                        "{{\n  // the base sets jsx\n  \"extends\": \"./configs/base\",\n  \"compilerOptions\": {{{base},}},\n  \"include\": [\"out\"],\n}}\n"
+                    ),
+                ),
+                (
+                    "configs/base.json",
+                    r#"{"compilerOptions": {"jsx": "Preserve"}}"#.to_string(),
+                ),
+            ],
+            &[],
+            "jsx",
+        ),
+        (
+            "extends packages, the later one winning",
+            vec![
+                (
+                    "tsconfig.json",
+                    format!(
+                        r#"{{"extends": ["@cfg/preserve", "@cfg/react/strict.json"], "compilerOptions": {{{base}}}, "include": ["out"]}}"#
+                    ),
+                ),
+                (
+                    "node_modules/@cfg/preserve/package.json",
+                    r#"{"name": "@cfg/preserve", "tsconfig": "base.json"}"#.to_string(),
+                ),
+                (
+                    "node_modules/@cfg/preserve/base.json",
+                    r#"{"compilerOptions": {"jsx": "preserve"}}"#.to_string(),
+                ),
+                (
+                    "node_modules/@cfg/react/strict.json",
+                    r#"{"compilerOptions": {"jsx": "react-jsx"}}"#.to_string(),
+                ),
+            ],
+            &[],
+            "js",
+        ),
+        (
+            "--project",
+            vec![
+                (
+                    "tsconfig.json",
+                    format!(
+                        r#"{{"compilerOptions": {{"jsx": "react", {base}}}, "include": ["out"]}}"#
+                    ),
+                ),
+                (
+                    "tsconfig.preserve.json",
+                    format!(
+                        r#"{{"compilerOptions": {{"jsx": "preserve", {base}}}, "include": ["out"]}}"#
+                    ),
+                ),
+            ],
+            &["--project", "tsconfig.preserve.json"],
+            "jsx",
+        ),
+    ];
+    for (name, files, extra, extension) in cases {
+        let dir = tmpdir();
+        fs::write(dir.join("package.json"), r#"{"type": "module"}"#).unwrap();
+        for (path, text) in &files {
+            let path = dir.join(path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        }
+        fs::create_dir_all(dir.join("src")).unwrap();
+        fs::write(
+            dir.join("src/view.ttx"),
+            "export const label: string = \"view\";\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.join("src/app.tt"),
+            "import { label } from \"./view.ttx\";\nconsole.log(label);\n",
+        )
+        .unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .current_dir(&*dir)
+            .args(["-o", "out", "src"])
+            .args(extra)
+            .output()
+            .expect("ttc runs");
+        assert!(
+            output.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let app = fs::read_to_string(dir.join("out/app.ts")).unwrap();
+        assert!(
+            app.contains(&format!("from \"./view.{extension}\"")),
+            "{name}: {app}"
+        );
+        if name == "unset" {
+            continue;
+        }
+        let config = extra.get(1).copied().unwrap_or("tsconfig.json");
+        let output = common::tsc()
+            .current_dir(&*dir)
+            .args(["-p", config])
+            .output()
+            .expect("tsc runs");
+        assert!(
+            output.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert!(dir.join(format!("js/view.{extension}")).is_file(), "{name}");
+        if extension == "js" {
+            let output = Command::new("node")
+                .arg(dir.join("js/app.js"))
+                .output()
+                .expect("node runs");
+            assert!(
+                output.status.success(),
+                "{name}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(String::from_utf8_lossy(&output.stdout), "view\n", "{name}");
+        }
+    }
+}
+
+/// A build with a `.ttx` source cannot name that module's output when the
+/// project's configuration cannot be read; it says so instead of guessing.
+/// A build without one does not need the answer.
+#[test]
+fn an_unreadable_jsx_option_fails_only_a_build_that_has_a_ttx_source() {
+    let dir = tmpdir();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"extends": "./missing.json"}"#,
+    )
+    .unwrap();
+    fs::write(dir.join("app.tt"), "export const a = 1;\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(&*dir)
+        .args(["-o", "out", "app.tt"])
+        .output()
+        .expect("ttc runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fs::write(dir.join("view.ttx"), "export const v = 1;\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(&*dir)
+        .args(["-o", "out", "app.tt", "view.ttx"])
+        .output()
+        .expect("ttc runs");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot read the project's `jsx` option")
+            && stderr.contains("cannot find the configuration it extends, \"./missing.json\""),
+        "{stderr}"
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(&*dir)
+        .args(["-o", "out", "--rewrite-imports", "ts", "app.tt", "view.ttx"])
+        .output()
+        .expect("ttc runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

@@ -1,0 +1,2 @@
+getter(2) => "#4" | risky 2; add 4; shape "#4"
+getter(5) => "#10" | risky 5; add 10; shape "#10"

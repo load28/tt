@@ -10,6 +10,14 @@ error[match-not-exhaustive]: match on (Coin, Coin) is not exhaustive: missing (T
 
 
 ==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on (Coin, Coin) is not exhaustive: missing (Tails, Tails)
+ --> tupleMatchGuardedArmCoversNothing.tt:3:11
+  |
+3 | const r = match (a, b) {
+  |           ^^^^^^^^^^^^
+  |
+  = help: add the missing arms: `(Tails, Tails) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
 error[ts2304]: Cannot find name 'a'.
  --> tupleMatchGuardedArmCoversNothing.tt:3:18
   |

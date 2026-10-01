@@ -1,2 +1,0 @@
-yieldOperand(1.5) => "3.0" | operand 1.5; yield function; add 3
-yieldOperand(2) => "4.0" | operand 2; yield function; add 4

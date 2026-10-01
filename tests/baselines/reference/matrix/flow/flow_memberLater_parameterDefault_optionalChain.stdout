@@ -1,2 +1,0 @@
-parameterDefault(2) => 12 | receiver {"factor":3}; add 4; twice 12
-parameterDefault(3) => null | receiver {"factor":3}; add null; twice null

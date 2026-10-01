@@ -1,5 +1,0 @@
-conditionalBranch({"kind":"Circle","r":1}) => 1 | flip true; guard big false; small 1
-conditionalBranch({"kind":"Circle","r":5}) => "skipped" | flip false; else "skipped"
-conditionalBranch({"kind":"Rect","w":4,"h":2}) => threw Cannot read properties of undefined (reading 'kind') | flip true
-conditionalBranch({"kind":"Rect","w":1,"h":3}) => "skipped" | flip false; else "skipped"
-conditionalBranch({"kind":"Point"}) => 0 | flip true; point 0

@@ -1,0 +1,2 @@
+throwOperand({"kind":"Click","x":3}) => threw 3 | open res; operand {"kind":"Click","x":3}; click 3; dispose res
+throwOperand({"kind":"Key","key":"k"}) => threw "k" | open res; operand {"kind":"Key","key":"k"}; key "k"; dispose res

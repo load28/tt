@@ -1,0 +1,4 @@
+compoundAssignment("north") => "start:1" | initial "start:"; target {"total":"start:"}; operand "north"; n 1; finally 0
+compoundAssignment("south") => "start:2" | initial "start:"; target {"total":"start:"}; operand "south"; se 2; finally 0
+compoundAssignment("east") => "start:2" | initial "start:"; target {"total":"start:"}; operand "east"; se 2; finally 0
+compoundAssignment("up") => "start:0" | initial "start:"; target {"total":"start:"}; operand "up"; other 0; finally 0

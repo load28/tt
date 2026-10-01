@@ -1,0 +1,2 @@
+constructorBody(3) => 6 | operand 3; add 6; keep 6
+constructorBody(-4) => -8 | operand -4; add -8; keep -8

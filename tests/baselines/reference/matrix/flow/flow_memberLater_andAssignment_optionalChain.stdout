@@ -1,0 +1,2 @@
+andAssignment(2) => 0 | flip true; target {"value":0}
+andAssignment(3) => 18 | flip false; target {"value":"kept"}; receiver {"factor":3}; add 6; twice 18

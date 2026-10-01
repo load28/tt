@@ -1,0 +1,2 @@
+loopBody(2.5) => ["2.50","2.50"] | risky 2.5; positive 2.5; risky 2.5; positive 2.5
+loopBody(-3) => "risky call 3" | caught "risky call 3"

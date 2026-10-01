@@ -1,2 +1,0 @@
-constructorBody(3) => 4 | risky 3; read 3; reassigned 4
-constructorBody(-3) => "diverged" | risky -3; read -3; caught "diverged"

@@ -1,0 +1,2 @@
+conditionalBranch(2) => {"kind":"Ok"} | flip true; read 2
+conditionalBranch(-1) => "skipped" | flip false; else "skipped"

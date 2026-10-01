@@ -1,3 +1,0 @@
-getter({"kind":"Done","value":{"kind":"Some","value":7}}) => 7 | some 7
-getter({"kind":"Done","value":{"kind":"None"}}) => threw Cannot read properties of undefined (reading 'kind') | 
-getter({"kind":"Failed","error":"lost"}) => "lost" | failed "lost"

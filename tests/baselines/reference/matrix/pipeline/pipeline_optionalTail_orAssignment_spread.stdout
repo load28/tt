@@ -1,0 +1,2 @@
+orAssignment(2.5) => "2.50" | flip true; target {"value":0}; positive 2.5
+orAssignment(-3) => "kept" | flip false; target {"value":"kept"}

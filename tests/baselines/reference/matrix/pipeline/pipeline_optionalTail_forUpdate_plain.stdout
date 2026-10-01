@@ -1,0 +1,2 @@
+forUpdate(2.5) => "2.50" | body 0; operand 2.5; positive 2.5
+forUpdate(-3) => undefined | body 0; operand -3; positive undefined

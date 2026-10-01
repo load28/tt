@@ -1,0 +1,2 @@
+compoundAssignment(4) => {"kind":"Ok","value":"start:9"} | open res; initial "start:"; target {"total":"start:"}; operand 4; read 4; second 5; read 5; dispose res
+compoundAssignment(-4) => {"kind":"Err","error":"negative -4"} | open res; initial "start:"; target {"total":"start:"}; operand -4; read -4; dispose res

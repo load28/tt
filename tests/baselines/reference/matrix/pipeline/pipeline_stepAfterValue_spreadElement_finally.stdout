@@ -1,0 +1,2 @@
+spreadElement(4) => [0,7] | first 0; operand 4; step 3; add 7; finally 0
+spreadElement(-1) => [0,2] | first 0; operand -1; step 3; add 2; finally 0

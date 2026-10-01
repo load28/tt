@@ -1,2 +1,0 @@
-returnOperand(1.5) => "3.0" | operand 1.5; add 3
-returnOperand(2) => "4.0" | operand 2; add 4

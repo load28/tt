@@ -1,0 +1,2 @@
+declarationInitializer(3) => {"kind":"Ok","value":30} | risky 3; read 3
+declarationInitializer(-2) => {"kind":"Err","error":"negative -2"} | risky -2; read -2

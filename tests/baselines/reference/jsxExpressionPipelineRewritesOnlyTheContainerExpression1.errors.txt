@@ -14,5 +14,5 @@ error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.I
   |                             ^^^^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-jsxExpressionPipelineRewritesOnlyTheContainerExpression1.tsx(5,15): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
-jsxExpressionPipelineRewritesOnlyTheContainerExpression1.tsx(5,35): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxExpressionPipelineRewritesOnlyTheContainerExpression1.tsx(2,15): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxExpressionPipelineRewritesOnlyTheContainerExpression1.tsx(2,61): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.

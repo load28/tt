@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[let-else-placement]: let-else cannot be used here — its `else` block's exit (`return`, `break`, `continue`) would complete this construct's value instead of leaving the enclosing function
+ --> ./main.tt:6:7
+  |
+6 |       const Ok(value: v) = read((yield input)) else { return `<${match (note("exit", 3)) { 3 => "three", _ => "other" }}>`; };
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: extract the logic into a function (a let-else inside a function written here is fine), or `match` on the value instead
+
+error[match-control-crossing]: `yield` cannot cross a match arm boundary
+ --> ./main.tt:6:34
+  |
+6 |       const Ok(value: v) = read((yield input)) else { return `<${match (note("exit", 3)) { 3 => "three", _ => "other" }}>`; };
+  |                                  ^^^^^
+  |
+  = help: yield outside the match, or yield inside a generator written in this arm
+
+
+==== ttc --check-types (exit 1) ====
+error[let-else-placement]: let-else cannot be used here — its `else` block's exit (`return`, `break`, `continue`) would complete this construct's value instead of leaving the enclosing function
+ --> main.tt:6:7
+  |
+6 |       const Ok(value: v) = read((yield input)) else { return `<${match (note("exit", 3)) { 3 => "three", _ => "other" }}>`; };
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: extract the logic into a function (a let-else inside a function written here is fine), or `match` on the value instead
+error[match-control-crossing]: `yield` cannot cross a match arm boundary
+ --> main.tt:6:34
+  |
+6 |       const Ok(value: v) = read((yield input)) else { return `<${match (note("exit", 3)) { 3 => "three", _ => "other" }}>`; };
+  |                                  ^^^^^
+  |
+  = help: yield outside the match, or yield inside a generator written in this arm
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,2 +1,0 @@
-conditionalBranch(3) => "***6" | flip true; risky 3; double 6
-conditionalBranch(12) => "skipped" | flip false; else "skipped"

@@ -1,0 +1,2 @@
+conditionalBranch(3) => {"kind":"Ok","value":30} | flip true; await; read 3
+conditionalBranch(-2) => {"kind":"Ok","value":"skipped"} | flip false; else "skipped"

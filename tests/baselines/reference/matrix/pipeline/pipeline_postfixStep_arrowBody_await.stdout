@@ -1,0 +1,2 @@
+arrowBody(1.25) => "1.3" | await
+arrowBody(7) => "7.0" | await

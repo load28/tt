@@ -1,2 +1,0 @@
-labeledBlock(3) => {"kind":"Ok","value":30} | operand 3; read 3; flip true
-labeledBlock(-2) => {"kind":"Err","error":"negative -2"} | operand -2; read -2

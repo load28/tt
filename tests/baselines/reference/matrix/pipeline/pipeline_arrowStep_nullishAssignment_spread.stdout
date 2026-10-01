@@ -1,0 +1,2 @@
+nullishAssignment(8) => 9 | flip true; target {"value":null}; arrow 9
+nullishAssignment(9) => "kept" | flip false; target {"value":"kept"}

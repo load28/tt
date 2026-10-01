@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in a class field initializer — this TypeScript control-flow boundary has no statement position for its `Err` propagation
+ --> ./main.tt:6:13
+  |
+6 |     field = try match (note("operand", input)) { 1 => read(note("one", 10)), _ => read(note("other", -10)) };
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[match-placement]: `match` cannot be used in a class field initializer — this TypeScript boundary has no statement position
+ --> ./main.tt:6:17
+  |
+6 |     field = try match (note("operand", input)) { 1 => read(note("one", 10)), _ => read(note("other", -10)) };
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a class field initializer — this TypeScript control-flow boundary has no statement position for its `Err` propagation
+ --> main.tt:6:13
+  |
+6 |     field = try match (note("operand", input)) { 1 => read(note("one", 10)), _ => read(note("other", -10)) };
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[match-placement]: `match` cannot be used in a class field initializer — this TypeScript boundary has no statement position
+ --> main.tt:6:17
+  |
+6 |     field = try match (note("operand", input)) { 1 => read(note("one", 10)), _ => read(note("other", -10)) };
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+==== tsc on the emitted TypeScript (exit 0) ====

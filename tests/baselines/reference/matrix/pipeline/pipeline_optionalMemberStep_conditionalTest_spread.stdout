@@ -1,0 +1,3 @@
+conditionalTest(3) => "truthy" | flip true; maybe true; twice 9; then "truthy"
+conditionalTest(4) => "falsy" | flip false; maybe false; else "falsy"
+conditionalTest(5) => "truthy" | flip true; maybe true; twice 15; then "truthy"

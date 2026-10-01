@@ -1,0 +1,2 @@
+logicalAnd(4) => 2 | flip true; shape "#4"
+logicalAnd(12) => false | flip false

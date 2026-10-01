@@ -1,0 +1,3 @@
+methodArgument(2) => ["receiver",1,{"kind":"Ok","value":"two"}] | open res; receiver {"tag":"receiver"}; a 1; operand 2; read 2; dispose res
+methodArgument(7) => ["receiver",1,{"kind":"Ok","value":"other"}] | open res; receiver {"tag":"receiver"}; a 1; operand 7; read 7; dispose res
+methodArgument(-1) => ["receiver",1,{"kind":"Err","error":"negative -1"}] | open res; receiver {"tag":"receiver"}; a 1; operand -1; read -1; dispose res

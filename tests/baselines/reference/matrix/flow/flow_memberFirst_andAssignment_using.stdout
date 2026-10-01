@@ -1,0 +1,2 @@
+andAssignment(2) => 0 | open res; flip true; target {"value":0}; dispose res
+andAssignment(7) => 28 | open res; flip false; target {"value":"kept"}; receiver {"factor":3}; operand 7; dispose res; twice 21; add 28

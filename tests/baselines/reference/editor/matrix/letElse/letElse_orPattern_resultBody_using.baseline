@@ -1,7 +1,0 @@
-differences from letElse_orPattern_resultBody_using at the questions listed in tests/editor-matrix-differences.txt
-
-=== rename /*bind*/ main.tt:8:15 ===
-  |     const Num(value) | Neg(value) = note("operand", input) else { return base; };
-  |               ^ /*bind*/
-  tt only: main "value" -> value: ttRenamePlaceholder
-

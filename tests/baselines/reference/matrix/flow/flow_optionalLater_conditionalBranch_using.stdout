@@ -1,3 +1,0 @@
-conditionalBranch(4) => undefined | open res; flip true; operand 4; flip false; maybe false; dispose res; add 8
-conditionalBranch(6) => undefined | open res; flip true; operand 6; flip false; maybe false; dispose res; add 12
-conditionalBranch(8) => undefined | open res; flip true; operand 8; flip false; maybe false; dispose res; add 16

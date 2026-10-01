@@ -1,0 +1,2 @@
+logicalAnd(2) => "#4" | open res; flip true; operand 2; dispose res; add 4; shape "#4"
+logicalAnd(5) => false | open res; flip false; dispose res

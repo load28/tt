@@ -1,4 +1,0 @@
-spreadElement({}) => [0,"range"] | first 0; operand {}; range "range"
-spreadElement({}) => [0,1] | first 0; operand {}; type 1
-spreadElement({}) => [0,"plain"] | first 0; operand {}; error "plain"
-spreadElement("text") => [0,null] | first 0; operand "text"; other null

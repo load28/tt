@@ -141,29 +141,15 @@ pub(crate) fn report(
         }
     }
 
-    // A file no checked project contains gets no answers from the checker
-    // (a requested or open file outside the configured program is answered
-    // by its default project): no question about its scrutinees is ever
-    // asked, so the tag path below has nothing to report about it. That is
-    // the same situation as a backend that could not run, and the same rule
-    // applies — the typed facts go, the tt layer does not. Its coverage is
-    // answered from the declarations the file can see, exactly as
-    // `ttc --check` answers it.
-    let checker_members: Option<HashSet<&std::path::Path>> = answers
-        .project_modules
-        .as_ref()
-        .map(|modules| modules.iter().map(PathBuf::as_path).collect());
+    let mut declared_holes: HashSet<(PathBuf, usize)> = HashSet::new();
     for file in files {
-        if checker_members
-            .as_ref()
-            .is_some_and(|members| members.contains(file.module_path.as_path()))
-        {
-            continue;
-        }
         let Some(semantics) = semantics.get(&file.source_path) else {
             continue;
         };
         for error in crate::sema::coverage_errors(&file.source, &semantics.analyses) {
+            if let Some(offset) = error.offset {
+                declared_holes.insert((file.source_path.clone(), offset));
+            }
             let diagnostic = Diagnostic {
                 path: file.source_path.clone(),
                 position: error.offset.map(|at| crate::line_col(&file.source, at)),
@@ -567,6 +553,7 @@ pub(crate) fn report(
             if semantics
                 .get(&file.source_path)
                 .is_some_and(|semantics| semantics.analyses.match_has_resolution_error(offset))
+                || declared_holes.contains(&(file.source_path.clone(), offset))
             {
                 continue;
             }

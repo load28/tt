@@ -1,2 +1,0 @@
-doWhileTest(2) => 2 | risky 2; read 2
-doWhileTest(-1) => 2 | risky -1; read -1

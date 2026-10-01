@@ -159,7 +159,7 @@ pub fn source_specifiers(declarations: &str, names_source: impl Fn(&str) -> bool
         };
         let Some(source) = [crate::ImportRewrite::Js, crate::ImportRewrite::Ts]
             .into_iter()
-            .filter_map(|rewrite| rewrite.source_specifier(specifier))
+            .flat_map(|rewrite| rewrite.source_candidates(specifier))
             .find(|source| names_source(source))
         else {
             continue;

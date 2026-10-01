@@ -1,5 +1,0 @@
-matchArm(200) => true | flip true; success true
-matchArm(201) => 0 | flip false; other arm 0
-matchArm(404) => null | flip true; other null
-matchArm(500) => 0 | flip false; other arm 0
-matchArm(7) => null | flip true; other null

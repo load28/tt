@@ -1,3 +1,0 @@
-loopBody(3) => [{"kind":"Ok","value":3},{"kind":"Ok","value":3}] | risky 3; read 3; big 3; risky 3; read 3; big 3
-loopBody(1) => "risky call 3" | caught "risky call 3"
-loopBody(-1) => [{"kind":"Err","error":"negative -1"},{"kind":"Err","error":"negative -1"}] | risky -1; read -1; risky -1; read -1

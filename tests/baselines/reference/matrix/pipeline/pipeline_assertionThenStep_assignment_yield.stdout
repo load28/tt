@@ -1,2 +1,0 @@
-assignment(123) => 3 | initial 0; target {"value":0}; yield 123
-assignment(4) => 1 | initial 0; target {"value":0}; yield 4

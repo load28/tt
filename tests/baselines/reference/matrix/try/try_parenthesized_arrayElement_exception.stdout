@@ -1,2 +1,0 @@
-arrayElement(6) => {"kind":"Ok","value":[0,6,2]} | first 0; flip true; risky 6; read 6; last 2
-arrayElement(-6) => {"kind":"Err","error":"negative -9"} | first 0; flip false; fallback -9; read -9

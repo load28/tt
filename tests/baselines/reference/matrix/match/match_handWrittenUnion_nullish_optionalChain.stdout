@@ -1,0 +1,2 @@
+nullish({"kind":"Click","x":3}) => 3 | flip true; click 3
+nullish({"kind":"Key","key":"k"}) => "set" | flip false; left "set"

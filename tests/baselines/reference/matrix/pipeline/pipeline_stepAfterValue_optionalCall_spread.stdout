@@ -1,2 +1,0 @@
-optionalCall(4) => [[7],null] | callee true; step 3; add 7; callee false
-optionalCall(-1) => [[2],null] | callee true; step 3; add 2; callee false

@@ -34,9 +34,9 @@ error[ts2304]: Cannot find name 'f'.
   |                     ^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-flowIsAContextualKeywordOnlyAtAPipelineHead.ts(4,19): error TS2304: Cannot find name 'flow'.
-flowIsAContextualKeywordOnlyAtAPipelineHead.ts(4,26): error TS2304: Cannot find name 'f'.
-flowIsAContextualKeywordOnlyAtAPipelineHead.ts(5,18): error TS2304: Cannot find name 'o'.
-flowIsAContextualKeywordOnlyAtAPipelineHead.ts(5,26): error TS2304: Cannot find name 'f'.
-flowIsAContextualKeywordOnlyAtAPipelineHead.ts(6,18): error TS2304: Cannot find name 'flow'.
-flowIsAContextualKeywordOnlyAtAPipelineHead.ts(6,26): error TS2304: Cannot find name 'f'.
+flowIsAContextualKeywordOnlyAtAPipelineHead.ts(1,45): error TS2304: Cannot find name 'flow'.
+flowIsAContextualKeywordOnlyAtAPipelineHead.ts(1,52): error TS2304: Cannot find name 'f'.
+flowIsAContextualKeywordOnlyAtAPipelineHead.ts(2,44): error TS2304: Cannot find name 'o'.
+flowIsAContextualKeywordOnlyAtAPipelineHead.ts(2,52): error TS2304: Cannot find name 'f'.
+flowIsAContextualKeywordOnlyAtAPipelineHead.ts(3,44): error TS2304: Cannot find name 'flow'.
+flowIsAContextualKeywordOnlyAtAPipelineHead.ts(3,52): error TS2304: Cannot find name 'f'.

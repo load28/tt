@@ -1,0 +1,128 @@
+// Inside a `result` block, a `return` whose whole operand is a tt value
+// (`return try r();`, `return match (...) {...};`) completes the block with
+// that value wherever the `return` stands. Written in the body of an
+// `if let`, in a let-else's `else` block, or in an `if` nested in either,
+// the operand must still be lowered: the emitted `const $tt_t1 = ;` and
+// `const $tt_m = ;` dropped it (verify-failed), and a returned template
+// literal holding a `match` was an internal compiler error ("returned
+// structured value was not emitted"). The twin is the same program written
+// as TypeScript.
+// @run: main.tt
+// @twin: twin.ts
+// @filename: main.tt
+export {};
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+type O = { kind: "Some"; value: number } | { kind: "None" };
+const log: string[] = [];
+function rd(n: number): R {
+  log.push(`rd ${n}`);
+  return n >= 0 ? { kind: "Ok", value: n } : { kind: "Err", error: `neg ${n}` };
+}
+function opt(n: number): O {
+  return n !== 0 ? { kind: "Some", value: n } : { kind: "None" };
+}
+function ifLetTry(n: number) {
+  return result {
+    if let Some(value: b) = opt(n) {
+      return try rd(b);
+    }
+    return 0;
+  };
+}
+function ifLetMatch(n: number) {
+  return result {
+    const a = try rd(n);
+    if let Some(value: b) = opt(a) {
+      return match (b) { 1 => "one", _ => "many" };
+    }
+    return "none";
+  };
+}
+function letElseTry(n: number) {
+  return result {
+    const Some(value: b) = opt(n) else { return try rd(-1); };
+    return b;
+  };
+}
+function nestedIf(n: number) {
+  return result {
+    if let Some(value: b) = opt(n) {
+      if (b > 1) return try rd(b);
+    }
+    return 0;
+  };
+}
+function template(n: number) {
+  return result {
+    const a = try rd(n);
+    if let Some(value: b) = opt(a) {
+      return `<${match (b) { 1 => "one", _ => "many" }}>`;
+    }
+    return "";
+  };
+}
+for (const n of [0, 1, 2, -3]) {
+  console.log(n, JSON.stringify([ifLetTry(n), ifLetMatch(n), letElseTry(n), nestedIf(n), template(n)]), log.splice(0).join());
+}
+// @filename: twin.ts
+export {};
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+type O = { kind: "Some"; value: number } | { kind: "None" };
+const log: string[] = [];
+function rd(n: number): R {
+  log.push(`rd ${n}`);
+  return n >= 0 ? { kind: "Ok", value: n } : { kind: "Err", error: `neg ${n}` };
+}
+function opt(n: number): O {
+  return n !== 0 ? { kind: "Some", value: n } : { kind: "None" };
+}
+function ifLetTry(n: number) {
+  const o = opt(n);
+  if (o.kind === "Some") {
+    const r = rd(o.value);
+    if (!("value" in r)) return r;
+    return { kind: "Ok" as const, value: r.value };
+  }
+  return { kind: "Ok" as const, value: 0 };
+}
+function ifLetMatch(n: number) {
+  const r = rd(n);
+  if (!("value" in r)) return r;
+  const o = opt(r.value);
+  if (o.kind === "Some") {
+    return { kind: "Ok" as const, value: o.value === 1 ? "one" : "many" };
+  }
+  return { kind: "Ok" as const, value: "none" };
+}
+function letElseTry(n: number) {
+  const o = opt(n);
+  if (o.kind !== "Some") {
+    const r = rd(-1);
+    if (!("value" in r)) return r;
+    return { kind: "Ok" as const, value: r.value };
+  }
+  return { kind: "Ok" as const, value: o.value };
+}
+function nestedIf(n: number) {
+  const o = opt(n);
+  if (o.kind === "Some") {
+    if (o.value > 1) {
+      const r = rd(o.value);
+      if (!("value" in r)) return r;
+      return { kind: "Ok" as const, value: r.value };
+    }
+  }
+  return { kind: "Ok" as const, value: 0 };
+}
+function template(n: number) {
+  const r = rd(n);
+  if (!("value" in r)) return r;
+  const o = opt(r.value);
+  if (o.kind === "Some") {
+    return { kind: "Ok" as const, value: `<${o.value === 1 ? "one" : "many"}>` };
+  }
+  return { kind: "Ok" as const, value: "" };
+}
+for (const n of [0, 1, 2, -3]) {
+  console.log(n, JSON.stringify([ifLetTry(n), ifLetMatch(n), letElseTry(n), nestedIf(n), template(n)]), log.splice(0).join());
+}

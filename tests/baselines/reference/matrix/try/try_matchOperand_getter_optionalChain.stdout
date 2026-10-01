@@ -1,3 +1,0 @@
-getter(1) => {"kind":"Ok","value":10} | one 10; read 10
-getter(2) => {"kind":"Err","error":"negative -10"} | other -10; read -10
-getter(-3) => {"kind":"Err","error":"negative -10"} | other -10; read -10

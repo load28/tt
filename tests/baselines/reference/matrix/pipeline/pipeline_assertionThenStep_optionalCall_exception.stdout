@@ -1,2 +1,0 @@
-optionalCall(123) => [[3],null] | callee true; risky 123; callee false
-optionalCall(4) => [[1],null] | callee true; risky 4; callee false

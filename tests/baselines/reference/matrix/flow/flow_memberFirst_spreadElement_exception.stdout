@@ -1,0 +1,2 @@
+spreadElement(2) => [0,null] | first 0; receiver {"factor":3}; risky 2
+spreadElement(7) => [0,null] | first 0; receiver {"factor":3}; risky 7

@@ -1,0 +1,4 @@
+conditionalBranch({"kind":"Num","value":4}) => -1 | flip true; operand {"kind":"Num","value":4}; other -1
+conditionalBranch({"kind":"Neg","value":-3}) => "skipped" | flip false; else "skipped"
+conditionalBranch({"kind":"Word","text":"hi"}) => 2 | flip true; operand {"kind":"Word","text":"hi"}; word 2
+conditionalBranch({"kind":"End"}) => "skipped" | flip false; else "skipped"

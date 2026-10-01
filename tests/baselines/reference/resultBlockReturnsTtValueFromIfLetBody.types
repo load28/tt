@@ -1,0 +1,206 @@
+=== main.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+type O = { kind: "Some"; value: number } | { kind: "None" };
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>kind : (property) kind: "None"
+const log: string[] = [];
+>log : const log: string[]
+function rd(n: number): R {
+>rd : function rd(n: number): R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  log.push(`rd ${n}`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+  return n >= 0 ? { kind: "Ok", value: n } : { kind: "Err", error: `neg ${n}` };
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+>n : (parameter) n: number
+function opt(n: number): O {
+>opt : function opt(n: number): O
+>n : (parameter) n: number
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+  return n !== 0 ? { kind: "Some", value: n } : { kind: "None" };
+>n : (parameter) n: number
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "None"
+function ifLetTry(n: number) {
+>ifLetTry : function ifLetTry(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>n : (parameter) n: number
+    if let Some(value: b) = opt(n) {
+>value : (property) value: number
+>b : const b: number
+>opt : function opt(n: number): O
+>n : (parameter) n: number
+      return try rd(b);
+>rd : function rd(n: number): R
+>b : const b: number
+function ifLetMatch(n: number) {
+>ifLetMatch : function ifLetMatch(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>n : (parameter) n: number
+    const a = try rd(n);
+>a : const a: number
+>rd : function rd(n: number): R
+>n : (parameter) n: number
+    if let Some(value: b) = opt(a) {
+>value : (property) value: number
+>b : const b: number
+>opt : function opt(n: number): O
+>a : const a: number
+      return match (b) { 1 => "one", _ => "many" };
+>b : const b: number
+function letElseTry(n: number) {
+>letElseTry : function letElseTry(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>n : (parameter) n: number
+    const Some(value: b) = opt(n) else { return try rd(-1); };
+>value : (property) value: number
+>b : const b: number
+>opt : function opt(n: number): O
+>n : (parameter) n: number
+>rd : function rd(n: number): R
+    return b;
+>b : const b: number
+function nestedIf(n: number) {
+>nestedIf : function nestedIf(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>n : (parameter) n: number
+    if let Some(value: b) = opt(n) {
+>value : (property) value: number
+>b : const b: number
+>opt : function opt(n: number): O
+>n : (parameter) n: number
+      if (b > 1) return try rd(b);
+>b : const b: number
+>rd : function rd(n: number): R
+>b : const b: number
+function template(n: number) {
+>template : function template(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>n : (parameter) n: number
+    const a = try rd(n);
+>a : const a: number
+>rd : function rd(n: number): R
+>n : (parameter) n: number
+    if let Some(value: b) = opt(a) {
+>value : (property) value: number
+>b : const b: number
+>opt : function opt(n: number): O
+>a : const a: number
+      return `<${match (b) { 1 => "one", _ => "many" }}>`;
+>b : const b: number
+for (const n of [0, 1, 2, -3]) {
+>n : const n: number
+  console.log(n, JSON.stringify([ifLetTry(n), ifLetMatch(n), letElseTry(n), nestedIf(n), template(n)]), log.splice(0).join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>n : const n: number
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>ifLetTry : function ifLetTry(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>n : const n: number
+>ifLetMatch : function ifLetMatch(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>n : const n: number
+>letElseTry : function letElseTry(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>n : const n: number
+>nestedIf : function nestedIf(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>n : const n: number
+>template : function template(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>n : const n: number
+>log : const log: string[]
+>splice : (method) Array<string>.splice(start: number, deleteCount?: number): string[]
+>join : (method) Array<string>.join(separator?: string): string
+

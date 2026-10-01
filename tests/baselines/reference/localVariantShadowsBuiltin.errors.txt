@@ -25,6 +25,14 @@ error[ts2749]: 'Option' refers to a value, but is being used as a type here. Did
   |
 2 | const f = (o: Option) => match (o) { Some => 1 };
   |               ^^^^^^
+error[match-not-exhaustive]: match on variant Option is not exhaustive: missing "Stale"
+ --> localVariantShadowsBuiltin.tt:2:26
+  |
+2 | const f = (o: Option) => match (o) { Some => 1 };
+  |                          ^^^^^^^^^
+  |
+  = help: add the missing arms: `, Stale => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
 
 ==== tsc on the emitted TypeScript ====
 nothing was emitted

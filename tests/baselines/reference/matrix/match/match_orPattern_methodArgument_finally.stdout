@@ -1,4 +1,0 @@
-methodArgument({"kind":"Num","value":4}) => ["receiver",1,4] | receiver {"tag":"receiver"}; a 1; operand {"kind":"Num","value":4}; number 4; finally 0
-methodArgument({"kind":"Neg","value":-3}) => ["receiver",1,-3] | receiver {"tag":"receiver"}; a 1; operand {"kind":"Neg","value":-3}; number -3; finally 0
-methodArgument({"kind":"Word","text":"hi"}) => ["receiver",1,"hi"] | receiver {"tag":"receiver"}; a 1; operand {"kind":"Word","text":"hi"}; word "hi"; finally 0
-methodArgument({"kind":"End"}) => ["receiver",1,""] | receiver {"tag":"receiver"}; a 1; operand {"kind":"End"}; end ""; finally 0

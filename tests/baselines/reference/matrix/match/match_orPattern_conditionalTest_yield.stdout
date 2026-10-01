@@ -1,0 +1,4 @@
+conditionalTest({"kind":"Num","value":4}) => "truthy" | yield {"kind":"Num","value":4}; number 4; then "truthy"
+conditionalTest({"kind":"Neg","value":-3}) => "truthy" | yield {"kind":"Neg","value":-3}; number -3; then "truthy"
+conditionalTest({"kind":"Word","text":"hi"}) => "truthy" | yield {"kind":"Word","text":"hi"}; word "hi"; then "truthy"
+conditionalTest({"kind":"End"}) => "falsy" | yield {"kind":"End"}; end ""; else "falsy"

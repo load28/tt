@@ -1,3 +1,0 @@
-throwOperand({"kind":"Done","value":{"kind":"Some","value":7}}) => threw 7 | some 7
-throwOperand({"kind":"Done","value":{"kind":"None"}}) => threw 0 | none 0
-throwOperand({"kind":"Failed","error":"lost"}) => threw "lost" | failed "lost"

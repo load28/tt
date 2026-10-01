@@ -1,0 +1,2 @@
+declarationInitializer(1.5) => "3.0" | await; add 3
+declarationInitializer(2) => "4.0" | await; add 4

@@ -1,0 +1,5 @@
+throwOperand(200) => threw true | success true
+throwOperand(201) => threw null | other null
+throwOperand(404) => threw false | missing false
+throwOperand(500) => threw null | other null
+throwOperand(7) => threw null | other null

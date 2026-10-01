@@ -1,2 +1,0 @@
-forUpdate(5) => 15 | body 0; risky 5; map 15
-forUpdate(0) => -1 | body 0; risky 0

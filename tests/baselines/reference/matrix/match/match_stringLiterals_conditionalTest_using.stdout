@@ -1,4 +1,0 @@
-conditionalTest("north") => "truthy" | open res; operand "north"; n 1; then "truthy"; dispose res
-conditionalTest("south") => "truthy" | open res; operand "south"; se 2; then "truthy"; dispose res
-conditionalTest("east") => "truthy" | open res; operand "east"; se 2; then "truthy"; dispose res
-conditionalTest("up") => "falsy" | open res; operand "up"; other 0; else "falsy"; dispose res

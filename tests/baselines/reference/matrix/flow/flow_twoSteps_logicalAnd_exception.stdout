@@ -1,2 +1,0 @@
-logicalAnd(2) => 6 | flip true; risky 2; double 4; add 6
-logicalAnd(5) => false | flip false

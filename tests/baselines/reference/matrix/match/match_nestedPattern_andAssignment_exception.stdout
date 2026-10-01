@@ -1,0 +1,3 @@
+andAssignment({"kind":"Done","value":{"kind":"Some","value":7}}) => 0 | flip true; target {"value":0}
+andAssignment({"kind":"Done","value":{"kind":"None"}}) => 0 | flip false; target {"value":"kept"}; risky {"kind":"Done","value":{"kind":"None"}}; none 0
+andAssignment({"kind":"Failed","error":"lost"}) => 0 | flip true; target {"value":0}

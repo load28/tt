@@ -12,9 +12,9 @@
 16:33 -> 63:7 len 1  "a"
 16:41 -> 59:44 len 5  "Ok(2)"
 16:47 -> 63:26 len 50  " return Ok(a + $tt_t0); }\nconst xs = [1].map(x ="...
-17:25 -> 64:34 len 1  "x"
-17:30 -> 64:37 len 6  "String"
-17:36 -> 64:44 len 27  ");\nconst ys = [1].map(x => "
+17:25 -> 64:62 len 1  "x"
+17:30 -> 64:65 len 6  "String"
+17:36 -> 64:72 len 27  ");\nconst ys = [1].map(x => "
 18:25 -> 65:70 len 1  "x"
 18:30 -> 65:74 len 3  "obj"
 18:33 -> 65:55 len 4  ".add"
@@ -23,10 +23,10 @@
 19:30 -> 66:75 len 3  "obj"
 19:33 -> 66:55 len 5  "[key]"
 19:38 -> 66:80 len 13  ");\nconst g = "
-20:19 -> 67:38 len 22  "((n: number) => n + 1)"
-20:45 -> 67:85 len 11  ".toFixed(1)"
-20:60 -> 67:100 len 6  "Number"
-20:70 -> 67:153 len 3  "obj"
-20:73 -> 67:131 len 4  ".add"
-20:77 -> 67:159 len 94  ";\nconsole.log(r, JSON.stringify(f()), xs[0], ys["...
+20:19 -> 67:94 len 22  "((n: number) => n + 1)"
+20:45 -> 67:141 len 11  ".toFixed(1)"
+20:60 -> 67:156 len 6  "Number"
+20:70 -> 67:209 len 3  "obj"
+20:73 -> 67:187 len 4  ".add"
+20:77 -> 67:215 len 94  ";\nconsole.log(r, JSON.stringify(f()), xs[0], ys["...
 

@@ -1,2 +1,0 @@
-destructuringDefault(5) => 15 | source {}; await; map 15
-destructuringDefault(0) => -1 | source {}; await

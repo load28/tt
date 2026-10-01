@@ -1,3 +1,0 @@
-logicalOr({"kind":"Circle","r":2}) => true | flip true; finally 0
-logicalOr({"kind":"Rect","w":3,"h":4}) => [3,4] | flip false; operand {"kind":"Rect","w":3,"h":4}; rect [3,4]; finally 0
-logicalOr({"kind":"Point"}) => true | flip true; finally 0

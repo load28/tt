@@ -1,2 +1,0 @@
-declarationInitializer(2) => {"kind":"Ok","value":20} | risky 2; read 2
-declarationInitializer(-1) => {"kind":"Err","error":"negative -1"} | risky -1; read -1

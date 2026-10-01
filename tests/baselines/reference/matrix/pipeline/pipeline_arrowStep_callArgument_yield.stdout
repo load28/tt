@@ -1,0 +1,2 @@
+callArgument(8) => [1,9,3] | a 1; yield 8; arrow 9; c 3
+callArgument(9) => [1,10,3] | a 1; yield 9; arrow 10; c 3

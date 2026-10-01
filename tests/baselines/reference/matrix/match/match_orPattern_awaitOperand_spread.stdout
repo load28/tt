@@ -1,0 +1,4 @@
+awaitOperand({"kind":"Num","value":4}) => 4 | number 4
+awaitOperand({"kind":"Neg","value":-3}) => -3 | number -3
+awaitOperand({"kind":"Word","text":"hi"}) => "hi" | word "hi"
+awaitOperand({"kind":"End"}) => "" | end ""

@@ -44,7 +44,7 @@ export {};
 //// [tt/runtime.ts] support module @tt/std/runtime.ts
 
 //// [pipelineThisAndOrder.ts]
-import { $tt_ap, $tt_fl } from "./tt/runtime.js";
+import { $tt_fl } from "./tt/runtime.js";
 // A pipeline step calls a method on its receiver with `this` bound, evaluates
 // the piped value before the receiver, and an optional step short-circuits.
 const log: string[] = [];
@@ -78,8 +78,8 @@ function find(present: boolean): Counter | undefined {
 }
 flush("optional absent", (($tt_v, $tt_r) => $tt_r?.add($tt_v))(note("head", 4), (find(false))));
 flush("optional present", (($tt_v, $tt_r) => $tt_r?.add($tt_v))(note("head", 5), (find(true))));
-flush("optional tail then step", $tt_ap((undefined as string | undefined)?.trim(), String));
-const composed = $tt_fl($tt_fl(((n: number) => note("double", n * 2)), String), (($tt_v) => ($tt_v).padStart(3, "0")));
+flush("optional tail then step", (($tt_v, $tt_f) => $tt_f($tt_v))((undefined as string | undefined)?.trim(), String));
+const composed = $tt_fl((($tt_g, $tt_f) => $tt_fl($tt_g, ($tt_v) => $tt_f($tt_v)))(((n: number) => note("double", n * 2)), String), (($tt_v) => ($tt_v).padStart(3, "0")));
 flush("flow built", "nothing yet");
 flush("flow called", composed(4));
 flush("postfix chain", " a,b ".trim().split(","));

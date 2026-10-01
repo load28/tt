@@ -1,3 +1,0 @@
-optionalCall({"kind":"Circle","r":2}) => [["some"],null] | open res; callee true; operand {"kind":"Circle","r":2}; inner circle 2; again {"kind":"Point"}; point "some"; callee false; dispose res
-optionalCall({"kind":"Rect","w":3,"h":4}) => [["some"],null] | open res; callee true; operand {"kind":"Rect","w":3,"h":4}; inner rect 3; again {"kind":"Point"}; point "some"; callee false; dispose res
-optionalCall({"kind":"Point"}) => [["none"],null] | open res; callee true; operand {"kind":"Point"}; inner point 0; zero "none"; callee false; dispose res

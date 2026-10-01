@@ -1,4 +1,0 @@
-yieldOperand({"kind":"Num","value":4}) => -1 | open res; operand {"kind":"Num","value":4}; other -1; yield -1; dispose res
-yieldOperand({"kind":"Neg","value":-3}) => -1 | open res; operand {"kind":"Neg","value":-3}; other -1; yield -1; dispose res
-yieldOperand({"kind":"Word","text":"hi"}) => 2 | open res; operand {"kind":"Word","text":"hi"}; word 2; yield 2; dispose res
-yieldOperand({"kind":"End"}) => -1 | open res; operand {"kind":"End"}; other -1; yield -1; dispose res

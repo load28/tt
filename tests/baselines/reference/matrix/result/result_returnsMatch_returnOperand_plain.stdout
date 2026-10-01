@@ -1,3 +1,0 @@
-returnOperand(2) => {"kind":"Ok","value":"two"} | operand 2; read 2
-returnOperand(7) => {"kind":"Ok","value":"other"} | operand 7; read 7
-returnOperand(-1) => {"kind":"Err","error":"negative -1"} | operand -1; read -1

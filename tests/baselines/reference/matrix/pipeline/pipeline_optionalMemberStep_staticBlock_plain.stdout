@@ -1,3 +1,0 @@
-staticBlock(3) => 9 | operand 3; flip true; maybe true; twice 9
-staticBlock(4) => undefined | operand 4; flip false; maybe false
-staticBlock(5) => 15 | operand 5; flip true; maybe true; twice 15

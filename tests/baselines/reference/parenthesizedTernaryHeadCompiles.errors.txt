@@ -24,7 +24,7 @@ error[ts2304]: Cannot find name 'f'.
   |                          ^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-parenthesizedTernaryHeadCompiles.ts(4,19): error TS2304: Cannot find name 'c'.
-parenthesizedTernaryHeadCompiles.ts(4,23): error TS2304: Cannot find name 'x'.
-parenthesizedTernaryHeadCompiles.ts(4,27): error TS2304: Cannot find name 'y'.
-parenthesizedTernaryHeadCompiles.ts(4,31): error TS2304: Cannot find name 'f'.
+parenthesizedTernaryHeadCompiles.ts(1,45): error TS2304: Cannot find name 'c'.
+parenthesizedTernaryHeadCompiles.ts(1,49): error TS2304: Cannot find name 'x'.
+parenthesizedTernaryHeadCompiles.ts(1,53): error TS2304: Cannot find name 'y'.
+parenthesizedTernaryHeadCompiles.ts(1,57): error TS2304: Cannot find name 'f'.

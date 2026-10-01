@@ -1,0 +1,2 @@
+jsxConditional(4) => "<p>2</p>" | flip true; yield 4; shape "#4"
+jsxConditional(12) => "<p></p>" | flip false

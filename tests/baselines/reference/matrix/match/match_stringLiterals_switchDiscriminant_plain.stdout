@@ -1,0 +1,4 @@
+switchDiscriminant("north") => "default" | operand "north"; n 1; case 0
+switchDiscriminant("south") => "default" | operand "south"; se 2; case 0
+switchDiscriminant("east") => "default" | operand "east"; se 2; case 0
+switchDiscriminant("up") => "zero" | operand "up"; other 0; case 0

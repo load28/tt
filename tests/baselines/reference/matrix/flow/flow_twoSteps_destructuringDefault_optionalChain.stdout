@@ -1,2 +1,0 @@
-destructuringDefault(2) => 6 | source {}; double 4; add 6
-destructuringDefault(5) => null | source {}; double 10; add null

@@ -1,0 +1,4 @@
+throwOperand({}) => threw "range" | range "range"
+throwOperand({}) => threw 1 | type 1
+throwOperand({}) => threw "plain" | error "plain"
+throwOperand("text") => threw null | other null

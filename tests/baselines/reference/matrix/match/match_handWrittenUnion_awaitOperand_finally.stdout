@@ -1,0 +1,2 @@
+awaitOperand({"kind":"Click","x":3}) => 3 | operand {"kind":"Click","x":3}; click 3; finally 0
+awaitOperand({"kind":"Key","key":"k"}) => "k" | operand {"kind":"Key","key":"k"}; key "k"; finally 0

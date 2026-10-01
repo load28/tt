@@ -1,3 +1,0 @@
-logicalAnd(3) => undefined | flip true; flip false; maybe false
-logicalAnd(4) => undefined | flip true; flip false; maybe false
-logicalAnd(5) => undefined | flip true; flip false; maybe false

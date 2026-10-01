@@ -15,6 +15,14 @@ error[ts2304]: Cannot find name 'Result'.
   |
 1 | const f = (r: Result<number, string>) => match (r) { Err(error) => error };
   |               ^^^^^^
+error[match-not-exhaustive]: match on built-in variant Result is not exhaustive: missing "Ok"
+ --> matchOnBuiltinResultIsExhaustivenessChecked.tt:1:42
+  |
+1 | const f = (r: Result<number, string>) => match (r) { Err(error) => error };
+  |                                          ^^^^^^^^^
+  |
+  = help: add the missing arms: `, Ok(value) => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
 
 ==== tsc on the emitted TypeScript ====
 nothing was emitted

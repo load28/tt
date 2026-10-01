@@ -1,0 +1,2 @@
+forUpdate(2) => {"kind":"Ok"} | open res; body 0; operand 2; read 2; dispose res
+forUpdate(-1) => {"kind":"Err","error":"negative -1"} | open res; body 0; operand -1; read -1; dispose res

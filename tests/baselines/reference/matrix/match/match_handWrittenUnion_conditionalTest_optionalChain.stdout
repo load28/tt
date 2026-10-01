@@ -1,2 +1,0 @@
-conditionalTest({"kind":"Click","x":3}) => "truthy" | click 3; then "truthy"
-conditionalTest({"kind":"Key","key":"k"}) => threw Cannot read properties of undefined (reading 'kind') | 

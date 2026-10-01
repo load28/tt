@@ -1,0 +1,3 @@
+compoundAssignment({"kind":"Done","value":{"kind":"Some","value":7}}) => "start:7" | initial "start:"; target {"total":"start:"}; some 7
+compoundAssignment({"kind":"Done","value":{"kind":"None"}}) => threw Cannot read properties of undefined (reading 'kind') | initial "start:"; target {"total":"start:"}
+compoundAssignment({"kind":"Failed","error":"lost"}) => "start:lost" | initial "start:"; target {"total":"start:"}; failed "lost"

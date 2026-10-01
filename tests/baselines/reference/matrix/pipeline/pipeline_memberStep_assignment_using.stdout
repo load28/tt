@@ -1,0 +1,2 @@
+assignment(2) => 6 | open res; initial 0; target {"value":0}; operand 2; receiver {"factor":3}; twice 6; dispose res
+assignment(6) => 18 | open res; initial 0; target {"value":0}; operand 6; receiver {"factor":3}; twice 18; dispose res

@@ -1,0 +1,2 @@
+getter(5) => 15 | operand 5; map 15; finally 0
+getter(0) => -1 | operand 0; finally 0

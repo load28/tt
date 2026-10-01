@@ -1,0 +1,2 @@
+nullish(123) => 3 | flip true
+nullish(4) => "set" | flip false; left "set"

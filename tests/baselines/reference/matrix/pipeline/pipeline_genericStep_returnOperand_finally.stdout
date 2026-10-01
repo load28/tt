@@ -1,0 +1,2 @@
+returnOperand(6) => 12 | operand 6; keep 6; double 12; finally 0
+returnOperand(-2) => -4 | operand -2; keep -2; double -4; finally 0

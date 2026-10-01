@@ -1,2 +1,0 @@
-throwOperand(1.5) => threw function | open res; operand 1.5; dispose res
-throwOperand(2) => threw function | open res; operand 2; dispose res

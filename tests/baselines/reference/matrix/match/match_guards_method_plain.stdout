@@ -1,0 +1,5 @@
+method({"kind":"Circle","r":1}) => 1 | this "holder"; operand {"kind":"Circle","r":1}; guard big false; small 1
+method({"kind":"Circle","r":5}) => 5 | this "holder"; operand {"kind":"Circle","r":5}; guard big true; big 5
+method({"kind":"Rect","w":4,"h":2}) => 4 | this "holder"; operand {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4
+method({"kind":"Rect","w":1,"h":3}) => 3 | this "holder"; operand {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3
+method({"kind":"Point"}) => 0 | this "holder"; operand {"kind":"Point"}; point 0

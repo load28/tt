@@ -1,0 +1,2 @@
+compoundAssignment(5) => "start:15" | open res; initial "start:"; target {"total":"start:"}; operand 5; map 15; dispose res
+compoundAssignment(0) => "start:-1" | open res; initial "start:"; target {"total":"start:"}; operand 0; dispose res

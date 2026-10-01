@@ -1,0 +1,2 @@
+compoundAssignment(true) => "start:1" | initial "start:"; target {"total":"start:"}; yes 1
+compoundAssignment(false) => "start:0" | initial "start:"; target {"total":"start:"}; no 0

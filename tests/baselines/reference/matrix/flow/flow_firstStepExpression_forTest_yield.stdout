@@ -1,2 +1,0 @@
-forTest(3) => 1 | yield 3
-forTest(-4) => 1 | yield -4

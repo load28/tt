@@ -1,0 +1,13 @@
+differences from pipeline_assertionThenStep_logicalAnd_yield at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:4:38 ===
+  |   return flip() && ((yield input) |> String as string |> .length);
+  |                                      ^ /*call*/
+  tt only: var String: StringConstructor
+  ts only: var String: (value?: any) => string
+
+=== definition /*call*/ main.tt:4:38 ===
+  |   return flip() && ((yield input) |> String as string |> .length);
+  |                                      ^ /*call*/
+  ts only: <external>/lib.es5.d.ts 534:5-534:27
+

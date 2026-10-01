@@ -1,2 +1,0 @@
-throwOperand(4) => threw 7 | operand 4; step 3; add 7
-throwOperand(-1) => threw 2 | operand -1; step 3; add 2

@@ -1,3 +1,0 @@
-arrowBody(1) => {"kind":"Ok","value":10} | open res; operand 1; one 10; read 10; dispose res
-arrowBody(2) => {"kind":"Err","error":"negative -10"} | open res; operand 2; other -10; read -10; dispose res
-arrowBody(-3) => {"kind":"Err","error":"negative -10"} | open res; operand -3; other -10; read -10; dispose res

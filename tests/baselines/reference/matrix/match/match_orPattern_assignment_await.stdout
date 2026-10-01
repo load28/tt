@@ -1,0 +1,4 @@
+assignment({"kind":"Num","value":4}) => 4 | initial 0; target {"value":0}; await; number 4
+assignment({"kind":"Neg","value":-3}) => -3 | initial 0; target {"value":0}; await; number -3
+assignment({"kind":"Word","text":"hi"}) => "hi" | initial 0; target {"value":0}; await; word "hi"
+assignment({"kind":"End"}) => "" | initial 0; target {"value":0}; await; end ""

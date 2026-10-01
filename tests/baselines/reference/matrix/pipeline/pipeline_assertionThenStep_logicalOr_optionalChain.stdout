@@ -1,0 +1,2 @@
+logicalOr(123) => true | flip true
+logicalOr(4) => 1 | flip false

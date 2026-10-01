@@ -1,5 +1,0 @@
-differences from match_nestedPattern_awaitOperand_finally at the questions listed in tests/editor-matrix-differences.txt
-
-=== diagnostics main.tt ===
-  ts only: main "await (((t0: Outcome) => { if (t0.kind === \"Done\" && t0.value.kind === \"Some\") { const v = t0.value.value; return note(\"some\", v); } if (t0.kind === \"Done\") { return note(\"none\", 0); } { const { error } = t0; return note(\"failed\", error); } })(note(\"operand\", input)))" hint TS80007: 'await' has no effect on the type of this expression.
-

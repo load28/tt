@@ -1,0 +1,2 @@
+callArgument(2) => [1,{"kind":"Ok"},3] | a 1; read 2; c 3
+callArgument(-1) => [1,{"kind":"Err","error":"negative undefined"},3] | a 1; read undefined; c 3

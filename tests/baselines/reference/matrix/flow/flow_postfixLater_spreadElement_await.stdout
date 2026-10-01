@@ -1,0 +1,2 @@
+spreadElement(1.5) => [0,null] | first 0; await
+spreadElement(2) => [0,null] | first 0; await

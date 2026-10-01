@@ -1,0 +1,3 @@
+conditionalTest(4) => "truthy" | await; flip true; maybe true; then "truthy"
+conditionalTest(6) => "truthy" | await; flip false; maybe false; then "truthy"
+conditionalTest(8) => "truthy" | await; flip true; maybe true; then "truthy"

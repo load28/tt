@@ -1,0 +1,2 @@
+andAssignment(1.5) => 0 | flip true; target {"value":0}
+andAssignment(2) => "4.0" | flip false; target {"value":"kept"}; yield 2; add 4

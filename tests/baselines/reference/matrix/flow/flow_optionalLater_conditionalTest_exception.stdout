@@ -1,3 +1,0 @@
-conditionalTest(4) => "truthy" | risky 4; flip true; maybe true; then "truthy"
-conditionalTest(6) => "truthy" | risky 6; flip false; maybe false; then "truthy"
-conditionalTest(8) => "risky call 3" | caught "risky call 3"

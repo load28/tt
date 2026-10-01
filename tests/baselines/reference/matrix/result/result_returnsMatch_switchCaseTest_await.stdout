@@ -1,0 +1,3 @@
+switchCaseTest(2) => "default" | discriminant 0; await; read 2
+switchCaseTest(7) => "default" | discriminant 0; await; read 7
+switchCaseTest(-1) => "default" | discriminant 0; await; read -1

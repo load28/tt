@@ -1,2 +1,0 @@
-spreadElement(true) => [0,1] | first 0; yes 1
-spreadElement(false) => threw tt match: unexpected literal undefined | first 0

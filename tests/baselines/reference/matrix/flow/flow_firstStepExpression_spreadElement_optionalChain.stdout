@@ -1,0 +1,2 @@
+spreadElement(3) => [0,null] | first 0
+spreadElement(-4) => [0,null] | first 0

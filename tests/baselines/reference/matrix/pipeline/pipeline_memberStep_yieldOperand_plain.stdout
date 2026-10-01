@@ -1,0 +1,2 @@
+yieldOperand(2) => 6 | operand 2; receiver {"factor":3}; twice 6; yield 6
+yieldOperand(6) => 18 | operand 6; receiver {"factor":3}; twice 18; yield 18

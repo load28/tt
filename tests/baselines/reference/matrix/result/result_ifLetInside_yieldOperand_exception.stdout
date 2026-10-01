@@ -1,0 +1,2 @@
+yieldOperand(4) => {"kind":"Ok","value":4} | risky 4; read 4; direct 4; yield {"kind":"Ok","value":4}
+yieldOperand(-1) => {"kind":"Err","error":"negative -7"} | risky -1; read -1; fallback -7; read -7; yield {"kind":"Err","error":"negative -7"}

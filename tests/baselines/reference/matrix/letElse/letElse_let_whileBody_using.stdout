@@ -1,2 +1,0 @@
-whileBody(3) => 4 | open res; test true; operand 3; read 3; reassigned 4; dispose res
-whileBody(-3) => "none" | open res; test true; operand -3; read -3; dispose res

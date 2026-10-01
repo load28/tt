@@ -1,2 +1,0 @@
-nullish({"kind":"Click","x":3}) => 3 | flip true; operand {"kind":"Click","x":3}; click 3; finally 0
-nullish({"kind":"Key","key":"k"}) => "set" | flip false; left "set"; finally 0

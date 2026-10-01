@@ -1,0 +1,4 @@
+arrowBody({}) => "range" | await; range "range"
+arrowBody({}) => 1 | await; type 1
+arrowBody({}) => "plain" | await; error "plain"
+arrowBody("text") => null | await; other null

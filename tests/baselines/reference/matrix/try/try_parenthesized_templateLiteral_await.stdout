@@ -1,0 +1,2 @@
+templateLiteral(6) => {"kind":"Ok","value":"<L|6|R>"} | left "L"; flip true; await; read 6; right "R"
+templateLiteral(-6) => {"kind":"Err","error":"negative -9"} | left "L"; flip false; fallback -9; read -9

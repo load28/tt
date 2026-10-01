@@ -1,0 +1,4 @@
+forOfHead({}) => ["range"] | range "range"
+forOfHead({}) => [1] | type 1
+forOfHead({}) => ["plain"] | error "plain"
+forOfHead("text") => [null] | other null

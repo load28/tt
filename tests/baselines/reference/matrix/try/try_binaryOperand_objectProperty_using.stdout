@@ -1,0 +1,2 @@
+objectProperty(3) => {"kind":"Ok","value":{"a":1,"value":30,"c":3}} | open res; a 1; operand 3; read 3; c 3; dispose res
+objectProperty(-2) => {"kind":"Err","error":"negative -2"} | open res; a 1; operand -2; read -2; dispose res

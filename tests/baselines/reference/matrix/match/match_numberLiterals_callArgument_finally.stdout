@@ -1,5 +1,0 @@
-callArgument(200) => [1,true,3] | a 1; operand 200; success true; c 3; finally 0
-callArgument(201) => [1,true,3] | a 1; operand 201; success true; c 3; finally 0
-callArgument(404) => [1,false,3] | a 1; operand 404; missing false; c 3; finally 0
-callArgument(500) => [1,false,3] | a 1; operand 500; guard true; server false; c 3; finally 0
-callArgument(7) => [1,null,3] | a 1; operand 7; other null; c 3; finally 0

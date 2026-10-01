@@ -1,2 +1,0 @@
-spreadElement(10) => [0,9] | first 0; flip true; lookup true; found 9
-spreadElement(20) => [0,null] | first 0; flip false; lookup false; double null

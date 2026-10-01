@@ -1,2 +1,0 @@
-throwOperand(3) => threw 30 | read 3
-throwOperand(-2) => {"kind":"Err","error":"negative undefined"} | read undefined

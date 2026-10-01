@@ -1,0 +1,2 @@
+matchArm(3) => "***6" | flip true; double 6
+matchArm(12) => 0 | flip false; other arm 0

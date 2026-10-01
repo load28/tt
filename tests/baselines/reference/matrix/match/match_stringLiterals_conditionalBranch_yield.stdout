@@ -1,0 +1,4 @@
+conditionalBranch("north") => 1 | flip true; yield "north"; n 1
+conditionalBranch("south") => "skipped" | flip false; else "skipped"
+conditionalBranch("east") => 2 | flip true; yield "east"; se 2
+conditionalBranch("up") => "skipped" | flip false; else "skipped"

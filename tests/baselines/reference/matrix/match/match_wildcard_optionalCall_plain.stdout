@@ -1,4 +1,0 @@
-optionalCall({"kind":"Num","value":4}) => [[-1],null] | callee true; operand {"kind":"Num","value":4}; other -1; callee false
-optionalCall({"kind":"Neg","value":-3}) => [[-1],null] | callee true; operand {"kind":"Neg","value":-3}; other -1; callee false
-optionalCall({"kind":"Word","text":"hi"}) => [[2],null] | callee true; operand {"kind":"Word","text":"hi"}; word 2; callee false
-optionalCall({"kind":"End"}) => [[-1],null] | callee true; operand {"kind":"End"}; other -1; callee false

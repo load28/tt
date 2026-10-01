@@ -1,0 +1,2 @@
+forOfBody(5) => threw thrown | round 0; read 5; round 1; read undefined; else "thrown"
+forOfBody(-5) => threw thrown | round 0; read -5; else "thrown"

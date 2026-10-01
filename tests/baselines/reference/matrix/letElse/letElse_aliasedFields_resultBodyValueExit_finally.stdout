@@ -1,0 +1,3 @@
+resultBodyValueExit({"kind":"Rect","w":2,"h":3}) => {"kind":"Ok","value":[1,[2,3]]} | base 1; read 1; operand {"kind":"Rect","w":2,"h":3}; finally 0
+resultBodyValueExit({"kind":"Circle","r":1}) => {"kind":"Err","error":"negative -7"} | base 1; read 1; operand {"kind":"Circle","r":1}; exit -7; read -7; finally 0
+resultBodyValueExit({"kind":"Point"}) => {"kind":"Err","error":"negative -7"} | base 1; read 1; operand {"kind":"Point"}; exit -7; read -7; finally 0

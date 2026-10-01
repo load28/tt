@@ -1,0 +1,5 @@
+differences from flow_optionalLater_awaitOperand_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await (((head: (n: number) => number, receiver: typeof tools | undefined) => (v: number) => ((w: number) => receiver?.twice(w))(head(v)))(adder(await later(input)), maybe(flip())))" hint TS80007: 'await' has no effect on the type of this expression.
+

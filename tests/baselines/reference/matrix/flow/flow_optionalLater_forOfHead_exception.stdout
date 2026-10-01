@@ -1,3 +1,0 @@
-forOfHead(4) => [null] | risky 4; flip true; maybe true
-forOfHead(6) => [null] | risky 6; flip false; maybe false
-forOfHead(8) => "risky call 3" | caught "risky call 3"

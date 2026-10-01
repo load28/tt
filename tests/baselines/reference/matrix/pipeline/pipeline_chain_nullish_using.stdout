@@ -1,2 +1,0 @@
-nullish(3) => "***6" | open res; flip true; operand 3; double 6; dispose res
-nullish(12) => "set" | open res; flip false; left "set"; dispose res

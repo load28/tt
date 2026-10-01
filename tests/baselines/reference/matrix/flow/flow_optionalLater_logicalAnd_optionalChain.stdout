@@ -1,0 +1,3 @@
+logicalAnd(4) => undefined | flip true; flip false; maybe false; add 8
+logicalAnd(6) => undefined | flip true; flip false; maybe false; add null
+logicalAnd(8) => undefined | flip true; flip false; maybe false; add 16

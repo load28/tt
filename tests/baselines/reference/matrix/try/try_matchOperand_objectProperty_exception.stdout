@@ -1,3 +1,0 @@
-objectProperty(1) => {"kind":"Ok","value":{"a":1,"value":10,"c":3}} | a 1; risky 1; one 10; read 10; c 3
-objectProperty(2) => {"kind":"Err","error":"negative -10"} | a 1; risky 2; other -10; read -10
-objectProperty(-3) => {"kind":"Ok","value":"risky call 3"} | a 1; caught "risky call 3"

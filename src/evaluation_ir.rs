@@ -284,6 +284,9 @@ pub(crate) enum PlannedConditionalKind {
         type_args: Option<SourceSpan>,
         test: OptionalCallTest,
     },
+    LogicalAssignment {
+        operator: crate::program_syntax::LogicalAssignment,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -398,6 +401,7 @@ pub(crate) enum ExpressionBoundaryReason {
     ValueHasNoStatementForm,
     LoopHeadDeclarator,
     LoopHeadBinding,
+    LogicalAssignmentValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]

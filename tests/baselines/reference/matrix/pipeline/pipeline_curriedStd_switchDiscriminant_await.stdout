@@ -1,0 +1,2 @@
+switchDiscriminant(5) => "default" | await; map 15; case 0
+switchDiscriminant(0) => "default" | await; case 0

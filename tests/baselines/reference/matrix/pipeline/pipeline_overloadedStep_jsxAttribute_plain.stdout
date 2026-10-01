@@ -1,0 +1,2 @@
+jsxAttribute(4) => "<div data-value=2></div>" | operand 4; shape "#4"
+jsxAttribute(12) => "<div data-value=3></div>" | operand 12; shape "#12"

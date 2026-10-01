@@ -1,0 +1,2 @@
+arrayElement(4) => [0,7,2] | open res; first 0; operand 4; step 3; add 7; last 2; dispose res
+arrayElement(-1) => [0,2,2] | open res; first 0; operand -1; step 3; add 2; last 2; dispose res

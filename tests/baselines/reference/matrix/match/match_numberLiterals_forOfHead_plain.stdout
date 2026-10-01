@@ -1,5 +1,0 @@
-forOfHead(200) => [true] | operand 200; success true
-forOfHead(201) => [true] | operand 201; success true
-forOfHead(404) => [false] | operand 404; missing false
-forOfHead(500) => [false] | operand 500; guard true; server false
-forOfHead(7) => [null] | operand 7; other null

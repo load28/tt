@@ -1,0 +1,2 @@
+method(123) => 3 | this "holder"; await
+method(4) => 1 | this "holder"; await

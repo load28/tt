@@ -2,7 +2,7 @@ export default {
   construct: "flow",
   kind: "value",
   lowPrecedence: true,
-  skip: ["templateLiteral"],
+  skip: ["templateLiteral", "compoundAssignment"],
   forms: [
     {
       id: "twoSteps",
@@ -82,6 +82,22 @@ export default {
       rejects: { all: "flow-first-step-method" },
       tt: (x) => `flow |> maybe(true)?.twice |> adder(${x})`,
       ts: () => "undefined",
+    },
+    {
+      id: "overloadedLater",
+      title: "a later step that names an overloaded function, resolved against the earlier step's result",
+      In: "number",
+      inputs: "[2, 5]",
+      tt: (x) => `flow |> adder(${x}) |> /*@call*/shape`,
+      ts: (x) => `((head: (n: number) => number) => (v: number) => /*@call*/shape(head(v)))(adder(${x}))`,
+    },
+    {
+      id: "genericLater",
+      title: "a later step that names a generic function, instantiated by the earlier step's result",
+      In: "number",
+      inputs: "[3, -4]",
+      tt: (x) => `flow |> adder(${x}) |> /*@call*/keep`,
+      ts: (x) => `((head: (n: number) => number) => (v: number) => /*@call*/keep(head(v)))(adder(${x}))`,
     },
   ],
 };

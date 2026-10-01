@@ -1,5 +1,0 @@
-callArgument({"kind":"Circle","r":1}) => [1,1,3] | a 1; guard big false; small 1; c 3
-callArgument({"kind":"Circle","r":5}) => threw Cannot read properties of undefined (reading 'kind') | a 1
-callArgument({"kind":"Rect","w":4,"h":2}) => [1,4,3] | a 1; guard wide true; wide 4; c 3
-callArgument({"kind":"Rect","w":1,"h":3}) => threw Cannot read properties of undefined (reading 'kind') | a 1
-callArgument({"kind":"Point"}) => [1,0,3] | a 1; point 0; c 3

@@ -1,0 +1,2 @@
+forUpdate(3) => 6 | body 0; operand 3; add 6; keep 6
+forUpdate(-4) => -8 | body 0; operand -4; add -8; keep -8

@@ -1,2 +1,0 @@
-templateLiteral(2) => "<L|6|R>" | left "L"; receiver {"factor":3}; twice 6; right "R"
-templateLiteral(6) => "<L|18|R>" | left "L"; receiver {"factor":3}; twice 18; right "R"

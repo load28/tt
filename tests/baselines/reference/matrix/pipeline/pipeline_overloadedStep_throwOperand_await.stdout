@@ -1,0 +1,2 @@
+throwOperand(4) => threw 2 | await; shape "#4"
+throwOperand(12) => threw 3 | await; shape "#12"

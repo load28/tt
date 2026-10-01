@@ -1,0 +1,3 @@
+logicalOr({"kind":"Done","value":{"kind":"Some","value":7}}) => true | flip true; finally 0
+logicalOr({"kind":"Done","value":{"kind":"None"}}) => 0 | flip false; operand {"kind":"Done","value":{"kind":"None"}}; none 0; finally 0
+logicalOr({"kind":"Failed","error":"lost"}) => true | flip true; finally 0

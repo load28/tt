@@ -1,0 +1,2 @@
+destructuringDefault(3) => 6 | source {}; await; add 6; keep 6
+destructuringDefault(-4) => -8 | source {}; await; add -8; keep -8

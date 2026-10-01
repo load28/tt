@@ -1,0 +1,4 @@
+arrayElement({"kind":"Num","value":4}) => [0,-1,2] | first 0; other -1; last 2
+arrayElement({"kind":"Neg","value":-3}) => threw Cannot read properties of undefined (reading 'kind') | first 0
+arrayElement({"kind":"Word","text":"hi"}) => [0,2,2] | first 0; word 2; last 2
+arrayElement({"kind":"End"}) => threw Cannot read properties of undefined (reading 'kind') | first 0

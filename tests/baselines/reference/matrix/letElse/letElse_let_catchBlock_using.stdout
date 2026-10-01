@@ -1,0 +1,2 @@
+catchBlock(3) => 4 | open res; throw "boom"; operand 3; read 3; reassigned 4; dispose res
+catchBlock(-3) => "diverged" | open res; throw "boom"; operand -3; read -3; dispose res

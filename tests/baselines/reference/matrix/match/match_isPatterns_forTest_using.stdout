@@ -1,0 +1,4 @@
+forTest({}) => 1 | open res; operand {}; range "range"; dispose res
+forTest({}) => 1 | open res; operand {}; type 1; dispose res
+forTest({}) => 1 | open res; operand {}; error "plain"; dispose res
+forTest("text") => 0 | open res; operand "text"; other null; dispose res

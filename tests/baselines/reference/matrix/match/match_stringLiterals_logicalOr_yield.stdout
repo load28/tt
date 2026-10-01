@@ -1,4 +1,0 @@
-logicalOr("north") => true | flip true
-logicalOr("south") => 2 | flip false; yield "south"; se 2
-logicalOr("east") => true | flip true
-logicalOr("up") => 0 | flip false; yield "up"; other 0

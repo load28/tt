@@ -1,0 +1,4 @@
+conditionalTest({}) => "truthy" | risky {}; range "range"; then "truthy"
+conditionalTest({}) => "truthy" | risky {}; type 1; then "truthy"
+conditionalTest({}) => "risky call 3" | caught "risky call 3"
+conditionalTest("text") => "falsy" | risky "text"; other null; else "falsy"

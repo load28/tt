@@ -1,2 +1,0 @@
-assignment(2) => 6 | initial 0; target {"value":0}; double 4; add 6
-assignment(5) => null | initial 0; target {"value":0}; double 10; add null

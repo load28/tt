@@ -1,0 +1,2 @@
+arrowBody(5) => 15 | await; map 15
+arrowBody(0) => -1 | await

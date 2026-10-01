@@ -1,0 +1,5 @@
+forInitializer(200) => [true] | risky 200; success true
+forInitializer(201) => [true] | risky 201; success true
+forInitializer(404) => "risky call 3" | caught "risky call 3"
+forInitializer(500) => [false] | risky 500; guard true; server false
+forInitializer(7) => [null] | risky 7; other null

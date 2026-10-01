@@ -1,0 +1,2 @@
+forInitializer(3) => [null] | risky 3
+forInitializer(-4) => [null] | risky -4

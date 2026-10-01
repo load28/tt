@@ -1,2 +1,0 @@
-whileBody(7) => 7 | test true; yield 7
-whileBody(8) => 8 | test true; yield 8

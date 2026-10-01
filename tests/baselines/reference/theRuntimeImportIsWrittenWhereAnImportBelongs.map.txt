@@ -1,6 +1,6 @@
 //// [theRuntimeImportIsWrittenWhereAnImportBelongs.tt] 4 mapping(s)
-1:1 -> 2:1 len 95  "declare function f(n: number): number;\ndeclare f"...
-3:18 -> 4:25 len 4  "f(4)"
-3:26 -> 4:31 len 1  "g"
-3:31 -> 4:33 len 13  ".toFixed(1);\n"
+1:1 -> 1:1 len 95  "declare function f(n: number): number;\ndeclare f"...
+3:18 -> 3:51 len 4  "f(4)"
+3:26 -> 3:57 len 1  "g"
+3:31 -> 3:59 len 13  ".toFixed(1);\n"
 

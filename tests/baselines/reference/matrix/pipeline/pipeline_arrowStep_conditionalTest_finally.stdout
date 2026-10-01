@@ -1,2 +1,0 @@
-conditionalTest(8) => "truthy" | operand 8; arrow 9; then "truthy"; finally 0
-conditionalTest(9) => "truthy" | operand 9; arrow 10; then "truthy"; finally 0

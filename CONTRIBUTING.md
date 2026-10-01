@@ -304,6 +304,12 @@ string.
 Every form meets every position, and the companions are chosen so that
 every pair of the three factors occurs at least once (all-pairs testing,
 NIST SP 800-142).
+A statement host hands each form the statement that leaves it (its exit:
+`return`, `break`, `continue`, `throw`), and a form that leaves early
+(an `if let` body, a let-else's `else` block) writes it there. Hosts that
+vary only that exit (`exitAxis`, such as a `result` block's body whose exit
+returns a `try` or a template holding a `match`) run only the forms whose
+template takes the exit, so they add no cases to the forms that ignore it.
 
 A combination the documented placement rules reject (`docs/ai/tt.md`,
 `docs/design/try-result-scopes.md`) becomes a case with `@expectErrors`

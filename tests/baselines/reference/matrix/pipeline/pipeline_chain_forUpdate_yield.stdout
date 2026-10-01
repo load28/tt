@@ -1,0 +1,2 @@
+forUpdate(3) => "***6" | body 0; yield 3; double 6
+forUpdate(12) => "**24" | body 0; yield 12; double 24

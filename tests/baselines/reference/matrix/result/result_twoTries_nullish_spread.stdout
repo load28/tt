@@ -1,0 +1,3 @@
+nullish(5) => {"kind":"Ok","value":[5,2]} | flip true; read 5; b 2; read 2
+nullish(1) => "set" | flip false; left "set"
+nullish(-2) => {"kind":"Err","error":"negative -2"} | flip true; read -2

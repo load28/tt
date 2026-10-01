@@ -1,2 +1,0 @@
-labeledBlock(2) => 6 | flip true; double 4; add 6
-labeledBlock(5) => [null] | flip false

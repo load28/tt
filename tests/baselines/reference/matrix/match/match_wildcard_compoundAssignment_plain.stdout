@@ -1,0 +1,4 @@
+compoundAssignment({"kind":"Num","value":4}) => "start:-1" | initial "start:"; target {"total":"start:"}; operand {"kind":"Num","value":4}; other -1
+compoundAssignment({"kind":"Neg","value":-3}) => "start:-1" | initial "start:"; target {"total":"start:"}; operand {"kind":"Neg","value":-3}; other -1
+compoundAssignment({"kind":"Word","text":"hi"}) => "start:2" | initial "start:"; target {"total":"start:"}; operand {"kind":"Word","text":"hi"}; word 2
+compoundAssignment({"kind":"End"}) => "start:-1" | initial "start:"; target {"total":"start:"}; operand {"kind":"End"}; other -1

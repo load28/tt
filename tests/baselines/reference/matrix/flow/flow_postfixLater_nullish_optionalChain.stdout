@@ -1,2 +1,0 @@
-nullish(1.5) => "3.0" | flip true; add 3
-nullish(2) => "set" | flip false; left "set"

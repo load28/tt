@@ -1,3 +1,0 @@
-forTest({"kind":"Circle","r":2}) => 1 | inner circle 2; again {"kind":"Point"}; point "some"
-forTest({"kind":"Rect","w":3,"h":4}) => 1 | inner rect 3; again {"kind":"Point"}; point "some"
-forTest({"kind":"Point"}) => 1 | inner point 0; zero "none"

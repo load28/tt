@@ -10,6 +10,14 @@ error[match-not-exhaustive]: match on (S, T) is not exhaustive: missing (A, D), 
 
 
 ==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on (S, T) is not exhaustive: missing (A, D), (B, C), (B, D)
+ --> aTupleMatchCoversEveryScrutinee.tt:3:11
+  |
+3 | const v = match (s, t) { (A(x), C) => x };
+  |           ^^^^^^^^^^^^
+  |
+  = help: add the missing arms: `, (A(x), D) => undefined, (B, C) => undefined, (B, D) => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
 error[ts2552]: Cannot find name 's'. Did you mean 'S'?
  --> aTupleMatchCoversEveryScrutinee.tt:3:18
   |

@@ -1,0 +1,4 @@
+optionalCall({"kind":"Num","value":4}) => [[4],null] | callee true; risky {"kind":"Num","value":4}; number 4; callee false
+optionalCall({"kind":"Neg","value":-3}) => [[-3],null] | callee true; risky {"kind":"Neg","value":-3}; number -3; callee false
+optionalCall({"kind":"Word","text":"hi"}) => "risky call 3" | callee true; caught "risky call 3"
+optionalCall({"kind":"End"}) => [[""],null] | callee true; risky {"kind":"End"}; end ""; callee false

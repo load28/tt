@@ -1,2 +1,0 @@
-matchArm(2) => 12 | flip true; receiver {"factor":3}; add 4; twice 12
-matchArm(3) => 0 | flip false; other arm 0

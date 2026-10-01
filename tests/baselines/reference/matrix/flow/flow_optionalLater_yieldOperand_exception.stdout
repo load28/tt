@@ -1,3 +1,0 @@
-yieldOperand(4) => 24 | risky 4; flip true; maybe true; yield function; add 8; twice 24
-yieldOperand(6) => undefined | risky 6; flip false; maybe false; yield function; add 12
-yieldOperand(8) => "risky call 3" | caught "risky call 3"

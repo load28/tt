@@ -1,4 +1,0 @@
-topLevel({}) => "range" | open res; operand {}; range "range"
-topLevel({}) => 1 | operand {}; type 1
-topLevel({}) => "plain" | operand {}; error "plain"
-topLevel("text") => null | operand "text"; other null

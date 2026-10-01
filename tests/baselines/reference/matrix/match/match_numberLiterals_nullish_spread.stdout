@@ -1,5 +1,0 @@
-nullish(200) => true | flip true; success true
-nullish(201) => "set" | flip false; left "set"
-nullish(404) => false | flip true; missing false
-nullish(500) => "set" | flip false; left "set"
-nullish(7) => null | flip true; other null

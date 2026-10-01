@@ -1,3 +1,0 @@
-optionalCall(4) => [[null],null] | callee true; await; flip true; maybe true; callee false
-optionalCall(6) => [[null],null] | callee true; await; flip false; maybe false; callee false
-optionalCall(8) => [[null],null] | callee true; await; flip true; maybe true; callee false

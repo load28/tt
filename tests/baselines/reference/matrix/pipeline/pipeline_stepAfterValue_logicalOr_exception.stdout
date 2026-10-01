@@ -1,0 +1,2 @@
+logicalOr(4) => true | flip true
+logicalOr(-1) => 2 | flip false; risky -1; step 3; add 2

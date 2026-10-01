@@ -1,2 +1,0 @@
-conditionalTest(1.25) => "truthy" | then "truthy"
-conditionalTest(7) => "truthy" | then "truthy"

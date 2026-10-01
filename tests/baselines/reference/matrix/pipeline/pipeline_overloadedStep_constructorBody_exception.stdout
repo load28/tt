@@ -1,0 +1,2 @@
+constructorBody(4) => 2 | risky 4; shape "#4"
+constructorBody(12) => 3 | risky 12; shape "#12"

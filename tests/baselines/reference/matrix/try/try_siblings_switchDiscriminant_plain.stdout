@@ -1,2 +1,0 @@
-switchDiscriminant(4) => {"kind":"Ok","value":"default"} | operand 4; read 4; second 5; read 5; case 0
-switchDiscriminant(-4) => {"kind":"Err","error":"negative -4"} | operand -4; read -4

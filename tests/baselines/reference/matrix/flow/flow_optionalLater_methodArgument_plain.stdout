@@ -1,3 +1,0 @@
-methodArgument(4) => ["receiver",1,null] | receiver {"tag":"receiver"}; a 1; operand 4; flip true; maybe true
-methodArgument(6) => ["receiver",1,null] | receiver {"tag":"receiver"}; a 1; operand 6; flip false; maybe false
-methodArgument(8) => ["receiver",1,null] | receiver {"tag":"receiver"}; a 1; operand 8; flip true; maybe true

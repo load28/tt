@@ -1,0 +1,2 @@
+yieldOperand(4) => 7 | step 3; add 7; yield 7
+yieldOperand(-1) => null | step 3; add null; yield null

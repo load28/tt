@@ -1,3 +1,0 @@
-throwOperand({"kind":"Circle","r":2}) => threw 0 | yield {"kind":"Circle","r":2}; other 0
-throwOperand({"kind":"Rect","w":3,"h":4}) => threw 12 | yield {"kind":"Rect","w":3,"h":4}; area 12; large 12
-throwOperand({"kind":"Point"}) => threw 0 | yield {"kind":"Point"}; other 0

@@ -1,2 +1,0 @@
-constructorBody({"kind":"Click","x":3}) => 3 | risky {"kind":"Click","x":3}; click 3
-constructorBody({"kind":"Key","key":"k"}) => "k" | risky {"kind":"Key","key":"k"}; key "k"

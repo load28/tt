@@ -1,0 +1,4 @@
+staticBlock("north") => 1 | n 1
+staticBlock("south") => 0 | other 0
+staticBlock("east") => 2 | se 2
+staticBlock("up") => 0 | other 0

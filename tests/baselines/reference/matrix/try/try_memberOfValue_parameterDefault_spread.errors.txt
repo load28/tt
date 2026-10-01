@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in a parameter initializer — this TypeScript control-flow boundary has no statement position for its `Err` propagation
+ --> ./main.tt:5:36
+  |
+5 |   function inner(value: unknown = (try read(first(...[input]))).toFixed(2)) {
+  |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a parameter initializer — this TypeScript control-flow boundary has no statement position for its `Err` propagation
+ --> main.tt:5:36
+  |
+5 |   function inner(value: unknown = (try read(first(...[input]))).toFixed(2)) {
+  |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript (exit 0) ====

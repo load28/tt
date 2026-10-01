@@ -1,3 +1,0 @@
-laterDeclarator(2) => [1,{"kind":"Ok","value":"two"}] | before 1; risky 2; read 2
-laterDeclarator(7) => [1,{"kind":"Ok","value":"other"}] | before 1; risky 7; read 7
-laterDeclarator(-1) => "risky call 3" | before 1; caught "risky call 3"

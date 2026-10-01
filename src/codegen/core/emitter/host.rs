@@ -247,6 +247,14 @@ impl<'a> Emitter<'a> {
                     continue;
                 }
                 ComposeAction::Value(value) => &value.slot,
+                ComposeAction::Operation(operation)
+                    if matches!(
+                        operation.kind,
+                        PlannedConditionalKind::LogicalAssignment { .. }
+                    ) =>
+                {
+                    continue;
+                }
                 ComposeAction::Operation(operation) => self.value_slot_name(operation.result),
             };
             out.push_value_declaration(slot);
@@ -356,6 +364,14 @@ impl<'a> Emitter<'a> {
         for action in &rewrite.actions {
             let slot = match action {
                 ComposeAction::Value(value) => &value.slot,
+                ComposeAction::Operation(operation)
+                    if matches!(
+                        operation.kind,
+                        PlannedConditionalKind::LogicalAssignment { .. }
+                    ) =>
+                {
+                    continue;
+                }
                 ComposeAction::Operation(operation) => self.value_slot_name(operation.result),
             };
             out.push_value_declaration(slot);
@@ -475,6 +491,54 @@ impl<'a> Emitter<'a> {
                 out.push_lit("} else {");
                 out.push_break(1);
                 out.append(second);
+                out.push_break(0);
+                out.push_lit("}");
+            }
+            PlannedConditionalKind::LogicalAssignment { operator } => {
+                let PlannedEvaluationInput::Source {
+                    source: target,
+                    receiver,
+                    key,
+                    ..
+                } = &operation.condition
+                else {
+                    crate::ice::bug!(
+                        "a logical assignment's target was not planned as its condition"
+                    )
+                };
+                for part in [receiver, key].into_iter().flatten() {
+                    self.capture_planned_receiver(part, captured, &mut out);
+                }
+                let target_text = || {
+                    let mut text = Rope::new();
+                    push_grouped(
+                        &mut text,
+                        self.captured_source(*target, captured),
+                        self.source_kind,
+                    );
+                    text
+                };
+                out.push_lit("if (");
+                match operator {
+                    crate::program_syntax::LogicalAssignment::Nullish => {
+                        out.append(target_text());
+                        out.push_lit(" == null");
+                    }
+                    crate::program_syntax::LogicalAssignment::Or => {
+                        out.push_lit("!");
+                        out.append(target_text());
+                    }
+                    crate::program_syntax::LogicalAssignment::And => out.append(target_text()),
+                }
+                out.push_lit(") {");
+                out.push_break(1);
+                let mut assign = Rope::new();
+                assign.append(self.captured_source(*target, captured));
+                assign.push_lit(" = ");
+                out.append(Rope::indented(
+                    1,
+                    self.emit_conditional_assignment_branch(operation, assign, captured),
+                ));
                 out.push_break(0);
                 out.push_lit("}");
             }
@@ -753,6 +817,38 @@ impl<'a> Emitter<'a> {
             out.append(operand);
             out.push_lit(format!(" {operator} "));
         }
+        let steps: Vec<_> = entries.iter().flat_map(|active| &active.steps).collect();
+        push_grouped(
+            &mut out,
+            self.source_range_with_scheduled_values(branch, &operation.values, &steps, &[]),
+            self.source_kind,
+        );
+        out.push_lit(";");
+        out
+    }
+
+    fn emit_conditional_assignment_branch(
+        &self,
+        operation: &PlannedConditionalOperation,
+        assign: Rope<'a>,
+        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+    ) -> Rope<'a> {
+        let entries: Vec<_> = operation
+            .values
+            .iter()
+            .filter_map(|value| {
+                operation
+                    .active
+                    .iter()
+                    .find(|active| active.value == *value)
+            })
+            .collect();
+        let Some(first) = entries.first() else {
+            crate::ice::bug!("a logical assignment's right operand has no active plan")
+        };
+        let branch = first.branch;
+        let mut out = self.emit_conditional_active_values(operation, &operation.values, captured);
+        out.append(assign);
         let steps: Vec<_> = entries.iter().flat_map(|active| &active.steps).collect();
         push_grouped(
             &mut out,
@@ -1684,6 +1780,11 @@ impl<'a> Emitter<'a> {
                     }
                     ConditionalBranch::NullishRight => {
                         prefix.push_lit(format!("{condition} == null"));
+                    }
+                    ConditionalBranch::LogicalAssignmentRight { .. } => {
+                        crate::ice::bug!(
+                            "a logical assignment reached step-level conditional emission"
+                        )
                     }
                 }
                 prefix.push_lit(") {");

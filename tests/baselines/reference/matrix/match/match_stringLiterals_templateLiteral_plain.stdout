@@ -1,0 +1,4 @@
+templateLiteral("north") => "<L|1|R>" | left "L"; operand "north"; n 1; right "R"
+templateLiteral("south") => "<L|2|R>" | left "L"; operand "south"; se 2; right "R"
+templateLiteral("east") => "<L|2|R>" | left "L"; operand "east"; se 2; right "R"
+templateLiteral("up") => "<L|0|R>" | left "L"; operand "up"; other 0; right "R"

@@ -1,3 +1,0 @@
-objectProperty(4) => {"a":1,"c":3} | a 1; flip true; maybe true; c 3
-objectProperty(6) => {"a":1,"c":3} | a 1; flip false; maybe false; c 3
-objectProperty(8) => {"a":1,"c":3} | a 1; flip true; maybe true; c 3

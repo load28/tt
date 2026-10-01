@@ -1,0 +1,2 @@
+compoundAssignment({"kind":"Click","x":3}) => "start:3" | initial "start:"; target {"total":"start:"}; operand {"kind":"Click","x":3}; click 3
+compoundAssignment({"kind":"Key","key":"k"}) => "start:k" | initial "start:"; target {"total":"start:"}; operand {"kind":"Key","key":"k"}; key "k"

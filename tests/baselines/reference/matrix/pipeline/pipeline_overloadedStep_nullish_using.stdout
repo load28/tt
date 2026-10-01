@@ -1,0 +1,2 @@
+nullish(4) => 2 | open res; flip true; operand 4; shape "#4"; dispose res
+nullish(12) => "set" | open res; flip false; left "set"; dispose res

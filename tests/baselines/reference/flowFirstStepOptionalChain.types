@@ -6,7 +6,7 @@ declare const scale: { by(n: number): number } | undefined;
 >by : (method) by(n: number): number
 >n : (parameter) n: number
 const direct = flow |> scale?.by |> String;
->direct : const direct: (n: number) => string
+>direct : const direct: (n: number) => unknown
 >scale : const scale: {
 >       by(n: number): number;
 >   } | undefined

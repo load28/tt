@@ -1,0 +1,8 @@
+differences from pipeline_genericStep_ifLetBody_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:5:44 ===
+  |     return [n, box(input)?.inner.value! |> keep |> double];
+  |                                            ^ /*call*/
+  tt only: (alias) function keep<T>(value: T): T
+  ts only: (alias) function keep<number>(value: number): number
+

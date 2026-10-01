@@ -1,0 +1,2 @@
+getter(1.5) => {"kind":"Ok","value":"1.50"} | read 1.5
+getter(-1) => {"kind":"Err","error":"negative undefined"} | read undefined

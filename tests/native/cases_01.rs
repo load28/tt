@@ -647,21 +647,28 @@ fn a_flow_mismatch_names_the_composed_step_and_the_boundary_types() {
         "src/flow.tt",
         "const inc = (n: number): number => n + 1;\n\
          const shout = (s: string): string => s.toUpperCase();\n\
-         const label = flow |> inc |> inc |> shout;\n",
+         const loud = () => shout;\n\
+         const label = flow |> inc |> inc |> loud();\n\
+         const named = flow |> inc |> inc |> shout;\n",
     )]);
     let out = check(&dir);
-    let step = block(&out, "ts2345");
+    let computed = block(&out, "src/flow.tt:4:37");
     assert!(
-        step.contains("this pipeline step expects `string`, but receives `number`"),
+        computed.contains("this pipeline step expects `string`, but receives `number`"),
         "the boundary's value types, not the whole function types: {out}"
     );
     assert!(
-        step.contains("required type: `(n: number) => string`"),
+        computed.contains("required type: `(n: number) => string`"),
         "the complete obligation remains visible: {out}"
     );
+    let named = block(&out, "src/flow.tt:5:37");
     assert!(
-        step.contains("--> src/flow.tt:3:37"),
-        "reported at the composed step that rejects the chain: {out}"
+        named.contains("this pipeline step expects `string`, but receives `number`"),
+        "a step naming its function is called with the boundary value: {out}"
+    );
+    assert!(
+        !named.contains("required type"),
+        "the call states the value obligation itself: {out}"
     );
 }
 

@@ -1,3 +1,0 @@
-throwOperand(3) => threw 9 | flip true; maybe true; twice 9
-throwOperand(4) => threw undefined | flip false; maybe false
-throwOperand(5) => threw 15 | flip true; maybe true; twice 15

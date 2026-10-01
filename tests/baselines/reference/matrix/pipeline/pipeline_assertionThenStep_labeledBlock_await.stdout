@@ -1,2 +1,0 @@
-labeledBlock(123) => 3 | await; flip true
-labeledBlock(4) => [1] | await; flip false

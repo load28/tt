@@ -1,3 +1,0 @@
-yieldOperand(3) => {"kind":"Ok","value":3} | read 3; big 3; yield {"kind":"Ok","value":3}
-yieldOperand(1) => {"kind":"Err","error":"negative undefined"} | read undefined; yield {"kind":"Err","error":"negative undefined"}
-yieldOperand(-1) => {"kind":"Err","error":"negative -1"} | read -1; yield {"kind":"Err","error":"negative -1"}

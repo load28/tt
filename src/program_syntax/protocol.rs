@@ -172,8 +172,44 @@ pub(super) fn protocol_step(
             parent,
             operator,
             target,
+            parts,
+            discarded,
+            right,
+            ..
+        } if projected_contains(*right, value) && operator.may_short_circuit() => {
+            let branch = match operator {
+                AssignOp::AndAssign => LogicalAssignment::And,
+                AssignOp::OrAssign => LogicalAssignment::Or,
+                _ => LogicalAssignment::Nullish,
+            };
+            conditional = Some(ProjectedConditionalFacts {
+                branch: *right,
+                skipped: None,
+                operands: Vec::new(),
+                type_args: None,
+                optional_test: None,
+            });
+            (
+                *parent,
+                HostEvaluationOperation::Conditional(ConditionalBranch::LogicalAssignmentRight {
+                    operator: branch,
+                    consumed: !discarded,
+                }),
+                vec![(
+                    *target,
+                    EvaluationInputMode::LogicalAssignmentTarget,
+                    Some(*parts),
+                    Effects::ANY,
+                )],
+            )
+        }
+        ProjectedProtocolFrame::Assignment {
+            parent,
+            operator,
+            target,
             reference,
             right,
+            ..
         } if projected_contains(*right, value) => (
             *parent,
             HostEvaluationOperation::Eager(EagerPosition::AssignmentRight),
@@ -737,7 +773,9 @@ fn peel_parens_grown(expression: &swc_ecma_ast::Expr) -> &swc_ecma_ast::Expr {
     }
 }
 
-fn target_reference(target: &swc_ecma_ast::AssignTarget) -> [Option<&swc_ecma_ast::Expr>; 2] {
+pub(super) fn target_reference(
+    target: &swc_ecma_ast::AssignTarget,
+) -> [Option<&swc_ecma_ast::Expr>; 2] {
     use swc_ecma_ast::{AssignTarget, SimpleAssignTarget};
 
     let AssignTarget::Simple(target) = target else {

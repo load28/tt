@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in a conditionally evaluated expression position — propagating its `Err` across this TypeScript control-flow boundary would evaluate it when the surrounding expression skips it
+ --> ./main.tt:5:19
+  |
+5 |   const { value = try match (box(input)?.inner.value!) { 1 => read(note("one", 10)), _ => read(note("other", -10)) } }: { value?: unknown } = note("source", {});
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[match-placement]: `match` cannot be lowered from this conditional expression position without evaluating a skipped branch
+ --> ./main.tt:5:23
+  |
+5 |   const { value = try match (box(input)?.inner.value!) { 1 => read(note("one", 10)), _ => read(note("other", -10)) } }: { value?: unknown } = note("source", {});
+  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a conditionally evaluated expression position — propagating its `Err` across this TypeScript control-flow boundary would evaluate it when the surrounding expression skips it
+ --> main.tt:5:19
+  |
+5 |   const { value = try match (box(input)?.inner.value!) { 1 => read(note("one", 10)), _ => read(note("other", -10)) } }: { value?: unknown } = note("source", {});
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[match-placement]: `match` cannot be lowered from this conditional expression position without evaluating a skipped branch
+ --> main.tt:5:23
+  |
+5 |   const { value = try match (box(input)?.inner.value!) { 1 => read(note("one", 10)), _ => read(note("other", -10)) } }: { value?: unknown } = note("source", {});
+  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,23 @@
+//// [resultBlockTemplateTryInIfLetBodyCrossesTheRegion.tt] 21 mapping(s)
+1:1 -> 1:1 len 685  "// A `try` in a template interpolation crosses a"...
+13:3 -> 35:3 len 7  "return "
+14:17 -> 18:17 len 5  "value"
+14:24 -> 18:24 len 1  "b"
+14:29 -> 16:22 len 6  "opt(n)"
+15:14 -> 26:48 len 4  "`<${"
+15:22 -> 20:24 len 5  "rd(b)"
+15:27 -> 26:58 len 3  "}>`"
+16:6 -> 29:6 len 5  "\n    "
+17:12 -> 31:46 len 2  "\"\""
+18:4 -> 35:16 len 48  ";\n}\nexport function letElseBlock(n: number) {\n  "
+21:3 -> 58:3 len 7  "return "
+22:16 -> 52:13 len 5  "value"
+22:23 -> 52:20 len 1  "b"
+22:28 -> 40:20 len 6  "opt(n)"
+22:49 -> 49:46 len 4  "`<${"
+22:57 -> 43:22 len 6  "rd(-1)"
+22:63 -> 49:56 len 3  "}>`"
+22:70 -> 52:33 len 5  "\n    "
+23:12 -> 54:46 len 6  "`${b}`"
+24:4 -> 58:16 len 4  ";\n}\n"
+

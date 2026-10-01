@@ -1,0 +1,2 @@
+arrayElement(3) => [0,null,2] | first 0; yield 3; last 2
+arrayElement(-4) => [0,null,2] | first 0; yield -4; last 2

@@ -1,2 +1,0 @@
-callArgument(1.25) => [1,"1.3",3] | a 1; c 3
-callArgument(7) => threw Cannot read properties of undefined (reading 'toFixed') | a 1

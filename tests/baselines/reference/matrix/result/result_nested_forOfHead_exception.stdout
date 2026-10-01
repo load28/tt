@@ -1,2 +1,0 @@
-forOfHead(2) => [{"kind":"Ok","value":6}] | risky 2; read 2; inner {"kind":"Ok","value":3}
-forOfHead(-1) => [{"kind":"Err","error":"negative -1"}] | risky -1; read -1; inner {"kind":"Err","error":"negative -1"}

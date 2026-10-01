@@ -1,0 +1,8 @@
+differences from flow_genericLater_objectProperty_yield at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:4:68 ===
+  |   return { a: note("a", 1), value: flow |> adder((yield input)) |> keep, c: note("c", 3) };
+  |                                                                    ^ /*call*/
+  tt only: (alias) function keep<T>(value: T): T
+  ts only: (alias) function keep<number>(value: number): number
+

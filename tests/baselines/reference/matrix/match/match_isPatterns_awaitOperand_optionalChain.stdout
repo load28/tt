@@ -1,4 +1,0 @@
-awaitOperand({}) => "range" | range "range"
-awaitOperand({}) => null | other null
-awaitOperand({}) => "plain" | error "plain"
-awaitOperand("text") => null | other null

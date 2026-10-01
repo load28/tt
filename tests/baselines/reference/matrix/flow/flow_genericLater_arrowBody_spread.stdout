@@ -1,0 +1,2 @@
+arrowBody(3) => 6 | add 6; keep 6
+arrowBody(-4) => -8 | add -8; keep -8

@@ -39,6 +39,14 @@ export function box<T>(value: T): { inner: { value: T } } | undefined {
   return boxes++ % 2 === 0 ? { inner: { value } } : undefined;
 }
 export const double = (n: number): number => note("double", n * 2);
+export function shape(n: number): string;
+export function shape(s: string): number;
+export function shape(value: number | string): number | string {
+  return note("shape", typeof value === "number" ? `#${value}` : value.length);
+}
+export function keep<T>(value: T): T {
+  return note("keep", value);
+}
 export const adder = (a: number) => (b: number): number => note("add", a + b);
 export const tools = {
   factor: 3,

@@ -1,3 +1,0 @@
-returnOperand({"kind":"Circle","r":2}) => 0 | other 0
-returnOperand({"kind":"Rect","w":3,"h":4}) => threw Cannot read properties of undefined (reading 'kind') | 
-returnOperand({"kind":"Point"}) => 0 | other 0

@@ -1,2 +1,0 @@
-nullish(2) => {"kind":"Ok","value":6} | flip true; await; read 2; inner {"kind":"Ok","value":3}
-nullish(-1) => "set" | flip false; left "set"

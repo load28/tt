@@ -34,6 +34,16 @@
 
 ### Changed
 
+- **A `.ttx` import names the file `tsc` writes** (TASK-723). With the default
+  `--rewrite-imports js`, `./view.ttx` becomes `./view.jsx` only when the
+  project compiles with `"jsx": "preserve"` and `./view.js` under every other
+  `jsx` value, read from the `tsconfig.json` `--project` names (now accepted
+  by builds and `-p`) or the nearest one above the inputs. Under `react-jsx`
+  the old `.jsx` named no file and the program failed with
+  `ERR_MODULE_NOT_FOUND`. The library's `Options::jsx_preserve` carries the
+  setting, and `ImportRewrite::source_candidates` lists every source a
+  rewritten specifier can come from.
+
 - **`ttc --dependencies` separates directories from files** (TASK-580). It
   prints `{"files": [...], "directories": [...]}` instead of one array, and
   the server's `dependencies` answers the same object. `@openload28/unplugin-tt`

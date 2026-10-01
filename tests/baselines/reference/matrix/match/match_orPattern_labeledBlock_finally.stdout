@@ -1,4 +1,0 @@
-labeledBlock({"kind":"Num","value":4}) => 4 | operand {"kind":"Num","value":4}; number 4; flip true; finally 0
-labeledBlock({"kind":"Neg","value":-3}) => [-3] | operand {"kind":"Neg","value":-3}; number -3; flip false; finally 0
-labeledBlock({"kind":"Word","text":"hi"}) => "hi" | operand {"kind":"Word","text":"hi"}; word "hi"; flip true; finally 0
-labeledBlock({"kind":"End"}) => [""] | operand {"kind":"End"}; end ""; flip false; finally 0

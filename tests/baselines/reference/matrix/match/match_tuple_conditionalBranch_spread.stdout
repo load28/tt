@@ -1,3 +1,0 @@
-conditionalBranch({"kind":"Circle","r":2}) => 2 | flip true; second {"kind":"Fast"}; fast circle 2
-conditionalBranch({"kind":"Rect","w":3,"h":4}) => "skipped" | flip false; else "skipped"
-conditionalBranch({"kind":"Point"}) => -1 | flip true; second {"kind":"Fast"}; rest -1

@@ -1,0 +1,2 @@
+spreadElement(6) => [0,12] | first 0; keep 6; double 12
+spreadElement(-2) => [0,-4] | first 0; keep -2; double -4

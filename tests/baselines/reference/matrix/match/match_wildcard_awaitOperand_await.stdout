@@ -1,4 +1,0 @@
-awaitOperand({"kind":"Num","value":4}) => -1 | await; other -1
-awaitOperand({"kind":"Neg","value":-3}) => -1 | await; other -1
-awaitOperand({"kind":"Word","text":"hi"}) => 2 | await; word 2
-awaitOperand({"kind":"End"}) => -1 | await; other -1

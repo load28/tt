@@ -1,0 +1,2 @@
+compoundAssignment(4) => "start:2" | initial "start:"; target {"total":"start:"}; shape "#4"
+compoundAssignment(12) => threw Cannot read properties of undefined (reading 'length') | initial "start:"; target {"total":"start:"}

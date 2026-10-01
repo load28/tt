@@ -1,4 +1,0 @@
-getter({"kind":"Num","value":4}) => -1 | other -1
-getter({"kind":"Neg","value":-3}) => -1 | other -1
-getter({"kind":"Word","text":"hi"}) => 2 | word 2
-getter({"kind":"End"}) => -1 | other -1

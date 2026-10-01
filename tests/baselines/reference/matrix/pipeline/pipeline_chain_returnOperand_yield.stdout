@@ -1,2 +1,0 @@
-returnOperand(3) => "***6" | yield 3; double 6
-returnOperand(12) => "**24" | yield 12; double 24

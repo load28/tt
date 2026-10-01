@@ -1,0 +1,3 @@
+nullishAssignment(4) => undefined | flip true; target {"value":null}; flip false; maybe false; add 8
+nullishAssignment(6) => undefined | flip true; target {"value":null}; flip false; maybe false; add null
+nullishAssignment(8) => undefined | flip true; target {"value":null}; flip false; maybe false; add 16

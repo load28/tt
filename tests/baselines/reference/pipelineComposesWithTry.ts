@@ -6,11 +6,8 @@ function f(): Result<number, string> {
 
 
 //// [pipelineComposesWithTry.ts]
-var $tt_ap: <A, B>(v: A, f: (v: A) => B) => B = function (v, f) {
-  return f(v);
-};
 function f(): Result<number, string> {
-  const $tt_t0 = $tt_ap(readCfg(), norm);
+  const $tt_t0 = (($tt_v, $tt_f) => $tt_f($tt_v))(readCfg(), norm);
   if (!("value" in $tt_t0)) {
     return $tt_t0;
   }

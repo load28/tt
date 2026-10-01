@@ -1,2 +1,0 @@
-doWhileTest(8) => 2 | open res; operand 8; arrow 9; dispose res
-doWhileTest(9) => 2 | open res; operand 9; arrow 10; dispose res

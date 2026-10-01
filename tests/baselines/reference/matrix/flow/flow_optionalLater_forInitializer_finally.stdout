@@ -1,0 +1,3 @@
+forInitializer(4) => [null] | operand 4; flip true; maybe true; finally 0
+forInitializer(6) => [null] | operand 6; flip false; maybe false; finally 0
+forInitializer(8) => [null] | operand 8; flip true; maybe true; finally 0

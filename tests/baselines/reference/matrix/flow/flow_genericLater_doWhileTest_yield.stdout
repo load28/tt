@@ -1,0 +1,2 @@
+doWhileTest(3) => 2 | yield 3
+doWhileTest(-4) => 2 | yield -4

@@ -1,0 +1,2 @@
+labeledBlock(5) => 5 | risky 5; read 5
+labeledBlock(-5) => "thrown" | risky -5; read -5; else "thrown"; caught "thrown"

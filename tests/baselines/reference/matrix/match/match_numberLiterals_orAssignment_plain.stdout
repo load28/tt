@@ -1,0 +1,5 @@
+orAssignment(200) => true | flip true; target {"value":0}; operand 200; success true
+orAssignment(201) => "kept" | flip false; target {"value":"kept"}
+orAssignment(404) => false | flip true; target {"value":0}; operand 404; missing false
+orAssignment(500) => "kept" | flip false; target {"value":"kept"}
+orAssignment(7) => null | flip true; target {"value":0}; operand 7; other null

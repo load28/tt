@@ -1,0 +1,3 @@
+forUpdate(3) => 9 | body 0; flip true; maybe true; twice 9
+forUpdate(4) => undefined | body 0; flip false; maybe false
+forUpdate(5) => 15 | body 0; flip true; maybe true; twice 15

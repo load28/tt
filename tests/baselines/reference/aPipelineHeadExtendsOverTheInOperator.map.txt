@@ -1,0 +1,18 @@
+//// [main.tt] 16 mapping(s)
+1:1 -> 1:1 len 180  "export {};\nclass Box {}\nconst o: Record<string, "...
+6:13 -> 6:20 len 8  "\"a\" in o"
+6:25 -> 6:13 len 6  "String"
+6:31 -> 6:29 len 2  ", "
+6:33 -> 6:64 len 18  "box instanceof Box"
+6:55 -> 6:84 len 6  "String"
+6:61 -> 6:91 len 2  ", "
+6:63 -> 6:126 len 5  "2 > 1"
+6:72 -> 6:133 len 6  "String"
+6:78 -> 6:140 len 19  ");\nfor (const k in "
+7:17 -> 7:50 len 1  "o"
+7:22 -> 7:53 len 4  "keys"
+7:26 -> 7:58 len 34  ") console.log(k);\nfor (let i = 0; "
+8:17 -> 8:25 len 8  "\"a\" in o"
+8:29 -> 8:17 len 7  "Boolean"
+8:36 -> 8:34 len 56  "; i++) {\n  console.log(\"loop\", i);\n  if (i > 0) "...
+

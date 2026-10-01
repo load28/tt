@@ -1,5 +1,0 @@
-loopBody(200) => [true,null] | success true; other null
-loopBody(201) => [true,null] | success true; other null
-loopBody(404) => [false,null] | missing false; other null
-loopBody(500) => [false,null] | guard true; server false; other null
-loopBody(7) => [null,null] | other null; other null

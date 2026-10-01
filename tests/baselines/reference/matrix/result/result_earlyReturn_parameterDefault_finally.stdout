@@ -1,3 +1,0 @@
-parameterDefault(3) => {"kind":"Ok","value":3} | operand 3; read 3; big 3; finally 0
-parameterDefault(1) => {"kind":"Ok","value":1} | operand 1; read 1; small 1; finally 0
-parameterDefault(-1) => {"kind":"Err","error":"negative -1"} | operand -1; read -1; finally 0

@@ -1,0 +1,4 @@
+nullishAssignment({"kind":"Num","value":4}) => 4 | open res; flip true; target {"value":null}; operand {"kind":"Num","value":4}; number 4; dispose res
+nullishAssignment({"kind":"Neg","value":-3}) => "kept" | open res; flip false; target {"value":"kept"}; dispose res
+nullishAssignment({"kind":"Word","text":"hi"}) => "hi" | open res; flip true; target {"value":null}; operand {"kind":"Word","text":"hi"}; word "hi"; dispose res
+nullishAssignment({"kind":"End"}) => "kept" | open res; flip false; target {"value":"kept"}; dispose res

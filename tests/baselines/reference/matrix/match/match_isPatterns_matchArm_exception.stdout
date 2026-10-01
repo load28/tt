@@ -1,4 +1,0 @@
-matchArm({}) => "range" | flip true; risky {}; range "range"
-matchArm({}) => 0 | flip false; other arm 0
-matchArm({}) => "plain" | flip true; risky {}; error "plain"
-matchArm("text") => 0 | flip false; other arm 0

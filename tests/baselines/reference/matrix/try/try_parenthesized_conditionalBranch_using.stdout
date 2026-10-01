@@ -1,2 +1,0 @@
-conditionalBranch(6) => {"kind":"Err","error":"negative -9"} | open res; flip true; flip false; fallback -9; read -9; dispose res
-conditionalBranch(-6) => {"kind":"Err","error":"negative -9"} | open res; flip true; flip false; fallback -9; read -9; dispose res

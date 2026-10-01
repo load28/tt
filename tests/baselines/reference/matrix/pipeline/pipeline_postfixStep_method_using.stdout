@@ -1,2 +1,0 @@
-method(1.25) => "1.3" | open res; this "holder"; operand 1.25; dispose res
-method(7) => "7.0" | open res; this "holder"; operand 7; dispose res

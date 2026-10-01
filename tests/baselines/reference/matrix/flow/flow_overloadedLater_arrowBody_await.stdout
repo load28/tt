@@ -1,0 +1,2 @@
+arrowBody(2) => "#4" | await; add 4; shape "#4"
+arrowBody(5) => "#10" | await; add 10; shape "#10"

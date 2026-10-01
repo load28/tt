@@ -1,2 +1,0 @@
-matchArm(8) => 9 | flip true; arrow 9
-matchArm(9) => 0 | flip false; other arm 0

@@ -1,0 +1,2 @@
+templateLiteral(123) => "<L|3|R>" | left "L"; operand 123; right "R"; finally 0
+templateLiteral(4) => "<L|1|R>" | left "L"; operand 4; right "R"; finally 0

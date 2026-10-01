@@ -1,0 +1,5 @@
+differences from match_nestedMatch_awaitOperand_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await (((t1: number) => { if (t1 === 0) return note(\"zero\", \"none\"); return ((t2: Shape) => { if (t2.kind === \"Point\") return note(\"point\", \"some\"); return note(\"other\", \"?\"); })(note(\"again\", Shape.Point)); })(((t0: Shape) => { if (t0.kind === \"Point\") return note(\"inner point\", 0); if (t0.kind === \"Circle\") { const { r } = t0; return note(\"inner circle\", r); } { const { w } = t0; return note(\"inner rect\", w); } })(first(...[input]))))" hint TS80007: 'await' has no effect on the type of this expression.
+

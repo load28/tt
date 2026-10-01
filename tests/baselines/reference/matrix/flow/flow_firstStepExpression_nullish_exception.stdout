@@ -1,2 +1,0 @@
-nullish(3) => "6" | flip true; risky 3; add 6
-nullish(-4) => "set" | flip false; left "set"

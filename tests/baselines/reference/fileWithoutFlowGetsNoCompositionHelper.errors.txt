@@ -14,5 +14,5 @@ error[ts2304]: Cannot find name 'f'.
   |                ^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-fileWithoutFlowGetsNoCompositionHelper.ts(4,18): error TS2304: Cannot find name 'x'.
-fileWithoutFlowGetsNoCompositionHelper.ts(4,21): error TS2304: Cannot find name 'f'.
+fileWithoutFlowGetsNoCompositionHelper.ts(1,44): error TS2304: Cannot find name 'x'.
+fileWithoutFlowGetsNoCompositionHelper.ts(1,47): error TS2304: Cannot find name 'f'.

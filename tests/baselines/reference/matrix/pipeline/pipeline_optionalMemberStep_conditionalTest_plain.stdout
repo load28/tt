@@ -1,3 +1,0 @@
-conditionalTest(3) => "truthy" | operand 3; flip true; maybe true; twice 9; then "truthy"
-conditionalTest(4) => "falsy" | operand 4; flip false; maybe false; else "falsy"
-conditionalTest(5) => "truthy" | operand 5; flip true; maybe true; twice 15; then "truthy"

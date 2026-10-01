@@ -1,0 +1,2 @@
+logicalOr(6) => true | flip true
+logicalOr(-2) => -4 | flip false; yield -2; keep -2; double -4

@@ -1,0 +1,2 @@
+destructuringDefault(1.5) => "3.0" | source {}; await; add 3
+destructuringDefault(2) => "4.0" | source {}; await; add 4

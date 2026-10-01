@@ -1,3 +1,0 @@
-logicalOr(3) => true | flip true
-logicalOr(1) => {"kind":"Ok","value":1} | flip false; risky 1; read 1; small 1
-logicalOr(-1) => true | flip true

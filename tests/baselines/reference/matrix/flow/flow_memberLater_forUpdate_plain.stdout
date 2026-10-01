@@ -1,2 +1,0 @@
-forUpdate(2) => 12 | body 0; operand 2; receiver {"factor":3}; add 4; twice 12
-forUpdate(3) => 18 | body 0; operand 3; receiver {"factor":3}; add 6; twice 18

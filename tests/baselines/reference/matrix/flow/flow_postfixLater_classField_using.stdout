@@ -1,2 +1,0 @@
-classField(1.5) => "3.0" | open res; operand 1.5; dispose res; add 3
-classField(2) => "4.0" | open res; operand 2; dispose res; add 4

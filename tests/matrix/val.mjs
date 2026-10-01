@@ -75,6 +75,29 @@ const forms = [
     rejects: { all: "val-mutation" },
     tt: (x) => `val const items: number[] = [];\nitems.push(${x});\nconst seen = items;`,
   },
+  {
+    id: "pipedToMutableParameter",
+    title: "a val binding piped into a mutable parameter",
+    only: diagnostic,
+    rejects: { all: "val-pass" },
+    tt: (x) => `function bump(p: { n: number }) {\np.n++;\n}\nval const cfg = { n: ${x} };\ncfg |> bump;\nconst seen = cfg.n;`,
+  },
+  {
+    id: "flowStepToMutableParameter",
+    title: "a val binding handed to a flow whose first step has a mutable parameter",
+    only: diagnostic,
+    rejects: { all: "val-pass" },
+    tt: (x) =>
+      `function bump(p: { n: number }) {\np.n++;\nreturn p.n;\n}\nval const cfg = { n: ${x} };\n(flow |> bump |> String)(cfg);\nconst seen = cfg.n;`,
+  },
+  {
+    id: "pipedToValParameter",
+    title: "a val binding piped into a val parameter",
+    tt: (x) =>
+      `const show = (val /*@bind*/p: { n: number }) => note("show", /*@use*/p.n);\nval const /*@bind2*/cfg = { n: ${x} };\nconst seen = /*@use2*/cfg |> /*@call*/show;`,
+    ts: (x) =>
+      `const show = (/*@bind*/p: { n: number }) => note("show", /*@use*/p.n);\nconst /*@bind2*/cfg = { n: ${x} };\nconst seen = /*@call*/show(/*@use2*/cfg);`,
+  },
 ];
 
 export default {
@@ -85,7 +108,7 @@ export default {
     In: "number",
     inputs: "[3, 8]",
     result: "seen",
-    ...form,
     ts: (x, t, exit) => strip(form.tt(x, t, exit)),
+    ...form,
   })),
 };

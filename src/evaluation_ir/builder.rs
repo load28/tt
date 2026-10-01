@@ -12,6 +12,7 @@ pub(super) struct EvaluationBuilder<'a> {
     /// (a `try` statement whose failure exits a `result` block) while its
     /// source still has a host of its own.
     pub(super) nested_owners: HashMap<RegionId, HostOwner>,
+    pub(super) enclosing: HashMap<RegionId, RegionId>,
 }
 
 impl EvaluationBuilder<'_> {
@@ -282,6 +283,9 @@ impl EvaluationBuilder<'_> {
         if let Some(owner) = nested_owner {
             self.nested_owners.insert(region, owner);
         }
+        if let Some(parent) = parent {
+            self.enclosing.insert(region, parent);
+        }
         Ok(region)
     }
 
@@ -304,23 +308,31 @@ impl EvaluationBuilder<'_> {
             let Some(binding) = self.hosts.get(&root) else {
                 return false;
             };
-            match &self.regions[parent.0 as usize].placement {
-                RegionPlacement::Host { exits, .. } | RegionPlacement::Nested { exits, .. } => {
-                    exits.iter().any(|exit| {
-                        exit.argument.is_some_and(|argument| {
-                            // Lexical containment alone crosses callbacks inside a
-                            // returned value. Only the host owning the whole return
-                            // argument can transfer evaluation to this exit.
-                            binding.owner.span.start <= argument.start
-                                && argument.end <= binding.owner.span.end
-                                && argument.start <= binding.source.start
-                                && binding.source.end <= argument.end
-                                && delivered_by_exit(binding, exit, argument)
-                        })
+            let mut ancestor = Some(parent);
+            while let Some(region) = ancestor {
+                let exits = match &self.regions[region.0 as usize].placement {
+                    RegionPlacement::Host { exits, .. } | RegionPlacement::Nested { exits, .. } => {
+                        exits.as_slice()
+                    }
+                    RegionPlacement::SourceEdit => &[][..],
+                };
+                if exits.iter().any(|exit| {
+                    exit.argument.is_some_and(|argument| {
+                        // Lexical containment alone crosses callbacks inside a
+                        // returned value. Only the host owning the whole return
+                        // argument can transfer evaluation to this exit.
+                        binding.owner.span.start <= argument.start
+                            && argument.end <= binding.owner.span.end
+                            && argument.start <= binding.source.start
+                            && binding.source.end <= argument.end
+                            && delivered_by_exit(binding, exit, argument)
                     })
+                }) {
+                    return true;
                 }
-                RegionPlacement::SourceEdit => false,
+                ancestor = self.enclosing.get(&region).copied();
             }
+            false
         });
         if let Some(parent) = parent
             && let Some(binding) = self.hosts.get(&root)

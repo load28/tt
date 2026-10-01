@@ -1,3 +1,0 @@
-conditionalBranch({"kind":"Done","value":{"kind":"Some","value":7}}) => 7 | flip true; yield {"kind":"Done","value":{"kind":"Some","value":7}}; some 7
-conditionalBranch({"kind":"Done","value":{"kind":"None"}}) => "skipped" | flip false; else "skipped"
-conditionalBranch({"kind":"Failed","error":"lost"}) => "lost" | flip true; yield {"kind":"Failed","error":"lost"}; failed "lost"

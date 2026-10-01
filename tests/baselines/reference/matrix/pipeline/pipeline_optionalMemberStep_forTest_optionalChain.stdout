@@ -1,3 +1,0 @@
-forTest(3) => 1 | flip true; maybe true; twice 9
-forTest(4) => 0 | flip false; maybe false
-forTest(5) => 1 | flip true; maybe true; twice 15

@@ -1,0 +1,3 @@
+ifBranch({"kind":"Num","value":1}) => 1 | enter true; risky {"kind":"Num","value":1}
+ifBranch({"kind":"Neg","value":-2}) => -2 | enter true; risky {"kind":"Neg","value":-2}
+ifBranch({"kind":"Word","text":"w"}) => "risky call 3" | enter true; caught "risky call 3"

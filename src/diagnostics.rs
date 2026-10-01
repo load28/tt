@@ -1137,7 +1137,10 @@ copy.
 
 A `val` binding may only be passed to a `val` parameter of a same-file
 named function, and only as a plain path argument — that is the extent of
-what tt can check without types."
+what tt can check without types. A pipeline step is the call it makes:
+`counter |> bump` passes `counter` to `bump`, and so do
+`(flow |> bump)(counter)` and `counter |> (flow |> bump)`, since a `flow`
+composition hands its argument to its first step."
             }
 
             DiagnosticCode::VerifyFailed => {

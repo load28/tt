@@ -1,2 +1,0 @@
-forOfHead(3) => ["***6"] | double 6
-forOfHead(12) => ["*NaN"] | double null

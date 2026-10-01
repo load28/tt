@@ -1,0 +1,4 @@
+orAssignment({}) => "range" | flip true; target {"value":0}; range "range"
+orAssignment({}) => "kept" | flip false; target {"value":"kept"}
+orAssignment({}) => null | flip true; target {"value":0}; other null
+orAssignment("text") => "kept" | flip false; target {"value":"kept"}

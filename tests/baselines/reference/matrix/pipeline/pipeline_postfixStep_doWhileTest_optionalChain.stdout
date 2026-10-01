@@ -1,2 +1,0 @@
-doWhileTest(1.25) => 2 | 
-doWhileTest(7) => threw Cannot read properties of undefined (reading 'toFixed') | 

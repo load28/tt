@@ -1,0 +1,2 @@
+throwOperand(3) => undefined | risky 3; caught undefined
+throwOperand(-4) => undefined | risky -4; caught undefined

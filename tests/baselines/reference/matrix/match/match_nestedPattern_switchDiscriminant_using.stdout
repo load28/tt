@@ -1,0 +1,3 @@
+switchDiscriminant({"kind":"Done","value":{"kind":"Some","value":7}}) => "default" | open res; operand {"kind":"Done","value":{"kind":"Some","value":7}}; some 7; case 0; dispose res
+switchDiscriminant({"kind":"Done","value":{"kind":"None"}}) => "zero" | open res; operand {"kind":"Done","value":{"kind":"None"}}; none 0; case 0; dispose res
+switchDiscriminant({"kind":"Failed","error":"lost"}) => "default" | open res; operand {"kind":"Failed","error":"lost"}; failed "lost"; case 0; dispose res

@@ -1,0 +1,2 @@
+conditionalTest(1.5) => "truthy" | then "truthy"
+conditionalTest(2) => "truthy" | then "truthy"

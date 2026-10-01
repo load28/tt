@@ -1,0 +1,13 @@
+differences from flow_firstStepExpression_objectProperty_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call2*/ main.tt:4:72 ===
+  |   return { a: note("a", 1), value: flow |> adder(first(...[input])) |> String, c: note("c", 3) };
+  |                                                                        ^ /*call2*/
+  tt only: var String: StringConstructor
+  ts only: var String: (value?: any) => string
+
+=== definition /*call2*/ main.tt:4:72 ===
+  |   return { a: note("a", 1), value: flow |> adder(first(...[input])) |> String, c: note("c", 3) };
+  |                                                                        ^ /*call2*/
+  ts only: <external>/lib.es5.d.ts 534:5-534:27
+

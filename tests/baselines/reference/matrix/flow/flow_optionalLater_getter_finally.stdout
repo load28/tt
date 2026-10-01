@@ -1,3 +1,0 @@
-getter(4) => 24 | operand 4; flip true; maybe true; finally 0; add 8; twice 24
-getter(6) => undefined | operand 6; flip false; maybe false; finally 0; add 12
-getter(8) => 48 | operand 8; flip true; maybe true; finally 0; add 16; twice 48

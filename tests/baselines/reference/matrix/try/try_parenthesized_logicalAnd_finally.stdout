@@ -1,2 +1,0 @@
-logicalAnd(6) => {"kind":"Err","error":"negative -9"} | flip true; flip false; fallback -9; read -9; finally 0
-logicalAnd(-6) => {"kind":"Err","error":"negative -9"} | flip true; flip false; fallback -9; read -9; finally 0

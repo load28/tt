@@ -1,0 +1,2 @@
+jsxTernary(6) => "<p>12</p>" | flip true; keep 6; double 12
+jsxTernary(-2) => "<p><i>none</i></p>" | flip false

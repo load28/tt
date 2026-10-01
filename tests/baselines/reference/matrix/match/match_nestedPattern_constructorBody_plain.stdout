@@ -1,3 +1,0 @@
-constructorBody({"kind":"Done","value":{"kind":"Some","value":7}}) => 7 | operand {"kind":"Done","value":{"kind":"Some","value":7}}; some 7
-constructorBody({"kind":"Done","value":{"kind":"None"}}) => 0 | operand {"kind":"Done","value":{"kind":"None"}}; none 0
-constructorBody({"kind":"Failed","error":"lost"}) => "lost" | operand {"kind":"Failed","error":"lost"}; failed "lost"

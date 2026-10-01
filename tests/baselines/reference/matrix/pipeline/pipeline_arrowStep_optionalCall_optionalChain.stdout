@@ -1,2 +1,0 @@
-optionalCall(8) => [[9],null] | callee true; arrow 9; callee false
-optionalCall(9) => [[null],null] | callee true; arrow null; callee false

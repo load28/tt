@@ -1,0 +1,2 @@
+awaitOperand(4) => 2 | shape "#4"
+awaitOperand(12) => threw Cannot read properties of undefined (reading 'length') | 

@@ -1,0 +1,2 @@
+andAssignment(2) => 0 | open res; flip true; target {"value":0}; dispose res
+andAssignment(-1) => {"kind":"Err","error":"negative -1"} | open res; flip false; target {"value":"kept"}; operand -1; read -1; inner {"kind":"Err","error":"negative -1"}; dispose res
