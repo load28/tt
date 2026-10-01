@@ -43,24 +43,28 @@ fn in_gap(src: &str, start: usize, end: usize, found: &mut Vec<Span>) {
 }
 
 pub(crate) fn directive_governed_lines(src: &str, comments: &[Span]) -> Vec<Span> {
-    let bytes = src.as_bytes();
     let mut governed: Vec<Span> = comments
         .iter()
-        .filter(|comment| is_directive(bytes, **comment))
-        .filter_map(|comment| {
-            let mut line = next_line(bytes, comment.end)?;
-            loop {
-                let end = line_end(bytes, line, bytes.len());
-                let text = src[line..end].trim_matches(|c: char| c.is_ascii_whitespace());
-                if !text.is_empty() && !text.starts_with("//") {
-                    return Some(Span { start: line, end });
-                }
-                line = next_line(bytes, end)?;
-            }
-        })
+        .filter_map(|comment| governed_line(src, *comment))
         .collect();
     governed.dedup();
     governed
+}
+
+fn governed_line(src: &str, comment: Span) -> Option<Span> {
+    let bytes = src.as_bytes();
+    if !is_directive(bytes, comment) {
+        return None;
+    }
+    let mut line = next_line(bytes, comment.end)?;
+    loop {
+        let end = line_end(bytes, line, bytes.len());
+        let text = src[line..end].trim_matches(|c: char| c.is_ascii_whitespace());
+        if !text.is_empty() && !text.starts_with("//") {
+            return Some(Span { start: line, end });
+        }
+        line = next_line(bytes, end)?;
+    }
 }
 
 fn next_line(bytes: &[u8], at: usize) -> Option<usize> {
@@ -126,8 +130,18 @@ pub(crate) fn leading_documentation(
         let text = &bytes[comment.start..comment.end];
         text.starts_with(b"/**") && !text.starts_with(b"/**/")
     })?;
+    let start = run
+        .iter()
+        .take_while(|comment| comment.start < documentation.start)
+        .filter(|comment| {
+            governed_line(src, **comment)
+                .is_some_and(|line| documentation.start <= line.end && line.start < statement)
+        })
+        .map(|comment| comment.start)
+        .min()
+        .unwrap_or(documentation.start);
     Some(Span {
-        start: documentation.start,
+        start,
         end: statement,
     })
 }
@@ -199,6 +213,18 @@ mod tests {
         assert_eq!(
             leading_documentation(src, &comments, &governed, statement),
             None
+        );
+    }
+
+    #[test]
+    fn a_directive_governing_the_jsdoc_line_moves_with_it() {
+        let src = "// @ts-expect-error\n/** doc */\nconst a = 1;\n";
+        let (comments, governed) = read(src);
+        let statement = src.find("const").unwrap();
+        let span = leading_documentation(src, &comments, &governed, statement).unwrap();
+        assert_eq!(
+            &src[span.start..span.end],
+            "// @ts-expect-error\n/** doc */\n"
         );
     }
 }

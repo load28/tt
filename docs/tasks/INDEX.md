@@ -698,6 +698,7 @@
 | TASK-690 | Emit a single-case variant as its case's object type so TypeScript names it | Complete | 2026-09-30 | 2026-09-30 | [TASK-690](./TASK-690-single-case-variant-alias.md) |
 | TASK-695 | Report a checker diagnostic on user-written text as TypeScript reports it | Complete | 2026-10-01 | 2026-10-01 | [TASK-695](./TASK-695-typescript-owned-diagnostics.md) |
 | TASK-696 | Name the incompatible part of a union as TypeScript names it | Complete | 2026-10-01 | 2026-10-01 | [TASK-696](./TASK-696-partly-incompatible-union.md) |
+| TASK-697 | Keep a directive on the JSDoc line it governs when the JSDoc moves to its declaration | Complete | 2026-10-01 | 2026-10-01 | [TASK-697](./TASK-697-jsdoc-and-directive-before-lowered-statement.md) |
 
 ## Next task number
 

@@ -1,0 +1,26 @@
+//// [jsdocAndDirectiveBeforeLoweredStatement.tt] 24 mapping(s)
+1:1 -> 19:1 len 440  "// A directive above a JSDoc comment governs the"...
+8:18 -> 27:21 len 6  "number"
+8:18 -> 30:10 len 6  "number"
+8:30 -> 32:3 len 21  "\ndeclare const s: S;\n"
+10:1 -> 52:1 len 138  "// @ts-ignore -- governs the documentation line "...
+12:42 -> 36:17 len 1  "s"
+12:49 -> 39:15 len 1  "n"
+12:55 -> 40:16 len 7  "\"a\" + n"
+12:69 -> 44:16 len 1  "0"
+12:72 -> 54:41 len 98  ";\nexport function ignored(r: (n: number) => TRes"...
+14:3 -> 60:3 len 110  "// @ts-ignore -- governs the documentation line "...
+16:9 -> 62:9 len 1  "v"
+16:17 -> 56:18 len 6  "r(\"x\")"
+16:24 -> 62:26 len 125  "\n  return Result.Ok(v);\n}\nexport function expect"...
+20:5 -> 70:5 len 126  "// @ts-expect-error -- governs the indented docu"...
+22:9 -> 72:9 len 1  "w"
+22:17 -> 66:20 len 6  "r(\"y\")"
+22:24 -> 72:26 len 150  "\n  return Result.Ok(w);\n}\n/** A directive below "...
+27:1 -> 77:239 len 32  "export const governed: number = "
+27:40 -> 77:37 len 1  "s"
+27:47 -> 77:82 len 1  "n"
+27:53 -> 77:104 len 7  "\"a\" + n"
+27:67 -> 77:143 len 3  "\"b\""
+27:72 -> 77:277 len 2  ";\n"
+

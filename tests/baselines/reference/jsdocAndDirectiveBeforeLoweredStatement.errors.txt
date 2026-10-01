@@ -1,0 +1,31 @@
+==== ttc --out-dir (exit 0) ====
+ttc: std → $DIR/out/tt
+ttc: ./jsdocAndDirectiveBeforeLoweredStatement.tt → $DIR/out/jsdocAndDirectiveBeforeLoweredStatement.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2322]: type mismatch: expected `number`, found `string`
+  --> jsdocAndDirectiveBeforeLoweredStatement.tt:12:55
+   |
+12 | export const ungoverned: number = match (s) { A(n) => "a" + n, B => 0 };
+   |                                                       ^^^^^^^
+error[ts2345]: Argument of type 'string' is not assignable to parameter of type 'number'.
+  --> jsdocAndDirectiveBeforeLoweredStatement.tt:16:19
+   |
+16 |   const v = try r("x");
+   |                   ^^^
+error[ts2578]: Unused '@ts-expect-error' directive.
+  --> jsdocAndDirectiveBeforeLoweredStatement.tt:20:5
+   |
+20 |     // @ts-expect-error -- governs the indented documentation line, so it is unused
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+error[ts2345]: Argument of type 'string' is not assignable to parameter of type 'number'.
+  --> jsdocAndDirectiveBeforeLoweredStatement.tt:22:19
+   |
+22 |   const w = try r("y");
+   |                   ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+jsdocAndDirectiveBeforeLoweredStatement.ts(40,7): error TS2322: Type 'string' is not assignable to type 'number'.
+jsdocAndDirectiveBeforeLoweredStatement.ts(56,20): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+jsdocAndDirectiveBeforeLoweredStatement.ts(66,22): error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+jsdocAndDirectiveBeforeLoweredStatement.ts(70,5): error TS2578: Unused '@ts-expect-error' directive.

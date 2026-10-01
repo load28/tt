@@ -1,5 +1,10 @@
 # TASK-665: Keep a comment directive's line and a statement's JSDoc where TypeScript reads them
 
+> **Extended by TASK-697**: a directive above the moved JSDoc that governs
+> the JSDoc's line now moves with it. A JSDoc above a directive that
+> governs a lowered statement still stays above the generated statements;
+> TASK-697 records why TypeScript's comment rules allow no layout with both.
+
 - **Status**: Complete
 - **Started**: 2026-09-30
 - **Completed**: 2026-09-30

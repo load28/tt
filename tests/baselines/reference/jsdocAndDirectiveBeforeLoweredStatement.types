@@ -1,0 +1,56 @@
+=== jsdocAndDirectiveBeforeLoweredStatement.tt ===
+variant S { A(n: number), B }
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => S
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const s: S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+export const ungoverned: number = match (s) { A(n) => "a" + n, B => 0 };
+>ungoverned : const ungoverned: number
+>s : const s: S
+>n : const n: number
+>n : const n: number
+export function ignored(r: (n: number) => TResult<number, string>): TResult<number, string> {
+>ignored : function ignored(r: (n: number) => TResult<number, string>): TResult<number, string>
+>r : (parameter) r: (n: number) => TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const v = try r("x");
+>v : const v: number
+>r : (parameter) r: (n: number) => TResult<number, string>
+  return Result.Ok(v);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>v : const v: number
+export function expected(r: (n: number) => TResult<number, string>): TResult<number, string> {
+>expected : function expected(r: (n: number) => TResult<number, string>): TResult<number, string>
+>r : (parameter) r: (n: number) => TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const w = try r("y");
+>w : const w: number
+>r : (parameter) r: (n: number) => TResult<number, string>
+  return Result.Ok(w);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>w : const w: number
+export const governed: number = match (s) { A(n) => "a" + n, B => "b" };
+>governed : const governed: number
+>s : const s: S
+>n : const n: number
+>n : const n: number
+
