@@ -1,8 +1,8 @@
 # TASK-703: Convert inline Rust tests to case files by proving each conversion
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-01
-- **Completed**: —
+- **Completed**: 2026-10-01
 - **Commit**: see `git log --grep TASK-703`
 
 ## Purpose
@@ -44,22 +44,25 @@ tool that converts them and proves every conversion mechanically.
 
 ## Classification
 
-What an inline test asserts on, counted over every `#[test]` function (795
-in all: 580 in the compile suite, 215 in the integration suite):
+What each inline test asserts on, over every `#[test]` function (795: 580
+in the compile suite, 215 in the integration suite). The first rows are
+what the recording step observed the converted tests compile; the others
+are why a test stays in Rust.
 
-| Class | Compile | Integration | Converts to |
+| Class | Compile | Integration | Becomes |
 | --- | --- | --- | --- |
-| Emitted TypeScript of one program (`ok`, `ok_tsx`) | most | — | `.ts` baseline |
-| tt diagnostics: message, position, rule, advice (`err`, `advice`, `codes`) | many | — | `.errors.txt` (`ttc --out-dir` section) |
-| TypeScript's verdict on the emitted tree (`typecheck`, `typecheck_with_std`) | — | 63 programs | `.errors.txt` (`tsc` section) |
-| What the emitted program prints (`run`, `run_with_std`) | — | 135 programs | `@run` `.stdout` |
-| A library API other than the emission: `analyze`, `compile_report`, `compile_mapped`, `emit_mapped`, `Options` other than the defaults, `ExternVariant`, `SourceKind`, `std_imports` | 125 + 19 | 6 + 9 | stays Rust |
-| Its own files, processes, or the CLI (`fs`, `Command`, `ttc` binary, `tsc` with extra flags) | — | 27 | stays Rust |
-| A panic or unwinding (`catch_unwind`) | 3 | — | stays Rust |
+| Emitted TypeScript and tt diagnostics of one or more programs (`ok`, `ok_tsx`, `err`, `advice`, `codes`), proven | 394 | — | case: `.ts`, `.errors.txt` (`ttc --out-dir` section) |
+| What the emitted program prints (`run`, `run_with_std`) or whether `tsc` accepts it (`typecheck`, `typecheck_with_std`), proven | — | 153 | case: `@run` `.stdout`, `.errors.txt` (`tsc` section) |
+| A library API directly (`analyze`, `compile_report`, `compile_mapped`, `emit_mapped`, `ExternVariant`, ...) | 122 | 6 | stays Rust |
+| A library API through a helper (`token_extern`, `hole`, `generated_lines`, `run_with_tsc_flags`, `typecheck_recovery`, `options_with_runtime`) | 10 | 5 | stays Rust |
+| Non-default `Options` or another `SourceKind` | 10 | 7 | stays Rust |
+| Its own files, processes, or the CLI | — | 19 | stays Rust |
+| A panic (`catch_unwind`) | 3 | — | stays Rust |
+| A table of more than six programs over one rule | 29 | 1 | stays Rust |
+| An observation a baseline does not hold (the library's default support specifiers, an error's end position; the `./tt/` std files the integration helper writes) | 10 | 24 | stays Rust |
+| No program compiled through a case-observable helper | 2 | — | stays Rust |
 
-The counts in the first four rows overlap (a test can observe several
-things) and are measured per program by the recording step; the exact
-figures per test are in TASK-704 and TASK-705.
+TASK-704 and TASK-705 list every kept test with its reason.
 
 ## Decisions
 
@@ -173,7 +176,11 @@ figures per test are in TASK-704 and TASK-705.
   After the correction: 397.
 - 2026-10-01: `UPDATE_EXPECT=1 TT_MATRIX_CASES=all cargo test --test
   case_baselines` to correct every matrix baseline the rewriting had
-  changed.
+  changed: 90 matrix `.stdout` baselines and five `.ts` baselines change.
+- 2026-10-01: A helper copied beside the bodies could still call the
+  library through a `ttc::` path; the textual check now applies to helpers
+  as well (a test that only reached the library through such a helper had
+  recorded nothing and was not deleted, so no conversion was affected).
 
 ## Issues and resolutions
 
@@ -197,13 +204,43 @@ figures per test are in TASK-704 and TASK-705.
 Not applicable: this task fixes no compiler bug. The corrected baselines
 of Decision 4 are their own evidence.
 
+## Time impact
+
+Measured on the shared 4-core development container (load average 12 to
+19 from other work, so the figures are an upper bound), each suite alone,
+before (`b3a1c9e`'s tests, or the case directory without the converted
+cases) and after TASK-704 and TASK-705:
+
+| Suite | Before | After |
+| --- | --- | --- |
+| `tests/case_baselines.rs` (pull-request sample) | 64 s wall, 131 s CPU | 468 s wall, 671 s CPU |
+| the same, converted cases without `.types` (measured, not adopted) | — | 355 s wall, 409 s CPU |
+| `tests/compile.rs` | 54 s wall, 24 s CPU | 50 s wall, 21 s CPU |
+| `tests/integration.rs` | 39 s wall, 75 s CPU | 23 s wall, 34 s CPU |
+
+A case costs about 0.75 s of CPU (two `ttc` runs, `tsc` on the emitted
+tree, the engine's hovers, and `node` for a run case) where an inline
+`ok` test cost milliseconds, so a pull request's `cargo test` grows by
+about 6 minutes of wall time on this machine. The nightly job grows by the
+same amount: the converted cases are not part of the sampled matrix, and
+`tests/incremental.rs` and `tests/fuzz_regressions.rs` draw a fixed-size
+sample from the larger corpus, so their time does not change.
+
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `RUST_TEST_THREADS=2 TTC_REQUIRE_TSGO=1 TTC_REQUIRE_TYPESCRIPT_CASES=1 TT_REQUIRE_EXTENSION=1 TT_BASELINE_TRACKING_DIR=... cargo test --no-fail-fast`: every suite passes
+- [x] `node scripts/check-baselines --tracking ...`: 5,073 compared, none unused
+- [x] `./scripts/ci agents`: passed
+- [x] Baseline changes reviewed and committed with the change: the 95
+  changed baselines differ from the committed ones only by a restored `\`
+  or by the final-newline marker (checked by comparing each with its
+  committed text after undoing exactly those two changes)
 
 ## Result
 
-In progress.
+`scripts/convert-inline-tests`, `@origin`, and the two baseline
+corrections. The conversions are TASK-704 (394 compile tests, 562 cases)
+and TASK-705 (153 integration tests, 158 cases). Follow-up defect: the
+semantic-token timeout of Issue 1.

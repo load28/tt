@@ -101,7 +101,7 @@ assertions were run against the new baselines by `scripts/convert-inline-tests p
 
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
-- [x] `cargo test`
+- [x] `cargo test`: the full gate of TASK-703 passes
 - [x] Baseline changes reviewed and committed with the change
 
 ## Tests kept in Rust (62)

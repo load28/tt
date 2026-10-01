@@ -705,7 +705,7 @@
 | TASK-697 | Keep a directive on the JSDoc line it governs when the JSDoc moves to its declaration | Complete | 2026-10-01 | 2026-10-01 | [TASK-697](./TASK-697-jsdoc-and-directive-before-lowered-statement.md) |
 | TASK-698 | Point a variant constructor's missing argument at the field it is for | Complete | 2026-10-01 | 2026-10-01 | [TASK-698](./TASK-698-variant-constructor-parameter-origin.md) |
 | TASK-699 | Read TypeScript's keyword filter from the served syntax, not from its answer | Complete | 2026-10-01 | 2026-10-01 | [TASK-699](./TASK-699-keyword-filter-from-syntax.md) |
-| TASK-703 | Convert inline Rust tests to case files by proving each conversion | In progress | 2026-10-01 | — | [TASK-703](./TASK-703-inline-test-conversion-tooling.md) |
+| TASK-703 | Convert inline Rust tests to case files by proving each conversion | Complete | 2026-10-01 | 2026-10-01 | [TASK-703](./TASK-703-inline-test-conversion-tooling.md) |
 | TASK-704 | Convert the compile suite's inline tests to case files | Complete | 2026-10-01 | 2026-10-01 | [TASK-704](./TASK-704-convert-compile-suite.md) |
 | TASK-705 | Convert the integration suite's runtime and type-check tests to case files | Complete | 2026-10-01 | 2026-10-01 | [TASK-705](./TASK-705-convert-integration-suite.md) |
 
