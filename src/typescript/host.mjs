@@ -994,24 +994,27 @@ async function main() {
       const checker = project.checker;
       const program = project.program;
       const scope = whole ? undefined : [...members];
-      const structural = unique([
-        ...(whole
-          ? [
-            ...program.getConfigFileParsingDiagnostics(),
-            ...program.getProgramDiagnostics(),
-            ...program.getGlobalDiagnostics(),
-          ]
-          : []),
-        ...program.getSyntacticDiagnostics(scope),
-      ]);
-      const semantic = unique(program.getSemanticDiagnostics(scope));
-      const late = whole ? unique(program.getGlobalDiagnostics()) : [];
-      for (const d of [...structural, ...late]) {
-        const span = !d.fileName || d.pos < 0
-          ? null
-          : configSpans.has(d.fileName)
-            ? originalSpan(configSpans.get(d.fileName), d.pos, d.end)
-            : { start: d.pos, end: d.end };
+      const placed = (d) => !d.fileName || d.pos < 0
+        ? null
+        : configSpans.has(d.fileName)
+          ? originalSpan(configSpans.get(d.fileName), d.pos, d.end)
+          : { start: d.pos, end: d.end };
+      const reportable = (d) => (open.tsconfig && whole) || placed(d) !== null;
+      const listFilesOnly = program.getCompilerOptions().listFilesOnly === true;
+      const unparsed = new Set((job.unparsedDocuments ?? []).flatMap((module) => [module, served(module)]));
+      const configuration = whole ? program.getConfigFileParsingDiagnostics() : [];
+      const syntactic = program.getSyntacticDiagnostics(scope);
+      const unparsable = (job.syntaxBlocked ?? []).some((module) => whole
+        ? program.getSourceFile(served(module)) !== undefined
+        : members.has(module) || members.has(served(module)));
+      let stopped = unparsable || syntactic.some((d) => reportable(d) && !unparsed.has(d.fileName));
+      const options = !stopped && whole ? program.getProgramDiagnostics() : [];
+      stopped ||= options.some(reportable);
+      const checked = !stopped && !listFilesOnly;
+      const semantic = checked ? unique(program.getSemanticDiagnostics(scope)) : [];
+      const late = checked && whole ? unique(program.getGlobalDiagnostics()) : [];
+      for (const d of [...unique([...configuration, ...syntactic, ...options]), ...late]) {
+        const span = placed(d);
         if (!span) {
           if (open.tsconfig && whole) out.projectDiagnostics.push({ file: d.fileName ?? null, code: d.code, message: messageText(d) });
           continue;
@@ -1038,7 +1041,7 @@ async function main() {
         });
       }
       const ttSources = new Set((job.modules ?? []).map((module) => loweredSource(module.path)));
-      for (const member of members) {
+      for (const member of checked ? members : []) {
         const sourceFile = program.getSourceFile(member);
         if (!sourceFile) continue;
         for (const literal of loweredModuleSpecifiers(sourceFile, ttSources, SyntaxKind)) {

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./a.tt → $DIR/out/a.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts5067]: Invalid value for 'jsxFactory'. 'id1 id2' is not a valid identifier or qualified-name.
+ --> tsconfig.json:8:19
+  |
+8 |     "jsxFactory": "id1 id2"
+  |                   ^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tsconfig.json(8,19): error TS5067: Invalid value for 'jsxFactory'. 'id1 id2' is not a valid identifier or qualified-name.

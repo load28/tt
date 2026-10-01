@@ -389,6 +389,8 @@ fn job_json(query: &Query) -> serde_json::Value {
         "contextualOnly": query.contextual_only,
         "inferJoinTypes": query.infer_join_types,
         "emitDeclarations": query.emit_declarations,
+        "unparsedDocuments": query.unparsed_documents,
+        "syntaxBlocked": query.syntax_blocked,
     })
 }
 

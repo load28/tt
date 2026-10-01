@@ -272,6 +272,9 @@ pub(crate) fn assemble(
             path: file.module_path.clone(),
             text: file.emit.code.clone(),
         });
+        if file.unparsed {
+            query.unparsed_documents.push(file.module_path.clone());
+        }
 
         for result_return in &file.emit.result_return_temps {
             query.result_shapes.push(ResultShapeQuery {
@@ -524,6 +527,16 @@ pub(crate) fn assemble(
         path: module_path_of(&file.source_path),
         text: "export {};\n".to_string(),
     }));
+    query.syntax_blocked.extend(
+        blocked
+            .iter()
+            .filter(|file| {
+                file.diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code.restates_typescript_syntax())
+            })
+            .map(|file| module_path_of(&file.source_path)),
+    );
 
     (query, probes)
 }

@@ -183,6 +183,11 @@ pub(crate) struct Query {
     /// never writes declaration syntax of its own: the compiler emits for a
     /// lowered module exactly what it would for a hand-written one.
     pub emit_declarations: bool,
+    /// Modules of documents held open whose TypeScript does not parse, served
+    /// through their faithful projection.
+    pub unparsed_documents: Vec<PathBuf>,
+    /// Modules whose source TypeScript does not parse, served as placeholders.
+    pub syntax_blocked: Vec<PathBuf>,
 }
 
 /// One TypeScript diagnostic, in TypeScript's coordinates. Mapping it back

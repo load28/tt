@@ -1,0 +1,3 @@
+//// [a.tt] 1 mapping(s)
+1:1 -> 1:1 len 30  "export const x: number = \"s\";\n"
+
