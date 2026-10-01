@@ -66,6 +66,37 @@ pub(crate) fn val_modifiers(program: &Program) -> HashMap<usize, ValModifier> {
     modifiers
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PipelineShape {
+    pub head: Option<Span>,
+    pub span: Span,
+    pub first_call: Option<Span>,
+}
+
+pub(crate) fn pipeline_shapes(program: &Program) -> Vec<PipelineShape> {
+    let mut shapes = Vec::new();
+    visit_programs(program, &mut |region| {
+        for segment in &region.segments {
+            if let Segment::Pipe(pipe) = segment {
+                let end = pipe.steps.last().map_or(pipe.head_span.end, |s| s.span.end);
+                shapes.push(PipelineShape {
+                    head: (pipe.head_kind != PipeHeadKind::Flow).then_some(pipe.head_span),
+                    span: Span {
+                        start: pipe.head_span.start,
+                        end,
+                    },
+                    first_call: pipe
+                        .steps
+                        .first()
+                        .filter(|step| step.kind == PipeStepKind::Call)
+                        .map(|step| step.span),
+                });
+            }
+        }
+    });
+    shapes
+}
+
 /// Visits every recursively nested parse region exactly once.
 ///
 /// Parser side tables use one structural traversal so adding a new nested

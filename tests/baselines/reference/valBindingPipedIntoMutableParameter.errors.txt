@@ -1,0 +1,83 @@
+==== ttc --out-dir (exit 1) ====
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `touch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> ./valBindingPipedIntoMutableParameter.tt:23:3
+   |
+23 |   cfg |> touch;
+   |   ^^^
+
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `arrowTouch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> ./valBindingPipedIntoMutableParameter.tt:24:3
+   |
+24 |   cfg |> arrowTouch;
+   |   ^^^
+
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `touch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> ./valBindingPipedIntoMutableParameter.tt:25:3
+   |
+25 |   cfg |> touch |> String;
+   |   ^^^
+
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `touch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> ./valBindingPipedIntoMutableParameter.tt:29:3
+   |
+29 |   cfg |> (flow |> touch |> String);
+   |   ^^^
+
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `touch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> ./valBindingPipedIntoMutableParameter.tt:30:19
+   |
+30 |   (flow |> touch)(cfg);
+   |                   ^^^
+
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `touch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> ./valBindingPipedIntoMutableParameter.tt:31:39
+   |
+31 |   (flow |> (flow |> touch) |> String)(cfg);
+   |                                       ^^^
+
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `touch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> ./valBindingPipedIntoMutableParameter.tt:32:19
+   |
+32 |   const text = `${cfg |> touch}`;
+   |                   ^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `touch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> valBindingPipedIntoMutableParameter.tt:23:3
+   |
+23 |   cfg |> touch;
+   |   ^^^
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `arrowTouch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> valBindingPipedIntoMutableParameter.tt:24:3
+   |
+24 |   cfg |> arrowTouch;
+   |   ^^^
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `touch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> valBindingPipedIntoMutableParameter.tt:25:3
+   |
+25 |   cfg |> touch |> String;
+   |   ^^^
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `touch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> valBindingPipedIntoMutableParameter.tt:29:3
+   |
+29 |   cfg |> (flow |> touch |> String);
+   |   ^^^
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `touch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> valBindingPipedIntoMutableParameter.tt:30:19
+   |
+30 |   (flow |> touch)(cfg);
+   |                   ^^^
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `touch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> valBindingPipedIntoMutableParameter.tt:31:39
+   |
+31 |   (flow |> (flow |> touch) |> String)(cfg);
+   |                                       ^^^
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `o` of `touch` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> valBindingPipedIntoMutableParameter.tt:32:19
+   |
+32 |   const text = `${cfg |> touch}`;
+   |                   ^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

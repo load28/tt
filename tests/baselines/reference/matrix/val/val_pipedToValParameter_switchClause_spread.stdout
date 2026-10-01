@@ -1,0 +1,2 @@
+switchClause(3) => 3 | discriminant 1; show 3
+switchClause(8) => 8 | discriminant 1; show 8

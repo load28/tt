@@ -282,6 +282,7 @@ fn tt_errors(
             options.source_kind,
             tokens,
             &parser::val_modifiers(program),
+            &parser::pipeline_shapes(program),
         ));
     }
     // One order for every producer: where the reader's eye goes, top to

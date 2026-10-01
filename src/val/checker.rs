@@ -14,6 +14,7 @@ pub(super) struct Checker<'a> {
     /// The parser's `val` modifiers.
     pub(super) modifiers: &'a Modifiers,
     pub(super) signatures: &'a HashMap<&'a str, Option<Vec<ParamSig>>>,
+    pub(super) applications: &'a Applications,
     /// Probe mode: collect method calls instead of reporting violations.
     /// The violations are the same either way — the file has already been
     /// checked by the time its probes are collected.
@@ -203,24 +204,53 @@ impl<'a> Checker<'a> {
 
         self.check_mutation(tokens, i, frames, writes.contains(&tokens[i].span.start));
         if punct_at(tokens, i + 1, b'(') {
-            match self.sink {
-                // Which declaration a call names is the checker's question:
-                // every call to a name the file declares is collected, and
-                // the pairing is by symbol identity, so a name the untyped
-                // path has to call ambiguous is settled per call site. The
-                // name gate only skips calls no same-file declaration
-                // could possibly match.
-                Sink::Probes(_) if self.signatures.contains_key(word) => {
-                    self.probe_call(tokens, i, word);
-                }
-                _ => {
-                    if let Some(Some(params)) = self.signatures.get(word) {
-                        self.check_call(tokens, i + 1, word, params, frames);
-                    }
+            self.call(tokens, tokens[i].span, list_entries(tokens, i + 1), frames);
+        }
+        let piped: Vec<(usize, usize)> = self
+            .applications
+            .piped_into(tokens[i].span.start)
+            .iter()
+            .filter_map(|head| token_range(tokens, *head))
+            .collect();
+        if !piped.is_empty() {
+            self.call(tokens, tokens[i].span, piped, frames);
+        }
+        if let Some((end, callee)) = self.applications.flow_at(tokens[i].span.start)
+            && i > 0
+            && punct_at(tokens, i - 1, b'(')
+            && let Some(close) = find_close_at(tokens, i - 1)
+            && tokens[close - 1].span.end == end
+            && punct_at(tokens, close + 1, b'(')
+        {
+            self.call(tokens, callee, list_entries(tokens, close + 1), frames);
+        }
+        i + 1
+    }
+
+    fn call(
+        &self,
+        tokens: &[Token],
+        callee: Span,
+        entries: Vec<(usize, usize)>,
+        frames: &[Frame<'a>],
+    ) {
+        let word = &self.src[callee.start..callee.end];
+        match self.sink {
+            // Which declaration a call names is the checker's question:
+            // every call to a name the file declares is collected, and
+            // the pairing is by symbol identity, so a name the untyped
+            // path has to call ambiguous is settled per call site. The
+            // name gate only skips calls no same-file declaration
+            // could possibly match.
+            Sink::Probes(_) if self.signatures.contains_key(word) => {
+                self.probe_call(tokens, entries, callee.start, word);
+            }
+            _ => {
+                if let Some(Some(params)) = self.signatures.get(word) {
+                    self.check_call(tokens, entries, word, params, frames);
                 }
             }
         }
-        i + 1
     }
 
     /// Declaration instantiation on entry to the scope whose contents are
@@ -610,7 +640,7 @@ impl<'a> Checker<'a> {
     fn check_call(
         &self,
         tokens: &[Token],
-        open: usize,
+        entries: Vec<(usize, usize)>,
         callee: &str,
         params: &[ParamSig],
         frames: &[Frame<'a>],
@@ -618,7 +648,7 @@ impl<'a> Checker<'a> {
         let Sink::Report(report) = self.sink else {
             return; // probes go through `probe_call`; Calls asks nothing
         };
-        for (idx, (start, end)) in list_entries(tokens, open).into_iter().enumerate() {
+        for (idx, (start, end)) in entries.into_iter().enumerate() {
             if !matches!(tokens[start].kind, TokenKind::Ident) || dotted_at(tokens, 0, start) {
                 continue;
             }
@@ -662,11 +692,17 @@ impl<'a> Checker<'a> {
     /// declaration's ([`ValPass`]). Nothing is decided here: which
     /// declaration is called, whether the argument is a `val` binding, and
     /// which parameter it lands on are all the verdict's half.
-    fn probe_call(&self, tokens: &[Token], callee: usize, word: &str) {
+    fn probe_call(
+        &self,
+        tokens: &[Token],
+        entries: Vec<(usize, usize)>,
+        callee_at: usize,
+        word: &str,
+    ) {
         let Sink::Probes(sink) = self.sink else {
             return;
         };
-        for (idx, (start, end)) in list_entries(tokens, callee + 1).into_iter().enumerate() {
+        for (idx, (start, end)) in entries.into_iter().enumerate() {
             if !matches!(tokens[start].kind, TokenKind::Ident) || dotted_at(tokens, 0, start) {
                 continue;
             }
@@ -679,7 +715,7 @@ impl<'a> Checker<'a> {
                 offset: tokens[start].span.start,
                 name: self.text(&tokens[start]).to_string(),
                 callee: word.to_string(),
-                callee_at: tokens[callee].span.start,
+                callee_at,
                 arg_index: idx,
             });
         }

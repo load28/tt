@@ -1,0 +1,2 @@
+catchBlock(3) => 3 | throw "boom"; yield 3; show 3
+catchBlock(8) => 8 | throw "boom"; yield 8; show 8

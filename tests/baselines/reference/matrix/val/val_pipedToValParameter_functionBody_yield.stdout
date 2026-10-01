@@ -1,0 +1,2 @@
+functionBody(3) => 3 | yield 3; show 3
+functionBody(8) => 8 | yield 8; show 8
