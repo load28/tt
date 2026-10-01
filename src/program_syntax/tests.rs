@@ -214,7 +214,8 @@ fn an_incomplete_source_expression_owns_the_generated_closing_boundary() {
     // SWC reports this at the generated `)` after `radius.`, not on the
     // copied dot. The owner projection records that fixed delimiter as
     // the boundary of the copied arm expression, so malformed user text
-    // remains an input failure instead of becoming an ICE.
+    // remains an input failure instead of becoming an ICE, reported at the
+    // `,` that ends the arm, where TypeScript reports TS1003.
     let source = "variant Shape { Circle(radius: number), Point }\n\
                       declare const shape: Shape;\n\
                       const label = match (shape) {\n\
@@ -225,7 +226,7 @@ fn an_incomplete_source_expression_owns_the_generated_closing_boundary() {
     let ProgramSyntaxError::SourceNotTypeScript { source: at, .. } = error else {
         panic!("expected a source-caused failure, got {error:?}");
     };
-    assert_eq!(&source[at..at + 1], ".");
+    assert_eq!(&source[at..at + 1], ",");
 }
 
 #[test]

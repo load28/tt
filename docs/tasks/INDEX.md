@@ -713,6 +713,7 @@
 | TASK-705 | Convert the integration suite's runtime and type-check tests to case files | Complete | 2026-10-01 | 2026-10-01 | [TASK-705](./TASK-705-convert-integration-suite.md) |
 | TASK-708 | Retire `stray-result`, which no `result` block can reach | Complete | 2026-10-01 | 2026-10-01 | [TASK-708](./TASK-708-retire-stray-result.md) |
 | TASK-709 | Count a nested alternative's bindings when or-pattern alternatives are compared | Complete | 2026-10-01 | 2026-10-01 | [TASK-709](./TASK-709-nested-or-pattern-bindings.md) |
+| TASK-711 | Report an incomplete fragment in a construct where TypeScript stops | Complete | 2026-10-01 | 2026-10-01 | [TASK-711](./TASK-711-incomplete-fragment-position.md) |
 
 ## Next task number
 
