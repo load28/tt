@@ -129,7 +129,10 @@ emitted program can carry it without type tricks, and otherwise recorded.
   `guard-evaluation-owner` fixture (Issue 1); `UPDATE_EXPECT=1 cargo test
   --test case_baselines` (eight baselines, Issue 1); added
   `tests/cases/compiler/logicalOperationRightNeverRuns.tt`.
-- 2026-10-01: The full gate for the batch (TASK-691 to TASK-694), below.
+- 2026-10-01: Merged `claude/ecstatic-dijkstra-qw5pf9` (dde5144) and ran
+  the full gate for the batch (TASK-691 to TASK-694) on the merged tree,
+  below; a container restart interrupted the first matrix runs, which
+  were run again.
 
 ## Issues and resolutions
 
@@ -168,7 +171,19 @@ emitted program can carry it without type tricks, and otherwise recorded.
 
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
-- [x] `cargo test` (the full gate below)
+- [x] `cargo test`: the batch's full gate, run on the tree merged with
+  `claude/ecstatic-dijkstra-qw5pf9` (dde5144, TASK-687 to TASK-690):
+  `RUST_TEST_THREADS=2 TTC_REQUIRE_TSGO=1 TTC_REQUIRE_TYPESCRIPT_CASES=1
+  TT_REQUIRE_EXTENSION=1 TT_BASELINE_TRACKING_DIR=<dir> cargo test
+  --no-fail-fast` passed (30 test binaries and the doc tests), and
+  `node scripts/check-baselines --tracking <dir>` reported "731 compared,
+  none unused".
+- [x] `TT_MATRIX_CASES=all cargo test --test case_baselines` (1116 s) and
+  `TT_MATRIX_CASES=all TT_REQUIRE_EXTENSION=1 cargo test --test
+  editor_cases` (1052 s) on the merged tree: pass.
+- [x] `./scripts/ci agents`: passes (doctor reports the release `ttc` and
+  VSIX that `./scripts/setup` builds as missing, which this batch did not
+  run, as AGENTS.md asks).
 - [x] Baseline changes reviewed and committed with the change
 
 ## Result
