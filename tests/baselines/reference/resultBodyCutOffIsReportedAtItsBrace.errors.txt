@@ -1,0 +1,65 @@
+==== ttc --out-dir (exit 1) ====
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> ./ifWithoutStatement.tt:4:13
+  |
+4 |   const r = result { const n = try read(x); if (n > 1) };
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./ifWithoutStatement.tt:4:56
+  |
+4 |   const r = result { const n = try read(x); if (n > 1) };
+  |                                                        ^
+
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./labelWithoutStatement.tt:4:61
+  |
+4 |   const r = result { const n = try read(x); return n; done: };
+  |                                                             ^
+
+error[source-not-typescript]: the TypeScript here does not parse: Expected ident. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./member.tt:4:63
+  |
+4 |   const r = result { const n = try read(x); return n.toFixed. };
+  |                                                               ^
+
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./operator.tt:4:43
+  |
+4 |   const r = result { return try read(x) + };
+  |                                           ^
+
+
+==== ttc --check-types (exit 1) ====
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> ifWithoutStatement.tt:4:13
+  |
+4 |   const r = result { const n = try read(x); if (n > 1) };
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ifWithoutStatement.tt:4:56
+  |
+4 |   const r = result { const n = try read(x); if (n > 1) };
+  |                                                        ^
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> labelWithoutStatement.tt:4:61
+  |
+4 |   const r = result { const n = try read(x); return n; done: };
+  |                                                             ^
+error[source-not-typescript]: the TypeScript here does not parse: Expected ident. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> member.tt:4:63
+  |
+4 |   const r = result { const n = try read(x); return n.toFixed. };
+  |                                                               ^
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> operator.tt:4:43
+  |
+4 |   const r = result { return try read(x) + };
+  |                                           ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

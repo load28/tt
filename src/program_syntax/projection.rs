@@ -1304,11 +1304,14 @@ impl<'a> ProjectionBuilder<'a> {
             }
             self.code.push_str("for (;;) {");
         }
+        self.code.push('{');
+        let segments_since = self.source_segments.len();
         for item in &region.items {
             match item {
                 crate::core_ir::ResultRegionItem::Statements(body) => self.emit_body(*body)?,
             }
         }
+        self.push_source_boundary("}", segments_since);
         self.code.push('\n');
         let synthetic_return_start = ProjectedByte(self.code.len());
         self.code.push_str("return ");
