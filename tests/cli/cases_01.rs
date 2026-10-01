@@ -53,6 +53,40 @@ fn tt_only_keeps_the_tt_layer_and_drops_the_type_layer() {
     );
 }
 
+/// The tt layer is every diagnostic of a tt rule, the ones the checker's
+/// answers decide included: `--tt-only` reports exactly what the full check
+/// reports, less TypeScript's own diagnostics.
+#[test]
+fn tt_only_reports_the_full_check_without_typescripts_diagnostics() {
+    require_types_toolchain!();
+    let source = "type R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n\
+                  function read(n: number): R { return n > 0 ? { kind: \"Ok\", value: n } : { kind: \"Err\", error: \"no\" }; }\n\
+                  val const scores = new Map<string, number>();\n\
+                  scores.set(\"a\", 1);\n\
+                  const wrong: number = \"not a number\";\n\
+                  export const nested = result { const n = try read(1); return read(n - 1); };\n\
+                  export const n = scores.size + wrong;\n";
+    let blocks = |report: &str| -> Vec<String> {
+        report
+            .split("\nerror")
+            .map(|block| block.trim_start_matches("error").trim().to_string())
+            .filter(|block| block.starts_with('['))
+            .collect()
+    };
+    let full = blocks(&types_stderr_overlay(source, source, false));
+    assert!(full.iter().any(|block| block.starts_with("[ts")), "{full:#?}");
+    assert!(
+        full.iter()
+            .any(|block| block.starts_with("[result-return-nested]")),
+        "{full:#?}"
+    );
+    let tt_layer: Vec<String> = full
+        .into_iter()
+        .filter(|block| !block.starts_with("[ts"))
+        .collect();
+    assert_eq!(blocks(&types_stderr_overlay(source, source, true)), tt_layer);
+}
+
 /// A `val` mutation is judged by what the receiver *is*, and the overlay
 /// keeps the buffer in its own project — so a type that comes from another
 /// module of the project still resolves.

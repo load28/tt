@@ -48,9 +48,11 @@ pub struct Blocked {
 pub struct CheckRequest {
     /// Emit declarations and return them (`--types`). A plain check does not.
     pub emit_declarations: bool,
-    /// Report only the tt layer. The type layer is TypeScript's answer about
-    /// the user's own code, and a caller that already has it from somewhere
-    /// else (an editor with a live language server) would show it twice.
+    /// Report only the tt layer: every diagnostic of a tt rule, the ones
+    /// the checker's answers decide included, and none of TypeScript's own.
+    /// The type layer is TypeScript's answer about the user's own code, and
+    /// a caller that already has it from somewhere else (an editor with a
+    /// live language server) would show it twice.
     pub tt_only: bool,
 }
 

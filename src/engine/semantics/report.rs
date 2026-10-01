@@ -65,38 +65,36 @@ pub(crate) fn report(
         }
     }
 
-    if !tt_only {
-        for shape in &answers.result_shapes {
-            let Some(anchor) = probes.result_returns.get(shape.index) else {
-                continue;
-            };
-            let Some(file) = files
-                .iter()
-                .find(|file| file.source_path == anchor.source_path)
-            else {
-                continue;
-            };
-            out.push(Diagnostic {
-                path: anchor.source_path.clone(),
-                position: Some(crate::line_col(&file.source, anchor.offset)),
-                end: Some(crate::line_col(&file.source, anchor.end)),
-                message: "`return` here would wrap an already-Result value".to_string(),
-                code: Some(
-                    crate::DiagnosticCode::ResultReturnNested
-                        .as_str()
-                        .to_string(),
-                ),
-                suggestions: vec![crate::Suggestion {
-                    message: "propagate this Result instead".to_string(),
-                    edit: Some(crate::Edit {
-                        start: anchor.offset,
-                        end: anchor.offset,
-                        replacement: "try ".to_string(),
-                    }),
-                }],
-                labels: Vec::new(),
-            });
-        }
+    for shape in &answers.result_shapes {
+        let Some(anchor) = probes.result_returns.get(shape.index) else {
+            continue;
+        };
+        let Some(file) = files
+            .iter()
+            .find(|file| file.source_path == anchor.source_path)
+        else {
+            continue;
+        };
+        out.push(Diagnostic {
+            path: anchor.source_path.clone(),
+            position: Some(crate::line_col(&file.source, anchor.offset)),
+            end: Some(crate::line_col(&file.source, anchor.end)),
+            message: "`return` here would wrap an already-Result value".to_string(),
+            code: Some(
+                crate::DiagnosticCode::ResultReturnNested
+                    .as_str()
+                    .to_string(),
+            ),
+            suggestions: vec![crate::Suggestion {
+                message: "propagate this Result instead".to_string(),
+                edit: Some(crate::Edit {
+                    start: anchor.offset,
+                    end: anchor.offset,
+                    replacement: "try ".to_string(),
+                }),
+            }],
+            labels: Vec::new(),
+        });
     }
 
     // A projection is deliberately file-local, so it cannot resolve names
@@ -171,19 +169,17 @@ pub(crate) fn report(
 
     // TypeScript's own diagnostics, at the position in the `.tt` file the
     // offending code was written at.
-    let type_diagnostics: &[TsDiagnostic] = if tt_only { &[] } else { &answers.diagnostics };
-    if !tt_only {
-        for diagnostic in &answers.project_diagnostics {
-            out.push(Diagnostic {
-                path: diagnostic.file.clone(),
-                position: None,
-                end: None,
-                message: diagnostic.message.clone(),
-                code: Some(format!("ts{}", diagnostic.code)),
-                suggestions: Vec::new(),
-                labels: Vec::new(),
-            });
-        }
+    let type_diagnostics: &[TsDiagnostic] = &answers.diagnostics;
+    for diagnostic in &answers.project_diagnostics {
+        out.push(Diagnostic {
+            path: diagnostic.file.clone(),
+            position: None,
+            end: None,
+            message: diagnostic.message.clone(),
+            code: Some(format!("ts{}", diagnostic.code)),
+            suggestions: Vec::new(),
+            labels: Vec::new(),
+        });
     }
     let structured_glue: HashSet<(PathBuf, usize, AnchorKind)> = type_diagnostics
         .iter()
@@ -800,5 +796,8 @@ pub(crate) fn report(
         });
     }
 
+    if tt_only {
+        out.retain(Diagnostic::states_tt_rule);
+    }
     finish_diagnostics(out)
 }
