@@ -30,7 +30,7 @@ error[ts2304]: Cannot find name 'g'.
 
 ==== tsc on the emitted TypeScript (exit 2) ====
 flowComposesInsideExpressions.ts(7,11): error TS2304: Cannot find name 'xs'.
-flowComposesInsideExpressions.ts(7,25): error TS2304: Cannot find name 'parse'.
-flowComposesInsideExpressions.ts(7,69): error TS2304: Cannot find name 'double'.
-flowComposesInsideExpressions.ts(8,21): error TS2304: Cannot find name 'f'.
-flowComposesInsideExpressions.ts(8,61): error TS2304: Cannot find name 'g'.
+flowComposesInsideExpressions.ts(7,77): error TS2304: Cannot find name 'parse'.
+flowComposesInsideExpressions.ts(7,84): error TS2304: Cannot find name 'double'.
+flowComposesInsideExpressions.ts(8,73): error TS2304: Cannot find name 'f'.
+flowComposesInsideExpressions.ts(8,76): error TS2304: Cannot find name 'g'.

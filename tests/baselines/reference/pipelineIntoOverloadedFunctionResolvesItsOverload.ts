@@ -99,7 +99,7 @@ const mapped: number[] = ["a", "bb"].map((s) => (($tt_v, $tt_f) => $tt_f($tt_v))
 const chained: string = (($tt_v, $tt_f) => $tt_f($tt_v))(conv("four"), conv);
 const wrapped: number = (($tt_v, $tt_f) => $tt_f($tt_v))(noted("head", "five"), (conv));
 const generic: number = (($tt_v, $tt_f) => $tt_f($tt_v))((($tt_v, $tt_f) => $tt_f($tt_v))((($tt_v, $tt_f) => $tt_f($tt_v))(noted("head", 5), keep<number>), conv), conv);
-const composed = $tt_fl(String, (($tt_f) => ($tt_v) => $tt_f($tt_v))(conv));
+const composed = (($tt_g, $tt_f) => $tt_fl($tt_g, ($tt_v) => $tt_f($tt_v)))(String, conv);
 const composedNumber: number = composed(123);
 console.log(param("xy"), local(), member({ s: "z" }), arrow("abcd"), mapped, chained, wrapped, generic, composedNumber, log.join());
 \ No newline at end of file

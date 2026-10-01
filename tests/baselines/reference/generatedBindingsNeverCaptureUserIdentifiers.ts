@@ -92,7 +92,7 @@ const a = $tt_t0_1.value; return Ok(a + $tt_t0); }
 const xs = [1].map(x => (($tt_v_1, $tt_f) => $tt_f($tt_v_1))(x, String));
 const ys = [1].map(x => (($tt_v_1, $tt_r_1) => $tt_r_1.add($tt_v_1))(x, (obj)));
 const zs = [1].map(x => (($tt_v_1, $tt_r_1) => $tt_r_1[key]($tt_v_1))(x, (obj)));
-const g = $tt_fl_1($tt_fl_1($tt_fl_1(((n: number) => n + 1), (($tt_v_1) => ($tt_v_1).toFixed(1))), (($tt_f) => ($tt_v_1) => $tt_f($tt_v_1))(Number)), (($tt_r_1) => ($tt_r_1.add).bind($tt_r_1))((obj)));
+const g = $tt_fl_1((($tt_g, $tt_f) => $tt_fl_1($tt_g, ($tt_v_1) => $tt_f($tt_v_1)))($tt_fl_1(((n: number) => n + 1), (($tt_v_1) => ($tt_v_1).toFixed(1))), Number), (($tt_r_1) => ($tt_r_1.add).bind($tt_r_1))((obj)));
 console.log(r, JSON.stringify(f()), xs[0], ys[0], zs[0], g(1), $tt_ap, $tt_fl);
 
 export {};

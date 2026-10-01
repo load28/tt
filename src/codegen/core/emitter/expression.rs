@@ -352,6 +352,35 @@ impl<'a> Emitter<'a> {
             }
             let body = self.emit_flow_function(step.value);
             let mut next = Rope::new();
+            if matches!(step.mode, ApplyMode::Call)
+                && self.reference_apply_steps.contains(&step.value)
+            {
+                let prior = self.generated_name("$tt_g");
+                let function = self.generated_name("$tt_f");
+                let input_name = self.generated_name("$tt_v");
+                next.push_lit(format!(
+                    "(({prior}, {function}) => {}({prior}, ({input_name}) => {function}(",
+                    self.generated_name("$tt_fl")
+                ));
+                let mut piped = Rope::new();
+                piped.push_lit(input_name);
+                next.anchored_with_context(
+                    AnchorKind::Pipe,
+                    step_span.start,
+                    step_span.end,
+                    owner_end,
+                    Some((produced.start, produced.end)),
+                    piped,
+                );
+                next.push_lit(")))(");
+                next.append(composed);
+                next.push_lit(", ");
+                push_grouped(&mut next, body, self.source_kind);
+                next.push_lit(")");
+                acc = next;
+                produced = step_span;
+                continue;
+            }
             next.push_lit(format!("{}(", self.generated_name("$tt_fl")));
             next.append(composed);
             match step.mode {
@@ -359,24 +388,6 @@ impl<'a> Emitter<'a> {
                     let input_name = self.generated_name("$tt_v");
                     next.push_lit(format!(", (({input_name}) => ({input_name})"));
                     next.append(body);
-                    next.push_lit("))");
-                }
-                ApplyMode::Call if self.reference_apply_steps.contains(&step.value) => {
-                    let function = self.generated_name("$tt_f");
-                    let input_name = self.generated_name("$tt_v");
-                    next.push_lit(format!(", (({function}) => ({input_name}) => {function}("));
-                    let mut piped = Rope::new();
-                    piped.push_lit(input_name);
-                    next.anchored_with_context(
-                        AnchorKind::Pipe,
-                        step_span.start,
-                        step_span.end,
-                        owner_end,
-                        Some((produced.start, produced.end)),
-                        piped,
-                    );
-                    next.push_lit("))(");
-                    push_grouped(&mut next, body, self.source_kind);
                     next.push_lit("))");
                 }
                 ApplyMode::Call => {

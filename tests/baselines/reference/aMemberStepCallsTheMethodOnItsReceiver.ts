@@ -50,7 +50,7 @@ const chained = (($tt_v, $tt_r) => $tt_r.add($tt_v))(obj.add(1), (obj));
 const computed = [2].map(x => (($tt_v, $tt_r) => $tt_r[key]($tt_v))(x, (obj)));
 const generic: number = (($tt_v, $tt_r) => $tt_r.id($tt_v))((1 + 1), (gen));
 const ordered = (($tt_v, $tt_r) => $tt_r.m($tt_v))((order.push("head"), 1), (traced));
-const composed = $tt_fl($tt_fl(((n: number) => n * 2), (($tt_r) => ($tt_r.add).bind($tt_r))((obj))), (($tt_f) => ($tt_v) => $tt_f($tt_v))(String));
+const composed = (($tt_g, $tt_f) => $tt_fl($tt_g, ($tt_v) => $tt_f($tt_v)))($tt_fl(((n: number) => n * 2), (($tt_r) => ($tt_r.add).bind($tt_r))((obj))), String);
 async function awaited() { return (await Promise.resolve(obj)).add(3); }
 awaited().then(q => {
     console.log(JSON.stringify([inlined, nested, chained, computed, generic, ordered, q]));

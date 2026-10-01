@@ -79,7 +79,7 @@ function find(present: boolean): Counter | undefined {
 flush("optional absent", (($tt_v, $tt_r) => $tt_r?.add($tt_v))(note("head", 4), (find(false))));
 flush("optional present", (($tt_v, $tt_r) => $tt_r?.add($tt_v))(note("head", 5), (find(true))));
 flush("optional tail then step", (($tt_v, $tt_f) => $tt_f($tt_v))((undefined as string | undefined)?.trim(), String));
-const composed = $tt_fl($tt_fl(((n: number) => note("double", n * 2)), (($tt_f) => ($tt_v) => $tt_f($tt_v))(String)), (($tt_v) => ($tt_v).padStart(3, "0")));
+const composed = $tt_fl((($tt_g, $tt_f) => $tt_fl($tt_g, ($tt_v) => $tt_f($tt_v)))(((n: number) => note("double", n * 2)), String), (($tt_v) => ($tt_v).padStart(3, "0")));
 flush("flow built", "nothing yet");
 flush("flow called", composed(4));
 flush("postfix chain", " a,b ".trim().split(","));

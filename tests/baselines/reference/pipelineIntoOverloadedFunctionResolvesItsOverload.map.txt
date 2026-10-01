@@ -27,7 +27,7 @@
 29:61 -> 30:157 len 4  "conv"
 29:69 -> 30:164 len 4  "conv"
 29:73 -> 30:169 len 19  ";\nconst composed = "
-30:26 -> 31:25 len 6  "String"
-30:36 -> 31:70 len 4  "conv"
-30:40 -> 31:76 len 180  ";\nconst composedNumber: number = composed(123);\n"...
+30:26 -> 31:77 len 6  "String"
+30:36 -> 31:85 len 4  "conv"
+30:40 -> 31:90 len 180  ";\nconst composedNumber: number = composed(123);\n"...
 

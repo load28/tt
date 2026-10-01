@@ -75,12 +75,16 @@ had no overloaded or generic step.
   types where the step is written.
 - **Decision and rationale**: Only a step that names its function changes.
   A `flow`'s later step is written
-  `(($tt_f) => ($tt_v) => $tt_f($tt_v))(step)`: the step is still evaluated
-  at composition and in order, and TypeScript gives an immediately invoked
-  function's returned arrow the contextual type of the call
-  (`getContextualReturnType` for an IIFE), so `$tt_v` is typed by the
-  earlier step and the call resolves the overload (checked with the pinned
-  `tsc`). The first step and a computed step keep `$tt_fl`/`$tt_ap`; the
+  `(($tt_g, $tt_f) => $tt_fl($tt_g, ($tt_v) => $tt_f($tt_v)))(composed, step)`:
+  the composition so far and the step are still evaluated at composition
+  and in order, as an immediately invoked function's arguments; TypeScript
+  types those parameters from the arguments, and the arrow passed to
+  `$tt_fl` is context sensitive, so `B` is inferred from `$tt_g` first and
+  `$tt_v` gets that type; the call then resolves the overload (checked with
+  the pinned `tsc`). The first form tried,
+  `(($tt_f) => ($tt_v) => $tt_f($tt_v))(step)` as `$tt_fl`'s argument,
+  resolved the overload too but typed `$tt_v` from `$tt_fl`'s not yet
+  inferred `B`, so a mismatch said "receives `unknown`" (Issue 2). The first step and a computed step keep `$tt_fl`/`$tt_ap`; the
   guide says an overloaded function there is inferred from its last
   signature, as TypeScript does for a generic call.
 
@@ -141,6 +145,31 @@ had no overloaded or generic step.
   generated text with no anchor.
 - **Resolution**: That `$tt_v` is anchored to the step with the piped
   value's span as context, as the old argument was.
+
+### Issue 2: A `flow` mismatch at a named later step said "receives `unknown`"
+
+- **Symptom**: The final gate's
+  `a_flow_mismatch_names_the_composed_step_and_the_boundary_types`
+  (`tests/native/cases_01.rs`) failed: `flow |> inc |> inc |> shout`
+  reported "this pipeline step expects `string`, but receives `unknown`".
+- **Cause**: In `$tt_fl(prev, (($tt_f) => ($tt_v) => $tt_f($tt_v))(shout))`
+  the IIFE is not context sensitive, so TypeScript checks it while `B` is
+  still uninferred, and `$tt_v` takes `B`'s constraint, `unknown`.
+- **Resolution**: The IIFE takes the composition so far as its first
+  argument and composes inside (Decision 2), so the arrow is the context
+  sensitive argument of a call whose `B` is inferred first; the mismatch
+  says "receives `number`". The test now pins both forms: a computed step
+  keeps the function obligation as context, and a named step reports the
+  value obligation of its call. A follow-up commit carries the change, the
+  regenerated `flow` baselines, and three `tests/cli.rs` tests and one
+  `tests/native/cases_06.rs` test that relied on `|> String` needing the
+  runtime import; they now use a computed step, which still does. One
+  type baseline moved: in `flowFirstStepOptionalChain`, whose first step
+  `scale?.by` is already a `flow-first-step-method` error, the hover of
+  `direct` reads `(n: number) => unknown` where it read
+  `(n: number) => string`, because a `$tt_fl` call whose first argument
+  fails gives the arrow no inferred `B`; a composition that type checks is
+  typed as before.
 
 ## Regression test (fails before the fix)
 

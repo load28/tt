@@ -74,8 +74,8 @@ fn a_project_writes_one_pipeline_runtime_and_imports_it() {
             source.join(format!("{name}.tt")),
             format!(
                 "declare function input_{name}(): number;\n\
-                 declare const step_{name}: (value: number) => number;\n\
-                 export const value_{name} = input_{name}() |> step_{name};\n"
+                 declare const step_{name}: () => (value: number) => number;\n\
+                 export const value_{name} = input_{name}() |> step_{name}();\n"
             ),
         )
         .unwrap();
@@ -226,8 +226,8 @@ fn a_source_cannot_claim_a_compiler_support_module_output() {
     fs::write(
         source.join("main.tt"),
         "declare function input(): number;\n\
-         const twice = (value: number): number => value * 2;\n\
-         export const result = input() |> twice;\n",
+         const twice = () => (value: number): number => value * 2;\n\
+         export const result = input() |> twice();\n",
     )
     .unwrap();
     fs::write(
@@ -2107,12 +2107,12 @@ fn watch_places_support_modules_by_the_whole_input_set() {
     fs::create_dir_all(input.join("sub")).unwrap();
     fs::write(
         input.join("a.tt"),
-        "export const x = (n: number) => n |> String;",
+        "export const x = (n: number) => n |> ((v: number) => String(v));",
     )
     .unwrap();
     fs::write(
         input.join("sub/b.tt"),
-        "export const x = (n: number) => n |> String;",
+        "export const x = (n: number) => n |> ((v: number) => String(v));",
     )
     .unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
@@ -2149,7 +2149,7 @@ fn watch_places_support_modules_by_the_whole_input_set() {
         );
         fs::write(
             input.join("sub/b.tt"),
-            "export const x = (n: number) => n |> String;\n",
+            "export const x = (n: number) => n |> ((v: number) => String(v));\n",
         )
         .unwrap();
         next_round();
@@ -2941,8 +2941,8 @@ fn a_commonjs_module_declares_its_pipeline_helpers() {
     fs::write(
         source.join("r.tt"),
         "import m = require(\"./m.js\");\n\
-         declare const step: (value: string) => string;\n\
-         export const value = m.g |> step;\n",
+         declare const step: () => (value: string) => string;\n\
+         export const value = m.g |> step();\n",
     )
     .unwrap();
     let output = ttc(&[
