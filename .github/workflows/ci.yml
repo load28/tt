@@ -420,6 +420,45 @@ jobs:
           TT_MATRIX_CASES: all
         run: cargo test --release --test editor_cases -- --nocapture
 
+  typescript-parity:
+    name: TypeScript's own tests through the typed check and the editor (nightly)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned Rust toolchain
+        run: rustup show active-toolchain
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install TypeScript
+        run: npm ci
+
+      - name: Fetch TypeScript's tests at the pinned commit
+        run: scripts/fetch-typescript-cases
+
+      - name: Every TypeScript test case type-checks as the pinned tsc does
+        env:
+          TTC_REQUIRE_TSGO: "1"
+          TTC_REQUIRE_TYPESCRIPT_CASES: "1"
+          TTC_TYPED_CASES: all
+        run: cargo test --release --test corpus typescript_cases_type_check -- --nocapture
+
+      - name: Every TypeScript fourslash test answers as tsgo --lsp does
+        env:
+          TTC_REQUIRE_TSGO: "1"
+          TTC_REQUIRE_TYPESCRIPT_CASES: "1"
+          TT_FOURSLASH: all
+        run: cargo test --release --test editor_cases typescript_fourslash -- --nocapture
+
   release-version:
     name: release artifact version
     if: >-

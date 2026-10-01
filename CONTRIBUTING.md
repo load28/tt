@@ -586,8 +586,8 @@ with `UPDATE_EXPECT=1 cargo test --test public_api`.
 
 Contract 1 is checked against TypeScript's test suite. `tests/typescript-cases.json`
 pins the microsoft/TypeScript commit the pinned `typescript` package was
-built from (its `gitHead`) and the tree ids of `tests/cases/compiler` and
-`tests/cases/conformance` there; `scripts/fetch-typescript-cases` makes a
+built from (its `gitHead`) and the tree ids of `tests/cases/compiler`,
+`tests/cases/conformance`, and the fourslash tests there; `scripts/fetch-typescript-cases` makes a
 sparse, blobless checkout of exactly those into `target/typescript-cases/`
 (about 55 MB, a few seconds) and verifies the tree ids. Nothing from it is
 committed; the checkout keeps TypeScript's `LICENSE.txt` and `NOTICE.txt`
@@ -611,6 +611,58 @@ TTC_TYPESCRIPT_CASES=all cargo test --release --test corpus typescript_test_case
 When `package.json` moves to another TypeScript, update the manifest's
 `typescript`, `commit` (the new package's `gitHead`), and tree ids in the
 same change; the test fails while they disagree.
+
+Contract 2 is checked over the same cases (TASK-717). For each case, a
+second test in `tests/corpus.rs` writes the units twice, with a
+`tsconfig.json` built from the case's `// @option` directives (typed by the
+pinned TypeScript's own command-line parser; `noEmit` is always on): as they
+are, and with every `.ts`/`.tsx` unit that no other unit imports renamed to
+`.tt`/`.ttx` (a `.tt` module is imported by its extension, `docs/ai/tt.md`).
+`tests/typescript-diagnostics.mjs` asks the pinned TypeScript, through its
+API, for the diagnostics `tsc --noEmit -p` reports for the TypeScript
+project, in `tsc`'s order of stages and with each range; the tt project is
+asked through `ttc --server`'s `typedCheck` (with `includeTypes`) and
+`ttc --check-types`, which must agree with each other. The two lists must be
+equal as (file, range, code, message). A case is skipped, with the reason
+counted in the output, when the harness lays out a file system the case
+directory cannot (`@currentDirectory`, `@link`, `@symlink`, its own
+`tsconfig.json`), when every configuration sets an option the pinned
+TypeScript removed, when TypeScript reports a syntax or grammar error, or
+when a renamed unit does not pass through. A difference is listed in
+`tests/typed-parity-differences.txt` (the case, a tab, the difference's
+signature as the failure prints it, a tab, `by-design` with the document
+under `docs/` that states it or `defect` with the TASK that records the
+repro, a tab, and the reason); the test fails on an unlisted difference, on
+a listed signature that changed, and on a listed case that now agrees. The
+first 40 cases compared are also run through `tsc -p` itself, whose printed
+diagnostics must be the oracle's.
+
+```sh
+cargo test --test corpus typescript_cases_type_check                     # 80 cases, fixed seed (PR CI)
+TTC_TYPED_CASES=all cargo test --release --test corpus typescript_cases_type_check   # every case (nightly)
+TTC_TYPED_FILTER=bluebirdStaticThis cargo test --test corpus typescript_cases_type_check   # named cases
+TTC_TYPED_CASES=all TTC_TYPED_SHARD=0/4 cargo test --test corpus typescript_cases_type_check  # every fourth case
+```
+
+The editor is checked against TypeScript's fourslash tests (TASK-718). At
+the pinned commit they are Go files, `tsc/internal/fourslash/tests/*_test.go`,
+and the manifest pins that tree too. `tests/editor_cases.rs` reads each
+test's `content` literal with fourslash's own rules (`// @Filename` units,
+`/*marker*/`, `{| "name": ... |}` and `[|range|]` markup), and the calls the
+test makes before its first edit: quick info and hover, completions, go to
+definition, find all references, rename, signature help, and semantic
+tokens, at the markers or ranges they name. Renamed as above, the test
+becomes an editor case asked through `ttc --server` and, as its twin,
+through `tsgo --lsp`, compared by `parity_view`. A differing question is
+listed in `tests/fourslash-differences.txt` in the format of the matrix's
+list (a by-design line cites a document under `docs/`); the test fails on
+an unlisted difference and on a listed one that now agrees.
+
+```sh
+cargo test --test editor_cases typescript_fourslash                      # 60 tests, fixed seed (PR CI)
+TT_FOURSLASH=all cargo test --release --test editor_cases typescript_fourslash   # every test (nightly)
+TT_FOURSLASH_FILTER=pathCompletions TT_FOURSLASH_VERBOSE=1 cargo test --test editor_cases typescript_fourslash
+```
 
 ### Fuzz findings and the mutation pass
 

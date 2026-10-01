@@ -163,6 +163,7 @@ struct Case {
     ignores: BTreeSet<String>,
     twin: Option<Vec<Unit>>,
     matrix: Option<PathBuf>,
+    server_only: bool,
     expected: Option<ExpectedDiagnostic>,
 }
 
@@ -500,6 +501,7 @@ fn parse_case(name: String, path: PathBuf, generated: &Path) -> Case {
         verbs,
         ignores,
         twin,
+        server_only: matrix.is_some(),
         matrix,
         expected,
     }
@@ -1297,7 +1299,8 @@ struct Files<'a> {
 
 impl Files<'_> {
     fn name(&self, path: &str) -> String {
-        let path = path.strip_prefix("file://").unwrap_or(path);
+        let decoded = path.strip_prefix("file://").map(percent_decoded);
+        let path = decoded.as_deref().unwrap_or(path);
         match Path::new(path).strip_prefix(self.dir) {
             Ok(relative) => relative.to_string_lossy().replace('\\', "/"),
             Err(_) => format!(
@@ -1384,6 +1387,29 @@ impl Files<'_> {
             ),
         }
     }
+}
+
+fn percent_decoded(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut at = 0;
+    while at < bytes.len() {
+        let escaped = (bytes[at] == b'%')
+            .then(|| text.get(at + 1..at + 3))
+            .flatten()
+            .and_then(|hex| u8::from_str_radix(hex, 16).ok());
+        match escaped {
+            Some(byte) => {
+                out.push(byte);
+                at += 3;
+            }
+            None => {
+                out.push(bytes[at]);
+                at += 1;
+            }
+        }
+    }
+    String::from_utf8(out).unwrap_or_else(|_| text.to_string())
 }
 
 fn indent(text: &str) -> String {
@@ -2166,7 +2192,7 @@ fn run(case: &Case) -> Outcome {
     let questions = questions(case, &project);
 
     let asks_editor = case.verbs.iter().any(|(verb, _)| {
-        *verb == Verb::Diagnostics || (*verb == Verb::Completions && case.matrix.is_none())
+        *verb == Verb::Diagnostics || (*verb == Verb::Completions && !case.server_only)
     });
     let mut editor = asks_editor.then(|| {
         let server = extension_server().expect("a built extension server, checked before the run");
@@ -2176,10 +2202,7 @@ fn run(case: &Case) -> Outcome {
         }
         editor
     });
-    let mut engine = case
-        .matrix
-        .is_none()
-        .then(|| ttc::engine::Workspace::new(Engine::new(None)));
+    let mut engine = (!case.server_only).then(|| ttc::engine::Workspace::new(Engine::new(None)));
     let mut server = Server::start(&project);
     for unit in case.units.iter().filter(|unit| is_tt(&unit.name)) {
         let path = project.join(&unit.name);
@@ -2288,7 +2311,7 @@ fn run(case: &Case) -> Outcome {
                     render_published(&files, &list, &mut baseline);
                     answered.push(("published".to_string(), list));
                 }
-                Verb::Completions if case.matrix.is_none() => {
+                Verb::Completions if !case.server_only => {
                     let offset = question.offset.expect("a marker");
                     let at = lsp_position(&unit.text, offset);
                     let answer = editor.request(
@@ -2956,8 +2979,8 @@ struct Listed {
     line: usize,
 }
 
-fn listed_differences() -> Vec<Listed> {
-    let text = fs::read_to_string(root().join(DIFFERENCES)).unwrap_or_default();
+fn listed_differences(file: &str, cite: &str) -> Vec<Listed> {
+    let text = fs::read_to_string(root().join(file)).unwrap_or_default();
     let mut out: Vec<Listed> = Vec::new();
     for (index, line) in text.lines().enumerate() {
         if line.trim().is_empty() || line.starts_with('#') {
@@ -2966,31 +2989,31 @@ fn listed_differences() -> Vec<Listed> {
         let fields: Vec<&str> = line.split('\t').collect();
         let [pattern, question, class, reason] = fields[..] else {
             panic!(
-                "{DIFFERENCES}:{}: a line is a case name (`*` matches any text), a tab, the verb and \
+                "{file}:{}: a line is a case name (`*` matches any text), a tab, the verb and \
                  marker, a tab, `by-design` or `defect`, a tab, and the reason",
                 index + 1
             );
         };
         match class {
             "by-design" => assert!(
-                reason.contains("docs/ai/tt.md"),
-                "{DIFFERENCES}:{}: a by-design difference cites where docs/ai/tt.md documents it",
+                reason.contains(cite),
+                "{file}:{}: a by-design difference cites where {cite} documents it",
                 index + 1
             ),
             "defect" => assert!(
                 reason.starts_with("TASK-"),
-                "{DIFFERENCES}:{}: a defect names the TASK-NNN that records it",
+                "{file}:{}: a defect names the TASK-NNN that records it",
                 index + 1
             ),
             other => panic!(
-                "{DIFFERENCES}:{}: `{other}` is neither `by-design` nor `defect`",
+                "{file}:{}: `{other}` is neither `by-design` nor `defect`",
                 index + 1
             ),
         }
         assert!(
             !out.iter()
                 .any(|entry| entry.pattern == pattern && entry.question == question),
-            "{DIFFERENCES}:{}: `{pattern}` `{question}` is listed twice",
+            "{file}:{}: `{pattern}` `{question}` is listed twice",
             index + 1
         );
         out.push(Listed {
@@ -3071,7 +3094,7 @@ fn judge_matrix(
     results: &BTreeMap<String, Vec<(String, bool)>>,
     unfiltered: bool,
 ) -> Vec<String> {
-    let listed = listed_differences();
+    let listed = listed_differences(DIFFERENCES, "docs/ai/tt.md");
     let mut failures = Vec::new();
     for (name, questions) in results {
         for (question, differs) in questions {
@@ -3636,4 +3659,1138 @@ fn judge_surfaces(
         }
     }
     failures
+}
+
+const FOURSLASH_DIFFERENCES: &str = "tests/fourslash-differences.txt";
+
+const FOURSLASH_SAMPLE: usize = 60;
+
+const ANONYMOUS: &str = "anonymous";
+
+const FOURSLASH_SEED: u64 = 0x7474_666f_7572_736c;
+
+const FOURSLASH_READ_ONLY: [&str; 40] = [
+    "GoToMarker",
+    "MarkTestAsStradaServer",
+    "Ranges",
+    "Markers",
+    "MarkerNames",
+    "MarkerByName",
+    "GetRangesByText",
+    "GetOptions",
+    "VerifyQuickInfoAt",
+    "VerifyQuickInfoIs",
+    "VerifyQuickInfoExists",
+    "VerifyNotQuickInfoExists",
+    "VerifyBaselineHover",
+    "VerifyBaselineHoverWithVerbosity",
+    "VerifyCompletions",
+    "VerifyBaselineGoToDefinition",
+    "VerifyBaselineGoToTypeDefinition",
+    "VerifyBaselineGoToImplementation",
+    "VerifyBaselineGoToSourceDefinition",
+    "VerifyBaselineFindAllReferences",
+    "VerifyBaselineRename",
+    "VerifyBaselineRenameAtRangesWithText",
+    "VerifyRenameSucceeded",
+    "VerifyRenameFailed",
+    "VerifySignatureHelp",
+    "VerifyBaselineSignatureHelp",
+    "VerifyNoSignatureHelpForMarkers",
+    "VerifySemanticTokens",
+    "VerifyBaselineDocumentHighlights",
+    "VerifyBaselineDocumentSymbol",
+    "VerifyBaselineInlayHints",
+    "VerifyBaselineCallHierarchy",
+    "VerifyBaselineSelectionRanges",
+    "VerifyOutliningSpans",
+    "VerifyNoErrors",
+    "VerifyNumberOfErrorsInCurrentFile",
+    "VerifyBaselineNonSuggestionDiagnostics",
+    "VerifyNonSuggestionDiagnostics",
+    "VerifySuggestionDiagnostics",
+    "VerifyErrorExistsBetweenMarkers",
+];
+
+const FOURSLASH_UNSUPPORTED_OPTIONS: [&str; 2] = ["tsc", "currentdirectory"];
+
+struct GoCall {
+    method: String,
+    args: Vec<String>,
+    chained: bool,
+}
+
+struct GoTest {
+    name: String,
+    content: String,
+    calls: Vec<GoCall>,
+}
+
+fn go_string(text: &str) -> Option<(String, usize)> {
+    let mut chars = text.char_indices();
+    let (_, quote) = chars.next()?;
+    let mut out = String::new();
+    match quote {
+        '`' => {
+            let end = text[1..].find('`')? + 1;
+            Some((text[1..end].replace('\r', ""), end + 1))
+        }
+        '"' => {
+            let mut escaped = false;
+            let mut index = 1;
+            let bytes = text.as_bytes();
+            while index < text.len() {
+                let ch = text[index..].chars().next()?;
+                if escaped {
+                    escaped = false;
+                    match ch {
+                        'n' => out.push('\n'),
+                        't' => out.push('\t'),
+                        'r' => out.push('\r'),
+                        '\\' => out.push('\\'),
+                        '"' => out.push('"'),
+                        '\'' => out.push('\''),
+                        'a' => out.push('\u{7}'),
+                        'b' => out.push('\u{8}'),
+                        'f' => out.push('\u{c}'),
+                        'v' => out.push('\u{b}'),
+                        'x' | 'u' | 'U' => {
+                            let width = match ch {
+                                'x' => 2,
+                                'u' => 4,
+                                _ => 8,
+                            };
+                            let digits = text.get(index + 1..index + 1 + width)?;
+                            let value = u32::from_str_radix(digits, 16).ok()?;
+                            out.push(char::from_u32(value)?);
+                            index += width;
+                        }
+                        '0'..='7' => {
+                            let digits = text.get(index..index + 3)?;
+                            let value = u32::from_str_radix(digits, 8).ok()?;
+                            out.push(char::from_u32(value)?);
+                            index += 2;
+                        }
+                        _ => return None,
+                    }
+                    index += ch.len_utf8();
+                    continue;
+                }
+                match bytes[index] {
+                    b'\\' => escaped = true,
+                    b'"' => return Some((out, index + 1)),
+                    _ => out.push(ch),
+                }
+                index += ch.len_utf8();
+            }
+            None
+        }
+        _ => None,
+    }
+}
+
+fn go_skip_space(text: &str, mut at: usize) -> usize {
+    loop {
+        let rest = &text[at..];
+        let trimmed = rest.trim_start();
+        at += rest.len() - trimmed.len();
+        if trimmed.starts_with("//") {
+            at += trimmed.find('\n').unwrap_or(trimmed.len());
+        } else if trimmed.starts_with("/*") {
+            at += trimmed.find("*/").map_or(trimmed.len(), |end| end + 2);
+        } else {
+            return at;
+        }
+    }
+}
+
+fn go_concatenation(text: &str) -> Option<(String, usize)> {
+    let mut at = go_skip_space(text, 0);
+    let mut out = String::new();
+    loop {
+        let (piece, length) = go_string(&text[at..])?;
+        out.push_str(&piece);
+        at = go_skip_space(text, at + length);
+        if text[at..].starts_with('+') {
+            at = go_skip_space(text, at + 1);
+        } else {
+            return Some((out, at));
+        }
+    }
+}
+
+fn go_balanced(text: &str, open: usize) -> Option<usize> {
+    let bytes = text.as_bytes();
+    let mut depth = 0usize;
+    let mut at = open;
+    while at < bytes.len() {
+        match bytes[at] {
+            b'(' | b'[' | b'{' => depth += 1,
+            b')' | b']' | b'}' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(at);
+                }
+            }
+            b'"' | b'`' => {
+                let (_, length) = go_string(&text[at..])?;
+                at += length;
+                continue;
+            }
+            b'\'' => {
+                at += 1;
+                while at < bytes.len() && bytes[at] != b'\'' {
+                    at += if bytes[at] == b'\\' { 2 } else { 1 };
+                }
+            }
+            b'/' if bytes.get(at + 1) == Some(&b'/') => {
+                at += text[at..].find('\n').unwrap_or(text.len() - at);
+                continue;
+            }
+            b'/' if bytes.get(at + 1) == Some(&b'*') => {
+                at += text[at..].find("*/").map_or(text.len() - at, |end| end + 2);
+                continue;
+            }
+            _ => {}
+        }
+        at += 1;
+    }
+    None
+}
+
+fn go_arguments(inner: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut start = 0;
+    let mut at = 0;
+    let bytes = inner.as_bytes();
+    while at < bytes.len() {
+        match bytes[at] {
+            b'(' | b'[' | b'{' => {
+                at = go_balanced(inner, at).map_or(bytes.len(), |end| end + 1);
+                continue;
+            }
+            b'"' | b'`' => {
+                at += go_string(&inner[at..]).map_or(bytes.len() - at, |(_, length)| length);
+                continue;
+            }
+            b',' => {
+                out.push(inner[start..at].trim().to_string());
+                start = at + 1;
+            }
+            _ => {}
+        }
+        at += 1;
+    }
+    let last = inner[start..].trim();
+    if !last.is_empty() {
+        out.push(last.to_string());
+    }
+    out
+}
+
+fn go_test(source: &str) -> Result<GoTest, String> {
+    let header = source.find("func Test").ok_or("no Test function")?;
+    let name_start = header + "func Test".len();
+    let name_end = name_start + source[name_start..].find('(').ok_or("no Test function")?;
+    let name = source[name_start..name_end].to_string();
+    let open = name_end + source[name_end..].find('{').ok_or("no body")?;
+    let close = go_balanced(source, open).ok_or("an unbalanced body")?;
+    let body = &source[open + 1..close];
+    let content_at = ["const content = ", "content := "]
+        .iter()
+        .find_map(|head| body.find(head).map(|at| at + head.len()))
+        .ok_or("no content literal")?;
+    let (content, _) =
+        go_concatenation(&body[content_at..]).ok_or("content that is not a string literal")?;
+    let created = body
+        .find("fourslash.NewFourslash(t, ")
+        .ok_or("no fourslash.NewFourslash")?;
+    let capabilities = &body[created + "fourslash.NewFourslash(t, ".len()..];
+    if !capabilities.starts_with("nil") {
+        return Err("custom client capabilities".to_string());
+    }
+    let after = created + body[created..].find('\n').unwrap_or(0);
+    let mut calls = Vec::new();
+    let mut at = after;
+    let bytes = body.as_bytes();
+    while at < bytes.len() {
+        at = go_skip_space(body, at);
+        if at >= bytes.len() {
+            break;
+        }
+        let rest = &body[at..];
+        let word: String = rest
+            .chars()
+            .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+            .collect();
+        if matches!(
+            word.as_str(),
+            "for" | "if" | "switch" | "go" | "func" | "select"
+        ) {
+            return Err("control flow in the test body".to_string());
+        }
+        if let Some(method_start) = rest.strip_prefix("f.") {
+            let method: String = method_start
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect();
+            let paren = at + 2 + method.len();
+            if body.as_bytes().get(paren) == Some(&b'(') {
+                let end = go_balanced(body, paren).ok_or("an unbalanced call")?;
+                let args = go_arguments(&body[paren + 1..end]);
+                let line_end = body[end..].find('\n').map_or(body.len(), |n| end + n);
+                let chained = body[end + 1..line_end].trim_start().starts_with('.');
+                calls.push(GoCall {
+                    method,
+                    args,
+                    chained,
+                });
+                at = line_end;
+                continue;
+            }
+        }
+        let mut cursor = at;
+        loop {
+            match bytes.get(cursor) {
+                None | Some(b'\n') => break,
+                Some(b'(' | b'[' | b'{') => {
+                    cursor = go_balanced(body, cursor).map_or(bytes.len(), |end| end + 1);
+                }
+                Some(b'"' | b'`') => {
+                    cursor += go_string(&body[cursor..]).map_or(1, |(_, length)| length);
+                }
+                Some(_) => cursor += 1,
+            }
+        }
+        at = cursor;
+    }
+    Ok(GoTest {
+        name,
+        content,
+        calls,
+    })
+}
+
+struct FourslashFile {
+    name: String,
+    unit: Unit,
+}
+
+fn chomp_leading_space(content: &str) -> String {
+    let lines: Vec<&str> = content.split('\n').collect();
+    if lines
+        .iter()
+        .any(|line| !line.is_empty() && !line.starts_with(' '))
+    {
+        return content.to_string();
+    }
+    lines
+        .iter()
+        .map(|line| line.get(1..).unwrap_or(""))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn fourslash_markers(raw: &str) -> Result<Unit, String> {
+    let content = chomp_leading_space(raw);
+    let chars: Vec<(usize, char)> = content.char_indices().collect();
+    let mut output = String::new();
+    let mut markers: Vec<(String, usize)> = Vec::new();
+    let mut ranges: Vec<(usize, usize)> = Vec::new();
+    let mut open_ranges: Vec<usize> = Vec::new();
+    let mut difference = 0usize;
+    let mut last_normal = 0usize;
+    let mut open_marker: Option<(usize, usize)> = None;
+    let mut state = 0u8;
+    let flush = |output: &mut String, from: usize, to: Option<usize>| {
+        output.push_str(&content[from..to.unwrap_or(content.len())]);
+    };
+    let Some(&(_, first)) = chars.first() else {
+        return Ok(Unit {
+            name: String::new(),
+            text: String::new(),
+            markers,
+            ranges,
+        });
+    };
+    let mut previous = first;
+    for &(i, current) in chars.iter().skip(1) {
+        match state {
+            0 => {
+                if previous == '[' && current == '|' {
+                    open_ranges.push(i - 1 - difference);
+                    flush(&mut output, last_normal, Some(i - 1));
+                    last_normal = i + 1;
+                    difference += 2;
+                } else if previous == '|' && current == ']' {
+                    let start = open_ranges.pop().ok_or("a range end with no start")?;
+                    ranges.push((start, i - 1 - difference));
+                    flush(&mut output, last_normal, Some(i - 1));
+                    last_normal = i + 1;
+                    difference += 2;
+                } else if previous == '/'
+                    && current == '*'
+                    && content.as_bytes().get(i + 1) != Some(&b'/')
+                {
+                    state = 1;
+                    open_marker = Some((i - 1 - difference, i - 1));
+                } else if previous == '{' && current == '|' {
+                    state = 2;
+                    open_marker = Some((i - 1 - difference, i - 1));
+                    flush(&mut output, last_normal, Some(i - 1));
+                }
+            }
+            2 => {
+                if previous == '|' && current == '}' {
+                    let (position, source) = open_marker.take().expect("an open marker");
+                    let data = content[source + 2..i - 1].trim();
+                    let value: Value = serde_json::from_str(&format!("{{ {data} }}"))
+                        .map_err(|_| format!("an object marker `{data}` that is not JSON"))?;
+                    if let Some(name) = value["name"].as_str().filter(|name| !name.is_empty()) {
+                        markers.push((name.to_string(), position));
+                    }
+                    last_normal = i + 1;
+                    difference += i + 1 - source;
+                    state = 0;
+                }
+            }
+            _ => {
+                if previous == '*' && current == '/' {
+                    let (position, source) = open_marker.take().expect("an open marker");
+                    let name = content[source + 2..i - 1].trim().to_string();
+                    markers.push((name, position));
+                    flush(&mut output, last_normal, Some(source));
+                    last_normal = i + 1;
+                    difference += i + 1 - source;
+                    state = 0;
+                } else if !(current.is_ascii_alphanumeric() || current == '$' || current == '_') {
+                    let closing = current == '*' && content.as_bytes().get(i + 1) == Some(&b'/');
+                    if !closing {
+                        flush(&mut output, last_normal, Some(i));
+                        last_normal = i;
+                        open_marker = None;
+                        state = 0;
+                    }
+                }
+            }
+        }
+        if current == '\n' && previous == '\r' {
+            continue;
+        }
+        previous = if i >= last_normal {
+            current
+        } else {
+            '\u{fffd}'
+        };
+    }
+    flush(&mut output, last_normal, None);
+    if !open_ranges.is_empty() {
+        return Err("an unterminated range".to_string());
+    }
+    if open_marker.is_some() {
+        return Err("an unterminated marker".to_string());
+    }
+    ranges.sort_by(|a, b| a.0.cmp(&b.0).then(b.1.cmp(&a.1)));
+    Ok(Unit {
+        name: String::new(),
+        text: output,
+        markers,
+        ranges,
+    })
+}
+
+fn fourslash_files(
+    content: &str,
+    default_name: &str,
+) -> Result<(Vec<FourslashFile>, BTreeMap<String, String>), String> {
+    let mut files = Vec::new();
+    let mut globals: BTreeMap<String, String> = BTreeMap::new();
+    let mut current_name = default_name.to_string();
+    let mut current = String::new();
+    let mut seen_content = false;
+    let mut seen_file = false;
+    let save = |files: &mut Vec<FourslashFile>, name: &str, text: &str| -> Result<(), String> {
+        let unit = fourslash_markers(text)?;
+        files.push(FourslashFile {
+            name: name.to_string(),
+            unit,
+        });
+        Ok(())
+    };
+    for line in content.split('\n') {
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        if let Some((name, value)) = directive(line) {
+            if (name == "link" && value.contains("->")) || name == "symlink" {
+                return Err("a harness symlink".to_string());
+            }
+            if name != "filename" {
+                if name != "emitthisfile" && name != "noopen" {
+                    globals.insert(name, value.to_string());
+                }
+                continue;
+            }
+            if !current.is_empty() || seen_file {
+                save(&mut files, &current_name, &current)?;
+                seen_file = true;
+            }
+            current.clear();
+            seen_content = false;
+            current_name = value.to_string();
+            continue;
+        }
+        if seen_content {
+            current.push('\n');
+        }
+        seen_content = true;
+        current.push_str(line);
+    }
+    save(&mut files, &current_name, &current)?;
+    Ok((files, globals))
+}
+
+fn lower_first(name: &str) -> String {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) => first.to_lowercase().collect::<String>() + chars.as_str(),
+        None => String::new(),
+    }
+}
+
+fn fourslash_relative(name: &str) -> Option<String> {
+    let mut parts: Vec<&str> = Vec::new();
+    for part in name.trim_start_matches('/').split('/') {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop()?;
+            }
+            other => parts.push(other),
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
+}
+
+fn fourslash_renameable(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    (lower.ends_with(".ts") || lower.ends_with(".tsx"))
+        && !lower.contains(".d.")
+        && !lower.split('/').any(|part| part == "node_modules")
+}
+
+fn fourslash_tt_name(name: &str) -> String {
+    if let Some(stem) = name.strip_suffix(".tsx") {
+        format!("{stem}.ttx")
+    } else if let Some(stem) = name.strip_suffix(".ts") {
+        format!("{stem}.tt")
+    } else {
+        name.to_string()
+    }
+}
+
+fn marker_list(
+    argument: &str,
+    named: &[String],
+    ranges: &[String],
+    ranges_by_text: &BTreeMap<String, Vec<String>>,
+) -> Option<Vec<String>> {
+    let argument = argument.trim().trim_end_matches("...");
+    if let Some((text, _)) = go_string(argument) {
+        return Some(vec![text]);
+    }
+    if argument == "f.Markers()" || argument == "f.MarkerNames()" {
+        return Some(named.to_vec());
+    }
+    if argument == "f.Ranges()" {
+        return Some(ranges.to_vec());
+    }
+    if let Some(index) = argument
+        .strip_prefix("f.Ranges()[")
+        .and_then(|rest| rest.strip_suffix(']'))
+        .and_then(|index| index.parse::<usize>().ok())
+    {
+        return ranges.get(index).map(|range| vec![range.clone()]);
+    }
+    if let Some(inner) = argument
+        .strip_prefix("f.MarkerByName(t, ")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        return go_string(inner).map(|(name, _)| vec![name]);
+    }
+    if let Some(inner) = argument
+        .strip_prefix("f.GetRangesByText().Get(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    {
+        let (text, _) = go_string(inner)?;
+        return ranges_by_text.get(&text).cloned();
+    }
+    if let Some(inner) = argument
+        .strip_prefix("[]string{")
+        .and_then(|rest| rest.strip_suffix('}'))
+    {
+        return go_arguments(inner)
+            .iter()
+            .map(|item| go_string(item).map(|(name, _)| name))
+            .collect();
+    }
+    None
+}
+
+type Answered = Vec<(String, Option<String>)>;
+
+struct Converted {
+    case: Case,
+    dir: Workspace,
+}
+
+fn fourslash_case(
+    path: &Path,
+    oracle: &mut common::typescript_cases::Oracle,
+) -> Result<Converted, String> {
+    let source = fs::read_to_string(path).map_err(|_| "not UTF-8".to_string())?;
+    let test = go_test(&source)?;
+    let default_name = format!("{}.ts", lower_first(&test.name));
+    let (files, globals) = fourslash_files(&test.content, &default_name)?;
+    for option in FOURSLASH_UNSUPPORTED_OPTIONS {
+        if globals.contains_key(option) {
+            return Err(format!("the harness option @{option}"));
+        }
+    }
+    let mut units: Vec<Unit> = Vec::new();
+    for file in files {
+        let lower = file.name.to_ascii_lowercase();
+        if lower.ends_with("tsconfig.json") || lower.ends_with("jsconfig.json") {
+            return Err("the test brings its own tsconfig.json".to_string());
+        }
+        let name = fourslash_relative(&file.name).ok_or("a file outside the root")?;
+        if units
+            .iter()
+            .any(|unit| unit.name.eq_ignore_ascii_case(&name))
+        {
+            return Err("two files at one path".to_string());
+        }
+        let mut unit = file.unit;
+        unit.name = name;
+        units.push(unit);
+    }
+    let mut named: Vec<String> = Vec::new();
+    for unit in &units {
+        for (marker, _) in &unit.markers {
+            if named.contains(marker) {
+                return Err(format!("the marker `{marker}` twice"));
+            }
+            named.push(marker.clone());
+        }
+    }
+    let mut range_names = Vec::new();
+    let mut ranges_by_text: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut counter = 0usize;
+    for unit in units.iter_mut() {
+        let mut added = Vec::new();
+        for (start, end) in unit.ranges.clone() {
+            let name = format!("range{counter}");
+            counter += 1;
+            if named.contains(&name) {
+                return Err(format!("a marker named `{name}`"));
+            }
+            ranges_by_text
+                .entry(unit.text[start..end].to_string())
+                .or_default()
+                .push(name.clone());
+            range_names.push(name.clone());
+            added.push((name, start));
+        }
+        unit.markers.extend(added);
+    }
+    let entries: Vec<Value> = globals
+        .iter()
+        .map(|(name, value)| json!([name, value]))
+        .collect();
+    let converted = oracle.ask(&json!({ "options": entries }));
+    for key in ["unknown", "varies", "invalid"] {
+        if converted[key]
+            .as_array()
+            .is_some_and(|list| !list.is_empty())
+        {
+            return Err(format!(
+                "an option the oracle reports as {key}: {}",
+                converted[key]
+            ));
+        }
+    }
+    let mut options = json!({
+        "target": "esnext",
+        "jsx": "preserve",
+        "skipDefaultLibCheck": true,
+        "noEmit": true,
+    });
+    let chosen = converted["configurations"][0].clone();
+    for (key, value) in chosen.as_object().into_iter().flatten() {
+        options[key] = value.clone();
+    }
+    let unsupported = [
+        ("target", &["es5", "es3"][..]),
+        ("module", &["amd", "umd", "system", "none"][..]),
+        ("moduleResolution", &["node10", "node", "classic"][..]),
+    ];
+    for (key, values) in unsupported {
+        if let Some(value) = options[key].as_str()
+            && values.contains(&value.to_ascii_lowercase().as_str())
+        {
+            return Err(format!(
+                "an option value the fourslash harness skips ({key}: {value})"
+            ));
+        }
+    }
+    for key in ["outFile", "baseUrl"] {
+        if !options[key].is_null() {
+            return Err(format!("an option the fourslash harness skips ({key})"));
+        }
+    }
+    for key in [
+        "esModuleInterop",
+        "allowSyntheticDefaultImports",
+        "alwaysStrict",
+    ] {
+        if options[key] == json!(false) {
+            return Err(format!(
+                "an option the fourslash harness skips ({key}: false)"
+            ));
+        }
+    }
+    let config = json!({ "compilerOptions": options }).to_string();
+    let dir = Workspace::in_repo("fourslash-reach");
+    let twin_dir = dir.path().to_path_buf();
+    write_units(&twin_dir, &units);
+    fs::write(twin_dir.join("tsconfig.json"), &config).expect("a writable tsconfig");
+    let members: Vec<String> = units
+        .iter()
+        .map(|unit| twin_dir.join(&unit.name).to_string_lossy().into_owned())
+        .collect();
+    let answer = oracle.ask(&json!({
+        "check": twin_dir.join("tsconfig.json").to_string_lossy(),
+        "units": members,
+    }));
+    let reached: BTreeSet<String> = answer["reached"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|path| path.as_str())
+        .filter_map(|path| Path::new(path).strip_prefix(&twin_dir).ok())
+        .map(|path| path.to_string_lossy().replace('\\', "/"))
+        .collect();
+    let renamed: BTreeSet<String> = units
+        .iter()
+        .map(|unit| unit.name.clone())
+        .filter(|name| fourslash_renameable(name) && !reached.contains(name))
+        .collect();
+    if renamed.is_empty() {
+        return Err("no .ts/.tsx file to rename that no other file imports".to_string());
+    }
+    let in_renamed = |marker: &str| {
+        units.iter().any(|unit| {
+            renamed.contains(&unit.name) && unit.markers.iter().any(|(name, _)| name == marker)
+        })
+    };
+    let mut verbs: Vec<(Verb, Vec<String>)> = Vec::new();
+    let mut current: Option<String> = None;
+    let mut push = |verb: Verb, targets: Vec<String>| {
+        let targets: Vec<String> = targets
+            .into_iter()
+            .filter(|t| t == "*" || in_renamed(t))
+            .collect();
+        if targets.is_empty() {
+            return;
+        }
+        match verbs.iter_mut().find(|(known, _)| *known == verb) {
+            Some((_, known)) => {
+                for target in targets {
+                    if !known.contains(&target) {
+                        known.push(target);
+                    }
+                }
+            }
+            None => verbs.push((verb, targets)),
+        }
+    };
+    let named_only: Vec<String> = named.clone();
+    for call in &test.calls {
+        if !FOURSLASH_READ_ONLY.contains(&call.method.as_str()) {
+            break;
+        }
+        let args = &call.args;
+        let markers_from = |from: usize| -> Option<Vec<String>> {
+            let mut out = Vec::new();
+            for argument in args.iter().skip(from) {
+                out.extend(marker_list(
+                    argument,
+                    &named_only,
+                    &range_names,
+                    &ranges_by_text,
+                )?);
+            }
+            Some(out)
+        };
+        let here = || current.clone().into_iter().collect::<Vec<_>>();
+        match call.method.as_str() {
+            "GoToMarker" => {
+                current = args
+                    .get(1)
+                    .and_then(|argument| go_string(argument))
+                    .map(|(name, _)| name);
+            }
+            "VerifyQuickInfoAt" => {
+                if let Some(marker) = args.get(1).and_then(|a| go_string(a)) {
+                    push(Verb::Hover, vec![marker.0]);
+                }
+            }
+            "VerifyBaselineHover" => push(Verb::Hover, named_only.clone()),
+            "VerifyQuickInfoIs" | "VerifyQuickInfoExists" | "VerifyNotQuickInfoExists" => {
+                push(Verb::Hover, here())
+            }
+            "VerifyCompletions" => {
+                let targets = match args.get(1).map(String::as_str) {
+                    Some("nil") => here(),
+                    Some(argument) => {
+                        marker_list(argument, &named_only, &range_names, &ranges_by_text)
+                            .unwrap_or_default()
+                    }
+                    None => Vec::new(),
+                };
+                if let Some(last) = targets.last() {
+                    current = Some(last.clone());
+                }
+                push(Verb::Completions, targets);
+            }
+            "VerifyBaselineGoToDefinition" => {
+                let targets = if args.len() <= 2 {
+                    Some(range_names.clone())
+                } else {
+                    markers_from(2)
+                };
+                push(Verb::Definition, targets.unwrap_or_default());
+            }
+            "VerifyBaselineFindAllReferences" => {
+                let targets = if args.len() <= 1 {
+                    Some(range_names.clone())
+                } else {
+                    markers_from(1)
+                };
+                push(Verb::References, targets.unwrap_or_default());
+            }
+            "VerifyBaselineRename" if args.get(1).map(String::as_str) == Some("nil") => {
+                push(Verb::Rename, markers_from(2).unwrap_or_default());
+            }
+            "VerifyBaselineRenameAtRangesWithText"
+                if args.get(1).map(String::as_str) == Some("nil") =>
+            {
+                let mut targets = Vec::new();
+                for argument in args.iter().skip(2) {
+                    if let Some((text, _)) = go_string(argument) {
+                        targets.extend(ranges_by_text.get(&text).cloned().unwrap_or_default());
+                    }
+                }
+                push(Verb::Rename, targets);
+            }
+            "VerifyRenameSucceeded" | "VerifyRenameFailed"
+                if args.get(1).map(String::as_str) == Some("nil") =>
+            {
+                push(Verb::Rename, here())
+            }
+            "VerifySignatureHelp" => push(Verb::SignatureHelp, here()),
+            "VerifyBaselineSignatureHelp" => push(Verb::SignatureHelp, named_only.clone()),
+            "VerifyNoSignatureHelpForMarkers" => {
+                push(Verb::SignatureHelp, markers_from(1).unwrap_or_default())
+            }
+            "VerifySemanticTokens" => push(Verb::SemanticTokens, vec!["*".to_string()]),
+            _ => {}
+        }
+        if call.chained {
+            break;
+        }
+    }
+    if verbs.is_empty() {
+        return Err("no question this runner asks at a marker in a renamed file".to_string());
+    }
+    if named.iter().any(|name| name == ANONYMOUS) {
+        return Err(format!("a marker named `{ANONYMOUS}`"));
+    }
+    let shown = |name: &str| {
+        if name.is_empty() {
+            ANONYMOUS.to_string()
+        } else {
+            name.to_string()
+        }
+    };
+    for (_, targets) in verbs.iter_mut() {
+        for target in targets.iter_mut() {
+            *target = shown(target);
+        }
+    }
+    for unit in units.iter_mut() {
+        for (marker, _) in unit.markers.iter_mut() {
+            *marker = shown(marker);
+        }
+    }
+    let twin: Vec<Unit> = units.clone();
+    let mut tt_units = units;
+    for unit in tt_units.iter_mut() {
+        if renamed.contains(&unit.name) {
+            unit.name = fourslash_tt_name(&unit.name);
+        }
+    }
+    tt_units.push(Unit {
+        name: "tsconfig.json".to_string(),
+        text: config.clone(),
+        markers: Vec::new(),
+        ranges: Vec::new(),
+    });
+    let mut twin = twin;
+    twin.push(Unit {
+        name: "tsconfig.json".to_string(),
+        text: config,
+        markers: Vec::new(),
+        ranges: Vec::new(),
+    });
+    Ok(Converted {
+        case: Case {
+            name: path
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .trim_end_matches("_test.go")
+                .to_string(),
+            path: path.to_path_buf(),
+            units: tt_units,
+            verbs,
+            ignores: BTreeSet::new(),
+            twin: Some(twin),
+            matrix: None,
+            server_only: true,
+            expected: None,
+        },
+        dir,
+    })
+}
+
+fn fourslash_tests(dir: &Path) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = fs::read_dir(dir)
+        .expect("a readable fourslash directory")
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| {
+            path.file_name()
+                .is_some_and(|name| name.to_string_lossy().ends_with("_test.go"))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
+#[test]
+fn typescript_fourslash_tests_answer_as_their_twins() {
+    let manifest = common::typescript_cases::manifest();
+    let Some(checkout) = common::typescript_cases::cases_checkout(&manifest) else {
+        assert!(
+            !common::typescript_cases::cases_required(),
+            "TTC_REQUIRE_TYPESCRIPT_CASES is set but TypeScript's tests are not fetched — run \
+             scripts/fetch-typescript-cases"
+        );
+        eprintln!(
+            "SKIP TypeScript's fourslash tests: not fetched (scripts/fetch-typescript-cases)"
+        );
+        return;
+    };
+    if !toolchain() || tsgo_binary().is_none() {
+        eprintln!("SKIP TypeScript's fourslash tests: no TypeScript installed — run `npm ci`");
+        return;
+    }
+    let tests_dir = checkout.join(common::typescript_cases::tree(
+        &manifest,
+        "/fourslash/tests",
+    ));
+    let all = fourslash_tests(&tests_dir);
+    let total = all.len();
+    let requested = std::env::var("TT_FOURSLASH").unwrap_or_default();
+    let filter = std::env::var("TT_FOURSLASH_FILTER")
+        .ok()
+        .filter(|f| !f.is_empty());
+    let full = requested == "all" && filter.is_none();
+    let (chosen, description): (Vec<PathBuf>, String) = if let Some(filter) = &filter {
+        let patterns: Vec<&str> = filter.split(',').collect();
+        let picked: Vec<PathBuf> = all
+            .into_iter()
+            .filter(|path| {
+                let name = path.file_name().unwrap().to_string_lossy();
+                patterns.iter().any(|p| name.contains(p))
+            })
+            .collect();
+        let description = format!(
+            "{} of {total} tests matching TT_FOURSLASH_FILTER",
+            picked.len()
+        );
+        (picked, description)
+    } else if requested == "all" {
+        (all, format!("all {total} tests"))
+    } else {
+        let count = requested.parse().unwrap_or(FOURSLASH_SAMPLE);
+        let seed = std::env::var("TT_FOURSLASH_SEED")
+            .ok()
+            .and_then(|value| value.parse().ok())
+            .unwrap_or(FOURSLASH_SEED);
+        let picked = common::typescript_cases::seeded_choice(total, count, seed);
+        (
+            all.into_iter()
+                .enumerate()
+                .filter(|(index, _)| picked.contains(index))
+                .map(|(_, path)| path)
+                .collect(),
+            format!(
+                "{} of {total} tests, seed {seed:#x} (TT_FOURSLASH=all for every one)",
+                count.min(total)
+            ),
+        )
+    };
+    let started = std::time::Instant::now();
+    let next = AtomicUsize::new(0);
+    let skipped: Mutex<BTreeMap<String, usize>> = Mutex::new(BTreeMap::new());
+    let results: Mutex<BTreeMap<String, Answered>> = Mutex::new(BTreeMap::new());
+    let failures: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    let questions_asked = AtomicUsize::new(0);
+    let workers = std::thread::available_parallelism()
+        .map_or(1, |n| n.get() * 2)
+        .min(8);
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            scope.spawn(|| {
+                let mut oracle = common::typescript_cases::Oracle::start();
+                loop {
+                    let index = next.fetch_add(1, Ordering::SeqCst);
+                    let Some(path) = chosen.get(index) else {
+                        break;
+                    };
+                    let converted = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        fourslash_case(path, &mut oracle)
+                    }));
+                    let converted = match converted {
+                        Ok(Ok(converted)) => converted,
+                        Ok(Err(reason)) => {
+                            if std::env::var_os("TT_FOURSLASH_VERBOSE").is_some() {
+                                eprintln!("skip {}: {reason}", path.display());
+                            }
+                            let class = reason.split([':', '`', '(']).next().unwrap_or(&reason);
+                            *skipped
+                                .lock()
+                                .unwrap()
+                                .entry(class.trim().to_string())
+                                .or_default() += 1;
+                            continue;
+                        }
+                        Err(_) => {
+                            oracle = common::typescript_cases::Oracle::start();
+                            *skipped
+                                .lock()
+                                .unwrap()
+                                .entry("the conversion failed".to_string())
+                                .or_default() += 1;
+                            continue;
+                        }
+                    };
+                    let case = &converted.case;
+                    let outcome =
+                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run(case)));
+                    drop(converted.dir);
+                    match outcome {
+                        Ok(outcome) => {
+                            questions_asked.fetch_add(outcome.compared.len(), Ordering::SeqCst);
+                            results.lock().unwrap().insert(
+                                case.name.clone(),
+                                outcome
+                                    .compared
+                                    .iter()
+                                    .map(|c| {
+                                        (
+                                            c.question.clone(),
+                                            c.difference
+                                                .as_ref()
+                                                .map(|lines| format!("{}{lines}", c.heading)),
+                                        )
+                                    })
+                                    .collect(),
+                            );
+                        }
+                        Err(payload) => {
+                            let message = payload
+                                .downcast_ref::<String>()
+                                .cloned()
+                                .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+                                .unwrap_or_else(|| "a non-string panic".to_string());
+                            results.lock().unwrap().insert(
+                                case.name.clone(),
+                                vec![("run".to_string(), Some(format!("{message}\n")))],
+                            );
+                        }
+                    }
+                }
+            });
+        }
+    });
+    let results = results.into_inner().unwrap();
+    let skipped = skipped.into_inner().unwrap();
+    let mut failures = failures.into_inner().unwrap();
+    let listed = listed_differences(FOURSLASH_DIFFERENCES, "docs/");
+    let mut differing = 0usize;
+    for (name, questions) in &results {
+        for (question, difference) in questions {
+            let covering: Vec<&Listed> = listed
+                .iter()
+                .filter(|entry| entry.question == *question && glob(&entry.pattern, name))
+                .collect();
+            if difference.is_some() {
+                differing += 1;
+            }
+            match (difference, covering.first()) {
+                (Some(lines), None) => failures.push(format!(
+                    "{name}: {question} differs from the TypeScript twin, and {FOURSLASH_DIFFERENCES} \
+                     does not list it:\n{lines}  list it as \
+                     `{name}<TAB>{question}<TAB>by-design|defect<TAB>...`"
+                )),
+                (None, Some(entry)) => failures.push(format!(
+                    "{FOURSLASH_DIFFERENCES}:{}: {name} {question} agrees with the TypeScript twin \
+                     now; narrow or remove the line",
+                    entry.line
+                )),
+                _ => {}
+            }
+        }
+    }
+    if full {
+        for entry in &listed {
+            let names_one = results.iter().any(|(name, questions)| {
+                glob(&entry.pattern, name) && questions.iter().any(|(q, _)| *q == entry.question)
+            });
+            if !names_one {
+                failures.push(format!(
+                    "{FOURSLASH_DIFFERENCES}:{}: `{}` `{}` names no question of a compared test; \
+                     remove the line",
+                    entry.line, entry.pattern, entry.question
+                ));
+            }
+        }
+    }
+    let skipped_total: usize = skipped.values().sum();
+    println!(
+        "fourslash parity: {description}; {} compared ({} questions, {differing} differ), \
+         {skipped_total} skipped, {:.1}s",
+        results.len(),
+        questions_asked.load(Ordering::SeqCst),
+        started.elapsed().as_secs_f64()
+    );
+    for (reason, count) in &skipped {
+        println!("  skipped {count}: {reason}");
+    }
+    assert!(
+        failures.is_empty(),
+        "{} fourslash difference(s):\n\n{}",
+        failures.len(),
+        failures.join("\n\n")
+    );
 }

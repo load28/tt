@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # scripts/fetch-typescript-cases — TypeScript's own test cases, at the commit
-# the pinned TypeScript was built from, for tests/corpus.rs.
+# the pinned TypeScript was built from, for tests/corpus.rs and
+# tests/editor_cases.rs.
 #
 # tests/typescript-cases.json names the repository, the commit (the
 # `gitHead` of the `typescript` package that package.json pins), and the git

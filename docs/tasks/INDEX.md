@@ -722,6 +722,8 @@
 | TASK-714 | Word a match's coverage hole the same way on every path | Complete | 2026-10-01 | 2026-10-01 | [TASK-714](./TASK-714-one-match-exhaustiveness-message.md) |
 | TASK-715 | Point every `val-mutation` report at the binding's declaration | Complete | 2026-10-01 | 2026-10-01 | [TASK-715](./TASK-715-val-mutation-declaration-label.md) |
 | TASK-716 | Read unclosed type-shaped brackets in linear time | Complete | 2026-10-01 | 2026-10-01 | [TASK-716](./TASK-716-linear-type-shaped-lookaheads.md) |
+| TASK-717 | Hold `ttc --check-types` to the pinned `tsc` over TypeScript's own test cases | Complete | 2026-10-01 | 2026-10-01 | [TASK-717](./TASK-717-typed-parity-over-typescript-cases.md) |
+| TASK-718 | Hold the editor answers to `tsgo --lsp` over TypeScript's fourslash tests | Complete | 2026-10-01 | 2026-10-01 | [TASK-718](./TASK-718-fourslash-editor-parity.md) |
 | TASK-719 | Run a tt value in a logical assignment's right operand only when the assignment needs it | Complete | 2026-10-01 | 2026-10-01 | [TASK-719](./TASK-719-logical-assignment-conditional-operand.md) |
 | TASK-720 | Lower a returned tt value in an `if let` or let-else block inside a `result` block or match block arm | Complete | 2026-10-01 | 2026-10-01 | [TASK-720](./TASK-720-returned-tt-value-in-nested-exit.md) |
 | TASK-721 | Call a pipeline step that names its function directly, so TypeScript resolves its overloads | Complete | 2026-10-01 | 2026-10-01 | [TASK-721](./TASK-721-pipeline-step-resolves-overloads.md) |
