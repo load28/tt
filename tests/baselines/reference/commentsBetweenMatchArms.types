@@ -1,0 +1,298 @@
+=== commentsBetweenMatchArms.tt ===
+export variant Shape { Circle(r: number), Square(s: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>r : (property) r: number
+>Square : (property) Square: (s: number) => Shape
+>s : (property) s: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+export function area(shape: Shape): number {
+>area : function area(shape: Shape): number
+>shape : (parameter) shape: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   } | {
+>       kind: "Point";
+>   }
+  return match (shape) {
+>shape : (parameter) shape: Shape
+    Circle(r) => r * 2,
+>r : const r: number
+>r : const r: number
+    Square(s) => s.side ?? s,
+>s : const s: number
+>s : const s: number
+>s : const s: number
+export function guarded(shape: Shape): string {
+>guarded : function guarded(shape: Shape): string
+>shape : (parameter) shape: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   } | {
+>       kind: "Point";
+>   }
+  const label = match (shape) {
+>label : const label: any
+>shape : (parameter) shape: Shape
+    Circle(r) if r > 1 => "big circle",
+>r : const r: number
+>r : const r: number
+    Circle(r) if r === "small" => "never",
+>r : const r: number
+>r : const r: number
+    Circle(r) => `circle ${r}`, // @ts-expect-error governs the next arm
+>r : const r: number
+>r : const r: number
+    Square(s) => s.toFixed(1).missing ?? "square",
+>s : const s: number
+>s : const s: number
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+  return label;
+>label : const label: any
+export function code(n: number): string {
+>code : function code(n: number): string
+>n : (parameter) n: number
+  return String(
+>String : var String: StringConstructor
+    match (n) {
+>n : (parameter) n: number
+export function blockArm(shape: Shape): number {
+>blockArm : function blockArm(shape: Shape): number
+>shape : (parameter) shape: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   } | {
+>       kind: "Point";
+>   }
+  const value = match (shape) {
+>value : const value: number
+>shape : (parameter) shape: Shape
+    Circle(r) => {
+>r : const r: number
+      return r;
+>r : const r: number
+    Square(s) => { const side: number = s.edge; return side ?? s; },
+>s : const s: number
+>side : const side: number
+>s : const s: number
+>side : const side: number
+>s : const s: number
+  return value;
+>value : const value: number
+export function pair(a: Shape, b: Shape): string {
+>pair : function pair(a: Shape, b: Shape): string
+>a : (parameter) a: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   } | {
+>       kind: "Point";
+>   }
+>b : (parameter) b: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   } | {
+>       kind: "Point";
+>   }
+  return match (a, b) {
+>a : (parameter) a: Shape
+>b : (parameter) b: Shape
+console.log(area(Shape.Circle(2)), area(Shape.Square(3)), area(Shape.Point));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>area : function area(shape: Shape): number
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>area : function area(shape: Shape): number
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Square : (property) Square: (s: number) => Shape
+>area : function area(shape: Shape): number
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+console.log(guarded(Shape.Circle(3)), guarded(Shape.Circle(1)), guarded(Shape.Square(2)), guarded(Shape.Point));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>guarded : function guarded(shape: Shape): string
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>guarded : function guarded(shape: Shape): string
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>guarded : function guarded(shape: Shape): string
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Square : (property) Square: (s: number) => Shape
+>guarded : function guarded(shape: Shape): string
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+console.log(code(1), code(3), code(9));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>code : function code(n: number): string
+>code : function code(n: number): string
+>code : function code(n: number): string
+console.log(blockArm(Shape.Circle(4)), blockArm(Shape.Square(5)), blockArm(Shape.Point));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>blockArm : function blockArm(shape: Shape): number
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>blockArm : function blockArm(shape: Shape): number
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Square : (property) Square: (s: number) => Shape
+>blockArm : function blockArm(shape: Shape): number
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+console.log(pair(Shape.Circle(1), Shape.Circle(2)), pair(Shape.Point, Shape.Circle(1)), pair(Shape.Square(1), Shape.Point));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pair : function pair(a: Shape, b: Shape): string
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>pair : function pair(a: Shape, b: Shape): string
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>pair : function pair(a: Shape, b: Shape): string
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Square : (property) Square: (s: number) => Shape
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (s: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+

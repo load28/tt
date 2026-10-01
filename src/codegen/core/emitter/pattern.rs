@@ -131,8 +131,14 @@ impl<'a> Emitter<'a> {
         };
         let mut out = Rope::new();
         out.push_lit("(");
+        let mut written = 0;
         for (index, arm) in decision.arms.iter().enumerate() {
+            written += 1;
             let mut last = index + 1 == decision.arms.len();
+            let commented = self.push_gap_comments(arm.gap, 0, &mut out);
+            if commented {
+                out.push_break(0);
+            }
             if !last {
                 if !self.has_conditional_match_dispatch(expr) {
                     out.push_lit(format!("{slot} === {index} ? "));
@@ -150,13 +156,24 @@ impl<'a> Emitter<'a> {
                 guard_line_comment(value.trim(), 0, self.source_kind),
                 self.source_kind,
             );
+            if commented {
+                out.push_break(0);
+            }
             if last {
                 break;
             }
             out.push_lit(" : ");
         }
+        for arm in decision.arms.iter().skip(written) {
+            if self.push_gap_comments(arm.gap, 0, &mut out) {
+                out.push_break(0);
+            }
+        }
+        if self.push_gap_comments(decision.trailing, 0, &mut out) {
+            out.push_break(0);
+        }
         out.push_lit(")");
-        out
+        self.scoped_if_commented(decision, out)
     }
 
     fn emit_deferred_arm_value(&self, expr: ExprId, action: &ArmAction) -> Rope<'a> {
@@ -220,7 +237,13 @@ impl<'a> Emitter<'a> {
             out.push_lit(", ");
         }
         let mut total = false;
+        let mut written = 0;
         for arm in &decision.arms {
+            written += 1;
+            let commented = self.push_gap_comments(arm.gap, 0, &mut out);
+            if commented {
+                out.push_break(0);
+            }
             if let Some(test) = self.emit_arm_test(arm, decision) {
                 out.push_lit("(");
                 out.append(test);
@@ -237,10 +260,21 @@ impl<'a> Emitter<'a> {
                 ),
                 self.source_kind,
             );
+            if commented {
+                out.push_break(0);
+            }
             if total {
                 break;
             }
             out.push_lit(" : ");
+        }
+        for arm in decision.arms.iter().skip(written) {
+            if self.push_gap_comments(arm.gap, 0, &mut out) {
+                out.push_break(0);
+            }
+        }
+        if self.push_gap_comments(decision.trailing, 0, &mut out) {
+            out.push_break(0);
         }
         if !total {
             self.used_match_raise.set(true);
@@ -263,7 +297,20 @@ impl<'a> Emitter<'a> {
             ));
         }
         out.push_lit(")");
-        out
+        self.scoped_if_commented(decision, out)
+    }
+
+    /// An expression lowering lays its glue on one line, and so needs no
+    /// layout scope of its own, unless comments written between the arms
+    /// put line breaks into it.
+    fn scoped_if_commented(&self, decision: &Decision, out: Rope<'a>) -> Rope<'a> {
+        let commented = decision
+            .arms
+            .iter()
+            .map(|arm| arm.gap)
+            .chain([decision.trailing])
+            .any(|gap| super::gap_comments(self.comments, gap).next().is_some());
+        if commented { Rope::scoped(out) } else { out }
     }
 
     pub(super) fn expression_is_inert(&self, expr: ExprId) -> bool {
@@ -291,7 +338,11 @@ impl<'a> Emitter<'a> {
         });
         let mut wildcard = false;
         for arm in &decision.arms {
+            self.push_gap_comments(arm.gap, 1, &mut out);
             out.push_break(1);
+            if let Some(gap) = arm.gap {
+                out.push_source_point(gap.end);
+            }
             if matches!(arm.pattern, PatternPlan::Any) {
                 wildcard = true;
                 out.push_lit("default");
@@ -329,6 +380,7 @@ impl<'a> Emitter<'a> {
             out.push_break(1);
             out.push_lit("}");
         }
+        self.push_gap_comments(decision.trailing, 1, &mut out);
         if !wildcard {
             out.push_break(1);
             out.push_lit("default: {");
@@ -368,7 +420,11 @@ impl<'a> Emitter<'a> {
         let mut unconditional = false;
         for arm in &decision.arms {
             let is_any = !arm.pattern.has_test();
+            self.push_gap_comments(arm.gap, depth, &mut out);
             out.push_break(depth);
+            if let Some(gap) = arm.gap {
+                out.push_source_point(gap.end);
+            }
             if is_any {
                 unconditional |= arm.guard.is_none();
             } else {
@@ -406,9 +462,12 @@ impl<'a> Emitter<'a> {
                 out.push_lit("}");
             }
         }
+        let trailing = self.push_gap_comments(decision.trailing, depth, &mut out);
         if !unconditional {
             out.push_break(depth);
             out.push_lit(self.unexpected_throw(decision));
+        } else if trailing && !needs_label && !continuation.assigns() {
+            out.push_break(depth);
         }
         if needs_label {
             depth -= 1;

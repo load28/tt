@@ -603,6 +603,10 @@ pub struct PatternSite {
     pub subjects: Vec<ExprId>,
     /// The arms, in source order. `if let` and let-else are one-arm sites.
     pub arms: Vec<SiteArm>,
+    /// The source between a match's last arm and its body's `}`, where a
+    /// comment after the last arm is written. `None` for an `if let` or a
+    /// let-else, which have no arm list.
+    pub trailing: Option<Span>,
 }
 
 /// Which construct a site lowered from — analysis rules that differ by
@@ -636,6 +640,11 @@ pub struct SiteArm {
     pub body: Option<BodyId>,
     /// Whether the arm body yields an expression or executes a block.
     pub body_kind: Option<ArmBodyKind>,
+    /// The source between the previous arm (for the first arm, the match
+    /// body's `{`) and this arm's pattern: the separator and the comments
+    /// written between the two arms. `None` for an `if let` or a let-else
+    /// arm.
+    pub gap: Option<Span>,
 }
 
 /// The two source forms of a pattern arm body.

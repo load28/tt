@@ -2696,6 +2696,7 @@ pub struct PatternSite {
     pub kind: SiteKind,
     pub subjects: Vec<ExprId>,
     pub arms: Vec<SiteArm>,
+    pub trailing: Option<Span>,
 }
 impl Debug for PatternSite
 impl Freeze for PatternSite
@@ -2728,6 +2729,7 @@ pub struct SiteArm {
     pub guard: Option<ExprId>,
     pub body: Option<BodyId>,
     pub body_kind: Option<ArmBodyKind>,
+    pub gap: Option<Span>,
 }
 impl Debug for SiteArm
 impl Freeze for SiteArm

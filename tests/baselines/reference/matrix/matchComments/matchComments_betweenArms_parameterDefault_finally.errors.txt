@@ -1,0 +1,33 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-placement]: `match` cannot be used in a parameter initializer — this TypeScript boundary has no statement position
+  --> ./main.tt:6:37
+   |
+ 6 |       function inner(value: unknown = match (note("operand", input)) {
+   |  _____________________________________^
+ 7 | |         // the radius, doubled
+ 8 | |         Circle(r) => note("circle", r * 2), // an area next
+ 9 | |         Rect(w, h) => note("rect", w * h), /* no area */ Point => note("point", 0)
+10 | |         // after the last arm
+11 | |     }) {
+   | |_____^
+   |
+   = help: move the match into a function-body statement that can own its generated control flow
+
+
+==== ttc --check-types (exit 1) ====
+error[match-placement]: `match` cannot be used in a parameter initializer — this TypeScript boundary has no statement position
+  --> main.tt:6:37
+   |
+ 6 |       function inner(value: unknown = match (note("operand", input)) {
+   |  _____________________________________^
+ 7 | |         // the radius, doubled
+ 8 | |         Circle(r) => note("circle", r * 2), // an area next
+ 9 | |         Rect(w, h) => note("rect", w * h), /* no area */ Point => note("point", 0)
+10 | |         // after the last arm
+11 | |     }) {
+   | |_____^
+   |
+   = help: move the match into a function-body statement that can own its generated control flow
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -233,11 +233,22 @@ impl Lower<'_> {
         let head = Span::new(expr.keyword_off, expr.scrutinee_span.end + 1);
         let node = self.node(head, AstOrigin::Match);
         let subject = self.lower_expr_program(&expr.scrutinee, Self::span(expr.scrutinee_span));
+        let ends: Vec<usize> = expr
+            .arms
+            .iter()
+            .map(|arm| arm_end(arm.body_span, arm.block, arm.missing))
+            .collect();
+        let (gaps, trailing) = arm_gaps(
+            expr.body_open,
+            expr.body_close,
+            expr.arms.iter().map(|arm| arm.pattern_span.start).zip(ends),
+        );
         let arms = expr
             .arms
             .iter()
-            .map(|arm| {
-                self.lower_arm(
+            .zip(gaps)
+            .map(|(arm, gap)| {
+                let mut lowered = self.lower_arm(
                     &arm.pattern,
                     arm.pattern_span,
                     &arm.guard,
@@ -245,7 +256,9 @@ impl Lower<'_> {
                         &arm.body,
                         arm_body_kind(arm.block, arm.diverges, arm.missing),
                     )),
-                )
+                );
+                lowered.gap = Some(gap);
+                lowered
             })
             .collect();
         let site_node = self.node(head, AstOrigin::Match);
@@ -254,6 +267,7 @@ impl Lower<'_> {
             kind: SiteKind::Match,
             subjects: vec![subject],
             arms,
+            trailing: Some(trailing),
         });
         let extent = self.node(
             Span::new(expr.keyword_off, expr.body_close + 1),
@@ -270,10 +284,21 @@ impl Lower<'_> {
             .iter()
             .map(|(span, program)| self.lower_expr_program(program, Self::span(*span)))
             .collect();
+        let (gaps, trailing) = arm_gaps(
+            expr.body_open,
+            expr.body_close,
+            expr.arms.iter().map(|arm| {
+                (
+                    arm.pattern_span.start,
+                    arm_end(arm.body_span, arm.block, arm.missing),
+                )
+            }),
+        );
         let arms = expr
             .arms
             .iter()
-            .map(|arm| {
+            .zip(gaps)
+            .map(|(arm, gap)| {
                 let pattern = match &arm.pattern {
                     ast::TuplePattern::Wildcard => {
                         self.alloc_pattern(Pat::Wildcard, Self::span(arm.pattern_span))
@@ -298,6 +323,7 @@ impl Lower<'_> {
                     guard,
                     body: Some(body),
                     body_kind: Some(arm_body_kind(arm.block, arm.diverges, arm.missing)),
+                    gap: Some(gap),
                 }
             })
             .collect();
@@ -307,6 +333,7 @@ impl Lower<'_> {
             kind: SiteKind::TupleMatch,
             subjects,
             arms,
+            trailing: Some(trailing),
         });
         let extent = self.node(
             Span::new(expr.keyword_off, expr.body_close + 1),
@@ -333,6 +360,7 @@ impl Lower<'_> {
             guard,
             body,
             body_kind,
+            gap: None,
         }
     }
 
@@ -540,7 +568,9 @@ impl Lower<'_> {
                 // construct; there is no body that runs "on match".
                 body: None,
                 body_kind: None,
+                gap: None,
             }],
+            trailing: None,
         });
         let else_body = self.lower_body(&stmt.else_body);
         LetElseStmt {
@@ -589,7 +619,9 @@ impl Lower<'_> {
                 // An `if let` body is executed, not yielded, so nothing
                 // reads this fact; it claims no divergence it has not proven.
                 body_kind: Some(ArmBodyKind::Block { completes: true }),
+                gap: None,
             }],
+            trailing: None,
         });
         let else_part = stmt.else_part.as_ref().map(|else_part| match else_part {
             ast::IfLetElse::Block(block) => IfLetElse::Block(self.lower_body(block)),
@@ -745,6 +777,33 @@ fn arm_body_kind(block: bool, diverges: bool, missing: bool) -> ArmBodyKind {
     } else {
         ArmBodyKind::Expression
     }
+}
+
+/// Where an arm's written text ends: past a block body's `}`, or at the end
+/// of its expression body (or, for an arm with no body, where it stops).
+fn arm_end(body: ast::Span, block: bool, missing: bool) -> usize {
+    if block && !missing {
+        body.end + 1
+    } else {
+        body.end
+    }
+}
+
+/// The source between consecutive arms of a match body whose `{` and `}`
+/// are at `open` and `close`, given each arm's pattern start and end: the
+/// gap before each arm, and the one after the last.
+fn arm_gaps(
+    open: usize,
+    close: usize,
+    arms: impl Iterator<Item = (usize, usize)>,
+) -> (Vec<Span>, Span) {
+    let mut previous = open + 1;
+    let mut gaps = Vec::new();
+    for (start, end) in arms {
+        gaps.push(Span::new(previous, start.max(previous)));
+        previous = end.max(start);
+    }
+    (gaps, Span::new(previous, close.max(previous)))
 }
 
 #[cfg(test)]

@@ -57,6 +57,10 @@ pub(crate) enum MarkKind {
         shorthand: bool,
     },
     SharedBindingEnd,
+    /// The glue after it is written for the source at `src`, a construct
+    /// part that starts there (a match arm), so the printer lays it out as
+    /// that source's: on one line with it when a directive governs that line.
+    SourcePoint,
     /// Start of glue written at source point `src` ([`crate::InsertedGlue`]).
     InsertedStart,
     /// End of the same glue.
@@ -716,6 +720,10 @@ impl<'a> TargetFile<'a> {
                         });
                     }
                 }
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::SourcePoint,
+                } => previous_source_end = Some(*src),
                 TargetPiece::Mark {
                     kind: MarkKind::ContextualSlot,
                     ..

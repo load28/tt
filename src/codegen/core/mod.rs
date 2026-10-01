@@ -195,9 +195,50 @@ fn governed_statements(
             })
         })
         .collect();
+    statements.extend(decisions(core).flat_map(|decision| {
+        let ends = decision
+            .arms
+            .iter()
+            .skip(1)
+            .map(|arm| arm.gap)
+            .chain([decision.trailing]);
+        decision
+            .arms
+            .iter()
+            .zip(ends)
+            .filter_map(|(arm, end)| {
+                let start = arm.gap?.end;
+                let end = end?.start;
+                let line = governed
+                    .iter()
+                    .find(|line| line.start <= start && start <= line.end)?;
+                Some(GovernedStatement {
+                    start,
+                    end: end.max(line.end),
+                    line_end: line.end,
+                })
+            })
+            .collect::<Vec<_>>()
+    }));
     statements.sort_unstable_by_key(|statement| (statement.start, statement.end));
     statements.dedup();
     statements
+}
+
+/// Every pattern decision of the file: those written as statements and
+/// those inside expressions.
+fn decisions(core: &CoreFile) -> impl Iterator<Item = &Decision> {
+    core.bodies
+        .iter()
+        .flat_map(|body| &body.statements)
+        .filter_map(|statement| match statement {
+            Statement::Decision(decision) => Some(decision),
+            _ => None,
+        })
+        .chain(core.exprs.iter().filter_map(|expr| match expr {
+            Expr::Decision(decision) => Some(decision),
+            _ => None,
+        }))
 }
 
 fn span_index(spans: impl Iterator<Item = SourceSpan>) -> crate::span_index::SpanIndex {
@@ -468,6 +509,7 @@ pub(crate) fn emit_with_map<'a>(
             || crate::generated_names::GeneratedNames::for_source(source, source_kind),
         )),
         global_temps: target.global_temps,
+        comments,
     };
     let mut output = emitter.emit_file(core.root);
     let used_pipe = emitter.used_pipe.get();
@@ -635,8 +677,25 @@ pub(crate) fn emit_with_map<'a>(
     rewritten.extend(rewritten_operations);
     rewritten.extend(target_recovered_propagations);
     rewritten.extend(emitter.recovered_sources.take());
+    let arm_comments: Vec<SourceSpan> = decisions(core)
+        .flat_map(|decision| {
+            decision
+                .arms
+                .iter()
+                .map(|arm| arm.gap)
+                .chain([decision.trailing])
+        })
+        .flat_map(|gap| emitter::gap_comments(comments, gap))
+        .map(|comment| SourceSpan {
+            start: comment.start,
+            end: comment.end,
+        })
+        .collect();
+    let mut owned = pass_through_spans(semantic, core);
+    owned.extend(arm_comments.iter().copied());
+    relocated.extend(arm_comments);
     let preservation = SourcePreservation {
-        owned: pass_through_spans(semantic, core),
+        owned,
         relocated,
         rewritten,
     };

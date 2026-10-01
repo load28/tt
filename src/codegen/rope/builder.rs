@@ -99,6 +99,15 @@ impl<'a> Rope<'a> {
         });
     }
 
+    /// Notes that the glue pushed next is written for the source construct
+    /// part at `src` ([`MarkKind::SourcePoint`]).
+    pub(crate) fn push_source_point(&mut self, src: usize) {
+        self.pieces.push(Piece::Mark {
+            src,
+            kind: MarkKind::SourcePoint,
+        });
+    }
+
     /// Notes that the next thing pushed is the receiver expression of the
     /// nested pattern whose tag starts at `src` — the one place a checker
     /// can be asked what that payload's type admits.

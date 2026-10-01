@@ -345,11 +345,13 @@ impl Lowering<'_> {
                 pattern: self.lower_pattern(arm.pattern, site.subjects.len()),
                 guard: arm.guard,
                 action: action(arm, arm.body_kind),
+                gap: arm.gap,
             })
             .collect();
         Decision {
             subjects,
             arms,
+            trailing: site.trailing,
             miss,
             head: site.node,
             extent,

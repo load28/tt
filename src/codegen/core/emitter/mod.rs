@@ -116,9 +116,30 @@ pub(super) struct Emitter<'a> {
     pub(super) imported_std: RefCell<Vec<crate::StdModule>>,
     pub(super) generated_names: RefCell<crate::generated_names::GeneratedNames>,
     pub(super) global_temps: HashMap<TempId, String>,
+    /// Every comment in the source, in source order.
+    pub(super) comments: &'a [crate::ast::Span],
 }
 
 impl<'a> Emitter<'a> {
+    /// Writes the comments in `gap`, the source between two match arms
+    /// ([`crate::core_ir::DecisionArm::gap`]), each on a line of its own at
+    /// `depth`, and says whether there were any. A line comment there ends
+    /// its line, so what follows starts on the next one.
+    pub(super) fn push_gap_comments(
+        &self,
+        gap: Option<crate::hir::Span>,
+        depth: u16,
+        out: &mut Rope<'a>,
+    ) -> bool {
+        let mut written = false;
+        for comment in gap_comments(self.comments, gap) {
+            out.push_break(depth);
+            out.push_src(&self.source[comment.start..comment.end], comment.start);
+            written = true;
+        }
+        written
+    }
+
     pub(super) fn relocated_documentation(&self, statement: usize) -> Option<Rope<'a>> {
         let span = *self.relocated_documentation.get(&statement)?;
         self.emitted_documentation.claim(span).then(|| {
@@ -459,4 +480,14 @@ impl Drop for ResultFailureScope<'_> {
             registry.remove(&self.id);
         }
     }
+}
+
+/// The comments of `comments` that lie in `gap`.
+pub(super) fn gap_comments(
+    comments: &[crate::ast::Span],
+    gap: Option<crate::hir::Span>,
+) -> impl Iterator<Item = &crate::ast::Span> {
+    comments.iter().filter(move |comment| {
+        gap.is_some_and(|gap| gap.start <= comment.start && comment.end <= gap.end)
+    })
 }

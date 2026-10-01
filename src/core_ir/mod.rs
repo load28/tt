@@ -191,6 +191,8 @@ pub(crate) enum TempId {
 pub(crate) struct Decision {
     pub subjects: Vec<Subject>,
     pub arms: Vec<DecisionArm>,
+    /// The source after a match's last arm, before its `}`.
+    pub trailing: Option<hir::Span>,
     pub miss: MissAction,
     pub head: NodeId,
     pub extent: NodeId,
@@ -231,6 +233,9 @@ pub(crate) struct DecisionArm {
     pub pattern: PatternPlan,
     pub guard: Option<ExprId>,
     pub action: ArmAction,
+    /// The source between the previous arm and this one, where the comments
+    /// written between them are ([`hir::SiteArm::gap`]).
+    pub gap: Option<hir::Span>,
 }
 
 impl DecisionArm {

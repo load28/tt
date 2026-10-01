@@ -1,0 +1,25 @@
+//// [directiveBetweenMatchArmsGovernsOneArm.tt] 23 mapping(s)
+1:1 -> 19:1 len 260  "// A `// @ts-ignore` between match arms governs "...
+5:34 -> 24:26 len 6  "number"
+5:34 -> 28:15 len 6  "number"
+5:53 -> 25:26 len 6  "number"
+5:53 -> 29:15 len 6  "number"
+5:69 -> 31:3 len 49  "\n\nexport function size(shape: Shape): number {\n "...
+8:3 -> 56:3 len 7  "return "
+8:17 -> 36:19 len 5  "shape"
+9:5 -> 38:7 len 13  "// @ts-ignore"
+10:12 -> 39:32 len 1  "r"
+10:18 -> 39:54 len 8  "r.radius"
+11:12 -> 43:17 len 1  "s"
+11:18 -> 44:18 len 6  "s.side"
+12:14 -> 48:18 len 1  "0"
+13:4 -> 56:16 len 42  ";\n}\n\nexport const inline = (n: number) => "
+16:38 -> 68:10 len 4  "[\n  "
+17:10 -> 62:19 len 1  "n"
+18:5 -> 70:3 len 13  "// @ts-ignore"
+19:5 -> 64:12 len 1  "1"
+19:10 -> 71:18 len 5  "n.one"
+20:10 -> 72:6 len 7  "n.other"
+21:4 -> 72:14 len 3  ",\n]"
+22:2 -> 74:2 len 2  ";\n"
+
