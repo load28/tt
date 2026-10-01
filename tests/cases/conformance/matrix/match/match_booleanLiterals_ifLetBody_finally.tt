@@ -27,6 +27,9 @@ export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
 }
+export function unexpected(value: unknown): never {
+  throw new Error(`tt match: unexpected literal ${text(value)}`);
+}
 export type Success<T> = { kind: "Ok"; value: T };
 export type Failure<E> = { kind: "Err"; error: E };
 export const ok = <T>(value: T): Success<T> => ({ kind: "Ok", value });
@@ -75,7 +78,7 @@ function probe(input: boolean) {
 }
 await drive("ifLetBody", probe, inputs);
 // @filename: twin.ts
-import { note, read, drive } from "./harness.js";
+import { note, unexpected, read, drive } from "./harness.js";
 let t0: any;
 const inputs: boolean[] = [true, false];
 function probe(input: boolean) {
@@ -83,7 +86,7 @@ function probe(input: boolean) {
     const head = read(note("head", 1));
     if (head.kind === "Ok") {
       const n = head.value;
-      return [n, (t0 = note("operand", input), t0 === true ? note("yes", 1) : note("no", 0))];
+      return [n, (t0 = note("operand", input), t0 === true ? note("yes", 1) : t0 === false ? note("no", 0) : unexpected(t0))];
     }
     return null;
   } finally {

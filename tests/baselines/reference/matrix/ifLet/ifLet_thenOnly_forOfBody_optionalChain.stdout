@@ -1,2 +1,2 @@
-forOfBody(2) => [2,2] | round 0; read 2; then 2; round 1; read 2; then 2
-forOfBody(-1) => ["none","none"] | round 0; read -1; round 1; read -1
+forOfBody(2) => [2,"none"] | round 0; read 2; then 2; round 1; read undefined
+forOfBody(-1) => ["none","none"] | round 0; read -1; round 1; read undefined

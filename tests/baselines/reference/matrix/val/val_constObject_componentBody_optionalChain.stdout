@@ -1,2 +1,2 @@
 componentBody(3) => "<p>4</p>" | read 4
-componentBody(8) => "<p>9</p>" | read 9
+componentBody(8) => "<p>null</p>" | read null

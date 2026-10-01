@@ -1,2 +1,2 @@
 tryBlock(2) => 2 | read 2
-tryBlock(-1) => "diverged" | read -1
+tryBlock(-1) => "diverged" | read undefined

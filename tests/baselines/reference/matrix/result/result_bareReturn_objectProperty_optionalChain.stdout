@@ -1,2 +1,2 @@
 objectProperty(2) => {"a":1,"value":{"kind":"Ok"},"c":3} | a 1; read 2; c 3
-objectProperty(-1) => {"a":1,"value":{"kind":"Err","error":"negative -1"},"c":3} | a 1; read -1; c 3
+objectProperty(-1) => {"a":1,"value":{"kind":"Err","error":"negative undefined"},"c":3} | a 1; read undefined; c 3

@@ -1,4 +1,4 @@
 constructorBody({"kind":"Num","value":4}) => -1 | other -1
-constructorBody({"kind":"Neg","value":-3}) => -1 | other -1
+constructorBody({"kind":"Neg","value":-3}) => threw Cannot read properties of undefined (reading 'kind') | 
 constructorBody({"kind":"Word","text":"hi"}) => 2 | word 2
-constructorBody({"kind":"End"}) => -1 | other -1
+constructorBody({"kind":"End"}) => threw Cannot read properties of undefined (reading 'kind') | 

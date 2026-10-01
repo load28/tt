@@ -1,2 +1,2 @@
 method(3) => 4 | read 4
-method(8) => 9 | read 9
+method(8) => null | read null

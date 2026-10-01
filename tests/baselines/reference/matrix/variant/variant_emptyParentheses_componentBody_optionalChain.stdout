@@ -1,2 +1,2 @@
 componentBody(4) => "<p>[{/"kind/":/"Now/"},{/"kind/":/"Later/",/"at/":4}]</p>" | 
-componentBody(9) => "<p>[{/"kind/":/"Now/"},{/"kind/":/"Later/",/"at/":9}]</p>" | 
+componentBody(9) => "<p>[{/"kind/":/"Now/"},{/"kind/":/"Later/"}]</p>" | 

@@ -1,2 +1,2 @@
 nestedBlock(4) => 4 | read 4
-nestedBlock(-4) => "diverged" | read -4
+nestedBlock(-4) => "diverged" | read undefined

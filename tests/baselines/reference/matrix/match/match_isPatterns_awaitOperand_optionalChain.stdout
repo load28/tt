@@ -1,4 +1,4 @@
 awaitOperand({}) => "range" | range "range"
-awaitOperand({}) => 1 | type 1
+awaitOperand({}) => null | other null
 awaitOperand({}) => "plain" | error "plain"
 awaitOperand("text") => null | other null

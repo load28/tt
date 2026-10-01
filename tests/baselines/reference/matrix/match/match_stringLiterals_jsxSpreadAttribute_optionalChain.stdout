@@ -1,4 +1,4 @@
 jsxSpreadAttribute("north") => "<div value=1></div>" | n 1
-jsxSpreadAttribute("south") => "<div value=2></div>" | se 2
+jsxSpreadAttribute("south") => "<div value=0></div>" | other 0
 jsxSpreadAttribute("east") => "<div value=2></div>" | se 2
 jsxSpreadAttribute("up") => "<div value=0></div>" | other 0

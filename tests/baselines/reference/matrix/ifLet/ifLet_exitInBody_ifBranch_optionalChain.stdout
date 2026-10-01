@@ -1,2 +1,2 @@
 ifBranch(2) => "passed" | enter true; read 2
-ifBranch(-2) => "diverged" | enter true; read -2; error "negative -2"
+ifBranch(-2) => "diverged" | enter true; read undefined; error "negative undefined"

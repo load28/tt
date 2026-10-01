@@ -1,4 +1,4 @@
 objectProperty({"kind":"Num","value":4}) => {"a":1,"value":4,"c":3} | a 1; number 4; c 3
-objectProperty({"kind":"Neg","value":-3}) => {"a":1,"value":-3,"c":3} | a 1; number -3; c 3
+objectProperty({"kind":"Neg","value":-3}) => threw Cannot read properties of undefined (reading 'kind') | a 1
 objectProperty({"kind":"Word","text":"hi"}) => {"a":1,"value":"hi","c":3} | a 1; word "hi"; c 3
-objectProperty({"kind":"End"}) => {"a":1,"value":"","c":3} | a 1; end ""; c 3
+objectProperty({"kind":"End"}) => threw Cannot read properties of undefined (reading 'kind') | a 1

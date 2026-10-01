@@ -1,2 +1,2 @@
 forInitializer(true) => [1] | yes 1
-forInitializer(false) => [0] | no 0
+forInitializer(false) => threw tt match: unexpected literal undefined | 

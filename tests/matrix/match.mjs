@@ -132,7 +132,7 @@ export default {
       In: "boolean",
       inputs: "[true, false]",
       tt: (x) => `match (${x}) { true => note("yes", 1), false => /*@call*/note(/*@arg*/"no", 0) }`,
-      ts: (x, [t]) => `(${t} = ${x}, ${t} === true ? note("yes", 1) : /*@call*/note(/*@arg*/"no", 0))`,
+      ts: (x, [t]) => `(${t} = ${x}, ${t} === true ? note("yes", 1) : ${t} === false ? /*@call*/note(/*@arg*/"no", 0) : unexpected(${t}))`,
     },
     {
       id: "tuple",

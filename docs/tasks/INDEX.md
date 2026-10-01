@@ -696,6 +696,10 @@
 | TASK-688 | Offer a function body's keywords in the arms and blocks of a module-level construct | Complete | 2026-09-30 | 2026-09-30 | [TASK-688](./TASK-688-completion-keywords-in-module-level-constructs.md) |
 | TASK-689 | Classify every alternative's binding of an or-pattern as a declaration in semantic tokens | Complete | 2026-09-30 | 2026-09-30 | [TASK-689](./TASK-689-or-pattern-binding-semantic-tokens.md) |
 | TASK-690 | Emit a single-case variant as its case's object type so TypeScript names it | Complete | 2026-09-30 | 2026-09-30 | [TASK-690](./TASK-690-single-case-variant-alias.md) |
+| TASK-691 | End the optional chain of a pipeline head before a postfix step | Complete | 2026-09-30 | 2026-09-30 | [TASK-691](./TASK-691-postfix-step-ends-optional-chain.md) |
+| TASK-692 | Write a logical operation's right-operand branch as the operation over its stored operand | Complete | 2026-09-30 | 2026-10-01 | [TASK-692](./TASK-692-logical-operation-result-type.md) |
+| TASK-693 | Decide once which coverage question a match asks | Complete | 2026-09-30 | 2026-09-30 | [TASK-693](./TASK-693-one-coverage-question-per-match.md) |
+| TASK-694 | Bound a `result` block's `try`s at class code, and name the module reason everywhere | Complete | 2026-09-30 | 2026-09-30 | [TASK-694](./TASK-694-try-in-class-code-inside-result.md) |
 | TASK-695 | Report a checker diagnostic on user-written text as TypeScript reports it | Complete | 2026-10-01 | 2026-10-01 | [TASK-695](./TASK-695-typescript-owned-diagnostics.md) |
 | TASK-696 | Name the incompatible part of a union as TypeScript names it | Complete | 2026-10-01 | 2026-10-01 | [TASK-696](./TASK-696-partly-incompatible-union.md) |
 | TASK-697 | Keep a directive on the JSDoc line it governs when the JSDoc moves to its declaration | Complete | 2026-10-01 | 2026-10-01 | [TASK-697](./TASK-697-jsdoc-and-directive-before-lowered-statement.md) |

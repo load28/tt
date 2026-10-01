@@ -88,7 +88,7 @@ function logical(flag: boolean, n: number): TResult<unknown, string> {
       return $tt_t1;
     }
     $tt_v1 = $tt_t1.value;
-    $tt_v4 = $tt_v3 + ($tt_v1);
+    $tt_v4 = $tt_v2 && $tt_v3 + ($tt_v1);
   } else {
     $tt_v4 = $tt_v2;
   }
@@ -111,7 +111,7 @@ function logical(flag: boolean, n: number): TResult<unknown, string> {
       return $tt_t3;
     }
     $tt_v6 = $tt_t3.value;
-    $tt_v8 = ($tt_v5) * ($tt_v6);
+    $tt_v8 = $tt_v7 || ($tt_v5) * ($tt_v6);
   }
   
   const or = $tt_v8;
@@ -130,7 +130,7 @@ function logical(flag: boolean, n: number): TResult<unknown, string> {
       return $tt_t5;
     }
     $tt_v10 = $tt_t5.value;
-    $tt_v12 = ($tt_v9) - ($tt_v10);
+    $tt_v12 = $tt_v11 ?? ($tt_v9) - ($tt_v10);
   } else {
     $tt_v12 = $tt_v11;
   }

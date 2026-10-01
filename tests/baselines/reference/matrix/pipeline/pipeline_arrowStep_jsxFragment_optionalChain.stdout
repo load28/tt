@@ -1,2 +1,2 @@
 jsxFragment(8) => "<>[9]</>" | before "["; arrow 9; after "]"
-jsxFragment(9) => "<>[10]</>" | before "["; arrow 10; after "]"
+jsxFragment(9) => "<>[null]</>" | before "["; arrow null; after "]"

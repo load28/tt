@@ -470,6 +470,7 @@ fn try_placement_message(
     let help = "move the propagation into the nearest function-body statement with \
                 `const value = try <expression>;`";
     match (owner, reason) {
+        (EvaluationOwner::Module, _) => crate::diagnostics::TRY_OUTSIDE_FUNCTION,
         (EvaluationOwner::StaticBlock, _) => (
             "`try` cannot be used in a class static block — it has no enclosing function \
              failure edge for its `Err` propagation",

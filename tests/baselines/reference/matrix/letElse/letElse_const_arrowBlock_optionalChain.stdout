@@ -1,2 +1,2 @@
 arrowBlock(2) => 2 | read 2
-arrowBlock(-1) => "diverged" | read -1
+arrowBlock(-1) => "diverged" | read undefined

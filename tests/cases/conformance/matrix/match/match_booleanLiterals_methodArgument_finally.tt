@@ -27,6 +27,9 @@ export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
 }
+export function unexpected(value: unknown): never {
+  throw new Error(`tt match: unexpected literal ${text(value)}`);
+}
 export function report(title: string, input: unknown, shown: string): void {
   console.log(`${title}(${text(input)}) => ${shown} | ${out.join("; ")}`);
   out.length = 0;
@@ -66,13 +69,13 @@ function probe(input: boolean) {
 }
 await drive("methodArgument", probe, inputs);
 // @filename: twin.ts
-import { note, drive } from "./harness.js";
+import { note, unexpected, drive } from "./harness.js";
 let t0: any;
 const inputs: boolean[] = [true, false];
 function probe(input: boolean) {
   try {
     const receiver = { tag: "receiver", take(...items: unknown[]) { return [this.tag, ...items]; } };
-    return note("receiver", receiver).take(note("a", 1), (t0 = note("operand", input), t0 === true ? note("yes", 1) : note("no", 0)));
+    return note("receiver", receiver).take(note("a", 1), (t0 = note("operand", input), t0 === true ? note("yes", 1) : t0 === false ? note("no", 0) : unexpected(t0)));
   } finally {
     note("finally", 0);
   }

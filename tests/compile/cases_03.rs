@@ -1,21 +1,17 @@
 
 #[test]
 fn try_inside_match_arm_is_an_error() {
-    // Directly in an arm's statement stream the emitted `return` would
-    // deliver the arm's value — the match would *evaluate to* the `Err`
-    // instead of propagating it.
     let e = err(
         "const x = match (r) {\n  Ok(value) => { const y = try f(value); return y; },\n  Err(error) => fallback(error),\n};\n",
     );
     assert!(
-        e.message
-            .contains("`try` cannot be used here, in an isolated value region"),
+        e.message.contains("`try` must be inside a function"),
         "{}",
         e.message
     );
     assert!(
         e.message
-            .contains("would complete this construct's value instead of returning from"),
+            .contains("at the top level of a module there is no function to return from"),
         "{}",
         e.message
     );
@@ -241,7 +237,7 @@ fn try_placement_reports_the_owning_reason() {
         ("class C { constructor() { try read(); } }\n", "constructor"),
         (
             "const value = match (source) { Ok(value) => { const item = try read(); return item; }, Err(error) => error };\n",
-            "isolated value region",
+            "must be inside a function",
         ),
     ];
     for (source, reason) in cases {
@@ -578,13 +574,11 @@ fn inline_bodies_inherit_the_enclosing_functions_place() {
 
 #[test]
 fn an_inline_chain_bottoming_out_in_an_iife_still_rejects_try() {
-    // The same body inside a match arm: the chain bottoms out in the
-    // arm's IIFE, so the emitted `return` would corrupt the match value.
     let e = err(
         "variant E { A(x: number), B }\nconst r = match (e) {\n  A(x) => { if let A(y) = f(x) { const n = try g(y); return n; } return 0; },\n  B => 0,\n};\n",
     );
     assert!(
-        e.message.contains("`try` cannot be used here"),
+        e.message.contains("`try` must be inside a function"),
         "{}",
         e.message
     );

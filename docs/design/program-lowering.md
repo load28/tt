@@ -577,9 +577,11 @@ The condition is therefore tested where it is evaluated:
   after the test.
 - `l && v`, `l || v`, and `l ?? v` keep the left operand's value, which is
   the result when the right operand does not run. It is stored in operand
-  storage inside the test: `let $l; if ($l = l) { …; $r = v' } else { $r = $l; }`
-  for `&&`, `if ($l = l) { $r = $l; } else { … }` for `||`, and
-  `if (($l = l) == null) { … } else { $r = $l; }` for `??`. TypeScript
+  storage inside the test: `let $l; if ($l = l) { …; $r = $l && v' } else { $r = $l; }`
+  for `&&`, `if ($l = l) { $r = $l; } else { …; $r = $l || v' }` for `||`,
+  and `if (($l = l) == null) { …; $r = $l ?? v' } else { $r = $l; }` for
+  `??` (TASK-692: the branch that runs the right operand writes the
+  operation itself over the stored, narrowed operand; see below). TypeScript
   narrows an assignment used as a condition by its right operand as well
   as its target (`narrowTypeByBinaryExpression` for `=`), so `l` narrows
   its references in the branch, and `$l` is narrowed as the original
@@ -601,6 +603,36 @@ The condition is therefore tested where it is evaluated:
   `$l`), so a value under `??` does not see it. Narrowing `l` by falsiness
   instead (`!($l = l) && $l == null`) would be a different, weaker fact, so
   it is not used.
+
+- The branch that runs the right operand writes the operation over `$l`
+  rather than `v'` alone (TASK-692). `$l` is a local the test already
+  evaluated, and `ToBoolean` and the nullish test have no observable
+  effects (ECMA-262 §7.1.2, §13.13.1), so the operation yields `v'`
+  exactly as before. Its type is the one TypeScript gives the operation
+  (`checkBinaryLikeExpressionWorker`) for `$l` narrowed by the test: when
+  the left operand is never falsy (`||`), never truthy (`&&`), or never
+  nullish (`??`), that narrowing is `never`, the branch's value is
+  `never`, and the result has the left operand's type alone
+  (`true || try r()` is `true`, `o ?? try r()` is `o`'s type), where a
+  bare `v'` joined its type into the result although the branch never
+  runs (TypeScript does not take a branch whose test narrows a reference
+  to `never` for unreachable).
+- Two facts of the source operation are still not carried. `&&` gives a
+  left operand of type `number` (`string`, `bigint`) the falsy part `0`
+  (`""`, `0n`) through `extractDefinitelyFalsyTypes`, which maps the
+  type rather than narrowing a reference: `$l` narrowed by falsiness
+  stays `number` (`NaN` is falsy too), so `n && try r()` joins `number`
+  where TypeScript gives `0`; only an assertion could say `0`, which
+  contract 2 rules out. TypeScript's syntactic checks of the left operand
+  (TS2869, TS2871, TS2872, TS2873: `getSyntacticTruthySemantics` and
+  `getSyntacticNullishnessSemantics` judge the operand's syntax kind) see
+  the identifier `$l`, which is "sometimes". Writing a literal operand
+  again as the operation's left operand does reproduce them (checked with
+  the pinned `tsc`: TS2873 at `""`, TS2871 at `null`), but then the
+  literal's fresh type reaches the result slot, whose join widens a fresh
+  literal at mutable storage as TypeScript widens `let`, so
+  `const b = true || try r()` would be `boolean` where TypeScript gives
+  `true`; the operand storage carries the regular literal type.
 
 A condition that was already captured by an earlier step (its slot is in
 the captured set), or that is itself a tt value, is tested through its

@@ -1,2 +1,2 @@
 labeledBlock(2) => {"kind":"Ok","value":2} | read 2; flip true
-labeledBlock(-1) => {"kind":"Err","error":"negative -1"} | read -1
+labeledBlock(-1) => {"kind":"Err","error":"negative undefined"} | read undefined

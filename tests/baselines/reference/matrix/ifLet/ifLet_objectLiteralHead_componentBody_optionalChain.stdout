@@ -1,2 +1,2 @@
 componentBody(6) => "<p>6</p>" | some 6
-componentBody(9) => "<p>9</p>" | some 9
+componentBody(9) => "<p>undefined</p>" | some undefined

@@ -1,2 +1,2 @@
 yieldOperand(3) => "6" | yield function; add 6
-yieldOperand(-4) => "-8" | yield function; add -8
+yieldOperand(-4) => "NaN" | yield function; add null

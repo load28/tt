@@ -1,2 +1,2 @@
 laterDeclarator(4) => [1,7] | before 1; step 3; add 7
-laterDeclarator(-1) => [1,2] | before 1; step 3; add 2
+laterDeclarator(-1) => [1,null] | before 1; step 3; add null

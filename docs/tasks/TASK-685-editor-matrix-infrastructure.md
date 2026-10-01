@@ -229,7 +229,8 @@ the matrix to the others.
   the parenthesized form reports (`'...' is possibly 'undefined'`) is
   lost. The compiled matrix did not see it because `box` never returns
   `undefined` there.
-- **Resolution**: Listed as a `defect`; not fixed in this task.
+- **Resolution**: Listed as a `defect`; not fixed in this task. Fixed by
+  TASK-691.
 
 ## Regression test (fails before the fix)
 

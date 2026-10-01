@@ -224,8 +224,9 @@ fn a_conditional_operand_owns_its_branch_in_a_pipeline_head() {
         "{TASK_501_PRELUDE}export const v = g() && f(match (n) {{ 0 => 1, _ => 2 }}) |> String;\n"
     ));
     assert!(out.contains("if ($tt_v3 = g()) {"), "{out}");
+    assert!(out.contains("$tt_v4 = $tt_v3 && $tt_v2($tt_v1);"), "{out}");
     assert!(out.contains("$tt_v4 = $tt_v3;"), "{out}");
-    assert!(!out.contains("&&"), "{out}");
+    assert!(!out.contains("g() &&"), "{out}");
 }
 
 #[test]

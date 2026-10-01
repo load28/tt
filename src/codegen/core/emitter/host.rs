@@ -432,7 +432,8 @@ impl<'a> Emitter<'a> {
             PlannedConditionalKind::LogicalAnd
             | PlannedConditionalKind::LogicalOr
             | PlannedConditionalKind::Nullish => {
-                let (test, left) = self.condition_operand(&operation.condition, captured, &mut out);
+                let (test, [left, stored]) =
+                    self.condition_operand(&operation.condition, captured, &mut out);
                 let nullish = matches!(operation.kind, PlannedConditionalKind::Nullish);
                 if nullish {
                     out.push_lit("if ((");
@@ -443,6 +444,11 @@ impl<'a> Emitter<'a> {
                     out.append(test);
                     out.push_lit(") {");
                 }
+                let operator = match operation.kind {
+                    PlannedConditionalKind::LogicalAnd => "&&",
+                    PlannedConditionalKind::LogicalOr => "||",
+                    _ => "??",
+                };
                 let mut assign_left = Rope::new();
                 assign_left.push_lit(format!("{result} = "));
                 assign_left.append(left);
@@ -453,6 +459,7 @@ impl<'a> Emitter<'a> {
                         operation,
                         &operation.values,
                         result,
+                        Some((stored, operator)),
                         captured,
                     ),
                 );
@@ -481,7 +488,7 @@ impl<'a> Emitter<'a> {
                         out.append(Rope::indented(
                             1,
                             self.emit_conditional_active_branch(
-                                operation, values, result, captured,
+                                operation, values, result, None, captured,
                             ),
                         ));
                     }
@@ -701,11 +708,19 @@ impl<'a> Emitter<'a> {
     /// One branch of a conditional operation: a value that is the whole
     /// branch delivers straight into the result slot; otherwise the branch's
     /// values run in source order and the branch is rebuilt around them.
+    ///
+    /// The right operand of a logical operation is written into the result
+    /// slot as the operation itself, over `left`, the left operand's
+    /// storage as the test narrowed it, so the result has the type
+    /// TypeScript gives the operation (`checkBinaryLikeExpressionWorker` in
+    /// the checker): the left operand's type alone when the branch cannot
+    /// be taken (`true || v`, `o ?? v`).
     pub(super) fn emit_conditional_active_branch(
         &self,
         operation: &PlannedConditionalOperation,
         values: &[ExprId],
         result: &str,
+        left: Option<(Rope<'a>, &str)>,
         captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
     ) -> Rope<'a> {
         let entries: Vec<_> = values
@@ -721,6 +736,9 @@ impl<'a> Emitter<'a> {
             let [value] = values else {
                 crate::ice::bug!("a conditional branch of several values has no active plan")
             };
+            if left.is_some() {
+                crate::ice::bug!("a logical operation's right operand has no active plan")
+            }
             let _active = self.active_structured_exprs.enter(*value);
             return self
                 .emit_continued_expr(*value, &ValueContinuation::assign(result))
@@ -731,6 +749,10 @@ impl<'a> Emitter<'a> {
         let branch = first.branch;
         let mut out = self.emit_conditional_active_values(operation, values, captured);
         out.push_lit(format!("{result} = "));
+        if let Some((operand, operator)) = left {
+            out.append(operand);
+            out.push_lit(format!(" {operator} "));
+        }
         let steps: Vec<_> = entries.iter().flat_map(|active| &active.steps).collect();
         push_grouped(
             &mut out,
@@ -1337,7 +1359,7 @@ impl<'a> Emitter<'a> {
         condition: &PlannedEvaluationInput,
         captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
         out: &mut Rope<'a>,
-    ) -> (Rope<'a>, Rope<'a>) {
+    ) -> (Rope<'a>, [Rope<'a>; 2]) {
         match condition {
             PlannedEvaluationInput::Source {
                 source,
@@ -1359,13 +1381,19 @@ impl<'a> Emitter<'a> {
                     self.source_kind,
                 );
                 captured.insert(*target);
-                let mut left = Rope::new();
-                left.push_lit(name.to_owned());
-                (test, left)
+                let left = || {
+                    let mut left = Rope::new();
+                    left.push_lit(name.to_owned());
+                    left
+                };
+                (test, [left(), left()])
             }
             _ => (
                 self.condition_test(condition, captured),
-                self.condition_test(condition, captured),
+                [
+                    self.condition_test(condition, captured),
+                    self.condition_test(condition, captured),
+                ],
             ),
         }
     }

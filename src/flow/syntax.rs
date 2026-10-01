@@ -2,26 +2,30 @@
 
 use super::*;
 
-/// Whether a `return` emitted at token index `at` of this statement
-/// stream would leave a **user-written function inside the stream** — the
-/// placement question `try` asks: its lowering emits a `return`, and that
-/// `return` must have a function of the user's to exit. At the top level
-/// of a module (or of a tt construct's own statement region, which
-/// forms an isolated value region) there is none; inside a `function`, a method, or
-/// an arrow body written in the region there is.
+/// Whether token index `at` of this statement stream stands inside a
+/// **function-like boundary written in the stream** — the placement
+/// question `try`, let-else, and `if let` ask: the exits their lowering
+/// emits (`return`, a labeled `break`) belong to that boundary, not to the
+/// stream's own region. At the top level of a module (or of a tt
+/// construct's own statement region: an isolated value region or a
+/// `result` block's body) there is none; inside a `function`, a method, or
+/// an arrow body written in the region there is, and so there is inside a
+/// class body or a class static block written there ([`FunctionTarget`]):
+/// code there is not evaluated by the region, and neither `return` nor a
+/// `break` to a label outside it is allowed there (ECMA-262 §15.7.1: a
+/// `ClassStaticBlockStatementList` is parsed `[~Return]` and may contain no
+/// undefined break target).
 ///
-/// The classification is per opening brace, and it is the lexer's: a `{`
-/// with the `function_body` fact ([`crate::lexer::TokenFacts`]) opens a
-/// body after `=>` or after a parameter list and its return type.
-/// Everything else — object literals, class and namespace bodies,
-/// control-statement bodies, bare blocks — is transparent or irrelevant:
-/// it never *provides* a function to return from, and never blocks an
-/// outer one from counting.
+/// The classification is per opening brace, and it is the lexer's
+/// ([`function_target_brace`]). Everything else — object literals,
+/// namespace bodies, control-statement bodies, bare blocks — is
+/// transparent: it never *provides* a boundary, and never blocks an outer
+/// one from counting.
 pub(crate) fn in_function_body(tokens: &[Token], at: usize) -> bool {
     let mut stack: Vec<bool> = Vec::new();
     for (k, t) in tokens.iter().enumerate().take(at) {
         match t.kind {
-            TokenKind::Punct(b'{') => stack.push(function_body_brace(tokens, k)),
+            TokenKind::Punct(b'{') => stack.push(function_target_brace(tokens, k).is_some()),
             TokenKind::Punct(b'}') => {
                 stack.pop();
             }
@@ -49,6 +53,12 @@ pub(crate) fn function_depth_at(tokens: &[Token], at: usize) -> usize {
     stack.into_iter().filter(|is_function| *is_function).count()
 }
 
+/// Number of function-like boundaries ([`FunctionTarget`]: user-written
+/// function bodies, concise arrow bodies, class bodies, and class static
+/// blocks) enclosing a token, skipping the braces and arrows of tt
+/// constructs in `tt_owned`. Each boundary is its own Result scope for a
+/// `try` written in it, so a speculative `result` claim counts them to find
+/// the `try`s whose nearest Result scope is the candidate block.
 pub(crate) fn user_function_depth_at(
     tokens: &[Token],
     at: usize,
@@ -58,7 +68,7 @@ pub(crate) fn user_function_depth_at(
     for (index, token) in tokens.iter().enumerate().take(at) {
         match token.kind {
             TokenKind::Punct(b'{') => stack.push(
-                function_body_brace(tokens, index)
+                function_target_brace(tokens, index).is_some()
                     && !tt_owned.contains(&index)
                     && !index
                         .checked_sub(1)

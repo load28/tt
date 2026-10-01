@@ -1,4 +1,4 @@
 jsxTernary({}) => "<p>range</p>" | flip true; range "range"
 jsxTernary({}) => "<p><i>none</i></p>" | flip false
-jsxTernary({}) => "<p>plain</p>" | flip true; error "plain"
+jsxTernary({}) => "<p></p>" | flip true; other null
 jsxTernary("text") => "<p><i>none</i></p>" | flip false

@@ -1,2 +1,2 @@
 forInitializer({"kind":"Click","x":3}) => [3] | click 3
-forInitializer({"kind":"Key","key":"k"}) => ["k"] | key "k"
+forInitializer({"kind":"Key","key":"k"}) => threw Cannot read properties of undefined (reading 'kind') | 

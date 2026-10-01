@@ -1,3 +1,3 @@
 forTest({"kind":"Done","value":{"kind":"Some","value":7}}) => 1 | some 7
-forTest({"kind":"Done","value":{"kind":"None"}}) => 0 | none 0
+forTest({"kind":"Done","value":{"kind":"None"}}) => threw Cannot read properties of undefined (reading 'kind') | 
 forTest({"kind":"Failed","error":"lost"}) => 1 | failed "lost"

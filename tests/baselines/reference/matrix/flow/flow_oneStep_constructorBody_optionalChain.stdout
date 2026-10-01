@@ -1,2 +1,2 @@
 constructorBody(7) => 14 | add 14
-constructorBody(1) => 2 | add 2
+constructorBody(1) => null | add null

@@ -1,8 +1,0 @@
-differences from pipeline_postfixStep_jsxChild_optionalChain at the questions listed in tests/editor-matrix-differences.txt
-
-=== signatureHelp /*arg*/ main.ttx:4:51 ===
-  |   return <p>{box(input)?.inner.value! |> .toFixed(1)}</p>;
-  |                                                   ^ /*arg*/
-  tt only: toFixed(fractionDigits?: number): string | undefined [fractionDigits?: number]
-  ts only: toFixed(fractionDigits?: number): string [fractionDigits?: number]
-

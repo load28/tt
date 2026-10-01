@@ -1,2 +1,2 @@
 parameterDefault(3) => "***6" | double 6
-parameterDefault(12) => "**24" | double 24
+parameterDefault(12) => "*NaN" | double null

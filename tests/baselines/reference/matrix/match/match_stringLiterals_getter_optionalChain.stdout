@@ -1,4 +1,4 @@
 getter("north") => 1 | n 1
-getter("south") => 2 | se 2
+getter("south") => 0 | other 0
 getter("east") => 2 | se 2
 getter("up") => 0 | other 0

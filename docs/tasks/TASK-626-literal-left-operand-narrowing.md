@@ -138,7 +138,7 @@ as the right operand's type alone.
   AGENTS.md contract 2.
 - **Resolution**: Open. The result is a supertype of TypeScript's, so a
   read of it type-checks; an assignment to a target that accepts only
-  `0` does not.
+  `0` does not. TASK-692 Decision 2 records why no lowering can carry it.
 
 ### Issue 3: A right operand that cannot run still joins the result
 
@@ -149,7 +149,8 @@ as the right operand's type alone.
   whatever `$l` narrowed to there; TypeScript does not take a branch whose
   test narrows a reference to `never` for unreachable.
 - **Resolution**: Open, as Issue 2; it holds for non-literal operands
-  (`obj || try read()`) as well, and did before this task.
+  (`obj || try read()`) as well, and did before this task. Fixed by
+  TASK-692.
 
 ### Issue 4: TypeScript 5.6's checks on a literal left operand are not reproduced
 
@@ -161,7 +162,7 @@ as the right operand's type alone.
   "Disallowed Nullish and Truthy Checks") and read the source operation,
   which the lowered program no longer contains.
 - **Resolution**: Open. With the operand stored, `"" || try read()` no
-  longer reports TS2873.
+  longer reports TS2873. TASK-692 Decision 3 records why it stays open.
 
 ## Regression test (fails before the fix)
 

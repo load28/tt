@@ -1,0 +1,12 @@
+//// [mixedPatternsAskNoCoverage.tt] ////
+// A match that mixes tag patterns with literal or `is` patterns has no one
+// discriminant: `match-mixed-patterns` reports the cause, and neither the
+// untyped pass nor the typed one (`--check-types`) asks whether its arms
+// are exhaustive, whichever kind of arm comes last.
+variant V { A, B }
+declare const v: V;
+declare const flag: boolean;
+export const tagLast = match (v) { "x" => 1, A => 2 };
+export const literalLast = match (flag) { A => 1, false => 2 };
+export const instanceLast = match (v) { A => 1, is Error => 2 };
+

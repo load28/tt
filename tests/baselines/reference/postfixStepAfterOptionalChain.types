@@ -1,0 +1,81 @@
+=== main.tt ===
+function box(present: boolean): { inner: { value: number } } | undefined {
+>box : function box(present: boolean): {
+>       inner: {
+>           value: number;
+>       };
+>   } | undefined
+>present : (parameter) present: boolean
+>inner : (property) inner: {
+>       value: number;
+>   }
+>value : (property) value: number
+  return present ? { inner: { value: 1.25 } } : undefined;
+>present : (parameter) present: boolean
+>inner : (property) inner: {
+>       value: number;
+>   }
+>value : (property) value: number
+function loose(present: boolean): any {
+>loose : function loose(present: boolean): any
+>present : (parameter) present: boolean
+  return present ? " a " : undefined;
+>present : (parameter) present: boolean
+function attempt(label: string, run: () => unknown): void {
+>attempt : function attempt(label: string, run: () => unknown): void
+>label : (parameter) label: string
+>run : (parameter) run: () => unknown
+    console.log(label, JSON.stringify(run()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>label : (parameter) label: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>run : (parameter) run: () => unknown
+  } catch (error) {
+>error : var error: unknown
+    console.log(label, "threw", error instanceof TypeError);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>label : (parameter) label: string
+>error : var error: unknown
+>TypeError : var TypeError: TypeErrorConstructor
+function fixed(present: boolean): string {
+>fixed : function fixed(present: boolean): string
+>present : (parameter) present: boolean
+  return box(present)?.inner.value! |> .toFixed(1);
+>box : function box(present: boolean): {
+>       inner: {
+>           value: number;
+>       };
+>   } | undefined
+>present : (parameter) present: boolean
+>inner : (property) inner: {
+>       value: number;
+>   }
+>value : (property) value: number | undefined
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+for (const present of [true, false]) {
+>present : const present: boolean
+  attempt("head", () => fixed(present));
+>attempt : function attempt(label: string, run: () => unknown): void
+>fixed : function fixed(present: boolean): string
+>present : const present: boolean
+  attempt("member", () => box(present)?.inner! |> .value |> String);
+>attempt : function attempt(label: string, run: () => unknown): void
+>box : function box(present: boolean): {
+>       inner: {
+>           value: number;
+>       };
+>   } | undefined
+>present : const present: boolean
+>inner : (property) inner: {
+>       value: number;
+>   } | undefined
+>value : (property) value: number
+>String : var String: StringConstructor
+  attempt("tail", () => loose(present) |> ?.trim() |> .length);
+>attempt : function attempt(label: string, run: () => unknown): void
+>loose : function loose(present: boolean): any
+>present : const present: boolean
+

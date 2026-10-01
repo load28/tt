@@ -100,7 +100,7 @@ export function orFalse() {
         break $tt_v0;
       }
       $tt_v1 = $tt_t0.value;
-      $tt_v2 = $tt_v1;
+      $tt_v2 = $tt_v3 || $tt_v1;
     }
     
     const a = $tt_v2; { const $tt_a0 = { value: { kind: "Ok" as const, value: a } }; $tt_v0 = $tt_a0.value; break $tt_v0; }
@@ -129,7 +129,7 @@ export function andTrue(m: M) {
         }
       }
     }
-    $tt_v5 = $tt_v4;
+    $tt_v5 = $tt_v6 && $tt_v4;
   } else {
     $tt_v5 = $tt_v6;
   }
@@ -153,7 +153,7 @@ export function nullishNull() {
         break $tt_v7;
       }
       $tt_v8 = $tt_t1.value;
-      $tt_v9 = $tt_v8;
+      $tt_v9 = $tt_v10 ?? $tt_v8;
     } else {
       $tt_v9 = $tt_v10;
     }
@@ -178,7 +178,7 @@ export function nullishUndefined() {
         break $tt_v11;
       }
       $tt_v12 = $tt_t2.value;
-      $tt_v14 = $tt_v12;
+      $tt_v14 = $tt_v13 ?? $tt_v12;
     } else {
       $tt_v14 = $tt_v13;
     }
@@ -208,7 +208,7 @@ export function numericLiterals(m: M) {
         break $tt_v15;
       }
       $tt_v16 = $tt_t3.value;
-      $tt_v17 = $tt_v16;
+      $tt_v17 = $tt_v18 || $tt_v16;
     }
     
     let e = $tt_v17;
@@ -233,7 +233,7 @@ export function numericLiterals(m: M) {
           }
         }
       }
-      $tt_v20 = $tt_v19;
+      $tt_v20 = $tt_v21 && $tt_v19;
     } else {
       $tt_v20 = $tt_v21;
     }
@@ -271,7 +271,7 @@ export function parenthesized(m: M) {
         }
       }
     }
-    $tt_v23 = $tt_v22;
+    $tt_v23 = $tt_v24 || $tt_v22;
   }
   
   let h = $tt_v23;

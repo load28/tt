@@ -7,7 +7,7 @@
 // @completions: operand
 // @signatureHelp: operand, arg
 // @diagnostics: *
-// @parityIgnores: t0
+// @parityIgnores: t0, unexpected
 // @filename: tsconfig.json
 {
   "compilerOptions": {
@@ -35,6 +35,9 @@ export function text(value: unknown): string {
 export function note<T>(label: string, value: T): T {
   out.push(`${label} ${text(value)}`);
   return value;
+}
+export function unexpected(value: unknown): never {
+  throw new Error(`tt match: unexpected literal ${text(value)}`);
 }
 let risks = 0;
 export function risky<T>(value: T): T {

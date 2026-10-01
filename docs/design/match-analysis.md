@@ -190,6 +190,18 @@ sema는 이제 자기 후보 표를 갖지 않는다.
   질문이라 계속 **첫 후보**를 쓴다 — 두 질문에 두 해석이 있는 것이 아니라,
   같은 표에 두 질의가 있는 것이다.
 
+**TASK-693 update**: whether a single match asks an exhaustiveness question
+at all, and which one, is decided once, by
+`analysis::coverage_question`: `Tags` for a match whose arms are tag
+patterns, `Literals` for literal patterns, and none for a match with a `_`
+arm, an `is` arm (wildcard presence is the whole rule), or tag patterns
+mixed with literal or `is` patterns (`match-mixed-patterns` reports the
+cause). The untyped `Coverage` and the typed probes (`probe.rs`, which
+`--check-types` asks the checker) both answer only that question. Sema used
+to keep its own list of suppressed matches, which the typed pass never read,
+so a mixed match was reported `match-not-exhaustive` under `--check-types`
+only.
+
 내장 variant(`Option`/`Result`)의 선언도 이 표 하나뿐이다. sema가 태그만 담긴
 사본(`stdlib::BUILTIN_ENUMS`)을 따로 보던 것은 함께 없앴다.
 

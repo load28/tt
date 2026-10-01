@@ -25,14 +25,6 @@ error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns
 
 
 ==== ttc --check-types (exit 1) ====
-error[match-not-exhaustive]: match on literal union is not exhaustive: missing true
- --> mixedPatternsInEveryPosition.tt:4:9
-  |
-4 | consume(match (flag) { e => 1, false => 2 });
-  |         ^^^^^^^^^^^^
-  |
-  = help: add the missing arms: `, true => undefined,`
-  = help: or add a final `_` arm: `, _ => undefined,`
 error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
  --> mixedPatternsInEveryPosition.tt:4:32
   |

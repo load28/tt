@@ -256,21 +256,10 @@ impl Checker<'_> {
                     "move the propagation into an ordinary function, or handle the Result explicitly",
                 )
             }
-            None if matches!(place, Place::Module | Place::Function) => (
-                "`try` must be inside a function — it compiles to a `return` that propagates \
-                 the `Err`, and at the top level of a module there is no function to return from"
-                    .to_string(),
-                "move the code into a function whose `Err` this can return, or `match` on the \
-                 `Result` instead",
-            ),
-            None => (
-                "`try` cannot be used here, in an isolated value region — it compiles to a \
-                 `return`, which would complete this construct's value instead of returning \
-                 from the enclosing function"
-                    .to_string(),
-                "extract the logic into a function (a `try` inside a function written here is \
-                 fine), or move the propagation into a statement-bodied `result` block",
-            ),
+            None => {
+                let (message, help) = crate::diagnostics::TRY_OUTSIDE_FUNCTION;
+                (message.to_string(), help)
+            }
         };
         self.error(
             TtError::span(stmt.span.start, stmt.span.end, message)
@@ -672,9 +661,6 @@ impl Checker<'_> {
                 .help("split them into two matches")
                 .owner(expr.keyword_off, expr.body_close + 1),
             );
-            // A mixed match has no one discriminant, so its coverage answer
-            // is not worth asking — report the cause, not its effects.
-            self.coverage_suppressed.push(expr.keyword_off);
         }
 
         let has_instances = expr
@@ -683,9 +669,8 @@ impl Checker<'_> {
             .any(|arm| matches!(arm.pattern, Pattern::Instances(_)));
         if has_instances {
             // Class hierarchies are open; wildcard presence is the complete
-            // exhaustiveness rule and the variant/literal coverage engines
-            // must not infer anything else for this site.
-            self.coverage_suppressed.push(expr.keyword_off);
+            // exhaustiveness rule, and the coverage question a match with an
+            // `is` arm asks is none (`analysis::coverage_question`).
             if !expr
                 .arms
                 .iter()

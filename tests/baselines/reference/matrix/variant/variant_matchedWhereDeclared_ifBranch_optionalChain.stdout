@@ -1,2 +1,2 @@
 ifBranch(4) => [5,0] | enter true; add 5; neg 0
-ifBranch(9) => [10,0] | enter true; add 10; neg 0
+ifBranch(9) => [null,0] | enter true; add null; neg 0

@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+error[try-placement]: `try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation
+  --> ./tryInClassCodeInsideResult.tt:14:17
+   |
+14 |       const w = try read(2);
+   |                 ^^^^^^^^^^^
+   |
+   = help: move the propagation into an ordinary function, or handle the Result explicitly
+
+error[try-placement]: `try` cannot be used in a class field initializer — this TypeScript control-flow boundary has no statement position for its `Err` propagation
+  --> ./tryInClassCodeInsideResult.tt:22:9
+   |
+22 |     x = try read(4);
+   |         ^^^^^^^^^^^
+   |
+   = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation
+  --> tryInClassCodeInsideResult.tt:14:17
+   |
+14 |       const w = try read(2);
+   |                 ^^^^^^^^^^^
+   |
+   = help: move the propagation into an ordinary function, or handle the Result explicitly
+error[try-placement]: `try` cannot be used in a class field initializer — this TypeScript control-flow boundary has no statement position for its `Err` propagation
+  --> tryInClassCodeInsideResult.tt:22:9
+   |
+22 |     x = try read(4);
+   |         ^^^^^^^^^^^
+   |
+   = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

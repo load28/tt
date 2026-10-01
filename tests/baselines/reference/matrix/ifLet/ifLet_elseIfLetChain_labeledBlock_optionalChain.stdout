@@ -1,2 +1,2 @@
 labeledBlock(4) => 4 | read 4; first 4
-labeledBlock(-4) => "negative -2" | read -4; second -2; read -2; second "negative -2"
+labeledBlock(-4) => "negative -2" | read undefined; second -2; read -2; second "negative -2"

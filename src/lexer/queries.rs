@@ -56,15 +56,38 @@ pub(crate) fn has_top_level_comma(src: &str, from: usize, end: usize, kind: Sour
 /// `new C`, `x as T`) is not primary — `(await x).f` and `await x.f` are
 /// different expressions.
 pub(crate) fn is_primary_expression(src: &str, from: usize, end: usize, kind: SourceKind) -> bool {
+    primary_expression(src, from, end, kind).is_some()
+}
+
+/// True when `src[from..end]` is a primary expression whose value a member
+/// access appended to it reads: a primary expression that does not end in
+/// an optional chain.
+///
+/// A `.name`, `[key]`, or call written after an optional chain continues
+/// that chain (ECMA-262 §13.3.9, `OptionalChain`), so it is skipped when
+/// the chain short-circuits; a parenthesized expression is a
+/// `PrimaryExpression` and ends the chain. `a?.b` is primary, but only
+/// `(a?.b).c` reads `c` of the value `a?.b` evaluates to.
+pub(crate) fn is_member_receiver(src: &str, from: usize, end: usize, kind: SourceKind) -> bool {
+    primary_expression(src, from, end, kind) == Some(Primary::Closed)
+}
+
+/// Whether a primary expression ends in an optional chain.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Primary {
+    Closed,
+    OptionalChain,
+}
+
+fn primary_expression(src: &str, from: usize, end: usize, kind: SourceKind) -> Option<Primary> {
     crate::work::tick("primary expression checks");
     let tokens = lex_with_kind(src, from, end, kind);
     let word = |index: usize| {
         let token = &tokens[index];
         matches!(token.kind, TokenKind::Ident).then(|| &src[token.span.start..token.span.end])
     };
-    let Some(head) = tokens.first() else {
-        return false;
-    };
+    let head = tokens.first()?;
+    let mut shape = Primary::Closed;
     let mut at = match head.kind {
         TokenKind::Ident => {
             if matches!(
@@ -81,21 +104,18 @@ pub(crate) fn is_primary_expression(src: &str, from: usize, end: usize, kind: So
                         | "async"
                 )
             ) {
-                return false;
+                return None;
             }
             1
         }
-        _ if head.opens_bracket() => match close_of(&tokens, 0) {
-            Some(close) => close + 1,
-            None => return false,
-        },
+        _ if head.opens_bracket() => close_of(&tokens, 0)? + 1,
         TokenKind::Str | TokenKind::Template(_) => 1,
         TokenKind::Punct(byte) if byte.is_ascii_digit() => tokens
             .iter()
             .position(|token| !token.facts.ends_expression() || token.facts.line_break_before())
             .filter(|&index| index > 0)
             .unwrap_or(tokens.len()),
-        _ => return false,
+        _ => return None,
     };
     let name = |at: usize| {
         let at = match tokens.get(at).map(|token| &token.kind) {
@@ -110,20 +130,14 @@ pub(crate) fn is_primary_expression(src: &str, from: usize, end: usize, kind: So
     };
     while let Some(token) = tokens.get(at) {
         at = match token.kind {
-            TokenKind::Punct(b'.') => match name(at + 1) {
-                Some(next) => next,
-                None => return false,
-            },
-            TokenKind::OptChain => match tokens.get(at + 1).map(|token| &token.kind) {
-                Some(TokenKind::Punct(b'(' | b'[')) => match close_of(&tokens, at + 1) {
-                    Some(close) => close + 1,
-                    None => return false,
-                },
-                _ => match name(at + 1) {
-                    Some(next) => next,
-                    None => return false,
-                },
-            },
+            TokenKind::Punct(b'.') => name(at + 1)?,
+            TokenKind::OptChain => {
+                shape = Primary::OptionalChain;
+                match tokens.get(at + 1).map(|token| &token.kind) {
+                    Some(TokenKind::Punct(b'(' | b'[')) => close_of(&tokens, at + 1)? + 1,
+                    _ => name(at + 1)?,
+                }
+            }
             TokenKind::Punct(b'!')
                 if !matches!(
                     tokens.get(at + 1).map(|token| &token.kind),
@@ -132,15 +146,12 @@ pub(crate) fn is_primary_expression(src: &str, from: usize, end: usize, kind: So
             {
                 at + 1
             }
-            TokenKind::Punct(b'(' | b'[') => match close_of(&tokens, at) {
-                Some(close) => close + 1,
-                None => return false,
-            },
+            TokenKind::Punct(b'(' | b'[') => close_of(&tokens, at)? + 1,
             TokenKind::Template(_) => at + 1,
-            _ => return false,
+            _ => return None,
         };
     }
-    true
+    Some(shape)
 }
 
 /// True if `src[from..end]` contains an `await` in code position, template
@@ -339,6 +350,28 @@ mod tests {
             assert_eq!(
                 is_primary_expression(text, 0, text.len(), SourceKind::TypeScript),
                 primary,
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_member_receiver_ends_any_optional_chain() {
+        for (text, receiver) in [
+            ("s.trim()", true),
+            ("a?.b", false),
+            ("a?.[0]!.b", false),
+            ("f?.()", false),
+            ("a.b?.c!", false),
+            ("(a?.b)", true),
+            ("(a?.b).c", true),
+            ("[a?.b]", true),
+            ("f(a?.b)", true),
+            ("a + b", false),
+        ] {
+            assert_eq!(
+                is_member_receiver(text, 0, text.len(), SourceKind::TypeScript),
+                receiver,
                 "{text}"
             );
         }

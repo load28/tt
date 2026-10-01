@@ -109,7 +109,6 @@ pub(crate) fn check_all(
         tokens,
         verify,
         errors: Vec::new(),
-        coverage_suppressed: Vec::new(),
         result_completions,
         function_targets: crate::flow::FunctionTargets::new(
             tokens,
@@ -125,12 +124,7 @@ pub(crate) fn check_all(
     // B's coverage is not match A's typo's business.
     checker.errors.extend(resolution_errors(&semantic.patterns));
     if !defer_to_checker {
-        report_coverage(
-            source,
-            &semantic.patterns,
-            &checker.coverage_suppressed,
-            &mut checker.errors,
-        );
+        report_coverage(source, &semantic.patterns, &mut checker.errors);
     }
     // Source order, whatever order the categories ran in — the reader fixes
     // a file top to bottom. Stable, so equal positions keep report order.
@@ -159,7 +153,7 @@ pub(crate) fn coverage_errors(
     analyses: &crate::analysis::PatternAnalyses,
 ) -> Vec<TtError> {
     let mut errors = Vec::new();
-    coverage::report_coverage(source, analyses, &[], &mut errors);
+    coverage::report_coverage(source, analyses, &mut errors);
     errors
 }
 
@@ -212,11 +206,6 @@ struct Checker<'a> {
     verify: bool,
     /// Every violation found so far — the walk keeps going after each one.
     errors: Vec<TtError>,
-    /// Keyword offsets of matches whose *structure* is broken (mixed tag
-    /// and literal patterns). Their coverage answer would be an effect
-    /// stacked on a cause, so [`report_coverage`] skips them — the same
-    /// per-match recovery boundary resolution failures use.
-    coverage_suppressed: Vec<usize>,
     /// Result completion is a HIR flow fact. Index it by the AST node's
     /// stable source start so this AST diagnostic walk consumes the same
     /// answer codegen will lower instead of running a second CFG query.

@@ -1,2 +1,2 @@
 whileTest(2) => 1 | receiver {"factor":3}; twice 6
-whileTest(6) => 1 | receiver {"factor":3}; twice 18
+whileTest(6) => 0 | receiver {"factor":3}; twice null

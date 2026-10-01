@@ -1,3 +1,3 @@
-forOfBody({"kind":"Rect","w":2,"h":3}) => [[2,3],[2,3]] | round 0; round 1
-forOfBody({"kind":"Circle","r":1}) => [] | round 0; round 1
-forOfBody({"kind":"Point"}) => [] | round 0; round 1
+forOfBody({"kind":"Rect","w":2,"h":3}) => threw Cannot read properties of undefined (reading 'kind') | round 0; round 1
+forOfBody({"kind":"Circle","r":1}) => threw Cannot read properties of undefined (reading 'kind') | round 0; round 1
+forOfBody({"kind":"Point"}) => threw Cannot read properties of undefined (reading 'kind') | round 0; round 1

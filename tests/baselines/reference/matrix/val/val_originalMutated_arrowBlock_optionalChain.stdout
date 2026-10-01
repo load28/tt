@@ -1,2 +1,2 @@
 arrowBlock(3) => 13 | original 13
-arrowBlock(8) => 18 | original 18
+arrowBlock(8) => null | original null

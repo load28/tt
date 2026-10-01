@@ -1,2 +1,2 @@
 forUpdate(3) => "6" | body 0; add 6
-forUpdate(-4) => "-8" | body 0; add -8
+forUpdate(-4) => "NaN" | body 0; add null

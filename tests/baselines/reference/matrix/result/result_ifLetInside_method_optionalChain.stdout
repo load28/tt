@@ -1,2 +1,2 @@
 method(4) => {"kind":"Ok","value":4} | this "holder"; read 4; direct 4
-method(-1) => {"kind":"Err","error":"negative -7"} | this "holder"; read -1; fallback -7; read -7
+method(-1) => {"kind":"Err","error":"negative -7"} | this "holder"; read undefined; fallback -7; read -7

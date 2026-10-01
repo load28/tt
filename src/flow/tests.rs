@@ -476,11 +476,16 @@ fn module_and_non_function_braces_are_not() {
     assert!(!inside("try { HERE; } catch (e) {}", "HERE"));
     assert!(!inside("do { HERE; } while (c);", "HERE"));
     assert!(!inside("namespace N { HERE; }", "HERE"));
-    assert!(!inside("class A extends mixin(B) { HERE; }", "HERE"));
-    assert!(!inside("class A { static { HERE; } }", "HERE"));
-    assert!(!inside("class A<T> { x = HERE; }", "HERE"));
     // A function body *closed before* the position provides nothing.
     assert!(!inside("function f() {} HERE;", "HERE"));
+}
+
+#[test]
+fn class_code_is_a_boundary_of_its_own() {
+    assert!(inside("class A extends mixin(B) { HERE; }", "HERE"));
+    assert!(inside("class A { static { HERE; } }", "HERE"));
+    assert!(inside("class A<T> { x = HERE; }", "HERE"));
+    assert!(inside("const C = class { static { HERE; } };", "HERE"));
 }
 
 #[test]
