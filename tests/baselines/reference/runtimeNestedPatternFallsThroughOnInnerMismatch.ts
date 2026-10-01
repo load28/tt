@@ -66,6 +66,8 @@ function grade(r: Res): string {
         $tt_v0 = "err:" + error;
         break;
       }
+      // v1 exhaustiveness: nested arms cover nothing, so `Ok` counts as
+      // uncovered without a final wildcard (documented, like guards).
       $tt_v0 = "unreachable";
       break;
     } while (false);

@@ -1,8 +1,8 @@
 # TASK-702: Keep the comments between match arms, and let a directive there govern its arm
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-01
-- **Completed**: —
+- **Completed**: 2026-10-01
 - **Commit**: see `git log --grep TASK-702`
 
 ## Purpose
@@ -100,6 +100,10 @@ same text written as TypeScript reports nothing).
 - 2026-10-01: Added `tests/matrix/matchComments.mjs`, a construct whose
   form writes line and block comments before, between, and after the arms,
   run in every host position against its twin (367 cases).
+- 2026-10-01: Merged `claude/ecstatic-dijkstra-qw5pf9` (TASK-703 to
+  TASK-705). One converted case, `runtimeNestedPatternFallsThroughOnInnerMismatch`,
+  has two comment lines between arms; its `.ts` and `.map.txt` baselines
+  now hold them, the only existing baselines this change moved.
 
 ## Issues and resolutions
 
@@ -139,11 +143,34 @@ same text written as TypeScript reports nothing).
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
+The full gate, on the merged tree, for TASK-700 to TASK-702:
+
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `RUST_TEST_THREADS=2 TTC_REQUIRE_TSGO=1 TTC_REQUIRE_TYPESCRIPT_CASES=1
+  TT_REQUIRE_EXTENSION=1 TT_BASELINE_TRACKING_DIR=<dir> cargo test
+  --no-fail-fast`: every suite passed except `case_baselines`, whose one
+  failure was the comment lines kept in the merged case above (reviewed and
+  accepted with `scripts/baseline-accept`); `node scripts/check-baselines
+  --tracking <dir>`: 5,327 compared, none unused.
+- [x] `TTC_REQUIRE_TSGO=1 TT_MATRIX_CASES=all cargo test --test
+  case_baselines`: passed in 2,192 s (the case matrix with `matchComments`,
+  3,653 cases; the diagnostics matrix, 2,830; every other case), every
+  listed defect observed as listed.
+- [x] `TTC_REQUIRE_TSGO=1 TT_REQUIRE_EXTENSION=1 TT_MATRIX_CASES=all cargo
+  test --test editor_cases`: passed in 834 s.
+- [x] `./scripts/ci extension` and `./scripts/ci agents`: passed (rolldown
+  absent, as the warning says).
+- [x] Baseline changes reviewed and committed with the change.
 
 ## Result
 
-TBD.
+Changed: `src/hir/{mod,lower}.rs`, `src/core_ir/{mod,lower}.rs`,
+`src/codegen/core/mod.rs`, `src/codegen/core/emitter/{mod,pattern}.rs`,
+`src/codegen/rope.rs`, `src/codegen/rope/builder.rs`, `docs/ai/tt.md`,
+`tests/matrix/matchComments.mjs` and its 367 generated cases with their
+baselines, the two compiler cases with their baselines, the public API
+baseline, and the two baselines of the merged case. A comment between,
+before, or after match arms reaches the output in place, and a directive
+there governs the arm on the line after it; comments inside a pattern
+remain dropped (Issue 1).
