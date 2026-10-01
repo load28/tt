@@ -19,6 +19,7 @@
 //! infallible), because the moment completion matters most is the moment
 //! the buffer does not compile.
 
+mod keyword_filter;
 mod project;
 mod scope;
 mod service;

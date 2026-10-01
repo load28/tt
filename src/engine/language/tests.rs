@@ -696,3 +696,96 @@ fn tt_tokens_replace_the_service_tokens_they_overlap() {
         ]
     );
 }
+
+fn keyword_item(label: &str) -> CompletionItem {
+    CompletionItem {
+        label: label.to_string(),
+        kind: Some(CompletionItemKind::Keyword),
+        tags: Vec::new(),
+        sort_text: "15".to_string(),
+        insert_text: None,
+        filter_text: None,
+        snippet: false,
+        range: None,
+        label_detail: None,
+        description: None,
+        detail: None,
+        source: None,
+    }
+}
+
+fn restated_keywords(source: &str, marker: &str, labels: &[&str]) -> Vec<String> {
+    let doc = service_doc(Path::new("/p/keywords.tt"), source.to_string());
+    let at = source.find(marker).unwrap() + marker.len();
+    let out = mapper::cursor_to_output(&doc.mappings, at, mapper::Affinity::Preceding).unwrap();
+    let served = mapper::to_utf16(&doc.code, out);
+    let mut answer = CompletionAnswer {
+        items: labels.iter().map(|label| keyword_item(label)).collect(),
+        ..CompletionAnswer::default()
+    };
+    scope::restate_completions(
+        &mut answer,
+        &doc,
+        doc.served(),
+        crate::SourceKind::TypeScript,
+        served,
+        at,
+    );
+    answer.items.into_iter().map(|item| item.label).collect()
+}
+
+#[test]
+fn a_module_level_arm_takes_a_function_body_keywords_whatever_the_answer_holds() {
+    let source = "declare function f(n: number): number;\ndeclare const input: number;\nexport const top = match (input) { 1 => f(input), _ => input as number };\n";
+    assert_eq!(
+        restated_keywords(source, "1 => f(", &["abstract", "declare", "if", "return"]),
+        ["if", "return"]
+    );
+    assert_eq!(
+        restated_keywords(source, "input as ", &["number", "declare", "unknown"]),
+        ["number", "declare", "unknown"]
+    );
+}
+
+fn offers_all_keywords_at(code: &str) -> bool {
+    let at = code.find('|').unwrap();
+    let code = code.replacen('|', "", 1);
+    let input = crate::host_input::HostInput::new(&code);
+    let program = input
+        .parser(crate::SourceKind::TypeScript)
+        .parse_program()
+        .unwrap();
+    keyword_filter::offers_all_keywords(
+        &code,
+        crate::SourceKind::TypeScript,
+        &program,
+        input.origin(),
+        at,
+    )
+}
+
+#[test]
+fn typescript_offers_every_keyword_only_outside_type_and_member_positions() {
+    let prelude = "declare const x: number; declare function g<T>(v: T): T;\n";
+    for (line, all) in [
+        ("g(|x);", true),
+        ("const a = |x;", true),
+        ("const p = typeof |x;", true),
+        ("let q: typeof |x;", true),
+        ("const t = `${|x}`;", true),
+        ("const z = /* c */|x;", true),
+        ("const a: |number = 1;", false),
+        ("const a: num|ber = 1;", false),
+        ("const b = x as |number;", false),
+        ("const c = x satisfies |number;", false),
+        ("type T = |number;", false),
+        ("let d: Array<|number>;", false),
+        ("const e = g<|number>(1);", false),
+        ("interface I { |a: number }", false),
+        ("const s = \"te|xt\";", false),
+        ("// com|ment", false),
+    ] {
+        let code = format!("{prelude}{line}\n");
+        assert_eq!(offers_all_keywords_at(&code), all, "{line}");
+    }
+}

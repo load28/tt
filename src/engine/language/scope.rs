@@ -52,14 +52,6 @@ const MODULE_LEVEL_KEYWORDS: [&str; 18] = [
     "unknown",
 ];
 
-/// A keyword `KeywordCompletionFiltersAll` offers and no other filter
-/// does: an answer holding it is TypeScript's global completion outside
-/// every function-like body, and one without it was filtered otherwise (a
-/// type position's `KeywordCompletionFiltersTypeKeywords`, a class body's
-/// keywords, or no keywords at all), which the construct's place does not
-/// change.
-const ALL_FILTER_KEYWORD: &str = "namespace";
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Stop {
     /// A variable or parameter declaration the position is written in.
@@ -143,13 +135,15 @@ impl Visit for Ancestors {
 
 /// Which of TypeScript's two walks from the served offset `at` (a byte of
 /// `text.code`) stop in text the user wrote, so that its answer is the
-/// source's: `(declaration, container)`. `None` when the served text does
-/// not parse.
+/// source's: `(declaration, container)`, and whether TypeScript's keyword
+/// filter there is the one its container walk chooses between
+/// ([`super::keyword_filter::offers_all_keywords`]). `None` when the
+/// served text does not parse.
 fn decided_in_source(
     text: ServedText<'_>,
     kind: crate::SourceKind,
     at: usize,
-) -> Option<(bool, bool)> {
+) -> Option<(bool, bool, bool)> {
     let input = crate::host_input::HostInput::new(text.code);
     let module = input.parser(kind).parse_program().ok()?;
     let mut ancestors = Ancestors {
@@ -158,6 +152,8 @@ fn decided_in_source(
         found: Vec::new(),
     };
     module.visit_with(&mut ancestors);
+    let global_keywords =
+        super::keyword_filter::offers_all_keywords(text.code, kind, &module, input.origin(), at);
     let (mut declaration, mut container) = (false, false);
     for &(stop, start, end) in ancestors.found.iter().rev() {
         if mapper::to_source_span(text.mappings, start, end).is_none() {
@@ -175,7 +171,7 @@ fn decided_in_source(
             break;
         }
     }
-    Some((declaration, container))
+    Some((declaration, container, global_keywords))
 }
 
 /// What the construct around source byte `at` says TypeScript's walks
@@ -214,7 +210,7 @@ pub(super) fn restate_completions(
     let Some((declaration, function_body)) = construct_scope(doc, at) else {
         return;
     };
-    let Some((declared, contained)) =
+    let Some((declared, contained, global_keywords)) =
         decided_in_source(text, kind, mapper::from_utf16(text.code, served))
     else {
         return;
@@ -227,13 +223,7 @@ pub(super) fn restate_completions(
     let keyword = |item: &CompletionItem, label: &str| {
         item.kind == Some(CompletionItemKind::Keyword) && item.label == label
     };
-    if !contained
-        && function_body
-        && answer
-            .items
-            .iter()
-            .any(|item| keyword(item, ALL_FILTER_KEYWORD))
-    {
+    if !contained && function_body && global_keywords {
         answer.items.retain(|item| {
             !MODULE_LEVEL_KEYWORDS
                 .iter()

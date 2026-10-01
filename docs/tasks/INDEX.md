@@ -704,6 +704,7 @@
 | TASK-696 | Name the incompatible part of a union as TypeScript names it | Complete | 2026-10-01 | 2026-10-01 | [TASK-696](./TASK-696-partly-incompatible-union.md) |
 | TASK-697 | Keep a directive on the JSDoc line it governs when the JSDoc moves to its declaration | Complete | 2026-10-01 | 2026-10-01 | [TASK-697](./TASK-697-jsdoc-and-directive-before-lowered-statement.md) |
 | TASK-698 | Point a variant constructor's missing argument at the field it is for | Complete | 2026-10-01 | 2026-10-01 | [TASK-698](./TASK-698-variant-constructor-parameter-origin.md) |
+| TASK-699 | Read TypeScript's keyword filter from the served syntax, not from its answer | Complete | 2026-10-01 | 2026-10-01 | [TASK-699](./TASK-699-keyword-filter-from-syntax.md) |
 
 ## Next task number
 

@@ -73,7 +73,15 @@ parameter's declaration, which in tt is the field `radius: number`.
 
 ## Issues and resolutions
 
-None.
+### Issue 1: Fifteen matrix baselines changed outside the sampled run
+
+- **Symptom**: The full case matrix (TASK-699's gate) found that the 15
+  `variant_requiredAfterOptional_*` cases no longer report TS1016 "(in code
+  ttc generated for this construct)" at the variant name.
+- **Cause**: TS1016 on the generated parameter now lands at the field the
+  case's `variant-required-after-optional` error covers, and a checker
+  diagnostic owned by a tt cause is not reported twice.
+- **Resolution**: Intended; the baselines are committed with TASK-699.
 
 ## Regression test (fails before the fix)
 

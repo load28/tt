@@ -10,11 +10,6 @@ error[variant-required-after-optional]: variant Bad: case "A" declares required 
 
 
 ==== ttc --check-types (exit 1) ====
-error[ts1016]: A required parameter cannot follow an optional parameter. (in code ttc generated for this construct)
- --> main.tt:4:9
-  |
-4 | variant Bad { A(a?: number, b: number) }
-  |         ^^^
 error[variant-required-after-optional]: variant Bad: case "A" declares required field `b` after optional field `a`
  --> main.tt:4:29
   |

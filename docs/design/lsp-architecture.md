@@ -439,10 +439,15 @@ TypeScript's syntax errors *and* its type errors; a `.tt` file must too.
   place is in a function-like body (a match arm and a `result` block are,
   as region functions), and where TypeScript's
   `tryGetFunctionLikeBodyCompletionContainer` walk leaves the user's text
-  and its answer carries the module-level keyword filter
-  (`KeywordCompletionFiltersAll`, the only one that offers `namespace`), the
-  keywords only that filter adds are removed, which is the answer
-  `KeywordCompletionFiltersFunctionLikeBodyKeywords` gives.
+  and TypeScript chose the module-level keyword filter
+  (`KeywordCompletionFiltersAll`), the keywords only that filter adds are
+  removed, which is the answer
+  `KeywordCompletionFiltersFunctionLikeBodyKeywords` gives. **Update
+  (TASK-699)**: whether TypeScript chose that filter is read from the
+  served syntax, not from the answer: the position is not in a comment or
+  literal, not an interface or type literal member position, and not a
+  type-only location as `isTypeOnlyLocation` defines it
+  (`src/engine/language/keyword_filter.rs`).
 
 ### 지운 것 (§51)
 

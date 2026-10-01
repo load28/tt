@@ -1,5 +1,10 @@
 # TASK-688: Offer a function body's keywords in the arms and blocks of a module-level construct
 
+> **Decision 2 superseded in part by TASK-699**: whether TypeScript applied
+> `KeywordCompletionFiltersAll` is no longer read from its answer (the
+> presence of `namespace`) but from the served syntax, as
+> `isTypeOnlyLocation` and the member-position completions define it.
+
 - **Status**: Complete
 - **Started**: 2026-09-30
 - **Completed**: 2026-09-30
