@@ -1,0 +1,15 @@
+// An or-pattern alternative with a nested pattern is rejected as
+// `match-nested-in-or-pattern`, and alternatives that bind different names,
+// nested leaves included, are a second fault that `match-or-binding-mismatch`
+// names: `w` is bound only in `Failed(...)`, and `v` only in `Done(...)`.
+// @expectErrors: match-nested-in-or-pattern, match-or-binding-mismatch
+// @baselines: errors.txt
+variant Opt { Some(value: number), None }
+variant Outcome { Done(value: Opt), Failed(error: number) }
+export function arm(o: Outcome) {
+  return match (o) { Done(value: Some(value: v)) | Failed(error: w) => 1, _ => 0 };
+}
+export function ifLet(o: Outcome) {
+  if let Failed(error: w) | Done(value: Some(value: v)) = o { return 1; }
+  return 0;
+}

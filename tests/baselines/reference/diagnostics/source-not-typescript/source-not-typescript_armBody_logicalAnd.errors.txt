@@ -1,17 +1,17 @@
 ==== ttc --out-dir (exit 1) ====
 ttc: ./harness.ts → $DIR/out/harness.ts
 error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
- --> ./main.tt:4:73
+ --> ./main.tt:4:74
   |
 4 |   return flip() && match (note("operand", input)) { 1 => note("one", 1) +, _ => note("other", 0) };
-  |                                                                         ^
+  |                                                                          ^
 
 
 ==== ttc --check-types (exit 1) ====
 error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
- --> main.tt:4:73
+ --> main.tt:4:74
   |
 4 |   return flip() && match (note("operand", input)) { 1 => note("one", 1) +, _ => note("other", 0) };
-  |                                                                         ^
+  |                                                                          ^
 
 ==== tsc on the emitted TypeScript (exit 0) ====

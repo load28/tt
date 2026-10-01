@@ -563,7 +563,10 @@ pub(super) enum ProjectionSegmentKind {
     Copied,
     /// Compiler-written delimiter that closes a copied source fragment.
     /// A parser stopping here proves that the fragment immediately before
-    /// it was incomplete; the delimiter itself is fixed syntax.
+    /// it was incomplete; the delimiter itself is fixed syntax. Its source
+    /// is the first significant source byte after the fragment, the token
+    /// that ends the fragment in the source and where TypeScript's parser
+    /// stops on the same text.
     SourceBoundary,
     Placeholder,
     AutomaticSemicolon,
@@ -731,10 +734,10 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     /// Writes the fixed delimiter after a source fragment embedded in a
-    /// generated owner and records the fragment as the parse cause when SWC
-    /// stops on that delimiter. This is provenance, not diagnostic-message
-    /// inference: only a copied segment ending exactly at this boundary can
-    /// own it.
+    /// generated owner and records the source token after the fragment as
+    /// the parse cause when SWC stops on that delimiter. This is
+    /// provenance, not diagnostic-message inference: only a copied segment
+    /// ending exactly at this boundary can own it.
     fn push_source_boundary(&mut self, text: &str, segments_since: usize) {
         let start = ProjectedByte(self.code.len());
         let source = self.source_segments[segments_since..]
@@ -743,7 +746,7 @@ impl<'a> ProjectionBuilder<'a> {
             .find(|segment| {
                 segment.kind == ProjectionSegmentKind::Copied && segment.projected.end == start
             })
-            .map(|segment| segment.source);
+            .map(|segment| self.token_after(segment.source.end));
         self.code.push_str(text);
         if let Some(source) = source {
             self.source_segments.push(ProjectionSourceSegment {
@@ -751,12 +754,22 @@ impl<'a> ProjectionBuilder<'a> {
                     start,
                     end: ProjectedByte(self.code.len()),
                 },
-                source: SourceSpan {
-                    start: source.end.saturating_sub(1),
-                    end: source.end,
-                },
+                source,
                 kind: ProjectionSegmentKind::SourceBoundary,
             });
+        }
+    }
+
+    fn token_after(&self, end: usize) -> SourceSpan {
+        let start =
+            crate::scanner::skip_ws_comments(self.source.as_bytes(), end, self.source.len());
+        let width = self.source[start..]
+            .chars()
+            .next()
+            .map_or(0, char::len_utf8);
+        SourceSpan {
+            start,
+            end: start + width,
         }
     }
 
@@ -1291,11 +1304,14 @@ impl<'a> ProjectionBuilder<'a> {
             }
             self.code.push_str("for (;;) {");
         }
+        self.code.push('{');
+        let segments_since = self.source_segments.len();
         for item in &region.items {
             match item {
                 crate::core_ir::ResultRegionItem::Statements(body) => self.emit_body(*body)?,
             }
         }
+        self.push_source_boundary("}", segments_since);
         self.code.push('\n');
         let synthetic_return_start = ProjectedByte(self.code.len());
         self.code.push_str("return ");

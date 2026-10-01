@@ -8,19 +8,8 @@ error[result-yield-crossing]: `yield` cannot cross a `result` block
   |
   = help: yield outside this `result` block instead
 
-error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
- --> ./main.ttx:4:111
-  |
-4 |   return <div {...{ value: [...(function* () { const r = result { const n = try read(note("operand", input)); yield n; return n; }; yield r; })()] }} />;
-  |                                                                                                               ^
-
 
 ==== ttc --check-types (exit 1) ====
-error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
- --> main.ttx:4:111
-  |
-4 |   return <div {...{ value: [...(function* () { const r = result { const n = try read(note("operand", input)); yield n; return n; }; yield r; })()] }} />;
-  |                                                                                                               ^
 error[result-yield-crossing]: `yield` cannot cross a `result` block
  --> main.ttx:4:111
   |

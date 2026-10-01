@@ -1,0 +1,57 @@
+==== ttc --out-dir (exit 1) ====
+error[match-nested-in-or-pattern]: match: nested patterns cannot be combined with or-patterns
+ --> ./nestedOrPatternAlternativeBindsOtherNames.tt:8:22
+  |
+8 |   return match (o) { Done(value: Some(value: v)) | Failed(error: w) => 1, _ => 0 };
+  |                      ^^^^
+
+error[match-or-binding-mismatch]: match: or-pattern alternatives must bind the same names — `v` is bound in `Done(...)` but not in `Failed(...)`
+ --> ./nestedOrPatternAlternativeBindsOtherNames.tt:8:52
+  |
+8 |   return match (o) { Done(value: Some(value: v)) | Failed(error: w) => 1, _ => 0 };
+  |                                                    ^^^^^^
+
+error[match-nested-in-or-pattern]: if let: nested patterns cannot be combined with or-patterns
+  --> ./nestedOrPatternAlternativeBindsOtherNames.tt:11:29
+   |
+11 |   if let Failed(error: w) | Done(value: Some(value: v)) = o { return 1; }
+   |                             ^^^^
+
+error[match-or-binding-mismatch]: if let: or-pattern alternatives must bind the same names — `w` is bound in `Failed(...)` but not in `Done(...)`
+  --> ./nestedOrPatternAlternativeBindsOtherNames.tt:11:29
+   |
+11 |   if let Failed(error: w) | Done(value: Some(value: v)) = o { return 1; }
+   |                             ^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2339]: match on a tag pattern needs a value with a `kind` discriminant — this scrutinee has none (a plain TypeScript `enum` is not one) (in tt's names: Property 'value' does not exist on type 'Outcome'.
+  Property 'value' does not exist on type 'Outcome.Failed'.) (ts2339: Property 'value' does not exist on type 'Outcome'.
+  Property 'value' does not exist on type '{ kind: "Failed"; error: number; }'.)
+ --> nestedOrPatternAlternativeBindsOtherNames.tt:8:10
+  |
+8 |   return match (o) { Done(value: Some(value: v)) | Failed(error: w) => 1, _ => 0 };
+  |          ^^^^^^^^^
+error[match-nested-in-or-pattern]: match: nested patterns cannot be combined with or-patterns
+ --> nestedOrPatternAlternativeBindsOtherNames.tt:8:22
+  |
+8 |   return match (o) { Done(value: Some(value: v)) | Failed(error: w) => 1, _ => 0 };
+  |                      ^^^^
+error[match-or-binding-mismatch]: match: or-pattern alternatives must bind the same names — `v` is bound in `Done(...)` but not in `Failed(...)`
+ --> nestedOrPatternAlternativeBindsOtherNames.tt:8:52
+  |
+8 |   return match (o) { Done(value: Some(value: v)) | Failed(error: w) => 1, _ => 0 };
+  |                                                    ^^^^^^
+error[match-nested-in-or-pattern]: if let: nested patterns cannot be combined with or-patterns
+  --> nestedOrPatternAlternativeBindsOtherNames.tt:11:29
+   |
+11 |   if let Failed(error: w) | Done(value: Some(value: v)) = o { return 1; }
+   |                             ^^^^
+error[match-or-binding-mismatch]: if let: or-pattern alternatives must bind the same names — `w` is bound in `Failed(...)` but not in `Done(...)`
+  --> nestedOrPatternAlternativeBindsOtherNames.tt:11:29
+   |
+11 |   if let Failed(error: w) | Done(value: Some(value: v)) = o { return 1; }
+   |                             ^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -113,6 +113,13 @@ The gate for TASK-713 to TASK-716, run on this tree with
   up: no release `ttc`, which `./scripts/setup` builds and this task did
   not run).
 - [x] Baseline changes reviewed and committed with the change.
+- [x] After merging `claude/ecstatic-dijkstra-qw5pf9` at 93de2cd
+  (TASK-706 to TASK-712): `cargo fmt --check`, `cargo clippy
+  --all-targets -- -D warnings`, the full `cargo test --no-fail-fast`
+  with the same variables (30 binaries passed), `check-baselines` (5 352
+  compared, none unused), `TT_MATRIX_CASES=all` `UPDATE_EXPECT=1` runs of
+  `case_baselines` and `editor_cases` (passed, no baseline changed),
+  `npm test` in `editors/vscode` (238 passed), and `./scripts/ci agents`.
 
 ## Result
 

@@ -239,7 +239,7 @@ impl Lower<'_> {
             .map(|arm| arm_end(arm.body_span, arm.block, arm.missing))
             .collect();
         let (gaps, trailing) = arm_gaps(
-            expr.body_open,
+            expr.scrutinee_span.end,
             expr.body_close,
             expr.arms.iter().map(|arm| arm.pattern_span.start).zip(ends),
         );
@@ -258,6 +258,11 @@ impl Lower<'_> {
                     )),
                 );
                 lowered.gap = Some(gap);
+                lowered.head = arm_head(
+                    arm.pattern_span.start,
+                    arm.guard.as_ref().map(|guard| guard.span),
+                    arm.body_span.start,
+                );
                 lowered
             })
             .collect();
@@ -285,7 +290,7 @@ impl Lower<'_> {
             .map(|(span, program)| self.lower_expr_program(program, Self::span(*span)))
             .collect();
         let (gaps, trailing) = arm_gaps(
-            expr.body_open,
+            expr.head_span().end - 1,
             expr.body_close,
             expr.arms.iter().map(|arm| {
                 (
@@ -324,6 +329,11 @@ impl Lower<'_> {
                     body: Some(body),
                     body_kind: Some(arm_body_kind(arm.block, arm.diverges, arm.missing)),
                     gap: Some(gap),
+                    head: arm_head(
+                        arm.pattern_span.start,
+                        arm.guard.as_ref().map(|guard| guard.span),
+                        arm.body_span.start,
+                    ),
                 }
             })
             .collect();
@@ -361,6 +371,7 @@ impl Lower<'_> {
             body,
             body_kind,
             gap: None,
+            head: Vec::new(),
         }
     }
 
@@ -569,6 +580,10 @@ impl Lower<'_> {
                 body: None,
                 body_kind: None,
                 gap: None,
+                head: vec![
+                    Span::new(stmt.head_span.start, stmt.expr.span.start),
+                    Span::new(stmt.expr.span.end, stmt.else_body.span.start),
+                ],
             }],
             trailing: None,
         });
@@ -620,6 +635,10 @@ impl Lower<'_> {
                 // reads this fact; it claims no divergence it has not proven.
                 body_kind: Some(ArmBodyKind::Block { completes: true }),
                 gap: None,
+                head: vec![
+                    Span::new(stmt.head_span.start, stmt.expr.span.start),
+                    Span::new(stmt.expr.span.end, stmt.body.span.start),
+                ],
             }],
             trailing: None,
         });
@@ -789,9 +808,22 @@ fn arm_end(body: ast::Span, block: bool, missing: bool) -> usize {
     }
 }
 
-/// The source between consecutive arms of a match body whose `{` and `}`
-/// are at `open` and `close`, given each arm's pattern start and end: the
-/// gap before each arm, and the one after the last.
+/// An arm's source from its pattern to its body, without its guard's
+/// condition, which is copied with its own comments.
+fn arm_head(pattern: usize, guard: Option<ast::Span>, body: usize) -> Vec<Span> {
+    match guard {
+        Some(guard) => vec![
+            Span::new(pattern, guard.start.max(pattern)),
+            Span::new(guard.end, body.max(guard.end)),
+        ],
+        None => vec![Span::new(pattern, body.max(pattern))],
+    }
+}
+
+/// The source between consecutive arms of a match whose scrutinee's `)` and
+/// body's `}` are at `open` and `close`, given each arm's pattern start and
+/// end: the gap before each arm (for the first, from the `)`, the body's
+/// `{` included), and the one after the last.
 fn arm_gaps(
     open: usize,
     close: usize,

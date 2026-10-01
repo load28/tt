@@ -12,12 +12,10 @@ pub(crate) fn lower_semantic(
     tokens: &[crate::lexer::Token],
 ) -> CoreFile {
     let temp_ordinals = temp_ordinals(semantic);
-    let tt_owned = semantic.hir.match_owned_tokens(tokens);
     let mut cx = Lowering {
         semantic,
         source,
         tokens,
-        tt_owned,
         function_targets: std::cell::OnceCell::new(),
         temp_ordinals,
     };
@@ -58,7 +56,6 @@ struct Lowering<'a> {
     semantic: &'a SemanticFile,
     source: &'a str,
     tokens: &'a [crate::lexer::Token],
-    tt_owned: HashSet<usize>,
     function_targets: std::cell::OnceCell<crate::flow::FunctionTargets>,
     temp_ordinals: HashMap<NodeId, u32>,
 }
@@ -346,6 +343,7 @@ impl Lowering<'_> {
                 guard: arm.guard,
                 action: action(arm, arm.body_kind),
                 gap: arm.gap,
+                head: arm.head.clone(),
             })
             .collect();
         Decision {
@@ -590,12 +588,13 @@ impl Lowering<'_> {
             .source_map
             .node_span(node)
             .unwrap_or_else(|| crate::ice::bug!("Core IR generator node has no source span"));
-        let at = self
-            .tokens
-            .partition_point(|token| token.span.start < span.start);
         self.function_targets
-            .get_or_init(|| crate::flow::FunctionTargets::new(self.tokens, &self.tt_owned))
-            .at(at)
+            .get_or_init(|| {
+                crate::flow::FunctionTargets::new(self.tokens, &|tokens| {
+                    self.semantic.hir.match_owned_tokens(tokens)
+                })
+            })
+            .at_offset(span.start)
             == Some(crate::flow::FunctionTarget::Generator)
     }
 }

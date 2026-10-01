@@ -236,6 +236,9 @@ pub(crate) struct DecisionArm {
     /// The source between the previous arm and this one, where the comments
     /// written between them are ([`hir::SiteArm::gap`]).
     pub gap: Option<hir::Span>,
+    /// The arm's own source outside its guard and body
+    /// ([`hir::SiteArm::head`]).
+    pub head: Vec<hir::Span>,
 }
 
 impl DecisionArm {

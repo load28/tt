@@ -140,17 +140,9 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
     // the first error in source order — and skips emission when the checks
     // already failed.
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
-    let typescript_tokens = lexer::TypeScriptTokens::of(source, options.source_kind, &tokens);
     let semantics = analysis::coverage_semantics(source, &program, options.extern_variants);
-    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
-    let mut errors = tt_errors(
-        source,
-        &program,
-        &tokens,
-        typescript_tokens.tokens(),
-        options,
-        &semantics,
-    );
+    let core = core_ir::lower_semantic(&semantics, source, &tokens);
+    let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
     if errors
         .iter()
         .any(|error| error.code == DiagnosticCode::ResultNoSuccessValue)
@@ -272,7 +264,6 @@ fn tt_errors(
     source: &str,
     program: &ast::Program,
     tokens: &[lexer::Token],
-    typescript_tokens: &[lexer::Token],
     options: &Options,
     semantics: &analysis::SemanticFile,
 ) -> Vec<TtError> {
@@ -283,7 +274,7 @@ fn tt_errors(
         options.verify,
         options.defer_to_checker,
         semantics,
-        typescript_tokens,
+        tokens,
     );
     if !options.defer_to_checker {
         errors.extend(val::check_all(
@@ -573,17 +564,9 @@ fn try_placement_message(
 /// ```
 pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
-    let typescript_tokens = lexer::TypeScriptTokens::of(source, options.source_kind, &tokens);
     let semantics = analysis::coverage_semantics(source, &program, options.extern_variants);
-    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
-    let mut errors = tt_errors(
-        source,
-        &program,
-        &tokens,
-        typescript_tokens.tokens(),
-        options,
-        &semantics,
-    );
+    let core = core_ir::lower_semantic(&semantics, source, &tokens);
+    let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
     if !errors.iter().any(|error| error.code.blocks_projection()) {
         match codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens) {
             Ok(plan) => errors.extend(nonredundant_target_errors(&plan, &errors)),
@@ -980,17 +963,9 @@ fn report_parsed(
     tokens: &[lexer::Token],
     refine: bool,
 ) -> CompileReport {
-    let typescript_tokens = lexer::TypeScriptTokens::of(source, options.source_kind, tokens);
     let semantics = analysis::coverage_semantics(source, program, options.extern_variants);
-    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
-    let mut errors = tt_errors(
-        source,
-        program,
-        tokens,
-        typescript_tokens.tokens(),
-        options,
-        &semantics,
-    );
+    let core = core_ir::lower_semantic(&semantics, source, tokens);
+    let mut errors = tt_errors(source, program, tokens, options, &semantics);
     if errors.iter().any(|e| e.code.blocks_projection()) {
         return CompileReport {
             emit: None,

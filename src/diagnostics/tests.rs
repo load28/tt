@@ -41,7 +41,7 @@ fn every_rule_is_listed_once_and_explained() {
     // `as_str` and `explanation` are exhaustive matches, so the
     // compiler catches a new variant in both. `ALL` it cannot check:
     // this count is the prompt to list a new rule there too.
-    assert_eq!(DiagnosticCode::ALL.len(), 49);
+    assert_eq!(DiagnosticCode::ALL.len(), 48);
     let mut seen = std::collections::HashSet::new();
     for code in DiagnosticCode::ALL {
         let wire = code.as_str();
@@ -84,6 +84,7 @@ fn code_numbers_are_stable_and_start_at_one() {
         Some("result-missing-keyword")
     );
     assert_eq!(DiagnosticCode::retired("33"), Some("result-tail-semicolon"));
+    assert_eq!(DiagnosticCode::retired("tt5"), Some("stray-result"));
     let mut seen = std::collections::HashSet::new();
     for code in DiagnosticCode::ALL {
         let number = code.number();

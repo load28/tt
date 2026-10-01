@@ -107,14 +107,12 @@ pub(crate) fn check_all(
     let mut checker = Checker {
         source,
         source_kind,
-        tokens,
         verify,
         errors: Vec::new(),
         result_completions,
-        function_targets: crate::flow::FunctionTargets::new(
-            tokens,
-            &semantic.hir.match_owned_tokens(tokens),
-        ),
+        function_targets: crate::flow::FunctionTargets::new(tokens, &|tokens| {
+            semantic.hir.match_owned_tokens(tokens)
+        }),
     };
     checker.visit_program(program, Ctx::Top, Place::Module);
     // One analysis, two reports. Resolution comes first — a pattern whose
@@ -203,7 +201,6 @@ pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> 
 struct Checker<'a> {
     source: &'a str,
     source_kind: crate::SourceKind,
-    tokens: &'a [crate::lexer::Token],
     verify: bool,
     /// Every violation found so far — the walk keeps going after each one.
     errors: Vec<TtError>,
@@ -216,18 +213,30 @@ struct Checker<'a> {
     function_targets: crate::flow::FunctionTargets,
 }
 
-/// The (field, bound name) pairs a tag alternative destructures, sorted so
-/// alternatives compare as sets. No parens and empty parens both bind nothing.
-/// Nested patterns never reach this (they are rejected inside or-patterns).
-fn binding_set(bindings: &Option<Vec<Binding>>) -> Vec<(&str, &str)> {
-    let mut set: Vec<(&str, &str)> = bindings
-        .as_deref()
-        .unwrap_or_default()
-        .iter()
-        .filter(|b| b.nested.is_none())
-        .map(|b| (b.name.as_str(), b.alias.as_deref().unwrap_or(&b.name)))
-        .collect();
+/// The bindings or-pattern alternatives are compared by, sorted so they
+/// compare as sets. When the alternatives share one emitted destructuring
+/// (`shared`: none carries a nested pattern) a binding is its (field, bound
+/// name) pair; otherwise the shared destructuring is already rejected
+/// (`match-nested-in-or-pattern`) and a binding is the name the body reads,
+/// nested leaves included, under an empty field. No parens and empty parens
+/// both bind nothing.
+fn binding_set(alt: &TagPattern, shared: bool) -> Vec<(&str, &str)> {
+    let mut set: Vec<(&str, &str)> = if shared {
+        alt.bindings
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|b| (b.name.as_str(), b.alias.as_deref().unwrap_or(&b.name)))
+            .collect()
+    } else {
+        let mut leaves = Vec::new();
+        leaf_bindings(alt, &mut leaves);
+        leaves.into_iter().map(|name| ("", name)).collect()
+    };
     set.sort_unstable();
+    if !shared {
+        set.dedup();
+    }
     set
 }
 
@@ -235,9 +244,9 @@ fn binding_set(bindings: &Option<Vec<Binding>>) -> Vec<(&str, &str)> {
 /// difference, named, so the message points at the binding to fix instead
 /// of restating the rule: a name only one side binds, or a name the two
 /// sides bind from different fields.
-fn binding_mismatch(first: &TagPattern, other: &TagPattern) -> String {
-    let a = binding_set(&first.bindings);
-    let b = binding_set(&other.bindings);
+fn binding_mismatch(first: &TagPattern, other: &TagPattern, shared: bool) -> String {
+    let a = binding_set(first, shared);
+    let b = binding_set(other, shared);
     let bound = |set: &[(&str, &str)], name: &str| set.iter().any(|&(_, n)| n == name);
     for &(_, name) in &a {
         if !bound(&b, name) {

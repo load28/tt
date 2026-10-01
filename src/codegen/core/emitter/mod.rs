@@ -140,6 +140,25 @@ impl<'a> Emitter<'a> {
         written
     }
 
+    /// Writes the comments in an arm's own source outside its guard and
+    /// body ([`crate::core_ir::DecisionArm::head`]), each on a line of its
+    /// own at `depth`, after the arm's lowering, and says whether there
+    /// were any.
+    pub(super) fn push_head_comments(
+        &self,
+        arm: &crate::core_ir::DecisionArm,
+        depth: u16,
+        out: &mut Rope<'a>,
+    ) -> bool {
+        let mut written = false;
+        for comment in head_comments(self.comments, &arm.head) {
+            out.push_break(depth);
+            out.push_src(&self.source[comment.start..comment.end], comment.start);
+            written = true;
+        }
+        written
+    }
+
     pub(super) fn relocated_documentation(&self, statement: usize) -> Option<Rope<'a>> {
         let span = *self.relocated_documentation.get(&statement)?;
         self.emitted_documentation.claim(span).then(|| {
@@ -480,6 +499,15 @@ impl Drop for ResultFailureScope<'_> {
             registry.remove(&self.id);
         }
     }
+}
+
+/// The comments of `comments` that lie in an arm's `head` ranges.
+pub(super) fn head_comments<'c>(
+    comments: &'c [crate::ast::Span],
+    head: &'c [crate::hir::Span],
+) -> impl Iterator<Item = &'c crate::ast::Span> {
+    head.iter()
+        .flat_map(move |range| gap_comments(comments, Some(*range)))
 }
 
 /// The comments of `comments` that lie in `gap`.

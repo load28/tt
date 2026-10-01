@@ -1,0 +1,27 @@
+// A match's scrutinee, guard, and arm bodies are TypeScript the match
+// embeds. When one ends before its expression is complete, TypeScript's
+// parser stops at the token after it, the one that ends the fragment in the
+// source: `,` after an arm, `}` after the last arm or inside a block arm,
+// `=>` after a guard, `)` after a scrutinee. `source-not-typescript` is
+// reported there (TS1109 "Expression expected", TS1003 "Identifier
+// expected"), past any comment in between; the baseline holds each position.
+// @expectErrors: source-not-typescript
+// @baselines: errors.txt
+// @filename: armThenComma.tt
+export function f(n: number) { return match (n) { 1 => n +, _ => 0 }; }
+// @filename: lastArm.tt
+export function f(n: number) { return match (n) { 1 => 1, _ => n.} ; }
+// @filename: commentBeforeComma.tt
+export function f(n: number) {
+  return match (n) {
+    1 => n * /* the factor */
+    ,
+    _ => 0,
+  };
+}
+// @filename: blockArm.tt
+export function f(n: number) { return match (n) { 1 => { return n + }, _ => 0 }; }
+// @filename: guard.tt
+export function f(n: number) { return match (n) { 1 if n > => 0, _ => 1 }; }
+// @filename: scrutinee.tt
+export function f(n: number) { return match (n -) { 1 => 0, _ => 1 }; }

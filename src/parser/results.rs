@@ -30,17 +30,12 @@ pub(super) enum Attempt<'t> {
 }
 
 /// `cur` is positioned at the `{` token following an undotted `result`
-/// identifier (`kw_span`, used only by the caller for error reporting).
-/// Besides the attempt, returns an empty compatibility vector retained for
-/// the parser caller while the old nested-bind recovery is removed.
-pub(super) fn parse_result_block<'t>(
-    mut cur: Cursor<'t>,
-    kw_span: Span,
-) -> (Attempt<'t>, Vec<Span>) {
+/// identifier (`kw_span`, the keyword the block's span starts at).
+pub(super) fn parse_result_block<'t>(mut cur: Cursor<'t>, kw_span: Span) -> Attempt<'t> {
     crate::work::tick("result block attempts");
     let open = cur.idx;
     let Some(close) = cur.find_close() else {
-        return (Attempt::Pass, Vec::new()); // unbalanced braces — nothing to claim
+        return Attempt::Pass; // unbalanced braces — nothing to claim
     };
     let body_span = Span {
         start: cur.tokens[open].span.end,
@@ -51,28 +46,25 @@ pub(super) fn parse_result_block<'t>(
             .parse_tokens(&cur.tokens[open + 1..close], body_span.start, body_span.end);
     let direct_try_spans = nearest_result_try_spans(&body, &cur, open);
     if direct_try_spans.is_empty() {
-        return (Attempt::Pass, Vec::new());
+        return Attempt::Pass;
     }
 
     let byte_end = cur.tokens[close].span.end;
     cur.idx = close + 1;
-    (
-        Attempt::Claimed(
-            cur,
-            byte_end,
-            Box::new(ResultBlock {
-                keyword_off: kw_span.start,
-                span: Span {
-                    start: kw_span.start,
-                    end: byte_end,
-                },
-                body_span,
-                direct_try_spans,
-                items: vec![ResultItem::Stmts(body)],
-                value: None,
-            }),
-        ),
-        Vec::new(),
+    Attempt::Claimed(
+        cur,
+        byte_end,
+        Box::new(ResultBlock {
+            keyword_off: kw_span.start,
+            span: Span {
+                start: kw_span.start,
+                end: byte_end,
+            },
+            body_span,
+            direct_try_spans,
+            items: vec![ResultItem::Stmts(body)],
+            value: None,
+        }),
     )
 }
 

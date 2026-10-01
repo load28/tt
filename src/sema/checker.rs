@@ -48,20 +48,6 @@ impl Checker<'_> {
                     .help(help),
             );
         }
-        for &off in &program.stray_results {
-            self.error(
-                TtError::span(
-                    off,
-                    off + "result".len(),
-                    "`result` block could not be parsed here".to_string(),
-                )
-                .code(DiagnosticCode::StrayResult)
-                .help(
-                    "use `const binding = try expression;` and finish every reachable success \
-                     path with `return`",
-                ),
-            );
-        }
         for segment in &program.segments {
             match segment {
                 Segment::Verbatim(_) | Segment::TtImport(_) | Segment::ValModifier(_) => {}
@@ -190,15 +176,10 @@ impl Checker<'_> {
     /// to return the `Err`: an ordinary function can; a constructor, a
     /// generator, class code outside a method, and a module's top level
     /// cannot. Inside a template literal, which the file's token stream
-    /// holds as one token, the boundary index cannot see the interpolation's
-    /// own functions, so a function written in the `try`'s region is the
-    /// target there, as the region's parse records.
+    /// holds as one token, the interpolation's own token stream is asked
+    /// ([`crate::flow::FunctionTargets::at_offset`]), so a generator written
+    /// there is the target as it is anywhere else.
     fn check_try(&mut self, stmt: &TryStmt, place: Place) {
-        let at = self
-            .tokens
-            .iter()
-            .position(|token| token.span.start >= stmt.span.start)
-            .unwrap_or(self.tokens.len());
         let function_target = match place {
             Place::ResultRegion if !stmt.in_function => {
                 self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
@@ -217,14 +198,7 @@ impl Checker<'_> {
                 self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
                 return;
             }
-            _ if at > 0 && self.tokens[at - 1].span.end > stmt.span.start => {
-                if stmt.in_function {
-                    Some(crate::flow::FunctionTarget::Ordinary)
-                } else {
-                    self.function_targets.at(at - 1)
-                }
-            }
-            _ => self.function_targets.at(at),
+            _ => self.function_targets.at_offset(stmt.span.start),
         };
         let (message, help) = match function_target {
             Some(crate::flow::FunctionTarget::Ordinary) => {
@@ -394,16 +368,17 @@ impl Checker<'_> {
                 .code(DiagnosticCode::MatchNestedInOrPattern),
             );
         }
-        let first_set = binding_set(&alts[0].bindings);
+        let shared = !alts.iter().any(has_nested);
+        let first_set = binding_set(&alts[0], shared);
         for alt in &alts[1..] {
-            if binding_set(&alt.bindings) != first_set {
+            if binding_set(alt, shared) != first_set {
                 self.error(
                     TtError::span(
                         alt.tag_off,
                         alt.tag_off + alt.tag.len(),
                         format!(
                             "{construct}: or-pattern alternatives must bind the same names — {}",
-                            binding_mismatch(&alts[0], alt)
+                            binding_mismatch(&alts[0], alt, shared)
                         ),
                     )
                     .code(DiagnosticCode::MatchOrBindingMismatch),
@@ -770,7 +745,8 @@ impl Checker<'_> {
                         );
                     }
                     self.check_leaf_bindings(&alts[0]);
-                    let first_set = binding_set(&alts[0].bindings);
+                    let shared = !alts.iter().any(has_nested);
+                    let first_set = binding_set(&alts[0], shared);
                     let mut arm_tags: Vec<&str> = Vec::new();
                     for alt in alts {
                         if covered_tags.contains(&alt.tag.as_str())
@@ -787,14 +763,14 @@ impl Checker<'_> {
                             continue;
                         }
                         arm_tags.push(&alt.tag);
-                        if binding_set(&alt.bindings) != first_set {
+                        if binding_set(alt, shared) != first_set {
                             self.error(
                                 TtError::span(
                                     alt.tag_off,
                                     alt.tag_off + alt.tag.len(),
                                     format!(
                                         "match: or-pattern alternatives must bind the same names — {}",
-                                        binding_mismatch(&alts[0], alt)
+                                        binding_mismatch(&alts[0], alt, shared)
                                     ),
                                 )
                                 .code(DiagnosticCode::MatchOrBindingMismatch),
@@ -995,16 +971,17 @@ impl Checker<'_> {
                                 .code(DiagnosticCode::MatchNestedInOrPattern),
                             );
                         }
-                        let first_set = binding_set(&alts[0].bindings);
+                        let shared = !alts.iter().any(has_nested);
+                        let first_set = binding_set(&alts[0], shared);
                         for alt in alts {
-                            if binding_set(&alt.bindings) != first_set {
+                            if binding_set(alt, shared) != first_set {
                                 self.error(
                                     TtError::span(
                                         alt.tag_off,
                                         alt.tag_off + alt.tag.len(),
                                         format!(
                                             "match: or-pattern alternatives must bind the same names — {}",
-                                            binding_mismatch(&alts[0], alt)
+                                            binding_mismatch(&alts[0], alt, shared)
                                         ),
                                     )
                                     .code(DiagnosticCode::MatchOrBindingMismatch),

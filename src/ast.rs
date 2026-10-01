@@ -54,8 +54,6 @@ pub(crate) struct Program {
     /// parse stopped — same reporting story as [`Self::stray_pipes`] (an
     /// undotted `if` followed by `let` is never valid TypeScript).
     pub stray_if_lets: Vec<StrayIfLet>,
-    /// Byte offsets of `result { ... }` blocks that could not be claimed.
-    pub stray_results: Vec<usize>,
 }
 
 impl Drop for Program {

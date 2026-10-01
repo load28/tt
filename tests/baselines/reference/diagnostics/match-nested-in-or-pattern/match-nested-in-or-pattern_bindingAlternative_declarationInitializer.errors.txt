@@ -6,12 +6,6 @@ error[match-nested-in-or-pattern]: match: nested patterns cannot be combined wit
 6 |   const value = match (note("operand", input)) { Done(value: Some(value: v)) | Failed(error: v) => note("hit", v), _ => note("other", 0) };
   |                                                  ^^^^
 
-error[match-or-binding-mismatch]: match: or-pattern alternatives must bind the same names — `v` is bound in `Failed(...)` but not in `Done(...)`
- --> ./main.tt:6:80
-  |
-6 |   const value = match (note("operand", input)) { Done(value: Some(value: v)) | Failed(error: v) => note("hit", v), _ => note("other", 0) };
-  |                                                                                ^^^^^^
-
 
 ==== ttc --check-types (exit 1) ====
 error[ts2339]: match on a tag pattern needs a value with a `kind` discriminant — this scrutinee has none (a plain TypeScript `enum` is not one) (in tt's names: Property 'value' does not exist on type 'Outcome'.
@@ -26,10 +20,5 @@ error[match-nested-in-or-pattern]: match: nested patterns cannot be combined wit
   |
 6 |   const value = match (note("operand", input)) { Done(value: Some(value: v)) | Failed(error: v) => note("hit", v), _ => note("other", 0) };
   |                                                  ^^^^
-error[match-or-binding-mismatch]: match: or-pattern alternatives must bind the same names — `v` is bound in `Failed(...)` but not in `Done(...)`
- --> main.tt:6:80
-  |
-6 |   const value = match (note("operand", input)) { Done(value: Some(value: v)) | Failed(error: v) => note("hit", v), _ => note("other", 0) };
-  |                                                                                ^^^^^^
 
 ==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,13 @@
+// A pipeline whose optional postfix tail is malformed is not claimed, so its
+// `|>` is left in the file as written, as a stray `|>` is. It is reported
+// once, as `malformed-pipeline-postfix` at the tail, wherever it stands: in
+// an `if let` body, in a match arm, and beside other tt constructs. The `|>`
+// left behind is not reported again as TypeScript that does not parse.
+// @expectDiagnostic: malformed-pipeline-postfix
+// @baselines: errors.txt
+import type { TResult } from "@tt/std";
+declare function read(n: number): TResult<number, string>;
+declare const n: number;
+if let Ok(value: m) = read(1) { const v = m |> ?.toFixed[|`1`|]; }
+const w = match (n) { 1 => n |> ?.toFixed[|`2`|], _ => 0 };
+const x = n |> ?.toFixed[|`3`|];

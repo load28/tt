@@ -328,9 +328,8 @@ pub(crate) fn emit_mapped_parsed(
     tokens: &[crate::lexer::Token],
 ) -> MappedEmit {
     let source_kind = options.source_kind;
-    let typescript_tokens = crate::lexer::TypeScriptTokens::of(source, source_kind, tokens);
     let semantics = analysis::coverage_semantics(source, program, options.extern_variants);
-    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
+    let core = core_ir::lower_semantic(&semantics, source, tokens);
     // A buffer mid-edit is routinely not TypeScript yet, and this entry
     // point is infallible by contract: with no owner model there are no
     // host rewrites to plan, so every tt value the plan cannot own emits as
