@@ -204,8 +204,8 @@ pub(super) fn anchored_diagnostic_message(
 
 /// The expected/found pair a structured mismatch renders: the minimal
 /// incompatible leaves when the checker reduced to a single expected type,
-/// else the complete pair — plus the complete contextual type when the pair
-/// shown was reduced from it.
+/// else the complete pair — plus the complete contextual type when the
+/// expected type shown was reduced from it.
 pub(super) fn mismatch_pair(
     mismatch: &TypeMismatch,
     declarations: &[DeclaredVariant],
@@ -237,7 +237,7 @@ pub(super) fn mismatch_pair(
             }
         }
         let found_leaf = found_leaves.join(" | ");
-        let required = (expected_leaf != expected || found_leaf != found).then(|| expected.clone());
+        let required = (expected_leaf != expected).then(|| expected.clone());
         return (expected_leaf.to_string(), found_leaf, required);
     }
     (expected, found, None)

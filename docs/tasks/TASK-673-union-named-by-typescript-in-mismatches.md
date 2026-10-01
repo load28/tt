@@ -1,5 +1,10 @@
 # TASK-673: Name a found union as TypeScript names it in a type mismatch
 
+> **Issue 1 resolved by TASK-695 and TASK-696**: the plain line is
+> TypeScript's own diagnostic with its elaboration, and a restated leaf
+> generalizes a literal as TypeScript's `reportRelationError` does, so the
+> partly incompatible union reads `boolean`.
+
 - **Status**: Complete
 - **Started**: 2026-09-30
 - **Completed**: 2026-09-30

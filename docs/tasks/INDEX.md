@@ -697,6 +697,7 @@
 | TASK-689 | Classify every alternative's binding of an or-pattern as a declaration in semantic tokens | Complete | 2026-09-30 | 2026-09-30 | [TASK-689](./TASK-689-or-pattern-binding-semantic-tokens.md) |
 | TASK-690 | Emit a single-case variant as its case's object type so TypeScript names it | Complete | 2026-09-30 | 2026-09-30 | [TASK-690](./TASK-690-single-case-variant-alias.md) |
 | TASK-695 | Report a checker diagnostic on user-written text as TypeScript reports it | Complete | 2026-10-01 | 2026-10-01 | [TASK-695](./TASK-695-typescript-owned-diagnostics.md) |
+| TASK-696 | Name the incompatible part of a union as TypeScript names it | Complete | 2026-10-01 | 2026-10-01 | [TASK-696](./TASK-696-partly-incompatible-union.md) |
 
 ## Next task number
 

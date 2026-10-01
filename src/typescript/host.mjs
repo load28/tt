@@ -862,7 +862,7 @@ async function main() {
     if (job.contextualOnly) { out.dependencies = [...dependencies.keys()]; out.directories = [...listings.keys()]; return engineAnswer(out); }
     const reported = new Set();
     const unique = (diagnostics) => diagnostics.filter((d) => {
-      const key = JSON.stringify([d.fileName ?? null, d.pos, d.end, d.code, d.text]);
+      const key = JSON.stringify([d.fileName ?? null, d.pos, d.end, d.code, messageText(d)]);
       if (reported.has(key)) return false;
       reported.add(key);
       return true;
@@ -890,17 +890,17 @@ async function main() {
       const late = whole ? unique(program.getGlobalDiagnostics()) : [];
       for (const d of [...structural, ...late]) {
         if (!d.fileName || configFiles.has(d.fileName) || d.pos < 0) {
-          if (open.tsconfig && whole) out.projectDiagnostics.push({ file: d.fileName ?? null, code: d.code, message: d.text });
+          if (open.tsconfig && whole) out.projectDiagnostics.push({ file: d.fileName ?? null, code: d.code, message: messageText(d) });
           continue;
         }
-        out.diagnostics.push({ file: d.fileName, start: d.pos, end: d.end, code: d.code, message: d.text });
+        out.diagnostics.push({ file: d.fileName, start: d.pos, end: d.end, code: d.code, message: messageText(d) });
       }
       for (const d of semantic) {
         if (!d.fileName) {
-          if (open.tsconfig && whole) out.projectDiagnostics.push({ file: null, code: d.code, message: d.text });
+          if (open.tsconfig && whole) out.projectDiagnostics.push({ file: null, code: d.code, message: messageText(d) });
           continue;
         }
-        const mismatch = contextualMismatch(project, checker, d, isExpression, SyntaxKind);
+        const mismatch = contextualMismatch(project, checker, d, isExpression, SyntaxKind, TypeFlags);
         const receiver = lookupReceiver(project, d, SyntaxKind);
         const related = relatedPlaces(d);
         out.diagnostics.push({
@@ -908,7 +908,7 @@ async function main() {
           start: d.pos,
           end: d.end,
           code: d.code,
-          message: d.text,
+          message: messageText(d),
           ...(mismatch ? { mismatch } : {}),
           ...(receiver ? { receiver } : {}),
           ...(related.length > 0 ? { related } : {}),
@@ -1460,6 +1460,12 @@ function denotes(checker, node, type, location, excluded, { SyntaxKind, SymbolFl
   return walk(node, type, new Map());
 }
 
+function messageText(diagnostic, level = 0) {
+  let text = (level > 0 ? "\n" + "  ".repeat(level) : "") + diagnostic.text;
+  for (const child of diagnostic.messageChain ?? []) text += messageText(child, level + 1);
+  return text;
+}
+
 /**
  * The checker's own related places — "the expected type comes from this
  * declaration", "first declared here" — normalized to the diagnostic item
@@ -1507,7 +1513,7 @@ const ASSIGNABILITY_CODES = new Set([
  * fit its context. A JSX attribute is typed by its name, which TypeScript
  * gives the attribute's type and the attribute's contextual type.
  */
-function contextualMismatch(project, checker, diagnostic, isExpression, SyntaxKind) {
+function contextualMismatch(project, checker, diagnostic, isExpression, SyntaxKind, TypeFlags) {
   if (!ASSIGNABILITY_CODES.has(diagnostic.code)) return null;
   const sourceFile = project.program.getSourceFile(diagnostic.fileName);
   if (!sourceFile) return null;
@@ -1577,7 +1583,7 @@ function contextualMismatch(project, checker, diagnostic, isExpression, SyntaxKi
     end: expression.getEnd(),
     expected: checker.typeToString(expected),
     found: checker.typeToString(found),
-    differences: incompatibleLeaves(checker, found, expected),
+    differences: incompatibleLeaves(checker, found, expected, TypeFlags),
     ...(declaration ? { declaration } : {}),
   };
 }
@@ -1704,7 +1710,7 @@ function typeArguments(checker, type) {
  * smallest checker-proven incompatible pair. No language construct or type
  * name is special-cased here.
  */
-function incompatibleLeaf(checker, found, expected, depth = 0) {
+function incompatibleLeaf(checker, found, expected, TypeFlags, depth = 0) {
   if (depth >= 8 || checker.isTypeAssignableTo(found, expected)) return null;
 
   const identity = typeIdentity(found);
@@ -1719,10 +1725,8 @@ function incompatibleLeaf(checker, found, expected, depth = 0) {
         for (let i = 0; i < foundArgs.length; i++) {
           if (!checker.isTypeAssignableTo(foundArgs[i], expectedArgs[i])) {
             return (
-              incompatibleLeaf(checker, foundArgs[i], expectedArgs[i], depth + 1) ?? {
-                expected: checker.typeToString(expectedArgs[i]),
-                found: checker.typeToString(foundArgs[i]),
-              }
+              incompatibleLeaf(checker, foundArgs[i], expectedArgs[i], TypeFlags, depth + 1) ??
+              relationPair(checker, foundArgs[i], expectedArgs[i], TypeFlags)
             );
           }
         }
@@ -1730,7 +1734,7 @@ function incompatibleLeaf(checker, found, expected, depth = 0) {
       // Two instantiations of one declaration with no retained type
       // arguments (an instantiated object literal, e.g. a lowered variant
       // case) differ where a declared property differs.
-      const property = propertyLeaf(checker, found, counterpart, depth);
+      const property = propertyLeaf(checker, found, counterpart, TypeFlags, depth);
       if (property) return property;
     }
   }
@@ -1750,20 +1754,15 @@ function incompatibleLeaf(checker, found, expected, depth = 0) {
         !checker.isTypeAssignableTo(foundReturn, expectedReturn)
       ) {
         return (
-          incompatibleLeaf(checker, foundReturn, expectedReturn, depth + 1) ?? {
-            expected: checker.typeToString(expectedReturn),
-            found: checker.typeToString(foundReturn),
-          }
+          incompatibleLeaf(checker, foundReturn, expectedReturn, TypeFlags, depth + 1) ??
+          relationPair(checker, foundReturn, expectedReturn, TypeFlags)
         );
       }
     }
   } catch {
     // Fall through to the complete pair.
   }
-  return {
-    expected: checker.typeToString(expected),
-    found: checker.typeToString(found),
-  };
+  return relationPair(checker, found, expected, TypeFlags);
 }
 
 /**
@@ -1774,7 +1773,7 @@ function incompatibleLeaf(checker, found, expected, depth = 0) {
  * more than one differing — keeps the complete pair. The property APIs are
  * optional on the native bridge.
  */
-function propertyLeaf(checker, found, expected, depth) {
+function propertyLeaf(checker, found, expected, TypeFlags, depth) {
   try {
     const properties = found.getProperties?.() ?? [];
     if (properties.length === 0) return null;
@@ -1796,17 +1795,47 @@ function propertyLeaf(checker, found, expected, depth) {
     }
     if (shared === 0 || incompatible !== 1 || !pair) return null;
     return (
-      incompatibleLeaf(checker, pair.foundType, pair.expectedType, depth + 1) ?? {
-        expected: checker.typeToString(pair.expectedType),
-        found: checker.typeToString(pair.foundType),
-      }
+      incompatibleLeaf(checker, pair.foundType, pair.expectedType, TypeFlags, depth + 1) ??
+      relationPair(checker, pair.foundType, pair.expectedType, TypeFlags)
     );
   } catch {
     return null;
   }
 }
 
-function incompatibleLeaves(checker, found, expected) {
+function relationPair(checker, found, expected, TypeFlags) {
+  const generalized =
+    !(expected.flags & TypeFlags.Never) &&
+    isLiteralType(found, TypeFlags) &&
+    !couldHaveTopLevelSingletonTypes(checker, expected, TypeFlags);
+  const shown = generalized ? checker.getBaseTypeOfLiteralType(found) : found;
+  return { expected: checker.typeToString(expected), found: checker.typeToString(shown) };
+}
+
+function isLiteralType(type, TypeFlags) {
+  if (type.flags & TypeFlags.Boolean) return true;
+  if (type.flags & TypeFlags.Union) {
+    return !!(type.flags & TypeFlags.EnumLiteral) ||
+      typeConstituents(type).every((member) => !!(member.flags & TypeFlags.Unit));
+  }
+  return !!(type.flags & TypeFlags.Unit);
+}
+
+function couldHaveTopLevelSingletonTypes(checker, type, TypeFlags) {
+  if (type.flags & TypeFlags.Boolean) return false;
+  if (type.flags & TypeFlags.UnionOrIntersection) {
+    return (type.getTypes?.() ?? []).some((member) => couldHaveTopLevelSingletonTypes(checker, member, TypeFlags));
+  }
+  if (type.flags & TypeFlags.Instantiable) {
+    const constraint = type.flags & TypeFlags.TypeParameter
+      ? checker.getConstraintOfTypeParameter(type)
+      : checker.getBaseConstraintOfType(type);
+    if (constraint && constraint !== type) return couldHaveTopLevelSingletonTypes(checker, constraint, TypeFlags);
+  }
+  return !!(type.flags & (TypeFlags.Unit | TypeFlags.TemplateLiteral | TypeFlags.StringMapping));
+}
+
+function incompatibleLeaves(checker, found, expected, TypeFlags) {
   const leaves = [];
   const seen = new Set();
   const constituents = typeConstituents(found);
@@ -1817,12 +1846,12 @@ function incompatibleLeaves(checker, found, expected) {
       unreduced = false;
       continue;
     }
-    const leaf = incompatibleLeaf(checker, constituent, expected);
+    const leaf = incompatibleLeaf(checker, constituent, expected, TypeFlags);
     if (!leaf) {
       unreduced = false;
       continue;
     }
-    if (leaf.expected !== wholeExpected || leaf.found !== checker.typeToString(constituent)) {
+    if (leaf.expected !== wholeExpected || leaf.found !== relationPair(checker, constituent, expected, TypeFlags).found) {
       unreduced = false;
     }
     const key = `${leaf.expected}\0${leaf.found}`;
@@ -1830,7 +1859,7 @@ function incompatibleLeaves(checker, found, expected) {
     seen.add(key);
     leaves.push(leaf);
   }
-  if (unreduced) return [{ expected: wholeExpected, found: checker.typeToString(found) }];
+  if (unreduced) return [relationPair(checker, found, expected, TypeFlags)];
   return leaves;
 }
 

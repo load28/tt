@@ -25,11 +25,13 @@ error[ts2322]: Type 'boolean' is not assignable to type 'number'.
 6 | export const imported: number = ready;
   |              ^^^^^^^^
 error[ts2322]: Type 'string' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
  --> booleanMismatchRendering.tt:7:14
   |
 7 | export const named: number = heading();
   |              ^^^^^
 error[ts2322]: Type 'number | boolean' is not assignable to type 'number'.
+  Type 'boolean' is not assignable to type 'number'.
  --> booleanMismatchRendering.tt:9:14
   |
 9 | export const partly: number = either();

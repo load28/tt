@@ -1,0 +1,46 @@
+=== partialUnionMismatch.tt ===
+declare function toEither(n: number): number | boolean;
+>toEither : function toEither(n: number): number | boolean
+>n : (parameter) n: number
+declare function needsNumber(n: number): number;
+>needsNumber : function needsNumber(n: number): number
+>n : (parameter) n: number
+export const direct: number = toEither(1);
+>direct : const direct: number
+>toEither : function toEither(n: number): number | boolean
+export const piped = 1 |> toEither |> needsNumber;
+>piped : const piped: number
+>toEither : function toEither(n: number): number | boolean
+>needsNumber : function needsNumber(n: number): number
+declare function needsTwo(n: number, m: number): number;
+>needsTwo : function needsTwo(n: number, m: number): number
+>n : (parameter) n: number
+>m : (parameter) m: number
+export const argument = needsTwo(1, 1 |> toEither);
+>argument : const argument: number
+>needsTwo : function needsTwo(n: number, m: number): number
+>toEither : function toEither(n: number): number | boolean
+variant K { A, B }
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const k: K;
+>k : const k: K
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+export const matched: number = match (k) { A => toEither(1), B => 2 };
+>matched : const matched: number
+>k : const k: K
+>toEither : function toEither(n: number): number | boolean
+
