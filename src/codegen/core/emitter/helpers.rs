@@ -298,13 +298,20 @@ pub(super) fn emit_adt<'a>(
             annotation(field, out);
         }
     };
+    let parameter = |field: &AdtField, out: &mut Rope<'a>| {
+        let start = span(field.node).start;
+        let end = field.ty_span.end;
+        let mut declaration = Rope::new();
+        declaration.push_lit(field.name.clone());
+        annotation(field, &mut declaration);
+        out.anchored(AnchorKind::Variant, start, end, end, declaration);
+    };
     let parameter_list = |fields: &[AdtField], out: &mut Rope<'a>| {
         for (index, field) in fields.iter().enumerate() {
             if index > 0 {
                 out.push_lit(", ");
             }
-            out.push_lit(field.name.clone());
-            annotation(field, out);
+            parameter(field, out);
         }
     };
     let generics = &source[adt.generics.start..adt.generics.end];
@@ -352,8 +359,7 @@ pub(super) fn emit_adt<'a>(
                 push_comment(out, comment, 2);
             }
             out.push_break(2);
-            out.push_lit(field.name.clone());
-            annotation(field, out);
+            parameter(field, out);
             out.push_lit(",");
         }
         out.push_break(1);

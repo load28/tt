@@ -1,0 +1,23 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./variantConstructorMissingArgument.tt → $DIR/out/variantConstructorMissingArgument.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2554]: Expected 1 arguments, but got 0.
+ --> variantConstructorMissingArgument.tt:4:24
+  |
+3 | export variant Shape { Circle(radius: number), Rect(width: number, height?: string) }
+  |                               -------------- An argument for 'radius' was not provided.
+4 | export const c = Shape.Circle();
+  |                        ^^^^^^
+error[ts2554]: Expected 1-2 arguments, but got 0.
+ --> variantConstructorMissingArgument.tt:5:24
+  |
+3 | export variant Shape { Circle(radius: number), Rect(width: number, height?: string) }
+  |                                                     ------------- An argument for 'width' was not provided.
+4 | export const c = Shape.Circle();
+5 | export const r = Shape.Rect();
+  |                        ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+variantConstructorMissingArgument.ts(10,24): error TS2554: Expected 1 arguments, but got 0.
+variantConstructorMissingArgument.ts(11,24): error TS2554: Expected 1-2 arguments, but got 0.

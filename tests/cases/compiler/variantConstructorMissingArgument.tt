@@ -1,0 +1,5 @@
+// A missing argument of a variant constructor: TypeScript's related place is
+// the constructor's parameter, which is the field the user declared.
+export variant Shape { Circle(radius: number), Rect(width: number, height?: string) }
+export const c = Shape.Circle();
+export const r = Shape.Rect();

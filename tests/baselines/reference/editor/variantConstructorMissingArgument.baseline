@@ -1,0 +1,65 @@
+=== hover /*field*/ variantConstructorMissingArgument.tt:1:31 ===
+  | export variant Shape { Circle(radius: number), Point }
+  |                               ^ /*field*/
+hover: 1:31-1:37 "radius"
+    (property) radius: number
+ttSymbol: field radius of Shape at 1:31-1:37 "radius"
+    radius: number
+  detail:
+    payload field of `Shape.Circle` — a pattern binds it by name
+  definition: variantConstructorMissingArgument.tt 1:31-1:37 "radius"
+
+=== hover /*use*/ variantConstructorMissingArgument.tt:3:59 ===
+  | export const area = (s: Shape) => s.kind === "Circle" ? s.radius : 0;
+  |                                                           ^ /*use*/
+hover: 3:59-3:65 "radius"
+    (property) radius: number
+ttSymbol: null
+
+=== hover /*call*/ variantConstructorMissingArgument.tt:2:24 ===
+  | export const c = Shape.Circle();
+  |                        ^ /*call*/
+hover: 2:24-2:30 "Circle"
+    (property) Circle: (radius: number) => Shape
+ttSymbol: null
+
+=== references /*field*/ variantConstructorMissingArgument.tt:1:31 ===
+  | export variant Shape { Circle(radius: number), Point }
+  |                               ^ /*field*/
+references: 2 location(s)
+  variantConstructorMissingArgument.tt 1:31-1:37 "radius" (definition)
+  variantConstructorMissingArgument.tt 3:59-3:65 "radius"
+
+=== signatureHelp /*args*/ variantConstructorMissingArgument.tt:2:31 ===
+  | export const c = Shape.Circle();
+  |                               ^ /*args*/
+signatureHelp: active signature 0, active parameter 0
+  Circle(radius: number): Shape
+    parameters: radius: number
+
+=== semanticTokens variantConstructorMissingArgument.tt ===
+semanticTokens: 15 token(s)
+  1:8-1:15 "variant" keyword [declaration]
+  1:16-1:21 "Shape" enum
+  1:24-1:30 "Circle" enumMember
+  1:31-1:37 "radius" property
+  1:48-1:53 "Point" enumMember
+  2:14-2:15 "c" variable [declaration, readonly]
+  2:18-2:23 "Shape" type [readonly]
+  2:24-2:30 "Circle" method
+  3:14-3:18 "area" function [declaration, readonly]
+  3:22-3:23 "s" parameter [declaration]
+  3:25-3:30 "Shape" type [readonly]
+  3:35-3:36 "s" parameter
+  3:37-3:41 "kind" property
+  3:57-3:58 "s" parameter
+  3:59-3:65 "radius" property
+
+=== diagnostics variantConstructorMissingArgument.tt ===
+diagnostics: 1 diagnostic(s)
+  2:24-2:30 "Circle" error TS2554: Expected 1 arguments, but got 0.
+    related 1:31-1:45 "radius: number": An argument for 'radius' was not provided.
+published: 1 diagnostic(s)
+  2:24-2:30 "Circle" error ts2554 (ttc): Expected 1 arguments, but got 0.
+    related variantConstructorMissingArgument.tt 1:31-1:45 "radius: number": An argument for 'radius' was not provided.
+

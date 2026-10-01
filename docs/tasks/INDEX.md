@@ -699,6 +699,7 @@
 | TASK-695 | Report a checker diagnostic on user-written text as TypeScript reports it | Complete | 2026-10-01 | 2026-10-01 | [TASK-695](./TASK-695-typescript-owned-diagnostics.md) |
 | TASK-696 | Name the incompatible part of a union as TypeScript names it | Complete | 2026-10-01 | 2026-10-01 | [TASK-696](./TASK-696-partly-incompatible-union.md) |
 | TASK-697 | Keep a directive on the JSDoc line it governs when the JSDoc moves to its declaration | Complete | 2026-10-01 | 2026-10-01 | [TASK-697](./TASK-697-jsdoc-and-directive-before-lowered-statement.md) |
+| TASK-698 | Point a variant constructor's missing argument at the field it is for | Complete | 2026-10-01 | 2026-10-01 | [TASK-698](./TASK-698-variant-constructor-parameter-origin.md) |
 
 ## Next task number
 

@@ -1,5 +1,9 @@
 # TASK-676: Export a let-else's bindings when the declaration is exported
 
+> **Issue 2 resolved by TASK-698**: each generated constructor parameter
+> has a diagnostic-only origin at its field, so the related place is
+> `radius: number`; no mapping changed.
+
 - **Status**: Complete
 - **Started**: 2026-09-30
 - **Completed**: 2026-09-30

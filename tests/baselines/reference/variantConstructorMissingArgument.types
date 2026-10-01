@@ -1,0 +1,30 @@
+=== variantConstructorMissingArgument.tt ===
+export variant Shape { Circle(radius: number), Rect(width: number, height?: string) }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       width: number;
+>       height?: string;
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Rect : (property) Rect: (width: number, height?: string) => Shape
+>width : (property) width: number
+>height : (property) height?: string | undefined
+export const c = Shape.Circle();
+>c : const c: Shape
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Rect: (width: number, height?: string) => Shape;
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+export const r = Shape.Rect();
+>r : const r: Shape
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Rect: (width: number, height?: string) => Shape;
+>   }
+>Rect : (property) Rect: (width: number, height?: string) => Shape
+
