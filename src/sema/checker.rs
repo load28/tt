@@ -48,20 +48,6 @@ impl Checker<'_> {
                     .help(help),
             );
         }
-        for &off in &program.stray_results {
-            self.error(
-                TtError::span(
-                    off,
-                    off + "result".len(),
-                    "`result` block could not be parsed here".to_string(),
-                )
-                .code(DiagnosticCode::StrayResult)
-                .help(
-                    "use `const binding = try expression;` and finish every reachable success \
-                     path with `return`",
-                ),
-            );
-        }
         for segment in &program.segments {
             match segment {
                 Segment::Verbatim(_) | Segment::TtImport(_) | Segment::ValModifier(_) => {}

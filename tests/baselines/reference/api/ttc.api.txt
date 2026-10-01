@@ -1382,12 +1382,11 @@ impl UnwindSafe for AnchorKind
 
 // enum ttc::DiagnosticCode
 #[non_exhaustive]pub enum DiagnosticCode {
-Show 49 variants    StrayPipe,
+Show 48 variants    StrayPipe,
     MalformedPipelinePostfix,
     MissingPipelineStep,
     InvalidOptionalReceiver,
     StrayIfLet,
-    StrayResult,
     MalformedVariant,
     MalformedMatch,
     MissingArmBody,

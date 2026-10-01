@@ -442,7 +442,6 @@ impl Parser<'_> {
         let mut host_candidates = HostCandidates::default();
         let mut stray_pipes: Vec<usize> = Vec::new();
         let mut stray_if_lets: Vec<crate::ast::StrayIfLet> = Vec::new();
-        let stray_results: Vec<usize> = Vec::new();
         let mut seg_start = start;
         let mut i = 0usize;
 
@@ -800,10 +799,7 @@ impl Parser<'_> {
                     .borrow()
                     .contains(&tokens[i + 1].span.start)
             {
-                let (attempt, nested) =
-                    results::parse_result_block(Cursor::new(self, tokens, i + 1, end), tok.span);
-                let _ = nested;
-                match attempt {
+                match results::parse_result_block(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     results::Attempt::Claimed(cur, byte_end, block) => {
                         flush_verbatim(&mut segments, seg_start, tok.span.start);
                         segments.push(Segment::ResultBlock(*block));
@@ -860,7 +856,6 @@ impl Parser<'_> {
             malformed,
             stray_pipes,
             stray_if_lets,
-            stray_results,
         }
     }
 

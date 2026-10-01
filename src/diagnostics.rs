@@ -70,8 +70,6 @@ pub enum DiagnosticCode {
     InvalidOptionalReceiver,
     /// An `if let` the parser could not claim.
     StrayIfLet,
-    /// A `result` block the parser could not claim.
-    StrayResult,
     /// A `variant` committed to tt syntax but not fully parsed.
     MalformedVariant,
     /// A `match` committed to tt syntax but not fully parsed.
@@ -182,7 +180,7 @@ const NUMBERED_CODES: [Numbered; 52] = [
     Numbered::Active(DiagnosticCode::MalformedPipelinePostfix),
     Numbered::Active(DiagnosticCode::InvalidOptionalReceiver),
     Numbered::Active(DiagnosticCode::StrayIfLet),
-    Numbered::Active(DiagnosticCode::StrayResult),
+    Numbered::Retired("stray-result"),
     Numbered::Active(DiagnosticCode::MalformedVariant),
     Numbered::Active(DiagnosticCode::MalformedMatch),
     Numbered::Retired("result-missing-keyword"),
@@ -255,7 +253,6 @@ impl DiagnosticCode {
             DiagnosticCode::MissingPipelineStep => "missing-pipeline-step",
             DiagnosticCode::InvalidOptionalReceiver => "invalid-optional-receiver",
             DiagnosticCode::StrayIfLet => "stray-if-let",
-            DiagnosticCode::StrayResult => "stray-result",
             DiagnosticCode::MalformedVariant => "malformed-variant",
             DiagnosticCode::MalformedMatch => "malformed-match",
             DiagnosticCode::MissingArmBody => "missing-arm-body",
@@ -313,7 +310,6 @@ impl DiagnosticCode {
         DiagnosticCode::MissingPipelineStep,
         DiagnosticCode::InvalidOptionalReceiver,
         DiagnosticCode::StrayIfLet,
-        DiagnosticCode::StrayResult,
         DiagnosticCode::MalformedVariant,
         DiagnosticCode::MalformedMatch,
         DiagnosticCode::MissingArmBody,
@@ -487,17 +483,6 @@ and the `else` may only be a block or another `if let` — a plain
 `else if (cond)` has to go inside an `else { ... }` block. Unlike a
 lookalike that is valid TypeScript, a claimed `if let` is reported here
 rather than passed through, because its text cannot be emitted as TS."
-            }
-
-            DiagnosticCode::StrayResult => {
-                "\
-A `result` block was claimed but could not be parsed.
-
-`result` is contextual: a block is claimed only when it contains a direct
-`try` expression. Its body is a statement list: write `const value = try expr;`
-to unwrap a success value, and use an explicit `return value;` or `return;` to
-complete the block successfully. Text that is meant to be an ordinary
-identifier followed by a block passes through untouched."
             }
 
             DiagnosticCode::MalformedVariant => {
@@ -1229,7 +1214,6 @@ look up."
                 | DiagnosticCode::InvalidOptionalReceiver
                 | DiagnosticCode::StrayIfLet
                 | DiagnosticCode::IfLetPlacement
-                | DiagnosticCode::StrayResult
                 | DiagnosticCode::MalformedVariant
                 | DiagnosticCode::VariantDefaultExport
                 | DiagnosticCode::MalformedMatch
