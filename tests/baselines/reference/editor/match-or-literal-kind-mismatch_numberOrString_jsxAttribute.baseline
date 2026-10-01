@@ -1,0 +1,7 @@
+=== diagnostics main.ttx ===
+diagnostics: 1 diagnostic(s)
+  1:32-1:40 "Fragment" hint TS6133: 'Fragment' is declared but its value is never read. [unnecessary]
+published: 2 diagnostic(s)
+  1:32-1:40 "Fragment" hint TS6133 (ts): 'Fragment' is declared but its value is never read. [unnecessary]
+  4:64-4:67 "\"a\"" error match-or-literal-kind-mismatch (ttc): match: or-pattern alternatives must all be the same kind of literal (found string after number)
+

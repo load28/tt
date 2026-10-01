@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  5:108-5:112 "(Up)" error match-tuple-arity (ttc): match: tuple pattern has 1 element but the match has 2 scrutinees
+

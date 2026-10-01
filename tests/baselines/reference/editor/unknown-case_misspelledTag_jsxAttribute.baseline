@@ -1,0 +1,8 @@
+=== diagnostics main.ttx ===
+diagnostics: 2 diagnostic(s)
+  5:60-5:66 "Circel" error TS2678: this pattern's case is not one the value can be (ts2678: Type '"Circel"' is not comparable to type '"Circle" | "Point" | "Rect"'.)
+  1:32-1:40 "Fragment" hint TS6133: 'Fragment' is declared but its value is never read. [unnecessary]
+published: 2 diagnostic(s)
+  1:32-1:40 "Fragment" hint TS6133 (ts): 'Fragment' is declared but its value is never read. [unnecessary]
+  5:60-5:66 "Circel" error unknown-case (ttc): variant Shape has no case `Circel`
+

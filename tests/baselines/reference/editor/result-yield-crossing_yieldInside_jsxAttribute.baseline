@@ -1,0 +1,8 @@
+=== diagnostics main.ttx ===
+diagnostics: 1 diagnostic(s)
+  1:38-1:46 "Fragment" hint TS6133: 'Fragment' is declared but its value is never read. [unnecessary]
+  restates: source-not-typescript
+published: 2 diagnostic(s)
+  1:38-1:46 "Fragment" hint TS6133 (ts): 'Fragment' is declared but its value is never read. [unnecessary]
+  4:110-4:115 "yield" error result-yield-crossing (ttc): `yield` cannot cross a `result` block
+

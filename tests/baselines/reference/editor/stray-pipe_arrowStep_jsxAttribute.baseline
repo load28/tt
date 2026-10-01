@@ -1,0 +1,15 @@
+=== diagnostics main.ttx ===
+diagnostics: 5 diagnostic(s)
+  4:91-4:92 ";" error TS1005: '}' expected.
+  5:1-5:2 "}" error TS1003: Identifier expected.
+  1:10-1:14 "note" hint TS6133: 'note' is declared but its value is never read. [unnecessary]
+  1:32-1:40 "Fragment" hint TS6133: 'Fragment' is declared but its value is never read. [unnecessary]
+  3:16-3:21 "input" hint TS6133: 'input' is declared but its value is never read. [unnecessary]
+published: 6 diagnostic(s)
+  1:10-1:14 "note" hint TS6133 (ts): 'note' is declared but its value is never read. [unnecessary]
+  1:32-1:40 "Fragment" hint TS6133 (ts): 'Fragment' is declared but its value is never read. [unnecessary]
+  3:16-3:21 "input" hint TS6133 (ts): 'input' is declared but its value is never read. [unnecessary]
+  4:50-4:52 "|>" error stray-pipe (ttc): pipeline: `|>` could not be parsed here
+  4:91-4:92 ";" error ts1005 (ttc): '}' expected.
+  5:1-5:2 "}" error ts1003 (ttc): Identifier expected.
+

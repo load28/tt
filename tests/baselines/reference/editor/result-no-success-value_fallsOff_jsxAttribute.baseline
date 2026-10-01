@@ -1,0 +1,7 @@
+=== diagnostics main.ttx ===
+diagnostics: 1 diagnostic(s)
+  1:38-1:46 "Fragment" hint TS6133: 'Fragment' is declared but its value is never read. [unnecessary]
+published: 2 diagnostic(s)
+  1:38-1:46 "Fragment" hint TS6133 (ts): 'Fragment' is declared but its value is never read. [unnecessary]
+  4:27-4:119 "result { const n = try read(note(\"operand\", input)); if (n > 2) { return note(\"big\", n); } }" error result-no-success-value (ttc): `result` can reach the end of its body without a success value
+

@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  4:50-4:52 "|>" error missing-pipeline-step (ttc): pipeline: `|>` has no step
+

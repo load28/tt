@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  5:50-5:54 "Rect" error pattern-duplicate-binding (ttc): match: binding `w` is used more than once in this pattern
+

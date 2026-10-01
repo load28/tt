@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  4:50-4:74 "is TypeError { message }" error match-is-or-bindings (ttc): match: an `is` or-pattern cannot bind properties
+

@@ -420,6 +420,26 @@ names and `CompletionItemTag`s. The adapter must be built (`npm ci --prefix
 editors/vscode && npm --prefix editors/vscode run compile`); without it the
 suite skips, and `TT_REQUIRE_EXTENSION=1` turns the skip into a failure.
 
+`// @expectDiagnostic: <code>` (with `// @typedOnly: true` for a rule only
+the checker decides) holds one diagnostic to every surface that shows it.
+The tt diagnostics the adapter publishes must be exactly the case's
+`[|ranges|]`, each with that code, severity Error, and no tags; and `ttc
+--check` (unless `@typedOnly`) and `ttc --check-types`, run in the case's
+project, must each report the same number of tt diagnostics in the unit,
+every one with the published code, message, and start, the published width
+when the range is on one line, and, as its labels, the published related
+information. For a code whose report restates TypeScript's own syntax
+verdict (`verify-failed`, `source-not-typescript`), the adapter publishes
+TypeScript's diagnostic in its place, which must be at the range, and the
+command line must report the code where it starts. A difference is a defect, listed in
+`tests/editor-diagnostic-differences.txt` (the case name, a tab, the first
+line of the failure, a tab, and the task); the suite fails on a difference
+the file does not list and on a listed one that no longer occurs.
+`scripts/generate-cases` writes one such case per code under
+`tests/cases/editor/diagnostics/` from the first example of
+`tests/matrix/diagnostics.mjs` (see "The diagnostics matrix"), in its first
+`.tt` position and, when it has one, its first `.ttx` position.
+
 A TypeScript twin, the same name with `.ts` or `.tsx` and the same units
 with `.ts`/`.tsx` for `.tt`/`.ttx`, is asked the same questions at the same
 markers through `tsgo --lsp`; a unit that is not `.tt`/`.ttx` may be left

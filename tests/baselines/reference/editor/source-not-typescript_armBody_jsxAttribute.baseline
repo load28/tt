@@ -1,0 +1,9 @@
+=== diagnostics main.ttx ===
+diagnostics: 2 diagnostic(s)
+  4:81-4:82 "," error TS1109: Expression expected.
+  1:32-1:40 "Fragment" hint TS6133: 'Fragment' is declared but its value is never read. [unnecessary]
+  restates: source-not-typescript
+published: 2 diagnostic(s)
+  1:32-1:40 "Fragment" hint TS6133 (ts): 'Fragment' is declared but its value is never read. [unnecessary]
+  4:81-4:82 "," error ts1109 (ttc): Expression expected.
+

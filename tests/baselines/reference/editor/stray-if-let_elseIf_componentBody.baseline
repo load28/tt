@@ -1,0 +1,9 @@
+=== diagnostics main.ttx ===
+diagnostics: 2 diagnostic(s)
+  1:22-1:26 "flip" hint TS6133: 'flip' is declared but its value is never read. [unnecessary]
+  1:50-1:58 "Fragment" hint TS6133: 'Fragment' is declared but its value is never read. [unnecessary]
+published: 3 diagnostic(s)
+  1:22-1:26 "flip" hint TS6133 (ts): 'flip' is declared but its value is never read. [unnecessary]
+  1:50-1:58 "Fragment" hint TS6133 (ts): 'Fragment' is declared but its value is never read. [unnecessary]
+  7:84-7:91 "else if" error stray-if-let (ttc): the `else` of an `if let` must be a block or another `if let`
+

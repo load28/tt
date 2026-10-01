@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  4:37-4:69 "try read(note(\"operand\", input))" error try-crosses-value-region (ttc): `try` crosses an isolated value region whose exits cannot target the enclosing `result` block
+

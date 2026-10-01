@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  4:50-4:61 "is Error {}" error match-is-empty-bindings (ttc): match: `is Error { }` has an empty property pattern
+

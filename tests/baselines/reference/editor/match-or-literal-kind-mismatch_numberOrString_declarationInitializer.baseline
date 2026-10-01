@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  4:54-4:57 "\"a\"" error match-or-literal-kind-mismatch (ttc): match: or-pattern alternatives must all be the same kind of literal (found string after number)
+

@@ -1,0 +1,11 @@
+=== diagnostics main.tt ===
+diagnostics: 3 diagnostic(s)
+  4:76-4:77 ")" error TS1005: ',' expected.
+  1:10-1:14 "note" hint TS6133: 'note' is declared but its value is never read. [unnecessary]
+  3:16-3:21 "input" hint TS6133: 'input' is declared but its value is never read. [unnecessary]
+published: 4 diagnostic(s)
+  1:10-1:14 "note" hint TS6133 (ts): 'note' is declared but its value is never read. [unnecessary]
+  3:16-3:21 "input" hint TS6133 (ts): 'input' is declared but its value is never read. [unnecessary]
+  4:40-4:42 "|>" error stray-pipe (ttc): pipeline: `|>` could not be parsed here
+  4:76-4:77 ")" error ts1005 (ttc): ',' expected.
+

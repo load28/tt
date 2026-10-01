@@ -1,0 +1,7 @@
+=== diagnostics main.ttx ===
+diagnostics: 1 diagnostic(s)
+  1:22-1:23 ";" error TS1109: Expression expected.
+  restates: verify-failed
+published: 1 diagnostic(s)
+  1:22-1:23 ";" error ts1109 (ttc): Expression expected.
+

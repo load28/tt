@@ -1,0 +1,6 @@
+=== diagnostics main.tt ===
+diagnostics: 1 diagnostic(s)
+  4:12-4:17 "value" error TS2339: Property 'value' does not exist on type 'Failure<string> | Success<number>'.
+published: 1 diagnostic(s)
+  4:53-4:57 "else" error let-else-not-diverging (ttc): let-else: every path through the `else` block must diverge
+

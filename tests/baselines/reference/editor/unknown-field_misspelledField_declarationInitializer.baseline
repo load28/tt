@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  5:56-5:61 "radiu" error unknown-field (ttc): variant Disk: case `Round` has no field `radiu`
+

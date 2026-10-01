@@ -1,0 +1,17 @@
+=== diagnostics main.ttx ===
+diagnostics: 4 diagnostic(s)
+  1:16-1:21 "Token" error TS2300: Duplicate identifier 'kind'. (in code ttc generated for this construct)
+  1:16-1:21 "Token" error TS2717: Subsequent property declarations must have the same type.  Property 'kind' must be of type '"Word"', but here has type 'string'. (in code ttc generated for this construct)
+    related 1:16-1:21 "Token": 'kind' was also declared here.
+  1:16-1:21 "Token" error TS2322: Type 'string' is not assignable to type '"Word"'. (in code ttc generated for this construct)
+    related 1:16-1:21 "Token": The expected type comes from property 'kind' which is declared here on type 'Token'
+  1:16-1:21 "Token" error TS1117: An object literal cannot have multiple properties with the same name. (in code ttc generated for this construct)
+published: 5 diagnostic(s)
+  1:16-1:21 "Token" error ts1117 (ttc): An object literal cannot have multiple properties with the same name. (in code ttc generated for this construct)
+  1:16-1:21 "Token" error ts2300 (ttc): Duplicate identifier 'kind'. (in code ttc generated for this construct)
+  1:16-1:21 "Token" error ts2322 (ttc): Type 'string' is not assignable to type '"Word"'. (in code ttc generated for this construct)
+    related main.ttx 1:16-1:21 "Token": The expected type comes from property 'kind' which is declared here on type 'Token'
+  1:16-1:21 "Token" error ts2717 (ttc): Subsequent property declarations must have the same type.  Property 'kind' must be of type '"Word"', but here has type 'string'. (in code ttc generated for this construct)
+    related main.ttx 1:16-1:21 "Token": 'kind' was also declared here.
+  1:29-1:33 "kind" error variant-field-shadows-tag (ttc): variant Token: case "Word" cannot have a field named `kind` — that is where the case tag lives
+

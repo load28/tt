@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  8:21-8:24 "cfg" error val-pass (ttc): cannot pass val binding `cfg` to mutable parameter `p` of `take` (the parameter is not declared with `val`, so the function may mutate through it)
+

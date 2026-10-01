@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  4:17-4:22 "match" error match-is-wildcard-required (ttc): match: an `is` match requires a final wildcard arm `_`
+

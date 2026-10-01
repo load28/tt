@@ -1,0 +1,16 @@
+# Editor cases with `// @expectDiagnostic` whose surfaces disagree: what the VS Code
+# adapter publishes against the case's [|ranges|], `ttc --check`, and `ttc --check-types`.
+# One line per difference: the case name, a tab, the failure's first line, a tab, and the
+# TASK-NNN that records the defect. tests/editor_cases.rs fails on a difference this file
+# does not list, on a listed one that no longer occurs, and, unfiltered, on a line that
+# names no case.
+match-not-exhaustive_missingCase_declarationInitializer	the editor publishes `match-not-exhaustive` at main.tt:5:17, and `ttc --check` does not report it there with those words and that width	TASK-701: Issue 1, the untyped check names the variant in its message and the typed check does not
+match-not-exhaustive_missingCase_jsxAttribute	the editor publishes `match-not-exhaustive` at main.ttx:5:27, and `ttc --check` does not report it there with those words and that width	TASK-701: Issue 1, the untyped check names the variant in its message and the typed check does not
+result-yield-crossing_yieldInside_jsxAttribute	`ttc --check` reports 2 tt diagnostic(s) in main.ttx, and the editor publishes 1	TASK-700: Issue 6, a crossing yield in a JSX expression is also reported as unparsable
+result-yield-crossing_yieldInside_jsxAttribute	`ttc --check-types` reports 2 tt diagnostic(s) in main.ttx, and the editor publishes 1	TASK-700: Issue 6, a crossing yield in a JSX expression is also reported as unparsable
+source-not-typescript_armBody_declarationInitializer	the editor publishes `source-not-typescript` at main.tt:4:71, and `ttc --check` does not report it there	TASK-700: Issue 7, an arm body's missing operand is reported at the body's last character
+source-not-typescript_armBody_declarationInitializer	the editor publishes `source-not-typescript` at main.tt:4:71, and `ttc --check-types` does not report it there	TASK-700: Issue 7, an arm body's missing operand is reported at the body's last character
+source-not-typescript_armBody_jsxAttribute	the editor publishes `source-not-typescript` at main.ttx:4:81, and `ttc --check` does not report it there	TASK-700: Issue 7, an arm body's missing operand is reported at the body's last character
+source-not-typescript_armBody_jsxAttribute	the editor publishes `source-not-typescript` at main.ttx:4:81, and `ttc --check-types` does not report it there	TASK-700: Issue 7, an arm body's missing operand is reported at the body's last character
+val-mutation_propertyWrite_componentBody	the editor publishes `val-mutation` with 1 related place(s), and `ttc --check` shows 0 other one(s)	TASK-701: Issue 2, the untyped check leaves out where the val binding is declared
+val-mutation_propertyWrite_functionBody	the editor publishes `val-mutation` with 1 related place(s), and `ttc --check` shows 0 other one(s)	TASK-701: Issue 2, the untyped check leaves out where the val binding is declared

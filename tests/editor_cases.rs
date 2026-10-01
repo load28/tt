@@ -163,12 +163,21 @@ struct Case {
     ignores: BTreeSet<String>,
     twin: Option<Vec<Unit>>,
     matrix: Option<PathBuf>,
+    expected: Option<ExpectedDiagnostic>,
+}
+
+#[derive(Clone)]
+struct ExpectedDiagnostic {
+    code: String,
+    typed_only: bool,
 }
 
 #[derive(Default)]
 struct Directives {
     verbs: Vec<(Verb, Vec<String>)>,
     ignores: BTreeSet<String>,
+    expected: Option<String>,
+    typed_only: bool,
 }
 
 fn directive(line: &str) -> Option<(String, &str)> {
@@ -284,10 +293,24 @@ fn parse_units(
             directives.ignores.extend(targets);
             continue;
         }
+        if name == "expectdiagnostic" {
+            assert!(
+                ttc::DiagnosticCode::parse(value).is_some(),
+                "{}: @expectDiagnostic names `{value}`, which is no tt diagnostic code",
+                path.display()
+            );
+            directives.expected = Some(value.to_string());
+            continue;
+        }
+        if name == "typedonly" {
+            assert_eq!(value, "true", "{}: @typedOnly takes `true`", path.display());
+            directives.typed_only = true;
+            continue;
+        }
         let verb = Verb::parse(&name).unwrap_or_else(|| {
             panic!(
                 "{}: unknown directive `@{name}`; an editor case takes @filename, @parityIgnores, \
-                 and the verbs hover, completions, definition, references, rename, \
+                 @expectDiagnostic, @typedOnly, and the verbs hover, completions, definition, references, rename, \
                  signatureHelp, semanticTokens, diagnostics",
                 path.display()
             )
@@ -395,7 +418,23 @@ fn parse_case(name: String, path: PathBuf, generated: &Path) -> Case {
     let text = fs::read_to_string(&path).expect("a readable editor case");
     let mut directives = Directives::default();
     let units = parse_units(&text, &file_name, &path, Some(&mut directives));
-    let Directives { verbs, ignores } = directives;
+    let Directives {
+        verbs,
+        ignores,
+        expected,
+        typed_only,
+    } = directives;
+    assert!(
+        expected.is_some() || !typed_only,
+        "{}: @typedOnly qualifies an @expectDiagnostic",
+        path.display()
+    );
+    assert!(
+        expected.is_none() || verbs.iter().any(|(verb, _)| *verb == Verb::Diagnostics),
+        "{}: @expectDiagnostic is a claim about the published diagnostics, so the case asks @diagnostics",
+        path.display()
+    );
+    let expected = expected.map(|code| ExpectedDiagnostic { code, typed_only });
     assert!(
         !verbs.is_empty(),
         "{}: the case asks nothing",
@@ -462,6 +501,7 @@ fn parse_case(name: String, path: PathBuf, generated: &Path) -> Case {
         ignores,
         twin,
         matrix,
+        expected,
     }
 }
 
@@ -2022,6 +2062,9 @@ struct Outcome {
     parity: Vec<String>,
     compared: Vec<Compared>,
     transport: Vec<String>,
+    /// Where the surfaces that show an `@expectDiagnostic` case's
+    /// diagnostic disagree: a one-line summary, then the detail.
+    surfaces: Vec<String>,
 }
 
 struct Compared {
@@ -2278,6 +2321,10 @@ fn run(case: &Case) -> Outcome {
     }
     drop(server);
     drop(editor);
+    let surfaces = match (&case.expected, &published) {
+        (Some(expected), Some(published)) => surfaces_agree(case, expected, published, &project),
+        _ => Vec::new(),
+    };
 
     let mut parity = Vec::new();
     let mut compared = Vec::new();
@@ -2365,6 +2412,10 @@ fn run(case: &Case) -> Outcome {
         parity,
         compared,
         transport,
+        surfaces: surfaces
+            .into_iter()
+            .map(|problem| problem.replace(&dir_text, "$DIR"))
+            .collect(),
     }
 }
 
@@ -3108,6 +3159,7 @@ fn every_editor_case_matches_its_baseline() {
     let failures: Mutex<Vec<String>> = Mutex::new(Vec::new());
     let parity: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
     let matrix_results: Mutex<BTreeMap<String, Vec<(String, bool)>>> = Mutex::new(BTreeMap::new());
+    let surface_results: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
     let workers = std::thread::available_parallelism()
         .map_or(1, |n| n.get() * 2)
         .min(8);
@@ -3160,6 +3212,12 @@ fn every_editor_case_matches_its_baseline() {
                                     .unwrap()
                                     .push(outcome.transport.join("\n\n"));
                             }
+                            if case.expected.is_some() {
+                                surface_results
+                                    .lock()
+                                    .unwrap()
+                                    .insert(case.name.clone(), outcome.surfaces);
+                            }
                         }
                         Err(payload) => {
                             let message = payload
@@ -3183,6 +3241,11 @@ fn every_editor_case_matches_its_baseline() {
         &matrix_results.into_inner().unwrap(),
         !filtered,
     ));
+    failures.extend(judge_surfaces(
+        &selection,
+        &surface_results.into_inner().unwrap(),
+        !filtered,
+    ));
     assert!(
         failures.is_empty(),
         "{} editor case(s) failed:\n\n{}",
@@ -3203,4 +3266,374 @@ fn every_editor_case_matches_its_baseline() {
             expect(&path, &format!("{}\n", listed.join("\n")));
         }
     }
+}
+
+struct Reported {
+    code: String,
+    message: String,
+    start: (usize, usize),
+    width: Option<usize>,
+    labels: Vec<Label>,
+}
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+struct Label {
+    message: String,
+    start: (usize, usize),
+    width: Option<usize>,
+}
+
+fn command_line_reports(text: &str, unit: &str) -> Vec<Reported> {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut out = Vec::new();
+    for (index, line) in lines.iter().enumerate() {
+        let Some((code, message)) = line
+            .strip_prefix("error[")
+            .and_then(|rest| rest.split_once("]: "))
+        else {
+            continue;
+        };
+        if ttc::DiagnosticCode::parse(code).is_none() {
+            continue;
+        }
+        let Some(at) = lines
+            .get(index + 1)
+            .and_then(|next| next.trim_start().strip_prefix("--> "))
+        else {
+            continue;
+        };
+        let mut parts = at.rsplitn(3, ':');
+        let col: usize = parts.next().and_then(|n| n.parse().ok()).unwrap_or(0);
+        let line_number: usize = parts.next().and_then(|n| n.parse().ok()).unwrap_or(0);
+        let path = parts.next().unwrap_or_default();
+        if path.strip_prefix("./").unwrap_or(path) != unit {
+            continue;
+        }
+        let mut width = None;
+        let mut labels = Vec::new();
+        let mut quoted = 0;
+        for row in lines[index + 2..]
+            .iter()
+            .take_while(|line| !line.starts_with("error") && !line.starts_with("warning"))
+        {
+            let trimmed = row.trim_start();
+            if let Some(note) = trimmed.strip_prefix("= note: ") {
+                if let Some((message, place)) = note.rsplit_once(" --> ") {
+                    let mut parts = place.rsplitn(3, ':');
+                    let col = parts.next().and_then(|n| n.parse().ok()).unwrap_or(0);
+                    let line = parts.next().and_then(|n| n.parse().ok()).unwrap_or(0);
+                    labels.push(Label {
+                        message: message.to_string(),
+                        start: (line, col),
+                        width: None,
+                    });
+                }
+                continue;
+            }
+            let Some(bar) = row.find(" |") else {
+                continue;
+            };
+            let gutter = row[..bar].trim();
+            if let Ok(number) = gutter.parse::<usize>() {
+                quoted = number;
+                continue;
+            }
+            if !gutter.is_empty() {
+                continue;
+            }
+            let picture = &row[(bar + 3).min(row.len())..];
+            let Some(from) = picture.find(['^', '-']) else {
+                continue;
+            };
+            let marker = picture.as_bytes()[from];
+            let run = picture[from..]
+                .bytes()
+                .take_while(|byte| *byte == marker)
+                .count();
+            if marker == b'^' {
+                width.get_or_insert(run);
+            } else {
+                labels.push(Label {
+                    message: picture[from + run..].trim().to_string(),
+                    start: (quoted, from + 1),
+                    width: Some(run),
+                });
+            }
+        }
+        labels.sort();
+        out.push(Reported {
+            code: code.to_string(),
+            message: message.to_string(),
+            start: (line_number, col),
+            width,
+            labels,
+        });
+    }
+    out
+}
+
+fn surfaces_agree(
+    case: &Case,
+    expected: &ExpectedDiagnostic,
+    published: &BTreeMap<String, Value>,
+    project: &Path,
+) -> Vec<String> {
+    let mut problems = Vec::new();
+    let ttc = |mode: &str| {
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args([mode, "."])
+            .current_dir(project)
+            .output()
+            .expect("ttc runs");
+        format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    };
+    let reports = [
+        ("ttc --check", ttc("--check")),
+        ("ttc --check-types", ttc("--check-types")),
+    ];
+    let restates = ttc::DiagnosticCode::parse(&expected.code)
+        .is_some_and(ttc::DiagnosticCode::restates_typescript_syntax);
+    let position = |value: &Value| Position {
+        line: value["line"].as_u64().unwrap_or(0) as u32,
+        character: value["character"].as_u64().unwrap_or(0) as u32,
+    };
+    let shown = |ranges: &[(Position, Position)]| {
+        ranges
+            .iter()
+            .map(|(start, end)| {
+                format!(
+                    "{}:{}-{}:{}",
+                    start.line + 1,
+                    start.character + 1,
+                    end.line + 1,
+                    end.character + 1
+                )
+            })
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    for unit in case.units.iter().filter(|unit| is_tt(&unit.name)) {
+        let list = published
+            .get(&uri(&project.join(&unit.name)))
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let is_tt_code = |d: &&Value| {
+            d["code"]
+                .as_str()
+                .is_some_and(|code| ttc::DiagnosticCode::parse(code).is_some())
+        };
+        let restated = |d: &&Value| {
+            d["source"] == "ttc"
+                && d["code"].as_str().is_some_and(|code| {
+                    code.strip_prefix("ts").is_some_and(|number| {
+                        !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit())
+                    })
+                })
+        };
+        let entries: Vec<&Value> = if restates {
+            list.iter().filter(restated).collect()
+        } else {
+            list.iter().filter(is_tt_code).collect()
+        };
+        let mut wanted: Vec<(Position, Position)> = unit
+            .ranges
+            .iter()
+            .map(|(start, end)| {
+                (
+                    lsp_position(&unit.text, *start),
+                    lsp_position(&unit.text, *end),
+                )
+            })
+            .collect();
+        wanted.sort_by_key(|(start, end)| (start.line, start.character, end.line, end.character));
+        let mut got: Vec<(Position, Position)> = entries
+            .iter()
+            .map(|d| (position(&d["range"]["start"]), position(&d["range"]["end"])))
+            .collect();
+        got.sort_by_key(|(start, end)| (start.line, start.character, end.line, end.character));
+        if got != wanted {
+            problems.push(format!(
+                "the editor publishes {} at [{}] in {}, and the case's [|ranges|] are [{}]",
+                if restates {
+                    "TypeScript's syntax diagnostics"
+                } else {
+                    "tt diagnostics"
+                },
+                shown(&got),
+                unit.name,
+                shown(&wanted)
+            ));
+        }
+        if restates && list.iter().any(|d| is_tt_code(&d)) {
+            problems.push(format!(
+                "the editor publishes a tt diagnostic in {} beside TypeScript's own words for `{}`",
+                unit.name, expected.code
+            ));
+        }
+        for d in &entries {
+            let code = if restates {
+                expected.code.clone()
+            } else {
+                d["code"].as_str().unwrap_or_default().to_string()
+            };
+            if code != expected.code {
+                problems.push(format!(
+                    "the editor publishes `{code}` in {}, and the case expects `{}`",
+                    unit.name, expected.code
+                ));
+            }
+            if d["severity"].as_u64() != Some(1) {
+                problems.push(format!(
+                    "the editor publishes `{code}` with severity {}, and every tt rule is an error (1)",
+                    d["severity"]
+                ));
+            }
+            if d["tags"].as_array().is_some_and(|tags| !tags.is_empty()) {
+                problems.push(format!(
+                    "the editor publishes `{code}` with tags {}, which no tt diagnostic carries",
+                    d["tags"]
+                ));
+            }
+            let start = position(&d["range"]["start"]);
+            let end = position(&d["range"]["end"]);
+            let at = (start.line as usize + 1, start.character as usize + 1);
+            let width = (start.line == end.line)
+                .then(|| end.character.saturating_sub(start.character).max(1) as usize);
+            let message = d["message"].as_str().unwrap_or_default();
+            let mut related: Vec<Label> = d["relatedInformation"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|related| {
+                    let start = position(&related["location"]["range"]["start"]);
+                    let end = position(&related["location"]["range"]["end"]);
+                    Label {
+                        message: related["message"].as_str().unwrap_or_default().to_string(),
+                        start: (start.line as usize + 1, start.character as usize + 1),
+                        width: (start.line == end.line)
+                            .then(|| end.character.saturating_sub(start.character).max(1) as usize),
+                    }
+                })
+                .collect();
+            related.sort();
+            for (surface, text) in &reports {
+                if *surface == "ttc --check" && expected.typed_only {
+                    continue;
+                }
+                let found = command_line_reports(text, &unit.name);
+                let same = found.iter().find(|reported| {
+                    reported.code == code
+                        && reported.start == at
+                        && (restates || reported.message == message)
+                        && (width.is_none() || reported.width == width)
+                });
+                match same {
+                    None => problems.push(format!(
+                        "the editor publishes `{code}` at {}:{}:{}, and `{surface}` does not report it there{}\npublished: {message}\n{text}",
+                        unit.name,
+                        at.0,
+                        at.1,
+                        if restates {
+                            ""
+                        } else {
+                            " with those words and that width"
+                        }
+                    )),
+                    Some(reported) if !restates && reported.labels.iter().zip(&related).any(|(label, related)| {
+                        label.message != related.message
+                            || label.start != related.start
+                            || (label.width.is_some() && label.width != related.width)
+                    }) || (!restates && reported.labels.len() != related.len()) => problems.push(format!(
+                        "the editor publishes `{code}` with {} related place(s), and `{surface}` shows {} other one(s)\npublished: {related:?}\n{text}",
+                        related.len(),
+                        reported.labels.len()
+                    )),
+                    Some(_) => {}
+                }
+            }
+        }
+        for (surface, text) in &reports {
+            let found = command_line_reports(text, &unit.name).len();
+            let wanted = if *surface == "ttc --check" && expected.typed_only {
+                0
+            } else {
+                entries.len()
+            };
+            if found != wanted {
+                problems.push(format!(
+                    "`{surface}` reports {found} tt diagnostic(s) in {}, and the editor publishes {wanted}\n{text}",
+                    unit.name
+                ));
+            }
+        }
+    }
+    problems
+}
+
+const SURFACE_DIFFERENCES: &str = "tests/editor-diagnostic-differences.txt";
+
+fn judge_surfaces(
+    selection: &Selection,
+    results: &BTreeMap<String, Vec<String>>,
+    unfiltered: bool,
+) -> Vec<String> {
+    let text = fs::read_to_string(root().join(SURFACE_DIFFERENCES)).unwrap_or_default();
+    let mut listed: BTreeMap<(String, String), usize> = BTreeMap::new();
+    let mut failures = Vec::new();
+    for (index, line) in text.lines().enumerate() {
+        if line.trim().is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let fields: Vec<&str> = line.split('\t').collect();
+        let [name, difference, task] = fields[..] else {
+            panic!(
+                "{SURFACE_DIFFERENCES}:{}: a line is a case name, a tab, the difference as the failure's first line states it, a tab, and the TASK-NNN that records it",
+                index + 1
+            );
+        };
+        assert!(
+            task.starts_with("TASK-"),
+            "{SURFACE_DIFFERENCES}:{}: the last field names the TASK-NNN that records the defect",
+            index + 1
+        );
+        listed.insert((name.to_string(), difference.to_string()), index + 1);
+    }
+    let known: BTreeSet<&str> = selection
+        .cases
+        .iter()
+        .chain(&selection.unsampled)
+        .map(|case| case.name.as_str())
+        .collect();
+    for ((name, difference), line) in &listed {
+        let observed = results.get(name).map(|problems| {
+            problems
+                .iter()
+                .any(|problem| problem.lines().next() == Some(difference))
+        });
+        match observed {
+            Some(false) => failures.push(format!(
+                "{SURFACE_DIFFERENCES}:{line}: `{name}` no longer shows `{difference}`; remove the line"
+            )),
+            None if unfiltered && !known.contains(name.as_str()) => failures.push(format!(
+                "{SURFACE_DIFFERENCES}:{line}: `{name}` names no editor case; remove the line"
+            )),
+            _ => {}
+        }
+    }
+    for (name, problems) in results {
+        for problem in problems {
+            let first = problem.lines().next().unwrap_or_default().to_string();
+            if !listed.contains_key(&(name.clone(), first.clone())) {
+                failures.push(format!(
+                    "{name}: {problem}\nA difference between the surfaces is a defect, listed in {SURFACE_DIFFERENCES}: `{name}<TAB>{first}<TAB>TASK-NNN: ...`"
+                ));
+            }
+        }
+    }
+    failures
 }

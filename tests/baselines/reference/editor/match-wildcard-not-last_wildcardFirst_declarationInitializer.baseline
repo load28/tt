@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  4:50-4:51 "_" error match-wildcard-not-last (ttc): match: the wildcard arm `_` must be the last arm
+
