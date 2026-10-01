@@ -1,5 +1,7 @@
 # TASK-717: Hold `ttc --check-types` to the pinned `tsc` over TypeScript's own test cases
 
+> Follow-up: TASK-726, TASK-727 and TASK-728 fix D1, D2 and D3; TASK-729 classifies D4 as by design (`tsc --runExternalCode` writes the same name). TASK-730 adds a declaration map's sources to the oracle's reachability (Decision 3).
+
 - **Status**: Complete
 - **Started**: 2026-10-01
 - **Completed**: 2026-10-01

@@ -1,5 +1,7 @@
 # TASK-718: Hold the editor answers to `tsgo --lsp` over TypeScript's fourslash tests
 
+> Follow-up: TASK-729 classifies D1 as by design (TypeScript names a module after the file it holds). TASK-730 found D2 to be this harness's: Decision 2 renamed the source a declaration map names; a declaration map's sources now count as reached.
+
 - **Status**: Complete
 - **Started**: 2026-10-01
 - **Completed**: 2026-10-01

@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as path from "node:path";
 import * as readline from "node:readline";
 
@@ -171,10 +172,67 @@ function check(tsconfig, units) {
         }
       });
     }
+    for (const unit of units) {
+      for (const source of declarationMapSources(unit)) {
+        if (members.has(source)) reached.add(source);
+      }
+    }
     return { diagnostics, reached: [...reached] };
   } finally {
     api.updateSnapshot({ closeProjects: [tsconfig] });
   }
+}
+
+function readText(file) {
+  try {
+    return fs.readFileSync(file, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+function declarationMapSources(file) {
+  if (!/\.d\.[cm]?ts$/.test(file)) return [];
+  const text = readText(file);
+  if (text === null) return [];
+  let url = "";
+  for (const raw of text.split(/\r\n|\r|\n|\u2028|\u2029/).reverse()) {
+    const line = raw.trimStart();
+    if (line.length === 0) continue;
+    if (line.length < 4 || !line.startsWith("//") || (line[2] !== "#" && line[2] !== "@") || line[3] !== " ") break;
+    if (line.startsWith("sourceMappingURL=", 4)) {
+      url = line.slice(4 + "sourceMappingURL=".length).trimEnd();
+      break;
+    }
+  }
+  const candidates = [];
+  if (url.startsWith("data:")) {
+    const inline = /^data:application\/json;(?:charset=utf-8;)?base64,([A-Za-z0-9+/=]+)$/i.exec(url);
+    if (inline) return mapSources(Buffer.from(inline[1], "base64").toString("utf8"), file);
+  } else if (url) {
+    candidates.push(url);
+  }
+  candidates.push(file + ".map");
+  for (const candidate of candidates) {
+    const map = path.resolve(path.dirname(file), candidate);
+    const contents = readText(map);
+    if (contents !== null) return mapSources(contents, map);
+  }
+  return [];
+}
+
+function mapSources(contents, map) {
+  let parsed;
+  try {
+    parsed = JSON.parse(contents);
+  } catch {
+    return [];
+  }
+  const sources = Array.isArray(parsed?.sources) ? parsed.sources : [];
+  if (sources.length === 0 || !parsed.file || !parsed.mappings) return [];
+  if ((parsed.sourcesContent ?? []).some((content) => content !== null)) return [];
+  const root = parsed.sourceRoot ? path.resolve(path.dirname(map), parsed.sourceRoot) : path.dirname(map);
+  return sources.filter((source) => typeof source === "string").map((source) => path.resolve(root, source));
 }
 
 function programFiles(tsconfig) {
