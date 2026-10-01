@@ -435,7 +435,14 @@ TypeScript's syntax errors *and* its type errors; a `.tt` file must too.
   it. Where TypeScript's walk from the served position stops in text the
   user wrote, its answer stands; where it reaches compiler-written text,
   the innermost construct around the cursor names the declaration left
-  out.
+  out. **Update (TASK-688)**: the same fact says whether the construct's
+  place is in a function-like body (a match arm and a `result` block are,
+  as region functions), and where TypeScript's
+  `tryGetFunctionLikeBodyCompletionContainer` walk leaves the user's text
+  and its answer carries the module-level keyword filter
+  (`KeywordCompletionFiltersAll`, the only one that offers `namespace`), the
+  keywords only that filter adds are removed, which is the answer
+  `KeywordCompletionFiltersFunctionLikeBodyKeywords` gives.
 
 ### 지운 것 (§51)
 

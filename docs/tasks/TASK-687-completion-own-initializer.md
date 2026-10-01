@@ -5,6 +5,11 @@
 - **Completed**: 2026-09-30
 - **Commit**: see `git log --grep TASK-687`
 
+**Update (TASK-688)**: an exported declaration is not left out. TypeScript
+keeps it in its own initializer, because the symbol in scope is the local
+symbol `declareModuleMember` creates with `ExportValue` alone, which has no
+value declaration (TASK-688 Issue 1).
+
 ## Purpose
 
 TASK-686 Issue 1: completion inside a tt construct in a declaration's

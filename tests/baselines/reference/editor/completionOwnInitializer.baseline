@@ -1,25 +1,27 @@
 === completions /*topScrutinee*/ completionOwnInitializer.tt:8:27 ===
   | export const top = match (input) { 1 => 1, _ => 0 };
   |                           ^ /*topScrutinee*/
-completion: 1064 item(s), member false, probe no
+completion: 1065 item(s), member false, probe no
   Box (Variable, 11)
   box (Variable, 11)
   f (Function, 11)
   g (Function, 11)
   input (Variable, 11)
   read (Function, 11)
+  top (Variable, 11)
   xs (Variable, 11)
   ... 1057 global or keyword item(s) (sortText 15, no source)
 ttCompletions: pattern false, member null
   keywords: match (15), flow (15), result (15)
 patternCompletions: null
-editor completion: 1067 item(s)
+editor completion: 1068 item(s)
   Box (Variable, 211)
   box (Variable, 211)
   f (Function, 211)
   g (Function, 211)
   input (Variable, 211)
   read (Function, 211)
+  top (Variable, 211)
   xs (Variable, 211)
   ... 1060 global or keyword item(s) (sortText 215, no source)
 
