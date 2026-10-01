@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[match-or-literal-kind-mismatch]: match: or-pattern alternatives must all be the same kind of literal (found number after string)
+ --> ./main.tt:4:13
+  |
+4 |       "a" | 1 => "first",
+  |             ^
+
+
+==== ttc --check-types (exit 1) ====
+error[match-or-literal-kind-mismatch]: match: or-pattern alternatives must all be the same kind of literal (found number after string)
+ --> main.tt:4:13
+  |
+4 |       "a" | 1 => "first",
+  |             ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

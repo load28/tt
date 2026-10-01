@@ -7,6 +7,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SPEC = join(ROOT, "tests/matrix");
 const OUT = join(ROOT, "tests/cases/conformance/matrix");
 const EDITOR_OUT = join(ROOT, "tests/cases/editor/matrix");
+const DIAGNOSTICS_OUT = join(ROOT, "tests/cases/conformance/diagnostics");
 
 const plain = () => `note("operand", /*@operand*/input)`;
 
@@ -264,7 +265,7 @@ function rows(construct, forms, positions) {
   return out;
 }
 
-function build(parts, construct, form, position, companion, side, surface, editor = false) {
+function build(parts, construct, form, position, companion, side, surface, editor = false, lift = false) {
   let count = 0;
   const alloc = (n) => Array.from({ length: n }, () => `t${count++}`);
   const isAsync = companion.id === "await" || position.forces === "await";
@@ -311,6 +312,24 @@ function build(parts, construct, form, position, companion, side, surface, edito
     c.result = form.result;
     c.hoisted = form.hoisted;
   }
+  const lifted = (name) => {
+    if (construct.kind === "value") {
+      const value = c.v;
+      return form.lift ? form.lift[side](operand, temps(), name, c) : `const ${name} = ${value};`;
+    }
+    return template(operand, temps(), `return ${c.ret('"diverged"')};`, c);
+  };
+  if (lift && !position.topLevel) {
+    const statements = lifted("lifted");
+    const probe = c.probe;
+    c.probe = (body, options) => probe(`${statements}\n${body}`, options);
+    if (construct.kind === "value") {
+      c.v = "lifted";
+      c.again = () => "lifted";
+    } else {
+      c.s = () => "";
+    }
+  }
   const inputs = splitTop(form.inputs);
   let host;
   if (position.topLevel) {
@@ -319,7 +338,13 @@ function build(parts, construct, form, position, companion, side, surface, edito
     if (construct.kind === "value") {
       inputs.forEach((_, i) => {
         if (i > 0) lines.push(`input = inputs[${i}]!;`);
-        lines.push(`const top${i} = ${i === 0 ? c.v : c.again()};`);
+        if (lift) {
+          c.v = instance();
+          lines.push(lifted(`lifted${i}`));
+          lines.push(`const top${i} = lifted${i};`);
+        } else {
+          lines.push(`const top${i} = ${i === 0 ? c.v : c.again()};`);
+        }
         lines.push(`report("${position.id}", input, text(top${i}));`);
       });
     } else {
@@ -431,6 +456,160 @@ function editorPositions(editor, surface, construct) {
   return (position) => chosen === "all" || chosen.includes(position.id);
 }
 
+const RANGE = /\[\||\|\]/g;
+
+function unrange(code) {
+  return code.replace(RANGE, "");
+}
+
+function where(example, position) {
+  const rule = example.where ?? "accepts";
+  if (example.only && !example.only.includes(position.id)) return false;
+  if (example.skip?.includes(position.id)) return false;
+  if (position.unbraced && example.hoisted === undefined) return false;
+  if (rule === "rejects") {
+    return position.rejects?.[example.family] === example.code || (Boolean(position.unbraced) && example.unbraced === example.code);
+  }
+  if (rule === "all") return true;
+  if (position.extra) return false;
+  return !position.rejects?.[example.family] && !(position.unbraced && example.unbraced);
+}
+
+function diagnosticPositions(example, positions, extra, surface) {
+  const value = example.kind === "value";
+  const list =
+    surface === "tt"
+      ? value
+        ? [...positions.valuePositions, ...extra.map((position) => ({ ...position, extra: true }))]
+        : positions.statementPositions
+      : value
+        ? positions.jsxPositions
+        : positions.jsxStatementPositions;
+  return list.filter((position) => where(example, position));
+}
+
+function exampleForms(example, position) {
+  const construct = { kind: example.kind, target: example.target, lowPrecedence: example.lowPrecedence };
+  const bad = { ...example, tt: example.bads?.[position.id] ?? example.bad };
+  const placement = (example.where ?? "accepts") !== "accepts";
+  const override = example.fixes?.[position.id];
+  const fixed = { ...example, tt: example.tt ?? ((...args) => unrange(example.bad(...args))), ...(override ?? {}) };
+  return { construct: { ...construct, target: override?.target ?? example.target }, bad, fixed, lift: placement && !override };
+}
+
+function diagnosticUnits(parts, programs, surface) {
+  const harness = closure(
+    parts,
+    programs.flatMap(([, program]) => program.names),
+  );
+  return [["tsconfig.json", tsconfig(surface)], ["harness.ts", harness], ...programs.map(([file, program]) => [file, indent(unmark(program.code))])];
+}
+
+function written(header, units) {
+  return `${header.join("\n")}\n${units.map(([file, text]) => `// @filename: ${file}\n${text}\n`).join("")}`;
+}
+
+function moduleUnits(units, surface) {
+  return Object.entries(units).map(([file, text]) => [
+    file.replace(/\.EXT$/, `.${surface}`).replace(/\.TS$/, surface === "ttx" ? ".tsx" : ".ts"),
+    text.replaceAll('.EXT"', `.${surface}"`).trimEnd(),
+  ]);
+}
+
+function diagnosticCases(spec, entry, positions, extra, parts) {
+  const out = [];
+  const { code } = entry;
+  const lead = `// Generated by scripts/generate-cases from tests/matrix/${spec}; edit the spec, not this file.`;
+  const examples = (entry.examples ?? []).map((example) => ({ ...example, code }));
+  for (const example of examples) {
+    const surfaces = example.surfaces ?? (example.jsx ? ["tt", "ttx"] : ["tt"]);
+    for (const surface of surfaces) {
+      const { main, twin } = SURFACES[surface];
+      if (example.kind === "module") {
+        const name = `${code}_${example.id}${surface === "ttx" ? "_ttx" : ""}`;
+        const units = (list) => [["tsconfig.json", tsconfig(surface)], ...moduleUnits(list, surface)];
+        out.push({
+          code,
+          kind: "invalid",
+          surface,
+          position: "module",
+          name,
+          text: written(
+            [lead, `// ${code}: ${example.title}.`, `// @expectDiagnostic: ${code}`, ...(example.typedOnly ? ["// @typedOnly: true"] : []), "// @baselines: errors.txt"],
+            units(example.bad),
+          ),
+        });
+        const header = [lead, `// ${code}, fixed: ${example.fixTitle}.`];
+        if (example.run) header.push(`// @run: ${main}`, `// @twin: ${twin}`, "// @baselines: errors.txt");
+        else header.push("// @expectClean: true", "// @baselines: errors.txt");
+        out.push({ code, kind: "fixed", surface, position: "module", name: `${name}_fixed`, text: written(header, units(example.good)) });
+        continue;
+      }
+      for (const position of diagnosticPositions(example, positions, extra, surface)) {
+        const { construct, bad, fixed, lift } = exampleForms(example, position);
+        const name = `${code}_${example.id}_${position.id}`;
+        const invalid = build(parts, construct, bad, position, COMPANIONS[0], "tt", surface);
+        out.push({
+          code,
+          kind: "invalid",
+          surface,
+          position: position.id,
+          name,
+          text: written(
+            [
+              lead,
+              `// ${code}: ${example.title}, in ${position.title}.`,
+              `// @expectDiagnostic: ${code}`,
+              ...(example.typedOnly ? ["// @typedOnly: true"] : []),
+              "// @baselines: errors.txt",
+            ],
+            diagnosticUnits(parts, [[main, invalid]], surface),
+          ),
+        });
+        const programs = [
+          [main, build(parts, construct, fixed, position, COMPANIONS[0], "tt", surface, false, lift)],
+          [twin, build(parts, construct, fixed, position, COMPANIONS[0], "ts", surface, false, lift)],
+        ];
+        out.push({
+          code,
+          kind: "fixed",
+          surface,
+          position: position.id,
+          name: `${name}_fixed`,
+          text: written(
+            [
+              lead,
+              `// ${code}, fixed: ${fixed.fixTitle}, in ${position.title}.`,
+              `// @run: ${main}`,
+              `// @twin: ${twin}`,
+              "// @baselines: errors.txt",
+            ],
+            diagnosticUnits(parts, programs, surface),
+          ),
+        });
+      }
+    }
+  }
+  (entry.explain ?? []).forEach((example, index) => {
+    const number = index + 1;
+    const surface = example.surface ?? "tt";
+    const units = typeof example.units === "string" ? { "main.EXT": example.units } : example.units;
+    const header = [lead, `// Example ${number} of \`ttc explain ${code}\`, which ${example.role === "error" ? "reproduces it" : "compiles cleanly"}.`, `// @explains: ${code} ${number}`];
+    if (example.role === "error") header.push(`// @expectDiagnostic: ${code}`, ...(example.typedOnly ? ["// @typedOnly: true"] : []));
+    else header.push("// @expectClean: true");
+    header.push("// @baselines: errors.txt");
+    out.push({
+      code,
+      kind: "explain",
+      surface,
+      position: "explain",
+      name: `${code}_explain${number}`,
+      text: written(header, [["tsconfig.json", tsconfig(surface)], ...moduleUnits(units, surface)]),
+    });
+  });
+  return out;
+}
+
 async function generate() {
   const positions = await import(pathToFileURL(join(SPEC, "positions.mjs")).href);
   const editor = await import(pathToFileURL(join(SPEC, "editor.mjs")).href);
@@ -470,7 +649,18 @@ async function generate() {
       }
     }
   }
-  return { files, editorFiles, stats };
+  const diagnostics = await import(pathToFileURL(join(SPEC, "diagnostics.mjs")).href);
+  const diagnosticFiles = new Map();
+  const diagnosticStats = [];
+  for (const entry of diagnostics.diagnostics) {
+    for (const made of diagnosticCases("diagnostics.mjs", entry, positions, diagnostics.extraPositions, parts)) {
+      const path = join(DIAGNOSTICS_OUT, made.code, `${made.name}.${made.surface}`);
+      if (diagnosticFiles.has(path)) throw new Error(`two examples generate ${made.name}`);
+      diagnosticFiles.set(path, made.text);
+      diagnosticStats.push(made);
+    }
+  }
+  return { files, editorFiles, stats, diagnosticFiles, diagnosticStats, codes: diagnostics.diagnostics.map((entry) => entry.code) };
 }
 
 function existing(dir, out = []) {
@@ -487,10 +677,11 @@ function show(path) {
   return relative(ROOT, path).split(sep).join("/");
 }
 
-const { files, editorFiles, stats } = await generate();
+const { files, editorFiles, stats, diagnosticFiles, diagnosticStats, codes } = await generate();
 const trees = [
   { dir: OUT, files, what: "cases" },
   { dir: EDITOR_OUT, files: editorFiles, what: "editor case files" },
+  { dir: DIAGNOSTICS_OUT, files: diagnosticFiles, what: "diagnostic cases" },
 ];
 const mode = process.argv[2];
 if (mode === "--stats") {
@@ -514,6 +705,22 @@ if (mode === "--stats") {
     );
   }
   console.log(`total: ${total}; editor cases: ${asked}`);
+  const perCode = new Map(codes.map((code) => [code, { invalid: 0, fixed: 0, explain: 0, ttx: 0, positions: new Set() }]));
+  for (const made of diagnosticStats) {
+    const entry = perCode.get(made.code);
+    entry[made.kind]++;
+    if (made.surface === "ttx") entry.ttx++;
+    if (made.kind === "invalid") entry.positions.add(`${made.surface}:${made.position}`);
+  }
+  for (const [code, entry] of perCode) {
+    console.log(
+      `${code}: ${entry.invalid} invalid, ${entry.fixed} fixed, ${entry.explain} explain example(s); ${entry.positions.size} positions, ${entry.ttx} .ttx`,
+    );
+  }
+  const count = (kind) => diagnosticStats.filter((made) => made.kind === kind).length;
+  console.log(
+    `diagnostics: ${count("invalid")} invalid, ${count("fixed")} fixed, ${count("explain")} explain example(s)`,
+  );
 } else if (mode === "--check") {
   const problems = [];
   for (const tree of trees) {

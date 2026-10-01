@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-tuple-arity]: match: tuple pattern has 1 element but the match has 2 scrutinees
+ --> ./main.tt:5:113
+  |
+5 |   const sent = yield match (note("operand", input), note<Dir>("second", Dir.Up)) { (Up, Down) => note("ud", 0), (Up) => note("u", 1), _ => note("other", 2) };
+  |                                                                                                                 ^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[match-tuple-arity]: match: tuple pattern has 1 element but the match has 2 scrutinees
+ --> main.tt:5:113
+  |
+5 |   const sent = yield match (note("operand", input), note<Dir>("second", Dir.Up)) { (Up, Down) => note("ud", 0), (Up) => note("u", 1), _ => note("other", 2) };
+  |                                                                                                                 ^^^^
+
+==== tsc on the emitted TypeScript (exit 0) ====

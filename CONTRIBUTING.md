@@ -187,9 +187,11 @@ A case with `@twin` or `@expectErrors` carries its own oracle. When the
 oracle disagrees, the case fails unless `tests/oracle-failures.txt` lists
 it with what the run observes and the task that tracks the defect (one line
 per case: the case name, a tab, the observation the failure prints, a tab,
-`TASK-NNN: ...`). A listed case whose oracle agrees fails too, and so does
-a line that names no case, so the list is always the exact set of known
-failures.
+`TASK-NNN: ...`). A case name there may contain `*`, which stands for any
+text, so one line lists a defect every position of a generated example
+shows: it excuses each case it names that observes what it says, and a run
+of every case it names fails when none does. A listed case whose oracle agrees fails too, and so does a line that
+names no case, so the list is always the exact set of known failures.
 
 Case names must be distinct across `tests/cases`, because each case writes
 its baselines as `tests/baselines/reference/<name>.<kind>`:
@@ -321,6 +323,57 @@ job runs all of it with `TT_MATRIX_CASES=all`.
 ```sh
 node scripts/generate-cases                        # also rewrites tests/cases/editor/matrix
 UPDATE_EXPECT=1 TT_MATRIX_CASES=all cargo test --test editor_cases
+```
+
+### The diagnostics matrix
+
+`tests/cases/conformance/diagnostics/<code>/` holds cases generated from
+`tests/matrix/diagnostics.mjs`, one directory for every tt diagnostic code
+`ttc explain` lists. Each entry gives a code's examples: a minimal invalid
+program and the nearest valid one, the fix the code's explanation
+suggests. An example of a construct (a `match`, a `result` block, a
+pipeline, a let-else, ...) is placed in every host position of
+`tests/matrix/positions.mjs` where the rule applies, `.ttx` positions
+included: where the construct is accepted for a rule about the construct
+itself, and where the position rejects it (`rejects`) for a placement rule,
+together with the hosts `extraPositions` adds (an enum member, a computed
+member name, a decorator, the heritage of a decorated class, a later
+declarator of a `for` head). A whole-program example (`kind: "module"`) is
+one case per surface.
+
+An invalid case carries `// @expectDiagnostic: <code>` and marks the range
+the diagnostic must cover with `[|...|]` (the markers are removed before
+the case is compiled). The case passes when `ttc --out-dir`, `ttc
+--check-types`, and `ttc --server`'s `check` and `typedCheck` each report
+exactly the marked ranges with that code and no other tt diagnostic; the
+two command-line reports are compared by where they start, the server's by
+their whole range. `// @typedOnly: true` names a rule only the checker can
+decide, which the untyped surfaces must not report. The fixed case runs
+against a TypeScript twin as the case matrix does (a placement rule's fix
+lifts the construct into a declaration before its host, or names its own
+form in `fixes`); a fixed program that does not run carries `// @expectClean:
+true` and must compile cleanly. These cases keep only `.errors.txt`.
+
+`ttc explain`'s examples are tested too, as rustc tests the examples of
+its error-code explanations: every block indented by four spaces in an
+explanation is held by a case with `// @explains: <code> <n>` (its `n`th
+block), which reproduces the code or compiles cleanly, and whose lines
+contain the block's lines in order. Every code's explanation has an
+example that reproduces it. A code no program can report is listed in
+`tests/diagnostic-codes-without-cases.txt` with the reason and the task
+that records it; every other code without a case fails the suite, and so
+does a listed code that has one.
+
+A pull request runs every explanation case and one invalid and one fixed
+case of each code, chosen by a fixed seed (`TT_MATRIX_SEED` chooses
+another); the nightly `exhaustive` job runs all of them with
+`TT_MATRIX_CASES=all`. A disagreement is listed in
+`tests/oracle-failures.txt` like the case matrix's.
+
+```sh
+node scripts/generate-cases --stats    # also counts the cases of each code
+UPDATE_EXPECT=1 TT_MATRIX_CASES=all cargo test --test case_baselines
+TT_CASES=match-duplicate-arm cargo test --test case_baselines   # one code
 ```
 
 ### Adding an editor case

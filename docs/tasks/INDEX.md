@@ -705,7 +705,8 @@
 | TASK-697 | Keep a directive on the JSDoc line it governs when the JSDoc moves to its declaration | Complete | 2026-10-01 | 2026-10-01 | [TASK-697](./TASK-697-jsdoc-and-directive-before-lowered-statement.md) |
 | TASK-698 | Point a variant constructor's missing argument at the field it is for | Complete | 2026-10-01 | 2026-10-01 | [TASK-698](./TASK-698-variant-constructor-parameter-origin.md) |
 | TASK-699 | Read TypeScript's keyword filter from the served syntax, not from its answer | Complete | 2026-10-01 | 2026-10-01 | [TASK-699](./TASK-699-keyword-filter-from-syntax.md) |
+| TASK-700 | Generate a diagnostics matrix that holds every tt code to its range, and test the examples of `ttc explain` | Complete | 2026-10-01 | 2026-10-01 | [TASK-700](./TASK-700-diagnostics-matrix.md) |
 
 ## Next task number
 
-**TASK-700**
+**TASK-701**

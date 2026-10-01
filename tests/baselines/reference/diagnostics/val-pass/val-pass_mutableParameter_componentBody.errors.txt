@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `p` of `take` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> ./main.ttx:10:23
+   |
+10 |     const seen = take(cfg);
+   |                       ^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `p` of `take` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> main.ttx:10:23
+   |
+10 |     const seen = take(cfg);
+   |                       ^^^
+
+==== tsc on the emitted TypeScript (exit 0) ====

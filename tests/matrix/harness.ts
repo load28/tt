@@ -126,3 +126,14 @@ export const Fragment = "";
 export function Show(props: { value: unknown }): string {
   return `<Show ${text(props.value).replaceAll('"', "'")}>`;
 }
+export function decorate(value: unknown) {
+  return <T>(target: T, context: ClassDecoratorContext): T => {
+    note(`decorate ${String(context.name)}`, value);
+    return target;
+  };
+}
+export function heritage(value: unknown) {
+  return class {
+    inherited = note("base", value);
+  };
+}

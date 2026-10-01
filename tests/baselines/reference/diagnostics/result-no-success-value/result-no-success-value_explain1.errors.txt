@@ -1,0 +1,33 @@
+==== ttc --out-dir (exit 1) ====
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> ./main.tt:3:13
+  |
+3 |     const r = result {
+  |  _____________^
+4 | |     const n = try read(text.length);
+5 | |     if (n > 0) {
+6 | |       return n;
+7 | |     }
+8 | |   };
+  | |___^
+  |
+  = help: return a value from every reachable path in this `result` block
+
+
+==== ttc --check-types (exit 1) ====
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> main.tt:3:13
+  |
+3 |     const r = result {
+  |  _____________^
+4 | |     const n = try read(text.length);
+5 | |     if (n > 0) {
+6 | |       return n;
+7 | |     }
+8 | |   };
+  | |___^
+  |
+  = help: return a value from every reachable path in this `result` block
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -412,6 +412,10 @@ impl DiagnosticCode {
                 "\
 A `|>` was written where the pipeline parser could not claim the text
 around it, so the file is neither a valid pipeline nor valid TypeScript.
+Here the step is an arrow function, whose body would take the rest of the
+line:
+
+    const n = x |> n => n + 1;
 
 The usual causes are a head or step that needs parentheses. A ternary or
 an arrow function at the top level of either side has to be wrapped:
@@ -446,7 +450,9 @@ step, but its tail is incomplete or outside the supported postfix grammar.
 The first operation is `?.name`, `?.[key]`, or `?.(args)`. It may continue
 with ordinary or optional member, index, and call operations. Tagged
 templates, private fields, optional construction, and partial operations are
-not supported. The whole pipeline is rejected rather than partially emitted."
+not supported. The whole pipeline is rejected rather than partially emitted:
+
+    return value |> ?.name.trim`x`;"
             }
 
             DiagnosticCode::InvalidOptionalReceiver => {
@@ -456,14 +462,25 @@ optional-chain receiver. Parentheses only control precedence; they cannot make
 a syntactically forbidden receiver valid.
 
 For example, bare `super` may only appear in the member and call forms the
-JavaScript grammar permits, and cannot become the base of `?.`. Use an
-ordinary `super.member` expression before the pipeline or restructure the
-access."
+JavaScript grammar permits, and cannot become the base of `?.`:
+
+    override label() {
+      return super |> ?.label();
+    }
+
+Use an ordinary `super.member` expression before the pipeline or
+restructure the access."
             }
 
             DiagnosticCode::StrayIfLet => {
                 "\
 An `if let` was written that the parser could not claim.
+
+    if let Ok(value: v) = read(n) {
+      return v;
+    } else if (fallback) {
+      return 0;
+    }
 
 The pattern's parentheses are mandatory (`if let Some(value: u) = f()`),
 and the `else` may only be a block or another `if let` — a plain
@@ -489,12 +506,17 @@ The text committed to tt's `variant` syntax but did not parse as one.
 
 Every `enum` declaration belongs to TypeScript and passes through untouched.
 A `variant` belongs to tt and each case must be
-`Tag`, `Tag()`, or `Tag(field: Type, ...)`, separated by commas."
+`Tag`, `Tag()`, or `Tag(field: Type, ...)`, separated by commas, which this
+one leaves out:
+
+    variant Shape { Circle(r: number) Point }"
             }
 
             DiagnosticCode::MalformedMatch => {
                 "\
 The text committed to tt's `match` syntax but did not parse as one.
+
+    return match () { 200 => \"ok\", _ => \"other\" };
 
 The scrutinee parentheses are mandatory and may not be empty. Each arm is
 `pattern => expression,` or `pattern => { ... }`. An object literal body
@@ -510,7 +532,7 @@ value after it.
 
     match (shape) {
       Circle(radius) => radius,
-      Rect(width) if width > 0
+      _ =>
     }
 
 The arm is still the arm written, as TypeScript keeps an `if` whose
@@ -525,6 +547,8 @@ arm."
 A `flow` composition's first step is a method step (one starting with
 `.`) or an optional-chain step (`o?.m`).
 
+    const label = flow |> .toFixed(1) |> String;
+
 `flow` composes functions rather than piping a value, so the first step is
 what fixes the composed function's input type — and a method step has no
 input type of its own to give. An optional-chain step is the optional call
@@ -538,6 +562,8 @@ function either. Put a named or parenthesized function first:
             DiagnosticCode::TryPlacement => {
                 "\
 A `try` was written where its propagation could not go anywhere.
+
+    for (let i = 0; i < try read(xs.length); i++) {
 
 `try` compiles to an early exit of the nearest Result scope: the innermost
 `result` block, or the enclosing function when no such block is open. It is
@@ -571,12 +597,26 @@ allowed there and stays function-scoped."
 A `result` block can finish without producing an `Ok` value.
 
 A statement-bodied Result block completes successfully only with `return value;`
-or `return;`. Add a return on every reachable path."
+or `return;`. Here the block reaches its end when `n` is not positive:
+
+    const r = result {
+      const n = try read(text.length);
+      if (n > 0) {
+        return n;
+      }
+    };
+
+Add a return on every reachable path."
             }
 
             DiagnosticCode::ResultValueDiscarded => {
                 "\
 A `result` expression was used as a discarded statement value.
+
+    result {
+      const v = try read(n);
+      return v;
+    };
 
 Store, return, or otherwise consume the Result so its `Err` remains observable."
             }
@@ -585,13 +625,28 @@ Store, return, or otherwise consume the Result so its `Err` remains observable."
 A `result` block return already has a Result value.
 
 `return value;` completes the block with `Ok(value)`, so returning a Result
-there creates a nested Result. Write `return try value;` when the inner Err
-should complete the enclosing block instead. This diagnostic is emitted only
-when the TypeScript checker proves the returned value has the Result shape."
+there creates a nested Result:
+
+    return result {
+      const v = try read(n);
+      return read(v * 2);
+    };
+
+Write `return try value;` when the inner Err should complete the enclosing
+block instead. This diagnostic is emitted only when the TypeScript checker
+proves the returned value has the Result shape."
             }
             DiagnosticCode::ResultBreakCrossing => {
                 "\
 A `break` in a `result` block would leave the block's generated completion region.
+
+    for (const x of xs) {
+      const r = result {
+        const v = try read(x);
+        if (v > 9) break;
+        return v;
+      };
+    }
 
 Break only a loop or switch written inside the `result` block, or move the
 control transfer outside the block."
@@ -600,6 +655,14 @@ control transfer outside the block."
                 "\
 A `continue` in a `result` block would leave the block's generated completion region.
 
+    for (const x of xs) {
+      const r = result {
+        const v = try read(x);
+        if (v > 9) continue;
+        return v;
+      };
+    }
+
 Continue only a loop written inside the `result` block, or move the control
 transfer outside the block."
             }
@@ -607,11 +670,27 @@ transfer outside the block."
                 "\
 A `yield` in a `result` block would cross the block's completion region.
 
+    for (const x of xs) {
+      const r = result {
+        const v = try read(x);
+        yield v;
+        return v;
+      };
+    }
+
 Yield outside the block, or return a Result value from the generator instead."
             }
             DiagnosticCode::ResultLabelCrossing => {
                 "\
 A labeled control transfer in a `result` block would leave the block's completion region.
+
+    found: {
+      const r = result {
+        const v = try read(x);
+        if (v > 9) break found;
+        return v;
+      };
+    }
 
 Keep the label and its target inside the `result` block, or move the transfer
 outside the block."
@@ -620,6 +699,8 @@ outside the block."
             DiagnosticCode::TryCrossesValueRegion => {
                 "\
 A `try` crosses an isolated value region inside a `result` block.
+
+    return result { return `value: ${try read(n)}`; };
 
 The nearest Result scope is outside a value region that owns its own exits, so
 the failure cannot reach that Result scope without changing the region's value
@@ -631,6 +712,8 @@ explicitly."
             DiagnosticCode::LetElsePlacement => {
                 "\
 A let-else was written outside the statement stream it needs.
+
+    if (round) const Circle(r) = s else { return 0; };
 
 Like `try`, its `else` block leaves the enclosing function, so it belongs
 to a statement list — not to a `match` arm or another construct's value
@@ -648,6 +731,10 @@ there and its binding stays function-scoped."
                 "\
 A let-else `else` block can fall out of its bottom.
 
+    const Ok(value: v) = read(n) else {
+      console.log(\"not a number\");
+    };
+
 The binding is only in scope afterwards because the `else` never reaches
 that point, so every path through it has to leave via `return`, `throw`,
 `break` or `continue`. A `break` or `continue` naming a loop or switch
@@ -662,6 +749,8 @@ where both halves diverge all count."
             DiagnosticCode::IfLetPlacement => {
                 "\
 An `if let` was written in expression position.
+
+    const v = if let Ok(value: x) = read(n) { x } else { 0 };
 
 `if let` is a statement — it lowers to an `if` with a narrowing test and
 produces no value. Its `if` must start a statement, so it cannot be a
@@ -678,6 +767,8 @@ statement and assign it in the bodies."
                 "\
 A variant declares the same case tag twice.
 
+    variant Token { Word(text: string), Number(value: number), Word }
+
 The tag is the emitted union's `kind` discriminant, so two cases with one
 tag would be indistinguishable at runtime and unmatchable in a pattern.
 Rename one of them."
@@ -687,6 +778,8 @@ Rename one of them."
                 "\
 A variant field's type annotation does not parse as TypeScript.
 
+    variant Reading { Sample(at: Date =) }
+
 Field types are emitted into the generated union verbatim, so they are
 checked as TypeScript type syntax where they are written — that way the
 error points at your declaration rather than at generated code."
@@ -695,6 +788,8 @@ error points at your declaration rather than at generated code."
             DiagnosticCode::VariantFieldShadowsTag => {
                 "\
 A case declares a payload field named like the property its tag lives in.
+
+    variant Token { Word(kind: string) }
 
 Every case of a lowered variant carries its tag in one fixed property, and
 that property is part of the shape your own TypeScript reads. A payload
@@ -711,6 +806,8 @@ Rename the field. Nothing else about the case changes:
                 "\
 A case declares a required field after an optional one.
 
+    variant Request { Get(timeout?: number, url: string) }
+
 A case's fields are also its constructor's parameters, in order, and a
 TypeScript parameter list cannot have a required parameter after an
 optional one: the call could not leave the optional argument out and
@@ -724,6 +821,8 @@ Put the required fields first, or make the later field optional too:
             DiagnosticCode::VariantDefaultExport => {
                 "\
 A `variant` is declared as the module's default export.
+
+    export default variant Dir { Up, Down }
 
 A variant declares two things under one name: a type (the union of its
 cases) and a value (the constructor object). TypeScript has no declaration
@@ -745,6 +844,8 @@ Export the variant by name and import it by name:
                 "\
 A pattern binds the same name twice.
 
+    Rect(width: w, height: w) => w * w,
+
 Two fields cannot both introduce one name; alias one of them with
 `field: alias`:
 
@@ -754,6 +855,12 @@ Two fields cannot both introduce one name; alias one of them with
             DiagnosticCode::MatchMixedPatterns => {
                 "\
 A `match` mixes tag patterns with literal or `is` patterns.
+
+    match (s) {
+      Circle(r) => r,
+      0 => 0,
+      _ => -1,
+    }
 
 They inspect different representations: a tag match switches on `.kind`,
 while literal and `is` patterns inspect the value itself. One `match` must
@@ -765,6 +872,11 @@ Split the arms into two matches, or match on a value the arms agree about."
                 "\
 A `_` arm is followed by another arm.
 
+    match (code) {
+      _ => \"other\",
+      200 => \"ok\",
+    }
+
 `_` matches everything, so any arm after it is unreachable. Move it to the
 end."
             }
@@ -772,6 +884,11 @@ end."
             DiagnosticCode::MatchOrLiteralKindMismatch => {
                 "\
 An or-pattern's alternatives are literals of different kinds.
+
+    match (key) {
+      \"a\" | 1 => \"first\",
+      _ => \"other\",
+    }
 
 `\"a\" | 1` cannot be one comparison. Every alternative of one or-pattern
 has to be the same kind of literal — all strings, all numbers, all
@@ -783,6 +900,12 @@ written two ways."
                 "\
 An arm repeats a tag or a literal an earlier arm already covers.
 
+    match (status) {
+      200 => \"ok\",
+      0xc8 => \"also ok\",
+      _ => \"other\",
+    }
+
 The later arm can never run. Literals are compared by value, so `200` and
 `0xc8` are the same arm. Guarded arms may repeat a tag — the guard can
 fail — but an arm that repeats a tag an *unguarded* arm already took is
@@ -793,6 +916,11 @@ still dead."
                 "\
 An `is` match has no final wildcard arm.
 
+    match (value) {
+      is Error => \"error\",
+      is Date => \"date\",
+    }
+
 JavaScript class hierarchies are open, so ttc cannot prove that a list of
 `instanceof` tests is exhaustive. Add a final `_` arm."
             }
@@ -800,6 +928,11 @@ JavaScript class hierarchies are open, so ttc cannot prove that a list of
             DiagnosticCode::MatchIsEmptyBindings => {
                 "\
 An `is` pattern writes an empty property binding list.
+
+    match (value) {
+      is Error {} => \"error\",
+      _ => \"other\",
+    }
 
 `is Error {}` has the same runtime test as `is Error` but suggests that a
 value is materialized. Remove the braces."
@@ -809,6 +942,11 @@ value is materialized. Remove the braces."
                 "\
 An `is` or-pattern binds properties.
 
+    match (value) {
+      is TypeError { message } | is RangeError { message } => message,
+      _ => \"\",
+    }
+
 ttc does not answer whether different JavaScript classes share a property.
 Use type-only alternatives (`is A | is B`) or split the alternatives into
 separate arms before binding properties."
@@ -817,6 +955,10 @@ separate arms before binding properties."
             DiagnosticCode::MatchPlacement => {
                 "\
 A `match` is used in a TypeScript host that cannot own its control flow.
+
+    function scale(factor: number, size = match (factor) { 0 => 1, _ => factor }) {
+      return size;
+    }
 
 Expression matches lower to host-owned statements and a result slot. They
 never use an IIFE, an immediately invoked callback, or `$tt_expr`. Move the
@@ -853,6 +995,13 @@ neither is rejected."
             DiagnosticCode::MatchControlCrossing => {
                 r#"A `break`, `continue`, or `yield` in a match arm may target only control flow written inside that arm.
 
+    for (const item of items) {
+      total += match (item) {
+        Stop => { if (total > 9) break; return 0; },
+        Keep(value) => value,
+      };
+    }
+
 Each arm is an isolated completion region. Allowing a jump to an enclosing host construct would bypass the match result delivery and make the generated control-flow target depend on unrelated outer syntax."#
             }
 
@@ -860,13 +1009,18 @@ Each arm is an isolated completion region. Allowing a jump to an enclosing host 
                 "\
 A nested pattern appears inside an or-pattern.
 
+    match (o) {
+      Ok(value: None()) | Err => 0,
+      _ => -1,
+    }
+
 The alternatives of an or-pattern share one arm body and are compared by
 tag alone, so none of them may descend into a payload:
-`Ok(value: Some(v)) | Err(error)` is rejected. An alternation inside a
-field, such as `Ok(value: Some(v) | None())`, is not pattern syntax and
-does not parse. Write each nested shape as its own arm:
+`Ok(value: Some(value: v)) | Err(error)` is rejected. An alternation inside
+a field, such as `Ok(value: Some(value: v) | None())`, is not pattern
+syntax and does not parse. Write each nested shape as its own arm:
 
-    Ok(value: Some(v)) => v,
+    Ok(value: Some(value: v)) => v,
     Ok(value: None()) => 0,
     Err(error) => -1,
 
@@ -878,16 +1032,28 @@ under the same rule: no alternative there is nested either."
                 "\
 An or-pattern's alternatives do not bind the same names.
 
-The arm body is one piece of code, so every alternative has to leave it
-the same bindings. Alias the fields so the sets agree:
+    match (s) {
+      Circle(radius) | Square(side) => 0,
+    }
 
-    Circle(radius: r) | Square(side: r) => r"
+The arm body is one piece of code that reads each binding from one place,
+so every alternative has to bind the same names from the same fields.
+Alternatives whose fields differ become arms of their own:
+
+    Circle(radius) => radius,
+    Square(side) => side,"
             }
 
             DiagnosticCode::MatchTupleArity => {
                 "\
 A tuple pattern has a different number of elements than the match has
 scrutinees.
+
+    match (a, b) {
+      (Up, Up) => 2,
+      (Down) => 1,
+      _ => 0,
+    }
 
 `match (a, b)` matches pairs, so every arm is a two-element tuple pattern
 (or a final bare `_`). A one-element side is still claimed as a tuple when
@@ -904,6 +1070,11 @@ Parenthesize a comparison: `match ((a < b), c > (d))`."
                 "\
 A pattern names a case the variant does not declare.
 
+    match (s) {
+      Circel(r) => r,
+      Point => 0,
+    }
+
 tt only reports this when it can name what you meant — a near-miss or a
 case difference — because tag patterns also match hand-written `kind`
 unions whose tags are in no declaration table. A name that is simply wrong
@@ -917,6 +1088,11 @@ apply it directly."
                 "\
 A pattern names a field the case does not declare.
 
+    match (s) {
+      Circle(radus) => radus,
+      Point => 0,
+    }
+
 Fields are bound by name, never by position, so the name has to exist on
 that case. As with an unknown case, this is only reported when the
 declaration table can name the field you meant."
@@ -925,6 +1101,10 @@ declaration table can name the field you meant."
             DiagnosticCode::MatchNotExhaustive => {
                 "\
 A `match` without a `_` arm does not cover every case of its subject.
+
+    match (s) {
+      Circle(r) => r,
+    }
 
 Exhaustiveness is what makes adding a case to a variant a compile error at
 every place that handles it, rather than a runtime surprise. Add the
@@ -943,6 +1123,9 @@ a combination: `missing (North, Slow)`."
                 "\
 A value reached through a `val` binding is mutated.
 
+    val const settings = { retries: 3 };
+    settings.retries = 0;
+
 `val` makes the binding *and every path from it* read-only, at any depth:
 `x.a = v` and its compound forms, `x[i] = v`, `x.a++`, `delete x.a`.
 
@@ -960,6 +1143,9 @@ copy and replace rather than mutate in place."
                 "\
 A `val` binding is passed to a parameter that is not declared `val`.
 
+    val const counter = { n: 0 };
+    bump(counter);
+
 The guarantee would end at the call otherwise: the callee could mutate
 what the caller promised not to. Declare the parameter `val`, or pass a
 copy.
@@ -973,6 +1159,8 @@ what tt can check without types."
                 "\
 The TypeScript the compiler emitted did not parse.
 
+    export const limit = ;
+
 This is the compiler checking its own output, so seeing it means either
 the passthrough text was not valid TypeScript to begin with, or ttc has a
 bug. Check the file for a syntax error outside any tt construct first; if
@@ -984,6 +1172,11 @@ there is none, this is worth reporting.
             DiagnosticCode::SourceNotTypeScript => {
                 "\
 The TypeScript inside a claimed tt construct does not parse.
+
+    match (s) {
+      Circle(r) => r *,
+      Point => 0,
+    }
 
 Lowering models the file's TypeScript — that is how a construct knows what
 it is nested in and what evaluates when — so a `match` arm body or a

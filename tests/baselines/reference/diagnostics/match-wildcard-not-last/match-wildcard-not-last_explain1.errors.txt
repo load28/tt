@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[match-wildcard-not-last]: match: the wildcard arm `_` must be the last arm
+ --> ./main.tt:4:7
+  |
+4 |       _ => "other",
+  |       ^
+
+
+==== ttc --check-types (exit 1) ====
+error[match-wildcard-not-last]: match: the wildcard arm `_` must be the last arm
+ --> main.tt:4:7
+  |
+4 |       _ => "other",
+  |       ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

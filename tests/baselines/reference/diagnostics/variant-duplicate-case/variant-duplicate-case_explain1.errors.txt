@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[variant-duplicate-case]: variant Token: duplicate case "Word"
+ --> ./main.tt:1:60
+  |
+1 | variant Token { Word(text: string), Number(value: number), Word }
+  |                                                            ^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[variant-duplicate-case]: variant Token: duplicate case "Word"
+ --> main.tt:1:60
+  |
+1 | variant Token { Word(text: string), Number(value: number), Word }
+  |                                                            ^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

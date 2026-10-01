@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation
+ --> ./main.tt:8:23
+  |
+8 |       const checked = try read(note("operand", input));
+  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into an ordinary function, or handle the Result explicitly
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation
+ --> main.tt:8:23
+  |
+8 |       const checked = try read(note("operand", input));
+  |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into an ordinary function, or handle the Result explicitly
+
+==== tsc on the emitted TypeScript (exit 0) ====

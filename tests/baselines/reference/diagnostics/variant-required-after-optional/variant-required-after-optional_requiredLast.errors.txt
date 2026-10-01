@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[variant-required-after-optional]: variant Request: case "Get" declares required field `url` after optional field `timeout`
+ --> ./main.tt:1:48
+  |
+1 | export variant Request { Get(timeout?: number, url: string) }
+  |                                                ^^^
+  |
+  = help: declare the required fields before the optional ones
+
+
+==== ttc --check-types (exit 1) ====
+error[variant-required-after-optional]: variant Request: case "Get" declares required field `url` after optional field `timeout`
+ --> main.tt:1:48
+  |
+1 | export variant Request { Get(timeout?: number, url: string) }
+  |                                                ^^^
+  |
+  = help: declare the required fields before the optional ones
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in a later declarator of a `for` loop head — its propagation would run before the earlier declarators and outside the bindings the head declares
+ --> ./main.tt:6:30
+  |
+6 |   for (let round = 0, item = try read(note("operand", input)); round < 1; round++) {
+  |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the declaration before the loop, or make this declarator the first one
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a later declarator of a `for` loop head — its propagation would run before the earlier declarators and outside the bindings the head declares
+ --> main.tt:6:30
+  |
+6 |   for (let round = 0, item = try read(note("operand", input)); round < 1; round++) {
+  |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the declaration before the loop, or make this declarator the first one
+
+==== tsc on the emitted TypeScript (exit 0) ====

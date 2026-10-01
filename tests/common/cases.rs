@@ -85,6 +85,69 @@ pub fn parse(text: &str, file_name: &str, path: &Path) -> Parsed {
     Parsed { units, directives }
 }
 
+pub fn strip_ranges(raw: &str, path: &Path) -> (String, Vec<(usize, usize)>) {
+    let mut text = String::new();
+    let mut ranges = Vec::new();
+    let mut open = Vec::new();
+    let mut i = 0;
+    while i < raw.len() {
+        if raw[i..].starts_with("[|") {
+            open.push(text.len());
+            i += 2;
+            continue;
+        }
+        if raw[i..].starts_with("|]") {
+            let start = open
+                .pop()
+                .unwrap_or_else(|| panic!("{}: `|]` without `[|`", path.display()));
+            ranges.push((start, text.len()));
+            i += 2;
+            continue;
+        }
+        let width = raw[i..].chars().next().map_or(1, char::len_utf8);
+        text.push_str(&raw[i..i + width]);
+        i += width;
+    }
+    assert!(open.is_empty(), "{}: `[|` without `|]`", path.display());
+    ranges.sort_unstable();
+    (text, ranges)
+}
+
+pub fn line_col(text: &str, offset: usize) -> (usize, usize) {
+    let before = &text[..offset];
+    let line = before.matches('\n').count() + 1;
+    let col = before[before.rfind('\n').map_or(0, |i| i + 1)..]
+        .chars()
+        .count()
+        + 1;
+    (line, col)
+}
+
+pub fn example_blocks(explanation: &str) -> Vec<String> {
+    let lines: Vec<&str> = explanation.lines().collect();
+    let mut blocks: Vec<Vec<&str>> = Vec::new();
+    let mut open = false;
+    for (index, line) in lines.iter().enumerate() {
+        if let Some(code) = line.strip_prefix("    ") {
+            if !open {
+                blocks.push(Vec::new());
+                open = true;
+            }
+            blocks.last_mut().unwrap().push(code);
+        } else if open
+            && line.trim().is_empty()
+            && lines
+                .get(index + 1)
+                .is_some_and(|next| next.starts_with("    "))
+        {
+            blocks.last_mut().unwrap().push("");
+        } else {
+            open = false;
+        }
+    }
+    blocks.into_iter().map(|block| block.join("\n")).collect()
+}
+
 pub fn is_tt(path: &Path) -> bool {
     matches!(
         path.extension().and_then(|e| e.to_str()),

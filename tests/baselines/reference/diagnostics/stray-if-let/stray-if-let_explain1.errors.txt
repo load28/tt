@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[stray-if-let]: the `else` of an `if let` must be a block or another `if let`
+ --> ./main.tt:5:5
+  |
+5 |   } else if (fallback) {
+  |     ^^^^^^^
+  |
+  = help: put a plain `if (...)` inside an `else { ... }` block
+
+
+==== ttc --check-types (exit 1) ====
+error[stray-if-let]: the `else` of an `if let` must be a block or another `if let`
+ --> main.tt:5:5
+  |
+5 |   } else if (fallback) {
+  |     ^^^^^^^
+  |
+  = help: put a plain `if (...)` inside an `else { ... }` block
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

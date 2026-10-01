@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[missing-arm-body]: match: this arm has no body
+ --> ./main.tt:4:89
+  |
+4 |   return `<${note("left", "L")}|${match (note("operand", input)) { 1 => note("one", 1), _ => }}|${note("right", "R")}>`;
+  |                                                                                         ^
+  |
+  = help: write `=> <body>` after the guard, or the body after `=>`
+
+
+==== ttc --check-types (exit 1) ====
+error[missing-arm-body]: match: this arm has no body
+ --> main.tt:4:89
+  |
+4 |   return `<${note("left", "L")}|${match (note("operand", input)) { 1 => note("one", 1), _ => }}|${note("right", "R")}>`;
+  |                                                                                         ^
+  |
+  = help: write `=> <body>` after the guard, or the body after `=>`
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[lowering-plan-failed]: tt host lowering could not plan this construct: the generated TypeScript for it does not parse: Expression expected
+ --> ./main.tt:4:17
+  |
+4 |   const value = result { return try read(note("operand", input)) + };
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[lowering-plan-failed]: tt host lowering could not plan this construct: the generated TypeScript for it does not parse: Expression expected
+ --> main.tt:4:17
+  |
+4 |   const value = result { return try read(note("operand", input)) + };
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 0) ====

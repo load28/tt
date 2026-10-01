@@ -1,0 +1,22 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-or-binding-mismatch]: match: or-pattern alternatives must bind the same names — `r` is bound in `Circle(...)` but not in `Rect(...)`
+ --> ./main.tt:6:61
+  |
+6 |     return [n, match (note("operand", input)) { Circle(r) | Rect(w) => note("size", 0), Point => note("point", 0) }];
+  |                                                             ^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2339]: match on a tag pattern needs a value with a `kind` discriminant — this scrutinee has none (a plain TypeScript `enum` is not one) (in tt's names: Property 'r' does not exist on type 'Shape.Circle | Shape.Rect'.) (ts2339: Property 'r' does not exist on type '{ kind: "Circle"; r: number; } | { kind: "Rect"; w: number; h: number; }'.)
+ --> main.tt:6:16
+  |
+6 |     return [n, match (note("operand", input)) { Circle(r) | Rect(w) => note("size", 0), Point => note("point", 0) }];
+  |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+error[match-or-binding-mismatch]: match: or-pattern alternatives must bind the same names — `r` is bound in `Circle(...)` but not in `Rect(...)`
+ --> main.tt:6:61
+  |
+6 |     return [n, match (note("operand", input)) { Circle(r) | Rect(w) => note("size", 0), Point => note("point", 0) }];
+  |                                                             ^^^^
+
+==== tsc on the emitted TypeScript (exit 0) ====

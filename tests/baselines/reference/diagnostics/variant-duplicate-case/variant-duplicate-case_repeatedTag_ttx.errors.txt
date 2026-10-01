@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[variant-duplicate-case]: variant Shape: duplicate case "Circle"
+ --> ./main.ttx:1:43
+  |
+1 | export variant Shape { Circle(r: number), Circle }
+  |                                           ^^^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[variant-duplicate-case]: variant Shape: duplicate case "Circle"
+ --> main.ttx:1:43
+  |
+1 | export variant Shape { Circle(r: number), Circle }
+  |                                           ^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

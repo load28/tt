@@ -613,9 +613,9 @@ fn codes(src: &str) -> Vec<DiagnosticCode> {
 #[test]
 fn explained_examples_behave_as_their_explanations_say() {
     let nested = DiagnosticCode::MatchNestedInOrPattern.explanation();
-    let arms = "Ok(value: Some(v)) => v,\n    Ok(value: None()) => 0,\n    Err(error) => -1,";
+    let arms = "Ok(value: Some(value: v)) => v,\n    Ok(value: None()) => 0,\n    Err(error) => -1,";
     assert!(nested.contains(arms), "{nested}");
-    assert!(nested.contains("`Ok(value: Some(v) | None())`"), "{nested}");
+    assert!(nested.contains("`Ok(value: Some(value: v) | None())`"), "{nested}");
     let prelude = "declare const r: { kind: \"Ok\"; value: { kind: \"Some\"; value: number } | { kind: \"None\" } } | { kind: \"Err\"; error: string };\n";
     assert_eq!(
         codes(&format!("{prelude}const a = match (r) {{ {arms} }};\n")),
@@ -623,7 +623,7 @@ fn explained_examples_behave_as_their_explanations_say() {
     );
     assert_eq!(
         codes(&format!(
-            "{prelude}const a = match (r) {{ Ok(value: Some(v) | None()) => 1, Err(error) => -1 }};\n"
+            "{prelude}const a = match (r) {{ Ok(value: Some(value: v) | None()) => 1, Err(error) => -1 }};\n"
         )),
         vec![DiagnosticCode::MalformedMatch]
     );

@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[result-break-crossing]: `break` cannot leave a `result` block
+ --> ./main.tt:5:109
+  |
+5 | for (const round of [1, 2]) { const r = result { const n = try read(note("operand", input)); if (n > round) break; return n; }; seen = note("r", r); }
+  |                                                                                                             ^^^^^
+  |
+  = help: break only a loop or switch written inside this `result` block
+
+
+==== ttc --check-types (exit 1) ====
+error[result-break-crossing]: `break` cannot leave a `result` block
+ --> main.tt:5:109
+  |
+5 | for (const round of [1, 2]) { const r = result { const n = try read(note("operand", input)); if (n > round) break; return n; }; seen = note("r", r); }
+  |                                                                                                             ^^^^^
+  |
+  = help: break only a loop or switch written inside this `result` block
+
+==== tsc on the emitted TypeScript (exit 0) ====

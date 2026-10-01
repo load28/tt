@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[match-control-crossing]: `break` cannot leave a match arm
+ --> ./main.tt:6:32
+  |
+6 |       Stop => { if (total > 9) break; return 0; },
+  |                                ^^^^^
+  |
+  = help: break only a loop or switch written inside this arm
+
+
+==== ttc --check-types (exit 1) ====
+error[match-control-crossing]: `break` cannot leave a match arm
+ --> main.tt:6:32
+  |
+6 |       Stop => { if (total > 9) break; return 0; },
+  |                                ^^^^^
+  |
+  = help: break only a loop or switch written inside this arm
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

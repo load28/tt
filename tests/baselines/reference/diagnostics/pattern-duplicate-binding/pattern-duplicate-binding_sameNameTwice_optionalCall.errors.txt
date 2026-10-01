@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[pattern-duplicate-binding]: match: binding `w` is used more than once in this pattern
+ --> ./main.tt:5:63
+  |
+5 |   const ran = callee(true)?.(match (note("operand", input)) { Rect(w, h: w) => note("rect", w), Circle(r) => note("circle", r), Point => note("point", 0) });
+  |                                                               ^^^^
+  |
+  = help: rename one of them with `field: alias`
+
+error[pattern-duplicate-binding]: match: binding `w` is used more than once in this pattern
+ --> ./main.tt:6:68
+  |
+6 |   const skipped = callee(false)?.(match (note("operand", input)) { Rect(w, h: w) => note("rect", w), Circle(r) => note("circle", r), Point => note("point", 0) });
+  |                                                                    ^^^^
+  |
+  = help: rename one of them with `field: alias`
+
+
+==== ttc --check-types (exit 1) ====
+error[pattern-duplicate-binding]: match: binding `w` is used more than once in this pattern
+ --> main.tt:5:63
+  |
+5 |   const ran = callee(true)?.(match (note("operand", input)) { Rect(w, h: w) => note("rect", w), Circle(r) => note("circle", r), Point => note("point", 0) });
+  |                                                               ^^^^
+  |
+  = help: rename one of them with `field: alias`
+error[pattern-duplicate-binding]: match: binding `w` is used more than once in this pattern
+ --> main.tt:6:68
+  |
+6 |   const skipped = callee(false)?.(match (note("operand", input)) { Rect(w, h: w) => note("rect", w), Circle(r) => note("circle", r), Point => note("point", 0) });
+  |                                                                    ^^^^
+  |
+  = help: rename one of them with `field: alias`
+
+==== tsc on the emitted TypeScript (exit 0) ====

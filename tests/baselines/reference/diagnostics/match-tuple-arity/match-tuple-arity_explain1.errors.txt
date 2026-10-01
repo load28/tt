@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[match-tuple-arity]: match: tuple pattern has 1 element but the match has 2 scrutinees
+ --> ./main.tt:6:7
+  |
+6 |       (Down) => 1,
+  |       ^^^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[match-tuple-arity]: match: tuple pattern has 1 element but the match has 2 scrutinees
+ --> main.tt:6:7
+  |
+6 |       (Down) => 1,
+  |       ^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

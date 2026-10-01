@@ -1,0 +1,26 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> ./main.tt:4:35
+  |
+4 |   return match (flip()) { true => result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } }, false => note("other arm", 0) };
+  |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2454]: Variable '$tt_v0' is used before being assigned. (in code ttc generated for this construct)
+ --> main.tt:4:10
+  |
+4 |   return match (flip()) { true => result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } }, false => note("other arm", 0) };
+  |          ^^^^^^^^^^^^^^
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> main.tt:4:35
+  |
+4 |   return match (flip()) { true => result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } }, false => note("other arm", 0) };
+  |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+
+==== tsc on the emitted TypeScript (exit 0) ====

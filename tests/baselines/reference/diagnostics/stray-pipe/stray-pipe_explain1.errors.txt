@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[stray-pipe]: pipeline: `|>` could not be parsed here
+ --> ./main.tt:3:15
+  |
+3 |   const n = x |> n => n + 1;
+  |               ^^
+  |
+  = help: a step is an expression — parenthesize a ternary or an arrow function
+
+
+==== ttc --check-types (exit 1) ====
+error[stray-pipe]: pipeline: `|>` could not be parsed here
+ --> main.tt:3:15
+  |
+3 |   const n = x |> n => n + 1;
+  |               ^^
+  |
+  = help: a step is an expression — parenthesize a ternary or an arrow function
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

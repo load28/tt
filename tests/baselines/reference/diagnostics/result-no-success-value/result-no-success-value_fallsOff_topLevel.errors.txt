@@ -1,0 +1,51 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> ./main.tt:4:14
+  |
+4 | const top0 = result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } };
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> ./main.tt:7:14
+  |
+7 | const top1 = result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } };
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+  --> ./main.tt:10:14
+   |
+10 | const top2 = result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } };
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: return a value from every reachable path in this `result` block
+
+
+==== ttc --check-types (exit 1) ====
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> main.tt:4:14
+  |
+4 | const top0 = result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } };
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> main.tt:7:14
+  |
+7 | const top1 = result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } };
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+  --> main.tt:10:14
+   |
+10 | const top2 = result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } };
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: return a value from every reachable path in this `result` block
+
+==== tsc on the emitted TypeScript (exit 0) ====

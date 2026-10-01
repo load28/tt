@@ -4,4 +4,23 @@
 # One line per case: the case name, a tab, what the run observes (as the
 # failure prints it), a tab, and the TASK-NNN that tracks the defect.
 # tests/case_baselines.rs fails when a listed case agrees with its oracle,
-# is observed differently, or names no case.
+# is observed differently, or names no case. A name with `*` lists every
+# case it matches that observes the same thing (@expectDiagnostic cases).
+malformed-pipeline-postfix_taggedTemplate_ifLetBody	`ttc --out-dir` reports malformed-pipeline-postfix, source-not-typescript	TASK-700: Issue 1, a malformed postfix pipeline in a construct's body is reported twice
+malformed-pipeline-postfix_taggedTemplate_matchArm	`ttc --out-dir` reports malformed-pipeline-postfix, source-not-typescript	TASK-700: Issue 1, a malformed postfix pipeline in a construct's body is reported twice
+source-not-typescript_resultBodyEnd_declarationInitializer	`ttc --out-dir` reports lowering-plan-failed	TASK-700: Issue 2, an expression the result block's `}` cuts off fails the lowering plan
+match-nested-in-or-pattern_bindingAlternative_declarationInitializer	`ttc --out-dir` reports match-nested-in-or-pattern, match-or-binding-mismatch	TASK-700: Issue 4, a nested alternative's bindings are not counted in the binding check
+result-return-nested_*	`typedCheck` reports nothing	TASK-700: Issue 5, the tt-only typed check drops result-return-nested
+result-yield-crossing_yieldInside_jsxAttribute	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
+result-yield-crossing_yieldInside_jsxComponentProp	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
+result-yield-crossing_yieldInside_jsxNested	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
+result-yield-crossing_yieldInside_jsxSpreadAttribute	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
+result-yield-crossing_yieldInside_templateLiteral	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
+source-not-typescript_armBody_*	`ttc --out-dir` reports source-not-typescript off its range (start +0:-1)	TASK-700: Issue 7, an arm body's missing operand is reported at the body's last character
+source-not-typescript_explain1	`ttc --out-dir` reports source-not-typescript off its range (start +0:-1)	TASK-700: Issue 7, an arm body's missing operand is reported at the body's last character
+source-not-typescript_resultBody_conditionalBranch_fixed	does not compile cleanly	TASK-700: Issue 8, a try in a binary operand of a result block in a conditional operand emits TypeScript that does not parse
+source-not-typescript_resultBody_jsxConditional_fixed	does not compile cleanly	TASK-700: Issue 8, a try in a binary operand of a result block in a conditional operand emits TypeScript that does not parse
+source-not-typescript_resultBody_jsxTernary_fixed	does not compile cleanly	TASK-700: Issue 8, a try in a binary operand of a result block in a conditional operand emits TypeScript that does not parse
+source-not-typescript_resultBody_logicalAnd_fixed	does not compile cleanly	TASK-700: Issue 8, a try in a binary operand of a result block in a conditional operand emits TypeScript that does not parse
+source-not-typescript_resultBody_logicalOr_fixed	does not compile cleanly	TASK-700: Issue 8, a try in a binary operand of a result block in a conditional operand emits TypeScript that does not parse
+source-not-typescript_resultBody_nullish_fixed	does not compile cleanly	TASK-700: Issue 8, a try in a binary operand of a result block in a conditional operand emits TypeScript that does not parse

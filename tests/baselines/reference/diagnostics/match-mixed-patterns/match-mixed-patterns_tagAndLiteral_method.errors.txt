@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> ./main.tt:9:79
+  |
+9 |       return match (note("operand", input)) { Circle(r) => note("circle", r), 1 => note("one", 1), _ => note("other", 0) };
+  |                                                                               ^
+  |
+  = help: split them into two matches
+
+
+==== ttc --check-types (exit 1) ====
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> main.tt:9:79
+  |
+9 |       return match (note("operand", input)) { Circle(r) => note("circle", r), 1 => note("one", 1), _ => note("other", 0) };
+  |                                                                               ^
+  |
+  = help: split them into two matches
+
+==== tsc on the emitted TypeScript (exit 0) ====

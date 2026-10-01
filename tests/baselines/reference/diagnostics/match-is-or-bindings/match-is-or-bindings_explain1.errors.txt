@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[match-is-or-bindings]: match: an `is` or-pattern cannot bind properties
+ --> ./main.tt:4:7
+  |
+4 |       is TypeError { message } | is RangeError { message } => message,
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: use type-only alternatives or split them into separate arms
+
+
+==== ttc --check-types (exit 1) ====
+error[match-is-or-bindings]: match: an `is` or-pattern cannot bind properties
+ --> main.tt:4:7
+  |
+4 |       is TypeError { message } | is RangeError { message } => message,
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: use type-only alternatives or split them into separate arms
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[missing-pipeline-step]: pipeline: `|>` has no step
+ --> ./main.tt:4:62
+  |
+4 |   return pack(note("a", 1), note("operand", input) |> String |>, note("c", 3));
+  |                                                              ^^
+  |
+  = help: write the step after `|>`, or remove the `|>`
+
+
+==== ttc --check-types (exit 1) ====
+error[missing-pipeline-step]: pipeline: `|>` has no step
+ --> main.tt:4:62
+  |
+4 |   return pack(note("a", 1), note("operand", input) |> String |>, note("c", 3));
+  |                                                              ^^
+  |
+  = help: write the step after `|>`, or remove the `|>`
+
+==== tsc on the emitted TypeScript (exit 0) ====

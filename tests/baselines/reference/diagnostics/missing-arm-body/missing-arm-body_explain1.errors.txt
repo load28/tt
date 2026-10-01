@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[missing-arm-body]: match: this arm has no body
+ --> ./main.tt:6:7
+  |
+6 |       _ =>
+  |       ^
+  |
+  = help: write `=> <body>` after the guard, or the body after `=>`
+
+
+==== ttc --check-types (exit 1) ====
+error[missing-arm-body]: match: this arm has no body
+ --> main.tt:6:7
+  |
+6 |       _ =>
+  |       ^
+  |
+  = help: write `=> <body>` after the guard, or the body after `=>`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

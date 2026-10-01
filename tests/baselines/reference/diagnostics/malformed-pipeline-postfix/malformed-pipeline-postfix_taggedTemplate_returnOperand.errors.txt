@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[malformed-pipeline-postfix]: pipeline: invalid optional postfix tail
+ --> ./main.tt:4:45
+  |
+4 |   return note("operand", input) |> ?.toFixed`1`;
+  |                                             ^^^
+  |
+  = help: an optional postfix step starts with `?.name`, `?.[key]`, or `?.(args)` and continues only with member, index, or call operations
+
+
+==== ttc --check-types (exit 1) ====
+error[malformed-pipeline-postfix]: pipeline: invalid optional postfix tail
+ --> main.tt:4:45
+  |
+4 |   return note("operand", input) |> ?.toFixed`1`;
+  |                                             ^^^
+  |
+  = help: an optional postfix step starts with `?.name`, `?.[key]`, or `?.(args)` and continues only with member, index, or call operations
+
+==== tsc on the emitted TypeScript (exit 0) ====

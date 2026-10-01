@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> ./main.tt:4:30
+  |
+4 |   const ran = callee(true)?.(result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } });
+  |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> ./main.tt:5:35
+  |
+5 |   const skipped = callee(false)?.(result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } });
+  |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+
+
+==== ttc --check-types (exit 1) ====
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> main.tt:4:30
+  |
+4 |   const ran = callee(true)?.(result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } });
+  |                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> main.tt:5:35
+  |
+5 |   const skipped = callee(false)?.(result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } });
+  |                                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+
+==== tsc on the emitted TypeScript (exit 0) ====

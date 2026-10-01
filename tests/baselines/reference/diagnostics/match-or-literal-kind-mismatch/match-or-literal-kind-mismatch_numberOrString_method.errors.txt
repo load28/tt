@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-or-literal-kind-mismatch]: match: or-pattern alternatives must all be the same kind of literal (found string after number)
+ --> ./main.tt:8:51
+  |
+8 |       return match (note("operand", input)) { 1 | "a" => note("hit", 0), _ => note("other", 1) };
+  |                                                   ^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[match-or-literal-kind-mismatch]: match: or-pattern alternatives must all be the same kind of literal (found string after number)
+ --> main.tt:8:51
+  |
+8 |       return match (note("operand", input)) { 1 | "a" => note("hit", 0), _ => note("other", 1) };
+  |                                                   ^^^
+
+==== tsc on the emitted TypeScript (exit 0) ====

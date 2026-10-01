@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-control-crossing]: `break` cannot leave a match arm
+ --> ./main.tt:6:100
+  |
+6 |     for (const round of [1, 2]) { const v = match (note("operand", input)) { 1 => { if (round > 1) break; return note("one", round); }, _ => note("other", round) }; seen = v; }
+  |                                                                                                    ^^^^^
+  |
+  = help: break only a loop or switch written inside this arm
+
+
+==== ttc --check-types (exit 1) ====
+error[match-control-crossing]: `break` cannot leave a match arm
+ --> main.tt:6:100
+  |
+6 |     for (const round of [1, 2]) { const v = match (note("operand", input)) { 1 => { if (round > 1) break; return note("one", round); }, _ => note("other", round) }; seen = v; }
+  |                                                                                                    ^^^^^
+  |
+  = help: break only a loop or switch written inside this arm
+
+==== tsc on the emitted TypeScript (exit 0) ====

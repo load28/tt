@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-is-empty-bindings]: match: `is Error { }` has an empty property pattern
+ --> ./main.tt:4:62
+  |
+4 |   return pack(note("a", 1), match (note("operand", input)) { is Error {} => note("error", 0), _ => note("other", 1) }, note("c", 3));
+  |                                                              ^^^^^^^^^^^
+  |
+  = help: remove the braces
+
+
+==== ttc --check-types (exit 1) ====
+error[match-is-empty-bindings]: match: `is Error { }` has an empty property pattern
+ --> main.tt:4:62
+  |
+4 |   return pack(note("a", 1), match (note("operand", input)) { is Error {} => note("error", 0), _ => note("other", 1) }, note("c", 3));
+  |                                                              ^^^^^^^^^^^
+  |
+  = help: remove the braces
+
+==== tsc on the emitted TypeScript (exit 0) ====

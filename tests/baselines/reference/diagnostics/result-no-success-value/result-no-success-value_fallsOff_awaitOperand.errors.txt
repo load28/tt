@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> ./main.tt:4:17
+  |
+4 |   return await (result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } });
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+
+
+==== ttc --check-types (exit 1) ====
+error[result-no-success-value]: `result` can reach the end of its body without a success value
+ --> main.tt:4:17
+  |
+4 |   return await (result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } });
+  |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: return a value from every reachable path in this `result` block
+
+==== tsc on the emitted TypeScript (exit 0) ====

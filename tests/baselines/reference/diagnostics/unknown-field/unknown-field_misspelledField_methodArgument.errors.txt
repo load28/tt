@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[unknown-field]: variant Disk: case `Round` has no field `radiu`
+ --> ./main.tt:6:95
+  |
+6 |   return note("receiver", receiver).take(note("a", 1), match (note("operand", input)) { Round(radiu) => note("round", radiu), Dot => note("dot", 0) });
+  |                                                                                               ^^^^^
+  |
+  = help: a field with a similar name exists: `radius`
+
+
+==== ttc --check-types (exit 1) ====
+error[unknown-field]: variant Disk: case `Round` has no field `radiu`
+ --> main.tt:6:95
+  |
+6 |   return note("receiver", receiver).take(note("a", 1), match (note("operand", input)) { Round(radiu) => note("round", radiu), Dot => note("dot", 0) });
+  |                                                                                               ^^^^^
+  |
+  = help: a field with a similar name exists: `radius`
+
+==== tsc on the emitted TypeScript (exit 0) ====

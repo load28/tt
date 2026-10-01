@@ -1,0 +1,5 @@
+# Diagnostic codes no case can report: the code, a tab, why no program reports it, a tab, the task that records it.
+# tests/case_baselines.rs fails on a code with no case that is not listed here, and on a listed code that has one.
+stray-result	No reporting site produces it: the parser's `stray_results` list is never filled, so a `result` block the parser cannot claim passes through as TypeScript and is reported as `source-not-typescript` or `verify-failed`.	TASK-700: recorded as Issue 3
+lowering-plan-failed	Its explanation calls every report of it a gap the specific host rule has yet to close; the one path the matrix reaches is a defect listed in tests/oracle-failures.txt (`source-not-typescript_resultBody_*`).	TASK-700: recorded as Issue 2
+other	No reporting site produces it: every site names its own code, and `other` exists so an unclassified error still has one.	TASK-700: recorded in Decision 6

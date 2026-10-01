@@ -1,0 +1,29 @@
+==== ttc --out-dir (exit 1) ====
+error[result-value-discarded]: `result` is used as a statement, so its `Err` would be discarded
+ --> ./main.tt:3:3
+  |
+3 |     result {
+  |  ___^
+4 | |     const v = try read(n);
+5 | |     return v;
+6 | |   };
+  | |___^
+  |
+  = help: assign, return, or otherwise consume this Result value
+
+
+==== ttc --check-types (exit 1) ====
+error[result-value-discarded]: `result` is used as a statement, so its `Err` would be discarded
+ --> main.tt:3:3
+  |
+3 |     result {
+  |  ___^
+4 | |     const v = try read(n);
+5 | |     return v;
+6 | |   };
+  | |___^
+  |
+  = help: assign, return, or otherwise consume this Result value
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

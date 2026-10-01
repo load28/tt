@@ -402,7 +402,7 @@ jobs:
           TTC_TYPESCRIPT_CASES: all
         run: cargo test --release --test corpus typescript_test_cases -- --nocapture
 
-      - name: Every generated matrix case runs against its twin
+      - name: Every generated matrix case runs against its twin, and every diagnostics case reports its code at its range
         env:
           TTC_REQUIRE_TSGO: "1"
           TT_MATRIX_CASES: all

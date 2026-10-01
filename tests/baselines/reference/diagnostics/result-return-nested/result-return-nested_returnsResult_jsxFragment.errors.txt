@@ -1,0 +1,14 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+ttc: ./main.ttx → $DIR/out/main.tsx
+
+==== ttc --check-types (exit 1) ====
+error[result-return-nested]: `return` here would wrap an already-Result value
+ --> main.ttx:4:94
+  |
+4 |   return <>{note("before", "[")}{result { const n = try read(note("operand", input)); return read(n - 1); }}{note("after", "]")}</>;
+  |                                                                                              ^^^^^^^^^^^
+  |
+  = help: propagate this Result instead: `try`
+
+==== tsc on the emitted TypeScript (exit 0) ====

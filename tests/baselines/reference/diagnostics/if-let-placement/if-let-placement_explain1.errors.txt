@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[if-let-placement]: `if let` cannot be used in expression position — it is a statement and produces no value
+ --> ./main.tt:3:13
+  |
+3 |   const v = if let Ok(value: x) = read(n) { x } else { 0 };
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: `match` on the value instead, or write the `if let` as a statement (inside an expression region, in a function written there)
+
+
+==== ttc --check-types (exit 1) ====
+error[if-let-placement]: `if let` cannot be used in expression position — it is a statement and produces no value
+ --> main.tt:3:13
+  |
+3 |   const v = if let Ok(value: x) = read(n) { x } else { 0 };
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: `match` on the value instead, or write the `if let` as a statement (inside an expression region, in a function written there)
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

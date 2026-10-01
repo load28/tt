@@ -68,6 +68,57 @@ pub fn sample(matrix: Vec<Named>, count: usize, seed: u64) -> Sample {
     }
 }
 
+pub fn stratified(groups: Vec<Vec<Named>>, seed: u64) -> Sample {
+    let total: usize = groups.iter().map(Vec::len).sum();
+    if total == 0 {
+        return Sample {
+            sampled: Vec::new(),
+            unsampled: Vec::new(),
+            summary: None,
+        };
+    }
+    if std::env::var("TT_MATRIX_CASES").is_ok_and(|requested| requested == "all") {
+        return Sample {
+            sampled: groups.into_iter().flatten().collect(),
+            unsampled: Vec::new(),
+            summary: Some(format!("all {total} cases")),
+        };
+    }
+    let seed = std::env::var("TT_MATRIX_SEED")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .map(|value| {
+            value
+                .parse()
+                .unwrap_or_else(|_| panic!("TT_MATRIX_SEED takes a number, not `{value}`"))
+        })
+        .unwrap_or(seed);
+    let mut state = seed;
+    let mut sampled = Vec::new();
+    let mut unsampled = Vec::new();
+    let count = groups.iter().filter(|group| !group.is_empty()).count();
+    for group in groups {
+        if group.is_empty() {
+            continue;
+        }
+        let pick = (splitmix(&mut state) % group.len() as u64) as usize;
+        for (index, case) in group.into_iter().enumerate() {
+            if index == pick {
+                sampled.push(case);
+            } else {
+                unsampled.push(case);
+            }
+        }
+    }
+    Sample {
+        sampled,
+        unsampled,
+        summary: Some(format!(
+            "one case of each of {count} groups, {total} cases in all, seed {seed} (TT_MATRIX_CASES=all for every one)"
+        )),
+    }
+}
+
 fn splitmix(state: &mut u64) -> u64 {
     *state = state.wrapping_add(0x9e37_79b9_7f4a_7c15);
     let mut z = *state;

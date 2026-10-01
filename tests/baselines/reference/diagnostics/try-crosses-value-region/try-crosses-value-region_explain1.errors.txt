@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[try-crosses-value-region]: `try` crosses an isolated value region whose exits cannot target the enclosing `result` block
+ --> ./main.tt:3:36
+  |
+3 |   return result { return `value: ${try read(n)}`; };
+  |                                    ^^^^^^^^^^^
+  |
+  = help: extract the affected expression into a nested function when doing so preserves its captures and evaluation order
+
+
+==== ttc --check-types (exit 1) ====
+error[try-crosses-value-region]: `try` crosses an isolated value region whose exits cannot target the enclosing `result` block
+ --> main.tt:3:36
+  |
+3 |   return result { return `value: ${try read(n)}`; };
+  |                                    ^^^^^^^^^^^
+  |
+  = help: extract the affected expression into a nested function when doing so preserves its captures and evaluation order
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

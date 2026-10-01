@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[match-nested-in-or-pattern]: match: nested patterns cannot be combined with or-patterns
+ --> ./main.tt:6:7
+  |
+6 |       Ok(value: None()) | Err => 0,
+  |       ^^
+
+
+==== ttc --check-types (exit 1) ====
+error[match-nested-in-or-pattern]: match: nested patterns cannot be combined with or-patterns
+ --> main.tt:6:7
+  |
+6 |       Ok(value: None()) | Err => 0,
+  |       ^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[match-placement]: `match` cannot be used in a parameter initializer — this TypeScript boundary has no statement position
+ --> ./main.tt:1:39
+  |
+1 | function scale(factor: number, size = match (factor) { 0 => 1, _ => factor }) {
+  |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+
+==== ttc --check-types (exit 1) ====
+error[match-placement]: `match` cannot be used in a parameter initializer — this TypeScript boundary has no statement position
+ --> main.tt:1:39
+  |
+1 | function scale(factor: number, size = match (factor) { 0 => 1, _ => factor }) {
+  |                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

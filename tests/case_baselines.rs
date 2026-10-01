@@ -38,13 +38,13 @@ fn reference() -> PathBuf {
 }
 
 fn baseline_dir(path: &Path) -> PathBuf {
-    match path
-        .parent()
-        .and_then(|dir| dir.strip_prefix(root().join(MATRIX)).ok())
-    {
-        Some(inside) => reference().join("matrix").join(inside),
-        None => reference(),
+    let dir = path.parent().unwrap_or(path);
+    for (generated, baselines) in [(MATRIX, "matrix"), (DIAGNOSTICS, "diagnostics")] {
+        if let Ok(inside) = dir.strip_prefix(root().join(generated)) {
+            return reference().join(baselines).join(inside);
+        }
     }
+    reference()
 }
 
 struct Case {
@@ -67,17 +67,46 @@ struct Settings {
 struct Oracle {
     twin: Option<String>,
     errors: Vec<String>,
+    diagnostic: Option<Expected>,
+    clean: bool,
+}
+
+#[derive(Clone)]
+struct Expected {
+    code: String,
+    typed_only: bool,
+    ranges: Vec<Place>,
+}
+
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct Place {
+    unit: String,
+    start: (usize, usize),
+    end: (usize, usize),
 }
 
 const KINDS: [&str; 5] = ["ts", "errors.txt", "map.txt", "types", "stdout"];
 
-const PER_FILE: [&str; 4] = ["run", "twin", "expecterrors", "baselines"];
+const PER_FILE: [&str; 8] = [
+    "run",
+    "twin",
+    "expecterrors",
+    "expectdiagnostic",
+    "typedonly",
+    "expectclean",
+    "explains",
+    "baselines",
+];
 
 const MATRIX: &str = "tests/cases/conformance/matrix";
 
 const MATRIX_SAMPLE: usize = 120;
 
 const MATRIX_SEED: u64 = 0x7474_6d61_7472_6978;
+
+const DIAGNOSTICS: &str = "tests/cases/conformance/diagnostics";
+
+const DIAGNOSTICS_SEED: u64 = 0x7474_6469_6167_6e6f;
 
 struct Selection {
     cases: Vec<Case>,
@@ -101,6 +130,7 @@ fn cases() -> Selection {
     let mut names = BTreeSet::new();
     let mut chosen = Vec::new();
     let mut matrix = Vec::new();
+    let mut diagnostics: BTreeMap<(Option<PathBuf>, bool), Vec<matrix::Named>> = BTreeMap::new();
     for path in files {
         let name = path
             .file_stem()
@@ -119,16 +149,34 @@ fn cases() -> Selection {
         }
         if filter.is_none() && path.starts_with(root().join(MATRIX)) {
             matrix.push((name, path));
+        } else if filter.is_none()
+            && path.starts_with(root().join(DIAGNOSTICS))
+            && !name.contains("_explain")
+        {
+            let group = (
+                path.parent().map(Path::to_path_buf),
+                name.ends_with("_fixed"),
+            );
+            diagnostics.entry(group).or_default().push((name, path));
         } else {
             chosen.push((name, path));
         }
     }
     let matrix::Sample {
         sampled,
-        unsampled,
+        mut unsampled,
         summary,
     } = matrix::sample(matrix, MATRIX_SAMPLE, MATRIX_SEED);
     chosen.extend(sampled);
+    let diagnostics = matrix::stratified(diagnostics.into_values().collect(), DIAGNOSTICS_SEED);
+    chosen.extend(diagnostics.sampled);
+    unsampled.extend(diagnostics.unsampled);
+    let summary = match (summary, diagnostics.summary) {
+        (Some(matrix), Some(diagnostics)) => {
+            Some(format!("{matrix}; diagnostics matrix: {diagnostics}"))
+        }
+        (matrix, diagnostics) => matrix.or(diagnostics),
+    };
     let mut out = Vec::new();
     for (name, path) in &chosen {
         out.extend(expand(name, path, &mut names));
@@ -150,9 +198,38 @@ fn cases() -> Selection {
 fn expand(name: &str, path: &Path, names: &mut BTreeSet<String>) -> Vec<Case> {
     let text = fs::read_to_string(path).expect("readable case");
     let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
-    let parsed = cases::parse(&text, &file_name, path);
+    let mut parsed = cases::parse(&text, &file_name, path);
     let run = run_entry(&parsed.directives, &parsed.units, path);
-    let oracle = oracle(&parsed.directives, &parsed.units, run.as_deref(), path);
+    let mut oracle = oracle(&parsed.directives, &parsed.units, run.as_deref(), path);
+    oracle.diagnostic = expected_diagnostic(&parsed.directives, &mut parsed.units, path);
+    oracle.clean = single(&parsed.directives, "expectclean", path).is_some_and(|value| {
+        assert_eq!(
+            value,
+            "true",
+            "{}: @expectClean takes `true`",
+            path.display()
+        );
+        true
+    });
+    assert!(
+        oracle.diagnostic.is_none() && !oracle.clean || run.is_none(),
+        "{}: a case that expects a diagnostic or a clean compile is not run, so it takes no @run",
+        path.display()
+    );
+    assert!(
+        [
+            oracle.twin.is_some(),
+            !oracle.errors.is_empty(),
+            oracle.diagnostic.is_some(),
+            oracle.clean
+        ]
+        .iter()
+        .filter(|set| **set)
+        .count()
+            <= 1,
+        "{}: a case has one oracle: @twin, @expectErrors, @expectDiagnostic, or @expectClean",
+        path.display()
+    );
     let kinds = baseline_kinds(&parsed.directives, path);
     let mut out = Vec::new();
     for (suffix, mut settings) in configurations(&parsed.directives, path) {
@@ -221,7 +298,61 @@ fn oracle(
         "{}: a case that expects errors is not run, so it takes no @run",
         path.display()
     );
-    Oracle { twin, errors }
+    Oracle {
+        twin,
+        errors,
+        ..Oracle::default()
+    }
+}
+
+fn expected_diagnostic(
+    directives: &[(String, String)],
+    units: &mut [Unit],
+    path: &Path,
+) -> Option<Expected> {
+    let typed_only = single(directives, "typedonly", path).is_some_and(|value| {
+        assert_eq!(value, "true", "{}: @typedOnly takes `true`", path.display());
+        true
+    });
+    let Some(code) = single(directives, "expectdiagnostic", path) else {
+        assert!(
+            !typed_only,
+            "{}: @typedOnly qualifies an @expectDiagnostic",
+            path.display()
+        );
+        return None;
+    };
+    assert!(
+        ttc::DiagnosticCode::parse(code).is_some(),
+        "{}: @expectDiagnostic names `{code}`, which is no tt diagnostic code (`ttc explain` lists them)",
+        path.display()
+    );
+    let mut ranges = Vec::new();
+    for unit in units.iter_mut() {
+        if !is_tt(Path::new(&unit.name)) {
+            continue;
+        }
+        let (text, found) = cases::strip_ranges(&unit.content, path);
+        for (start, end) in found {
+            ranges.push(Place {
+                unit: unit.name.clone(),
+                start: cases::line_col(&text, start),
+                end: cases::line_col(&text, end),
+            });
+        }
+        unit.content = text;
+    }
+    assert!(
+        !ranges.is_empty(),
+        "{}: @expectDiagnostic needs the [|range|] the diagnostic covers in a .tt or .ttx unit",
+        path.display()
+    );
+    ranges.sort();
+    Some(Expected {
+        code: code.to_string(),
+        typed_only,
+        ranges,
+    })
 }
 
 fn baseline_kinds(directives: &[(String, String)], path: &Path) -> BTreeSet<&'static str> {
@@ -351,7 +482,7 @@ fn configurations(directives: &[(String, String)], path: &Path) -> Vec<(String, 
         }
         let Some((option, _)) = OPTIONS.iter().find(|(option, _)| option == name) else {
             panic!(
-                "{}: unknown directive `@{name}`; a case takes @filename, @run, @twin, @expectErrors, @baselines, and the ttc options @rewriteImports and @noVerify",
+                "{}: unknown directive `@{name}`; a case takes @filename, @run, @twin, @expectErrors, @expectDiagnostic, @typedOnly, @expectClean, @explains, @baselines, and the ttc options @rewriteImports and @noVerify",
                 path.display()
             );
         };
@@ -408,6 +539,273 @@ struct Artifacts {
     errors: Option<String>,
     emit: String,
     executions: Vec<Execution>,
+    reported: Vec<Reported>,
+}
+
+const SURFACES: [&str; 4] = ["ttc --out-dir", "ttc --check-types", "check", "typedCheck"];
+
+struct Reported {
+    surface: &'static str,
+    code: String,
+    place: Place,
+}
+
+fn cli_reports(surface: &'static str, text: &str, out: &mut Vec<Reported>) {
+    let mut lines = text.lines();
+    while let Some(line) = lines.next() {
+        let Some(code) = line
+            .strip_prefix("error[")
+            .or_else(|| line.strip_prefix("warning["))
+            .and_then(|rest| rest.split_once(']'))
+            .map(|(code, _)| code)
+        else {
+            continue;
+        };
+        if ttc::DiagnosticCode::parse(code).is_none() {
+            continue;
+        }
+        let at = lines
+            .next()
+            .and_then(|next| next.trim_start().strip_prefix("--> "))
+            .unwrap_or_default();
+        let mut parts = at.rsplitn(3, ':');
+        let col = parts.next().and_then(|n| n.parse().ok()).unwrap_or(0);
+        let line = parts.next().and_then(|n| n.parse().ok()).unwrap_or(0);
+        let unit = parts.next().unwrap_or_default();
+        out.push(Reported {
+            surface,
+            code: code.to_string(),
+            place: Place {
+                unit: unit.strip_prefix("./").unwrap_or(unit).to_string(),
+                start: (line, col),
+                end: (0, 0),
+            },
+        });
+    }
+}
+
+fn server_reports(case: &Case, project: &Path, out: &mut Vec<Reported>) {
+    let units: Vec<&Unit> = case
+        .units
+        .iter()
+        .filter(|unit| is_tt(Path::new(&unit.name)))
+        .collect();
+    let mut requests = String::new();
+    for (index, unit) in units.iter().enumerate() {
+        let path = project.join(&unit.name).to_string_lossy().into_owned();
+        for (offset, request) in [
+            serde_json::json!({ "method": "check", "params": { "text": unit.content, "filename": unit.name } }),
+            serde_json::json!({ "method": "typedCheck", "params": { "path": path, "text": unit.content } }),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let mut request = request;
+            request["id"] = serde_json::json!(index * 2 + offset);
+            requests.push_str(&request.to_string());
+            requests.push('\n');
+        }
+    }
+    let mut child = ttc_command(project)
+        .arg("--server")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("ttc --server runs");
+    {
+        use std::io::Write as _;
+        let mut stdin = child.stdin.take().expect("the server's stdin");
+        stdin
+            .write_all(requests.as_bytes())
+            .expect("the server reads its requests");
+    }
+    let output = child.wait_with_output().expect("ttc --server ends");
+    let mut answered = 0;
+    for line in String::from_utf8_lossy(&output.stdout).lines() {
+        let Ok(answer) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        let Some(id) = answer["id"].as_u64() else {
+            continue;
+        };
+        answered += 1;
+        let unit = &units[id as usize / 2];
+        let surface = SURFACES[2 + id as usize % 2];
+        assert!(
+            answer["error"].is_null(),
+            "{}: `{surface}` on {} failed: {}",
+            case.path.display(),
+            unit.name,
+            answer["error"]
+        );
+        for d in answer["result"]["diagnostics"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            let Some(code) = d["code"]
+                .as_str()
+                .filter(|code| ttc::DiagnosticCode::parse(code).is_some())
+            else {
+                continue;
+            };
+            let number = |field: &str| d[field].as_u64().unwrap_or(0) as usize;
+            let reported_in = d["path"]
+                .as_str()
+                .map(|path| {
+                    Path::new(path)
+                        .strip_prefix(project)
+                        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+                        .unwrap_or_else(|_| path.to_string())
+                })
+                .unwrap_or_else(|| unit.name.clone());
+            out.push(Reported {
+                surface,
+                code: code.to_string(),
+                place: Place {
+                    unit: reported_in,
+                    start: (number("line"), number("col")),
+                    end: (number("endLine"), number("endCol")),
+                },
+            });
+        }
+    }
+    assert_eq!(
+        answered,
+        units.len() * 2,
+        "{}: ttc --server answered {answered} of {} requests\n{}",
+        case.path.display(),
+        units.len() * 2,
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+fn shown(places: &[(String, Place)]) -> String {
+    if places.is_empty() {
+        return "nothing".to_string();
+    }
+    places
+        .iter()
+        .map(|(code, place)| {
+            let end = if place.end == (0, 0) {
+                String::new()
+            } else {
+                format!("-{}:{}", place.end.0, place.end.1)
+            };
+            format!(
+                "{code} at {}:{}:{}{end}",
+                place.unit, place.start.0, place.start.1
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn judge_diagnostic(expected: &Expected, artifacts: &Artifacts) -> Verdict {
+    for surface in SURFACES {
+        let typed = matches!(surface, "ttc --check-types" | "typedCheck");
+        let ranged = matches!(surface, "check" | "typedCheck");
+        let mut wanted: Vec<(String, Place)> = if typed || !expected.typed_only {
+            expected
+                .ranges
+                .iter()
+                .map(|place| {
+                    let mut place = place.clone();
+                    if !ranged {
+                        place.end = (0, 0);
+                    }
+                    (expected.code.clone(), place)
+                })
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let mut got: Vec<(String, Place)> = artifacts
+            .reported
+            .iter()
+            .filter(|reported| reported.surface == surface)
+            .map(|reported| (reported.code.clone(), reported.place.clone()))
+            .collect();
+        wanted.sort();
+        got.sort();
+        let agrees = wanted.len() == got.len()
+            && wanted
+                .iter()
+                .zip(&got)
+                .all(|((want_code, want), (got_code, place))| {
+                    want_code == got_code
+                        && want.unit == place.unit
+                        && want.start == place.start
+                        && (want.end == place.end || place.end == (0, 0))
+                });
+        if !agrees {
+            return Verdict::Disagrees {
+                observed: format!("`{surface}` {}", difference_of(&wanted, &got)),
+                detail: format!(
+                    "`{surface}` was to report {} and reports {}\n{}",
+                    shown(&wanted),
+                    shown(&got),
+                    artifacts.errors.clone().unwrap_or_default()
+                ),
+            };
+        }
+    }
+    if artifacts.errors.is_none() {
+        return Verdict::Disagrees {
+            observed: "compiles cleanly".to_string(),
+            detail: format!("expected {}", expected.code),
+        };
+    }
+    Verdict::Agrees
+}
+
+fn difference_of(wanted: &[(String, Place)], got: &[(String, Place)]) -> String {
+    if got.is_empty() {
+        return "reports nothing".to_string();
+    }
+    let codes = |list: &[(String, Place)]| {
+        list.iter()
+            .map(|(code, _)| code.as_str())
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    if codes(wanted) != codes(got) {
+        return format!("reports {}", codes(got));
+    }
+    if wanted.len() != got.len() {
+        return format!(
+            "reports {} {} time(s) for {} range(s)",
+            codes(got),
+            got.len(),
+            wanted.len()
+        );
+    }
+    let delta = |want: (usize, usize), place: (usize, usize)| {
+        format!(
+            "{:+}:{:+}",
+            place.0 as i64 - want.0 as i64,
+            place.1 as i64 - want.1 as i64
+        )
+    };
+    let moved: BTreeSet<String> = wanted
+        .iter()
+        .zip(got)
+        .map(|((_, want), (_, place))| {
+            let mut text = format!("start {}", delta(want.start, place.start));
+            if want.end != (0, 0) && place.end != (0, 0) {
+                text.push_str(&format!(", end {}", delta(want.end, place.end)));
+            }
+            text
+        })
+        .collect();
+    format!(
+        "reports {} off its range ({})",
+        codes(got),
+        moved.into_iter().collect::<Vec<_>>().join("; ")
+    )
 }
 
 struct Execution {
@@ -622,6 +1020,13 @@ fn run_typed(case: &Case, dir: &Path, project: &Path) -> Artifacts {
         .output()
         .expect("ttc runs");
 
+    let mut reported = Vec::new();
+    if case.oracle.diagnostic.is_some() {
+        cli_reports(SURFACES[0], &report(&build), &mut reported);
+        cli_reports(SURFACES[1], &report(&check), &mut reported);
+        server_reports(case, project, &mut reported);
+    }
+
     let tsc = if out_dir.is_dir() {
         fs::copy(project.join("tsconfig.json"), out_dir.join("tsconfig.json"))
             .expect("copyable tsconfig");
@@ -669,6 +1074,7 @@ fn run_typed(case: &Case, dir: &Path, project: &Path) -> Artifacts {
         errors,
         emit: normalize(&emit, dir),
         executions,
+        reported,
     }
 }
 
@@ -844,6 +1250,18 @@ fn judge(case: &Case, artifacts: &Artifacts) -> Option<Verdict> {
         }
         return Some(Verdict::Agrees);
     }
+    if let Some(expected) = &case.oracle.diagnostic {
+        return Some(judge_diagnostic(expected, artifacts));
+    }
+    if case.oracle.clean {
+        return Some(match &artifacts.errors {
+            Some(errors) => Verdict::Disagrees {
+                observed: "does not compile cleanly".to_string(),
+                detail: errors.clone(),
+            },
+            None => Verdict::Agrees,
+        });
+    }
     if case.oracle.errors.is_empty() {
         return None;
     }
@@ -998,7 +1416,12 @@ fn oracle_failures(
     );
     let mut failures = Vec::new();
     for (name, entry) in &listed {
-        if unfiltered && !selection.names.contains(name) {
+        if unfiltered
+            && !selection
+                .names
+                .iter()
+                .any(|case| matches_listed(name, case))
+        {
             failures.push(format!(
                 "{ORACLE_FAILURES}:{}: `{name}` names no case; remove the line",
                 entry.line
@@ -1008,8 +1431,37 @@ fn oracle_failures(
     if !typed {
         return failures;
     }
+    let mut patterns: BTreeMap<&str, (bool, bool)> = listed
+        .keys()
+        .filter(|name| name.contains('*'))
+        .map(|name| (name.as_str(), (true, false)))
+        .collect();
+    for case in &selection.unsampled {
+        for (pattern, (complete, _)) in patterns.iter_mut() {
+            if matches_listed(pattern, &case.0) {
+                *complete = false;
+            }
+        }
+    }
     for (name, verdict) in verdicts {
-        let entry = listed.get(name);
+        let pattern = listed
+            .iter()
+            .find(|(listed, _)| listed.contains('*') && matches_listed(listed, name));
+        if !listed.contains_key(name)
+            && let Some((pattern, entry)) = pattern
+        {
+            match verdict {
+                Some(Verdict::Disagrees { observed, .. }) if *observed == entry.observed => {
+                    if let Some((_, seen)) = patterns.get_mut(pattern.as_str()) {
+                        *seen = true;
+                    }
+                    continue;
+                }
+                Some(Verdict::Agrees) | None => continue,
+                Some(Verdict::Disagrees { .. }) => {}
+            }
+        }
+        let entry = listed.get(name).or_else(|| pattern.map(|(_, entry)| entry));
         match (verdict, entry) {
             (None, Some(entry)) => failures.push(format!(
                 "{ORACLE_FAILURES}:{}: `{name}` has no @twin or @expectErrors oracle to fail",
@@ -1033,7 +1485,34 @@ fn oracle_failures(
             _ => {}
         }
     }
+    for (pattern, (complete, seen)) in patterns {
+        if unfiltered && complete && !seen {
+            failures.push(format!(
+                "{ORACLE_FAILURES}:{}: no case `{pattern}` names observes `{}` now; remove the line",
+                listed[pattern].line, listed[pattern].observed
+            ));
+        }
+    }
     failures
+}
+
+fn matches_listed(pattern: &str, name: &str) -> bool {
+    let mut parts = pattern.split('*');
+    let first = parts.next().unwrap_or_default();
+    let Some(mut rest) = name.strip_prefix(first) else {
+        return false;
+    };
+    let parts: Vec<&str> = parts.collect();
+    let Some((last, middle)) = parts.split_last() else {
+        return rest.is_empty();
+    };
+    for part in middle {
+        match rest.find(part) {
+            Some(at) => rest = &rest[at + part.len()..],
+            None => return false,
+        }
+    }
+    rest.ends_with(last)
 }
 
 fn record_unsampled(cases: &[(String, PathBuf)]) {
@@ -1138,5 +1617,189 @@ fn the_case_matrix_is_what_its_spec_generates() {
         output.status.success(),
         "tests/cases/conformance/matrix differs from what tests/matrix generates:\n{}\nRun `node scripts/generate-cases` and review the diff.",
         report(&output)
+    );
+}
+
+const WITHOUT_CASES: &str = "tests/diagnostic-codes-without-cases.txt";
+
+struct Claim {
+    path: PathBuf,
+    expects: Option<String>,
+    clean: bool,
+    lines: Vec<String>,
+}
+
+type Examples = BTreeMap<(String, usize), Vec<Claim>>;
+
+fn claims() -> (BTreeMap<String, usize>, Examples) {
+    let mut files = Vec::new();
+    for suite in ["compiler", "conformance"] {
+        cases::files(&root().join("tests/cases").join(suite), &mut files);
+    }
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut examples: Examples = BTreeMap::new();
+    for path in files {
+        let text = fs::read_to_string(&path).expect("readable case");
+        let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let parsed = cases::parse(&text, &file_name, &path);
+        let expects = single(&parsed.directives, "expectdiagnostic", &path).map(str::to_string);
+        if let Some(code) = &expects {
+            *counts.entry(code.clone()).or_default() += 1;
+        }
+        let Some(explains) = single(&parsed.directives, "explains", &path) else {
+            continue;
+        };
+        let (code, number) = explains
+            .split_once(' ')
+            .and_then(|(code, number)| Some((code.to_string(), number.trim().parse().ok()?)))
+            .unwrap_or_else(|| {
+                panic!(
+                    "{}: @explains takes a code and the number of its example, as `match-duplicate-arm 1`",
+                    path.display()
+                )
+            });
+        let lines = parsed
+            .units
+            .iter()
+            .flat_map(|unit| {
+                cases::strip_ranges(&unit.content, &path)
+                    .0
+                    .lines()
+                    .map(str::to_string)
+                    .collect::<Vec<_>>()
+            })
+            .map(|line| line.trim().to_string())
+            .filter(|line| !line.is_empty() && cases::directive(line).is_none())
+            .collect();
+        let clean = single(&parsed.directives, "expectclean", &path).is_some();
+        examples.entry((code, number)).or_default().push(Claim {
+            path,
+            expects,
+            clean,
+            lines,
+        });
+    }
+    (counts, examples)
+}
+
+fn without_cases() -> BTreeMap<String, usize> {
+    let text = fs::read_to_string(root().join(WITHOUT_CASES)).unwrap_or_default();
+    let mut out = BTreeMap::new();
+    for (index, line) in text.lines().enumerate() {
+        if line.trim().is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let fields: Vec<&str> = line.split('\t').collect();
+        let [code, _why, task] = fields[..] else {
+            panic!(
+                "{WITHOUT_CASES}:{}: a line is a code, a tab, why no case can report it, a tab, and the TASK-NNN that records it",
+                index + 1
+            );
+        };
+        assert!(
+            task.starts_with("TASK-"),
+            "{WITHOUT_CASES}:{}: the last field names the TASK-NNN that records it",
+            index + 1
+        );
+        assert!(
+            ttc::DiagnosticCode::parse(code).is_some(),
+            "{WITHOUT_CASES}:{}: `{code}` is no diagnostic code",
+            index + 1
+        );
+        assert!(
+            out.insert(code.to_string(), index + 1).is_none(),
+            "{WITHOUT_CASES}:{}: `{code}` is listed twice",
+            index + 1
+        );
+    }
+    out
+}
+
+#[test]
+fn every_diagnostic_code_has_cases() {
+    let (counts, _) = claims();
+    let listed = without_cases();
+    let mut failures = Vec::new();
+    for code in ttc::DiagnosticCode::ALL {
+        let name = code.as_str();
+        match (counts.get(name), listed.get(name)) {
+            (None, None) => failures.push(format!(
+                "`{name}` has no case that expects it (`// @expectDiagnostic: {name}`); add one to tests/matrix/diagnostics.mjs, or list it in {WITHOUT_CASES} with the reason no program can report it"
+            )),
+            (Some(count), Some(line)) => failures.push(format!(
+                "{WITHOUT_CASES}:{line}: `{name}` has {count} case(s) now; remove the line"
+            )),
+            _ => {}
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn every_explanation_example_is_a_case() {
+    let (_, mut examples) = claims();
+    let listed = without_cases();
+    let mut failures = Vec::new();
+    for code in ttc::DiagnosticCode::ALL {
+        let name = code.as_str();
+        let explanation = code.explanation();
+        if explanation.trim().is_empty() {
+            failures.push(format!("`{name}` has no explanation for `ttc explain`"));
+            continue;
+        }
+        let mut reproduced = false;
+        for (index, block) in cases::example_blocks(explanation).iter().enumerate() {
+            let number = index + 1;
+            let Some(claims) = examples.remove(&(name.to_string(), number)) else {
+                failures.push(format!(
+                    "example {number} of `ttc explain {name}` is in no case; add it to tests/matrix/diagnostics.mjs:\n{block}"
+                ));
+                continue;
+            };
+            let wanted: Vec<String> = block
+                .lines()
+                .map(|line| line.trim().to_string())
+                .filter(|line| !line.is_empty())
+                .collect();
+            for claim in claims {
+                let found = claim
+                    .lines
+                    .windows(wanted.len())
+                    .any(|window| window == wanted.as_slice());
+                if !found {
+                    failures.push(format!(
+                        "{}: does not hold example {number} of `ttc explain {name}` as the explanation writes it:\n{block}",
+                        claim.path.display()
+                    ));
+                }
+                match (&claim.expects, claim.clean) {
+                    (Some(expects), _) if expects == name => reproduced = true,
+                    (None, true) => {}
+                    _ => failures.push(format!(
+                        "{}: an example of `ttc explain {name}` either reproduces it (`// @expectDiagnostic: {name}`) or compiles cleanly (`// @expectClean: true`)",
+                        claim.path.display()
+                    )),
+                }
+            }
+        }
+        if !reproduced && !listed.contains_key(name) {
+            failures.push(format!(
+                "`ttc explain {name}` has no example that reproduces it; write one and add its case to tests/matrix/diagnostics.mjs"
+            ));
+        }
+    }
+    for ((code, number), claims) in examples {
+        for claim in claims {
+            failures.push(format!(
+                "{}: `ttc explain {code}` has no example {number}",
+                claim.path.display()
+            ));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} problem(s):\n\n{}",
+        failures.len(),
+        failures.join("\n\n")
     );
 }

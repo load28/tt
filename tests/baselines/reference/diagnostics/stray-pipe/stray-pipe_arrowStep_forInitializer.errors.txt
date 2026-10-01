@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[stray-pipe]: pipeline: `|>` could not be parsed here
+ --> ./main.tt:5:42
+  |
+5 |   for (let item = note("operand", input) |> (n: number) => note("step", n + 1), round = 0; round < 1; round++) {
+  |                                          ^^
+  |
+  = help: a step is an expression — parenthesize a ternary or an arrow function
+
+
+==== ttc --check-types (exit 1) ====
+error[stray-pipe]: pipeline: `|>` could not be parsed here
+ --> main.tt:5:42
+  |
+5 |   for (let item = note("operand", input) |> (n: number) => note("step", n + 1), round = 0; round < 1; round++) {
+  |                                          ^^
+  |
+  = help: a step is an expression — parenthesize a ternary or an arrow function
+
+==== tsc on the emitted TypeScript (exit 0) ====
