@@ -5,7 +5,7 @@ error[match-nested-in-or-pattern]: match: nested patterns cannot be combined wit
 1 | const n = match (r) { Ok(value: Some(v)) | Err(error) => 1, _ => 0 };
   |                       ^^
 
-error[match-or-binding-mismatch]: match: or-pattern alternatives must bind the same names — `error` is bound in `Err(...)` but not in `Ok(...)`
+error[match-or-binding-mismatch]: match: or-pattern alternatives must bind the same names — `v` is bound in `Ok(...)` but not in `Err(...)`
  --> ./nestedPatternInsideOrPatternIsAnError.tt:1:44
   |
 1 | const n = match (r) { Ok(value: Some(v)) | Err(error) => 1, _ => 0 };
@@ -23,7 +23,7 @@ error[match-nested-in-or-pattern]: match: nested patterns cannot be combined wit
   |
 1 | const n = match (r) { Ok(value: Some(v)) | Err(error) => 1, _ => 0 };
   |                       ^^
-error[match-or-binding-mismatch]: match: or-pattern alternatives must bind the same names — `error` is bound in `Err(...)` but not in `Ok(...)`
+error[match-or-binding-mismatch]: match: or-pattern alternatives must bind the same names — `v` is bound in `Ok(...)` but not in `Err(...)`
  --> nestedPatternInsideOrPatternIsAnError.tt:1:44
   |
 1 | const n = match (r) { Ok(value: Some(v)) | Err(error) => 1, _ => 0 };

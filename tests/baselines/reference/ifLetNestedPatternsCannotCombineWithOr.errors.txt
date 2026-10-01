@@ -5,6 +5,12 @@ error[match-nested-in-or-pattern]: if let: nested patterns cannot be combined wi
 2 |   if let Some(value: Ok(v)) | None() = o {
   |          ^^^^
 
+error[match-or-binding-mismatch]: if let: or-pattern alternatives must bind the same names — `v` is bound in `Some(...)` but not in `None(...)`
+ --> ./ifLetNestedPatternsCannotCombineWithOr.tt:2:31
+  |
+2 |   if let Some(value: Ok(v)) | None() = o {
+  |                               ^^^^
+
 
 ==== ttc --check-types (exit 1) ====
 error[ts2304]: Cannot find name 'X'.
@@ -17,6 +23,11 @@ error[match-nested-in-or-pattern]: if let: nested patterns cannot be combined wi
   |
 2 |   if let Some(value: Ok(v)) | None() = o {
   |          ^^^^
+error[match-or-binding-mismatch]: if let: or-pattern alternatives must bind the same names — `v` is bound in `Some(...)` but not in `None(...)`
+ --> ifLetNestedPatternsCannotCombineWithOr.tt:2:31
+  |
+2 |   if let Some(value: Ok(v)) | None() = o {
+  |                               ^^^^
 
 ==== tsc on the emitted TypeScript ====
 nothing was emitted

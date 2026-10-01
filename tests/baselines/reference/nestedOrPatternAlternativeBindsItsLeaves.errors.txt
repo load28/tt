@@ -1,0 +1,69 @@
+==== ttc --out-dir (exit 1) ====
+error[match-nested-in-or-pattern]: match: nested patterns cannot be combined with or-patterns
+ --> ./nestedOrPatternAlternativeBindsItsLeaves.tt:9:22
+  |
+9 |   return match (o) { Done(value: Some(value: v)) | Failed(error: v) => v, _ => 0 };
+  |                      ^^^^
+
+error[match-nested-in-or-pattern]: match: nested patterns cannot be combined with or-patterns
+  --> ./nestedOrPatternAlternativeBindsItsLeaves.tt:12:41
+   |
+12 |   return match (o) { Failed(error: v) | Done(value: Some(value: v)) => v, _ => 0 };
+   |                                         ^^^^
+
+error[match-nested-in-or-pattern]: match: nested patterns cannot be combined with or-patterns
+  --> ./nestedOrPatternAlternativeBindsItsLeaves.tt:15:26
+   |
+15 |   return match (o, p) { (Done(value: Some(value: v)) | Failed(error: v), _) => v, _ => 0 };
+   |                          ^^^^
+
+error[match-nested-in-or-pattern]: if let: nested patterns cannot be combined with or-patterns
+  --> ./nestedOrPatternAlternativeBindsItsLeaves.tt:18:10
+   |
+18 |   if let Done(value: Some(value: v)) | Failed(error: v) = o { return v; }
+   |          ^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2339]: match on a tag pattern needs a value with a `kind` discriminant — this scrutinee has none (a plain TypeScript `enum` is not one) (in tt's names: Property 'value' does not exist on type 'Outcome'.
+  Property 'value' does not exist on type 'Outcome.Failed'.) (ts2339: Property 'value' does not exist on type 'Outcome'.
+  Property 'value' does not exist on type '{ kind: "Failed"; error: number; }'.)
+ --> nestedOrPatternAlternativeBindsItsLeaves.tt:9:10
+  |
+9 |   return match (o) { Done(value: Some(value: v)) | Failed(error: v) => v, _ => 0 };
+  |          ^^^^^^^^^
+error[match-nested-in-or-pattern]: match: nested patterns cannot be combined with or-patterns
+ --> nestedOrPatternAlternativeBindsItsLeaves.tt:9:22
+  |
+9 |   return match (o) { Done(value: Some(value: v)) | Failed(error: v) => v, _ => 0 };
+  |                      ^^^^
+error[ts2339]: match on a tag pattern needs a value with a `kind` discriminant — this scrutinee has none (a plain TypeScript `enum` is not one) (ts2339: Property 'error' does not exist on type 'Outcome'.)
+  --> nestedOrPatternAlternativeBindsItsLeaves.tt:12:10
+   |
+12 |   return match (o) { Failed(error: v) | Done(value: Some(value: v)) => v, _ => 0 };
+   |          ^^^^^^^^^
+error[match-nested-in-or-pattern]: match: nested patterns cannot be combined with or-patterns
+  --> nestedOrPatternAlternativeBindsItsLeaves.tt:12:41
+   |
+12 |   return match (o) { Failed(error: v) | Done(value: Some(value: v)) => v, _ => 0 };
+   |                                         ^^^^
+error[ts2339]: match on a tag pattern needs a value with a `kind` discriminant — this scrutinee has none (a plain TypeScript `enum` is not one) (in tt's names: Property 'value' does not exist on type 'Outcome'.
+  Property 'value' does not exist on type 'Outcome.Failed'.) (ts2339: Property 'value' does not exist on type 'Outcome'.
+  Property 'value' does not exist on type '{ kind: "Failed"; error: number; }'.)
+  --> nestedOrPatternAlternativeBindsItsLeaves.tt:15:10
+   |
+15 |   return match (o, p) { (Done(value: Some(value: v)) | Failed(error: v), _) => v, _ => 0 };
+   |          ^^^^^^^^^^^^
+error[match-nested-in-or-pattern]: match: nested patterns cannot be combined with or-patterns
+  --> nestedOrPatternAlternativeBindsItsLeaves.tt:15:26
+   |
+15 |   return match (o, p) { (Done(value: Some(value: v)) | Failed(error: v), _) => v, _ => 0 };
+   |                          ^^^^
+error[match-nested-in-or-pattern]: if let: nested patterns cannot be combined with or-patterns
+  --> nestedOrPatternAlternativeBindsItsLeaves.tt:18:10
+   |
+18 |   if let Done(value: Some(value: v)) | Failed(error: v) = o { return v; }
+   |          ^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -394,16 +394,17 @@ impl Checker<'_> {
                 .code(DiagnosticCode::MatchNestedInOrPattern),
             );
         }
-        let first_set = binding_set(&alts[0].bindings);
+        let shared = !alts.iter().any(has_nested);
+        let first_set = binding_set(&alts[0], shared);
         for alt in &alts[1..] {
-            if binding_set(&alt.bindings) != first_set {
+            if binding_set(alt, shared) != first_set {
                 self.error(
                     TtError::span(
                         alt.tag_off,
                         alt.tag_off + alt.tag.len(),
                         format!(
                             "{construct}: or-pattern alternatives must bind the same names — {}",
-                            binding_mismatch(&alts[0], alt)
+                            binding_mismatch(&alts[0], alt, shared)
                         ),
                     )
                     .code(DiagnosticCode::MatchOrBindingMismatch),
@@ -770,7 +771,8 @@ impl Checker<'_> {
                         );
                     }
                     self.check_leaf_bindings(&alts[0]);
-                    let first_set = binding_set(&alts[0].bindings);
+                    let shared = !alts.iter().any(has_nested);
+                    let first_set = binding_set(&alts[0], shared);
                     let mut arm_tags: Vec<&str> = Vec::new();
                     for alt in alts {
                         if covered_tags.contains(&alt.tag.as_str())
@@ -787,14 +789,14 @@ impl Checker<'_> {
                             continue;
                         }
                         arm_tags.push(&alt.tag);
-                        if binding_set(&alt.bindings) != first_set {
+                        if binding_set(alt, shared) != first_set {
                             self.error(
                                 TtError::span(
                                     alt.tag_off,
                                     alt.tag_off + alt.tag.len(),
                                     format!(
                                         "match: or-pattern alternatives must bind the same names — {}",
-                                        binding_mismatch(&alts[0], alt)
+                                        binding_mismatch(&alts[0], alt, shared)
                                     ),
                                 )
                                 .code(DiagnosticCode::MatchOrBindingMismatch),
@@ -995,16 +997,17 @@ impl Checker<'_> {
                                 .code(DiagnosticCode::MatchNestedInOrPattern),
                             );
                         }
-                        let first_set = binding_set(&alts[0].bindings);
+                        let shared = !alts.iter().any(has_nested);
+                        let first_set = binding_set(&alts[0], shared);
                         for alt in alts {
-                            if binding_set(&alt.bindings) != first_set {
+                            if binding_set(alt, shared) != first_set {
                                 self.error(
                                     TtError::span(
                                         alt.tag_off,
                                         alt.tag_off + alt.tag.len(),
                                         format!(
                                             "match: or-pattern alternatives must bind the same names — {}",
-                                            binding_mismatch(&alts[0], alt)
+                                            binding_mismatch(&alts[0], alt, shared)
                                         ),
                                     )
                                     .code(DiagnosticCode::MatchOrBindingMismatch),

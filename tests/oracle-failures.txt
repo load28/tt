@@ -9,7 +9,6 @@
 malformed-pipeline-postfix_taggedTemplate_ifLetBody	`ttc --out-dir` reports malformed-pipeline-postfix, source-not-typescript	TASK-700: Issue 1, a malformed postfix pipeline in a construct's body is reported twice
 malformed-pipeline-postfix_taggedTemplate_matchArm	`ttc --out-dir` reports malformed-pipeline-postfix, source-not-typescript	TASK-700: Issue 1, a malformed postfix pipeline in a construct's body is reported twice
 source-not-typescript_resultBodyEnd_declarationInitializer	`ttc --out-dir` reports lowering-plan-failed	TASK-700: Issue 2, an expression the result block's `}` cuts off fails the lowering plan
-match-nested-in-or-pattern_bindingAlternative_declarationInitializer	`ttc --out-dir` reports match-nested-in-or-pattern, match-or-binding-mismatch	TASK-700: Issue 4, a nested alternative's bindings are not counted in the binding check
 result-return-nested_*	`typedCheck` reports nothing	TASK-700: Issue 5, the tt-only typed check drops result-return-nested
 result-yield-crossing_yieldInside_jsxAttribute	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
 result-yield-crossing_yieldInside_jsxComponentProp	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
