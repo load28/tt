@@ -1,0 +1,8 @@
+//// [anUnexpectedValueGuardSurvivesShadowedGlobals.tt] 6 mapping(s)
+1:1 -> 19:1 len 80  "\nconst String = \"shadow\";\nconst JSON = 1;\nfuncti"...
+5:3 -> 36:3 len 7  "return "
+5:17 -> 25:19 len 1  "n"
+5:22 -> 27:12 len 2  "1n"
+5:28 -> 28:18 len 1  "1"
+5:31 -> 36:16 len 184  ";\n}\nfor (const value of [2n, Symbol(\"s\"), 3, \"a\""...
+

@@ -1,0 +1,3 @@
+//// [stdResultAndThenErrorUnionStaysCheckedAgainstAnAnnotation.tt] 1 mapping(s)
+1:1 -> 1:1 len 983  "\nimport type { TResult } from \"./tt/index.js\";\ni"...
+

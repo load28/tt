@@ -1,0 +1,126 @@
+=== cleanupBearingArmsKeepTheConsumerOutsideTheArm.tt ===
+variant State { Ready(value: number), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: number) => State
+>value : (property) value: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+type Item = {kind: "item"; run: (x: number) => number};
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+const trace: string[] = [];
+>trace : const trace: string[]
+function consume(item: Item): number { trace.push("call"); return item.run(1); }
+>consume : function consume(item: Item): number
+>item : (parameter) item: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>item : (parameter) item: Item
+>run : (property) run: (x: number) => number
+const finalized = consume(match (State.Ready(3)) {
+>finalized : const finalized: number
+>consume : function consume(item: Item): number
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Ready : (property) Ready: (value: number) => State
+  Ready(value) => {
+>value : const value: number
+      trace.push("arm");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+      return {kind: "item" as const, run: (x: number) => x + value};
+>kind : (property) kind: "item"
+>const : type const = "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+      trace.push("finally");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  Empty => ({kind: "item" as const, run: (x: number) => x}),
+>kind : (property) kind: "item"
+>const : type const = "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+console.log(finalized, trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>finalized : const finalized: number
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+function throwingConsumer(item: Item): number { trace.push("throwing"); throw new Error("consumer"); }
+>throwingConsumer : function throwingConsumer(item: Item): number
+>item : (parameter) item: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+  throwingConsumer(match (State.Ready(2)) {
+>throwingConsumer : function throwingConsumer(item: Item): number
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Ready : (property) Ready: (value: number) => State
+    Ready(value) => {
+>value : const value: number
+        return {kind: "item" as const, run: (x: number) => x + value};
+>kind : (property) kind: "item"
+>const : type const = "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+        trace.push("handler");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+        return {kind: "item" as const, run: (x: number) => x};
+>kind : (property) kind: "item"
+>const : type const = "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+    Empty => ({kind: "item" as const, run: (x: number) => x}),
+>kind : (property) kind: "item"
+>const : type const = "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+} catch { trace.push("caught outside"); }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+console.log(trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

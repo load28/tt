@@ -1,0 +1,15 @@
+//// [runtimeOrPatternsInLetElseAndIfLet.tt] 13 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:27 -> 3:26 len 6  "number"
+2:27 -> 7:15 len 6  "number"
+2:46 -> 4:26 len 6  "number"
+2:46 -> 8:15 len 6  "number"
+2:60 -> 10:3 len 38  "\n\nfunction side(s: Shape): number {\n  "
+5:33 -> 13:18 len 1  "s"
+5:42 -> 15:5 len 9  "return 0;"
+5:54 -> 17:24 len 52  "\n  return r;\n}\n\nfunction tell(s: Shape): string "...
+10:34 -> 23:20 len 1  "s"
+11:5 -> 26:7 len 20  "return \"sized \" + r;"
+13:5 -> 28:7 len 13  "return \"dot\";"
+14:4 -> 30:4 len 184  "\n}\n\nconsole.log(side(Shape.Circle(3)));\nconsole."...
+

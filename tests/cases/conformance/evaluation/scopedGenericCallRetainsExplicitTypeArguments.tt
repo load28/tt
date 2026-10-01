@@ -1,0 +1,12 @@
+// @origin: tests/integration/contextual.rs::scoped_generic_call_retains_explicit_type_arguments
+
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+declare const state: State;
+declare function consume<T>(item: T): void;
+consume<Item>(match (state) {
+    Ready(value) => ({kind: "item", run: x => x + value}),
+    Empty => ({kind: "item", run: x => x}),
+});
+
+export {};

@@ -1,0 +1,98 @@
+=== runtimeResultPreservesStatementMatchEffectOrder.tt ===
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>T : (type parameter) T in type Res<T, E>
+>E : (type parameter) E in type Res<T, E>
+>Ok : (property) Ok: <T, E>(value: T) => Res<T, E>
+>value : (property) value: T
+>T : (type parameter) T in type Res<T, E>
+>Err : (property) Err: <T, E>(error: E) => Res<T, E>
+>error : (property) error: E
+>E : (type parameter) E in type Res<T, E>
+const events: string[] = [];
+>events : const events: string[]
+const read = (): Res<number, string> => Res.Ok(7);
+>read : const read: () => Res<number, string>
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Ok : (property) Ok: <number, string>(value: number) => Res<number, string>
+const subject = (tag: number) => { events.push("subject-" + tag); return tag; };
+>subject : const subject: (tag: number) => number
+>tag : (parameter) tag: number
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>tag : (parameter) tag: number
+>tag : (parameter) tag: number
+const run = (tag: number) => result {
+>run : const run: (tag: number) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>tag : (parameter) tag: number
+  const value = try read();
+>value : const value: number
+>read : const read: () => Res<number, string>
+  match (subject(tag)) {
+>subject : const subject: (tag: number) => number
+>tag : (parameter) tag: number
+    1 => { events.push("one"); },
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+    _ => { events.push("other"); },
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  events.push("after");
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return value;
+>value : const value: number
+console.log(JSON.stringify(run(1)), events.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>run : const run: (tag: number) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>events : const events: string[]
+>join : (method) Array<string>.join(separator?: string): string
+events.length = 0;
+>events : const events: string[]
+>length : (property) Array<string>.length: number
+console.log(JSON.stringify(run(2)), events.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>run : const run: (tag: number) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>events : const events: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

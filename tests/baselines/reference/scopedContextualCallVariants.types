@@ -1,0 +1,94 @@
+=== scopedContextualCallVariants.tt ===
+variant State { Ready(value: number), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: number) => State
+>value : (property) value: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+declare const state: State;
+>state : const state: State
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+declare const flag: boolean;
+>flag : const flag: boolean
+declare function consume(item: {kind: "item"; run: (x: number) => number}): void;
+>consume : function consume(item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }): void
+>item : (parameter) item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+consume(match (state) {
+>consume : function consume(item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }): void
+>state : const state: State
+  Ready(value) if value > 0 => ({kind: "item", run: x => x + value}),
+>value : const value: number
+>value : const value: number
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+  _ => ({kind: "item", run: x => x}),
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+consume(match (state) {
+>consume : function consume(item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }): void
+>state : const state: State
+  Ready(value: amount) => ({kind: "item", run: x => x + amount}),
+>value : (property) value: number
+>amount : const amount: number
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>amount : const amount: number
+  Empty => ({kind: "item", run: x => x}),
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+consume(match (flag) {
+>consume : function consume(item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }): void
+>flag : const flag: boolean
+  true => { const amount = 1; return {kind: "item", run: x => x + amount}; },
+>amount : const amount: 1
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>amount : const amount: 1
+  false => { function amount() { return 2; } return {kind: "item", run: x => x + amount()}; },
+>amount : function amount(): number
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>amount : function amount(): number
+

@@ -1,0 +1,4 @@
+// @origin: tests/integration/cases_03.rs::a_direct_pipeline_call_keeps_contextual_typing
+const value: number = 1 |> (x => x + 1);
+
+export {};

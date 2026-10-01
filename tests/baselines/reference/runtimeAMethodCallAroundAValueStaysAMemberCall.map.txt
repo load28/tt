@@ -1,0 +1,28 @@
+//// [runtimeAMethodCallAroundAValueStaysAMemberCall.tt] 26 mapping(s)
+1:1 -> 19:1 len 29  "\nconst trace: string[] = [];\n"
+3:19 -> 27:3 len 489  "\nfunction pick(k: K): K { trace.push(\"pick\"); re"...
+14:3 -> 47:3 len 35  "const v: string | number = r.first("
+14:45 -> 40:19 len 7  "pick(k)"
+14:61 -> 47:54 len 1  "1"
+14:69 -> 47:58 len 1  "2"
+14:72 -> 47:60 len 63  ");\n  return v;\n}\nfunction optional(o: O | undefi"...
+18:3 -> 73:3 len 30  "const s: string | undefined = "
+18:46 -> 54:21 len 7  "pick(k)"
+18:62 -> 57:26 len 6  "o.name"
+18:75 -> 61:26 len 3  "\"b\""
+18:81 -> 73:39 len 41  ";\n  return s;\n}\nfunction keyed(k: K) {\n  "
+22:3 -> 88:3 len 7  "return "
+22:10 -> 78:19 len 6  "getO()"
+22:16 -> 88:16 len 1  "["
+22:17 -> 79:19 len 5  "key()"
+22:22 -> 88:23 len 2  "]("
+22:31 -> 81:19 len 7  "pick(k)"
+22:47 -> 88:41 len 1  "1"
+22:55 -> 88:45 len 1  "2"
+22:58 -> 88:47 len 5  ");\n}\n"
+24:1 -> 99:1 len 25  "const n: number = obj.id("
+24:33 -> 92:17 len 9  "pick(K.B)"
+24:51 -> 99:42 len 1  "1"
+24:59 -> 99:46 len 1  "2"
+24:62 -> 99:48 len 135  ");\nconsole.log(repo(K.A, new Repo()), optional(o"...
+

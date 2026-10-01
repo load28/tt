@@ -1,0 +1,282 @@
+=== runtimeATryStatementInAResultBlockLowersTheValuesOfItsOperand.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const trace: string[] = [];
+>trace : const trace: string[]
+let r = (n: number): R => { trace.push("r" + n); return n > 15 ? { kind: "Ok", value: n } : { kind: "Err", error: "small" + n }; };
+>r : let r: (n: number) => R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+>n : (parameter) n: number
+function swap(n: number): number {
+>swap : function swap(n: number): number
+>n : (parameter) n: number
+  trace.push("swap");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  const first = r;
+>first : const first: (n: number) => R
+>r : let r: (n: number) => R
+  r = (m) => { trace.push("late"); return first(m); };
+>r : let r: (n: number) => R
+>m : (parameter) m: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>first : const first: (n: number) => R
+>m : (parameter) m: number
+  return n;
+>n : (parameter) n: number
+const id = <T,>(x: T) => x;
+>id : const id: <T>(x: T) => T
+>T : (type parameter) T in <T>(x: T): T
+>x : (parameter) x: T
+>T : (type parameter) T in <T>(x: T): T
+>x : (parameter) x: T
+const g = (x: R): R => x;
+>g : const g: (x: R) => R
+>x : (parameter) x: R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>x : (parameter) x: R
+function viaConst(v: number) { return result { const x = try r(match (v) { 1 => swap(10), _ => swap(20) }); return x; }; }
+>viaConst : function viaConst(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>v : (parameter) v: number
+>x : const x: number
+>r : let r: (n: number) => R
+>v : (parameter) v: number
+>swap : function swap(n: number): number
+>swap : function swap(n: number): number
+>x : const x: number
+function viaLet(v: number) { return result { let x = try r(match (v) { 1 => 10, _ => 20 }); x += 1; return x; }; }
+>viaLet : function viaLet(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>v : (parameter) v: number
+>x : let x: number
+>r : let r: (n: number) => R
+>v : (parameter) v: number
+>x : let x: number
+>x : let x: number
+function propagateOnly(v: number) { return result { try r(match (v) { 1 => 10, _ => 20 }); return 0; }; }
+>propagateOnly : function propagateOnly(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>v : (parameter) v: number
+>r : let r: (n: number) => R
+>v : (parameter) v: number
+function viaPipeline(v: number) { return result { const x = try (match (v) { 1 => r(10), _ => r(20) } |> id); return x; }; }
+>viaPipeline : function viaPipeline(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>v : (parameter) v: number
+>x : const x: number
+>v : (parameter) v: number
+>r : let r: (n: number) => R
+>r : let r: (n: number) => R
+>id : const id: <R>(x: R) => R
+>x : const x: number
+function viaCall(v: number) { return result { const x = try id(match (v) { 1 => r(10), _ => r(20) }); return x; }; }
+>viaCall : function viaCall(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>v : (parameter) v: number
+>x : const x: number
+>id : const id: <T>(x: T) => T
+>v : (parameter) v: number
+>r : let r: (n: number) => R
+>r : let r: (n: number) => R
+>x : const x: number
+function viaResult(v: number) {
+>viaResult : function viaResult(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>v : (parameter) v: number
+  return result { const x = try r(result { const y = try r(v); return y; } |> g |> (q => q.kind === "Ok" ? q.value : 0)); return x; };
+>x : const x: number
+>r : let r: (n: number) => R
+>y : const y: number
+>r : let r: (n: number) => R
+>v : (parameter) v: number
+>y : const y: number
+>g : const g: (x: R) => R
+>q : (parameter) q: R
+>q : (parameter) q: R
+>kind : (property) kind: "Err" | "Ok"
+>q : (parameter) q: {
+>       kind: "Ok";
+>       value: number;
+>   }
+>value : (property) value: number
+>x : const x: number
+const base = r;
+>base : const base: (n: number) => R
+>r : let r: (n: number) => R
+console.log(JSON.stringify([viaConst(1), viaConst(2)]), JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>viaConst : function viaConst(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>viaConst : function viaConst(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+r = base;
+>r : let r: (n: number) => R
+>base : const base: (n: number) => R
+console.log(JSON.stringify([viaLet(1), viaLet(2), propagateOnly(1), propagateOnly(2)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>viaLet : function viaLet(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>viaLet : function viaLet(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>propagateOnly : function propagateOnly(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>propagateOnly : function propagateOnly(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+console.log(JSON.stringify([viaPipeline(1), viaPipeline(2), viaCall(1), viaCall(2), viaResult(20), viaResult(1)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>viaPipeline : function viaPipeline(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>viaPipeline : function viaPipeline(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>viaCall : function viaCall(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>viaCall : function viaCall(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>viaResult : function viaResult(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>viaResult : function viaResult(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+

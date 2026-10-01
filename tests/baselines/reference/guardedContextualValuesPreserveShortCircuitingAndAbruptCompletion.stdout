@@ -1,0 +1,4 @@
+15 receiver,first,subject,guard,second guard,second,last,call
+16 receiver,first,subject,guard,yes,last,call
+thrown receiver,first,subject,guard
+14 receiver,first,subject,no,last,call

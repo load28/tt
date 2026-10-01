@@ -1,0 +1,16 @@
+=== composedMatchLiteralsKeepNarrowContexts.tt ===
+declare const flag: boolean;
+>flag : const flag: boolean
+declare function stringValue(value: "one" | "two"): void;
+>stringValue : function stringValue(value: "one" | "two"): void
+>value : (parameter) value: "one" | "two"
+declare function numberValue(value: 1 | 2): void;
+>numberValue : function numberValue(value: 1 | 2): void
+>value : (parameter) value: 1 | 2
+stringValue(match (flag) { true => "one", false => "two" });
+>stringValue : function stringValue(value: "one" | "two"): void
+>flag : const flag: boolean
+numberValue(match (flag) { true => 1, false => 2 });
+>numberValue : function numberValue(value: 1 | 2): void
+>flag : const flag: boolean
+

@@ -1,0 +1,50 @@
+=== aValueWithNoContextualTypeIsTypedAsAtItsSourcePosition1.tt ===
+declare const n: number;
+>n : const n: number
+const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };
+>b : const b: {
+>       k: number;
+>       m(): {
+>           k: number;
+>           m(): ...;
+>       };
+>   }
+>n : const n: number
+>k : (property) k: number
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+>k : (property) k: number
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+b.m().zzz;
+>b : const b: {
+>       k: number;
+>       m(): {
+>           k: number;
+>           m(): ...;
+>       };
+>   }
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+const xs = match (n) { 1 => [n], _ => [] };
+>xs : const xs: number[]
+>n : const n: number
+>n : const n: number
+const s = match (n) { 1 => Symbol(), _ => Symbol() };
+>s : const s: symbol
+>n : const n: number
+>Symbol : var Symbol: (description?: string | number) => symbol
+>Symbol : var Symbol: (description?: string | number) => symbol
+const checked: symbol[] = [s];
+>checked : const checked: symbol[]
+>s : const s: symbol
+xs.push(1);
+>xs : const xs: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+

@@ -1,0 +1,7 @@
+//// [optionalPostfixTypesAreCheckedAsPlainTypescript1.tt] 5 mapping(s)
+1:1 -> 2:1 len 87  "declare const value: { n: number } | undefined;\n"...
+2:44 -> 3:40 len 21  "?.n;\nconst project = "
+3:25 -> 4:24 len 37  "((v: { n: number } | undefined) => v)"
+3:66 -> 4:82 len 3  "?.n"
+3:69 -> 4:87 len 63  ";\nconst also: number | undefined = project(value"...
+

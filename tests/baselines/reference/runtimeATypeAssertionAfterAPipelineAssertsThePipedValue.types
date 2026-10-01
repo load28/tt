@@ -1,0 +1,47 @@
+=== runtimeATypeAssertionAfterAPipelineAssertsThePipedValue.tt ===
+const maybe = undefined as ((n: number) => string) | undefined;
+>maybe : const maybe: ((n: number) => string) | undefined
+>n : (parameter) n: number
+const twice = (n: number) => n * 2;
+>twice : const twice: (n: number) => number
+>n : (parameter) n: number
+>n : (parameter) n: number
+const d = 1 |> String as string;
+>d : const d: string
+>String : var String: (value?: any) => string
+const e = 2 |> twice satisfies number;
+>e : const e: number
+>twice : const twice: (n: number) => number
+const g = 3 |> ((x: number) => x + 1) as number;
+>g : const g: number
+>x : (parameter) x: number
+>x : (parameter) x: number
+const h = 4 |> twice as number |> String satisfies string |> .length;
+>h : const h: number
+>twice : const twice: (n: number) => number
+>String : var String: StringConstructor
+>length : (property) String.length: number
+const k = flow |> twice as (n: number) => number;
+>k : const k: (n: number) => number
+>flow : const twice: (n: number) => number
+>twice : const twice: (n: number) => number
+>n : (parameter) n: number
+const l = 5 |> (maybe ?? String);
+>l : const l: string
+>maybe : const maybe: ((n: number) => string) | undefined
+>String : var String: StringConstructor
+const m = 6 |> maybe ?? String;
+>m : const m: string
+>maybe : const maybe: ((n: number) => string) | undefined
+>String : var String: StringConstructor
+console.log(d, e, g, h, k(7), l, m);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>d : const d: string
+>e : const e: number
+>g : const g: number
+>h : const h: number
+>k : const k: (n: number) => number
+>l : const l: string
+>m : const m: string
+

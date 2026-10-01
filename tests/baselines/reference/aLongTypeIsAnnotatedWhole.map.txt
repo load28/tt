@@ -1,0 +1,9 @@
+//// [aLongTypeIsAnnotatedWhole.tt] 7 mapping(s)
+1:1 -> 1:1 len 1983  "\nfunction make(tag: string) { return { p39_long_"...
+4:3 -> 18:3 len 10  "const x = "
+4:20 -> 6:19 len 1  "n"
+4:25 -> 8:12 len 1  "1"
+4:30 -> 9:18 len 9  "make(\"a\")"
+4:46 -> 13:18 len 9  "make(\"b\")"
+4:57 -> 18:19 len 92  ";\n  return x.p39_long_property_name.nested_39;\n}"...
+

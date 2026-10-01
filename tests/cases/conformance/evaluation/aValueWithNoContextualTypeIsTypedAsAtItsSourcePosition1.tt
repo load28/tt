@@ -1,0 +1,11 @@
+// @origin: tests/integration/contextual.rs::a_value_with_no_contextual_type_is_typed_as_at_its_source_position
+
+declare const n: number;
+const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };
+b.m().zzz;
+const xs = match (n) { 1 => [n], _ => [] };
+const s = match (n) { 1 => Symbol(), _ => Symbol() };
+const checked: symbol[] = [s];
+xs.push(1);
+
+export {};

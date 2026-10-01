@@ -1,0 +1,66 @@
+=== aBlockArmExitLeavesTheRegionFromInsideALoop.tt ===
+variant Pick { Scan(from: number), Zero }
+>Pick : type Pick = {
+>       kind: "Scan";
+>       from: number;
+>   } | {
+>       kind: "Zero";
+>   }
+>Scan : (property) Scan: (from: number) => Pick
+>from : (property) from: number
+>Zero : (property) Zero: {
+>       readonly kind: "Zero";
+>   }
+declare const nothing: number;
+>nothing : const nothing: number
+function choose(p: Pick): number {
+>choose : function choose(p: Pick): number
+>p : (parameter) p: Pick
+>Pick : type Pick = {
+>       kind: "Scan";
+>       from: number;
+>   } | {
+>       kind: "Zero";
+>   }
+  return match (p) {
+>p : (parameter) p: Pick
+    Scan(from) => {
+>from : const from: number
+      for (const x of [from, from + 1, from + 2]) {
+>x : const x: number
+>from : const from: number
+>from : const from: number
+>from : const from: number
+        if (x % 3 === 0) { return x; }
+>x : const x: number
+>x : const x: number
+console.log(choose(Pick.Scan(2)), choose(Pick.Scan(4)), choose(Pick.Zero));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>choose : function choose(p: Pick): number
+>Pick : const Pick: {
+>       Scan: (from: number) => Pick;
+>       Zero: {
+>           readonly kind: "Zero";
+>       };
+>   }
+>Scan : (property) Scan: (from: number) => Pick
+>choose : function choose(p: Pick): number
+>Pick : const Pick: {
+>       Scan: (from: number) => Pick;
+>       Zero: {
+>           readonly kind: "Zero";
+>       };
+>   }
+>Scan : (property) Scan: (from: number) => Pick
+>choose : function choose(p: Pick): number
+>Pick : const Pick: {
+>       Scan: (from: number) => Pick;
+>       Zero: {
+>           readonly kind: "Zero";
+>       };
+>   }
+>Zero : (property) Zero: {
+>       readonly kind: "Zero";
+>   }
+

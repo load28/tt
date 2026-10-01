@@ -1,0 +1,32 @@
+=== eagerArgumentsKeepLeftToRightOrderAtRuntime.tt ===
+const trace: number[] = [];
+>trace : const trace: number[]
+function mark(n: number): number { trace.push(n); return n; }
+>mark : function mark(n: number): number
+>n : (parameter) n: number
+>trace : const trace: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+function g(a: number, b: number, c: number): void { console.log(a, b, c); }
+>g : function g(a: number, b: number, c: number): void
+>a : (parameter) a: number
+>b : (parameter) b: number
+>c : (parameter) c: number
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>a : (parameter) a: number
+>b : (parameter) b: number
+>c : (parameter) c: number
+g(mark(1), match (mark(2)) { 2 => 20, _ => 0 }, mark(3));
+>g : function g(a: number, b: number, c: number): void
+>mark : function mark(n: number): number
+>mark : function mark(n: number): number
+>mark : function mark(n: number): number
+console.log(JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: number[]
+

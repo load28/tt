@@ -1,0 +1,40 @@
+// @origin: tests/integration.rs::a_member_step_after_a_semicolon_free_line_calls_the_member
+// @run: aMemberStepAfterASemicolonFreeLineCallsTheMember.tt
+const log: string[] = []
+const o = { m(x: unknown) { log.push(String(x)) } }
+const k = "m" as const
+const c = false
+function f() {}
+class A {
+m(x: unknown) { log.push("this " + String(x)) }
+run() {
+const w = 0
+w |> this.m
+}
+}
+new A().run()
+const v = 1
+v |> o.m
+const a = f
+2 |> o[k]
+if (c) f
+3 |> o?.m
+type T = number
+4 |> String |> o.m
+let d: number
+5 |> (o.m)
+f // c
+6 |> o.m
+const g = () => {}
+7 |> o.m
+function* gen() {
+yield
+8 |> o.m
+}
+log.push(String([...gen()].length))
+log.push(`${(() => { const w = 9
+w |> o.m
+return "t" })()}`)
+console.log(log.join(","))
+
+export {};

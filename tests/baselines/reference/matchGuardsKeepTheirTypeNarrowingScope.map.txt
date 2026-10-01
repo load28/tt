@@ -1,0 +1,11 @@
+//// [matchGuardsKeepTheirTypeNarrowingScope.tt] 9 mapping(s)
+1:1 -> 1:1 len 107  "\ndeclare const input: unknown;\ndeclare const fla"...
+5:1 -> 5:17 len 7  "consume"
+5:8 -> 8:7 len 1  "("
+5:16 -> 6:15 len 4  "flag"
+6:3 -> 8:20 len 4  "true"
+6:11 -> 8:28 len 25  "typeof input === \"string\""
+6:40 -> 8:57 len 12  "input.length"
+7:8 -> 8:72 len 1  "0"
+8:2 -> 8:74 len 15  ");\n\nexport {};\n"
+

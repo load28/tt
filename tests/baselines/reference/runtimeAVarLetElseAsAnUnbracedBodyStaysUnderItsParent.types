@@ -1,0 +1,206 @@
+=== runtimeAVarLetElseAsAnUnbracedBodyStaysUnderItsParent.tt ===
+variant O { Some(value: number), None }
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => O
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+function h(c: boolean, o: O): number | undefined {
+>h : function h(c: boolean, o: O): number | undefined
+>c : (parameter) c: boolean
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+  const read = () => hv;
+>read : const read: () => number
+>hv : var hv: number
+  if (c) var Some(value: hv) = o else { return 0; };
+>c : (parameter) c: boolean
+>value : (property) value: number
+>hv : var hv: number
+>o : (parameter) o: O
+  return read();
+>read : const read: () => number
+function w(xs: O[]): number {
+>w : function w(xs: O[]): number
+>xs : (parameter) xs: O[]
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+  const read = () => wv;
+>read : const read: () => number
+>wv : var wv: number
+  let i = 0;
+>i : let i: number
+  while (i < xs.length) var Some(value: wv) = xs[i++] else { break; };
+>i : let i: number
+>xs : (parameter) xs: O[]
+>length : (property) Array<O>.length: number
+>value : (property) value: number
+>wv : var wv: number
+>xs : (parameter) xs: O[]
+>i : let i: number
+  return read() ?? -1;
+>read : const read: () => number
+function e(c: boolean, o: O): number | undefined {
+>e : function e(c: boolean, o: O): number | undefined
+>c : (parameter) c: boolean
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+  if (c) return -3; else var Some(value: ev) = o else { return 0; };
+>c : (parameter) c: boolean
+>value : (property) value: number
+>ev : var ev: number
+>o : (parameter) o: O
+  return ev;
+>ev : var ev: number
+function l(o: O): number {
+>l : function l(o: O): number
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+  lbl: var Some(value: lv) = o else { return -2; };
+>value : (property) value: number
+>lv : var lv: number
+>o : (parameter) o: O
+  return lv + 1;
+>lv : var lv: number
+console.log(h(true, O.Some(5)), h(true, O.None), h(false, O.Some(5)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>h : function h(c: boolean, o: O): number | undefined
+>O : const O: {
+>       Some: (value: number) => O;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => O
+>h : function h(c: boolean, o: O): number | undefined
+>O : const O: {
+>       Some: (value: number) => O;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+>h : function h(c: boolean, o: O): number | undefined
+>O : const O: {
+>       Some: (value: number) => O;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => O
+console.log(w([O.Some(1), O.Some(2), O.None, O.Some(9)]), w([]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>w : function w(xs: O[]): number
+>O : const O: {
+>       Some: (value: number) => O;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => O
+>O : const O: {
+>       Some: (value: number) => O;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => O
+>O : const O: {
+>       Some: (value: number) => O;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+>O : const O: {
+>       Some: (value: number) => O;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => O
+>w : function w(xs: O[]): number
+console.log(e(true, O.None), e(false, O.Some(4)), e(false, O.None));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>e : function e(c: boolean, o: O): number | undefined
+>O : const O: {
+>       Some: (value: number) => O;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+>e : function e(c: boolean, o: O): number | undefined
+>O : const O: {
+>       Some: (value: number) => O;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => O
+>e : function e(c: boolean, o: O): number | undefined
+>O : const O: {
+>       Some: (value: number) => O;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+console.log(l(O.Some(1)), l(O.None));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>l : function l(o: O): number
+>O : const O: {
+>       Some: (value: number) => O;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => O
+>l : function l(o: O): number
+>O : const O: {
+>       Some: (value: number) => O;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+

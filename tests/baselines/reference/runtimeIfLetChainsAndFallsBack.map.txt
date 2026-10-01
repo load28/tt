@@ -1,0 +1,14 @@
+//// [runtimeIfLetChainsAndFallsBack.tt] 12 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:27 -> 3:28 len 6  "number"
+2:27 -> 6:17 len 6  "number"
+2:42 -> 8:3 len 60  "\n\nfunction pick(a: Opt, b: Opt): number {\n  let "...
+6:15 -> 15:15 len 5  "value"
+6:24 -> 13:20 len 1  "a"
+7:5 -> 16:7 len 12  "out = value;"
+8:22 -> 20:17 len 5  "value"
+8:31 -> 18:22 len 1  "b"
+9:5 -> 21:9 len 17  "out = value * 10;"
+11:5 -> 23:9 len 8  "out = 0;"
+12:4 -> 26:4 len 156  "\n  return out;\n}\n\nconsole.log(pick(Opt.Some(1), "...
+

@@ -1,0 +1,9 @@
+// @origin: tests/integration/contextual.rs::composed_match_literals_keep_narrow_contexts
+
+declare const flag: boolean;
+declare function stringValue(value: "one" | "two"): void;
+declare function numberValue(value: 1 | 2): void;
+stringValue(match (flag) { true => "one", false => "two" });
+numberValue(match (flag) { true => 1, false => 2 });
+
+export {};

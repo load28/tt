@@ -1,0 +1,8 @@
+//// [flowCompositionInfersInputFromItsFirstStep.tt] 6 mapping(s)
+1:1 -> 2:1 len 563  "\ntype TOption<T> = { kind: \"Some\"; value: T } | "...
+18:23 -> 19:36 len 4  "half"
+18:31 -> 19:42 len 23  "Option.mapP(x => x + 1)"
+18:58 -> 19:68 len 19  "Option.unwrapOrP(0)"
+18:81 -> 19:109 len 11  ".toFixed(1)"
+18:92 -> 19:122 len 42  ";\nconst s: string = label(4);\n\nexport {};\n"
+

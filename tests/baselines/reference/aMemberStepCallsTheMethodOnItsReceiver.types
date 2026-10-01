@@ -1,0 +1,191 @@
+=== aMemberStepCallsTheMethodOnItsReceiver.tt ===
+const order: string[] = [];
+>order : const order: string[]
+const obj = { k: 10, add(n: number) { return n + this.k; } };
+>obj : const obj: {
+>       k: number;
+>       add(n: number): number;
+>   }
+>k : (property) k: number
+>add : (method) add(n: number): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+>k : (property) k: number
+const key = "add" as const;
+>key : const key: "add"
+>const : type const = "add"
+const traced = { k: 1, get m() { order.push("get"); return function (this: { k: number }, n: number) { return n + this.k; }; } };
+>traced : const traced: {
+>       k: number;
+>       readonly m: (this: {
+>           k: number;
+>       }, n: number) => number;
+>   }
+>k : (property) k: number
+>m : (accessor) m: (this: {
+>       k: number;
+>   }, n: number) => number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>this : (parameter) this: {
+>       k: number;
+>   }
+>k : (property) k: number
+>n : (parameter) n: number
+>n : (parameter) n: number
+>k : (property) k: number
+class Base { k = 3; m(n: number) { return n + this.k; } }
+>Base : class Base
+>k : (property) Base.k: number
+>m : (method) Base.m(n: number): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+>k : (property) Base.k: number
+class Derived extends Base {
+>Derived : class Derived
+>Base : class Base
+    #p(n: number) { return n - this.k; }
+>n : (parameter) n: number
+>n : (parameter) n: number
+>k : (property) Base.k: number
+    run() { return [2].map(x => x |> this.m |> this.#p); }
+>run : (method) Derived.run(): number[]
+>map : (method) Array<number>.map<number>(callbackfn: (value: number, index: number, array: number[]) => number, thisArg?: any): number[]
+>x : (parameter) x: number
+>x : (parameter) x: number
+>m : (method) Base.m(n: number): number
+    parent() { return [4].map(x => x |> super.m); }
+>parent : (method) Derived.parent(): number[]
+>map : (method) Array<number>.map<number>(callbackfn: (value: number, index: number, array: number[]) => number, thisArg?: any): number[]
+>x : (parameter) x: number
+>x : (parameter) x: number
+>m : (method) Base.m(n: number): number
+    composed() { return flow |> super.m |> this.#p; }
+>composed : (method) Derived.composed(): (n: number) => number
+>m : (method) Base.m(n: number): number
+const gen = { id<T>(v: T): T { return v; } };
+>gen : const gen: {
+>       id<T>(v: T): T;
+>   }
+>id : (method) id<T>(v: T): T
+>T : (type parameter) T in id<T>(v: T): T
+>v : (parameter) v: T
+>T : (type parameter) T in id<T>(v: T): T
+>T : (type parameter) T in id<T>(v: T): T
+>v : (parameter) v: T
+const inlined = 1 |> obj.add;
+>inlined : const inlined: number
+>obj : const obj: {
+>       k: number;
+>       add(n: number): number;
+>   }
+>add : (method) add(n: number): number
+const nested = [1].map(x => x |> obj.add);
+>nested : const nested: number[]
+>map : (method) Array<number>.map<number>(callbackfn: (value: number, index: number, array: number[]) => number, thisArg?: any): number[]
+>x : (parameter) x: number
+>x : (parameter) x: number
+>obj : const obj: {
+>       k: number;
+>       add(n: number): number;
+>   }
+>add : (method) add(n: number): number
+const chained = 1 |> obj.add |> obj.add;
+>chained : const chained: number
+>obj : const obj: {
+>       k: number;
+>       add(n: number): number;
+>   }
+>add : (method) add(n: number): number
+>obj : const obj: {
+>       k: number;
+>       add(n: number): number;
+>   }
+>add : (method) add(n: number): number
+const computed = [2].map(x => x |> obj[key]);
+>computed : const computed: number[]
+>map : (method) Array<number>.map<number>(callbackfn: (value: number, index: number, array: number[]) => number, thisArg?: any): number[]
+>x : (parameter) x: number
+>x : (parameter) x: number
+>obj : const obj: {
+>       k: number;
+>       add(n: number): number;
+>   }
+>key : const key: "add"
+const generic: number = (1 + 1) |> gen.id;
+>generic : const generic: number
+>gen : const gen: {
+>       id<T>(v: T): T;
+>   }
+>id : (method) id<number>(v: number): number
+const ordered = (order.push("head"), 1) |> traced.m;
+>ordered : const ordered: number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>traced : const traced: {
+>       k: number;
+>       readonly m: (this: {
+>           k: number;
+>       }, n: number) => number;
+>   }
+>m : (accessor) m: (this: {
+>       k: number;
+>   }, n: number) => number
+const composed = flow |> ((n: number) => n * 2) |> obj.add |> String;
+>composed : const composed: (n: number) => string
+>n : (parameter) n: number
+>n : (parameter) n: number
+>obj : const obj: {
+>       k: number;
+>       add(n: number): number;
+>   }
+>add : (method) add(n: number): number
+>String : var String: StringConstructor
+async function awaited() { return 3 |> (await Promise.resolve(obj)).add; }
+>awaited : function awaited(): Promise<number>
+>Promise : var Promise: PromiseConstructor
+>resolve : (method) PromiseConstructor.resolve<{
+>       k: number;
+>       add(n: number): number;
+>   }>(value: {
+>       k: number;
+>       add(n: number): number;
+>   }): Promise<{
+>       k: number;
+>       add(n: number): number;
+>   }>
+>obj : const obj: {
+>       k: number;
+>       add(n: number): number;
+>   }
+>add : (method) add(n: number): number
+awaited().then(q => {
+>awaited : function awaited(): Promise<number>
+>then : (method) Promise<number>.then<void, never>(onfulfilled?: ((value: number) => void | PromiseLike<void>) | null | undefined, onrejected?: ((reason: any) => PromiseLike<never>) | null | undefined): Promise<void>
+>q : (parameter) q: number
+    console.log(JSON.stringify([inlined, nested, chained, computed, generic, ordered, q]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>inlined : const inlined: number
+>nested : const nested: number[]
+>chained : const chained: number
+>computed : const computed: number[]
+>generic : const generic: number
+>ordered : const ordered: number
+>q : (parameter) q: number
+    console.log(JSON.stringify([new Derived().run(), new Derived().parent(), new Derived().composed()(5), composed(1), order]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>Derived : constructor Derived(): Derived
+>run : (method) Derived.run(): number[]
+>Derived : constructor Derived(): Derived
+>parent : (method) Derived.parent(): number[]
+>Derived : constructor Derived(): Derived
+>composed : (method) Derived.composed(): (n: number) => number
+>composed : const composed: (n: number) => string
+>order : const order: string[]
+

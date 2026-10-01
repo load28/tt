@@ -1,0 +1,25 @@
+//// [generatedGuardsReachTheHostGlobalsPastAShadowedGlobalThis1.tt] 23 mapping(s)
+1:1 -> 23:1 len 1  "\n"
+2:25 -> 25:28 len 6  "number"
+2:25 -> 28:17 len 6  "number"
+2:40 -> 30:3 len 58  "\nfunction f(o: O, globalThis: unknown) { const E"...
+3:58 -> 49:1 len 7  "return "
+3:72 -> 33:17 len 1  "o"
+3:82 -> 36:15 len 5  "value"
+3:92 -> 37:16 len 5  "value"
+3:107 -> 41:16 len 5  "Error"
+3:114 -> 49:14 len 230  "; }\ntry { f({ kind: \"Nope\" } as unknown as O, 1)"...
+7:3 -> 56:3 len 7  "return "
+7:17 -> 56:27 len 1  "v"
+7:22 -> 56:49 len 1  "1"
+7:27 -> 56:54 len 4  "JSON"
+7:33 -> 56:80 len 1  "2"
+7:38 -> 56:85 len 6  "String"
+7:46 -> 56:178 len 3  " + "
+7:56 -> 56:198 len 1  "s"
+7:61 -> 56:220 len 3  "\"a\""
+7:68 -> 56:227 len 1  "1"
+7:71 -> 56:250 len 3  "\"b\""
+7:78 -> 56:257 len 1  "2"
+7:81 -> 56:345 len 198  ";\n}\ntry { g(3 as 1, \"a\", 1); } catch (e) { conso"...
+

@@ -1,0 +1,14 @@
+// @origin: tests/integration/cases_03.rs::tuple_match_bindings_typecheck_per_position
+
+variant Left { A(n: number), B }
+variant Right { C(s: string), D }
+function f(l: Left, r: Right): string {
+  return match (l, r) {
+    (A(n), C(s)) => s.repeat(n),
+    (A(n), D) => n.toFixed(0),
+    (B, C(s)) => s,
+    (B, D) => "",
+  };
+}
+
+export {};

@@ -1,0 +1,203 @@
+=== runtimeValuesHoistedOutOfUnbracedBodiesStayUnderTheirParent.tt ===
+variant S { A(n: number), B }
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => S
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const log: string[] = [];
+>log : const log: string[]
+function note(x: unknown) { log.push(String(x)); }
+>note : function note(x: unknown): void
+>x : (parameter) x: unknown
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>String : var String: (value?: any) => string
+>x : (parameter) x: unknown
+function f(s: S, c: boolean) {
+>f : function f(s: S, c: boolean): number
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>c : (parameter) c: boolean
+  if (c) return match (s) { A(n) => n, B => 0 };
+>c : (parameter) c: boolean
+>s : (parameter) s: S
+>n : const n: number
+>n : const n: number
+function loops(s: S, xs: number[]) {
+>loops : function loops(s: S, xs: number[]): void
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>xs : (parameter) xs: number[]
+  for (const q of xs) note(match (s) { A(n) => n + q, B => q });
+>q : const q: number
+>xs : (parameter) xs: number[]
+>note : function note(x: unknown): void
+>s : (parameter) s: S
+>n : const n: number
+>n : const n: number
+>q : const q: number
+>q : const q: number
+  let i = 0;
+>i : let i: number
+  while (i++ < 2) note(match (s) { A(n) => n, B => -1 });
+>i : let i: number
+>note : function note(x: unknown): void
+>s : (parameter) s: S
+>n : const n: number
+>n : const n: number
+  outer: for (const q of match (s) { A(n) => [n, n + 1], B => [] }) { if (q > 5) continue outer; note(q); }
+>q : const q: number
+>s : (parameter) s: S
+>n : const n: number
+>n : const n: number
+>n : const n: number
+>q : const q: number
+>note : function note(x: unknown): void
+>q : const q: number
+  do note(match (s) { A(n) => -n, B => 0 }); while (false);
+>note : function note(x: unknown): void
+>s : (parameter) s: S
+>n : const n: number
+>n : const n: number
+  lbl: note(match (s) { A(n) => n * 10, B => 0 });
+>note : function note(x: unknown): void
+>s : (parameter) s: S
+>n : const n: number
+>n : const n: number
+function tries(c: boolean, r: R): R {
+>tries : function tries(c: boolean, r: R): R
+>c : (parameter) c: boolean
+>r : (parameter) r: R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  if (c) note(try r); else note("else");
+>c : (parameter) c: boolean
+>note : function note(x: unknown): void
+>r : (parameter) r: R
+>note : function note(x: unknown): void
+  if (c) note(result { const v = try r; return v + 1; }.kind);
+>c : (parameter) c: boolean
+>note : function note(x: unknown): void
+>v : const v: number
+>r : (parameter) r: R
+>v : const v: number
+>kind : (property) kind: "Err" | "Ok"
+  if (c) for (let k = try r; k < 6; k++) note(k);
+>c : (parameter) c: boolean
+>k : let k: number
+>r : (parameter) r: R
+>k : let k: number
+>k : let k: number
+>note : function note(x: unknown): void
+>k : let k: number
+  return { kind: "Ok", value: 0 };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+console.log(f(S.A(3), true), f(S.A(3), false), f(S.B, true));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : function f(s: S, c: boolean): number
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>f : function f(s: S, c: boolean): number
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>f : function f(s: S, c: boolean): number
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+loops(S.A(5), [1, 2]);
+>loops : function loops(s: S, xs: number[]): void
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+console.log(log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+console.log(tries(true, { kind: "Err", error: "e" }).kind, tries(false, { kind: "Ok", value: 1 }).kind, tries(true, { kind: "Ok", value: 4 }).kind);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>tries : function tries(c: boolean, r: R): R
+>kind : (property) kind: "Err"
+>error : (property) error: string
+>kind : (property) kind: "Err" | "Ok"
+>tries : function tries(c: boolean, r: R): R
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err" | "Ok"
+>tries : function tries(c: boolean, r: R): R
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err" | "Ok"
+console.log(log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

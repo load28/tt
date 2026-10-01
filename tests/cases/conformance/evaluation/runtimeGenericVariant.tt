@@ -1,0 +1,19 @@
+// @origin: tests/integration/cases_01.rs::runtime_generic_variant
+// @run: runtimeGenericVariant.tt
+
+variant TOption<T> {
+  Some(value: T),
+  None,
+}
+
+function unwrapOr<T>(o: TOption<T>, fallback: T): T {
+  return match (o) {
+    Some(value) => value,
+    None => fallback,
+  };
+}
+
+console.log(unwrapOr(TOption.Some(7), 0));
+console.log(unwrapOr<number>(TOption.None, 42));
+
+export {};

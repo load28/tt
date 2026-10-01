@@ -1,0 +1,26 @@
+=== anUnexpectedCaseReportsItsOwnMatchSubject.tt ===
+const pick = (s: string) => s as "a" | "b";
+>pick : const pick: (s: string) => "a" | "b"
+>s : (parameter) s: string
+>s : (parameter) s: string
+function outer(s: string) {
+>outer : function outer(s: string): number
+>s : (parameter) s: string
+  return match (match (pick(s)) { "a" => pick("z"), "b" => pick("b") }) { "a" => 1, "b" => 2 };
+>pick : const pick: (s: string) => "a" | "b"
+>s : (parameter) s: string
+>pick : const pick: (s: string) => "a" | "b"
+>pick : const pick: (s: string) => "a" | "b"
+try { outer("a"); } catch (error) { console.log((error as Error).message); }
+>outer : function outer(s: string): number
+>error : var error: unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>error : var error: unknown
+>Error : interface Error
+>message : (property) Error.message: string
+console.log(outer("b"));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>outer : function outer(s: string): number
+

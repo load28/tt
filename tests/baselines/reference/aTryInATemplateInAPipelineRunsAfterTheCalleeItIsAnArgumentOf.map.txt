@@ -1,0 +1,29 @@
+//// [aTryInATemplateInAPipelineRunsAfterTheCalleeItIsAnArgumentOf.tt] 27 mapping(s)
+1:1 -> 1:1 len 806  "\ntype R = { kind: \"Ok\"; value: number } | { kind"...
+12:3 -> 25:3 len 14  "const value = "
+12:17 -> 21:20 len 3  "`${"
+12:20 -> 15:21 len 8  "callee()"
+12:28 -> 21:29 len 1  "("
+12:33 -> 16:20 len 35  "(ok ? okay(\"try\", 1) : fail(\"err\"))"
+12:68 -> 21:36 len 4  ")}!`"
+12:76 -> 22:14 len 6  "String"
+12:82 -> 25:23 len 70  ";\n  return { kind: \"Ok\", value };\n}\nfunction ste"...
+16:3 -> 43:3 len 14  "const value = "
+16:17 -> 31:20 len 3  "\"v\""
+16:24 -> 33:22 len 6  "suffix"
+16:30 -> 40:21 len 4  "(`${"
+16:34 -> 34:22 len 8  "callee()"
+16:42 -> 40:32 len 1  "("
+16:47 -> 35:20 len 35  "(ok ? okay(\"try\", 2) : fail(\"err\"))"
+16:82 -> 40:39 len 4  ")}`)"
+16:86 -> 43:23 len 72  ";\n  return { kind: \"Ok\", value };\n}\nfunction nes"...
+20:3 -> 61:3 len 14  "const value = "
+20:17 -> 50:22 len 8  "callee()"
+20:25 -> 57:27 len 4  "(`${"
+20:29 -> 51:22 len 8  "callee()"
+20:37 -> 57:38 len 1  "("
+20:42 -> 52:20 len 35  "(ok ? okay(\"try\", 3) : fail(\"err\"))"
+20:77 -> 57:45 len 11  ")}`.length)"
+20:92 -> 58:14 len 6  "String"
+20:98 -> 61:23 len 175  ";\n  return { kind: \"Ok\", value };\n}\nreport(head("...
+

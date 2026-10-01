@@ -1,0 +1,18 @@
+//// [joinStoragePreservesArrayInferenceUnderStrictChecking.tt] 16 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:32 -> 21:31 len 6  "number"
+2:32 -> 24:20 len 6  "number"
+2:48 -> 26:3 len 25  "\ndeclare const s: Shape;\n"
+4:1 -> 46:1 len 22  "export const spread = "
+4:29 -> 30:17 len 1  "s"
+4:41 -> 33:15 len 6  "radius"
+4:52 -> 34:16 len 8  "[radius]"
+4:71 -> 38:16 len 2  "[]"
+4:75 -> 46:29 len 58  ";\nspread.push(1);\nexport const n: number = sprea"...
+7:1 -> 65:1 len 21  "export const block = "
+7:28 -> 51:17 len 1  "s"
+7:40 -> 54:15 len 6  "radius"
+7:60 -> 55:16 len 8  "[radius]"
+7:91 -> 58:16 len 2  "[]"
+7:98 -> 65:28 len 63  ";\nblock.push(2);\nconst invalid: string[] = sprea"...
+

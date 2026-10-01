@@ -1,0 +1,22 @@
+//// [runtimeIsPatternsAndLoopTestRegionsPreserveOrderAndCount.tt] 20 mapping(s)
+1:1 -> 1:1 len 204  "\nclass Keep extends Error {}\nclass Stop extends "...
+11:15 -> 14:19 len 7  "probe()"
+11:29 -> 16:28 len 4  "Keep"
+11:37 -> 17:18 len 4  "true"
+11:48 -> 20:16 len 5  "false"
+11:57 -> 11:10 len 12  "updates += 1"
+11:71 -> 24:25 len 46  "{\n  bodies += 1;\n  if (bodies < 3) continue;\n}"
+14:2 -> 27:3 len 1  "\n"
+15:1 -> 48:1 len 16  "const message = "
+15:24 -> 30:17 len 22  "new SyntaxError(\"bad\")"
+16:6 -> 32:26 len 11  "SyntaxError"
+16:20 -> 33:15 len 7  "message"
+16:33 -> 34:11 len 18  "message.length > 0"
+16:55 -> 35:18 len 7  "message"
+17:6 -> 39:26 len 5  "Error"
+17:14 -> 40:15 len 7  "message"
+17:23 -> 40:24 len 6  "detail"
+17:35 -> 41:16 len 6  "detail"
+18:8 -> 44:14 len 9  "\"unknown\""
+19:2 -> 48:23 len 61  ";\nconsole.log(probes, updates, bodies, message);"...
+

@@ -1,0 +1,36 @@
+//// [runtimeACommaOperandBeforeAValueRunsOnceAsAStatement.tt] 34 mapping(s)
+1:1 -> 19:1 len 285  "\ntype R = { kind: \"Ok\"; value: number } | { kind"...
+7:19 -> 31:3 len 78  "\nfunction pick(k: K) { trace.push(\"pick\"); retur"...
+9:24 -> 43:1 len 8  "return ("
+9:32 -> 34:2 len 6  "tick()"
+9:39 -> 43:9 len 1  " "
+9:47 -> 36:17 len 7  "pick(k)"
+9:63 -> 43:26 len 1  "1"
+9:71 -> 43:30 len 1  "2"
+9:74 -> 43:32 len 30  "); }\nfunction several(k: K) { "
+10:26 -> 55:1 len 11  "const x = ("
+10:37 -> 45:2 len 6  "tick()"
+10:44 -> 55:12 len 1  " "
+10:45 -> 46:2 len 6  "tock()"
+10:52 -> 55:13 len 1  " "
+10:60 -> 48:17 len 7  "pick(k)"
+10:76 -> 55:30 len 1  "1"
+10:84 -> 55:34 len 1  "2"
+10:87 -> 55:36 len 61  "); return x + tock(); }\nfunction guarded(c: bool"...
+11:38 -> 82:1 len 7  "return "
+11:45 -> 58:14 len 1  "c"
+11:51 -> 60:4 len 6  "tick()"
+11:57 -> 77:22 len 13  " /* effect */"
+11:71 -> 77:35 len 1  " "
+11:79 -> 62:19 len 7  "pick(k)"
+11:95 -> 65:18 len 1  "1"
+11:103 -> 69:18 len 1  "2"
+11:107 -> 82:14 len 31  "; }\nfunction propagated(): R { "
+12:28 -> 91:1 len 7  "return "
+12:35 -> 84:18 len 1  "r"
+12:36 -> 91:15 len 2  "(("
+12:38 -> 85:2 len 6  "tick()"
+12:45 -> 91:17 len 1  " "
+12:50 -> 86:16 len 4  "r(3)"
+12:54 -> 91:24 len 313  ")); }\nconsole.log(first(K.B), JSON.stringify(tra"...
+

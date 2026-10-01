@@ -1,0 +1,6 @@
+// @origin: tests/integration/cases_03.rs::flow_composition_keeps_the_first_step_arity
+const add = (a: number, b: number) => a + b;
+const f = flow |> add |> ((n: number) => n * 2);
+const v: number = f(1, 2);
+
+export {};

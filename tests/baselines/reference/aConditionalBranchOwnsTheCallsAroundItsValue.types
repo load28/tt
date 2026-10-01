@@ -1,0 +1,252 @@
+=== aConditionalBranchOwnsTheCallsAroundItsValue.tt ===
+variant O { A, B }
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const Ok = <T,>(value: T): R<T> => ({ kind: "Ok", value });
+>Ok : const Ok: <T>(value: T) => R<T>
+>T : (type parameter) T in <T>(value: T): R<T>
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(value: T): R<T>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in <T>(value: T): R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+const Err = (error: string): R<never> => ({ kind: "Err", error });
+>Err : const Err: (error: string) => R<never>
+>error : (parameter) error: string
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const log: string[] = [];
+>log : const log: string[]
+const f = (n: number) => { log.push("f" + n); return n * 10; };
+>f : const f: (n: number) => number
+>n : (parameter) n: number
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+const g = (n: number) => { log.push("g" + n); return n + 1; };
+>g : const g: (n: number) => number
+>n : (parameter) n: number
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+function both(c: boolean, o: O) { return c ? f(match (o) { A => 1, B => 2 }) : g(match (o) { A => 3, B => 4 }); }
+>both : function both(c: boolean, o: O): number
+>c : (parameter) c: boolean
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>c : (parameter) c: boolean
+>f : const f: (n: number) => number
+>o : (parameter) o: O
+>g : const g: (n: number) => number
+>o : (parameter) o: O
+function left(c: boolean, o: O) { return c ? f(match (o) { A => 1, B => 2 }) : 0; }
+>left : function left(c: boolean, o: O): number
+>c : (parameter) c: boolean
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>c : (parameter) c: boolean
+>f : const f: (n: number) => number
+>o : (parameter) o: O
+function right(c: boolean, o: O) { return c ? match (o) { A => 5, B => 6 } : g(match (o) { A => 7, B => 8 }); }
+>right : function right(c: boolean, o: O): number
+>c : (parameter) c: boolean
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>c : (parameter) c: boolean
+>o : (parameter) o: O
+>g : const g: (n: number) => number
+>o : (parameter) o: O
+function wrapped(c: boolean, r: R<number>): R<number> { const v = c ? Ok(try r) : Ok(0); return v; }
+>wrapped : function wrapped(c: boolean, r: R<number>): R<number>
+>c : (parameter) c: boolean
+>r : (parameter) r: R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>v : const v: R<number>
+>c : (parameter) c: boolean
+>Ok : const Ok: <T>(value: T) => R<T>
+>r : (parameter) r: R<number>
+>Ok : const Ok: <number>(value: number) => R<number>
+>v : const v: R<number>
+function summed(c: boolean, r: R<number>): R<number> { const v = c ? (try r) + 1 : 0; return Ok(v); }
+>summed : function summed(c: boolean, r: R<number>): R<number>
+>c : (parameter) c: boolean
+>r : (parameter) r: R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>v : const v: number
+>c : (parameter) c: boolean
+>r : (parameter) r: R<number>
+>Ok : const Ok: <number>(value: number) => R<number>
+>v : const v: number
+console.log(JSON.stringify([both(true, O.A), both(false, O.B), left(true, O.B), left(false, O.A), right(true, O.B), right(false, O.A), log]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>both : function both(c: boolean, o: O): number
+>O : const O: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>both : function both(c: boolean, o: O): number
+>O : const O: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>left : function left(c: boolean, o: O): number
+>O : const O: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>left : function left(c: boolean, o: O): number
+>O : const O: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>right : function right(c: boolean, o: O): number
+>O : const O: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>right : function right(c: boolean, o: O): number
+>O : const O: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>log : const log: string[]
+console.log(JSON.stringify([wrapped(true, Ok(4)), wrapped(true, Err("e")), wrapped(false, Err("e")), summed(true, Ok(4)), summed(true, Err("e")), summed(false, Err("e"))]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>wrapped : function wrapped(c: boolean, r: R<number>): R<number>
+>Ok : const Ok: <number>(value: number) => R<number>
+>wrapped : function wrapped(c: boolean, r: R<number>): R<number>
+>Err : const Err: (error: string) => R<never>
+>wrapped : function wrapped(c: boolean, r: R<number>): R<number>
+>Err : const Err: (error: string) => R<never>
+>summed : function summed(c: boolean, r: R<number>): R<number>
+>Ok : const Ok: <number>(value: number) => R<number>
+>summed : function summed(c: boolean, r: R<number>): R<number>
+>Err : const Err: (error: string) => R<never>
+>summed : function summed(c: boolean, r: R<number>): R<number>
+>Err : const Err: (error: string) => R<never>
+

@@ -1,0 +1,42 @@
+//// [runtimeAForHeadInitializerValueRunsBeforeTheLoopWhenFaithful.tt] 40 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:18 -> 21:21 len 6  "number"
+2:18 -> 24:10 len 6  "number"
+2:30 -> 26:3 len 244  "\nconst o = O.A(1) as O;\ntype R = { kind: \"Ok\"; v"...
+8:3 -> 50:3 len 13  "for (let f = "
+8:23 -> 34:19 len 1  "o"
+8:30 -> 37:17 len 1  "n"
+8:36 -> 38:18 len 11  "() => n + 1"
+8:54 -> 42:18 len 4  "null"
+8:60 -> 50:22 len 78  ", i = 0; i < 1; i++) out.push(\"a\" + f!() + i);\n}"...
+11:3 -> 59:3 len 13  "for (let x = "
+11:20 -> 54:18 len 4  "r(n)"
+11:24 -> 59:22 len 98  ", i = 0; i < 2; i++) out.push(\"c\" + x + i);\n  re"...
+15:3 -> 81:3 len 13  "for (let n = "
+15:23 -> 65:19 len 1  "o"
+15:30 -> 68:17 len 1  "n"
+15:36 -> 69:18 len 1  "n"
+15:44 -> 73:18 len 1  "0"
+15:47 -> 81:22 len 52  "; n < 3; n++) out.push(\"d\" + n);\n}\nfunction f() "...
+18:3 -> 102:3 len 45  "for (let k: ((k: number) => number) | null = "
+18:55 -> 86:19 len 1  "o"
+18:62 -> 89:17 len 1  "n"
+18:68 -> 90:18 len 20  "(k: number) => k + n"
+18:95 -> 94:18 len 4  "null"
+18:101 -> 102:54 len 56  "; k; k = null) out.push(\"f\" + k(1));\n}\nfunction "...
+21:3 -> 123:3 len 37  "for (var v: (() => unknown) | null = "
+21:47 -> 107:19 len 1  "o"
+21:54 -> 110:17 len 1  "n"
+21:60 -> 111:18 len 7  "() => v"
+21:74 -> 115:18 len 4  "null"
+21:80 -> 123:46 len 76  "; v; v = null) out.push(\"g\" + (v() === v));\n}\nfu"...
+25:3 -> 145:3 len 9  "for (x = "
+25:19 -> 129:19 len 1  "o"
+25:26 -> 132:17 len 1  "n"
+25:32 -> 133:18 len 6  "n + 10"
+25:45 -> 137:18 len 1  "0"
+25:48 -> 145:18 len 78  "; x < 12; x++) out.push(\"e\" + x);\n}\nfunction p(n"...
+29:3 -> 155:3 len 9  "for (y = "
+29:16 -> 150:18 len 4  "r(n)"
+29:20 -> 155:18 len 250  "; y < 2; y++) out.push(\"p\" + y);\n  return { kind"...
+

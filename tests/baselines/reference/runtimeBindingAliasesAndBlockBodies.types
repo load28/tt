@@ -1,0 +1,91 @@
+=== runtimeBindingAliasesAndBlockBodies.tt ===
+variant Msg {
+>Msg : type Msg = {
+>       kind: "Quit";
+>   } | {
+>       kind: "Move";
+>       x: number;
+>       y: number;
+>   } | {
+>       kind: "Write";
+>       text: string;
+>   }
+  Quit,
+>Quit : (property) Quit: {
+>       readonly kind: "Quit";
+>   }
+  Move(x: number, y: number),
+>Move : (property) Move: (x: number, y: number) => Msg
+>x : (property) x: number
+>y : (property) y: number
+  Write(text: string),
+>Write : (property) Write: (text: string) => Msg
+>text : (property) text: string
+function describe(m: Msg): string {
+>describe : function describe(m: Msg): string
+>m : (parameter) m: Msg
+>Msg : type Msg = {
+>       kind: "Quit";
+>   } | {
+>       kind: "Move";
+>       x: number;
+>       y: number;
+>   } | {
+>       kind: "Write";
+>       text: string;
+>   }
+  return match (m) {
+>m : (parameter) m: Msg
+    Move(x: px, y: py) => {
+>x : (property) x: number
+>px : const px: number
+>y : (property) y: number
+>py : const py: number
+      const sum = px + py;
+>sum : const sum: number
+>px : const px: number
+>py : const py: number
+      return "move:" + sum;
+>sum : const sum: number
+    Write(text) => "write:" + text,
+>text : const text: string
+>text : const text: string
+console.log(describe(Msg.Move(2, 3)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>describe : function describe(m: Msg): string
+>Msg : const Msg: {
+>       Quit: {
+>           readonly kind: "Quit";
+>       };
+>       Move: (x: number, y: number) => Msg;
+>       Write: (text: string) => Msg;
+>   }
+>Move : (property) Move: (x: number, y: number) => Msg
+console.log(describe(Msg.Write("hi")));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>describe : function describe(m: Msg): string
+>Msg : const Msg: {
+>       Quit: {
+>           readonly kind: "Quit";
+>       };
+>       Move: (x: number, y: number) => Msg;
+>       Write: (text: string) => Msg;
+>   }
+>Write : (property) Write: (text: string) => Msg
+console.log(describe(Msg.Quit));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>describe : function describe(m: Msg): string
+>Msg : const Msg: {
+>       Quit: {
+>           readonly kind: "Quit";
+>       };
+>       Move: (x: number, y: number) => Msg;
+>       Write: (text: string) => Msg;
+>   }
+>Quit : (property) Quit: {
+>       readonly kind: "Quit";
+>   }
+

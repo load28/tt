@@ -1,0 +1,6 @@
+=== aDirectPipelineCallKeepsContextualTyping.tt ===
+const value: number = 1 |> (x => x + 1);
+>value : const value: number
+>x : (parameter) x: number
+>x : (parameter) x: number
+

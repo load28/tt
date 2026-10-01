@@ -1,0 +1,112 @@
+=== runtimeVariantConstructionAndMatch.tt ===
+variant Shape {
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       width: number;
+>       height: number;
+>   } | {
+>       kind: "Point";
+>   }
+  Circle(radius: number),
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+  Rect(width: number, height: number),
+>Rect : (property) Rect: (width: number, height: number) => Shape
+>width : (property) width: number
+>height : (property) height: number
+  Point,
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+function area(s: Shape): number {
+>area : function area(s: Shape): number
+>s : (parameter) s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       width: number;
+>       height: number;
+>   } | {
+>       kind: "Point";
+>   }
+  return match (s) {
+>s : (parameter) s: Shape
+    Circle(radius) => Math.PI * radius * radius,
+>radius : const radius: number
+>Math : var Math: Math
+>PI : (property) Math.PI: number
+>radius : const radius: number
+>radius : const radius: number
+    Rect(width, height) => width * height,
+>width : const width: number
+>height : const height: number
+>width : const width: number
+>height : const height: number
+console.log(JSON.stringify([area(Shape.Circle(1)), area(Shape.Rect(3, 4)), area(Shape.Point)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>area : function area(s: Shape): number
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Rect: (width: number, height: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>area : function area(s: Shape): number
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Rect: (width: number, height: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Rect : (property) Rect: (width: number, height: number) => Shape
+>area : function area(s: Shape): number
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Rect: (width: number, height: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+console.log(JSON.stringify(Shape.Circle(2)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Rect: (width: number, height: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+console.log(JSON.stringify(Shape.Point));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Rect: (width: number, height: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+

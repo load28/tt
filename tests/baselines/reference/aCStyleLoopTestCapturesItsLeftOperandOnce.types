@@ -1,0 +1,29 @@
+=== aCStyleLoopTestCapturesItsLeftOperandOnce.tt ===
+const xs = [3];
+>xs : const xs: number[]
+let j = 0;
+>j : let j: number
+const seen: number[] = [];
+>seen : const seen: number[]
+for (; j < match (xs[0]) { 3 => 3, _ => 0 };) { seen.push(j); j++; }
+>j : let j: number
+>xs : const xs: number[]
+>seen : const seen: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>j : let j: number
+>j : let j: number
+for (let k = 0; k < match (xs[0]) { 3 => 2, _ => 0 }; k++) { seen.push(10 + k); }
+>k : let k: number
+>k : let k: number
+>xs : const xs: number[]
+>k : let k: number
+>seen : const seen: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>k : let k: number
+console.log(JSON.stringify(seen));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>seen : const seen: number[]
+

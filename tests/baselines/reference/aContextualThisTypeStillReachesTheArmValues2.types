@@ -1,0 +1,47 @@
+=== aContextualThisTypeStillReachesTheArmValues2.tt ===
+type Methods = { k: number; m(): number } & ThisType<{ q: string }>;
+>Methods : type Methods = {
+>       k: number;
+>       m(): number;
+>   } & ThisType<{
+>       q: string;
+>   }>
+>k : (property) k: number
+>m : (method) m(): number
+>ThisType : interface ThisType<T>
+>q : (property) q: string
+function pick(n: number) {
+>pick : function pick(n: number): number
+>n : (parameter) n: number
+  const d: Methods = match (n) { 1 => ({ k: 1, m() { return this.q.length; } }), _ => ({ k: 2, m() { return 0; } }) };
+>d : const d: Methods
+>Methods : type Methods = {
+>       k: number;
+>       m(): number;
+>   } & ThisType<{
+>       q: string;
+>   }>
+>n : (parameter) n: number
+>k : (property) k: number
+>m : (method) m(): number
+>q : (property) q: string
+>length : (property) String.length: number
+>k : (property) k: number
+>m : (method) m(): number
+  return d.m.call({ q: "abc" });
+>d : const d: Methods
+>m : (method) m(): number
+>call : (method) CallableFunction.call<{
+>       q: string;
+>   }, [], number>(this: (this: {
+>       q: string;
+>   }) => number, thisArg: {
+>       q: string;
+>   }): number
+>q : (property) q: string
+console.log(pick(1), pick(2));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pick : function pick(n: number): number
+>pick : function pick(n: number): number
+

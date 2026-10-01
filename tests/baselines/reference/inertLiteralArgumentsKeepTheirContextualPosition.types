@@ -1,0 +1,139 @@
+=== inertLiteralArgumentsKeepTheirContextualPosition.tt ===
+variant State { Ready(value: number), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: number) => State
+>value : (property) value: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+type Item = {kind: "item"; run: (x: number) => number};
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+declare const state: State;
+>state : const state: State
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+declare function widget(props: {first: Item; second: Item}): number;
+>widget : function widget(props: {
+>       first: Item;
+>       second: Item;
+>   }): number
+>props : (parameter) props: {
+>       first: Item;
+>       second: Item;
+>   }
+>first : (property) first: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>second : (property) second: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+declare function tagged(first: Item, second: number[], third: Item): number;
+>tagged : function tagged(first: Item, second: number[], third: Item): number
+>first : (parameter) first: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>second : (parameter) second: number[]
+>third : (parameter) third: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+const items: Item[] = [{kind: "item", run: x => x}, made];
+>items : const items: Item[]
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>made : const made: Item
+const nested: {first: Item; second: Item} = {
+>nested : const nested: {
+>       first: Item;
+>       second: Item;
+>   }
+>first : (property) first: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>second : (property) second: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+  first: {kind: "item", run: x => x},
+>first : (property) first: Item
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+  second: made,
+>second : (property) second: Item
+>made : const made: Item
+declare const made: Item;
+>made : const made: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+const wrapped = widget({
+>wrapped : const wrapped: number
+>widget : function widget(props: {
+>       first: Item;
+>       second: Item;
+>   }): number
+  first: {kind: "item", run: x => x},
+>first : (property) first: Item
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+  second: match (state) {
+>second : (property) second: Item
+>state : const state: State
+    Ready(value) => (made),
+>value : const value: number
+>made : const made: Item
+    Empty => (made),
+>made : const made: Item
+const counted = tagged({kind: "item", run: x => x}, [1, 2], made);
+>counted : const counted: number
+>tagged : function tagged(first: Item, second: number[], third: Item): number
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>made : const made: Item
+export {items, nested, wrapped, counted};
+>items : (alias) const items: Item[]
+>nested : (alias) const nested: {
+>       first: Item;
+>       second: Item;
+>   }
+>wrapped : (alias) const wrapped: number
+>counted : (alias) const counted: number
+

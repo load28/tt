@@ -1,0 +1,80 @@
+=== aRecursiveAnonymousTypeIsNeverAnnotatedWithItsElidedCycle1.tt ===
+declare const n: number;
+>n : const n: number
+const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };
+>b : const b: {
+>       k: number;
+>       m(): {
+>           k: number;
+>           m(): ...;
+>       };
+>   }
+>n : const n: number
+>k : (property) k: number
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+>k : (property) k: number
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+b.m().m().zzz;
+>b : const b: {
+>       k: number;
+>       m(): {
+>           k: number;
+>           m(): ...;
+>       };
+>   }
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+function mk() { return { m() { return this; } }; }
+>mk : function mk(): {
+>       m(): {
+>           m(): ...;
+>       };
+>   }
+>m : (method) m(): {
+>       m(): ...;
+>   }
+const c = match (n) { 1 => mk(), _ => mk() };
+>c : const c: {
+>       m(): ...;
+>   }
+>n : const n: number
+>mk : function mk(): {
+>       m(): {
+>           m(): ...;
+>       };
+>   }
+>mk : function mk(): {
+>       m(): {
+>           m(): ...;
+>       };
+>   }
+c.m().m().yyy;
+>c : const c: {
+>       m(): ...;
+>   }
+>m : (method) m(): {
+>       m(): ...;
+>   }
+>m : (method) m(): {
+>       m(): ...;
+>   }
+const d = match (n) { 1 => [JSON.parse("1")], _ => [] };
+>d : const d: any[]
+>n : const n: number
+>JSON : var JSON: JSON
+>parse : (method) JSON.parse(text: string, reviver?: (this: any, key: string, value: any) => any): any
+d[0].anything;
+>d : const d: any[]
+

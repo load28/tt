@@ -1,0 +1,89 @@
+=== nestedCallbackReturnsAndOverlappingCallCapturesPreserveEffects.tt ===
+variant State { Ready(values: number[]), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       values: number[];
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (values: number[]) => State
+>values : (property) values: number[]
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+const events: string[] = [];
+>events : const events: string[]
+const convert = (n: number) => { events.push(`convert:${n}`); return n + 10; };
+>convert : const convert: (n: number) => number
+>n : (parameter) n: number
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+const answer = match(State.Ready([2, 5])) {
+>answer : const answer: number[]
+>State : const State: {
+>       Ready: (values: number[]) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Ready : (property) Ready: (values: number[]) => State
+    Ready(values) => { return values.map(n => convert(match(n){0=>0,_=>n}) + convert(match(n){0=>0,_=>n})); },
+>values : const values: number[]
+>values : const values: number[]
+>map : (method) Array<number>.map<number>(callbackfn: (value: number, index: number, array: number[]) => number, thisArg?: any): number[]
+>n : (parameter) n: number
+>convert : const convert: (n: number) => number
+>n : (parameter) n: number
+>n : (parameter) n: number
+>convert : const convert: (n: number) => number
+>n : (parameter) n: number
+>n : (parameter) n: number
+const keyed = { [String(match(1){1=>1,_=>0})]: match(2){2=>2,_=>0} };
+>keyed : const keyed: {
+>       [x: string]: number;
+>   }
+>String : var String: (value?: any) => string
+const truthy = (1 |> ((n: number) => n + 1)) && match(3){3=>3,_=>0};
+>truthy : const truthy: number
+>n : (parameter) n: number
+>n : (parameter) n: number
+const fromBody = (() => { if let Ready(values) = State.Ready([4]) { return values[0]; } return 0; })() && match(4){4=>4,_=>0};
+>fromBody : const fromBody: number
+>values : const values: number[]
+>State : const State: {
+>       Ready: (values: number[]) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Ready : (property) Ready: (values: number[]) => State
+>values : const values: number[]
+const take = (...values: number[]) => values;
+>take : const take: (...values: number[]) => number[]
+>values : (parameter) values: number[]
+>values : (parameter) values: number[]
+const callArgs = take((1 |> ((n: number) => n + 1)), match(3){3=>3,_=>0});
+>callArgs : const callArgs: number[]
+>take : const take: (...values: number[]) => number[]
+>n : (parameter) n: number
+>n : (parameter) n: number
+console.log(JSON.stringify([answer, keyed, truthy, fromBody, callArgs]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>answer : const answer: number[]
+>keyed : const keyed: {
+>       [x: string]: number;
+>   }
+>truthy : const truthy: number
+>fromBody : const fromBody: number
+>callArgs : const callArgs: number[]
+console.log(events.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>events : const events: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

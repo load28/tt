@@ -1,0 +1,11 @@
+// @origin: tests/integration/contextual.rs::an_annotation_never_names_the_storage_the_lowering_declared
+// @run: anAnnotationNeverNamesTheStorageTheLoweringDeclared.tt
+
+function pick(n: number) {
+  const C = match (n) { 1 => class { q = 1 }, _ => class { q = 2 } };
+  const K = match (n) { 1 => { const Local = class { r = 3 }; return Local; }, _ => class { r = 4 } };
+  return [new C().q, new K().r];
+}
+console.log(JSON.stringify([pick(1), pick(2)]));
+
+export {};

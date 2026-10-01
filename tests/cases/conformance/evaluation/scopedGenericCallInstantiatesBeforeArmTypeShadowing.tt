@@ -1,0 +1,20 @@
+// @origin: tests/integration/contextual.rs::scoped_generic_call_instantiates_before_arm_type_shadowing
+// @run: scopedGenericCallInstantiatesBeforeArmTypeShadowing.tt
+
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function original<T extends Item>(item: T) { trace.push("original:" + item.run(3)); }
+let consume = original;
+consume<Item>(match (State.Ready(4)) {
+  Ready(value) => {
+    type Item = never;
+    consume = () => { trace.push("replaced"); };
+    trace.push("arm");
+    return {kind: "item", run: x => x + value};
+  },
+  Empty => ({kind: "item", run: x => x}),
+});
+console.log(trace.join(","));
+
+export {};

@@ -1,0 +1,122 @@
+=== runtimeMatchGuardsFallThroughTopToBottom.tt ===
+variant Score {
+>Score : type Score = {
+>       kind: "Graded";
+>       points: number;
+>   } | {
+>       kind: "Pending";
+>   }
+  Graded(points: number),
+>Graded : (property) Graded: (points: number) => Score
+>points : (property) points: number
+  Pending,
+>Pending : (property) Pending: {
+>       readonly kind: "Pending";
+>   }
+function grade(s: Score): string {
+>grade : function grade(s: Score): string
+>s : (parameter) s: Score
+>Score : type Score = {
+>       kind: "Graded";
+>       points: number;
+>   } | {
+>       kind: "Pending";
+>   }
+  return match (s) {
+>s : (parameter) s: Score
+    Graded(points) if points >= 90 => "A",
+>points : const points: number
+>points : const points: number
+    Graded(points) if points >= 80 => "B",
+>points : const points: number
+>points : const points: number
+    Graded(points) => "F",
+>points : const points: number
+function tally(s: Score): number {
+>tally : function tally(s: Score): number
+>s : (parameter) s: Score
+>Score : type Score = {
+>       kind: "Graded";
+>       points: number;
+>   } | {
+>       kind: "Pending";
+>   }
+  return match (s) {
+>s : (parameter) s: Score
+    Graded(points) if points > 0 => {
+>points : const points: number
+>points : const points: number
+      const doubled = points * 2;
+>doubled : const doubled: number
+>points : const points: number
+      return doubled;
+>doubled : const doubled: number
+console.log(grade(Score.Graded(95)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>grade : function grade(s: Score): string
+>Score : const Score: {
+>       Graded: (points: number) => Score;
+>       Pending: {
+>           readonly kind: "Pending";
+>       };
+>   }
+>Graded : (property) Graded: (points: number) => Score
+console.log(grade(Score.Graded(85)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>grade : function grade(s: Score): string
+>Score : const Score: {
+>       Graded: (points: number) => Score;
+>       Pending: {
+>           readonly kind: "Pending";
+>       };
+>   }
+>Graded : (property) Graded: (points: number) => Score
+console.log(grade(Score.Graded(10)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>grade : function grade(s: Score): string
+>Score : const Score: {
+>       Graded: (points: number) => Score;
+>       Pending: {
+>           readonly kind: "Pending";
+>       };
+>   }
+>Graded : (property) Graded: (points: number) => Score
+console.log(grade(Score.Pending));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>grade : function grade(s: Score): string
+>Score : const Score: {
+>       Graded: (points: number) => Score;
+>       Pending: {
+>           readonly kind: "Pending";
+>       };
+>   }
+>Pending : (property) Pending: {
+>       readonly kind: "Pending";
+>   }
+console.log(tally(Score.Graded(3)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>tally : function tally(s: Score): number
+>Score : const Score: {
+>       Graded: (points: number) => Score;
+>       Pending: {
+>           readonly kind: "Pending";
+>       };
+>   }
+>Graded : (property) Graded: (points: number) => Score
+console.log(tally(Score.Graded(-1)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>tally : function tally(s: Score): number
+>Score : const Score: {
+>       Graded: (points: number) => Score;
+>       Pending: {
+>           readonly kind: "Pending";
+>       };
+>   }
+>Graded : (property) Graded: (points: number) => Score
+

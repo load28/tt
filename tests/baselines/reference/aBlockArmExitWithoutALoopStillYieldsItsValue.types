@@ -1,0 +1,59 @@
+=== aBlockArmExitWithoutALoopStillYieldsItsValue.tt ===
+variant Pick { Some(v: number), None }
+>Pick : type Pick = {
+>       kind: "Some";
+>       v: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (v: number) => Pick
+>v : (property) v: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+function choose(p: Pick): number {
+>choose : function choose(p: Pick): number
+>p : (parameter) p: Pick
+>Pick : type Pick = {
+>       kind: "Some";
+>       v: number;
+>   } | {
+>       kind: "None";
+>   }
+  return match (p) {
+>p : (parameter) p: Pick
+    Some(v) => { const doubled = v * 2; return doubled; },
+>v : const v: number
+>doubled : const doubled: number
+>v : const v: number
+>doubled : const doubled: number
+const guarded = (n: number): number => match (n) {
+>guarded : const guarded: (n: number) => number
+>n : (parameter) n: number
+>n : (parameter) n: number
+  _ => { return n + 100; },
+>n : (parameter) n: number
+console.log(choose(Pick.Some(21)), choose(Pick.None), guarded(0), guarded(5));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>choose : function choose(p: Pick): number
+>Pick : const Pick: {
+>       Some: (v: number) => Pick;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (v: number) => Pick
+>choose : function choose(p: Pick): number
+>Pick : const Pick: {
+>       Some: (v: number) => Pick;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+>guarded : const guarded: (n: number) => number
+>guarded : const guarded: (n: number) => number
+

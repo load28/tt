@@ -1,0 +1,9 @@
+// @origin: tests/integration/cases_03.rs::flow_composition_runs_left_to_right_when_called
+// @run: flowCompositionRunsLeftToRightWhenCalled.tt
+
+const order: string[] = [];
+const tap = <T,>(name: string) => (v: T): T => { order.push(name); return v; };
+const f = flow |> tap<number>("s1") |> .toFixed(0) |> tap("s2");
+console.log(order.join(","), "|", f(10), "|", order.join(","));
+
+export {};

@@ -1,0 +1,165 @@
+=== runtimeAValueInsideALetElseOrIfLetSubjectKeepsEvaluationOrder.tt ===
+type Opt = { kind: "Some"; value: number } | { kind: "None" };
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>kind : (property) kind: "None"
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const trace: string[] = [];
+>trace : const trace: string[]
+let pick = (n: number): Opt => { trace.push("pick" + n); return n > 1 ? { kind: "Some", value: n } : { kind: "None" }; };
+>pick : let pick: (n: number) => Opt
+>n : (parameter) n: number
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "None"
+function swap(n: number): number {
+>swap : function swap(n: number): number
+>n : (parameter) n: number
+  trace.push("swap");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  const first = pick;
+>first : const first: (n: number) => Opt
+>pick : let pick: (n: number) => Opt
+  pick = (m) => { trace.push("late" + m); return first(m); };
+>pick : let pick: (n: number) => Opt
+>m : (parameter) m: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>m : (parameter) m: number
+>first : const first: (n: number) => Opt
+>m : (parameter) m: number
+  return n;
+>n : (parameter) n: number
+function viaMatch(k: number): number {
+>viaMatch : function viaMatch(k: number): number
+>k : (parameter) k: number
+  if let Some(value: w) = pick(match (k) { 1 => swap(1), _ => swap(3) }) { return w; }
+>value : (property) value: number
+>w : const w: number
+>pick : let pick: (n: number) => Opt
+>k : (parameter) k: number
+>swap : function swap(n: number): number
+>swap : function swap(n: number): number
+>w : const w: number
+  else if let Some(value: z) = pick(match (k) { 1 => swap(5), _ => 0 }) { return z * 10; }
+>value : (property) value: number
+>z : const z: number
+>pick : let pick: (n: number) => Opt
+>k : (parameter) k: number
+>swap : function swap(n: number): number
+>z : const z: number
+function readOpt(n: number): R<Opt> {
+>readOpt : function readOpt(n: number): R<Opt>
+>n : (parameter) n: number
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+  return n < 0 ? { kind: "Err", error: "neg" } : { kind: "Ok", value: n > 1 ? { kind: "Some", value: n } : { kind: "None" } };
+>n : (parameter) n: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+>kind : (property) kind: "Ok"
+>value : (property) value: Opt
+>n : (parameter) n: number
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "None"
+function inResult(n: number) {
+>inResult : function inResult(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>n : (parameter) n: number
+    const Some(value: v) = (try readOpt(n)) else { return -2; };
+>value : (property) value: number
+>v : const v: number
+>readOpt : function readOpt(n: number): R<Opt>
+>n : (parameter) n: number
+    if let Some(value: q) = [try readOpt(n + 1)][0] { return v + q; }
+>value : (property) value: number
+>q : const q: number
+>readOpt : function readOpt(n: number): R<Opt>
+>n : (parameter) n: number
+>v : const v: number
+>q : const q: number
+    return v;
+>v : const v: number
+console.log(viaMatch(1), JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>viaMatch : function viaMatch(k: number): number
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+console.log(JSON.stringify([inResult(2), inResult(1), inResult(-1)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>inResult : function inResult(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>inResult : function inResult(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>inResult : function inResult(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+

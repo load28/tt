@@ -1,0 +1,23 @@
+// @origin: tests/integration/cases_04.rs::runtime_result_preserves_statement_match_effect_order
+// @run: runtimeResultPreservesStatementMatchEffectOrder.tt
+
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+const events: string[] = [];
+const read = (): Res<number, string> => Res.Ok(7);
+const subject = (tag: number) => { events.push("subject-" + tag); return tag; };
+
+const run = (tag: number) => result {
+  const value = try read();
+  match (subject(tag)) {
+    1 => { events.push("one"); },
+    _ => { events.push("other"); },
+  }
+  events.push("after");
+  return value;
+};
+
+console.log(JSON.stringify(run(1)), events.join(","));
+events.length = 0;
+console.log(JSON.stringify(run(2)), events.join(","));
+
+export {};

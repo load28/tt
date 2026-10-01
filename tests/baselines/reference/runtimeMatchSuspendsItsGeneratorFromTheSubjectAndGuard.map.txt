@@ -1,0 +1,41 @@
+//// [runtimeMatchSuspendsItsGeneratorFromTheSubjectAndGuard.tt] 39 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:18 -> 21:21 len 6  "number"
+2:18 -> 24:10 len 6  "number"
+2:30 -> 26:3 len 56  "\n\nfunction* subject(): Generator<string, number,"...
+5:3 -> 47:3 len 10  "const r = "
+5:20 -> 31:19 len 15  "yield \"subject\""
+5:41 -> 34:17 len 1  "n"
+5:47 -> 35:18 len 1  "n"
+5:55 -> 39:18 len 1  "0"
+5:58 -> 47:19 len 78  ";\n  return r;\n}\n\nfunction* guard(s: S): Generato"...
+10:3 -> 67:3 len 10  "const r = "
+10:20 -> 54:19 len 1  "s"
+10:27 -> 57:17 len 1  "n"
+10:33 -> 58:13 len 15  "(yield n) === 1"
+10:52 -> 59:20 len 10  "`one ${n}`"
+10:69 -> 63:16 len 7  "\"other\""
+10:78 -> 67:19 len 74  ";\n  return r;\n}\n\nfunction* cast(): Generator<num"...
+15:3 -> 106:3 len 10  "const r = "
+15:20 -> 74:19 len 14  "(yield 1) as S"
+16:7 -> 77:17 len 1  "n"
+16:20 -> 79:25 len 14  "(yield n) as S"
+16:40 -> 82:23 len 1  "n"
+16:43 -> 82:26 len 1  "m"
+16:49 -> 83:24 len 5  "n + m"
+16:61 -> 87:24 len 1  "n"
+17:10 -> 98:18 len 1  "0"
+18:4 -> 106:19 len 142  ";\n  return r;\n}\n\nclass Base { start() { return 7"...
+26:5 -> 132:5 len 7  "return "
+26:19 -> 116:21 len 19  "yield super.start()"
+26:44 -> 119:19 len 1  "n"
+26:50 -> 120:20 len 14  "n * this.scale"
+26:71 -> 124:20 len 2  "-1"
+26:75 -> 132:18 len 81  ";\n  }\n}\n\nasync function* later(): AsyncGenerator"...
+31:3 -> 155:3 len 10  "const r = "
+31:20 -> 139:19 len 15  "await (yield 1)"
+31:41 -> 142:17 len 1  "n"
+31:47 -> 143:18 len 1  "n"
+31:55 -> 147:18 len 1  "0"
+31:58 -> 155:19 len 718  ";\n  return r;\n}\n\nconst drive = <Y, R, N>(g: Gene"...
+

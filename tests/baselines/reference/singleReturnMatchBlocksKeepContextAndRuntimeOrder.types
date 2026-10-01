@@ -1,0 +1,111 @@
+=== singleReturnMatchBlocksKeepContextAndRuntimeOrder.tt ===
+const trace: string[] = [];
+>trace : const trace: string[]
+const mark = <T,>(name: string, value: T): T => { trace.push(name); return value; };
+>mark : const mark: <T>(name: string, value: T) => T
+>T : (type parameter) T in <T>(name: string, value: T): T
+>name : (parameter) name: string
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(name: string, value: T): T
+>T : (type parameter) T in <T>(name: string, value: T): T
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>value : (parameter) value: T
+const receiver = {
+>receiver : const receiver: {
+>       base: number;
+>       consume(first: number, item: {
+>           kind: "item";
+>           run: (x: number) => number;
+>       }, last: number): number;
+>   }
+  base: 10,
+>base : (property) base: number
+  consume(first: number, item: {kind: "item"; run: (x: number) => number}, last: number) {
+>consume : (method) consume(first: number, item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }, last: number): number
+>first : (parameter) first: number
+>item : (parameter) item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>last : (parameter) last: number
+    trace.push("call");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+    return this.base + first + item.run(last);
+>base : (property) base: number
+>first : (parameter) first: number
+>item : (parameter) item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>run : (property) run: (x: number) => number
+>last : (parameter) last: number
+for (const flag of [true, false]) {
+>flag : const flag: boolean
+  trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+  const answer = mark("receiver", receiver).consume(mark("first", 2), match (mark("subject", flag)) {
+>answer : const answer: number
+>mark : const mark: <{
+>       base: number;
+>       consume(first: number, item: {
+>           kind: "item";
+>           run: (x: number) => number;
+>       }, last: number): number;
+>   }>(name: string, value: {
+>       base: number;
+>       consume(first: number, item: {
+>           kind: "item";
+>           run: (x: number) => number;
+>       }, last: number): number;
+>   }) => {
+>       base: number;
+>       consume(first: number, item: {
+>           kind: "item";
+>           run: (x: number) => number;
+>       }, last: number): number;
+>   }
+>receiver : const receiver: {
+>       base: number;
+>       consume(first: number, item: {
+>           kind: "item";
+>           run: (x: number) => number;
+>       }, last: number): number;
+>   }
+>consume : (method) consume(first: number, item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }, last: number): number
+>mark : const mark: <2>(name: string, value: 2) => 2
+>mark : const mark: <boolean>(name: string, value: boolean) => boolean
+>flag : const flag: boolean
+    true => { /* selected block */ return (mark("yes", 0), {kind: "item", run: x => x + 1}); /* tail */ },
+>mark : const mark: <0>(name: string, value: 0) => 0
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+    false => { return (mark("no", 0), {kind: "item", run: x => x - 1}); },
+>mark : const mark: <0>(name: string, value: 0) => 0
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+  }, mark("last", 3));
+>mark : const mark: <3>(name: string, value: 3) => 3
+  console.log(answer, trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>answer : const answer: number
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

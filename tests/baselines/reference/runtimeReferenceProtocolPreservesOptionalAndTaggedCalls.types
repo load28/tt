@@ -1,0 +1,153 @@
+=== runtimeReferenceProtocolPreservesOptionalAndTaggedCalls.tt ===
+variant E { A(value: number), B }
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (value: number) => E
+>value : (property) value: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const events: string[] = [];
+>events : const events: string[]
+const receiver = {
+>receiver : const receiver: {
+>       readonly method: (this: unknown, value: number) => number;
+>       readonly tag: (this: unknown, strings: TemplateStringsArray, value: number) => string;
+>   }
+  get method() {
+>method : (accessor) method: (this: unknown, value: number) => number
+    events.push("method");
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+    return function (this: unknown, value: number) {
+>this : (parameter) this: unknown
+>value : (parameter) value: number
+      events.push(`call:${this === receiver}:${value}`);
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>receiver : const receiver: {
+>       readonly method: (this: unknown, value: number) => number;
+>       readonly tag: (this: unknown, strings: TemplateStringsArray, value: number) => string;
+>   }
+>value : (parameter) value: number
+      return value;
+>value : (parameter) value: number
+  get tag() {
+>tag : (accessor) tag: (this: unknown, strings: TemplateStringsArray, value: number) => string
+    events.push("tag");
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+    return function (this: unknown, strings: TemplateStringsArray, value: number) {
+>this : (parameter) this: unknown
+>strings : (parameter) strings: TemplateStringsArray
+>TemplateStringsArray : interface TemplateStringsArray
+>value : (parameter) value: number
+      events.push(`tag-call:${this === receiver}:${value}`);
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>receiver : const receiver: {
+>       readonly method: (this: unknown, value: number) => number;
+>       readonly tag: (this: unknown, strings: TemplateStringsArray, value: number) => string;
+>   }
+>value : (parameter) value: number
+      return (strings[0] ?? "") + value;
+>strings : (parameter) strings: TemplateStringsArray
+>value : (parameter) value: number
+const absent: { method: ((value: number) => number) | null } = {
+>absent : const absent: {
+>       method: ((value: number) => number) | null;
+>   }
+>method : (property) method: ((value: number) => number) | null
+>value : (parameter) value: number
+  get method() { return null as ((value: number) => number) | null; },
+>method : (property) method: ((value: number) => number) | null
+>value : (parameter) value: number
+function effect(value: E): E {
+>effect : function effect(value: E): E
+>value : (parameter) value: E
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+  events.push("subject");
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return value;
+>value : (parameter) value: E
+const present = receiver.method?.(
+>present : const present: number | undefined
+>receiver : const receiver: {
+>       readonly method: (this: unknown, value: number) => number;
+>       readonly tag: (this: unknown, strings: TemplateStringsArray, value: number) => string;
+>   }
+>method : (accessor) method: (this: unknown, value: number) => number
+  match (effect(E.A(2))) { A(value) => value, B => 0 },
+>effect : function effect(value: E): E
+>E : const E: {
+>       A: (value: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: number) => E
+>value : const value: number
+>value : const value: number
+const missing = absent.method?.(
+>missing : const missing: number | undefined
+>absent : const absent: {
+>       method: ((value: number) => number) | null;
+>   }
+>method : (property) method: ((value: number) => number) | null
+  match (effect(E.A(3))) { A(value) => value, B => 0 },
+>effect : function effect(value: E): E
+>E : const E: {
+>       A: (value: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: number) => E
+>value : const value: number
+>value : const value: number
+const tagged = receiver.tag`value:${match (effect(E.A(4))) {
+>tagged : const tagged: string
+>receiver : const receiver: {
+>       readonly method: (this: unknown, value: number) => number;
+>       readonly tag: (this: unknown, strings: TemplateStringsArray, value: number) => string;
+>   }
+>tag : (accessor) tag: (this: unknown, strings: TemplateStringsArray, value: number) => string
+>effect : function effect(value: E): E
+>E : const E: {
+>       A: (value: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: number) => E
+  A(value) => value,
+>value : const value: number
+>value : const value: number
+console.log(events.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>events : const events: string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(present, missing, tagged);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>present : const present: number | undefined
+>missing : const missing: number | undefined
+>tagged : const tagged: string
+

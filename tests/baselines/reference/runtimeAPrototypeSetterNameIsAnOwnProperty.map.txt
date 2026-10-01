@@ -1,0 +1,21 @@
+//// [runtimeAPrototypeSetterNameIsAnOwnProperty.tt] 19 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:26 -> 21:29 len 6  "number"
+2:26 -> 24:22 len 6  "number"
+2:42 -> 26:3 len 1  "\n"
+3:31 -> 33:3 len 1  "\n"
+4:26 -> 35:29 len 6  "number"
+4:26 -> 38:18 len 6  "number"
+4:42 -> 35:45 len 6  "number"
+4:42 -> 38:34 len 6  "number"
+4:54 -> 40:3 len 325  "\nconst v = V.__proto__(1);\nconsole.log(JSON.stri"...
+10:20 -> 48:17 len 1  "v"
+10:35 -> 51:15 len 1  "x"
+10:41 -> 52:16 len 1  "x"
+10:53 -> 56:16 len 1  "0"
+10:65 -> 65:17 len 1  "w"
+10:72 -> 68:15 len 9  "__proto__"
+10:86 -> 69:27 len 9  "__proto__"
+10:102 -> 73:27 len 1  "0"
+10:107 -> 81:1 len 13  "\n\nexport {};\n"
+

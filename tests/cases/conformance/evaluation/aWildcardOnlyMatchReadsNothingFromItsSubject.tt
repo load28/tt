@@ -1,0 +1,7 @@
+// @origin: tests/integration.rs::a_wildcard_only_match_reads_nothing_from_its_subject
+// @run: aWildcardOnlyMatchReadsNothingFromItsSubject.tt
+
+const values: (number | null | undefined)[] = [1, null, undefined];
+console.log(JSON.stringify(values.map(v => match (v) { _ => "any" })));
+
+export {};

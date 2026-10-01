@@ -1,0 +1,14 @@
+//// [siblingValuesBesideAShortCircuitKeepLeftToRightOrder.tt] 12 mapping(s)
+1:1 -> 1:1 len 182  "\nconst trace: number[] = [];\nfunction mark(n: nu"...
+6:1 -> 9:1 len 7  "g(a && "
+6:15 -> 9:23 len 7  "mark(1)"
+6:26 -> 9:49 len 1  "1"
+6:31 -> 9:54 len 2  "11"
+6:40 -> 9:59 len 1  "0"
+6:43 -> 9:61 len 2  ", "
+6:52 -> 9:80 len 7  "mark(2)"
+6:63 -> 9:108 len 1  "2"
+6:68 -> 9:113 len 2  "22"
+6:77 -> 9:118 len 1  "0"
+6:80 -> 9:120 len 51  ");\nconsole.log(JSON.stringify(trace));\n\nexport {"...
+

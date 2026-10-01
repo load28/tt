@@ -1,0 +1,33 @@
+//// [inlineDecisionsKeepTheEnclosingMatchReturnOwner.tt] 31 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:27 -> 21:28 len 6  "number"
+2:27 -> 24:17 len 6  "number"
+2:42 -> 26:3 len 35  "\nfunction pick(o: Opt): number {\n  "
+4:3 -> 56:3 len 10  "const v = "
+4:20 -> 30:19 len 1  "o"
+5:10 -> 33:17 len 5  "value"
+6:7 -> 34:9 len 38  "for (let i = 0; i < 1; i++) {\n        "
+7:21 -> 38:21 len 5  "value"
+7:28 -> 38:28 len 2  "v2"
+7:34 -> 36:26 len 1  "o"
+8:11 -> 39:13 len 57  "const nested = () => { return v2 + 1; };\n       "...
+9:24 -> 40:26 len 8  "nested()"
+9:33 -> 40:51 len 38  " } finally { console.log(\"cleanup\"); }"
+10:10 -> 42:10 len 15  "\n      }\n      "
+12:14 -> 44:18 len 5  "value"
+14:13 -> 48:18 len 1  "0"
+15:4 -> 56:19 len 60  ";\n  return v + 100;\n}\nfunction fallback(o: Opt):"...
+19:3 -> 86:3 len 10  "const v = "
+19:20 -> 62:19 len 10  "Boolean(o)"
+20:5 -> 64:12 len 4  "true"
+21:19 -> 68:21 len 5  "value"
+21:26 -> 68:28 len 1  "n"
+21:31 -> 66:26 len 1  "o"
+21:42 -> 69:22 len 1  "n"
+21:61 -> 71:22 len 1  "7"
+21:65 -> 73:10 len 7  "\n      "
+22:14 -> 74:18 len 1  "9"
+24:5 -> 77:12 len 5  "false"
+24:14 -> 78:18 len 1  "0"
+25:4 -> 86:19 len 138  ";\n  return v + 100;\n}\nconsole.log(pick(Opt.Some("...
+

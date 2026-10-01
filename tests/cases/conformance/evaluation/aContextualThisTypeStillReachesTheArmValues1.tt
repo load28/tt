@@ -1,0 +1,8 @@
+// @origin: tests/integration/contextual.rs::a_contextual_this_type_still_reaches_the_arm_values
+
+declare const n: number;
+type Methods = { k: number; m(): number } & ThisType<{ q: string }>;
+const d: Methods = match (n) { 1 => ({ k: 1, m() { return this.q.length; } }), _ => ({ k: 2, m() { return this.q.length; } }) };
+const e: Methods = match (n) { 1 => ({ k: 1, m() { return this.k; } }), _ => ({ k: 2, m() { return 0; } }) };
+
+export {};

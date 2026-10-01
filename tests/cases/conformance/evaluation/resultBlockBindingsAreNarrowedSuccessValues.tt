@@ -1,0 +1,25 @@
+// @origin: tests/integration/cases_04.rs::result_block_bindings_are_narrowed_success_values
+
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+variant UserError { NoUser() }
+variant CompanyError { NoCompany(id: number) }
+type User = { id: number; name: string; companyId: number };
+type Company = { id: number; name: string };
+declare function getUser(id: number): Res<User, UserError>;
+declare function getCompany(id: number): Res<Company, CompanyError>;
+
+const view = (id: number) => result {
+  const user = try getUser(id);
+  const company = try getCompany(user.companyId);
+  const label: string = user.name.toUpperCase() + company.name;
+  return { user, company, label };
+};
+const check = (id: number): string => match (view(id)) {
+  Ok(value) => value.label,
+  Err(error) => match (error) {
+    NoUser => "no user",
+    NoCompany(id: missing) => "no company " + missing,
+  },
+};
+
+export {};

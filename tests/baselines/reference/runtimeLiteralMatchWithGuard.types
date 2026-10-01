@@ -1,0 +1,16 @@
+=== runtimeLiteralMatchWithGuard.tt ===
+function classify(code: number, retry: boolean) {
+>classify : function classify(code: number, retry: boolean): string
+>code : (parameter) code: number
+>retry : (parameter) retry: boolean
+  return match (code) {
+>code : (parameter) code: number
+    500 if retry => "retrying",
+>retry : (parameter) retry: boolean
+console.log(classify(500, true), classify(500, false), classify(200, true));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>classify : function classify(code: number, retry: boolean): string
+>classify : function classify(code: number, retry: boolean): string
+>classify : function classify(code: number, retry: boolean): string
+

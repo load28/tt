@@ -1,0 +1,17 @@
+// @origin: tests/integration/cases_04.rs::runtime_literal_match_evaluates_the_scrutinee_once
+// @run: runtimeLiteralMatchEvaluatesTheScrutineeOnce.tt
+
+let calls = 0;
+function getValue(): string {
+  calls += 1;
+  return "b";
+}
+
+const picked = match (getValue()) {
+  "a" => 1,
+  "b" => 2,
+  _ => 3,
+};
+console.log(picked, calls);
+
+export {};

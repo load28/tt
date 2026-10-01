@@ -1,0 +1,34 @@
+// @origin: tests/integration/contextual.rs::consumed_call_completions_preserve_results_order_and_errors
+// @run: consumedCallCompletionsPreserveResultsOrderAndErrors.tt
+
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function mark<T>(name: string, value: T): T { trace.push(name); return value; }
+const api = {
+  base: 10,
+  get consume() {
+    trace.push("callee");
+    return function(this: {base: number}, item: Item) { trace.push("call"); return this.base + item.run(3); };
+  },
+};
+for (const state of [State.Ready(4), State.Empty]) {
+  trace.length = 0;
+  const result = mark("receiver", api).consume(match (mark("subject", state)) {
+    Ready(value) => (trace.push("arm"), {kind: "item", run: x => x + value}),
+    Empty => ({kind: "item", run: x => x}),
+  }) + mark("after", 1);
+  console.log(result, trace.join(","));
+}
+function throws(item: Item): number { trace.push("throws:" + item.run(1)); throw new Error("consumer"); }
+trace.length = 0;
+let unreached = "kept";
+try {
+  unreached = "lost:" + throws(match (State.Ready(2)) {
+    Ready(value) => { trace.push("value"); return {kind: "item", run: x => x + value}; },
+    Empty => ({kind: "item", run: x => x}),
+  });
+} catch { trace.push("caught"); }
+console.log(unreached, trace.join(","));
+
+export {};

@@ -1,0 +1,41 @@
+// @origin: tests/integration.rs::runtime_owner_lowering_preserves_reference_order_and_block_exits
+// @run: runtimeOwnerLoweringPreservesReferenceOrderAndBlockExits.tt
+
+variant E { A(value: number), B }
+const events: string[] = [];
+const receiver = {
+  get method() {
+    events.push("callee");
+    return function (this: unknown, before: number, value: number, after: number) {
+      events.push(`call:${this === receiver}:${before}:${value}:${after}`);
+      return value;
+    };
+  },
+};
+function effect<T>(label: string, value: T): T {
+  events.push(label);
+  return value;
+}
+const value = receiver.method(
+  effect("before", 1),
+  match (effect("subject", E.A(2))) { A(value) => value, B => 0 },
+  effect("after", 3),
+);
+const block = match (E.A(4)) {
+  A(value) => {
+    if (value > 0) return value * 2;
+    return 0;
+  },
+  B => { return -1; },
+};
+const nested = match (E.A(5)) {
+  A(value) => {
+    const add = () => { return value + 1; };
+    return add();
+  },
+  B => { return 0; },
+};
+console.log(events.join(","));
+console.log(value, block, nested);
+
+export {};

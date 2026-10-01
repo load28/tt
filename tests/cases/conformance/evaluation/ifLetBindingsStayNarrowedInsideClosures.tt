@@ -1,0 +1,12 @@
+// @origin: tests/integration/cases_04.rs::if_let_bindings_stay_narrowed_inside_closures
+
+variant Opt { Some(value: string), None }
+function f(o: Opt, xs: number[]): string[] {
+  const collected: string[] = [];
+  if let Some(value) = o {
+    xs.forEach(() => collected.push(value.toUpperCase()));
+  }
+  return collected;
+}
+
+export {};

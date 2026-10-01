@@ -1,0 +1,26 @@
+//// [runtimeAVarLetElseAsAnUnbracedBodyStaysUnderItsParent.tt] 24 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:25 -> 3:28 len 6  "number"
+2:25 -> 6:17 len 6  "number"
+2:40 -> 8:3 len 86  "\nfunction h(c: boolean, o: O): number | undefine"...
+5:19 -> 16:11 len 5  "value"
+5:26 -> 16:18 len 2  "hv"
+5:32 -> 12:20 len 1  "o"
+5:41 -> 14:7 len 9  "return 0;"
+5:53 -> 17:4 len 112  "\n  return read();\n}\nfunction w(xs: O[]): number "...
+11:34 -> 28:11 len 5  "value"
+11:41 -> 28:18 len 2  "wv"
+11:47 -> 24:20 len 7  "xs[i++]"
+11:62 -> 26:7 len 6  "break;"
+11:71 -> 29:4 len 102  "\n  return read() ?? -1;\n}\nfunction e(c: boolean,"...
+15:35 -> 38:11 len 5  "value"
+15:42 -> 38:18 len 2  "ev"
+15:48 -> 34:20 len 1  "o"
+15:57 -> 36:7 len 9  "return 0;"
+15:69 -> 39:4 len 50  "\n  return ev;\n}\nfunction l(o: O): number {\n  lbl"...
+19:17 -> 48:11 len 5  "value"
+19:24 -> 48:18 len 2  "lv"
+19:30 -> 44:20 len 1  "o"
+19:39 -> 46:7 len 10  "return -2;"
+19:52 -> 49:4 len 276  "\n  return lv + 1;\n}\nconsole.log(h(true, O.Some(5"...
+

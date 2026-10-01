@@ -1,0 +1,5 @@
+// @origin: tests/integration/cases_03.rs::optional_postfix_types_are_checked_as_plain_typescript
+declare const value: { n: number } | undefined;
+const bad = value |> ?.n |> ((n: number) => n + 1);
+
+export {};

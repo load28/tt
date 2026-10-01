@@ -1,0 +1,14 @@
+// @origin: tests/integration/contextual.rs::instantiated_call_completions_keep_generic_context
+// @run: instantiatedCallCompletionsKeepGenericContext.tt
+
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function generic<T>(value: T): T { trace.push("call"); return value; }
+const item = generic<Item>(match (State.Ready(3)) {
+  Ready(value) => { trace.push("arm"); return {kind: "item", run: x => x + value}; },
+  Empty => ({kind: "item", run: x => x}),
+});
+console.log(item.run(1), trace.join(","));
+
+export {};

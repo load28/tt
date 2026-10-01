@@ -1,0 +1,169 @@
+=== runtimeAValueInsideARegionReturnArgumentRunsInTheReturnSPrelude.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const trace: string[] = [];
+>trace : const trace: string[]
+function ok(n: number): R { return { kind: "Ok", value: n }; }
+>ok : function ok(n: number): R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+let s = (n: number): string => { trace.push("s" + n); return "s" + n; };
+>s : let s: (n: number) => string
+>n : (parameter) n: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+function swap(n: number): number {
+>swap : function swap(n: number): number
+>n : (parameter) n: number
+  trace.push("swap");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  const first = s;
+>first : const first: (n: number) => string
+>s : let s: (n: number) => string
+  s = (m) => { trace.push("late"); return first(m); };
+>s : let s: (n: number) => string
+>m : (parameter) m: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>first : const first: (n: number) => string
+>m : (parameter) m: number
+  return n;
+>n : (parameter) n: number
+function inResult(v: number) {
+>inResult : function inResult(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>v : (parameter) v: number
+    const q = try ok(1);
+>q : const q: number
+>ok : function ok(n: number): R
+    if (v > 5) return s(match (v) { 6 => swap(6), _ => 2 }) + q;
+>v : (parameter) v: number
+>s : let s: (n: number) => string
+>v : (parameter) v: number
+>swap : function swap(n: number): number
+>q : const q: number
+    return [match (v) { 1 => "a", _ => "b" }, match (q) { 1 => "c", _ => "d" }].join("") + q;
+>v : (parameter) v: number
+>q : const q: number
+>join : (method) Array<string>.join(separator?: string): string
+>q : const q: number
+function inArm(v: number) {
+>inArm : function inArm(v: number): string
+>v : (parameter) v: number
+  const x = match (v) {
+>x : const x: string
+>v : (parameter) v: number
+    1 => { const q = 1; if (q > 0) return s(match (v) { 1 => swap(1), _ => 2 }) + q; return "n"; },
+>q : const q: 1
+>q : const q: 1
+>s : let s: (n: number) => string
+>v : (parameter) v: number
+>swap : function swap(n: number): number
+>q : const q: 1
+    2 => { return `${match (v) { 2 => "t", _ => "u" }}-`; },
+>v : (parameter) v: number
+  return x;
+>x : const x: string
+function template(v: number) {
+>template : function template(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>v : (parameter) v: number
+  return result { const q = try ok(1); return `${match (v) { 1 => "a", _ => "b" }}-${q}`; };
+>q : const q: number
+>ok : function ok(n: number): R
+>v : (parameter) v: number
+>q : const q: number
+const base = s;
+>base : const base: (n: number) => string
+>s : let s: (n: number) => string
+console.log(JSON.stringify([inResult(6), inResult(1)]), JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>inResult : function inResult(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>inResult : function inResult(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+s = base;
+>s : let s: (n: number) => string
+>base : const base: (n: number) => string
+trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+console.log(JSON.stringify([inArm(1), inArm(2), inArm(3)]), JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>inArm : function inArm(v: number): string
+>inArm : function inArm(v: number): string
+>inArm : function inArm(v: number): string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+console.log(JSON.stringify([template(1), template(2)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>template : function template(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>template : function template(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+

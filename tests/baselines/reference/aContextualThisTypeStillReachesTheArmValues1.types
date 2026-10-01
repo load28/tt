@@ -1,0 +1,45 @@
+=== aContextualThisTypeStillReachesTheArmValues1.tt ===
+declare const n: number;
+>n : const n: number
+type Methods = { k: number; m(): number } & ThisType<{ q: string }>;
+>Methods : type Methods = {
+>       k: number;
+>       m(): number;
+>   } & ThisType<{
+>       q: string;
+>   }>
+>k : (property) k: number
+>m : (method) m(): number
+>ThisType : interface ThisType<T>
+>q : (property) q: string
+const d: Methods = match (n) { 1 => ({ k: 1, m() { return this.q.length; } }), _ => ({ k: 2, m() { return this.q.length; } }) };
+>d : const d: Methods
+>Methods : type Methods = {
+>       k: number;
+>       m(): number;
+>   } & ThisType<{
+>       q: string;
+>   }>
+>n : const n: number
+>k : (property) k: number
+>m : (method) m(): number
+>q : (property) q: string
+>length : (property) String.length: number
+>k : (property) k: number
+>m : (method) m(): number
+>q : (property) q: string
+>length : (property) String.length: number
+const e: Methods = match (n) { 1 => ({ k: 1, m() { return this.k; } }), _ => ({ k: 2, m() { return 0; } }) };
+>e : const e: Methods
+>Methods : type Methods = {
+>       k: number;
+>       m(): number;
+>   } & ThisType<{
+>       q: string;
+>   }>
+>n : const n: number
+>k : (property) k: number
+>m : (method) m(): number
+>k : (property) k: number
+>m : (method) m(): number
+

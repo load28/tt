@@ -1,0 +1,106 @@
+=== anAnnotationNamesTheDeclarationsItsTypeRefersTo.tt ===
+variant K { A, B }
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+interface Item { a: number }
+>Item : interface Item
+>a : (property) Item.a: number
+function outer<T>(a: T) {
+>outer : function outer<T>(a: T): readonly [T, string]
+>T : (type parameter) T in outer<T>(a: T): readonly [T, string]
+>a : (parameter) a: T
+>T : (type parameter) T in outer<T>(a: T): readonly [T, string]
+  function inner<T>(b: T, k: K) {
+>inner : function inner<T>(b: T, k: K): readonly [T, T]
+>T : (type parameter) T in inner<T>(b: T, k: K): readonly [T, T]
+>b : (parameter) b: T
+>T : (type parameter) T in inner<T>(b: T, k: K): readonly [T, T]
+>k : (parameter) k: K
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+    const z = match (k) { A => a, B => a };
+>z : const z: T
+>k : (parameter) k: K
+>a : (parameter) a: T
+>a : (parameter) a: T
+    return [z, b] as const;
+>z : const z: T
+>b : (parameter) b: T
+>const : type const = readonly [T, T]
+  return inner("s", K.A);
+>inner : function inner<string>(b: string, k: K): readonly [T, string]
+>K : const K: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+function local(i: Item, k: K) {
+>local : function local(i: Item, k: K): (string | number)[]
+>i : (parameter) i: Item
+>Item : interface Item
+>k : (parameter) k: K
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  interface Item { b: string }
+>Item : interface Item
+>b : (property) Item.b: string
+  const x: Item = { b: "s" };
+>x : const x: Item
+>Item : interface Item
+>b : (property) Item.b: string
+  const z = match (k) { A => i, B => i };
+>z : const z: Item
+>k : (parameter) k: K
+>i : (parameter) i: Item
+>i : (parameter) i: Item
+  const y = match (k) { A => x, B => x };
+>y : const y: Item
+>k : (parameter) k: K
+>x : const x: Item
+>x : const x: Item
+  return [z.a, y.b];
+>z : const z: Item
+>a : (property) Item.a: number
+>y : const y: Item
+>b : (property) Item.b: string
+console.log(JSON.stringify([outer(1), local({ a: 2 }, K.B)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>outer : function outer<number>(a: number): readonly [number, string]
+>local : function local(i: Item, k: K): (string | number)[]
+>a : (property) Item.a: number
+>K : const K: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+

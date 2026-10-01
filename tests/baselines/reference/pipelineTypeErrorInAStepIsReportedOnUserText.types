@@ -1,0 +1,7 @@
+=== pipelineTypeErrorInAStepIsReportedOnUserText.tt ===
+const n: number = 1 |> ((a: string) => a.length);
+>n : const n: number
+>a : (parameter) a: string
+>a : (parameter) a: string
+>length : (property) String.length: number
+

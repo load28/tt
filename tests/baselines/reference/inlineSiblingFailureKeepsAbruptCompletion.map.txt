@@ -1,0 +1,15 @@
+//// [inlineSiblingFailureKeepsAbruptCompletion.tt] 13 mapping(s)
+1:1 -> 20:1 len 153  "\nconst trace: string[] = [];\nfunction bad(): boo"...
+6:3 -> 28:3 len 5  "pair("
+6:15 -> 28:23 len 5  "bad()"
+6:24 -> 28:47 len 4  "true"
+6:32 -> 28:55 len 1  "1"
+6:35 -> 28:76 len 5  "false"
+6:44 -> 28:85 len 1  "2"
+6:47 -> 28:167 len 2  ", "
+6:56 -> 28:186 len 4  "true"
+6:64 -> 28:211 len 4  "true"
+6:72 -> 28:219 len 25  "(trace.push(\"second\"), 3)"
+6:104 -> 28:247 len 1  "4"
+6:107 -> 28:249 len 136  ");\n} catch (error) {\n  console.log(error instanc"...
+

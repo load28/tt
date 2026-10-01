@@ -1,0 +1,616 @@
+=== aLongTypeIsAnnotatedWhole.tt ===
+function make(tag: string) { return { p39_long_property_name: { nested_39: tag } } as { p0_long_property_name: { nested_0: string }; p1_long_property_name: { nested_1: string }; p2_long_property_name: { nested_2: string }; p3_long_property_name: { nested_3: string }; p4_long_property_name: { nested_4: string }; p5_long_property_name: { nested_5: string }; p6_long_property_name: { nested_6: string }; p7_long_property_name: { nested_7: string }; p8_long_property_name: { nested_8: string }; p9_long_property_name: { nested_9: string }; p10_long_property_name: { nested_10: string }; p11_long_property_name: { nested_11: string }; p12_long_property_name: { nested_12: string }; p13_long_property_name: { nested_13: string }; p14_long_property_name: { nested_14: string }; p15_long_property_name: { nested_15: string }; p16_long_property_name: { nested_16: string }; p17_long_property_name: { nested_17: string }; p18_long_property_name: { nested_18: string }; p19_long_property_name: { nested_19: string }; p20_long_property_name: { nested_20: string }; p21_long_property_name: { nested_21: string }; p22_long_property_name: { nested_22: string }; p23_long_property_name: { nested_23: string }; p24_long_property_name: { nested_24: string }; p25_long_property_name: { nested_25: string }; p26_long_property_name: { nested_26: string }; p27_long_property_name: { nested_27: string }; p28_long_property_name: { nested_28: string }; p29_long_property_name: { nested_29: string }; p30_long_property_name: { nested_30: string }; p31_long_property_name: { nested_31: string }; p32_long_property_name: { nested_32: string }; p33_long_property_name: { nested_33: string }; p34_long_property_name: { nested_34: string }; p35_long_property_name: { nested_35: string }; p36_long_property_name: { nested_36: string }; p37_long_property_name: { nested_37: string }; p38_long_property_name: { nested_38: string }; p39_long_property_name: { nested_39: string }; }; }
+>make : function make(tag: string): {
+>       p0_long_property_name: {
+>           nested_0: string;
+>       };
+>       p1_long_property_name: {
+>           nested_1: string;
+>       };
+>       p2_long_property_name: {
+>           nested_2: string;
+>       };
+>       p3_long_property_name: {
+>           nested_3: string;
+>       };
+>       p4_long_property_name: {
+>           nested_4: string;
+>       };
+>       p5_long_property_name: {
+>           nested_5: string;
+>       };
+>       p6_long_property_name: {
+>           nested_6: string;
+>       };
+>       p7_long_property_name: {
+>           nested_7: string;
+>       };
+>       p8_long_property_name: {
+>           nested_8: string;
+>       };
+>       p9_long_property_name: {
+>           nested_9: string;
+>       };
+>       p10_long_property_name: {
+>           nested_10: string;
+>       };
+>       p11_long_property_name: {
+>           nested_11: string;
+>       };
+>       p12_long_property_name: {
+>           nested_12: string;
+>       };
+>       p13_long_property_name: {
+>           nested_13: string;
+>       };
+>       p14_long_property_name: {
+>           nested_14: string;
+>       };
+>       p15_long_property_name: {
+>           nested_15: string;
+>       };
+>       p16_long_property_name: {
+>           nested_16: string;
+>       };
+>       p17_long_property_name: {
+>           nested_17: string;
+>       };
+>       p18_long_property_name: {
+>           nested_18: string;
+>       };
+>       p19_long_property_name: {
+>           nested_19: string;
+>       };
+>       p20_long_property_name: {
+>           nested_20: string;
+>       };
+>       p21_long_property_name: {
+>           nested_21: string;
+>       };
+>       p22_long_property_name: {
+>           nested_22: string;
+>       };
+>       p23_long_property_name: {
+>           nested_23: string;
+>       };
+>       p24_long_property_name: {
+>           nested_24: string;
+>       };
+>       p25_long_property_name: {
+>           nested_25: string;
+>       };
+>       p26_long_property_name: {
+>           nested_26: string;
+>       };
+>       p27_long_property_name: {
+>           nested_27: string;
+>       };
+>       p28_long_property_name: {
+>           nested_28: string;
+>       };
+>       p29_long_property_name: {
+>           nested_29: string;
+>       };
+>       p30_long_property_name: {
+>           nested_30: string;
+>       };
+>       p31_long_property_name: {
+>           nested_31: string;
+>       };
+>       p32_long_property_name: {
+>           nested_32: string;
+>       };
+>       p33_long_property_name: {
+>           nested_33: string;
+>       };
+>       p34_long_property_name: {
+>           nested_34: string;
+>       };
+>       p35_long_property_name: {
+>           nested_35: string;
+>       };
+>       p36_long_property_name: {
+>           nested_36: string;
+>       };
+>       p37_long_property_name: {
+>           nested_37: string;
+>       };
+>       p38_long_property_name: {
+>           nested_38: string;
+>       };
+>       p39_long_property_name: {
+>           nested_39: string;
+>       };
+>   }
+>tag : (parameter) tag: string
+>p39_long_property_name : (property) p39_long_property_name: {
+>       nested_39: string;
+>   }
+>nested_39 : (property) nested_39: string
+>tag : (parameter) tag: string
+>p0_long_property_name : (property) p0_long_property_name: {
+>       nested_0: string;
+>   }
+>nested_0 : (property) nested_0: string
+>p1_long_property_name : (property) p1_long_property_name: {
+>       nested_1: string;
+>   }
+>nested_1 : (property) nested_1: string
+>p2_long_property_name : (property) p2_long_property_name: {
+>       nested_2: string;
+>   }
+>nested_2 : (property) nested_2: string
+>p3_long_property_name : (property) p3_long_property_name: {
+>       nested_3: string;
+>   }
+>nested_3 : (property) nested_3: string
+>p4_long_property_name : (property) p4_long_property_name: {
+>       nested_4: string;
+>   }
+>nested_4 : (property) nested_4: string
+>p5_long_property_name : (property) p5_long_property_name: {
+>       nested_5: string;
+>   }
+>nested_5 : (property) nested_5: string
+>p6_long_property_name : (property) p6_long_property_name: {
+>       nested_6: string;
+>   }
+>nested_6 : (property) nested_6: string
+>p7_long_property_name : (property) p7_long_property_name: {
+>       nested_7: string;
+>   }
+>nested_7 : (property) nested_7: string
+>p8_long_property_name : (property) p8_long_property_name: {
+>       nested_8: string;
+>   }
+>nested_8 : (property) nested_8: string
+>p9_long_property_name : (property) p9_long_property_name: {
+>       nested_9: string;
+>   }
+>nested_9 : (property) nested_9: string
+>p10_long_property_name : (property) p10_long_property_name: {
+>       nested_10: string;
+>   }
+>nested_10 : (property) nested_10: string
+>p11_long_property_name : (property) p11_long_property_name: {
+>       nested_11: string;
+>   }
+>nested_11 : (property) nested_11: string
+>p12_long_property_name : (property) p12_long_property_name: {
+>       nested_12: string;
+>   }
+>nested_12 : (property) nested_12: string
+>p13_long_property_name : (property) p13_long_property_name: {
+>       nested_13: string;
+>   }
+>nested_13 : (property) nested_13: string
+>p14_long_property_name : (property) p14_long_property_name: {
+>       nested_14: string;
+>   }
+>nested_14 : (property) nested_14: string
+>p15_long_property_name : (property) p15_long_property_name: {
+>       nested_15: string;
+>   }
+>nested_15 : (property) nested_15: string
+>p16_long_property_name : (property) p16_long_property_name: {
+>       nested_16: string;
+>   }
+>nested_16 : (property) nested_16: string
+>p17_long_property_name : (property) p17_long_property_name: {
+>       nested_17: string;
+>   }
+>nested_17 : (property) nested_17: string
+>p18_long_property_name : (property) p18_long_property_name: {
+>       nested_18: string;
+>   }
+>nested_18 : (property) nested_18: string
+>p19_long_property_name : (property) p19_long_property_name: {
+>       nested_19: string;
+>   }
+>nested_19 : (property) nested_19: string
+>p20_long_property_name : (property) p20_long_property_name: {
+>       nested_20: string;
+>   }
+>nested_20 : (property) nested_20: string
+>p21_long_property_name : (property) p21_long_property_name: {
+>       nested_21: string;
+>   }
+>nested_21 : (property) nested_21: string
+>p22_long_property_name : (property) p22_long_property_name: {
+>       nested_22: string;
+>   }
+>nested_22 : (property) nested_22: string
+>p23_long_property_name : (property) p23_long_property_name: {
+>       nested_23: string;
+>   }
+>nested_23 : (property) nested_23: string
+>p24_long_property_name : (property) p24_long_property_name: {
+>       nested_24: string;
+>   }
+>nested_24 : (property) nested_24: string
+>p25_long_property_name : (property) p25_long_property_name: {
+>       nested_25: string;
+>   }
+>nested_25 : (property) nested_25: string
+>p26_long_property_name : (property) p26_long_property_name: {
+>       nested_26: string;
+>   }
+>nested_26 : (property) nested_26: string
+>p27_long_property_name : (property) p27_long_property_name: {
+>       nested_27: string;
+>   }
+>nested_27 : (property) nested_27: string
+>p28_long_property_name : (property) p28_long_property_name: {
+>       nested_28: string;
+>   }
+>nested_28 : (property) nested_28: string
+>p29_long_property_name : (property) p29_long_property_name: {
+>       nested_29: string;
+>   }
+>nested_29 : (property) nested_29: string
+>p30_long_property_name : (property) p30_long_property_name: {
+>       nested_30: string;
+>   }
+>nested_30 : (property) nested_30: string
+>p31_long_property_name : (property) p31_long_property_name: {
+>       nested_31: string;
+>   }
+>nested_31 : (property) nested_31: string
+>p32_long_property_name : (property) p32_long_property_name: {
+>       nested_32: string;
+>   }
+>nested_32 : (property) nested_32: string
+>p33_long_property_name : (property) p33_long_property_name: {
+>       nested_33: string;
+>   }
+>nested_33 : (property) nested_33: string
+>p34_long_property_name : (property) p34_long_property_name: {
+>       nested_34: string;
+>   }
+>nested_34 : (property) nested_34: string
+>p35_long_property_name : (property) p35_long_property_name: {
+>       nested_35: string;
+>   }
+>nested_35 : (property) nested_35: string
+>p36_long_property_name : (property) p36_long_property_name: {
+>       nested_36: string;
+>   }
+>nested_36 : (property) nested_36: string
+>p37_long_property_name : (property) p37_long_property_name: {
+>       nested_37: string;
+>   }
+>nested_37 : (property) nested_37: string
+>p38_long_property_name : (property) p38_long_property_name: {
+>       nested_38: string;
+>   }
+>nested_38 : (property) nested_38: string
+>p39_long_property_name : (property) p39_long_property_name: {
+>       nested_39: string;
+>   }
+>nested_39 : (property) nested_39: string
+function pick(n: number) {
+>pick : function pick(n: number): string
+>n : (parameter) n: number
+  const x = match (n) { 1 => make("a"), _ => make("b") };
+>x : const x: {
+>       p0_long_property_name: {
+>           nested_0: string;
+>       };
+>       p1_long_property_name: {
+>           nested_1: string;
+>       };
+>       p2_long_property_name: {
+>           nested_2: string;
+>       };
+>       p3_long_property_name: {
+>           nested_3: string;
+>       };
+>       p4_long_property_name: {
+>           nested_4: string;
+>       };
+>       p5_long_property_name: {
+>           nested_5: string;
+>       };
+>       p6_long_property_name: {
+>           nested_6: string;
+>       };
+>       p7_long_property_name: {
+>           nested_7: string;
+>       };
+>       p8_long_property_name: {
+>           nested_8: string;
+>       };
+>       ... 30 more ...;
+>       p39_long_property_name: {
+>           nested_39: string;
+>       };
+>   }
+>n : (parameter) n: number
+>make : function make(tag: string): {
+>       p0_long_property_name: {
+>           nested_0: string;
+>       };
+>       p1_long_property_name: {
+>           nested_1: string;
+>       };
+>       p2_long_property_name: {
+>           nested_2: string;
+>       };
+>       p3_long_property_name: {
+>           nested_3: string;
+>       };
+>       p4_long_property_name: {
+>           nested_4: string;
+>       };
+>       p5_long_property_name: {
+>           nested_5: string;
+>       };
+>       p6_long_property_name: {
+>           nested_6: string;
+>       };
+>       p7_long_property_name: {
+>           nested_7: string;
+>       };
+>       p8_long_property_name: {
+>           nested_8: string;
+>       };
+>       p9_long_property_name: {
+>           nested_9: string;
+>       };
+>       p10_long_property_name: {
+>           nested_10: string;
+>       };
+>       p11_long_property_name: {
+>           nested_11: string;
+>       };
+>       p12_long_property_name: {
+>           nested_12: string;
+>       };
+>       p13_long_property_name: {
+>           nested_13: string;
+>       };
+>       p14_long_property_name: {
+>           nested_14: string;
+>       };
+>       p15_long_property_name: {
+>           nested_15: string;
+>       };
+>       p16_long_property_name: {
+>           nested_16: string;
+>       };
+>       p17_long_property_name: {
+>           nested_17: string;
+>       };
+>       p18_long_property_name: {
+>           nested_18: string;
+>       };
+>       p19_long_property_name: {
+>           nested_19: string;
+>       };
+>       p20_long_property_name: {
+>           nested_20: string;
+>       };
+>       p21_long_property_name: {
+>           nested_21: string;
+>       };
+>       p22_long_property_name: {
+>           nested_22: string;
+>       };
+>       p23_long_property_name: {
+>           nested_23: string;
+>       };
+>       p24_long_property_name: {
+>           nested_24: string;
+>       };
+>       p25_long_property_name: {
+>           nested_25: string;
+>       };
+>       p26_long_property_name: {
+>           nested_26: string;
+>       };
+>       p27_long_property_name: {
+>           nested_27: string;
+>       };
+>       p28_long_property_name: {
+>           nested_28: string;
+>       };
+>       p29_long_property_name: {
+>           nested_29: string;
+>       };
+>       p30_long_property_name: {
+>           nested_30: string;
+>       };
+>       p31_long_property_name: {
+>           nested_31: string;
+>       };
+>       p32_long_property_name: {
+>           nested_32: string;
+>       };
+>       p33_long_property_name: {
+>           nested_33: string;
+>       };
+>       p34_long_property_name: {
+>           nested_34: string;
+>       };
+>       p35_long_property_name: {
+>           nested_35: string;
+>       };
+>       p36_long_property_name: {
+>           nested_36: string;
+>       };
+>       p37_long_property_name: {
+>           nested_37: string;
+>       };
+>       p38_long_property_name: {
+>           nested_38: string;
+>       };
+>       p39_long_property_name: {
+>           nested_39: string;
+>       };
+>   }
+>make : function make(tag: string): {
+>       p0_long_property_name: {
+>           nested_0: string;
+>       };
+>       p1_long_property_name: {
+>           nested_1: string;
+>       };
+>       p2_long_property_name: {
+>           nested_2: string;
+>       };
+>       p3_long_property_name: {
+>           nested_3: string;
+>       };
+>       p4_long_property_name: {
+>           nested_4: string;
+>       };
+>       p5_long_property_name: {
+>           nested_5: string;
+>       };
+>       p6_long_property_name: {
+>           nested_6: string;
+>       };
+>       p7_long_property_name: {
+>           nested_7: string;
+>       };
+>       p8_long_property_name: {
+>           nested_8: string;
+>       };
+>       p9_long_property_name: {
+>           nested_9: string;
+>       };
+>       p10_long_property_name: {
+>           nested_10: string;
+>       };
+>       p11_long_property_name: {
+>           nested_11: string;
+>       };
+>       p12_long_property_name: {
+>           nested_12: string;
+>       };
+>       p13_long_property_name: {
+>           nested_13: string;
+>       };
+>       p14_long_property_name: {
+>           nested_14: string;
+>       };
+>       p15_long_property_name: {
+>           nested_15: string;
+>       };
+>       p16_long_property_name: {
+>           nested_16: string;
+>       };
+>       p17_long_property_name: {
+>           nested_17: string;
+>       };
+>       p18_long_property_name: {
+>           nested_18: string;
+>       };
+>       p19_long_property_name: {
+>           nested_19: string;
+>       };
+>       p20_long_property_name: {
+>           nested_20: string;
+>       };
+>       p21_long_property_name: {
+>           nested_21: string;
+>       };
+>       p22_long_property_name: {
+>           nested_22: string;
+>       };
+>       p23_long_property_name: {
+>           nested_23: string;
+>       };
+>       p24_long_property_name: {
+>           nested_24: string;
+>       };
+>       p25_long_property_name: {
+>           nested_25: string;
+>       };
+>       p26_long_property_name: {
+>           nested_26: string;
+>       };
+>       p27_long_property_name: {
+>           nested_27: string;
+>       };
+>       p28_long_property_name: {
+>           nested_28: string;
+>       };
+>       p29_long_property_name: {
+>           nested_29: string;
+>       };
+>       p30_long_property_name: {
+>           nested_30: string;
+>       };
+>       p31_long_property_name: {
+>           nested_31: string;
+>       };
+>       p32_long_property_name: {
+>           nested_32: string;
+>       };
+>       p33_long_property_name: {
+>           nested_33: string;
+>       };
+>       p34_long_property_name: {
+>           nested_34: string;
+>       };
+>       p35_long_property_name: {
+>           nested_35: string;
+>       };
+>       p36_long_property_name: {
+>           nested_36: string;
+>       };
+>       p37_long_property_name: {
+>           nested_37: string;
+>       };
+>       p38_long_property_name: {
+>           nested_38: string;
+>       };
+>       p39_long_property_name: {
+>           nested_39: string;
+>       };
+>   }
+  return x.p39_long_property_name.nested_39;
+>x : const x: {
+>       p0_long_property_name: {
+>           nested_0: string;
+>       };
+>       p1_long_property_name: {
+>           nested_1: string;
+>       };
+>       p2_long_property_name: {
+>           nested_2: string;
+>       };
+>       p3_long_property_name: {
+>           nested_3: string;
+>       };
+>       p4_long_property_name: {
+>           nested_4: string;
+>       };
+>       p5_long_property_name: {
+>           nested_5: string;
+>       };
+>       p6_long_property_name: {
+>           nested_6: string;
+>       };
+>       p7_long_property_name: {
+>           nested_7: string;
+>       };
+>       p8_long_property_name: {
+>           nested_8: string;
+>       };
+>       ... 30 more ...;
+>       p39_long_property_name: {
+>           nested_39: string;
+>       };
+>   }
+>p39_long_property_name : (property) p39_long_property_name: {
+>       nested_39: string;
+>   }
+>nested_39 : (property) nested_39: string
+console.log(pick(1), pick(2));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pick : function pick(n: number): string
+>pick : function pick(n: number): string
+

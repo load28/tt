@@ -1,0 +1,16 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./resultBlockMissingAnErrorTypeIsATypeError.tt → $DIR/out/resultBlockMissingAnErrorTypeIsATypeError.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2322]: type mismatch: expected `UserError`, found `CompanyError`
+  required type: `Res<string, UserError>`
+  --> resultBlockMissingAnErrorTypeIsATypeError.tt:12:19
+   |
+12 |   const company = try getCompany(user.companyId);
+   |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+resultBlockMissingAnErrorTypeIsATypeError.ts(35,5): error TS2322: Type '{ kind: "Err"; error: CompanyError; }' is not assignable to type 'Res<string, UserError>'.
+  Type '{ kind: "Err"; error: CompanyError; }' is not assignable to type '{ kind: "Err"; error: UserError; }'.
+    The types of 'error.kind' are incompatible between these types.
+      Type '"NoCompany"' is not assignable to type '"NoUser"'.

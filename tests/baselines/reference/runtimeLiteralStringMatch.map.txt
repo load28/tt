@@ -1,0 +1,14 @@
+//// [runtimeLiteralStringMatch.tt] 12 mapping(s)
+1:1 -> 19:1 len 91  "\ntype Direction = \"north\" | \"south\" | \"east\" | \""...
+5:3 -> 48:3 len 7  "return "
+5:17 -> 25:19 len 3  "dir"
+6:5 -> 27:12 len 7  "\"north\""
+6:16 -> 28:18 len 3  "\"N\""
+7:5 -> 31:12 len 7  "\"south\""
+7:16 -> 32:18 len 3  "\"S\""
+8:5 -> 35:12 len 6  "\"east\""
+8:15 -> 36:18 len 3  "\"E\""
+9:5 -> 39:12 len 6  "\"west\""
+9:15 -> 40:18 len 3  "\"W\""
+10:4 -> 48:16 len 92  ";\n}\n\nconsole.log(short(\"north\"), short(\"south\"),"...
+

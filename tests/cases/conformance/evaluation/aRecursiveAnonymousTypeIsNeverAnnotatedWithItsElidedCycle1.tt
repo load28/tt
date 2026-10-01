@@ -1,0 +1,12 @@
+// @origin: tests/integration/contextual.rs::a_recursive_anonymous_type_is_never_annotated_with_its_elided_cycle
+
+declare const n: number;
+const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };
+b.m().m().zzz;
+function mk() { return { m() { return this; } }; }
+const c = match (n) { 1 => mk(), _ => mk() };
+c.m().m().yyy;
+const d = match (n) { 1 => [JSON.parse("1")], _ => [] };
+d[0].anything;
+
+export {};

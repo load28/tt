@@ -1,0 +1,201 @@
+=== strictTypescriptAcceptsAllResultDiscriminatorShapes.tt ===
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>T : (type parameter) T in type Res<T, E>
+>E : (type parameter) E in type Res<T, E>
+>Ok : (property) Ok: <T, E>(value: T) => Res<T, E>
+>value : (property) value: T
+>T : (type parameter) T in type Res<T, E>
+>Err : (property) Err: <T, E>(error: E) => Res<T, E>
+>error : (property) error: E
+>E : (type parameter) E in type Res<T, E>
+type Alias<T, E> = Res<T, E>;
+>Alias : type Alias<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>T : (type parameter) T in type Alias<T, E>
+>E : (type parameter) E in type Alias<T, E>
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>T : (type parameter) T in type Alias<T, E>
+>E : (type parameter) E in type Alias<T, E>
+const directErr = () => {
+>directErr : const directErr: () => Res<unknown, unknown>
+  const value = try Res.Err("direct");
+>value : const value: unknown
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Err : (property) Err: <unknown, string>(error: string) => Res<unknown, string>
+  return Res.Ok(value);
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Ok : (property) Ok: <unknown, unknown>(value: unknown) => Res<unknown, unknown>
+>value : const value: unknown
+const directOk = () => {
+>directOk : const directOk: () => Res<number, unknown>
+  const value = try Res.Ok(1);
+>value : const value: number
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Ok : (property) Ok: <number, unknown>(value: number) => Res<number, unknown>
+  return Res.Ok(value + 1);
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Ok : (property) Ok: <number, unknown>(value: number) => Res<number, unknown>
+>value : const value: number
+const widened = (input: Res<number, string>): Res<number, string> => {
+>widened : const widened: (input: Res<number, string>) => Res<number, string>
+>input : (parameter) input: Res<number, string>
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+  const value = try input;
+>value : const value: number
+>input : (parameter) input: Res<number, string>
+  return Res.Ok(value + 1);
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Ok : (property) Ok: <number, string>(value: number) => Res<number, string>
+>value : const value: number
+const aliased = (input: Alias<number, string>): Alias<number, string> => {
+>aliased : const aliased: (input: Alias<number, string>) => Alias<number, string>
+>input : (parameter) input: Alias<number, string>
+>Alias : type Alias<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>Alias : type Alias<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+  const value = try input;
+>value : const value: number
+>input : (parameter) input: Alias<number, string>
+  return Res.Ok(value + 1);
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Ok : (property) Ok: <number, string>(value: number) => Res<number, string>
+>value : const value: number
+function generic<T, E>(input: Res<T, E>): Res<T, E> {
+>generic : function generic<T, E>(input: Res<T, E>): Res<T, E>
+>T : (type parameter) T in generic<T, E>(input: Res<T, E>): Res<T, E>
+>E : (type parameter) E in generic<T, E>(input: Res<T, E>): Res<T, E>
+>input : (parameter) input: Res<T, E>
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>T : (type parameter) T in generic<T, E>(input: Res<T, E>): Res<T, E>
+>E : (type parameter) E in generic<T, E>(input: Res<T, E>): Res<T, E>
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>T : (type parameter) T in generic<T, E>(input: Res<T, E>): Res<T, E>
+>E : (type parameter) E in generic<T, E>(input: Res<T, E>): Res<T, E>
+  const value = try input;
+>value : const value: T
+>input : (parameter) input: Res<T, E>
+  return Res.Ok(value);
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Ok : (property) Ok: <T, E>(value: T) => Res<T, E>
+>value : const value: T
+console.log(JSON.stringify(directErr()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>directErr : const directErr: () => Res<unknown, unknown>
+console.log(JSON.stringify(directOk()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>directOk : const directOk: () => Res<number, unknown>
+console.log(JSON.stringify(widened(Res.Err("wide"))));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>widened : const widened: (input: Res<number, string>) => Res<number, string>
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Err : (property) Err: <number, string>(error: string) => Res<number, string>
+console.log(JSON.stringify(aliased(Res.Ok(2))));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>aliased : const aliased: (input: Alias<number, string>) => Alias<number, string>
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Ok : (property) Ok: <number, string>(value: number) => Res<number, string>
+console.log(JSON.stringify(generic(Res.Ok("generic"))));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>generic : function generic<string, unknown>(input: Res<string, unknown>): Res<string, unknown>
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Ok : (property) Ok: <string, unknown>(value: string) => Res<string, unknown>
+

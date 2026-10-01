@@ -1,0 +1,11 @@
+// @origin: tests/integration/contextual.rs::match_guards_keep_their_type_narrowing_scope
+
+declare const input: unknown;
+declare const flag: boolean;
+declare function consume(value: number): void;
+consume(match (flag) {
+  true if typeof input === "string" => input.length,
+  _ => 0,
+});
+
+export {};

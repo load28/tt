@@ -1,0 +1,20 @@
+=== tryErrorUnionStaysCheckedAgainstTheDeclaredReturnType.tt ===
+declare function getUser(): TResult<number, { tag: "user" }>;
+>getUser : function getUser(): TResult<number, {
+>       tag: "user";
+>   }>
+>tag : (property) tag: "user"
+function load(): TResult<number, string> {
+>load : function load(): TResult<number, string>
+  const user = try getUser();
+>user : const user: any
+>getUser : function getUser(): TResult<number, {
+>       tag: "user";
+>   }>
+  return Result.Ok(user);
+>user : const user: any
+console.log(load());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>load : function load(): TResult<number, string>
+

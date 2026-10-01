@@ -1,0 +1,21 @@
+//// [runtimeAMemberStepSSimpleKeyNamesItsMember.tt] 19 mapping(s)
+1:1 -> 2:1 len 360  "\nconst trace: string[] = [];\nconst obj = { m(x: "...
+8:20 -> 9:51 len 3  "obj"
+8:23 -> 9:30 len 5  "[\"m\"]"
+8:28 -> 9:56 len 16  ")(3);\nconst d = "
+9:11 -> 10:49 len 4  "h(3)"
+9:19 -> 10:56 len 13  "(() => obj)()"
+9:32 -> 10:35 len 5  "[\"m\"]"
+9:37 -> 10:71 len 12  ";\nconst e = "
+10:11 -> 11:47 len 4  "h(3)"
+10:19 -> 11:54 len 8  "getFns()"
+10:27 -> 11:35 len 3  "[0]"
+10:30 -> 11:64 len 12  ";\nconst f = "
+11:11 -> 12:18 len 4  "h(3)"
+11:19 -> 12:24 len 8  "obj[`n`]"
+11:27 -> 12:33 len 12  ";\nconst g = "
+12:11 -> 13:49 len 4  "h(3)"
+12:19 -> 13:56 len 10  "receiver()"
+12:29 -> 13:35 len 5  "[key]"
+12:34 -> 13:68 len 65  ";\nconsole.log(c, d, e, f, g, JSON.stringify(trac"...
+

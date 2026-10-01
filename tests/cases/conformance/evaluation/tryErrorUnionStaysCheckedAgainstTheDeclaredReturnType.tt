@@ -1,0 +1,15 @@
+// @origin: tests/integration/cases_02.rs::try_error_union_stays_checked_against_the_declared_return_type
+
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
+
+declare function getUser(): TResult<number, { tag: "user" }>;
+
+function load(): TResult<number, string> {
+  const user = try getUser();
+  return Result.Ok(user);
+}
+
+console.log(load());
+
+export {};

@@ -1,0 +1,18 @@
+//// [generatedGuardsReachTheHostErrorAndJsonPastUserDeclarations.tt] 16 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:26 -> 21:25 len 6  "string"
+2:26 -> 24:14 len 6  "string"
+2:42 -> 26:3 len 24  "\nfunction m(x: Error) { "
+3:24 -> 45:1 len 7  "return "
+3:38 -> 29:17 len 1  "x"
+3:47 -> 32:15 len 3  "msg"
+3:55 -> 33:16 len 3  "msg"
+3:69 -> 37:16 len 3  "\"w\""
+3:74 -> 45:14 len 157  "; }\ntry { m({ kind: \"Nope\" } as unknown as Error"...
+6:36 -> 51:19 len 1  "v"
+6:41 -> 53:12 len 3  "\"a\""
+6:48 -> 54:18 len 1  "1"
+6:51 -> 57:12 len 3  "\"b\""
+6:58 -> 58:18 len 4  "JSON"
+6:64 -> 67:2 len 108  ";\ntry { k(\"c\" as unknown as \"a\"); } catch (e) { "...
+

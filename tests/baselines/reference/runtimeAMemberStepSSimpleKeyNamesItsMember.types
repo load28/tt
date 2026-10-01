@@ -1,0 +1,83 @@
+=== runtimeAMemberStepSSimpleKeyNamesItsMember.tt ===
+const trace: string[] = [];
+>trace : const trace: string[]
+const obj = { m(x: number) { return x * 2; }, n(x: number) { return x * 5; } };
+>obj : const obj: {
+>       m(x: number): number;
+>       n(x: number): number;
+>   }
+>m : (method) m(x: number): number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>n : (method) n(x: number): number
+>x : (parameter) x: number
+>x : (parameter) x: number
+function h(n: number) { trace.push("head"); return n + 1; }
+>h : function h(n: number): number
+>n : (parameter) n: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+function getFns(): [(n: number) => number, string] { return [(n) => n * 3, "s"]; }
+>getFns : function getFns(): [(n: number) => number, string]
+>n : (parameter) n: number
+>n : (parameter) n: number
+>n : (parameter) n: number
+let key: "m" | "n" = "m";
+>key : let key: "m" | "n"
+function receiver() { trace.push("receiver"); key = "n"; return obj; }
+>receiver : function receiver(): {
+>       m(x: number): number;
+>       n(x: number): number;
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>key : let key: "m" | "n"
+>obj : const obj: {
+>       m(x: number): number;
+>       n(x: number): number;
+>   }
+const c = (flow |> obj["m"])(3);
+>c : const c: number
+>obj : const obj: {
+>       m(x: number): number;
+>       n(x: number): number;
+>   }
+const d = h(3) |> (() => obj)()["m"];
+>d : const d: number
+>h : function h(n: number): number
+>obj : const obj: {
+>       m(x: number): number;
+>       n(x: number): number;
+>   }
+const e = h(3) |> getFns()[0];
+>e : const e: number
+>h : function h(n: number): number
+>getFns : function getFns(): [(n: number) => number, string]
+const f = h(3) |> obj[`n`];
+>f : const f: number
+>h : function h(n: number): number
+>obj : const obj: {
+>       m(x: number): number;
+>       n(x: number): number;
+>   }
+const g = h(3) |> receiver()[key];
+>g : const g: number
+>h : function h(n: number): number
+>receiver : function receiver(): {
+>       m(x: number): number;
+>       n(x: number): number;
+>   }
+>key : let key: "m"
+console.log(c, d, e, f, g, JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>c : const c: number
+>d : const d: number
+>e : const e: number
+>f : const f: number
+>g : const g: number
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+

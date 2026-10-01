@@ -1,0 +1,115 @@
+=== runtimeTupleMatchDispatchesOnTheCombination.tt ===
+variant Conn { Online(latency: number), Offline }
+>Conn : type Conn = {
+>       kind: "Online";
+>       latency: number;
+>   } | {
+>       kind: "Offline";
+>   }
+>Online : (property) Online: (latency: number) => Conn
+>latency : (property) latency: number
+>Offline : (property) Offline: {
+>       readonly kind: "Offline";
+>   }
+variant Mode { Auto(), Manual(level: number) }
+>Mode : type Mode = {
+>       kind: "Auto";
+>   } | {
+>       kind: "Manual";
+>       level: number;
+>   }
+>Auto : (property) Auto: () => Mode
+>Manual : (property) Manual: (level: number) => Mode
+>level : (property) level: number
+function decide(c: Conn, m: Mode): number {
+>decide : function decide(c: Conn, m: Mode): number
+>c : (parameter) c: Conn
+>Conn : type Conn = {
+>       kind: "Online";
+>       latency: number;
+>   } | {
+>       kind: "Offline";
+>   }
+>m : (parameter) m: Mode
+>Mode : type Mode = {
+>       kind: "Auto";
+>   } | {
+>       kind: "Manual";
+>       level: number;
+>   }
+  return match (c, m) {
+>c : (parameter) c: Conn
+>m : (parameter) m: Mode
+    (Online(latency), Auto) if latency < 50 => 10,
+>latency : const latency: number
+>latency : const latency: number
+    (Online, Manual(level)) => level,
+>level : const level: number
+>level : const level: number
+console.log(decide(Conn.Online(10), Mode.Auto()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>decide : function decide(c: Conn, m: Mode): number
+>Conn : const Conn: {
+>       Online: (latency: number) => Conn;
+>       Offline: {
+>           readonly kind: "Offline";
+>       };
+>   }
+>Online : (property) Online: (latency: number) => Conn
+>Mode : const Mode: {
+>       Auto: () => Mode;
+>       Manual: (level: number) => Mode;
+>   }
+>Auto : (property) Auto: () => Mode
+console.log(decide(Conn.Online(80), Mode.Auto()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>decide : function decide(c: Conn, m: Mode): number
+>Conn : const Conn: {
+>       Online: (latency: number) => Conn;
+>       Offline: {
+>           readonly kind: "Offline";
+>       };
+>   }
+>Online : (property) Online: (latency: number) => Conn
+>Mode : const Mode: {
+>       Auto: () => Mode;
+>       Manual: (level: number) => Mode;
+>   }
+>Auto : (property) Auto: () => Mode
+console.log(decide(Conn.Online(10), Mode.Manual(7)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>decide : function decide(c: Conn, m: Mode): number
+>Conn : const Conn: {
+>       Online: (latency: number) => Conn;
+>       Offline: {
+>           readonly kind: "Offline";
+>       };
+>   }
+>Online : (property) Online: (latency: number) => Conn
+>Mode : const Mode: {
+>       Auto: () => Mode;
+>       Manual: (level: number) => Mode;
+>   }
+>Manual : (property) Manual: (level: number) => Mode
+console.log(decide(Conn.Offline, Mode.Auto()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>decide : function decide(c: Conn, m: Mode): number
+>Conn : const Conn: {
+>       Online: (latency: number) => Conn;
+>       Offline: {
+>           readonly kind: "Offline";
+>       };
+>   }
+>Offline : (property) Offline: {
+>       readonly kind: "Offline";
+>   }
+>Mode : const Mode: {
+>       Auto: () => Mode;
+>       Manual: (level: number) => Mode;
+>   }
+>Auto : (property) Auto: () => Mode
+

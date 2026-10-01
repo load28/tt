@@ -1,0 +1,165 @@
+=== generatedStorageNamesNoTypeDeclaredInsideAnArm.tt ===
+variant S { A, B }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function read(): R { return { kind: "Ok", value: 1 }; }
+>read : function read(): R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+class Loc { other = 1; }
+>Loc : class Loc
+>other : (property) Loc.other: number
+function inner(s: S) {
+>inner : function inner(s: S): string
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  const v = match (s) { A => { class Loc { tag = "a"; } return new Loc(); }, B => ({ tag: "b" }) };
+>v : const v: Loc
+>s : (parameter) s: S
+>Loc : class Loc
+>tag : (property) Loc.tag: string
+>Loc : constructor Loc(): Loc
+>tag : (property) tag: string
+  return v.tag;
+>v : const v: Loc
+>tag : (property) Loc.tag: string
+function inResult(s: S) {
+>inResult : function inResult(s: S): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+    const n = try read();
+>n : const n: number
+>read : function read(): R
+    const v = match (s) { A => { class Loc { tag = "a" + n; } return new Loc(); }, B => ({ tag: "b" }) };
+>v : const v: Loc
+>s : (parameter) s: S
+>Loc : class Loc
+>tag : (property) Loc.tag: string
+>n : const n: number
+>Loc : constructor Loc(): Loc
+>tag : (property) tag: string
+    return v.tag;
+>v : const v: Loc
+>tag : (property) Loc.tag: string
+function unnamed(s: S) {
+>unnamed : function unnamed(s: S): string
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  const v = match (s) { A => { class Hidden { tag = "h"; } return new Hidden(); }, B => ({ tag: "b" }) };
+>v : const v: Hidden
+>s : (parameter) s: S
+>Hidden : class Hidden
+>tag : (property) Hidden.tag: string
+>Hidden : constructor Hidden(): Hidden
+>tag : (property) tag: string
+  return v.tag;
+>v : const v: Hidden
+>tag : (property) Hidden.tag: string
+console.log(inner(S.A), inner(S.B), JSON.stringify(inResult(S.A)), unnamed(S.A), new Loc().other);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>inner : function inner(s: S): string
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>inner : function inner(s: S): string
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>inResult : function inResult(s: S): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>unnamed : function unnamed(s: S): string
+>S : const S: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>Loc : constructor Loc(): Loc
+>other : (property) Loc.other: number
+

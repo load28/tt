@@ -1,0 +1,92 @@
+=== aSemicolonFreeBraceAfterAnExpressionIsADivergingBlock.tt ===
+type Opt = { kind: "Some"; value: number } | { kind: "None" }
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>kind : (property) kind: "None"
+let foo = 0, Foo = 0
+>foo : let foo: number
+>Foo : let Foo: number
+function unwrap(o: Opt): number {
+>unwrap : function unwrap(o: Opt): number
+>o : (parameter) o: Opt
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+let Some(value) = o else {
+>value : let value: number
+>o : (parameter) o: Opt
+foo
+>foo : let foo: number
+Foo
+>Foo : let Foo: number
+return value
+>value : let value: number
+function arm(o: Opt): number {
+>arm : function arm(o: Opt): number
+>o : (parameter) o: Opt
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+const n: number = match (o) {
+>n : const n: number
+>o : (parameter) o: Opt
+Some(value) => {
+>value : const value: number
+foo
+>foo : let foo: number
+{ return value * 2 }
+>value : const value: number
+return n
+>n : const n: number
+function body(o: Opt): number {
+>body : function body(o: Opt): number
+>o : (parameter) o: Opt
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+if let Some(value) = o {
+>value : const value: number
+>o : (parameter) o: Opt
+Foo
+>Foo : let Foo: number
+{ return value + 1 }
+>value : const value: number
+foo
+>foo : let foo: number
+console.log([unwrap({ kind: "Some", value: 3 }), unwrap({ kind: "None" })].join(","))
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>unwrap : function unwrap(o: Opt): number
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>unwrap : function unwrap(o: Opt): number
+>kind : (property) kind: "None"
+>join : (method) Array<number>.join(separator?: string): string
+console.log([arm({ kind: "Some", value: 3 }), body({ kind: "Some", value: 3 }), body({ kind: "None" })].join(","))
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>arm : function arm(o: Opt): number
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>body : function body(o: Opt): number
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>body : function body(o: Opt): number
+>kind : (property) kind: "None"
+>join : (method) Array<number>.join(separator?: string): string
+

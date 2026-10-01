@@ -1,0 +1,171 @@
+=== runtimeResultExitsCrossUserBreakableStatements.tt ===
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>T : (type parameter) T in type Res<T, E>
+>E : (type parameter) E in type Res<T, E>
+>Ok : (property) Ok: <T, E>(value: T) => Res<T, E>
+>value : (property) value: T
+>T : (type parameter) T in type Res<T, E>
+>Err : (property) Err: <T, E>(error: E) => Res<T, E>
+>error : (property) error: E
+>E : (type parameter) E in type Res<T, E>
+const events: string[] = [];
+>events : const events: string[]
+const step = (ok: boolean, name: string): Res<number, string> =>
+>step : const step: (ok: boolean, name: string) => Res<number, string>
+>ok : (parameter) ok: boolean
+>name : (parameter) name: string
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+  ok ? Res.Ok(name.length) : Res.Err(name);
+>ok : (parameter) ok: boolean
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Ok : (property) Ok: <number, string>(value: number) => Res<number, string>
+>name : (parameter) name: string
+>length : (property) String.length: number
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Err : (property) Err: <number, string>(error: string) => Res<number, string>
+>name : (parameter) name: string
+const fromFor = (ok: boolean) => result {
+>fromFor : const fromFor: (ok: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>ok : (parameter) ok: boolean
+  for (const name of ["for"]) { return try step(ok, name); }
+>name : const name: string
+>step : const step: (ok: boolean, name: string) => Res<number, string>
+>ok : (parameter) ok: boolean
+>name : const name: string
+  events.push("for-tail");
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+const fromWhile = (ok: boolean) => result {
+>fromWhile : const fromWhile: (ok: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>ok : (parameter) ok: boolean
+  while (true) { return try step(ok, "while"); }
+>step : const step: (ok: boolean, name: string) => Res<number, string>
+>ok : (parameter) ok: boolean
+  events.push("while-tail");
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+const fromDo = (ok: boolean) => result {
+>fromDo : const fromDo: (ok: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>ok : (parameter) ok: boolean
+  do { return try step(ok, "do"); } while (false);
+>step : const step: (ok: boolean, name: string) => Res<number, string>
+>ok : (parameter) ok: boolean
+  events.push("do-tail");
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+const fromSwitch = (ok: boolean) => result {
+>fromSwitch : const fromSwitch: (ok: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>ok : (parameter) ok: boolean
+  switch (ok) { default: return try step(ok, "switch"); }
+>ok : (parameter) ok: boolean
+>step : const step: (ok: boolean, name: string) => Res<number, string>
+>ok : (parameter) ok: boolean
+  events.push("switch-tail");
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+for (const run of [fromFor, fromWhile, fromDo, fromSwitch]) {
+>run : const run: (ok: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>fromFor : const fromFor: (ok: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>fromWhile : const fromWhile: (ok: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>fromDo : const fromDo: (ok: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>fromSwitch : const fromSwitch: (ok: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+  console.log(JSON.stringify(run(true)), JSON.stringify(run(false)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>run : const run: (ok: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>run : const run: (ok: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+console.log(events.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>events : const events: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

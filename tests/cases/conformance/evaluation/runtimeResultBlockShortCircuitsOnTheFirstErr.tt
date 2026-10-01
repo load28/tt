@@ -1,0 +1,23 @@
+// @origin: tests/integration/cases_04.rs::runtime_result_block_short_circuits_on_the_first_err
+// @run: runtimeResultBlockShortCircuitsOnTheFirstErr.tt
+
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+
+const steps: string[] = [];
+const step = (name: string, ok: boolean): Res<string, string> => {
+  steps.push(name);
+  return ok ? Res.Ok(name) : Res.Err("failed:" + name);
+};
+
+const chain = (secondOk: boolean) => result {
+  const a = try step("a", true);
+  const b = try step("b", secondOk);
+  const c = try step("c", true);
+  return a + b + c;
+};
+
+console.log(JSON.stringify(chain(true)), steps.join(","));
+steps.length = 0;
+console.log(JSON.stringify(chain(false)), steps.join(","));
+
+export {};

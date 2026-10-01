@@ -1,0 +1,42 @@
+=== runtimePlainTypescriptEnumCoexists.tt ===
+enum Color { Red, Green, Blue }
+>Color : enum Color
+>Red : (enum member) Color.Red = 0
+>Green : (enum member) Color.Green = 1
+>Blue : (enum member) Color.Blue = 2
+variant Shape { Circle(radius: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+console.log(Color.Green);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>Color : enum Color
+>Green : (enum member) Color.Green = 1
+console.log(Color[Color.Blue]);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>Color : enum Color
+>Color : enum Color
+>Blue : (enum member) Color.Blue = 2
+console.log(JSON.stringify(Shape.Circle(1)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+

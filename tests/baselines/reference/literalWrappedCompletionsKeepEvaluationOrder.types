@@ -1,0 +1,143 @@
+=== literalWrappedCompletionsKeepEvaluationOrder.tt ===
+variant State { Ready(value: number), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: number) => State
+>value : (property) value: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+const trace: string[] = [];
+>trace : const trace: string[]
+function mark<T>(name: string, value: T): T { trace.push(name); return value; }
+>mark : function mark<T>(name: string, value: T): T
+>T : (type parameter) T in mark<T>(name: string, value: T): T
+>name : (parameter) name: string
+>value : (parameter) value: T
+>T : (type parameter) T in mark<T>(name: string, value: T): T
+>T : (type parameter) T in mark<T>(name: string, value: T): T
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>value : (parameter) value: T
+type Item = {kind: string; run: (x: number) => number};
+>Item : type Item = {
+>       kind: string;
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: string
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+function consume(item: Item) { trace.push("call:" + item.kind + ":" + item.run(3)); }
+>consume : function consume(item: Item): void
+>item : (parameter) item: Item
+>Item : type Item = {
+>       kind: string;
+>       run: (x: number) => number;
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>item : (parameter) item: Item
+>kind : (property) kind: string
+>item : (parameter) item: Item
+>run : (property) run: (x: number) => number
+for (const state of [State.Ready(4), State.Empty]) {
+>state : const state: {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       readonly kind: "Empty";
+>   }
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Ready : (property) Ready: (value: number) => State
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+  trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+  consume({kind: "inert", run: match (mark("subject", state)) {
+>consume : function consume(item: Item): void
+>kind : (property) kind: string
+>run : (property) run: (x: number) => number
+>match : (parameter) x: number
+>mark : function mark<{
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       readonly kind: "Empty";
+>   }>(name: string, value: {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       readonly kind: "Empty";
+>   }): {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       readonly kind: "Empty";
+>   }
+>state : const state: {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       readonly kind: "Empty";
+>   }
+    Ready(value) => x => x + value,
+>value : const value: number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+    Empty => x => x,
+>x : (parameter) x: number
+>x : (parameter) x: number
+  console.log(trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+consume({kind: mark("sibling", "effectful"), run: match (mark("subject", State.Ready(1))) {
+>consume : function consume(item: Item): void
+>kind : (property) kind: string
+>mark : function mark<"effectful">(name: string, value: "effectful"): "effectful"
+>run : (property) run: (x: number) => number
+>mark : function mark<State>(name: string, value: State): State
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Ready : (property) Ready: (value: number) => State
+  Ready(value) => (x: number) => x + value,
+>value : const value: number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+  Empty => (x: number) => x,
+>x : (parameter) x: number
+>x : (parameter) x: number
+console.log(trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

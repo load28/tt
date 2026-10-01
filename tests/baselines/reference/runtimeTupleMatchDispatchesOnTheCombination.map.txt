@@ -1,0 +1,20 @@
+//// [runtimeTupleMatchDispatchesOnTheCombination.tt] 18 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:32 -> 21:32 len 6  "number"
+2:32 -> 24:21 len 6  "number"
+2:50 -> 26:3 len 1  "\n"
+3:38 -> 29:30 len 6  "number"
+3:38 -> 32:19 len 6  "number"
+3:47 -> 33:3 len 48  "\n\nfunction decide(c: Conn, m: Mode): number {\n  "
+6:3 -> 64:3 len 7  "return "
+6:17 -> 38:20 len 1  "c"
+6:20 -> 39:20 len 1  "m"
+7:13 -> 42:17 len 7  "latency"
+7:32 -> 43:13 len 12  "latency < 50"
+7:48 -> 44:20 len 2  "10"
+8:23 -> 49:18 len 1  "5"
+9:21 -> 53:17 len 5  "level"
+9:32 -> 54:18 len 5  "level"
+10:21 -> 58:18 len 1  "0"
+11:4 -> 64:16 len 221  ";\n}\n\nconsole.log(decide(Conn.Online(10), Mode.Au"...
+

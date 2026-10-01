@@ -1,0 +1,22 @@
+//// [runtimeResultBlockShortCircuitsOnTheFirstErr.tt] 20 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:12 -> 2:9 len 6  "<T, E>"
+2:12 -> 6:7 len 6  "<T, E>"
+2:12 -> 7:8 len 6  "<T, E>"
+2:31 -> 3:26 len 1  "T"
+2:31 -> 6:21 len 1  "T"
+2:46 -> 4:27 len 1  "E"
+2:46 -> 7:22 len 1  "E"
+2:50 -> 8:3 len 214  "\n\nconst steps: string[] = [];\nconst step = (name"...
+11:9 -> 24:11 len 1  "a"
+11:17 -> 19:20 len 15  "step(\"a\", true)"
+11:33 -> 24:28 len 3  "\n  "
+12:9 -> 30:9 len 1  "b"
+12:17 -> 25:18 len 19  "step(\"b\", secondOk)"
+12:37 -> 30:26 len 3  "\n  "
+13:9 -> 36:9 len 1  "c"
+13:17 -> 31:18 len 15  "step(\"c\", true)"
+13:33 -> 36:26 len 3  "\n  "
+14:10 -> 38:44 len 9  "a + b + c"
+15:2 -> 43:2 len 152  ";\n\nconsole.log(JSON.stringify(chain(true)), step"...
+

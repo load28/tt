@@ -1,0 +1,29 @@
+=== anAnnotationNeverNamesTheStorageTheLoweringDeclared.tt ===
+function pick(n: number) {
+>pick : function pick(n: number): number[]
+>n : (parameter) n: number
+  const C = match (n) { 1 => class { q = 1 }, _ => class { q = 2 } };
+>C : const C: typeof $tt_v0
+>n : (parameter) n: number
+>q : (property) $tt_v0.q: number
+>q : (property) $tt_v0.q: number
+  const K = match (n) { 1 => { const Local = class { r = 3 }; return Local; }, _ => class { r = 4 } };
+>K : const K: typeof Local
+>n : (parameter) n: number
+>Local : const Local: typeof Local
+>r : (property) Local.r: number
+>Local : const Local: typeof Local
+>r : (property) $tt_v1.r: number
+  return [new C().q, new K().r];
+>C : const C: new () => $tt_v0
+>q : (property) $tt_v0.q: number
+>K : const K: new () => Local
+>r : (property) Local.r: number
+console.log(JSON.stringify([pick(1), pick(2)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>pick : function pick(n: number): number[]
+>pick : function pick(n: number): number[]
+

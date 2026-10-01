@@ -1,0 +1,114 @@
+=== runtimeNestedPatternFallsThroughOnInnerMismatch.tt ===
+variant Opt { Some(value: number), None }
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => Opt
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+variant Res { Ok(value: Opt), Err(error: string) }
+>Res : type Res = {
+>       kind: "Ok";
+>       value: Opt;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>Ok : (property) Ok: (value: Opt) => Res
+>value : (property) value: Opt
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Err : (property) Err: (error: string) => Res
+>error : (property) error: string
+function grade(r: Res): string {
+>grade : function grade(r: Res): string
+>r : (parameter) r: Res
+>Res : type Res = {
+>       kind: "Ok";
+>       value: Opt;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  return match (r) {
+>r : (parameter) r: Res
+    Ok(value: Some(value: v)) if v > 9000 => "over",
+>value : (property) value: number
+>v : const v: number
+>v : const v: number
+    Ok(value: Some(value: v)) => "num:" + v,
+>value : (property) value: number
+>v : const v: number
+>v : const v: number
+    Err(error) => "err:" + error,
+>error : const error: string
+>error : const error: string
+console.log(grade(Res.Ok(Opt.Some(9001))));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>grade : function grade(r: Res): string
+>Res : const Res: {
+>       Ok: (value: Opt) => Res;
+>       Err: (error: string) => Res;
+>   }
+>Ok : (property) Ok: (value: Opt) => Res
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => Opt
+console.log(grade(Res.Ok(Opt.Some(3))));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>grade : function grade(r: Res): string
+>Res : const Res: {
+>       Ok: (value: Opt) => Res;
+>       Err: (error: string) => Res;
+>   }
+>Ok : (property) Ok: (value: Opt) => Res
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => Opt
+console.log(grade(Res.Ok(Opt.None)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>grade : function grade(r: Res): string
+>Res : const Res: {
+>       Ok: (value: Opt) => Res;
+>       Err: (error: string) => Res;
+>   }
+>Ok : (property) Ok: (value: Opt) => Res
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+console.log(grade(Res.Err("boom")));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>grade : function grade(r: Res): string
+>Res : const Res: {
+>       Ok: (value: Opt) => Res;
+>       Err: (error: string) => Res;
+>   }
+>Err : (property) Err: (error: string) => Res
+

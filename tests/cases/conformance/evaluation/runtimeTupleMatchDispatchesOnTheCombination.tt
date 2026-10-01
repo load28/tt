@@ -1,0 +1,21 @@
+// @origin: tests/integration/cases_03.rs::runtime_tuple_match_dispatches_on_the_combination
+// @run: runtimeTupleMatchDispatchesOnTheCombination.tt
+
+variant Conn { Online(latency: number), Offline }
+variant Mode { Auto(), Manual(level: number) }
+
+function decide(c: Conn, m: Mode): number {
+  return match (c, m) {
+    (Online(latency), Auto) if latency < 50 => 10,
+    (Online, Auto) => 5,
+    (Online, Manual(level)) => level,
+    (Offline, _) => 0,
+  };
+}
+
+console.log(decide(Conn.Online(10), Mode.Auto()));
+console.log(decide(Conn.Online(80), Mode.Auto()));
+console.log(decide(Conn.Online(10), Mode.Manual(7)));
+console.log(decide(Conn.Offline, Mode.Auto()));
+
+export {};

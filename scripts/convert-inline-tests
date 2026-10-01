@@ -607,7 +607,9 @@ fn typecheck(src: &str) -> (bool, String) {
     }
     let case = conversion::case("tt", &unit);
     assert!(!conversion::failed(&case), "tt compile failed");
-    conversion::tsc(&case)
+    let (ok, report) = conversion::tsc(&case);
+    let code = conversion::emitted(&case, &format!("{}.ts", case.name));
+    (ok, format!("{report}\n---compiled---\n{code}"))
 }
 
 fn typecheck_with_std(src: &str) -> (bool, String) {
@@ -618,7 +620,9 @@ fn typecheck_with_std(src: &str) -> (bool, String) {
     }
     let case = conversion::case("tt", &unit);
     assert!(!conversion::failed(&case), "tt compile failed");
-    conversion::tsc(&case)
+    let (ok, report) = conversion::tsc(&case);
+    let code = conversion::emitted(&case, &format!("{}.ts", case.name));
+    (ok, format!("{report}\n---compiled---\n{code}"))
 }
 `,
 };

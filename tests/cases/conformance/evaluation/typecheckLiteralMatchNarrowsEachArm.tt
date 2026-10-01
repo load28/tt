@@ -1,0 +1,10 @@
+// @origin: tests/integration/cases_04.rs::typecheck_literal_match_narrows_each_arm
+
+type Size = "sm" | "md" | "lg";
+const px: number = match ("sm" as Size) {
+  "sm" => 12,
+  "md" => 16,
+  "lg" => 20,
+};
+
+export {};

@@ -1,0 +1,270 @@
+=== aHoistedValueInsideAPipelineOperandRunsOnceInSourceOrder.tt ===
+variant E { A(value: number), B }
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (value: number) => E
+>value : (property) value: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const order: string[] = [];
+>order : const order: string[]
+const mark = <T,>(name: string, value: T): T => { order.push(name); return value; };
+>mark : const mark: <T>(name: string, value: T) => T
+>T : (type parameter) T in <T>(name: string, value: T): T
+>name : (parameter) name: string
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(name: string, value: T): T
+>T : (type parameter) T in <T>(name: string, value: T): T
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>value : (parameter) value: T
+const subject = (name: string): E => { order.push(name); return E.A(1); };
+>subject : const subject: (name: string) => E
+>name : (parameter) name: string
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>E : const E: {
+>       A: (value: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: number) => E
+const add = (value: number) => { order.push("call"); return value + 1; };
+>add : const add: (value: number) => number
+>value : (parameter) value: number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: number
+const callee = () => { order.push("callee"); return add; };
+>callee : const callee: () => (value: number) => number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>add : const add: (value: number) => number
+const make = (n: number) => { order.push("make"); return (value: number) => { order.push("apply"); return value + n; }; };
+>make : const make: (n: number) => (value: number) => number
+>n : (parameter) n: number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: number
+>n : (parameter) n: number
+const step = () => { order.push("step"); return (value: number) => { order.push("apply"); return value * 10; }; };
+>step : const step: () => (value: number) => number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: number
+const okay = (name: string, value: number): R => { order.push(name); return { kind: "Ok", value }; };
+>okay : const okay: (name: string, value: number) => R
+>name : (parameter) name: string
+>value : (parameter) value: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+const fail = (name: string): R => { order.push(name); return { kind: "Err", error: name }; };
+>fail : const fail: (name: string) => R
+>name : (parameter) name: string
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>kind : (property) kind: "Err"
+>error : (property) error: string
+>name : (parameter) name: string
+const report = (value: unknown) => { console.log(order.join(","), String(value)); order.length = 0; };
+>report : const report: (value: unknown) => void
+>value : (parameter) value: unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>order : const order: string[]
+>join : (method) Array<string>.join(separator?: string): string
+>String : var String: (value?: any) => string
+>value : (parameter) value: unknown
+>order : const order: string[]
+>length : (property) Array<string>.length: number
+report(callee()(match (subject("head")) { A(value) => value, B => 0 }) |> step());
+>report : const report: (value: unknown) => void
+>callee : const callee: () => (value: number) => number
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>step : const step: () => (value: number) => number
+report(mark("left", 1) + match (subject("right")) { A(value) => value, B => 0 } |> step());
+>report : const report: (value: unknown) => void
+>mark : const mark: <1>(name: string, value: 1) => 1
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>step : const step: () => (value: number) => number
+report(match (subject("head")) { A(value) => value, B => 0 } + mark("right", 1) |> step());
+>report : const report: (value: unknown) => void
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>mark : const mark: <1>(name: string, value: 1) => 1
+>step : const step: () => (value: number) => number
+report([mark("first", 1), match (subject("second")) { A(value) => value, B => 0 }] |> (pair => pair.map(n => n + 1)));
+>report : const report: (value: unknown) => void
+>mark : const mark: <1>(name: string, value: 1) => 1
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>pair : (parameter) pair: number[]
+>pair : (parameter) pair: number[]
+>map : (method) Array<number>.map<number>(callbackfn: (value: number, index: number, array: number[]) => number, thisArg?: any): number[]
+>n : (parameter) n: number
+>n : (parameter) n: number
+report(-match (subject("head")) { A(value) => value, B => 0 } |> step());
+>report : const report: (value: unknown) => void
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>step : const step: () => (value: number) => number
+report((match (subject("head")) { A(value) => value, B => 0 }).toFixed(1) |> Number);
+>report : const report: (value: unknown) => void
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+>Number : var Number: (value?: any) => number
+report(`${callee()(match (subject("head")) { A(value) => value, B => 0 })}` |> Number);
+>report : const report: (value: unknown) => void
+>callee : const callee: () => (value: number) => number
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>Number : var Number: (value?: any) => number
+report(mark("head", 3) |> make(match (subject("arg")) { A(value) => value, B => 0 }));
+>report : const report: (value: unknown) => void
+>mark : const mark: <3>(name: string, value: 3) => 3
+>make : const make: (n: number) => (value: number) => number
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+report(callee()(match (subject("one")) { A(value) => value, B => 0 }) + callee()(match (subject("two")) { A(value) => value, B => 0 }) |> step());
+>report : const report: (value: unknown) => void
+>callee : const callee: () => (value: number) => number
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>callee : const callee: () => (value: number) => number
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>step : const step: () => (value: number) => number
+report(mark("cond", true) && callee()(match (subject("branch")) { A(value) => value, B => 0 }) |> String);
+>report : const report: (value: unknown) => void
+>mark : const mark: <true>(name: string, value: true) => true
+>callee : const callee: () => (value: number) => number
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>String : var String: (value?: any) => string
+report(mark("cond", false) && callee()(match (subject("skipped")) { A(value) => value, B => 0 }) |> String);
+>report : const report: (value: unknown) => void
+>mark : const mark: <false>(name: string, value: false) => false
+>callee : const callee: () => (value: number) => number
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>String : var String: (value?: any) => string
+function lifted(ok: boolean): R {
+>lifted : function lifted(ok: boolean): R
+>ok : (parameter) ok: boolean
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const value = callee()(try (ok ? okay("try", 4) : fail("err"))) |> step();
+>value : const value: number
+>callee : const callee: () => (value: number) => number
+>ok : (parameter) ok: boolean
+>okay : const okay: (name: string, value: number) => R
+>fail : const fail: (name: string) => R
+>step : const step: () => (value: number) => number
+  return { kind: "Ok", value };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+const first = lifted(true);
+>first : const first: R
+>lifted : function lifted(ok: boolean): R
+report(first.kind === "Ok" ? first.value : first.error);
+>report : const report: (value: unknown) => void
+>first : const first: R
+>kind : (property) kind: "Err" | "Ok"
+>first : const first: {
+>       kind: "Ok";
+>       value: number;
+>   }
+>value : (property) value: number
+>first : const first: {
+>       kind: "Err";
+>       error: string;
+>   }
+>error : (property) error: string
+const second = lifted(false);
+>second : const second: R
+>lifted : function lifted(ok: boolean): R
+report(second.kind === "Ok" ? second.value : second.error);
+>report : const report: (value: unknown) => void
+>second : const second: R
+>kind : (property) kind: "Err" | "Ok"
+>second : const second: {
+>       kind: "Ok";
+>       value: number;
+>   }
+>value : (property) value: number
+>second : const second: {
+>       kind: "Err";
+>       error: string;
+>   }
+>error : (property) error: string
+

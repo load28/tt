@@ -1,0 +1,10 @@
+//// [runtimeLiteralBooleanMatch.tt] 8 mapping(s)
+1:1 -> 19:1 len 35  "\nfunction label(flag: boolean) {\n  "
+3:3 -> 38:3 len 7  "return "
+3:17 -> 23:19 len 4  "flag"
+4:5 -> 25:12 len 4  "true"
+4:13 -> 26:18 len 5  "\"yes\""
+5:5 -> 29:12 len 5  "false"
+5:14 -> 30:18 len 4  "\"no\""
+6:4 -> 38:16 len 57  ";\n}\n\nconsole.log(label(true), label(false));\n\nex"...
+

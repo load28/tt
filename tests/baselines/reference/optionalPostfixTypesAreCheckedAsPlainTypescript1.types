@@ -1,0 +1,33 @@
+=== optionalPostfixTypesAreCheckedAsPlainTypescript1.tt ===
+declare const value: { n: number } | undefined;
+>value : const value: {
+>       n: number;
+>   } | undefined
+>n : (property) n: number
+const maybe: number | undefined = value |> ?.n;
+>maybe : const maybe: number | undefined
+>value : const value: {
+>       n: number;
+>   } | undefined
+>n : (property) n: number | undefined
+const project = flow |> ((v: { n: number } | undefined) => v) |> ?.n;
+>project : const project: (v: {
+>       n: number;
+>   } | undefined) => number | undefined
+>v : (parameter) v: {
+>       n: number;
+>   } | undefined
+>n : (property) n: number
+>v : (parameter) v: {
+>       n: number;
+>   } | undefined
+>n : (property) n: number | undefined
+const also: number | undefined = project(value);
+>also : const also: number | undefined
+>project : const project: (v: {
+>       n: number;
+>   } | undefined) => number | undefined
+>value : const value: {
+>       n: number;
+>   } | undefined
+

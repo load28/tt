@@ -1,0 +1,2 @@
+50 ["swap","pick1","swap","late5","pick5"]
+[{"kind":"Ok","value":5},{"kind":"Ok","value":-2},{"kind":"Err","error":"neg"}]

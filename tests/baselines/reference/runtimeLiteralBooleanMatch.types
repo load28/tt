@@ -1,0 +1,12 @@
+=== runtimeLiteralBooleanMatch.tt ===
+function label(flag: boolean) {
+>label : function label(flag: boolean): string
+>flag : (parameter) flag: boolean
+  return match (flag) {
+>flag : (parameter) flag: boolean
+console.log(label(true), label(false));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>label : function label(flag: boolean): string
+>label : function label(flag: boolean): string
+

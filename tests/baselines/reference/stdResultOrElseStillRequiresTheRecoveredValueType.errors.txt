@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./stdResultOrElseStillRequiresTheRecoveredValueType.tt → $DIR/out/stdResultOrElseStillRequiresTheRecoveredValueType.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2307]: Cannot find module './tt/index.js' or its corresponding type declarations.
+ --> stdResultOrElseStillRequiresTheRecoveredValueType.tt:2:30
+  |
+2 | import type { TResult } from "./tt/index.js";
+  |                              ^^^^^^^^^^^^^^^
+error[ts2307]: Cannot find module './tt/result.js' or its corresponding type declarations.
+ --> stdResultOrElseStillRequiresTheRecoveredValueType.tt:3:25
+  |
+3 | import * as Result from "./tt/result.js";
+  |                         ^^^^^^^^^^^^^^^^
+error[ts7006]: Parameter 's' implicitly has an 'any' type.
+  --> stdResultOrElseStillRequiresTheRecoveredValueType.tt:23:37
+   |
+23 | const recovered = Result.orElse(r, (s) => Result.Ok(s));
+   |                                     ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+stdResultOrElseStillRequiresTheRecoveredValueType.ts(2,30): error TS2307: Cannot find module './tt/index.js' or its corresponding type declarations.
+stdResultOrElseStillRequiresTheRecoveredValueType.ts(3,25): error TS2307: Cannot find module './tt/result.js' or its corresponding type declarations.
+stdResultOrElseStillRequiresTheRecoveredValueType.ts(23,37): error TS7006: Parameter 's' implicitly has an 'any' type.

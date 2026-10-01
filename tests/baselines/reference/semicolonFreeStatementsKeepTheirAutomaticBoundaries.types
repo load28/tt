@@ -1,0 +1,109 @@
+=== semicolonFreeStatementsKeepTheirAutomaticBoundaries.tt ===
+variant O { A, B }
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const log: string[] = []
+>log : const log: string[]
+const inc = (n: number) => n + 1
+>inc : const inc: (n: number) => number
+>n : (parameter) n: number
+>n : (parameter) n: number
+const note = (text: string) => { log.push(text) }
+>note : const note: (text: string) => void
+>text : (parameter) text: string
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>text : (parameter) text: string
+function run(x: O, y: O) {
+>run : function run(x: O, y: O): void
+>x : (parameter) x: O
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>y : (parameter) y: O
+>O : type O = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+log.push("start")
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+match (x) {
+>x : (parameter) x: O
+A => { log.push("xa") },
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+B => { log.push("xb") },
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+match (y) {
+>y : (parameter) y: O
+A => { log.push("ya") },
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+B => { log.push("yb") },
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+const n = 1
+>n : const n: 1
+n |> inc |> String |> note
+>n : const n: 1
+>inc : const inc: (n: number) => number
+>String : var String: StringConstructor
+>note : const note: (text: string) => void
+const piped = 1 |> inc
+>piped : const piped: number
+>inc : const inc: (n: number) => number
+log.push(String(piped))
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>String : var String: (value?: any) => string
+>piped : const piped: number
+const next = 2
+>next : const next: 2
+next |> String |> note
+>next : const next: 2
+>String : var String: StringConstructor
+>note : const note: (text: string) => void
+run(O.A, O.B)
+>run : function run(x: O, y: O): void
+>O : const O: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>O : const O: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+console.log(log.join(","))
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

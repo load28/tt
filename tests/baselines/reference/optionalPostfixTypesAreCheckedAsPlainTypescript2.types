@@ -1,0 +1,15 @@
+=== optionalPostfixTypesAreCheckedAsPlainTypescript2.tt ===
+declare const value: { n: number } | undefined;
+>value : const value: {
+>       n: number;
+>   } | undefined
+>n : (property) n: number
+const bad = value |> ?.n |> ((n: number) => n + 1);
+>bad : const bad: number
+>value : const value: {
+>       n: number;
+>   } | undefined
+>n : (property) n: number | undefined
+>n : (parameter) n: number
+>n : (parameter) n: number
+

@@ -1,0 +1,10 @@
+// @origin: tests/integration/contextual.rs::contextual_match_still_rejects_incompatible_callbacks
+
+declare const flag: boolean;
+declare function consume(item: {run: (x: number) => number}): void;
+consume(match (flag) {
+  true => ({run: (x: string) => x.length}),
+  false => ({run: x => x + 1}),
+});
+
+export {};

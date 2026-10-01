@@ -1,0 +1,29 @@
+// @origin: tests/integration/cases_05.rs::runtime_a_method_call_around_a_value_stays_a_member_call
+// @run: runtimeAMethodCallAroundAValueStaysAMemberCall.tt
+
+const trace: string[] = [];
+variant K { A, B }
+function pick(k: K): K { trace.push("pick"); return k; }
+class Repo {
+  items = ["x"];
+  first<T>(this: Repo, fallback: T): string | T { trace.push("first"); return this.items[0] ?? fallback; }
+}
+type O = { name: string; id<T>(x: T): T; add(x: number): number };
+const obj: O = { name: "o", id: (x) => x, add(x: number) { return x + 1; } };
+function getO(): O { trace.push("getO"); return obj; }
+function key(): "add" { trace.push("key"); return "add"; }
+function repo(k: K, r: Repo) {
+  const v: string | number = r.first(match (pick(k)) { A => 1, B => 2 });
+  return v;
+}
+function optional(o: O | undefined, k: K) {
+  const s: string | undefined = o?.id(match (pick(k)) { A => o.name, B => "b" });
+  return s;
+}
+function keyed(k: K) {
+  return getO()[key()](match (pick(k)) { A => 1, B => 2 });
+}
+const n: number = obj.id(match (pick(K.B)) { A => 1, B => 2 });
+console.log(repo(K.A, new Repo()), optional(obj, K.A), optional(undefined, K.A), keyed(K.B), n, JSON.stringify(trace));
+
+export {};

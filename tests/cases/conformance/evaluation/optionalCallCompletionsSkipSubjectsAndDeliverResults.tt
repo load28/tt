@@ -1,0 +1,29 @@
+// @origin: tests/integration/contextual.rs::optional_call_completions_skip_subjects_and_deliver_results
+// @run: optionalCallCompletionsSkipSubjectsAndDeliverResults.tt
+
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function mark<T>(name: string, value: T): T { trace.push(name); return value; }
+const present: ((item: Item) => number) | undefined = item => { trace.push("call"); return item.run(2); };
+const absent: ((item: Item) => number) | undefined = undefined;
+for (const consume of [present, absent]) {
+  trace.length = 0;
+  const result = consume?.(match (mark("subject", State.Ready(5))) {
+    Ready(value) => (trace.push("arm"), {kind: "item", run: x => x + value}),
+    Empty => ({kind: "item", run: x => x}),
+  });
+  console.log(result, trace.join(",") || "silent");
+}
+const holder = {
+  base: 100,
+  maybe(item: Item): number { trace.push("method"); return this.base + item.run(1); },
+};
+trace.length = 0;
+const viaReceiver = holder.maybe?.(match (mark("subject", State.Ready(7))) {
+  Ready(value) => ({kind: "item", run: x => x * value}),
+  Empty => ({kind: "item", run: x => x}),
+});
+console.log(viaReceiver, trace.join(","));
+
+export {};

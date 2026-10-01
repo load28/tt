@@ -1,0 +1,168 @@
+=== resultExpressionPropagationUsesItsLexicalFailureEdge.tt ===
+type R<T> = {kind: "Ok"; value: T} | {kind: "Err"; error: string};
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const trace: string[] = [];
+>trace : const trace: string[]
+function read(ok: boolean): R<number> { trace.push("read"); return ok ? {kind: "Ok", value: 3} : {kind: "Err", error: "bad"}; }
+>read : function read(ok: boolean): R<number>
+>ok : (parameter) ok: boolean
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>ok : (parameter) ok: boolean
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function before() { trace.push("before"); return 2; }
+>before : function before(): number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+function compute(ok: boolean) {
+>compute : function compute(ok: boolean): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>ok : (parameter) ok: boolean
+  const r = result {
+>r : const r: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+    let company;
+>company : let company: any
+    company = before() + try read(ok);
+>company : let company: any
+>before : function before(): number
+>read : function read(ok: boolean): R<number>
+>ok : (parameter) ok: boolean
+    trace.push("after");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+    return company;
+>company : let company: number
+  trace.push("outside");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return r;
+>r : const r: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+for (const ok of [true, false]) {
+>ok : const ok: boolean
+  trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+  console.log(JSON.stringify(compute(ok)), trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>compute : function compute(ok: boolean): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>ok : const ok: boolean
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+const nested = result {
+>nested : const nested: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: (number | "Err" | "Ok")[];
+>   }
+  const a = try read(true);
+>a : const a: number
+>read : function read(ok: boolean): R<number>
+  const inner = result { let b; b = try read(false); return b; };
+>inner : const inner: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>b : let b: any
+>b : let b: any
+>read : function read(ok: boolean): R<number>
+>b : let b: number
+  return [a, inner.kind];
+>a : const a: number
+>inner : const inner: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>kind : (property) kind: "Err" | "Ok"
+console.log(JSON.stringify(nested));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>nested : const nested: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: (number | "Err" | "Ok")[];
+>   }
+const skipped = result { let n = 0; n = false ? try read(false) : 4; return n; };
+>skipped : const skipped: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>n : let n: number
+>n : let n: number
+>read : function read(ok: boolean): R<number>
+>n : let n: number
+console.log(JSON.stringify(skipped));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>skipped : const skipped: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+

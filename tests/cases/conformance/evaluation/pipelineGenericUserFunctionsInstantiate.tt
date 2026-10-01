@@ -1,0 +1,5 @@
+// @origin: tests/integration/cases_03.rs::pipeline_generic_user_functions_instantiate
+const wrap = <T,>(v: T): T[] => [v];
+const arr: number[][] = 3 |> wrap |> wrap;
+
+export {};

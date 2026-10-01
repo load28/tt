@@ -1,0 +1,14 @@
+//// [anAssignmentTargetKeepsTheNarrowingTypescriptGivesIt.tt] 12 mapping(s)
+1:1 -> 1:1 len 190  "\ntype R<T> = { kind: \"Ok\"; value: T } | { kind: "...
+6:3 -> 12:3 len 14  "state.value = "
+6:21 -> 7:18 len 6  "read()"
+6:27 -> 12:23 len 185  ";\n  return { kind: \"Ok\", value: state.value.toFi"...
+12:3 -> 19:17 len 11  "state.value"
+12:3 -> 25:3 len 12  "state.value "
+12:17 -> 25:26 len 1  " "
+12:22 -> 20:18 len 6  "read()"
+12:28 -> 25:33 len 114  ";\n  return { kind: \"Ok\", value: state.value };\n}"...
+18:5 -> 41:5 len 13  "this.value = "
+18:38 -> 33:22 len 1  "r"
+18:42 -> 41:24 len 20  ";\n  }\n}\n\nexport {};\n"
+

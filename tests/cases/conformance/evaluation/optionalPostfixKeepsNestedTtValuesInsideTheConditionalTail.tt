@@ -1,0 +1,13 @@
+// @origin: tests/integration/cases_03.rs::optional_postfix_keeps_nested_tt_values_inside_the_conditional_tail
+// @run: optionalPostfixKeepsNestedTtValuesInsideTheConditionalTail.tt
+
+variant E { A(value: number), B }
+const order: string[] = [];
+const subject = (): E => { order.push("subject"); return E.A(4); };
+const live = { method(value: number): number { order.push("method"); return value; } };
+const absent = (() => undefined as typeof live | undefined)();
+const miss = absent |> ?.method(match (subject()) { A(value) => value, B => 0 });
+const hit = live |> ?.method(match (subject()) { A(value) => value, B => 0 });
+console.log(miss, hit, order.join(","));
+
+export {};

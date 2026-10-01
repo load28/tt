@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aRecursiveAnonymousTypeIsNeverAnnotatedWithItsElidedCycle1.tt → $DIR/out/aRecursiveAnonymousTypeIsNeverAnnotatedWithItsElidedCycle1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2339]: Property 'zzz' does not exist on type '{ k: number; m(): ...; }'.
+ --> aRecursiveAnonymousTypeIsNeverAnnotatedWithItsElidedCycle1.tt:4:11
+  |
+4 | b.m().m().zzz;
+  |           ^^^
+error[ts2339]: Property 'yyy' does not exist on type '{ m(): ...; }'.
+ --> aRecursiveAnonymousTypeIsNeverAnnotatedWithItsElidedCycle1.tt:7:11
+  |
+7 | c.m().m().yyy;
+  |           ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aRecursiveAnonymousTypeIsNeverAnnotatedWithItsElidedCycle1.ts(20,11): error TS2339: Property 'zzz' does not exist on type '{ k: number; m(): ...; }'.
+aRecursiveAnonymousTypeIsNeverAnnotatedWithItsElidedCycle1.ts(37,11): error TS2339: Property 'yyy' does not exist on type '{ m(): ...; }'.

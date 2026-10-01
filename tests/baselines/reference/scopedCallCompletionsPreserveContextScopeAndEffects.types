@@ -1,0 +1,145 @@
+=== scopedCallCompletionsPreserveContextScopeAndEffects.tt ===
+variant State { Ready(value: number), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: number) => State
+>value : (property) value: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+type Item = {kind: "item"; run: (x: number) => number};
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+const trace: string[] = [];
+>trace : const trace: string[]
+function consume(item: Item) { trace.push("call:" + item.run(3)); }
+>consume : function consume(item: Item): void
+>item : (parameter) item: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>item : (parameter) item: Item
+>run : (property) run: (x: number) => number
+for (const state of [State.Ready(4), State.Empty]) {
+>state : const state: {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       readonly kind: "Empty";
+>   }
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Ready : (property) Ready: (value: number) => State
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+  trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+  consume(match (state) {
+>consume : function consume(item: Item): void
+>state : const state: {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       readonly kind: "Empty";
+>   }
+    Ready(value) => {
+>value : const value: number
+      const consume = value + 1;
+>consume : const consume: number
+>value : const value: number
+      const local = () => consume;
+>local : const local: () => number
+>consume : const consume: number
+      trace.push("arm");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+      return {kind: "item", run: x => x + local()};
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>local : const local: () => number
+    Empty => ({kind: "item", run: x => x - 1}),
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+  trace.push("after");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  console.log(trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+function throws(item: Item): void { trace.push("throws:" + item.run(2)); throw new Error("consumer"); }
+>throws : function throws(item: Item): void
+>item : (parameter) item: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>item : (parameter) item: Item
+>run : (property) run: (x: number) => number
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+  throws(match (State.Ready(5)) {
+>throws : function throws(item: Item): void
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Ready : (property) Ready: (value: number) => State
+    Ready(value) => { trace.push("value"); return {kind: "item", run: x => x + value}; },
+>value : const value: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+    Empty => ({kind: "item", run: x => x}),
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+} catch { trace.push("caught"); }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+console.log(trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

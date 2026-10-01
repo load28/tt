@@ -1,0 +1,16 @@
+// @origin: tests/integration/cases_04.rs::runtime_literal_match_keeps_number_spellings
+// @run: runtimeLiteralMatchKeepsNumberSpellings.tt
+
+function pick(n: number) {
+  return match (n) {
+    0xff => "hex",
+    1_000 => "sep",
+    1.5e2 => "exp",
+    -1 => "neg",
+    _ => "other",
+  };
+}
+
+console.log(pick(255), pick(1000), pick(150), pick(-1), pick(0));
+
+export {};

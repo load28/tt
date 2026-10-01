@@ -1,0 +1,197 @@
+=== runtimeACommaOperandBeforeAValueRunsOnceAsAStatement.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const trace: string[] = [];
+>trace : const trace: string[]
+function tick(): void { trace.push("tick"); }
+>tick : function tick(): void
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+function tock(): number { trace.push("tock"); return 7; }
+>tock : function tock(): number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+function r(n: number): R { trace.push("r"); return { kind: "Ok", value: n }; }
+>r : function r(n: number): R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+variant K { A, B }
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function pick(k: K) { trace.push("pick"); return k; }
+>pick : function pick(k: K): K
+>k : (parameter) k: K
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>k : (parameter) k: K
+function first(k: K) { return (tick(), match (pick(k)) { A => 1, B => 2 }); }
+>first : function first(k: K): 1 | 2
+>k : (parameter) k: K
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>tick : function tick(): void
+>pick : function pick(k: K): K
+>k : (parameter) k: K
+function several(k: K) { const x = (tick(), tock(), match (pick(k)) { A => 1, B => 2 }); return x + tock(); }
+>several : function several(k: K): number
+>k : (parameter) k: K
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>x : const x: 1 | 2
+>tick : function tick(): void
+>tock : function tock(): number
+>pick : function pick(k: K): K
+>k : (parameter) k: K
+>x : const x: 1 | 2
+>tock : function tock(): number
+function guarded(c: boolean, k: K) { return c && (tick() /* effect */, match (pick(k)) { A => 1, B => 2 }); }
+>guarded : function guarded(c: boolean, k: K): number | false
+>c : (parameter) c: boolean
+>k : (parameter) k: K
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>c : (parameter) c: boolean
+>tick : function tick(): void
+>pick : function pick(k: K): K
+>k : (parameter) k: K
+function propagated(): R { return r((tick(), try r(3))); }
+>propagated : function propagated(): R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>r : function r(n: number): R
+>tick : function tick(): void
+>r : function r(n: number): R
+console.log(first(K.B), JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>first : function first(k: K): 1 | 2
+>K : const K: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+console.log(several(K.A), JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>several : function several(k: K): number
+>K : const K: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+console.log(guarded(false, K.A), guarded(true, K.B), JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>guarded : function guarded(c: boolean, k: K): number | false
+>K : const K: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>guarded : function guarded(c: boolean, k: K): number | false
+>K : const K: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+console.log(JSON.stringify(propagated()), JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>propagated : function propagated(): R
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+

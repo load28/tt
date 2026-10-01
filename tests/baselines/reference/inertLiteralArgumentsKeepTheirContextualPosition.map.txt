@@ -1,0 +1,17 @@
+//// [inertLiteralArgumentsKeepTheirContextualPosition.tt] 15 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:30 -> 21:29 len 6  "number"
+2:30 -> 24:18 len 6  "number"
+2:46 -> 26:3 len 419  "\ntype Item = {kind: \"item\"; run: (x: number) => "...
+13:1 -> 62:1 len 16  "const wrapped = "
+13:17 -> 38:17 len 6  "widget"
+13:24 -> 44:23 len 50  "{\n  first: {kind: \"item\", run: x => x},\n  second"...
+13:24 -> 51:23 len 50  "{\n  first: {kind: \"item\", run: x => x},\n  second"...
+15:18 -> 40:17 len 5  "state"
+16:11 -> 43:15 len 5  "value"
+16:21 -> 46:11 len 6  "(made)"
+17:14 -> 53:11 len 6  "(made)"
+18:4 -> 46:17 len 3  ",\n}"
+18:4 -> 53:17 len 3  ",\n}"
+19:3 -> 62:23 len 123  ";\nconst counted = tagged({kind: \"item\", run: x ="...
+

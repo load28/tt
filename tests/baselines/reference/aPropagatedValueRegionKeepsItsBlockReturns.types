@@ -1,0 +1,256 @@
+=== aPropagatedValueRegionKeepsItsBlockReturns.tt ===
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const Ok = <T,>(value: T): R<T> => ({ kind: "Ok", value });
+>Ok : const Ok: <T>(value: T) => R<T>
+>T : (type parameter) T in <T>(value: T): R<T>
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(value: T): R<T>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in <T>(value: T): R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+const Err = (error: string): R<never> => ({ kind: "Err", error });
+>Err : const Err: (error: string) => R<never>
+>error : (parameter) error: string
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function statement(): R<number> {
+>statement : function statement(): R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    const q = try result { const w = try Ok(10); return w + 1; };
+>q : const q: number
+>w : const w: number
+>Ok : const Ok: <number>(value: number) => R<number>
+>w : const w: number
+    return Ok(q * 2);
+>Ok : const Ok: <number>(value: number) => R<number>
+>q : const q: number
+function product(fail: boolean): R<number> {
+>product : function product(fail: boolean): R<number>
+>fail : (parameter) fail: boolean
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    const q = (try result { const w = try (fail ? Err("no") : Ok(10)); return w + 1; }) * 2;
+>q : const q: number
+>w : const w: number
+>fail : (parameter) fail: boolean
+>Err : const Err: (error: string) => R<never>
+>Ok : const Ok: <number>(value: number) => R<number>
+>w : const w: number
+    return Ok(q);
+>Ok : const Ok: <number>(value: number) => R<number>
+>q : const q: number
+function discarded(): R<number> {
+>discarded : function discarded(): R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    try result { const w = try Err("inner"); return w; };
+>w : const w: never
+>Err : const Err: (error: string) => R<never>
+>w : const w: never
+    return Ok(0);
+>Ok : const Ok: <number>(value: number) => R<number>
+function matched(b: boolean): R<number> {
+>matched : function matched(b: boolean): R<number>
+>b : (parameter) b: boolean
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    const q = (try match (b) { true => { return Ok(10); }, false => Ok(1) }) * 2;
+>q : const q: number
+>b : (parameter) b: boolean
+>Ok : const Ok: <number>(value: number) => R<number>
+>Ok : const Ok: <number>(value: number) => R<number>
+    return Ok(q + 1000);
+>Ok : const Ok: <number>(value: number) => R<number>
+>q : const q: number
+function guarded(ready: boolean, b: boolean): R<number> {
+>guarded : function guarded(ready: boolean, b: boolean): R<number>
+>ready : (parameter) ready: boolean
+>b : (parameter) b: boolean
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    const q = ready && (try match (b) { true => { return Ok(10); }, false => Ok(1) });
+>q : const q: number | false
+>ready : (parameter) ready: boolean
+>b : (parameter) b: boolean
+>Ok : const Ok: <number>(value: number) => R<number>
+>Ok : const Ok: <number>(value: number) => R<number>
+    return Ok(Number(q) + 1000);
+>Ok : const Ok: <number>(value: number) => R<number>
+>Number : var Number: (value?: any) => number
+>q : const q: number | false
+function argument(b: boolean): R<number> {
+>argument : function argument(b: boolean): R<number>
+>b : (parameter) b: boolean
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    const q = String(try match (b) { true => { return Ok(10); }, false => Ok(1) });
+>q : const q: string
+>String : var String: StringConstructor
+>b : (parameter) b: boolean
+>Ok : const Ok: <number>(value: number) => R<number>
+>Ok : const Ok: <number>(value: number) => R<number>
+    return Ok(Number(q) + 1000);
+>Ok : const Ok: <number>(value: number) => R<number>
+>Number : var Number: (value?: any) => number
+>q : const q: string
+function alternate(ready: boolean): R<number> {
+>alternate : function alternate(ready: boolean): R<number>
+>ready : (parameter) ready: boolean
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    const q = ready ? 5 : (try result { const w = try Ok(3); return w + 1; });
+>q : const q: number
+>ready : (parameter) ready: boolean
+>w : const w: number
+>Ok : const Ok: <number>(value: number) => R<number>
+>w : const w: number
+    return Ok(q);
+>Ok : const Ok: <number>(value: number) => R<number>
+>q : const q: number
+function piped(): R<string> {
+>piped : function piped(): R<string>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    const q = (try result { const w = try Ok(3); return w + 1; }) |> String;
+>q : const q: string
+>w : const w: number
+>Ok : const Ok: <number>(value: number) => R<number>
+>w : const w: number
+>String : var String: (value?: any) => string
+    return Ok(q);
+>Ok : const Ok: <string>(value: string) => R<string>
+>q : const q: string
+function interpolated(b: boolean): R<number> {
+>interpolated : function interpolated(b: boolean): R<number>
+>b : (parameter) b: boolean
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    const q = `${try match (b) { true => { return Ok(7); }, false => Err("x") }}`;
+>q : const q: string
+>b : (parameter) b: boolean
+>Ok : const Ok: <number>(value: number) => R<number>
+>Err : const Err: (error: string) => R<never>
+    return Ok(Number(q) + 1);
+>Ok : const Ok: <number>(value: number) => R<number>
+>Number : var Number: (value?: any) => number
+>q : const q: string
+const nested = result { const q = try result { const w = try Ok(3); return w + 1; }; return q * 2; };
+>nested : const nested: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>q : const q: number
+>w : const w: number
+>Ok : const Ok: <number>(value: number) => R<number>
+>w : const w: number
+>q : const q: number
+console.log(JSON.stringify([statement(), product(false), product(true), discarded()]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>statement : function statement(): R<number>
+>product : function product(fail: boolean): R<number>
+>product : function product(fail: boolean): R<number>
+>discarded : function discarded(): R<number>
+console.log(JSON.stringify([matched(true), guarded(true, true), guarded(false, true), argument(true)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>matched : function matched(b: boolean): R<number>
+>guarded : function guarded(ready: boolean, b: boolean): R<number>
+>guarded : function guarded(ready: boolean, b: boolean): R<number>
+>argument : function argument(b: boolean): R<number>
+console.log(JSON.stringify([alternate(false), piped(), interpolated(true), nested]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>alternate : function alternate(ready: boolean): R<number>
+>piped : function piped(): R<string>
+>interpolated : function interpolated(b: boolean): R<number>
+>nested : const nested: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+
