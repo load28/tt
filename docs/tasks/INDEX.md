@@ -722,7 +722,8 @@
 | TASK-714 | Word a match's coverage hole the same way on every path | Complete | 2026-10-01 | 2026-10-01 | [TASK-714](./TASK-714-one-match-exhaustiveness-message.md) |
 | TASK-715 | Point every `val-mutation` report at the binding's declaration | Complete | 2026-10-01 | 2026-10-01 | [TASK-715](./TASK-715-val-mutation-declaration-label.md) |
 | TASK-716 | Read unclosed type-shaped brackets in linear time | Complete | 2026-10-01 | 2026-10-01 | [TASK-716](./TASK-716-linear-type-shaped-lookaheads.md) |
+| TASK-717 | Hold `ttc --check-types` to the pinned `tsc` over TypeScript's own test cases | Complete | 2026-10-01 | 2026-10-01 | [TASK-717](./TASK-717-typed-parity-over-typescript-cases.md) |
 
 ## Next task number
 
-**TASK-717**
+**TASK-718**

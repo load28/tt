@@ -3,6 +3,7 @@
 pub mod baseline;
 pub mod cases;
 pub mod matrix;
+pub mod typescript_cases;
 
 #[path = "../../src/test_workspace.rs"]
 mod workspace;
