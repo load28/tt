@@ -29,6 +29,14 @@ pub struct Options<'a> {
     pub verify: bool,
     /// How relative `.tt`/`.ttx` import specifiers are rewritten in the output.
     pub rewrite_imports: ImportRewrite,
+    /// Whether the project's TypeScript compiles JSX with `"jsx":
+    /// "preserve"`. TypeScript names the JavaScript it emits for a `.tsx`
+    /// file `.jsx` under `preserve` and `.js` under every other `jsx` value
+    /// or none (`GetOutputExtension` in typescript-go's
+    /// `internal/outputpaths`), so [`ImportRewrite::Js`] rewrites `./x.ttx`
+    /// to `./x.jsx` only when this is set. The CLI reads it from the
+    /// project's `tsconfig.json`. `false` by default, TypeScript's default.
+    pub jsx_preserve: bool,
     /// Variant declarations imported from other modules, included in
     /// exhaustiveness checking (shadowed by local declarations; shadowing
     /// built-ins of the same name). The `ttc` CLI fills this from the
@@ -66,6 +74,7 @@ impl Default for Options<'_> {
             source_kind: SourceKind::TypeScript,
             verify: true,
             rewrite_imports: ImportRewrite::default(),
+            jsx_preserve: false,
             extern_variants: &[],
             defer_to_checker: false,
             std_imports: StdImports::default(),
@@ -190,7 +199,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             comments: &comments,
         },
         &plan,
-        options.rewrite_imports,
+        options.rewrite_imports.extensions(options.jsx_preserve),
         options.std_imports,
     );
     if options.verify
@@ -1021,7 +1030,7 @@ fn report_parsed(
             comments: &comments,
         },
         &plan,
-        options.rewrite_imports,
+        options.rewrite_imports.extensions(options.jsx_preserve),
         options.std_imports,
     );
     let lowered = MappedEmit {

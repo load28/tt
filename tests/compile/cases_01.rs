@@ -87,7 +87,17 @@ fn duplicate_variant_cases_do_not_duplicate_the_semantic_alphabet() {
 fn ttx_rewrites_ttx_imports_for_each_target_surface() {
     let source = "import { View } from \"./view.ttx\";\nexport { View };\n";
     let js = ok_tsx(source);
-    assert!(js.contains("from \"./view.jsx\""), "{js}");
+    assert!(js.contains("from \"./view.js\""), "{js}");
+    let preserved = compile(
+        source,
+        &Options {
+            source_kind: SourceKind::Tsx,
+            jsx_preserve: true,
+            ..Options::default()
+        },
+    )
+    .unwrap();
+    assert!(preserved.contains("from \"./view.jsx\""), "{preserved}");
     let ts = compile(
         source,
         &Options {

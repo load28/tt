@@ -356,6 +356,12 @@ pub fn collect_sources(
     out: &mut Vec<PathBuf>,
 ) -> Result<()>
 
+// fn ttc::engine::jsx_preserve
+pub fn jsx_preserve(
+    files: &[PathBuf],
+    tsconfig: Option<&Path>,
+) -> Result<bool, String>
+
 // fn ttc::engine::member_access_at
 pub fn member_access_at(
     path: &Path,
@@ -1464,6 +1470,7 @@ pub enum ImportRewrite {
 }
 impl ImportRewrite
     pub fn source_specifier(self, specifier: &str) -> Option<String>
+    pub fn source_candidates(self, specifier: &str) -> Vec<String>
 impl Clone for ImportRewrite
 impl Copy for ImportRewrite
 impl Debug for ImportRewrite
@@ -3830,6 +3837,7 @@ pub struct Options<'a> {
     pub source_kind: SourceKind,
     pub verify: bool,
     pub rewrite_imports: ImportRewrite,
+    pub jsx_preserve: bool,
     pub extern_variants: &'a [ExternVariant],
     pub defer_to_checker: bool,
     pub std_imports: StdImports<'a>,

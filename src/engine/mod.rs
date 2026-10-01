@@ -42,6 +42,7 @@
 //! ```
 
 mod completions;
+mod config;
 mod declarations;
 mod documents;
 mod hints;
@@ -59,6 +60,7 @@ pub use completions::{
     MemberAccess, TtCompletion, TtCompletionKind, TtKeyword, member_access_at, tt_completions_at,
     tt_keywords_at,
 };
+pub use config::jsx_preserve;
 pub use declarations::{
     TtCaseDecl, TtDeclarations, TtFieldDecl, TtMatchSite, TtVariantDecl, TtVariantOrigin,
     tt_declarations,

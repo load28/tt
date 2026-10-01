@@ -410,16 +410,18 @@ fn sidecars_name_tt_modules_as_the_source_does() {
     let root = Workspace::new("sidecar-specifiers");
     let declarations = "import { K } from \"./sub/m.js\";\n\
         import type { V } from './sub/v.jsx';\n\
+        import type { W } from './sub/w.js';\n\
         import { h } from \"./h.js\";\n\
         export * from \"./sub/m.ts\";\n\
         export { K } from \"pkg/m.js\";\n\
         export declare const k: K;\n\
-        export type T = import(\"./sub/m.js\").K | V | typeof h;\n";
+        export type T = import(\"./sub/m.js\").K | V | W | typeof h;\n";
     write_all(
         &root,
         &[
             ("src/sub/m.tt", "export variant K { A, B }\n"),
             ("src/sub/v.ttx", "export type V = number;\n"),
+            ("src/sub/w.ttx", "export type W = string;\n"),
             ("src/h.ts", "export const h = 1;\n"),
             (
                 "src/u.tt",
@@ -428,15 +430,17 @@ fn sidecars_name_tt_modules_as_the_source_does() {
             ("decl/u.d.ts", declarations),
             ("decl/sub/m.d.ts", "export type K = { kind: \"A\" };\n"),
             ("decl/sub/v.d.ts", "export type V = number;\n"),
+            ("decl/sub/w.d.ts", "export type W = string;\n"),
         ],
     );
     let expected = "import { K } from \"./sub/m.tt\";\n\
         import type { V } from './sub/v.ttx';\n\
+        import type { W } from './sub/w.ttx';\n\
         import { h } from \"./h.js\";\n\
         export * from \"./sub/m.tt\";\n\
         export { K } from \"pkg/m.js\";\n\
         export declare const k: K;\n\
-        export type T = import(\"./sub/m.tt\").K | V | typeof h;\n";
+        export type T = import(\"./sub/m.tt\").K | V | W | typeof h;\n";
     success(run(&root, &["--sidecar", "decl", "src"]));
     success(run(&root, &["--sidecar", "decl", "-o", "types", "src"]));
     for sidecar in ["src/u.tt.d.ts", "types/u.tt.d.ts"] {

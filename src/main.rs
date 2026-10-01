@@ -94,7 +94,8 @@ Options:
   --types               --check-types, and write the editor/typecheck
                         sidecars the compiler emits: <name>.tt.d.ts + .map
                         under -o (default .tt-types)
-  --project <path>      tsconfig.json the two modes above check against
+  --project <path>      tsconfig.json the two modes above check against, and
+                        whose `jsx` option names a .ttx import's output
                         (default: the nearest one at or above the inputs)
   --node <path>         node binary the TypeScript compiler's client runs
                         with (default: node on PATH)
@@ -114,8 +115,9 @@ Tooling options (bundler plugins, editors):
                         inline = a data: URL in the output itself
   --rewrite-imports <js|ts|off>
                         how relative .tt/.ttx specifiers are emitted:
-                        js = ./x.js/.jsx (default), ts = ./x.ts/.tsx,
-                        off = untouched
+                        js = ./x.js (default; a .ttx import becomes .jsx
+                        under the project's \"jsx\": \"preserve\", as tsc
+                        names its output), ts = ./x.ts/.tsx, off = untouched
   --sidecar <dir>       write <name>.tt.d.ts and .map next to each input from
                         <dir>/<path>/<name>.d.ts, where <path> is the input's
                         directory below the inputs' common directory (the

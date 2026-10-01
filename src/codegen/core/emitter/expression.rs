@@ -375,27 +375,20 @@ impl<'a> Emitter<'a> {
             }
             return;
         }
-        match self.rewrite_imports {
-            ImportRewrite::Off => out.push_src(specifier, at),
-            ImportRewrite::Js => {
-                let hir::ImportKind::Relative(kind) = import.kind else {
-                    unreachable!("standard-library imports returned above")
-                };
-                let extension = if kind.is_tsx() { "jsx" } else { "js" };
-                let suffix_len = if kind.is_tsx() { 5 } else { 4 };
-                out.push_src(&specifier[..specifier.len() - suffix_len], at);
-                out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
-            }
-            ImportRewrite::Ts => {
-                let hir::ImportKind::Relative(kind) = import.kind else {
-                    unreachable!("standard-library imports returned above")
-                };
-                let extension = kind.output_extension();
-                let suffix_len = if kind.is_tsx() { 5 } else { 4 };
-                out.push_src(&specifier[..specifier.len() - suffix_len], at);
-                out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
-            }
-        }
+        let Some(extensions) = self.rewrite_imports else {
+            out.push_src(specifier, at);
+            return;
+        };
+        let hir::ImportKind::Relative(kind) = import.kind else {
+            unreachable!("standard-library imports returned above")
+        };
+        let (extension, suffix_len) = if kind.is_tsx() {
+            (extensions.ttx, 5)
+        } else {
+            (extensions.tt, 4)
+        };
+        out.push_src(&specifier[..specifier.len() - suffix_len], at);
+        out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
     }
 
     pub(super) fn emit_statement_decision(

@@ -351,7 +351,7 @@ pub(crate) fn emit_mapped_parsed(
             comments: &comments,
         },
         &plan,
-        options.rewrite_imports,
+        options.rewrite_imports.extensions(options.jsx_preserve),
         options.std_imports,
     );
     MappedEmit {

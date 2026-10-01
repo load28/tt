@@ -907,6 +907,12 @@ fn print(params: &serde_json::Value) -> Result<serde_json::Value, String> {
             ));
         }
     };
+    let jsx_preserve = crate::build::project_jsx_preserve(
+        rewrite_imports,
+        &[std::path::PathBuf::from(path)],
+        None,
+    )
+    .map_err(|error| format!("print: {error}"))?;
     let printed = crate::build::print_input(
         path,
         &crate::build::BuildOptions {
@@ -915,6 +921,7 @@ fn print(params: &serde_json::Value) -> Result<serde_json::Value, String> {
             check: false,
             verify: params["verify"].as_bool().unwrap_or(true),
             rewrite_imports,
+            jsx_preserve,
             source_map,
             out_dir: None,
             jobs: None,

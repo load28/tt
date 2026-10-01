@@ -1,0 +1,28 @@
+// `./view.ttx` names the module tsc writes for the `view.tsx` ttc emits.
+// TypeScript names that output `view.jsx` only under `"jsx": "preserve"`
+// and `view.js` under every other `jsx` value (`GetOutputExtension` in
+// typescript-go's `internal/outputpaths`), so under `react-jsx` the import
+// is `./view.js`. ttc wrote `./view.jsx` whatever the option, which named
+// no file once tsc had compiled the tree: the program stopped with
+// ERR_MODULE_NOT_FOUND.
+// @run: main.tt
+// @filename: tsconfig.json
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  }
+}
+// @filename: view.ttx
+export const label: string = "view";
+export const lazy = () => import("./lazy.ttx");
+// @filename: lazy.ttx
+export const later: string = "lazy";
+// @filename: main.tt
+import { label, lazy } from "./view.ttx";
+console.log(label, (await lazy()).later);

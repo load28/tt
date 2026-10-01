@@ -24,7 +24,7 @@ use crate::program_syntax::{
     ConditionalBranch, EvaluationInputMode, HostContinuation, HostEvaluationOperation, HostExit,
     HostOwnerKind, LoopTestKind, OptionalCallTest, SourceSpan,
 };
-use crate::{AnchorKind, ImportRewrite, SourceKind, StdImports};
+use crate::{AnchorKind, RewrittenExtensions, SourceKind, StdImports};
 
 use emitter::*;
 use planning::*;
@@ -279,7 +279,7 @@ pub(crate) fn emit_with_map<'a>(
     core: &'a CoreFile,
     emit_source: EmitSource<'a>,
     lowering_plan: &LoweringPlan,
-    rewrite_imports: ImportRewrite,
+    rewrite_imports: Option<RewrittenExtensions>,
     std_imports: StdImports<'a>,
 ) -> Flat {
     let EmitSource {

@@ -723,6 +723,7 @@
 | TASK-715 | Point every `val-mutation` report at the binding's declaration | Complete | 2026-10-01 | 2026-10-01 | [TASK-715](./TASK-715-val-mutation-declaration-label.md) |
 | TASK-716 | Read unclosed type-shaped brackets in linear time | Complete | 2026-10-01 | 2026-10-01 | [TASK-716](./TASK-716-linear-type-shaped-lookaheads.md) |
 | TASK-722 | Judge a pipeline step as the call it makes in the `val` call check | Complete | 2026-10-01 | 2026-10-01 | [TASK-722](./TASK-722-val-pass-through-pipelines.md) |
+| TASK-723 | Name a `.ttx` import's output as `tsc` names it under the project's `jsx` option | Complete | 2026-10-01 | 2026-10-01 | [TASK-723](./TASK-723-ttx-import-follows-jsx-emit.md) |
 | TASK-724 | Report `=>` after a later parenthesized item instead of asserting | Complete | 2026-10-01 | 2026-10-01 | [TASK-724](./TASK-724-arrow-after-a-later-parenthesized-item.md) |
 
 ## Next task number

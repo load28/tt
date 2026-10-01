@@ -6,9 +6,12 @@ use super::*;
 /// TypeScript/TSX. Corresponds to the CLI's `--rewrite-imports` flag.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ImportRewrite {
-    /// `"./x.tt"` → `"./x.js"`, `"./x.ttx"` → `"./x.jsx"` — works under both `moduleResolution:
+    /// `"./x.tt"` → `"./x.js"`, and `"./x.ttx"` → the name TypeScript gives
+    /// the JavaScript it emits for `x.tsx`: `"./x.jsx"` under `"jsx":
+    /// "preserve"` and `"./x.js"` under every other `jsx` value or none
+    /// ([`Options::jsx_preserve`]). Works under both `moduleResolution:
     /// nodenext` (Node ESM requires the extension) and `bundler` (tsc maps
-    /// `.js` to `.ts`). The default.
+    /// `.js` and `.jsx` to `.ts` and `.tsx`). The default.
     #[default]
     Js,
     /// `"./x.tt"` → `"./x.ts"`, `"./x.ttx"` → `"./x.tsx"` — points at the emitted file.
@@ -20,31 +23,83 @@ pub enum ImportRewrite {
     Off,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RewrittenExtensions {
+    pub(crate) tt: &'static str,
+    pub(crate) ttx: &'static str,
+}
+
 impl ImportRewrite {
+    pub(crate) fn extensions(self, jsx_preserve: bool) -> Option<RewrittenExtensions> {
+        match self {
+            ImportRewrite::Js => Some(RewrittenExtensions {
+                tt: "js",
+                ttx: if jsx_preserve { "jsx" } else { "js" },
+            }),
+            ImportRewrite::Ts => Some(RewrittenExtensions {
+                tt: "ts",
+                ttx: "tsx",
+            }),
+            ImportRewrite::Off => None,
+        }
+    }
+
     /// The relative `.tt`/`.ttx` specifier this rewrite turns into
     /// `specifier`, if it produces that spelling at all — the rewrite only
     /// replaces a relative specifier's extension, so this is its inverse.
+    /// A `.js` specifier is the rewrite of a `.tt` one, and also of a
+    /// `.ttx` one in a project that does not preserve JSX; this names the
+    /// `.tt` one ([`ImportRewrite::source_candidates`] names both).
     ///
     /// ```
     /// use ttc::ImportRewrite;
     /// assert_eq!(ImportRewrite::Js.source_specifier("./sub/m.js").as_deref(), Some("./sub/m.tt"));
+    /// assert_eq!(ImportRewrite::Js.source_specifier("./v.jsx").as_deref(), Some("./v.ttx"));
     /// assert_eq!(ImportRewrite::Ts.source_specifier("../v.tsx").as_deref(), Some("../v.ttx"));
     /// assert_eq!(ImportRewrite::Js.source_specifier("pkg/m.js"), None);
     /// assert_eq!(ImportRewrite::Off.source_specifier("./m.tt"), None);
     /// ```
     pub fn source_specifier(self, specifier: &str) -> Option<String> {
+        self.source_candidates(specifier).into_iter().next()
+    }
+
+    /// Every relative `.tt`/`.ttx` specifier this rewrite turns into
+    /// `specifier` under some `jsx` option, `.tt` first: `./m.js` is the
+    /// rewrite of `./m.tt`, and of `./m.ttx` when the project does not
+    /// preserve JSX.
+    ///
+    /// ```
+    /// use ttc::ImportRewrite;
+    /// assert_eq!(ImportRewrite::Js.source_candidates("./m.js"), ["./m.tt", "./m.ttx"]);
+    /// assert_eq!(ImportRewrite::Js.source_candidates("./v.jsx"), ["./v.ttx"]);
+    /// assert_eq!(ImportRewrite::Ts.source_candidates("./m.ts"), ["./m.tt"]);
+    /// assert!(ImportRewrite::Off.source_candidates("./m.js").is_empty());
+    /// ```
+    pub fn source_candidates(self, specifier: &str) -> Vec<String> {
         if !(specifier.starts_with("./") || specifier.starts_with("../")) {
-            return None;
+            return Vec::new();
         }
-        let (tt, ttx) = match self {
-            ImportRewrite::Js => (".js", ".jsx"),
-            ImportRewrite::Ts => (".ts", ".tsx"),
-            ImportRewrite::Off => return None,
-        };
-        if let Some(stem) = specifier.strip_suffix(ttx) {
-            return Some(format!("{stem}.ttx"));
+        let mut candidates = Vec::new();
+        for (jsx_preserve, source) in [(true, "tt"), (false, "ttx"), (true, "ttx")] {
+            let Some(extensions) = self.extensions(jsx_preserve) else {
+                return Vec::new();
+            };
+            let extension = if source == "tt" {
+                extensions.tt
+            } else {
+                extensions.ttx
+            };
+            if let Some(stem) = specifier
+                .strip_suffix(extension)
+                .and_then(|rest| rest.strip_suffix('.'))
+            {
+                let candidate = format!("{stem}.{source}");
+                if !candidates.contains(&candidate) {
+                    candidates.push(candidate);
+                }
+            }
         }
-        specifier.strip_suffix(tt).map(|stem| format!("{stem}.tt"))
+        candidates
     }
 }
 
