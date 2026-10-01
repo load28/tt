@@ -1,11 +1,11 @@
-error[unknown-field]: imported variant PaymentState: case `Paid` has no field `receipt`
+error[unknown-field]: variant PaymentState (imported from "./domain.tt"): case `Paid` has no field `receipt`
   --> src/checkout.tt:11:10
    |
 11 |     Paid(receipt: id) => id,
    |          ^^^^^^^
    |
    = help: a field with a similar name exists: `receiptId`
-error[match-not-exhaustive]: match is not exhaustive: missing "Failed"
+error[match-not-exhaustive]: match on variant PaymentState (imported from "./domain.tt") is not exhaustive: missing "Failed"
   --> src/checkout.tt:14:17
    |
 14 |   const label = match (state) {

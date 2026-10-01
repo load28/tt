@@ -90,7 +90,7 @@ error[missing-arm-body]: match: this arm has no body
 
 
 ==== ttc --check-types (exit 1) ====
-error[match-not-exhaustive]: match is not exhaustive: missing "A", "B"
+error[match-not-exhaustive]: match on variant O is not exhaustive: missing "A", "B"
  --> onlyArmGuardWithoutBody.tt:4:10
   |
 4 |   return match (o) { A(n) if n > 0 };
@@ -105,7 +105,7 @@ error[missing-arm-body]: match: this arm has no body
   |                      ^^^^
   |
   = help: write `=> <body>` after the guard, or the body after `=>`
-error[match-not-exhaustive]: match is not exhaustive: missing (A, _), (B, _)
+error[match-not-exhaustive]: match on (O, _) is not exhaustive: missing (A, _), (B, _)
  --> onlyArmGuardWithoutBody.tt:7:10
   |
 7 |   return match (o, p) { (A(n), _) if n > 0 };
@@ -127,7 +127,7 @@ error[missing-arm-body]: match: this arm has no body
    |                      ^^^^^^^^^
    |
    = help: write `=> <body>` after the guard, or the body after `=>`
-error[match-not-exhaustive]: match is not exhaustive: missing "A", "B"
+error[match-not-exhaustive]: match on variant O is not exhaustive: missing "A", "B"
   --> onlyArmGuardWithoutBody.tt:13:10
    |
 13 |   return match (o) { A(n) if n > 0, B if o.kind === "B" };
@@ -149,7 +149,7 @@ error[missing-arm-body]: match: this arm has no body
    |                                     ^
    |
    = help: write `=> <body>` after the guard, or the body after `=>`
-error[match-not-exhaustive]: match is not exhaustive: missing "A", "B"
+error[match-not-exhaustive]: match on variant O is not exhaustive: missing "A", "B"
   --> onlyArmGuardWithoutBody.tt:16:10
    |
 16 |   return match (o) {

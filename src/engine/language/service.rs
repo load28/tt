@@ -412,7 +412,11 @@ pub(in super::super) fn analyses_for(
     source: &str,
     texts: Texts<'_>,
 ) -> crate::PatternAnalyses {
-    let externs = externs_of(path, source, &|target| texts.read(target));
+    let externs: Vec<crate::resolve::ExternDecl> =
+        externs_of(path, source, &|target| texts.read(target))
+            .iter()
+            .map(Into::into)
+            .collect();
     crate::analysis::pattern_analyses_with_kind(
         source,
         &externs,
@@ -441,7 +445,7 @@ pub(in super::super) fn externs_of(
     path: &Path,
     source: &str,
     read: &dyn Fn(&Path) -> Option<String>,
-) -> Vec<crate::VariantSymbol> {
+) -> Vec<crate::resolve::ImportedVariant> {
     externs_from(
         path,
         &crate::tt_imports_with_kind(
@@ -466,10 +470,10 @@ pub(in super::super) fn externs_from(
     path: &Path,
     imports: &[crate::TtImport],
     exports_of: &dyn Fn(&Path) -> Option<Vec<crate::VariantSymbol>>,
-) -> Vec<crate::VariantSymbol> {
+) -> Vec<crate::resolve::ImportedVariant> {
     imported_variants(path, imports, exports_of)
         .into_iter()
-        .map(|(_, symbol)| symbol)
+        .map(|(_, imported)| imported)
         .collect()
 }
 
@@ -477,9 +481,14 @@ pub(in super::super) fn imported_variants(
     path: &Path,
     imports: &[crate::TtImport],
     exports_of: &dyn Fn(&Path) -> Option<Vec<crate::VariantSymbol>>,
-) -> Vec<(PathBuf, crate::VariantSymbol)> {
+) -> Vec<(PathBuf, crate::resolve::ImportedVariant)> {
     let dir = path.parent().unwrap_or(Path::new("."));
-    let mut externs: Vec<(PathBuf, crate::VariantSymbol)> = Vec::new();
+    let mut externs: Vec<(PathBuf, crate::resolve::ImportedVariant)> = Vec::new();
+    let imported =
+        |symbol: crate::VariantSymbol, specifier: &str| crate::resolve::ImportedVariant {
+            specifier: specifier.to_string(),
+            symbol,
+        };
     for import in imports {
         if matches!(import.names, crate::TtImportNames::None) {
             continue; // a re-export brings nothing into scope
@@ -495,7 +504,7 @@ pub(in super::super) fn imported_variants(
             crate::TtImportNames::Namespace(ns) => {
                 externs.extend(decls.into_iter().map(|mut d| {
                     d.name = format!("{ns}.{}", d.name);
-                    (target.clone(), d)
+                    (target.clone(), imported(d, &import.specifier))
                 }));
             }
             crate::TtImportNames::Named(entries) => {
@@ -503,7 +512,7 @@ pub(in super::super) fn imported_variants(
                     if let Some(d) = decls.iter().find(|d| &d.name == name) {
                         let mut d = d.clone();
                         d.name = alias.clone().unwrap_or_else(|| name.clone());
-                        externs.push((target.clone(), d));
+                        externs.push((target.clone(), imported(d, &import.specifier)));
                     }
                 }
             }

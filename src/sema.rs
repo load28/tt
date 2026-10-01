@@ -70,6 +70,7 @@ use crate::verify;
 use std::collections::HashMap;
 
 use coverage::*;
+pub(crate) use coverage::{Witnesses, non_exhaustive};
 
 /// Checks a whole program and returns **every** tt-level violation, in
 /// source order. `verify` enables swc validation of field types; `externs`

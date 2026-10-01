@@ -221,7 +221,7 @@ type MatchAlphabets = (usize, Vec<Vec<String>>);
 pub(crate) struct FileSemantics {
     /// The imported declarations in this file's scope (aliases applied) —
     /// half of the cache key, and `checked_coverage`'s input.
-    pub externs: Vec<crate::VariantSymbol>,
+    pub externs: Vec<crate::resolve::ImportedVariant>,
     /// The file's pattern analyses over those externs.
     pub analyses: crate::PatternAnalyses,
 }

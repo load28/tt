@@ -804,7 +804,7 @@ fn typed_exhaustiveness_sees_a_hole_inside_a_payload() {
     )]);
     let out = check(&dir);
     assert!(
-        out.contains("match is not exhaustive: missing \"Wrap(inner: No())\""),
+        out.contains("match on variant Outer is not exhaustive: missing \"Wrap(inner: No())\""),
         "the typed path sees the payload hole: {out}"
     );
 }

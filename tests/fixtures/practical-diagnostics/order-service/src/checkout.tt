@@ -11,7 +11,7 @@ export function receipt(): TResult<string, string> {
     Paid(receipt: id) => id, //~ ERROR[unknown-field] has no field `receipt`
     _ => null,
   };
-  const label = match (state) { //~ ERROR[match-not-exhaustive] match is not exhaustive
+  const label = match (state) { //~ ERROR[match-not-exhaustive] is not exhaustive
     Pending => "pending",
     Paid(receiptId) => receiptId,
   };

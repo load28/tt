@@ -1,5 +1,5 @@
 === diagnostics main.tt ===
 diagnostics: 0 diagnostic(s)
 published: 1 diagnostic(s)
-  5:17-5:47 "match (note(\"operand\", input))" error match-not-exhaustive (ttc): match is not exhaustive: missing "Point"
+  5:17-5:47 "match (note(\"operand\", input))" error match-not-exhaustive (ttc): match on variant Shape is not exhaustive: missing "Point"
 

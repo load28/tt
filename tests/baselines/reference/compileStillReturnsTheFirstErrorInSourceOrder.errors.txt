@@ -19,7 +19,7 @@ error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "
 
 
 ==== ttc --check-types (exit 1) ====
-error[match-not-exhaustive]: match is not exhaustive: missing "Square"
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Square"
  --> compileStillReturnsTheFirstErrorInSourceOrder.tt:3:10
   |
 3 |   return match (x) { Circle(r) => r };
@@ -27,7 +27,7 @@ error[match-not-exhaustive]: match is not exhaustive: missing "Square"
   |
   = help: add the missing arms: `, Square(s) => undefined,`
   = help: or add a final `_` arm: `, _ => undefined,`
-error[match-not-exhaustive]: match is not exhaustive: missing "Circle"
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Circle"
  --> compileStillReturnsTheFirstErrorInSourceOrder.tt:6:10
   |
 6 |   return match (x) { Square(s) => s };

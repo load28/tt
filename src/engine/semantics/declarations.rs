@@ -99,7 +99,7 @@ fn reaches_placeholders(snapshot: &Snapshot) -> HashSet<PathBuf> {
 pub(crate) fn externs_of(
     snapshot: &Snapshot,
     file: &ProjectedDocument,
-) -> Vec<crate::VariantSymbol> {
+) -> Vec<crate::resolve::ImportedVariant> {
     super::super::language::externs_from(&file.source_path, file.tt_imports(), &|target| {
         snapshot
             .files()

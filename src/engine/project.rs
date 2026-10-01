@@ -575,7 +575,7 @@ impl Project {
         &self,
         path: &Path,
         source: &str,
-        externs: Vec<crate::VariantSymbol>,
+        externs: Vec<crate::resolve::ImportedVariant>,
     ) -> Arc<FileSemantics> {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         source.hash(&mut hasher);
@@ -589,9 +589,10 @@ impl Project {
                 .set(self.pattern_analysis_cache_hits.get() + 1);
             return cached.value.clone();
         }
+        let decls: Vec<crate::resolve::ExternDecl> = externs.iter().map(Into::into).collect();
         let analyses = crate::analysis::pattern_analyses_with_kind(
             source,
-            &externs,
+            &decls,
             crate::SourceKind::from_path(path).unwrap_or_default(),
         );
         let value = Arc::new(FileSemantics { externs, analyses });

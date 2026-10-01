@@ -1,4 +1,4 @@
-error[match-not-exhaustive]: match is not exhaustive: missing "Failed"
+error[match-not-exhaustive]: match on variant LoadState is not exhaustive: missing "Failed"
   --> src/dashboard.ttx:12:15
    |
 12 | const label = match (state) {

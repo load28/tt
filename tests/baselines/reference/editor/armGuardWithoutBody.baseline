@@ -40,7 +40,7 @@ diagnostics: 2 diagnostic(s)
   2:7-2:12 "limit" hint TS6133: 'limit' is declared but its value is never read. [unnecessary]
 published: 4 diagnostic(s)
   2:7-2:12 "limit" hint TS6133 (ts): 'limit' is declared but its value is never read. [unnecessary]
-  4:10-4:19 "match (s)" error match-not-exhaustive (ttc): match is not exhaustive: missing "Rect", "Point"
+  4:10-4:19 "match (s)" error match-not-exhaustive (ttc): match on variant Shape is not exhaustive: missing "Rect", "Point"
   6:5-6:16 "Rect(width)" error missing-arm-body (ttc): match: this arm has no body
   6:28-6:30 "li" error ts2304 (ttc): Cannot find name 'li'.
 

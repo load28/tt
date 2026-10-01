@@ -62,6 +62,25 @@ impl From<&crate::ExternVariant> for ExternDecl {
     }
 }
 
+/// A variant declaration a file imports, as the engine collects it: the
+/// declaration under the name the import gives it, and the specifier the
+/// import is written with — the origin a message names, as the command
+/// line's collector records it in [`crate::ExternVariant::from`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ImportedVariant {
+    pub(crate) specifier: String,
+    pub(crate) symbol: crate::VariantSymbol,
+}
+
+impl From<&ImportedVariant> for ExternDecl {
+    fn from(imported: &ImportedVariant) -> ExternDecl {
+        ExternDecl {
+            from: Some(imported.specifier.clone()),
+            ..ExternDecl::from(&imported.symbol)
+        }
+    }
+}
+
 impl From<&crate::VariantSymbol> for ExternDecl {
     fn from(e: &crate::VariantSymbol) -> ExternDecl {
         ExternDecl {

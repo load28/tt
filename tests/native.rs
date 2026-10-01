@@ -874,7 +874,7 @@ fn typed_missing_arms_list_every_hole_under_a_written_constructor() {
              export function f(c: A, m: B) {\n\
              \treturn match (c, m) { (Y, Q) => 1, };\n\
              }\n",
-            "missing (X, P), (X, Q), (Y, P)",
+            "match on (A, B) is not exhaustive: missing (X, P), (X, Q), (Y, P)",
         ),
         (
             "variant O { Some(value: number), None }\n\
@@ -882,7 +882,7 @@ fn typed_missing_arms_list_every_hole_under_a_written_constructor() {
              export function f(r: R) {\n\
              \treturn match (r) { Ok(value: Some(value: v)) => v };\n\
              }\n",
-            "missing \"Ok(value: None())\", \"Err\"",
+            "match on variant R is not exhaustive: missing \"Ok(value: None())\", \"Err\"",
         ),
     ] {
         let dir = project(&[("src/main.tt", source)]);
@@ -895,14 +895,7 @@ fn typed_missing_arms_list_every_hole_under_a_written_constructor() {
             .collect();
         assert_eq!(holes.len(), 1, "{answer}");
         let hole = holes[0];
-        assert!(
-            hole["message"]
-                .as_str()
-                .unwrap()
-                .starts_with("match is not exhaustive: missing")
-                && hole["message"].as_str().unwrap().ends_with(said),
-            "{hole}"
-        );
+        assert_eq!(hole["message"], said, "{hole}");
         let edit = &hole["suggestions"][0]["edit"];
         let replaced = source_slice(source, edit);
         let start = replaced.as_ptr() as usize - source.as_ptr() as usize;

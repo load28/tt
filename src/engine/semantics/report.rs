@@ -534,9 +534,9 @@ pub(crate) fn report(
         // imported ones have to be collected — otherwise a payload whose
         // type is an imported variant reads as an unknown alphabet and its
         // holes go unreported. The cached semantics carry them.
-        let externs: &[crate::VariantSymbol] = semantics
+        let externs: Vec<crate::resolve::ExternDecl> = semantics
             .get(&file.source_path)
-            .map(|s| s.externs.as_slice())
+            .map(|s| s.externs.iter().map(Into::into).collect())
             .unwrap_or_default();
         let asked_payloads = payloads
             .get(&file.source_path)
@@ -544,7 +544,7 @@ pub(crate) fn report(
         for (offset, coverage) in crate::analysis::checked_coverage(
             &file.source,
             crate::SourceKind::from_path(&file.source_path).unwrap_or_default(),
-            externs,
+            &externs,
             asked,
             asked_payloads,
         ) {
@@ -554,66 +554,29 @@ pub(crate) fn report(
             {
                 continue;
             }
-            // A single match's witness is one pattern, quoted the way the
-            // default path quotes one; a tuple match's is a combination of
-            // positions, written as one `(a, b)` and left unquoted — the
-            // quotes would read as part of the pattern.
-            let uncovered: Vec<String> = coverage
-                .missing
-                .iter()
-                .filter(|m| m.certain)
-                .map(|m| {
-                    if m.pattern.len() > 1 {
-                        format!("({})", m.pattern.join(", "))
-                    } else {
-                        format!("{:?}", m.pattern.first().cloned().unwrap_or_default())
-                    }
-                })
-                .collect();
-            if uncovered.is_empty() {
+            let Some(hole) =
+                crate::sema::non_exhaustive(&coverage, crate::sema::Witnesses::Certain)
+            else {
                 continue;
-            }
-            // The arms that close the hole, from the same witnesses in
-            // their binding form — one authoring, both pipelines.
-            let whole = coverage.exact && uncovered.len() == coverage.certain_total;
-            let arms: Vec<String> = coverage
-                .missing
-                .iter()
-                .filter(|m| whole && m.certain)
-                .map(|m| {
-                    if m.arm.len() > 1 {
-                        format!("({})", m.arm.join(", "))
-                    } else {
-                        m.arm.first().cloned().unwrap_or_else(|| "_".to_string())
-                    }
-                })
-                .collect();
-            // The typed pass knows the alphabet but not the declaration,
-            // so the shared renderer gets no subject — one renderer, one
-            // wording, on both pipelines (TASK-120).
-            let tuple = coverage.positions.len() > 1;
+            };
             out.push(Diagnostic {
                 path: file.source_path.clone(),
                 position: Some(crate::line_col(&file.source, offset)),
                 end: match_ends
                     .get(&(file.source_path.clone(), offset))
                     .map(|at| crate::line_col(&file.source, *at)),
-                message: crate::diagnostics::non_exhaustive_message(
-                    None,
-                    &uncovered,
-                    coverage.certain_total,
-                    coverage.exact,
-                    tuple,
-                ),
+                message: hole.message,
                 code: Some(
                     crate::DiagnosticCode::MatchNotExhaustive
                         .as_str()
                         .to_string(),
                 ),
                 suggestions: match sites.get(&(file.source_path.clone(), offset)) {
-                    Some(site) => {
-                        crate::diagnostics::non_exhaustive_suggestions(&file.source, *site, &arms)
-                    }
+                    Some(site) => crate::diagnostics::non_exhaustive_suggestions(
+                        &file.source,
+                        *site,
+                        &hole.arms,
+                    ),
                     None => vec![non_exhaustive_help()],
                 },
                 labels: Vec::new(),

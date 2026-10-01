@@ -77,7 +77,7 @@ fn a_hand_written_payload_union_is_named_by_the_checker() {
     )]);
     let out = check(&dir);
     assert!(
-        out.contains("match is not exhaustive: missing \"Wrap(inner: No())\""),
+        out.contains("match on variant Outer is not exhaustive: missing \"Wrap(inner: No())\""),
         "the checker names the payload's constituents: {out}"
     );
 }
@@ -125,7 +125,7 @@ fn typed_exhaustiveness_resolves_a_payload_declared_in_another_module() {
     ]);
     let out = check(&dir);
     assert!(
-        out.contains("match is not exhaustive: missing \"Head(t: Eof())\""),
+        out.contains("match on variant Line is not exhaustive: missing \"Head(t: Eof())\""),
         "the imported payload variant is resolved: {out}"
     );
 }
@@ -148,7 +148,7 @@ fn typed_exhaustiveness_resolves_a_payload_exported_through_a_specifier() {
     ]);
     let out = check(&dir);
     assert!(
-        out.contains("match is not exhaustive: missing \"Head(t: Eof())\""),
+        out.contains("match on variant Line is not exhaustive: missing \"Head(t: Eof())\""),
         "the aliased payload variant is resolved: {out}"
     );
 }
@@ -169,7 +169,7 @@ fn typed_exhaustiveness_covers_tuple_matches_too() {
     )]);
     let out = check(&dir);
     assert!(
-        out.contains("match is not exhaustive: missing (North, Slow)"),
+        out.contains("match on (Dir, Speed) is not exhaustive: missing (North, Slow)"),
         "the missing combination is named: {out}"
     );
 }

@@ -5,7 +5,7 @@
       "code": "match-not-exhaustive",
       "text": "match (state)",
       "line": 12,
-      "message": "match is not exhaustive: missing \"Failed\"",
+      "message": "match on variant LoadState is not exhaustive: missing \"Failed\"",
       "help": ["add the missing arms", "or add a final `_` arm"],
       "cliHelp": [
         "add the missing arms: `Failed(message) => undefined,`",

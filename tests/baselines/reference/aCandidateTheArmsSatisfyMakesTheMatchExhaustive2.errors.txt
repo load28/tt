@@ -10,7 +10,7 @@ error[match-not-exhaustive]: match on variant Small is not exhaustive: missing "
 
 
 ==== ttc --check-types (exit 1) ====
-error[match-not-exhaustive]: match is not exhaustive: missing "C"
+error[match-not-exhaustive]: match on variant Small is not exhaustive: missing "C"
  --> aCandidateTheArmsSatisfyMakesTheMatchExhaustive2.tt:3:25
   |
 3 | const f = (v: Small) => match (v) { A(s) => s, B => "b" };

@@ -10,7 +10,7 @@ error[match-not-exhaustive]: match on variant Dir is not exhaustive: missing "We
 
 
 ==== ttc --check-types (exit 1) ====
-error[match-not-exhaustive]: match is not exhaustive: missing "West"
+error[match-not-exhaustive]: match on variant Dir is not exhaustive: missing "West"
  --> orPatternCountsForExhaustiveness2.tt:3:23
   |
 3 | const f = (d: Dir) => match (d) {

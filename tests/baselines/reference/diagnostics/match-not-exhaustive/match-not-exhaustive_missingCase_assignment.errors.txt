@@ -11,7 +11,7 @@ error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "
 
 
 ==== ttc --check-types (exit 1) ====
-error[match-not-exhaustive]: match is not exhaustive: missing "Point"
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Point"
  --> main.tt:6:34
   |
 6 |   note("target", target).value = match (note("operand", input)) { Circle(r) => note("circle", r), Rect(w, h) => note("rect", w * h) };

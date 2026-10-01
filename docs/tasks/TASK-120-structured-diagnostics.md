@@ -1,5 +1,7 @@
 # TASK-120: 구조화 다중 진단 — Phase 0 (TASK-117 흡수)
 
+> **Reversed in part by [TASK-714](./TASK-714-one-match-exhaustiveness-message.md)**: Decision 4 (the typed path's coverage message names no variant) no longer holds. Both paths now name the variant the arms are read against, by one rule, and render the message in one function.
+
 - **상태**: 완료
 - **시작일**: 2026-08-21
 - **완료일**: 2026-08-21

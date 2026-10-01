@@ -12,7 +12,7 @@ ttc: ./main.ts → $DIR/out/main.ts
 ttc: ./shapes.tt → $DIR/out/shapes.ts
 
 ==== ttc --check-types (exit 1) ====
-error[match-not-exhaustive]: match is not exhaustive: missing "Rect"
+error[match-not-exhaustive]: match on variant Shape (imported from "./shapes.tt") is not exhaustive: missing "Rect"
  --> area.tt:8:40
   |
 8 | export const perimeter = (s: Shape) => match (s) { Circle(radius) => 2 * Math.PI * radius };

@@ -131,7 +131,8 @@ impl Table {
     /// analyzes; a tag no declaration knows becomes a constructor with no
     /// field list, which specializes to nothing and so covers only itself.
     /// The entry has no name — the checker answers with a *type*, not a
-    /// declaration, which is why the typed path's message names no variant.
+    /// declaration; the variant a message names is the one the arms are
+    /// read against (`coverage::subject_of`).
     pub(super) fn entry_of_members(&self, tags: &[String]) -> Entry {
         Entry {
             name: String::new(),

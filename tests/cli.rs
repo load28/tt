@@ -890,7 +890,7 @@ fn an_overlay_checks_a_buffer_whose_file_is_not_saved_yet() {
     let err = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{err}");
     assert!(
-        err.contains("match is not exhaustive: missing \"B\""),
+        err.contains("match on variant V is not exhaustive: missing \"B\""),
         "{err}"
     );
     assert!(!file.exists());

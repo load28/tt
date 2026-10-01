@@ -10,7 +10,7 @@ error[match-not-exhaustive]: match on variant Dir is not exhaustive: missing "So
 
 
 ==== ttc --check-types (exit 1) ====
-error[match-not-exhaustive]: match is not exhaustive: missing "South", "East", "West"
+error[match-not-exhaustive]: match on variant Dir is not exhaustive: missing "South", "East", "West"
  --> missingCasesAreAllListed.tt:2:23
   |
 2 | const f = (d: Dir) => match (d) { North => 1 };

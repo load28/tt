@@ -10,7 +10,7 @@ error[match-not-exhaustive]: match on variant Outer is not exhaustive: missing "
 
 
 ==== ttc --check-types (exit 1) ====
-error[match-not-exhaustive]: match is not exhaustive: missing "Wrap(inner: No())"
+error[match-not-exhaustive]: match on variant Outer is not exhaustive: missing "Wrap(inner: No())"
  --> aWitnessCanBePastedBackAsAnArm1.tt:4:11
   |
 4 | const a = match (o) {

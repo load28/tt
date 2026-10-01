@@ -413,6 +413,7 @@ fn imported_declaration(
         Some(exported)
     })
     .into_iter()
+    .map(|(target, imported)| (target, imported.symbol))
     .find(|(_, symbol)| symbol.name == declared.name)?;
     let text = read.borrow_mut().remove(&target)?;
     Some((target, text, found))
