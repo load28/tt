@@ -14,9 +14,3 @@ result-yield-crossing_yieldInside_jsxComponentProp	`ttc --out-dir` reports resul
 result-yield-crossing_yieldInside_jsxNested	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
 result-yield-crossing_yieldInside_jsxSpreadAttribute	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
 result-yield-crossing_yieldInside_templateLiteral	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
-source-not-typescript_resultBody_conditionalBranch_fixed	does not compile cleanly	TASK-700: Issue 8, a try in a binary operand of a result block in a conditional operand emits TypeScript that does not parse
-source-not-typescript_resultBody_jsxConditional_fixed	does not compile cleanly	TASK-700: Issue 8, a try in a binary operand of a result block in a conditional operand emits TypeScript that does not parse
-source-not-typescript_resultBody_jsxTernary_fixed	does not compile cleanly	TASK-700: Issue 8, a try in a binary operand of a result block in a conditional operand emits TypeScript that does not parse
-source-not-typescript_resultBody_logicalAnd_fixed	does not compile cleanly	TASK-700: Issue 8, a try in a binary operand of a result block in a conditional operand emits TypeScript that does not parse
-source-not-typescript_resultBody_logicalOr_fixed	does not compile cleanly	TASK-700: Issue 8, a try in a binary operand of a result block in a conditional operand emits TypeScript that does not parse
-source-not-typescript_resultBody_nullish_fixed	does not compile cleanly	TASK-700: Issue 8, a try in a binary operand of a result block in a conditional operand emits TypeScript that does not parse

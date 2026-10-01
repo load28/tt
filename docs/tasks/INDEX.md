@@ -711,6 +711,7 @@
 | TASK-703 | Convert inline Rust tests to case files by proving each conversion | Complete | 2026-10-01 | 2026-10-01 | [TASK-703](./TASK-703-inline-test-conversion-tooling.md) |
 | TASK-704 | Convert the compile suite's inline tests to case files | Complete | 2026-10-01 | 2026-10-01 | [TASK-704](./TASK-704-convert-compile-suite.md) |
 | TASK-705 | Convert the integration suite's runtime and type-check tests to case files | Complete | 2026-10-01 | 2026-10-01 | [TASK-705](./TASK-705-convert-integration-suite.md) |
+| TASK-706 | Write a value in a statement of a block a conditional operation holds | Complete | 2026-10-01 | 2026-10-01 | [TASK-706](./TASK-706-values-in-statements-under-conditional-operation.md) |
 | TASK-707 | Report a statement a `result` block's `}` cuts off as the author's syntax error | Complete | 2026-10-01 | 2026-10-01 | [TASK-707](./TASK-707-result-body-end.md) |
 | TASK-708 | Retire `stray-result`, which no `result` block can reach | Complete | 2026-10-01 | 2026-10-01 | [TASK-708](./TASK-708-retire-stray-result.md) |
 | TASK-709 | Count a nested alternative's bindings when or-pattern alternatives are compared | Complete | 2026-10-01 | 2026-10-01 | [TASK-709](./TASK-709-nested-or-pattern-bindings.md) |

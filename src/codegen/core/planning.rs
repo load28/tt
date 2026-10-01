@@ -1713,13 +1713,25 @@ impl TargetRewritePlan {
             // evaluated before its conditional branch (for example its left
             // operand). Their actions still run, but their authored inline
             // occurrences must not be appended after the operation's join slot.
-            .chain(compose_values().filter_map(|value| {
-                compose_operations()
-                    .any(|operation| {
-                        operation.parent.start <= value.source.start
-                            && value.source.end <= operation.parent.end
+            .chain(composes.iter().flat_map(|rewrite| {
+                let operations = || {
+                    rewrite.actions.iter().filter_map(|action| match action {
+                        ComposeAction::Operation(operation) => Some(operation),
+                        ComposeAction::Value(_) => None,
                     })
-                    .then_some(value.expr)
+                };
+                rewrite
+                    .actions
+                    .iter()
+                    .filter_map(move |action| match action {
+                        ComposeAction::Value(value) => operations()
+                            .any(|operation| {
+                                operation.parent.start <= value.source.start
+                                    && value.source.end <= operation.parent.end
+                            })
+                            .then_some(value.expr),
+                        ComposeAction::Operation(_) => None,
+                    })
             }))
             .chain(
                 compose_values()
