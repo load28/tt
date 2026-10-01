@@ -2,6 +2,8 @@
 
 > Follow-up: TASK-410 removes the tt content-mapper entry from the configuration this host serves, because reporting program diagnostics exposed TS100024 for the documented mapper setup.
 
+> Reversed in part: TASK-726 serves a rewritten configuration as edits to the file's own text and maps TypeScript's range back through them, so a diagnostic inside a configuration this host serves keeps its position; Decision 2 now covers only diagnostics with no file or with text the host inserted.
+
 - **Status**: Complete
 - **Started**: 2026-09-27
 - **Completed**: 2026-09-27

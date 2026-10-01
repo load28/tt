@@ -1,5 +1,7 @@
 # TASK-410: Serve tt modules without the project's tt content mapper in the typed check
 
+> Reversed in part: TASK-726 serves the configuration as edits to the file's own text, so the TS100024 of a mapper the host does not replace keeps its position in `tsconfig.json`.
+
 - **Status**: Complete
 - **Started**: 2026-09-27
 - **Completed**: 2026-09-27

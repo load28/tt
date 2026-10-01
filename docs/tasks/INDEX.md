@@ -724,7 +724,8 @@
 | TASK-716 | Read unclosed type-shaped brackets in linear time | Complete | 2026-10-01 | 2026-10-01 | [TASK-716](./TASK-716-linear-type-shaped-lookaheads.md) |
 | TASK-717 | Hold `ttc --check-types` to the pinned `tsc` over TypeScript's own test cases | Complete | 2026-10-01 | 2026-10-01 | [TASK-717](./TASK-717-typed-parity-over-typescript-cases.md) |
 | TASK-718 | Hold the editor answers to `tsgo --lsp` over TypeScript's fourslash tests | Complete | 2026-10-01 | 2026-10-01 | [TASK-718](./TASK-718-fourslash-editor-parity.md) |
+| TASK-726 | Report a configuration diagnostic at its range in `tsconfig.json` | Complete | 2026-10-01 | 2026-10-01 | [TASK-726](./TASK-726-configuration-diagnostic-ranges.md) |
 
 ## Next task number
 
-**TASK-719**
+**TASK-727**

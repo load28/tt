@@ -993,7 +993,7 @@ fn types_reports_program_diagnostics_without_a_file() {
 }
 
 #[test]
-fn types_reports_option_diagnostics_of_a_rewritten_configuration_without_a_position() {
+fn types_reports_option_diagnostics_of_a_served_configuration_at_the_option() {
     require_types_toolchain!();
     let (ok, err) = types_project_output(
         "{\n  \"compilerOptions\": { \"target\": \"es5x\" },\n  \"include\": [\"src/**/*.tt\"]\n}\n",
@@ -1001,7 +1001,7 @@ fn types_reports_option_diagnostics_of_a_rewritten_configuration_without_a_posit
     );
     assert!(!ok, "{err}");
     assert!(err.contains("error[ts6046]"), "{err}");
-    assert!(err.contains("--> tsconfig.json\n"), "{err}");
+    assert!(err.contains("--> tsconfig.json:2:34\n"), "{err}");
 }
 
 #[test]

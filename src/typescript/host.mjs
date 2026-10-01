@@ -93,6 +93,103 @@ function publishFile(file, text) {
   fs.writeFileSync(staging, text);
   fs.renameSync(staging, file);
 }
+function jsoncTree(text) {
+  let at = 0;
+  const skip = () => {
+    for (;;) {
+      if (/\s|﻿/.test(text[at] ?? "")) at += 1;
+      else if (text.startsWith("//", at)) at = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);
+      else if (text.startsWith("/*", at)) {
+        const close = text.indexOf("*/", at + 2);
+        if (close < 0) return false;
+        at = close + 2;
+      } else return true;
+    }
+  };
+  const string = () => {
+    const quote = text[at];
+    const start = at;
+    for (at += 1; at < text.length && text[at] !== quote; at += text[at] === "\\" ? 2 : 1) {}
+    if (at >= text.length) return null;
+    at += 1;
+    const raw = text.slice(start, at);
+    let key;
+    try { key = JSON.parse(quote === '"' ? raw : `"${raw.slice(1, -1).replaceAll('"', '\\"')}"`); } catch { key = raw; }
+    return { kind: "string", start, end: at, key };
+  };
+  const value = () => {
+    if (!skip()) return null;
+    const start = at;
+    const open = text[at];
+    if (open === '"' || open === "'") return string();
+    if (open === "{" || open === "[") {
+      const close = open === "{" ? "}" : "]";
+      const node = open === "{" ? { kind: "object", start, members: [] } : { kind: "array", start, elements: [] };
+      at += 1;
+      let previousComma = null;
+      for (;;) {
+        if (!skip()) return null;
+        if (text[at] === close) { at += 1; node.end = at; return node; }
+        let entry;
+        if (open === "{") {
+          const name = text[at] === '"' || text[at] === "'" ? string() : null;
+          if (!name || !skip() || text[at] !== ":") return null;
+          at += 1;
+          const member = value();
+          if (!member) return null;
+          entry = { key: name.key, start: name.start, end: member.end, value: member, previousComma, comma: null };
+          node.members.push(entry);
+        } else {
+          entry = value();
+          if (!entry) return null;
+          node.elements.push(entry);
+        }
+        if (!skip()) return null;
+        if (text[at] === ",") {
+          entry.comma = at;
+          previousComma = at;
+          at += 1;
+        } else if (text[at] !== close) return null;
+      }
+    }
+    while (at < text.length && !/[\s,:{}[\]"'/]/.test(text[at])) at += 1;
+    return at > start ? { kind: "literal", start, end: at } : null;
+  };
+  if (skip() && at === text.length) return { kind: "empty", start: at, end: at, members: [] };
+  const root = value();
+  return root && skip() && at === text.length ? root : null;
+}
+
+function editedText(text, edits) {
+  const ordered = [...edits].sort((a, b) => a.start - b.start);
+  let served = "";
+  let from = 0;
+  const spans = [];
+  for (const edit of ordered) {
+    served += text.slice(from, edit.start);
+    spans.push({ servedStart: served.length, servedEnd: served.length + edit.text.length, start: edit.start, end: edit.end });
+    served += edit.text;
+    from = edit.end;
+  }
+  return { text: served + text.slice(from), spans };
+}
+
+function originalSpan(spans, start, end) {
+  const inserted = spans.find((span) =>
+    span.start === span.end && span.servedStart <= start && end <= span.servedEnd && span.servedStart < span.servedEnd);
+  if (inserted) return null;
+  const original = (offset, closing) => {
+    let delta = 0;
+    for (const span of spans) {
+      if (offset < span.servedStart || (closing && offset === span.servedStart)) return offset + delta;
+      if (offset < span.servedEnd || (closing && offset === span.servedEnd)) return closing ? span.end : span.start;
+      delta = span.end - span.servedEnd;
+    }
+    return offset + delta;
+  };
+  return { start: original(start, false), end: original(end, true) };
+}
+
 const CANNOT_READ_FILE = 5083;
 const CANNOT_FIND_MODULE = 2307;
 const LOWERED = /\.(?:tt\.ts|ttx\.tsx)$/;
@@ -307,6 +404,7 @@ async function main() {
   const files = new Map();
   const dirs = new Set();
   const configFiles = new Map();
+  const configSpans = new Map();
   const dependencies = new Map();
   const listings = new Map();
   const links = new Map();
@@ -515,6 +613,7 @@ async function main() {
       // as modules; never alter source strings or infer membership from a scan.
       const previous = new Map(configFiles);
       configFiles.clear();
+      configSpans.clear();
       // A configuration TypeScript cannot read is TS5083, the diagnostic
       // `tsc` reports for it. No project exists until it can be read again,
       // and then it is opened afresh.
@@ -537,7 +636,11 @@ async function main() {
         if (!file.endsWith(".json") || !(files.has(file) || fs.existsSync(file))) continue;
         const { config, error } = api.readConfigFile(file);
         if (error || !config || typeof config !== "object") continue;
-        let changed = false;
+        const text = files.has(file) ? files.get(file) : fs.readFileSync(file, "utf8");
+        const tree = jsoncTree(text);
+        if (tree?.kind !== "object" && tree?.kind !== "empty") continue;
+        const member = (key) => tree.members.findLast((entry) => entry.key === key);
+        const edits = [];
         // Unmapped, a pattern naming `.tt` names the lowered `.tt.ts`. Mapped,
         // user patterns already name what TypeScript sees; only a
         // configuration the engine serves names its modules by the engine's
@@ -546,32 +649,47 @@ async function main() {
           ? (files.has(file) ? served : null)
           : (entry) => entry + (entry.endsWith(".ttx") ? ".tsx" : entry.endsWith(".tt") ? ".ts" : "");
         for (const key of rename ? ["files", "include", "exclude"] : []) {
-          if (!Array.isArray(config[key])) continue;
-          config[key] = config[key].map(entry => {
-            if (typeof entry !== "string") return entry;
+          const list = member(key)?.value;
+          if (!Array.isArray(config[key]) || list?.kind !== "array") continue;
+          config[key].forEach((entry, index) => {
+            const element = list.elements[index];
+            if (typeof entry !== "string" || element?.kind !== "string") return;
             const renamed = rename(entry);
-            changed ||= renamed !== entry;
-            return renamed;
+            if (renamed !== entry) edits.push({ start: element.start, end: element.end, text: JSON.stringify(renamed) });
           });
         }
-        if (Array.isArray(config.contentMappers)) {
-          const mappers = config.contentMappers
+        const mappers = member("contentMappers");
+        if (mapped && path.resolve(file) === path.resolve(open.tsconfig)) {
+          const own = JSON.stringify([{ package: MAPPER_PACKAGE, extensions: [".tt", ".ttx"] }]);
+          edits.push(mappers
+            ? { start: mappers.value.start, end: mappers.value.end, text: own }
+            : tree.kind === "empty"
+              ? { start: tree.start, end: tree.start, text: `{"contentMappers":${own}}` }
+              : { start: tree.start + 1, end: tree.start + 1, text: `"contentMappers":${own}${tree.members.length > 0 ? "," : ""}` });
+        } else if (Array.isArray(config.contentMappers) && mappers) {
+          let filtered = false;
+          const kept = config.contentMappers
             .map(entry => {
               if (!entry || typeof entry !== "object" || !Array.isArray(entry.extensions)) return entry;
               const extensions = entry.extensions.filter(extension => extension !== ".tt" && extension !== ".ttx");
               if (extensions.length === entry.extensions.length) return entry;
-              changed = true;
+              filtered = true;
               return extensions.length > 0 ? { ...entry, extensions } : null;
             })
             .filter(entry => entry !== null);
-          if (mappers.length > 0) config.contentMappers = mappers;
-          else delete config.contentMappers;
+          if (filtered && kept.length > 0) {
+            edits.push({ start: mappers.value.start, end: mappers.value.end, text: JSON.stringify(kept) });
+          } else if (filtered) {
+            edits.push(mappers.comma !== null
+              ? { start: mappers.start, end: mappers.comma + 1, text: "" }
+              : { start: mappers.previousComma ?? mappers.start, end: mappers.end, text: "" });
+          }
         }
-        if (mapped && path.resolve(file) === path.resolve(open.tsconfig)) {
-          config.contentMappers = [{ package: MAPPER_PACKAGE, extensions: [".tt", ".ttx"] }];
-          changed = true;
+        if (edits.length > 0) {
+          const edited = editedText(text, edits);
+          configFiles.set(file, edited.text);
+          configSpans.set(file, edited.spans);
         }
-        if (changed) configFiles.set(file, JSON.stringify(config));
       }
       const carries = mapped && configFiles.has(open.tsconfig);
       if (opened && carries !== carried) reconnect();
@@ -889,11 +1007,16 @@ async function main() {
       const semantic = unique(program.getSemanticDiagnostics(scope));
       const late = whole ? unique(program.getGlobalDiagnostics()) : [];
       for (const d of [...structural, ...late]) {
-        if (!d.fileName || configFiles.has(d.fileName) || d.pos < 0) {
+        const span = !d.fileName || d.pos < 0
+          ? null
+          : configSpans.has(d.fileName)
+            ? originalSpan(configSpans.get(d.fileName), d.pos, d.end)
+            : { start: d.pos, end: d.end };
+        if (!span) {
           if (open.tsconfig && whole) out.projectDiagnostics.push({ file: d.fileName ?? null, code: d.code, message: messageText(d) });
           continue;
         }
-        out.diagnostics.push({ file: d.fileName, start: d.pos, end: d.end, code: d.code, message: messageText(d) });
+        out.diagnostics.push({ file: d.fileName, start: span.start, end: span.end, code: d.code, message: messageText(d) });
       }
       for (const d of semantic) {
         if (!d.fileName) {
