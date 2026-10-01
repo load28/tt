@@ -648,6 +648,9 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
                 ConditionalBranch::Consequent => "conditional-consequent",
                 ConditionalBranch::Alternate => "conditional-alternate",
                 ConditionalBranch::OptionalCallArgument(_) => "conditional-optional-call-argument",
+                ConditionalBranch::LogicalAssignmentRight { .. } => {
+                    "conditional-logical-assignment-right"
+                }
             },
             HostEvaluationOperation::Reference(position) => match position {
                 ReferencePosition::CallCallee => "reference-call-callee",

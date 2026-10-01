@@ -129,6 +129,17 @@ the position matrix had no logical or compound assignment.
   which is the runtime helper's in the program and an arrow in the twin.
 - **Resolution**: `flow` skips the position, as it skips `templateLiteral`.
 
+### Issue 3: The protocol test's operation names missed the new branch
+
+- **Symptom**: The final gate's `cargo clippy --all-targets` stopped with
+  E0004 in `src/program_syntax/tests.rs`: `ConditionalBranch::
+  LogicalAssignmentRight { .. }` not covered.
+- **Cause**: The unit test names every host operation by exhaustive
+  `match`, and the new branch was added after the record's commit had been
+  verified with `cargo test --test case_baselines` only.
+- **Resolution**: A follow-up commit names it
+  `conditional-logical-assignment-right`.
+
 ## Regression test (fails before the fix)
 
 - **Path**: `tests/cases/compiler/logicalAssignmentShortCircuitsTtValue.tt`;
