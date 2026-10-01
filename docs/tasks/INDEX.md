@@ -734,7 +734,8 @@
 | TASK-726 | Report a configuration diagnostic at its range in `tsconfig.json` | Complete | 2026-10-01 | 2026-10-01 | [TASK-726](./TASK-726-configuration-diagnostic-ranges.md) |
 | TASK-727 | Stop at the stage where `tsc` stops | Complete | 2026-10-01 | 2026-10-01 | [TASK-727](./TASK-727-diagnostic-stages.md) |
 | TASK-728 | Report declaration diagnostics as `tsc` does | Complete | 2026-10-01 | 2026-10-01 | [TASK-728](./TASK-728-declaration-diagnostics.md) |
+| TASK-729 | Name a `.tt` module as TypeScript names it | Complete | 2026-10-01 | 2026-10-01 | [TASK-729](./TASK-729-module-names.md) |
 
 ## Next task number
 
-**TASK-729**
+**TASK-730**

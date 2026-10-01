@@ -1,10 +1,10 @@
 # Differences between ttc --check-types and the pinned tsc over TypeScript's own test cases
 # (tests/corpus.rs, typescript_cases_type_check_as_typescript_does; TASK-717).
 # <case>\t<signature>\t<by-design|defect>\t<a document under docs/, or the TASK that records the repro>
-compiler/bluebirdStaticThis.ts	~TS2694@message	defect	TASK-717: TypeScript names a .tt module with its extension in a message (D4)
+compiler/bluebirdStaticThis.ts	~TS2694@message	by-design	docs/ai/tt.md (TypeScript names a module after the file it holds): `tsc --runExternalCode` names the module `"<dir>/a.tt"` in the same message
 compiler/declarationEmitInvalidReferenceAllowJs.ts	~TS6231@message	by-design	docs/ai/tt.md (contentMappers registers .tt and .ttx): TypeScript lists them among the supported extensions
-compiler/internalAliasInterfaceInsideLocalModuleWithoutExportAccessError.ts	~TS2694@message	defect	TASK-717: TypeScript names a .tt module with its extension in a message (D4)
-compiler/internalAliasUninitializedModuleInsideLocalModuleWithoutExportAccessError.ts	~TS2694@message	defect	TASK-717: TypeScript names a .tt module with its extension in a message (D4)
+compiler/internalAliasInterfaceInsideLocalModuleWithoutExportAccessError.ts	~TS2694@message	by-design	docs/ai/tt.md (TypeScript names a module after the file it holds): `tsc --runExternalCode` names the module `"<dir>/a.tt"` in the same message
+compiler/internalAliasUninitializedModuleInsideLocalModuleWithoutExportAccessError.ts	~TS2694@message	by-design	docs/ai/tt.md (TypeScript names a module after the file it holds): `tsc --runExternalCode` names the module `"<dir>/a.tt"` in the same message
 compiler/jsFileCompilationWithMapFileAsJs.ts	~TS6054@message	by-design	docs/ai/tt.md (contentMappers registers .tt and .ttx): TypeScript lists them among the supported extensions
 compiler/jsFileCompilationWithMapFileAsJsWithInlineSourceMap.ts	~TS6054@message	by-design	docs/ai/tt.md (contentMappers registers .tt and .ttx): TypeScript lists them among the supported extensions
 compiler/jsFileCompilationWithMapFileAsJsWithOutDir.ts	~TS6054@message	by-design	docs/ai/tt.md (contentMappers registers .tt and .ttx): TypeScript lists them among the supported extensions
