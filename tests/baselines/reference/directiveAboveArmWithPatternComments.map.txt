@@ -1,0 +1,20 @@
+//// [directiveAboveArmWithPatternComments.tt] 18 mapping(s)
+1:1 -> 19:1 len 345  "// A `// @ts-ignore` above an arm governs that a"...
+6:34 -> 25:26 len 6  "number"
+6:34 -> 29:15 len 6  "number"
+6:53 -> 26:26 len 6  "number"
+6:53 -> 30:15 len 6  "number"
+6:69 -> 32:3 len 49  "\n\nexport function size(shape: Shape): number {\n "...
+9:3 -> 56:3 len 7  "return "
+9:17 -> 37:19 len 5  "shape"
+10:5 -> 39:7 len 13  "// @ts-ignore"
+11:12 -> 40:73 len 16  "/* the radius */"
+11:29 -> 40:32 len 1  "r"
+11:32 -> 40:90 len 10  "/* read */"
+11:46 -> 40:54 len 8  "r.radius"
+12:12 -> 46:7 len 14  "/* the side */"
+12:27 -> 42:17 len 1  "s"
+12:33 -> 43:18 len 6  "s.side"
+13:14 -> 48:18 len 1  "0"
+14:4 -> 56:16 len 4  ";\n}\n"
+

@@ -2729,6 +2729,7 @@ pub struct SiteArm {
     pub body: Option<BodyId>,
     pub body_kind: Option<ArmBodyKind>,
     pub gap: Option<Span>,
+    pub head: Vec<Span>,
 }
 impl Debug for SiteArm
 impl Freeze for SiteArm

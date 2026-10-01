@@ -1,0 +1,39 @@
+=== directiveAboveArmWithPatternComments.tt ===
+export variant Shape { Circle(r: number), Square(s: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>r : (property) r: number
+>Square : (property) Square: (s: number) => Shape
+>s : (property) s: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+export function size(shape: Shape): number {
+>size : function size(shape: Shape): number
+>shape : (parameter) shape: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   } | {
+>       kind: "Point";
+>   }
+  return match (shape) {
+>shape : (parameter) shape: Shape
+    Circle(/* the radius */ r) /* read */ => r.radius,
+>r : const r: number
+>r : const r: number
+    Square(/* the side */ s) => s.side,
+>s : const s: number
+>s : const s: number
+

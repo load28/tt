@@ -1,0 +1,15 @@
+// A `// @ts-ignore` above an arm governs that arm, as TypeScript applies a
+// directive to the next line that is neither blank nor a `//` comment, also
+// when the arm's pattern holds comments: they are written after the arm, so
+// the directive still stands right above it. The error in the next arm is
+// still reported, at its own position.
+export variant Shape { Circle(r: number), Square(s: number), Point }
+
+export function size(shape: Shape): number {
+  return match (shape) {
+    // @ts-ignore
+    Circle(/* the radius */ r) /* read */ => r.radius,
+    Square(/* the side */ s) => s.side,
+    Point => 0,
+  };
+}

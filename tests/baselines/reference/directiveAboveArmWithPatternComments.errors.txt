@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./directiveAboveArmWithPatternComments.tt → $DIR/out/directiveAboveArmWithPatternComments.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2339]: Property 'side' does not exist on type 'number'.
+  --> directiveAboveArmWithPatternComments.tt:12:35
+   |
+12 |     Square(/* the side */ s) => s.side,
+   |                                   ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+directiveAboveArmWithPatternComments.ts(43,20): error TS2339: Property 'side' does not exist on type 'number'.

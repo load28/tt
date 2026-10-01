@@ -524,6 +524,7 @@ impl<'a> Emitter<'a> {
             )
             .trim(),
         );
+        self.push_head_comments(arm, 0, &mut out);
         Rope::scoped(out)
     }
 
@@ -564,16 +565,26 @@ impl<'a> Emitter<'a> {
         out.append(Rope::indented(2, emit_body(body).trim()));
         out.push_break(1);
         out.push_lit("}");
+        let commented = self.push_head_comments(arm, 1, &mut out);
+        let separate = |out: &mut Rope<'a>| {
+            if commented {
+                out.push_break(1);
+            } else {
+                out.push_lit(" ");
+            }
+        };
         match &decision.miss {
             MissAction::Execute(body) => {
-                out.push_lit(" else {");
+                separate(&mut out);
+                out.push_lit("else {");
                 out.push_break(2);
                 out.append(Rope::indented(2, emit_body(*body).trim()));
                 out.push_break(1);
                 out.push_lit("}");
             }
             MissAction::Decision(inner) => {
-                out.push_lit(" else ");
+                separate(&mut out);
+                out.push_lit("else ");
                 out.append(self.emit_if_let(inner, emit_body));
             }
             MissAction::Nothing => {}

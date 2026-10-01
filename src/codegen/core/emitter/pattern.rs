@@ -156,7 +156,8 @@ impl<'a> Emitter<'a> {
                 guard_line_comment(value.trim(), 0, self.source_kind),
                 self.source_kind,
             );
-            if commented {
+            let pattern_commented = self.push_head_comments(arm, 0, &mut out);
+            if commented || pattern_commented {
                 out.push_break(0);
             }
             if last {
@@ -165,7 +166,8 @@ impl<'a> Emitter<'a> {
             out.push_lit(" : ");
         }
         for arm in decision.arms.iter().skip(written) {
-            if self.push_gap_comments(arm.gap, 0, &mut out) {
+            let commented = self.push_gap_comments(arm.gap, 0, &mut out);
+            if self.push_head_comments(arm, 0, &mut out) || commented {
                 out.push_break(0);
             }
         }
@@ -260,7 +262,8 @@ impl<'a> Emitter<'a> {
                 ),
                 self.source_kind,
             );
-            if commented {
+            let pattern_commented = self.push_head_comments(arm, 0, &mut out);
+            if commented || pattern_commented {
                 out.push_break(0);
             }
             if total {
@@ -269,7 +272,8 @@ impl<'a> Emitter<'a> {
             out.push_lit(" : ");
         }
         for arm in decision.arms.iter().skip(written) {
-            if self.push_gap_comments(arm.gap, 0, &mut out) {
+            let commented = self.push_gap_comments(arm.gap, 0, &mut out);
+            if self.push_head_comments(arm, 0, &mut out) || commented {
                 out.push_break(0);
             }
         }
@@ -309,7 +313,12 @@ impl<'a> Emitter<'a> {
             .iter()
             .map(|arm| arm.gap)
             .chain([decision.trailing])
-            .any(|gap| super::gap_comments(self.comments, gap).next().is_some());
+            .any(|gap| super::gap_comments(self.comments, gap).next().is_some())
+            || decision.arms.iter().any(|arm| {
+                super::head_comments(self.comments, &arm.head)
+                    .next()
+                    .is_some()
+            });
         if commented { Rope::scoped(out) } else { out }
     }
 
@@ -379,6 +388,7 @@ impl<'a> Emitter<'a> {
             );
             out.push_break(1);
             out.push_lit("}");
+            self.push_head_comments(arm, 1, &mut out);
         }
         self.push_gap_comments(decision.trailing, 1, &mut out);
         if !wildcard {
@@ -461,6 +471,7 @@ impl<'a> Emitter<'a> {
                 out.push_break(depth);
                 out.push_lit("}");
             }
+            self.push_head_comments(arm, depth, &mut out);
         }
         let trailing = self.push_gap_comments(decision.trailing, depth, &mut out);
         if !unconditional {

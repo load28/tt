@@ -343,6 +343,7 @@ impl Lowering<'_> {
                 guard: arm.guard,
                 action: action(arm, arm.body_kind),
                 gap: arm.gap,
+                head: arm.head.clone(),
             })
             .collect();
         Decision {

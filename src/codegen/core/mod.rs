@@ -684,8 +684,14 @@ pub(crate) fn emit_with_map<'a>(
                 .iter()
                 .map(|arm| arm.gap)
                 .chain([decision.trailing])
+                .flat_map(|gap| emitter::gap_comments(comments, gap))
+                .chain(
+                    decision
+                        .arms
+                        .iter()
+                        .flat_map(|arm| emitter::head_comments(comments, &arm.head)),
+                )
         })
-        .flat_map(|gap| emitter::gap_comments(comments, gap))
         .map(|comment| SourceSpan {
             start: comment.start,
             end: comment.end,

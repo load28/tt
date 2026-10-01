@@ -647,11 +647,16 @@ pub struct SiteArm {
     pub body: Option<BodyId>,
     /// Whether the arm body yields an expression or executes a block.
     pub body_kind: Option<ArmBodyKind>,
-    /// The source between the previous arm (for the first arm, the match
-    /// body's `{`) and this arm's pattern: the separator and the comments
-    /// written between the two arms. `None` for an `if let` or a let-else
-    /// arm.
+    /// The source between the previous arm (for the first arm, the
+    /// scrutinee's `)`, the body's `{` included) and this arm's pattern: the
+    /// separator and the comments written between the two arms. `None` for
+    /// an `if let` or a let-else arm.
     pub gap: Option<Span>,
+    /// The arm's own source outside its guard and body: from its pattern to
+    /// its body (for an `if let` or a let-else, from its keyword to its
+    /// block, the scrutinee excluded), where the comments written in and
+    /// around the pattern are.
+    pub head: Vec<Span>,
 }
 
 /// The two source forms of a pattern arm body.

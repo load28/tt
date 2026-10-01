@@ -1,0 +1,432 @@
+=== commentsInPatternsAreKept.tt ===
+export variant Shape { Circle(radius: number), Square(side: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Square : (property) Square: (side: number) => Shape
+>side : (property) side: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+export variant Maybe { Some(value: number), None }
+>Maybe : type Maybe = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => Maybe
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+export variant Box { Full(item: Maybe), Empty }
+>Box : type Box = {
+>       kind: "Full";
+>       item: Maybe;
+>   } | {
+>       kind: "Empty";
+>   }
+>Full : (property) Full: (item: Maybe) => Box
+>item : (property) item: Maybe
+>Maybe : type Maybe = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+export function size(shape: Shape): number {
+>size : function size(shape: Shape): number
+>shape : (parameter) shape: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       kind: "Point";
+>   }
+  return match (shape) /* by kind */ {
+>shape : (parameter) shape: Shape
+    Circle(/* the radius */ radius: r) /* doubled */ => r * 2,
+>radius : (property) radius: number
+>r : const r: number
+>r : const r: number
+    Square(side /* a side */ : /* named */ s) => s,
+>side : (property) side: number
+>s : const s: number
+>s : const s: number
+export function guarded(shape: Shape): string {
+>guarded : function guarded(shape: Shape): string
+>shape : (parameter) shape: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       kind: "Point";
+>   }
+  return match (shape) {
+>shape : (parameter) shape: Shape
+    Circle(radius: r) /* before the guard */ if r > 1 /* after the guard */ => "big",
+>radius : (property) radius: number
+>r : const r: number
+>r : const r: number
+export function nested(box: Box): number {
+>nested : function nested(box: Box): number
+>box : (parameter) box: Box
+>Box : type Box = {
+>       kind: "Full";
+>       item: Maybe;
+>   } | {
+>       kind: "Empty";
+>   }
+  return match (box) {
+>box : (parameter) box: Box
+    Full(item: Some(/* deep */ value: v)) => v,
+>value : (property) value: number
+>v : const v: number
+>v : const v: number
+export function literal(n: number): string {
+>literal : function literal(n: number): string
+>n : (parameter) n: number
+  return `${match (n) { 1 /* one */ | /* or two */ 2 => "low", _ => "high" }}`;
+>n : (parameter) n: number
+export function pair(a: Shape, b: Shape): string {
+>pair : function pair(a: Shape, b: Shape): string
+>a : (parameter) a: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       kind: "Point";
+>   }
+>b : (parameter) b: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       kind: "Point";
+>   }
+  return match (a, b) {
+>a : (parameter) a: Shape
+>b : (parameter) b: Shape
+    (Circle(radius: r) /* first */, /* second */ Point) => `circle ${r} and point`,
+>radius : (property) radius: number
+>r : const r: number
+>r : const r: number
+export function chain(shape: Shape): number {
+>chain : function chain(shape: Shape): number
+>shape : (parameter) shape: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       kind: "Point";
+>   }
+  if /* a */ let Circle(/* c */ radius: r) = shape /* then */ {
+>radius : (property) radius: number
+>r : const r: number
+>shape : (parameter) shape: Shape
+    return r;
+>r : const r: number
+    side: s) = shape {
+>side : (property) side: number
+>s : const s: number
+>shape : (parameter) shape: Shape
+    return s;
+>s : const s: number
+export function bound(shape: Shape): number {
+>bound : function bound(shape: Shape): number
+>shape : (parameter) shape: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       kind: "Point";
+>   }
+  const /* k */ Square(side: s) /* l */ = shape /* m */ else { return -1; };
+>side : (property) side: number
+>s : const s: number
+>shape : (parameter) shape: Shape
+  return s;
+>s : const s: number
+const shapes = [Shape.Circle(2), Shape.Square(3), Shape.Point];
+>shapes : const shapes: ({
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Square: (side: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Square: (side: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Square : (property) Square: (side: number) => Shape
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Square: (side: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+console.log(shapes.map(size).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>shapes : const shapes: ({
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]
+>map : (method) Array<{ kind: "Circle"; radius: number; } | { kind: "Square"; side: number; } | { readonly kind: "Point"; }>.map<number>(callbackfn: (value: {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   }, index: number, array: ({
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]) => number, thisArg?: any): number[]
+>size : function size(shape: Shape): number
+>join : (method) Array<number>.join(separator?: string): string
+console.log(shapes.map(guarded).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>shapes : const shapes: ({
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]
+>map : (method) Array<{ kind: "Circle"; radius: number; } | { kind: "Square"; side: number; } | { readonly kind: "Point"; }>.map<string>(callbackfn: (value: {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   }, index: number, array: ({
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]) => string, thisArg?: any): string[]
+>guarded : function guarded(shape: Shape): string
+>join : (method) Array<string>.join(separator?: string): string
+console.log([nested(Box.Full(Maybe.Some(4))), nested(Box.Full(Maybe.None)), nested(Box.Empty)].join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>nested : function nested(box: Box): number
+>Box : const Box: {
+>       Full: (item: Maybe) => Box;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Full : (property) Full: (item: Maybe) => Box
+>Maybe : const Maybe: {
+>       Some: (value: number) => Maybe;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => Maybe
+>nested : function nested(box: Box): number
+>Box : const Box: {
+>       Full: (item: Maybe) => Box;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Full : (property) Full: (item: Maybe) => Box
+>Maybe : const Maybe: {
+>       Some: (value: number) => Maybe;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+>nested : function nested(box: Box): number
+>Box : const Box: {
+>       Full: (item: Maybe) => Box;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+>join : (method) Array<number>.join(separator?: string): string
+console.log([1, 2, 3].map(literal).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>map : (method) Array<number>.map<string>(callbackfn: (value: number, index: number, array: number[]) => string, thisArg?: any): string[]
+>literal : function literal(n: number): string
+>join : (method) Array<string>.join(separator?: string): string
+console.log(pair(Shape.Circle(1), Shape.Point), pair(Shape.Point, Shape.Point));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pair : function pair(a: Shape, b: Shape): string
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Square: (side: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Square: (side: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+>pair : function pair(a: Shape, b: Shape): string
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Square: (side: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Square: (side: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+console.log(shapes.map(chain).join(","), shapes.map(bound).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>shapes : const shapes: ({
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]
+>map : (method) Array<{ kind: "Circle"; radius: number; } | { kind: "Square"; side: number; } | { readonly kind: "Point"; }>.map<number>(callbackfn: (value: {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   }, index: number, array: ({
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]) => number, thisArg?: any): number[]
+>chain : function chain(shape: Shape): number
+>join : (method) Array<number>.join(separator?: string): string
+>shapes : const shapes: ({
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]
+>map : (method) Array<{ kind: "Circle"; radius: number; } | { kind: "Square"; side: number; } | { readonly kind: "Point"; }>.map<number>(callbackfn: (value: {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   }, index: number, array: ({
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Square";
+>       side: number;
+>   } | {
+>       readonly kind: "Point";
+>   })[]) => number, thisArg?: any): number[]
+>bound : function bound(shape: Shape): number
+>join : (method) Array<number>.join(separator?: string): string
+
