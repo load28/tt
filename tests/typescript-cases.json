@@ -6,6 +6,7 @@
   "notices": ["LICENSE.txt", "NOTICE.txt"],
   "trees": {
     "tsc/testdata/tests/cases/compiler": "94ad8b748a31aa89b0aaef99b6013ce5e23ab6b5",
-    "tsc/testdata/tests/cases/conformance": "cd94f45aa8f6d7445692b9ca7bd89a1ecdc2d764"
+    "tsc/testdata/tests/cases/conformance": "cd94f45aa8f6d7445692b9ca7bd89a1ecdc2d764",
+    "tsc/internal/fourslash/tests": "e22a52dabdd2807bbc1e61e24dba1683629ec330"
   }
 }
