@@ -1,0 +1,2 @@
+labeledBlock(3) => 4 | read 3; reassigned 4
+labeledBlock(-3) => "none" | read undefined

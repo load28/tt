@@ -1,0 +1,3 @@
+nestedBlock({"kind":"Num","value":1}) => 1 | yield {"kind":"Num","value":1}
+nestedBlock({"kind":"Neg","value":-2}) => -2 | yield {"kind":"Neg","value":-2}
+nestedBlock({"kind":"Word","text":"w"}) => "diverged" | yield {"kind":"Word","text":"w"}

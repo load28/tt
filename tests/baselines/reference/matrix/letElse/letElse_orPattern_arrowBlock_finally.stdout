@@ -1,3 +1,0 @@
-arrowBlock({"kind":"Num","value":1}) => 1 | operand {"kind":"Num","value":1}; finally 0
-arrowBlock({"kind":"Neg","value":-2}) => -2 | operand {"kind":"Neg","value":-2}; finally 0
-arrowBlock({"kind":"Word","text":"w"}) => "diverged" | operand {"kind":"Word","text":"w"}; finally 0

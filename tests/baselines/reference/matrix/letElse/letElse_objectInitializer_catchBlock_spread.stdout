@@ -1,2 +1,0 @@
-catchBlock(7) => 7 | throw "boom"
-catchBlock(8) => 8 | throw "boom"

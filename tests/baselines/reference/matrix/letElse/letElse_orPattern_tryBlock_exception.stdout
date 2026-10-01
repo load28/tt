@@ -1,3 +1,0 @@
-tryBlock({"kind":"Num","value":1}) => 1 | risky {"kind":"Num","value":1}
-tryBlock({"kind":"Neg","value":-2}) => -2 | risky {"kind":"Neg","value":-2}
-tryBlock({"kind":"Word","text":"w"}) => "caught" | 

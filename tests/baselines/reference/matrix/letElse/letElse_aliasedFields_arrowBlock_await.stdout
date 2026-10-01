@@ -1,3 +1,0 @@
-arrowBlock({"kind":"Rect","w":2,"h":3}) => [2,3] | await
-arrowBlock({"kind":"Circle","r":1}) => "diverged" | await
-arrowBlock({"kind":"Point"}) => "diverged" | await

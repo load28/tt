@@ -1,0 +1,2 @@
+switchClause(7) => 7 | discriminant 1
+switchClause(8) => undefined | discriminant 1

@@ -1,0 +1,27 @@
+//// [resultBlockTemplateTryInIfLetBodyCrossesTheRegion.tt] ////
+// A `try` in a template interpolation crosses an isolated value region, so
+// one whose nearest Result scope is a `result` block is
+// `try-crosses-value-region` (docs/ai/tt.md, "result block"): in the body
+// of an `if let` or a let-else's `else` block, as directly in the block.
+// The returned template stopped the compiler with an internal error
+// ("returned structured value was not emitted") before the diagnostic was
+// reported.
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+type O = { kind: "Some"; value: number } | { kind: "None" };
+declare function rd(n: number): R;
+declare function opt(n: number): O;
+export function ifLetBody(n: number) {
+  return result {
+    if let Some(value: b) = opt(n) {
+      return `<${try rd(b)}>`;
+    }
+    return "";
+  };
+}
+export function letElseBlock(n: number) {
+  return result {
+    const Some(value: b) = opt(n) else { return `<${try rd(-1)}>`; };
+    return `${b}`;
+  };
+}
+

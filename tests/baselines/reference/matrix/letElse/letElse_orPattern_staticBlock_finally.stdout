@@ -1,0 +1,3 @@
+staticBlock({"kind":"Num","value":1}) => 1 | operand {"kind":"Num","value":1}; finally 0
+staticBlock({"kind":"Neg","value":-2}) => -2 | operand {"kind":"Neg","value":-2}; finally 0
+staticBlock({"kind":"Word","text":"w"}) => threw diverged | operand {"kind":"Word","text":"w"}; finally 0

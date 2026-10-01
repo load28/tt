@@ -1,2 +1,0 @@
-catchBlock(3) => 4 | throw "boom"; yield 3; read 3; reassigned 4
-catchBlock(-3) => "diverged" | throw "boom"; yield -3; read -3

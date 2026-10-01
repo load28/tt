@@ -1,3 +1,0 @@
-staticBlock({"kind":"Num","value":1}) => 1 | 
-staticBlock({"kind":"Neg","value":-2}) => threw Cannot read properties of undefined (reading 'kind') | 
-staticBlock({"kind":"Word","text":"w"}) => threw diverged | 

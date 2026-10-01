@@ -1,0 +1,2 @@
+ifBranch(5) => 5 | enter true; await; read 5
+ifBranch(-5) => threw thrown | enter true; await; read -5; else "thrown"

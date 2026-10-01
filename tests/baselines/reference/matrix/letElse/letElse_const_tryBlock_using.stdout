@@ -1,2 +1,0 @@
-tryBlock(2) => 2 | open res; operand 2; read 2; dispose res
-tryBlock(-1) => "diverged" | open res; operand -1; read -1; dispose res

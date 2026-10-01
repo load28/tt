@@ -1,0 +1,2 @@
+arrowBlock(7) => 7 | open res; operand 7; dispose res
+arrowBlock(8) => 8 | open res; operand 8; dispose res

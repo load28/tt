@@ -1,2 +1,0 @@
-method(4) => 4 | open res; operand 4; read 4; dispose res
-method(-4) => "diverged" | open res; operand -4; read -4; dispose res

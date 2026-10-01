@@ -1,2 +1,0 @@
-method(5) => 5 | operand 5; read 5; finally 0
-method(-5) => threw thrown | operand -5; read -5; else "thrown"; finally 0

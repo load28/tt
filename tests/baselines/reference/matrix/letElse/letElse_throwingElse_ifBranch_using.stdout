@@ -1,2 +1,0 @@
-ifBranch(5) => 5 | open res; enter true; operand 5; read 5; dispose res
-ifBranch(-5) => threw thrown | open res; enter true; operand -5; read -5; else "thrown"; dispose res

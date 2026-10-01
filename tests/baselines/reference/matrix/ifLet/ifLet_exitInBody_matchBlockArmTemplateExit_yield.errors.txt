@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-control-crossing]: `yield` cannot cross a match arm boundary
+ --> ./main.tt:6:33
+  |
+6 |       if let Err(error) = read((yield input)) { note("error", error); return `<${match (note("exit", 3)) { 3 => "three", _ => "other" }}>`; }
+  |                                 ^^^^^
+  |
+  = help: yield outside the match, or yield inside a generator written in this arm
+
+
+==== ttc --check-types (exit 1) ====
+error[match-control-crossing]: `yield` cannot cross a match arm boundary
+ --> main.tt:6:33
+  |
+6 |       if let Err(error) = read((yield input)) { note("error", error); return `<${match (note("exit", 3)) { 3 => "three", _ => "other" }}>`; }
+  |                                 ^^^^^
+  |
+  = help: yield outside the match, or yield inside a generator written in this arm
+
+==== tsc on the emitted TypeScript (exit 0) ====

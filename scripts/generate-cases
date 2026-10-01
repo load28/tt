@@ -195,6 +195,7 @@ function feasible(construct, form, position, companion) {
   if (position.inner?.includes(companion.id)) return false;
   if (position.topLevel && !TOP_LEVEL.has(companion.id)) return false;
   if (position.unbraced && form.hoisted === undefined) return false;
+  if (position.exitAxis && form.tt.length < 3) return false;
   if (position.forces === "await" && companion.id === "yield") return false;
   if (position.forces === "yield" && companion.id === "await") return false;
   return true;
@@ -468,6 +469,7 @@ function where(example, position) {
   if (example.only && !example.only.includes(position.id)) return false;
   if (example.skip?.includes(position.id)) return false;
   if (position.unbraced && example.hoisted === undefined) return false;
+  if (position.exitAxis && (example.tt ?? example.bad).length < 3) return false;
   if (rule === "rejects") {
     return position.rejects?.[example.family] === example.code || (Boolean(position.unbraced) && example.unbraced === example.code);
   }

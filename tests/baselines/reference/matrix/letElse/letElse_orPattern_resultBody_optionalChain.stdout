@@ -1,0 +1,3 @@
+resultBody({"kind":"Num","value":1}) => {"kind":"Ok","value":[1,1]} | base 1; read 1
+resultBody({"kind":"Neg","value":-2}) => threw Cannot read properties of undefined (reading 'kind') | base 1; read 1
+resultBody({"kind":"Word","text":"w"}) => {"kind":"Ok","value":1} | base 1; read 1

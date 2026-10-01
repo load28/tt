@@ -1,0 +1,3 @@
+functionBody({"kind":"Num","value":1}) => 1 | 
+functionBody({"kind":"Neg","value":-2}) => threw Cannot read properties of undefined (reading 'kind') | 
+functionBody({"kind":"Word","text":"w"}) => "diverged" | 

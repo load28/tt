@@ -1,2 +1,0 @@
-nestedBlock(5) => 5 | risky 5; read 5
-nestedBlock(-5) => "thrown" | risky -5; read -5; else "thrown"; caught "thrown"

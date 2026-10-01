@@ -1,2 +1,0 @@
-staticBlock(3) => 4 | open res; operand 3; read 3; reassigned 4; dispose res
-staticBlock(-3) => threw diverged | open res; operand -3; read -3; dispose res

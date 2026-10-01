@@ -1,3 +1,0 @@
-catchBlock({"kind":"Rect","w":2,"h":3}) => [2,3] | throw "boom"; operand {"kind":"Rect","w":2,"h":3}
-catchBlock({"kind":"Circle","r":1}) => "diverged" | throw "boom"; operand {"kind":"Circle","r":1}
-catchBlock({"kind":"Point"}) => "diverged" | throw "boom"; operand {"kind":"Point"}

@@ -1,0 +1,2 @@
+ifBranch(7) => 7 | open res; enter true; operand 7; dispose res
+ifBranch(8) => 8 | open res; enter true; operand 8; dispose res

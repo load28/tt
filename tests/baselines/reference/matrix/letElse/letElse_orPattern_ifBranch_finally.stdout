@@ -1,3 +1,0 @@
-ifBranch({"kind":"Num","value":1}) => 1 | enter true; operand {"kind":"Num","value":1}; finally 0
-ifBranch({"kind":"Neg","value":-2}) => -2 | enter true; operand {"kind":"Neg","value":-2}; finally 0
-ifBranch({"kind":"Word","text":"w"}) => "diverged" | enter true; operand {"kind":"Word","text":"w"}; finally 0

@@ -1,0 +1,2 @@
+constructorBody(3) => 4 | read 3; reassigned 4
+constructorBody(-3) => threw diverged | read -3

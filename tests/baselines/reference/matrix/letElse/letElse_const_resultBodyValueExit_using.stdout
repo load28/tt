@@ -1,0 +1,2 @@
+resultBodyValueExit(2) => {"kind":"Ok","value":[1,2]} | open res; base 1; read 1; operand 2; read 2; dispose res
+resultBodyValueExit(-1) => {"kind":"Err","error":"negative -7"} | open res; base 1; read 1; operand -1; read -1; exit -7; read -7; dispose res

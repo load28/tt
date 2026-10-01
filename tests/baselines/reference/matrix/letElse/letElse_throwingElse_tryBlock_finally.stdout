@@ -1,0 +1,2 @@
+tryBlock(5) => 5 | operand 5; read 5; finally 0
+tryBlock(-5) => "caught" | operand -5; read -5; else "thrown"; finally 0

@@ -1,2 +1,0 @@
-staticBlock(5) => 5 | operand 5; read 5
-staticBlock(-5) => threw thrown | operand -5; read -5; else "thrown"

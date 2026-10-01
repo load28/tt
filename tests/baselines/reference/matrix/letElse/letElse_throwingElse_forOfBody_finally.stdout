@@ -1,2 +1,0 @@
-forOfBody(5) => [5,5] | round 0; operand 5; read 5; round 1; operand 5; read 5; finally 0
-forOfBody(-5) => threw thrown | round 0; operand -5; read -5; else "thrown"; finally 0

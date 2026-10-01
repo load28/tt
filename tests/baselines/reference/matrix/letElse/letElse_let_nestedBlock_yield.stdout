@@ -1,2 +1,0 @@
-nestedBlock(3) => 4 | yield 3; read 3; reassigned 4
-nestedBlock(-3) => "diverged" | yield -3; read -3

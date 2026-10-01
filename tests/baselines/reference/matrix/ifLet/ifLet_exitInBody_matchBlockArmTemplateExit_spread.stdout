@@ -1,0 +1,2 @@
+matchBlockArmTemplateExit(2) => "passed" | arm true; read 2
+matchBlockArmTemplateExit(-2) => "<three>" | arm true; read -2; error "negative -2"; exit 3

@@ -1,3 +1,0 @@
-whileBody({"kind":"Rect","w":2,"h":3}) => [2,3] | test true; yield {"kind":"Rect","w":2,"h":3}
-whileBody({"kind":"Circle","r":1}) => "none" | test true; yield {"kind":"Circle","r":1}
-whileBody({"kind":"Point"}) => "none" | test true; yield {"kind":"Point"}

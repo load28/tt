@@ -1,2 +1,0 @@
-functionBody(3) => 4 | await; read 3; reassigned 4
-functionBody(-3) => "diverged" | await; read -3

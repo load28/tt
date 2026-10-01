@@ -49,6 +49,7 @@ impl EvaluationFile {
             seen: HashSet::new(),
             next_value: 0,
             nested_owners: HashMap::new(),
+            enclosing: HashMap::new(),
         };
         builder.walk_body(core.root, None)?;
         if let Some(root) = builder.hosts.keys().copied().next() {

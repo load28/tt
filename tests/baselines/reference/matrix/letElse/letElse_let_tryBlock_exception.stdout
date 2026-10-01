@@ -1,0 +1,2 @@
+tryBlock(3) => 4 | risky 3; read 3; reassigned 4
+tryBlock(-3) => "diverged" | risky -3; read -3

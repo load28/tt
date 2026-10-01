@@ -417,6 +417,37 @@ export const statementPositions = [
     topLevel: true,
     rejects: { try: "try-placement" },
   },
+  ...[
+    ["ValueExit", "whose exit returns a tt value", 'return match (note("exit", 3)) { 3 => "three", _ => "other" };', 'return note("exit", 3) === 3 ? "three" : "other";'],
+    ["TemplateExit", "whose exit returns a template holding a tt value", 'return `<${match (note("exit", 3)) { 3 => "three", _ => "other" }}>`;', 'return `<${note("exit", 3) === 3 ? "three" : "other"}>`;'],
+  ].map(([suffix, title, ttExit, tsExit]) => ({
+    id: `matchBlockArm${suffix}`,
+    title: `a match block arm ${title}`,
+    exitAxis: true,
+    rejects: { letElse: "let-else-placement", yield: "match-control-crossing" },
+    host: (c) =>
+      c.probe(
+        c.side === "tt"
+          ? `const value = match (note<boolean>("arm", true)) {\ntrue => {\n${c.s(ttExit)}\nreturn ${c.result};\n},\nfalse => "other",\n};\nreturn ${c.ret("value")};`
+          : `note<boolean>("arm", true);\nconst value = ${c.iife(`${c.s(tsExit)}\nreturn ${c.result};`)};\nreturn ${c.ret("value")};`,
+      ),
+  })),
+  ...[
+    ["ValueExit", "whose exit returns a tt value", 'return try read(note("exit", -7));', 'return ok(unwrap(read(note("exit", -7))));'],
+    ["TemplateExit", "whose exit returns a template holding a tt value", 'return `<${match (base) { 1 => "one", _ => "many" }}>`;', 'return ok(`<${base === 1 ? "one" : "many"}>`);'],
+  ].map(([suffix, title, ttExit, tsExit]) => ({
+    id: `resultBody${suffix}`,
+    title: `a result block's body ${title}`,
+    exitAxis: true,
+    retargets: true,
+    rejects: { yield: "result-yield-crossing" },
+    host: (c) =>
+      c.probe(
+        c.side === "tt"
+          ? `const block = result {\nconst base = try read(note("base", 1));\n${c.s(ttExit)}\nreturn [base, ${c.result}];\n};\nreturn ${c.ret("block")};`
+          : `const block = ${c.iife(`try {\nconst base = unwrap(read(note("base", 1)));\n${c.s(tsExit)}\nreturn ok([base, ${c.result}]);\n} catch (error) {\nreturn caught(error);\n}`)};\nreturn ${c.ret("block")};`,
+      ),
+  })),
 ];
 
 export const jsxPositions = [

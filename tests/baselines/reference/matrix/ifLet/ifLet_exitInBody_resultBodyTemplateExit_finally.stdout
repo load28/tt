@@ -1,0 +1,2 @@
+resultBodyTemplateExit(2) => {"kind":"Ok","value":[1,"passed"]} | base 1; read 1; operand 2; read 2; finally 0
+resultBodyTemplateExit(-2) => {"kind":"Ok","value":"<one>"} | base 1; read 1; operand -2; read -2; error "negative -2"; finally 0
