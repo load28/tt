@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_10.rs::a_byte_order_mark_passes_through_ahead_of_lowered_constructs
+﻿variant O { Some(value: number), None }
+export const f = (o: O) => match (o) { Some(value) => value, None => 0 };

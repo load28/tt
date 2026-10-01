@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_08.rs::val_parameter_positions_beyond_plain_identifiers
+for (val const item of items) {
+  item.a = 1;
+}

@@ -1,0 +1,20 @@
+=== runtimeLiteralMatchRuntimeGuardThrows.tt ===
+function label(dir: string) {
+>label : function label(dir: string): number
+>dir : (parameter) dir: string
+  return match (dir as "a" | "b") {
+>dir : (parameter) dir: string
+  label("zzz");
+>label : function label(dir: string): number
+  console.log("no throw");
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+} catch (e) {
+>e : var e: unknown
+  console.log((e as Error).message);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>e : var e: unknown
+>Error : interface Error
+>message : (property) Error.message: string
+

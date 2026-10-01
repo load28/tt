@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_03.rs::let_else_diverges_via_throw_and_continue
+function f(): number {
+  for (const x of xs) {
+    const Some(v) = find(x) else { continue; };
+    use(v);
+  }
+  return 0;
+}

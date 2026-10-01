@@ -1,0 +1,92 @@
+=== uncapturedFunctionCreationKeepsDefaultsAndBodiesLazy.tt ===
+const trace: string[] = [];
+>trace : const trace: string[]
+const mark = <T,>(name: string, value: T): T => { trace.push(name); return value; };
+>mark : const mark: <T>(name: string, value: T) => T
+>T : (type parameter) T in <T>(name: string, value: T): T
+>name : (parameter) name: string
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(name: string, value: T): T
+>T : (type parameter) T in <T>(name: string, value: T): T
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>value : (parameter) value: T
+function consume(callback: (value?: number) => number, item: {run: (x: number) => number}) {
+>consume : function consume(callback: (value?: number) => number, item: {
+>       run: (x: number) => number;
+>   }): number
+>callback : (parameter) callback: (value?: number) => number
+>value : (parameter) value: number | undefined
+>item : (parameter) item: {
+>       run: (x: number) => number;
+>   }
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+  trace.push("call");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return callback() + item.run(2);
+>callback : (parameter) callback: (value?: number) => number
+>item : (parameter) item: {
+>       run: (x: number) => number;
+>   }
+>run : (property) run: (x: number) => number
+const first = consume((value = mark("default", 5)) => { trace.push("body"); return value; }, match (mark<boolean>("subject", true)) {
+>first : const first: number
+>consume : function consume(callback: (value?: number) => number, item: {
+>       run: (x: number) => number;
+>   }): number
+>value : (parameter) value: number | undefined
+>mark : const mark: <5>(name: string, value: 5) => 5
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: number
+>mark : const mark: <boolean>(name: string, value: boolean) => boolean
+  true => (trace.push("arm"), {run: x => x + 1}),
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+  false => ({run: x => x - 1}),
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+console.log(first, trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>first : const first: number
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+const second = consume(function(value = mark("default", 5)) { trace.push("body"); return value; }, match (mark<boolean>("subject", false)) {
+>second : const second: number
+>consume : function consume(callback: (value?: number) => number, item: {
+>       run: (x: number) => number;
+>   }): number
+>value : (parameter) value: number | undefined
+>mark : const mark: <5>(name: string, value: 5) => 5
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: number
+>mark : const mark: <boolean>(name: string, value: boolean) => boolean
+  true => ({run: x => x + 1}),
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+  false => (trace.push("arm"), {run: x => x - 1}),
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+console.log(second, trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>second : const second: number
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

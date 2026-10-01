@@ -1,0 +1,8 @@
+//// [orPatternDuplicateTagIsError2.tt] 6 mapping(s)
+1:1 -> 19:1 len 10  "const r = "
+1:18 -> 3:17 len 1  "x"
+1:32 -> 6:18 len 1  "1"
+1:40 -> 10:18 len 1  "2"
+1:48 -> 14:18 len 1  "0"
+1:51 -> 19:19 len 1  ";"
+

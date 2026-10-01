@@ -1,0 +1,19 @@
+//// [templateCapturesPreserveDelimitersAndEvaluationOrder.tt] 17 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:32 -> 21:31 len 6  "number"
+2:32 -> 24:20 len 6  "number"
+2:48 -> 26:3 len 195  "\nconst s = Shape.Circle(5);\nconst trace: string["...
+7:29 -> 33:19 len 17  "`${before()}${x}`"
+7:46 -> 51:16 len 3  " + "
+7:55 -> 35:19 len 1  "s"
+7:67 -> 38:17 len 6  "radius"
+7:78 -> 39:18 len 11  "arm(radius)"
+7:100 -> 43:18 len 1  "0"
+7:103 -> 52:2 len 44  ");\nconsole.log(values[0], trace.join(\",\"));\n"
+9:1 -> 72:1 len 19  "console.log(`${1}${"
+9:26 -> 56:17 len 1  "s"
+9:38 -> 59:15 len 6  "radius"
+9:49 -> 60:16 len 6  "radius"
+9:66 -> 64:16 len 1  "0"
+9:69 -> 72:26 len 21  "}${2}`);\n\nexport {};\n"
+

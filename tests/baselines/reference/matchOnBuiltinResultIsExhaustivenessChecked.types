@@ -1,0 +1,9 @@
+=== matchOnBuiltinResultIsExhaustivenessChecked.tt ===
+const f = (r: Result<number, string>) => match (r) { Err(error) => error };
+>f : const f: (r: Result<number, string>) => Result<number, string>
+>r : (parameter) r: Result<number, string>
+>Result : type Result = /*unresolved*/ any
+>r : (parameter) r: Result<number, string>
+>error : const error: Result<number, string>
+>error : const error: Result<number, string>
+

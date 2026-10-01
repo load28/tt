@@ -1,0 +1,5 @@
+//// [aHostGlobalAliasIsCapturedOnlyWhenGlobalThisIsShadowed5.tt] 3 mapping(s)
+1:25 -> 2:28 len 6  "number"
+1:25 -> 5:17 len 6  "number"
+1:40 -> 7:3 len 82  "\nexport function f(o: O, globalThis: unknown) { "...
+

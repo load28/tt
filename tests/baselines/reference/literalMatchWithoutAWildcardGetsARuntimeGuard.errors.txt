@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalMatchWithoutAWildcardGetsARuntimeGuard.tt → $DIR/out/literalMatchWithoutAWildcardGetsARuntimeGuard.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'dir'.
+ --> literalMatchWithoutAWildcardGetsARuntimeGuard.tt:1:22
+  |
+1 | const label = match (dir) { "a" => 1, "b" => 2 };
+  |                      ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalMatchWithoutAWildcardGetsARuntimeGuard.ts(21,17): error TS2304: Cannot find name 'dir'.

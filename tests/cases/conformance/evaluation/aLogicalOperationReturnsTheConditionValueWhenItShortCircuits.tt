@@ -1,0 +1,11 @@
+// @origin: tests/integration/cases_05.rs::a_logical_operation_returns_the_condition_value_when_it_short_circuits
+// @run: aLogicalOperationReturnsTheConditionValueWhenItShortCircuits.tt
+
+const zero = 0 as number;
+const empty = "" as string;
+const a = zero && match (1) { 1 => 1, _ => 0 };
+const b = empty || match (1) { 1 => 2, _ => 0 };
+const c = (zero as number | null) ?? match (1) { 1 => 3, _ => 0 };
+console.log(a, JSON.stringify(b), c);
+
+export {};

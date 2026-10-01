@@ -1,0 +1,18 @@
+// @origin: tests/integration/cases_01.rs::runtime_unexpected_case_throws
+// @run: runtimeUnexpectedCaseThrows.tt
+
+variant AB { A(n: number), B }
+function f(x: AB): number {
+  return match (x) {
+    A(n) => n,
+    B => 2,
+  };
+}
+const g = f as unknown as (x: { kind: string }) => number;
+try {
+  g({ kind: "C" });
+} catch (e) {
+  console.log("threw: " + (e as Error).message);
+}
+
+export {};

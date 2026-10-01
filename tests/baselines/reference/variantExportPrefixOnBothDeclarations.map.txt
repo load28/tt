@@ -1,0 +1,4 @@
+//// [variantExportPrefixOnBothDeclarations.tt] 2 mapping(s)
+1:39 -> 2:31 len 6  "number"
+1:39 -> 5:20 len 6  "number"
+

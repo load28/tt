@@ -1,0 +1,6 @@
+//// [tryInSpreadOperandsEntersTheEvaluationProtocol1.tt] 4 mapping(s)
+1:1 -> 1:1 len 15  "function f() { "
+1:16 -> 7:1 len 19  "const value = { ..."
+1:39 -> 2:16 len 6  "read()"
+1:45 -> 7:26 len 6  " }; }\n"
+

@@ -1,0 +1,75 @@
+=== generatedGuardsReachTheHostGlobalsPastAShadowedGlobalThis1.tt ===
+variant O { Some(value: number), None }
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => O
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+function f(o: O, globalThis: unknown) { const Error = 5; return match (o) { Some(value) => value, None => Error }; }
+>f : function f(o: O, globalThis: unknown): number
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>globalThis : (parameter) globalThis: unknown
+>Error : const Error: 5
+>o : (parameter) o: O
+>value : const value: number
+>value : const value: number
+>Error : const Error: 5
+try { f({ kind: "Nope" } as unknown as O, 1); } catch (e) { console.log(e instanceof RangeError, (e as { message: string }).message); }
+>f : function f(o: O, globalThis: unknown): number
+>kind : (property) kind: string
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>e : var e: unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>e : var e: unknown
+>RangeError : var RangeError: RangeErrorConstructor
+>e : var e: unknown
+>message : (property) message: string
+>message : (property) message: string
+function g(v: 1 | 2, s: "a" | "b", globalThis: unknown) {
+>g : function g(v: 1 | 2, s: "a" | "b", globalThis: unknown): number
+>v : (parameter) v: 1 | 2
+>s : (parameter) s: "a" | "b"
+>globalThis : (parameter) globalThis: unknown
+  const JSON = 1, String = 2;
+>JSON : const JSON: 1
+>String : const String: 2
+  return match (v) { 1 => JSON, 2 => String } + match (s) { "a" => 1, "b" => 2 };
+>v : (parameter) v: 1 | 2
+>JSON : const JSON: 1
+>String : const String: 2
+>s : (parameter) s: "a" | "b"
+try { g(3 as 1, "a", 1); } catch (e) { console.log((e as { message: string }).message); }
+>g : function g(v: 1 | 2, s: "a" | "b", globalThis: unknown): number
+>e : var e: unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>e : var e: unknown
+>message : (property) message: string
+>message : (property) message: string
+try { g(1, "c" as "a", 1); } catch (e) { console.log((e as { message: string }).message); }
+>g : function g(v: 1 | 2, s: "a" | "b", globalThis: unknown): number
+>e : var e: unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>e : var e: unknown
+>message : (property) message: string
+>message : (property) message: string
+

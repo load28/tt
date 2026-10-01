@@ -1,0 +1,9 @@
+=== ifLetNestedPatternsCannotCombineWithOr.tt ===
+function g(o: X): number {
+>g : function g(o: X): number
+>o : (parameter) o: X
+>X : type X = /*unresolved*/ any
+  if let Some(value: Ok(v)) | None() = o {
+>v : const v: any
+>o : (parameter) o: X
+

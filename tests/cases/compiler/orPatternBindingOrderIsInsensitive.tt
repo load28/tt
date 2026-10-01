@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::or_pattern_binding_order_is_insensitive
+const r = match (p) { A(x, y) | B(y, x) => x + y, _ => 0 };

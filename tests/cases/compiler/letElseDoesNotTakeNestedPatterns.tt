@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_06.rs::let_else_does_not_take_nested_patterns
+function f() {
+  const Some(value: Ok(v)) = g() else { return; };
+}

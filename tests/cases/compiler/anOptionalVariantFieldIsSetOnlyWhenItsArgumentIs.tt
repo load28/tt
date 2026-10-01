@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::an_optional_variant_field_is_set_only_when_its_argument_is
+variant V { C(req: string, opt?: number), D }

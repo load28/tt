@@ -1,0 +1,9 @@
+=== aPipelineHeadStartsAfterAPostfixOrRestrictedBoundary4.tt ===
+declare const o: number;
+>o : const o: number
+function f() {
+>f : function f(): void
+  o |> String;
+>o : const o: number
+>String : var String: StringConstructor
+

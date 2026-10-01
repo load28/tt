@@ -1,0 +1,5 @@
+//// [tryAtModuleTopLevelIsAnError1.tt] 3 mapping(s)
+1:1 -> 1:1 len 22  "function f(): void {}\n"
+2:5 -> 2:16 len 3  "g()"
+2:9 -> 5:2 len 1  "\n"
+

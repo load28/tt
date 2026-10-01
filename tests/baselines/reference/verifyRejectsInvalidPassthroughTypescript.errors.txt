@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[verify-failed]: generated TypeScript failed to parse: Unexpected token `=`. Expected yield, an identifier, [ or {. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.
+ --> ./verifyRejectsInvalidPassthroughTypescript.tt:1:7
+  |
+1 | const = 5;
+  |       ^
+
+
+==== ttc --check-types (exit 1) ====
+error[verify-failed]: generated TypeScript failed to parse: Unexpected token `=`. Expected yield, an identifier, [ or {. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.
+ --> verifyRejectsInvalidPassthroughTypescript.tt:1:7
+  |
+1 | const = 5;
+  |       ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,3 @@
+//// [aTryOperandNeverStartsWithAStatementKeyword1.tt] 1 mapping(s)
+1:1 -> 1:1 len 71  "declare function f(): any;\nfunction g() { const "...
+

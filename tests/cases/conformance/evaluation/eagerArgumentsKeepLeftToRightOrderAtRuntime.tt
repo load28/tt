@@ -1,0 +1,10 @@
+// @origin: tests/integration/cases_05.rs::eager_arguments_keep_left_to_right_order_at_runtime
+// @run: eagerArgumentsKeepLeftToRightOrderAtRuntime.tt
+
+const trace: number[] = [];
+function mark(n: number): number { trace.push(n); return n; }
+function g(a: number, b: number, c: number): void { console.log(a, b, c); }
+g(mark(1), match (mark(2)) { 2 => 20, _ => 0 }, mark(3));
+console.log(JSON.stringify(trace));
+
+export {};

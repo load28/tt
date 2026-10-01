@@ -1,0 +1,14 @@
+//// [nonExhaustiveMatchIsAnTtcErrorWithPosition.tt] 12 mapping(s)
+1:32 -> 20:31 len 6  "number"
+1:32 -> 24:20 len 6  "number"
+1:49 -> 21:24 len 6  "number"
+1:49 -> 25:13 len 6  "number"
+1:60 -> 21:35 len 6  "number"
+1:60 -> 25:24 len 6  "number"
+1:76 -> 27:3 len 25  "\nconst f = (s: Shape) => "
+2:32 -> 31:19 len 1  "s"
+3:10 -> 34:17 len 6  "radius"
+3:21 -> 35:18 len 6  "radius"
+4:12 -> 39:18 len 1  "0"
+5:2 -> 48:2 len 2  ";\n"
+

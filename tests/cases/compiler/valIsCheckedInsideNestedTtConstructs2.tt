@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_08.rs::val_is_checked_inside_nested_tt_constructs
+variant Shape { Circle(r: number), Point }
+val const s = Shape.Circle(1);
+const v = match (s) {
+  Circle(r) => { s.kind = "Point"; return r; },
+  Point => 0,
+};

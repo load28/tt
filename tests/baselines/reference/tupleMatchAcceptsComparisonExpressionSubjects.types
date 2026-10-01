@@ -1,0 +1,52 @@
+=== tupleMatchAcceptsComparisonExpressionSubjects.tt ===
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const a: number; declare const b: number; declare const v: V;
+>a : const a: number
+>b : const b: number
+>v : const v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+declare const id: <T>(value: T) => T;
+>id : const id: <T>(value: T) => T
+>T : (type parameter) T in <T>(value: T): T
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(value: T): T
+>T : (type parameter) T in <T>(value: T): T
+const n = match (a < b, v) { (_, A) => 1, _ => 0 };
+>n : const n: number
+>a : const a: number
+>b : const b: number
+>v : const v: V
+const m = match (id<number>(0), v) { (_, A) => 1, _ => 0 };
+>m : const m: number
+>id : const id: <number>(value: number) => number
+>v : const v: V
+const k = match ((a < b), (b > (a)), v) { (_, _, A) => 1, _ => 0 };
+>k : const k: number
+>a : const a: number
+>b : const b: number
+>b : const b: number
+>a : const a: number
+>v : const v: V
+const j = match (a < b, (b > (a)), v) { (_, _, A) => 1, _ => 0 };
+>j : const j: number
+>a : const a: number
+>b : const b: number
+>b : const b: number
+>a : const a: number
+>v : const v: V
+

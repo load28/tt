@@ -1,0 +1,20 @@
+=== onlyAValueTypedByItsContextIsCarriedPastItsStorage.tt ===
+declare const n: number;
+>n : const n: number
+declare function g(): number;
+>g : function g(): number
+export const a = match (n) { 1 => 1, _ => g() };
+>a : const a: number
+>n : const n: number
+>g : function g(): number
+export const b = match (n) { 1 => ({ m() { return this; } }), _ => null };
+>b : const b: {
+>       m(): {
+>           m(): ...;
+>       };
+>   } | null
+>n : const n: number
+>m : (method) m(): {
+>       m(): ...;
+>   }
+

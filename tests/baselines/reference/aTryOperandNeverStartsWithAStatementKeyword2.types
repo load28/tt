@@ -1,0 +1,8 @@
+=== aTryOperandNeverStartsWithAStatementKeyword2.tt ===
+declare function f(): any;
+>f : function f(): any
+function g() { const x = if (f()) {}; }
+>g : function g(): void
+>x : const x: any
+>f : function f(): any
+

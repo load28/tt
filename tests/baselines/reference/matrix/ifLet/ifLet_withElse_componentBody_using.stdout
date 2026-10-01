@@ -1,2 +1,2 @@
 componentBody(3) => "<p>3</p>" | open res; operand 3; read 3; then 3; dispose res
-componentBody(-3) => "<p>/"missing/"</p>" | open res; operand -3; read -3; else "missing"; dispose res
+componentBody(-3) => "<p>\"missing\"</p>" | open res; operand -3; read -3; else "missing"; dispose res

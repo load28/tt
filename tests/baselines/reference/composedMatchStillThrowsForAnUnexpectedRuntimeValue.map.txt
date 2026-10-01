@@ -1,0 +1,10 @@
+//// [composedMatchStillThrowsForAnUnexpectedRuntimeValue.tt] 8 mapping(s)
+1:1 -> 19:1 len 36  "\nfunction choose(flag: boolean) {\n  "
+3:3 -> 30:3 len 8  "return ["
+3:18 -> 23:19 len 4  "flag"
+3:26 -> 25:12 len 4  "true"
+3:34 -> 30:27 len 1  "1"
+3:37 -> 26:12 len 5  "false"
+3:46 -> 30:31 len 1  "2"
+3:49 -> 30:33 len 157  "];\n}\ntry {\n  choose(\"invalid\" as unknown as bool"...
+

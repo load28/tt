@@ -1,0 +1,44 @@
+// @origin: tests/integration/cases_05.rs::an_unexpected_value_guard_reports_every_scrutinee_type
+// @run: anUnexpectedValueGuardReportsEveryScrutineeType.tt
+
+variant V { A, B }
+const cyclic: { kind: string; self?: unknown } = { kind: "Z" };
+cyclic.self = cyclic;
+const values: unknown[] = [
+  2n, -5n, Symbol("s"), "zz", 3, NaN, undefined, null, true,
+  { toJSON() { throw new Error("toJSON"); } }, cyclic, () => 1, { kind: "Q" },
+];
+function statement(n: unknown): string {
+  return match (n) { 1n => "one", "a" => "a" };
+}
+function chain(n: unknown, ok: boolean): string {
+  return match (n) { 1n if ok => "one", "a" => "a" };
+}
+type Item = { run: (x: number) => number };
+const pair2 = (a: Item, b: Item) => a.run(1) + b.run(1);
+function inline(n: unknown): number {
+  return pair2(
+    match (n) { 1n => ({ run: x => x }), "a" => ({ run: x => x + 1 }) },
+    match (n) { 1n => ({ run: x => x }), "a" => ({ run: x => x + 1 }) },
+  );
+}
+function kind(v: V): string {
+  return match (v) { A => "a", B => "b" };
+}
+function pair(a: V, b: V): string {
+  return match (a, b) { (A, A) => "aa", (B, _) => "b", (A, B) => "ab" };
+}
+const report = (run: () => unknown) => {
+  try { run(); console.log("returned"); }
+  catch (error) { console.log(error instanceof Error ? error.message : "not an Error: " + String(error)); }
+};
+for (const value of values) {
+  report(() => statement(value));
+  report(() => chain(value, true));
+  report(() => inline(value));
+  if (value !== null && value !== undefined) report(() => kind(value as V));
+}
+report(() => pair(V.A, 7n as unknown as V));
+report(() => pair(V.A, { kind: "Nope" } as unknown as V));
+
+export {};

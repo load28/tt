@@ -1,0 +1,15 @@
+=== matchBindingAliasAndBlockBody.tt ===
+const r = match (m) {
+>r : const r: any
+  Move(x: px, y: py) => {
+>x : any
+>px : const px: any
+>y : any
+>py : const py: any
+    const sum = px + py;
+>sum : const sum: any
+>px : const px: any
+>py : const py: any
+    return sum;
+>sum : const sum: any
+

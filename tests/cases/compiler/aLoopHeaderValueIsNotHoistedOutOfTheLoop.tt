@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_09.rs::a_loop_header_value_is_not_hoisted_out_of_the_loop
+declare function id(v: number): number;
+let n = 0;
+while (id(match (n) { 0 => 1, _ => 0 })) { n = n + 1; }

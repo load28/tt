@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryInsideAFunctionInsideAGuardIsAllowed.tt → $DIR/out/tryInsideAFunctionInsideAGuardIsAllowed.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> tryInsideAFunctionInsideAGuardIsAllowed.tt:1:18
+  |
+1 | const r = match (x) {
+  |                  ^
+error[ts2304]: Cannot find name 'run'.
+ --> tryInsideAFunctionInsideAGuardIsAllowed.tt:2:11
+  |
+2 |   A(v) if run(() => { try g(); return true; }) => v,
+  |           ^^^
+error[ts2304]: Cannot find name 'g'.
+ --> tryInsideAFunctionInsideAGuardIsAllowed.tt:2:27
+  |
+2 |   A(v) if run(() => { try g(); return true; }) => v,
+  |                           ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryInsideAFunctionInsideAGuardIsAllowed.ts(3,17): error TS2304: Cannot find name 'x'.
+tryInsideAFunctionInsideAGuardIsAllowed.ts(7,11): error TS2304: Cannot find name 'run'.
+tryInsideAFunctionInsideAGuardIsAllowed.ts(7,38): error TS2304: Cannot find name 'g'.

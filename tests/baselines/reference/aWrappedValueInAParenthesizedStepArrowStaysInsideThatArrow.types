@@ -1,0 +1,61 @@
+=== aWrappedValueInAParenthesizedStepArrowStaysInsideThatArrow.tt ===
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare function next(): R<number>;
+>next : function next(): R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+declare const value: number;
+>value : const value: number
+const f = value |> (x => (try next()));
+>f : const f: number | {
+>       kind: "Err";
+>       error: string;
+>   }
+>value : const value: number
+>x : (parameter) x: number
+>next : function next(): R<number>
+const h = value |> ((v: number) => (match (V.A(v)) { A(n) => n, B => 0 }) as number);
+>h : const h: number
+>value : const value: number
+>v : (parameter) v: number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>v : (parameter) v: number
+>n : const n: number
+>n : const n: number
+

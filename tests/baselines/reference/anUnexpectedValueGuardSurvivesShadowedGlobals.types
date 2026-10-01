@@ -1,0 +1,33 @@
+=== anUnexpectedValueGuardSurvivesShadowedGlobals.tt ===
+const String = "shadow";
+>String : const String: "shadow"
+const JSON = 1;
+>JSON : const JSON: 1
+function pick(n: unknown): number {
+>pick : function pick(n: unknown): number
+>n : (parameter) n: unknown
+  return match (n) { 1n => 1 };
+>n : (parameter) n: unknown
+for (const value of [2n, Symbol("s"), 3, "a", { a: 1 }]) {
+>value : const value: string | number | bigint | symbol | {
+>       a: number;
+>   }
+>Symbol : var Symbol: (description?: string | number) => symbol
+>a : (property) a: number
+  try { pick(value); } catch (error) { console.log((error as Error).message); }
+>pick : function pick(n: unknown): number
+>value : const value: string | number | bigint | symbol | {
+>       a: number;
+>   }
+>error : var error: unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>error : var error: unknown
+>Error : interface Error
+>message : (property) Error.message: string
+console.log(String, JSON);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>String : const String: "shadow"
+>JSON : const JSON: 1
+

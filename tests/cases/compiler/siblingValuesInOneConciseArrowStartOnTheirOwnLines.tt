@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_10.rs::sibling_values_in_one_concise_arrow_start_on_their_own_lines
+variant O { Some(value: number), None }
+export const j = (o: O) => [match (o) { Some(value) => value, None => 0 }, match (o) { Some(value) => value, None => 1 }];

@@ -1,0 +1,9 @@
+=== nestedPatternTwoLevelsDeep.tt ===
+const n = match (r) {
+>n : const n: any
+  Ok(value: Some(value: Pair(a, b))) => a + b,
+>a : const a: any
+>b : const b: any
+>a : const a: any
+>b : const b: any
+

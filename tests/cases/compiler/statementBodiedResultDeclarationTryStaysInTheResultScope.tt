@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::statement_bodied_result_declaration_try_stays_in_the_result_scope
+const value = result { const item = try read(); return item; };

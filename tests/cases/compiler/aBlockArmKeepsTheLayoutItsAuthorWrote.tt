@@ -1,0 +1,10 @@
+// @origin: tests/compile/cases_05.rs::a_block_arm_keeps_the_layout_its_author_wrote
+variant E { A(n: number), B }
+declare const e: E;
+const v = match (e) {
+  A(n) => {
+    const m = n + 1;
+    return m;
+  },
+  B => 0,
+};

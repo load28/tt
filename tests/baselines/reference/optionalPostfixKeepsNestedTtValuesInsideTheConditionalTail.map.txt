@@ -1,0 +1,20 @@
+//// [optionalPostfixKeepsNestedTtValuesInsideTheConditionalTail.tt] 18 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:22 -> 21:25 len 6  "number"
+2:22 -> 24:14 len 6  "number"
+2:34 -> 26:3 len 248  "\nconst order: string[] = [];\nconst subject = ():"...
+7:1 -> 60:1 len 13  "const miss = "
+7:14 -> 33:19 len 6  "absent"
+7:40 -> 38:21 len 9  "subject()"
+7:55 -> 41:19 len 5  "value"
+7:65 -> 42:35 len 5  "value"
+7:77 -> 46:35 len 1  "0"
+7:81 -> 60:20 len 2  ";\n"
+8:1 -> 90:1 len 12  "const hit = "
+8:13 -> 63:19 len 4  "live"
+8:37 -> 68:21 len 9  "subject()"
+8:52 -> 71:19 len 5  "value"
+8:62 -> 72:35 len 5  "value"
+8:74 -> 76:35 len 1  "0"
+8:78 -> 90:19 len 55  ";\nconsole.log(miss, hit, order.join(\",\"));\n\nexpo"...
+

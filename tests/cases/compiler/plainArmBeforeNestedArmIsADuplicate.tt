@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::plain_arm_before_nested_arm_is_a_duplicate
+const n = match (r) { Ok(value) => 1, Ok(value: Some(value: v)) => v, _ => 0 };

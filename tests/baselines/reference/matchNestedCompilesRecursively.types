@@ -1,0 +1,7 @@
+=== matchNestedCompilesRecursively.tt ===
+const r = match (a) {
+>r : const r: number
+  X(inner) => match (inner) { Y => 1, _ => 2 },
+>inner : const inner: any
+>inner : const inner: any
+

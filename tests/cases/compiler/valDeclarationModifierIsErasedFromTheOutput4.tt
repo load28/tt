@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::val_declaration_modifier_is_erased_from_the_output
+val	const a = 1;

@@ -1,0 +1,19 @@
+//// [composedMatchLiteralsKeepNarrowContexts.tt] 17 mapping(s)
+1:1 -> 19:1 len 138  "\ndeclare const flag: boolean;\ndeclare function s"...
+5:1 -> 24:17 len 11  "stringValue"
+5:12 -> 33:7 len 1  "("
+5:20 -> 26:17 len 4  "flag"
+5:28 -> 28:10 len 4  "true"
+5:36 -> 33:24 len 5  "\"one\""
+5:43 -> 29:10 len 5  "false"
+5:52 -> 33:32 len 5  "\"two\""
+5:59 -> 33:38 len 3  ");\n"
+6:1 -> 35:17 len 11  "numberValue"
+6:12 -> 44:7 len 1  "("
+6:20 -> 37:17 len 4  "flag"
+6:28 -> 39:10 len 4  "true"
+6:36 -> 44:24 len 1  "1"
+6:39 -> 40:10 len 5  "false"
+6:48 -> 44:28 len 1  "2"
+6:51 -> 44:30 len 15  ");\n\nexport {};\n"
+

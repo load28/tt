@@ -1,0 +1,4 @@
+=== oneElementTuplePatternReportsTheExactArity2.tt ===
+const r = match (a) {
+>r : const r: number
+

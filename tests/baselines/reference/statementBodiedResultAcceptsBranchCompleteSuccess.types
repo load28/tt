@@ -1,0 +1,7 @@
+=== statementBodiedResultAcceptsBranchCompleteSuccess.tt ===
+const value = result { const item = try read(); if (item) return item; else return 0; };
+>value : const value: any
+>item : const item: any
+>item : const item: any
+>item : const item: any
+

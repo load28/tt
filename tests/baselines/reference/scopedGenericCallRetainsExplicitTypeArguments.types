@@ -1,0 +1,54 @@
+=== scopedGenericCallRetainsExplicitTypeArguments.tt ===
+variant State { Ready(value: number), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: number) => State
+>value : (property) value: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+type Item = {kind: "item"; run: (x: number) => number};
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+declare const state: State;
+>state : const state: State
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+declare function consume<T>(item: T): void;
+>consume : function consume<T>(item: T): void
+>T : (type parameter) T in consume<T>(item: T): void
+>item : (parameter) item: T
+>T : (type parameter) T in consume<T>(item: T): void
+consume<Item>(match (state) {
+>consume : function consume<T>(item: T): void
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>state : const state: State
+    Ready(value) => ({kind: "item", run: x => x + value}),
+>value : const value: number
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+    Empty => ({kind: "item", run: x => x}),
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+

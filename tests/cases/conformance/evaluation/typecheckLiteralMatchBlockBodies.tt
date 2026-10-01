@@ -1,0 +1,8 @@
+// @origin: tests/integration/cases_04.rs::typecheck_literal_match_block_bodies
+
+const label: string = match ("a" as "a" | "b") {
+  "a" => { return "first"; },
+  "b" => { return "second"; },
+};
+
+export {};

@@ -1,0 +1,22 @@
+=== valLeavesReadsAndComparisonsAlone.tt ===
+val const x = load();
+>x : const x: any
+const r = [x.a == 1, x.a === 1, x.a != 1, x.a >= 1, x.a <= 1, x.a && 1, x.a || 1, x.a ?? 1, x.a + 1, x.a > 1];
+>r : const r: any[]
+>x : const x: any
+>x : const x: any
+>x : const x: any
+>x : const x: any
+>x : const x: any
+>x : const x: any
+>x : const x: any
+>x : const x: any
+>x : const x: any
+>x : const x: any
+const y = x.a;
+>y : const y: any
+>x : const x: any
+const z = { ...x };
+>z : const z: any
+>x : const x: any
+

@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_11.rs::untyped_try_methods_survive_next_to_tt_constructs
+variant V { A }
+interface X { try(x); }

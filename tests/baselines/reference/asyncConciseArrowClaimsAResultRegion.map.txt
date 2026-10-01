@@ -1,0 +1,12 @@
+//// [asyncConciseArrowClaimsAResultRegion.tt] 10 mapping(s)
+1:23 -> 2:26 len 6  "number"
+1:23 -> 5:15 len 6  "number"
+1:43 -> 3:27 len 6  "string"
+1:43 -> 6:16 len 6  "string"
+1:52 -> 7:3 len 61  "\ndeclare const g: () => R;\nconst f = async (): P"...
+3:50 -> 17:11 len 1  "x"
+3:58 -> 12:20 len 3  "g()"
+3:62 -> 17:28 len 1  " "
+3:70 -> 17:70 len 5  "x + 1"
+3:78 -> 20:2 len 2  ";\n"
+

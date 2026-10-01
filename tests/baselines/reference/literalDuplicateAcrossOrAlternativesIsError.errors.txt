@@ -1,0 +1,22 @@
+==== ttc --out-dir (exit 1) ====
+error[match-duplicate-arm]: match: duplicate arm "b"
+ --> ./literalDuplicateAcrossOrAlternativesIsError.tt:1:39
+  |
+1 | const v = match (x) { "a" | "b" => 1, "b" | "c" => 2 };
+  |                                       ^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> literalDuplicateAcrossOrAlternativesIsError.tt:1:18
+  |
+1 | const v = match (x) { "a" | "b" => 1, "b" | "c" => 2 };
+  |                  ^
+error[match-duplicate-arm]: match: duplicate arm "b"
+ --> literalDuplicateAcrossOrAlternativesIsError.tt:1:39
+  |
+1 | const v = match (x) { "a" | "b" => 1, "b" | "c" => 2 };
+  |                                       ^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

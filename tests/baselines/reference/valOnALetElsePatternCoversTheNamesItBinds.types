@@ -1,0 +1,29 @@
+=== valOnALetElsePatternCoversTheNamesItBinds.tt ===
+variant Opt { Some(value: Box), None }
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: Box;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: Box) => Opt
+>value : (property) value: Box
+>Box : type Box = /*unresolved*/ any
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+function f(o: Opt) {
+>f : function f(o: Opt): void
+>o : (parameter) o: Opt
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: Box;
+>   } | {
+>       kind: "None";
+>   }
+  val const Some(value) = o else { return; };
+>value : const value: Box
+>o : (parameter) o: Opt
+  value.n = 1;
+>value : const value: Box
+

@@ -1,0 +1,14 @@
+//// [literalOrPatternSharesOneBodyViaFallthrough.tt] 12 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:1 -> 20:1 len 13  "const kind = "
+2:21 -> 4:17 len 4  "code"
+3:3 -> 6:10 len 3  "200"
+3:9 -> 6:20 len 3  "201"
+3:15 -> 6:30 len 3  "204"
+3:22 -> 7:21 len 9  "\"success\""
+4:3 -> 10:10 len 3  "400"
+4:9 -> 10:20 len 3  "404"
+4:16 -> 11:21 len 14  "\"client error\""
+5:8 -> 15:21 len 9  "\"unknown\""
+6:2 -> 20:25 len 2  ";\n"
+

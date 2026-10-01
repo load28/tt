@@ -1,0 +1,8 @@
+=== aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.tt ===
+const a = s |> .trim();
+>a : const a: any
+const b = (x + y) |> .toFixed(2);
+>b : const b: any
+const c = await p |> .then(g);
+>c : const c: any
+

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valBindingReplacementIsNotAValError.tt → $DIR/out/valBindingReplacementIsNotAValError.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2588]: Cannot assign to 'b' because it is a constant.
+ --> valBindingReplacementIsNotAValError.tt:4:1
+  |
+4 | b = 2;
+  | ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valBindingReplacementIsNotAValError.ts(4,1): error TS2588: Cannot assign to 'b' because it is a constant.

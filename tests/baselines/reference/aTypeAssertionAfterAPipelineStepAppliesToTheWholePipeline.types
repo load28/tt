@@ -1,0 +1,28 @@
+=== aTypeAssertionAfterAPipelineStepAppliesToTheWholePipeline.tt ===
+declare const f: (n: number) => string;
+>f : const f: (n: number) => string
+>n : (parameter) n: number
+const d = 1 |> String as string;
+>d : const d: string
+>String : var String: (value?: any) => string
+const e = 1 |> String satisfies string;
+>e : const e: string
+>String : var String: (value?: any) => string
+const g = 1 |> ((x: number) => x) as number;
+>g : const g: number
+>x : (parameter) x: number
+>x : (parameter) x: number
+const h = 1 |> f as string | undefined;
+>h : const h: string | undefined
+>f : const f: (n: number) => string
+const k = flow |> f as (n: number) => string;
+>k : const k: (n: number) => string
+>flow : const f: (n: number) => string
+>f : const f: (n: number) => string
+>n : (parameter) n: number
+const m = [1 |> f as string |> .length satisfies number |> String, 2];
+>m : const m: (string | number)[]
+>f : const f: (n: number) => string
+>length : (property) String.length: number
+>String : var String: StringConstructor
+

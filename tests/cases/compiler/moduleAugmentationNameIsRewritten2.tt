@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_04.rs::module_augmentation_name_is_rewritten
+declare module "pkg.tt" {}
+declare module "@scope/x.tt" {}

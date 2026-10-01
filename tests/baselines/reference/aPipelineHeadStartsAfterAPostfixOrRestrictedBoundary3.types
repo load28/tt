@@ -1,0 +1,10 @@
+=== aPipelineHeadStartsAfterAPostfixOrRestrictedBoundary3.tt ===
+declare const o: number;
+>o : const o: number
+const k = [1] as const
+>k : const k: readonly [1]
+>const : type const = readonly [1]
+o |> String;
+>o : const o: number
+>String : var String: StringConstructor
+

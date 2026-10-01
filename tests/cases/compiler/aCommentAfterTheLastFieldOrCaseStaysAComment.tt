@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_07.rs::a_comment_after_the_last_field_or_case_stays_a_comment
+export variant Shape {
+  Rect(
+    w: number,
+    h: number // height
+  ),
+  Point // last
+}

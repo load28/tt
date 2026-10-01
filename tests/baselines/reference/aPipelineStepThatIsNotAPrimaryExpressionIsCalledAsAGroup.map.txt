@@ -1,0 +1,12 @@
+//// [aPipelineStepThatIsNotAPrimaryExpressionIsCalledAsAGroup.tt] 10 mapping(s)
+1:1 -> 1:1 len 145  "declare const f: ((n: number) => string) | undef"...
+4:11 -> 4:20 len 1  "1"
+4:16 -> 4:12 len 6  "f ?? g"
+4:22 -> 4:22 len 12  ";\nconst b = "
+5:11 -> 5:38 len 1  "1"
+5:16 -> 5:12 len 24  "await Promise.resolve(g)"
+5:40 -> 5:40 len 12  ";\nconst c = "
+6:11 -> 6:14 len 1  "1"
+6:16 -> 6:11 len 2  "as"
+6:18 -> 6:16 len 13  ";\nexport {};\n"
+

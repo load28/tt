@@ -1,0 +1,4 @@
+=== aBlockOfLiteralsIsNotAMatch.tt ===
+match (x)
+>match : any
+

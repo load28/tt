@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.tt → $DIR/out/inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'consume'.
+ --> inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.tt:1:1
+  |
+1 | consume({run: (n) => n}, match (x) { A(v) => v, _ => 0 });
+  | ^^^^^^^
+error[ts7006]: Parameter 'n' implicitly has an 'any' type.
+ --> inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.tt:1:16
+  |
+1 | consume({run: (n) => n}, match (x) { A(v) => v, _ => 0 });
+  |                ^
+error[ts2304]: Cannot find name 'x'.
+ --> inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.tt:1:33
+  |
+1 | consume({run: (n) => n}, match (x) { A(v) => v, _ => 0 });
+  |                                 ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.ts(2,19): error TS2304: Cannot find name 'consume'.
+inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.ts(3,26): error TS7006: Parameter 'n' implicitly has an 'any' type.
+inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.ts(5,19): error TS2304: Cannot find name 'x'.

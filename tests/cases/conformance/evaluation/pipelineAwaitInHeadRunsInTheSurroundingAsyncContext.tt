@@ -1,0 +1,11 @@
+// @origin: tests/integration/cases_03.rs::pipeline_await_in_head_runs_in_the_surrounding_async_context
+// @run: pipelineAwaitInHeadRunsInTheSurroundingAsyncContext.tt
+
+const upper = (s: string) => s.toUpperCase();
+async function main() {
+  const v = await Promise.resolve("ok") |> upper |> .concat("!");
+  console.log(v);
+}
+await main();
+
+export {};

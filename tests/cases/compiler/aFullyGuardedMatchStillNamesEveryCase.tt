@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_09.rs::a_fully_guarded_match_still_names_every_case
+const f = (o: Option<number>) => match (o) { Some(value) if value > 0 => value };

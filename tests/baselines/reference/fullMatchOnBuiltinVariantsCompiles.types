@@ -1,0 +1,18 @@
+=== fullMatchOnBuiltinVariantsCompiles.tt ===
+const f = (o: Option<number>) => match (o) { Some(value) => value, None => 0 };
+>f : const f: (o: Option<number>) => any
+>o : (parameter) o: Option<number>
+>Option : type Option = /*unresolved*/ any
+>o : (parameter) o: Option<number>
+>value : const value: Option<number>
+>value : const value: Option<number>
+const g = (r: Result<number, string>) => match (r) { Ok(value) => value, Err(error) => error.length };
+>g : const g: (r: Result<number, string>) => any
+>r : (parameter) r: Result<number, string>
+>Result : type Result = /*unresolved*/ any
+>r : (parameter) r: Result<number, string>
+>value : const value: Result<number, string>
+>value : const value: Result<number, string>
+>error : const error: Result<number, string>
+>error : const error: Result<number, string>
+

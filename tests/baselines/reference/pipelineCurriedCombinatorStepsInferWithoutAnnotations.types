@@ -1,0 +1,163 @@
+=== pipelineCurriedCombinatorStepsInferWithoutAnnotations.tt ===
+type TOption<T> = { kind: "Some"; value: T } | { kind: "None" };
+>TOption : type TOption<T> = {
+>       kind: "Some";
+>       value: T;
+>   } | {
+>       kind: "None";
+>   }
+>T : (type parameter) T in type TOption<T>
+>kind : (property) kind: "Some"
+>value : (property) value: T
+>T : (type parameter) T in type TOption<T>
+>kind : (property) kind: "None"
+const Option = {
+>Option : const Option: {
+>       Some: <T>(value: T) => TOption<T>;
+>       None: {
+>           readonly kind: "None";
+>       };
+>       mapP: <T, U>(f: (value: T) => U) => (o: TOption<T>) => TOption<U>;
+>       unwrapOrP: <T>(fallback: T) => (o: TOption<T>) => T;
+>   }
+  Some: <T>(value: T): TOption<T> => ({ kind: "Some", value }),
+>Some : (property) Some: <T>(value: T) => TOption<T>
+>T : (type parameter) T in <T>(value: T): TOption<T>
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(value: T): TOption<T>
+>TOption : type TOption<T> = {
+>       kind: "Some";
+>       value: T;
+>   } | {
+>       kind: "None";
+>   }
+>T : (type parameter) T in <T>(value: T): TOption<T>
+>kind : (property) kind: "Some"
+>value : (property) value: T
+  None: { kind: "None" } as const,
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+>kind : (property) kind: "None"
+>const : type const = {
+>       readonly kind: "None";
+>   }
+  mapP:
+>mapP : (property) mapP: <T, U>(f: (value: T) => U) => (o: TOption<T>) => TOption<U>
+    <T, U>(f: (value: T) => U) =>
+>T : (type parameter) T in <T, U>(f: (value: T) => U): (o: TOption<T>) => TOption<U>
+>U : (type parameter) U in <T, U>(f: (value: T) => U): (o: TOption<T>) => TOption<U>
+>f : (parameter) f: (value: T) => U
+>value : (parameter) value: T
+>T : (type parameter) T in <T, U>(f: (value: T) => U): (o: TOption<T>) => TOption<U>
+>U : (type parameter) U in <T, U>(f: (value: T) => U): (o: TOption<T>) => TOption<U>
+    (o: TOption<T>): TOption<U> =>
+>o : (parameter) o: TOption<T>
+>TOption : type TOption<T> = {
+>       kind: "Some";
+>       value: T;
+>   } | {
+>       kind: "None";
+>   }
+>T : (type parameter) T in <T, U>(f: (value: T) => U): (o: TOption<T>) => TOption<U>
+>TOption : type TOption<T> = {
+>       kind: "Some";
+>       value: T;
+>   } | {
+>       kind: "None";
+>   }
+>U : (type parameter) U in <T, U>(f: (value: T) => U): (o: TOption<T>) => TOption<U>
+      o.kind === "Some" ? { kind: "Some", value: f(o.value) } : { kind: "None" },
+>o : (parameter) o: TOption<T>
+>kind : (property) kind: "None" | "Some"
+>kind : (property) kind: "Some"
+>value : (property) value: U
+>f : (parameter) f: (value: T) => U
+>o : (parameter) o: {
+>       kind: "Some";
+>       value: T;
+>   }
+>value : (property) value: T
+>kind : (property) kind: "None"
+  unwrapOrP:
+>unwrapOrP : (property) unwrapOrP: <T>(fallback: T) => (o: TOption<T>) => T
+    <T>(fallback: T) =>
+>T : (type parameter) T in <T>(fallback: T): (o: TOption<T>) => T
+>fallback : (parameter) fallback: T
+>T : (type parameter) T in <T>(fallback: T): (o: TOption<T>) => T
+    (o: TOption<T>): T =>
+>o : (parameter) o: TOption<T>
+>TOption : type TOption<T> = {
+>       kind: "Some";
+>       value: T;
+>   } | {
+>       kind: "None";
+>   }
+>T : (type parameter) T in <T>(fallback: T): (o: TOption<T>) => T
+>T : (type parameter) T in <T>(fallback: T): (o: TOption<T>) => T
+      o.kind === "Some" ? o.value : fallback,
+>o : (parameter) o: TOption<T>
+>kind : (property) kind: "None" | "Some"
+>o : (parameter) o: {
+>       kind: "Some";
+>       value: T;
+>   }
+>value : (property) value: T
+>fallback : (parameter) fallback: T
+const half = (n: number): TOption<number> =>
+>half : const half: (n: number) => TOption<number>
+>n : (parameter) n: number
+>TOption : type TOption<T> = {
+>       kind: "Some";
+>       value: T;
+>   } | {
+>       kind: "None";
+>   }
+  n % 2 === 0 ? Option.Some(n / 2) : Option.None;
+>n : (parameter) n: number
+>Option : const Option: {
+>       Some: <T>(value: T) => TOption<T>;
+>       None: {
+>           readonly kind: "None";
+>       };
+>       mapP: <T, U>(f: (value: T) => U) => (o: TOption<T>) => TOption<U>;
+>       unwrapOrP: <T>(fallback: T) => (o: TOption<T>) => T;
+>   }
+>Some : (property) Some: <number>(value: number) => TOption<number>
+>n : (parameter) n: number
+>Option : const Option: {
+>       Some: <T>(value: T) => TOption<T>;
+>       None: {
+>           readonly kind: "None";
+>       };
+>       mapP: <T, U>(f: (value: T) => U) => (o: TOption<T>) => TOption<U>;
+>       unwrapOrP: <T>(fallback: T) => (o: TOption<T>) => T;
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+const label: string = half(4) |> Option.mapP(x => x + 1) |> Option.unwrapOrP(0) |> .toFixed(1);
+>label : const label: string
+>half : const half: (n: number) => TOption<number>
+>Option : const Option: {
+>       Some: <T>(value: T) => TOption<T>;
+>       None: {
+>           readonly kind: "None";
+>       };
+>       mapP: <T, U>(f: (value: T) => U) => (o: TOption<T>) => TOption<U>;
+>       unwrapOrP: <T>(fallback: T) => (o: TOption<T>) => T;
+>   }
+>mapP : (property) mapP: <number, number>(f: (value: number) => number) => (o: TOption<number>) => TOption<number>
+>x : (parameter) x: number
+>x : (parameter) x: number
+>Option : const Option: {
+>       Some: <T>(value: T) => TOption<T>;
+>       None: {
+>           readonly kind: "None";
+>       };
+>       mapP: <T, U>(f: (value: T) => U) => (o: TOption<T>) => TOption<U>;
+>       unwrapOrP: <T>(fallback: T) => (o: TOption<T>) => T;
+>   }
+>unwrapOrP : (property) unwrapOrP: <number>(fallback: number) => (o: TOption<number>) => number
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+

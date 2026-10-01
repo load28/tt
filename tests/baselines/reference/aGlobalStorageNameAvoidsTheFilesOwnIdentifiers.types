@@ -1,0 +1,20 @@
+=== aGlobalStorageNameAvoidsTheFilesOwnIdentifiers.tt ===
+declare const $tt_v0$total: number;
+>$tt_v0$total : const $tt_v0$total: number
+declare const o: { kind: "A" } | { kind: "B" };
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>kind : (property) kind: "A"
+>kind : (property) kind: "B"
+const total = match (o) { A => $tt_v0$total, B => 2 };
+>total : const total: number
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>$tt_v0$total : const $tt_v0$total: number
+

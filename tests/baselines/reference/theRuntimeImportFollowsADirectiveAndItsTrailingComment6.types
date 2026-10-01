@@ -1,0 +1,26 @@
+=== theRuntimeImportFollowsADirectiveAndItsTrailingComment6.tt ===
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const o: { p: number };
+>o : const o: {
+>       p: number;
+>   }
+>p : (property) p: number
+export const a = o.p |> String;
+>a : const a: string
+>o : const o: {
+>       p: number;
+>   }
+>p : (property) p: number
+>String : var String: StringConstructor
+

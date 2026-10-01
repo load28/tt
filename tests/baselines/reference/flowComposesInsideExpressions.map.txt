@@ -1,0 +1,9 @@
+//// [flowComposesInsideExpressions.tt] 7 mapping(s)
+1:1 -> 7:1 len 17  "const a = xs.map("
+1:26 -> 7:25 len 5  "parse"
+1:35 -> 7:32 len 6  "double"
+1:41 -> 7:39 len 16  ");\nconst b = `${"
+2:22 -> 8:21 len 1  "f"
+2:27 -> 8:24 len 1  "g"
+2:28 -> 8:26 len 4  "}`;\n"
+

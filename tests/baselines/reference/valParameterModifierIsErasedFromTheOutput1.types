@@ -1,0 +1,8 @@
+=== valParameterModifierIsErasedFromTheOutput1.tt ===
+function read(val user: User) {
+>read : function read(user: User): any
+>user : (parameter) user: User
+>User : type User = /*unresolved*/ any
+  return user.name;
+>user : (parameter) user: User
+

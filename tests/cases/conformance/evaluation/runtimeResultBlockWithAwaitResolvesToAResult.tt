@@ -1,0 +1,18 @@
+// @origin: tests/integration/cases_04.rs::runtime_result_block_with_await_resolves_to_a_result
+// @run: runtimeResultBlockWithAwaitResolvesToAResult.tt
+
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+
+const fetchNum = async (n: number): Promise<Res<number, string>> =>
+  n > 0 ? Res.Ok(n) : Res.Err("not positive");
+
+const total = async (a: number, b: number) => result {
+  const x = try await fetchNum(a);
+  const y = try await fetchNum(b);
+  return x + y;
+};
+
+total(2, 3).then((r) => console.log(JSON.stringify(r)));
+total(2, -1).then((r) => console.log(JSON.stringify(r)));
+
+export {};

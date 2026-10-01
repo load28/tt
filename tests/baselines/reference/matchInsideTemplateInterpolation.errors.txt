@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./matchInsideTemplateInterpolation.tt → $DIR/out/matchInsideTemplateInterpolation.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> matchInsideTemplateInterpolation.tt:1:23
+  |
+1 | const s = `v=${match (x) { A => 1, _ => 0 }}`;
+  |                       ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+matchInsideTemplateInterpolation.ts(3,17): error TS2304: Cannot find name 'x'.

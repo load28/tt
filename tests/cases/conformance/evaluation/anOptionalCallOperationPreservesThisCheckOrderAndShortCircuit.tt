@@ -1,0 +1,15 @@
+// @origin: tests/integration/cases_05.rs::an_optional_call_operation_preserves_this_check_order_and_short_circuit
+// @run: anOptionalCallOperationPreservesThisCheckOrderAndShortCircuit.tt
+
+const trace: string[] = [];
+const live = {
+  base: 7,
+  m(v: number): number { trace.push("call:" + (this === live)); return this.base + v; },
+};
+const dead: { m?: (v: number) => number } = {};
+function arg(tag: string): number { trace.push(tag); return 1; }
+const hit = live.m?.(match (arg("live")) { 1 => 1, _ => 0 });
+const miss = dead.m?.(match (arg("dead")) { 1 => 1, _ => 0 });
+console.log(JSON.stringify(trace), hit, miss);
+
+export {};

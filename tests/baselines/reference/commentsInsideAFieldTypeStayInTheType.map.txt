@@ -1,0 +1,5 @@
+//// [commentsInsideAFieldTypeStayInTheType.tt] 3 mapping(s)
+1:26 -> 2:24 len 36  "/* css */ number | /* auto */ \"auto\""
+1:26 -> 4:15 len 36  "/* css */ number | /* auto */ \"auto\""
+1:65 -> 5:3 len 1  "\n"
+

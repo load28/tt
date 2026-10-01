@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::result_preserves_a_statement_position_match_dispatch
+const value = result { const item = try read(); match (item) { 1 => useOne(), _ => useOther() }; return item; };

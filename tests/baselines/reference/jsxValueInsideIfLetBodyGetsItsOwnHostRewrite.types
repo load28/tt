@@ -1,0 +1,30 @@
+=== jsxValueInsideIfLetBodyGetsItsOwnHostRewrite.ttx ===
+variant E { A(value: string), B }
+>E : type E = {
+>       kind: "A";
+>       value: string;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (value: string) => E
+>value : (property) value: string
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const view = (node: E) => {
+>view : const view: (node: E) => any
+>node : (parameter) node: E
+>E : type E = {
+>       kind: "A";
+>       value: string;
+>   } | {
+>       kind: "B";
+>   }
+  if let A(value) = node {
+>value : const value: string
+>node : (parameter) node: E
+    return <section data-kind={match (node) { A => "a", B => "b" }}>{value |> .trim()}</section>;
+>node : (parameter) node: E
+>value : const value: string
+>trim : (method) String.trim(): string
+

@@ -1,0 +1,8 @@
+=== nestedPatternEmitsPathConditionsAndBinds.tt ===
+const n = match (r) {
+>n : const n: any
+  Ok(value: Some(value: v)) => v,
+>value : any
+>v : const v: any
+>v : const v: any
+

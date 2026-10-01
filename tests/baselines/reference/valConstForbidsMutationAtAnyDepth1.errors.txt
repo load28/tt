@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[val-mutation]: cannot mutate through val binding `x` (the binding is declared with `val`, so every access path from it is read-only)
+ --> ./valConstForbidsMutationAtAnyDepth1.tt:2:1
+  |
+2 | x.nested.a = 2;
+  | ^
+
+
+==== ttc --check-types (exit 1) ====
+error[val-mutation]: cannot mutate through val binding `x` (the binding is declared with `val`, so every access path from it is read-only)
+ --> valConstForbidsMutationAtAnyDepth1.tt:2:1
+  |
+1 | val const x = { nested: { a: 1 } };
+  | --- the read-only binding is declared here
+2 | x.nested.a = 2;
+  | ^
+  |
+  = help: remove `val` if this binding is intended to be mutable
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./pipelineComposesWithTry.tt → $DIR/out/pipelineComposesWithTry.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'Result'.
+ --> pipelineComposesWithTry.tt:1:15
+  |
+1 | function f(): Result<number, string> {
+  |               ^^^^^^
+error[ts18046]: '$tt_t0' is of type 'unknown'. (in code ttc generated for this construct)
+ --> pipelineComposesWithTry.tt:2:13
+  |
+2 |   const a = try readCfg() |> norm;
+  |             ^^^^^^^^^^^^^^^^^^^^^
+error[ts2304]: Cannot find name 'readCfg'.
+ --> pipelineComposesWithTry.tt:2:17
+  |
+2 |   const a = try readCfg() |> norm;
+  |                 ^^^^^^^
+error[ts2304]: Cannot find name 'norm'.
+ --> pipelineComposesWithTry.tt:2:30
+  |
+2 |   const a = try readCfg() |> norm;
+  |                              ^^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> pipelineComposesWithTry.tt:3:10
+  |
+3 |   return Result.Ok(a);
+  |          ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+pipelineComposesWithTry.ts(4,15): error TS2304: Cannot find name 'Result'.
+pipelineComposesWithTry.ts(5,25): error TS2304: Cannot find name 'readCfg'.
+pipelineComposesWithTry.ts(5,36): error TS2304: Cannot find name 'norm'.
+pipelineComposesWithTry.ts(6,20): error TS18046: '$tt_t0' is of type 'unknown'.
+pipelineComposesWithTry.ts(10,10): error TS2304: Cannot find name 'Result'.

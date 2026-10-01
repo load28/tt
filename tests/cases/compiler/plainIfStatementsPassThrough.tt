@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_07.rs::plain_if_statements_pass_through
+if (x) { a(); } else if (y) { b(); } else { c(); }
+const z = cond ? 1 : 2;

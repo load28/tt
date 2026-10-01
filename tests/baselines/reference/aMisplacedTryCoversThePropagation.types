@@ -1,0 +1,10 @@
+=== aMisplacedTryCoversThePropagation.tt ===
+const x = match (r) {
+>x : const x: any
+  Ok(v) => { const y = try f(v); return y; },
+>v : const v: any
+>y : const y: any
+>y : const y: any
+  Err(e) => 0,
+>e : const e: any
+

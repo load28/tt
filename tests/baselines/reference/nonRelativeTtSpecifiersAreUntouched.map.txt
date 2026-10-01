@@ -1,0 +1,3 @@
+//// [nonRelativeTtSpecifiersAreUntouched.tt] 1 mapping(s)
+1:1 -> 1:1 len 82  "import a from \"pkg.tt\";\nimport b from \"/abs/x.tt"...
+

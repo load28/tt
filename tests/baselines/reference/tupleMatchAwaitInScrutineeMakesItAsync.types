@@ -1,0 +1,4 @@
+=== tupleMatchAwaitInScrutineeMakesItAsync.tt ===
+async function f() {
+>f : function f(): Promise<number>
+

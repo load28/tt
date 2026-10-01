@@ -1,0 +1,106 @@
+=== runValProgramBehavesExactlyLikeTheTypescriptItErasesTo.tt ===
+val const config = { name: "tt", tags: ["dev"] };
+>config : const config: {
+>       name: string;
+>       tags: string[];
+>   }
+>name : (property) name: string
+>tags : (property) tags: string[]
+val let state = { count: 0 };
+>state : let state: {
+>       count: number;
+>   }
+>count : (property) count: number
+function describe(val c: { name: string; tags: string[] }): string {
+>describe : function describe(c: {
+>       name: string;
+>       tags: string[];
+>   }): string
+>c : (parameter) c: {
+>       name: string;
+>       tags: string[];
+>   }
+>name : (property) name: string
+>tags : (property) tags: string[]
+  return `${c.name}:${c.tags.length}`;
+>c : (parameter) c: {
+>       name: string;
+>       tags: string[];
+>   }
+>name : (property) name: string
+>c : (parameter) c: {
+>       name: string;
+>       tags: string[];
+>   }
+>tags : (property) tags: string[]
+>length : (property) Array<string>.length: number
+function bump(s: { count: number }) {
+>bump : function bump(s: {
+>       count: number;
+>   }): {
+>       count: number;
+>   }
+>s : (parameter) s: {
+>       count: number;
+>   }
+>count : (property) count: number
+  s.count += 1;
+>s : (parameter) s: {
+>       count: number;
+>   }
+>count : (property) count: number
+  return s;
+>s : (parameter) s: {
+>       count: number;
+>   }
+state = { count: state.count + 1 };
+>state : let state: {
+>       count: number;
+>   }
+>count : (property) count: number
+>state : let state: {
+>       count: number;
+>   }
+>count : (property) count: number
+const mutable = { count: 0 };
+>mutable : const mutable: {
+>       count: number;
+>   }
+>count : (property) count: number
+bump(mutable);
+>bump : function bump(s: {
+>       count: number;
+>   }): {
+>       count: number;
+>   }
+>mutable : const mutable: {
+>       count: number;
+>   }
+console.log(describe(config));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>describe : function describe(c: {
+>       name: string;
+>       tags: string[];
+>   }): string
+>config : const config: {
+>       name: string;
+>       tags: string[];
+>   }
+console.log(String(state.count));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>String : var String: (value?: any) => string
+>state : let state: {
+>       count: number;
+>   }
+>count : (property) count: number
+console.log(String(mutable.count));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>String : var String: (value?: any) => string
+>mutable : const mutable: {
+>       count: number;
+>   }
+>count : (property) count: number
+

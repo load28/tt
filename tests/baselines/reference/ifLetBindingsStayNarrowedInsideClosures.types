@@ -1,0 +1,38 @@
+=== ifLetBindingsStayNarrowedInsideClosures.tt ===
+variant Opt { Some(value: string), None }
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: string;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: string) => Opt
+>value : (property) value: string
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+function f(o: Opt, xs: number[]): string[] {
+>f : function f(o: Opt, xs: number[]): string[]
+>o : (parameter) o: Opt
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: string;
+>   } | {
+>       kind: "None";
+>   }
+>xs : (parameter) xs: number[]
+  const collected: string[] = [];
+>collected : const collected: string[]
+  if let Some(value) = o {
+>value : const value: string
+>o : (parameter) o: Opt
+    xs.forEach(() => collected.push(value.toUpperCase()));
+>xs : (parameter) xs: number[]
+>forEach : (method) Array<number>.forEach(callbackfn: (value: number, index: number, array: number[]) => void, thisArg?: any): void
+>collected : const collected: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : const value: string
+>toUpperCase : (method) String.toUpperCase(): string
+  return collected;
+>collected : const collected: string[]
+

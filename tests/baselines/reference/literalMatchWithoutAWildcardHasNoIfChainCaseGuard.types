@@ -1,0 +1,4 @@
+=== literalMatchWithoutAWildcardHasNoIfChainCaseGuard.tt ===
+const v = match (code) { 200 if ok => 1, 404 => 2 };
+>v : const v: number
+

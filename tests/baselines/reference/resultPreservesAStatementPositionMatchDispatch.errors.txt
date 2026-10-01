@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./resultPreservesAStatementPositionMatchDispatch.tt → $DIR/out/resultPreservesAStatementPositionMatchDispatch.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'read'.
+ --> resultPreservesAStatementPositionMatchDispatch.tt:1:41
+  |
+1 | const value = result { const item = try read(); match (item) { 1 => useOne(), _ => useOther() }; return item; };
+  |                                         ^^^^
+error[ts2304]: Cannot find name 'useOne'.
+ --> resultPreservesAStatementPositionMatchDispatch.tt:1:69
+  |
+1 | const value = result { const item = try read(); match (item) { 1 => useOne(), _ => useOther() }; return item; };
+  |                                                                     ^^^^^^
+error[ts2304]: Cannot find name 'useOther'.
+ --> resultPreservesAStatementPositionMatchDispatch.tt:1:84
+  |
+1 | const value = result { const item = try read(); match (item) { 1 => useOne(), _ => useOther() }; return item; };
+  |                                                                                    ^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+resultPreservesAStatementPositionMatchDispatch.ts(3,18): error TS2304: Cannot find name 'read'.
+resultPreservesAStatementPositionMatchDispatch.ts(13,18): error TS2304: Cannot find name 'useOne'.
+resultPreservesAStatementPositionMatchDispatch.ts(17,18): error TS2304: Cannot find name 'useOther'.

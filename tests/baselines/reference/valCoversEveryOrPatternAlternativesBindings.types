@@ -1,0 +1,32 @@
+=== valCoversEveryOrPatternAlternativesBindings.tt ===
+variant E { A(x: Box), B(x: Box) }
+>E : type E = {
+>       kind: "A";
+>       x: Box;
+>   } | {
+>       kind: "B";
+>       x: Box;
+>   }
+>A : (property) A: (x: Box) => E
+>x : (property) x: Box
+>Box : type Box = /*unresolved*/ any
+>B : (property) B: (x: Box) => E
+>x : (property) x: Box
+>Box : type Box = /*unresolved*/ any
+function f(e: E) {
+>f : function f(e: E): void
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>       x: Box;
+>   } | {
+>       kind: "B";
+>       x: Box;
+>   }
+  val const A(x) | B(x) = e else { return; };
+>x : const x: Box
+>x : const x: Box
+>e : (parameter) e: E
+  x.n = 1;
+>x : const x: any
+

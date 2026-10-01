@@ -1,0 +1,3 @@
+//// [typescriptMembersAndPropertiesNamedTryArePassthrough.tt] 1 mapping(s)
+1:1 -> 1:1 len 41  "const object = { try: 1 };\nobject.try();\n"
+

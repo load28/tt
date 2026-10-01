@@ -1,0 +1,9 @@
+=== letElseInsideMatchArmIsError.tt ===
+const x = match (r) {
+>x : const x: any
+  Ok(value) => { const Some(v) = h(value) else { return 0; }; return v; },
+>value : const value: any
+>v : const v: any
+>value : const value: any
+>v : const v: any
+

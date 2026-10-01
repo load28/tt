@@ -1,0 +1,279 @@
+=== aHoistedValueInAMemberStepRunsAfterThePipedValueAndItsMethod.tt ===
+variant E { A(value: number), B }
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (value: number) => E
+>value : (property) value: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+type N = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>N : type N = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+type R = { kind: "Ok"; value: Box } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: Box;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: Box
+>Box : class Box
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const order: string[] = [];
+>order : const order: string[]
+const mark = <T,>(name: string, value: T): T => { order.push(name); return value; };
+>mark : const mark: <T>(name: string, value: T) => T
+>T : (type parameter) T in <T>(name: string, value: T): T
+>name : (parameter) name: string
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(name: string, value: T): T
+>T : (type parameter) T in <T>(name: string, value: T): T
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>value : (parameter) value: T
+const subject = (name: string): E => { order.push(name); return E.A(1); };
+>subject : const subject: (name: string) => E
+>name : (parameter) name: string
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>E : const E: {
+>       A: (value: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: number) => E
+class Box {
+>Box : class Box
+  constructor(readonly n: number) {}
+>n : (property) Box.n: number
+  get add() { order.push("get"); return Box.prototype.addTo; }
+>add : (accessor) Box.add: (amount: number) => Box
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>Box : class Box
+>addTo : (method) Box.addTo(amount: number): Box
+  addTo(amount: number): Box { order.push("call"); return new Box(this.n + amount); }
+>addTo : (method) Box.addTo(amount: number): Box
+>amount : (parameter) amount: number
+>Box : class Box
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>Box : constructor Box(n: number): Box
+>n : (property) Box.n: number
+>amount : (parameter) amount: number
+const factory = {
+>factory : const factory: {
+>       readonly make: (amount: number) => (value: number) => number;
+>   }
+  get make() { order.push("get"); return (amount: number) => { order.push("make"); return (value: number) => { order.push("apply"); return value + amount; }; }; },
+>make : (accessor) make: (amount: number) => (value: number) => number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>amount : (parameter) amount: number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: number
+>amount : (parameter) amount: number
+const okay = (name: string, value: number): N => { order.push(name); return { kind: "Ok", value }; };
+>okay : const okay: (name: string, value: number) => N
+>name : (parameter) name: string
+>value : (parameter) value: number
+>N : type N = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+const fail = (name: string): N => { order.push(name); return { kind: "Err", error: name }; };
+>fail : const fail: (name: string) => N
+>name : (parameter) name: string
+>N : type N = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>kind : (property) kind: "Err"
+>error : (property) error: string
+>name : (parameter) name: string
+const report = (value: unknown) => { console.log(order.join(","), String(value)); order.length = 0; };
+>report : const report: (value: unknown) => void
+>value : (parameter) value: unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>order : const order: string[]
+>join : (method) Array<string>.join(separator?: string): string
+>String : var String: (value?: any) => string
+>value : (parameter) value: unknown
+>order : const order: string[]
+>length : (property) Array<string>.length: number
+report(mark("head", new Box(1)) |> .add(match (subject("arg")) { A(value) => value, B => 0 }) |> .n);
+>report : const report: (value: unknown) => void
+>mark : const mark: <Box>(name: string, value: Box) => Box
+>Box : constructor Box(n: number): Box
+>add : (accessor) Box.add: (amount: number) => Box
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>n : (property) Box.n: number
+report(mark("head", new Box(1)) |> .add(match (subject("one")) { A(value) => value, B => 0 }) |> .add(match (subject("two")) { A(value) => value, B => 0 }) |> .n);
+>report : const report: (value: unknown) => void
+>mark : const mark: <Box>(name: string, value: Box) => Box
+>Box : constructor Box(n: number): Box
+>add : (accessor) Box.add: (amount: number) => Box
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>add : (accessor) Box.add: (amount: number) => Box
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>n : (property) Box.n: number
+report(mark("head", new Box(1)) |> .add(1).add(match (subject("arg")) { A(value) => value, B => 0 }).n);
+>report : const report: (value: unknown) => void
+>mark : const mark: <Box>(name: string, value: Box) => Box
+>Box : constructor Box(n: number): Box
+>add : (accessor) Box.add: (amount: number) => Box
+>add : (accessor) Box.add: (amount: number) => Box
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>n : (property) Box.n: number
+report(mark("head", { list: [10, 20] }) |> .list[match (subject("index")) { A(value) => value, B => 0 }]);
+>report : const report: (value: unknown) => void
+>mark : const mark: <{
+>       list: number[];
+>   }>(name: string, value: {
+>       list: number[];
+>   }) => {
+>       list: number[];
+>   }
+>list : (property) list: number[]
+>list : (property) list: number[]
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+report(mark("head", new Box(1) as Box | undefined) |> ?.add(match (subject("arg")) { A(value) => value, B => 0 }) |> String);
+>report : const report: (value: unknown) => void
+>mark : const mark: <Box | undefined>(name: string, value: Box | undefined) => Box | undefined
+>Box : constructor Box(n: number): Box
+>Box : class Box
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>String : var String: (value?: any) => string
+report(mark("head", undefined as Box | undefined) |> ?.add(match (subject("skipped")) { A(value) => value, B => 0 }) |> String);
+>report : const report: (value: unknown) => void
+>mark : const mark: <Box | undefined>(name: string, value: Box | undefined) => Box | undefined
+>Box : class Box
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+>String : var String: (value?: any) => string
+report(mark("head", 2) |> factory.make(match (subject("arg")) { A(value) => value, B => 0 }));
+>report : const report: (value: unknown) => void
+>mark : const mark: <2>(name: string, value: 2) => 2
+>factory : const factory: {
+>       readonly make: (amount: number) => (value: number) => number;
+>   }
+>make : (accessor) make: (amount: number) => (value: number) => number
+>subject : const subject: (name: string) => E
+>value : const value: number
+>value : const value: number
+function lifted(ok: boolean): R {
+>lifted : function lifted(ok: boolean): R
+>ok : (parameter) ok: boolean
+>R : type R = {
+>       kind: "Ok";
+>       value: Box;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const value = mark("head", new Box(1)) |> .add(try (ok ? okay("try", 4) : fail("err")));
+>value : const value: Box
+>mark : const mark: <Box>(name: string, value: Box) => Box
+>Box : constructor Box(n: number): Box
+>add : (accessor) Box.add: (amount: number) => Box
+>ok : (parameter) ok: boolean
+>okay : const okay: (name: string, value: number) => N
+>fail : const fail: (name: string) => N
+  return { kind: "Ok", value };
+>kind : (property) kind: "Ok"
+>value : (property) value: Box
+const first = lifted(true);
+>first : const first: R
+>lifted : function lifted(ok: boolean): R
+report(first.kind === "Ok" ? first.value.n : first.error);
+>report : const report: (value: unknown) => void
+>first : const first: R
+>kind : (property) kind: "Err" | "Ok"
+>first : const first: {
+>       kind: "Ok";
+>       value: Box;
+>   }
+>value : (property) value: Box
+>n : (property) Box.n: number
+>first : const first: {
+>       kind: "Err";
+>       error: string;
+>   }
+>error : (property) error: string
+const second = lifted(false);
+>second : const second: R
+>lifted : function lifted(ok: boolean): R
+report(second.kind === "Ok" ? second.value.n : second.error);
+>report : const report: (value: unknown) => void
+>second : const second: R
+>kind : (property) kind: "Err" | "Ok"
+>second : const second: {
+>       kind: "Ok";
+>       value: Box;
+>   }
+>value : (property) value: Box
+>n : (property) Box.n: number
+>second : const second: {
+>       kind: "Err";
+>       error: string;
+>   }
+>error : (property) error: string
+

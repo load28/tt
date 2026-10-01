@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_03.rs::let_else_diverges_via_throw_and_continue
+function f(): number {
+  const Some(v) = find() else { throw new Error("no"); };
+  return v;
+}

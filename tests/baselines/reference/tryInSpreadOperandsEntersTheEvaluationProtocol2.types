@@ -1,0 +1,5 @@
+=== tryInSpreadOperandsEntersTheEvaluationProtocol2.tt ===
+function f() { const value = [ ...try read() ]; }
+>f : function f(): any
+>value : const value: any[]
+

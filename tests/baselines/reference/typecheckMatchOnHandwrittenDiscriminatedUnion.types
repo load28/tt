@@ -1,0 +1,39 @@
+=== typecheckMatchOnHandwrittenDiscriminatedUnion.tt ===
+type AppEvent =
+>AppEvent : type AppEvent = {
+>       kind: "click";
+>       x: number;
+>       y: number;
+>   } | {
+>       kind: "key";
+>       code: string;
+>   }
+  | { kind: "click"; x: number; y: number }
+>kind : (property) kind: "click"
+>x : (property) x: number
+>y : (property) y: number
+  | { kind: "key"; code: string };
+>kind : (property) kind: "key"
+>code : (property) code: string
+const f = (e: AppEvent) => match (e) {
+>f : const f: (e: AppEvent) => number
+>e : (parameter) e: AppEvent
+>AppEvent : type AppEvent = {
+>       kind: "click";
+>       x: number;
+>       y: number;
+>   } | {
+>       kind: "key";
+>       code: string;
+>   }
+>e : (parameter) e: AppEvent
+  click(x, y) => x + y,
+>x : const x: number
+>y : const y: number
+>x : const x: number
+>y : const y: number
+  key(code) => code.length,
+>code : const code: string
+>code : const code: string
+>length : (property) String.length: number
+

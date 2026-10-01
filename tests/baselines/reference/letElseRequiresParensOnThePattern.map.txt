@@ -1,0 +1,3 @@
+//// [letElseRequiresParensOnThePattern.tt] 1 mapping(s)
+1:1 -> 1:1 len 80  "function f(): number {\n  const Point = find() el"...
+

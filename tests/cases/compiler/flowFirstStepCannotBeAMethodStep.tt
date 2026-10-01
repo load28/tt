@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::flow_first_step_cannot_be_a_method_step
+const f = flow |> .trim() |> lower;

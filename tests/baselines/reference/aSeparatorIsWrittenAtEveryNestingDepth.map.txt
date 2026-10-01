@@ -1,0 +1,15 @@
+//// [aSeparatorIsWrittenAtEveryNestingDepth.tt] 13 mapping(s)
+1:1 -> 1:1 len 247  "declare const o: { m(x: unknown): unknown };\ndec"...
+11:5 -> 11:41 len 1  "w"
+11:10 -> 11:45 len 4  "this"
+11:14 -> 11:30 len 2  ".m"
+11:16 -> 11:51 len 48  "\n  }\n}\nexport const g = () => {\n  const w = 2\n  "
+16:3 -> 16:39 len 1  "w"
+16:8 -> 16:43 len 1  "o"
+16:9 -> 16:28 len 2  ".m"
+16:11 -> 16:46 len 46  "\n}\nexport const t = `${(() => { const w = 3\n  "
+19:3 -> 19:39 len 1  "w"
+19:8 -> 19:43 len 1  "o"
+19:9 -> 19:28 len 2  ".m"
+19:11 -> 19:46 len 19  "\n  return w })()}`\n"
+

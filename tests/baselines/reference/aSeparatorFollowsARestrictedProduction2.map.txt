@@ -1,0 +1,7 @@
+//// [aSeparatorFollowsARestrictedProduction2.tt] 5 mapping(s)
+1:1 -> 1:1 len 205  "declare const o: { m(x: unknown): unknown };\ndec"...
+9:3 -> 9:39 len 1  "v"
+9:8 -> 9:43 len 1  "o"
+9:9 -> 9:28 len 2  ".m"
+9:11 -> 9:46 len 3  "\n}\n"
+

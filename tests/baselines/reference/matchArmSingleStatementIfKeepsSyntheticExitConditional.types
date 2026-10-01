@@ -1,0 +1,28 @@
+=== matchArmSingleStatementIfKeepsSyntheticExitConditional.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const f = (v: V): number => match (v) {
+>f : const f: (v: V) => number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>v : (parameter) v: V
+A(n) => { if (n === 0) return 100; return n; },
+>n : const n: number
+>n : const n: number
+>n : const n: number
+

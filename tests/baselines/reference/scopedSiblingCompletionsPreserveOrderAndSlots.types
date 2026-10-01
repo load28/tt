@@ -1,0 +1,210 @@
+=== scopedSiblingCompletionsPreserveOrderAndSlots.tt ===
+variant State { Ready(value: number), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: number) => State
+>value : (property) value: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+type Item = {kind: "item"; run: (x: number) => number};
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+const trace: string[] = [];
+>trace : const trace: string[]
+function mark<T>(name: string, value: T): T { trace.push(name); return value; }
+>mark : function mark<T>(name: string, value: T): T
+>T : (type parameter) T in mark<T>(name: string, value: T): T
+>name : (parameter) name: string
+>value : (parameter) value: T
+>T : (type parameter) T in mark<T>(name: string, value: T): T
+>T : (type parameter) T in mark<T>(name: string, value: T): T
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>value : (parameter) value: T
+function pair(first: Item, second: Item): number { trace.push("call"); return first.run(1) + second.run(2); }
+>pair : function pair(first: Item, second: Item): number
+>first : (parameter) first: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>second : (parameter) second: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>first : (parameter) first: Item
+>run : (property) run: (x: number) => number
+>second : (parameter) second: Item
+>run : (property) run: (x: number) => number
+let shared = 10;
+>shared : let shared: number
+for (const state of [State.Ready(4), State.Empty]) {
+>state : const state: {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       readonly kind: "Empty";
+>   }
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Ready : (property) Ready: (value: number) => State
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+  trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+  shared = 10;
+>shared : let shared: number
+  const result = pair(
+>result : const result: number
+>pair : function pair(first: Item, second: Item): number
+    match (mark("subject1", state)) {
+>mark : function mark<{
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       readonly kind: "Empty";
+>   }>(name: string, value: {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       readonly kind: "Empty";
+>   }): {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       readonly kind: "Empty";
+>   }
+>state : const state: {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       readonly kind: "Empty";
+>   }
+      Ready(value) => (trace.push("arm1"), shared = value, {kind: "item" as const, run: (x: number) => x + shared}),
+>value : const value: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>shared : let shared: number
+>value : const value: number
+>kind : (property) kind: "item"
+>const : type const = "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>shared : let shared: number
+      Empty => ({kind: "item" as const, run: (x: number) => x}),
+>kind : (property) kind: "item"
+>const : type const = "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+    match (mark("subject2", shared > 5)) {
+>mark : function mark<boolean>(name: string, value: boolean): boolean
+>shared : let shared: number
+      true => (trace.push("arm2:big"), {kind: "item", run: x => x * shared}),
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>shared : let shared: number
+      false => (trace.push("arm2:small"), {kind: "item", run: x => x + shared}),
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>shared : let shared: number
+  console.log(result, trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>result : const result: number
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+function throwingSubject(): State { trace.push("boom"); throw new Error("subject"); }
+>throwingSubject : function throwingSubject(): State
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+  pair(
+>pair : function pair(first: Item, second: Item): number
+    match (State.Ready(1)) { Ready(value) => (trace.push("first"), {kind: "item" as const, run: (x: number) => x + value}), Empty => ({kind: "item" as const, run: (x: number) => x}) },
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Ready : (property) Ready: (value: number) => State
+>value : const value: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>kind : (property) kind: "item"
+>const : type const = "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+>kind : (property) kind: "item"
+>const : type const = "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+    match (throwingSubject()) { Ready(value) => ({kind: "item", run: x => x + value}), Empty => ({kind: "item", run: x => x}) },
+>throwingSubject : function throwingSubject(): State
+>value : const value: number
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+} catch { trace.push("caught"); }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+console.log(trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

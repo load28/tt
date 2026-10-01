@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[match-or-binding-mismatch]: let-else: or-pattern alternatives must bind the same names — `x` is bound in `A(...)` but not in `B(...)`
+ --> ./letElseOrAlternativesMustBindTheSameNames.tt:3:16
+  |
+3 |   const A(x) | B(y) = e else { return 0; };
+  |                ^
+
+
+==== ttc --check-types (exit 1) ====
+error[match-or-binding-mismatch]: let-else: or-pattern alternatives must bind the same names — `x` is bound in `A(...)` but not in `B(...)`
+ --> letElseOrAlternativesMustBindTheSameNames.tt:3:16
+  |
+3 |   const A(x) | B(y) = e else { return 0; };
+  |                ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseDivergenceSeesAnInlineIfLet4.tt → $DIR/out/letElseDivergenceSeesAnInlineIfLet4.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseDivergenceSeesAnInlineIfLet4.tt:3:19
+  |
+3 |   const Some(v) = find() else { if let Ok(value) = r { if let Ok(inner) = r { return inner; } else { return value; } } else { return 1; } };
+  |                   ^^^^
+error[ts2339]: Property 'inner' does not exist on type '{ kind: "Ok"; value: number; }'.
+ --> letElseDivergenceSeesAnInlineIfLet4.tt:3:66
+  |
+3 |   const Some(v) = find() else { if let Ok(value) = r { if let Ok(inner) = r { return inner; } else { return value; } } else { return 1; } };
+  |                                                                  ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseDivergenceSeesAnInlineIfLet4.ts(9,18): error TS2304: Cannot find name 'find'.
+letElseDivergenceSeesAnInlineIfLet4.ts(18,21): error TS2339: Property 'inner' does not exist on type '{ kind: "Ok"; value: number; }'.

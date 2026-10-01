@@ -1,0 +1,32 @@
+=== inlineBodiesInheritTheEnclosingFunctionsPlace1.tt ===
+variant E { A(x: number), B }
+>E : type E = {
+>       kind: "A";
+>       x: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (x: number) => E
+>x : (property) x: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function f(e: E): Result<number, string> {
+>f : function f(e: E): Result<number, string>
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>       x: number;
+>   } | {
+>       kind: "B";
+>   }
+>Result : type Result = /*unresolved*/ any
+  if let A(x) = e {
+>x : const x: number
+>e : (parameter) e: E
+    const n = try g(x);
+>n : const n: any
+>x : const x: number
+    return Result.Ok(n);
+>n : const n: any
+

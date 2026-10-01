@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[try-placement]: `try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation
+ --> ./tryPlacementReportsTheOwningReason3.tt:1:42
+  |
+1 | class C { static { const value = { item: try read() }; } }
+  |                                          ^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation
+ --> tryPlacementReportsTheOwningReason3.tt:1:42
+  |
+1 | class C { static { const value = { item: try read() }; } }
+  |                                          ^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

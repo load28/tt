@@ -1,0 +1,24 @@
+// @origin: tests/integration/cases_05.rs::run_val_program_behaves_exactly_like_the_typescript_it_erases_to
+// @run: runValProgramBehavesExactlyLikeTheTypescriptItErasesTo.tt
+
+val const config = { name: "tt", tags: ["dev"] };
+val let state = { count: 0 };
+
+function describe(val c: { name: string; tags: string[] }): string {
+  return `${c.name}:${c.tags.length}`;
+}
+
+function bump(s: { count: number }) {
+  s.count += 1;
+  return s;
+}
+
+state = { count: state.count + 1 };
+const mutable = { count: 0 };
+bump(mutable);
+
+console.log(describe(config));
+console.log(String(state.count));
+console.log(String(mutable.count));
+
+export {};

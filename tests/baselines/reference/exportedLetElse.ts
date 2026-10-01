@@ -45,6 +45,7 @@ export namespace Nested {
   }
   export var { value: inner } = $tt_t2;
 }
+\ No newline at end of file
 
 //// [main.ts]
 import { size, counter, Nested } from "./boxes.js";
@@ -58,3 +59,4 @@ if ($tt_t0.kind !== "Some") {
   throw new Error("none");
 }
 export const { value: label } = $tt_t0;
+\ No newline at end of file

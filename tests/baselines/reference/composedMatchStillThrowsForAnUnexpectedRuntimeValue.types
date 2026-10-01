@@ -1,0 +1,20 @@
+=== composedMatchStillThrowsForAnUnexpectedRuntimeValue.tt ===
+function choose(flag: boolean) {
+>choose : function choose(flag: boolean): number[]
+>flag : (parameter) flag: boolean
+  return [match (flag) { true => 1, false => 2 }];
+>flag : (parameter) flag: boolean
+  choose("invalid" as unknown as boolean);
+>choose : function choose(flag: boolean): number[]
+} catch (error) {
+>error : var error: unknown
+  console.log(error instanceof Error ? error.message : String(error));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>error : var error: unknown
+>Error : var Error: ErrorConstructor
+>error : var error: Error
+>message : (property) Error.message: string
+>String : var String: (value?: any) => string
+>error : var error: unknown
+

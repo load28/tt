@@ -1,0 +1,12 @@
+//// [runtimeLiteralMatchWithGuard.tt] 10 mapping(s)
+1:1 -> 1:1 len 53  "\nfunction classify(code: number, retry: boolean)"...
+3:3 -> 21:3 len 7  "return "
+3:17 -> 5:19 len 4  "code"
+4:5 -> 7:21 len 3  "500"
+4:12 -> 8:13 len 5  "retry"
+4:21 -> 9:20 len 10  "\"retrying\""
+5:5 -> 13:21 len 3  "500"
+5:12 -> 14:18 len 8  "\"failed\""
+6:10 -> 17:16 len 4  "\"ok\""
+7:4 -> 21:16 len 94  ";\n}\n\nconsole.log(classify(500, true), classify(5"...
+

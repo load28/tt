@@ -1,0 +1,299 @@
+=== runtimeAssignmentEvaluatesItsTargetBeforeAHoistedRightOperand.tt ===
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const log: string[] = [];
+>log : const log: string[]
+const ok = <T,>(value: T): R<T> => { log.push("rhs"); return { kind: "Ok", value }; };
+>ok : const ok: <T>(value: T) => R<T>
+>T : (type parameter) T in <T>(value: T): R<T>
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(value: T): R<T>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in <T>(value: T): R<T>
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+const done = <T,>(value: T): R<T> => ({ kind: "Ok", value });
+>done : const done: <T>(value: T) => R<T>
+>T : (type parameter) T in <T>(value: T): R<T>
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(value: T): R<T>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in <T>(value: T): R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+const err = (): R<number> => { log.push("rhs"); return { kind: "Err", error: "e" }; };
+>err : const err: () => R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+let n = 1;
+>n : let n: number
+let box = { v: 0, s: "a" };
+>box : let box: {
+>       v: number;
+>       s: string;
+>   }
+>v : (property) v: number
+>s : (property) s: string
+const first = box;
+>first : const first: {
+>       v: number;
+>       s: string;
+>   }
+>box : let box: {
+>       v: number;
+>       s: string;
+>   }
+const target = () => { log.push("target"); return box; };
+>target : const target: () => {
+>       v: number;
+>       s: string;
+>   }
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>box : let box: {
+>       v: number;
+>       s: string;
+>   }
+const key = (): "v" => { log.push("key"); return "v"; };
+>key : const key: () => "v"
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+const report = (label: string, result: R<unknown>) => {
+>report : const report: (label: string, result: R<unknown>) => void
+>label : (parameter) label: string
+>result : (parameter) result: R<unknown>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  console.log(label, JSON.stringify(result), n, first.v, first.s, log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>label : (parameter) label: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>result : (parameter) result: R<unknown>
+>n : let n: number
+>first : const first: {
+>       v: number;
+>       s: string;
+>   }
+>v : (property) v: number
+>first : const first: {
+>       v: number;
+>       s: string;
+>   }
+>s : (property) s: string
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+  n = 1; box = first; first.v = 0; first.s = "a"; log.length = 0;
+>n : let n: number
+>box : let box: {
+>       v: number;
+>       s: string;
+>   }
+>first : const first: {
+>       v: number;
+>       s: string;
+>   }
+>first : const first: {
+>       v: number;
+>       s: string;
+>   }
+>v : (property) v: number
+>first : const first: {
+>       v: number;
+>       s: string;
+>   }
+>s : (property) s: string
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+function compound(): R<number> { n += try (n = 100, ok(5)); return done(n); }
+>compound : function compound(): R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>n : let n: number
+>n : let n: number
+>ok : const ok: <number>(value: number) => R<number>
+>done : const done: <number>(value: number) => R<number>
+>n : let n: number
+function member(): R<number> { target().v = try ok(7); return done(box.v); }
+>member : function member(): R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>target : const target: () => {
+>       v: number;
+>       s: string;
+>   }
+>v : (property) v: number
+>ok : const ok: <number>(value: number) => R<number>
+>done : const done: <number>(value: number) => R<number>
+>box : let box: {
+>       v: number;
+>       s: string;
+>   }
+>v : (property) v: number
+function failed(): R<number> { target().v = try err(); return done(box.v); }
+>failed : function failed(): R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>target : const target: () => {
+>       v: number;
+>       s: string;
+>   }
+>v : (property) v: number
+>err : const err: () => R<number>
+>done : const done: <number>(value: number) => R<number>
+>box : let box: {
+>       v: number;
+>       s: string;
+>   }
+>v : (property) v: number
+function computed(): R<number> { target()[key()] += try (first.v = 50, ok(2)); return done(first.v); }
+>computed : function computed(): R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>target : const target: () => {
+>       v: number;
+>       s: string;
+>   }
+>key : const key: () => "v"
+>first : const first: {
+>       v: number;
+>       s: string;
+>   }
+>v : (property) v: number
+>ok : const ok: <number>(value: number) => R<number>
+>done : const done: <number>(value: number) => R<number>
+>first : const first: {
+>       v: number;
+>       s: string;
+>   }
+>v : (property) v: number
+function text(): R<string> { box.s += try (box.s = "q", ok("b")); return done(box.s); }
+>text : function text(): R<string>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>box : let box: {
+>       v: number;
+>       s: string;
+>   }
+>s : (property) s: string
+>box : let box: {
+>       v: number;
+>       s: string;
+>   }
+>s : (property) s: string
+>ok : const ok: <string>(value: string) => R<string>
+>done : const done: <string>(value: string) => R<string>
+>box : let box: {
+>       v: number;
+>       s: string;
+>   }
+>s : (property) s: string
+class Counter {
+>Counter : class Counter
+  add(): R<number> { this.#count *= try (this.#count = 10, ok(3)); return done(this.#count); }
+>add : (method) Counter.add(): R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>ok : const ok: <number>(value: number) => R<number>
+>done : const done: <number>(value: number) => R<number>
+report("compound", compound());
+>report : const report: (label: string, result: R<unknown>) => void
+>compound : function compound(): R<number>
+report("member", member());
+>report : const report: (label: string, result: R<unknown>) => void
+>member : function member(): R<number>
+report("failed", failed());
+>report : const report: (label: string, result: R<unknown>) => void
+>failed : function failed(): R<number>
+report("computed", computed());
+>report : const report: (label: string, result: R<unknown>) => void
+>computed : function computed(): R<number>
+report("text", text());
+>report : const report: (label: string, result: R<unknown>) => void
+>text : function text(): R<string>
+report("private", new Counter().add());
+>report : const report: (label: string, result: R<unknown>) => void
+>Counter : constructor Counter(): Counter
+>add : (method) Counter.add(): R<number>
+let m = 1;
+>m : let m: number
+m += match (m) { 1 => { m = 100; return 5; }, _ => 0 };
+>m : let m: number
+>m : let m: number
+>m : let m: number
+console.log("match", m);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>m : let m: number
+

@@ -1,0 +1,6 @@
+=== valParameterPositionsBeyondPlainIdentifiers3.tt ===
+} catch (val error: any) {
+>error : var error: any
+  error.code = 1;
+>error : var error: any
+

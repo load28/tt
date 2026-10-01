@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_04.rs::let_else_non_diverging_else_ending_in_a_brace_is_still_an_error
+function f(): number {
+  const Some(v) = find() else { const o = { n: 1 }; };
+  return v;
+}

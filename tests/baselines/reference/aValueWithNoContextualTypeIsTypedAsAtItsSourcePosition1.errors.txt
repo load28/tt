@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aValueWithNoContextualTypeIsTypedAsAtItsSourcePosition1.tt → $DIR/out/aValueWithNoContextualTypeIsTypedAsAtItsSourcePosition1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2339]: Property 'zzz' does not exist on type '{ k: number; m(): ...; }'.
+ --> aValueWithNoContextualTypeIsTypedAsAtItsSourcePosition1.tt:4:7
+  |
+4 | b.m().zzz;
+  |       ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aValueWithNoContextualTypeIsTypedAsAtItsSourcePosition1.ts(20,7): error TS2339: Property 'zzz' does not exist on type '{ k: number; m(): ...; }'.

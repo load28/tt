@@ -1,0 +1,10 @@
+=== valParameterModifierIsErasedFromTheOutput3.tt ===
+function pick(a: A, val b: B, val { c }: C) {}
+>pick : function pick(a: A, b: B, { c }: C): void
+>a : (parameter) a: A
+>A : type A = /*unresolved*/ any
+>b : (parameter) b: B
+>B : type B = /*unresolved*/ any
+>c : (parameter) c: C
+>C : type C = /*unresolved*/ any
+

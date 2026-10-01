@@ -1,0 +1,7 @@
+//// [orPatternBindingMismatchIsError5.tt] 5 mapping(s)
+1:1 -> 16:1 len 10  "const r = "
+1:18 -> 3:17 len 1  "x"
+1:38 -> 7:18 len 1  "v"
+1:46 -> 11:18 len 1  "0"
+1:49 -> 16:19 len 1  ";"
+

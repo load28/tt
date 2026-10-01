@@ -1,0 +1,11 @@
+//// [aSharedTagNameDoesNotDragAnUnrelatedUnionIntoAVariant.tt] 9 mapping(s)
+1:32 -> 20:31 len 6  "number"
+1:32 -> 23:20 len 6  "number"
+1:48 -> 25:3 len 61  "\ntype Msg = { kind: \"Empty\" } | { kind: \"Full\"; "...
+3:1 -> 45:1 len 10  "const a = "
+3:18 -> 29:17 len 1  "m"
+3:32 -> 32:18 len 1  "0"
+3:40 -> 36:15 len 1  "n"
+3:46 -> 37:18 len 1  "n"
+3:49 -> 45:19 len 2  ";\n"
+

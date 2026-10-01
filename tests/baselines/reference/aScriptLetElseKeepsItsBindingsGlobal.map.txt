@@ -1,0 +1,15 @@
+//// [aScriptLetElseKeepsItsBindingsGlobal.tt] 13 mapping(s)
+1:1 -> 1:1 len 69  "declare const o: { kind: \"Some\"; value: number }"...
+2:12 -> 6:9 len 5  "value"
+2:21 -> 2:22 len 1  "o"
+2:30 -> 4:3 len 18  "throw new Error();"
+2:51 -> 6:32 len 1  "\n"
+3:10 -> 12:9 len 5  "value"
+3:17 -> 12:16 len 5  "other"
+3:26 -> 8:18 len 1  "o"
+3:35 -> 10:5 len 18  "throw new Error();"
+3:56 -> 13:2 len 1  "\n"
+4:14 -> 15:18 len 1  "o"
+4:23 -> 17:5 len 18  "throw new Error();"
+4:44 -> 19:2 len 1  "\n"
+

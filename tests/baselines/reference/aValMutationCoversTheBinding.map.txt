@@ -1,0 +1,4 @@
+//// [aValMutationCoversTheBinding.tt] 2 mapping(s)
+1:1 -> 1:1 len 17  "function f() {\n  "
+2:7 -> 2:3 len 37  "const cfg = { a: 1 };\n  cfg.a = 2;\n}\n"
+

@@ -1,0 +1,8 @@
+=== statementBodiedResultRequiresSuccessOnEveryReachablePath.tt ===
+const value = result { const item = try read(); if (item) return item; log(item); };
+>value : const value: any
+>item : const item: any
+>item : const item: any
+>item : const item: any
+>item : const item: any
+

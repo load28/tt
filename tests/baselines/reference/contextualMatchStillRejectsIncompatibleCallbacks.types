@@ -1,0 +1,27 @@
+=== contextualMatchStillRejectsIncompatibleCallbacks.tt ===
+declare const flag: boolean;
+>flag : const flag: boolean
+declare function consume(item: {run: (x: number) => number}): void;
+>consume : function consume(item: {
+>       run: (x: number) => number;
+>   }): void
+>item : (parameter) item: {
+>       run: (x: number) => number;
+>   }
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+consume(match (flag) {
+>consume : function consume(item: {
+>       run: (x: number) => number;
+>   }): void
+>flag : const flag: boolean
+  true => ({run: (x: string) => x.length}),
+>run : (property) run: (x: number) => number
+>x : (parameter) x: string
+>x : (parameter) x: string
+>length : (property) String.length: number
+  false => ({run: x => x + 1}),
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+

@@ -1,0 +1,11 @@
+//// [aGenericPayloadIsTypedByThePatternsWrittenInIt.tt] 9 mapping(s)
+1:1 -> 40:1 len 10  "const n = "
+1:18 -> 21:17 len 1  "r"
+2:18 -> 24:15 len 5  "value"
+2:25 -> 24:22 len 1  "v"
+2:32 -> 25:18 len 1  "v"
+3:24 -> 29:18 len 1  "0"
+4:7 -> 33:15 len 5  "error"
+4:17 -> 34:18 len 2  "-1"
+5:2 -> 40:19 len 2  ";\n"
+

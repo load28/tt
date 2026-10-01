@@ -1,0 +1,100 @@
+=== runGuardRegionsPreserveAllValuesAndShortCircuitEffects.tt ===
+const events: number[] = [];
+>events : const events: number[]
+function mark(n: number) { events.push(n); return n; }
+>mark : function mark(n: number): number
+>n : (parameter) n: number
+>events : const events: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+function both(a: boolean, b: boolean) {
+>both : function both(a: boolean, b: boolean): boolean
+>a : (parameter) a: boolean
+>b : (parameter) b: boolean
+    1 if (match (mark(1)) { 1 => { const value = a; return value; }, _ => false }) &&
+>mark : function mark(n: number): number
+>value : const value: boolean
+>a : (parameter) a: boolean
+>value : const value: boolean
+         (match (mark(2)) { 2 => { const value = b; return value; }, _ => false }) => true,
+>mark : function mark(n: number): number
+>value : const value: boolean
+>b : (parameter) b: boolean
+>value : const value: boolean
+function either(a: boolean, b: boolean) {
+>either : function either(a: boolean, b: boolean): boolean
+>a : (parameter) a: boolean
+>b : (parameter) b: boolean
+    1 if (match (mark(3)) { 3 => { const value = a; return value; }, _ => false }) ||
+>mark : function mark(n: number): number
+>value : const value: boolean
+>a : (parameter) a: boolean
+>value : const value: boolean
+         (match (mark(4)) { 4 => { const value = b; return value; }, _ => false }) => true,
+>mark : function mark(n: number): number
+>value : const value: boolean
+>b : (parameter) b: boolean
+>value : const value: boolean
+function choose(a: boolean) {
+>choose : function choose(a: boolean): boolean
+>a : (parameter) a: boolean
+    1 if a ? (match (mark(5)) { 5 => { const value = true; return value; }, _ => false }) :
+>a : (parameter) a: boolean
+>mark : function mark(n: number): number
+>value : const value: true
+>value : const value: true
+             (match (mark(6)) { 6 => { const value = false; return value; }, _ => false }) => true,
+>mark : function mark(n: number): number
+>value : const value: false
+>value : const value: false
+console.log(both(false, true), events.splice(0).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>both : function both(a: boolean, b: boolean): boolean
+>events : const events: number[]
+>splice : (method) Array<number>.splice(start: number, deleteCount?: number): number[]
+>join : (method) Array<number>.join(separator?: string): string
+console.log(both(true, false), events.splice(0).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>both : function both(a: boolean, b: boolean): boolean
+>events : const events: number[]
+>splice : (method) Array<number>.splice(start: number, deleteCount?: number): number[]
+>join : (method) Array<number>.join(separator?: string): string
+console.log(both(true, true), events.splice(0).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>both : function both(a: boolean, b: boolean): boolean
+>events : const events: number[]
+>splice : (method) Array<number>.splice(start: number, deleteCount?: number): number[]
+>join : (method) Array<number>.join(separator?: string): string
+console.log(either(true, false), events.splice(0).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>either : function either(a: boolean, b: boolean): boolean
+>events : const events: number[]
+>splice : (method) Array<number>.splice(start: number, deleteCount?: number): number[]
+>join : (method) Array<number>.join(separator?: string): string
+console.log(either(false, true), events.splice(0).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>either : function either(a: boolean, b: boolean): boolean
+>events : const events: number[]
+>splice : (method) Array<number>.splice(start: number, deleteCount?: number): number[]
+>join : (method) Array<number>.join(separator?: string): string
+console.log(choose(true), events.splice(0).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>choose : function choose(a: boolean): boolean
+>events : const events: number[]
+>splice : (method) Array<number>.splice(start: number, deleteCount?: number): number[]
+>join : (method) Array<number>.join(separator?: string): string
+console.log(choose(false), events.splice(0).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>choose : function choose(a: boolean): boolean
+>events : const events: number[]
+>splice : (method) Array<number>.splice(start: number, deleteCount?: number): number[]
+>join : (method) Array<number>.join(separator?: string): string
+

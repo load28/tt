@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::guarded_arms_do_not_satisfy_exhaustiveness
+const f = (o: Option<number>) => match (o) { Some(value) if value > 0 => value, None => 0 };

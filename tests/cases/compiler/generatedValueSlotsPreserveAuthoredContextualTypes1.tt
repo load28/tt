@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_01.rs::generated_value_slots_preserve_authored_contextual_types
+type TResult<T, E> = { kind: "Ok"; value: T } | { kind: "Err"; error: E };
+declare const g: () => TResult<number, string>;
+const f = (): TResult<readonly number[], string> => result {
+const n = try g(); if (n === 0) return []; return [n];
+};

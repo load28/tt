@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_11.rs::a_pipeline_head_starts_after_a_postfix_or_restricted_boundary
+declare const o: number;
+let q = 1
+q++
+o |> String;

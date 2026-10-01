@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[malformed-match]: tt `match` could not be parsed
+ --> ./orPatternDoublePipeIsNotTtSyntax.tt:1:11
+  |
+1 | const r = match (x) { A || B => 1 };
+  |           ^^^^^
+  |
+  = help: write `match (<scrutinee>) { <pattern> => <body> }`
+
+
+==== ttc --check-types (exit 1) ====
+error[malformed-match]: tt `match` could not be parsed
+ --> orPatternDoublePipeIsNotTtSyntax.tt:1:11
+  |
+1 | const r = match (x) { A || B => 1 };
+  |           ^^^^^
+  |
+  = help: write `match (<scrutinee>) { <pattern> => <body> }`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,21 @@
+//// [aTypeTypescriptCannotWriteLeavesItsStorageUnannotated.tt] 19 mapping(s)
+1:1 -> 1:1 len 150  "\nclass Base {}\nfunction Tagged<B extends new (.."...
+5:3 -> 19:3 len 10  "const M = "
+5:20 -> 7:19 len 1  "n"
+5:25 -> 9:12 len 1  "1"
+5:30 -> 10:18 len 12  "Tagged(Base)"
+5:49 -> 14:18 len 12  "Tagged(Base)"
+5:63 -> 19:19 len 4  ";\n  "
+6:3 -> 34:3 len 10  "const o = "
+6:20 -> 22:19 len 1  "n"
+6:25 -> 24:12 len 1  "1"
+6:30 -> 25:18 len 23  "new (class { x = 1 })()"
+6:60 -> 29:18 len 23  "new (class { x = 2 })()"
+6:85 -> 34:19 len 4  ";\n  "
+7:3 -> 49:3 len 10  "const a = "
+7:20 -> 37:19 len 1  "n"
+7:25 -> 39:12 len 1  "1"
+7:30 -> 40:18 len 10  "[class {}]"
+7:47 -> 44:18 len 20  "[class {}, class {}]"
+7:69 -> 49:19 len 104  ";\n  return [new M().tag, o.x, a.length];\n}\nconso"...
+

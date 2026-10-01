@@ -1,0 +1,13 @@
+=== aTypeArgumentListDoesNotDeclareAValBinding3.tt ===
+val const p = 1, q = { n: 0 };
+>p : const p: 1
+>q : const q: {
+>       n: number;
+>   }
+>n : (property) n: number
+q.n = 2;
+>q : const q: {
+>       n: number;
+>   }
+>n : (property) n: number
+

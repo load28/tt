@@ -1,2 +1,2 @@
 componentBody(2) => "<p>2</p>" | read 2; then 2
-componentBody(-1) => "<p>/"none/"</p>" | read undefined
+componentBody(-1) => "<p>\"none\"</p>" | read undefined

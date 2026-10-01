@@ -1,0 +1,6 @@
+=== aHandWrittenPayloadFieldIsNotAMisspelling.tt ===
+const n = match (o) { Some(v) => v, None => 0 };
+>n : const n: any
+>v : const v: any
+>v : const v: any
+

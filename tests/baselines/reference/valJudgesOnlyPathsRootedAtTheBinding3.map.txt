@@ -1,0 +1,3 @@
+//// [valJudgesOnlyPathsRootedAtTheBinding3.tt] 1 mapping(s)
+1:5 -> 1:1 len 97  "const o = { x: 1 };\nconst q = { o: { x: 1 } };\nq"...
+

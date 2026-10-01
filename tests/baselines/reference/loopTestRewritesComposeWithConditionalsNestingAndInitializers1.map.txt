@@ -1,0 +1,10 @@
+//// [loopTestRewritesComposeWithConditionalsNestingAndInitializers1.tt] 8 mapping(s)
+1:1 -> 1:1 len 63  "declare const flag: boolean; declare function ne"...
+2:8 -> 5:16 len 4  "flag"
+2:23 -> 8:21 len 6  "next()"
+2:36 -> 10:30 len 5  "Error"
+2:45 -> 11:20 len 5  "false"
+2:57 -> 14:18 len 4  "true"
+2:65 -> 23:25 len 11  "{ work(); }"
+2:76 -> 23:37 len 1  "\n"
+

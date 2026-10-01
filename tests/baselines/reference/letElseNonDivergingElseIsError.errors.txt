@@ -1,0 +1,31 @@
+==== ttc --out-dir (exit 1) ====
+error[let-else-not-diverging]: let-else: every path through the `else` block must diverge
+ --> ./letElseNonDivergingElseIsError.tt:2:26
+  |
+2 |   const Some(v) = find() else { log(); };
+  |                          ^^^^
+  |
+  = help: end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` counts when both branches do)
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseNonDivergingElseIsError.tt:2:19
+  |
+2 |   const Some(v) = find() else { log(); };
+  |                   ^^^^
+error[let-else-not-diverging]: let-else: every path through the `else` block must diverge
+ --> letElseNonDivergingElseIsError.tt:2:26
+  |
+2 |   const Some(v) = find() else { log(); };
+  |                          ^^^^
+  |
+  = help: end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` counts when both branches do)
+error[ts2304]: Cannot find name 'log'.
+ --> letElseNonDivergingElseIsError.tt:2:33
+  |
+2 |   const Some(v) = find() else { log(); };
+  |                                 ^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

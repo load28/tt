@@ -1,0 +1,11 @@
+=== genericLookAlikeWithAdjacentOperatorsPassesThrough.tt ===
+declare const result: number;
+>result : const result: number
+function f() {
+>f : function f(): void
+  result
+>result : const result: number
+  { let x: Foo<-1>; }
+>x : let x: Foo<-1>
+>Foo : type Foo = /*unresolved*/ any
+

@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_04.rs::invalid_typescript_inside_a_claimed_construct_is_a_located_error
+const r = result {
+  const a = try f();
+  const b = ;
+  return a;
+};

@@ -1,0 +1,5 @@
+//// [valArgumentMayOnlyReachAValParameter1.tt] 3 mapping(s)
+1:1 -> 1:1 len 14  "function read("
+1:19 -> 1:15 len 100  "user: User) { log(user.name); }\nfunction update("...
+3:22 -> 3:18 len 30  "user: User) {\n  read(user);\n}\n"
+

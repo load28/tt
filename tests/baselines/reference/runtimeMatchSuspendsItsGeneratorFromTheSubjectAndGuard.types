@@ -1,0 +1,289 @@
+=== runtimeMatchSuspendsItsGeneratorFromTheSubjectAndGuard.tt ===
+variant S { A(n: number), B }
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => S
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function* subject(): Generator<string, number, S> {
+>subject : function subject(): Generator<string, number, S>
+>Generator : interface Generator<T = unknown, TReturn = any, TNext = any>
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const r = match (yield "subject") { A(n) => n, B => 0 };
+>r : const r: number
+>n : const n: number
+>n : const n: number
+  return r;
+>r : const r: number
+function* guard(s: S): Generator<number, string, number> {
+>guard : function guard(s: S): Generator<number, string, number>
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>Generator : interface Generator<T = unknown, TReturn = any, TNext = any>
+  const r = match (s) { A(n) if (yield n) === 1 => `one ${n}`, _ => "other" };
+>r : const r: string
+>s : (parameter) s: S
+>n : const n: number
+>n : const n: number
+>n : const n: number
+  return r;
+>r : const r: string
+function* cast(): Generator<number, number, unknown> {
+>cast : function cast(): Generator<number, number, unknown>
+>Generator : interface Generator<T = unknown, TReturn = any, TNext = any>
+  const r = match ((yield 1) as S) {
+>r : const r: number
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+    A(n) => match ((yield n) as S) { A(n: m) => n + m, B => n },
+>n : const n: number
+>n : const n: number
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>n : (property) n: number
+>m : const m: number
+>n : const n: number
+>m : const m: number
+>n : const n: number
+  return r;
+>r : const r: number
+class Base { start() { return 7; } }
+>Base : class Base
+>start : (method) Base.start(): number
+class Derived extends Base {
+>Derived : class Derived
+>Base : class Base
+  scale = 10;
+>scale : (property) Derived.scale: number
+  *run(): Generator<number, number, S> {
+>run : (method) Derived.run(): Generator<number, number, S>
+>Generator : interface Generator<T = unknown, TReturn = any, TNext = any>
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+    return match (yield super.start()) { A(n) => n * this.scale, B => -1 };
+>start : (method) Base.start(): number
+>n : const n: number
+>n : const n: number
+>scale : (property) Derived.scale: number
+async function* later(): AsyncGenerator<number, number, Promise<S>> {
+>later : function later(): AsyncGenerator<number, number, Promise<S>>
+>AsyncGenerator : interface AsyncGenerator<T = unknown, TReturn = any, TNext = any>
+>Promise : interface Promise<T>
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const r = match (await (yield 1)) { A(n) => n, B => 0 };
+>r : const r: number
+>n : const n: number
+>n : const n: number
+  return r;
+>r : const r: number
+const drive = <Y, R, N>(g: Generator<Y, R, N>, sent: N[]) => {
+>drive : const drive: <Y, R, N>(g: Generator<Y, R, N>, sent: N[]) => string
+>Y : (type parameter) Y in <Y, R, N>(g: Generator<Y, R, N>, sent: N[]): string
+>R : (type parameter) R in <Y, R, N>(g: Generator<Y, R, N>, sent: N[]): string
+>N : (type parameter) N in <Y, R, N>(g: Generator<Y, R, N>, sent: N[]): string
+>g : (parameter) g: Generator<Y, R, N>
+>Generator : interface Generator<T = unknown, TReturn = any, TNext = any>
+>Y : (type parameter) Y in <Y, R, N>(g: Generator<Y, R, N>, sent: N[]): string
+>R : (type parameter) R in <Y, R, N>(g: Generator<Y, R, N>, sent: N[]): string
+>N : (type parameter) N in <Y, R, N>(g: Generator<Y, R, N>, sent: N[]): string
+>sent : (parameter) sent: N[]
+>N : (type parameter) N in <Y, R, N>(g: Generator<Y, R, N>, sent: N[]): string
+  const seen: unknown[] = [JSON.stringify(g.next().value)];
+>seen : const seen: unknown[]
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>g : (parameter) g: Generator<Y, R, N>
+>next : (method) Generator<Y, R, N>.next(...[value]: [] | [N]): IteratorResult<Y, R>
+>value : (property) value: R | Y
+  for (const value of sent) seen.push(JSON.stringify(g.next(value).value));
+>value : const value: N
+>sent : (parameter) sent: N[]
+>seen : const seen: unknown[]
+>push : (method) Array<unknown>.push(...items: unknown[]): number
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>g : (parameter) g: Generator<Y, R, N>
+>next : (method) Generator<Y, R, N>.next(...[value]: [] | [N]): IteratorResult<Y, R>
+>value : const value: N
+>value : (property) value: R | Y
+  return seen.join(" ");
+>seen : const seen: unknown[]
+>join : (method) Array<unknown>.join(separator?: string): string
+console.log(drive(subject(), [S.A(4)]), drive(subject(), [S.B]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>drive : const drive: <string, number, S>(g: Generator<string, number, S>, sent: S[]) => string
+>subject : function subject(): Generator<string, number, S>
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>drive : const drive: <string, number, S>(g: Generator<string, number, S>, sent: S[]) => string
+>subject : function subject(): Generator<string, number, S>
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+console.log(drive(guard(S.A(3)), [1]), drive(guard(S.A(3)), [2]), drive(guard(S.B), []));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>drive : const drive: <number, string, number>(g: Generator<number, string, number>, sent: number[]) => string
+>guard : function guard(s: S): Generator<number, string, number>
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>drive : const drive: <number, string, number>(g: Generator<number, string, number>, sent: number[]) => string
+>guard : function guard(s: S): Generator<number, string, number>
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>drive : const drive: <number, string, number>(g: Generator<number, string, number>, sent: number[]) => string
+>guard : function guard(s: S): Generator<number, string, number>
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+console.log(drive(cast(), [S.A(2), S.A(5)]), drive(cast(), [S.A(2), S.B]), drive(cast(), [S.B]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>drive : const drive: <number, number, unknown>(g: Generator<number, number, unknown>, sent: unknown[]) => string
+>cast : function cast(): Generator<number, number, unknown>
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>drive : const drive: <number, number, unknown>(g: Generator<number, number, unknown>, sent: unknown[]) => string
+>cast : function cast(): Generator<number, number, unknown>
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>drive : const drive: <number, number, unknown>(g: Generator<number, number, unknown>, sent: unknown[]) => string
+>cast : function cast(): Generator<number, number, unknown>
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+console.log(drive(new Derived().run(), [S.A(3)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>drive : const drive: <number, number, S>(g: Generator<number, number, S>, sent: S[]) => string
+>Derived : constructor Derived(): Derived
+>run : (method) Derived.run(): Generator<number, number, S>
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+const iterator = later();
+>iterator : const iterator: AsyncGenerator<number, number, Promise<S>>
+>later : function later(): AsyncGenerator<number, number, Promise<S>>
+iterator.next().then((first) =>
+>iterator : const iterator: AsyncGenerator<number, number, Promise<S>>
+>next : (method) AsyncGenerator<number, number, Promise<S>>.next(...[value]: [] | [Promise<S>]): Promise<IteratorResult<number, number>>
+>then : (method) Promise<IteratorResult<number, number>>.then<void, never>(onfulfilled?: ((value: IteratorResult<number, number>) => void | PromiseLike<void>) | null | undefined, onrejected?: ((reason: any) => PromiseLike<never>) | null | undefined): Promise<void>
+>first : (parameter) first: IteratorResult<number, number>
+  iterator.next(Promise.resolve(S.A(9))).then((last) => console.log(first.value, last.value)),
+>iterator : const iterator: AsyncGenerator<number, number, Promise<S>>
+>next : (method) AsyncGenerator<number, number, Promise<S>>.next(...[value]: [] | [Promise<S>]): Promise<IteratorResult<number, number>>
+>Promise : var Promise: PromiseConstructor
+>resolve : (method) PromiseConstructor.resolve<S>(value: S): Promise<S>
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>then : (method) Promise<IteratorResult<number, number>>.then<void, never>(onfulfilled?: ((value: IteratorResult<number, number>) => void | PromiseLike<void>) | null | undefined, onrejected?: ((reason: any) => PromiseLike<never>) | null | undefined): Promise<void>
+>last : (parameter) last: IteratorResult<number, number>
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>first : (parameter) first: IteratorResult<number, number>
+>value : (property) value: number
+>last : (parameter) last: IteratorResult<number, number>
+>value : (property) value: number
+

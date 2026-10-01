@@ -1,0 +1,6 @@
+=== literalAndTagPatternsCannotBeMixed.tt ===
+const v = match (x) { Some(v) => v, "none" => 0 };
+>v : const v: any
+>v : const v: any
+>v : const v: any
+

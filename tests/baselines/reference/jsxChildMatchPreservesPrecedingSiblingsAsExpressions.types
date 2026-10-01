@@ -1,0 +1,28 @@
+=== jsxChildMatchPreservesPrecedingSiblingsAsExpressions.ttx ===
+variant Maybe { Some(value: string), None }
+>Maybe : type Maybe = {
+>       kind: "Some";
+>       value: string;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: string) => Maybe
+>value : (property) value: string
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+declare const value: Maybe;
+>value : const value: Maybe
+>Maybe : type Maybe = {
+>       kind: "Some";
+>       value: string;
+>   } | {
+>       kind: "None";
+>   }
+const view = <main><h1>title</h1><form>form</form>{match (value) {
+>view : const view: any
+>value : const value: Maybe
+  Some(value) => <p>{value}</p>, None => null,
+>value : const value: string
+>value : const value: string
+

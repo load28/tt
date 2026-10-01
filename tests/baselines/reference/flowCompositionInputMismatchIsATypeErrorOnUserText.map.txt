@@ -1,0 +1,6 @@
+//// [flowCompositionInputMismatchIsATypeErrorOnUserText.tt] 4 mapping(s)
+1:1 -> 2:1 len 49  "const parse = (s: string) => s.length;\nconst f ="...
+2:19 -> 3:18 len 5  "parse"
+2:28 -> 3:25 len 22  "((n: number) => n + 1)"
+2:50 -> 3:48 len 30  ";\nconst v = f(3);\n\nexport {};\n"
+

@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_04.rs::computed_and_non_module_import_lookalikes_remain_unchanged
+const load = object?.import('./feature.tt');

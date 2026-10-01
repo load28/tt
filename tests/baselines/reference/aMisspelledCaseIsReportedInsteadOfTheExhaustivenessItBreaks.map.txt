@@ -1,0 +1,11 @@
+//// [aMisspelledCaseIsReportedInsteadOfTheExhaustivenessItBreaks.tt] 9 mapping(s)
+1:32 -> 20:31 len 6  "number"
+1:32 -> 23:20 len 6  "number"
+1:48 -> 25:3 len 1  "\n"
+2:1 -> 44:1 len 10  "const a = "
+2:18 -> 28:17 len 1  "s"
+2:30 -> 31:15 len 6  "radius"
+2:41 -> 32:18 len 6  "radius"
+2:58 -> 36:18 len 1  "0"
+2:61 -> 44:19 len 2  ";\n"
+

@@ -1,0 +1,14 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./matchOnUnknownTagsIsNotChecked.tt → $DIR/out/matchOnUnknownTagsIsNotChecked.ts
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match is not exhaustive: missing "key"
+ --> matchOnUnknownTagsIsNotChecked.tt:3:28
+  |
+3 | const f = (e: AppEvent) => match (e) {
+  |                            ^^^^^^^^^
+  |
+  = help: add the missing arms: `key => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,148 @@
+=== aBlockArmYieldsTheSameValueWhetherOrNotItCanFallOut.tt ===
+variant E { A(v: number), B }
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (v: number) => E
+>v : (property) v: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const run = (e: E): unknown => match (e) {
+>run : const run: (e: E) => unknown
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+>e : (parameter) e: E
+A(v) => {
+>v : const v: number
+if (v > 0) { return "positive"; }
+>v : const v: number
+throw new Error("not positive");
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+const maybe = (e: E): unknown => match (e) {
+>maybe : const maybe: (e: E) => unknown
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+>e : (parameter) e: E
+A(v) => {
+>v : const v: number
+if (v > 0) { return "positive"; }
+>v : const v: number
+const never = (e: E): unknown => match (e) {
+>never : const never: (e: E) => unknown
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+>e : (parameter) e: E
+A(v) => {
+>v : const v: number
+void v;
+>v : const v: number
+let threw = "no";
+>threw : let threw: string
+try { run(E.A(-1)); } catch { threw = "yes"; }
+>run : const run: (e: E) => unknown
+>E : const E: {
+>       A: (v: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (v: number) => E
+>threw : let threw: string
+console.log([
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+run(E.A(1)),
+>run : const run: (e: E) => unknown
+>E : const E: {
+>       A: (v: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (v: number) => E
+threw,
+>threw : let threw: string
+run(E.B),
+>run : const run: (e: E) => unknown
+>E : const E: {
+>       A: (v: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+maybe(E.A(1)),
+>maybe : const maybe: (e: E) => unknown
+>E : const E: {
+>       A: (v: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (v: number) => E
+String(maybe(E.A(-1))),
+>String : var String: (value?: any) => string
+>maybe : const maybe: (e: E) => unknown
+>E : const E: {
+>       A: (v: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (v: number) => E
+maybe(E.B),
+>maybe : const maybe: (e: E) => unknown
+>E : const E: {
+>       A: (v: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+String(never(E.A(1))),
+>String : var String: (value?: any) => string
+>never : const never: (e: E) => unknown
+>E : const E: {
+>       A: (v: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (v: number) => E
+never(E.B),
+>never : const never: (e: E) => unknown
+>E : const E: {
+>       A: (v: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+].join("|"));
+>join : (method) Array<unknown>.join(separator?: string): string
+

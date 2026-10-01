@@ -1,0 +1,11 @@
+// @origin: tests/compile/cases_04.rs::rewrite_covers_all_static_import_forms
+
+import def from "./a.tt";
+import def2, { named as alias } from "./b.tt";
+import * as ns from "./c.tt";
+import type { T } from "./d.tt";
+import "./side.tt";
+export { x, y as z } from "./e.tt";
+export * from "./f.tt";
+export * as g from "./g.tt";
+export type { U } from "./h.tt";

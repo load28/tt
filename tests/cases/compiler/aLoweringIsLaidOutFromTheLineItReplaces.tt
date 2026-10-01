@@ -1,0 +1,10 @@
+// @origin: tests/compile/cases_05.rs::a_lowering_is_laid_out_from_the_line_it_replaces
+variant E { A(v: number), B }
+declare const e: E;
+function f(): number {
+  if (true) {
+    const r = match (e) { A(v) => v, B => 0 };
+    return r;
+  }
+  return 0;
+}

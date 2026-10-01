@@ -1,0 +1,40 @@
+=== anOperatorLineAfterABlockBodiedArrowFunctionIsItsOwnStatement.tt ===
+const log: string[] = []
+>log : const log: string[]
+const f = () => {}
+>f : const f: () => void
+/x/g.exec("x") |> String |> log.push
+>exec : (method) RegExp.exec(string: string): RegExpExecArray | null
+>String : var String: StringConstructor
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+const g = async () => {}
+>g : const g: () => Promise<void>
+/y/.test("y") |> String |> log.push
+>test : (method) RegExp.test(string: string): boolean
+>String : var String: StringConstructor
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+const h = (): void => {}
+>h : const h: () => void
+-1 |> String |> log.push
+>String : var String: StringConstructor
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+const k = () => {}
+>k : const k: () => void
+(2) |> String |> log.push
+>String : var String: (value?: any) => string
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+f(); g(); h(); k()
+>f : const f: () => void
+>g : const g: () => Promise<void>
+>h : const h: () => void
+>k : const k: () => void
+console.log(log.join(","))
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

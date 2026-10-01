@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_01.rs::loop_test_rewrites_compose_with_conditionals_nesting_and_initializers
+declare function a(): number; declare function b(): number;
+while (match (a()) { 1 => true, _ => false }) { while (match (b()) { 2 => true, _ => false }) { work(); } }

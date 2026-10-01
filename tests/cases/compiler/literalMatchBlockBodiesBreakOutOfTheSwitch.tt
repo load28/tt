@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::literal_match_block_bodies_break_out_of_the_switch
+const v = match (s) { "a" => { return 1; }, _ => 0 };

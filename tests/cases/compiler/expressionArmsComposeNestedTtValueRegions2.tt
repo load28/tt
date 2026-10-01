@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_01.rs::expression_arms_compose_nested_tt_value_regions
+variant V { A(n: number), B } variant R { Ok(value: number), Err(error: string) }
+declare const v: V; declare const g: () => R; declare const unwrap: (r: R) => number;
+const n = match (v) { A(n) => unwrap(result { const x = try g(); return n + x; }), B => -1 };

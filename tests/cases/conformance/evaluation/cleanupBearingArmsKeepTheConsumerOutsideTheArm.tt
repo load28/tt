@@ -1,0 +1,37 @@
+// @origin: tests/integration/contextual.rs::cleanup_bearing_arms_keep_the_consumer_outside_the_arm
+// @run: cleanupBearingArmsKeepTheConsumerOutsideTheArm.tt
+
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function consume(item: Item): number { trace.push("call"); return item.run(1); }
+const finalized = consume(match (State.Ready(3)) {
+  Ready(value) => {
+    try {
+      trace.push("arm");
+      return {kind: "item" as const, run: (x: number) => x + value};
+    } finally {
+      trace.push("finally");
+    }
+  },
+  Empty => ({kind: "item" as const, run: (x: number) => x}),
+});
+console.log(finalized, trace.join(","));
+trace.length = 0;
+function throwingConsumer(item: Item): number { trace.push("throwing"); throw new Error("consumer"); }
+try {
+  throwingConsumer(match (State.Ready(2)) {
+    Ready(value) => {
+      try {
+        return {kind: "item" as const, run: (x: number) => x + value};
+      } catch {
+        trace.push("handler");
+        return {kind: "item" as const, run: (x: number) => x};
+      }
+    },
+    Empty => ({kind: "item" as const, run: (x: number) => x}),
+  });
+} catch { trace.push("caught outside"); }
+console.log(trace.join(","));
+
+export {};

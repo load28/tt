@@ -1,0 +1,8 @@
+=== letElseDivergenceStillSeesBlockStatements1.tt ===
+function f(): number {
+>f : function f(): number
+  const Some(v) = find() else { if (c) { log("x"); } return 0; };
+>v : const v: any
+  return v;
+>v : const v: any
+

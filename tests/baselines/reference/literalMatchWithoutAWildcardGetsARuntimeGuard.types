@@ -1,0 +1,4 @@
+=== literalMatchWithoutAWildcardGetsARuntimeGuard.tt ===
+const label = match (dir) { "a" => 1, "b" => 2 };
+>label : const label: number
+

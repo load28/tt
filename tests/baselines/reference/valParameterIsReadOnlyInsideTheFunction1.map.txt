@@ -1,0 +1,4 @@
+//// [valParameterIsReadOnlyInsideTheFunction1.tt] 2 mapping(s)
+1:1 -> 1:1 len 14  "function read("
+1:19 -> 1:15 len 37  "user: User) {\n  user.name = \"Lee\";\n}\n"
+

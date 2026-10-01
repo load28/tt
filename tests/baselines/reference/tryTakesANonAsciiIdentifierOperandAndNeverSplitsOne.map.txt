@@ -1,0 +1,6 @@
+//// [tryTakesANonAsciiIdentifierOperandAndNeverSplitsOne.tt] 4 mapping(s)
+1:1 -> 1:1 len 91  "declare function étry(): Result<number, string>;"...
+3:9 -> 7:9 len 1  "n"
+3:17 -> 3:18 len 7  "étry()"
+3:25 -> 7:26 len 19  "\n  return Ok(n);\n}\n"
+

@@ -1,0 +1,7 @@
+=== loopTestRewritesComposeWithConditionalsNestingAndInitializers4.tt ===
+for (let a = match (1) { 1 => 1, _ => 0 }; match (a) { 1 => true, _ => false }; a++) { use(a); }
+>a : let a: number
+>a : let a: number
+>a : let a: number
+>a : let a: number
+

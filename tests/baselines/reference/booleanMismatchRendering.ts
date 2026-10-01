@@ -30,3 +30,4 @@ export const partly: number = either();
 export const ready: boolean = true;
 export type Dir = "north" | "south";
 export declare function heading(): Dir;
+\ No newline at end of file

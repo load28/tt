@@ -1,0 +1,6 @@
+=== inertArgumentsAreNotCapturedOutOfTheirContextualPosition2.tt ===
+const items = [make(), match (x) { A(v) => v, _ => 0 }];
+>items : const items: any[]
+>v : const v: any
+>v : const v: any
+

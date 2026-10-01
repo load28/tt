@@ -1,0 +1,18 @@
+=== repeatedGuardedCaseDoesNotWeightSubjectIdentification.tt ===
+variant Left { Alpha }
+>Left : type Left = {
+>       kind: "Alpha";
+>   }
+>Alpha : (property) Alpha: {
+>       readonly kind: "Alpha";
+>   }
+variant Right { Alphx }
+>Right : type Right = {
+>       kind: "Alphx";
+>   }
+>Alphx : (property) Alphx: {
+>       readonly kind: "Alphx";
+>   }
+const v = match (u) {
+>v : const v: number
+

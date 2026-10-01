@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_11.rs::a_match_under_a_conditional_operation_in_a_guard_keeps_the_short_circuit
+variant S { A(v: number), B(w: number), C }
+declare const s: S;
+const x = match (s) { A(v) if v > 0 && match (s) { B(w) => w > 0, _ => false } => 1, _ => 0 };

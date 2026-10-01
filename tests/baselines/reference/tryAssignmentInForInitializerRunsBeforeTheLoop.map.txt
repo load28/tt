@@ -1,0 +1,6 @@
+//// [tryAssignmentInForInitializerRunsBeforeTheLoop.tt] 4 mapping(s)
+1:1 -> 1:1 len 15  "function f() { "
+1:16 -> 7:1 len 9  "for (i = "
+1:29 -> 2:16 len 6  "next()"
+1:35 -> 7:16 len 9  ";;) {} }\n"
+

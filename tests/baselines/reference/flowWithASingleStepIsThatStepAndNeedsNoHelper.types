@@ -1,0 +1,5 @@
+=== flowWithASingleStepIsThatStepAndNeedsNoHelper.tt ===
+const f = flow |> parse;
+>f : const f: any
+>flow : any
+

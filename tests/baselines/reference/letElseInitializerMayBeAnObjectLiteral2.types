@@ -1,0 +1,37 @@
+=== letElseInitializerMayBeAnObjectLiteral2.tt ===
+function f(o?: { kind: "Some"; value: number }, c = true) {
+>f : function f(o?: {
+>       kind: "Some";
+>       value: number;
+>   }, c?: boolean): number
+>o : (parameter) o: {
+>       kind: "Some";
+>       value: number;
+>   } | undefined
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>c : (parameter) c: boolean
+  const Some(value) = o ?? (c ? { kind: "Some" as const, value: 1 } : { kind: "None" as const }) else { return 0; };
+>value : const value: number
+>o : (parameter) o: {
+>       kind: "Some";
+>       value: number;
+>   } | undefined
+>c : (parameter) c: boolean
+>kind : (property) kind: "Some"
+>const : type const = "Some"
+>value : (property) value: number
+>kind : (property) kind: "None"
+>const : type const = "None"
+  const Some(value: w) = c ? { kind: "Some" as const, value } : { kind: "None" as const } else { return 1; };
+>value : (property) value: number
+>w : const w: number
+>c : (parameter) c: boolean
+>kind : (property) kind: "Some"
+>const : type const = "Some"
+>value : (property) value: number
+>kind : (property) kind: "None"
+>const : type const = "None"
+  return w;
+>w : const w: number
+

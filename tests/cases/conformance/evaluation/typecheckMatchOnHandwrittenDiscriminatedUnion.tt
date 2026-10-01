@@ -1,0 +1,11 @@
+// @origin: tests/integration/cases_02.rs::typecheck_match_on_handwritten_discriminated_union
+
+type AppEvent =
+  | { kind: "click"; x: number; y: number }
+  | { kind: "key"; code: string };
+const f = (e: AppEvent) => match (e) {
+  click(x, y) => x + y,
+  key(code) => code.length,
+};
+
+export {};

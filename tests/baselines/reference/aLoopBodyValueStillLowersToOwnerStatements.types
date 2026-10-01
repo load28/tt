@@ -1,0 +1,11 @@
+=== aLoopBodyValueStillLowersToOwnerStatements.tt ===
+let n = 0;
+>n : let n: number
+while (n < 3) { const v = match (n) { 0 => 1, _ => 0 }; n = n + v; }
+>n : let n: number
+>v : const v: number
+>n : let n: number
+>n : let n: number
+>n : let n: number
+>v : const v: number
+

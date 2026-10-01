@@ -1,0 +1,14 @@
+=== valJudgesOnlyPathsRootedAtTheBinding5.tt ===
+val const o = { p: 1 };
+>o : const o: {
+>       p: number;
+>   }
+>p : (property) p: number
+({ a: o.p } = { a: 2 });
+>a : (property) a: number
+>o : const o: {
+>       p: number;
+>   }
+>p : (property) p: number
+>a : (property) a: number
+

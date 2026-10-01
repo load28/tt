@@ -1,0 +1,23 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./nestedInitializerMatchInheritsTheParentAssignmentContinuation.tt → $DIR/out/nestedInitializerMatchInheritsTheParentAssignmentContinuation.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2552]: Cannot find name 'outer'. Did you mean 'Outer'?
+ --> nestedInitializerMatchInheritsTheParentAssignmentContinuation.tt:3:22
+  |
+1 | variant Outer { A, B }
+  |         ----- 'Outer' is declared here.
+2 | enum Inner { X, Y }
+3 | const value = match (outer) { A => match (inner) { X => 1, Y => 2 }, B => 0 };
+  |                      ^^^^^
+error[ts2552]: Cannot find name 'inner'. Did you mean 'Inner'?
+ --> nestedInitializerMatchInheritsTheParentAssignmentContinuation.tt:3:43
+  |
+2 | enum Inner { X, Y }
+  |      ----- 'Inner' is declared here.
+3 | const value = match (outer) { A => match (inner) { X => 1, Y => 2 }, B => 0 };
+  |                                           ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+nestedInitializerMatchInheritsTheParentAssignmentContinuation.ts(29,17): error TS2552: Cannot find name 'outer'. Did you mean 'Outer'?
+nestedInitializerMatchInheritsTheParentAssignmentContinuation.ts(33,23): error TS2552: Cannot find name 'inner'. Did you mean 'Inner'?

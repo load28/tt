@@ -1,0 +1,32 @@
+// @origin: tests/integration/contextual.rs::scoped_call_completions_preserve_context_scope_and_effects
+// @run: scopedCallCompletionsPreserveContextScopeAndEffects.tt
+
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+const trace: string[] = [];
+function consume(item: Item) { trace.push("call:" + item.run(3)); }
+for (const state of [State.Ready(4), State.Empty]) {
+  trace.length = 0;
+  consume(match (state) {
+    Ready(value) => {
+      const consume = value + 1;
+      const local = () => consume;
+      trace.push("arm");
+      return {kind: "item", run: x => x + local()};
+    },
+    Empty => ({kind: "item", run: x => x - 1}),
+  });
+  trace.push("after");
+  console.log(trace.join(","));
+}
+function throws(item: Item): void { trace.push("throws:" + item.run(2)); throw new Error("consumer"); }
+trace.length = 0;
+try {
+  throws(match (State.Ready(5)) {
+    Ready(value) => { trace.push("value"); return {kind: "item", run: x => x + value}; },
+    Empty => ({kind: "item", run: x => x}),
+  });
+} catch { trace.push("caught"); }
+console.log(trace.join(","));
+
+export {};

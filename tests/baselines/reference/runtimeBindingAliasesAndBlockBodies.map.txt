@@ -1,0 +1,22 @@
+//// [runtimeBindingAliasesAndBlockBodies.tt] 20 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+4:11 -> 22:24 len 6  "number"
+4:11 -> 26:13 len 6  "number"
+4:22 -> 22:35 len 6  "number"
+4:22 -> 26:24 len 6  "number"
+5:15 -> 23:28 len 6  "string"
+5:15 -> 27:17 len 6  "string"
+6:2 -> 28:3 len 40  "\n\nfunction describe(m: Msg): string {\n  "
+9:3 -> 55:3 len 7  "return "
+9:17 -> 33:19 len 1  "m"
+10:10 -> 36:17 len 1  "x"
+10:13 -> 36:20 len 2  "px"
+10:17 -> 36:24 len 1  "y"
+10:20 -> 36:27 len 2  "py"
+11:7 -> 37:9 len 27  "const sum = px + py;\n      "
+12:14 -> 38:18 len 13  "\"move:\" + sum"
+14:11 -> 42:17 len 4  "text"
+14:20 -> 43:18 len 15  "\"write:\" + text"
+15:13 -> 47:18 len 6  "\"quit\""
+16:4 -> 55:16 len 129  ";\n}\n\nconsole.log(describe(Msg.Move(2, 3)));\ncons"...
+

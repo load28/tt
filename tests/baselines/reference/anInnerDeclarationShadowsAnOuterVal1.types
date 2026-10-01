@@ -1,0 +1,17 @@
+=== anInnerDeclarationShadowsAnOuterVal1.tt ===
+val const x = { a: 1 };
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+  const x = { a: 2 };
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+  x.a = 3;
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+

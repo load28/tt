@@ -1,2 +1,2 @@
-componentBody(4) => "<p>[{/"kind/":/"kind/",/"value/":4},{/"kind/":/"other/"}]</p>" | risky 4
-componentBody(9) => "<p>[{/"kind/":/"kind/",/"value/":9},{/"kind/":/"other/"}]</p>" | risky 9
+componentBody(4) => "<p>[{\"kind\":\"kind\",\"value\":4},{\"kind\":\"other\"}]</p>" | risky 4
+componentBody(9) => "<p>[{\"kind\":\"kind\",\"value\":9},{\"kind\":\"other\"}]</p>" | risky 9

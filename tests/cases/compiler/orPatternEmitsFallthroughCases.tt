@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_02.rs::or_pattern_emits_fallthrough_cases
+
+variant Key { Enter(), Escape, Tab, Char(ch: string) }
+const action = match (key) {
+  Enter => "submit",
+  Escape | Tab => "cancel",
+  Char(ch) => "type:" + ch,
+};

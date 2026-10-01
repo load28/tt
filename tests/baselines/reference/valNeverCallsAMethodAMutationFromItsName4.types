@@ -1,0 +1,8 @@
+=== valNeverCallsAMethodAMutationFromItsName4.tt ===
+val const m = new Map<string, number>();
+>m : const m: Map<string, number>
+>Map : var Map: new <string, number>(iterable?: Iterable<readonly [string, number]> | null | undefined) => Map<string, number>
+m.set("a", 1);
+>m : const m: Map<string, number>
+>set : (method) Map<string, number>.set(key: string, value: number): Map<string, number>
+

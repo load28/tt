@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_03.rs::try_inside_a_function_inside_an_arm_body_is_allowed
+const x = match (r) {
+  Ok(value) => { const f = () => { try g(value); return 1; }; return f(); },
+  Err(error) => 0,
+};

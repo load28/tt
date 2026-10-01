@@ -1,0 +1,7 @@
+//// [matchOnUnknownTagsIsNotChecked.tt] 5 mapping(s)
+1:1 -> 19:1 len 106  "\ntype AppEvent = { kind: \"click\"; x: number } | "...
+3:35 -> 24:19 len 1  "e"
+4:9 -> 27:17 len 1  "x"
+4:15 -> 28:18 len 1  "x"
+5:2 -> 37:2 len 2  ";\n"
+

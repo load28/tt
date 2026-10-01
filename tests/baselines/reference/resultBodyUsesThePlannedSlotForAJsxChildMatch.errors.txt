@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 0) ====
+ttc: std → $DIR/out/tt
+ttc: ./resultBodyUsesThePlannedSlotForAJsxChildMatch.ttx → $DIR/out/resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx
+
+==== ttc --check-types (exit 1) ====
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists. (in code ttc generated for this construct)
+  --> resultBodyUsesThePlannedSlotForAJsxChildMatch.ttx:7:17
+   |
+ 7 |     const value = result {
+   |  _________________^
+ 8 | |     const first = try fallible(n);
+ 9 | |     const chosen = match (e) { A => 1, B => 2 };
+... | |
+16 | |   };
+   | |___^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+  --> resultBodyUsesThePlannedSlotForAJsxChildMatch.ttx:11:14
+   |
+11 |       Yes => <strong>{chosen |> step}</strong>,
+   |              ^^^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+  --> resultBodyUsesThePlannedSlotForAJsxChildMatch.ttx:11:38
+   |
+11 |       Yes => <strong>{chosen |> step}</strong>,
+   |                                      ^^^^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+  --> resultBodyUsesThePlannedSlotForAJsxChildMatch.ttx:13:7
+   |
+13 |     }}</section>;
+   |       ^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx(77,18): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx(77,64): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx(77,94): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+resultBodyUsesThePlannedSlotForAJsxChildMatch.tsx(77,112): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.

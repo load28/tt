@@ -1,0 +1,35 @@
+=== resultRegionComposesEmbeddedTryAndPipelineTry1.tt ===
+variant R { Ok(value: number), Err(error: string) }
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>Ok : (property) Ok: (value: number) => R
+>value : (property) value: number
+>Err : (property) Err: (error: string) => R
+>error : (property) error: string
+declare const g: () => R;
+>g : const g: () => R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+const f = (): R => result { return Math.round(try g() * 1.1); };
+>f : const f: () => R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>Math : var Math: Math
+>round : (method) Math.round(x: number): number
+>g : const g: () => R
+

@@ -1,0 +1,31 @@
+==== ttc --out-dir (exit 1) ====
+error[pattern-duplicate-binding]: match: binding `value` is used more than once in this tuple pattern
+ --> ./tupleMatchDuplicateBindingAcrossElementsIsAnError.tt:2:17
+  |
+2 |   (Some(value), Some(value)) => value,
+  |                 ^^^^
+  |
+  = help: rename one of them with `field: alias`
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'a'.
+ --> tupleMatchDuplicateBindingAcrossElementsIsAnError.tt:1:18
+  |
+1 | const r = match (a, b) {
+  |                  ^
+error[ts2304]: Cannot find name 'b'.
+ --> tupleMatchDuplicateBindingAcrossElementsIsAnError.tt:1:21
+  |
+1 | const r = match (a, b) {
+  |                     ^
+error[pattern-duplicate-binding]: match: binding `value` is used more than once in this tuple pattern
+ --> tupleMatchDuplicateBindingAcrossElementsIsAnError.tt:2:17
+  |
+2 |   (Some(value), Some(value)) => value,
+  |                 ^^^^
+  |
+  = help: rename one of them with `field: alias`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

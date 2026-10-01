@@ -1,0 +1,6 @@
+// @origin: tests/compile.rs::sibling_jsx_tt_values_share_one_owner_rewrite
+declare const n: number;
+const view = () => (<aside>
+  {match (n) { 0 => <b>zero</b>, _ => <b>other</b> }}
+  {match (n) { 0 => <i>zero</i>, _ => <i>other</i> }}
+</aside>);

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseEmptyBindingsChecksOnly.tt → $DIR/out/letElseEmptyBindingsChecksOnly.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'check'.
+ --> letElseEmptyBindingsChecksOnly.tt:2:16
+  |
+2 |   const Ok() = check() else { return -1; };
+  |                ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseEmptyBindingsChecksOnly.ts(2,18): error TS2304: Cannot find name 'check'.

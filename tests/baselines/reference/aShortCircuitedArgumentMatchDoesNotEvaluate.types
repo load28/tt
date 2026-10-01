@@ -1,0 +1,41 @@
+=== aShortCircuitedArgumentMatchDoesNotEvaluate.tt ===
+const trace: string[] = [];
+>trace : const trace: string[]
+function subject(tag: string): number { trace.push(tag); return 1; }
+>subject : function subject(tag: string): number
+>tag : (parameter) tag: string
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>tag : (parameter) tag: string
+function id(v: number): number { return v; }
+>id : function id(v: number): number
+>v : (parameter) v: number
+>v : (parameter) v: number
+declare const globalThis: { flagOn: boolean };
+>globalThis : const globalThis: {
+>       flagOn: boolean;
+>   }
+>flagOn : (property) flagOn: boolean
+const on = true as boolean;
+>on : const on: boolean
+const off = false as boolean;
+>off : const off: boolean
+const a = on && id(match (subject("on")) { 1 => 10, _ => 0 });
+>a : const a: number | false
+>on : const on: boolean
+>id : function id(v: number): number
+>subject : function subject(tag: string): number
+const b = off && id(match (subject("off")) { 1 => 20, _ => 0 });
+>b : const b: number | false
+>off : const off: boolean
+>id : function id(v: number): number
+>subject : function subject(tag: string): number
+console.log(JSON.stringify(trace), a, b);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+>a : const a: number | false
+>b : const b: number | false
+

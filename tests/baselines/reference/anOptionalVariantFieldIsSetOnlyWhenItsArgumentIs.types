@@ -1,0 +1,16 @@
+=== anOptionalVariantFieldIsSetOnlyWhenItsArgumentIs.tt ===
+variant V { C(req: string, opt?: number), D }
+>V : type V = {
+>       kind: "C";
+>       req: string;
+>       opt?: number;
+>   } | {
+>       kind: "D";
+>   }
+>C : (property) C: (req: string, opt?: number) => V
+>req : (property) req: string
+>opt : (property) opt?: number | undefined
+>D : (property) D: {
+>       readonly kind: "D";
+>   }
+

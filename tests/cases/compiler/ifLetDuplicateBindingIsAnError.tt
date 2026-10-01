@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_07.rs::if_let_duplicate_binding_is_an_error
+function f() {
+  if let Both(a: v, b: v) = o { g(v); }
+}

@@ -1,0 +1,10 @@
+=== generatedValueSlotsPreserveAuthoredContextualTypes2.tt ===
+type Toggle = "on" | "off";
+>Toggle : type Toggle = "off" | "on"
+const flip = (value: Toggle): Toggle => match (value) {
+>flip : const flip: (value: Toggle) => Toggle
+>value : (parameter) value: Toggle
+>Toggle : type Toggle = "off" | "on"
+>Toggle : type Toggle = "off" | "on"
+>value : (parameter) value: Toggle
+

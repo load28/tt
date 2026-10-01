@@ -1,0 +1,10 @@
+//// [statementBodiedResultAcceptsBranchCompleteSuccess.tt] 8 mapping(s)
+1:1 -> 10:1 len 14  "const value = "
+1:30 -> 8:9 len 4  "item"
+1:41 -> 3:18 len 6  "read()"
+1:48 -> 8:29 len 11  " if (item) "
+1:66 -> 8:87 len 4  "item"
+1:71 -> 8:116 len 6  " else "
+1:84 -> 8:169 len 1  "0"
+1:88 -> 10:27 len 2  ";\n"
+

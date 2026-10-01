@@ -1,0 +1,4 @@
+=== computedAndNonModuleImportLookalikesRemainUnchanged3.tt ===
+const load = import('package.tt');
+>load : const load: Promise<any>
+

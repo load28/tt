@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryBareStatementEmitsEarlyReturnOnly.tt → $DIR/out/tryBareStatementEmitsEarlyReturnOnly.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'X'.
+ --> tryBareStatementEmitsEarlyReturnOnly.tt:1:15
+  |
+1 | function f(): X {
+  |               ^
+error[ts2304]: Cannot find name 'g'.
+ --> tryBareStatementEmitsEarlyReturnOnly.tt:2:7
+  |
+2 |   try g();
+  |       ^
+error[ts2304]: Cannot find name 'h'.
+ --> tryBareStatementEmitsEarlyReturnOnly.tt:3:10
+  |
+3 |   return h();
+  |          ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryBareStatementEmitsEarlyReturnOnly.ts(1,15): error TS2304: Cannot find name 'X'.
+tryBareStatementEmitsEarlyReturnOnly.ts(2,18): error TS2304: Cannot find name 'g'.
+tryBareStatementEmitsEarlyReturnOnly.ts(6,10): error TS2304: Cannot find name 'h'.

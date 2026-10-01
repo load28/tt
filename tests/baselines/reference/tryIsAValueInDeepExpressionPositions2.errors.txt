@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryIsAValueInDeepExpressionPositions2.tt → $DIR/out/tryIsAValueInDeepExpressionPositions2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'TResult'.
+ --> tryIsAValueInDeepExpressionPositions2.tt:1:28
+  |
+1 | function f(flag: boolean): TResult<number, string> { const value = try (flag ? left() : right()); return Result.Ok(value); }
+  |                            ^^^^^^^
+error[ts2304]: Cannot find name 'left'.
+ --> tryIsAValueInDeepExpressionPositions2.tt:1:80
+  |
+1 | function f(flag: boolean): TResult<number, string> { const value = try (flag ? left() : right()); return Result.Ok(value); }
+  |                                                                                ^^^^
+error[ts2304]: Cannot find name 'right'.
+ --> tryIsAValueInDeepExpressionPositions2.tt:1:89
+  |
+1 | function f(flag: boolean): TResult<number, string> { const value = try (flag ? left() : right()); return Result.Ok(value); }
+  |                                                                                         ^^^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> tryIsAValueInDeepExpressionPositions2.tt:1:106
+  |
+1 | function f(flag: boolean): TResult<number, string> { const value = try (flag ? left() : right()); return Result.Ok(value); }
+  |                                                                                                          ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryIsAValueInDeepExpressionPositions2.ts(1,28): error TS2304: Cannot find name 'TResult'.
+tryIsAValueInDeepExpressionPositions2.ts(1,77): error TS2304: Cannot find name 'left'.
+tryIsAValueInDeepExpressionPositions2.ts(1,86): error TS2304: Cannot find name 'right'.
+tryIsAValueInDeepExpressionPositions2.ts(5,36): error TS2304: Cannot find name 'Result'.

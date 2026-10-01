@@ -1,0 +1,20 @@
+//// [optionalCallCompletionsSkipSubjectsAndDeliverResults.tt] 18 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:30 -> 21:29 len 6  "number"
+2:30 -> 24:18 len 6  "number"
+2:46 -> 26:3 len 401  "\ntype Item = {kind: \"item\"; run: (x: number) => "...
+10:3 -> 58:3 len 15  "const result = "
+10:18 -> 35:19 len 7  "consume"
+10:35 -> 38:21 len 31  "mark(\"subject\", State.Ready(5))"
+11:11 -> 41:19 len 5  "value"
+11:21 -> 42:27 len 56  "(trace.push(\"arm\"), {kind: \"item\", run: x => x +"...
+12:14 -> 46:27 len 29  "({kind: \"item\", run: x => x})"
+13:5 -> 58:24 len 194  ";\n  console.log(result, trace.join(\",\") || \"sile"...
+21:1 -> 90:1 len 20  "const viaReceiver = "
+21:21 -> 67:17 len 12  "holder.maybe"
+21:43 -> 70:19 len 31  "mark(\"subject\", State.Ready(7))"
+22:9 -> 73:17 len 5  "value"
+22:19 -> 74:38 len 37  "({kind: \"item\", run: x => x * value})"
+23:12 -> 78:38 len 29  "({kind: \"item\", run: x => x})"
+24:3 -> 90:27 len 57  ";\nconsole.log(viaReceiver, trace.join(\",\"));\n\nex"...
+

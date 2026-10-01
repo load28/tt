@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::literal_duplicate_is_allowed_between_guarded_arms
+const v = match (x) { 1 if a => 1, 1 if b => 2, 1 => 3, _ => 4 };

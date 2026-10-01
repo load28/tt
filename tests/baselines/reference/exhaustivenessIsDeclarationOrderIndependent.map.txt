@@ -1,0 +1,10 @@
+//// [exhaustivenessIsDeclarationOrderIndependent.tt] 8 mapping(s)
+1:1 -> 19:1 len 24  "const f = (s: Shape) => "
+1:32 -> 22:19 len 1  "s"
+2:10 -> 25:17 len 6  "radius"
+2:21 -> 26:18 len 6  "radius"
+3:2 -> 35:2 len 2  ";\n"
+4:32 -> 37:31 len 6  "number"
+4:32 -> 40:20 len 6  "number"
+4:48 -> 42:3 len 1  "\n"
+

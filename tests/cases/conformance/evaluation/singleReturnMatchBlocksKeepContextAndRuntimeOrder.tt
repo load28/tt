@@ -1,0 +1,22 @@
+// @origin: tests/integration/contextual.rs::single_return_match_blocks_keep_context_and_runtime_order
+// @run: singleReturnMatchBlocksKeepContextAndRuntimeOrder.tt
+
+const trace: string[] = [];
+const mark = <T,>(name: string, value: T): T => { trace.push(name); return value; };
+const receiver = {
+  base: 10,
+  consume(first: number, item: {kind: "item"; run: (x: number) => number}, last: number) {
+    trace.push("call");
+    return this.base + first + item.run(last);
+  },
+};
+for (const flag of [true, false]) {
+  trace.length = 0;
+  const answer = mark("receiver", receiver).consume(mark("first", 2), match (mark("subject", flag)) {
+    true => { /* selected block */ return (mark("yes", 0), {kind: "item", run: x => x + 1}); /* tail */ },
+    false => { return (mark("no", 0), {kind: "item", run: x => x - 1}); },
+  }, mark("last", 3));
+  console.log(answer, trace.join(","));
+}
+
+export {};

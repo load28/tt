@@ -1,0 +1,7 @@
+//// [orPatternBindingOrderIsInsensitive.tt] 5 mapping(s)
+1:1 -> 16:1 len 10  "const r = "
+1:18 -> 3:17 len 1  "p"
+1:44 -> 7:18 len 5  "x + y"
+1:56 -> 11:18 len 1  "0"
+1:59 -> 16:19 len 1  ";"
+

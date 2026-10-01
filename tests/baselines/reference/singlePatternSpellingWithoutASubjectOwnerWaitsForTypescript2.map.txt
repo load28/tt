@@ -1,0 +1,9 @@
+//// [singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript2.tt] 7 mapping(s)
+1:32 -> 2:31 len 6  "number"
+1:32 -> 5:20 len 6  "number"
+1:48 -> 7:3 len 1  "\n"
+2:15 -> 11:13 len 6  "radius"
+2:25 -> 9:18 len 1  "s"
+2:29 -> 12:5 len 12  "log(radius);"
+2:43 -> 14:2 len 1  "\n"
+

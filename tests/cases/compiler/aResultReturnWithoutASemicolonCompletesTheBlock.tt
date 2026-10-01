@@ -1,0 +1,9 @@
+// @origin: tests/compile/cases_10.rs::a_result_return_without_a_semicolon_completes_the_block
+declare function read(): { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+export function f() {
+  const r = result {
+    const a = try read();
+    return a
+  };
+  return r;
+}

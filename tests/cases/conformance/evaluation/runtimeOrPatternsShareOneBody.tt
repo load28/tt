@@ -1,0 +1,24 @@
+// @origin: tests/integration/cases_01.rs::runtime_or_patterns_share_one_body
+// @run: runtimeOrPatternsShareOneBody.tt
+
+variant Key {
+  Enter(),
+  Escape,
+  Tab,
+  Char(ch: string),
+}
+
+function action(k: Key): string {
+  return match (k) {
+    Enter => "submit",
+    Escape | Tab => "cancel",
+    Char(ch) => "type:" + ch,
+  };
+}
+
+console.log(action(Key.Enter()));
+console.log(action(Key.Escape));
+console.log(action(Key.Tab));
+console.log(action(Key.Char("z")));
+
+export {};

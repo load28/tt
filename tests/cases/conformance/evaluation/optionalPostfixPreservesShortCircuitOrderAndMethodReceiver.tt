@@ -1,0 +1,20 @@
+// @origin: tests/integration/cases_03.rs::optional_postfix_preserves_short_circuit_order_and_method_receiver
+// @run: optionalPostfixPreservesShortCircuitOrderAndMethodReceiver.tt
+
+const order: string[] = [];
+const mark = (name: string, value: number): number => { order.push(name); return value; };
+const key = (): "method" => { order.push("key"); return "method"; };
+const live = {
+  base: 10,
+  method(value: number): number {
+    order.push(this === live ? "this" : "lost-this");
+    return this.base + value;
+  },
+};
+const absent = (() => undefined as typeof live | undefined)();
+const hit = (order.push("head-hit"), live) |> ?.[key()]?.(mark("arg", 2));
+const miss = (order.push("head-miss"), absent) |> ?.[key()]?.(mark("skipped", 3));
+const after = miss |> (value => { order.push("after"); return value ?? -1; });
+console.log(hit, miss, after, order.join(","));
+
+export {};

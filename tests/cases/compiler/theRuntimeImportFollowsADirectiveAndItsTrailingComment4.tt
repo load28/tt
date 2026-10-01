@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_11.rs::the_runtime_import_follows_a_directive_and_its_trailing_comment
+"use strict"; 'use client' // x
+'b'
+declare const o: { p: number };
+export const a = o.p |> String;

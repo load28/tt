@@ -1,0 +1,15 @@
+//// [anOptionalMemberStepIsTheOptionalCall.tt] 13 mapping(s)
+1:1 -> 1:1 len 410  "\nclass C { k = 3; m(x: number) { return x * this"...
+9:29 -> 9:65 len 6  "head()"
+9:39 -> 9:74 len 1  "o"
+9:40 -> 9:53 len 3  "?.m"
+9:43 -> 9:77 len 2  ", "
+9:45 -> 9:115 len 6  "head()"
+9:55 -> 9:124 len 4  "none"
+9:59 -> 9:103 len 3  "?.m"
+9:62 -> 9:130 len 2  ", "
+9:64 -> 9:171 len 6  "head()"
+9:74 -> 9:180 len 6  "nested"
+9:80 -> 9:156 len 6  "?.c?.m"
+9:86 -> 9:188 len 24  ", order]));\n\nexport {};\n"
+

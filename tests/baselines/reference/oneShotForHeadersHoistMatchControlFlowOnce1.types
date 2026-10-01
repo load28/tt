@@ -1,0 +1,6 @@
+=== oneShotForHeadersHoistMatchControlFlowOnce1.tt ===
+for (const value of match (source) { is Array => source, _ => [] }) { use(value); }
+>value : const value: any
+>Array : var Array: ArrayConstructor
+>value : const value: any
+

@@ -1,0 +1,10 @@
+//// [aCrlfSourceGetsCrlfGlue.tt] 8 mapping(s)
+1:25 -> 20:28 len 6  "number"
+1:25 -> 23:17 len 6  "number"
+1:40 -> 25:3 len 29  "\r\nexport const f = (o: O) => "
+2:35 -> 29:19 len 1  "o"
+3:8 -> 32:17 len 5  "value"
+3:18 -> 33:18 len 5  "value"
+4:11 -> 37:18 len 1  "0"
+5:2 -> 46:2 len 3  ";\r\n"
+

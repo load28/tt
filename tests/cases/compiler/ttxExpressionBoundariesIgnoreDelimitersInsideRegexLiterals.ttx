@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_01.rs::ttx_expression_boundaries_ignore_delimiters_inside_regex_literals
+variant State { Ready(value: string), Empty }
+declare const state: State;
+const view = <Panel visible={/}/.test("}")} value={match (state) {
+  Ready(value) => value,
+  Empty => "",
+}} />;

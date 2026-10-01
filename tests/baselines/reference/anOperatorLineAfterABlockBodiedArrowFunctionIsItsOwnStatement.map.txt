@@ -1,0 +1,23 @@
+//// [anOperatorLineAfterABlockBodiedArrowFunctionIsItsOwnStatement.tt] 21 mapping(s)
+1:1 -> 2:1 len 44  "const log: string[] = []\nconst f = () => {}\n"
+3:1 -> 4:47 len 14  "/x/g.exec(\"x\")"
+3:19 -> 4:63 len 6  "String"
+3:29 -> 4:73 len 3  "log"
+3:32 -> 4:26 len 5  ".push"
+3:37 -> 4:78 len 26  "\nconst g = async () => {}\n"
+5:1 -> 6:47 len 13  "/y/.test(\"y\")"
+5:18 -> 6:62 len 6  "String"
+5:28 -> 6:72 len 3  "log"
+5:31 -> 6:26 len 5  ".push"
+5:36 -> 6:77 len 26  "\nconst h = (): void => {}\n"
+7:1 -> 8:47 len 2  "-1"
+7:7 -> 8:51 len 6  "String"
+7:17 -> 8:61 len 3  "log"
+7:20 -> 8:26 len 5  ".push"
+7:25 -> 8:66 len 20  "\nconst k = () => {}\n"
+9:1 -> 10:47 len 3  "(2)"
+9:8 -> 10:40 len 6  "String"
+9:18 -> 10:54 len 3  "log"
+9:21 -> 10:26 len 5  ".push"
+9:26 -> 10:59 len 59  "\nf(); g(); h(); k()\nconsole.log(log.join(\",\"))\n\n"...
+

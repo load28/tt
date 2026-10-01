@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::try_is_a_value_in_deep_expression_positions
+function f(): TResult<string, string> { return Result.Ok(`v=${try read()}`); }

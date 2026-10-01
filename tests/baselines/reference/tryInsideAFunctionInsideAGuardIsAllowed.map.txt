@@ -1,0 +1,11 @@
+//// [tryInsideAFunctionInsideAGuardIsAllowed.tt] 9 mapping(s)
+1:1 -> 19:1 len 10  "const r = "
+1:18 -> 3:17 len 1  "x"
+2:5 -> 6:15 len 1  "v"
+2:11 -> 7:11 len 12  "run(() => { "
+2:27 -> 7:38 len 3  "g()"
+2:31 -> 10:8 len 16  " return true; })"
+2:51 -> 11:20 len 1  "v"
+3:8 -> 15:16 len 1  "0"
+4:2 -> 19:19 len 2  ";\n"
+

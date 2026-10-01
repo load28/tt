@@ -1,0 +1,9 @@
+=== letElseDivergenceStillSeesBlockStatements2.tt ===
+function f(): number {
+>f : function f(): number
+  const Some(v) = find() else { try { log("x"); } catch (e) { log("y"); } return 0; };
+>v : const v: any
+>e : var e: unknown
+  return v;
+>v : const v: any
+

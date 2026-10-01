@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_07.rs::generic_look_alike_with_adjacent_operators_passes_through
+declare const result: number;
+function f() {
+  result
+  { let x: Foo<-1>; }
+}

@@ -1,0 +1,10 @@
+//// [tryExpressionMayContainAMatch1.tt] 8 mapping(s)
+1:1 -> 19:1 len 20  "function f(): X {\n  "
+2:9 -> 43:9 len 1  "x"
+2:24 -> 22:19 len 1  "m"
+2:32 -> 25:17 len 5  "value"
+2:42 -> 26:18 len 11  "wrap(value)"
+2:59 -> 30:17 len 5  "error"
+2:69 -> 31:18 len 13  "rewrap(error)"
+2:85 -> 43:26 len 15  "\n  return x;\n}\n"
+

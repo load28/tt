@@ -1,0 +1,14 @@
+=== tupleMatchBlockBodiesAndGuardsLeaveThroughTheRegion.tt ===
+variant Coin { Heads(), Tails }
+>Coin : type Coin = {
+>       kind: "Heads";
+>   } | {
+>       kind: "Tails";
+>   }
+>Heads : (property) Heads: () => Coin
+>Tails : (property) Tails: {
+>       readonly kind: "Tails";
+>   }
+const r = match (a, b) {
+>r : const r: number
+

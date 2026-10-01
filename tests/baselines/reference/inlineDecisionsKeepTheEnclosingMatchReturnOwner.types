@@ -1,0 +1,119 @@
+=== inlineDecisionsKeepTheEnclosingMatchReturnOwner.tt ===
+variant Opt { Some(value: number), None }
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => Opt
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+function pick(o: Opt): number {
+>pick : function pick(o: Opt): number
+>o : (parameter) o: Opt
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+  const v = match (o) {
+>v : const v: number
+>o : (parameter) o: Opt
+    Some(value) => {
+>value : const value: number
+      for (let i = 0; i < 1; i++) {
+>i : let i: number
+>i : let i: number
+>i : let i: number
+        if let Some(value: v2) = o {
+>value : (property) value: number
+>v2 : const v2: number
+>o : (parameter) o: Opt
+          const nested = () => { return v2 + 1; };
+>nested : const nested: () => number
+>v2 : const v2: number
+          try { return nested(); } finally { console.log("cleanup"); }
+>nested : const nested: () => number
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+      return value;
+>value : const value: number
+  return v + 100;
+>v : const v: number
+function fallback(o: Opt): number {
+>fallback : function fallback(o: Opt): number
+>o : (parameter) o: Opt
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+  const v = match (Boolean(o)) {
+>v : const v: number
+>Boolean : var Boolean: <{
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }>(value?: {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   } | undefined) => boolean
+>o : (parameter) o: Opt
+      if let Some(value: n) = o { return n; } else { return 7; }
+>value : (property) value: number
+>n : const n: number
+>o : (parameter) o: Opt
+>n : const n: number
+  return v + 100;
+>v : const v: number
+console.log(pick(Opt.Some(5)), pick(Opt.None));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pick : function pick(o: Opt): number
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => Opt
+>pick : function pick(o: Opt): number
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+console.log(fallback(Opt.None), fallback(Opt.Some(3)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>fallback : function fallback(o: Opt): number
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+>fallback : function fallback(o: Opt): number
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => Opt
+

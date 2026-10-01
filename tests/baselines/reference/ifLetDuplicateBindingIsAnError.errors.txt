@@ -1,0 +1,31 @@
+==== ttc --out-dir (exit 1) ====
+error[pattern-duplicate-binding]: match: binding `v` is used more than once in this pattern
+ --> ./ifLetDuplicateBindingIsAnError.tt:2:10
+  |
+2 |   if let Both(a: v, b: v) = o { g(v); }
+  |          ^^^^
+  |
+  = help: rename one of them with `field: alias`
+
+
+==== ttc --check-types (exit 1) ====
+error[pattern-duplicate-binding]: match: binding `v` is used more than once in this pattern
+ --> ifLetDuplicateBindingIsAnError.tt:2:10
+  |
+2 |   if let Both(a: v, b: v) = o { g(v); }
+  |          ^^^^
+  |
+  = help: rename one of them with `field: alias`
+error[ts2304]: Cannot find name 'o'.
+ --> ifLetDuplicateBindingIsAnError.tt:2:29
+  |
+2 |   if let Both(a: v, b: v) = o { g(v); }
+  |                             ^
+error[ts2304]: Cannot find name 'g'.
+ --> ifLetDuplicateBindingIsAnError.tt:2:33
+  |
+2 |   if let Both(a: v, b: v) = o { g(v); }
+  |                                 ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,31 @@
+=== inlineSiblingFailureKeepsAbruptCompletion.tt ===
+const trace: string[] = [];
+>trace : const trace: string[]
+function bad(): boolean { return JSON.parse('"bad"'); }
+>bad : function bad(): boolean
+>JSON : var JSON: JSON
+>parse : (method) JSON.parse(text: string, reviver?: (this: any, key: string, value: any) => any): any
+function pair(a: number, b: number) { trace.push("call"); }
+>pair : function pair(a: number, b: number): void
+>a : (parameter) a: number
+>b : (parameter) b: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  pair(match (bad()) { true => 1, false => 2 }, match (true) { true => (trace.push("second"), 3), _ => 4 });
+>pair : function pair(a: number, b: number): void
+>bad : function bad(): boolean
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+} catch (error) {
+>error : var error: unknown
+  console.log(error instanceof Error && error.message.includes("unexpected literal"), trace.length);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>error : var error: unknown
+>Error : var Error: ErrorConstructor
+>error : var error: Error
+>message : (property) Error.message: string
+>includes : (method) String.includes(searchString: string, position?: number): boolean
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+

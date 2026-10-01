@@ -1,0 +1,3 @@
+//// [literalDuplicateComparesValuesNotSpellings3.tt] ////
+const v = match (x) { true => 1, true => 2 };
+

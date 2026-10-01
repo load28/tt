@@ -1,0 +1,11 @@
+//// [letElseDivergesWhenTheReturnValueIsAnObjectLiteral3.tt] 9 mapping(s)
+1:1 -> 1:1 len 25  "function f(): number {\n  "
+2:14 -> 20:11 len 1  "v"
+2:19 -> 2:18 len 6  "find()"
+2:33 -> 18:5 len 7  "return "
+2:47 -> 6:21 len 1  "o"
+2:57 -> 9:20 len 1  "1"
+2:65 -> 13:20 len 1  "0"
+2:68 -> 18:18 len 1  ";"
+2:72 -> 20:24 len 15  "\n  return v;\n}\n"
+

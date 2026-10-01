@@ -1,0 +1,13 @@
+//// [aCandidateTheArmsSatisfyMakesTheMatchExhaustive2.tt] 11 mapping(s)
+1:20 -> 20:21 len 6  "string"
+1:20 -> 25:10 len 6  "string"
+1:38 -> 29:3 len 1  "\n"
+2:22 -> 31:21 len 6  "string"
+2:22 -> 35:10 len 6  "string"
+2:37 -> 38:3 len 25  "\nconst f = (v: Small) => "
+3:32 -> 42:19 len 1  "v"
+3:39 -> 45:17 len 1  "s"
+3:45 -> 46:18 len 1  "s"
+3:53 -> 50:18 len 3  "\"b\""
+3:58 -> 59:2 len 2  ";\n"
+

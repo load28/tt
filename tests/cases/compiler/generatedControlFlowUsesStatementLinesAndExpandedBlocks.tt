@@ -1,0 +1,25 @@
+// @origin: tests/compile/cases_05.rs::generated_control_flow_uses_statement_lines_and_expanded_blocks
+variant E { A(v: number), B }
+function f(e: E): Result<number, string> {
+  const value = try read();
+  const matched = match (e) { A(v) => v, B => 0 };
+  return Result.Ok(value + matched);
+}
+function block(e: E): number {
+  return match (e) {
+    A(v) if v > 0 => {
+      const doubled = v * 2;
+      return doubled;
+    },
+    _ => 0,
+  };
+}
+function bind(e: E): number {
+  const A(v) = e else {
+    return 0;
+  };
+  return v;
+}
+const computed = result {
+  return try read();
+};

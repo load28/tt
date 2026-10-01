@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_12.rs::a_block_after_a_call_opens_no_function
+declare function f(): Option<number>;
+declare function g(): Result<number, string>;
+if let Some(v) = f() { try g(); }

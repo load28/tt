@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript2.tt → $DIR/out/singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 's'.
+ --> singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript2.tt:2:25
+  |
+2 | if let Circel(radius) = s { log(radius); }
+  |                         ^
+error[ts2304]: Cannot find name 'log'.
+ --> singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript2.tt:2:29
+  |
+2 | if let Circel(radius) = s { log(radius); }
+  |                             ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript2.ts(9,18): error TS2304: Cannot find name 's'.
+singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript2.ts(12,5): error TS2304: Cannot find name 'log'.

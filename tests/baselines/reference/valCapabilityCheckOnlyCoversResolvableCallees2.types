@@ -1,0 +1,17 @@
+=== valCapabilityCheckOnlyCoversResolvableCallees2.tt ===
+function apply(user: User) {}
+>apply : function apply(user: User): void
+>user : (parameter) user: User
+>User : type User = /*unresolved*/ any
+function apply(val user: User) {}
+>apply : function apply(user: User): void
+>user : (parameter) user: User
+>User : type User = /*unresolved*/ any
+function f(val user: User) {
+>f : function f(user: User): void
+>user : (parameter) user: User
+>User : type User = /*unresolved*/ any
+  apply(user);
+>apply : function apply(user: User): void
+>user : (parameter) user: User
+

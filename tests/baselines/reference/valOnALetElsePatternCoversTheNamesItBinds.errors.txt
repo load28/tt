@@ -1,0 +1,26 @@
+==== ttc --out-dir (exit 1) ====
+error[val-mutation]: cannot mutate through val binding `value` (the binding is declared with `val`, so every access path from it is read-only)
+ --> ./valOnALetElsePatternCoversTheNamesItBinds.tt:4:3
+  |
+4 |   value.n = 1;
+  |   ^^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'Box'.
+ --> valOnALetElsePatternCoversTheNamesItBinds.tt:1:27
+  |
+1 | variant Opt { Some(value: Box), None }
+  |                           ^^^
+error[val-mutation]: cannot mutate through val binding `value` (the binding is declared with `val`, so every access path from it is read-only)
+ --> valOnALetElsePatternCoversTheNamesItBinds.tt:4:3
+  |
+3 |   val const Some(value) = o else { return; };
+  |   --- the read-only binding is declared here
+4 |   value.n = 1;
+  |   ^^^^^
+  |
+  = help: remove `val` if this binding is intended to be mutable
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

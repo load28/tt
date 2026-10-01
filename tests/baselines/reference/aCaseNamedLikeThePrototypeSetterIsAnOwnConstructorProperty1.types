@@ -1,0 +1,22 @@
+=== aCaseNamedLikeThePrototypeSetterIsAnOwnConstructorProperty1.tt ===
+variant V { __proto__(x: number), B }
+>V : type V = {
+>       kind: "__proto__";
+>       x: number;
+>   } | {
+>       kind: "B";
+>   }
+>x : (property) x: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+variant U { __proto__, C }
+>U : type U = {
+>       kind: "__proto__";
+>   } | {
+>       kind: "C";
+>   }
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+

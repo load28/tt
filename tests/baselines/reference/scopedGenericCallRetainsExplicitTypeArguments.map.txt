@@ -1,0 +1,13 @@
+//// [scopedGenericCallRetainsExplicitTypeArguments.tt] 11 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:30 -> 21:29 len 6  "number"
+2:30 -> 24:18 len 6  "number"
+2:46 -> 26:3 len 129  "\ntype Item = {kind: \"item\"; run: (x: number) => "...
+6:1 -> 30:17 len 7  "consume"
+6:8 -> 31:22 len 6  "<Item>"
+6:22 -> 33:17 len 5  "state"
+7:11 -> 36:15 len 5  "value"
+7:21 -> 37:14 len 37  "({kind: \"item\", run: x => x + value})"
+8:14 -> 41:14 len 29  "({kind: \"item\", run: x => x})"
+9:4 -> 49:1 len 13  "\n\nexport {};\n"
+

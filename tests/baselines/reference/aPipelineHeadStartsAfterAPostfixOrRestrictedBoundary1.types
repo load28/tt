@@ -1,0 +1,11 @@
+=== aPipelineHeadStartsAfterAPostfixOrRestrictedBoundary1.tt ===
+declare const o: number;
+>o : const o: number
+let q = 1
+>q : let q: number
+q++
+>q : let q: number
+o |> String;
+>o : const o: number
+>String : var String: StringConstructor
+

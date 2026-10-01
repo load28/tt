@@ -1,0 +1,8 @@
+=== letElseExpressionMayBeAMatch.tt ===
+function f(): number {
+>f : function f(): number
+  const Some(v) = match (x) { A => some(1), _ => none() } else { return 0; };
+>v : const v: any
+  return v;
+>v : const v: any
+

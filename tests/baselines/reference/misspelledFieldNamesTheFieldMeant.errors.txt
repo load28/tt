@@ -1,0 +1,26 @@
+==== ttc --out-dir (exit 1) ====
+error[unknown-field]: variant Shape: case `Circle` has no field `radiuz`
+ --> ./misspelledFieldNamesTheFieldMeant.tt:2:30
+  |
+2 | const a = match (s) { Circle(radiuz) => radiuz, Empty => 0 };
+  |                              ^^^^^^
+  |
+  = help: a field with a similar name exists: `radius`
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 's'.
+ --> misspelledFieldNamesTheFieldMeant.tt:2:18
+  |
+2 | const a = match (s) { Circle(radiuz) => radiuz, Empty => 0 };
+  |                  ^
+error[unknown-field]: variant Shape: case `Circle` has no field `radiuz`
+ --> misspelledFieldNamesTheFieldMeant.tt:2:30
+  |
+2 | const a = match (s) { Circle(radiuz) => radiuz, Empty => 0 };
+  |                              ^^^^^^
+  |
+  = help: a field with a similar name exists: `radius`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

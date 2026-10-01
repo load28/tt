@@ -1,0 +1,4 @@
+//// [valParameterPositionsBeyondPlainIdentifiers4.tt] 2 mapping(s)
+1:1 -> 1:1 len 32  "class B {\n  constructor(private "
+2:27 -> 2:23 len 35  "inner: I) {\n    inner.a = 1;\n  }\n}\n"
+

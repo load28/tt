@@ -1,0 +1,11 @@
+//// [runtimeLiteralMatchEvaluatesTheScrutineeOnce.tt] 9 mapping(s)
+1:1 -> 1:1 len 77  "\nlet calls = 0;\nfunction getValue(): string {\n  "...
+8:1 -> 26:1 len 15  "const picked = "
+8:23 -> 10:17 len 10  "getValue()"
+9:3 -> 12:10 len 3  "\"a\""
+9:10 -> 13:16 len 1  "1"
+10:3 -> 16:10 len 3  "\"b\""
+10:10 -> 17:16 len 1  "2"
+11:8 -> 21:16 len 1  "3"
+12:2 -> 26:22 len 42  ";\nconsole.log(picked, calls);\n\nexport {};\n"
+

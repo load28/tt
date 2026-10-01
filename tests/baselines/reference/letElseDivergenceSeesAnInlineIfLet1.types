@@ -1,0 +1,31 @@
+=== letElseDivergenceSeesAnInlineIfLet1.tt ===
+variant Res { Ok(value: number), Err(error: string) }
+>Res : type Res = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>Ok : (property) Ok: (value: number) => Res
+>value : (property) value: number
+>Err : (property) Err: (error: string) => Res
+>error : (property) error: string
+function f(r: Res): number {
+>f : function f(r: Res): number
+>r : (parameter) r: Res
+>Res : type Res = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const Some(v) = find() else { if let Ok(value) = r { return value; } else { return 1; } };
+>v : const v: any
+>value : const value: number
+>r : (parameter) r: Res
+>value : const value: number
+  return v;
+>v : const v: any
+

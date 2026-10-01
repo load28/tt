@@ -1,0 +1,8 @@
+=== letElseEmptyElseBlockIsError.tt ===
+function f(): number {
+>f : function f(): number
+  const Some(v) = find() else { };
+>v : const v: any
+  return v;
+>v : const v: any
+

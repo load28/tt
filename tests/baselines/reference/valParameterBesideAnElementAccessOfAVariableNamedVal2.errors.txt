@@ -1,0 +1,42 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valParameterBesideAnElementAccessOfAVariableNamedVal2.tt → $DIR/out/valParameterBesideAnElementAccessOfAVariableNamedVal2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'c'.
+ --> valParameterBesideAnElementAccessOfAVariableNamedVal2.tt:1:11
+  |
+1 | const g = c ? (val [0]) : w => w;
+  |           ^
+error[ts2552]: Cannot find name 'val'. Did you mean 'eval'?
+ --> valParameterBesideAnElementAccessOfAVariableNamedVal2.tt:1:16
+  |
+1 | const g = c ? (val [0]) : w => w;
+  |                ^^^
+error[ts7006]: Parameter 'w' implicitly has an 'any' type.
+ --> valParameterBesideAnElementAccessOfAVariableNamedVal2.tt:1:27
+  |
+1 | const g = c ? (val [0]) : w => w;
+  |                           ^
+error[ts2304]: Cannot find name 'f'.
+ --> valParameterBesideAnElementAccessOfAVariableNamedVal2.tt:2:1
+  |
+2 | f(val [0])
+  | ^
+error[ts2552]: Cannot find name 'val'. Did you mean 'eval'?
+ --> valParameterBesideAnElementAccessOfAVariableNamedVal2.tt:2:3
+  |
+2 | f(val [0])
+  |   ^^^
+error[ts2552]: Cannot find name 'val'. Did you mean 'eval'?
+ --> valParameterBesideAnElementAccessOfAVariableNamedVal2.tt:4:3
+  |
+4 |   val.name = 1;
+  |   ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valParameterBesideAnElementAccessOfAVariableNamedVal2.ts(1,11): error TS2304: Cannot find name 'c'.
+valParameterBesideAnElementAccessOfAVariableNamedVal2.ts(1,16): error TS2552: Cannot find name 'val'. Did you mean 'eval'?
+valParameterBesideAnElementAccessOfAVariableNamedVal2.ts(1,27): error TS7006: Parameter 'w' implicitly has an 'any' type.
+valParameterBesideAnElementAccessOfAVariableNamedVal2.ts(2,1): error TS2304: Cannot find name 'f'.
+valParameterBesideAnElementAccessOfAVariableNamedVal2.ts(2,3): error TS2552: Cannot find name 'val'. Did you mean 'eval'?
+valParameterBesideAnElementAccessOfAVariableNamedVal2.ts(4,3): error TS2552: Cannot find name 'val'. Did you mean 'eval'?

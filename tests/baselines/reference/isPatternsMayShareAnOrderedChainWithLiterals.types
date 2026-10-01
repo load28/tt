@@ -1,0 +1,5 @@
+=== isPatternsMayShareAnOrderedChainWithLiterals.tt ===
+const value = match (x) { is Error => "error", "ok" => "ok", _ => "other" };
+>value : const value: string
+>Error : var Error: ErrorConstructor
+

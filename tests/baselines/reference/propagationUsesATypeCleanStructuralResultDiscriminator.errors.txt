@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./propagationUsesATypeCleanStructuralResultDiscriminator.tt → $DIR/out/propagationUsesATypeCleanStructuralResultDiscriminator.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'Result'.
+ --> propagationUsesATypeCleanStructuralResultDiscriminator.tt:1:36
+  |
+1 | function run() { const value = try Result.Err("boom"); return Result.Ok(value); }
+  |                                    ^^^^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> propagationUsesATypeCleanStructuralResultDiscriminator.tt:1:63
+  |
+1 | function run() { const value = try Result.Err("boom"); return Result.Ok(value); }
+  |                                                               ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+propagationUsesATypeCleanStructuralResultDiscriminator.ts(1,33): error TS2304: Cannot find name 'Result'.
+propagationUsesATypeCleanStructuralResultDiscriminator.ts(5,36): error TS2304: Cannot find name 'Result'.

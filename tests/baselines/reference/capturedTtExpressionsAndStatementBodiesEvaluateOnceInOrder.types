@@ -1,0 +1,85 @@
+=== capturedTtExpressionsAndStatementBodiesEvaluateOnceInOrder.tt ===
+variant E { A(value: number), B }
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (value: number) => E
+>value : (property) value: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const events: string[] = [];
+>events : const events: string[]
+function note(n: number) { events.push(`n:${n}`); return n; }
+>note : function note(n: number): number
+>n : (parameter) n: number
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+function callable() { events.push("callee"); return (n: number) => { events.push(`call:${n}`); return n; }; }
+>callable : function callable(): (n: number) => number
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+const values = [(note(1) |> ((n: number) => note(n + 1))), match(note(3)) { 3 => 3, _ => 0 }];
+>values : const values: number[]
+>note : function note(n: number): number
+>n : (parameter) n: number
+>note : function note(n: number): number
+>n : (parameter) n: number
+>note : function note(n: number): number
+const calls = callable()(match(note(4)){4=>4,_=>0}) + callable()(match(note(5)){5=>5,_=>0});
+>calls : const calls: number
+>callable : function callable(): (n: number) => number
+>note : function note(n: number): number
+>callable : function callable(): (n: number) => number
+>note : function note(n: number): number
+const statements = [(() => { if let A(value) = E.A(note(6)) { return value; } return 0; })(), match(note(7)){7=>7,_=>0}];
+>statements : const statements: number[]
+>value : const value: number
+>E : const E: {
+>       A: (value: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: number) => E
+>note : function note(n: number): number
+>value : const value: number
+>note : function note(n: number): number
+const bindings = [(() => { const A(value) = E.A(note(8)) else { return 0; }; return value; })(), match(note(9)){9=>9,_=>0}];
+>bindings : const bindings: number[]
+>value : const value: number
+>E : const E: {
+>       A: (value: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: number) => E
+>note : function note(n: number): number
+>value : const value: number
+>note : function note(n: number): number
+console.log(JSON.stringify([values, calls, statements, bindings]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>values : const values: number[]
+>calls : const calls: number
+>statements : const statements: number[]
+>bindings : const bindings: number[]
+console.log(events.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>events : const events: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

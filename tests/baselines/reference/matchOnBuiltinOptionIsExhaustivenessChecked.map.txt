@@ -1,0 +1,7 @@
+//// [matchOnBuiltinOptionIsExhaustivenessChecked.tt] 5 mapping(s)
+1:1 -> 19:1 len 33  "const f = (o: Option<number>) => "
+1:41 -> 22:19 len 1  "o"
+1:51 -> 25:17 len 5  "value"
+1:61 -> 26:18 len 5  "value"
+1:68 -> 35:2 len 2  ";\n"
+

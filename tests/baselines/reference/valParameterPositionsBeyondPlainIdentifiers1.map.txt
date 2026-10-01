@@ -1,0 +1,4 @@
+//// [valParameterPositionsBeyondPlainIdentifiers1.tt] 2 mapping(s)
+1:1 -> 1:1 len 13  "function foo("
+1:18 -> 1:14 len 38  "{ user }: Ctx) {\n  user.name = \"x\";\n}\n"
+

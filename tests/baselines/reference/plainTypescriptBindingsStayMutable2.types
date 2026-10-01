@@ -1,0 +1,8 @@
+=== plainTypescriptBindingsStayMutable2.tt ===
+function f(x: X) {
+>f : function f(x: X): void
+>x : (parameter) x: X
+>X : type X = /*unresolved*/ any
+  x.value = 1;
+>x : (parameter) x: X
+

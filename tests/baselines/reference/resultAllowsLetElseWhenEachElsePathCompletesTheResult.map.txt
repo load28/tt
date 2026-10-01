@@ -1,0 +1,15 @@
+//// [resultAllowsLetElseWhenEachElsePathCompletesTheResult.tt] 13 mapping(s)
+1:28 -> 2:28 len 6  "number"
+1:28 -> 5:17 len 6  "number"
+1:43 -> 7:3 len 1  "\n"
+2:1 -> 21:1 len 14  "const value = "
+2:30 -> 15:9 len 4  "item"
+2:41 -> 10:18 len 6  "read()"
+2:48 -> 15:29 len 1  " "
+2:58 -> 19:9 len 5  "found"
+2:67 -> 15:45 len 4  "item"
+2:86 -> 17:52 len 1  "0"
+2:91 -> 19:26 len 1  " "
+2:99 -> 19:74 len 5  "found"
+2:107 -> 21:27 len 2  ";\n"
+

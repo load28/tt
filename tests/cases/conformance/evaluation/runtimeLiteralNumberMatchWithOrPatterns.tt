@@ -1,0 +1,14 @@
+// @origin: tests/integration/cases_04.rs::runtime_literal_number_match_with_or_patterns
+// @run: runtimeLiteralNumberMatchWithOrPatterns.tt
+
+function status(code: 200 | 201 | 404 | 500) {
+  return match (code) {
+    200 | 201 => "success",
+    404 => "not found",
+    500 => "server error",
+  };
+}
+
+console.log(status(200), status(201), status(404), status(500));
+
+export {};

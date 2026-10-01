@@ -1,0 +1,71 @@
+=== runtimeAsyncMatchWithAwait.tt ===
+variant Job {
+>Job : type Job = {
+>       kind: "Fetch";
+>       n: number;
+>   } | {
+>       kind: "Idle";
+>   }
+  Fetch(n: number),
+>Fetch : (property) Fetch: (n: number) => Job
+>n : (property) n: number
+  Idle,
+>Idle : (property) Idle: {
+>       readonly kind: "Idle";
+>   }
+async function double(n: number): Promise<number> {
+>double : function double(n: number): Promise<number>
+>n : (parameter) n: number
+>Promise : interface Promise<T>
+  return n * 2;
+>n : (parameter) n: number
+async function runJob(j: Job): Promise<number> {
+>runJob : function runJob(j: Job): Promise<number>
+>j : (parameter) j: Job
+>Job : type Job = {
+>       kind: "Fetch";
+>       n: number;
+>   } | {
+>       kind: "Idle";
+>   }
+>Promise : interface Promise<T>
+  return match (j) {
+>j : (parameter) j: Job
+    Fetch(n) => await double(n),
+>n : const n: number
+>double : function double(n: number): Promise<number>
+>n : const n: number
+runJob(Job.Fetch(21)).then((a) => {
+>runJob : function runJob(j: Job): Promise<number>
+>Job : const Job: {
+>       Fetch: (n: number) => Job;
+>       Idle: {
+>           readonly kind: "Idle";
+>       };
+>   }
+>Fetch : (property) Fetch: (n: number) => Job
+>then : (method) Promise<number>.then<number, never>(onfulfilled?: ((value: number) => number | PromiseLike<number>) | null | undefined, onrejected?: ((reason: any) => PromiseLike<never>) | null | undefined): Promise<number>
+>a : (parameter) a: number
+  console.log(a);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>a : (parameter) a: number
+  return runJob(Job.Idle);
+>runJob : function runJob(j: Job): Promise<number>
+>Job : const Job: {
+>       Fetch: (n: number) => Job;
+>       Idle: {
+>           readonly kind: "Idle";
+>       };
+>   }
+>Idle : (property) Idle: {
+>       readonly kind: "Idle";
+>   }
+}).then((b) => {
+>then : (method) Promise<number>.then<void, never>(onfulfilled?: ((value: number) => void | PromiseLike<void>) | null | undefined, onrejected?: ((reason: any) => PromiseLike<never>) | null | undefined): Promise<void>
+>b : (parameter) b: number
+  console.log(b);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>b : (parameter) b: number
+

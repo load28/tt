@@ -1,0 +1,13 @@
+//// [aMaterializedPipelineKeepsHeadBeforeCallee.tt] 11 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:22 -> 21:25 len 6  "number"
+2:22 -> 24:14 len 6  "number"
+2:34 -> 26:3 len 208  "\nconst order: string[] = [];\nconst head = (): E "...
+9:1 -> 56:1 len 14  "const value = "
+9:22 -> 37:19 len 6  "head()"
+9:34 -> 40:17 len 5  "value"
+9:44 -> 41:18 len 5  "value"
+9:56 -> 45:18 len 1  "0"
+9:63 -> 53:12 len 6  "step()"
+9:69 -> 56:21 len 51  ";\nconsole.log(order.join(\",\"), value);\n\nexport {"...
+

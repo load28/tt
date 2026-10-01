@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 1) ====
+error[match-not-exhaustive]: match on variant Option is not exhaustive: missing "Stale"
+ --> ./localVariantShadowsBuiltin.tt:2:26
+  |
+2 | const f = (o: Option) => match (o) { Some => 1 };
+  |                          ^^^^^^^^^
+  |
+  = help: add the missing arms: `, Stale => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2749]: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'? (in code ttc generated for this construct)
+ --> localVariantShadowsBuiltin.tt:1:9
+  |
+1 | variant Option { Some(), Stale }
+  |         ^^^^^^
+error[ts2451]: Cannot redeclare block-scoped variable 'Option'. (in code ttc generated for this construct)
+ --> localVariantShadowsBuiltin.tt:1:9
+  |
+1 | variant Option { Some(), Stale }
+  |         ^^^^^^
+error[ts2749]: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'?
+ --> localVariantShadowsBuiltin.tt:2:15
+  |
+2 | const f = (o: Option) => match (o) { Some => 1 };
+  |               ^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

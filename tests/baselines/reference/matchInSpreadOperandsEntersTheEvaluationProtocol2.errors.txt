@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./matchInSpreadOperandsEntersTheEvaluationProtocol2.tt → $DIR/out/matchInSpreadOperandsEntersTheEvaluationProtocol2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'kind'.
+ --> matchInSpreadOperandsEntersTheEvaluationProtocol2.tt:1:27
+  |
+1 | const value = [ ...match (kind) { A => [1], _ => [] } ];
+  |                           ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+matchInSpreadOperandsEntersTheEvaluationProtocol2.ts(3,17): error TS2304: Cannot find name 'kind'.

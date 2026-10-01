@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::flow_optional_postfix_step_becomes_a_contextually_typed_arrow
+const f = flow |> parse |> ?.value?.toFixed(1);

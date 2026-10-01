@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseDivergenceIsAFlowAnswerNotALastKeywordCheck2.tt → $DIR/out/letElseDivergenceIsAFlowAnswerNotALastKeywordCheck2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseDivergenceIsAFlowAnswerNotALastKeywordCheck2.tt:2:19
+  |
+2 |   const Some(v) = find() else { if (c) { return 1; } else if (d) { throw e; } else { return 2; } };
+  |                   ^^^^
+error[ts2304]: Cannot find name 'c'.
+ --> letElseDivergenceIsAFlowAnswerNotALastKeywordCheck2.tt:2:37
+  |
+2 |   const Some(v) = find() else { if (c) { return 1; } else if (d) { throw e; } else { return 2; } };
+  |                                     ^
+error[ts2304]: Cannot find name 'd'.
+ --> letElseDivergenceIsAFlowAnswerNotALastKeywordCheck2.tt:2:63
+  |
+2 |   const Some(v) = find() else { if (c) { return 1; } else if (d) { throw e; } else { return 2; } };
+  |                                                               ^
+error[ts2304]: Cannot find name 'e'.
+ --> letElseDivergenceIsAFlowAnswerNotALastKeywordCheck2.tt:2:74
+  |
+2 |   const Some(v) = find() else { if (c) { return 1; } else if (d) { throw e; } else { return 2; } };
+  |                                                                          ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseDivergenceIsAFlowAnswerNotALastKeywordCheck2.ts(2,18): error TS2304: Cannot find name 'find'.
+letElseDivergenceIsAFlowAnswerNotALastKeywordCheck2.ts(4,9): error TS2304: Cannot find name 'c'.
+letElseDivergenceIsAFlowAnswerNotALastKeywordCheck2.ts(4,35): error TS2304: Cannot find name 'd'.
+letElseDivergenceIsAFlowAnswerNotALastKeywordCheck2.ts(4,46): error TS2304: Cannot find name 'e'.

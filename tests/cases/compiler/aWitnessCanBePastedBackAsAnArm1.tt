@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_09.rs::a_witness_can_be_pasted_back_as_an_arm
+variant Inner { Yes(n: number), No }
+variant Outer { Wrap(inner: Inner), Bare }
+declare const o: Outer;
+const a = match (o) {
+  Wrap(inner: Yes(n)) => n,
+  Bare => -1,
+};

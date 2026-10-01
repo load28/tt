@@ -1,0 +1,3 @@
+//// [genericLookAlikeWithAdjacentOperatorsPassesThrough.tt] 1 mapping(s)
+1:1 -> 1:1 len 78  "declare const result: number;\nfunction f() {\n  r"...
+

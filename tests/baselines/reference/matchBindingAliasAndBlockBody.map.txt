@@ -1,0 +1,13 @@
+//// [matchBindingAliasAndBlockBody.tt] 11 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:1 -> 18:1 len 10  "const r = "
+2:18 -> 4:17 len 1  "m"
+3:8 -> 7:15 len 1  "x"
+3:11 -> 7:18 len 2  "px"
+3:15 -> 7:22 len 1  "y"
+3:18 -> 7:25 len 2  "py"
+4:5 -> 8:7 len 25  "const sum = px + py;\n    "
+5:12 -> 9:18 len 3  "sum"
+7:8 -> 13:18 len 1  "0"
+8:2 -> 18:19 len 2  ";\n"
+

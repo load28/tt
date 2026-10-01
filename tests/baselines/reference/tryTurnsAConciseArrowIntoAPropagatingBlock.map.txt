@@ -1,0 +1,7 @@
+//// [tryTurnsAConciseArrowIntoAPropagatingBlock.tt] 5 mapping(s)
+1:1 -> 1:1 len 41  "const f = (): TResult<number, string> => "
+1:42 -> 8:10 len 10  "Result.Ok("
+1:56 -> 3:18 len 6  "read()"
+1:62 -> 8:26 len 1  ")"
+1:63 -> 9:2 len 2  ";\n"
+

@@ -1,0 +1,18 @@
+=== pipelineHeadReclaimsALiftedMatch.tt ===
+variant E { A(v: number), B }
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (v: number) => E
+>v : (property) v: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const a = match (e) { A(v) => v, B => 0, } |> double;
+>a : const a: any
+>v : const v: any
+>v : const v: any
+

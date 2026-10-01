@@ -1,0 +1,4 @@
+=== valDeclarationModifierIsErasedFromTheOutput3.tt ===
+export val const cfg = load();
+>cfg : const cfg: any
+

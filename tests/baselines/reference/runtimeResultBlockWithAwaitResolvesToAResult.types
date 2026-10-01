@@ -1,0 +1,129 @@
+=== runtimeResultBlockWithAwaitResolvesToAResult.tt ===
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>T : (type parameter) T in type Res<T, E>
+>E : (type parameter) E in type Res<T, E>
+>Ok : (property) Ok: <T, E>(value: T) => Res<T, E>
+>value : (property) value: T
+>T : (type parameter) T in type Res<T, E>
+>Err : (property) Err: <T, E>(error: E) => Res<T, E>
+>error : (property) error: E
+>E : (type parameter) E in type Res<T, E>
+const fetchNum = async (n: number): Promise<Res<number, string>> =>
+>fetchNum : const fetchNum: (n: number) => Promise<Res<number, string>>
+>n : (parameter) n: number
+>Promise : interface Promise<T>
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+  n > 0 ? Res.Ok(n) : Res.Err("not positive");
+>n : (parameter) n: number
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Ok : (property) Ok: <number, string>(value: number) => Res<number, string>
+>n : (parameter) n: number
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Err : (property) Err: <number, string>(error: string) => Res<number, string>
+const total = async (a: number, b: number) => result {
+>total : const total: (a: number, b: number) => Promise<{
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }>
+>a : (parameter) a: number
+>b : (parameter) b: number
+  const x = try await fetchNum(a);
+>x : const x: number
+>fetchNum : const fetchNum: (n: number) => Promise<Res<number, string>>
+>a : (parameter) a: number
+  const y = try await fetchNum(b);
+>y : const y: number
+>fetchNum : const fetchNum: (n: number) => Promise<Res<number, string>>
+>b : (parameter) b: number
+  return x + y;
+>x : const x: number
+>y : const y: number
+total(2, 3).then((r) => console.log(JSON.stringify(r)));
+>total : const total: (a: number, b: number) => Promise<{
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }>
+>then : (method) Promise<{ kind: "Err"; error: string; } | { kind: "Ok"; value: number; }>.then<void, never>(onfulfilled?: ((value: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }) => void | PromiseLike<void>) | null | undefined, onrejected?: ((reason: any) => PromiseLike<never>) | null | undefined): Promise<void>
+>r : (parameter) r: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>r : (parameter) r: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+total(2, -1).then((r) => console.log(JSON.stringify(r)));
+>total : const total: (a: number, b: number) => Promise<{
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }>
+>then : (method) Promise<{ kind: "Err"; error: string; } | { kind: "Ok"; value: number; }>.then<void, never>(onfulfilled?: ((value: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }) => void | PromiseLike<void>) | null | undefined, onrejected?: ((reason: any) => PromiseLike<never>) | null | undefined): Promise<void>
+>r : (parameter) r: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>r : (parameter) r: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+

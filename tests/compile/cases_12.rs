@@ -30,18 +30,6 @@ fn a_let_else_block_diverges_after_a_line_ending_in_a_type_or_a_name() {
 }
 
 #[test]
-fn every_ecma_line_terminator_ends_a_statement() {
-    for terminator in ["\r", "\r\n", "\u{2028}", "\u{2029}"] {
-        let source = format!(
-            "{TASK_491_PRELUDE}export function f(v: Option<number>): number {{\n  const Some(value) = v else {{\n    const a = 1{terminator}    throw e\n  }};\n  return value;\n}}\n"
-        );
-        assert_eq!(codes(&source), vec![], "{terminator:?}");
-    }
-    let source = "declare const e: Error;\nexport function f(v: Option<number>): number {\n  const Some(value) = v else {\n    // a comment ends at a CR\r    throw e\n  };\n  return value;\n}\n";
-    assert_eq!(codes(source), vec![]);
-}
-
-#[test]
 fn an_if_let_after_a_line_ending_in_a_type_starts_a_statement() {
     for line in TASK_491_STATEMENT_ENDS {
         let source = format!(
@@ -85,30 +73,5 @@ fn a_statement_match_after_a_line_ending_in_a_type_keeps_both_statements() {
         let out = ok(&source);
         assert!(out.contains(&format!("  {line}\n")), "{line}\n{out}");
         assert!(!out.contains("match (s)"), "{line}\n{out}");
-    }
-}
-
-#[test]
-fn a_block_after_a_call_opens_no_function() {
-    let source = "declare function f(): Option<number>;\n\
-                  declare function g(): Result<number, string>;\n\
-                  if let Some(v) = f() { try g(); }\n";
-    assert_eq!(codes(source), [DiagnosticCode::TryPlacement]);
-}
-
-#[test]
-fn generated_text_follows_a_line_ended_by_any_line_terminator() {
-    let tail = "declare const o: { p: number };\nexport const a = o.p |> String;\n";
-    for terminator in ["\r\n", "\u{2028}", "\u{2029}"] {
-        for head in [
-            format!("\"use client\" // client{terminator}"),
-            format!("#!/usr/bin/env node{terminator}"),
-        ] {
-            let out = ok(&format!("{head}{tail}"));
-            assert!(
-                out.contains(&format!("{head}import {{ $tt_ap }} from ")),
-                "{terminator:?}\n{out}"
-            );
-        }
     }
 }

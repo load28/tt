@@ -1,0 +1,28 @@
+//// [generatedStorageNamesNoTypeDeclaredInsideAnArm.tt] 26 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:19 -> 26:3 len 180  "\ntype R = { kind: \"Ok\"; value: number } | { kind"...
+7:3 -> 47:3 len 10  "const v = "
+7:20 -> 33:19 len 1  "s"
+7:32 -> 36:9 len 25  "class Loc { tag = \"a\"; } "
+7:64 -> 36:43 len 9  "new Loc()"
+7:83 -> 39:18 len 14  "({ tag: \"b\" })"
+7:99 -> 47:19 len 48  ";\n  return v.tag;\n}\nfunction inResult(s: S) {\n  "
+11:3 -> 81:3 len 7  "return "
+12:11 -> 58:11 len 1  "n"
+12:19 -> 53:20 len 6  "read()"
+12:26 -> 58:28 len 5  "\n    "
+13:5 -> 75:5 len 10  "const v = "
+13:22 -> 61:21 len 1  "s"
+13:34 -> 64:11 len 29  "class Loc { tag = \"a\" + n; } "
+13:70 -> 64:49 len 9  "new Loc()"
+13:89 -> 67:20 len 14  "({ tag: \"b\" })"
+13:105 -> 75:21 len 6  ";\n    "
+14:12 -> 77:46 len 5  "v.tag"
+15:4 -> 81:16 len 31  ";\n}\nfunction unnamed(s: S) {\n  "
+18:3 -> 100:3 len 10  "const v = "
+18:20 -> 86:19 len 1  "s"
+18:32 -> 89:9 len 28  "class Hidden { tag = \"h\"; } "
+18:67 -> 89:46 len 12  "new Hidden()"
+18:89 -> 92:18 len 14  "({ tag: \"b\" })"
+18:105 -> 100:19 len 131  ";\n  return v.tag;\n}\nconsole.log(inner(S.A), inne"...
+

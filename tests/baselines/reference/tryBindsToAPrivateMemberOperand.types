@@ -1,0 +1,83 @@
+=== tryBindsToAPrivateMemberOperand.tt ===
+variant R { Ok(value: number), Err(error: string) }
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>Ok : (property) Ok: (value: number) => R
+>value : (property) value: number
+>Err : (property) Err: (error: string) => R
+>error : (property) error: string
+class C {
+>C : class C
+#v: R = R.Ok(1);
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : const R: {
+>       Ok: (value: number) => R;
+>       Err: (error: string) => R;
+>   }
+>Ok : (property) Ok: (value: number) => R
+#c: C = this;
+>C : class C
+#case: R = R.Ok(1);
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : const R: {
+>       Ok: (value: number) => R;
+>       Err: (error: string) => R;
+>   }
+>Ok : (property) Ok: (value: number) => R
+#match(): R { return R.Ok(2); }
+>match : (method) C.#match(): R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : const R: {
+>       Ok: (value: number) => R;
+>       Err: (error: string) => R;
+>   }
+>Ok : (property) Ok: (value: number) => R
+f(): R {
+>f : (method) C.f(): R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+const a = try this.#v;
+>a : const a: number
+const b = try this.#c?.#v;
+>b : const b: number
+const d = try this.#match() * 2;
+>d : const d: number
+>match : (method) C.#match(): R
+return R.Ok(a + b + d);
+>R : const R: {
+>       Ok: (value: number) => R;
+>       Err: (error: string) => R;
+>   }
+>Ok : (property) Ok: (value: number) => R
+>a : const a: number
+>b : const b: number
+>d : const d: number
+

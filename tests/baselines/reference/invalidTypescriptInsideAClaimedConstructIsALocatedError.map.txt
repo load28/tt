@@ -1,0 +1,7 @@
+//// [invalidTypescriptInsideAClaimedConstructIsALocatedError.tt] 5 mapping(s)
+1:1 -> 2:1 len 10  "const r = "
+2:9 -> 7:9 len 1  "a"
+2:17 -> 3:18 len 3  "f()"
+2:21 -> 7:26 len 26  "\n  const b = ;\n  return a;"
+5:2 -> 10:5 len 2  ";\n"
+

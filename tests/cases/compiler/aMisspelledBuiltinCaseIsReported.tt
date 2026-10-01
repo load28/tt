@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_08.rs::a_misspelled_builtin_case_is_reported
+const n = match (o) { Some(value) => value, Non => 0 };

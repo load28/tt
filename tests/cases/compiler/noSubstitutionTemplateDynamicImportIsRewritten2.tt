@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_04.rs::no_substitution_template_dynamic_import_is_rewritten
+const m = import(`../view.ttx`, { with: { type: 'module' } });

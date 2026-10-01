@@ -1,0 +1,63 @@
+=== runtimeGenericVariant.tt ===
+variant TOption<T> {
+>TOption : type TOption<T> = {
+>       kind: "Some";
+>       value: T;
+>   } | {
+>       kind: "None";
+>   }
+>T : (type parameter) T in type TOption<T>
+  Some(value: T),
+>Some : (property) Some: <T>(value: T) => TOption<T>
+>value : (property) value: T
+>T : (type parameter) T in type TOption<T>
+  None,
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+function unwrapOr<T>(o: TOption<T>, fallback: T): T {
+>unwrapOr : function unwrapOr<T>(o: TOption<T>, fallback: T): T
+>T : (type parameter) T in unwrapOr<T>(o: TOption<T>, fallback: T): T
+>o : (parameter) o: TOption<T>
+>TOption : type TOption<T> = {
+>       kind: "Some";
+>       value: T;
+>   } | {
+>       kind: "None";
+>   }
+>T : (type parameter) T in unwrapOr<T>(o: TOption<T>, fallback: T): T
+>fallback : (parameter) fallback: T
+>T : (type parameter) T in unwrapOr<T>(o: TOption<T>, fallback: T): T
+>T : (type parameter) T in unwrapOr<T>(o: TOption<T>, fallback: T): T
+  return match (o) {
+>o : (parameter) o: TOption<T>
+    Some(value) => value,
+>value : const value: T
+>value : const value: T
+    None => fallback,
+>fallback : (parameter) fallback: T
+console.log(unwrapOr(TOption.Some(7), 0));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>unwrapOr : function unwrapOr<number>(o: TOption<number>, fallback: number): number
+>TOption : const TOption: {
+>       Some: <T>(value: T) => TOption<T>;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: <number>(value: number) => TOption<number>
+console.log(unwrapOr<number>(TOption.None, 42));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>unwrapOr : function unwrapOr<number>(o: TOption<number>, fallback: number): number
+>TOption : const TOption: {
+>       Some: <T>(value: T) => TOption<T>;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+

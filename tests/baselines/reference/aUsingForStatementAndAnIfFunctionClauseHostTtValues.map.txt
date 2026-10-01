@@ -1,0 +1,23 @@
+//// [aUsingForStatementAndAnIfFunctionClauseHostTtValues.tt] 21 mapping(s)
+1:1 -> 19:1 len 40  "import type { TResult } from \"@tt/std\";\n"
+2:18 -> 21:21 len 6  "number"
+2:18 -> 24:10 len 6  "number"
+2:30 -> 26:3 len 280  "\ndeclare const o: O;\ndeclare function res(): { n"...
+9:5 -> 34:19 len 1  "t"
+9:5 -> 52:5 len 2  "t "
+9:9 -> 52:18 len 1  " "
+9:17 -> 36:21 len 1  "o"
+9:24 -> 39:19 len 1  "n"
+9:30 -> 40:20 len 13  "n + q.n + p.n"
+9:50 -> 44:20 len 1  "0"
+9:53 -> 52:25 len 8  ";\n  }\n  "
+11:3 -> 60:3 len 15  "for (using q = "
+11:22 -> 55:18 len 4  "rr()"
+11:26 -> 60:24 len 105  "; t < 3; t++) {\n    t += q.n;\n  }\n  return { kin"...
+16:35 -> 83:1 len 7  "return "
+16:49 -> 67:17 len 1  "o"
+16:56 -> 70:15 len 1  "n"
+16:62 -> 71:16 len 1  "n"
+16:70 -> 75:16 len 1  "0"
+16:73 -> 83:14 len 4  "; }\n"
+

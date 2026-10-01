@@ -1,0 +1,13 @@
+==== ttc --out-dir (exit 0) ====
+ttc: std → $DIR/out/tt
+ttc: ./flowCompositionInputMismatchIsATypeErrorOnUserText.tt → $DIR/out/flowCompositionInputMismatchIsATypeErrorOnUserText.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2345]: Argument of type 'number' is not assignable to parameter of type 'string'.
+ --> flowCompositionInputMismatchIsATypeErrorOnUserText.tt:3:13
+  |
+3 | const v = f(3);
+  |             ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+flowCompositionInputMismatchIsATypeErrorOnUserText.ts(4,13): error TS2345: Argument of type 'number' is not assignable to parameter of type 'string'.

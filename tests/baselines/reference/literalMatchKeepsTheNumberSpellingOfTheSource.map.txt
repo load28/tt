@@ -1,0 +1,14 @@
+//// [literalMatchKeepsTheNumberSpellingOfTheSource.tt] 12 mapping(s)
+1:1 -> 27:1 len 10  "const v = "
+1:18 -> 3:17 len 1  "x"
+1:23 -> 5:10 len 4  "0xff"
+1:31 -> 6:18 len 1  "1"
+1:34 -> 9:10 len 5  "1_000"
+1:43 -> 10:18 len 1  "2"
+1:46 -> 13:10 len 5  "1.5e2"
+1:55 -> 14:18 len 1  "3"
+1:58 -> 17:10 len 2  "-1"
+1:64 -> 18:18 len 1  "4"
+1:72 -> 22:18 len 1  "0"
+1:75 -> 27:19 len 1  ";"
+

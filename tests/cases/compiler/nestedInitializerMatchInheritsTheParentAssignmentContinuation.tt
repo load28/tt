@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_01.rs::nested_initializer_match_inherits_the_parent_assignment_continuation
+variant Outer { A, B }
+enum Inner { X, Y }
+const value = match (outer) { A => match (inner) { X => 1, Y => 2 }, B => 0 };

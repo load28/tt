@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./ifLetSharesTheTempCounterWithTry.tt → $DIR/out/ifLetSharesTheTempCounterWithTry.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'Result'.
+ --> ifLetSharesTheTempCounterWithTry.tt:1:15
+  |
+1 | function f(): Result<number, string> {
+  |               ^^^^^^
+error[ts2304]: Cannot find name 'g'.
+ --> ifLetSharesTheTempCounterWithTry.tt:2:17
+  |
+2 |   const a = try g();
+  |                 ^
+error[ts2304]: Cannot find name 'h'.
+ --> ifLetSharesTheTempCounterWithTry.tt:3:24
+  |
+3 |   if let Some(value) = h(a) { use(value); }
+  |                        ^
+error[ts2304]: Cannot find name 'use'.
+ --> ifLetSharesTheTempCounterWithTry.tt:3:31
+  |
+3 |   if let Some(value) = h(a) { use(value); }
+  |                               ^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> ifLetSharesTheTempCounterWithTry.tt:4:10
+  |
+4 |   return Result.Ok(a);
+  |          ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+ifLetSharesTheTempCounterWithTry.ts(1,15): error TS2304: Cannot find name 'Result'.
+ifLetSharesTheTempCounterWithTry.ts(2,18): error TS2304: Cannot find name 'g'.
+ifLetSharesTheTempCounterWithTry.ts(8,20): error TS2304: Cannot find name 'h'.
+ifLetSharesTheTempCounterWithTry.ts(11,7): error TS2304: Cannot find name 'use'.
+ifLetSharesTheTempCounterWithTry.ts(14,10): error TS2304: Cannot find name 'Result'.

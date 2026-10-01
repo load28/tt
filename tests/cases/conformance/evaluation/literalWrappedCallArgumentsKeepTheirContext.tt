@@ -1,0 +1,25 @@
+// @origin: tests/integration/contextual.rs::literal_wrapped_call_arguments_keep_their_context
+
+variant State { Ready(value: number), Empty }
+declare const state: State;
+declare function consume(item: {kind: "item"; run: (x: number) => number}): void;
+declare function consumeAll(items: ((x: number) => number)[]): void;
+declare function nested(outer: {inner: {run: (x: number) => number}}): void;
+consume({kind: "item", run: match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+}});
+consumeAll([match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+}]);
+nested({inner: {run: match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+}}});
+const kept: void = consume({kind: "item", run: match (state) {
+  Ready(value) => x => x + value,
+  Empty => x => x,
+}});
+
+export {};

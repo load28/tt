@@ -1,0 +1,9 @@
+// @origin: tests/integration/cases_03.rs::pipeline_runs_left_to_right
+// @run: pipelineRunsLeftToRight.tt
+
+const order: string[] = [];
+const tap = <T,>(name: string) => (v: T): T => { order.push(name); return v; };
+const out = (order.push("head"), 10) |> tap("s1") |> .toFixed(0) |> tap("s2");
+console.log(order.join(","), out);
+
+export {};

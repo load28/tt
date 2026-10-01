@@ -1,0 +1,121 @@
+=== aMemberStepAfterASemicolonFreeLineCallsTheMember.tt ===
+const log: string[] = []
+>log : const log: string[]
+const o = { m(x: unknown) { log.push(String(x)) } }
+>o : const o: {
+>       m(x: unknown): void;
+>   }
+>m : (method) m(x: unknown): void
+>x : (parameter) x: unknown
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>String : var String: (value?: any) => string
+>x : (parameter) x: unknown
+const k = "m" as const
+>k : const k: "m"
+>const : type const = "m"
+const c = false
+>c : const c: false
+function f() {}
+>f : function f(): void
+class A {
+>A : class A
+m(x: unknown) { log.push("this " + String(x)) }
+>m : (method) A.m(x: unknown): void
+>x : (parameter) x: unknown
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>String : var String: (value?: any) => string
+>x : (parameter) x: unknown
+run() {
+>run : (method) A.run(): void
+const w = 0
+>w : const w: 0
+w |> this.m
+>w : const w: 0
+>m : (method) A.m(x: unknown): void
+new A().run()
+>A : constructor A(): A
+>run : (method) A.run(): void
+const v = 1
+>v : const v: 1
+v |> o.m
+>v : const v: 1
+>o : const o: {
+>       m(x: unknown): void;
+>   }
+>m : (method) m(x: unknown): void
+const a = f
+>a : const a: () => void
+>f : function f(): void
+2 |> o[k]
+>o : const o: {
+>       m(x: unknown): void;
+>   }
+>k : const k: "m"
+if (c) f
+>c : const c: false
+>f : function f(): void
+3 |> o?.m
+>o : const o: {
+>       m(x: unknown): void;
+>   }
+>m : (method) m(x: unknown): void
+type T = number
+>T : type T = number
+4 |> String |> o.m
+>String : var String: (value?: any) => string
+>o : const o: {
+>       m(x: unknown): void;
+>   }
+>m : (method) m(x: unknown): void
+let d: number
+>d : let d: number
+5 |> (o.m)
+>o : const o: {
+>       m(x: unknown): void;
+>   }
+>m : (method) m(x: unknown): void
+f // c
+>f : function f(): void
+6 |> o.m
+>o : const o: {
+>       m(x: unknown): void;
+>   }
+>m : (method) m(x: unknown): void
+const g = () => {}
+>g : const g: () => void
+7 |> o.m
+>o : const o: {
+>       m(x: unknown): void;
+>   }
+>m : (method) m(x: unknown): void
+function* gen() {
+>gen : function gen(): Generator<undefined, void, unknown>
+8 |> o.m
+>o : const o: {
+>       m(x: unknown): void;
+>   }
+>m : (method) m(x: unknown): void
+log.push(String([...gen()].length))
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>String : var String: (value?: any) => string
+>gen : function gen(): Generator<undefined, void, unknown>
+>length : (property) Array<undefined>.length: number
+log.push(`${(() => { const w = 9
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>w : const w: 9
+w |> o.m
+>w : const w: 9
+>o : const o: {
+>       m(x: unknown): void;
+>   }
+>m : (method) m(x: unknown): void
+console.log(log.join(","))
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalStringMatchSwitchesOnTheScrutineeItself.tt → $DIR/out/literalStringMatchSwitchesOnTheScrutineeItself.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'dir'.
+ --> literalStringMatchSwitchesOnTheScrutineeItself.tt:2:22
+  |
+2 | const label = match (dir) {
+  |                      ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalStringMatchSwitchesOnTheScrutineeItself.ts(4,17): error TS2304: Cannot find name 'dir'.

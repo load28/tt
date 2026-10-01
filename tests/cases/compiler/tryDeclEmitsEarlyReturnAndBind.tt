@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_02.rs::try_decl_emits_early_return_and_bind
+function f(): X {
+  const n = try g();
+  return h(n);
+}

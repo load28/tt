@@ -1,0 +1,4 @@
+=== flowOptionalPostfixStepBecomesAContextuallyTypedArrow.tt ===
+const f = flow |> parse |> ?.value?.toFixed(1);
+>f : const f: (...a: unknown[]) => any
+

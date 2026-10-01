@@ -1,0 +1,16 @@
+// @origin: tests/integration/contextual.rs::statementful_match_blocks_keep_effects_and_scope
+// @run: statementfulMatchBlocksKeepEffectsAndScope.tt
+
+const trace: string[] = [];
+const label = 9;
+function consume(value: number) { trace.push("call"); return value; }
+for (const flag of [true, false]) {
+  trace.length = 0;
+  const result = consume(match (flag) {
+    true => { const label = 3; trace.push("before"); return label; },
+    false => { try { return label; } finally { trace.push("finally"); } },
+  });
+  console.log(result, label, trace.join(","));
+}
+
+export {};

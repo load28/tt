@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_04.rs::let_else_empty_else_block_is_error
+function f(): number {
+  const Some(v) = find() else { };
+  return v;
+}

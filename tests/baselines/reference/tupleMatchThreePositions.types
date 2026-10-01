@@ -1,0 +1,14 @@
+=== tupleMatchThreePositions.tt ===
+variant B { T(), F }
+>B : type B = {
+>       kind: "T";
+>   } | {
+>       kind: "F";
+>   }
+>T : (property) T: () => B
+>F : (property) F: {
+>       readonly kind: "F";
+>   }
+const r = match (x, y, z) {
+>r : const r: number
+

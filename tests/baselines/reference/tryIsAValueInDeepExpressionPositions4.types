@@ -1,0 +1,9 @@
+=== tryIsAValueInDeepExpressionPositions4.tt ===
+function f(): TResult<{ amount: number }, string> { return Result.Ok({ amount: try total() }); }
+>f : function f(): TResult<{
+>       amount: number;
+>   }, string>
+>TResult : type TResult = /*unresolved*/ any
+>amount : (property) amount: number
+>amount : (property) amount: any
+

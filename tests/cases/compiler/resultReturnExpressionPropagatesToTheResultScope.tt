@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::result_return_expression_propagates_to_the_result_scope
+const value = result { return Math.round(try total() * 1.1); };

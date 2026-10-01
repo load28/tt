@@ -1,0 +1,8 @@
+//// [parenthesizedSiblingTriesBothPropagate.tt] 6 mapping(s)
+1:1 -> 1:1 len 101  "declare function a(): { kind: \"Ok\"; value: numbe"...
+2:16 -> 14:1 len 11  "const x = ("
+2:31 -> 4:16 len 3  "a()"
+2:34 -> 14:18 len 5  ") + ("
+2:43 -> 9:16 len 3  "a()"
+2:46 -> 14:29 len 15  "); return x; }\n"
+

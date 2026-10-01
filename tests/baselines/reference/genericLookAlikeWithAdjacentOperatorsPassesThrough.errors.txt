@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./genericLookAlikeWithAdjacentOperatorsPassesThrough.tt → $DIR/out/genericLookAlikeWithAdjacentOperatorsPassesThrough.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'Foo'.
+ --> genericLookAlikeWithAdjacentOperatorsPassesThrough.tt:4:12
+  |
+4 |   { let x: Foo<-1>; }
+  |            ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+genericLookAlikeWithAdjacentOperatorsPassesThrough.ts(4,12): error TS2304: Cannot find name 'Foo'.

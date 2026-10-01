@@ -1,0 +1,8 @@
+//// [orPatternCountsForExhaustiveness2.tt] 6 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:43 -> 30:3 len 23  "\nconst f = (d: Dir) => "
+3:30 -> 34:19 len 1  "d"
+4:20 -> 37:18 len 1  "1"
+5:11 -> 41:18 len 1  "2"
+6:2 -> 50:2 len 2  ";\n"
+

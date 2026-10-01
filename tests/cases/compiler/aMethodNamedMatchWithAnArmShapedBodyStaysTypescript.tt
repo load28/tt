@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_05.rs::a_method_named_match_with_an_arm_shaped_body_stays_typescript
+class C {
+  match(x: number) { x }
+  other(y: boolean) { if (y) return 1; }
+}

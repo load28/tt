@@ -1,0 +1,26 @@
+==== ttc --out-dir (exit 1) ====
+error[unknown-case]: variant Inner has no case `Yess`
+ --> ./misspelledCaseOfANestedPatternIsResolvedThroughTheFieldType.tt:3:35
+  |
+3 | const a = match (o) { Wrap(inner: Yess(n)) => n, Bare => 0 };
+  |                                   ^^^^
+  |
+  = help: a case with a similar name exists: `Yes`
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'o'.
+ --> misspelledCaseOfANestedPatternIsResolvedThroughTheFieldType.tt:3:18
+  |
+3 | const a = match (o) { Wrap(inner: Yess(n)) => n, Bare => 0 };
+  |                  ^
+error[unknown-case]: variant Inner has no case `Yess`
+ --> misspelledCaseOfANestedPatternIsResolvedThroughTheFieldType.tt:3:35
+  |
+3 | const a = match (o) { Wrap(inner: Yess(n)) => n, Bare => 0 };
+  |                                   ^^^^
+  |
+  = help: a case with a similar name exists: `Yes`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

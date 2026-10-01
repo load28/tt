@@ -1,0 +1,22 @@
+// @origin: tests/integration/contextual.rs::deferred_match_values_preserve_order_and_receiver
+// @run: deferredMatchValuesPreserveOrderAndReceiver.tt
+
+const trace: string[] = [];
+const mark = <T,>(name: string, value: T): T => { trace.push(name); return value; };
+const receiver = {
+  value: 10,
+  consume(first: number, item: {kind: "item"; run: (x: number) => number}, last: number) {
+    trace.push("call");
+    return this.value + first + item.run(last);
+  },
+};
+for (const flag of [true, false]) {
+  trace.length = 0;
+  const value = mark("receiver", receiver).consume(mark("first", 2), match (mark("subject", flag)) {
+    true => (trace.push("yes"), {kind: "item", run: x => x + 1}),
+    _ => (trace.push("no"), {kind: "item", run: x => x - 1}),
+  }, mark("last", 3));
+  console.log(value, trace.join(","));
+}
+
+export {};

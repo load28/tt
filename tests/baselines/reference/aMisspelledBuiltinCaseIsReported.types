@@ -1,0 +1,6 @@
+=== aMisspelledBuiltinCaseIsReported.tt ===
+const n = match (o) { Some(value) => value, Non => 0 };
+>n : const n: any
+>value : const value: any
+>value : const value: any
+

@@ -1,0 +1,36 @@
+=== valConstForbidsMutationAtAnyDepth2.tt ===
+val const s = { u: { p: { n: 0 } } };
+>s : const s: {
+>       u: {
+>           p: {
+>               n: number;
+>           };
+>       };
+>   }
+>u : (property) u: {
+>       p: {
+>           n: number;
+>       };
+>   }
+>p : (property) p: {
+>       n: number;
+>   }
+>n : (property) n: number
+s.u.p.n += 1;
+>s : const s: {
+>       u: {
+>           p: {
+>               n: number;
+>           };
+>       };
+>   }
+>u : (property) u: {
+>       p: {
+>           n: number;
+>       };
+>   }
+>p : (property) p: {
+>       n: number;
+>   }
+>n : (property) n: number
+

@@ -1,0 +1,11 @@
+// @origin: tests/integration.rs::generated_guards_reach_the_host_error_and_json_past_user_declarations
+// @run: generatedGuardsReachTheHostErrorAndJsonPastUserDeclarations.tt
+
+variant Error { Bad(msg: string), Worse }
+function m(x: Error) { return match (x) { Bad(msg) => msg, Worse => "w" }; }
+try { m({ kind: "Nope" } as unknown as Error); } catch (e) { console.log((e as globalThis.Error).message); }
+const JSON = 1;
+const k = (v: "a" | "b") => match (v) { "a" => 1, "b" => JSON };
+try { k("c" as unknown as "a"); } catch (e) { console.log((e as globalThis.Error).message); }
+
+export {};

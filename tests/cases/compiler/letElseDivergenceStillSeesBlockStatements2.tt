@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_04.rs::let_else_divergence_still_sees_block_statements
+function f(): number {
+  const Some(v) = find() else { try { log("x"); } catch (e) { log("y"); } return 0; };
+  return v;
+}

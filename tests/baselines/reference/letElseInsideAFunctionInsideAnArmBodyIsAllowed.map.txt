@@ -1,0 +1,13 @@
+//// [letElseInsideAFunctionInsideAnArmBodyIsAllowed.tt] 11 mapping(s)
+1:1 -> 19:1 len 10  "const x = "
+1:18 -> 3:17 len 1  "r"
+2:6 -> 6:15 len 5  "value"
+2:18 -> 7:7 len 18  "const f = () => { "
+2:47 -> 11:15 len 1  "v"
+2:52 -> 7:40 len 8  "h(value)"
+2:68 -> 9:9 len 9  "return 0;"
+2:80 -> 11:28 len 14  " return v; }; "
+2:101 -> 11:53 len 3  "f()"
+3:8 -> 14:18 len 1  "0"
+4:2 -> 19:19 len 2  ";\n"
+

@@ -1,0 +1,43 @@
+==== ttc --out-dir (exit 0) ====
+ttc: std → $DIR/out/tt
+ttc: ./jsxMatchComposesAResultScrutineeOnce.ttx → $DIR/out/jsxMatchComposesAResultScrutineeOnce.tsx
+
+==== ttc --check-types (exit 1) ====
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxMatchComposesAResultScrutineeOnce.ttx:3:14
+  |
+3 | const view = <aside>{match (result {
+  |              ^^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxMatchComposesAResultScrutineeOnce.ttx:7:16
+  |
+7 |   Ok(value) => <b>{value}</b>,
+  |                ^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxMatchComposesAResultScrutineeOnce.ttx:7:26
+  |
+7 |   Ok(value) => <b>{value}</b>,
+  |                          ^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxMatchComposesAResultScrutineeOnce.ttx:8:17
+  |
+8 |   Err(error) => <code>{error}</code>,
+  |                 ^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxMatchComposesAResultScrutineeOnce.ttx:8:30
+  |
+8 |   Err(error) => <code>{error}</code>,
+  |                              ^^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxMatchComposesAResultScrutineeOnce.ttx:9:3
+  |
+9 | }}</aside>;
+  |   ^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+jsxMatchComposesAResultScrutineeOnce.tsx(38,16): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxMatchComposesAResultScrutineeOnce.tsx(38,26): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxMatchComposesAResultScrutineeOnce.tsx(43,16): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxMatchComposesAResultScrutineeOnce.tsx(43,29): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxMatchComposesAResultScrutineeOnce.tsx(51,14): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxMatchComposesAResultScrutineeOnce.tsx(51,29): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.

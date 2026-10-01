@@ -1,0 +1,4 @@
+=== valDeclarationModifierIsErasedFromTheOutput1.tt ===
+val const user = getUser();
+>user : const user: any
+

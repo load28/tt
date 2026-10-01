@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_02.rs::reference_protocol_preserves_optional_calls_and_structures_tagged_templates
+variant E { A(value: number), B }
+const value = receiver.method?.(match (input) { A(value) => value, B => 0 });

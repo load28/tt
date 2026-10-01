@@ -1,0 +1,108 @@
+=== runtimeOrPatternsShareOneBody.tt ===
+variant Key {
+>Key : type Key = {
+>       kind: "Enter";
+>   } | {
+>       kind: "Escape";
+>   } | {
+>       kind: "Tab";
+>   } | {
+>       kind: "Char";
+>       ch: string;
+>   }
+  Enter(),
+>Enter : (property) Enter: () => Key
+  Escape,
+>Escape : (property) Escape: {
+>       readonly kind: "Escape";
+>   }
+  Tab,
+>Tab : (property) Tab: {
+>       readonly kind: "Tab";
+>   }
+  Char(ch: string),
+>Char : (property) Char: (ch: string) => Key
+>ch : (property) ch: string
+function action(k: Key): string {
+>action : function action(k: Key): string
+>k : (parameter) k: Key
+>Key : type Key = {
+>       kind: "Enter";
+>   } | {
+>       kind: "Escape";
+>   } | {
+>       kind: "Tab";
+>   } | {
+>       kind: "Char";
+>       ch: string;
+>   }
+  return match (k) {
+>k : (parameter) k: Key
+    Char(ch) => "type:" + ch,
+>ch : const ch: string
+>ch : const ch: string
+console.log(action(Key.Enter()));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>action : function action(k: Key): string
+>Key : const Key: {
+>       Enter: () => Key;
+>       Escape: {
+>           readonly kind: "Escape";
+>       };
+>       Tab: {
+>           readonly kind: "Tab";
+>       };
+>       Char: (ch: string) => Key;
+>   }
+>Enter : (property) Enter: () => Key
+console.log(action(Key.Escape));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>action : function action(k: Key): string
+>Key : const Key: {
+>       Enter: () => Key;
+>       Escape: {
+>           readonly kind: "Escape";
+>       };
+>       Tab: {
+>           readonly kind: "Tab";
+>       };
+>       Char: (ch: string) => Key;
+>   }
+>Escape : (property) Escape: {
+>       readonly kind: "Escape";
+>   }
+console.log(action(Key.Tab));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>action : function action(k: Key): string
+>Key : const Key: {
+>       Enter: () => Key;
+>       Escape: {
+>           readonly kind: "Escape";
+>       };
+>       Tab: {
+>           readonly kind: "Tab";
+>       };
+>       Char: (ch: string) => Key;
+>   }
+>Tab : (property) Tab: {
+>       readonly kind: "Tab";
+>   }
+console.log(action(Key.Char("z")));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>action : function action(k: Key): string
+>Key : const Key: {
+>       Enter: () => Key;
+>       Escape: {
+>           readonly kind: "Escape";
+>       };
+>       Tab: {
+>           readonly kind: "Tab";
+>       };
+>       Char: (ch: string) => Key;
+>   }
+>Char : (property) Char: (ch: string) => Key
+

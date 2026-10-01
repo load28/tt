@@ -1,0 +1,5 @@
+//// [variantInvalidFieldTypeIsRejectedBySwcWithPosition.tt] 3 mapping(s)
+2:8 -> 2:19 len 13  "number number"
+2:8 -> 4:10 len 13  "number number"
+3:2 -> 5:3 len 1  "\n"
+

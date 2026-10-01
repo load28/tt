@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::val_parameter_beside_an_element_access_of_a_variable_named_val
+const g = c ? (val [0]) : w => w;
+f(val [0])
+{
+  val.name = 1;
+}

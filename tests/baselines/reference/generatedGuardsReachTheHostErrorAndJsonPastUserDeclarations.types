@@ -1,0 +1,56 @@
+=== generatedGuardsReachTheHostErrorAndJsonPastUserDeclarations.tt ===
+variant Error { Bad(msg: string), Worse }
+>Error : type Error = {
+>       kind: "Bad";
+>       msg: string;
+>   } | {
+>       kind: "Worse";
+>   }
+>Bad : (property) Bad: (msg: string) => Error
+>msg : (property) msg: string
+>Worse : (property) Worse: {
+>       readonly kind: "Worse";
+>   }
+function m(x: Error) { return match (x) { Bad(msg) => msg, Worse => "w" }; }
+>m : function m(x: Error): string
+>x : (parameter) x: Error
+>Error : type Error = {
+>       kind: "Bad";
+>       msg: string;
+>   } | {
+>       kind: "Worse";
+>   }
+>x : (parameter) x: Error
+>msg : const msg: string
+>msg : const msg: string
+try { m({ kind: "Nope" } as unknown as Error); } catch (e) { console.log((e as globalThis.Error).message); }
+>m : function m(x: Error): string
+>kind : (property) kind: string
+>Error : type Error = {
+>       kind: "Bad";
+>       msg: string;
+>   } | {
+>       kind: "Worse";
+>   }
+>e : var e: unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>e : var e: unknown
+>Error : interface Error
+>message : (property) Error.message: string
+const JSON = 1;
+>JSON : const JSON: 1
+const k = (v: "a" | "b") => match (v) { "a" => 1, "b" => JSON };
+>k : const k: (v: "a" | "b") => number
+>v : (parameter) v: "a" | "b"
+>v : (parameter) v: "a" | "b"
+>JSON : const JSON: 1
+try { k("c" as unknown as "a"); } catch (e) { console.log((e as globalThis.Error).message); }
+>k : const k: (v: "a" | "b") => number
+>e : var e: unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>e : var e: unknown
+>Error : interface Error
+>message : (property) Error.message: string
+

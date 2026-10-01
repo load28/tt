@@ -1,0 +1,14 @@
+=== unitOnlyVariantHasTtSemanticsWithoutParentheses.tt ===
+variant Status { Active, Inactive }
+>Status : type Status = {
+>       kind: "Active";
+>   } | {
+>       kind: "Inactive";
+>   }
+>Active : (property) Active: {
+>       readonly kind: "Active";
+>   }
+>Inactive : (property) Inactive: {
+>       readonly kind: "Inactive";
+>   }
+

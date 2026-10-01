@@ -1,0 +1,13 @@
+//// [valIsCheckedInsideNestedTtConstructs2.tt] 11 mapping(s)
+1:27 -> 20:26 len 6  "number"
+1:27 -> 23:15 len 6  "number"
+1:43 -> 25:3 len 1  "\n"
+2:5 -> 26:1 len 27  "const s = Shape.Circle(1);\n"
+3:1 -> 44:1 len 10  "const v = "
+3:18 -> 29:17 len 1  "s"
+4:10 -> 32:15 len 1  "r"
+4:18 -> 33:7 len 18  "s.kind = \"Point\"; "
+4:43 -> 33:36 len 1  "r"
+5:12 -> 36:18 len 1  "0"
+6:2 -> 44:19 len 2  ";\n"
+

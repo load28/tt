@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_06.rs::tuple_match_bare_wildcard_arm_skips_the_check_and_must_be_last
+
+variant Coin { Heads(), Tails }
+const r = match (a, b) {
+  (Heads, Heads) => 1,
+  _ => 0,
+};

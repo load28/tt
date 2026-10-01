@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_08.rs::a_cr_file_emits_the_same_layout_with_its_own_line_ending
+variant Shape { Circle(r: number), Point }declare const s: Shape;function f() {  const a = match (s) {    Circle(r) => r,    Point => 0,  };  return a |> String;}

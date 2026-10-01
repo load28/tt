@@ -1,0 +1,28 @@
+=== flowCompositionRunsLeftToRightWhenCalled.tt ===
+const order: string[] = [];
+>order : const order: string[]
+const tap = <T,>(name: string) => (v: T): T => { order.push(name); return v; };
+>tap : const tap: <T>(name: string) => (v: T) => T
+>T : (type parameter) T in <T>(name: string): (v: T) => T
+>name : (parameter) name: string
+>v : (parameter) v: T
+>T : (type parameter) T in <T>(name: string): (v: T) => T
+>T : (type parameter) T in <T>(name: string): (v: T) => T
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>v : (parameter) v: T
+const f = flow |> tap<number>("s1") |> .toFixed(0) |> tap("s2");
+>f : const f: (v: number) => string
+>tap : const tap: <number>(name: string) => (v: number) => number
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+>tap : const tap: <string>(name: string) => (v: string) => string
+console.log(order.join(","), "|", f(10), "|", order.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>order : const order: string[]
+>join : (method) Array<string>.join(separator?: string): string
+>f : const f: (v: number) => string
+>order : const order: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

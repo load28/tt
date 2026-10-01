@@ -1,0 +1,3 @@
+//// [literalOrPatternAlternativesMustShareAKind.tt] ////
+const v = match (x) { "a" | 1 => 1, _ => 2 };
+

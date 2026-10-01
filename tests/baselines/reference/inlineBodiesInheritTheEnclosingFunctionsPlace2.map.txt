@@ -1,0 +1,11 @@
+//// [inlineBodiesInheritTheEnclosingFunctionsPlace2.tt] 9 mapping(s)
+1:18 -> 2:21 len 6  "number"
+1:18 -> 5:10 len 6  "number"
+1:30 -> 7:3 len 30  "\nfunction f(e: E): number {\n  "
+3:14 -> 18:11 len 1  "v"
+3:19 -> 9:18 len 7  "find(e)"
+4:17 -> 11:20 len 1  "e"
+4:26 -> 13:7 len 21  "throw new Error(\"a\");"
+4:50 -> 15:5 len 14  "\n    return 0;"
+6:5 -> 18:24 len 15  "\n  return v;\n}\n"
+

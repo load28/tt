@@ -1,0 +1,29 @@
+// @origin: tests/integration/cases_05.rs::runtime_a_try_statement_in_a_result_block_lowers_the_values_of_its_operand
+// @run: runtimeATryStatementInAResultBlockLowersTheValuesOfItsOperand.tt
+
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const trace: string[] = [];
+let r = (n: number): R => { trace.push("r" + n); return n > 15 ? { kind: "Ok", value: n } : { kind: "Err", error: "small" + n }; };
+function swap(n: number): number {
+  trace.push("swap");
+  const first = r;
+  r = (m) => { trace.push("late"); return first(m); };
+  return n;
+}
+const id = <T,>(x: T) => x;
+const g = (x: R): R => x;
+function viaConst(v: number) { return result { const x = try r(match (v) { 1 => swap(10), _ => swap(20) }); return x; }; }
+function viaLet(v: number) { return result { let x = try r(match (v) { 1 => 10, _ => 20 }); x += 1; return x; }; }
+function propagateOnly(v: number) { return result { try r(match (v) { 1 => 10, _ => 20 }); return 0; }; }
+function viaPipeline(v: number) { return result { const x = try (match (v) { 1 => r(10), _ => r(20) } |> id); return x; }; }
+function viaCall(v: number) { return result { const x = try id(match (v) { 1 => r(10), _ => r(20) }); return x; }; }
+function viaResult(v: number) {
+  return result { const x = try r(result { const y = try r(v); return y; } |> g |> (q => q.kind === "Ok" ? q.value : 0)); return x; };
+}
+const base = r;
+console.log(JSON.stringify([viaConst(1), viaConst(2)]), JSON.stringify(trace));
+r = base;
+console.log(JSON.stringify([viaLet(1), viaLet(2), propagateOnly(1), propagateOnly(2)]));
+console.log(JSON.stringify([viaPipeline(1), viaPipeline(2), viaCall(1), viaCall(2), viaResult(20), viaResult(1)]));
+
+export {};

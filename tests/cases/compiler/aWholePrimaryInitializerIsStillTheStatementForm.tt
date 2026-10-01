@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_10.rs::a_whole_primary_initializer_is_still_the_statement_form
+declare function a(): { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+function g() { const x = try a(); const y = try (a()); return x + y; }

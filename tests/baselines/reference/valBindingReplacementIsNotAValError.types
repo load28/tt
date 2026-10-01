@@ -1,0 +1,10 @@
+=== valBindingReplacementIsNotAValError.tt ===
+val let a = 1;
+>a : let a: number
+a = 2;
+>a : let a: number
+val const b = 1;
+>b : const b: 1
+b = 2;
+>b : const b: any
+

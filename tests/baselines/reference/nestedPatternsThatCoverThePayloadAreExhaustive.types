@@ -1,0 +1,37 @@
+=== nestedPatternsThatCoverThePayloadAreExhaustive.tt ===
+variant Inner { Yes(n: number), No }
+>Inner : type Inner = {
+>       kind: "Yes";
+>       n: number;
+>   } | {
+>       kind: "No";
+>   }
+>Yes : (property) Yes: (n: number) => Inner
+>n : (property) n: number
+>No : (property) No: {
+>       readonly kind: "No";
+>   }
+variant Outer { Wrap(inner: Inner), Bare }
+>Outer : type Outer = {
+>       kind: "Wrap";
+>       inner: Inner;
+>   } | {
+>       kind: "Bare";
+>   }
+>Wrap : (property) Wrap: (inner: Inner) => Outer
+>inner : (property) inner: Inner
+>Inner : type Inner = {
+>       kind: "Yes";
+>       n: number;
+>   } | {
+>       kind: "No";
+>   }
+>Bare : (property) Bare: {
+>       readonly kind: "Bare";
+>   }
+const a = match (o) {
+>a : const a: any
+  Wrap(inner: Yes(n)) => n,
+>n : const n: any
+>n : const n: any
+

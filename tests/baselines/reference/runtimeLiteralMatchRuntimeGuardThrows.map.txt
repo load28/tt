@@ -1,0 +1,10 @@
+//// [runtimeLiteralMatchRuntimeGuardThrows.tt] 8 mapping(s)
+1:1 -> 19:1 len 33  "\nfunction label(dir: string) {\n  "
+3:3 -> 38:3 len 7  "return "
+3:17 -> 23:19 len 16  "dir as \"a\" | \"b\""
+4:5 -> 25:12 len 3  "\"a\""
+4:12 -> 26:18 len 1  "1"
+5:5 -> 29:12 len 3  "\"b\""
+5:12 -> 30:18 len 1  "2"
+6:4 -> 38:16 len 119  ";\n}\n\ntry {\n  label(\"zzz\");\n  console.log(\"no thr"...
+

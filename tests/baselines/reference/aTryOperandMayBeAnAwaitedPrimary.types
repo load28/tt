@@ -1,0 +1,38 @@
+=== aTryOperandMayBeAnAwaitedPrimary.tt ===
+declare function a(): Promise<{ kind: "Ok"; value: number } | { kind: "Err"; error: string }>;
+>a : function a(): Promise<{
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }>
+>Promise : interface Promise<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+async function g() { const x = try await a(); const y = try await a() * 2; return x + y; }
+>g : function g(): Promise<number | {
+>       kind: "Err";
+>       error: string;
+>   }>
+>x : const x: number
+>a : function a(): Promise<{
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }>
+>y : const y: number
+>a : function a(): Promise<{
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }>
+>x : const x: number
+>y : const y: number
+

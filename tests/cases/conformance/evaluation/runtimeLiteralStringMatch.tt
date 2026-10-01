@@ -1,0 +1,17 @@
+// @origin: tests/integration/cases_04.rs::runtime_literal_string_match
+// @run: runtimeLiteralStringMatch.tt
+
+type Direction = "north" | "south" | "east" | "west";
+
+function short(dir: Direction) {
+  return match (dir) {
+    "north" => "N",
+    "south" => "S",
+    "east" => "E",
+    "west" => "W",
+  };
+}
+
+console.log(short("north"), short("south"), short("east"), short("west"));
+
+export {};

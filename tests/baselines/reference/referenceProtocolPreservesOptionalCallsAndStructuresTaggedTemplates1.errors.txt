@@ -1,0 +1,25 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./referenceProtocolPreservesOptionalCallsAndStructuresTaggedTemplates1.tt → $DIR/out/referenceProtocolPreservesOptionalCallsAndStructuresTaggedTemplates1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'receiver'.
+ --> referenceProtocolPreservesOptionalCallsAndStructuresTaggedTemplates1.tt:2:15
+  |
+2 | const value = receiver.method?.(match (input) { A(value) => value, B => 0 });
+  |               ^^^^^^^^
+error[ts2304]: Cannot find name 'receiver'. (in code ttc generated for this construct)
+ --> referenceProtocolPreservesOptionalCallsAndStructuresTaggedTemplates1.tt:2:33
+  |
+2 | const value = receiver.method?.(match (input) { A(value) => value, B => 0 });
+  |                                 ^^^^^^^^^^^^^
+error[ts2552]: Cannot find name 'input'. Did you mean 'oninput'?
+ --> referenceProtocolPreservesOptionalCallsAndStructuresTaggedTemplates1.tt:2:40
+  |
+2 | const value = receiver.method?.(match (input) { A(value) => value, B => 0 });
+  |                                        ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+referenceProtocolPreservesOptionalCallsAndStructuresTaggedTemplates1.ts(27,23): error TS2304: Cannot find name 'receiver'.
+referenceProtocolPreservesOptionalCallsAndStructuresTaggedTemplates1.ts(30,19): error TS2552: Cannot find name 'input'. Did you mean 'oninput'?
+referenceProtocolPreservesOptionalCallsAndStructuresTaggedTemplates1.ts(34,42): error TS2304: Cannot find name 'receiver'.
+referenceProtocolPreservesOptionalCallsAndStructuresTaggedTemplates1.ts(38,42): error TS2304: Cannot find name 'receiver'.

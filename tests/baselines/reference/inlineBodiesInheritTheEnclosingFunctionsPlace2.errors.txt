@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./inlineBodiesInheritTheEnclosingFunctionsPlace2.tt → $DIR/out/inlineBodiesInheritTheEnclosingFunctionsPlace2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> inlineBodiesInheritTheEnclosingFunctionsPlace2.tt:3:19
+  |
+3 |   const Some(v) = find(e) else {
+  |                   ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+inlineBodiesInheritTheEnclosingFunctionsPlace2.ts(9,18): error TS2304: Cannot find name 'find'.

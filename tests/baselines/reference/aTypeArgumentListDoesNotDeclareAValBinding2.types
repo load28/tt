@@ -1,0 +1,8 @@
+=== aTypeArgumentListDoesNotDeclareAValBinding2.tt ===
+val let a, b, c;
+>a : let a: any
+>b : let b: any
+>c : let c: any
+b.x = 1;
+>b : let b: undefined
+

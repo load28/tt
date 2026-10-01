@@ -1,0 +1,3 @@
+[{"kind":"Ok","value":22},{"kind":"Ok","value":22},{"kind":"Err","error":"no"},{"kind":"Err","error":"inner"}]
+[{"kind":"Ok","value":1020},{"kind":"Ok","value":1010},{"kind":"Ok","value":1000},{"kind":"Ok","value":1010}]
+[{"kind":"Ok","value":4},{"kind":"Ok","value":"4"},{"kind":"Ok","value":8},{"kind":"Ok","value":8}]

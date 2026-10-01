@@ -1,0 +1,26 @@
+==== ttc --out-dir (exit 1) ====
+error[pattern-duplicate-binding]: match: binding `value` is used more than once in this pattern
+ --> ./duplicateBindingWithinOnePatternIsAnError.tt:1:23
+  |
+1 | const n = match (r) { Ok(value: Some(value), error: value) => value, _ => 0 };
+  |                       ^^
+  |
+  = help: rename one of them with `field: alias`
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'r'.
+ --> duplicateBindingWithinOnePatternIsAnError.tt:1:18
+  |
+1 | const n = match (r) { Ok(value: Some(value), error: value) => value, _ => 0 };
+  |                  ^
+error[pattern-duplicate-binding]: match: binding `value` is used more than once in this pattern
+ --> duplicateBindingWithinOnePatternIsAnError.tt:1:23
+  |
+1 | const n = match (r) { Ok(value: Some(value), error: value) => value, _ => 0 };
+  |                       ^^
+  |
+  = help: rename one of them with `field: alias`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

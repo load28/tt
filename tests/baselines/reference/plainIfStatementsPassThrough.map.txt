@@ -1,0 +1,3 @@
+//// [plainIfStatementsPassThrough.tt] 1 mapping(s)
+1:1 -> 1:1 len 75  "if (x) { a(); } else if (y) { b(); } else { c();"...
+

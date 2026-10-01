@@ -1,0 +1,22 @@
+==== ttc --out-dir (exit 0) ====
+ttc: std → $DIR/out/tt
+ttc: ./aUsingForStatementAndAnIfFunctionClauseHostTtValues.tt → $DIR/out/aUsingForStatementAndAnIfFunctionClauseHostTtValues.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2550]: Property 'dispose' does not exist on type 'SymbolConstructor'. Do you need to change your target library? Try changing the 'lib' compiler option to 'esnext' or later.
+ --> aUsingForStatementAndAnIfFunctionClauseHostTtValues.tt:4:46
+  |
+4 | declare function res(): { n: number; [Symbol.dispose](): void };
+  |                                              ^^^^^^^
+error[ts2550]: Property 'dispose' does not exist on type 'SymbolConstructor'. Do you need to change your target library? Try changing the 'lib' compiler option to 'esnext' or later.
+ --> aUsingForStatementAndAnIfFunctionClauseHostTtValues.tt:5:53
+  |
+5 | declare function rr(): TResult<{ n: number; [Symbol.dispose](): void }, string>;
+  |                                                     ^^^^^^^
+error[ts2318]: Cannot find global type 'Disposable'.
+ --> tsconfig.json
+
+==== tsc on the emitted TypeScript (exit 2) ====
+error TS2318: Cannot find global type 'Disposable'.
+aUsingForStatementAndAnIfFunctionClauseHostTtValues.ts(28,46): error TS2550: Property 'dispose' does not exist on type 'SymbolConstructor'. Do you need to change your target library? Try changing the 'lib' compiler option to 'esnext' or later.
+aUsingForStatementAndAnIfFunctionClauseHostTtValues.ts(29,53): error TS2550: Property 'dispose' does not exist on type 'SymbolConstructor'. Do you need to change your target library? Try changing the 'lib' compiler option to 'esnext' or later.

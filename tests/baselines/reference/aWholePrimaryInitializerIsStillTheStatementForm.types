@@ -1,0 +1,37 @@
+=== aWholePrimaryInitializerIsStillTheStatementForm.tt ===
+declare function a(): { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>a : function a(): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function g() { const x = try a(); const y = try (a()); return x + y; }
+>g : function g(): number | {
+>       kind: "Err";
+>       error: string;
+>   }
+>x : const x: number
+>a : function a(): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>y : const y: number
+>a : function a(): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>x : const x: number
+>y : const y: number
+

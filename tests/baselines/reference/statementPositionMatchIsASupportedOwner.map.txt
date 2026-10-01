@@ -1,0 +1,13 @@
+//// [statementPositionMatchIsASupportedOwner.tt] 11 mapping(s)
+1:23 -> 20:26 len 6  "number"
+1:23 -> 23:15 len 6  "number"
+1:43 -> 21:27 len 6  "string"
+1:43 -> 24:16 len 6  "string"
+1:52 -> 25:3 len 28  "\nconst f = (x: number) => { "
+2:35 -> 28:17 len 7  "R.Ok(x)"
+3:4 -> 31:15 len 5  "value"
+3:16 -> 32:7 len 19  "console.log(value);"
+4:5 -> 37:15 len 5  "error"
+4:17 -> 38:7 len 19  "console.log(error);"
+5:2 -> 47:1 len 5  "; };\n"
+

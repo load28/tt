@@ -1,0 +1,4 @@
+=== directReturnLiteralMatchKeepsAwaitInTheHostFunction.tt ===
+async function f() { return match (s) { "a" => await g(), _ => null }; }
+>f : function f(): Promise<any>
+

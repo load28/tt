@@ -1,0 +1,25 @@
+=== aVariantWithOneCaseIsThatCaseObjectType.tt ===
+export variant Pub { Item(n: number) }
+>Pub : type Pub = {
+>       kind: "Item";
+>       n: number;
+>   }
+>Item : (property) Item: (n: number) => Pub
+>n : (property) n: number
+variant Lone { Only }
+>Lone : type Lone = {
+>       kind: "Only";
+>   }
+>Only : (property) Only: {
+>       readonly kind: "Only";
+>   }
+variant Noted {
+>Noted : type Noted = {
+>       kind: "Cell";
+>       v: number;
+>   }
+  Cell(
+>Cell : (property) Cell: (v: number) => Noted
+    v: number // value
+>v : (property) v: number
+

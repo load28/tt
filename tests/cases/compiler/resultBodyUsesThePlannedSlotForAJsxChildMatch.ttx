@@ -1,0 +1,19 @@
+// @origin: tests/compile/cases_09.rs::result_body_uses_the_planned_slot_for_a_jsx_child_match
+import type { TResult } from "@tt/std";
+variant E { A, B }
+variant F { Yes, No }
+declare function step(n: number): number;
+declare function fallible(n: number): TResult<number, string>;
+export function run(e: E, f: F, n: number): number {
+  const value = result {
+    const first = try fallible(n);
+    const chosen = match (e) { A => 1, B => 2 };
+    const view = <section data-value={chosen}>{match (f) {
+      Yes => <strong>{chosen |> step}</strong>,
+      No => null,
+    }}</section>;
+    void view;
+    return first + chosen;
+  };
+  return value.kind === "Ok" ? 0 : 1;
+}

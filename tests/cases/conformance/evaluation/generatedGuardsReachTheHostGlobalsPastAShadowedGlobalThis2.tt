@@ -1,0 +1,9 @@
+// @origin: tests/integration.rs::generated_guards_reach_the_host_globals_past_a_shadowed_global_this
+// @run: generatedGuardsReachTheHostGlobalsPastAShadowedGlobalThis2.tt
+
+variant O { Some(value: number), None }
+const globalThis = { Error: 1 };
+function f(o: O) { const Error = 5; return match (o) { Some(value) => value, None => Error + globalThis.Error }; }
+try { f({ kind: "Nope" } as unknown as O); } catch (e) { console.log((e as { message: string }).message); }
+
+export {};

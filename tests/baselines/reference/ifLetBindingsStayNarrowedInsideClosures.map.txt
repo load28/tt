@@ -1,0 +1,10 @@
+//// [ifLetBindingsStayNarrowedInsideClosures.tt] 8 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:27 -> 3:28 len 6  "string"
+2:27 -> 6:17 len 6  "string"
+2:42 -> 8:3 len 82  "\nfunction f(o: Opt, xs: number[]): string[] {\n  "...
+5:15 -> 14:15 len 5  "value"
+5:24 -> 12:20 len 1  "o"
+6:5 -> 15:7 len 54  "xs.forEach(() => collected.push(value.toUpperCas"...
+7:4 -> 17:4 len 35  "\n  return collected;\n}\n\nexport {};\n"
+

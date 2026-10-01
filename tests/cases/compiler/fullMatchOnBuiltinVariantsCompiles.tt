@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_02.rs::full_match_on_builtin_variants_compiles
+
+const f = (o: Option<number>) => match (o) { Some(value) => value, None => 0 };
+const g = (r: Result<number, string>) => match (r) { Ok(value) => value, Err(error) => error.length };

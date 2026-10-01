@@ -1,0 +1,5 @@
+=== controlFlowArmCompletionsUseALabeledRegion2.tt ===
+consume(match (x) { A(v) => { try { return v; } finally { effect(); } }, _ => 0 });
+>v : const v: any
+>v : const v: any
+

@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::an_inner_declaration_shadows_an_outer_val
+val const x = { a: 1 };
+{
+  const x = { a: 2 };
+  x.a = 3;
+}

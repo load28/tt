@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::literal_and_tag_patterns_cannot_be_mixed_in_either_order
+const v = match (x) { "none" => 0, Some(v) => v };

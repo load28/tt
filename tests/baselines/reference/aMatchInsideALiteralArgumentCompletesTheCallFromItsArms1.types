@@ -1,0 +1,7 @@
+=== aMatchInsideALiteralArgumentCompletesTheCallFromItsArms1.tt ===
+consume({item: match (x) { A(v) => v, _ => 0 }});
+>item : (property) item: any
+>match : const v: any
+>v : const v: any
+>v : const v: any
+

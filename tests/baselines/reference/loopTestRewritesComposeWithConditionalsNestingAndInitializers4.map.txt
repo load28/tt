@@ -1,0 +1,15 @@
+//// [loopTestRewritesComposeWithConditionalsNestingAndInitializers4.tt] 13 mapping(s)
+1:1 -> 16:3 len 13  "for (let a = "
+1:21 -> 4:19 len 1  "1"
+1:26 -> 6:12 len 1  "1"
+1:31 -> 7:18 len 1  "1"
+1:39 -> 11:18 len 1  "0"
+1:42 -> 16:22 len 2  "; "
+1:51 -> 19:21 len 1  "a"
+1:56 -> 21:14 len 1  "1"
+1:61 -> 22:20 len 4  "true"
+1:72 -> 26:20 len 5  "false"
+1:81 -> 16:26 len 3  "a++"
+1:86 -> 31:27 len 11  "{ use(a); }"
+1:97 -> 32:3 len 1  "\n"
+

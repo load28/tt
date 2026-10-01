@@ -1,0 +1,18 @@
+//// [aMatchUnderAConditionalOperationInAGuardKeepsTheShortCircuit.tt] 16 mapping(s)
+1:18 -> 2:21 len 6  "number"
+1:18 -> 6:10 len 6  "number"
+1:32 -> 3:21 len 6  "number"
+1:32 -> 7:10 len 6  "number"
+1:44 -> 9:3 len 21  "\ndeclare const s: S;\n"
+3:1 -> 48:1 len 10  "const x = "
+3:18 -> 13:17 len 1  "s"
+3:25 -> 16:15 len 1  "v"
+3:31 -> 19:20 len 5  "v > 0"
+3:47 -> 22:25 len 1  "s"
+3:54 -> 25:23 len 1  "w"
+3:60 -> 26:24 len 5  "w > 0"
+3:72 -> 30:24 len 5  "false"
+3:83 -> 40:20 len 1  "1"
+3:91 -> 44:16 len 1  "0"
+3:94 -> 48:19 len 2  ";\n"
+

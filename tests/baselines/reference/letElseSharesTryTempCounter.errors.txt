@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseSharesTryTempCounter.tt → $DIR/out/letElseSharesTryTempCounter.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'X'.
+ --> letElseSharesTryTempCounter.tt:1:15
+  |
+1 | function f(): X {
+  |               ^
+error[ts2304]: Cannot find name 'g'.
+ --> letElseSharesTryTempCounter.tt:2:17
+  |
+2 |   const n = try g();
+  |                 ^
+error[ts2304]: Cannot find name 'h'.
+ --> letElseSharesTryTempCounter.tt:3:19
+  |
+3 |   const Some(v) = h(n) else { return fallback(); };
+  |                   ^
+error[ts2304]: Cannot find name 'fallback'.
+ --> letElseSharesTryTempCounter.tt:3:38
+  |
+3 |   const Some(v) = h(n) else { return fallback(); };
+  |                                      ^^^^^^^^
+error[ts2304]: Cannot find name 'wrap'.
+ --> letElseSharesTryTempCounter.tt:4:10
+  |
+4 |   return wrap(v);
+  |          ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseSharesTryTempCounter.ts(1,15): error TS2304: Cannot find name 'X'.
+letElseSharesTryTempCounter.ts(2,18): error TS2304: Cannot find name 'g'.
+letElseSharesTryTempCounter.ts(7,18): error TS2304: Cannot find name 'h'.
+letElseSharesTryTempCounter.ts(9,12): error TS2304: Cannot find name 'fallback'.
+letElseSharesTryTempCounter.ts(12,10): error TS2304: Cannot find name 'wrap'.

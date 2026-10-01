@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::direct_return_match_keeps_await_in_the_host_function
+async function f(x: T) { return match (x) { A(url) => await fetch(url), _ => null }; }

@@ -1,0 +1,34 @@
+=== aGuardedAllWildcardTupleArmIsTestedByItsGuardAlone.tt ===
+variant T { A, B }
+>T : type T = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function f(a: T, b: T, cond: boolean): number {
+>f : function f(a: T, b: T, cond: boolean): number
+>a : (parameter) a: T
+>T : type T = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>b : (parameter) b: T
+>T : type T = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>cond : (parameter) cond: boolean
+  return match (a, b) {
+>a : (parameter) a: T
+>b : (parameter) b: T
+    (_, _) if cond => 2,
+>cond : (parameter) cond: boolean
+

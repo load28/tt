@@ -1,0 +1,21 @@
+=== pipelineAwaitInHeadRunsInTheSurroundingAsyncContext.tt ===
+const upper = (s: string) => s.toUpperCase();
+>upper : const upper: (s: string) => string
+>s : (parameter) s: string
+>s : (parameter) s: string
+>toUpperCase : (method) String.toUpperCase(): string
+async function main() {
+>main : function main(): Promise<void>
+  const v = await Promise.resolve("ok") |> upper |> .concat("!");
+>v : const v: string
+>Promise : var Promise: PromiseConstructor
+>resolve : (method) PromiseConstructor.resolve<string>(value: string): Promise<string>
+>upper : const upper: (s: string) => string
+>concat : (method) String.concat(...strings: string[]): string
+  console.log(v);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>v : const v: string
+await main();
+>main : function main(): Promise<void>
+

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./matchBindingAliasAndBlockBody.tt → $DIR/out/matchBindingAliasAndBlockBody.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'm'.
+ --> matchBindingAliasAndBlockBody.tt:2:18
+  |
+2 | const r = match (m) {
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+matchBindingAliasAndBlockBody.ts(4,17): error TS2304: Cannot find name 'm'.

@@ -1,0 +1,56 @@
+=== aTypeTypescriptCannotWriteLeavesItsStorageUnannotated.tt ===
+class Base {}
+>Base : class Base
+function Tagged<B extends new (...a: any[]) => {}>(Base: B) { return class extends Base { tag = "t"; }; }
+>Tagged : function Tagged<B extends new (...a: any[]) => {}>(Base: B): {
+>       new (...a: any[]): (Anonymous class);
+>   } & B
+>B : (type parameter) B extends new (...a: any[]) => {} in Tagged<B extends new (...a: any[]) => {}>(Base: B): {
+>       new (...a: any[]): (Anonymous class);
+>   } & B
+>a : (parameter) a: any[]
+>Base : (parameter) Base: B
+>B : (type parameter) B extends new (...a: any[]) => {} in Tagged<B extends new (...a: any[]) => {}>(Base: B): {
+>       new (...a: any[]): (Anonymous class);
+>   } & B
+>Base : (parameter) Base: B
+>tag : (property) (Anonymous class).tag: string
+function pick(n: number) {
+>pick : function pick(n: number): (string | number)[]
+>n : (parameter) n: number
+  const M = match (n) { 1 => Tagged(Base), _ => Tagged(Base) };
+>M : const M: {
+>       new (...a: any[]): Tagged<typeof Base>.(Anonymous class);
+>   } & typeof Base
+>n : (parameter) n: number
+>Tagged : function Tagged<typeof Base>(Base: typeof Base): {
+>       new (...a: any[]): Tagged<typeof Base>.(Anonymous class);
+>   } & typeof Base
+>Base : class Base
+>Tagged : function Tagged<typeof Base>(Base: typeof Base): {
+>       new (...a: any[]): Tagged<typeof Base>.(Anonymous class);
+>   } & typeof Base
+>Base : class Base
+  const o = match (n) { 1 => new (class { x = 1 })(), _ => new (class { x = 2 })() };
+>o : const o: (Anonymous class) | (Anonymous class)
+>n : (parameter) n: number
+>x : (property) (Anonymous class).x: number
+>x : (property) (Anonymous class).x: number
+  const a = match (n) { 1 => [class {}], _ => [class {}, class {}] };
+>a : const a: (typeof (Anonymous class))[]
+>n : (parameter) n: number
+  return [new M().tag, o.x, a.length];
+>M : const M: new () => Tagged<typeof Base>.(Anonymous class) & Base
+>tag : (property) (Anonymous class).tag: string
+>o : const o: (Anonymous class) | (Anonymous class)
+>x : (property) x: number
+>a : const a: (typeof (Anonymous class))[]
+>length : (property) Array<typeof (Anonymous class)>.length: number
+console.log(JSON.stringify([pick(1), pick(2)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>pick : function pick(n: number): (string | number)[]
+>pick : function pick(n: number): (string | number)[]
+

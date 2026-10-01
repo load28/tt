@@ -1,0 +1,21 @@
+//// [aMatchInsideAnArmBodyCallKeepsArgumentOrder.tt] 19 mapping(s)
+1:18 -> 2:21 len 6  "number"
+1:18 -> 6:10 len 6  "number"
+1:32 -> 3:21 len 6  "number"
+1:32 -> 7:10 len 6  "number"
+1:44 -> 9:3 len 103  "\ndeclare const s: S;\ndeclare function eff(): num"...
+5:1 -> 45:1 len 10  "const x = "
+5:18 -> 15:17 len 1  "s"
+5:25 -> 18:15 len 1  "v"
+5:31 -> 20:25 len 1  "g"
+5:32 -> 36:26 len 1  "("
+5:33 -> 21:25 len 5  "eff()"
+5:38 -> 36:35 len 2  ", "
+5:47 -> 23:23 len 1  "s"
+5:54 -> 26:21 len 1  "w"
+5:60 -> 27:24 len 1  "w"
+5:68 -> 31:24 len 1  "0"
+5:71 -> 36:45 len 1  ")"
+5:79 -> 40:18 len 1  "0"
+5:82 -> 45:19 len 2  ";\n"
+

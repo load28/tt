@@ -1,0 +1,108 @@
+=== runtimeIfLetChainsAndFallsBack.tt ===
+variant Opt { Some(value: number), None }
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => Opt
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+function pick(a: Opt, b: Opt): number {
+>pick : function pick(a: Opt, b: Opt): number
+>a : (parameter) a: Opt
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>b : (parameter) b: Opt
+>Opt : type Opt = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+  let out = -1;
+>out : let out: number
+  if let Some(value) = a {
+>value : const value: number
+>a : (parameter) a: Opt
+    out = value;
+>out : let out: number
+>value : const value: number
+  } else if let Some(value) = b {
+>value : const value: number
+>b : (parameter) b: Opt
+    out = value * 10;
+>out : let out: number
+>value : const value: number
+    out = 0;
+>out : let out: number
+  return out;
+>out : let out: number
+console.log(pick(Opt.Some(1), Opt.Some(2)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pick : function pick(a: Opt, b: Opt): number
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => Opt
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => Opt
+console.log(pick(Opt.None, Opt.Some(2)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pick : function pick(a: Opt, b: Opt): number
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>Some : (property) Some: (value: number) => Opt
+console.log(pick(Opt.None, Opt.None));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pick : function pick(a: Opt, b: Opt): number
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+>Opt : const Opt: {
+>       Some: (value: number) => Opt;
+>       None: {
+>           readonly kind: "None";
+>       };
+>   }
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+

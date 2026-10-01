@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_07.rs::literal_number_match_emits_number_cases
+
+const message = match (status) {
+  200 => "ok",
+  404 => "not found",
+  500 => "error",
+  _ => "unknown",
+};

@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_08.rs::val_parameter_is_read_only_inside_the_function
+function update(user: User) {
+  user.name = "Lee";
+}

@@ -1,0 +1,33 @@
+=== aDeliveredValueKeepsOnlyTheParenthesesThatGroupIt.tt ===
+variant E { A(v: number), B }
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (v: number) => E
+>v : (property) v: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const e: E;
+>e : const e: E
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+const plain = match (e) { A(v) => v + 1, B => 0 };
+>plain : const plain: number
+>e : const e: E
+>v : const v: number
+>v : const v: number
+const seq = match (e) { A(v) => (v, v + 1), B => 0 };
+>seq : const seq: number
+>e : const e: E
+>v : const v: number
+>v : const v: number
+>v : const v: number
+

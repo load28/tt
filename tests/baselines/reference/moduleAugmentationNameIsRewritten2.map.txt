@@ -1,0 +1,3 @@
+//// [moduleAugmentationNameIsRewritten2.tt] 1 mapping(s)
+1:1 -> 1:1 len 59  "declare module \"pkg.tt\" {}\ndeclare module \"@scop"...
+

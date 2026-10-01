@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_10.rs::a_crlf_source_gets_crlf_glue
+variant O { Some(value: number), None }
+export const f = (o: O) => match (o) {
+  Some(value) => value,
+  None => 0,
+};

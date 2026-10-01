@@ -1,0 +1,4 @@
+=== tryAtModuleTopLevelIsAnError2.tt ===
+const x = try g();
+>x : const x: 0
+

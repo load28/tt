@@ -1,0 +1,15 @@
+//// [aBlockArmExitLeavesTheRegionFromInsideALoop.tt] 13 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:27 -> 21:27 len 6  "number"
+2:27 -> 24:16 len 6  "number"
+2:42 -> 26:3 len 69  "\ndeclare const nothing: number;\nfunction choose("...
+5:3 -> 50:3 len 7  "return "
+5:17 -> 31:19 len 1  "p"
+6:10 -> 34:17 len 4  "from"
+7:7 -> 35:9 len 73  "for (const x of [from, from + 1, from + 2]) {\n  "...
+8:35 -> 36:37 len 1  "x"
+8:37 -> 36:55 len 17  " }\n      }\n      "
+10:14 -> 38:18 len 2  "-1"
+12:13 -> 42:18 len 1  "0"
+13:4 -> 50:16 len 92  ";\n}\nconsole.log(choose(Pick.Scan(2)), choose(Pic"...
+

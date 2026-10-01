@@ -126,8 +126,12 @@ Nightly와 Beta·RC·Stable·Patch의 개발자 절차 및 운영 기준은 [`do
 - 스캐너와 변환기는 ASCII 바이트만 판단하고 멀티바이트 UTF-8은 불투명하게
   통과시킵니다.
 - 내부 오류는 바이트 오프셋을 담고 사용자 line/column 변환은 공개 경계에서 합니다.
-- 새 기능은 출력 계약이면 `tests/compile.rs`, TS 통과 계약이면
-  `tests/passthrough.rs`, 타입·런타임 의미이면 통합 테스트를 추가합니다.
+- A new feature's emitted output, diagnostics, type-check result, or
+  runtime behaviour is pinned by case files under `tests/cases/` (see
+  below). `tests/compile.rs` and `tests/integration.rs` hold what a case
+  does not observe: library APIs other than the emission, non-default
+  `Options`, and the CLI or processes. The TS pass-through contract goes in
+  `tests/passthrough.rs`.
   방출된 TypeScript나 렌더된 진단처럼 **산출물 전체**가 계약인 것은
   `tests/fixtures/` 스냅샷으로 고정하고(`UPDATE_EXPECT=1 cargo test --test
   snapshot`), 갱신된 diff를 읽고 검토합니다.

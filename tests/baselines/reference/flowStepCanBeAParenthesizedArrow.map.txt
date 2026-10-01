@@ -1,0 +1,6 @@
+//// [flowStepCanBeAParenthesizedArrow.tt] 4 mapping(s)
+1:1 -> 7:1 len 10  "const f = "
+1:19 -> 7:18 len 5  "parse"
+1:28 -> 7:25 len 12  "(n => n + 1)"
+1:40 -> 7:38 len 2  ";\n"
+

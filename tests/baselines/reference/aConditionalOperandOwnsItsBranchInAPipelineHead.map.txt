@@ -1,0 +1,14 @@
+//// [aConditionalOperandOwnsItsBranchInAPipelineHead.tt] 12 mapping(s)
+1:1 -> 1:1 len 233  "declare function f(a: any, b?: any): any;\ndeclar"...
+7:1 -> 36:1 len 17  "export const v = "
+7:18 -> 12:16 len 3  "g()"
+7:25 -> 14:21 len 1  "f"
+7:26 -> 28:30 len 1  "("
+7:34 -> 16:21 len 1  "n"
+7:39 -> 18:14 len 1  "0"
+7:44 -> 19:20 len 1  "1"
+7:52 -> 23:20 len 1  "2"
+7:55 -> 28:37 len 1  ")"
+7:60 -> 33:12 len 6  "String"
+7:66 -> 36:24 len 2  ";\n"
+

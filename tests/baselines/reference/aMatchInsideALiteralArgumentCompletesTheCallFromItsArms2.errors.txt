@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aMatchInsideALiteralArgumentCompletesTheCallFromItsArms2.tt → $DIR/out/aMatchInsideALiteralArgumentCompletesTheCallFromItsArms2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'consume'.
+ --> aMatchInsideALiteralArgumentCompletesTheCallFromItsArms2.tt:1:1
+  |
+1 | consume([match (x) { A(v) => v, _ => 0 }]);
+  | ^^^^^^^
+error[ts2304]: Cannot find name 'x'.
+ --> aMatchInsideALiteralArgumentCompletesTheCallFromItsArms2.tt:1:17
+  |
+1 | consume([match (x) { A(v) => v, _ => 0 }]);
+  |                 ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aMatchInsideALiteralArgumentCompletesTheCallFromItsArms2.ts(2,19): error TS2304: Cannot find name 'consume'.
+aMatchInsideALiteralArgumentCompletesTheCallFromItsArms2.ts(4,19): error TS2304: Cannot find name 'x'.

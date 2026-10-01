@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./pipelineMethodStepChainsPostfix.tt → $DIR/out/pipelineMethodStepChainsPostfix.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 's'.
+ --> pipelineMethodStepChainsPostfix.tt:1:11
+  |
+1 | const t = s |> .trim() |> .split(",") |> f;
+  |           ^
+error[ts2304]: Cannot find name 'f'.
+ --> pipelineMethodStepChainsPostfix.tt:1:42
+  |
+1 | const t = s |> .trim() |> .split(",") |> f;
+  |                                          ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+pipelineMethodStepChainsPostfix.ts(4,18): error TS2304: Cannot find name 's'.
+pipelineMethodStepChainsPostfix.ts(4,39): error TS2304: Cannot find name 'f'.

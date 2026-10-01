@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./resultAllowsLetElseWhenEachElsePathCompletesTheResult.tt → $DIR/out/resultAllowsLetElseWhenEachElsePathCompletesTheResult.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'read'.
+ --> resultAllowsLetElseWhenEachElsePathCompletesTheResult.tt:2:41
+  |
+2 | const value = result { const item = try read(); let Some(found) = item else { return 0; }; return found; };
+  |                                         ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+resultAllowsLetElseWhenEachElsePathCompletesTheResult.ts(10,18): error TS2304: Cannot find name 'read'.

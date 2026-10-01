@@ -1,0 +1,7 @@
+//// [matchOnBuiltinResultIsExhaustivenessChecked.tt] 5 mapping(s)
+1:1 -> 19:1 len 41  "const f = (r: Result<number, string>) => "
+1:49 -> 22:19 len 1  "r"
+1:58 -> 25:17 len 5  "error"
+1:68 -> 26:18 len 5  "error"
+1:75 -> 35:2 len 2  ";\n"
+

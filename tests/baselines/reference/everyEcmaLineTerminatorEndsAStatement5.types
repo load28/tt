@@ -1,0 +1,16 @@
+=== everyEcmaLineTerminatorEndsAStatement5.tt ===
+declare const e: Error;
+>e : const e: Error
+>Error : interface Error
+export function f(v: Option<number>): number {
+>f : function f(v: Option<number>): number
+>v : (parameter) v: Option<number>
+>Option : type Option = /*unresolved*/ any
+  const Some(value) = v else {
+>value : const value: Option<number>
+>v : (parameter) v: Option<number>
+  };
+> : const e: Error
+}
+> : const value: Option<number>
+

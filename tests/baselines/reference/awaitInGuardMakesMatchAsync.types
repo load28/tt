@@ -1,0 +1,9 @@
+=== awaitInGuardMakesMatchAsync.tt ===
+async function f(x: T) { return match (x) { A(u) if await allowed(u) => 1, _ => 0 }; }
+>f : function f(x: T): Promise<number>
+>x : (parameter) x: T
+>T : type T = /*unresolved*/ any
+>x : (parameter) x: T
+>u : const u: T
+>u : const u: T
+

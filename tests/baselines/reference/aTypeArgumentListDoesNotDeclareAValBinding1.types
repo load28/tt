@@ -1,0 +1,7 @@
+=== aTypeArgumentListDoesNotDeclareAValBinding1.tt ===
+val const m = new Map<string, number>();
+>m : const m: Map<string, number>
+>Map : var Map: new <string, number>(iterable?: Iterable<readonly [string, number]> | null | undefined) => Map<string, number>
+val const items: number[] = [];
+>items : const items: number[]
+

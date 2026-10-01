@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_05.rs::an_inert_member_receiver_needs_no_receiver_slot
+variant E { A(value: string), B }
+const value = "abc".replace(match (E.A("a")) { A(value) => value, B => "b" },"x",);

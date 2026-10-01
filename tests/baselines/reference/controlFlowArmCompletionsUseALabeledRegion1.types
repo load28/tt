@@ -1,0 +1,8 @@
+=== controlFlowArmCompletionsUseALabeledRegion1.tt ===
+consume(match (x) { A(v) => { for (const s of [1]) { if (s === v) return s; } return 0; }, _ => 0 });
+>v : const v: any
+>s : const s: number
+>s : const s: number
+>v : const v: any
+>s : const s: number
+

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./ttxExpressionBoundariesIgnoreDelimitersInsideRegexLiterals.ttx → $DIR/out/ttxExpressionBoundariesIgnoreDelimitersInsideRegexLiterals.tsx
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'Panel'.
+ --> ttxExpressionBoundariesIgnoreDelimitersInsideRegexLiterals.ttx:3:15
+  |
+3 | const view = <Panel visible={/}/.test("}")} value={match (state) {
+  |               ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+ttxExpressionBoundariesIgnoreDelimitersInsideRegexLiterals.tsx(46,15): error TS2304: Cannot find name 'Panel'.

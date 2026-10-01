@@ -1,0 +1,33 @@
+=== runtimeLetElseBindsFromAnObjectLiteralInitializer.tt ===
+function f(n: number) {
+>f : function f(n: number): number
+>n : (parameter) n: number
+  const Some(value: v) = { kind: "Some" as const, value: n } else { return -1; };
+>value : (property) value: number
+>v : const v: number
+>kind : (property) kind: "Some"
+>const : type const = "Some"
+>value : (property) value: number
+>n : (parameter) n: number
+  return v;
+>v : const v: number
+function g(on: boolean) {
+>g : function g(on: boolean): string
+>on : (parameter) on: boolean
+  const Some(value) = on ? { kind: "Some" as const, value: "on" } : { kind: "None" as const } else { return "off"; };
+>value : const value: string
+>on : (parameter) on: boolean
+>kind : (property) kind: "Some"
+>const : type const = "Some"
+>value : (property) value: string
+>kind : (property) kind: "None"
+>const : type const = "None"
+  return value;
+>value : const value: string
+console.log(f(3), g(true), g(false));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : function f(n: number): number
+>g : function g(on: boolean): string
+>g : function g(on: boolean): string
+

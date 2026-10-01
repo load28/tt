@@ -1,0 +1,13 @@
+=== anInnerDeclarationShadowsAnOuterVal2.tt ===
+val const cfg = { a: 1 };
+>cfg : const cfg: {
+>       a: number;
+>   }
+>a : (property) a: number
+function f(cfg: C) {
+>f : function f(cfg: C): void
+>cfg : (parameter) cfg: C
+>C : type C = /*unresolved*/ any
+  cfg.a = 2;
+>cfg : (parameter) cfg: C
+

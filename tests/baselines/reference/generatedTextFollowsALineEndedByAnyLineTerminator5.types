@@ -1,0 +1,14 @@
+=== generatedTextFollowsALineEndedByAnyLineTerminator5.tt ===
+"use client" // client declare const o: { p: number };
+>o : const o: {
+>       p: number;
+>   }
+>p : (property) p: number
+export const a = o.p |> String;
+>a : const a: string
+>o : const o: {
+>       p: number;
+>   }
+>p : (property) p: number
+>String : var String: StringConstructor
+

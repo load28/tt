@@ -1,0 +1,11 @@
+=== tryDestructuringBindingIsKeptVerbatim.tt ===
+function f(): X {
+>f : function f(): X
+>X : type X = /*unresolved*/ any
+  const { a, b } = try g();
+>a : const a: any
+>b : const b: any
+  return a + b;
+>a : const a: any
+>b : const b: any
+

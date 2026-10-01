@@ -1,0 +1,121 @@
+=== literalWrappedCallArgumentsKeepTheirContext.tt ===
+variant State { Ready(value: number), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: number) => State
+>value : (property) value: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+declare const state: State;
+>state : const state: State
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+declare function consume(item: {kind: "item"; run: (x: number) => number}): void;
+>consume : function consume(item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }): void
+>item : (parameter) item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+declare function consumeAll(items: ((x: number) => number)[]): void;
+>consumeAll : function consumeAll(items: ((x: number) => number)[]): void
+>items : (parameter) items: ((x: number) => number)[]
+>x : (parameter) x: number
+declare function nested(outer: {inner: {run: (x: number) => number}}): void;
+>nested : function nested(outer: {
+>       inner: {
+>           run: (x: number) => number;
+>       };
+>   }): void
+>outer : (parameter) outer: {
+>       inner: {
+>           run: (x: number) => number;
+>       };
+>   }
+>inner : (property) inner: {
+>       run: (x: number) => number;
+>   }
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+consume({kind: "item", run: match (state) {
+>consume : function consume(item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }): void
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>match : (parameter) x: number
+>state : const state: State
+  Ready(value) => x => x + value,
+>value : const value: number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+  Empty => x => x,
+>x : (parameter) x: number
+>x : (parameter) x: number
+consumeAll([match (state) {
+>consumeAll : function consumeAll(items: ((x: number) => number)[]): void
+>match : (parameter) x: number
+>state : const state: State
+  Ready(value) => x => x + value,
+>value : const value: number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+  Empty => x => x,
+>x : (parameter) x: number
+>x : (parameter) x: number
+nested({inner: {run: match (state) {
+>nested : function nested(outer: {
+>       inner: {
+>           run: (x: number) => number;
+>       };
+>   }): void
+>inner : (property) inner: {
+>       run: (x: number) => number;
+>   }
+>run : (property) run: (x: number) => number
+>match : (parameter) x: number
+>state : const state: State
+  Ready(value) => x => x + value,
+>value : const value: number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+  Empty => x => x,
+>x : (parameter) x: number
+>x : (parameter) x: number
+const kept: void = consume({kind: "item", run: match (state) {
+>kept : const kept: void
+>consume : function consume(item: {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }): void
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>match : (parameter) x: number
+>state : const state: State
+  Ready(value) => x => x + value,
+>value : const value: number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+  Empty => x => x,
+>x : (parameter) x: number
+>x : (parameter) x: number
+

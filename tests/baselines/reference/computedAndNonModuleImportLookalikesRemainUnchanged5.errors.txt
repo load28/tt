@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./computedAndNonModuleImportLookalikesRemainUnchanged5.tt → $DIR/out/computedAndNonModuleImportLookalikesRemainUnchanged5.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2552]: Cannot find name 'object'. Did you mean 'Object'?
+ --> computedAndNonModuleImportLookalikesRemainUnchanged5.tt:1:14
+  |
+1 | const load = object?.import('./feature.tt');
+  |              ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+computedAndNonModuleImportLookalikesRemainUnchanged5.ts(1,14): error TS2552: Cannot find name 'object'. Did you mean 'Object'?

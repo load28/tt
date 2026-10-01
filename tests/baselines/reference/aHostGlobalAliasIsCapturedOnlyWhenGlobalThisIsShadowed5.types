@@ -1,0 +1,27 @@
+=== aHostGlobalAliasIsCapturedOnlyWhenGlobalThisIsShadowed5.tt ===
+variant O { Some(value: number), None }
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => O
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+export function f(o: O, globalThis: unknown) { const Error = 5; return o.kind; }
+>f : function f(o: O, globalThis: unknown): "None" | "Some"
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>globalThis : (parameter) globalThis: unknown
+>Error : const Error: 5
+>o : (parameter) o: O
+>kind : (property) kind: "None" | "Some"
+

@@ -1,0 +1,4 @@
+=== computedAndNonModuleImportLookalikesRemainUnchanged2.tt ===
+const load = import(path);
+>load : const load: Promise<any>
+

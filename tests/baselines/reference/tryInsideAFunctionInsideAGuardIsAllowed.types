@@ -1,0 +1,7 @@
+=== tryInsideAFunctionInsideAGuardIsAllowed.tt ===
+const r = match (x) {
+>r : const r: any
+  A(v) if run(() => { try g(); return true; }) => v,
+>v : const v: any
+>v : const v: any
+

@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_04.rs::rewrite_composes_with_tt_constructs_in_the_same_file
+
+import { CalcError } from "./error.tt";
+variant Shape { Circle(radius: number), Point }
+const area = match (Shape.Point) {
+  Circle(radius) => radius,
+  Point => 0,
+};

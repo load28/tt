@@ -1,0 +1,6 @@
+//// [runtimePlainTypescriptEnumCoexists.tt] 4 mapping(s)
+1:1 -> 1:1 len 33  "\nenum Color { Red, Green, Blue }\n"
+3:32 -> 4:31 len 6  "number"
+3:32 -> 7:20 len 6  "number"
+3:48 -> 9:3 len 118  "\n\nconsole.log(Color.Green);\nconsole.log(Color[Co"...
+

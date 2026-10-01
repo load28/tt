@@ -1,0 +1,57 @@
+=== valJudgesOnlyPathsRootedAtTheBinding3.tt ===
+val const o = { x: 1 };
+>o : const o: {
+>       x: number;
+>   }
+>x : (property) x: number
+const q = { o: { x: 1 } };
+>q : const q: {
+>       o: {
+>           x: number;
+>       };
+>   }
+>o : (property) o: {
+>       x: number;
+>   }
+>x : (property) x: number
+q.o.x++;
+>q : const q: {
+>       o: {
+>           x: number;
+>       };
+>   }
+>o : (property) o: {
+>       x: number;
+>   }
+>x : (property) x: number
+q!.o.x = 2;
+>q : const q: {
+>       o: {
+>           x: number;
+>       };
+>   }
+>o : (property) o: {
+>       x: number;
+>   }
+>x : (property) x: number
+delete q.o.x;
+>q : const q: {
+>       o: {
+>           x: number;
+>       };
+>   }
+>o : (property) o: {
+>       x: number;
+>   }
+>x : (property) x: number
+[q.o.x] = [3];
+>q : const q: {
+>       o: {
+>           x: number;
+>       };
+>   }
+>o : (property) o: {
+>       x: number;
+>   }
+>x : (property) x: number
+

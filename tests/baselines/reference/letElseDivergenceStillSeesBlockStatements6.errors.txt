@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseDivergenceStillSeesBlockStatements6.tt → $DIR/out/letElseDivergenceStillSeesBlockStatements6.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseDivergenceStillSeesBlockStatements6.tt:2:19
+  |
+2 |   const Some(v) = find() else { const o = { n: 1 }; return o.n; };
+  |                   ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseDivergenceStillSeesBlockStatements6.ts(2,18): error TS2304: Cannot find name 'find'.

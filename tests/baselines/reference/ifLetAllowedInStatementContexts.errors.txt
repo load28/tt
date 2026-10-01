@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./ifLetAllowedInStatementContexts.tt → $DIR/out/ifLetAllowedInStatementContexts.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'X'.
+ --> ifLetAllowedInStatementContexts.tt:2:15
+  |
+2 | function f(x: X, o: O) {
+  |               ^
+error[ts2304]: Cannot find name 'O'.
+ --> ifLetAllowedInStatementContexts.tt:2:21
+  |
+2 | function f(x: X, o: O) {
+  |                     ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+ifLetAllowedInStatementContexts.ts(2,15): error TS2304: Cannot find name 'X'.
+ifLetAllowedInStatementContexts.ts(2,21): error TS2304: Cannot find name 'O'.

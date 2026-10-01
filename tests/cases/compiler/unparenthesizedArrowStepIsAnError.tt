@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_05.rs::unparenthesized_arrow_step_is_an_error
+const a = x |> n => n + 1;

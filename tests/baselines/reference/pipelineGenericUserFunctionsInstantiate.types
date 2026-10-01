@@ -1,0 +1,13 @@
+=== pipelineGenericUserFunctionsInstantiate.tt ===
+const wrap = <T,>(v: T): T[] => [v];
+>wrap : const wrap: <T>(v: T) => T[]
+>T : (type parameter) T in <T>(v: T): T[]
+>v : (parameter) v: T
+>T : (type parameter) T in <T>(v: T): T[]
+>T : (type parameter) T in <T>(v: T): T[]
+>v : (parameter) v: T
+const arr: number[][] = 3 |> wrap |> wrap;
+>arr : const arr: number[][]
+>wrap : const wrap: <number>(v: number) => number[]
+>wrap : const wrap: <T>(v: T) => T[]
+

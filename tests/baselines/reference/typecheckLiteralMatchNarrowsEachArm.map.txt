@@ -1,0 +1,12 @@
+//// [typecheckLiteralMatchNarrowsEachArm.tt] 10 mapping(s)
+1:1 -> 19:1 len 33  "\ntype Size = \"sm\" | \"md\" | \"lg\";\n"
+3:1 -> 42:1 len 19  "const px: number = "
+3:27 -> 23:17 len 12  "\"sm\" as Size"
+4:3 -> 25:10 len 4  "\"sm\""
+4:11 -> 26:16 len 2  "12"
+5:3 -> 29:10 len 4  "\"md\""
+5:11 -> 30:16 len 2  "16"
+6:3 -> 33:10 len 4  "\"lg\""
+6:11 -> 34:16 len 2  "20"
+7:2 -> 42:26 len 14  ";\n\nexport {};\n"
+

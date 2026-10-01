@@ -1,0 +1,29 @@
+=== aLoopHeaderMatchIsEvaluatedEveryIteration.tt ===
+let n = 0;
+>n : let n: number
+function next(): number { n = n + 1; return n; }
+>next : function next(): number
+>n : let n: number
+>n : let n: number
+>n : let n: number
+function id(v: number): number { return v; }
+>id : function id(v: number): number
+>v : (parameter) v: number
+>v : (parameter) v: number
+const seen: number[] = [];
+>seen : const seen: number[]
+while (id(match (next()) { 1 => 1, 2 => 1, _ => 0 })) {
+>id : function id(v: number): number
+>next : function next(): number
+  seen.push(n);
+>seen : const seen: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>n : let n: number
+console.log(JSON.stringify(seen), n);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>seen : const seen: number[]
+>n : let n: number
+

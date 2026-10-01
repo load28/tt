@@ -1,0 +1,9 @@
+head,arg,get,call 2
+head,one,get,call,two,get,call 3
+head,get,call,arg,get,call 3
+head,index 20
+head,arg,get,call [object Object]
+head undefined
+head,arg,get,make,apply 3
+head,try,get,call 5
+head,err err

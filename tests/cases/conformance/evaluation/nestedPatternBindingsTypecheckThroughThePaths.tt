@@ -1,0 +1,12 @@
+// @origin: tests/integration/cases_03.rs::nested_pattern_bindings_typecheck_through_the_paths
+
+variant Opt { Some(value: number), None }
+variant Res { Ok(value: Opt), Err(error: string) }
+function f(r: Res): number {
+  return match (r) {
+    Ok(value: Some(value: v)) => v + 1,
+    _ => 0,
+  };
+}
+
+export {};

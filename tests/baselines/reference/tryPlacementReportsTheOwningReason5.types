@@ -1,0 +1,9 @@
+=== tryPlacementReportsTheOwningReason5.tt ===
+const value = match (source) { Ok(value) => { const item = try read(); return item; }, Err(error) => error };
+>value : const value: any
+>value : const value: any
+>item : const item: any
+>item : const item: any
+>error : const error: any
+>error : const error: any
+

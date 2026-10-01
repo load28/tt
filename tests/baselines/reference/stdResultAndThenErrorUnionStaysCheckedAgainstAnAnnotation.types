@@ -1,0 +1,120 @@
+=== stdResultAndThenErrorUnionStaysCheckedAgainstAnAnnotation.tt ===
+type Exact<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+>Exact : type Exact<A, B> = [A] extends [B] ? [B] extends [A] ? true : false : false
+>A : (type parameter) A in type Exact<A, B>
+>B : (type parameter) B in type Exact<A, B>
+>A : (type parameter) A in type Exact<A, B>
+>B : (type parameter) B in type Exact<A, B>
+>B : (type parameter) B in type Exact<A, B>
+>A : (type parameter) A in type Exact<A, B>
+type User = { id: number };
+>User : type User = {
+>       id: number;
+>   }
+>id : (property) id: number
+type Company = { name: string };
+>Company : type Company = {
+>       name: string;
+>   }
+>name : (property) name: string
+type Profile = { title: string };
+>Profile : type Profile = {
+>       title: string;
+>   }
+>title : (property) title: string
+type ConfigError = { tag: "config" };
+>ConfigError : type ConfigError = {
+>       tag: "config";
+>   }
+>tag : (property) tag: "config"
+type TokenError = { tag: "token" };
+>TokenError : type TokenError = {
+>       tag: "token";
+>   }
+>tag : (property) tag: "token"
+type FetchError = { tag: "fetch" };
+>FetchError : type FetchError = {
+>       tag: "fetch";
+>   }
+>tag : (property) tag: "fetch"
+type ValidationError = { tag: "validation" };
+>ValidationError : type ValidationError = {
+>       tag: "validation";
+>   }
+>tag : (property) tag: "validation"
+declare function loadConfig(): TResult<string, ConfigError>;
+>loadConfig : function loadConfig(): TResult<string, ConfigError>
+>ConfigError : type ConfigError = {
+>       tag: "config";
+>   }
+declare function loadToken(config: string): TResult<User, TokenError>;
+>loadToken : function loadToken(config: string): TResult<User, TokenError>
+>config : (parameter) config: string
+>User : type User = {
+>       id: number;
+>   }
+>TokenError : type TokenError = {
+>       tag: "token";
+>   }
+declare function getCompany(user: User): TResult<Company, FetchError>;
+>getCompany : function getCompany(user: User): TResult<Company, FetchError>
+>user : (parameter) user: User
+>User : type User = {
+>       id: number;
+>   }
+>Company : type Company = {
+>       name: string;
+>   }
+>FetchError : type FetchError = {
+>       tag: "fetch";
+>   }
+declare function fetchProfile(user: User): TResult<Profile, FetchError>;
+>fetchProfile : function fetchProfile(user: User): TResult<Profile, FetchError>
+>user : (parameter) user: User
+>User : type User = {
+>       id: number;
+>   }
+>Profile : type Profile = {
+>       title: string;
+>   }
+>FetchError : type FetchError = {
+>       tag: "fetch";
+>   }
+declare function validateProfile(profile: Profile): TResult<Profile, ValidationError>;
+>validateProfile : function validateProfile(profile: Profile): TResult<Profile, ValidationError>
+>profile : (parameter) profile: Profile
+>Profile : type Profile = {
+>       title: string;
+>   }
+>Profile : type Profile = {
+>       title: string;
+>   }
+>ValidationError : type ValidationError = {
+>       tag: "validation";
+>   }
+declare const first: TResult<User, TokenError>;
+>first : const first: TResult<User, TokenError>
+>User : type User = {
+>       id: number;
+>   }
+>TokenError : type TokenError = {
+>       tag: "token";
+>   }
+function chain(): TResult<Profile, TokenError> {
+>chain : function chain(): TResult<Profile, TokenError>
+>Profile : type Profile = {
+>       title: string;
+>   }
+>TokenError : type TokenError = {
+>       tag: "token";
+>   }
+  return Result.andThen(first, (user) => fetchProfile(user));
+>first : const first: TResult<User, TokenError>
+>user : (parameter) user: any
+>fetchProfile : function fetchProfile(user: User): TResult<Profile, FetchError>
+>user : (parameter) user: any
+console.log(chain());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>chain : function chain(): TResult<Profile, TokenError>
+

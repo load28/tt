@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::or_pattern_with_identical_bindings_shares_destructuring
+const r = match (x) { A(v) | B(v) => v, _ => 0 };

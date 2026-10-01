@@ -1,0 +1,125 @@
+=== runtimeAConditionalOperationsConditionIsEvaluatedOnceWhereItIsTested.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const o = O.A(1) as O;
+>o : const o: O
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+let reads = 0;
+>reads : let reads: number
+function read<T>(v: T): T { reads++; return v; }
+>read : function read<T>(v: T): T
+>T : (type parameter) T in read<T>(v: T): T
+>v : (parameter) v: T
+>T : (type parameter) T in read<T>(v: T): T
+>T : (type parameter) T in read<T>(v: T): T
+>reads : let reads: number
+>v : (parameter) v: T
+const cfg = { get name(): string | undefined { reads++; return "abc"; } };
+>cfg : const cfg: {
+>       readonly name: string | undefined;
+>   }
+>name : (accessor) name: string | undefined
+>reads : let reads: number
+const a = cfg.name ? match (o) { A(n) => n + 1, B => 0 } : -1;
+>a : const a: number
+>cfg : const cfg: {
+>       readonly name: string | undefined;
+>   }
+>name : (accessor) name: string | undefined
+>o : const o: O
+>n : const n: number
+>n : const n: number
+const b = cfg.name && match (o) { A(n) => n + 2, B => 0 };
+>b : const b: string | number | undefined
+>cfg : const cfg: {
+>       readonly name: string | undefined;
+>   }
+>name : (accessor) name: string | undefined
+>o : const o: O
+>n : const n: number
+>n : const n: number
+const c = !cfg.name || match (o) { A(n) => n + 3, B => 0 };
+>c : const c: number | true
+>cfg : const cfg: {
+>       readonly name: string | undefined;
+>   }
+>name : (accessor) name: string | undefined
+>o : const o: O
+>n : const n: number
+>n : const n: number
+const d = cfg.name ?? match (o) { A(n) => n + 4, B => 0 };
+>d : const d: string | number
+>cfg : const cfg: {
+>       readonly name: string | undefined;
+>   }
+>name : (accessor) name: string | undefined
+>o : const o: O
+>n : const n: number
+>n : const n: number
+const e = read(0) && match (o) { A(n) => n, B => 0 };
+>e : const e: 0
+>read : function read<0>(v: 0): 0
+>o : const o: O
+>n : const n: number
+>n : const n: number
+const f = read("") || match (o) { A(n) => n + 5, B => 0 };
+>f : const f: number
+>read : function read<"">(v: ""): ""
+>o : const o: O
+>n : const n: number
+>n : const n: number
+const g = read(null) ?? match (o) { A(n) => n + 6, B => 0 };
+>g : const g: number
+>read : function read<null>(v: null): null
+>o : const o: O
+>n : const n: number
+>n : const n: number
+const h = (read(true) ? { k: 1 } : null) && match (o) { A(n) => n, B => 0 };
+>h : const h: number | null
+>read : function read<true>(v: true): true
+>k : (property) k: number
+>o : const o: O
+>n : const n: number
+>n : const n: number
+const i = (read(false) ? [] : null) || match (o) { A(n) => n, B => 0 };
+>i : const i: number | never[]
+>read : function read<false>(v: false): false
+>o : const o: O
+>n : const n: number
+>n : const n: number
+console.log(a, b, c, d, e, f, g, h, i, reads);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>a : const a: number
+>b : const b: string | number | undefined
+>c : const c: number | true
+>d : const d: string | number
+>e : const e: 0
+>f : const f: number
+>g : const g: number
+>h : const h: number | null
+>i : const i: number | never[]
+>reads : let reads: number
+

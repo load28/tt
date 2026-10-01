@@ -1,0 +1,207 @@
+=== runtimeAForHeadInitializerValueRunsBeforeTheLoopWhenFaithful.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const o = O.A(1) as O;
+>o : const o: O
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function r(n: number): R { return n > 0 ? { kind: "Ok", value: n } : { kind: "Err", error: "e" + n }; }
+>r : function r(n: number): R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+>n : (parameter) n: number
+const out: string[] = [];
+>out : const out: string[]
+function a() {
+>a : function a(): void
+  for (let f = match (o) { A(n) => () => n + 1, B => null }, i = 0; i < 1; i++) out.push("a" + f!() + i);
+>f : let f: (() => number) | null
+>o : const o: O
+>n : const n: number
+>n : const n: number
+>i : let i: number
+>i : let i: number
+>i : let i: number
+>out : const out: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>f : let f: (() => number) | null
+>i : let i: number
+function c(n: number): R {
+>c : function c(n: number): R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  for (let x = try r(n), i = 0; i < 2; i++) out.push("c" + x + i);
+>x : let x: number
+>r : function r(n: number): R
+>n : (parameter) n: number
+>i : let i: number
+>i : let i: number
+>i : let i: number
+>out : const out: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>x : let x: number
+>i : let i: number
+  return { kind: "Ok", value: 1 };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+function d() {
+>d : function d(): void
+  for (let n = match (o) { A(n) => n, B => 0 }; n < 3; n++) out.push("d" + n);
+>n : let n: number
+>o : const o: O
+>n : const n: number
+>n : const n: number
+>n : let n: number
+>n : let n: number
+>out : const out: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : let n: number
+function f() {
+>f : function f(): void
+  for (let k: ((k: number) => number) | null = match (o) { A(n) => (k: number) => k + n, B => null }; k; k = null) out.push("f" + k(1));
+>k : let k: ((k: number) => number) | null
+>k : (parameter) k: number
+>o : const o: O
+>n : const n: number
+>k : (parameter) k: number
+>k : (parameter) k: number
+>n : const n: number
+>k : let k: ((k: number) => number) | null
+>k : let k: ((k: number) => number) | null
+>out : const out: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>k : let k: (k: number) => number
+function g() {
+>g : function g(): void
+  for (var v: (() => unknown) | null = match (o) { A(n) => () => v, B => null }; v; v = null) out.push("g" + (v() === v));
+>v : var v: (() => unknown) | null
+>o : const o: O
+>n : const n: number
+>v : var v: (() => unknown) | null
+>v : var v: (() => unknown) | null
+>v : var v: (() => unknown) | null
+>out : const out: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>v : var v: () => unknown
+>v : var v: () => unknown
+function e() {
+>e : function e(): void
+  let x = 0;
+>x : let x: number
+  for (x = match (o) { A(n) => n + 10, B => 0 }; x < 12; x++) out.push("e" + x);
+>x : let x: number
+>o : const o: O
+>n : const n: number
+>n : const n: number
+>x : let x: number
+>x : let x: number
+>out : const out: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>x : let x: number
+function p(n: number): R {
+>p : function p(n: number): R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  let y = 0;
+>y : let y: number
+  for (y = try r(n); y < 2; y++) out.push("p" + y);
+>y : let y: number
+>r : function r(n: number): R
+>n : (parameter) n: number
+>y : let y: number
+>y : let y: number
+>out : const out: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>y : let y: number
+  return { kind: "Ok", value: y };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>y : let y: number
+a();
+>a : function a(): void
+console.log(JSON.stringify(c(1)), JSON.stringify(c(0)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>c : function c(n: number): R
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>c : function c(n: number): R
+d(); f(); g(); e();
+>d : function d(): void
+>f : function f(): void
+>g : function g(): void
+>e : function e(): void
+console.log(JSON.stringify(p(1)), JSON.stringify(p(-1)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>p : function p(n: number): R
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>p : function p(n: number): R
+console.log(out.join(" "));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>out : const out: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::wildcard_exempts_builtin_exhaustiveness
+const f = (o: Option<number>) => match (o) { Some(value) => value, _ => 0 };

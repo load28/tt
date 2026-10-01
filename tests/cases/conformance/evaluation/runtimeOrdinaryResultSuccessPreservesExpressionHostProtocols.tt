@@ -1,0 +1,31 @@
+// @origin: tests/integration/cases_04.rs::runtime_ordinary_result_success_preserves_expression_host_protocols
+// @run: runtimeOrdinaryResultSuccessPreservesExpressionHostProtocols.tt
+
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+const read = (value: number): Res<number, string> => Res.Ok(value);
+
+class FieldBox {
+  field = result { const value = try read(1); return value; };
+}
+class ConstructorBox {
+  outcome;
+  constructor() {
+    this.outcome = result { const value = try read(2); return value; };
+  }
+}
+function withDefault(value = result { const item = try read(3); return item; }) {
+  return value;
+}
+function* values() {
+  yield result { const item = try read(4); return item; };
+  yield "after";
+}
+const text = `value=${result { const item = try read(5); return item; }}`;
+
+console.log(JSON.stringify(new FieldBox().field));
+console.log(JSON.stringify(new ConstructorBox().outcome));
+console.log(JSON.stringify(withDefault()));
+console.log(Array.from(values()).map((value) => JSON.stringify(value)).join(","));
+console.log(text);
+
+export {};

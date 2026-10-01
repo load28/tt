@@ -1,0 +1,16 @@
+//// [singleReturnMatchBlocksKeepContextAndRuntimeOrder.tt] 14 mapping(s)
+1:1 -> 19:1 len 373  "\nconst trace: string[] = [];\nconst mark = <T,>(n"...
+13:3 -> 42:3 len 15  "const answer = "
+13:18 -> 32:19 len 26  "mark(\"receiver\", receiver)"
+13:44 -> 42:24 len 9  ".consume("
+13:53 -> 33:19 len 16  "mark(\"first\", 2)"
+13:69 -> 42:39 len 2  ", "
+13:78 -> 35:19 len 21  "mark(\"subject\", flag)"
+14:5 -> 37:12 len 4  "true"
+14:15 -> 42:57 len 21  "/* selected block */ "
+14:42 -> 42:78 len 50  " (mark(\"yes\", 0), {kind: \"item\", run: x => x + 1"...
+14:93 -> 42:128 len 11  " /* tail */"
+15:5 -> 38:12 len 5  "false"
+15:23 -> 42:142 len 48  "(mark(\"no\", 0), {kind: \"item\", run: x => x - 1})"
+16:4 -> 42:191 len 74  ", mark(\"last\", 3));\n  console.log(answer, trace."...
+

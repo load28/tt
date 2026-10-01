@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./controlFlowArmCompletionsUseALabeledRegion1.tt → $DIR/out/controlFlowArmCompletionsUseALabeledRegion1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'consume'.
+ --> controlFlowArmCompletionsUseALabeledRegion1.tt:1:1
+  |
+1 | consume(match (x) { A(v) => { for (const s of [1]) { if (s === v) return s; } return 0; }, _ => 0 });
+  | ^^^^^^^
+error[ts2304]: Cannot find name 'x'.
+ --> controlFlowArmCompletionsUseALabeledRegion1.tt:1:16
+  |
+1 | consume(match (x) { A(v) => { for (const s of [1]) { if (s === v) return s; } return 0; }, _ => 0 });
+  |                ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+controlFlowArmCompletionsUseALabeledRegion1.ts(2,19): error TS2304: Cannot find name 'consume'.
+controlFlowArmCompletionsUseALabeledRegion1.ts(4,19): error TS2304: Cannot find name 'x'.

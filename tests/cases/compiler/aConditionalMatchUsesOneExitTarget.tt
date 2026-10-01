@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_07.rs::a_conditional_match_uses_one_exit_target
+const value = match (item) {
+  A if ready => { consume(); },
+  _ => 0,
+};

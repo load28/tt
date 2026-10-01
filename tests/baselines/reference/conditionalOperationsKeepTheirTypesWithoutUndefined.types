@@ -1,0 +1,36 @@
+=== conditionalOperationsKeepTheirTypesWithoutUndefined.tt ===
+declare const flag: boolean;
+>flag : const flag: boolean
+declare const maybe: number | undefined;
+>maybe : const maybe: number | undefined
+export const a: number | boolean = flag && match (1) { 1 => 1, _ => 0 };
+>a : const a: number | boolean
+>flag : const flag: boolean
+export const b: number | boolean = flag || match (1) { 1 => 2, _ => 0 };
+>b : const b: number | boolean
+>flag : const flag: boolean
+export const c: number = maybe ?? match (1) { 1 => 3, _ => 0 };
+>c : const c: number
+>maybe : const maybe: number | undefined
+export const d: number = flag ? match (1) { 1 => 4, _ => 0 } : 9;
+>d : const d: number
+>flag : const flag: boolean
+declare const f: ((v: number) => number) | undefined;
+>f : const f: ((v: number) => number) | undefined
+>v : (parameter) v: number
+export const e: number | undefined = f?.(match (1) { 1 => 5, _ => 0 });
+>e : const e: number | undefined
+>f : const f: ((v: number) => number) | undefined
+declare const host: { g?: (v: number) => number };
+>host : const host: {
+>       g?: (v: number) => number;
+>   }
+>g : (property) g?: ((v: number) => number) | undefined
+>v : (parameter) v: number
+export const g: number | undefined = host.g?.(match (1) { 1 => 6, _ => 0 });
+>g : const g: number | undefined
+>host : const host: {
+>       g?: (v: number) => number;
+>   }
+>g : (property) g?: ((v: number) => number) | undefined
+

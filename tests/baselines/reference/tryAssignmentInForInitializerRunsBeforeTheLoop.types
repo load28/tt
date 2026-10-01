@@ -1,0 +1,4 @@
+=== tryAssignmentInForInitializerRunsBeforeTheLoop.tt ===
+function f() { for (i = try next();;) {} }
+>f : function f(): any
+

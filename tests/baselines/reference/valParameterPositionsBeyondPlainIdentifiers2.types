@@ -1,0 +1,6 @@
+=== valParameterPositionsBeyondPlainIdentifiers2.tt ===
+for (val const item of items) {
+>item : const item: any
+  item.a = 1;
+>item : const item: any
+

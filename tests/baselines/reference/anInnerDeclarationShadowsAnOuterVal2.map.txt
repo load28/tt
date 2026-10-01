@@ -1,0 +1,3 @@
+//// [anInnerDeclarationShadowsAnOuterVal2.tt] 1 mapping(s)
+1:5 -> 1:1 len 58  "const cfg = { a: 1 };\nfunction f(cfg: C) {\n  cfg"...
+

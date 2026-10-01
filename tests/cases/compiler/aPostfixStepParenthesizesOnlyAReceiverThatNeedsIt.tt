@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_05.rs::a_postfix_step_parenthesizes_only_a_receiver_that_needs_it
+const a = s |> .trim();
+const b = (x + y) |> .toFixed(2);
+const c = await p |> .then(g);

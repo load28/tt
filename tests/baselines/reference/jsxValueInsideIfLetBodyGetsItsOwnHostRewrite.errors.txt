@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./jsxValueInsideIfLetBodyGetsItsOwnHostRewrite.ttx → $DIR/out/jsxValueInsideIfLetBodyGetsItsOwnHostRewrite.tsx
+
+==== ttc --check-types (exit 1) ====
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists. (in code ttc generated for this construct)
+ --> jsxValueInsideIfLetBodyGetsItsOwnHostRewrite.ttx:3:3
+  |
+3 |   if let A(value) = node {
+  |   ^^^^^^^^^^^^^^^^^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxValueInsideIfLetBodyGetsItsOwnHostRewrite.ttx:4:87
+  |
+4 |     return <section data-kind={match (node) { A => "a", B => "b" }}>{value |> .trim()}</section>;
+  |                                                                                       ^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+jsxValueInsideIfLetBodyGetsItsOwnHostRewrite.tsx(48,14): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxValueInsideIfLetBodyGetsItsOwnHostRewrite.tsx(48,56): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./jsxExpressionPipelineRewritesOnlyTheContainerExpression2.ttx → $DIR/out/jsxExpressionPipelineRewritesOnlyTheContainerExpression2.tsx
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'P'.
+ --> jsxExpressionPipelineRewritesOnlyTheContainerExpression2.ttx:2:16
+  |
+2 | const child = <P value={raw |> up} />;
+  |                ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+jsxExpressionPipelineRewritesOnlyTheContainerExpression2.tsx(5,16): error TS2304: Cannot find name 'P'.

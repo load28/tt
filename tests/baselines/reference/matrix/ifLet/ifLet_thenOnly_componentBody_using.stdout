@@ -1,2 +1,2 @@
 componentBody(2) => "<p>2</p>" | open res; operand 2; read 2; then 2; dispose res
-componentBody(-1) => "<p>/"none/"</p>" | open res; operand -1; read -1; dispose res
+componentBody(-1) => "<p>\"none\"</p>" | open res; operand -1; read -1; dispose res

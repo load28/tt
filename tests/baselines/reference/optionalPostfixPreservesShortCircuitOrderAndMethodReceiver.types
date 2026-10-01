@@ -1,0 +1,80 @@
+=== optionalPostfixPreservesShortCircuitOrderAndMethodReceiver.tt ===
+const order: string[] = [];
+>order : const order: string[]
+const mark = (name: string, value: number): number => { order.push(name); return value; };
+>mark : const mark: (name: string, value: number) => number
+>name : (parameter) name: string
+>value : (parameter) value: number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>value : (parameter) value: number
+const key = (): "method" => { order.push("key"); return "method"; };
+>key : const key: () => "method"
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+const live = {
+>live : const live: {
+>       base: number;
+>       method(value: number): number;
+>   }
+  base: 10,
+>base : (property) base: number
+  method(value: number): number {
+>method : (method) method(value: number): number
+>value : (parameter) value: number
+    order.push(this === live ? "this" : "lost-this");
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>live : const live: {
+>       base: number;
+>       method(value: number): number;
+>   }
+    return this.base + value;
+>base : (property) base: number
+>value : (parameter) value: number
+const absent = (() => undefined as typeof live | undefined)();
+>absent : const absent: {
+>       base: number;
+>       method(value: number): number;
+>   } | undefined
+>live : const live: {
+>       base: number;
+>       method(value: number): number;
+>   }
+const hit = (order.push("head-hit"), live) |> ?.[key()]?.(mark("arg", 2));
+>hit : const hit: number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>live : const live: {
+>       base: number;
+>       method(value: number): number;
+>   }
+>key : const key: () => "method"
+>mark : const mark: (name: string, value: number) => number
+const miss = (order.push("head-miss"), absent) |> ?.[key()]?.(mark("skipped", 3));
+>miss : const miss: number | undefined
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>absent : const absent: {
+>       base: number;
+>       method(value: number): number;
+>   } | undefined
+>key : const key: () => "method"
+>mark : const mark: (name: string, value: number) => number
+const after = miss |> (value => { order.push("after"); return value ?? -1; });
+>after : const after: number
+>miss : const miss: number | undefined
+>value : (parameter) value: number | undefined
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: number | undefined
+console.log(hit, miss, after, order.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>hit : const hit: number
+>miss : const miss: number | undefined
+>after : const after: number
+>order : const order: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

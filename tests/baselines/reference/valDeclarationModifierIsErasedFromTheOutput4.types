@@ -1,0 +1,4 @@
+=== valDeclarationModifierIsErasedFromTheOutput4.tt ===
+val	const a = 1;
+>a : const a: 1
+

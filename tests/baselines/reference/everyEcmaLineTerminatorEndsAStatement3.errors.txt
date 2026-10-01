@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./everyEcmaLineTerminatorEndsAStatement3.tt → $DIR/out/everyEcmaLineTerminatorEndsAStatement3.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2749]: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'?
+ --> everyEcmaLineTerminatorEndsAStatement3.tt:5:22
+  |
+5 | export function f(v: Option<number>): number {
+  |                      ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+everyEcmaLineTerminatorEndsAStatement3.ts(5,22): error TS2749: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'?

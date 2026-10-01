@@ -1,0 +1,5 @@
+{"kind":"Err","error":"direct"}
+{"kind":"Ok","value":2}
+{"kind":"Err","error":"wide"}
+{"kind":"Ok","value":3}
+{"kind":"Ok","value":"generic"}

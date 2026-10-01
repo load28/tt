@@ -1,0 +1,8 @@
+=== tryIsAValueInDeepExpressionPositions5.tt ===
+function f(r: R): TResult<number, string> { return match (r) { A => try total(), B => Result.Ok(0) }; }
+>f : function f(r: R): TResult<number, string>
+>r : (parameter) r: R
+>R : type R = /*unresolved*/ any
+>TResult : type TResult = /*unresolved*/ any
+>r : (parameter) r: R
+

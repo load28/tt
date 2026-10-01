@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_10.rs::a_match_in_a_guard_is_lowered_before_the_guard_test
+variant S { A(v: number), B(w: number), C }
+declare const s: S;
+const x = match (s) { A(v) if match (s) { B(w) => w > 0, _ => false } => 1, _ => 0 };

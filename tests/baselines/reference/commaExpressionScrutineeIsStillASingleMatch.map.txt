@@ -1,0 +1,12 @@
+//// [commaExpressionScrutineeIsStillASingleMatch.tt] 10 mapping(s)
+1:1 -> 15:1 len 10  "const r = "
+1:18 -> 3:17 len 6  "(a, b)"
+1:33 -> 6:18 len 1  "1"
+1:41 -> 10:18 len 1  "0"
+1:44 -> 15:19 len 2  ";\n"
+2:1 -> 30:1 len 10  "const s = "
+2:18 -> 18:18 len 4  "a, b"
+2:31 -> 21:18 len 1  "1"
+2:39 -> 25:18 len 1  "0"
+2:42 -> 30:19 len 2  ";\n"
+

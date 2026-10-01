@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_14.rs::a_conditional_operation_tests_its_condition_where_it_evaluates_it
+variant O { A(n: number), B }
+declare const o: O;
+declare const cfg: { name?: string };
+export const v = cfg.name ? match (o) { A(n) => n, B => 0 } : 1;

@@ -1,0 +1,6 @@
+//// [aPipelineHeadStartsAfterAPostfixOrRestrictedBoundary3.tt] 4 mapping(s)
+1:1 -> 4:1 len 48  "declare const o: number;\nconst k = [1] as const\n"
+3:1 -> 6:8 len 1  "o"
+3:6 -> 6:11 len 6  "String"
+3:12 -> 6:18 len 2  ";\n"
+

@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_05.rs::try_inside_a_function_inside_a_pipeline_step_is_allowed
+const a = x |> (n => { const b = try f(n); return b; });

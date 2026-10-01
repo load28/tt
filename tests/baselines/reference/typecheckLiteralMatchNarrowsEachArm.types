@@ -1,0 +1,7 @@
+=== typecheckLiteralMatchNarrowsEachArm.tt ===
+type Size = "sm" | "md" | "lg";
+>Size : type Size = "lg" | "md" | "sm"
+const px: number = match ("sm" as Size) {
+>px : const px: number
+>Size : type Size = "lg" | "md" | "sm"
+

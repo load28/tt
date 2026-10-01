@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::try_placement_reports_the_owning_reason
+class C { static { const value = { item: try read() }; } }

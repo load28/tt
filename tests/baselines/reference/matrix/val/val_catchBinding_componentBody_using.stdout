@@ -1,2 +1,2 @@
-componentBody(3) => "<p>{/"n/":3}</p>" | open res; operand 3; caught {"n":3}; dispose res
-componentBody(8) => "<p>{/"n/":8}</p>" | open res; operand 8; caught {"n":8}; dispose res
+componentBody(3) => "<p>{\"n\":3}</p>" | open res; operand 3; caught {"n":3}; dispose res
+componentBody(8) => "<p>{\"n\":8}</p>" | open res; operand 8; caught {"n":8}; dispose res

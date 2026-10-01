@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valLeavesReadsAndComparisonsAlone.tt → $DIR/out/valLeavesReadsAndComparisonsAlone.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'load'.
+ --> valLeavesReadsAndComparisonsAlone.tt:1:15
+  |
+1 | val const x = load();
+  |               ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valLeavesReadsAndComparisonsAlone.ts(1,11): error TS2304: Cannot find name 'load'.

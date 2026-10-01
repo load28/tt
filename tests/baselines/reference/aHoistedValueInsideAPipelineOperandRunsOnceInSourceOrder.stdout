@@ -1,0 +1,13 @@
+callee,head,call,step,apply 20
+left,right,step,apply 20
+head,right,step,apply 20
+first,second 2,2
+head,step,apply -10
+head 1
+callee,head,call 2
+head,arg,make,apply 4
+callee,one,call,callee,two,call,step,apply 40
+cond,callee,branch,call 2
+cond false
+callee,try,call,step,apply 50
+callee,err err

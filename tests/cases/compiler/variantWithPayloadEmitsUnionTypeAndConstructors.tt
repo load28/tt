@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_01.rs::variant_with_payload_emits_union_type_and_constructors
+
+variant Shape {
+  Circle(radius: number),
+  Rect(width: number, height: number),
+  Point,
+}

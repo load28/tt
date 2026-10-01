@@ -1,0 +1,15 @@
+//// [statementfulMatchBlocksKeepEffectsAndScope.tt] 13 mapping(s)
+1:1 -> 19:1 len 174  "\nconst trace: string[] = [];\nconst label = 9;\nfu"...
+7:3 -> 41:3 len 15  "const result = "
+7:18 -> 26:19 len 7  "consume"
+7:25 -> 41:24 len 1  "("
+7:33 -> 28:19 len 4  "flag"
+8:5 -> 30:12 len 4  "true"
+8:15 -> 31:9 len 39  "const label = 3; trace.push(\"before\"); "
+8:61 -> 31:57 len 5  "label"
+9:5 -> 33:12 len 5  "false"
+9:16 -> 34:9 len 6  "try { "
+9:29 -> 34:24 len 5  "label"
+9:35 -> 34:37 len 37  " } finally { trace.push(\"finally\"); }"
+10:4 -> 41:31 len 64  ");\n  console.log(result, label, trace.join(\",\"))"...
+

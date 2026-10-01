@@ -1,2 +1,2 @@
-componentBody(2) => "<p>/"passed/"</p>" | operand 2; read 2
+componentBody(2) => "<p>\"passed\"</p>" | operand 2; read 2
 componentBody(-2) => "<p>diverged</p>" | operand -2; read -2; error "negative -2"

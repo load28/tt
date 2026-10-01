@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./nestedAwaitMatchKeepsItsExpressionBoundary.tt → $DIR/out/nestedAwaitMatchKeepsItsExpressionBoundary.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'T'.
+ --> nestedAwaitMatchKeepsItsExpressionBoundary.tt:1:21
+  |
+1 | async function f(x: T) { return consume(match (x) { A(url) => await fetch(url), _ => null }); }
+  |                     ^
+error[ts2304]: Cannot find name 'consume'.
+ --> nestedAwaitMatchKeepsItsExpressionBoundary.tt:1:33
+  |
+1 | async function f(x: T) { return consume(match (x) { A(url) => await fetch(url), _ => null }); }
+  |                                 ^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+nestedAwaitMatchKeepsItsExpressionBoundary.ts(1,21): error TS2304: Cannot find name 'T'.
+nestedAwaitMatchKeepsItsExpressionBoundary.ts(2,17): error TS2304: Cannot find name 'consume'.

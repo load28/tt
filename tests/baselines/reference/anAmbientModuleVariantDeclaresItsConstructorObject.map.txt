@@ -1,0 +1,7 @@
+//// [anAmbientModuleVariantDeclaresItsConstructorObject.tt] 5 mapping(s)
+1:1 -> 1:1 len 22  "declare namespace N { "
+1:43 -> 3:21 len 6  "number"
+1:43 -> 6:19 len 6  "number"
+1:52 -> 7:3 len 24  " }\ndeclare module \"m\" { "
+2:45 -> 12:3 len 3  " }\n"
+

@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::literal_match_keeps_the_number_spelling_of_the_source
+const v = match (x) { 0xff => 1, 1_000 => 2, 1.5e2 => 3, -1 => 4, _ => 0 };

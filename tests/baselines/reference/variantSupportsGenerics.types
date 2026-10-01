@@ -1,0 +1,15 @@
+=== variantSupportsGenerics.tt ===
+variant Pair<T> { First, Second }
+>Pair : type Pair<T> = {
+>       kind: "First";
+>   } | {
+>       kind: "Second";
+>   }
+>T : (type parameter) T in type Pair<T>
+>First : (property) First: {
+>       readonly kind: "First";
+>   }
+>Second : (property) Second: {
+>       readonly kind: "Second";
+>   }
+

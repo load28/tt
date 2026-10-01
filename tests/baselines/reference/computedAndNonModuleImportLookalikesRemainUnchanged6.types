@@ -1,0 +1,4 @@
+=== computedAndNonModuleImportLookalikesRemainUnchanged6.tt ===
+const text = "import('./feature.tt')";
+>text : const text: "import('./feature.tt')"
+

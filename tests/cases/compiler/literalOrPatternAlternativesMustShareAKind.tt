@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::literal_or_pattern_alternatives_must_share_a_kind
+const v = match (x) { "a" | 1 => 1, _ => 2 };

@@ -1,0 +1,7 @@
+=== resultKeepsControlTransfersOwnedByItsOwnLoop.tt ===
+const value = result { const item = try read(); while (item) { break; } return item; };
+>value : const value: any
+>item : const item: any
+>item : const item: any
+>item : const item: any
+

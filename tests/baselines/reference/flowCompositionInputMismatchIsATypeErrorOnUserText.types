@@ -1,0 +1,15 @@
+=== flowCompositionInputMismatchIsATypeErrorOnUserText.tt ===
+const parse = (s: string) => s.length;
+>parse : const parse: (s: string) => number
+>s : (parameter) s: string
+>s : (parameter) s: string
+>length : (property) String.length: number
+const f = flow |> parse |> ((n: number) => n + 1);
+>f : const f: (s: string) => number
+>parse : const parse: (s: string) => number
+>n : (parameter) n: number
+>n : (parameter) n: number
+const v = f(3);
+>v : const v: number
+>f : const f: (s: string) => number
+

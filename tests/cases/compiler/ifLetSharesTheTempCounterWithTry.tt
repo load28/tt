@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_06.rs::if_let_shares_the_temp_counter_with_try
+function f(): Result<number, string> {
+  const a = try g();
+  if let Some(value) = h(a) { use(value); }
+  return Result.Ok(a);
+}

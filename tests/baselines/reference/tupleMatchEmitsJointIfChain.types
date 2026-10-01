@@ -1,0 +1,24 @@
+=== tupleMatchEmitsJointIfChain.tt ===
+variant Dir { North(), South }
+>Dir : type Dir = {
+>       kind: "North";
+>   } | {
+>       kind: "South";
+>   }
+>North : (property) North: () => Dir
+>South : (property) South: {
+>       readonly kind: "South";
+>   }
+variant Speed { Fast(), Slow }
+>Speed : type Speed = {
+>       kind: "Fast";
+>   } | {
+>       kind: "Slow";
+>   }
+>Fast : (property) Fast: () => Speed
+>Slow : (property) Slow: {
+>       readonly kind: "Slow";
+>   }
+const step = match (dir, speed) {
+>step : const step: number
+

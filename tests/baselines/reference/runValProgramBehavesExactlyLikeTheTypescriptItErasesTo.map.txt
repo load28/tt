@@ -1,0 +1,6 @@
+//// [runValProgramBehavesExactlyLikeTheTypescriptItErasesTo.tt] 4 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:5 -> 2:1 len 46  "const config = { name: \"tt\", tags: [\"dev\"] };\n"
+3:5 -> 3:1 len 45  "let state = { count: 0 };\n\nfunction describe("
+5:23 -> 5:19 len 353  "c: { name: string; tags: string[] }): string {\n "...
+

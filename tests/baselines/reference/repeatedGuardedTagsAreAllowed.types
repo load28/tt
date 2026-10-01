@@ -1,0 +1,8 @@
+=== repeatedGuardedTagsAreAllowed.tt ===
+const r = match (x) { A(v) if v > 9 => 2, A(v) if v > 0 => 1, A => 0, _ => -1 };
+>r : const r: number
+>v : const v: any
+>v : const v: any
+>v : const v: any
+>v : const v: any
+

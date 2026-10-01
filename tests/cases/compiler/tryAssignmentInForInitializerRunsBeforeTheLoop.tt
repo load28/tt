@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_04.rs::try_assignment_in_for_initializer_runs_before_the_loop
+function f() { for (i = try next();;) {} }

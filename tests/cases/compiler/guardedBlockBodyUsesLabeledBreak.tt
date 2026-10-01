@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::guarded_block_body_uses_labeled_break
+const r = match (x) { A(v) if v > 0 => { log(v); }, _ => 0 };

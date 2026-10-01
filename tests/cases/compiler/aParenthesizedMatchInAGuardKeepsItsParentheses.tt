@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_10.rs::a_parenthesized_match_in_a_guard_keeps_its_parentheses
+variant S { A(v: number), B(w: number), C }
+declare const s: S;
+const y = match (s) { A(v) if (match (s) { B(w) => w > 0, _ => false }) => 1, _ => 0 };

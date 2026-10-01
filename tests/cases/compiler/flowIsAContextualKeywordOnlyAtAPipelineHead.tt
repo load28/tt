@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_06.rs::flow_is_a_contextual_keyword_only_at_a_pipeline_head
+const a = (flow) |> f;
+const b = o.flow |> f;
+const c = flow() |> f;

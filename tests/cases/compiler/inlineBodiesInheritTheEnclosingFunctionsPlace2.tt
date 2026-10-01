@@ -1,0 +1,9 @@
+// @origin: tests/compile/cases_03.rs::inline_bodies_inherit_the_enclosing_functions_place
+variant E { A(x: number), B }
+function f(e: E): number {
+  const Some(v) = find(e) else {
+    const B() = e else { throw new Error("a"); };
+    return 0;
+  };
+  return v;
+}

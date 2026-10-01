@@ -1,0 +1,52 @@
+=== runtimeIsPatternsAndLoopTestRegionsPreserveOrderAndCount.tt ===
+class Keep extends Error {}
+>Keep : class Keep
+>Error : var Error: ErrorConstructor
+class Stop extends Error {}
+>Stop : class Stop
+>Error : var Error: ErrorConstructor
+let probes = 0;
+>probes : let probes: number
+let updates = 0;
+>updates : let updates: number
+let bodies = 0;
+>bodies : let bodies: number
+function probe(): Error {
+>probe : function probe(): Error
+>Error : interface Error
+  probes += 1;
+>probes : let probes: number
+  return probes <= 3 ? new Keep() : new Stop();
+>probes : let probes: number
+>Keep : constructor Keep(message?: string, options?: ErrorOptions): Keep
+>Stop : constructor Stop(message?: string, options?: ErrorOptions): Stop
+for (; match (probe()) { is Keep => true, _ => false }; updates += 1) {
+>probe : function probe(): Error
+>Keep : class Keep
+>updates : let updates: number
+  bodies += 1;
+>bodies : let bodies: number
+  if (bodies < 3) continue;
+>bodies : let bodies: number
+const message = match (new SyntaxError("bad")) {
+>message : const message: string
+>SyntaxError : var SyntaxError: new (message?: string, options?: ErrorOptions) => SyntaxError
+  is SyntaxError { message } if message.length > 0 => message,
+>SyntaxError : var SyntaxError: SyntaxErrorConstructor
+>message : const message: string
+>message : const message: string
+>length : (property) String.length: number
+>message : const message: string
+  is Error { message: detail } => detail,
+>Error : var Error: ErrorConstructor
+>message : (property) Error.message: string
+>detail : const detail: string
+>detail : const detail: string
+console.log(probes, updates, bodies, message);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>probes : let probes: number
+>updates : let updates: number
+>bodies : let bodies: number
+>message : const message: string
+

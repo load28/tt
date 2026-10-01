@@ -1,0 +1,9 @@
+// @origin: tests/compile/cases_06.rs::tuple_match_product_exhaustiveness_reports_missing_combination
+
+variant Dir { North(), South }
+variant Speed { Fast(), Slow }
+const step = match (d, s) {
+  (North, Fast) => 2,
+  (North, Slow) => 1,
+  (South, Fast) => -1,
+};

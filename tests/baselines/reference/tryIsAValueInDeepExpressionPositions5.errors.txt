@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryIsAValueInDeepExpressionPositions5.tt → $DIR/out/tryIsAValueInDeepExpressionPositions5.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'R'.
+ --> tryIsAValueInDeepExpressionPositions5.tt:1:15
+  |
+1 | function f(r: R): TResult<number, string> { return match (r) { A => try total(), B => Result.Ok(0) }; }
+  |               ^
+error[ts2304]: Cannot find name 'TResult'.
+ --> tryIsAValueInDeepExpressionPositions5.tt:1:19
+  |
+1 | function f(r: R): TResult<number, string> { return match (r) { A => try total(), B => Result.Ok(0) }; }
+  |                   ^^^^^^^
+error[ts2304]: Cannot find name 'TResult'. (in code ttc generated near this position)
+ --> tryIsAValueInDeepExpressionPositions5.tt:1:44
+  |
+1 | function f(r: R): TResult<number, string> { return match (r) { A => try total(), B => Result.Ok(0) }; }
+  |                                            ^
+error[ts2304]: Cannot find name 'total'.
+ --> tryIsAValueInDeepExpressionPositions5.tt:1:73
+  |
+1 | function f(r: R): TResult<number, string> { return match (r) { A => try total(), B => Result.Ok(0) }; }
+  |                                                                         ^^^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> tryIsAValueInDeepExpressionPositions5.tt:1:87
+  |
+1 | function f(r: R): TResult<number, string> { return match (r) { A => try total(), B => Result.Ok(0) }; }
+  |                                                                                       ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryIsAValueInDeepExpressionPositions5.ts(19,15): error TS2304: Cannot find name 'R'.
+tryIsAValueInDeepExpressionPositions5.ts(19,19): error TS2304: Cannot find name 'TResult'.
+tryIsAValueInDeepExpressionPositions5.ts(19,57): error TS2304: Cannot find name 'TResult'.
+tryIsAValueInDeepExpressionPositions5.ts(24,22): error TS2304: Cannot find name 'total'.
+tryIsAValueInDeepExpressionPositions5.ts(32,16): error TS2304: Cannot find name 'Result'.

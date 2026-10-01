@@ -1,0 +1,5 @@
+//// [tryAtModuleTopLevelIsAnError3.tt] 3 mapping(s)
+1:1 -> 1:1 len 16  "namespace N {\n  "
+2:7 -> 2:18 len 3  "g()"
+2:11 -> 5:4 len 3  "\n}\n"
+

@@ -1,0 +1,3 @@
+//// [aFileWithoutTtConstructsStillReportsThroughTheOutputSelfCheck.tt] ////
+const q = ;
+

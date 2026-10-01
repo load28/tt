@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_02.rs::try_temporaries_are_unique_and_keep_declaration_keyword
+function f(): X {
+  let a: number = try g();
+  var b = try h(a);
+  return k(b);
+}

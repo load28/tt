@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_06.rs::malformed_if_let_is_an_error_with_position
+function f() {
+  if let Some(v) = o { g(); } else if (x) { h(); }
+}

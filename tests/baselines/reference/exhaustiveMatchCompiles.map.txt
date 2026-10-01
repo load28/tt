@@ -1,0 +1,18 @@
+//// [exhaustiveMatchCompiles.tt] 16 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:32 -> 21:31 len 6  "number"
+2:32 -> 25:20 len 6  "number"
+2:49 -> 22:24 len 6  "number"
+2:49 -> 26:13 len 6  "number"
+2:60 -> 22:35 len 6  "number"
+2:60 -> 26:24 len 6  "number"
+2:76 -> 28:3 len 25  "\nconst f = (s: Shape) => "
+3:32 -> 32:19 len 1  "s"
+4:10 -> 35:17 len 6  "radius"
+4:21 -> 36:18 len 6  "radius"
+5:8 -> 40:17 len 1  "w"
+5:11 -> 40:20 len 1  "h"
+5:17 -> 41:18 len 5  "w * h"
+6:12 -> 45:18 len 1  "0"
+7:2 -> 54:2 len 2  ";\n"
+

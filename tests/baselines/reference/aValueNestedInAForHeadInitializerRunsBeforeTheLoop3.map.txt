@@ -1,0 +1,8 @@
+//// [aValueNestedInAForHeadInitializerRunsBeforeTheLoop3.tt] 6 mapping(s)
+1:18 -> 2:21 len 6  "number"
+1:18 -> 5:10 len 6  "number"
+1:30 -> 7:3 len 201  "\ndeclare const o: O;\ndeclare function g(n: numbe"...
+6:44 -> 18:1 len 9  "for (y = "
+6:57 -> 13:16 len 3  "r()"
+6:60 -> 18:16 len 38  ", i = 1; y < 1; y++) {} return r(); }\n"
+

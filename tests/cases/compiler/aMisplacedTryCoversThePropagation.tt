@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_09.rs::a_misplaced_try_covers_the_propagation
+const x = match (r) {
+  Ok(v) => { const y = try f(v); return y; },
+  Err(e) => 0,
+};

@@ -1,0 +1,10 @@
+=== valCapabilityCheckOnlyCoversResolvableCallees1.tt ===
+function f(val user: User) {
+>f : function f(user: User): void
+>user : (parameter) user: User
+>User : type User = /*unresolved*/ any
+  save(user);
+>user : (parameter) user: User
+  user.save();
+>user : (parameter) user: User
+

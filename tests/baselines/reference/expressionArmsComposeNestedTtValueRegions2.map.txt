@@ -1,0 +1,21 @@
+//// [expressionArmsComposeNestedTtValueRegions2.tt] 19 mapping(s)
+1:18 -> 21:21 len 6  "number"
+1:18 -> 24:10 len 6  "number"
+1:30 -> 26:3 len 1  " "
+1:53 -> 27:26 len 6  "number"
+1:53 -> 30:15 len 6  "number"
+1:73 -> 28:27 len 6  "string"
+1:73 -> 31:16 len 6  "string"
+1:82 -> 32:3 len 87  "\ndeclare const v: V; declare const g: () => R; d"...
+3:1 -> 58:1 len 10  "const n = "
+3:18 -> 36:17 len 1  "v"
+3:25 -> 39:15 len 1  "n"
+3:31 -> 40:19 len 7  "unwrap("
+3:53 -> 45:15 len 1  "x"
+3:61 -> 41:24 len 3  "g()"
+3:65 -> 45:32 len 1  " "
+3:73 -> 45:72 len 5  "n + x"
+3:81 -> 46:11 len 1  ")"
+3:89 -> 50:18 len 2  "-1"
+3:93 -> 58:19 len 2  ";\n"
+

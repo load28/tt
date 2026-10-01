@@ -1,0 +1,57 @@
+=== anOptionalCallOperationPreservesThisCheckOrderAndShortCircuit.tt ===
+const trace: string[] = [];
+>trace : const trace: string[]
+const live = {
+>live : const live: {
+>       base: number;
+>       m(v: number): number;
+>   }
+  base: 7,
+>base : (property) base: number
+  m(v: number): number { trace.push("call:" + (this === live)); return this.base + v; },
+>m : (method) m(v: number): number
+>v : (parameter) v: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>live : const live: {
+>       base: number;
+>       m(v: number): number;
+>   }
+>base : (property) base: number
+>v : (parameter) v: number
+const dead: { m?: (v: number) => number } = {};
+>dead : const dead: {
+>       m?: (v: number) => number;
+>   }
+>m : (property) m?: ((v: number) => number) | undefined
+>v : (parameter) v: number
+function arg(tag: string): number { trace.push(tag); return 1; }
+>arg : function arg(tag: string): number
+>tag : (parameter) tag: string
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>tag : (parameter) tag: string
+const hit = live.m?.(match (arg("live")) { 1 => 1, _ => 0 });
+>hit : const hit: number | undefined
+>live : const live: {
+>       base: number;
+>       m(v: number): number;
+>   }
+>m : (method) m(v: number): number
+>arg : function arg(tag: string): number
+const miss = dead.m?.(match (arg("dead")) { 1 => 1, _ => 0 });
+>miss : const miss: number | undefined
+>dead : const dead: {
+>       m?: (v: number) => number;
+>   }
+>m : (property) m?: ((v: number) => number) | undefined
+>arg : function arg(tag: string): number
+console.log(JSON.stringify(trace), hit, miss);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+>hit : const hit: number | undefined
+>miss : const miss: number | undefined
+

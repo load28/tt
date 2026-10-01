@@ -1,0 +1,33 @@
+// @origin: tests/integration/pr115.rs::inline_decisions_keep_the_enclosing_match_return_owner
+// @run: inlineDecisionsKeepTheEnclosingMatchReturnOwner.tt
+
+variant Opt { Some(value: number), None }
+function pick(o: Opt): number {
+  const v = match (o) {
+    Some(value) => {
+      for (let i = 0; i < 1; i++) {
+        if let Some(value: v2) = o {
+          const nested = () => { return v2 + 1; };
+          try { return nested(); } finally { console.log("cleanup"); }
+        }
+      }
+      return value;
+    },
+    None => 0,
+  };
+  return v + 100;
+}
+function fallback(o: Opt): number {
+  const v = match (Boolean(o)) {
+    true => {
+      if let Some(value: n) = o { return n; } else { return 7; }
+      return 9;
+    },
+    false => 0,
+  };
+  return v + 100;
+}
+console.log(pick(Opt.Some(5)), pick(Opt.None));
+console.log(fallback(Opt.None), fallback(Opt.Some(3)));
+
+export {};

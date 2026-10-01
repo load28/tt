@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::literal_or_pattern_if_chain_tests_each_alternative
+const v = match (s) { "a" | "b" if ok => 1, _ => 2 };

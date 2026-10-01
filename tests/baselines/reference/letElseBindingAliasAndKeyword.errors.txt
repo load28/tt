@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseBindingAliasAndKeyword.tt → $DIR/out/letElseBindingAliasAndKeyword.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseBindingAliasAndKeyword.tt:2:27
+  |
+2 |   let Some(value: user) = find() else { throw new Error("none"); };
+  |                           ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseBindingAliasAndKeyword.ts(2,18): error TS2304: Cannot find name 'find'.

@@ -1,0 +1,8 @@
+//// [pipelineRunsLeftToRight.tt] 6 mapping(s)
+1:1 -> 2:1 len 121  "\nconst order: string[] = [];\nconst tap = <T,>(na"...
+4:13 -> 5:27 len 24  "(order.push(\"head\"), 10)"
+4:41 -> 5:53 len 9  "tap(\"s1\")"
+4:54 -> 5:63 len 11  ".toFixed(0)"
+4:69 -> 5:76 len 9  "tap(\"s2\")"
+4:78 -> 5:86 len 49  ";\nconsole.log(order.join(\",\"), out);\n\nexport {};"...
+

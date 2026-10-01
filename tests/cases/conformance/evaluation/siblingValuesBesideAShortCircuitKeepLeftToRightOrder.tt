@@ -1,0 +1,11 @@
+// @origin: tests/integration/cases_05.rs::sibling_values_beside_a_short_circuit_keep_left_to_right_order
+// @run: siblingValuesBesideAShortCircuitKeepLeftToRightOrder.tt
+
+const trace: number[] = [];
+function mark(n: number): number { trace.push(n); return n; }
+function g(x: unknown, y: unknown): void { console.log(x, y); }
+const a = true as boolean;
+g(a && match (mark(1)) { 1 => 11, _ => 0 }, match (mark(2)) { 2 => 22, _ => 0 });
+console.log(JSON.stringify(trace));
+
+export {};

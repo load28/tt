@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::a_generic_payload_is_typed_by_the_patterns_written_in_it
+const n = match (r) {
+  Ok(value: Some(value: v)) => v,
+  Ok(value: None()) => 0,
+  Err(error) => -1,
+};

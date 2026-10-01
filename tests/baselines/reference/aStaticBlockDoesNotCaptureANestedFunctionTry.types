@@ -1,0 +1,5 @@
+=== aStaticBlockDoesNotCaptureANestedFunctionTry.tt ===
+class C { static { const run = () => { try read(); }; } }
+>C : class C
+>run : const run: () => any
+

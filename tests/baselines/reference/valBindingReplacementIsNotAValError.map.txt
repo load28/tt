@@ -1,0 +1,4 @@
+//// [valBindingReplacementIsNotAValError.tt] 2 mapping(s)
+1:5 -> 1:1 len 18  "let a = 1;\na = 2;\n"
+3:5 -> 3:1 len 20  "const b = 1;\nb = 2;\n"
+

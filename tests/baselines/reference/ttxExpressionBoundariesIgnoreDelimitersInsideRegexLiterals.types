@@ -1,0 +1,29 @@
+=== ttxExpressionBoundariesIgnoreDelimitersInsideRegexLiterals.ttx ===
+variant State { Ready(value: string), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: string;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: string) => State
+>value : (property) value: string
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+declare const state: State;
+>state : const state: State
+>State : type State = {
+>       kind: "Ready";
+>       value: string;
+>   } | {
+>       kind: "Empty";
+>   }
+const view = <Panel visible={/}/.test("}")} value={match (state) {
+>view : const view: any
+>test : (method) RegExp.test(string: string): boolean
+>state : const state: State
+  Ready(value) => value,
+>value : const value: string
+>value : const value: string
+

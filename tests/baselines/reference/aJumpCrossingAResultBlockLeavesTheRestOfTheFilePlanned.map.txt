@@ -1,0 +1,10 @@
+//// [aJumpCrossingAResultBlockLeavesTheRestOfTheFilePlanned.tt] 8 mapping(s)
+1:1 -> 1:1 len 108  "import type { TResult } from \"@tt/std\";\ndeclare "...
+3:27 -> 12:1 len 10  "const r = "
+3:52 -> 10:9 len 1  "v"
+3:60 -> 5:18 len 1  "x"
+3:62 -> 10:26 len 15  " if (v) break; "
+3:84 -> 10:82 len 1  "v"
+3:88 -> 12:17 len 20  "; } }\nclass C { y = "
+4:20 -> 13:33 len 4  "; }\n"
+

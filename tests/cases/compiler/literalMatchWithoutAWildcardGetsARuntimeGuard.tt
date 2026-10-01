@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::literal_match_without_a_wildcard_gets_a_runtime_guard
+const label = match (dir) { "a" => 1, "b" => 2 };

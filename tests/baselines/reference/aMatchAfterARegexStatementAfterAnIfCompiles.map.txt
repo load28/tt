@@ -1,0 +1,9 @@
+//// [aMatchAfterARegexStatementAfterAnIfCompiles.tt] 7 mapping(s)
+1:1 -> 19:1 len 104  "declare const x: Option<number>;\nexport function"...
+5:3 -> 41:3 len 7  "return "
+5:17 -> 25:19 len 1  "x"
+5:27 -> 28:17 len 1  "v"
+5:33 -> 29:18 len 1  "v"
+5:44 -> 33:18 len 1  "0"
+5:47 -> 41:16 len 4  ";\n}\n"
+

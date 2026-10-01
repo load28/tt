@@ -1,0 +1,12 @@
+//// [generatedGuardsReachTheHostGlobalsPastAShadowedGlobalThis2.tt] 10 mapping(s)
+1:1 -> 20:1 len 1  "\n"
+2:25 -> 22:28 len 6  "number"
+2:25 -> 25:17 len 6  "number"
+2:40 -> 27:3 len 70  "\nconst globalThis = { Error: 1 };\nfunction f(o: "...
+4:37 -> 47:1 len 7  "return "
+4:51 -> 31:17 len 1  "o"
+4:61 -> 34:15 len 5  "value"
+4:71 -> 35:16 len 5  "value"
+4:86 -> 39:16 len 24  "Error + globalThis.Error"
+4:112 -> 47:14 len 124  "; }\ntry { f({ kind: \"Nope\" } as unknown as O); }"...
+

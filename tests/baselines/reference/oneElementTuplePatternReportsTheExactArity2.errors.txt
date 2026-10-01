@@ -1,0 +1,22 @@
+==== ttc --out-dir (exit 1) ====
+error[match-tuple-arity]: match: tuple pattern has 2 elements but the match has 1 scrutinee
+ --> ./oneElementTuplePatternReportsTheExactArity2.tt:2:3
+  |
+2 |   (A, B) => 1,
+  |   ^^^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'a'.
+ --> oneElementTuplePatternReportsTheExactArity2.tt:1:18
+  |
+1 | const r = match (a) {
+  |                  ^
+error[match-tuple-arity]: match: tuple pattern has 2 elements but the match has 1 scrutinee
+ --> oneElementTuplePatternReportsTheExactArity2.tt:2:3
+  |
+2 |   (A, B) => 1,
+  |   ^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

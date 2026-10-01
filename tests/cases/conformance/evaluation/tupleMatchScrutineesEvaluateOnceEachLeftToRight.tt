@@ -1,0 +1,13 @@
+// @origin: tests/integration/cases_03.rs::tuple_match_scrutinees_evaluate_once_each_left_to_right
+// @run: tupleMatchScrutineesEvaluateOnceEachLeftToRight.tt
+
+variant Coin { Heads(), Tails }
+const order: string[] = [];
+function heads(name: string): Coin { order.push(name); return Coin.Heads(); }
+const r = match (heads("a"), heads("b")) {
+  (Heads, Heads) => 1,
+  _ => 0,
+};
+console.log(order.join(","), r);
+
+export {};

@@ -1,0 +1,29 @@
+=== siblingValuesInOneConciseArrowStartOnTheirOwnLines.tt ===
+variant O { Some(value: number), None }
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => O
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+export const j = (o: O) => [match (o) { Some(value) => value, None => 0 }, match (o) { Some(value) => value, None => 1 }];
+>j : const j: (o: O) => number[]
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>o : (parameter) o: O
+>value : const value: number
+>value : const value: number
+>o : (parameter) o: O
+>value : const value: number
+>value : const value: number
+

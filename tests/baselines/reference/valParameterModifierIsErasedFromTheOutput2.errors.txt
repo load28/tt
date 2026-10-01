@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valParameterModifierIsErasedFromTheOutput2.tt → $DIR/out/valParameterModifierIsErasedFromTheOutput2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'User'.
+ --> valParameterModifierIsErasedFromTheOutput2.tt:1:25
+  |
+1 | const read = (val user: User) => user.name;
+  |                         ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valParameterModifierIsErasedFromTheOutput2.ts(1,21): error TS2304: Cannot find name 'User'.

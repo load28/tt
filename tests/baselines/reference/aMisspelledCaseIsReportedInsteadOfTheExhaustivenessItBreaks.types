@@ -1,0 +1,18 @@
+=== aMisspelledCaseIsReportedInsteadOfTheExhaustivenessItBreaks.tt ===
+variant Shape { Circle(radius: number), Empty }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+const a = match (s) { Circel(radius) => radius, Empty => 0 };
+>a : const a: any
+>radius : const radius: any
+>radius : const radius: any
+

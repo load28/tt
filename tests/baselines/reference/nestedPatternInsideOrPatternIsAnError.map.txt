@@ -1,0 +1,7 @@
+//// [nestedPatternInsideOrPatternIsAnError.tt] 5 mapping(s)
+1:1 -> 14:1 len 10  "const n = "
+1:18 -> 3:17 len 1  "r"
+1:58 -> 7:18 len 1  "1"
+1:66 -> 10:16 len 1  "0"
+1:69 -> 14:19 len 1  ";"
+

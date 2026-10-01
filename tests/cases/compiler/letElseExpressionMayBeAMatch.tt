@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_03.rs::let_else_expression_may_be_a_match
+function f(): number {
+  const Some(v) = match (x) { A => some(1), _ => none() } else { return 0; };
+  return v;
+}

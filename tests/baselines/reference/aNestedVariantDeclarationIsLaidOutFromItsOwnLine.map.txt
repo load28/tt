@@ -1,0 +1,6 @@
+//// [aNestedVariantDeclarationIsLaidOutFromItsOwnLine.tt] 4 mapping(s)
+1:1 -> 1:1 len 20  "function make() {\n  "
+2:24 -> 3:23 len 6  "number"
+2:24 -> 6:12 len 6  "number"
+2:36 -> 8:5 len 21  "\n  return Inner.B;\n}\n"
+

@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./resultExitLabelAvoidsUserIdentifiersAndLabels.tt → $DIR/out/resultExitLabelAvoidsUserIdentifiersAndLabels.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'ready'.
+ --> resultExitLabelAvoidsUserIdentifiersAndLabels.tt:1:33
+  |
+1 | function run() { $tt_v0: while (ready()) { break $tt_v0; } const $tt_v1 = 0; const value = result { const item = try read(); return item; }; return value; }
+  |                                 ^^^^^
+error[ts2304]: Cannot find name 'read'.
+ --> resultExitLabelAvoidsUserIdentifiersAndLabels.tt:1:118
+  |
+1 | function run() { $tt_v0: while (ready()) { break $tt_v0; } const $tt_v1 = 0; const value = result { const item = try read(); return item; }; return value; }
+  |                                                                                                                      ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+resultExitLabelAvoidsUserIdentifiersAndLabels.ts(1,33): error TS2304: Cannot find name 'ready'.
+resultExitLabelAvoidsUserIdentifiersAndLabels.ts(3,18): error TS2304: Cannot find name 'read'.

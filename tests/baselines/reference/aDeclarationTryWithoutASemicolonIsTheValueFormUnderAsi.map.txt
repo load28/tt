@@ -1,0 +1,6 @@
+//// [aDeclarationTryWithoutASemicolonIsTheValueFormUnderAsi.tt] 4 mapping(s)
+1:1 -> 1:1 len 103  "declare function g(): { kind: \"Ok\"; value: numbe"...
+3:3 -> 9:3 len 10  "const n = "
+3:17 -> 4:18 len 3  "g()"
+3:20 -> 9:19 len 15  "\n  return n;\n}\n"
+

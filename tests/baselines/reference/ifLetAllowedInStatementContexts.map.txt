@@ -1,0 +1,12 @@
+//// [ifLetAllowedInStatementContexts.tt] 10 mapping(s)
+1:1 -> 1:1 len 28  "\nfunction f(x: X, o: O) {\n  "
+3:3 -> 24:3 len 10  "const r = "
+3:20 -> 5:19 len 1  "x"
+5:19 -> 11:21 len 5  "value"
+5:28 -> 9:26 len 1  "o"
+5:39 -> 12:22 len 5  "value"
+5:47 -> 14:10 len 7  "\n      "
+6:14 -> 15:18 len 1  "0"
+8:10 -> 19:18 len 1  "1"
+9:4 -> 24:19 len 16  ";\n  return r;\n}\n"
+

@@ -1,0 +1,11 @@
+=== nestedPatternInTupleMatchElements.tt ===
+const n = match (a, b) {
+>n : const n: any
+  (Ok(value: Some(value: x)), Ok(value: Some(value: y))) => x + y,
+>value : any
+>x : const x: any
+>value : any
+>y : const y: any
+>x : const x: any
+>y : const y: any
+

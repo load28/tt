@@ -1,0 +1,20 @@
+=== resultAllowsLetElseWhenEachElsePathCompletesTheResult.tt ===
+variant Item { Some(value: number), None }
+>Item : type Item = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => Item
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+const value = result { const item = try read(); let Some(found) = item else { return 0; }; return found; };
+>value : const value: any
+>item : const item: any
+>found : let found: any
+>item : const item: any
+>found : let found: any
+

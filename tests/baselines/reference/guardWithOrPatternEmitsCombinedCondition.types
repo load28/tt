@@ -1,0 +1,8 @@
+=== guardWithOrPatternEmitsCombinedCondition.tt ===
+const r = match (x) { A(v) | B(v) if v > 0 => v, _ => 0 };
+>r : const r: any
+>v : const v: any
+>v : const v: any
+>v : const v: any
+>v : const v: any
+

@@ -1,0 +1,59 @@
+=== expressionArmsComposeNestedTtValueRegions2.tt ===
+variant V { A(n: number), B } variant R { Ok(value: number), Err(error: string) }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>Ok : (property) Ok: (value: number) => R
+>value : (property) value: number
+>Err : (property) Err: (error: string) => R
+>error : (property) error: string
+declare const v: V; declare const g: () => R; declare const unwrap: (r: R) => number;
+>v : const v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>g : const g: () => R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>unwrap : const unwrap: (r: R) => number
+>r : (parameter) r: R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+const n = match (v) { A(n) => unwrap(result { const x = try g(); return n + x; }), B => -1 };
+>n : const n: number
+>v : const v: V
+>n : const n: number
+>unwrap : const unwrap: (r: R) => number
+>x : const x: number
+>g : const g: () => R
+>n : const n: number
+>x : const x: number
+

@@ -1,0 +1,13 @@
+// @origin: tests/integration/contextual.rs::inline_sibling_failure_keeps_abrupt_completion
+// @run: inlineSiblingFailureKeepsAbruptCompletion.tt
+
+const trace: string[] = [];
+function bad(): boolean { return JSON.parse('"bad"'); }
+function pair(a: number, b: number) { trace.push("call"); }
+try {
+  pair(match (bad()) { true => 1, false => 2 }, match (true) { true => (trace.push("second"), 3), _ => 4 });
+} catch (error) {
+  console.log(error instanceof Error && error.message.includes("unexpected literal"), trace.length);
+}
+
+export {};

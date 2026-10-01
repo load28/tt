@@ -1,0 +1,11 @@
+// @origin: tests/integration/cases_05.rs::an_unexpected_case_reports_its_own_match_subject
+// @run: anUnexpectedCaseReportsItsOwnMatchSubject.tt
+
+const pick = (s: string) => s as "a" | "b";
+function outer(s: string) {
+  return match (match (pick(s)) { "a" => pick("z"), "b" => pick("b") }) { "a" => 1, "b" => 2 };
+}
+try { outer("a"); } catch (error) { console.log((error as Error).message); }
+console.log(outer("b"));
+
+export {};

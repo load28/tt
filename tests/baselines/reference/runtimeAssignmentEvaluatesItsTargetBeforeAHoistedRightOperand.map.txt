@@ -1,0 +1,44 @@
+//// [runtimeAssignmentEvaluatesItsTargetBeforeAHoistedRightOperand.tt] 42 mapping(s)
+1:1 -> 1:1 len 747  "\ntype R<T> = { kind: \"Ok\"; value: T } | { kind: "...
+16:34 -> 17:15 len 1  "n"
+16:34 -> 23:1 len 2  "n "
+16:38 -> 23:14 len 1  " "
+16:43 -> 18:16 len 16  "(n = 100, ok(5))"
+16:59 -> 23:21 len 51  "; return done(n); }\nfunction member(): R<number>"...
+17:32 -> 25:17 len 8  "target()"
+17:40 -> 31:7 len 5  ".v = "
+17:49 -> 26:16 len 5  "ok(7)"
+17:54 -> 31:18 len 55  "; return done(box.v); }\nfunction failed(): R<num"...
+18:32 -> 33:17 len 8  "target()"
+18:40 -> 39:7 len 5  ".v = "
+18:49 -> 34:16 len 5  "err()"
+18:54 -> 39:18 len 57  "; return done(box.v); }\nfunction computed(): R<n"...
+19:34 -> 41:17 len 8  "target()"
+19:42 -> 43:21 len 1  "["
+19:42 -> 49:7 len 1  "["
+19:43 -> 42:17 len 5  "key()"
+19:48 -> 43:28 len 1  "]"
+19:48 -> 49:14 len 2  "] "
+19:52 -> 49:27 len 1  " "
+19:57 -> 44:16 len 21  "(first.v = 50, ok(2))"
+19:78 -> 49:34 len 55  "; return done(first.v); }\nfunction text(): R<str"...
+20:30 -> 51:16 len 5  "box.s"
+20:30 -> 57:1 len 6  "box.s "
+20:38 -> 57:19 len 1  " "
+20:43 -> 52:16 len 22  "(box.s = \"q\", ok(\"b\"))"
+20:65 -> 57:27 len 75  "; return done(box.s); }\nclass Counter {\n  #count"...
+23:22 -> 61:18 len 11  "this.#count"
+23:22 -> 67:3 len 12  "this.#count "
+23:36 -> 67:27 len 1  " "
+23:41 -> 62:18 len 25  "(this.#count = 10, ok(3))"
+23:66 -> 67:35 len 227  "; return done(this.#count); }\n}\nreport(\"compound"...
+32:1 -> 77:16 len 1  "m"
+32:1 -> 90:1 len 2  "m "
+32:5 -> 90:15 len 1  " "
+32:13 -> 79:17 len 1  "m"
+32:18 -> 81:10 len 1  "1"
+32:25 -> 82:7 len 9  "m = 100; "
+32:41 -> 82:26 len 1  "5"
+32:52 -> 85:17 len 1  "0"
+32:55 -> 90:23 len 39  ";\nconsole.log(\"match\", m);\n\nexport {};\n"
+

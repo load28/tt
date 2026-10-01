@@ -1,0 +1,9 @@
+=== nestedPatternWithGuard.tt ===
+const n = match (r) {
+>n : const n: any
+  Ok(value: Some(value: v)) if v > 0 => v,
+>value : any
+>v : const v: any
+>v : const v: any
+>v : const v: any
+

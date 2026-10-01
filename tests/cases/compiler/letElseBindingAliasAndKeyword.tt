@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_03.rs::let_else_binding_alias_and_keyword
+function f(): string {
+  let Some(value: user) = find() else { throw new Error("none"); };
+  return user;
+}

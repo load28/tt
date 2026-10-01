@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::or_pattern_duplicate_tag_is_error
+const r = match (x) { A | A => 1, _ => 0 };

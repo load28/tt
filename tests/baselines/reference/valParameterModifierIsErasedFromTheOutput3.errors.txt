@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valParameterModifierIsErasedFromTheOutput3.tt → $DIR/out/valParameterModifierIsErasedFromTheOutput3.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'A'.
+ --> valParameterModifierIsErasedFromTheOutput3.tt:1:18
+  |
+1 | function pick(a: A, val b: B, val { c }: C) {}
+  |                  ^
+error[ts2304]: Cannot find name 'B'.
+ --> valParameterModifierIsErasedFromTheOutput3.tt:1:28
+  |
+1 | function pick(a: A, val b: B, val { c }: C) {}
+  |                            ^
+error[ts2304]: Cannot find name 'C'.
+ --> valParameterModifierIsErasedFromTheOutput3.tt:1:42
+  |
+1 | function pick(a: A, val b: B, val { c }: C) {}
+  |                                          ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valParameterModifierIsErasedFromTheOutput3.ts(1,18): error TS2304: Cannot find name 'A'.
+valParameterModifierIsErasedFromTheOutput3.ts(1,24): error TS2304: Cannot find name 'B'.
+valParameterModifierIsErasedFromTheOutput3.ts(1,34): error TS2304: Cannot find name 'C'.

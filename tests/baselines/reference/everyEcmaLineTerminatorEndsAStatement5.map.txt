@@ -1,0 +1,7 @@
+//// [everyEcmaLineTerminatorEndsAStatement5.tt] 5 mapping(s)
+1:1 -> 1:1 len 73  "declare const e: Error;\nexport function f(v: Opt"...
+3:14 -> 7:11 len 5  "value"
+3:23 -> 3:18 len 1  "v"
+4:5 -> 5:5 len 37  "// a comment ends at a CR\r    throw e"
+5:5 -> 7:28 len 19  "\n  return value;\n}\n"
+

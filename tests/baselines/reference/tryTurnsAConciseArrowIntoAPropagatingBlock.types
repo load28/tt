@@ -1,0 +1,5 @@
+=== tryTurnsAConciseArrowIntoAPropagatingBlock.tt ===
+const f = (): TResult<number, string> => Result.Ok(try read());
+>f : const f: () => TResult<number, string>
+>TResult : type TResult = /*unresolved*/ any
+

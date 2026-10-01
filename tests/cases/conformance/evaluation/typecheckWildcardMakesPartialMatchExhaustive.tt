@@ -1,0 +1,9 @@
+// @origin: tests/integration/cases_02.rs::typecheck_wildcard_makes_partial_match_exhaustive
+
+variant Shape { Circle(radius: number), Rect(w: number, h: number), Point }
+const f = (s: Shape) => match (s) {
+  Circle(radius) => radius,
+  _ => 0,
+};
+
+export {};

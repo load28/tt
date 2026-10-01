@@ -1,0 +1,14 @@
+//// [aMisspelledCaseCoversTheNameAsWritten.tt] 12 mapping(s)
+1:27 -> 20:26 len 6  "number"
+1:27 -> 23:15 len 6  "number"
+1:46 -> 21:26 len 6  "number"
+1:46 -> 24:15 len 6  "number"
+1:55 -> 25:3 len 1  "\n"
+2:1 -> 45:1 len 10  "const v = "
+2:18 -> 28:17 len 1  "s"
+2:30 -> 31:15 len 1  "r"
+2:36 -> 32:18 len 1  "r"
+2:46 -> 36:15 len 1  "s"
+2:52 -> 37:18 len 1  "s"
+2:55 -> 45:19 len 2  ";\n"
+

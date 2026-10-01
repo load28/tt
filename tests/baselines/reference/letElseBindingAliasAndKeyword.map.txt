@@ -1,0 +1,8 @@
+//// [letElseBindingAliasAndKeyword.tt] 6 mapping(s)
+1:1 -> 1:1 len 25  "function f(): string {\n  "
+2:12 -> 6:9 len 5  "value"
+2:19 -> 6:16 len 4  "user"
+2:27 -> 2:18 len 6  "find()"
+2:41 -> 4:5 len 24  "throw new Error(\"none\");"
+2:68 -> 6:32 len 18  "\n  return user;\n}\n"
+

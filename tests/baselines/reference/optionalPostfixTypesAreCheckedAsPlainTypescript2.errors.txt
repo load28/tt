@@ -1,0 +1,15 @@
+==== ttc --out-dir (exit 0) ====
+ttc: std → $DIR/out/tt
+ttc: ./optionalPostfixTypesAreCheckedAsPlainTypescript2.tt → $DIR/out/optionalPostfixTypesAreCheckedAsPlainTypescript2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2345]: this pipeline step expects `number`, but receives `undefined`
+ --> optionalPostfixTypesAreCheckedAsPlainTypescript2.tt:2:29
+  |
+2 | const bad = value |> ?.n |> ((n: number) => n + 1);
+  |                             ^^^^^^^^^^^^^^^^^^^^^^
+  |                      --- the piped value is produced here
+
+==== tsc on the emitted TypeScript (exit 2) ====
+optionalPostfixTypesAreCheckedAsPlainTypescript2.ts(3,20): error TS2345: Argument of type 'number | undefined' is not assignable to parameter of type 'number'.
+  Type 'undefined' is not assignable to type 'number'.

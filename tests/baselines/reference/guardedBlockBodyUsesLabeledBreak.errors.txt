@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./guardedBlockBodyUsesLabeledBreak.tt → $DIR/out/guardedBlockBodyUsesLabeledBreak.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> guardedBlockBodyUsesLabeledBreak.tt:1:18
+  |
+1 | const r = match (x) { A(v) if v > 0 => { log(v); }, _ => 0 };
+  |                  ^
+error[ts2304]: Cannot find name 'log'.
+ --> guardedBlockBodyUsesLabeledBreak.tt:1:42
+  |
+1 | const r = match (x) { A(v) if v > 0 => { log(v); }, _ => 0 };
+  |                                          ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+guardedBlockBodyUsesLabeledBreak.ts(3,17): error TS2304: Cannot find name 'x'.
+guardedBlockBodyUsesLabeledBreak.ts(8,11): error TS2304: Cannot find name 'log'.

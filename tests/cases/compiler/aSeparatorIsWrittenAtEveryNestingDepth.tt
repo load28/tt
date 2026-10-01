@@ -1,0 +1,21 @@
+// @origin: tests/compile/cases_13.rs::a_separator_is_written_at_every_nesting_depth
+declare const o: { m(x: unknown): unknown };
+declare const k: "m";
+declare const c: boolean;
+declare const u: unknown;
+declare function f(): void;
+declare const v: number;
+export class A {
+  m(x: number) { return x }
+  run() {
+    const w = 1
+    w |> this.m
+  }
+}
+export const g = () => {
+  const w = 2
+  w |> o.m
+}
+export const t = `${(() => { const w = 3
+  w |> o.m
+  return w })()}`

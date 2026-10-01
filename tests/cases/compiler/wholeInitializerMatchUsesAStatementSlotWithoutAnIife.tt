@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_01.rs::whole_initializer_match_uses_a_statement_slot_without_an_iife
+const r = match (x) { A => 1, _ => 0 };

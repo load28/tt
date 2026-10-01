@@ -1,0 +1,9 @@
+// @origin: tests/compile/cases_02.rs::match_binding_alias_and_block_body
+
+const r = match (m) {
+  Move(x: px, y: py) => {
+    const sum = px + py;
+    return sum;
+  },
+  _ => 0,
+};

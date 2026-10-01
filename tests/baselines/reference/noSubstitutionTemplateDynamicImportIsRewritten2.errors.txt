@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./noSubstitutionTemplateDynamicImportIsRewritten2.tt → $DIR/out/noSubstitutionTemplateDynamicImportIsRewritten2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2307]: Cannot find module '../view.ttx' or its corresponding type declarations.
+ --> noSubstitutionTemplateDynamicImportIsRewritten2.tt:1:18
+  |
+1 | const m = import(`../view.ttx`, { with: { type: 'module' } });
+  |                  ^^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+noSubstitutionTemplateDynamicImportIsRewritten2.ts(1,18): error TS2307: Cannot find module '../view.jsx' or its corresponding type declarations.

@@ -1,0 +1,18 @@
+=== aDeclaredVariantKeepsItsModifierOnBothDeclarations.tt ===
+export declare variant P2 { Q }
+>P2 : type P2 = {
+>       kind: "Q";
+>   }
+>Q : (property) Q: {
+>       readonly kind: "Q";
+>   }
+declare variant P4<T> { W(value: T) }
+>P4 : type P4<T> = {
+>       kind: "W";
+>       value: T;
+>   }
+>T : (type parameter) T in type P4<T>
+>W : (property) W: <T>(value: T) => P4<T>
+>value : (property) value: T
+>T : (type parameter) T in type P4<T>
+

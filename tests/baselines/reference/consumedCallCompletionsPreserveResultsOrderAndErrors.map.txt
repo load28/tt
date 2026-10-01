@@ -1,0 +1,21 @@
+//// [consumedCallCompletionsPreserveResultsOrderAndErrors.tt] 19 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:30 -> 21:29 len 6  "number"
+2:30 -> 24:18 len 6  "number"
+2:46 -> 26:3 len 429  "\ntype Item = {kind: \"item\"; run: (x: number) => "...
+15:3 -> 58:3 len 15  "const result = "
+15:18 -> 40:19 len 21  "mark(\"receiver\", api)"
+15:55 -> 42:19 len 22  "mark(\"subject\", state)"
+16:11 -> 45:17 len 5  "value"
+16:21 -> 46:33 len 56  "(trace.push(\"arm\"), {kind: \"item\", run: x => x +"...
+17:14 -> 50:33 len 29  "({kind: \"item\", run: x => x})"
+18:5 -> 58:24 len 219  " + mark(\"after\", 1);\n  console.log(result, trace"...
+25:3 -> 83:3 len 22  "unreached = \"lost:\" + "
+25:25 -> 66:19 len 6  "throws"
+25:39 -> 68:19 len 14  "State.Ready(2)"
+26:11 -> 71:17 len 5  "value"
+26:23 -> 72:9 len 21  "trace.push(\"value\"); "
+26:51 -> 72:46 len 35  "{kind: \"item\", run: x => x + value}"
+27:14 -> 75:25 len 29  "({kind: \"item\", run: x => x})"
+28:5 -> 83:31 len 89  ";\n} catch { trace.push(\"caught\"); }\nconsole.log("...
+

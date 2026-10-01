@@ -1,0 +1,21 @@
+=== guardedMatchCompilesToIfChain.tt ===
+variant Score { Graded(points: number), Pending }
+>Score : type Score = {
+>       kind: "Graded";
+>       points: number;
+>   } | {
+>       kind: "Pending";
+>   }
+>Graded : (property) Graded: (points: number) => Score
+>points : (property) points: number
+>Pending : (property) Pending: {
+>       readonly kind: "Pending";
+>   }
+const grade = match (s) {
+>grade : const grade: string
+  Graded(points) if points >= 90 => "A",
+>points : const points: any
+>points : const points: any
+  Graded(points) => "F",
+>points : const points: any
+

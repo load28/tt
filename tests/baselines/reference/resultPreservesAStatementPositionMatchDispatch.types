@@ -1,0 +1,7 @@
+=== resultPreservesAStatementPositionMatchDispatch.tt ===
+const value = result { const item = try read(); match (item) { 1 => useOne(), _ => useOther() }; return item; };
+>value : const value: any
+>item : const item: any
+>item : const item: any
+>item : const item: any
+

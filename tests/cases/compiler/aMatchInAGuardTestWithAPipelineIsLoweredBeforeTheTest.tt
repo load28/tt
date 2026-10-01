@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_11.rs::a_match_in_a_guard_test_with_a_pipeline_is_lowered_before_the_test
+variant S { A(v: number), B(w: number), C }
+declare const s: S;
+const z = match (s) { A(v) if match (s) { B(w) => w > 0, _ => false } |> Boolean => 1, _ => 0 };

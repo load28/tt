@@ -1,0 +1,6 @@
+//// [variantDuplicateCaseIsErrorWithPosition.tt] 4 mapping(s)
+1:1 -> 1:1 len 13  "const a = 1;\n"
+2:18 -> 3:21 len 6  "number"
+2:18 -> 6:10 len 6  "number"
+2:30 -> 7:3 len 1  "\n"
+
