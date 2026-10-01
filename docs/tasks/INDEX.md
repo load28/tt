@@ -711,7 +711,8 @@
 | TASK-703 | Convert inline Rust tests to case files by proving each conversion | Complete | 2026-10-01 | 2026-10-01 | [TASK-703](./TASK-703-inline-test-conversion-tooling.md) |
 | TASK-704 | Convert the compile suite's inline tests to case files | Complete | 2026-10-01 | 2026-10-01 | [TASK-704](./TASK-704-convert-compile-suite.md) |
 | TASK-705 | Convert the integration suite's runtime and type-check tests to case files | Complete | 2026-10-01 | 2026-10-01 | [TASK-705](./TASK-705-convert-integration-suite.md) |
+| TASK-716 | Read unclosed type-shaped brackets in linear time | Complete | 2026-10-01 | 2026-10-01 | [TASK-716](./TASK-716-linear-type-shaped-lookaheads.md) |
 
 ## Next task number
 
-**TASK-706**
+**TASK-717**

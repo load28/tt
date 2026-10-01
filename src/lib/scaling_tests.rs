@@ -375,3 +375,42 @@ fn project_requests_materialize_once_per_state_of_their_inputs() {
     let settled = measure(|| hover(&mut project, 16));
     assert_eq!(asks(&settled), 0);
 }
+
+fn unbalanced_openers(kind: crate::SourceKind, source: &str) {
+    crate::engine::semantic_tokens_with_kind(source, kind);
+    let _ = crate::check_report(
+        source,
+        &crate::Options {
+            source_kind: kind,
+            ..crate::Options::default()
+        },
+    );
+}
+
+#[test]
+fn every_request_does_linear_work_in_unclosed_type_shaped_openers() {
+    let fuzzed = "\tK<-[(\tK<\tK<[({[( -[(\t(\tK<\tK<[({[(\tK<[({[(\tK<[({[<[({[(\tK<[({[(.....z.........\tK<[K<[({[(\tK<[({[<[({[(\tK<[({[(.....z.........\tK<[({[<0";
+    for kind in [crate::SourceKind::TypeScript, crate::SourceKind::Tsx] {
+        for (text, count) in [(fuzzed, 20), ("K<[({[(", 200)] {
+            let [one, two, four] = [1, 2, 4]
+                .map(|times| measure(|| unbalanced_openers(kind, &text.repeat(times * count))));
+            for (name, &work) in &four {
+                let at =
+                    |counts: &HashMap<&'static str, usize>| counts.get(name).copied().unwrap_or(0);
+                assert!(
+                    work.saturating_sub(at(&two)) <= 2 * at(&two).saturating_sub(at(&one)) + 64,
+                    "{kind:?} {name}: {} units for n openers, {} for 2n, {work} for 4n",
+                    at(&one),
+                    at(&two),
+                );
+            }
+            assert!(four["type argument lookahead steps"] > 0, "{kind:?}");
+            if text == fuzzed {
+                assert!(four["expression lookahead steps"] > 0, "{kind:?}");
+            }
+            if kind == crate::SourceKind::Tsx {
+                assert!(four["operand probe frames"] > 0);
+            }
+        }
+    }
+}

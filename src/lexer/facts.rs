@@ -34,7 +34,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub(super) use types::type_arguments_end;
+pub(super) use types::{Lookaheads, type_arguments_end};
 
 use crate::ast::Span;
 use crate::scanner::{at, ident_end, skip_trivia, starts_identifier};
@@ -338,9 +338,10 @@ pub(super) struct Machine<'s> {
     skip_next: bool,
     last_end: usize,
     statements: Option<Vec<Span>>,
-    /// The stack [`Machine::operand_expected`] offers a byte to, kept
-    /// between queries so a query copies frames without allocating.
+    /// The frames [`Machine::operand_expected`] puts back after offering a
+    /// byte, kept between queries so a query does not allocate.
     probe: Vec<Frame>,
+    lookaheads: Lookaheads,
 }
 
 impl Frame {
@@ -371,6 +372,7 @@ impl<'s> Machine<'s> {
             last_end: 0,
             statements: trace.then(Vec::new),
             probe: Vec::new(),
+            lookaheads: Lookaheads::default(),
         }
     }
 
@@ -388,25 +390,35 @@ impl<'s> Machine<'s> {
     /// before the byte (§12.10.1) — and an operand is expected when an
     /// expression waiting for one receives it.
     pub(super) fn operand_expected(&mut self, at: usize, line_break: bool) -> bool {
-        let mut stack = std::mem::take(&mut self.probe);
-        stack.clear();
-        stack.extend_from_slice(&self.stack);
-        let mut probe = Machine {
-            src: self.src,
-            end: self.end,
-            stack,
-            facts: TokenFacts::default(),
-            skip_next: false,
-            last_end: self.last_end,
-            statements: None,
-            probe: Vec::new(),
-        };
-        let expected = probe.offer_operand_byte(at, line_break);
-        self.probe = probe.stack;
+        let facts = std::mem::take(&mut self.facts);
+        let skip_next = std::mem::take(&mut self.skip_next);
+        let last_end = self.last_end;
+        let statements = self.statements.take();
+        let mut popped = std::mem::take(&mut self.probe);
+        popped.clear();
+        let mut floor = self.stack.len();
+        let expected = self.offer_operand_byte(at, line_break, &mut floor, &mut popped);
+        self.stack.truncate(floor);
+        self.stack.extend(popped.drain(..).rev());
+        self.probe = popped;
+        self.facts = facts;
+        self.skip_next = skip_next;
+        self.last_end = last_end;
+        self.statements = statements;
         expected
     }
 
-    fn offer_operand_byte(&mut self, at: usize, line_break: bool) -> bool {
+    /// Offers the byte to the stack as [`Machine::operand_expected`] asks.
+    /// The frames the offer pops from below `floor` are kept in `popped`,
+    /// top first, so the caller puts the stack back by touching only the
+    /// frames the offer reached rather than copying the whole stack.
+    fn offer_operand_byte(
+        &mut self,
+        at: usize,
+        line_break: bool,
+        floor: &mut usize,
+        popped: &mut Vec<Frame>,
+    ) -> bool {
         let tok = Tok {
             kind: Tk::Punct(self.src.as_bytes()[at]),
             text: "",
@@ -417,7 +429,17 @@ impl<'s> Machine<'s> {
             line_break,
         };
         for _ in 0..4096 {
-            let frame = self.stack.pop().unwrap_or_else(Frame::top_level);
+            crate::work::tick("operand probe frames");
+            let frame = match self.stack.pop() {
+                Some(frame) => {
+                    if self.stack.len() < *floor {
+                        *floor = self.stack.len();
+                        popped.push(frame);
+                    }
+                    frame
+                }
+                None => Frame::top_level(),
+            };
             if let Frame::Expr(expr) = frame
                 && expr.operand_expected()
             {
@@ -428,6 +450,13 @@ impl<'s> Machine<'s> {
             }
         }
         false
+    }
+
+    /// The lookahead answers this machine's region has found, which a scan
+    /// of the same region outside the machine (a JSX tag's type arguments)
+    /// shares.
+    pub(super) fn lookaheads(&self) -> &Lookaheads {
+        &self.lookaheads
     }
 
     /// Whether `yield` is an operator where the machine stands: the nearest

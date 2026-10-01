@@ -428,7 +428,14 @@ fn lex_region_grown(
         if source_kind.is_tsx()
             && c == b'<'
             && machine.operand_expected(i, line_break)
-            && let Some(jsx) = scan_jsx(src_str, i, end, source_kind, trace.as_deref_mut())
+            && let Some(jsx) = scan_jsx(
+                src_str,
+                i,
+                end,
+                source_kind,
+                machine.lookaheads(),
+                trace.as_deref_mut(),
+            )
         {
             if let Some(trace) = trace.as_deref_mut() {
                 trace.elements.push(i);
@@ -750,9 +757,10 @@ fn scan_jsx(
     start: usize,
     end: usize,
     source_kind: SourceKind,
+    lookaheads: &facts::Lookaheads,
     trace: TraceSink<'_>,
 ) -> Option<ScannedJsx> {
-    crate::stack::grow(|| scan_jsx_grown(src_str, start, end, source_kind, trace))
+    crate::stack::grow(|| scan_jsx_grown(src_str, start, end, source_kind, lookaheads, trace))
 }
 
 fn scan_jsx_grown(
@@ -760,10 +768,18 @@ fn scan_jsx_grown(
     start: usize,
     end: usize,
     source_kind: SourceKind,
+    lookaheads: &facts::Lookaheads,
     mut trace: TraceSink<'_>,
 ) -> Option<ScannedJsx> {
     let src = src_str.as_bytes();
-    let opening = scan_jsx_opening(src_str, start, end, source_kind, trace.as_deref_mut())?;
+    let opening = scan_jsx_opening(
+        src_str,
+        start,
+        end,
+        source_kind,
+        lookaheads,
+        trace.as_deref_mut(),
+    )?;
     let mut tokens = jsx_region_tokens(start, opening.end, opening.expressions);
     let mut i = opening.end;
     if opening.self_closing {
@@ -792,7 +808,14 @@ fn scan_jsx_grown(
             });
         }
         if src[i] == b'<' {
-            let child = scan_jsx(src_str, i, end, source_kind, trace.as_deref_mut())?;
+            let child = scan_jsx(
+                src_str,
+                i,
+                end,
+                source_kind,
+                lookaheads,
+                trace.as_deref_mut(),
+            )?;
             if raw_start < i {
                 tokens.push(Token {
                     kind: TokenKind::JsxRaw,
@@ -899,6 +922,7 @@ fn scan_jsx_opening(
     start: usize,
     end: usize,
     source_kind: SourceKind,
+    lookaheads: &facts::Lookaheads,
     mut trace: TraceSink<'_>,
 ) -> Option<JsxOpening> {
     let src = src_str.as_bytes();
@@ -916,7 +940,7 @@ fn scan_jsx_opening(
     let name = String::from_utf8(src[name_start..i].to_vec()).ok()?;
     let mut expressions = Vec::new();
     if at(src, i, end) == Some(b'<') {
-        i = facts::type_arguments_end(src, i, end)?;
+        i = facts::type_arguments_end(src, i, end, lookaheads)?;
     }
     loop {
         i = skip_trivia(src, i, end).0;
