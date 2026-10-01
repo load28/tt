@@ -1,2 +1,2 @@
 componentBody(3) => "<p>3</p>" | risky 3; read 3; then 3
-componentBody(-3) => "<p>/"missing/"</p>" | risky -3; read -3; else "missing"
+componentBody(-3) => "<p>\"missing\"</p>" | risky -3; read -3; else "missing"

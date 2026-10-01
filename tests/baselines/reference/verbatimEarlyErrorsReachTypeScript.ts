@@ -16,6 +16,7 @@ export const area = (s: Shape) => match (s) {
 //// [script.ts]
 function named(await: number) { return await; }
 declare namespace Ambient { var static: number; }
+\ No newline at end of file
 
 //// [shapes.ts]
 function $tt_show(value: unknown): string {

@@ -72,6 +72,7 @@ for (const present of [true, false]) {
   attempt("member", () => $tt_ap((box(present)?.inner!).value, String));
   attempt("tail", () => (loose(present)?.trim()).length);
 }
+\ No newline at end of file
 
 //// [twin.ts]
 export {};

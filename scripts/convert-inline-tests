@@ -1,0 +1,976 @@
+#!/usr/bin/env node
+/* Converts inline Rust tests of tests/compile.rs and tests/integration.rs
+ * into case files under tests/cases/, and proves each conversion.
+ *
+ * A test converts when everything it observes is something a case pins in
+ * a baseline: the emitted TypeScript (`ok`, `ok_tsx`), the tt diagnostics
+ * and their advice (`err`, `advice`), TypeScript's verdict on the emitted
+ * tree (`typecheck`, `typecheck_with_std`), and what the program prints
+ * (`run`, `run_with_std`). The proof is mechanical: the test's own body is
+ * compiled again with those helpers answering from the committed
+ * baselines instead of from the library, and a test is converted only when
+ * every one of its assertions holds there. Its case files then carry the
+ * observation the assertions were about, and a later change to it shows up
+ * as a baseline diff.
+ *
+ * Steps, each reading what the previous one wrote under
+ * target/inline-conversion/:
+ *
+ *   scan       list the tests and the items around them
+ *   harness    write tests/inline_conversion_<suite>.rs, the test bodies
+ *              around helpers that record (or prove), dropping the bodies
+ *              that reach anything else, until it compiles
+ *   record     run the harness against the library and log every source a
+ *              helper compiled
+ *   generate   write one case file per distinct source, with `// @origin`
+ *   prove      run the harness against the baselines
+ *   apply      delete the proven tests from the Rust files and the case
+ *              files no proven test needs
+ *   clean      remove the generated harness files
+ *
+ * Usage: scripts/convert-inline-tests <step> <suite> [--only <file>]
+ *   <suite> is compile or integration.
+ */
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const WORK = join(ROOT, "target/inline-conversion");
+
+const SUITES = {
+  compile: {
+    root: "tests/compile.rs",
+    files: () => ["tests/compile.rs", ...listRs("tests/compile")],
+    modules: {},
+    shims: ["ok", "ok_tsx", "err", "advice", "codes"],
+    caseDir: "tests/cases/compiler",
+    uses: "use ttc::{DiagnosticCode, Options, SourceKind, compile};",
+  },
+  integration: {
+    root: "tests/integration.rs",
+    files: () => [
+      "tests/integration.rs",
+      ...listRs("tests/integration").filter((f) => /cases_\d+\.rs$/.test(f)),
+      "tests/integration/contextual.rs",
+      "tests/integration/pr115.rs",
+    ],
+    modules: {
+      "tests/integration/contextual.rs": "contextual",
+      "tests/integration/pr115.rs": "pr115",
+    },
+    shims: ["run", "run_with_std", "typecheck", "typecheck_with_std"],
+    caseDir: "tests/cases/conformance/evaluation",
+    uses: "use std::fs;\nuse std::process::Command;\nuse ttc::{Options, SourceKind, compile};",
+  },
+};
+
+const REJECTED_TEXT = [
+  [/\bttc::(?!CompileError\b|DiagnosticCode\b)/, "calls the library directly"],
+  [/\bstd::(fs|process|env|net|thread)\b/, "does its own I/O or process work"],
+  [/\binclude_str!/, "reads a file"],
+  [/\bcatch_unwind\b/, "observes a panic"],
+];
+
+function listRs(dir) {
+  return readdirSync(join(ROOT, dir))
+    .filter((f) => f.endsWith(".rs"))
+    .sort()
+    .map((f) => `${dir}/${f}`);
+}
+
+/* ---------------------------------------------------------------- */
+/* A Rust lexer just good enough to find item extents                */
+/* ---------------------------------------------------------------- */
+
+function skipLiteral(text, i) {
+  const c = text[i];
+  if (c === "/" && text[i + 1] === "/") {
+    const end = text.indexOf("\n", i);
+    return end < 0 ? text.length : end;
+  }
+  if (c === "/" && text[i + 1] === "*") {
+    let depth = 1;
+    let j = i + 2;
+    while (j < text.length && depth > 0) {
+      if (text[j] === "/" && text[j + 1] === "*") {
+        depth++;
+        j += 2;
+      } else if (text[j] === "*" && text[j + 1] === "/") {
+        depth--;
+        j += 2;
+      } else j++;
+    }
+    return j;
+  }
+  const raw = /^b?r(#*)"/.exec(text.slice(i, i + 40));
+  if (raw && !/[A-Za-z0-9_]/.test(text[i - 1] ?? "")) {
+    const close = `"${raw[1]}`;
+    const end = text.indexOf(close, i + raw[0].length);
+    return end + close.length;
+  }
+  if (c === '"' || (c === "b" && text[i + 1] === '"' && !/[A-Za-z0-9_]/.test(text[i - 1] ?? ""))) {
+    let j = c === "b" ? i + 2 : i + 1;
+    while (j < text.length && text[j] !== '"') j += text[j] === "\\" ? 2 : 1;
+    return j + 1;
+  }
+  if (c === "'") {
+    if (text[i + 1] === "\\") {
+      const end = text.indexOf("'", i + 2 + (text[i + 2] === "'" ? 1 : 0));
+      return end + 1;
+    }
+    const cp = text.codePointAt(i + 1);
+    const width = cp > 0xffff ? 2 : 1;
+    if (text[i + 1 + width] === "'") return i + 2 + width;
+    return i + 1;
+  }
+  return -1;
+}
+
+function itemEnd(text, start, braced) {
+  let depth = 0;
+  let i = start;
+  while (i < text.length) {
+    const skipped = skipLiteral(text, i);
+    if (skipped >= 0) {
+      i = skipped;
+      continue;
+    }
+    const c = text[i];
+    if (c === "(" || c === "[" || c === "{") depth++;
+    else if (c === ")" || c === "]" || c === "}") {
+      depth--;
+      if (depth === 0 && (c === "}" ? braced : braced === null)) return i + 1;
+    } else if (c === ";" && depth === 0) return i + 1;
+    i++;
+  }
+  throw new Error(`unterminated item at ${start}`);
+}
+
+function lineStart(text, i) {
+  return text.lastIndexOf("\n", i - 1) + 1;
+}
+
+function items(text) {
+  const out = [];
+  let i = 0;
+  let attrs = [];
+  let attrStart = -1;
+  while (i < text.length) {
+    if (/\s/.test(text[i])) {
+      i++;
+      continue;
+    }
+    if (text.startsWith("//", i) || text.startsWith("/*", i)) {
+      i = skipLiteral(text, i);
+      continue;
+    }
+    if (text.startsWith("#![", i)) {
+      i = itemEnd(text, i + 2, null);
+      continue;
+    }
+    if (text.startsWith("#[", i)) {
+      const end = itemEnd(text, i + 1, null);
+      if (attrStart < 0) attrStart = i;
+      attrs.push(text.slice(i, end));
+      i = end;
+      continue;
+    }
+    const head = /^(?:pub(?:\([^)]*\))?\s+)?(fn|const|static|use|mod|macro_rules!|struct|enum|impl|trait|type|include!)\s*([A-Za-z0-9_]*)/.exec(
+      text.slice(i, i + 200),
+    );
+    const kind = head ? head[1] : "other";
+    const name = head ? head[2] : "";
+    const end = itemEnd(text, i, ["fn", "mod", "macro_rules!", "struct", "enum", "impl", "trait"].includes(kind));
+    const first = attrStart >= 0 ? attrStart : i;
+    let start = lineStart(text, first);
+    for (;;) {
+      if (start === 0) break;
+      const prev = lineStart(text, start - 1);
+      const line = text.slice(prev, start - 1).trim();
+      if (line.startsWith("//") || line.startsWith("#[")) start = prev;
+      else break;
+    }
+    let stop = end;
+    while (text[stop] === " " || text[stop] === "\t") stop++;
+    if (text[stop] === "\n") stop++;
+    out.push({
+      kind,
+      name,
+      attrs,
+      test: attrs.some((a) => /^#\[test\]$/.test(a.replace(/\s+/g, ""))),
+      start,
+      itemStart: first,
+      end: stop,
+      text: text.slice(first, end),
+    });
+    attrs = [];
+    attrStart = -1;
+    i = end;
+  }
+  return out;
+}
+
+/* ---------------------------------------------------------------- */
+/* scan                                                              */
+/* ---------------------------------------------------------------- */
+
+function scan(suiteName) {
+  const suite = SUITES[suiteName];
+  const tests = [];
+  const helpers = [];
+  for (const file of suite.files()) {
+    const text = readFileSync(join(ROOT, file), "utf8");
+    for (const item of items(text)) {
+      const module = suite.modules[file] ?? null;
+      if (item.test) {
+        const unsupported = item.attrs.find((a) => !/^#\[test\]$/.test(a.replace(/\s+/g, "")));
+        const rejected = REJECTED_TEXT.find(([pattern]) => pattern.test(item.text));
+        tests.push({
+          file,
+          module,
+          name: item.name,
+          text: item.text,
+          reason: unsupported
+            ? `carries ${unsupported}`
+            : rejected
+              ? rejected[1]
+              : null,
+        });
+      } else if (["fn", "const", "static", "macro_rules!", "use", "struct", "enum", "impl", "type"].includes(item.kind)) {
+        const rejected = REJECTED_TEXT.find(([pattern]) => pattern.test(item.text));
+        helpers.push({ file, module, kind: item.kind, name: item.name, text: item.text, reason: rejected ? rejected[1] : null });
+      }
+    }
+  }
+  mkdirSync(WORK, { recursive: true });
+  writeFileSync(join(WORK, `${suiteName}.scan.json`), JSON.stringify({ tests, helpers }, null, 1));
+  const kept = tests.filter((t) => t.reason);
+  console.log(`${suiteName}: ${tests.length} tests, ${kept.length} rejected by their text, ${helpers.length} helper items`);
+}
+
+/* ---------------------------------------------------------------- */
+/* harness                                                           */
+/* ---------------------------------------------------------------- */
+
+const SHIM_COMMON = String.raw`
+mod conversion {
+    use std::collections::BTreeMap;
+    use std::io::Write;
+    use std::path::{Path, PathBuf};
+    use std::sync::OnceLock;
+
+    pub fn proving() -> bool {
+        std::env::var("TT_CONVERSION").as_deref() == Ok("prove")
+    }
+
+    fn root() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    }
+
+    pub fn test() -> String {
+        let name = std::thread::current().name().unwrap_or("").to_string();
+        let file = super::ORIGINS
+            .iter()
+            .find(|(test, _)| *test == name)
+            .map(|(_, file)| *file)
+            .unwrap_or_else(|| panic!("no origin for {name}"));
+        format!("{file}::{}", name.rsplit("::").next().unwrap())
+    }
+
+    pub fn record(kind: &str, unit: &str) {
+        let Ok(log) = std::env::var("TT_CONVERSION_LOG") else {
+            return;
+        };
+        let line = serde_json::json!({ "test": test(), "kind": kind, "unit": unit });
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(log)
+            .expect("writable log");
+        file.write_all(format!("{line}\n").as_bytes())
+            .expect("written log");
+    }
+
+    pub struct Case {
+        pub name: String,
+        pub dir: PathBuf,
+        pub origins: Vec<String>,
+        pub unit: String,
+    }
+
+    fn index() -> &'static BTreeMap<(String, String), Vec<(String, PathBuf, Vec<String>)>> {
+        static INDEX: OnceLock<BTreeMap<(String, String), Vec<(String, PathBuf, Vec<String>)>>> =
+            OnceLock::new();
+        INDEX.get_or_init(|| {
+            let mut files = Vec::new();
+            for suite in ["compiler", "conformance"] {
+                super::real_common::cases::files(&root().join("tests/cases").join(suite), &mut files);
+            }
+            let mut out: BTreeMap<_, Vec<_>> = BTreeMap::new();
+            for path in files {
+                let text = std::fs::read_to_string(&path).unwrap();
+                let file_name = path.file_name().unwrap().to_string_lossy().into_owned();
+                let parsed = super::real_common::cases::parse(&text, &file_name, &path);
+                let origins: Vec<String> = parsed
+                    .directives
+                    .iter()
+                    .filter(|(name, _)| name == "origin")
+                    .map(|(_, value)| value.clone())
+                    .collect();
+                if origins.is_empty() || parsed.units.len() != 1 {
+                    continue;
+                }
+                let unit = &parsed.units[0];
+                let extension = Path::new(&unit.name)
+                    .extension()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned();
+                let name = path.file_stem().unwrap().to_string_lossy().into_owned();
+                out.entry((extension, unit.content.clone()))
+                    .or_default()
+                    .push((name, path.clone(), origins));
+            }
+            out
+        })
+    }
+
+    pub fn case(extension: &str, unit: &str) -> Case {
+        let test = test();
+        let found = index()
+            .get(&(extension.to_string(), unit.to_string()))
+            .unwrap_or_else(|| panic!("{test}: no case holds this .{extension} unit:\n{unit}"));
+        let (name, _, origins) = found
+            .iter()
+            .find(|(_, _, origins)| origins.contains(&test))
+            .unwrap_or_else(|| panic!("{test}: the case for this unit does not name it as an origin"));
+        Case {
+            name: name.clone(),
+            dir: root().join("tests/baselines/reference"),
+            origins: origins.clone(),
+            unit: unit.to_string(),
+        }
+    }
+
+    pub fn baseline(case: &Case, kind: &str) -> Option<String> {
+        std::fs::read_to_string(case.dir.join(format!("{}.{kind}", case.name))).ok()
+    }
+
+    pub fn emitted(case: &Case, output: &str) -> String {
+        let ts = baseline(case, "ts").unwrap_or_else(|| panic!("{}: no .ts baseline", case.name));
+        let marker = format!("\n//// [{output}]\n");
+        let start = ts
+            .find(&marker)
+            .unwrap_or_else(|| panic!("{}: nothing emitted as {output}", case.name))
+            + marker.len();
+        let rest = &ts[start..];
+        let end = rest.find("\n//// [").map_or(rest.len(), |i| i + 1);
+        let content = &rest[..end];
+        match content.strip_suffix("\n\\ No newline at end of file\n") {
+            Some(unterminated) => unterminated.to_string(),
+            None => content.to_string(),
+        }
+    }
+
+    pub fn section<'a>(errors: &'a str, heading: &str) -> Option<(i32, &'a str)> {
+        let start = errors.find(&format!("==== {heading}"))?;
+        let rest = &errors[start..];
+        let line_end = rest.find('\n').unwrap_or(rest.len());
+        let header = &rest[..line_end];
+        let code = header
+            .rsplit_once("(exit ")
+            .map(|(_, tail)| tail.trim_end_matches(") ====").parse::<i32>().unwrap())
+            .unwrap_or(-1);
+        let body = &rest[(line_end + 1).min(rest.len())..];
+        let end = body.find("\n==== ").map_or(body.len(), |i| i + 1);
+        Some((code, &body[..end]))
+    }
+
+    pub struct Diag {
+        pub message: String,
+        pub line: usize,
+        pub col: usize,
+        pub end_line: usize,
+        pub end_col: usize,
+        pub help: Vec<String>,
+        pub code: String,
+    }
+
+    pub fn diagnostics(case: &Case) -> Vec<Diag> {
+        let errors = baseline(case, "errors.txt").unwrap_or_default();
+        let Some((_, body)) = section(&errors, "ttc --out-dir") else {
+            return Vec::new();
+        };
+        let lines: Vec<&str> = case.unit.split('\n').collect();
+        let mut out: Vec<Diag> = Vec::new();
+        let mut blocks: Vec<String> = Vec::new();
+        for line in body.split('\n') {
+            if line.starts_with("error[") || line.starts_with("error:") {
+                blocks.push(String::new());
+            }
+            if let Some(block) = blocks.last_mut() {
+                block.push_str(line);
+                block.push('\n');
+            }
+        }
+        for block in blocks {
+            let header_end = block.find("\n --> ").unwrap_or_else(|| block.trim_end().len());
+            let header = &block[..header_end];
+            let message = header.split_once("]: ").map(|(_, m)| m).unwrap_or(header).to_string();
+            let code = header
+                .strip_prefix("error[")
+                .and_then(|rest| rest.split_once(']'))
+                .map(|(code, _)| code.to_string())
+                .unwrap_or_default();
+            let mut diag = Diag {
+                message,
+                line: 0,
+                col: 0,
+                end_line: usize::MAX,
+                end_col: usize::MAX,
+                help: Vec::new(),
+                code,
+            };
+            if let Some(arrow) = block.get(header_end..).and_then(|r| r.strip_prefix("\n --> ")) {
+                let location = arrow.split('\n').next().unwrap();
+                let mut parts = location.rsplitn(3, ':');
+                let col = parts.next().and_then(|c| c.parse().ok());
+                let line = parts.next().and_then(|l| l.parse().ok());
+                if let (Some(line), Some(col)) = (line, col) {
+                    diag.line = line;
+                    diag.col = col;
+                    let carets: Vec<&str> = block
+                        .split('\n')
+                        .filter(|l| l.trim_start().starts_with('|') && l.contains('^'))
+                        .collect();
+                    let source_line = lines.get(line - 1).copied().unwrap_or("");
+                    let plain = source_line.bytes().all(|b| b.is_ascii() && b != b'\t');
+                    if carets.len() == 1 && plain {
+                        let count = carets[0].matches('^').count();
+                        if count > 1 {
+                            diag.end_line = line;
+                            diag.end_col = col + count;
+                        }
+                    }
+                } else {
+                    diag.end_line = 0;
+                    diag.end_col = 0;
+                }
+            } else {
+                diag.end_line = 0;
+                diag.end_col = 0;
+            }
+            for line in block.split('\n') {
+                if let Some(help) = line.trim_start().strip_prefix("= help: ") {
+                    diag.help.push(help.to_string());
+                }
+            }
+            out.push(diag);
+        }
+        out
+    }
+
+    pub fn failed(case: &Case) -> bool {
+        let errors = baseline(case, "errors.txt").unwrap_or_default();
+        section(&errors, "ttc --out-dir").is_some_and(|(code, _)| code != 0)
+    }
+
+    pub fn tsc(case: &Case) -> (bool, String) {
+        let Some(errors) = baseline(case, "errors.txt") else {
+            return (true, String::new());
+        };
+        match section(&errors, "tsc on the emitted TypeScript") {
+            Some((-1, _)) | None => panic!("{}: nothing was emitted to check", case.name),
+            Some((code, body)) => (code == 0, body.to_string()),
+        }
+    }
+
+    pub fn stdout(case: &Case) -> Vec<String> {
+        if let Some(stderr) = baseline(case, "stderr") {
+            let header = stderr.lines().next().unwrap_or("");
+            assert!(
+                header.ends_with("(exit 0) ===="),
+                "{}: the program did not succeed:\n{stderr}",
+                case.name
+            );
+        }
+        let out = baseline(case, "stdout")
+            .unwrap_or_else(|| panic!("{}: no .stdout baseline", case.name));
+        out.lines().map(str::to_string).collect()
+    }
+}
+
+#[path = "common/mod.rs"]
+#[allow(dead_code)]
+mod real_common;
+
+mod common {
+    pub fn tsc_available() -> bool {
+        super::real_common::tsc_available()
+    }
+}
+`;
+
+const SHIMS = {
+  compile: String.raw`
+fn ok(src: &str) -> String {
+    conversion::record("tt", src);
+    if !conversion::proving() {
+        return real::ok(src);
+    }
+    let case = conversion::case("tt", src);
+    assert!(!conversion::failed(&case), "compile failed");
+    conversion::emitted(&case, &format!("{}.ts", case.name))
+}
+
+fn ok_tsx(src: &str) -> String {
+    conversion::record("ttx", src);
+    if !conversion::proving() {
+        return real::ok_tsx(src);
+    }
+    let case = conversion::case("ttx", src);
+    assert!(!conversion::failed(&case), "ttx compile failed");
+    conversion::emitted(&case, &format!("{}.tsx", case.name))
+}
+
+fn err(src: &str) -> ttc::CompileError {
+    conversion::record("tt", src);
+    if !conversion::proving() {
+        return real::err(src);
+    }
+    let case = conversion::case("tt", src);
+    assert!(conversion::failed(&case), "expected a compile error");
+    let mut all = conversion::diagnostics(&case);
+    all.sort_by_key(|d| (d.line == 0, d.line, d.col));
+    let first = all.into_iter().next().expect("a rendered diagnostic");
+    ttc::CompileError {
+        message: first.message,
+        filename: None,
+        line: first.line,
+        col: first.col,
+        end_line: first.end_line,
+        end_col: first.end_col,
+    }
+}
+
+use ttc::DiagnosticCode;
+
+fn codes(src: &str) -> Vec<DiagnosticCode> {
+    conversion::record("tt", src);
+    if !conversion::proving() {
+        return real::codes(src);
+    }
+    let case = conversion::case("tt", src);
+    conversion::diagnostics(&case)
+        .into_iter()
+        .map(|d| DiagnosticCode::parse(&d.code).expect("a known code"))
+        .collect()
+}
+
+fn advice(src: &str) -> Vec<String> {
+    conversion::record("tt", src);
+    if !conversion::proving() {
+        return real::advice(src);
+    }
+    let case = conversion::case("tt", src);
+    conversion::diagnostics(&case)
+        .into_iter()
+        .flat_map(|d| d.help)
+        .collect()
+}
+`,
+  integration: String.raw`
+fn run(src: &str) -> Vec<String> {
+    let unit = real::as_module(src);
+    conversion::record("run", &unit);
+    if !conversion::proving() {
+        return real::run(src);
+    }
+    conversion::stdout(&conversion::case("tt", &unit))
+}
+
+fn run_with_std(src: &str) -> Vec<String> {
+    conversion::record("run", src);
+    if !conversion::proving() {
+        return real::run_with_std(src);
+    }
+    conversion::stdout(&conversion::case("tt", src))
+}
+
+fn typecheck(src: &str) -> (bool, String) {
+    let unit = real::as_module(src);
+    conversion::record("check", &unit);
+    if !conversion::proving() {
+        return real::typecheck(src);
+    }
+    let case = conversion::case("tt", &unit);
+    assert!(!conversion::failed(&case), "tt compile failed");
+    conversion::tsc(&case)
+}
+
+fn typecheck_with_std(src: &str) -> (bool, String) {
+    let unit = real::as_module(src);
+    conversion::record("check", &unit);
+    if !conversion::proving() {
+        return real::typecheck_with_std(src);
+    }
+    let case = conversion::case("tt", &unit);
+    assert!(!conversion::failed(&case), "tt compile failed");
+    conversion::tsc(&case)
+}
+`,
+};
+
+function harnessPath(suiteName) {
+  return join(ROOT, `tests/inline_conversion_${suiteName}.rs`);
+}
+
+function writeHarness(suiteName, excluded) {
+  const suite = SUITES[suiteName];
+  const { tests, helpers } = JSON.parse(readFileSync(join(WORK, `${suiteName}.scan.json`), "utf8"));
+  const lines = [];
+  const map = [];
+  const push = (text, owner) => {
+    const start = lines.length + 1;
+    lines.push(...text.split("\n"));
+    map.push({ start, end: lines.length, owner });
+  };
+  push(`#![allow(warnings, clippy::all)]\n${SHIM_COMMON}\n${SHIMS[suiteName]}`, null);
+  const realItems = helpers
+    .filter((h) => h.module === null && h.kind !== "use")
+    .map((h) => h.text.replace(/^(\s*)(fn|const|static) /, "$1pub(crate) $2 "));
+  push(
+    `mod real {\n#![allow(warnings)]\nuse super::real_common as common;\n${suite.uses}\nuse common::Workspace;\n${realItems.join("\n\n")}\n}`,
+    null,
+  );
+  const topLevel = helpers.filter(
+    (h) =>
+      h.module === null &&
+      h.kind !== "use" &&
+      !h.reason &&
+      !suite.shims.includes(h.name) &&
+      !excluded.has(`helper:${h.file}::${h.name}`),
+  );
+  for (const h of topLevel) push(h.text, `helper:${h.file}::${h.name}`);
+  const modules = [...new Set(tests.map((t) => t.module).filter(Boolean))];
+  const origins = [];
+  for (const module of [null, ...modules]) {
+    if (module) {
+      push(`mod ${module} {\nuse super::*;`, null);
+      for (const h of helpers.filter((h) => h.module === module && h.kind !== "use" && !h.reason)) {
+        if (!excluded.has(`helper:${h.file}::${h.name}`)) push(h.text, `helper:${h.file}::${h.name}`);
+      }
+    }
+    for (const t of tests.filter((t) => t.module === module)) {
+      const id = `${t.file}::${t.name}`;
+      if (t.reason || excluded.has(id)) continue;
+      push(t.text, id);
+      origins.push([module ? `${module}::${t.name}` : t.name, t.file]);
+    }
+    if (module) push("}", null);
+  }
+  push(
+    `static ORIGINS: &[(&str, &str)] = &[\n${origins.map(([n, f]) => `    (${JSON.stringify(n)}, ${JSON.stringify(f)}),`).join("\n")}\n];`,
+    null,
+  );
+  writeFileSync(harnessPath(suiteName), lines.join("\n") + "\n");
+  return map;
+}
+
+function cargo(args, env = {}) {
+  return spawnSync("cargo", args, {
+    cwd: ROOT,
+    env: { ...process.env, CARGO_BUILD_JOBS: process.env.CARGO_BUILD_JOBS ?? "2", CARGO_PROFILE_DEV_DEBUG: "0", ...env },
+    encoding: "utf8",
+    maxBuffer: 1 << 30,
+  });
+}
+
+function harness(suiteName) {
+  const excludedPath = join(WORK, `${suiteName}.excluded.json`);
+  const excluded = new Map();
+  for (let round = 0; round < 40; round++) {
+    const map = writeHarness(suiteName, new Set(excluded.keys()));
+    const built = cargo(["test", "--test", `inline_conversion_${suiteName}`, "--no-run", "--message-format=json"]);
+    const owners = new Map();
+    let fatal = null;
+    for (const line of built.stdout.split("\n")) {
+      if (!line.startsWith("{")) continue;
+      const message = JSON.parse(line);
+      if (message.reason !== "compiler-message" || message.message.level !== "error") continue;
+      const span = message.message.spans.find((s) => s.is_primary) ?? message.message.spans[0];
+      if (!span || !span.file_name.endsWith(`inline_conversion_${suiteName}.rs`)) {
+        fatal = message.message.rendered;
+        continue;
+      }
+      const owner = map.find((m) => span.line_start >= m.start && span.line_start <= m.end)?.owner;
+      if (!owner) {
+        fatal = message.message.rendered;
+        continue;
+      }
+      if (!owners.has(owner)) owners.set(owner, message.message.rendered.split("\n").slice(0, 3).join(" | "));
+    }
+    if (built.status === 0) {
+      writeFileSync(excludedPath, JSON.stringify(Object.fromEntries(excluded), null, 1));
+      console.log(`${suiteName}: harness builds; ${excluded.size} item(s) excluded for reaching what a case does not pin`);
+      return;
+    }
+    if (owners.size === 0) {
+      console.error(fatal ?? built.stderr);
+      throw new Error("the harness does not build, and no test or helper is to blame");
+    }
+    for (const [owner, why] of owners) excluded.set(owner, why);
+    console.log(`round ${round}: excluded ${owners.size}`);
+  }
+  throw new Error("the harness did not converge");
+}
+
+/* ---------------------------------------------------------------- */
+/* record                                                            */
+/* ---------------------------------------------------------------- */
+
+function runHarness(suiteName, env) {
+  const result = cargo(["test", "--test", `inline_conversion_${suiteName}`, "--", "--test-threads", process.env.RUST_TEST_THREADS ?? "2"], {
+    TTC_REQUIRE_TSGO: "1",
+    ...env,
+  });
+  const outcomes = new Map();
+  for (const line of result.stdout.split("\n")) {
+    const m = /^test (\S+) \.\.\. (ok|FAILED|ignored)/.exec(line);
+    if (m) outcomes.set(m[1], m[2]);
+  }
+  const failures = new Map();
+  const blocks = result.stdout.split(/\n---- (\S+) stdout ----\n/);
+  for (let i = 1; i < blocks.length; i += 2) failures.set(blocks[i], blocks[i + 1].split("\n\n")[0].slice(0, 600));
+  return { outcomes, failures, result };
+}
+
+function record(suiteName) {
+  const log = join(WORK, `${suiteName}.record.jsonl`);
+  rmSync(log, { force: true });
+  const { outcomes, failures } = runHarness(suiteName, { TT_CONVERSION: "record", TT_CONVERSION_LOG: log });
+  writeFileSync(join(WORK, `${suiteName}.record.json`), JSON.stringify({ outcomes: Object.fromEntries(outcomes), failures: Object.fromEntries(failures) }, null, 1));
+  const bad = [...outcomes].filter(([, o]) => o !== "ok");
+  console.log(`${suiteName}: recorded ${outcomes.size} tests, ${bad.length} not passing against the library`);
+  for (const [name] of bad) console.log(`  ${name}: ${failures.get(name) ?? ""}`);
+}
+
+/* ---------------------------------------------------------------- */
+/* generate                                                          */
+/* ---------------------------------------------------------------- */
+
+const MAX_UNITS = 6;
+
+const BASELINES = {
+  "tests/compile/cases_04.rs::verify_preflights_unbalanced_delimiters_before_swc": "ts, errors.txt, map.txt",
+};
+
+function camel(name) {
+  return name.replace(/_+([a-z0-9])/g, (_, c) => c.toUpperCase());
+}
+
+function directiveLike(line) {
+  return /^\/\/\s*@\w+\s*:/.test(line);
+}
+
+function existingCaseNames() {
+  const names = new Set();
+  const walk = (dir) => {
+    if (!existsSync(dir)) return;
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) walk(path);
+      else if (/\.(tt|ttx)$/.test(entry.name)) names.add(entry.name.replace(/\.(tt|ttx)$/, ""));
+    }
+  };
+  walk(join(ROOT, "tests/cases/compiler"));
+  walk(join(ROOT, "tests/cases/conformance"));
+  return names;
+}
+
+function readLog(suiteName) {
+  const path = join(WORK, `${suiteName}.record.jsonl`);
+  if (!existsSync(path)) return [];
+  return readFileSync(path, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .map((l) => JSON.parse(l));
+}
+
+function generate(suiteName) {
+  const suite = SUITES[suiteName];
+  const recorded = JSON.parse(readFileSync(join(WORK, `${suiteName}.record.json`), "utf8"));
+  const passing = new Set(Object.entries(recorded.outcomes).filter(([, o]) => o === "ok").map(([n]) => n));
+  const byTest = new Map();
+  for (const entry of readLog(suiteName)) {
+    if (!byTest.has(entry.test)) byTest.set(entry.test, []);
+    const list = byTest.get(entry.test);
+    if (!list.some((e) => e.kind === entry.kind && e.unit === entry.unit)) list.push(entry);
+  }
+  const skipped = {};
+  const cases = new Map();
+  for (const [test, entries] of byTest) {
+    const fnName = test.split("::").pop();
+    const harnessName = test.includes("integration/contextual.rs")
+      ? `contextual::${fnName}`
+      : test.includes("integration/pr115.rs")
+        ? `pr115::${fnName}`
+        : fnName;
+    if (!passing.has(harnessName)) {
+      skipped[test] = "does not pass against the library in the harness";
+      continue;
+    }
+    if (entries.length > MAX_UNITS) {
+      skipped[test] = `compiles ${entries.length} programs; a generated family belongs in the case matrix`;
+      continue;
+    }
+    const badLine = entries.find((e) => e.unit.split("\n").some(directiveLike));
+    if (badLine) {
+      skipped[test] = "a program line reads as a case directive";
+      continue;
+    }
+    for (const entry of entries) {
+      const extension = entry.kind === "ttx" ? "ttx" : "tt";
+      const key = `${extension}\u0000${entry.unit}`;
+      if (!cases.has(key)) cases.set(key, { extension, unit: entry.unit, origins: [], run: false });
+      const c = cases.get(key);
+      if (!c.origins.includes(test)) c.origins.push(test);
+      if (entry.kind === "run") c.run = true;
+    }
+  }
+  const taken = existingCaseNames();
+  const previous = new Map();
+  const dir = join(ROOT, suite.caseDir);
+  if (existsSync(dir)) {
+    for (const file of readdirSync(dir)) {
+      if (!/\.(tt|ttx)$/.test(file)) continue;
+      const text = readFileSync(join(dir, file), "utf8");
+      if (!/^\/\/ @origin: /m.test(text)) continue;
+      rmSync(join(dir, file));
+      taken.delete(file.replace(/\.(tt|ttx)$/, ""));
+      previous.set(file, text);
+    }
+  }
+  mkdirSync(dir, { recursive: true });
+  const perTest = new Map();
+  for (const c of cases.values()) {
+    const first = c.origins[0];
+    perTest.set(first, (perTest.get(first) ?? 0) + 1);
+  }
+  const counters = new Map();
+  let written = 0;
+  for (const c of cases.values()) {
+    const first = c.origins[0];
+    const base = camel(first.split("::").pop());
+    const index = (counters.get(first) ?? 0) + 1;
+    counters.set(first, index);
+    let name = perTest.get(first) > 1 ? `${base}${index}` : base;
+    while (taken.has(name)) name = `${name}_`;
+    taken.add(name);
+    const header = c.origins.map((o) => `// @origin: ${o}`);
+    if (c.run) header.push(`// @run: ${name}.${c.extension}`);
+    const kinds = c.origins.map((o) => BASELINES[o]).find(Boolean);
+    if (kinds) header.push(`// @baselines: ${kinds}`);
+    writeFileSync(join(dir, `${name}.${c.extension}`), `${header.join("\n")}\n${c.unit}`);
+    written++;
+  }
+  writeFileSync(join(WORK, `${suiteName}.skipped.json`), JSON.stringify(skipped, null, 1));
+  console.log(`${suiteName}: ${written} case files for ${byTest.size - Object.keys(skipped).length} tests; ${Object.keys(skipped).length} recorded tests skipped`);
+}
+
+/* ---------------------------------------------------------------- */
+/* prove                                                             */
+/* ---------------------------------------------------------------- */
+
+function prove(suiteName) {
+  const run = runHarness(suiteName, { TT_CONVERSION: "prove" });
+  const proven = [];
+  const unproven = {};
+  for (const [name, outcome] of run.outcomes) {
+    if (outcome === "ok") proven.push(name);
+    else unproven[name] = run.failures.get(name) ?? outcome;
+  }
+  writeFileSync(join(WORK, `${suiteName}.proof.json`), JSON.stringify({ proven, unproven }, null, 1));
+  console.log(`${suiteName}: ${proven.length} proven, ${Object.keys(unproven).length} not proven`);
+}
+
+/* ---------------------------------------------------------------- */
+/* apply                                                             */
+/* ---------------------------------------------------------------- */
+
+function apply(suiteName, only) {
+  const suite = SUITES[suiteName];
+  const { proven } = JSON.parse(readFileSync(join(WORK, `${suiteName}.proof.json`), "utf8"));
+  const { tests } = JSON.parse(readFileSync(join(WORK, `${suiteName}.scan.json`), "utf8"));
+  const harnessToOrigin = new Map(
+    tests.map((t) => [t.module ? `${t.module}::${t.name}` : t.name, `${t.file}::${t.name}`]),
+  );
+  const recorded = new Set(readLog(suiteName).map((e) => e.test));
+  const skipped = JSON.parse(readFileSync(join(WORK, `${suiteName}.skipped.json`), "utf8"));
+  const provenOrigins = new Set(
+    proven
+      .map((n) => harnessToOrigin.get(n))
+      .filter((origin) => origin && recorded.has(origin) && !skipped[origin]),
+  );
+  const byFile = new Map();
+  for (const origin of provenOrigins) {
+    const [file, name] = origin.split("::");
+    if (only && file !== only) continue;
+    if (!byFile.has(file)) byFile.set(file, new Set());
+    byFile.get(file).add(name);
+  }
+  let deleted = 0;
+  const deletedOrigins = new Set();
+  for (const [file, names] of byFile) {
+    let text = readFileSync(join(ROOT, file), "utf8");
+    const doomed = items(text).filter((i) => i.test && names.has(i.name)).sort((a, b) => b.start - a.start);
+    for (const item of doomed) {
+      text = text.slice(0, item.start) + text.slice(item.end);
+      deleted++;
+      deletedOrigins.add(`${file}::${item.name}`);
+    }
+    text = text.replace(/\n{3,}/g, "\n\n").replace(/^\n+/, "");
+    writeFileSync(join(ROOT, file), text);
+  }
+  const dir = join(ROOT, suite.caseDir);
+  let removed = 0;
+  let pruned = 0;
+  const finalOrigins = new Set([...deletedOrigins, ...existingDeleted(suiteName)]);
+  for (const file of readdirSync(dir)) {
+    if (!/\.(tt|ttx)$/.test(file)) continue;
+    const path = join(dir, file);
+    const text = readFileSync(path, "utf8");
+    const lines = text.split("\n");
+    const origins = lines.filter((l) => l.startsWith("// @origin: "));
+    if (origins.length === 0) continue;
+    const kept = origins.filter((l) => finalOrigins.has(l.slice("// @origin: ".length)));
+    if (kept.length === 0) {
+      rmSync(path);
+      removed++;
+    } else if (kept.length !== origins.length) {
+      writeFileSync(path, lines.filter((l) => !l.startsWith("// @origin: ") || kept.includes(l)).join("\n"));
+      pruned++;
+    }
+  }
+  writeFileSync(join(WORK, `${suiteName}.deleted.json`), JSON.stringify([...finalOrigins].sort(), null, 1));
+  console.log(`${suiteName}: deleted ${deleted} Rust tests; removed ${removed} unneeded case files, pruned the origins of ${pruned}`);
+}
+
+function existingDeleted(suiteName) {
+  const path = join(WORK, `${suiteName}.deleted.json`);
+  return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : [];
+}
+
+function clean(suiteName) {
+  rmSync(harnessPath(suiteName), { force: true });
+}
+
+const [step, suiteName, flag, value] = process.argv.slice(2);
+if (!SUITES[suiteName]) {
+  console.error("usage: scripts/convert-inline-tests <scan|harness|record|generate|prove|apply|clean> <compile|integration> [--only <file>]");
+  process.exit(2);
+}
+const only = flag === "--only" ? value : undefined;
+({ scan, harness, record, generate, prove, apply: (s) => apply(s, only), clean })[step](suiteName);

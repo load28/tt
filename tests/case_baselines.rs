@@ -71,7 +71,7 @@ struct Oracle {
 
 const KINDS: [&str; 5] = ["ts", "errors.txt", "map.txt", "types", "stdout"];
 
-const PER_FILE: [&str; 4] = ["run", "twin", "expecterrors", "baselines"];
+const PER_FILE: [&str; 5] = ["run", "twin", "expecterrors", "baselines", "origin"];
 
 const MATRIX: &str = "tests/cases/conformance/matrix";
 
@@ -154,6 +154,7 @@ fn expand(name: &str, path: &Path, names: &mut BTreeSet<String>) -> Vec<Case> {
     let run = run_entry(&parsed.directives, &parsed.units, path);
     let oracle = oracle(&parsed.directives, &parsed.units, run.as_deref(), path);
     let kinds = baseline_kinds(&parsed.directives, path);
+    origins(&parsed.directives, path);
     let mut out = Vec::new();
     for (suffix, mut settings) in configurations(&parsed.directives, path) {
         settings.run = run.clone();
@@ -224,6 +225,22 @@ fn oracle(
     Oracle { twin, errors }
 }
 
+fn origins(directives: &[(String, String)], path: &Path) {
+    for (_, origin) in directives.iter().filter(|(name, _)| name == "origin") {
+        let well_formed = origin.split_once("::").is_some_and(|(file, test)| {
+            file.starts_with("tests/")
+                && file.ends_with(".rs")
+                && !test.is_empty()
+                && test.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        });
+        assert!(
+            well_formed,
+            "{}: @origin names the Rust test the case was converted from, as `tests/<file>.rs::<test>`, not `{origin}`",
+            path.display()
+        );
+    }
+}
+
 fn baseline_kinds(directives: &[(String, String)], path: &Path) -> BTreeSet<&'static str> {
     let Some(value) = single(directives, "baselines", path) else {
         return KINDS.into_iter().collect();
@@ -251,6 +268,8 @@ const OPTIONS: [(&str, &[&str]); 2] = [
 ];
 
 const MAX_VARIATIONS: usize = 25;
+
+const NO_FINAL_NEWLINE: &str = "\n\\ No newline at end of file\n";
 
 const RUN_TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -351,7 +370,7 @@ fn configurations(directives: &[(String, String)], path: &Path) -> Vec<(String, 
         }
         let Some((option, _)) = OPTIONS.iter().find(|(option, _)| option == name) else {
             panic!(
-                "{}: unknown directive `@{name}`; a case takes @filename, @run, @twin, @expectErrors, @baselines, and the ttc options @rewriteImports and @noVerify",
+                "{}: unknown directive `@{name}`; a case takes @filename, @run, @twin, @expectErrors, @baselines, @origin, and the ttc options @rewriteImports and @noVerify",
                 path.display()
             );
         };
@@ -423,9 +442,12 @@ enum Verdict {
 
 fn normalize(text: &str, dir: &Path) -> String {
     let dir = dir.to_string_lossy();
-    text.replace("\r\n", "\n")
-        .replace(dir.as_ref(), "$DIR")
-        .replace('\\', "/")
+    let text = text.replace(dir.as_ref(), "$DIR");
+    if cfg!(windows) {
+        text.replace("\r\n", "\n").replace('\\', "/")
+    } else {
+        text
+    }
 }
 
 fn line_col(text: &str, offset: usize) -> (usize, usize) {
@@ -613,7 +635,7 @@ fn run_typed(case: &Case, dir: &Path, project: &Path) -> Artifacts {
         }
         emit.push_str(&format!("\n//// [{relative}]\n{content}"));
         if !content.ends_with('\n') {
-            emit.push('\n');
+            emit.push_str(NO_FINAL_NEWLINE);
         }
     }
 

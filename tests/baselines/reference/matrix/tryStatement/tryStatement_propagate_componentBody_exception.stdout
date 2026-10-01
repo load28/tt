@@ -1,2 +1,2 @@
-componentBody(2) => {"kind":"Ok","value":"<p>/"checked/"</p>"} | risky 2; read 2
+componentBody(2) => {"kind":"Ok","value":"<p>\"checked\"</p>"} | risky 2; read 2
 componentBody(-1) => {"kind":"Err","error":"negative -1"} | risky -1; read -1

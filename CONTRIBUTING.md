@@ -182,6 +182,10 @@ Case files take metadata lines in the form `// @name: value`:
 - `// @baselines: <kind>, ...` keeps only the listed baselines (`ts`,
   `errors.txt`, `map.txt`, `types`, `stdout`; `stdout` includes `stderr`).
   The default is every kind.
+- `// @origin: tests/<file>.rs::<test>` names the inline Rust test the case
+  was converted from (see "Converting an inline test" below). It changes
+  nothing about how the case runs; a case converted from several tests
+  carries one line per test.
 
 A case with `@twin` or `@expectErrors` carries its own oracle. When the
 oracle disagrees, the case fails unless `tests/oracle-failures.txt` lists
@@ -196,7 +200,7 @@ its baselines as `tests/baselines/reference/<name>.<kind>`:
 
 | Baseline | Contents |
 | --- | --- |
-| `<name>.ts` | every unit, then every file `ttc --out-dir` wrote (support modules by name only) |
+| `<name>.ts` | every unit, then every file `ttc --out-dir` wrote (support modules by name only); a written file that does not end in a newline is followed by `\ No newline at end of file` |
 | `<name>.errors.txt` | what `ttc --out-dir` and `ttc --check-types` report, then what `tsc` reports on the emitted TypeScript; absent when all three succeed |
 | `<name>.map.txt` | the source-to-output mappings of the editor projection (`ttc::emit_mapped`) |
 | `<name>.types` | the engine's hover for each classified identifier, under its source line |
@@ -235,6 +239,44 @@ the pinned TypeScript (`npm ci`), and the runtime baselines a Node.js 22
 recent enough for `--permission` (22.13 or later). Without TypeScript they
 are skipped, `TTC_REQUIRE_TSGO=1` turns the skip into a failure, and
 `UPDATE_EXPECT=1` refuses to run.
+
+A baseline holds the text it pins byte for byte: only the case's temporary
+directory is replaced by `$DIR` (and, on Windows, `\r\n` and `\` by `\n` and
+`/`), so a line ending, an escape sequence, or a missing final newline in
+the output is part of what the case asserts.
+
+### Converting an inline test
+
+Most of the older tests are Rust functions in `tests/compile/*.rs` and
+`tests/integration/*.rs` that compile a string and assert on part of the
+answer. `scripts/convert-inline-tests` turns the ones whose observations a
+case pins into case files, and proves each conversion before the Rust test
+is removed:
+
+```sh
+scripts/convert-inline-tests scan compile        # or integration
+scripts/convert-inline-tests harness compile     # the bodies around recording helpers
+scripts/convert-inline-tests record compile      # every program a helper compiled
+scripts/convert-inline-tests generate compile    # one case per program, with @origin
+UPDATE_EXPECT=1 cargo test --test case_baselines # their baselines; read them
+scripts/convert-inline-tests prove compile       # the bodies against the baselines
+scripts/convert-inline-tests apply compile       # delete what was proven
+scripts/convert-inline-tests clean compile
+```
+
+The harness copies each test body verbatim around helpers of the same
+names: `ok`, `ok_tsx`, `err`, `advice`, and `codes` for the compile suite,
+`run`, `run_with_std`, `typecheck`, and `typecheck_with_std` for the
+integration suite. Recording, they call the library and log the program;
+proving, they answer from the case's baselines (the emitted file of the
+`.ts` baseline, the diagnostics and their `help:` lines of the
+`.errors.txt` baseline's `ttc --out-dir` section, its `tsc` section, the
+`.stdout` baseline). A test is removed only when every assertion of its
+body holds against those answers. A body that reaches anything else (the
+library directly, its own files or processes, a helper that does) does not
+build in the harness and stays in Rust, and so does a test whose
+observation a baseline does not hold, which the proof reports as a failed
+assertion.
 
 ### The case matrix
 
