@@ -128,6 +128,13 @@ TypeScript's emit.
   option, whatever the specifier.
 - **Resolution**: That configuration checks the specifier only.
 
+### Issue 2: The CLI test's case table tripped `clippy::type_complexity`
+
+- **Symptom**: The final gate's `cargo clippy --all-targets -- -D
+  warnings` rejected the table's type in `tests/cli.rs`.
+- **Cause**: The tuple type spelled the project files' `Vec` inline.
+- **Resolution**: A follow-up commit names it with a local `type` alias.
+
 ## Regression test (fails before the fix)
 
 - **Path**: `tests/cases/compiler/ttxImportNamesTheOutputTscWrites.tt`;

@@ -3207,7 +3207,8 @@ fn a_ttx_import_names_the_output_tsc_writes_under_the_projects_jsx_option() {
         return;
     }
     let base = r#""module": "nodenext", "target": "es2022", "strict": true, "rootDir": "out", "outDir": "js""#;
-    let cases: [(&str, Vec<(&str, String)>, &[&str], &str); 9] = [
+    type ProjectFiles = Vec<(&'static str, String)>;
+    let cases: [(&str, ProjectFiles, &[&str], &str); 9] = [
         (
             "preserve",
             vec![(
