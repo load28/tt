@@ -1,0 +1,2 @@
+compoundAssignment(3) => "start:***6" | initial "start:"; target {"total":"start:"}; await; double 6
+compoundAssignment(12) => "start:**24" | initial "start:"; target {"total":"start:"}; await; double 24

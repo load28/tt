@@ -1,3 +1,0 @@
-spreadElement({"kind":"Done","value":{"kind":"Some","value":7}}) => [0,7] | first 0; some 7
-spreadElement({"kind":"Done","value":{"kind":"None"}}) => [0,0] | first 0; none 0
-spreadElement({"kind":"Failed","error":"lost"}) => [0,"lost"] | first 0; failed "lost"

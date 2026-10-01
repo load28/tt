@@ -1,2 +1,0 @@
-getter(2.5) => "2.50" | positive 2.5
-getter(-3) => undefined | positive undefined

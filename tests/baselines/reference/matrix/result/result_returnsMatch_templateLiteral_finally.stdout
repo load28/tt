@@ -1,3 +1,0 @@
-templateLiteral(2) => "<L|[object Object]|R>" | left "L"; operand 2; read 2; right "R"; finally 0
-templateLiteral(7) => "<L|[object Object]|R>" | left "L"; operand 7; read 7; right "R"; finally 0
-templateLiteral(-1) => "<L|[object Object]|R>" | left "L"; operand -1; read -1; right "R"; finally 0

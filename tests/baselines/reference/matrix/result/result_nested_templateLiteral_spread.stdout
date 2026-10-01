@@ -1,2 +1,0 @@
-templateLiteral(2) => "<L|[object Object]|R>" | left "L"; read 2; inner {"kind":"Ok","value":3}; right "R"
-templateLiteral(-1) => "<L|[object Object]|R>" | left "L"; read -1; inner {"kind":"Err","error":"negative -1"}; right "R"

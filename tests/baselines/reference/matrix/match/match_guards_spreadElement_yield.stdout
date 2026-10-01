@@ -1,0 +1,5 @@
+spreadElement({"kind":"Circle","r":1}) => [0,1] | first 0; yield {"kind":"Circle","r":1}; guard big false; small 1
+spreadElement({"kind":"Circle","r":5}) => [0,5] | first 0; yield {"kind":"Circle","r":5}; guard big true; big 5
+spreadElement({"kind":"Rect","w":4,"h":2}) => [0,4] | first 0; yield {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4
+spreadElement({"kind":"Rect","w":1,"h":3}) => [0,3] | first 0; yield {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3
+spreadElement({"kind":"Point"}) => [0,0] | first 0; yield {"kind":"Point"}; point 0

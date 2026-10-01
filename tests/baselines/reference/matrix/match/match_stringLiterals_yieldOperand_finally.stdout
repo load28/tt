@@ -1,4 +1,0 @@
-yieldOperand("north") => 1 | operand "north"; n 1; yield 1; finally 0
-yieldOperand("south") => 2 | operand "south"; se 2; yield 2; finally 0
-yieldOperand("east") => 2 | operand "east"; se 2; yield 2; finally 0
-yieldOperand("up") => 0 | operand "up"; other 0; yield 0; finally 0

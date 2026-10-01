@@ -1,0 +1,4 @@
+arrowBody("north") => 1 | n 1
+arrowBody("south") => 0 | other 0
+arrowBody("east") => 2 | se 2
+arrowBody("up") => 0 | other 0

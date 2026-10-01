@@ -1,0 +1,316 @@
+=== main.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const log: string[] = [];
+>log : const log: string[]
+function read(n: number): R {
+>read : function read(n: number): R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  log.push("read");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return n > 0 ? { kind: "Ok", value: n } : { kind: "Err", error: "neg" };
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function nullish(o: { a?: number }, k: number): R {
+>nullish : function nullish(o: {
+>       a?: number;
+>   }, k: number): R
+>o : (parameter) o: {
+>       a?: number;
+>   }
+>a : (property) a?: number | undefined
+>k : (parameter) k: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  o.a ??= try read(k);
+>o : (parameter) o: {
+>       a?: number;
+>   }
+>a : (property) a?: number | undefined
+>read : function read(n: number): R
+>k : (parameter) k: number
+  return { kind: "Ok", value: o.a };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>o : (parameter) o: {
+>       a?: number;
+>   }
+>a : (property) a?: number
+const counted = {
+>counted : const counted: {
+>       stored: number | undefined;
+>       a: number | undefined;
+>   }
+  stored: undefined as number | undefined,
+>stored : (property) stored: number | undefined
+  get a(): number | undefined {
+>a : (accessor) a: number | undefined
+    log.push("get a");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+    return this.stored;
+>stored : (property) stored: number | undefined
+  set a(value: number | undefined) {
+>a : (accessor) a: number | undefined
+>value : (parameter) value: number | undefined
+    log.push("set a");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+    this.stored = value;
+>stored : (property) stored: number | undefined
+>value : (parameter) value: number | undefined
+function pick<T>(value: T): T {
+>pick : function pick<T>(value: T): T
+>T : (type parameter) T in pick<T>(value: T): T
+>value : (parameter) value: T
+>T : (type parameter) T in pick<T>(value: T): T
+>T : (type parameter) T in pick<T>(value: T): T
+  log.push("object");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return value;
+>value : (parameter) value: T
+function key(): string {
+>key : function key(): string
+  log.push("key");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+function getterOnce(k: number): R {
+>getterOnce : function getterOnce(k: number): R
+>k : (parameter) k: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  counted.a ??= try read(k);
+>counted : const counted: {
+>       stored: number | undefined;
+>       a: number | undefined;
+>   }
+>a : (accessor) a: number | undefined
+>read : function read(n: number): R
+>k : (parameter) k: number
+  return { kind: "Ok", value: counted.a };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>counted : const counted: {
+>       stored: number | undefined;
+>       a: number | undefined;
+>   }
+>a : (accessor) a: number
+function computedOnce(o: Record<string, number | undefined>, k: number): R {
+>computedOnce : function computedOnce(o: Record<string, number | undefined>, k: number): R
+>o : (parameter) o: Record<string, number | undefined>
+>Record : type Record<K extends string | number | symbol, T> = { [P in K]: T; }
+>k : (parameter) k: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  pick(o)[key()] ??= try read(k);
+>pick : function pick<Record<string, number | undefined>>(value: Record<string, number | undefined>): Record<string, number | undefined>
+>o : (parameter) o: Record<string, number | undefined>
+>key : function key(): string
+>read : function read(n: number): R
+>k : (parameter) k: number
+  return { kind: "Ok", value: o.a ?? -1 };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>o : (parameter) o: Record<string, number | undefined>
+function or(o: { b: boolean }): boolean {
+>or : function or(o: {
+>       b: boolean;
+>   }): boolean
+>o : (parameter) o: {
+>       b: boolean;
+>   }
+>b : (property) b: boolean
+  o.b ||= match (log.push("scrutinee") > 0) { true => true, false => false };
+>o : (parameter) o: {
+>       b: boolean;
+>   }
+>b : (property) b: boolean
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return o.b;
+>o : (parameter) o: {
+>       b: boolean;
+>   }
+>b : (property) b: boolean
+function and(o: { c: number }, k: number): R {
+>and : function and(o: {
+>       c: number;
+>   }, k: number): R
+>o : (parameter) o: {
+>       c: number;
+>   }
+>c : (property) c: number
+>k : (parameter) k: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  o.c &&= try read(k);
+>o : (parameter) o: {
+>       c: number;
+>   }
+>c : (property) c: number
+>read : function read(n: number): R
+>k : (parameter) k: number
+  return { kind: "Ok", value: o.c };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>o : (parameter) o: {
+>       c: number;
+>   }
+>c : (property) c: number
+console.log(JSON.stringify(nullish({ a: 1 }, -1)), log.splice(0).join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>nullish : function nullish(o: {
+>       a?: number;
+>   }, k: number): R
+>a : (property) a?: number | undefined
+>log : const log: string[]
+>splice : (method) Array<string>.splice(start: number, deleteCount?: number): string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(JSON.stringify(nullish({}, 2)), log.splice(0).join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>nullish : function nullish(o: {
+>       a?: number;
+>   }, k: number): R
+>log : const log: string[]
+>splice : (method) Array<string>.splice(start: number, deleteCount?: number): string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(or({ b: true }), log.splice(0).join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>or : function or(o: {
+>       b: boolean;
+>   }): boolean
+>b : (property) b: boolean
+>log : const log: string[]
+>splice : (method) Array<string>.splice(start: number, deleteCount?: number): string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(or({ b: false }), log.splice(0).join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>or : function or(o: {
+>       b: boolean;
+>   }): boolean
+>b : (property) b: boolean
+>log : const log: string[]
+>splice : (method) Array<string>.splice(start: number, deleteCount?: number): string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(JSON.stringify(and({ c: 0 }, -1)), log.splice(0).join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>and : function and(o: {
+>       c: number;
+>   }, k: number): R
+>c : (property) c: number
+>log : const log: string[]
+>splice : (method) Array<string>.splice(start: number, deleteCount?: number): string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(JSON.stringify(and({ c: 1 }, -1)), log.splice(0).join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>and : function and(o: {
+>       c: number;
+>   }, k: number): R
+>c : (property) c: number
+>log : const log: string[]
+>splice : (method) Array<string>.splice(start: number, deleteCount?: number): string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(JSON.stringify(getterOnce(-1)), log.splice(0).join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>getterOnce : function getterOnce(k: number): R
+>log : const log: string[]
+>splice : (method) Array<string>.splice(start: number, deleteCount?: number): string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(JSON.stringify(getterOnce(4)), log.splice(0).join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>getterOnce : function getterOnce(k: number): R
+>log : const log: string[]
+>splice : (method) Array<string>.splice(start: number, deleteCount?: number): string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(JSON.stringify(getterOnce(-1)), log.splice(0).join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>getterOnce : function getterOnce(k: number): R
+>log : const log: string[]
+>splice : (method) Array<string>.splice(start: number, deleteCount?: number): string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(JSON.stringify(computedOnce({}, 5)), log.splice(0).join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>computedOnce : function computedOnce(o: Record<string, number | undefined>, k: number): R
+>log : const log: string[]
+>splice : (method) Array<string>.splice(start: number, deleteCount?: number): string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(JSON.stringify(computedOnce({ a: 2 }, -5)), log.splice(0).join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>computedOnce : function computedOnce(o: Record<string, number | undefined>, k: number): R
+>a : (property) a: number
+>log : const log: string[]
+>splice : (method) Array<string>.splice(start: number, deleteCount?: number): string[]
+>join : (method) Array<string>.join(separator?: string): string
+

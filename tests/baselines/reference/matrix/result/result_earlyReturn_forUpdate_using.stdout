@@ -1,3 +1,0 @@
-forUpdate(3) => {"kind":"Ok","value":3} | open res; body 0; operand 3; read 3; big 3; dispose res
-forUpdate(1) => {"kind":"Ok","value":1} | open res; body 0; operand 1; read 1; small 1; dispose res
-forUpdate(-1) => {"kind":"Err","error":"negative -1"} | open res; body 0; operand -1; read -1; dispose res

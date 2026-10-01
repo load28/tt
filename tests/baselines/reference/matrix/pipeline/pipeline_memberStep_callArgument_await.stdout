@@ -1,2 +1,0 @@
-callArgument(2) => [1,6,3] | a 1; await; receiver {"factor":3}; twice 6; c 3
-callArgument(6) => [1,18,3] | a 1; await; receiver {"factor":3}; twice 18; c 3

@@ -1,0 +1,3 @@
+templateLiteral({"kind":"Done","value":{"kind":"Some","value":7}}) => "<L|7|R>" | left "L"; some 7; right "R"
+templateLiteral({"kind":"Done","value":{"kind":"None"}}) => threw Cannot read properties of undefined (reading 'kind') | left "L"
+templateLiteral({"kind":"Failed","error":"lost"}) => "<L|lost|R>" | left "L"; failed "lost"; right "R"

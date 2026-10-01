@@ -1,0 +1,2 @@
+doWhileTest(2) => 2 | operand 2; receiver {"factor":3}; twice 6; finally 0
+doWhileTest(6) => 2 | operand 6; receiver {"factor":3}; twice 18; finally 0

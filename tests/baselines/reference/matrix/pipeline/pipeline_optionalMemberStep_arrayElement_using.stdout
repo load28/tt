@@ -1,3 +1,0 @@
-arrayElement(3) => [0,9,2] | open res; first 0; operand 3; flip true; maybe true; twice 9; last 2; dispose res
-arrayElement(4) => [0,null,2] | open res; first 0; operand 4; flip false; maybe false; last 2; dispose res
-arrayElement(5) => [0,15,2] | open res; first 0; operand 5; flip true; maybe true; twice 15; last 2; dispose res

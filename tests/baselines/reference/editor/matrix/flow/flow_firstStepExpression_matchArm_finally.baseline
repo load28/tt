@@ -1,0 +1,13 @@
+differences from flow_firstStepExpression_matchArm_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call2*/ main.tt:5:78 ===
+  |     return match (flip()) { true => flow |> adder(note("operand", input)) |> String, false => note("other arm", 0) };
+  |                                                                              ^ /*call2*/
+  tt only: var String: StringConstructor
+  ts only: var String: (value?: any) => string
+
+=== definition /*call2*/ main.tt:5:78 ===
+  |     return match (flip()) { true => flow |> adder(note("operand", input)) |> String, false => note("other arm", 0) };
+  |                                                                              ^ /*call2*/
+  ts only: <external>/lib.es5.d.ts 534:5-534:27
+

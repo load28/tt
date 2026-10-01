@@ -1,4 +1,0 @@
-callArgument({}) => [1,"range",3] | a 1; range "range"; c 3
-callArgument({}) => [1,1,3] | a 1; type 1; c 3
-callArgument({}) => [1,"plain",3] | a 1; error "plain"; c 3
-callArgument("text") => [1,null,3] | a 1; other null; c 3

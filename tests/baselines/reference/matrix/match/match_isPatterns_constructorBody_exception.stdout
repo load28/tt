@@ -1,4 +1,0 @@
-constructorBody({}) => "range" | risky {}; range "range"
-constructorBody({}) => 1 | risky {}; type 1
-constructorBody({}) => "risky call 3" | caught "risky call 3"
-constructorBody("text") => null | risky "text"; other null

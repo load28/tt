@@ -1,2 +1,0 @@
-method(6) => 12 | this "holder"; operand 6; keep 6; double 12; finally 0
-method(-2) => -4 | this "holder"; operand -2; keep -2; double -4; finally 0

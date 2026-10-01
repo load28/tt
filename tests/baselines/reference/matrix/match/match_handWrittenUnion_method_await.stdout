@@ -1,0 +1,2 @@
+method({"kind":"Click","x":3}) => 3 | this "holder"; await; click 3
+method({"kind":"Key","key":"k"}) => "k" | this "holder"; await; key "k"

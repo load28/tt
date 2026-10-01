@@ -1,3 +1,0 @@
-whileTest(4) => 1 | flip true; maybe true
-whileTest(6) => 1 | flip false; maybe false
-whileTest(8) => 1 | flip true; maybe true

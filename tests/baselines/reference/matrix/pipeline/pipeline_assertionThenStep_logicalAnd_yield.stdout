@@ -1,0 +1,2 @@
+logicalAnd(123) => 3 | flip true; yield 123
+logicalAnd(4) => false | flip false

@@ -1,2 +1,0 @@
-method(1.5) => {"kind":"Ok","value":"1.50"} | this "holder"; risky 1.5; read 1.5
-method(-1) => {"kind":"Err","error":"negative -1"} | this "holder"; risky -1; read -1

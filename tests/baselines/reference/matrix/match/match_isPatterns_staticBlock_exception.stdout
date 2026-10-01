@@ -1,0 +1,4 @@
+staticBlock({}) => "range" | risky {}; range "range"
+staticBlock({}) => 1 | risky {}; type 1
+staticBlock({}) => "risky call 3" | caught "risky call 3"
+staticBlock("text") => null | risky "text"; other null

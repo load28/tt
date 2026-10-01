@@ -1,3 +1,0 @@
-forInitializer(4) => [null] | open res; operand 4; flip true; maybe true; dispose res
-forInitializer(6) => [null] | open res; operand 6; flip false; maybe false; dispose res
-forInitializer(8) => [null] | open res; operand 8; flip true; maybe true; dispose res

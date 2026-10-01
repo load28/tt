@@ -1,2 +1,0 @@
-throwOperand(8) => threw 9 | operand 8; arrow 9; finally 0
-throwOperand(9) => threw 10 | operand 9; arrow 10; finally 0

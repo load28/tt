@@ -1,0 +1,2 @@
+nullishAssignment(3) => "***6" | flip true; target {"value":null}; risky 3; double 6
+nullishAssignment(12) => "kept" | flip false; target {"value":"kept"}

@@ -1,2 +1,0 @@
-yieldOperand(2.5) => "2.50" | operand 2.5; positive 2.5; yield "2.50"; finally 0
-yieldOperand(-3) => undefined | operand -3; positive undefined; yield undefined; finally 0

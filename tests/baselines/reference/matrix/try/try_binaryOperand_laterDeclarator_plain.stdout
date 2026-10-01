@@ -1,2 +1,0 @@
-laterDeclarator(3) => {"kind":"Ok","value":[1,30]} | before 1; operand 3; read 3
-laterDeclarator(-2) => {"kind":"Err","error":"negative -2"} | before 1; operand -2; read -2

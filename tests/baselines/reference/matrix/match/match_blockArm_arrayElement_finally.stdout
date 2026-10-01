@@ -1,3 +1,0 @@
-arrayElement({"kind":"Circle","r":2}) => [0,0,2] | first 0; operand {"kind":"Circle","r":2}; other 0; last 2; finally 0
-arrayElement({"kind":"Rect","w":3,"h":4}) => [0,12,2] | first 0; operand {"kind":"Rect","w":3,"h":4}; area 12; large 12; last 2; finally 0
-arrayElement({"kind":"Point"}) => [0,0,2] | first 0; operand {"kind":"Point"}; other 0; last 2; finally 0

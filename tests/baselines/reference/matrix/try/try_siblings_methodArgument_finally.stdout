@@ -1,0 +1,2 @@
+methodArgument(4) => {"kind":"Ok","value":["receiver",1,9]} | receiver {"tag":"receiver"}; a 1; operand 4; read 4; second 5; read 5; finally 0
+methodArgument(-4) => {"kind":"Err","error":"negative -4"} | receiver {"tag":"receiver"}; a 1; operand -4; read -4; finally 0

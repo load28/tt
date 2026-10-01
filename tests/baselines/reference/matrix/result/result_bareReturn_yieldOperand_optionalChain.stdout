@@ -1,0 +1,2 @@
+yieldOperand(2) => {"kind":"Ok"} | read 2; yield {"kind":"Ok"}
+yieldOperand(-1) => {"kind":"Err","error":"negative undefined"} | read undefined; yield {"kind":"Err","error":"negative undefined"}

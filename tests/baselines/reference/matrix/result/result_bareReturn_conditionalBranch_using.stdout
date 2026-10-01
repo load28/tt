@@ -1,2 +1,0 @@
-conditionalBranch(2) => {"kind":"Ok"} | open res; flip true; operand 2; read 2; dispose res
-conditionalBranch(-1) => "skipped" | open res; flip false; else "skipped"; dispose res

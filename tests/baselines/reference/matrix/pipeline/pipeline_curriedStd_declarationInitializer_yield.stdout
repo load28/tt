@@ -1,0 +1,2 @@
+declarationInitializer(5) => 15 | yield 5; map 15
+declarationInitializer(0) => -1 | yield 0

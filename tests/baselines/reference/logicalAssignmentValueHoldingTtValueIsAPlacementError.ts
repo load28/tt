@@ -1,0 +1,23 @@
+//// [logicalAssignmentValueHoldingTtValueIsAPlacementError.tt] ////
+// A logical assignment whose own value is used (`const x = (u ??= try r())`,
+// `f(o.b ||= match ...)`) cannot hold a `try` or a `match` in its right
+// operand: the operand runs only when the target's value does not decide the
+// result (ECMA-262 §13.15.2), and no statement form reads the target once,
+// skips the operand, and keeps TypeScript's narrowing of the target. The
+// placement is reported (the operand was evaluated unconditionally); written
+// as a statement of its own, the same assignment lowers.
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+declare function read(n: number): R;
+declare function use(value: unknown): void;
+export function consumedTry(u: number | undefined, k: number): R {
+  const x = (u ??= try read(k));
+  return { kind: "Ok", value: x };
+}
+export function consumedMatch(o: { b: boolean }, k: number): boolean {
+  use(o.b ||= match (k) { 1 => true, _ => false });
+  return o.b;
+}
+export function returnedTry(o: { c: number }, k: number): R {
+  return { kind: "Ok", value: (o.c &&= try read(k)) };
+}
+

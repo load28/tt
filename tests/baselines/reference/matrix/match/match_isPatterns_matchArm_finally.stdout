@@ -1,0 +1,4 @@
+matchArm({}) => "range" | flip true; operand {}; range "range"; finally 0
+matchArm({}) => 0 | flip false; other arm 0; finally 0
+matchArm({}) => "plain" | flip true; operand {}; error "plain"; finally 0
+matchArm("text") => 0 | flip false; other arm 0; finally 0

@@ -1,2 +1,0 @@
-forOfHead(1.5) => [null] | operand 1.5; finally 0
-forOfHead(2) => [null] | operand 2; finally 0

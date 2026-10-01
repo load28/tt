@@ -1,5 +1,0 @@
-differences from flow_postfixLater_awaitOperand_finally at the questions listed in tests/editor-matrix-differences.txt
-
-=== diagnostics main.tt ===
-  ts only: main "await (((head: (n: number) => number) => (v: number) => head(v).toFixed(1))(adder(note(\"operand\", input))))" hint TS80007: 'await' has no effect on the type of this expression.
-

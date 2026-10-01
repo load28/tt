@@ -1,0 +1,4 @@
+throwOperand({"kind":"Num","value":4}) => threw 4 | await; number 4
+throwOperand({"kind":"Neg","value":-3}) => threw -3 | await; number -3
+throwOperand({"kind":"Word","text":"hi"}) => threw "hi" | await; word "hi"
+throwOperand({"kind":"End"}) => threw "" | await; end ""

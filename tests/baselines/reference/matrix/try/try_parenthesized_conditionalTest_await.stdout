@@ -1,2 +1,0 @@
-conditionalTest(6) => {"kind":"Ok","value":"truthy"} | flip true; await; read 6; then "truthy"
-conditionalTest(-6) => {"kind":"Err","error":"negative -9"} | flip false; fallback -9; read -9

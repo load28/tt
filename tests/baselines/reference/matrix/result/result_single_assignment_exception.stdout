@@ -1,0 +1,2 @@
+assignment(2) => {"kind":"Ok","value":20} | initial 0; target {"value":0}; risky 2; read 2
+assignment(-1) => {"kind":"Err","error":"negative -1"} | initial 0; target {"value":0}; risky -1; read -1

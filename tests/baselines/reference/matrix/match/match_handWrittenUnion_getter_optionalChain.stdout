@@ -1,0 +1,2 @@
+getter({"kind":"Click","x":3}) => 3 | click 3
+getter({"kind":"Key","key":"k"}) => threw Cannot read properties of undefined (reading 'kind') | 

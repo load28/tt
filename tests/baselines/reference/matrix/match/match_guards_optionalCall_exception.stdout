@@ -1,5 +1,0 @@
-optionalCall({"kind":"Circle","r":1}) => [[1],null] | callee true; risky {"kind":"Circle","r":1}; guard big false; small 1; callee false
-optionalCall({"kind":"Circle","r":5}) => [[5],null] | callee true; risky {"kind":"Circle","r":5}; guard big true; big 5; callee false
-optionalCall({"kind":"Rect","w":4,"h":2}) => "risky call 3" | callee true; caught "risky call 3"
-optionalCall({"kind":"Rect","w":1,"h":3}) => [[3],null] | callee true; risky {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3; callee false
-optionalCall({"kind":"Point"}) => [[0],null] | callee true; risky {"kind":"Point"}; point 0; callee false

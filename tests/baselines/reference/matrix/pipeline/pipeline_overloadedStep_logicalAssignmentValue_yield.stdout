@@ -1,0 +1,2 @@
+logicalAssignmentValue(4) => [2,2] | flip true; yield 4; shape "#4"
+logicalAssignmentValue(12) => ["kept","kept"] | flip false

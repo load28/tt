@@ -1,0 +1,2 @@
+conditionalTest(3) => {"kind":"Ok","value":"truthy"} | operand 3; read 3; then "truthy"
+conditionalTest(-2) => {"kind":"Err","error":"negative -2"} | operand -2; read -2

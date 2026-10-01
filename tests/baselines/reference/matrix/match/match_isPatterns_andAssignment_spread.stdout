@@ -1,0 +1,4 @@
+andAssignment({}) => 0 | flip true; target {"value":0}
+andAssignment({}) => 1 | flip false; target {"value":"kept"}; type 1
+andAssignment({}) => 0 | flip true; target {"value":0}
+andAssignment("text") => null | flip false; target {"value":"kept"}; other null

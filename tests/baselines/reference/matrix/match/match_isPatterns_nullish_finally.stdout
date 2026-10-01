@@ -1,4 +1,0 @@
-nullish({}) => "range" | flip true; operand {}; range "range"; finally 0
-nullish({}) => "set" | flip false; left "set"; finally 0
-nullish({}) => "plain" | flip true; operand {}; error "plain"; finally 0
-nullish("text") => "set" | flip false; left "set"; finally 0

@@ -1,2 +1,0 @@
-getter(2) => 12 | operand 2; receiver {"factor":3}; add 4; twice 12
-getter(3) => 18 | operand 3; receiver {"factor":3}; add 6; twice 18

@@ -1,3 +1,0 @@
-constructorBody(5) => {"kind":"Ok","value":[5,2]} | open res; operand 5; read 5; b 2; read 2; dispose res
-constructorBody(1) => {"kind":"Err","error":"negative -2"} | open res; operand 1; read 1; b -2; read -2; dispose res
-constructorBody(-2) => {"kind":"Err","error":"negative -2"} | open res; operand -2; read -2; dispose res

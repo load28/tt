@@ -1,2 +1,0 @@
-forTest(6) => 1 | keep 6; double 12
-forTest(-2) => 1 | keep -2; double -4

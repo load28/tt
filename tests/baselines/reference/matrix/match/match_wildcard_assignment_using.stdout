@@ -1,0 +1,4 @@
+assignment({"kind":"Num","value":4}) => -1 | open res; initial 0; target {"value":0}; operand {"kind":"Num","value":4}; other -1; dispose res
+assignment({"kind":"Neg","value":-3}) => -1 | open res; initial 0; target {"value":0}; operand {"kind":"Neg","value":-3}; other -1; dispose res
+assignment({"kind":"Word","text":"hi"}) => 2 | open res; initial 0; target {"value":0}; operand {"kind":"Word","text":"hi"}; word 2; dispose res
+assignment({"kind":"End"}) => -1 | open res; initial 0; target {"value":0}; operand {"kind":"End"}; other -1; dispose res

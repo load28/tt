@@ -1,0 +1,4 @@
+assignment("north") => 1 | initial 0; target {"value":0}; operand "north"; n 1
+assignment("south") => 2 | initial 0; target {"value":0}; operand "south"; se 2
+assignment("east") => 2 | initial 0; target {"value":0}; operand "east"; se 2
+assignment("up") => 0 | initial 0; target {"value":0}; operand "up"; other 0

@@ -1,0 +1,2 @@
+throwOperand(6) => threw 12 | open res; operand 6; keep 6; double 12; dispose res
+throwOperand(-2) => threw -4 | open res; operand -2; keep -2; double -4; dispose res

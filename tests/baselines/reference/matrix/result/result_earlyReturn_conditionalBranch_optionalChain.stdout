@@ -1,3 +1,0 @@
-conditionalBranch(3) => {"kind":"Ok","value":3} | flip true; read 3; big 3
-conditionalBranch(1) => "skipped" | flip false; else "skipped"
-conditionalBranch(-1) => {"kind":"Err","error":"negative undefined"} | flip true; read undefined

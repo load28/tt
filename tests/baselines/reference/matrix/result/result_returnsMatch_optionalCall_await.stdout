@@ -1,3 +1,0 @@
-optionalCall(2) => [[{"kind":"Ok","value":"two"}],null] | callee true; await; read 2; callee false
-optionalCall(7) => [[{"kind":"Ok","value":"other"}],null] | callee true; await; read 7; callee false
-optionalCall(-1) => [[{"kind":"Err","error":"negative -1"}],null] | callee true; await; read -1; callee false

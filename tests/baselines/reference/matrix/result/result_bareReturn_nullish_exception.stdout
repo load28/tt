@@ -1,2 +1,0 @@
-nullish(2) => {"kind":"Ok"} | flip true; risky 2; read 2
-nullish(-1) => "set" | flip false; left "set"

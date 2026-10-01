@@ -1,3 +1,0 @@
-arrayElement(1) => {"kind":"Ok","value":[0,10,2]} | open res; first 0; operand 1; one 10; read 10; last 2; dispose res
-arrayElement(2) => {"kind":"Err","error":"negative -10"} | open res; first 0; operand 2; other -10; read -10; dispose res
-arrayElement(-3) => {"kind":"Err","error":"negative -10"} | open res; first 0; operand -3; other -10; read -10; dispose res

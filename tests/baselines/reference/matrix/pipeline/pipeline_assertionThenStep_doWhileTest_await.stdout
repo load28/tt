@@ -1,2 +1,0 @@
-doWhileTest(123) => 2 | await
-doWhileTest(4) => 2 | await

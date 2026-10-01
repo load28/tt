@@ -1,2 +1,0 @@
-methodArgument(4) => ["receiver",1,2] | receiver {"tag":"receiver"}; a 1; risky 4; shape "#4"
-methodArgument(12) => ["receiver",1,3] | receiver {"tag":"receiver"}; a 1; risky 12; shape "#12"

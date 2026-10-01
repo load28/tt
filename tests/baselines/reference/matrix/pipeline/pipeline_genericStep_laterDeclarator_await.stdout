@@ -1,2 +1,0 @@
-laterDeclarator(6) => [1,12] | before 1; await; keep 6; double 12
-laterDeclarator(-2) => [1,-4] | before 1; await; keep -2; double -4

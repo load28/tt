@@ -1,4 +1,0 @@
-forTest({"kind":"Num","value":4}) => 1 | operand {"kind":"Num","value":4}; other -1; finally 0
-forTest({"kind":"Neg","value":-3}) => 1 | operand {"kind":"Neg","value":-3}; other -1; finally 0
-forTest({"kind":"Word","text":"hi"}) => 1 | operand {"kind":"Word","text":"hi"}; word 2; finally 0
-forTest({"kind":"End"}) => 1 | operand {"kind":"End"}; other -1; finally 0

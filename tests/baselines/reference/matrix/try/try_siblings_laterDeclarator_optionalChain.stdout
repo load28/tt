@@ -1,0 +1,2 @@
+laterDeclarator(4) => {"kind":"Ok","value":[1,9]} | before 1; read 4; second 5; read 5
+laterDeclarator(-4) => {"kind":"Err","error":"negative undefined"} | before 1; read undefined

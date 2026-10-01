@@ -1,3 +1,0 @@
-whileTest(5) => 1 | operand 5; read 5; b 2; read 2
-whileTest(1) => 1 | operand 1; read 1; b -2; read -2
-whileTest(-2) => 1 | operand -2; read -2

@@ -1,3 +1,0 @@
-nullish({"kind":"Circle","r":2}) => 2 | open res; flip true; operand {"kind":"Circle","r":2}; circle 2; dispose res
-nullish({"kind":"Rect","w":3,"h":4}) => "set" | open res; flip false; left "set"; dispose res
-nullish({"kind":"Point"}) => null | open res; flip true; operand {"kind":"Point"}; point null; dispose res

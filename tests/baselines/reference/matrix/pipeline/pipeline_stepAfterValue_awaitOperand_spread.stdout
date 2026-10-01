@@ -1,0 +1,2 @@
+awaitOperand(4) => 7 | step 3; add 7
+awaitOperand(-1) => 2 | step 3; add 2

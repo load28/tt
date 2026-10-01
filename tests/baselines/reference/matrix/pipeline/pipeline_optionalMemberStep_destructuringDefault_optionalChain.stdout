@@ -1,0 +1,3 @@
+destructuringDefault(3) => 9 | source {}; flip true; maybe true; twice 9
+destructuringDefault(4) => undefined | source {}; flip false; maybe false
+destructuringDefault(5) => 15 | source {}; flip true; maybe true; twice 15

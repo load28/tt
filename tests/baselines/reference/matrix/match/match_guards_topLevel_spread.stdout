@@ -1,5 +1,0 @@
-topLevel({"kind":"Circle","r":1}) => 1 | guard big false; small 1
-topLevel({"kind":"Circle","r":5}) => 5 | guard big true; big 5
-topLevel({"kind":"Rect","w":4,"h":2}) => 4 | guard wide true; wide 4
-topLevel({"kind":"Rect","w":1,"h":3}) => 3 | guard wide false; tall 3
-topLevel({"kind":"Point"}) => 0 | point 0

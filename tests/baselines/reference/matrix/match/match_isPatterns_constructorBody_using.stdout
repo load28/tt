@@ -1,0 +1,4 @@
+constructorBody({}) => "range" | open res; operand {}; range "range"; dispose res
+constructorBody({}) => 1 | open res; operand {}; type 1; dispose res
+constructorBody({}) => "plain" | open res; operand {}; error "plain"; dispose res
+constructorBody("text") => null | open res; operand "text"; other null; dispose res

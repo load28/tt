@@ -1,0 +1,2 @@
+switchDiscriminant(1.25) => "default" | await; case 0
+switchDiscriminant(7) => "default" | await; case 0

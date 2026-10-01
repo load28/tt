@@ -1,0 +1,2 @@
+loopBody(2) => [null,null] | receiver {"factor":3}; receiver {"factor":3}
+loopBody(3) => [null,null] | receiver {"factor":3}; receiver {"factor":3}

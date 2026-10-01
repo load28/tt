@@ -1,2 +1,0 @@
-switchCaseTest(1.5) => "default" | discriminant 0
-switchCaseTest(2) => "default" | discriminant 0

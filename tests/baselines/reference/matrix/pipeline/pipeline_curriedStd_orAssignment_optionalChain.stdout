@@ -1,0 +1,2 @@
+orAssignment(5) => 15 | flip true; target {"value":0}; map 15
+orAssignment(0) => "kept" | flip false; target {"value":"kept"}

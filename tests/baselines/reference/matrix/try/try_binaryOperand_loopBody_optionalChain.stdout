@@ -1,0 +1,2 @@
+loopBody(3) => {"kind":"Err","error":"negative undefined"} | read 3; read undefined
+loopBody(-2) => {"kind":"Err","error":"negative -2"} | read -2

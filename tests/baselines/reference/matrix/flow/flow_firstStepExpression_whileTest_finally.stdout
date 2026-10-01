@@ -1,2 +1,0 @@
-whileTest(3) => 1 | operand 3; finally 0
-whileTest(-4) => 1 | operand -4; finally 0

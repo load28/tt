@@ -1,3 +1,0 @@
-switchDiscriminant({"kind":"Circle","r":2}) => "default" | operand {"kind":"Circle","r":2}; second {"kind":"Fast"}; fast circle 2; case 0; finally 0
-switchDiscriminant({"kind":"Rect","w":3,"h":4}) => "default" | operand {"kind":"Rect","w":3,"h":4}; second {"kind":"Fast"}; rect 3; case 0; finally 0
-switchDiscriminant({"kind":"Point"}) => "default" | operand {"kind":"Point"}; second {"kind":"Fast"}; rest -1; case 0; finally 0

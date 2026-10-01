@@ -1,2 +1,0 @@
-throwOperand(1.25) => threw "1.3" | await
-throwOperand(7) => threw "7.0" | await

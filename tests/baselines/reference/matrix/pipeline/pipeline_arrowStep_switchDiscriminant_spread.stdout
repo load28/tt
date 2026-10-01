@@ -1,2 +1,0 @@
-switchDiscriminant(8) => "default" | arrow 9; case 0
-switchDiscriminant(9) => "default" | arrow 10; case 0

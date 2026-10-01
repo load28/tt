@@ -1,4 +1,0 @@
-arrowBody("north") => 1 | risky "north"; n 1
-arrowBody("south") => 2 | risky "south"; se 2
-arrowBody("east") => "risky call 3" | caught "risky call 3"
-arrowBody("up") => 0 | risky "up"; other 0

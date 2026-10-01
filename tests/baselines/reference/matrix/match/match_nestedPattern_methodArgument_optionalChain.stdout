@@ -1,3 +1,0 @@
-methodArgument({"kind":"Done","value":{"kind":"Some","value":7}}) => ["receiver",1,7] | receiver {"tag":"receiver"}; a 1; some 7
-methodArgument({"kind":"Done","value":{"kind":"None"}}) => threw Cannot read properties of undefined (reading 'kind') | receiver {"tag":"receiver"}; a 1
-methodArgument({"kind":"Failed","error":"lost"}) => ["receiver",1,"lost"] | receiver {"tag":"receiver"}; a 1; failed "lost"

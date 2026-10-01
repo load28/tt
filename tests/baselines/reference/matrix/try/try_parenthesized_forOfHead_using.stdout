@@ -1,2 +1,0 @@
-forOfHead(6) => {"kind":"Ok","value":[6]} | open res; flip true; operand 6; read 6; dispose res
-forOfHead(-6) => {"kind":"Err","error":"negative -9"} | open res; flip false; fallback -9; read -9; dispose res

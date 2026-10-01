@@ -1,0 +1,4 @@
+staticBlock({"kind":"Num","value":4}) => 4 | number 4
+staticBlock({"kind":"Neg","value":-3}) => threw Cannot read properties of undefined (reading 'kind') | 
+staticBlock({"kind":"Word","text":"hi"}) => "hi" | word "hi"
+staticBlock({"kind":"End"}) => threw Cannot read properties of undefined (reading 'kind') | 

@@ -1,2 +1,0 @@
-spreadElement(3) => [0,null] | first 0; operand 3; finally 0
-spreadElement(-4) => [0,null] | first 0; operand -4; finally 0

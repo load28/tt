@@ -1,0 +1,2 @@
+forTest(3) => 1 | await; double 6
+forTest(12) => 1 | await; double 24

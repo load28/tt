@@ -1,2 +1,0 @@
-forUpdate(2) => "#4" | body 0; operand 2; finally 0; add 4; shape "#4"
-forUpdate(5) => "#10" | body 0; operand 5; finally 0; add 10; shape "#10"

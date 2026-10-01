@@ -1,0 +1,3 @@
+logicalAnd(1) => {"kind":"Ok","value":10} | open res; flip true; operand 1; one 10; read 10; dispose res
+logicalAnd(2) => {"kind":"Ok","value":false} | open res; flip false; dispose res
+logicalAnd(-3) => {"kind":"Err","error":"negative -10"} | open res; flip true; operand -3; other -10; read -10; dispose res

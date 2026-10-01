@@ -1,3 +1,0 @@
-logicalOr(1) => {"kind":"Ok","value":true} | flip true
-logicalOr(2) => {"kind":"Err","error":"negative -10"} | flip false; await; other -10; read -10
-logicalOr(-3) => {"kind":"Ok","value":true} | flip true

@@ -1,0 +1,31 @@
+//// [main.tt] 29 mapping(s)
+1:1 -> 19:1 len 291  "export {};\ntype R = { kind: \"Ok\"; value: number "...
+9:3 -> 27:7 len 3  "o.a"
+9:3 -> 34:5 len 3  "o.a"
+9:15 -> 29:20 len 7  "read(k)"
+9:22 -> 37:3 len 449  ";\n  return { kind: \"Ok\", value: o.a };\n}\nconst c"...
+32:3 -> 60:7 len 9  "counted.a"
+32:3 -> 67:5 len 9  "counted.a"
+32:21 -> 62:20 len 7  "read(k)"
+32:28 -> 70:3 len 126  ";\n  return { kind: \"Ok\", value: counted.a };\n}\nf"...
+36:3 -> 74:19 len 7  "pick(o)"
+36:10 -> 76:13 len 1  "["
+36:10 -> 83:11 len 1  "["
+36:11 -> 75:19 len 5  "key()"
+36:16 -> 76:20 len 1  "]"
+36:16 -> 83:18 len 1  "]"
+36:26 -> 78:20 len 7  "read(k)"
+36:33 -> 86:3 len 91  ";\n  return { kind: \"Ok\", value: o.a ?? -1 };\n}\nf"...
+40:3 -> 90:8 len 3  "o.b"
+40:3 -> 108:5 len 3  "o.b"
+40:18 -> 93:21 len 25  "log.push(\"scrutinee\") > 0"
+40:47 -> 95:14 len 4  "true"
+40:55 -> 96:21 len 4  "true"
+40:61 -> 99:14 len 5  "false"
+40:70 -> 100:21 len 5  "false"
+40:77 -> 111:3 len 67  ";\n  return o.b;\n}\nfunction and(o: { c: number },"...
+44:3 -> 115:7 len 3  "o.c"
+44:3 -> 122:5 len 3  "o.c"
+44:15 -> 117:20 len 7  "read(k)"
+44:22 -> 125:3 len 777  ";\n  return { kind: \"Ok\", value: o.c };\n}\nconsole"...
+

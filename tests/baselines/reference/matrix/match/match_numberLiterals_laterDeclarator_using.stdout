@@ -1,5 +1,0 @@
-laterDeclarator(200) => [1,true] | open res; before 1; operand 200; success true; dispose res
-laterDeclarator(201) => [1,true] | open res; before 1; operand 201; success true; dispose res
-laterDeclarator(404) => [1,false] | open res; before 1; operand 404; missing false; dispose res
-laterDeclarator(500) => [1,false] | open res; before 1; operand 500; guard true; server false; dispose res
-laterDeclarator(7) => [1,null] | open res; before 1; operand 7; other null; dispose res

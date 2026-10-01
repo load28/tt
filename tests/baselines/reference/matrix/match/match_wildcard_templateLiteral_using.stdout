@@ -1,0 +1,4 @@
+templateLiteral({"kind":"Num","value":4}) => "<L|-1|R>" | open res; left "L"; operand {"kind":"Num","value":4}; other -1; right "R"; dispose res
+templateLiteral({"kind":"Neg","value":-3}) => "<L|-1|R>" | open res; left "L"; operand {"kind":"Neg","value":-3}; other -1; right "R"; dispose res
+templateLiteral({"kind":"Word","text":"hi"}) => "<L|2|R>" | open res; left "L"; operand {"kind":"Word","text":"hi"}; word 2; right "R"; dispose res
+templateLiteral({"kind":"End"}) => "<L|-1|R>" | open res; left "L"; operand {"kind":"End"}; other -1; right "R"; dispose res

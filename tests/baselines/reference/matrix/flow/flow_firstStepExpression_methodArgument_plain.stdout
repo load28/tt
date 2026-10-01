@@ -1,0 +1,2 @@
+methodArgument(3) => ["receiver",1,null] | receiver {"tag":"receiver"}; a 1; operand 3
+methodArgument(-4) => ["receiver",1,null] | receiver {"tag":"receiver"}; a 1; operand -4

@@ -1,0 +1,2 @@
+forOfHead(5) => [15] | map 15
+forOfHead(0) => [-1] | 

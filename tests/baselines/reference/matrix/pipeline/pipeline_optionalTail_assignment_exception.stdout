@@ -1,2 +1,0 @@
-assignment(2.5) => "2.50" | initial 0; target {"value":0}; risky 2.5; positive 2.5
-assignment(-3) => undefined | initial 0; target {"value":0}; risky -3; positive undefined

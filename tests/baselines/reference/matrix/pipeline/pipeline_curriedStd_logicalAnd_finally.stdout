@@ -1,0 +1,2 @@
+logicalAnd(5) => 15 | flip true; operand 5; map 15; finally 0
+logicalAnd(0) => false | flip false; finally 0

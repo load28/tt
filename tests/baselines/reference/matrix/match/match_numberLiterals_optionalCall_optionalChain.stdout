@@ -1,5 +1,0 @@
-optionalCall(200) => [[true],null] | callee true; success true; callee false
-optionalCall(201) => [[null],null] | callee true; other null; callee false
-optionalCall(404) => [[false],null] | callee true; missing false; callee false
-optionalCall(500) => [[null],null] | callee true; other null; callee false
-optionalCall(7) => [[null],null] | callee true; other null; callee false

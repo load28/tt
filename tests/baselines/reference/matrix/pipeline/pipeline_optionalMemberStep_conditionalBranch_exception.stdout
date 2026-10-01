@@ -1,0 +1,3 @@
+conditionalBranch(3) => undefined | flip true; risky 3; flip false; maybe false
+conditionalBranch(4) => undefined | flip true; risky 4; flip false; maybe false
+conditionalBranch(5) => "risky call 3" | flip true; caught "risky call 3"

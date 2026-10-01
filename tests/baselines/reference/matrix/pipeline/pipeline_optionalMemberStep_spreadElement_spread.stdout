@@ -1,3 +1,0 @@
-spreadElement(3) => [0,9] | first 0; flip true; maybe true; twice 9
-spreadElement(4) => [0,null] | first 0; flip false; maybe false
-spreadElement(5) => [0,15] | first 0; flip true; maybe true; twice 15

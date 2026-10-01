@@ -1,0 +1,3 @@
+forTest(5) => 1 | await; read 5; b 2; read 2
+forTest(1) => 1 | await; read 1; b -2; read -2
+forTest(-2) => 1 | await; read -2

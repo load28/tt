@@ -1,2 +1,0 @@
-returnOperand(true) => 1 | yes 1
-returnOperand(false) => 0 | no 0

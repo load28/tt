@@ -1,0 +1,2 @@
+returnOperand(true) => 1 | operand true; yes 1
+returnOperand(false) => 0 | operand false; no 0

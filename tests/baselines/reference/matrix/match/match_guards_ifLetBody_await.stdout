@@ -1,0 +1,5 @@
+ifLetBody({"kind":"Circle","r":1}) => [1,1] | head 1; read 1; await; guard big false; small 1
+ifLetBody({"kind":"Circle","r":5}) => [1,5] | head 1; read 1; await; guard big true; big 5
+ifLetBody({"kind":"Rect","w":4,"h":2}) => [1,4] | head 1; read 1; await; guard wide true; wide 4
+ifLetBody({"kind":"Rect","w":1,"h":3}) => [1,3] | head 1; read 1; await; guard wide false; tall 3
+ifLetBody({"kind":"Point"}) => [1,0] | head 1; read 1; await; point 0

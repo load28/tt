@@ -1,2 +1,0 @@
-spreadElement(4) => [0,7] | first 0; yield 4; step 3; add 7
-spreadElement(-1) => [0,2] | first 0; yield -1; step 3; add 2

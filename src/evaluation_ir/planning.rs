@@ -343,6 +343,10 @@ pub(super) fn plan_one_operation(
                 alternate: alternate_branch,
             }
         }
+        HostEvaluationOperation::Conditional(ConditionalBranch::LogicalAssignmentRight {
+            operator,
+            ..
+        }) => PlannedConditionalKind::LogicalAssignment { operator },
         HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(_)) => {
             // A member callee the chain tests is called through its
             // captured receiver (`callee.call(receiver, ...)`), which cannot
@@ -472,6 +476,7 @@ pub(super) fn plan_one_operation(
             | PlannedConditionalKind::LogicalOr
             | PlannedConditionalKind::Nullish
     );
+    let assignment = matches!(&kind, PlannedConditionalKind::LogicalAssignment { .. });
     let condition = match condition {
         PlannedEvaluationInput::Stable { source, reserved } if logical => {
             PlannedEvaluationInput::Source {
@@ -487,7 +492,7 @@ pub(super) fn plan_one_operation(
         }
         condition => condition,
     };
-    if logical {
+    if logical || assignment {
         for member in members {
             let value = &values[*member];
             let Some((member_index, _)) = whole_operation_step(&value.schedule) else {
@@ -601,11 +606,19 @@ pub(super) fn target_capability(
         .filter(|step| matches!(step.operation, HostEvaluationOperation::Conditional(_)))
         .count();
     if conditional_steps > 0 {
-        let Some((_, step)) = whole_operation_step(schedule) else {
+        let Some((index, step)) = whole_operation_step(schedule) else {
             return TargetCapability::ExpressionBoundary(
                 Reason::ConditionalOperationNotStructurable,
             );
         };
+        if let HostEvaluationOperation::Conditional(ConditionalBranch::LogicalAssignmentRight {
+            consumed,
+            ..
+        }) = step.operation
+            && (consumed || index + 1 < steps.len())
+        {
+            return TargetCapability::ExpressionBoundary(Reason::LogicalAssignmentValue);
+        }
         // An optional call skipped at a link inside its callee's receiver
         // cannot be tested before that link is evaluated.
         let structurable = step.conditional.as_ref().is_some_and(|facts| {

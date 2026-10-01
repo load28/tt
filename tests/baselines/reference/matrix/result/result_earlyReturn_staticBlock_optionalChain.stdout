@@ -1,3 +1,0 @@
-staticBlock(3) => {"kind":"Ok","value":3} | read 3; big 3
-staticBlock(1) => {"kind":"Err","error":"negative undefined"} | read undefined
-staticBlock(-1) => {"kind":"Err","error":"negative -1"} | read -1

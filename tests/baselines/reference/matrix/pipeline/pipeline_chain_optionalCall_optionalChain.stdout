@@ -1,0 +1,2 @@
+optionalCall(3) => [["***6"],null] | callee true; double 6; callee false
+optionalCall(12) => [["*NaN"],null] | callee true; double null; callee false

@@ -1,2 +1,0 @@
-classField(6) => 12 | keep 6; double 12
-classField(-2) => null | keep undefined; double null

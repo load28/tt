@@ -1,0 +1,2 @@
+laterDeclarator({"kind":"Click","x":3}) => [1,3] | before 1; risky {"kind":"Click","x":3}; click 3
+laterDeclarator({"kind":"Key","key":"k"}) => [1,"k"] | before 1; risky {"kind":"Key","key":"k"}; key "k"

@@ -1,2 +1,0 @@
-labeledBlock(8) => 9 | open res; operand 8; arrow 9; flip true; dispose res
-labeledBlock(9) => [10] | open res; operand 9; arrow 10; flip false; dispose res

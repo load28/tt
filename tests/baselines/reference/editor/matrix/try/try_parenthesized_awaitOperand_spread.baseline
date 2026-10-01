@@ -1,0 +1,5 @@
+differences from try_parenthesized_awaitOperand_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await (unwrap(flip() ? read(first(...[input])) : read(note(\"fallback\", -9))))" hint TS80007: 'await' has no effect on the type of this expression.
+

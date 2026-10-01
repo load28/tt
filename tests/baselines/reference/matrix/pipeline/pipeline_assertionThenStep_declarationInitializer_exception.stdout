@@ -1,0 +1,2 @@
+declarationInitializer(123) => 3 | risky 123
+declarationInitializer(4) => 1 | risky 4

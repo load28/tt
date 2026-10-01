@@ -1,3 +1,0 @@
-logicalAnd(2) => {"kind":"Ok","value":"two"} | flip true; read 2
-logicalAnd(7) => false | flip false
-logicalAnd(-1) => {"kind":"Err","error":"negative undefined"} | flip true; read undefined

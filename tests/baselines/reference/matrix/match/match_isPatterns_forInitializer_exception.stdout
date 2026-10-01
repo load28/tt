@@ -1,0 +1,4 @@
+forInitializer({}) => ["range"] | risky {}; range "range"
+forInitializer({}) => [1] | risky {}; type 1
+forInitializer({}) => "risky call 3" | caught "risky call 3"
+forInitializer("text") => [null] | risky "text"; other null

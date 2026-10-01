@@ -1,0 +1,2 @@
+compoundAssignment(4) => "start:[object Object]" | initial "start:"; target {"total":"start:"}; operand 4; read 4; direct 4; finally 0
+compoundAssignment(-1) => "start:[object Object]" | initial "start:"; target {"total":"start:"}; operand -1; read -1; fallback -7; read -7; finally 0

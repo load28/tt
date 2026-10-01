@@ -1,0 +1,2 @@
+conditionalTest(4) => "truthy" | yield 4; step 3; add 7; then "truthy"
+conditionalTest(-1) => "truthy" | yield -1; step 3; add 2; then "truthy"

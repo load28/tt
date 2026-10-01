@@ -1,7 +1,0 @@
-differences from flow_overloadedLater_matchArm_using at the questions listed in tests/editor-matrix-differences.txt
-
-=== hover /*call*/ main.tt:5:76 ===
-  |   return match (flip()) { true => flow |> adder(note("operand", input)) |> shape, false => note("other arm", 0) };
-  |                                                                            ^ /*call*/
-  tt only: (alias) function shape(s: string): number
-

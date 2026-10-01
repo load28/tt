@@ -1,2 +1,0 @@
-methodArgument(1.25) => ["receiver",1,"1.3"] | open res; receiver {"tag":"receiver"}; a 1; operand 1.25; dispose res
-methodArgument(7) => ["receiver",1,"7.0"] | open res; receiver {"tag":"receiver"}; a 1; operand 7; dispose res

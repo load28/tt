@@ -1,2 +1,0 @@
-throwOperand(2) => threw 2 | operand 2; read 2; finally 0
-throwOperand(-1) => {"kind":"Err","error":"negative -1"} | operand -1; read -1; finally 0

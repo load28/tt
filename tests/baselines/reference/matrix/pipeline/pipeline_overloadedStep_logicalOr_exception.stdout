@@ -1,0 +1,2 @@
+logicalOr(4) => true | flip true
+logicalOr(12) => 3 | flip false; risky 12; shape "#12"

@@ -1,4 +1,0 @@
-method({}) => "range" | this "holder"; operand {}; range "range"; finally 0
-method({}) => 1 | this "holder"; operand {}; type 1; finally 0
-method({}) => "plain" | this "holder"; operand {}; error "plain"; finally 0
-method("text") => null | this "holder"; operand "text"; other null; finally 0

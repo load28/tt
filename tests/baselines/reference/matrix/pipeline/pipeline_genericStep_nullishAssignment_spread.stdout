@@ -1,0 +1,2 @@
+nullishAssignment(6) => 12 | flip true; target {"value":null}; keep 6; double 12
+nullishAssignment(-2) => "kept" | flip false; target {"value":"kept"}

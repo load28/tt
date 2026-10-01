@@ -2,7 +2,7 @@ export default {
   construct: "flow",
   kind: "value",
   lowPrecedence: true,
-  skip: ["templateLiteral"],
+  skip: ["templateLiteral", "compoundAssignment"],
   forms: [
     {
       id: "twoSteps",

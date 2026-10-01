@@ -1,2 +1,0 @@
-constructorBody(2) => {"kind":"Ok","value":6} | read 2; inner {"kind":"Ok","value":3}
-constructorBody(-1) => {"kind":"Err","error":"negative undefined"} | read undefined; inner {"kind":"Err","error":"negative undefined"}

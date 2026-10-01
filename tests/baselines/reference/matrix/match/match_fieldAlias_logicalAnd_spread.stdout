@@ -1,3 +1,0 @@
-logicalAnd({"kind":"Circle","r":2}) => 2 | flip true; circle 2
-logicalAnd({"kind":"Rect","w":3,"h":4}) => false | flip false
-logicalAnd({"kind":"Point"}) => null | flip true; point null

@@ -1,5 +1,0 @@
-ifLetBody(200) => [1,true] | head 1; read 1; success true
-ifLetBody(201) => [1,true] | head 1; read 1; success true
-ifLetBody(404) => [1,false] | head 1; read 1; missing false
-ifLetBody(500) => [1,false] | head 1; read 1; guard true; server false
-ifLetBody(7) => [1,null] | head 1; read 1; other null

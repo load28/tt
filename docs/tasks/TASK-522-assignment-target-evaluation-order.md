@@ -1,5 +1,9 @@
 # TASK-522: Evaluate an assignment's target before a hoisted right operand
 
+> Issue 2 (a logical assignment's right operand evaluated unconditionally)
+> is resolved by TASK-719, which lowers a logical assignment statement as a
+> conditional operation and rejects one whose value is used.
+
 - **Status**: Complete
 - **Started**: 2026-09-29
 - **Completed**: 2026-09-29

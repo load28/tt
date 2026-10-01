@@ -1,0 +1,2 @@
+orAssignment(8) => 9 | flip true; target {"value":0}; operand 8; arrow 9
+orAssignment(9) => "kept" | flip false; target {"value":"kept"}

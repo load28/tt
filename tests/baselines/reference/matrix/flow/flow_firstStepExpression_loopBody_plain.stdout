@@ -1,0 +1,2 @@
+loopBody(3) => [null,null] | operand 3; operand 3
+loopBody(-4) => [null,null] | operand -4; operand -4

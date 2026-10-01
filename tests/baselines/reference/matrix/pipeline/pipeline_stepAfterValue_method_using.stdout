@@ -1,0 +1,2 @@
+method(4) => 7 | open res; this "holder"; operand 4; step 3; add 7; dispose res
+method(-1) => 2 | open res; this "holder"; operand -1; step 3; add 2; dispose res

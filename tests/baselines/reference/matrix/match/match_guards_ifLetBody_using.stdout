@@ -1,5 +1,0 @@
-ifLetBody({"kind":"Circle","r":1}) => [1,1] | open res; head 1; read 1; operand {"kind":"Circle","r":1}; guard big false; small 1; dispose res
-ifLetBody({"kind":"Circle","r":5}) => [1,5] | open res; head 1; read 1; operand {"kind":"Circle","r":5}; guard big true; big 5; dispose res
-ifLetBody({"kind":"Rect","w":4,"h":2}) => [1,4] | open res; head 1; read 1; operand {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4; dispose res
-ifLetBody({"kind":"Rect","w":1,"h":3}) => [1,3] | open res; head 1; read 1; operand {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3; dispose res
-ifLetBody({"kind":"Point"}) => [1,0] | open res; head 1; read 1; operand {"kind":"Point"}; point 0; dispose res

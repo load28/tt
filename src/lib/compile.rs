@@ -358,6 +358,9 @@ fn lexical_declaration_body_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<Tt
         .collect()
 }
 
+const LOGICAL_ASSIGNMENT_HELP: &str = "write the logical assignment as a statement of its own \
+     (`target ??= value;`), then read the target where its value was used";
+
 fn match_placement_message(
     owner: program_syntax::EvaluationOwner,
     reason: evaluation_ir::ExpressionBoundaryReason,
@@ -398,6 +401,10 @@ fn match_placement_message(
         (_, Reason::ConditionalInOwner | Reason::ConditionalOperationNotStructurable) => (
             "`match` cannot be lowered from this conditional expression position without evaluating a skipped branch",
             help,
+        ),
+        (_, Reason::LogicalAssignmentValue) => (
+            "`match` cannot be lowered in the right operand of a logical assignment whose value is used — the operand runs only when the target's value does not decide the result, and no statement form reads the target once, skips the operand, and keeps TypeScript's narrowing of the target",
+            LOGICAL_ASSIGNMENT_HELP,
         ),
         (_, Reason::ReferenceNotPreservable) => (
             "`match` cannot be lowered from this reference position while preserving its receiver and `this`",
@@ -535,6 +542,13 @@ fn try_placement_message(
             "`try` cannot be used in this conditional operation — its TypeScript control-flow \
              boundary cannot be rebuilt without changing evaluation order",
             help,
+        ),
+        (_, Reason::LogicalAssignmentValue) => (
+            "`try` cannot be used in the right operand of a logical assignment whose value is \
+             used — the operand runs only when the target's value does not decide the result, \
+             and no statement form reads the target once, skips the operand, and keeps \
+             TypeScript's narrowing of the target",
+            LOGICAL_ASSIGNMENT_HELP,
         ),
         (_, Reason::CaptureOverlapsValue) => (
             "`try` cannot be used in this expression context — its TypeScript control-flow \

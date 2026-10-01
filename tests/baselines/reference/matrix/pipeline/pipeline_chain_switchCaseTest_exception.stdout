@@ -1,0 +1,2 @@
+switchCaseTest(3) => "default" | discriminant 0; risky 3; double 6
+switchCaseTest(12) => "default" | discriminant 0; risky 12; double 24

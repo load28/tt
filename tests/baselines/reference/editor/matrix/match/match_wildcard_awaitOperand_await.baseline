@@ -1,5 +1,0 @@
-differences from match_wildcard_awaitOperand_await at the questions listed in tests/editor-matrix-differences.txt
-
-=== diagnostics main.tt ===
-  ts only: main "await (((t0: Token) => { if (t0.kind === \"Word\") { const { text } = t0; return note(\"word\", text.length); } return note(\"other\", -1); })(await later(input)))" hint TS80007: 'await' has no effect on the type of this expression.
-

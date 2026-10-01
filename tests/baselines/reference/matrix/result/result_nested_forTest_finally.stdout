@@ -1,2 +1,0 @@
-forTest(2) => 1 | operand 2; read 2; inner {"kind":"Ok","value":3}; finally 0
-forTest(-1) => 1 | operand -1; read -1; inner {"kind":"Err","error":"negative -1"}; finally 0

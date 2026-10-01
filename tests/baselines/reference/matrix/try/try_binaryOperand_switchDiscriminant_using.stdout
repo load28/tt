@@ -1,2 +1,0 @@
-switchDiscriminant(3) => {"kind":"Ok","value":"default"} | open res; operand 3; read 3; case 0; dispose res
-switchDiscriminant(-2) => {"kind":"Err","error":"negative -2"} | open res; operand -2; read -2; dispose res

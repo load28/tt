@@ -1,0 +1,2 @@
+whileTest(1.5) => 1 | operand 1.5; finally 0
+whileTest(2) => 1 | operand 2; finally 0

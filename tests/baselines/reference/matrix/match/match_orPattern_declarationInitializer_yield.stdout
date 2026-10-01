@@ -1,4 +1,0 @@
-declarationInitializer({"kind":"Num","value":4}) => 4 | yield {"kind":"Num","value":4}; number 4
-declarationInitializer({"kind":"Neg","value":-3}) => -3 | yield {"kind":"Neg","value":-3}; number -3
-declarationInitializer({"kind":"Word","text":"hi"}) => "hi" | yield {"kind":"Word","text":"hi"}; word "hi"
-declarationInitializer({"kind":"End"}) => "" | yield {"kind":"End"}; end ""

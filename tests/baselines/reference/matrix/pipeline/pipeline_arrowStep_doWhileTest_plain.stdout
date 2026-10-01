@@ -1,0 +1,2 @@
+doWhileTest(8) => 2 | operand 8; arrow 9
+doWhileTest(9) => 2 | operand 9; arrow 10

@@ -1,0 +1,2 @@
+matchArm(1.5) => "3.0" | open res; flip true; operand 1.5; dispose res; add 3
+matchArm(2) => 0 | open res; flip false; other arm 0; dispose res

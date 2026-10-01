@@ -1,0 +1,4 @@
+topLevel({"kind":"Num","value":4}) => -1 | other -1
+topLevel({"kind":"Neg","value":-3}) => -1 | other -1
+topLevel({"kind":"Word","text":"hi"}) => 2 | word 2
+topLevel({"kind":"End"}) => -1 | other -1

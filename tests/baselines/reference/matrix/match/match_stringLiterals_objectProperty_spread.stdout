@@ -1,4 +1,0 @@
-objectProperty("north") => {"a":1,"value":1,"c":3} | a 1; n 1; c 3
-objectProperty("south") => {"a":1,"value":2,"c":3} | a 1; se 2; c 3
-objectProperty("east") => {"a":1,"value":2,"c":3} | a 1; se 2; c 3
-objectProperty("up") => {"a":1,"value":0,"c":3} | a 1; other 0; c 3

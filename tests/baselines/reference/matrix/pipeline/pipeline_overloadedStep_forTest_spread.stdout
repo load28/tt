@@ -1,2 +1,0 @@
-forTest(4) => 1 | shape "#4"
-forTest(12) => 1 | shape "#12"

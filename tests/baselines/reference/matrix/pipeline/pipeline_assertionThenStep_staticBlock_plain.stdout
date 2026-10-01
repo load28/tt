@@ -1,0 +1,2 @@
+staticBlock(123) => 3 | operand 123
+staticBlock(4) => 1 | operand 4

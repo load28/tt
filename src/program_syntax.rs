@@ -321,6 +321,7 @@ pub(crate) enum EvaluationInputMode {
     /// so the lowering evaluates it as an expression statement in order and
     /// removes it, with its comma, where it was written.
     Discarded,
+    LogicalAssignmentTarget,
 }
 
 /// What evaluating one host expression may observably do
@@ -677,6 +678,17 @@ pub(crate) enum ConditionalBranch {
     Consequent,
     Alternate,
     OptionalCallArgument(u32),
+    LogicalAssignmentRight {
+        operator: LogicalAssignment,
+        consumed: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LogicalAssignment {
+    And,
+    Or,
+    Nullish,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

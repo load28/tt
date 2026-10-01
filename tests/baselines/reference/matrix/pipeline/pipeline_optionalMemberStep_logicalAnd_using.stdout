@@ -1,0 +1,3 @@
+logicalAnd(3) => undefined | open res; flip true; operand 3; flip false; maybe false; dispose res
+logicalAnd(4) => undefined | open res; flip true; operand 4; flip false; maybe false; dispose res
+logicalAnd(5) => undefined | open res; flip true; operand 5; flip false; maybe false; dispose res

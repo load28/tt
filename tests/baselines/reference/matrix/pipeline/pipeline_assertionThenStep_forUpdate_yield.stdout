@@ -1,0 +1,2 @@
+forUpdate(123) => 3 | body 0; yield 123
+forUpdate(4) => 1 | body 0; yield 4

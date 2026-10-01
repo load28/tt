@@ -1,3 +1,0 @@
-conditionalTest({"kind":"Circle","r":2}) => "truthy" | second {"kind":"Fast"}; fast circle 2; then "truthy"
-conditionalTest({"kind":"Rect","w":3,"h":4}) => threw Cannot read properties of undefined (reading 'kind') | second {"kind":"Fast"}
-conditionalTest({"kind":"Point"}) => "truthy" | second {"kind":"Fast"}; rest -1; then "truthy"

@@ -1,3 +1,0 @@
-laterDeclarator({"kind":"Circle","r":2}) => [1,"some"] | before 1; await; inner circle 2; again {"kind":"Point"}; point "some"
-laterDeclarator({"kind":"Rect","w":3,"h":4}) => [1,"some"] | before 1; await; inner rect 3; again {"kind":"Point"}; point "some"
-laterDeclarator({"kind":"Point"}) => [1,"none"] | before 1; await; inner point 0; zero "none"

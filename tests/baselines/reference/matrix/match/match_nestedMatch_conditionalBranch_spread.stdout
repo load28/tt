@@ -1,3 +1,0 @@
-conditionalBranch({"kind":"Circle","r":2}) => "some" | flip true; inner circle 2; again {"kind":"Point"}; point "some"
-conditionalBranch({"kind":"Rect","w":3,"h":4}) => "skipped" | flip false; else "skipped"
-conditionalBranch({"kind":"Point"}) => "none" | flip true; inner point 0; zero "none"

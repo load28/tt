@@ -1,0 +1,2 @@
+logicalAssignmentValue(3) => ["***6","***6"] | flip true; operand 3; double 6
+logicalAssignmentValue(12) => ["kept","kept"] | flip false

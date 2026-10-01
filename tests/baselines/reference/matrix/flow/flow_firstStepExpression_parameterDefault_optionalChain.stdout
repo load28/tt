@@ -1,0 +1,2 @@
+parameterDefault(3) => "6" | add 6
+parameterDefault(-4) => "NaN" | add null

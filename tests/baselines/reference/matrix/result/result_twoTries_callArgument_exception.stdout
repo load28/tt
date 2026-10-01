@@ -1,3 +1,0 @@
-callArgument(5) => [1,{"kind":"Ok","value":[5,2]},3] | a 1; risky 5; read 5; b 2; read 2; c 3
-callArgument(1) => [1,{"kind":"Err","error":"negative -2"},3] | a 1; risky 1; read 1; b -2; read -2; c 3
-callArgument(-2) => "risky call 3" | a 1; caught "risky call 3"

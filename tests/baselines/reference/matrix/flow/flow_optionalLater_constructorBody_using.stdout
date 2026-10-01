@@ -1,3 +1,0 @@
-constructorBody(4) => 24 | open res; operand 4; flip true; maybe true; dispose res; add 8; twice 24
-constructorBody(6) => undefined | open res; operand 6; flip false; maybe false; dispose res; add 12
-constructorBody(8) => 48 | open res; operand 8; flip true; maybe true; dispose res; add 16; twice 48

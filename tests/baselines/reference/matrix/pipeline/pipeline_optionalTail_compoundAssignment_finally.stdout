@@ -1,0 +1,2 @@
+compoundAssignment(2.5) => "start:2.50" | initial "start:"; target {"total":"start:"}; operand 2.5; positive 2.5; finally 0
+compoundAssignment(-3) => "start:undefined" | initial "start:"; target {"total":"start:"}; operand -3; positive undefined; finally 0

@@ -1,7 +1,0 @@
-differences from pipeline_overloadedStep_nullish_finally at the questions listed in tests/editor-matrix-differences.txt
-
-=== hover /*call*/ main.tt:5:80 ===
-  |     return (flip() ? null : note("left", "set")) ?? (note("operand", input) |> shape |> .length);
-  |                                                                                ^ /*call*/
-  tt only: (alias) function shape(s: string): number
-

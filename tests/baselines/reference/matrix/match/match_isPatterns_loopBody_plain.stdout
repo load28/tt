@@ -1,0 +1,4 @@
+loopBody({}) => ["range","range"] | operand {}; range "range"; operand {}; range "range"
+loopBody({}) => [1,1] | operand {}; type 1; operand {}; type 1
+loopBody({}) => ["plain","plain"] | operand {}; error "plain"; operand {}; error "plain"
+loopBody("text") => [null,null] | operand "text"; other null; operand "text"; other null

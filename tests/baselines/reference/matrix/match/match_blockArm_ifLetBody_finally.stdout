@@ -1,3 +1,0 @@
-ifLetBody({"kind":"Circle","r":2}) => [1,0] | head 1; read 1; operand {"kind":"Circle","r":2}; other 0; finally 0
-ifLetBody({"kind":"Rect","w":3,"h":4}) => [1,12] | head 1; read 1; operand {"kind":"Rect","w":3,"h":4}; area 12; large 12; finally 0
-ifLetBody({"kind":"Point"}) => [1,0] | head 1; read 1; operand {"kind":"Point"}; other 0; finally 0

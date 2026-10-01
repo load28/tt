@@ -1,0 +1,2 @@
+logicalOr(2) => true | flip true
+logicalOr(7) => 28 | flip false; receiver {"factor":3}; yield 7; twice 21; add 28

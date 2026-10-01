@@ -1,3 +1,0 @@
-templateLiteral(3) => "<L|[object Object]|R>" | left "L"; await; read 3; big 3; right "R"
-templateLiteral(1) => "<L|[object Object]|R>" | left "L"; await; read 1; small 1; right "R"
-templateLiteral(-1) => "<L|[object Object]|R>" | left "L"; await; read -1; right "R"

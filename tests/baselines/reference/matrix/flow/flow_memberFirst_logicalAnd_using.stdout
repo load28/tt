@@ -1,2 +1,0 @@
-logicalAnd(2) => 8 | open res; flip true; receiver {"factor":3}; operand 2; dispose res; twice 6; add 8
-logicalAnd(7) => false | open res; flip false; dispose res

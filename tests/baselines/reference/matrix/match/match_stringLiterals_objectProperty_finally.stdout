@@ -1,0 +1,4 @@
+objectProperty("north") => {"a":1,"value":1,"c":3} | a 1; operand "north"; n 1; c 3; finally 0
+objectProperty("south") => {"a":1,"value":2,"c":3} | a 1; operand "south"; se 2; c 3; finally 0
+objectProperty("east") => {"a":1,"value":2,"c":3} | a 1; operand "east"; se 2; c 3; finally 0
+objectProperty("up") => {"a":1,"value":0,"c":3} | a 1; operand "up"; other 0; c 3; finally 0

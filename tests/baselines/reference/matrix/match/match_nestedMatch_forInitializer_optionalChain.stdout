@@ -1,3 +1,0 @@
-forInitializer({"kind":"Circle","r":2}) => ["some"] | inner circle 2; again {"kind":"Point"}; point "some"
-forInitializer({"kind":"Rect","w":3,"h":4}) => threw Cannot read properties of undefined (reading 'kind') | 
-forInitializer({"kind":"Point"}) => ["none"] | inner point 0; zero "none"

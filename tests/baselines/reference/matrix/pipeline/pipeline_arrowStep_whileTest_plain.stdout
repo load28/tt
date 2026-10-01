@@ -1,0 +1,2 @@
+whileTest(8) => 1 | operand 8; arrow 9
+whileTest(9) => 1 | operand 9; arrow 10

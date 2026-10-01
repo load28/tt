@@ -1,0 +1,2 @@
+logicalOr(5) => true | flip true
+logicalOr(0) => -1 | flip false; operand 0

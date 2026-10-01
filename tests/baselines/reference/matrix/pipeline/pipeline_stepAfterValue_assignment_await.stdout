@@ -1,0 +1,2 @@
+assignment(4) => 7 | initial 0; target {"value":0}; await; step 3; add 7
+assignment(-1) => 2 | initial 0; target {"value":0}; await; step 3; add 2

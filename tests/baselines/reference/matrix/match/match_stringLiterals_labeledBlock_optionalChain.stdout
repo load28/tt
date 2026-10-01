@@ -1,4 +1,0 @@
-labeledBlock("north") => 1 | n 1; flip true
-labeledBlock("south") => [0] | other 0; flip false
-labeledBlock("east") => 2 | se 2; flip true
-labeledBlock("up") => [0] | other 0; flip false

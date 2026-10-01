@@ -1,0 +1,4 @@
+whileTest({"kind":"Num","value":4}) => 1 | risky {"kind":"Num","value":4}; other -1
+whileTest({"kind":"Neg","value":-3}) => 1 | risky {"kind":"Neg","value":-3}; other -1
+whileTest({"kind":"Word","text":"hi"}) => "risky call 3" | caught "risky call 3"
+whileTest({"kind":"End"}) => 1 | risky {"kind":"End"}; other -1

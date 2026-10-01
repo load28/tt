@@ -1,0 +1,2 @@
+logicalOr(3) => true | flip true
+logicalOr(-4) => -8 | flip false; yield -4; add -8; keep -8

@@ -1,0 +1,2 @@
+nullish(2) => {"kind":"Ok"} | open res; flip true; operand 2; read 2; dispose res
+nullish(-1) => "set" | open res; flip false; left "set"; dispose res

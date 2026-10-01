@@ -1,0 +1,5 @@
+conditionalTest({"kind":"Circle","r":1}) => "truthy" | risky {"kind":"Circle","r":1}; guard big false; small 1; then "truthy"
+conditionalTest({"kind":"Circle","r":5}) => "truthy" | risky {"kind":"Circle","r":5}; guard big true; big 5; then "truthy"
+conditionalTest({"kind":"Rect","w":4,"h":2}) => "risky call 3" | caught "risky call 3"
+conditionalTest({"kind":"Rect","w":1,"h":3}) => "truthy" | risky {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3; then "truthy"
+conditionalTest({"kind":"Point"}) => "falsy" | risky {"kind":"Point"}; point 0; else "falsy"

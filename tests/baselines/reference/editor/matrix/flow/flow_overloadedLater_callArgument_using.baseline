@@ -1,7 +1,0 @@
-differences from flow_overloadedLater_callArgument_using at the questions listed in tests/editor-matrix-differences.txt
-
-=== hover /*call*/ main.tt:5:70 ===
-  |   return pack(note("a", 1), flow |> adder(note("operand", input)) |> shape, note("c", 3));
-  |                                                                      ^ /*call*/
-  tt only: (alias) function shape(s: string): number
-

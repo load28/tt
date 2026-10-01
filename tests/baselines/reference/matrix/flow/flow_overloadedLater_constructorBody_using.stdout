@@ -1,2 +1,0 @@
-constructorBody(2) => "#4" | open res; operand 2; dispose res; add 4; shape "#4"
-constructorBody(5) => "#10" | open res; operand 5; dispose res; add 10; shape "#10"

@@ -1,2 +1,0 @@
-optionalCall(2.5) => [["2.50"],null] | callee true; yield 2.5; positive 2.5; callee false
-optionalCall(-3) => [[null],null] | callee true; yield -3; positive undefined; callee false

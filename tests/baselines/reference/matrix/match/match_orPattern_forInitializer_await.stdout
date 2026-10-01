@@ -1,4 +1,0 @@
-forInitializer({"kind":"Num","value":4}) => [4] | await; number 4
-forInitializer({"kind":"Neg","value":-3}) => [-3] | await; number -3
-forInitializer({"kind":"Word","text":"hi"}) => ["hi"] | await; word "hi"
-forInitializer({"kind":"End"}) => [""] | await; end ""

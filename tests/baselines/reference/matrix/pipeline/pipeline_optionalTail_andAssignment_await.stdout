@@ -1,0 +1,2 @@
+andAssignment(2.5) => 0 | flip true; target {"value":0}
+andAssignment(-3) => undefined | flip false; target {"value":"kept"}; await; positive undefined

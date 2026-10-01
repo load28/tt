@@ -1,3 +1,0 @@
-methodArgument({"kind":"Circle","r":2}) => ["receiver",1,0] | receiver {"tag":"receiver"}; a 1; risky {"kind":"Circle","r":2}; other 0
-methodArgument({"kind":"Rect","w":3,"h":4}) => ["receiver",1,12] | receiver {"tag":"receiver"}; a 1; risky {"kind":"Rect","w":3,"h":4}; area 12; large 12
-methodArgument({"kind":"Point"}) => "risky call 3" | receiver {"tag":"receiver"}; a 1; caught "risky call 3"

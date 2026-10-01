@@ -1,0 +1,4 @@
+conditionalTest({"kind":"Num","value":4}) => "truthy" | operand {"kind":"Num","value":4}; other -1; then "truthy"; finally 0
+conditionalTest({"kind":"Neg","value":-3}) => "truthy" | operand {"kind":"Neg","value":-3}; other -1; then "truthy"; finally 0
+conditionalTest({"kind":"Word","text":"hi"}) => "truthy" | operand {"kind":"Word","text":"hi"}; word 2; then "truthy"; finally 0
+conditionalTest({"kind":"End"}) => "truthy" | operand {"kind":"End"}; other -1; then "truthy"; finally 0

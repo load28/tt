@@ -1,0 +1,2 @@
+forOfHead({"kind":"Click","x":3}) => [3] | open res; operand {"kind":"Click","x":3}; click 3; dispose res
+forOfHead({"kind":"Key","key":"k"}) => ["k"] | open res; operand {"kind":"Key","key":"k"}; key "k"; dispose res

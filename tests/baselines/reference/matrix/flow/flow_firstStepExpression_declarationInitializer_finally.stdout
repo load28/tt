@@ -1,2 +1,0 @@
-declarationInitializer(3) => "6" | operand 3; finally 0; add 6
-declarationInitializer(-4) => "-8" | operand -4; finally 0; add -8

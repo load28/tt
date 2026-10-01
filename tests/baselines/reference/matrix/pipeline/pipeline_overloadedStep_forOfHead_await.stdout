@@ -1,0 +1,2 @@
+forOfHead(4) => [2] | await; shape "#4"
+forOfHead(12) => [3] | await; shape "#12"

@@ -1,3 +1,0 @@
-declarationInitializer(3) => 9 | flip true; maybe true; twice 9
-declarationInitializer(4) => undefined | flip false; maybe false
-declarationInitializer(5) => 15 | flip true; maybe true; twice 15

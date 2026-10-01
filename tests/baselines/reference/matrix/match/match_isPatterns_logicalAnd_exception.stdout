@@ -1,4 +1,0 @@
-logicalAnd({}) => "range" | flip true; risky {}; range "range"
-logicalAnd({}) => false | flip false
-logicalAnd({}) => "plain" | flip true; risky {}; error "plain"
-logicalAnd("text") => false | flip false

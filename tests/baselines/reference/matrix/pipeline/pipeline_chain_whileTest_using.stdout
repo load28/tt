@@ -1,0 +1,2 @@
+whileTest(3) => 1 | open res; operand 3; double 6; dispose res
+whileTest(12) => 1 | open res; operand 12; double 24; dispose res

@@ -1,0 +1,12 @@
+differences from match_orPattern_returnOperand_yield at the questions listed in tests/editor-matrix-differences.txt
+
+=== definition /*use*/ main.tt:5:76 ===
+  |   return match ((yield input)) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") };
+  |                                                                            ^ /*use*/
+  tt only: main "value"
+
+=== rename /*bind*/ main.tt:5:38 ===
+  |   return match ((yield input)) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") };
+  |                                      ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+

@@ -1,0 +1,2 @@
+andAssignment(4) => 0 | flip true; target {"value":0}
+andAssignment(-1) => {"kind":"Err","error":"negative -7"} | flip false; target {"value":"kept"}; await; read -1; fallback -7; read -7

@@ -1,2 +1,0 @@
-topLevel(123) => 3 | open res; operand 123
-topLevel(4) => 1 | operand 4

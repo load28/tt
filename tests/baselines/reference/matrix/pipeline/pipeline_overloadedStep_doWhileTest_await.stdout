@@ -1,2 +1,0 @@
-doWhileTest(4) => 2 | await; shape "#4"
-doWhileTest(12) => 2 | await; shape "#12"

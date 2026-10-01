@@ -1,0 +1,2 @@
+andAssignment(8) => 0 | flip true; target {"value":0}
+andAssignment(9) => 10 | flip false; target {"value":"kept"}; arrow 10

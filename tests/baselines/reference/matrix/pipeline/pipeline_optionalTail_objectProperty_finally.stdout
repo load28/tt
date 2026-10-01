@@ -1,0 +1,2 @@
+objectProperty(2.5) => {"a":1,"value":"2.50","c":3} | a 1; operand 2.5; positive 2.5; c 3; finally 0
+objectProperty(-3) => {"a":1,"c":3} | a 1; operand -3; positive undefined; c 3; finally 0

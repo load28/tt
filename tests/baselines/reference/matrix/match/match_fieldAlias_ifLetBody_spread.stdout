@@ -1,0 +1,3 @@
+ifLetBody({"kind":"Circle","r":2}) => [1,2] | head 1; read 1; circle 2
+ifLetBody({"kind":"Rect","w":3,"h":4}) => [1,[3,4]] | head 1; read 1; rect [3,4]
+ifLetBody({"kind":"Point"}) => [1,null] | head 1; read 1; point null

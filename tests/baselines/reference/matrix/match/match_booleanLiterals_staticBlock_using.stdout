@@ -1,2 +1,0 @@
-staticBlock(true) => 1 | open res; operand true; yes 1; dispose res
-staticBlock(false) => 0 | open res; operand false; no 0; dispose res

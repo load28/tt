@@ -1,2 +1,0 @@
-throwOperand(6) => threw 6 | flip true; operand 6; read 6
-throwOperand(-6) => {"kind":"Err","error":"negative -9"} | flip false; fallback -9; read -9

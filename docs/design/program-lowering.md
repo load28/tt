@@ -446,9 +446,25 @@ evaluation order:
   whose value is an object, `ToPropertyKey` then runs once for the read and
   once for the write, where a native compound assignment converts it once.
 
-A logical assignment (`&&=`, `||=`, `??=`) captures its reference parts the
-same way; its right operand is evaluated only conditionally, which this
-section does not lower.
+A logical assignment (`&&=`, `||=`, `??=`) evaluates its right operand only
+when the target's current value does not decide the result (§13.15.2:
+`GetValue(lref)`, the test, then the right operand and `PutValue`), so a tt
+value there is a conditional operation (TASK-719,
+`PlannedConditionalKind::LogicalAssignment`). Its condition is the target,
+with its object and computed key as the parts of the reference (captured
+unless they are an identifier or `this`); the operation tests the target
+where it is written and assigns it in the branch:
+`o.a ??= v` becomes `if (o.a == null) { ...; o.a = v'; }`, `||=` tests
+`!target` and `&&=` tests `target`. The target is read once, by the test,
+and TypeScript narrows it after the statement as it does after the
+operator (the test narrows the reference on one path and the assignment on
+the other). This needs the assignment to be an expression statement of its
+own: when its value is used, the value is the target's value on the
+skipped path, which only a second read or a stored copy can supply, and a
+stored copy (`($l = o.a) == null`) does not narrow `o.a` for `??=`
+(TASK-522 Issue 2; §7.10). Such an operand is
+`ExpressionBoundaryReason::LogicalAssignmentValue`: `try-placement` or
+`match-placement`.
 
 ### 7.7 Comma operands (TASK-572)
 

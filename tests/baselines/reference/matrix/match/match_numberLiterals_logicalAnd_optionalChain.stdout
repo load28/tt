@@ -1,0 +1,5 @@
+logicalAnd(200) => true | flip true; success true
+logicalAnd(201) => false | flip false
+logicalAnd(404) => null | flip true; other null
+logicalAnd(500) => false | flip false
+logicalAnd(7) => null | flip true; other null

@@ -1,0 +1,2 @@
+matchArm(2) => "#4" | flip true; add 4; shape "#4"
+matchArm(5) => 0 | flip false; other arm 0

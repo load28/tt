@@ -1,0 +1,2 @@
+optionalCall(4) => [[2],null] | callee true; risky 4; shape "#4"; callee false
+optionalCall(12) => [[3],null] | callee true; risky 12; shape "#12"; callee false

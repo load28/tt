@@ -1,0 +1,2 @@
+nullish(5) => 15 | flip true; await; map 15
+nullish(0) => "set" | flip false; left "set"

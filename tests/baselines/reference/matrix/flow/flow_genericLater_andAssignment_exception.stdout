@@ -1,0 +1,2 @@
+andAssignment(3) => 0 | flip true; target {"value":0}
+andAssignment(-4) => -8 | flip false; target {"value":"kept"}; risky -4; add -8; keep -8

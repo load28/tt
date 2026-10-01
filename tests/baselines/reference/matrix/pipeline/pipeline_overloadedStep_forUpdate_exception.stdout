@@ -1,2 +1,0 @@
-forUpdate(4) => 2 | body 0; risky 4; shape "#4"
-forUpdate(12) => 3 | body 0; risky 12; shape "#12"

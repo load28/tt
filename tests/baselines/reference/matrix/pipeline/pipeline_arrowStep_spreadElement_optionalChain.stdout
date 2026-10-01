@@ -1,0 +1,2 @@
+spreadElement(8) => [0,9] | first 0; arrow 9
+spreadElement(9) => [0,null] | first 0; arrow null

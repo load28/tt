@@ -1,5 +1,0 @@
-logicalAnd({"kind":"Circle","r":1}) => 1 | open res; flip true; operand {"kind":"Circle","r":1}; guard big false; small 1; dispose res
-logicalAnd({"kind":"Circle","r":5}) => false | open res; flip false; dispose res
-logicalAnd({"kind":"Rect","w":4,"h":2}) => 4 | open res; flip true; operand {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4; dispose res
-logicalAnd({"kind":"Rect","w":1,"h":3}) => false | open res; flip false; dispose res
-logicalAnd({"kind":"Point"}) => 0 | open res; flip true; operand {"kind":"Point"}; point 0; dispose res

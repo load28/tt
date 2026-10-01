@@ -1,0 +1,3 @@
+conditionalBranch(4) => undefined | flip true; yield 4; flip false; maybe false; add 8
+conditionalBranch(6) => undefined | flip true; yield 6; flip false; maybe false; add 12
+conditionalBranch(8) => undefined | flip true; yield 8; flip false; maybe false; add 16

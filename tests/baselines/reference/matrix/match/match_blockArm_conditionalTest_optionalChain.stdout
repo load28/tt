@@ -1,3 +1,0 @@
-conditionalTest({"kind":"Circle","r":2}) => "falsy" | other 0; else "falsy"
-conditionalTest({"kind":"Rect","w":3,"h":4}) => threw Cannot read properties of undefined (reading 'kind') | 
-conditionalTest({"kind":"Point"}) => "falsy" | other 0; else "falsy"

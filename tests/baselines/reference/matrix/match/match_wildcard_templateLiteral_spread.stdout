@@ -1,4 +1,0 @@
-templateLiteral({"kind":"Num","value":4}) => "<L|-1|R>" | left "L"; other -1; right "R"
-templateLiteral({"kind":"Neg","value":-3}) => "<L|-1|R>" | left "L"; other -1; right "R"
-templateLiteral({"kind":"Word","text":"hi"}) => "<L|2|R>" | left "L"; word 2; right "R"
-templateLiteral({"kind":"End"}) => "<L|-1|R>" | left "L"; other -1; right "R"

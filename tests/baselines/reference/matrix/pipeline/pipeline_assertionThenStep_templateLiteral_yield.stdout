@@ -1,2 +1,0 @@
-templateLiteral(123) => "<L|3|R>" | left "L"; yield 123; right "R"
-templateLiteral(4) => "<L|1|R>" | left "L"; yield 4; right "R"

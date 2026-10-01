@@ -1,2 +1,0 @@
-assignment(1.5) => "3.0" | initial 0; target {"value":0}; operand 1.5; finally 0; add 3
-assignment(2) => "4.0" | initial 0; target {"value":0}; operand 2; finally 0; add 4

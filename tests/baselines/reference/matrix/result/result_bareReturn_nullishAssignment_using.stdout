@@ -1,0 +1,2 @@
+nullishAssignment(2) => {"kind":"Ok"} | open res; flip true; target {"value":null}; operand 2; read 2; dispose res
+nullishAssignment(-1) => "kept" | open res; flip false; target {"value":"kept"}; dispose res

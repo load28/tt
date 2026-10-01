@@ -275,6 +275,31 @@ export const valuePositions = [
           : `const head = read(note("head", 1));\nif (head.kind === "Ok") {\nconst n = head.value;\nreturn ${c.ret(`[n, ${c.v}]`)};\n}\nreturn ${c.ret("null")};`,
       ),
   },
+  ...[
+    ["nullishAssignment", "the right side of a `??=` statement, run when the target is nullish", "??=", "null"],
+    ["orAssignment", "the right side of a `||=` statement, run when the target is falsy", "||=", "0"],
+    ["andAssignment", "the right side of a `&&=` statement, run when the target is truthy", "&&=", "0"],
+  ].map(([id, title, operator, skipped]) => ({
+    id,
+    title,
+    host: (c) =>
+      c.probe(
+        `const target = { value: (flip() ? ${skipped} : "kept") as unknown };\nnote("target", target).value ${operator} ${c.v};\nreturn ${c.ret("target.value")};`,
+      ),
+  })),
+  {
+    id: "logicalAssignmentValue",
+    title: "the right side of a `??=` whose value is used",
+    rejects: { match: "match-placement", try: "try-placement" },
+    host: (c) =>
+      c.probe(`let slot: unknown = flip() ? null : "kept";\nreturn ${c.ret(`[(slot ??= ${c.v}), slot]`)};`),
+  },
+  {
+    id: "compoundAssignment",
+    title: "the right side of a `+=` statement",
+    host: (c) =>
+      c.probe(`const target = { total: note("initial", "start:") };\nnote("target", target).total += ${c.v};\nreturn ${c.ret("target.total")};`),
+  },
 ];
 
 export const statementPositions = [

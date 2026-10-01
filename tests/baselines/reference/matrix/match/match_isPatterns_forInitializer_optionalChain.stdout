@@ -1,4 +1,0 @@
-forInitializer({}) => ["range"] | range "range"
-forInitializer({}) => [null] | other null
-forInitializer({}) => ["plain"] | error "plain"
-forInitializer("text") => [null] | other null

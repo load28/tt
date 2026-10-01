@@ -1,3 +1,0 @@
-throwOperand(1) => threw 10 | one 10; read 10
-throwOperand(2) => {"kind":"Err","error":"negative -10"} | other -10; read -10
-throwOperand(-3) => {"kind":"Err","error":"negative -10"} | other -10; read -10

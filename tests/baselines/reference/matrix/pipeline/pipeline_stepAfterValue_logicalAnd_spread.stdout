@@ -1,0 +1,2 @@
+logicalAnd(4) => 7 | flip true; step 3; add 7
+logicalAnd(-1) => false | flip false

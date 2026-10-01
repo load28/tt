@@ -1,2 +1,0 @@
-declarationInitializer(4) => 7 | yield 4; step 3; add 7
-declarationInitializer(-1) => 2 | yield -1; step 3; add 2

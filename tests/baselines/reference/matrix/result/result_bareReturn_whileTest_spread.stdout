@@ -1,2 +1,0 @@
-whileTest(2) => 1 | read 2
-whileTest(-1) => 1 | read -1

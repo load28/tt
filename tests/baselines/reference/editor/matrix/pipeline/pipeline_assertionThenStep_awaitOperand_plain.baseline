@@ -1,0 +1,16 @@
+differences from pipeline_assertionThenStep_awaitOperand_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:4:43 ===
+  |   return await (note("operand", input) |> String as string |> .length);
+  |                                           ^ /*call*/
+  tt only: var String: StringConstructor
+  ts only: var String: (value?: any) => string
+
+=== definition /*call*/ main.tt:4:43 ===
+  |   return await (note("operand", input) |> String as string |> .length);
+  |                                           ^ /*call*/
+  ts only: <external>/lib.es5.d.ts 534:5-534:27
+
+=== diagnostics main.tt ===
+  ts only: main "await ((String(note(\"operand\", input)) as string).length)" hint TS80007: 'await' has no effect on the type of this expression.
+

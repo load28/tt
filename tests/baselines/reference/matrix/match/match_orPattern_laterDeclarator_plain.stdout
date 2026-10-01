@@ -1,0 +1,4 @@
+laterDeclarator({"kind":"Num","value":4}) => [1,4] | before 1; operand {"kind":"Num","value":4}; number 4
+laterDeclarator({"kind":"Neg","value":-3}) => [1,-3] | before 1; operand {"kind":"Neg","value":-3}; number -3
+laterDeclarator({"kind":"Word","text":"hi"}) => [1,"hi"] | before 1; operand {"kind":"Word","text":"hi"}; word "hi"
+laterDeclarator({"kind":"End"}) => [1,""] | before 1; operand {"kind":"End"}; end ""

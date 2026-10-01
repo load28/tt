@@ -1,0 +1,3 @@
+conditionalTest({"kind":"Done","value":{"kind":"Some","value":7}}) => "truthy" | some 7; then "truthy"
+conditionalTest({"kind":"Done","value":{"kind":"None"}}) => "falsy" | none 0; else "falsy"
+conditionalTest({"kind":"Failed","error":"lost"}) => "truthy" | failed "lost"; then "truthy"

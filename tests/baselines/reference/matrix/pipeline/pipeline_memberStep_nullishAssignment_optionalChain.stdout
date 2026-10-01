@@ -1,0 +1,2 @@
+nullishAssignment(2) => 6 | flip true; target {"value":null}; receiver {"factor":3}; twice 6
+nullishAssignment(6) => "kept" | flip false; target {"value":"kept"}

@@ -1,0 +1,5 @@
+declarationInitializer(200) => true | success true
+declarationInitializer(201) => null | other null
+declarationInitializer(404) => false | missing false
+declarationInitializer(500) => null | other null
+declarationInitializer(7) => null | other null

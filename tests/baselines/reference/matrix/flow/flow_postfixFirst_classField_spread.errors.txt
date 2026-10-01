@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[flow-first-step-method]: `flow`: the first step cannot be a method step — it is the composed function's input, so it must be a function
+ --> ./main.tt:5:21
+  |
+5 |     field = flow |> .toFixed(1) |> adder(first(...[input]));
+  |                     ^^^^^^^^^^^
+  |
+  = help: write the step as a function — `flow |> ((s: string) => s.trim()) |> ...`
+
+
+==== ttc --check-types (exit 1) ====
+error[flow-first-step-method]: `flow`: the first step cannot be a method step — it is the composed function's input, so it must be a function
+ --> main.tt:5:21
+  |
+5 |     field = flow |> .toFixed(1) |> adder(first(...[input]));
+  |                     ^^^^^^^^^^^
+  |
+  = help: write the step as a function — `flow |> ((s: string) => s.trim()) |> ...`
+
+==== tsc on the emitted TypeScript (exit 0) ====

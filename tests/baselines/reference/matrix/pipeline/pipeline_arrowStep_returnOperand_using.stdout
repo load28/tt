@@ -1,0 +1,2 @@
+returnOperand(8) => 9 | open res; operand 8; arrow 9; dispose res
+returnOperand(9) => 10 | open res; operand 9; arrow 10; dispose res

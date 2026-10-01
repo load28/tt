@@ -1,4 +1,0 @@
-nullish({"kind":"Num","value":4}) => 4 | flip true; risky {"kind":"Num","value":4}; number 4
-nullish({"kind":"Neg","value":-3}) => "set" | flip false; left "set"
-nullish({"kind":"Word","text":"hi"}) => "hi" | flip true; risky {"kind":"Word","text":"hi"}; word "hi"
-nullish({"kind":"End"}) => "set" | flip false; left "set"

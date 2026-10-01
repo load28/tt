@@ -1,0 +1,3 @@
+getter(4) => 24 | flip true; maybe true; add 8; twice 24
+getter(6) => undefined | flip false; maybe false; add null
+getter(8) => 48 | flip true; maybe true; add 16; twice 48

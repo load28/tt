@@ -1,2 +1,0 @@
-getter(4) => {"kind":"Ok","value":4} | read 4; direct 4
-getter(-1) => {"kind":"Err","error":"negative -7"} | read undefined; fallback -7; read -7

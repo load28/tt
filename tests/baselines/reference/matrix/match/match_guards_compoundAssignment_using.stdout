@@ -1,0 +1,5 @@
+compoundAssignment({"kind":"Circle","r":1}) => "start:1" | open res; initial "start:"; target {"total":"start:"}; operand {"kind":"Circle","r":1}; guard big false; small 1; dispose res
+compoundAssignment({"kind":"Circle","r":5}) => "start:5" | open res; initial "start:"; target {"total":"start:"}; operand {"kind":"Circle","r":5}; guard big true; big 5; dispose res
+compoundAssignment({"kind":"Rect","w":4,"h":2}) => "start:4" | open res; initial "start:"; target {"total":"start:"}; operand {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4; dispose res
+compoundAssignment({"kind":"Rect","w":1,"h":3}) => "start:3" | open res; initial "start:"; target {"total":"start:"}; operand {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3; dispose res
+compoundAssignment({"kind":"Point"}) => "start:0" | open res; initial "start:"; target {"total":"start:"}; operand {"kind":"Point"}; point 0; dispose res

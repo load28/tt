@@ -1,2 +1,0 @@
-logicalAnd(4) => 7 | flip true; operand 4; step 3; add 7; finally 0
-logicalAnd(-1) => false | flip false; finally 0

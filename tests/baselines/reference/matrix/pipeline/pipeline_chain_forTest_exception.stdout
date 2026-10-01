@@ -1,2 +1,0 @@
-forTest(3) => 1 | risky 3; double 6
-forTest(12) => 1 | risky 12; double 24

@@ -1,0 +1,2 @@
+optionalCall(2.5) => [["2.50"],null] | callee true; risky 2.5; positive 2.5; callee false
+optionalCall(-3) => [[null],null] | callee true; risky -3; positive undefined; callee false

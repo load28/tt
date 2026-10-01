@@ -1,2 +1,0 @@
-callArgument(10) => [1,9,3] | a 1; risky 10; flip true; lookup true; found 9; c 3
-callArgument(20) => [1,40,3] | a 1; risky 20; flip false; lookup false; double 40; c 3

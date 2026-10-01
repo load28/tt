@@ -1,2 +1,0 @@
-objectProperty(2) => {"a":1,"c":3} | a 1; yield 2; c 3
-objectProperty(5) => {"a":1,"c":3} | a 1; yield 5; c 3

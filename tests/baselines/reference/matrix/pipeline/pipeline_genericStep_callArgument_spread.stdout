@@ -1,2 +1,0 @@
-callArgument(6) => [1,12,3] | a 1; keep 6; double 12; c 3
-callArgument(-2) => [1,-4,3] | a 1; keep -2; double -4; c 3

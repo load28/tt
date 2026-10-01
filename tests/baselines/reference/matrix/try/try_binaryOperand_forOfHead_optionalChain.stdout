@@ -1,2 +1,0 @@
-forOfHead(3) => {"kind":"Ok","value":[30]} | read 3
-forOfHead(-2) => {"kind":"Err","error":"negative undefined"} | read undefined

@@ -1,3 +1,0 @@
-matchArm(5) => {"kind":"Ok","value":[5,2]} | open res; flip true; operand 5; read 5; b 2; read 2; dispose res
-matchArm(1) => 0 | open res; flip false; other arm 0; dispose res
-matchArm(-2) => {"kind":"Err","error":"negative -2"} | open res; flip true; operand -2; read -2; dispose res

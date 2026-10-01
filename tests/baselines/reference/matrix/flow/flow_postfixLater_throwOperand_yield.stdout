@@ -1,0 +1,2 @@
+throwOperand(1.5) => threw function | yield 1.5
+throwOperand(2) => threw function | yield 2

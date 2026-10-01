@@ -1,0 +1,3 @@
+getter(5) => {"kind":"Ok","value":[5,2]} | read 5; b 2; read 2
+getter(1) => {"kind":"Err","error":"negative -2"} | read 1; b -2; read -2
+getter(-2) => {"kind":"Err","error":"negative -2"} | read -2

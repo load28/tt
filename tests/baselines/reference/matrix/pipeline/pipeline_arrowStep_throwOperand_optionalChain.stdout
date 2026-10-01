@@ -1,0 +1,2 @@
+throwOperand(8) => threw 9 | arrow 9
+throwOperand(9) => threw null | arrow null

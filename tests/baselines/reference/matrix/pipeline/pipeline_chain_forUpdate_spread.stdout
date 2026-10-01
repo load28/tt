@@ -1,2 +1,0 @@
-forUpdate(3) => "***6" | body 0; double 6
-forUpdate(12) => "**24" | body 0; double 24

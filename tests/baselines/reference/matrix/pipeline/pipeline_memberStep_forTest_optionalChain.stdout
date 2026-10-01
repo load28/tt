@@ -1,0 +1,2 @@
+forTest(2) => 1 | receiver {"factor":3}; twice 6
+forTest(6) => 0 | receiver {"factor":3}; twice null

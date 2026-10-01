@@ -1,2 +1,0 @@
-switchDiscriminant(1.5) => "default" | yield 1.5; case 0
-switchDiscriminant(2) => "default" | yield 2; case 0

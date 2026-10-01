@@ -1,2 +1,0 @@
-optionalCall(5) => [[15],null] | open res; callee true; operand 5; map 15; callee false; dispose res
-optionalCall(0) => [[-1],null] | open res; callee true; operand 0; callee false; dispose res

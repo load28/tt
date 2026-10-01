@@ -1,2 +1,0 @@
-switchCaseTest(2) => "default" | discriminant 0; read 2; inner {"kind":"Ok","value":3}
-switchCaseTest(-1) => "default" | discriminant 0; read undefined; inner {"kind":"Err","error":"negative undefined"}

@@ -1,0 +1,7 @@
+differences from flow_overloadedLater_objectProperty_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:5:77 ===
+  |   return { a: note("a", 1), value: flow |> adder(note("operand", input)) |> shape, c: note("c", 3) };
+  |                                                                             ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

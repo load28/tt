@@ -1,0 +1,5 @@
+conditionalTest(200) => "truthy" | open res; operand 200; success true; then "truthy"; dispose res
+conditionalTest(201) => "truthy" | open res; operand 201; success true; then "truthy"; dispose res
+conditionalTest(404) => "falsy" | open res; operand 404; missing false; else "falsy"; dispose res
+conditionalTest(500) => "falsy" | open res; operand 500; guard true; server false; else "falsy"; dispose res
+conditionalTest(7) => "falsy" | open res; operand 7; other null; else "falsy"; dispose res

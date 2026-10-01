@@ -1,3 +1,0 @@
-laterDeclarator({"kind":"Done","value":{"kind":"Some","value":7}}) => [1,7] | before 1; risky {"kind":"Done","value":{"kind":"Some","value":7}}; some 7
-laterDeclarator({"kind":"Done","value":{"kind":"None"}}) => [1,0] | before 1; risky {"kind":"Done","value":{"kind":"None"}}; none 0
-laterDeclarator({"kind":"Failed","error":"lost"}) => "risky call 3" | before 1; caught "risky call 3"

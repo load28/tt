@@ -1,0 +1,5 @@
+matchArm(200) => true | open res; flip true; operand 200; success true; dispose res
+matchArm(201) => 0 | open res; flip false; other arm 0; dispose res
+matchArm(404) => false | open res; flip true; operand 404; missing false; dispose res
+matchArm(500) => 0 | open res; flip false; other arm 0; dispose res
+matchArm(7) => null | open res; flip true; operand 7; other null; dispose res

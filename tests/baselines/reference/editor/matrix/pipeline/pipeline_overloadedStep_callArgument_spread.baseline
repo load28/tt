@@ -1,7 +1,0 @@
-differences from pipeline_overloadedStep_callArgument_spread at the questions listed in tests/editor-matrix-differences.txt
-
-=== hover /*call*/ main.tt:4:50 ===
-  |   return pack(note("a", 1), first(...[input]) |> shape |> .length, note("c", 3));
-  |                                                  ^ /*call*/
-  tt only: (alias) function shape(s: string): number
-

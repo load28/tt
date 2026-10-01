@@ -1,0 +1,2 @@
+logicalAssignmentValue(2) => [null,null] | open res; flip true; operand 2; dispose res
+logicalAssignmentValue(5) => ["kept","kept"] | open res; flip false; dispose res

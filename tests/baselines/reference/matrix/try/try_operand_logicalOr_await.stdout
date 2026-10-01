@@ -1,0 +1,2 @@
+logicalOr(2) => {"kind":"Ok","value":true} | flip true
+logicalOr(-1) => {"kind":"Err","error":"negative -1"} | flip false; await; read -1

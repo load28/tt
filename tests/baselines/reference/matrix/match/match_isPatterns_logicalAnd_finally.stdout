@@ -1,0 +1,4 @@
+logicalAnd({}) => "range" | flip true; operand {}; range "range"; finally 0
+logicalAnd({}) => false | flip false; finally 0
+logicalAnd({}) => "plain" | flip true; operand {}; error "plain"; finally 0
+logicalAnd("text") => false | flip false; finally 0

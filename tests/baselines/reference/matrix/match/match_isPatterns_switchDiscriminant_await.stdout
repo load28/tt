@@ -1,0 +1,4 @@
+switchDiscriminant({}) => "default" | await; range "range"; case 0
+switchDiscriminant({}) => "default" | await; type 1; case 0
+switchDiscriminant({}) => "default" | await; error "plain"; case 0
+switchDiscriminant("text") => "default" | await; other null; case 0

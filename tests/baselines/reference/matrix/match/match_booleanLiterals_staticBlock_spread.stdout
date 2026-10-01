@@ -1,0 +1,2 @@
+staticBlock(true) => 1 | yes 1
+staticBlock(false) => 0 | no 0

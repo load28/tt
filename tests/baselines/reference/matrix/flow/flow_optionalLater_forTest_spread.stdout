@@ -1,0 +1,3 @@
+forTest(4) => 1 | flip true; maybe true
+forTest(6) => 1 | flip false; maybe false
+forTest(8) => 1 | flip true; maybe true

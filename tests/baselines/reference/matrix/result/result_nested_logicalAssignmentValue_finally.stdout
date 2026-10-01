@@ -1,0 +1,2 @@
+logicalAssignmentValue(2) => [{"kind":"Ok","value":6},{"kind":"Ok","value":6}] | flip true; operand 2; read 2; inner {"kind":"Ok","value":3}; finally 0
+logicalAssignmentValue(-1) => ["kept","kept"] | flip false; finally 0

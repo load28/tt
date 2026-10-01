@@ -1,0 +1,2 @@
+andAssignment(6) => 0 | open res; flip true; target {"value":0}; dispose res
+andAssignment(-2) => -4 | open res; flip false; target {"value":"kept"}; operand -2; keep -2; double -4; dispose res

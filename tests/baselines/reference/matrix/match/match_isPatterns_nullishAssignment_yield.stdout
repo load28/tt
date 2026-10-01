@@ -1,0 +1,4 @@
+nullishAssignment({}) => "range" | flip true; target {"value":null}; yield {}; range "range"
+nullishAssignment({}) => "kept" | flip false; target {"value":"kept"}
+nullishAssignment({}) => "plain" | flip true; target {"value":null}; yield {}; error "plain"
+nullishAssignment("text") => "kept" | flip false; target {"value":"kept"}

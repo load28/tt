@@ -1,0 +1,2 @@
+methodArgument(1.5) => ["receiver",1,null] | open res; receiver {"tag":"receiver"}; a 1; operand 1.5; dispose res
+methodArgument(2) => ["receiver",1,null] | open res; receiver {"tag":"receiver"}; a 1; operand 2; dispose res

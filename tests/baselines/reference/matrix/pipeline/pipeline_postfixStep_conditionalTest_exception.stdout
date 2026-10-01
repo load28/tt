@@ -1,0 +1,2 @@
+conditionalTest(1.25) => "truthy" | risky 1.25; then "truthy"
+conditionalTest(7) => "truthy" | risky 7; then "truthy"

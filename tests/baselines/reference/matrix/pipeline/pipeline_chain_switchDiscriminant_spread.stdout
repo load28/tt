@@ -1,0 +1,2 @@
+switchDiscriminant(3) => "default" | double 6; case 0
+switchDiscriminant(12) => "default" | double 24; case 0

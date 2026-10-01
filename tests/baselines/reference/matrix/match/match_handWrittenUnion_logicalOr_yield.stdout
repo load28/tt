@@ -1,0 +1,2 @@
+logicalOr({"kind":"Click","x":3}) => true | flip true
+logicalOr({"kind":"Key","key":"k"}) => "k" | flip false; yield {"kind":"Key","key":"k"}; key "k"

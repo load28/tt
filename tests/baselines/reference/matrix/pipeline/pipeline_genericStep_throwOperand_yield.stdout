@@ -1,2 +1,0 @@
-throwOperand(6) => threw 12 | yield 6; keep 6; double 12
-throwOperand(-2) => threw -4 | yield -2; keep -2; double -4

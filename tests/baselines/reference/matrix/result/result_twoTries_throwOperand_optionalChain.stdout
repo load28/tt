@@ -1,3 +1,0 @@
-throwOperand(5) => threw {"kind":"Ok","value":[5,2]} | read 5; b 2; read 2
-throwOperand(1) => threw {"kind":"Err","error":"negative undefined"} | read undefined
-throwOperand(-2) => threw {"kind":"Err","error":"negative -2"} | read -2

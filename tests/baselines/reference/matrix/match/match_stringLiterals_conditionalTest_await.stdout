@@ -1,0 +1,4 @@
+conditionalTest("north") => "truthy" | await; n 1; then "truthy"
+conditionalTest("south") => "truthy" | await; se 2; then "truthy"
+conditionalTest("east") => "truthy" | await; se 2; then "truthy"
+conditionalTest("up") => "falsy" | await; other 0; else "falsy"

@@ -1,2 +1,0 @@
-returnOperand(123) => 3 | open res; operand 123; dispose res
-returnOperand(4) => 1 | open res; operand 4; dispose res

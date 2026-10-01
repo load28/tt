@@ -1,2 +1,0 @@
-yieldOperand(2) => {"kind":"Ok","value":6} | open res; operand 2; read 2; inner {"kind":"Ok","value":3}; yield {"kind":"Ok","value":6}; dispose res
-yieldOperand(-1) => {"kind":"Err","error":"negative -1"} | open res; operand -1; read -1; inner {"kind":"Err","error":"negative -1"}; yield {"kind":"Err","error":"negative -1"}; dispose res

@@ -1,2 +1,0 @@
-method(6) => {"kind":"Ok","value":6} | this "holder"; flip true; operand 6; read 6
-method(-6) => {"kind":"Err","error":"negative -9"} | this "holder"; flip false; fallback -9; read -9

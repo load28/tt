@@ -1,2 +1,0 @@
-switchCaseTest(3) => "default" | discriminant 0; await; double 6
-switchCaseTest(12) => "default" | discriminant 0; await; double 24

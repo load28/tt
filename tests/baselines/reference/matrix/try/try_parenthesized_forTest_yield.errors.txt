@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> ./main.tt:6:24
+  |
+6 |   for (; rounds < 1 && try (flip() ? read((yield input)) : read(note("fallback", -9))); ) {
+  |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> main.tt:6:24
+  |
+6 |   for (; rounds < 1 && try (flip() ? read((yield input)) : read(note("fallback", -9))); ) {
+  |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,2 +1,0 @@
-switchDiscriminant(2) => "default" | operand 2; case 0
-switchDiscriminant(5) => "default" | operand 5; case 0

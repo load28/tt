@@ -1,3 +1,0 @@
-spreadElement(1) => {"kind":"Ok","value":[0,10]} | first 0; one 10; read 10
-spreadElement(2) => {"kind":"Err","error":"negative -10"} | first 0; other -10; read -10
-spreadElement(-3) => {"kind":"Err","error":"negative -10"} | first 0; other -10; read -10

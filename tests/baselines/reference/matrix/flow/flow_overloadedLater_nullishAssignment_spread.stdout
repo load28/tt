@@ -1,0 +1,2 @@
+nullishAssignment(2) => "#4" | flip true; target {"value":null}; add 4; shape "#4"
+nullishAssignment(5) => "kept" | flip false; target {"value":"kept"}

@@ -1,2 +1,0 @@
-logicalOr(3) => true | flip true
-logicalOr(-4) => -8 | flip false; add -8; keep -8

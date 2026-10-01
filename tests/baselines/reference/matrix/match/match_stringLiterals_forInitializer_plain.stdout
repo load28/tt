@@ -1,4 +1,0 @@
-forInitializer("north") => [1] | operand "north"; n 1
-forInitializer("south") => [2] | operand "south"; se 2
-forInitializer("east") => [2] | operand "east"; se 2
-forInitializer("up") => [0] | operand "up"; other 0

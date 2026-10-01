@@ -1,2 +1,0 @@
-callArgument(4) => [1,7,3] | open res; a 1; operand 4; step 3; add 7; c 3; dispose res
-callArgument(-1) => [1,2,3] | open res; a 1; operand -1; step 3; add 2; c 3; dispose res

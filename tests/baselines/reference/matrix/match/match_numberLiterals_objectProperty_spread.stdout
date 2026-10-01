@@ -1,0 +1,5 @@
+objectProperty(200) => {"a":1,"value":true,"c":3} | a 1; success true; c 3
+objectProperty(201) => {"a":1,"value":true,"c":3} | a 1; success true; c 3
+objectProperty(404) => {"a":1,"value":false,"c":3} | a 1; missing false; c 3
+objectProperty(500) => {"a":1,"value":false,"c":3} | a 1; guard true; server false; c 3
+objectProperty(7) => {"a":1,"value":null,"c":3} | a 1; other null; c 3

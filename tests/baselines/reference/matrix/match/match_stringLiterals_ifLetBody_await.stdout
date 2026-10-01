@@ -1,4 +1,0 @@
-ifLetBody("north") => [1,1] | head 1; read 1; await; n 1
-ifLetBody("south") => [1,2] | head 1; read 1; await; se 2
-ifLetBody("east") => [1,2] | head 1; read 1; await; se 2
-ifLetBody("up") => [1,0] | head 1; read 1; await; other 0

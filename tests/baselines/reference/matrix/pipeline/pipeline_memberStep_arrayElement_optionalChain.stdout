@@ -1,0 +1,2 @@
+arrayElement(2) => [0,6,2] | first 0; receiver {"factor":3}; twice 6; last 2
+arrayElement(6) => [0,null,2] | first 0; receiver {"factor":3}; twice null; last 2

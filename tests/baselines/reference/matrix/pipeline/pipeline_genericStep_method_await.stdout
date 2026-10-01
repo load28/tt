@@ -1,0 +1,2 @@
+method(6) => 12 | this "holder"; await; keep 6; double 12
+method(-2) => -4 | this "holder"; await; keep -2; double -4

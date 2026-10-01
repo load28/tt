@@ -1,3 +1,0 @@
-objectProperty({"kind":"Circle","r":2}) => {"a":1,"value":2,"c":3} | a 1; operand {"kind":"Circle","r":2}; circle 2; c 3
-objectProperty({"kind":"Rect","w":3,"h":4}) => {"a":1,"value":[3,4],"c":3} | a 1; operand {"kind":"Rect","w":3,"h":4}; rect [3,4]; c 3
-objectProperty({"kind":"Point"}) => {"a":1,"value":null,"c":3} | a 1; operand {"kind":"Point"}; point null; c 3

@@ -1,0 +1,2 @@
+callArgument(5) => [1,15,3] | a 1; operand 5; map 15; c 3; finally 0
+callArgument(0) => [1,-1,3] | a 1; operand 0; c 3; finally 0

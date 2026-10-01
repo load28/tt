@@ -1,0 +1,2 @@
+arrayElement(1.5) => [0,null,2] | first 0; operand 1.5; last 2
+arrayElement(2) => [0,null,2] | first 0; operand 2; last 2

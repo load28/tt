@@ -1,2 +1,0 @@
-forOfHead(4) => [7] | open res; operand 4; step 3; add 7; dispose res
-forOfHead(-1) => [2] | open res; operand -1; step 3; add 2; dispose res

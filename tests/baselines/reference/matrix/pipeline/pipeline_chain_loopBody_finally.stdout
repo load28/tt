@@ -1,2 +1,0 @@
-loopBody(3) => ["***6","***6"] | operand 3; double 6; operand 3; double 6; finally 0
-loopBody(12) => ["**24","**24"] | operand 12; double 24; operand 12; double 24; finally 0

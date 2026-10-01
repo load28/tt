@@ -1,5 +1,0 @@
-whileTest({"kind":"Circle","r":1}) => 1 | await; guard big false; small 1
-whileTest({"kind":"Circle","r":5}) => 1 | await; guard big true; big 5
-whileTest({"kind":"Rect","w":4,"h":2}) => 1 | await; guard wide true; wide 4
-whileTest({"kind":"Rect","w":1,"h":3}) => 1 | await; guard wide false; tall 3
-whileTest({"kind":"Point"}) => 0 | await; point 0

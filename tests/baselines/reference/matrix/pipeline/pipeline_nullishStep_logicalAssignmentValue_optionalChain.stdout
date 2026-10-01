@@ -1,0 +1,2 @@
+logicalAssignmentValue(10) => [20,20] | flip true; flip false; lookup false; double 20
+logicalAssignmentValue(20) => [null,null] | flip true; flip false; lookup false; double null

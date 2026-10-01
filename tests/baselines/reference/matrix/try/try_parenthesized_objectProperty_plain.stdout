@@ -1,0 +1,2 @@
+objectProperty(6) => {"kind":"Ok","value":{"a":1,"value":6,"c":3}} | a 1; flip true; operand 6; read 6; c 3
+objectProperty(-6) => {"kind":"Err","error":"negative -9"} | a 1; flip false; fallback -9; read -9

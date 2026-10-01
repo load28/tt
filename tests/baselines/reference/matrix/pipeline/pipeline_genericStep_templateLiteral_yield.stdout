@@ -1,2 +1,0 @@
-templateLiteral(6) => "<L|12|R>" | left "L"; yield 6; keep 6; double 12; right "R"
-templateLiteral(-2) => "<L|-4|R>" | left "L"; yield -2; keep -2; double -4; right "R"

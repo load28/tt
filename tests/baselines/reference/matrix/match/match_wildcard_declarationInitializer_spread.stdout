@@ -1,0 +1,4 @@
+declarationInitializer({"kind":"Num","value":4}) => -1 | other -1
+declarationInitializer({"kind":"Neg","value":-3}) => -1 | other -1
+declarationInitializer({"kind":"Word","text":"hi"}) => 2 | word 2
+declarationInitializer({"kind":"End"}) => -1 | other -1

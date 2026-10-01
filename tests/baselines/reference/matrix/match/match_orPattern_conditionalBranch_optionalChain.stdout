@@ -1,0 +1,4 @@
+conditionalBranch({"kind":"Num","value":4}) => 4 | flip true; number 4
+conditionalBranch({"kind":"Neg","value":-3}) => "skipped" | flip false; else "skipped"
+conditionalBranch({"kind":"Word","text":"hi"}) => threw Cannot read properties of undefined (reading 'kind') | flip true
+conditionalBranch({"kind":"End"}) => "skipped" | flip false; else "skipped"

@@ -1,0 +1,2 @@
+logicalOr(2) => true | flip true; finally 0
+logicalOr(5) => "#10" | flip false; operand 5; finally 0; add 10; shape "#10"

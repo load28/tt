@@ -1,2 +1,0 @@
-logicalOr(6) => true | open res; flip true; dispose res
-logicalOr(-2) => -4 | open res; flip false; operand -2; keep -2; double -4; dispose res

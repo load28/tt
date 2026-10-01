@@ -1,2 +1,0 @@
-getter(2) => "#4" | operand 2; finally 0; add 4; shape "#4"
-getter(5) => "#10" | operand 5; finally 0; add 10; shape "#10"

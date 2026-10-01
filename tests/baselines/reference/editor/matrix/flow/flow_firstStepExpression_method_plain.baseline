@@ -1,0 +1,13 @@
+differences from flow_firstStepExpression_method_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call2*/ main.tt:8:55 ===
+  |       return flow |> adder(note("operand", input)) |> String;
+  |                                                       ^ /*call2*/
+  tt only: var String: StringConstructor
+  ts only: var String: (value?: any) => string
+
+=== definition /*call2*/ main.tt:8:55 ===
+  |       return flow |> adder(note("operand", input)) |> String;
+  |                                                       ^ /*call2*/
+  ts only: <external>/lib.es5.d.ts 534:5-534:27
+

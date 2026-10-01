@@ -1,3 +1,0 @@
-forOfHead({"kind":"Circle","r":2}) => [0] | yield {"kind":"Circle","r":2}; other 0
-forOfHead({"kind":"Rect","w":3,"h":4}) => [12] | yield {"kind":"Rect","w":3,"h":4}; area 12; large 12
-forOfHead({"kind":"Point"}) => [0] | yield {"kind":"Point"}; other 0

@@ -1,2 +1,0 @@
-switchCaseTest(3) => "default" | open res; discriminant 0; operand 3; dispose res
-switchCaseTest(-4) => "default" | open res; discriminant 0; operand -4; dispose res

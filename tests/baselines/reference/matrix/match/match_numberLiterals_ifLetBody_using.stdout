@@ -1,0 +1,5 @@
+ifLetBody(200) => [1,true] | open res; head 1; read 1; operand 200; success true; dispose res
+ifLetBody(201) => [1,true] | open res; head 1; read 1; operand 201; success true; dispose res
+ifLetBody(404) => [1,false] | open res; head 1; read 1; operand 404; missing false; dispose res
+ifLetBody(500) => [1,false] | open res; head 1; read 1; operand 500; guard true; server false; dispose res
+ifLetBody(7) => [1,null] | open res; head 1; read 1; operand 7; other null; dispose res

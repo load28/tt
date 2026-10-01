@@ -1618,7 +1618,11 @@ impl TargetRewritePlan {
                     jsx_child: false,
                     anchor: Some(primary),
                     claim: false,
-                    rewrite: None,
+                    rewrite: matches!(
+                        operation.kind,
+                        PlannedConditionalKind::LogicalAssignment { .. }
+                    )
+                    .then(String::new),
                 }
             })
             .collect();
@@ -1711,6 +1715,31 @@ impl TargetRewritePlan {
                 rewrite: None,
             }))
             .chain(operation_replacements)
+            .chain(all_operations().flat_map(|operation| {
+                match &operation.condition {
+                    PlannedEvaluationInput::Source {
+                        mode: EvaluationInputMode::LogicalAssignmentTarget,
+                        receiver,
+                        key,
+                        ..
+                    } => [*receiver, *key]
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|part| match part {
+                            PlannedReceiver::Captured { source, slot } => Some(SourceReplacement {
+                                source,
+                                slot: lowering.slot_name(slot).to_owned(),
+                                jsx_child: false,
+                                anchor: None,
+                                claim: false,
+                                rewrite: None,
+                            }),
+                            PlannedReceiver::Stable { .. } => None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                }
+            }))
             .collect();
         // A consumed call frame owns its original occurrence; captures
         // within that frame are still emitted while the value is active.

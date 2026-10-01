@@ -1,0 +1,5 @@
+laterDeclarator(200) => [1,true] | before 1; operand 200; success true; finally 0
+laterDeclarator(201) => [1,true] | before 1; operand 201; success true; finally 0
+laterDeclarator(404) => [1,false] | before 1; operand 404; missing false; finally 0
+laterDeclarator(500) => [1,false] | before 1; operand 500; guard true; server false; finally 0
+laterDeclarator(7) => [1,null] | before 1; operand 7; other null; finally 0

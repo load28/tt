@@ -1,0 +1,4 @@
+whileTest("north") => 1 | operand "north"; n 1; finally 0
+whileTest("south") => 1 | operand "south"; se 2; finally 0
+whileTest("east") => 1 | operand "east"; se 2; finally 0
+whileTest("up") => 0 | operand "up"; other 0; finally 0

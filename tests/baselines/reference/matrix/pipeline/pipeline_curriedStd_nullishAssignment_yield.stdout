@@ -1,0 +1,2 @@
+nullishAssignment(5) => 15 | flip true; target {"value":null}; yield 5; map 15
+nullishAssignment(0) => "kept" | flip false; target {"value":"kept"}

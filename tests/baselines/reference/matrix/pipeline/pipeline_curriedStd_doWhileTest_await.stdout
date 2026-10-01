@@ -1,2 +1,0 @@
-doWhileTest(5) => 2 | await; map 15
-doWhileTest(0) => 2 | await

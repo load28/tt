@@ -1,0 +1,2 @@
+doWhileTest(4) => 2 | step 3; add 7
+doWhileTest(-1) => 1 | step 3; add null

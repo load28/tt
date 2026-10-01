@@ -1,2 +1,0 @@
-conditionalBranch(6) => 12 | flip true; keep 6; double 12
-conditionalBranch(-2) => "skipped" | flip false; else "skipped"

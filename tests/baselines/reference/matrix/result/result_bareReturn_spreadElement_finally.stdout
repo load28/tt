@@ -1,0 +1,2 @@
+spreadElement(2) => [0,{"kind":"Ok"}] | first 0; operand 2; read 2; finally 0
+spreadElement(-1) => [0,{"kind":"Err","error":"negative -1"}] | first 0; operand -1; read -1; finally 0

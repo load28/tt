@@ -1,2 +1,0 @@
-conditionalTest(4) => "truthy" | shape "#4"; then "truthy"
-conditionalTest(12) => threw Cannot read properties of undefined (reading 'length') | 

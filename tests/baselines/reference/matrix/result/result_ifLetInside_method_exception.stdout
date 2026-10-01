@@ -1,0 +1,2 @@
+method(4) => {"kind":"Ok","value":4} | this "holder"; risky 4; read 4; direct 4
+method(-1) => {"kind":"Err","error":"negative -7"} | this "holder"; risky -1; read -1; fallback -7; read -7

@@ -1,2 +1,0 @@
-forUpdate(6) => 12 | body 0; risky 6; keep 6; double 12
-forUpdate(-2) => -4 | body 0; risky -2; keep -2; double -4

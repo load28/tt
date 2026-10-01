@@ -1,0 +1,3 @@
+destructuringDefault(4) => 24 | source {}; operand 4; flip true; maybe true; finally 0; add 8; twice 24
+destructuringDefault(6) => undefined | source {}; operand 6; flip false; maybe false; finally 0; add 12
+destructuringDefault(8) => 48 | source {}; operand 8; flip true; maybe true; finally 0; add 16; twice 48

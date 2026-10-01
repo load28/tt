@@ -1,0 +1,4 @@
+constructorBody("north") => 1 | n 1
+constructorBody("south") => 2 | se 2
+constructorBody("east") => 2 | se 2
+constructorBody("up") => 0 | other 0

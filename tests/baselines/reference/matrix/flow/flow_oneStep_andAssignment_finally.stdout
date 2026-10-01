@@ -1,0 +1,2 @@
+andAssignment(7) => 0 | flip true; target {"value":0}; finally 0
+andAssignment(1) => 2 | flip false; target {"value":"kept"}; operand 1; finally 0; add 2

@@ -1,0 +1,4 @@
+declarationInitializer({}) => "range" | yield {}; range "range"
+declarationInitializer({}) => 1 | yield {}; type 1
+declarationInitializer({}) => "plain" | yield {}; error "plain"
+declarationInitializer("text") => null | yield "text"; other null

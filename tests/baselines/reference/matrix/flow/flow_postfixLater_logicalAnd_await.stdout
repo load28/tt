@@ -1,2 +1,0 @@
-logicalAnd(1.5) => "3.0" | flip true; await; add 3
-logicalAnd(2) => false | flip false

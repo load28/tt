@@ -1,4 +1,0 @@
-methodArgument("north") => ["receiver",1,1] | receiver {"tag":"receiver"}; a 1; await; n 1
-methodArgument("south") => ["receiver",1,2] | receiver {"tag":"receiver"}; a 1; await; se 2
-methodArgument("east") => ["receiver",1,2] | receiver {"tag":"receiver"}; a 1; await; se 2
-methodArgument("up") => ["receiver",1,0] | receiver {"tag":"receiver"}; a 1; await; other 0

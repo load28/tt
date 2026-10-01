@@ -1,0 +1,2 @@
+declarationInitializer(4) => 7 | operand 4; step 3; add 7; finally 0
+declarationInitializer(-1) => 2 | operand -1; step 3; add 2; finally 0

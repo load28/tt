@@ -1,0 +1,2 @@
+logicalOr(1.5) => true | open res; flip true; dispose res
+logicalOr(2) => "4.0" | open res; flip false; operand 2; dispose res; add 4

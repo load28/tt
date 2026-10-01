@@ -1,8 +1,0 @@
-differences from flow_genericLater_returnOperand_await at the questions listed in tests/editor-matrix-differences.txt
-
-=== hover /*call*/ main.tt:4:47 ===
-  |   return flow |> adder(await later(input)) |> keep;
-  |                                               ^ /*call*/
-  tt only: (alias) function keep<T>(value: T): T
-  ts only: (alias) function keep<number>(value: number): number
-

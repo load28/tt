@@ -1,3 +1,0 @@
-forOfHead({"kind":"Circle","r":2}) => [2] | circle 2
-forOfHead({"kind":"Rect","w":3,"h":4}) => threw Cannot read properties of undefined (reading 'kind') | 
-forOfHead({"kind":"Point"}) => [null] | point null

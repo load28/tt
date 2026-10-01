@@ -1,5 +1,0 @@
-labeledBlock(200) => true | open res; operand 200; success true; flip true; dispose res
-labeledBlock(201) => [true] | open res; operand 201; success true; flip false; dispose res
-labeledBlock(404) => false | open res; operand 404; missing false; flip true; dispose res
-labeledBlock(500) => [false] | open res; operand 500; guard true; server false; flip false; dispose res
-labeledBlock(7) => null | open res; operand 7; other null; flip true; dispose res

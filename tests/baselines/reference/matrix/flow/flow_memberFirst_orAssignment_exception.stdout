@@ -1,0 +1,2 @@
+orAssignment(2) => 8 | flip true; target {"value":0}; receiver {"factor":3}; risky 2; twice 6; add 8
+orAssignment(7) => "kept" | flip false; target {"value":"kept"}

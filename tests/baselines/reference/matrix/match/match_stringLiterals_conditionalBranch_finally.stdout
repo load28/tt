@@ -1,4 +1,0 @@
-conditionalBranch("north") => 1 | flip true; operand "north"; n 1; finally 0
-conditionalBranch("south") => "skipped" | flip false; else "skipped"; finally 0
-conditionalBranch("east") => 2 | flip true; operand "east"; se 2; finally 0
-conditionalBranch("up") => "skipped" | flip false; else "skipped"; finally 0

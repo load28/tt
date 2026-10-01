@@ -1,0 +1,2 @@
+forInitializer(5) => [15] | risky 5; map 15
+forInitializer(0) => [-1] | risky 0

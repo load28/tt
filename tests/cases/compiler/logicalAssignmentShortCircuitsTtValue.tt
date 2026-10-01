@@ -1,0 +1,146 @@
+// A logical assignment (`??=`, `||=`, `&&=`) evaluates its right side only
+// when the target's value does not already decide the result, so a tt value
+// there (a `try`, a `match`) must run, and a `try` may propagate its `Err`,
+// only on that path. `o.a ??= try read(k)` with `o.a` already set leaves the
+// function untouched; `o.b ||= match (...)` with `o.b` truthy never evaluates
+// the scrutinee. The target is read once (`counted.a` runs its getter
+// once), its object and computed key are evaluated before the test, and
+// TypeScript keeps narrowing the target after the statement (`o.a` is a
+// `number` in the `return`). The twin is the same program written as
+// TypeScript.
+// @run: main.tt
+// @twin: twin.ts
+// @filename: main.tt
+export {};
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const log: string[] = [];
+function read(n: number): R {
+  log.push("read");
+  return n > 0 ? { kind: "Ok", value: n } : { kind: "Err", error: "neg" };
+}
+function nullish(o: { a?: number }, k: number): R {
+  o.a ??= try read(k);
+  return { kind: "Ok", value: o.a };
+}
+const counted = {
+  stored: undefined as number | undefined,
+  get a(): number | undefined {
+    log.push("get a");
+    return this.stored;
+  },
+  set a(value: number | undefined) {
+    log.push("set a");
+    this.stored = value;
+  },
+};
+function pick<T>(value: T): T {
+  log.push("object");
+  return value;
+}
+function key(): string {
+  log.push("key");
+  return "a";
+}
+function getterOnce(k: number): R {
+  counted.a ??= try read(k);
+  return { kind: "Ok", value: counted.a };
+}
+function computedOnce(o: Record<string, number | undefined>, k: number): R {
+  pick(o)[key()] ??= try read(k);
+  return { kind: "Ok", value: o.a ?? -1 };
+}
+function or(o: { b: boolean }): boolean {
+  o.b ||= match (log.push("scrutinee") > 0) { true => true, false => false };
+  return o.b;
+}
+function and(o: { c: number }, k: number): R {
+  o.c &&= try read(k);
+  return { kind: "Ok", value: o.c };
+}
+console.log(JSON.stringify(nullish({ a: 1 }, -1)), log.splice(0).join());
+console.log(JSON.stringify(nullish({}, 2)), log.splice(0).join());
+console.log(or({ b: true }), log.splice(0).join());
+console.log(or({ b: false }), log.splice(0).join());
+console.log(JSON.stringify(and({ c: 0 }, -1)), log.splice(0).join());
+console.log(JSON.stringify(and({ c: 1 }, -1)), log.splice(0).join());
+console.log(JSON.stringify(getterOnce(-1)), log.splice(0).join());
+console.log(JSON.stringify(getterOnce(4)), log.splice(0).join());
+console.log(JSON.stringify(getterOnce(-1)), log.splice(0).join());
+console.log(JSON.stringify(computedOnce({}, 5)), log.splice(0).join());
+console.log(JSON.stringify(computedOnce({ a: 2 }, -5)), log.splice(0).join());
+// @filename: twin.ts
+export {};
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const log: string[] = [];
+function read(n: number): R {
+  log.push("read");
+  return n > 0 ? { kind: "Ok", value: n } : { kind: "Err", error: "neg" };
+}
+function nullish(o: { a?: number }, k: number): R {
+  if (o.a == null) {
+    const r = read(k);
+    if (!("value" in r)) return r;
+    o.a = r.value;
+  }
+  return { kind: "Ok", value: o.a };
+}
+const counted = {
+  stored: undefined as number | undefined,
+  get a(): number | undefined {
+    log.push("get a");
+    return this.stored;
+  },
+  set a(value: number | undefined) {
+    log.push("set a");
+    this.stored = value;
+  },
+};
+function pick<T>(value: T): T {
+  log.push("object");
+  return value;
+}
+function key(): string {
+  log.push("key");
+  return "a";
+}
+function getterOnce(k: number): R {
+  if (counted.a == null) {
+    const r = read(k);
+    if (!("value" in r)) return r;
+    counted.a = r.value;
+  }
+  return { kind: "Ok", value: counted.a };
+}
+function computedOnce(o: Record<string, number | undefined>, k: number): R {
+  const target = pick(o);
+  const name = key();
+  if (target[name] == null) {
+    const r = read(k);
+    if (!("value" in r)) return r;
+    target[name] = r.value;
+  }
+  return { kind: "Ok", value: o.a ?? -1 };
+}
+function or(o: { b: boolean }): boolean {
+  o.b ||= log.push("scrutinee") > 0 ? true : false;
+  return o.b;
+}
+function and(o: { c: number }, k: number): R {
+  if (o.c) {
+    const r = read(k);
+    if (!("value" in r)) return r;
+    o.c = r.value;
+  }
+  return { kind: "Ok", value: o.c };
+}
+console.log(JSON.stringify(nullish({ a: 1 }, -1)), log.splice(0).join());
+console.log(JSON.stringify(nullish({}, 2)), log.splice(0).join());
+console.log(or({ b: true }), log.splice(0).join());
+console.log(or({ b: false }), log.splice(0).join());
+console.log(JSON.stringify(and({ c: 0 }, -1)), log.splice(0).join());
+console.log(JSON.stringify(and({ c: 1 }, -1)), log.splice(0).join());
+console.log(JSON.stringify(getterOnce(-1)), log.splice(0).join());
+console.log(JSON.stringify(getterOnce(4)), log.splice(0).join());
+console.log(JSON.stringify(getterOnce(-1)), log.splice(0).join());
+console.log(JSON.stringify(computedOnce({}, 5)), log.splice(0).join());
+console.log(JSON.stringify(computedOnce({ a: 2 }, -5)), log.splice(0).join());

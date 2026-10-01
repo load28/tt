@@ -1,0 +1,3 @@
+returnOperand({"kind":"Done","value":{"kind":"Some","value":7}}) => 7 | some 7
+returnOperand({"kind":"Done","value":{"kind":"None"}}) => 0 | none 0
+returnOperand({"kind":"Failed","error":"lost"}) => "lost" | failed "lost"

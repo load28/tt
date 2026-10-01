@@ -1,2 +1,0 @@
-optionalCall(4) => [[2],null] | open res; callee true; operand 4; shape "#4"; callee false; dispose res
-optionalCall(12) => [[3],null] | open res; callee true; operand 12; shape "#12"; callee false; dispose res

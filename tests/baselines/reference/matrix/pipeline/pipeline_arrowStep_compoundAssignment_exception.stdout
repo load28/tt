@@ -1,0 +1,2 @@
+compoundAssignment(8) => "start:9" | initial "start:"; target {"total":"start:"}; risky 8; arrow 9
+compoundAssignment(9) => "start:10" | initial "start:"; target {"total":"start:"}; risky 9; arrow 10

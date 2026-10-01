@@ -1,2 +1,0 @@
-destructuringDefault(3) => "***6" | source {}; operand 3; double 6
-destructuringDefault(12) => "**24" | source {}; operand 12; double 24

@@ -1,3 +1,0 @@
-callArgument(3) => [1,9,3] | a 1; yield 3; flip true; maybe true; twice 9; c 3
-callArgument(4) => [1,null,3] | a 1; yield 4; flip false; maybe false; c 3
-callArgument(5) => [1,15,3] | a 1; yield 5; flip true; maybe true; twice 15; c 3

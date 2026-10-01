@@ -1,2 +1,0 @@
-assignment(4) => 2 | initial 0; target {"value":0}; yield 4; shape "#4"
-assignment(12) => 3 | initial 0; target {"value":0}; yield 12; shape "#12"

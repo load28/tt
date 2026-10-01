@@ -1,3 +1,0 @@
-nullish(3) => {"kind":"Ok","value":3} | flip true; operand 3; read 3; big 3
-nullish(1) => "set" | flip false; left "set"
-nullish(-1) => {"kind":"Err","error":"negative -1"} | flip true; operand -1; read -1

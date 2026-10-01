@@ -1,2 +1,0 @@
-assignment(3) => 6 | initial 0; target {"value":0}; risky 3; add 6; keep 6
-assignment(-4) => -8 | initial 0; target {"value":0}; risky -4; add -8; keep -8

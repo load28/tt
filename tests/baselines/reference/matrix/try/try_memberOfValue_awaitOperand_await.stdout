@@ -1,2 +1,0 @@
-awaitOperand(1.5) => {"kind":"Ok","value":"1.50"} | await; read 1.5
-awaitOperand(-1) => {"kind":"Err","error":"negative -1"} | await; read -1

@@ -1,2 +1,0 @@
-forTest(2.5) => 1 | open res; operand 2.5; positive 2.5; dispose res
-forTest(-3) => 0 | open res; operand -3; positive undefined; dispose res

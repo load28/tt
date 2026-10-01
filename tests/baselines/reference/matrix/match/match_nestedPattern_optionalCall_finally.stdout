@@ -1,0 +1,3 @@
+optionalCall({"kind":"Done","value":{"kind":"Some","value":7}}) => [[7],null] | callee true; operand {"kind":"Done","value":{"kind":"Some","value":7}}; some 7; callee false; finally 0
+optionalCall({"kind":"Done","value":{"kind":"None"}}) => [[0],null] | callee true; operand {"kind":"Done","value":{"kind":"None"}}; none 0; callee false; finally 0
+optionalCall({"kind":"Failed","error":"lost"}) => [["lost"],null] | callee true; operand {"kind":"Failed","error":"lost"}; failed "lost"; callee false; finally 0

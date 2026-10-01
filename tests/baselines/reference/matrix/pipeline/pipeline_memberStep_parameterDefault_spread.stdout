@@ -1,0 +1,2 @@
+parameterDefault(2) => 6 | receiver {"factor":3}; twice 6
+parameterDefault(6) => 18 | receiver {"factor":3}; twice 18

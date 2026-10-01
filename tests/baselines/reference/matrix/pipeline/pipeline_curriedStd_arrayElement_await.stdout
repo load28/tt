@@ -1,0 +1,2 @@
+arrayElement(5) => [0,15,2] | first 0; await; map 15; last 2
+arrayElement(0) => [0,-1,2] | first 0; await; last 2

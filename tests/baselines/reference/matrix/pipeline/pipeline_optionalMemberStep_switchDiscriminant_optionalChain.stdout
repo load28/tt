@@ -1,3 +1,0 @@
-switchDiscriminant(3) => "default" | flip true; maybe true; twice 9; case 0
-switchDiscriminant(4) => "default" | flip false; maybe false; case 0
-switchDiscriminant(5) => "default" | flip true; maybe true; twice 15; case 0

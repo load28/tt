@@ -1,2 +1,0 @@
-logicalAnd(2) => "#4" | flip true; risky 2; add 4; shape "#4"
-logicalAnd(5) => false | flip false

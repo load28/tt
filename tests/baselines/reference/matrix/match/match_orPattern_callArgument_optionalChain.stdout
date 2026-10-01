@@ -1,0 +1,4 @@
+callArgument({"kind":"Num","value":4}) => [1,4,3] | a 1; number 4; c 3
+callArgument({"kind":"Neg","value":-3}) => threw Cannot read properties of undefined (reading 'kind') | a 1
+callArgument({"kind":"Word","text":"hi"}) => [1,"hi",3] | a 1; word "hi"; c 3
+callArgument({"kind":"End"}) => threw Cannot read properties of undefined (reading 'kind') | a 1

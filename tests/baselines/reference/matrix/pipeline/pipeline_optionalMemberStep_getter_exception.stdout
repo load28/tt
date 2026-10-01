@@ -1,0 +1,3 @@
+getter(3) => 9 | risky 3; flip true; maybe true; twice 9
+getter(4) => undefined | risky 4; flip false; maybe false
+getter(5) => "risky call 3" | caught "risky call 3"

@@ -1,4 +1,0 @@
-methodArgument({}) => ["receiver",1,"range"] | receiver {"tag":"receiver"}; a 1; risky {}; range "range"
-methodArgument({}) => ["receiver",1,1] | receiver {"tag":"receiver"}; a 1; risky {}; type 1
-methodArgument({}) => "risky call 3" | receiver {"tag":"receiver"}; a 1; caught "risky call 3"
-methodArgument("text") => ["receiver",1,null] | receiver {"tag":"receiver"}; a 1; risky "text"; other null

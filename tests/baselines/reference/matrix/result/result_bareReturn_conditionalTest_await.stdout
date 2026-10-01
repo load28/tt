@@ -1,2 +1,0 @@
-conditionalTest(2) => "truthy" | await; read 2; then "truthy"
-conditionalTest(-1) => "truthy" | await; read -1; then "truthy"

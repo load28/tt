@@ -1,0 +1,4 @@
+whileTest({"kind":"Num","value":4}) => 1 | await; number 4
+whileTest({"kind":"Neg","value":-3}) => 1 | await; number -3
+whileTest({"kind":"Word","text":"hi"}) => 1 | await; word "hi"
+whileTest({"kind":"End"}) => 0 | await; end ""

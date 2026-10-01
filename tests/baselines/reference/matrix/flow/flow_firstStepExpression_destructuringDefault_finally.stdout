@@ -1,2 +1,0 @@
-destructuringDefault(3) => "6" | source {}; operand 3; finally 0; add 6
-destructuringDefault(-4) => "-8" | source {}; operand -4; finally 0; add -8

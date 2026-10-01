@@ -1,8 +1,0 @@
-differences from flow_genericLater_callArgument_using at the questions listed in tests/editor-matrix-differences.txt
-
-=== hover /*call*/ main.tt:5:70 ===
-  |   return pack(note("a", 1), flow |> adder(note("operand", input)) |> keep, note("c", 3));
-  |                                                                      ^ /*call*/
-  tt only: (alias) function keep<T>(value: T): T
-  ts only: (alias) function keep<number>(value: number): number
-

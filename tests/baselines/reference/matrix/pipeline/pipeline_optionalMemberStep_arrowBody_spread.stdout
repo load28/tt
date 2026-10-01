@@ -1,0 +1,3 @@
+arrowBody(3) => 9 | flip true; maybe true; twice 9
+arrowBody(4) => undefined | flip false; maybe false
+arrowBody(5) => 15 | flip true; maybe true; twice 15

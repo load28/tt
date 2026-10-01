@@ -1,0 +1,2 @@
+method(2) => {"kind":"Ok","value":6} | this "holder"; read 2; inner {"kind":"Ok","value":3}
+method(-1) => {"kind":"Err","error":"negative -1"} | this "holder"; read -1; inner {"kind":"Err","error":"negative -1"}

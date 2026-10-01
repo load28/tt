@@ -1,0 +1,2 @@
+objectProperty({"kind":"Click","x":3}) => {"a":1,"value":3,"c":3} | a 1; risky {"kind":"Click","x":3}; click 3; c 3
+objectProperty({"kind":"Key","key":"k"}) => {"a":1,"value":"k","c":3} | a 1; risky {"kind":"Key","key":"k"}; key "k"; c 3

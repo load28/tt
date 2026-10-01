@@ -1,2 +1,0 @@
-matchArm(2) => {"kind":"Ok"} | flip true; read 2
-matchArm(-1) => 0 | flip false; other arm 0

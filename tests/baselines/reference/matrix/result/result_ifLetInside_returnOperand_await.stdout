@@ -1,0 +1,2 @@
+returnOperand(4) => {"kind":"Ok","value":4} | await; read 4; direct 4
+returnOperand(-1) => {"kind":"Err","error":"negative -7"} | await; read -1; fallback -7; read -7

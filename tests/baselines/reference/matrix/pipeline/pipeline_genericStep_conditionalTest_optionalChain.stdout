@@ -1,2 +1,0 @@
-conditionalTest(6) => "truthy" | keep 6; double 12; then "truthy"
-conditionalTest(-2) => "falsy" | keep undefined; double null; else "falsy"

@@ -1,0 +1,2 @@
+methodArgument(true) => ["receiver",1,1] | receiver {"tag":"receiver"}; a 1; risky true; yes 1
+methodArgument(false) => ["receiver",1,0] | receiver {"tag":"receiver"}; a 1; risky false; no 0

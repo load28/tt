@@ -1,4 +1,0 @@
-loopBody({"kind":"Num","value":4}) => [-1,-1] | operand {"kind":"Num","value":4}; other -1; operand {"kind":"Num","value":4}; other -1
-loopBody({"kind":"Neg","value":-3}) => [-1,-1] | operand {"kind":"Neg","value":-3}; other -1; operand {"kind":"Neg","value":-3}; other -1
-loopBody({"kind":"Word","text":"hi"}) => [2,2] | operand {"kind":"Word","text":"hi"}; word 2; operand {"kind":"Word","text":"hi"}; word 2
-loopBody({"kind":"End"}) => [-1,-1] | operand {"kind":"End"}; other -1; operand {"kind":"End"}; other -1

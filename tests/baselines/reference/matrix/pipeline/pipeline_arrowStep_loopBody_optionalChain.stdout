@@ -1,2 +1,0 @@
-loopBody(8) => [9,null] | arrow 9; arrow null
-loopBody(9) => [10,null] | arrow 10; arrow null

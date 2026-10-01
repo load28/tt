@@ -1,0 +1,2 @@
+callArgument(3) => [1,"***6",3] | a 1; await; double 6; c 3
+callArgument(12) => [1,"**24",3] | a 1; await; double 24; c 3

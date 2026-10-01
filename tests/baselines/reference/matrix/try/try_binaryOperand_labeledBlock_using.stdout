@@ -1,0 +1,2 @@
+labeledBlock(3) => {"kind":"Ok","value":30} | open res; operand 3; read 3; flip true; dispose res
+labeledBlock(-2) => {"kind":"Err","error":"negative -2"} | open res; operand -2; read -2; dispose res

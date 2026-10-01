@@ -1,0 +1,2 @@
+logicalAnd({"kind":"Click","x":3}) => 3 | flip true; await; click 3
+logicalAnd({"kind":"Key","key":"k"}) => false | flip false

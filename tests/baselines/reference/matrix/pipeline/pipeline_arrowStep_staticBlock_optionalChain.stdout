@@ -1,0 +1,2 @@
+staticBlock(8) => 9 | arrow 9
+staticBlock(9) => null | arrow null

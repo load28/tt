@@ -1,7 +1,0 @@
-differences from flow_overloadedLater_objectProperty_yield at the questions listed in tests/editor-matrix-differences.txt
-
-=== hover /*call*/ main.tt:4:68 ===
-  |   return { a: note("a", 1), value: flow |> adder((yield input)) |> shape, c: note("c", 3) };
-  |                                                                    ^ /*call*/
-  tt only: (alias) function shape(s: string): number
-

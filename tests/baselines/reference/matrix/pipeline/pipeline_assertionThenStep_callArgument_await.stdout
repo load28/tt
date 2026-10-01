@@ -1,0 +1,2 @@
+callArgument(123) => [1,3,3] | a 1; await; c 3
+callArgument(4) => [1,1,3] | a 1; await; c 3

@@ -1,0 +1,3 @@
+staticBlock(3) => 9 | open res; operand 3; flip true; maybe true; twice 9; dispose res
+staticBlock(4) => undefined | open res; operand 4; flip false; maybe false; dispose res
+staticBlock(5) => 15 | open res; operand 5; flip true; maybe true; twice 15; dispose res

@@ -1,2 +1,0 @@
-logicalAnd(3) => "6" | flip true; add 6
-logicalAnd(-4) => false | flip false

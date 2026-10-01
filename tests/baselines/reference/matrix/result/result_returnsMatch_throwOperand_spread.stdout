@@ -1,3 +1,0 @@
-throwOperand(2) => threw {"kind":"Ok","value":"two"} | read 2
-throwOperand(7) => threw {"kind":"Ok","value":"other"} | read 7
-throwOperand(-1) => threw {"kind":"Err","error":"negative -1"} | read -1

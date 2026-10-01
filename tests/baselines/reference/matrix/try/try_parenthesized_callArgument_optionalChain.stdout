@@ -1,0 +1,2 @@
+callArgument(6) => {"kind":"Ok","value":[1,6,3]} | a 1; flip true; read 6; c 3
+callArgument(-6) => {"kind":"Err","error":"negative -9"} | a 1; flip false; fallback -9; read -9

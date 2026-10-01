@@ -1,0 +1,2 @@
+method(2) => {"kind":"Ok"} | open res; this "holder"; operand 2; read 2; dispose res
+method(-1) => {"kind":"Err","error":"negative -1"} | open res; this "holder"; operand -1; read -1; dispose res

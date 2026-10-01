@@ -1,2 +1,0 @@
-conditionalTest(3) => "truthy" | yield 3; double 6; then "truthy"
-conditionalTest(12) => "truthy" | yield 12; double 24; then "truthy"

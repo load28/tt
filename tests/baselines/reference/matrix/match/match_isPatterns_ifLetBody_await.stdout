@@ -1,0 +1,4 @@
+ifLetBody({}) => [1,"range"] | head 1; read 1; await; range "range"
+ifLetBody({}) => [1,1] | head 1; read 1; await; type 1
+ifLetBody({}) => [1,"plain"] | head 1; read 1; await; error "plain"
+ifLetBody("text") => [1,null] | head 1; read 1; await; other null

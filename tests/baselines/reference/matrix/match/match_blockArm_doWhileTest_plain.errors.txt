@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-placement]: `match` cannot be lowered from this repeated loop position without changing how often it evaluates
+ --> ./main.tt:8:26
+  |
+8 |   } while (rounds < 2 && match (note("operand", input)) { Rect(w, h) => { const area = note("area", w * h); if (area > 10) { return note("large", area); } return note("small", area); }, _ => note("other", 0) });
+  |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+
+==== ttc --check-types (exit 1) ====
+error[match-placement]: `match` cannot be lowered from this repeated loop position without changing how often it evaluates
+ --> main.tt:8:26
+  |
+8 |   } while (rounds < 2 && match (note("operand", input)) { Rect(w, h) => { const area = note("area", w * h); if (area > 10) { return note("large", area); } return note("small", area); }, _ => note("other", 0) });
+  |                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,2 @@
+templateLiteral(2) => "<L|6|R>" | open res; left "L"; operand 2; receiver {"factor":3}; twice 6; right "R"; dispose res
+templateLiteral(6) => "<L|18|R>" | open res; left "L"; operand 6; receiver {"factor":3}; twice 18; right "R"; dispose res

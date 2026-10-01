@@ -1,2 +1,0 @@
-logicalOr(2) => true | flip true
-logicalOr(-1) => {"kind":"Err","error":"negative -1"} | flip false; read -1

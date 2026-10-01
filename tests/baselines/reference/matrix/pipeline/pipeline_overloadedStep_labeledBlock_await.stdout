@@ -1,2 +1,0 @@
-labeledBlock(4) => 2 | await; shape "#4"; flip true
-labeledBlock(12) => [3] | await; shape "#12"; flip false

@@ -1,3 +1,0 @@
-declarationInitializer(5) => {"kind":"Ok","value":[5,2]} | await; read 5; b 2; read 2
-declarationInitializer(1) => {"kind":"Err","error":"negative -2"} | await; read 1; b -2; read -2
-declarationInitializer(-2) => {"kind":"Err","error":"negative -2"} | await; read -2

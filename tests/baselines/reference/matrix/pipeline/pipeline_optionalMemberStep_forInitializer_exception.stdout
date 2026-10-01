@@ -1,3 +1,0 @@
-forInitializer(3) => [9] | risky 3; flip true; maybe true; twice 9
-forInitializer(4) => [null] | risky 4; flip false; maybe false
-forInitializer(5) => "risky call 3" | caught "risky call 3"

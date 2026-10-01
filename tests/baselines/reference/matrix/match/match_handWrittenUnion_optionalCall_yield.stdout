@@ -1,0 +1,2 @@
+optionalCall({"kind":"Click","x":3}) => [[3],null] | callee true; yield {"kind":"Click","x":3}; click 3; callee false
+optionalCall({"kind":"Key","key":"k"}) => [["k"],null] | callee true; yield {"kind":"Key","key":"k"}; key "k"; callee false
