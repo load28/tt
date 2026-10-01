@@ -100,7 +100,25 @@ bundler plugins, `ttc --check`, the content mapper, and the editor reported
 
 ## Issues and resolutions
 
-None.
+### Issue 1: Five typed-path tests pinned the narrowed answer
+
+- **Symptom**: The final gate's `cargo test --test native` failed
+  `typed_exhaustiveness_still_answers_from_the_narrowed_type`,
+  `variant_exhaustiveness_uses_the_narrowed_type_at_the_match`,
+  `a_tuple_position_the_checker_narrowed_is_not_demanded_back`,
+  `a_hand_written_payload_union_is_named_by_the_checker`, and
+  `a_hand_written_payload_union_fully_covered_is_exhaustive`
+  (`tests/native/cases_02.rs`, `cases_03.rs`).
+- **Cause**: They pinned the TASK-108 behaviour Decision 1 reverses: a case
+  narrowing removed was not demanded, and a hand-written payload union was
+  judged by the checker's alphabet alone.
+- **Resolution**: A follow-up commit renames them after the declared rule
+  and asserts what every surface now reports: the declared cases narrowing
+  removed, and `missing "Wrap"` for a nested pattern over a hand-written
+  payload union, which a build (`ttc -o`) and `ttc --check` already
+  reported, also when the payload's cases are all written. The checker's
+  finer witness (`Wrap(inner: No())`) for that match is dropped because the
+  declared rule already reported the match.
 
 ## Regression test (fails before the fix)
 

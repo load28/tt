@@ -394,7 +394,7 @@ fn literal_exhaustiveness_uses_the_narrowed_type_at_the_match() {
 }
 
 #[test]
-fn variant_exhaustiveness_uses_the_narrowed_type_at_the_match() {
+fn variant_exhaustiveness_uses_the_declared_cases_at_the_match() {
     require_tsgo!();
     let dir = project(&[(
         "src/shape.tt",
@@ -408,12 +408,8 @@ fn variant_exhaustiveness_uses_the_narrowed_type_at_the_match() {
     )]);
     let out = check(&dir);
     assert!(
-        out.contains("missing \"Square\""),
-        "the narrowed type still allows Square: {out}"
-    );
-    assert!(
-        !out.contains("Point"),
-        "the guard removed Point before the match: {out}"
+        out.contains("missing \"Square\", \"Point\""),
+        "the guard does not remove a declared case: {out}"
     );
 }
 

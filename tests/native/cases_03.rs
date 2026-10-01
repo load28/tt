@@ -41,11 +41,8 @@ fn host_overlays_are_snapshot_values_and_live_language_inputs() {
 }
 
 #[test]
-fn typed_exhaustiveness_still_answers_from_the_narrowed_type() {
+fn typed_exhaustiveness_answers_from_the_declared_cases() {
     require_tsgo!();
-    // The point of asking the checker at all: a case an earlier test
-    // removed is not demanded back. `--check`, which knows only the
-    // declaration, does report it.
     let dir = project(&[(
         "src/narrow.tt",
         "variant Shape { Circle(radius: number), Point }\n\
@@ -56,18 +53,14 @@ fn typed_exhaustiveness_still_answers_from_the_narrowed_type() {
     )]);
     let out = check(&dir);
     assert!(
-        !out.contains("not exhaustive"),
-        "Point is already excluded here: {out}"
+        out.contains("match on variant Shape is not exhaustive: missing \"Point\""),
+        "an earlier test does not remove a declared case: {out}"
     );
 }
 
 #[test]
-fn a_hand_written_payload_union_is_named_by_the_checker() {
+fn a_hand_written_payload_union_is_judged_as_the_build_judges_it() {
     require_tsgo!();
-    // The payload's declared type is a hand-written union, so no tt
-    // declaration describes it — the one thing the declaration table can
-    // never answer. The emitted condition tests that payload at exactly
-    // its type, and asking there names the column's alphabet (TASK-109).
     let dir = project(&[(
         "src/opaque.tt",
         "type Inner = { kind: \"Yes\"; n: number } | { kind: \"No\" };\n\
@@ -77,18 +70,14 @@ fn a_hand_written_payload_union_is_named_by_the_checker() {
     )]);
     let out = check(&dir);
     assert!(
-        out.contains("match on variant Outer is not exhaustive: missing \"Wrap(inner: No())\""),
-        "the checker names the payload's constituents: {out}"
+        out.contains("match on variant Outer is not exhaustive: missing \"Wrap\""),
+        "the declared cases cannot see into the payload: {out}"
     );
 }
 
 #[test]
-fn a_hand_written_payload_union_fully_covered_is_exhaustive() {
+fn a_hand_written_payload_union_covered_by_cases_still_needs_a_declared_arm() {
     require_tsgo!();
-    // The other half of the same answer: covering the payload's cases
-    // makes the match exhaustive, and nothing is reported. Before the
-    // payload question existed this stayed quiet too — but only because tt
-    // refused to guess, which is a different thing from knowing.
     let dir = project(&[(
         "src/opaque_full.tt",
         "type Inner = { kind: \"Yes\"; n: number } | { kind: \"No\" };\n\
@@ -101,7 +90,10 @@ fn a_hand_written_payload_union_fully_covered_is_exhaustive() {
          };\n",
     )]);
     let out = check(&dir);
-    assert!(!out.contains("not exhaustive"), "covered: {out}");
+    assert!(
+        out.contains("match on variant Outer is not exhaustive: missing \"Wrap\""),
+        "a build rejects it, so the check does: {out}"
+    );
 }
 
 #[test]
@@ -175,11 +167,8 @@ fn typed_exhaustiveness_covers_tuple_matches_too() {
 }
 
 #[test]
-fn a_tuple_position_the_checker_narrowed_is_not_demanded_back() {
+fn a_tuple_position_the_checker_narrowed_is_still_demanded() {
     require_tsgo!();
-    // The reason to ask at all: `South` is impossible at the match, so the
-    // combinations that need it are not missing. The default path, which
-    // knows only the declaration, does report them.
     let dir = project(&[(
         "src/narrowed_tuple.tt",
         "variant Dir { North(dx: number), South }\n\
@@ -191,8 +180,8 @@ fn a_tuple_position_the_checker_narrowed_is_not_demanded_back() {
     )]);
     let out = check(&dir);
     assert!(
-        !out.contains("not exhaustive"),
-        "South is impossible: {out}"
+        out.contains("match on (Dir, Speed) is not exhaustive: missing (South, Fast), (South, Slow)"),
+        "an earlier test does not remove a declared combination: {out}"
     );
 }
 
