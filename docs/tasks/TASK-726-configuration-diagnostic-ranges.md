@@ -126,7 +126,7 @@ Pinned: microsoft/TypeScript at `5739027c9a7df24e27123f453a50c011b37717b6`.
   sidecar` (`TTC_REQUIRE_TSGO=1`): 127, 163, 13, 20 passed.
 - [x] An unmapped project (a foreign `contentMappers` entry) reports
   TS6046 at `tsconfig.json:2:50` and TS100024 at `3:3`.
-- [x] The full gate is recorded in TASK-731.
+- [ ] The full gate (`cargo test` over every suite, `TTC_TYPED_CASES=all`, every fourslash test, `TT_MATRIX_CASES=all`, `./scripts/ci agents`): not run; the coordinator asked for targeted checks only. `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` pass.
 
 ## Result
 

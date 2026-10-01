@@ -140,7 +140,7 @@ None.
 - [x] Extension tests (`node --test server/out/test/*.test.js
   client/out/test/*.test.js` with `target/debug` on `PATH`): 238 pass,
   including TASK-561's open-document check.
-- [x] The full gate is recorded in TASK-731.
+- [ ] The full gate (`cargo test` over every suite, `TTC_TYPED_CASES=all`, every fourslash test, `TT_MATRIX_CASES=all`, `./scripts/ci agents`): not run; the coordinator asked for targeted checks only. `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` pass.
 
 ## Result
 

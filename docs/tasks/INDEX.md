@@ -736,7 +736,8 @@
 | TASK-728 | Report declaration diagnostics as `tsc` does | Complete | 2026-10-01 | 2026-10-01 | [TASK-728](./TASK-728-declaration-diagnostics.md) |
 | TASK-729 | Name a `.tt` module as TypeScript names it | Complete | 2026-10-01 | 2026-10-01 | [TASK-729](./TASK-729-module-names.md) |
 | TASK-730 | Keep a declaration map's source in the fourslash comparison | Complete | 2026-10-01 | 2026-10-01 | [TASK-730](./TASK-730-declaration-map-sources.md) |
+| TASK-731 | Hold the same documents open on both sides of the editor comparison | Complete | 2026-10-01 | 2026-10-01 | [TASK-731](./TASK-731-symmetric-open-documents.md) |
 
 ## Next task number
 
-**TASK-731**
+**TASK-732**

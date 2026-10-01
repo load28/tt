@@ -2204,7 +2204,18 @@ fn run(case: &Case) -> Outcome {
     });
     let mut engine = (!case.server_only).then(|| ttc::engine::Workspace::new(Engine::new(None)));
     let mut server = Server::start(&project);
-    for unit in case.units.iter().filter(|unit| is_tt(&unit.name)) {
+    let opened_by_twin = |unit: &Unit| {
+        (unit.name.ends_with(".ts") || unit.name.ends_with(".tsx"))
+            && case
+                .twin
+                .as_ref()
+                .is_some_and(|twin| twin.iter().any(|other| other.name == unit.name))
+    };
+    for unit in case
+        .units
+        .iter()
+        .filter(|unit| is_tt(&unit.name) || opened_by_twin(unit))
+    {
         let path = project.join(&unit.name);
         if let Some(engine) = engine.as_mut() {
             engine

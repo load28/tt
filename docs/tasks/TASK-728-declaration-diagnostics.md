@@ -96,7 +96,7 @@ None.
 - [x] `RUST_TEST_THREADS=4 TTC_REQUIRE_TSGO=1 cargo test --test native
   --test cli --test sidecar --test case_baselines --test integration
   --test workflow_repairs`: all pass.
-- [x] The full gate is recorded in TASK-731.
+- [ ] The full gate (`cargo test` over every suite, `TTC_TYPED_CASES=all`, every fourslash test, `TT_MATRIX_CASES=all`, `./scripts/ci agents`): not run; the coordinator asked for targeted checks only. `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` pass.
 
 ## Result
 
