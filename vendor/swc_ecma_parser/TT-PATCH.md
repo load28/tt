@@ -109,6 +109,21 @@ commit (`5739027c`, `tsc/internal/parser`) reads and upstream rejected:
 
 `tests/swc_typescript_grammar_gaps.rs` in the parent repository tests them.
 
+Local change (TASK-724): `src/parser/expr.rs`, `parse_args_or_pats_inner`
+reads a `=>` after a parenthesized item as the arrow of that item only when
+the item is a lone identifier, and builds the arrow function from that item
+alone, in place of it. Upstream's recovery for swc-project/swc#433
+(`(x => x)(1)`) consumed the `=>` first, then asserted (`debug_assert_eq!`)
+that the list held exactly one item, and tested the first item rather than
+the one the `=>` follows, so `(a, b() => 1)` stopped a debug build with an
+assertion failure, and a release build turned every item of the list into
+a parameter of an arrow function appended after them. TypeScript's `parseParenthesizedExpression` reads
+the items as a comma expression and reports TS1005 ("')' expected") at the
+`=>`; the parser now leaves the `=>` in place and reports "Expected ','"
+there. `fuzz/regressions/compile_any_bytes/arrow-after-a-later-parenthesized-item.tt`
+and `tests/cases/compiler/anArrowAfterALaterParenthesizedItemIsASyntaxError.tt`
+in the parent repository cover it.
+
 `tests/jsx_entities.rs`, `tests/swc_arrow_asi.rs`,
 `tests/swc_import_type_arguments.rs`, `tests/swc_for_using_and_if_function.rs`,
 and `tests/swc_typescript_grammar_gaps.rs` in the parent repository test the

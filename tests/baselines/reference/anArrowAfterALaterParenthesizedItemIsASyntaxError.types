@@ -1,0 +1,9 @@
+=== anArrowAfterALaterParenthesizedItemIsASyntaxError.tt ===
+declare const a: number;
+>a : const a: number
+declare function b(): number;
+>b : function b(): number
+(a, b() => 1);
+>a : const a: number
+>b : function b(): number
+
