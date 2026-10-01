@@ -1,8 +1,8 @@
 === flowIsAContextualKeywordOnlyAtAPipelineHead.tt ===
 const a = (flow) |> f;
->a : const a: unknown
+>a : const a: any
 const b = o.flow |> f;
->b : const b: unknown
+>b : const b: any
 const c = flow() |> f;
->c : const c: unknown
+>c : const c: any
 

@@ -1,0 +1,2 @@
+classField(2) => "#4" | operand 2; add 4; shape "#4"
+classField(5) => "#10" | operand 5; add 10; shape "#10"

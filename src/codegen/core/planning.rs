@@ -84,6 +84,31 @@ pub(super) fn direct_apply_inputs(
         .collect()
 }
 
+pub(super) fn reference_apply_steps(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    source_kind: SourceKind,
+) -> HashSet<ExprId> {
+    core.exprs
+        .iter()
+        .filter_map(|expr| match expr {
+            Expr::Apply(apply) => Some(apply),
+            _ => None,
+        })
+        .flat_map(|apply| apply.steps.iter().skip(usize::from(apply.head.is_none())))
+        .filter(|step| matches!(step.mode, ApplyMode::Call))
+        .filter_map(|step| {
+            let Expr::Opaque(node) = &core.exprs[step.value.index()] else {
+                return None;
+            };
+            let span = semantic.hir.source_map.node_span(*node)?;
+            crate::program_syntax::source_reference_callee(source, span, source_kind)
+                .then_some(step.value)
+        })
+        .collect()
+}
+
 pub(super) fn member_apply_steps(
     semantic: &SemanticFile,
     core: &CoreFile,

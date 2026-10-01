@@ -9,14 +9,14 @@ fn an_emission_reports_the_support_modules_it_imports() {
             .support_imports
     };
     let pipeline = "declare function input(): number;\n\
-                    declare const step: (value: number) => number;\n";
+                    declare const step: () => (value: number) => number;\n";
     assert_eq!(
-        imports(&format!("{pipeline}export const v = input() |> step;\n")),
+        imports(&format!("{pipeline}export const v = input() |> step();\n")),
         [StdModule::Runtime]
     );
     // A literal head lowers to a direct call; a script inlines its helper.
     assert!(imports("export const a = 1 |> String;\n").is_empty());
-    assert!(imports(&format!("{pipeline}const v = input() |> step;\n")).is_empty());
+    assert!(imports(&format!("{pipeline}const v = input() |> step();\n")).is_empty());
     assert_eq!(
         imports("import * as Option from \"@tt/std/option\";\nexport const o = Option;\n"),
         [StdModule::Option]
@@ -230,9 +230,9 @@ fn variant_symbols_carries_positions_and_field_shapes() {
 
 #[test]
 fn pipeline_emits_nested_apply_helper_calls() {
-    let out = ok("const y = half(4) |> double |> label;\nexport {};\n");
+    let out = ok("const y = half(4) |> times(2) |> label();\nexport {};\n");
     assert!(
-        out.contains("const y = $tt_ap($tt_ap(half(4), double), label);"),
+        out.contains("const y = $tt_ap($tt_ap(half(4), times(2)), label());"),
         "{out}"
     );
     assert!(out.contains("import { $tt_ap } from \"@tt/runtime\";"));
@@ -349,7 +349,7 @@ fn every_construct_lays_its_glue_out_from_the_line_it_replaces() {
 
 #[test]
 fn pipeline_runtime_is_imported_once_per_file() {
-    let out = ok("const a = x |> f;\nconst b = y |> g;\nexport {};\n");
+    let out = ok("const a = x |> f();\nconst b = y |> g();\nexport {};\n");
     assert_eq!(out.matches("$tt_ap(").count(), 2, "{out}");
     assert_eq!(out.matches("from \"@tt/runtime\"").count(), 1, "{out}");
 }

@@ -1,0 +1,2 @@
+labeledBlock(2) => "#4" | flip true; add 4; shape "#4"
+labeledBlock(5) => [null] | flip false

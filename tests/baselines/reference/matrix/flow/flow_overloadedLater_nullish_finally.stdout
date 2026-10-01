@@ -1,0 +1,2 @@
+nullish(2) => "#4" | flip true; operand 2; finally 0; add 4; shape "#4"
+nullish(5) => "set" | flip false; left "set"; finally 0

@@ -345,12 +345,13 @@ fn scripts_stay_scripts_and_their_generated_globals_never_collide() {
              type Shape_{suffix} = {{ kind: \"A\"; n: number }} | {{ kind: \"B\" }};\n\
              function make_{suffix}(n: number): Shape_{suffix} {{ return n > 0 ? {{ kind: \"A\", n }} : {{ kind: \"B\" }}; }}\n\
              function step_{suffix}(value: number): number {{ return value + 1; }}\n\
+             function pick_{suffix}(): (value: number) => number {{ return step_{suffix}; }}\n\
              const size_{suffix} = match (make_{suffix}(2)) {{ A(n) => n, B => 0 }};\n\
              var total_{suffix} = match (make_{suffix}(0)) {{ A(n) => n, B => 10 }};\n\
              function measure_{suffix}(shape: Shape_{suffix}): number {{ return match (shape) {{ A(n) => n * 2, B => -1 }}; }}\n\
              console.log(match (make_{suffix}(1)) {{ A(n) => `{suffix}:${{n}}`, B => \"{suffix}:none\" }});\n\
              const A(n: first_{suffix}) = make_{suffix}(5) else {{ throw new Error(\"{suffix}\"); }};\n\
-             const piped_{suffix} = size_{suffix} |> step_{suffix};\n\
+             const piped_{suffix} = size_{suffix} |> pick_{suffix}();\n\
              const flowed_{suffix} = flow |> step_{suffix} |> step_{suffix};\n\
              const kept_{suffix} = match (make_{suffix}(4)) {{ A(n) => {{ var seen_{suffix} = n; return n; }}, B => 0 }};\n"
         );

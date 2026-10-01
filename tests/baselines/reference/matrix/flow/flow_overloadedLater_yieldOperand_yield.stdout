@@ -1,0 +1,2 @@
+yieldOperand(2) => "#4" | yield 2; yield function; add 4; shape "#4"
+yieldOperand(5) => "#10" | yield 5; yield function; add 10; shape "#10"

@@ -1,0 +1,33 @@
+//// [main.tt] 31 mapping(s)
+1:1 -> 2:1 len 395  "export {};\nfunction conv(x: string): number;\nfun"...
+16:10 -> 17:43 len 1  "s"
+16:15 -> 17:46 len 4  "conv"
+16:19 -> 17:51 len 59  ";\n}\nfunction local(): number {\n  const q = \"abc\""...
+20:10 -> 21:43 len 1  "q"
+20:15 -> 21:46 len 4  "conv"
+20:19 -> 21:51 len 57  ";\n}\nfunction member(o: { s: string }): number {\n"...
+23:10 -> 24:43 len 3  "o.s"
+23:17 -> 24:48 len 4  "conv"
+23:21 -> 24:53 len 41  ";\n}\nconst arrow = (s: string): number => "
+25:38 -> 26:71 len 1  "s"
+25:43 -> 26:74 len 4  "conv"
+25:47 -> 26:79 len 50  ";\nconst mapped: number[] = [\"a\", \"bb\"].map((s) ="...
+26:49 -> 27:82 len 1  "s"
+26:54 -> 27:85 len 4  "conv"
+26:58 -> 27:90 len 27  ");\nconst chained: string = "
+27:25 -> 28:63 len 6  "\"four\""
+27:35 -> 28:58 len 4  "conv"
+27:43 -> 28:72 len 4  "conv"
+27:47 -> 28:77 len 26  ";\nconst wrapped: number = "
+28:25 -> 29:58 len 21  "noted(\"head\", \"five\")"
+28:50 -> 29:81 len 6  "(conv)"
+28:56 -> 29:88 len 26  ";\nconst generic: number = "
+29:25 -> 30:124 len 16  "noted(\"head\", 5)"
+29:45 -> 30:142 len 12  "keep<number>"
+29:61 -> 30:157 len 4  "conv"
+29:69 -> 30:164 len 4  "conv"
+29:73 -> 30:169 len 19  ";\nconst composed = "
+30:26 -> 31:25 len 6  "String"
+30:36 -> 31:70 len 4  "conv"
+30:40 -> 31:76 len 180  ";\nconst composedNumber: number = composed(123);\n"...
+

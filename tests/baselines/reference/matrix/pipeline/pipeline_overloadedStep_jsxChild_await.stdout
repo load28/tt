@@ -1,0 +1,2 @@
+jsxChild(4) => "<p>2</p>" | await; shape "#4"
+jsxChild(12) => "<p>3</p>" | await; shape "#12"

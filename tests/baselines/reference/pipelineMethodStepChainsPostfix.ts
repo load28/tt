@@ -3,7 +3,4 @@ const t = s |> .trim() |> .split(",") |> f;
 
 
 //// [pipelineMethodStepChainsPostfix.ts]
-var $tt_ap: <A, B>(v: A, f: (v: A) => B) => B = function (v, f) {
-  return f(v);
-};
-const t = $tt_ap(s.trim().split(","), f);
+const t = (($tt_v, $tt_f) => $tt_f($tt_v))(s.trim().split(","), f);

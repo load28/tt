@@ -17,6 +17,7 @@ pub(super) struct Emitter<'a> {
     pub(super) source_kind: SourceKind,
     pub(super) direct_apply_inputs: HashSet<ExprId>,
     pub(super) member_apply_steps: HashMap<ExprId, crate::program_syntax::MemberCallee>,
+    pub(super) reference_apply_steps: HashSet<ExprId>,
     pub(super) rewrite_imports: Option<RewrittenExtensions>,
     pub(super) std_imports: StdImports<'a>,
     pub(super) owner_slot_rewrites: Vec<OwnerSlotRewrite>,

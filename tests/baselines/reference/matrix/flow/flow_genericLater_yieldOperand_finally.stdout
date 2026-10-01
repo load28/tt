@@ -1,0 +1,2 @@
+yieldOperand(3) => 6 | operand 3; yield function; finally 0; add 6; keep 6
+yieldOperand(-4) => -8 | operand -4; yield function; finally 0; add -8; keep -8

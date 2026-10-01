@@ -1,0 +1,8 @@
+differences from pipeline_genericStep_callArgument_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:4:50 ===
+  |   return pack(note("a", 1), first(...[input]) |> keep |> double, note("c", 3));
+  |                                                  ^ /*call*/
+  tt only: (alias) function keep<T>(value: T): T
+  ts only: (alias) function keep<number>(value: number): number
+

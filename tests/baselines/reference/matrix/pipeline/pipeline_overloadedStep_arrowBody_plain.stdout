@@ -1,0 +1,2 @@
+arrowBody(4) => 2 | operand 4; shape "#4"
+arrowBody(12) => 3 | operand 12; shape "#12"

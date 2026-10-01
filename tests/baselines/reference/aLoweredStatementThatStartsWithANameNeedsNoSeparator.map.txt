@@ -1,6 +1,6 @@
 //// [aLoweredStatementThatStartsWithANameNeedsNoSeparator.tt] 4 mapping(s)
-1:1 -> 2:1 len 210  "declare const o: { m(x: unknown): unknown };\ndec"...
-9:3 -> 10:10 len 1  "v"
-9:8 -> 10:13 len 6  "String"
-9:14 -> 10:20 len 3  "\n}\n"
+1:1 -> 1:1 len 210  "declare const o: { m(x: unknown): unknown };\ndec"...
+9:3 -> 9:37 len 1  "v"
+9:8 -> 9:40 len 6  "String"
+9:14 -> 9:47 len 3  "\n}\n"
 

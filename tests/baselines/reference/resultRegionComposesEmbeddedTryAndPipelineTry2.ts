@@ -5,9 +5,6 @@ const f = (): R => result { const v = try (g() |> step); return v; };
 
 
 //// [resultRegionComposesEmbeddedTryAndPipelineTry2.ts]
-var $tt_ap: <A, B>(v: A, f: (v: A) => B) => B = function (v, f) {
-  return f(v);
-};
 type R =
   | { kind: "Ok"; value: number }
   | { kind: "Err"; error: string };
@@ -19,7 +16,7 @@ declare const g: () => R; declare const step: (x: R) => R;
 const f = (): R => {
   let $tt_v0: R;
   $tt_v0: {
-    const $tt_t0 = ($tt_ap(g(), step));
+    const $tt_t0 = ((($tt_v, $tt_f) => $tt_f($tt_v))(g(), step));
     if (!("value" in $tt_t0)) {
       $tt_v0 = $tt_t0;
       break $tt_v0;

@@ -8,9 +8,6 @@ const t = `n=${x |> f}`;
 
 
 //// [pipelineInsideMatchScrutineeArmAndTemplate.ts]
-var $tt_ap: <A, B>(v: A, f: (v: A) => B) => B = function (v, f) {
-  return f(v);
-};
 var $tt_show: (value: unknown) => string = function (value) {
   if (typeof value === "string") {
     return JSON.stringify(value);
@@ -38,11 +35,11 @@ const E = {
 };
 let $tt_v0$r;
 {
-  const $tt_m = $tt_ap(x, norm);
+  const $tt_m = (($tt_v, $tt_f) => $tt_f($tt_v))(x, norm);
   switch ($tt_m.kind) {
     case "A": {
       const { v } = $tt_m;
-      $tt_v0$r = $tt_ap(v, double);
+      $tt_v0$r = (($tt_v, $tt_f) => $tt_f($tt_v))(v, double);
       break;
     }
     case "B": {
@@ -55,4 +52,4 @@ let $tt_v0$r;
   }
 }
 const r = $tt_v0$r;
-const t = `n=${$tt_ap(x, f)}`;
+const t = `n=${(($tt_v, $tt_f) => $tt_f($tt_v))(x, f)}`;

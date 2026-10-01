@@ -1,0 +1,2 @@
+templateLiteral(4) => "<L|2|R>" | left "L"; yield 4; shape "#4"; right "R"
+templateLiteral(12) => "<L|3|R>" | left "L"; yield 12; shape "#12"; right "R"

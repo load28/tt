@@ -1,0 +1,7 @@
+differences from flow_overloadedLater_loopBody_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:7:63 ===
+  |       collected.push(flow |> adder(note("operand", input)) |> shape);
+  |                                                               ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

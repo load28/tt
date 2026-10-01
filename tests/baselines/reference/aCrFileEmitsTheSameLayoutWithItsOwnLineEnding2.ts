@@ -11,9 +11,6 @@ function f() {
 
 
 //// [aCrFileEmitsTheSameLayoutWithItsOwnLineEnding2.ts]
-var $tt_ap: <A, B>(v: A, f: (v: A) => B) => B = function (v, f) {
-  return f(v);
-};
 var $tt_show: (value: unknown) => string = function (value) {
   if (typeof value === "string") {
     return JSON.stringify(value);
@@ -60,5 +57,5 @@ function f() {
     }
   }
   const a = $tt_v0;
-  return $tt_ap(a, String);
+  return (($tt_v, $tt_f) => $tt_f($tt_v))(a, String);
 }

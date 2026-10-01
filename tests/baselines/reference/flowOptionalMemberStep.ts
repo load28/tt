@@ -74,7 +74,7 @@ const steps = {
   absentNested: (($tt_f, $tt_r) => $tt_fl($tt_f, ($tt_v) => $tt_r?.inner.by($tt_v)))(inc, (absent)),
   absentComputed: (($tt_f, $tt_r) => $tt_fl($tt_f, ($tt_v) => $tt_r?.[key]($tt_v)))(inc, (absent)),
   bound: $tt_fl(inc, (($tt_r) => ($tt_r.by).bind($tt_r))((present!))),
-  later: $tt_fl((($tt_f, $tt_r) => $tt_fl($tt_f, ($tt_v) => $tt_r?.by($tt_v)))(inc, (present)), String),
+  later: $tt_fl((($tt_f, $tt_r) => $tt_fl($tt_f, ($tt_v) => $tt_r?.by($tt_v)))(inc, (present)), (($tt_f) => ($tt_v) => $tt_f($tt_v))(String)),
   once: (($tt_f, $tt_r) => $tt_fl($tt_f, ($tt_v) => $tt_r?.by($tt_v)))(inc, (receiver(present))),
 };
 for (const [name, composed] of Object.entries(steps)) {

@@ -91,12 +91,12 @@ fn numeric_literal_patterns_take_their_ecmascript_values() {
 
 #[test]
 fn generated_names_are_allocated_around_the_files_identifiers() {
-    let out = ok("const $tt_ap = 1;\nconst \\u0024tt_m = 2;\nconst xs = [1].map(x => x |> String);\nconst r = match (xs[0]) { \"1\" => $tt_m, _ => $tt_ap };\nexport {};\n");
+    let out = ok("const $tt_ap = 1;\nconst \\u0024tt_m = 2;\nconst xs = [1].map(x => x |> pick());\nconst r = match (xs[0]) { \"1\" => $tt_m, _ => $tt_ap };\nexport {};\n");
     assert!(
         out.starts_with("import { $tt_ap as $tt_ap_1 } from \"@tt/runtime\";\n"),
         "{out}"
     );
-    assert!(out.contains("x => $tt_ap_1(x, String)"), "{out}");
+    assert!(out.contains("x => $tt_ap_1(x, pick())"), "{out}");
     assert!(out.contains("const $tt_m_1 = xs[0];"), "{out}");
     assert!(out.contains("= $tt_m;"), "{out}");
 }
@@ -650,7 +650,7 @@ fn an_if_let_after_an_automatic_semicolon_boundary_starts_a_statement() {
 
 #[test]
 fn a_string_that_continues_into_an_expression_is_not_a_directive() {
-    let tail = "declare const o: { p: number };\nexport const a = o.p |> String;\n";
+    let tail = "declare const o: { p: number };\nexport const a = o.p |> pick();\n";
     for head in [
         "\"use client\"\n.length;\n",
         "\"use client\"\n+ 1;\n",
@@ -814,7 +814,8 @@ fn a_script_declares_its_helpers_as_typed_vars_after_its_file_pragmas() {
     let source = "declare const o: { kind: \"A\" } | { kind: \"B\" };\n\
                   declare function step(n: number): number;\n\
                   declare function read(): number;\n\
-                  const piped = read() |> step;\n\
+                  declare function pick(): (n: number) => number;\n\
+                  const piped = read() |> pick();\n\
                   const composed = flow |> step |> step;\n\
                   const total = match (o) { A => 1, B => 2 };\n";
     let out = ok(source);

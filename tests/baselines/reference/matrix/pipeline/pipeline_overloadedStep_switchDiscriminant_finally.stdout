@@ -1,0 +1,2 @@
+switchDiscriminant(4) => "default" | operand 4; shape "#4"; case 0; finally 0
+switchDiscriminant(12) => "default" | operand 12; shape "#12"; case 0; finally 0

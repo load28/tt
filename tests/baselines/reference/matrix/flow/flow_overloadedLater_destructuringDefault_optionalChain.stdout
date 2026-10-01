@@ -1,0 +1,2 @@
+destructuringDefault(2) => "#4" | source {}; add 4; shape "#4"
+destructuringDefault(5) => "#NaN" | source {}; add null; shape "#NaN"

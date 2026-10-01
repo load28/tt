@@ -1,0 +1,2 @@
+jsxSpreadAttribute(6) => "<div value=12></div>" | risky 6; keep 6; double 12
+jsxSpreadAttribute(-2) => "<div value=-4></div>" | risky -2; keep -2; double -4

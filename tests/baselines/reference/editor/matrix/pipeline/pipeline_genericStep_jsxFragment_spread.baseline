@@ -1,0 +1,8 @@
+differences from pipeline_genericStep_jsxFragment_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.ttx:4:55 ===
+  |   return <>{note("before", "[")}{first(...[input]) |> keep |> double}{note("after", "]")}</>;
+  |                                                       ^ /*call*/
+  tt only: (alias) function keep<T>(value: T): T
+  ts only: (alias) function keep<number>(value: number): number
+

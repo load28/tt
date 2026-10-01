@@ -1,0 +1,2 @@
+topLevel(6) => 12 | open res; operand 6; keep 6; double 12
+topLevel(-2) => -4 | operand -2; keep -2; double -4

@@ -1,0 +1,2 @@
+destructuringDefault(4) => 2 | source {}; await; shape "#4"
+destructuringDefault(12) => 3 | source {}; await; shape "#12"

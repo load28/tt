@@ -1,0 +1,2 @@
+parameterDefault(6) => 12 | operand 6; keep 6; double 12
+parameterDefault(-2) => -4 | operand -2; keep -2; double -4

@@ -1,0 +1,2 @@
+forInitializer(4) => [2] | shape "#4"
+forInitializer(12) => threw Cannot read properties of undefined (reading 'length') | 

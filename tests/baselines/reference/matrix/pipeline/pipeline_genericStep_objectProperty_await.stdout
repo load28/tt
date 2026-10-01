@@ -1,0 +1,2 @@
+objectProperty(6) => {"a":1,"value":12,"c":3} | a 1; await; keep 6; double 12; c 3
+objectProperty(-2) => {"a":1,"value":-4,"c":3} | a 1; await; keep -2; double -4; c 3

@@ -1,0 +1,7 @@
+differences from pipeline_overloadedStep_ifLetBody_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:6:44 ===
+  |       return [n, note("operand", input) |> shape |> .length];
+  |                                            ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

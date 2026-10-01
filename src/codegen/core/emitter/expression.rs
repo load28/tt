@@ -79,6 +79,33 @@ impl<'a> Emitter<'a> {
                                     context,
                                     self.emit_member_step(step.value, member, call),
                                 );
+                            } else if self.reference_apply_steps.contains(&step.value) {
+                                let value = self.generated_name("$tt_v");
+                                let function = self.generated_name("$tt_f");
+                                next.push_lit(format!("(({value}, {function}) => {function}("));
+                                let mut piped = Rope::new();
+                                piped.push_lit(value);
+                                next.anchored_with_context(
+                                    AnchorKind::Pipe,
+                                    step_span.start,
+                                    step_span.end,
+                                    end,
+                                    context,
+                                    piped,
+                                );
+                                next.push_lit("))(");
+                                push_grouped(&mut input, acc, self.source_kind);
+                                next.anchored_with_context(
+                                    AnchorKind::Pipe,
+                                    step_span.start,
+                                    step_span.end,
+                                    end,
+                                    context,
+                                    input,
+                                );
+                                next.push_lit(", ");
+                                push_grouped(&mut next, body, self.source_kind);
+                                next.push_lit(")");
                             } else {
                                 self.used_pipe.set(true);
                                 next.push_lit(format!("{}(", self.generated_name("$tt_ap")));
@@ -332,6 +359,24 @@ impl<'a> Emitter<'a> {
                     let input_name = self.generated_name("$tt_v");
                     next.push_lit(format!(", (({input_name}) => ({input_name})"));
                     next.append(body);
+                    next.push_lit("))");
+                }
+                ApplyMode::Call if self.reference_apply_steps.contains(&step.value) => {
+                    let function = self.generated_name("$tt_f");
+                    let input_name = self.generated_name("$tt_v");
+                    next.push_lit(format!(", (({function}) => ({input_name}) => {function}("));
+                    let mut piped = Rope::new();
+                    piped.push_lit(input_name);
+                    next.anchored_with_context(
+                        AnchorKind::Pipe,
+                        step_span.start,
+                        step_span.end,
+                        owner_end,
+                        Some((produced.start, produced.end)),
+                        piped,
+                    );
+                    next.push_lit("))(");
+                    push_grouped(&mut next, body, self.source_kind);
                     next.push_lit("))");
                 }
                 ApplyMode::Call => {

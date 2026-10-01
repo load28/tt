@@ -24,7 +24,7 @@ error[ts2304]: Cannot find name 'g'.
   |                     ^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-pipelineHeadIsTheWholeCallNotTheInnerArgument.ts(4,11): error TS2304: Cannot find name 'f'.
-pipelineHeadIsTheWholeCallNotTheInnerArgument.ts(4,20): error TS2304: Cannot find name 'a'.
-pipelineHeadIsTheWholeCallNotTheInnerArgument.ts(4,22): error TS2304: Cannot find name 'b'.
-pipelineHeadIsTheWholeCallNotTheInnerArgument.ts(4,26): error TS2304: Cannot find name 'g'.
+pipelineHeadIsTheWholeCallNotTheInnerArgument.ts(1,11): error TS2304: Cannot find name 'f'.
+pipelineHeadIsTheWholeCallNotTheInnerArgument.ts(1,46): error TS2304: Cannot find name 'a'.
+pipelineHeadIsTheWholeCallNotTheInnerArgument.ts(1,48): error TS2304: Cannot find name 'b'.
+pipelineHeadIsTheWholeCallNotTheInnerArgument.ts(1,52): error TS2304: Cannot find name 'g'.

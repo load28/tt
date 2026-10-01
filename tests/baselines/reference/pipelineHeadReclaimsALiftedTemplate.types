@@ -1,4 +1,4 @@
 === pipelineHeadReclaimsALiftedTemplate.tt ===
 const a = `v=${n}` |> f;
->a : const a: unknown
+>a : const a: any
 

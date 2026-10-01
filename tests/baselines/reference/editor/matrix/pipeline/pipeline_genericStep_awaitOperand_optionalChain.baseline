@@ -1,0 +1,11 @@
+differences from pipeline_genericStep_awaitOperand_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:4:45 ===
+  |   return await (box(input)?.inner.value! |> keep |> double);
+  |                                             ^ /*call*/
+  tt only: (alias) function keep<T>(value: T): T
+  ts only: (alias) function keep<number>(value: number): number
+
+=== diagnostics main.tt ===
+  ts only: main "await (double(keep(box(input)?.inner.value!)))" hint TS80007: 'await' has no effect on the type of this expression.
+

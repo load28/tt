@@ -95,5 +95,21 @@ export default {
       ts: (x, [t]) => `(${t} = ${x} || null, ${t} === null ? -1 : note("map", ${t} * 3))`,
       edit: (x, [t]) => `(${t} = ${x} || null, ${t} === null ? -1 : ((/*@bind*/n: number) => note("map", /*@use*/n * 3))(${t}))`,
     },
+    {
+      id: "overloadedStep",
+      title: "a step that names an overloaded function, resolved against the piped value",
+      In: "number",
+      inputs: "[4, 12]",
+      tt: (x) => `${x} |> /*@call*/shape |> ./*@member*/length`,
+      ts: (x) => `/*@call*/shape(${x})./*@member*/length`,
+    },
+    {
+      id: "genericStep",
+      title: "a step that names a generic function, instantiated by the piped value",
+      In: "number",
+      inputs: "[6, -2]",
+      tt: (x) => `${x} |> /*@call*/keep |> double`,
+      ts: (x) => `double(/*@call*/keep(${x}))`,
+    },
   ],
 };

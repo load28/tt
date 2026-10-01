@@ -13,17 +13,15 @@ console.log(log.join(","))
 
 export {};
 
-//// [tt/runtime.ts] support module @tt/std/runtime.ts
 
 //// [anOperatorLineAfterABlockBodiedArrowFunctionIsItsOwnStatement.ts]
-import { $tt_ap } from "./tt/runtime.js";
 const log: string[] = []
 const f = () => {}
-;(($tt_v, $tt_r) => $tt_r.push($tt_v))($tt_ap(/x/g.exec("x"), String), (log))
+;(($tt_v, $tt_r) => $tt_r.push($tt_v))((($tt_v, $tt_f) => $tt_f($tt_v))(/x/g.exec("x"), String), (log))
 const g = async () => {}
-;(($tt_v, $tt_r) => $tt_r.push($tt_v))($tt_ap(/y/.test("y"), String), (log))
+;(($tt_v, $tt_r) => $tt_r.push($tt_v))((($tt_v, $tt_f) => $tt_f($tt_v))(/y/.test("y"), String), (log))
 const h = (): void => {}
-;(($tt_v, $tt_r) => $tt_r.push($tt_v))($tt_ap(-1, String), (log))
+;(($tt_v, $tt_r) => $tt_r.push($tt_v))((($tt_v, $tt_f) => $tt_f($tt_v))(-1, String), (log))
 const k = () => {}
 ;(($tt_v, $tt_r) => $tt_r.push($tt_v))(String((2)), (log))
 f(); g(); h(); k()

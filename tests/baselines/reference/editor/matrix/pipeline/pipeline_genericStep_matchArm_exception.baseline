@@ -1,0 +1,8 @@
+differences from pipeline_genericStep_matchArm_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:5:53 ===
+  |     return match (flip()) { true => risky(input) |> keep |> double, false => note("other arm", 0) };
+  |                                                     ^ /*call*/
+  tt only: (alias) function keep<T>(value: T): T
+  ts only: (alias) function keep<number>(value: number): number
+

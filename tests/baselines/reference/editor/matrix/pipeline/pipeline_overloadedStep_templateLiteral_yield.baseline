@@ -1,0 +1,7 @@
+differences from pipeline_overloadedStep_templateLiteral_yield at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:4:52 ===
+  |   return `<${note("left", "L")}|${(yield input) |> shape |> .length}|${note("right", "R")}>`;
+  |                                                    ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

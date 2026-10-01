@@ -1,0 +1,11 @@
+differences from flow_genericLater_awaitOperand_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:5:58 ===
+  |   return await (flow |> adder(note("operand", input)) |> keep);
+  |                                                          ^ /*call*/
+  tt only: (alias) function keep<T>(value: T): T
+  ts only: (alias) function keep<number>(value: number): number
+
+=== diagnostics main.tt ===
+  ts only: main "await (((head: (n: number) => number) => (v: number) => keep(head(v)))(adder(note(\"operand\", input))))" hint TS80007: 'await' has no effect on the type of this expression.
+

@@ -1,0 +1,2 @@
+awaitOperand(6) => 12 | keep 6; double 12
+awaitOperand(-2) => null | keep undefined; double null

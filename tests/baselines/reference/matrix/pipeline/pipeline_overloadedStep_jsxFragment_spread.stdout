@@ -1,0 +1,2 @@
+jsxFragment(4) => "<>[2]</>" | before "["; shape "#4"; after "]"
+jsxFragment(12) => "<>[3]</>" | before "["; shape "#12"; after "]"

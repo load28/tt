@@ -14,5 +14,5 @@ error[ts2304]: Cannot find name 'f'.
   |                       ^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-pipelineHeadReclaimsALiftedTemplate.ts(4,23): error TS2304: Cannot find name 'n'.
-pipelineHeadReclaimsALiftedTemplate.ts(4,28): error TS2304: Cannot find name 'f'.
+pipelineHeadReclaimsALiftedTemplate.ts(1,49): error TS2304: Cannot find name 'n'.
+pipelineHeadReclaimsALiftedTemplate.ts(1,54): error TS2304: Cannot find name 'f'.

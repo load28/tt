@@ -3,10 +3,8 @@
 declare const o: { p: number };
 export const a = o.p |> String;
 
-//// [tt/runtime.ts] support module @tt/std/runtime.ts
 
 //// [generatedTextFollowsALineEndedByAnyLineTerminator2.ts]
 #!/usr/bin/env node
-import { $tt_ap } from "./tt/runtime.js";
 declare const o: { p: number };
-export const a = $tt_ap(o.p, String);
+export const a = (($tt_v, $tt_f) => $tt_f($tt_v))(o.p, String);

@@ -1,0 +1,2 @@
+yieldOperand(4) => 2 | shape "#4"; yield 2
+yieldOperand(12) => 3 | shape "#12"; yield 3

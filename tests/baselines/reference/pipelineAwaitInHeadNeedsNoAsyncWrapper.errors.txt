@@ -9,4 +9,4 @@ error[ts2304]: Cannot find name 'norm'.
   |                     ^^^^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-pipelineAwaitInHeadNeedsNoAsyncWrapper.ts(5,26): error TS2304: Cannot find name 'norm'.
+pipelineAwaitInHeadNeedsNoAsyncWrapper.ts(2,52): error TS2304: Cannot find name 'norm'.

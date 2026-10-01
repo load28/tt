@@ -1,0 +1,2 @@
+jsxAttribute(6) => "<div data-value=12></div>" | operand 6; keep 6; double 12
+jsxAttribute(-2) => "<div data-value=-4></div>" | operand -2; keep -2; double -4

@@ -1,0 +1,2 @@
+method(2) => "#4" | this "holder"; await; add 4; shape "#4"
+method(5) => "#10" | this "holder"; await; add 10; shape "#10"

@@ -9,4 +9,4 @@ error[ts2304]: Cannot find name 'P'.
   |                ^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-jsxExpressionPipelineRewritesOnlyTheContainerExpression2.tsx(5,16): error TS2304: Cannot find name 'P'.
+jsxExpressionPipelineRewritesOnlyTheContainerExpression2.tsx(2,16): error TS2304: Cannot find name 'P'.

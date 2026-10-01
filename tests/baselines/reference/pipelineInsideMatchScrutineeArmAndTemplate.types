@@ -12,7 +12,7 @@ variant E { A(v: number), B }
 >       readonly kind: "B";
 >   }
 const r = match (x |> norm) {
->r : const r: unknown
+>r : const r: any
   A(v) => v |> double,
 >v : const v: any
 >v : const v: any

@@ -1,16 +1,16 @@
 //// [partialUnionMismatch.tt] 14 mapping(s)
-1:1 -> 20:1 len 304  "// A value whose union type is only partly incom"...
-6:22 -> 25:38 len 1  "1"
-6:27 -> 25:29 len 8  "toEither"
-6:39 -> 25:42 len 11  "needsNumber"
-6:50 -> 25:54 len 95  ";\ndeclare function needsTwo(n: number, m: number"...
-8:37 -> 27:46 len 1  "1"
-8:42 -> 27:37 len 8  "toEither"
-8:50 -> 27:48 len 3  ");\n"
-9:19 -> 34:3 len 21  "\ndeclare const k: K;\n"
-11:1 -> 53:1 len 31  "export const matched: number = "
-11:39 -> 38:17 len 1  "k"
-11:49 -> 41:16 len 11  "toEither(1)"
-11:67 -> 45:16 len 1  "2"
-11:70 -> 53:38 len 2  ";\n"
+1:1 -> 19:1 len 304  "// A value whose union type is only partly incom"...
+6:22 -> 24:64 len 1  "1"
+6:27 -> 24:55 len 8  "toEither"
+6:39 -> 24:68 len 11  "needsNumber"
+6:50 -> 24:80 len 95  ";\ndeclare function needsTwo(n: number, m: number"...
+8:37 -> 26:46 len 1  "1"
+8:42 -> 26:37 len 8  "toEither"
+8:50 -> 26:48 len 3  ");\n"
+9:19 -> 33:3 len 21  "\ndeclare const k: K;\n"
+11:1 -> 52:1 len 31  "export const matched: number = "
+11:39 -> 37:17 len 1  "k"
+11:49 -> 40:16 len 11  "toEither(1)"
+11:67 -> 44:16 len 1  "2"
+11:70 -> 52:38 len 2  ";\n"
 

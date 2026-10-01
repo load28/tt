@@ -1,0 +1,2 @@
+jsxFragment(6) => "<>[12]</>" | before "["; keep 6; double 12; after "]"
+jsxFragment(-2) => "<>[-4]</>" | before "["; keep -2; double -4; after "]"

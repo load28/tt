@@ -46,10 +46,8 @@ for (const present of [true, false]) {
   attempt("tail", () => (loose(present)?.trim()).length);
 }
 
-//// [tt/runtime.ts] support module @tt/std/runtime.ts
 
 //// [main.ts]
-import { $tt_ap } from "./tt/runtime.js";
 export {};
 function box(present: boolean): { inner: { value: number } } | undefined {
   return present ? { inner: { value: 1.25 } } : undefined;
@@ -69,7 +67,7 @@ function fixed(present: boolean): string {
 }
 for (const present of [true, false]) {
   attempt("head", () => fixed(present));
-  attempt("member", () => $tt_ap((box(present)?.inner!).value, String));
+  attempt("member", () => (($tt_v, $tt_f) => $tt_f($tt_v))((box(present)?.inner!).value, String));
   attempt("tail", () => (loose(present)?.trim()).length);
 }
 \ No newline at end of file

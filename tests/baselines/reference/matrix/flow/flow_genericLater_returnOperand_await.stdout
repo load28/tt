@@ -1,0 +1,2 @@
+returnOperand(3) => 6 | await; add 6; keep 6
+returnOperand(-4) => -8 | await; add -8; keep -8

@@ -1,0 +1,7 @@
+differences from flow_overloadedLater_nullish_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:5:95 ===
+  |     return (flip() ? null : note("left", "set")) ?? (flow |> adder(note("operand", input)) |> shape);
+  |                                                                                               ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

@@ -1,0 +1,2 @@
+arrowBody(6) => 12 | operand 6; keep 6; double 12
+arrowBody(-2) => -4 | operand -2; keep -2; double -4

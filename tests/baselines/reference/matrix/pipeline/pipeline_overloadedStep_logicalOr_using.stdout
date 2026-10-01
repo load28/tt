@@ -1,0 +1,2 @@
+logicalOr(4) => true | open res; flip true; dispose res
+logicalOr(12) => 3 | open res; flip false; operand 12; shape "#12"; dispose res

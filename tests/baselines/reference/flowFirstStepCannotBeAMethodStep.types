@@ -1,4 +1,4 @@
 === flowFirstStepCannotBeAMethodStep.tt ===
 const f = flow |> .trim() |> lower;
->f : const f: (...a: unknown[]) => unknown
+>f : const f: (...a: unknown[]) => any
 

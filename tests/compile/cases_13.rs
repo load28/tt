@@ -93,7 +93,7 @@ fn a_comma_inside_type_arguments_stays_inside_its_construct() {
         ),
         (
             "export const p = x |> f<A, B> |> f<B, A>;\n",
-            "$tt_ap($tt_ap(x, f<A, B>), f<B, A>)",
+            "(($tt_v, $tt_f) => $tt_f($tt_v))((($tt_v, $tt_f) => $tt_f($tt_v))(x, f<A, B>), f<B, A>)",
         ),
         (
             "export const s = match (g<A, B>(x), x) { (Some(v), _) => v, _ => 2 };\n",

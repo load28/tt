@@ -1,0 +1,8 @@
+differences from pipeline_genericStep_jsxSpreadAttribute_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.ttx:5:46 ===
+  |     return <div {...{ value: risky(input) |> keep |> double }} />;
+  |                                              ^ /*call*/
+  tt only: (alias) function keep<T>(value: T): T
+  ts only: (alias) function keep<number>(value: number): number
+
