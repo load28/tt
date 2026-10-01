@@ -255,6 +255,55 @@ impl ParamSig {
     }
 }
 
+/// Where a `val` binding was declared, as a report about it points back:
+/// the `val` keyword, and the end of the modifier and the spaces and tabs
+/// after it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ValSite {
+    pub(crate) val_at: usize,
+    pub(crate) modifier_end: usize,
+}
+
+/// The one report of a mutation through a `val` binding, whichever path
+/// found it: the access path at `[start, end)` rooted at `name`, through
+/// the mutating built-in `method` when there is one. When the binding is
+/// known (`binding`, whose offsets are in the source that declares it),
+/// the report points at its `val` and offers to remove the modifier.
+pub(crate) fn mutation_error(
+    start: usize,
+    end: usize,
+    name: &str,
+    method: Option<&str>,
+    binding: Option<ValSite>,
+) -> TtError {
+    let message = match method {
+        Some(method) => format!(
+            "cannot call mutating method `{method}` through val binding `{name}` \
+             (the binding is declared with `val`, so every access path from it is read-only)"
+        ),
+        None => format!(
+            "cannot mutate through val binding `{name}` \
+             (the binding is declared with `val`, so every access path from it is read-only)"
+        ),
+    };
+    let error = TtError::span(start, end, message).code(crate::DiagnosticCode::ValMutation);
+    match binding {
+        Some(site) => error
+            .suggest(
+                "remove `val` if this binding is intended to be mutable",
+                site.val_at,
+                site.modifier_end,
+                "",
+            )
+            .label(
+                site.val_at,
+                site.val_at + "val".len(),
+                "the read-only binding is declared here",
+            ),
+        None => error,
+    }
+}
+
 /// One `val` binding, as a node a checker can resolve — half of the
 /// delegated form of `val`'s analysis ([`crate::val_probes`]).
 #[derive(Debug, Clone, PartialEq, Eq)]

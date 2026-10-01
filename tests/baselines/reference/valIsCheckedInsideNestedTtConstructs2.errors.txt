@@ -2,8 +2,13 @@
 error[val-mutation]: cannot mutate through val binding `s` (the binding is declared with `val`, so every access path from it is read-only)
  --> ./valIsCheckedInsideNestedTtConstructs2.tt:4:18
   |
+2 | val const s = Shape.Circle(1);
+  | --- the read-only binding is declared here
+3 | const v = match (s) {
 4 |   Circle(r) => { s.kind = "Point"; return r; },
   |                  ^
+  |
+  = help: remove `val` if this binding is intended to be mutable
 
 
 ==== ttc --check-types (exit 1) ====

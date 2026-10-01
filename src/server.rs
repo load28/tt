@@ -19,7 +19,9 @@
 //! ← { "id": 1, "result": { "diagnostics":
 //!        [{ "line", "col", "endLine", "endCol", "message", "code",
 //!           "suggestions": [{ "message", "edit": { "line", "col",
-//!             "endLine", "endCol", "replacement" } | null }] }] } }
+//!             "endLine", "endCol", "replacement" } | null }],
+//!           "labels"?: [{ "line", "col", "endLine", "endCol",
+//!             "message" }] }] } }
 //!
 //! → { "id": 2, "method": "emitMap", "params": { "text", "filename"? } }
 //! ← { "id": 2, "result": { "code", "mappings": [{ "src", "out", "len" }] } }
@@ -620,7 +622,7 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
             let at = |offset: Option<usize>| offset.map_or((0, 0), |at| positions.of_byte(at));
             let (line, col) = at(d.start);
             let (end_line, end_col) = at(d.end);
-            json!({
+            let mut entry = json!({
                 "line": line,
                 "col": col,
                 "endLine": end_line,
@@ -628,7 +630,25 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
                 "message": d.message,
                 "code": d.code.as_str(),
                 "suggestions": suggestions_json(&d.suggestions, Some(text)),
-            })
+            });
+            if !d.labels.is_empty() {
+                entry["labels"] = d
+                    .labels
+                    .iter()
+                    .map(|label| {
+                        let (line, col) = positions.of_byte(label.start);
+                        let (end_line, end_col) = positions.of_byte(label.end);
+                        json!({
+                            "line": line,
+                            "col": col,
+                            "endLine": end_line,
+                            "endCol": end_col,
+                            "message": label.message,
+                        })
+                    })
+                    .collect();
+            }
+            entry
         })
         .collect();
     Ok(json!({ "diagnostics": diagnostics }))

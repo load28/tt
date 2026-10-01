@@ -226,6 +226,7 @@ export async function runCheck(
         message: d.message,
         code: d.code,
         suggestions: d.suggestions,
+        labels: d.labels,
       })),
     };
   }

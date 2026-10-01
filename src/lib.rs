@@ -98,7 +98,9 @@ pub use analysis::{
     SiteKind, UnresolvedName, pattern_analyses,
 };
 pub use ast::ArmsTail;
-pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticOwner, Edit, Severity, Suggestion};
+pub use diagnostics::{
+    Diagnostic, DiagnosticCode, DiagnosticLabel, DiagnosticOwner, Edit, Severity, Suggestion,
+};
 pub use error::CompileError;
 pub use probe::{
     Literal, LiteralMatch, PayloadProbe, TagMatch, literal_matches, literal_matches_with_kind,

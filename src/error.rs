@@ -71,9 +71,12 @@ pub(crate) struct TtError {
     /// How to resolve the cause ([`crate::Diagnostic::suggestions`]).
     /// Added with [`TtError::help`] or [`TtError::suggest`].
     pub suggestions: Vec<Suggestion>,
+    /// Secondary places the error points at ([`crate::Diagnostic::labels`]).
+    /// Added with [`TtError::label`].
+    pub labels: Vec<DiagnosticLabel>,
 }
 
-use crate::diagnostics::{DiagnosticCode, DiagnosticOwner, Edit, Suggestion};
+use crate::diagnostics::{DiagnosticCode, DiagnosticLabel, DiagnosticOwner, Edit, Suggestion};
 
 impl TtError {
     /// An error at one byte, its width left to the consumer.
@@ -85,6 +88,7 @@ impl TtError {
             code: DiagnosticCode::Other,
             owner: None,
             suggestions: Vec::new(),
+            labels: Vec::new(),
         }
     }
 
@@ -98,6 +102,7 @@ impl TtError {
             code: DiagnosticCode::Other,
             owner: None,
             suggestions: Vec::new(),
+            labels: Vec::new(),
         }
     }
 
@@ -111,6 +116,7 @@ impl TtError {
             code: DiagnosticCode::Other,
             owner: None,
             suggestions: Vec::new(),
+            labels: Vec::new(),
         }
     }
 
@@ -125,6 +131,17 @@ impl TtError {
     #[must_use]
     pub fn owner(mut self, start: usize, end: usize) -> Self {
         self.owner = Some(DiagnosticOwner { start, end });
+        self
+    }
+
+    /// The same error, pointing also at `[start, end)` with `message`.
+    #[must_use]
+    pub fn label(mut self, start: usize, end: usize, message: impl Into<String>) -> Self {
+        self.labels.push(DiagnosticLabel {
+            start,
+            end: end.max(start),
+            message: message.into(),
+        });
         self
     }
 

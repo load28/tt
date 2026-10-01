@@ -713,6 +713,7 @@
 | TASK-705 | Convert the integration suite's runtime and type-check tests to case files | Complete | 2026-10-01 | 2026-10-01 | [TASK-705](./TASK-705-convert-integration-suite.md) |
 | TASK-713 | Make the tt-only typed check the full check's tt layer | Complete | 2026-10-01 | 2026-10-01 | [TASK-713](./TASK-713-tt-only-is-the-tt-layer.md) |
 | TASK-714 | Word a match's coverage hole the same way on every path | Complete | 2026-10-01 | 2026-10-01 | [TASK-714](./TASK-714-one-match-exhaustiveness-message.md) |
+| TASK-715 | Point every `val-mutation` report at the binding's declaration | Complete | 2026-10-01 | 2026-10-01 | [TASK-715](./TASK-715-val-mutation-declaration-label.md) |
 | TASK-716 | Read unclosed type-shaped brackets in linear time | Complete | 2026-10-01 | 2026-10-01 | [TASK-716](./TASK-716-linear-type-shaped-lookaheads.md) |
 
 ## Next task number

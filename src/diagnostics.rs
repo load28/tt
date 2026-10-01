@@ -1293,6 +1293,23 @@ pub struct Diagnostic {
     /// out of their own wording is the heuristic this split exists to
     /// remove.
     pub suggestions: Vec<Suggestion>,
+    /// Secondary places the diagnostic points at, each with its own words
+    /// ("the read-only binding is declared here"), in the source the
+    /// diagnostic was found in. Empty when it has only its primary range.
+    pub labels: Vec<DiagnosticLabel>,
+}
+
+/// A secondary place a [`Diagnostic`] points at, with what it explains —
+/// rustc's labeled span, drawn under its own line.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct DiagnosticLabel {
+    /// Byte offset where the labeled range starts.
+    pub start: usize,
+    /// Byte offset just past the labeled range.
+    pub end: usize,
+    /// What this place explains.
+    pub message: String,
 }
 
 /// One way to resolve a [`Diagnostic`].
@@ -1368,6 +1385,7 @@ impl Diagnostic {
             end: error.end,
             owner: error.owner,
             suggestions: error.suggestions,
+            labels: error.labels,
         }
     }
 }

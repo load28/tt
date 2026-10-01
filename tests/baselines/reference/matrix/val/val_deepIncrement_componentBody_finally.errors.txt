@@ -3,8 +3,12 @@ ttc: ./harness.ts → $DIR/out/harness.ts
 error[val-mutation]: cannot mutate through val binding `cfg` (the binding is declared with `val`, so every access path from it is read-only)
  --> ./main.ttx:8:7
   |
+7 |       val const cfg = { a: { n: note("operand", input) } };
+  |       --- the read-only binding is declared here
 8 |       cfg.a.n++;
   |       ^^^
+  |
+  = help: remove `val` if this binding is intended to be mutable
 
 
 ==== ttc --check-types (exit 1) ====

@@ -579,7 +579,8 @@ impl<'a> Checker<'a> {
         let name = self.text(&tokens[root]);
         // In probe mode the root is *not* resolved here: which binding it
         // names is the checker's answer, from the symbol at this identifier.
-        if !matches!(self.sink, Sink::Probes(_)) && self.lookup(frames, name).is_none() {
+        let declared = self.lookup(frames, name);
+        if !matches!(self.sink, Sink::Probes(_)) && declared.is_none() {
             return;
         }
         let offset = tokens[root].span.start;
@@ -589,17 +590,16 @@ impl<'a> Checker<'a> {
                 name: name.to_string(),
                 method: None,
             }),
-            Sink::Report(sink) => sink.borrow_mut().push(
-                TtError::span(
-                    offset,
-                    offset + name.len(),
-                    format!(
-                        "cannot mutate through val binding `{name}` \
-                         (the binding is declared with `val`, so every access path from it is read-only)"
-                    ),
-                )
-                .code(crate::DiagnosticCode::ValMutation),
-            ),
+            Sink::Report(sink) => sink.borrow_mut().push(mutation_error(
+                offset,
+                offset + name.len(),
+                name,
+                None,
+                declared.map(|val_at| ValSite {
+                    val_at,
+                    modifier_end: self.modifiers[&val_at].span.end,
+                }),
+            )),
         }
     }
 

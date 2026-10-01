@@ -2,8 +2,12 @@
 error[val-mutation]: cannot mutate through val binding `error` (the binding is declared with `val`, so every access path from it is read-only)
  --> ./valParameterPositionsBeyondPlainIdentifiers3.tt:4:3
   |
+3 | } catch (val error: any) {
+  |          --- the read-only binding is declared here
 4 |   error.code = 1;
   |   ^^^^^
+  |
+  = help: remove `val` if this binding is intended to be mutable
 
 
 ==== ttc --check-types (exit 1) ====

@@ -4,6 +4,9 @@ error[val-mutation]: cannot mutate through val binding `user` (the binding is de
   |
 1 | const read = (val user: User) => user.name = "Lee";
   |                                  ^^^^
+  |               --- the read-only binding is declared here
+  |
+  = help: remove `val` if this binding is intended to be mutable
 
 
 ==== ttc --check-types (exit 1) ====

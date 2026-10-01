@@ -386,6 +386,18 @@ pub fn diagnostic(
         start: at(start),
         end: diagnostic.end.map(at),
     });
+    let labels: Vec<Label<'_>> = diagnostic
+        .labels
+        .iter()
+        .map(|label| Label {
+            span: Span {
+                start: at(label.start),
+                end: Some(at(label.end)),
+            },
+            message: &label.message,
+            path: None,
+        })
+        .collect();
     render(
         &Report {
             severity: diagnostic.severity,
@@ -393,7 +405,7 @@ pub fn diagnostic(
             message: &diagnostic.message,
             path,
             span,
-            labels: &[],
+            labels: &labels,
             suggestions: &diagnostic.suggestions,
         },
         Some(source),

@@ -41,7 +41,11 @@ pub(crate) fn report(
                 message: diagnostic.message.clone(),
                 code: Some(diagnostic.code.as_str().to_string()),
                 suggestions: diagnostic.suggestions.clone(),
-                labels: Vec::new(),
+                labels: labels_in(
+                    (&file.source_path, &file.source),
+                    &file.source_path,
+                    &diagnostic.labels,
+                ),
             });
         }
     }
@@ -60,7 +64,11 @@ pub(crate) fn report(
                 message: d.message.clone(),
                 code: Some(d.code.as_str().to_string()),
                 suggestions: d.suggestions.clone(),
-                labels: Vec::new(),
+                labels: labels_in(
+                    (&file.source_path, &file.source),
+                    &file.source_path,
+                    &d.labels,
+                ),
             });
         }
     }
@@ -119,9 +127,13 @@ pub(crate) fn report(
                 position: error.offset.map(|at| crate::line_col(&file.source, at)),
                 end: error.end.map(|at| crate::line_col(&file.source, at)),
                 message: error.message,
+                labels: labels_in(
+                    (&file.source_path, &file.source),
+                    &file.source_path,
+                    &error.labels,
+                ),
                 code: Some(error.code.as_str().to_string()),
                 suggestions: error.suggestions,
-                labels: Vec::new(),
             };
             if !out.contains(&diagnostic) {
                 out.push(diagnostic);
@@ -157,9 +169,13 @@ pub(crate) fn report(
                 position: error.offset.map(|at| crate::line_col(&file.source, at)),
                 end: error.end.map(|at| crate::line_col(&file.source, at)),
                 message: error.message,
+                labels: labels_in(
+                    (&file.source_path, &file.source),
+                    &file.source_path,
+                    &error.labels,
+                ),
                 code: Some(error.code.as_str().to_string()),
                 suggestions: error.suggestions,
-                labels: Vec::new(),
             };
             if !out.contains(&diagnostic) {
                 out.push(diagnostic);
@@ -631,56 +647,36 @@ pub(crate) fn report(
         else {
             continue;
         };
-        let message = match &mutation.method_name {
-            // The built-in itself is not named: the compiler answered
-            // "this method is one of TypeScript's own", which is the
-            // verdict — not which interface declares it.
-            Some(method) => format!(
-                "cannot call mutating method `{}` through val binding `{}` \
-                 (the binding is declared with `val`, so every access path from it is \
-                 read-only)",
-                method, mutation.name,
-            ),
-            None => format!(
-                "cannot mutate through val binding `{}` \
-                 (the binding is declared with `val`, so every access path \
-                 from it is read-only)",
-                mutation.name,
-            ),
-        };
-        let (suggestions, labels) = binding.map_or_else(
-            || (Vec::new(), Vec::new()),
-            |binding| {
-                let declaration = files
-                    .iter()
-                    .find(|candidate| candidate.source_path == binding.anchor.source_path);
-                let suggestions = vec![crate::Suggestion {
-                    message: "remove `val` if this binding is intended to be mutable".to_string(),
-                    edit: Some(crate::Edit {
-                        start: binding.anchor.offset,
-                        end: binding.modifier_end,
-                        replacement: String::new(),
-                    }),
-                }];
-                let labels = declaration.map_or_else(Vec::new, |declaration| {
-                    vec![DiagnosticLabel {
-                        path: (declaration.source_path != file.source_path)
-                            .then(|| declaration.source_path.clone()),
-                        position: crate::line_col(&declaration.source, binding.anchor.offset),
-                        end: crate::line_col(&declaration.source, binding.anchor.end),
-                        message: "the read-only binding is declared here".to_string(),
-                    }]
-                });
-                (suggestions, labels)
-            },
+        let error = crate::val::mutation_error(
+            mutation.anchor.offset,
+            mutation.anchor.end,
+            &mutation.name,
+            mutation.method_name.as_deref(),
+            binding.map(|binding| crate::val::ValSite {
+                val_at: binding.anchor.offset,
+                modifier_end: binding.modifier_end,
+            }),
         );
+        let labels = binding
+            .and_then(|binding| {
+                files
+                    .iter()
+                    .find(|candidate| candidate.source_path == binding.anchor.source_path)
+            })
+            .map_or_else(Vec::new, |declaration| {
+                labels_in(
+                    (&declaration.source_path, &declaration.source),
+                    &file.source_path,
+                    &error.labels,
+                )
+            });
         out.push(Diagnostic {
             path: file.source_path.clone(),
             position: Some(crate::line_col(&file.source, mutation.anchor.offset)),
             end: Some(crate::line_col(&file.source, mutation.anchor.end)),
-            message,
-            code: Some(crate::DiagnosticCode::ValMutation.as_str().to_string()),
-            suggestions,
+            message: error.message,
+            code: Some(error.code.as_str().to_string()),
+            suggestions: error.suggestions,
             labels,
         });
     }
@@ -763,4 +759,23 @@ pub(crate) fn report(
         out.retain(Diagnostic::states_tt_rule);
     }
     finish_diagnostics(out)
+}
+
+/// A tt diagnostic's labels, found in the source of the file at `path`,
+/// as the labels of a diagnostic reported in `reported`: a label names its
+/// file only when that is not the diagnostic's own.
+fn labels_in(
+    (path, source): (&std::path::Path, &str),
+    reported: &std::path::Path,
+    labels: &[crate::DiagnosticLabel],
+) -> Vec<DiagnosticLabel> {
+    labels
+        .iter()
+        .map(|label| DiagnosticLabel {
+            path: (path != reported).then(|| path.to_path_buf()),
+            position: crate::line_col(source, label.start),
+            end: crate::line_col(source, label.end),
+            message: label.message.clone(),
+        })
+        .collect()
 }

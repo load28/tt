@@ -2,8 +2,12 @@
 error[val-mutation]: cannot mutate through val binding `slots` (the binding is declared with `val`, so every access path from it is read-only)
   --> ./valAfterParameterPropertyModifier.tt:17:5
    |
+16 |   constructor(public readonly val slots: number[], val spare: number[]) {
+   |                               --- the read-only binding is declared here
 17 |     slots[0] = 1;
    |     ^^^^^
+   |
+   = help: remove `val` if this binding is intended to be mutable
 
 
 ==== ttc --check-types (exit 1) ====

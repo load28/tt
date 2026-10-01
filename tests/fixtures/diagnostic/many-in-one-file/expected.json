@@ -34,9 +34,29 @@
     "col": 3,
     "endCol": 8,
     "endLine": 10,
+    "labels": [
+      {
+        "col": 3,
+        "endCol": 6,
+        "endLine": 9,
+        "line": 9,
+        "message": "the read-only binding is declared here"
+      }
+    ],
     "line": 10,
     "message": "cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)",
-    "suggestions": []
+    "suggestions": [
+      {
+        "edit": {
+          "col": 3,
+          "endCol": 7,
+          "endLine": 9,
+          "line": 9,
+          "replacement": ""
+        },
+        "message": "remove `val` if this binding is intended to be mutable"
+      }
+    ]
   },
   {
     "code": "unknown-case",

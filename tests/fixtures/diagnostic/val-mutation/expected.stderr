@@ -1,17 +1,31 @@
 error[val-mutation]: cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)
  --> input.tt:3:3
   |
+2 |   val const state = { count: 0, inner: { n: 1 } };
+  |   --- the read-only binding is declared here
 3 |   state.count = 1;
   |   ^^^^^
+  |
+  = help: remove `val` if this binding is intended to be mutable
 
 error[val-mutation]: cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)
  --> input.tt:4:3
   |
+2 |   val const state = { count: 0, inner: { n: 1 } };
+  |   --- the read-only binding is declared here
+3 |   state.count = 1;
 4 |   state.inner.n += 1;
   |   ^^^^^
+  |
+  = help: remove `val` if this binding is intended to be mutable
 
 error[val-mutation]: cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)
  --> input.tt:5:11
   |
+2 |   val const state = { count: 0, inner: { n: 1 } };
+  |   --- the read-only binding is declared here
+... |
 5 |   delete (state as { count?: number }).count;
   |           ^^^^^
+  |
+  = help: remove `val` if this binding is intended to be mutable

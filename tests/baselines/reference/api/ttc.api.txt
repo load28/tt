@@ -3529,6 +3529,7 @@ impl UnwindSafe for CoveredVariant
     pub end: Option<usize>,
     pub owner: Option<DiagnosticOwner>,
     pub suggestions: Vec<Suggestion>,
+    pub labels: Vec<DiagnosticLabel>,
 }
 impl Diagnostic
     pub fn to_compile_error(
@@ -3548,6 +3549,25 @@ impl Sync for Diagnostic
 impl Unpin for Diagnostic
 impl UnsafeUnpin for Diagnostic
 impl UnwindSafe for Diagnostic
+
+// struct ttc::DiagnosticLabel
+#[non_exhaustive]pub struct DiagnosticLabel {
+    pub start: usize,
+    pub end: usize,
+    pub message: String,
+}
+impl Clone for DiagnosticLabel
+impl Debug for DiagnosticLabel
+impl Eq for DiagnosticLabel
+impl PartialEq for DiagnosticLabel
+impl StructuralPartialEq for DiagnosticLabel
+impl Freeze for DiagnosticLabel
+impl RefUnwindSafe for DiagnosticLabel
+impl Send for DiagnosticLabel
+impl Sync for DiagnosticLabel
+impl Unpin for DiagnosticLabel
+impl UnsafeUnpin for DiagnosticLabel
+impl UnwindSafe for DiagnosticLabel
 
 // struct ttc::DiagnosticOwner
 pub struct DiagnosticOwner {

@@ -127,6 +127,7 @@ fn a_diagnostic_converts_to_the_cli_error_form() {
         end: Some(6),
         owner: None,
         suggestions: Vec::new(),
+        labels: Vec::new(),
     };
     let e = d.to_compile_error("abc\ndef\n", Some("x.tt"));
     assert_eq!((e.line, e.col), (2, 2));

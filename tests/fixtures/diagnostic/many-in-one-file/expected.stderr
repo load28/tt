@@ -10,8 +10,12 @@ error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "
 error[val-mutation]: cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)
   --> input.tt:10:3
    |
+ 9 |   val const state = { count: 0 };
+   |   --- the read-only binding is declared here
 10 |   state.count = 1;
    |   ^^^^^
+   |
+   = help: remove `val` if this binding is intended to be mutable
 
 error[unknown-case]: variant Shape has no case `Circel`
   --> input.tt:13:30

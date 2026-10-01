@@ -2,8 +2,12 @@
 error[val-mutation]: cannot mutate through val binding `x` (the binding is declared with `val`, so every access path from it is read-only)
  --> ./valConstForbidsPropertyAssignment.tt:2:1
   |
+1 | val const x = { a: 1 };
+  | --- the read-only binding is declared here
 2 | x.a = 2;
   | ^
+  |
+  = help: remove `val` if this binding is intended to be mutable
 
 
 ==== ttc --check-types (exit 1) ====
