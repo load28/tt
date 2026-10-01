@@ -679,7 +679,7 @@ fn a_capture_never_escapes_a_generated_conditional_region() {
     assert!(!out.contains("$tt_expr"), "{out}");
     assert!(out.contains("let $tt_v2: boolean;\nif ($tt_v2 = flag) {"), "{out}");
     assert!(out.contains("$tt_v3 = $tt_v2;"), "{out}");
-    assert!(out.contains("$tt_v3 = $tt_v1($tt_v0);"), "{out}");
+    assert!(out.contains("$tt_v3 = $tt_v2 && $tt_v1($tt_v0);"), "{out}");
 }
 
 #[test]
@@ -731,11 +731,11 @@ fn a_conditional_operation_lowers_as_one_region() {
         "declare const flag: boolean;\nexport const a = flag && match (1) { 1 => 1, _ => 0 };\n",
     );
     assert!(out.contains("let $tt_v1: boolean;\nif ($tt_v1 = flag) {"), "{out}");
-    assert!(out.contains("$tt_v2 = $tt_v0;"), "{out}");
+    assert!(out.contains("$tt_v2 = $tt_v1 && $tt_v0;"), "{out}");
     assert!(out.contains("} else {\n  $tt_v2 = $tt_v1;\n}"), "{out}");
     assert!(out.contains("export const a = $tt_v2;"), "{out}");
     assert!(!out.contains("$tt_expr"), "{out}");
-    assert!(!out.contains("&&"), "{out}");
+    assert!(!out.contains("flag &&"), "{out}");
 }
 
 #[test]

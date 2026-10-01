@@ -69,7 +69,7 @@ export function joined(): TResult<number, string> {
       return $tt_t3;
     }
     $tt_v1 = $tt_t3.value;
-    $tt_v2 = $tt_v1;
+    $tt_v2 = $tt_v0 || $tt_v1;
   }
   
   const w = $tt_v2;

@@ -1,0 +1,28 @@
+// A logical operation whose right operand can never run has its left
+// operand's type, as TypeScript gives it (`checkBinaryLikeExpressionWorker`:
+// `||` when the left operand is never falsy, `&&` when it is never truthy,
+// `??` when it is never nullish). The branch that runs the right operand is
+// written as the operation over the stored left operand, so its value is
+// typed `never` when the test narrows that operand to `never`.
+// `n && try text()` stays `number | string` where TypeScript gives
+// `0 | string`: it takes `number`'s falsy part as `0`
+// (`extractDefinitelyFalsyTypes`), which no narrowing of a stored `number`
+// produces (`NaN` is falsy too).
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+declare function read(): TResult<number, string>;
+declare function text(): TResult<string, string>;
+declare const o: { a: number };
+declare const n: number;
+declare const s: string | null;
+export function operations(): TResult<unknown, string> {
+  const orTrue = true || try read();
+  const orObject = o || try read();
+  const nullishObject = o ?? try read();
+  const andNull = null && try read();
+  const andFalse = false && try read();
+  const andNumber = n && try text();
+  const orString = s || try read();
+  const nullishString = s ?? try read();
+  return Result.Ok([orTrue, orObject, nullishObject, andNull, andFalse, andNumber, orString, nullishString]);
+}

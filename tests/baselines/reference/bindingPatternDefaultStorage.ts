@@ -154,7 +154,7 @@ function f(r: TResult<number, string>, s: S, flag: boolean): TResult<string, str
       return $tt_t6;
     }
     $tt_v10 = $tt_t6.value;
-    $tt_v12 = $tt_v10;
+    $tt_v12 = $tt_v11 && $tt_v10;
   } else {
     $tt_v12 = $tt_v11;
   }

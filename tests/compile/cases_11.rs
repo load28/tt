@@ -7,7 +7,7 @@ fn a_match_under_a_conditional_operation_in_a_guard_keeps_the_short_circuit() {
     let out = ok("variant S { A(v: number), B(w: number), C }\ndeclare const s: S;\nconst x = match (s) { A(v) if v > 0 && match (s) { B(w) => w > 0, _ => false } => 1, _ => 0 };\n");
     assert!(out.contains("let $tt_v2: boolean;\n      if ($tt_v2 = v > 0) {"), "{out}");
     assert!(out.contains("$tt_v3 = $tt_v2;"), "{out}");
-    assert!(out.contains("$tt_v3 = $tt_v1;"), "{out}");
+    assert!(out.contains("$tt_v3 = $tt_v2 && $tt_v1;"), "{out}");
     assert!(out.contains("if ($tt_v3) {"), "{out}");
 }
 
@@ -31,7 +31,7 @@ fn a_match_under_a_conditional_operation_in_an_arm_body_is_a_region() {
     let out = ok("variant S { A(v: number), B(w: number), C }\ndeclare const s: S;\ndeclare function eff(): number;\nconst y = match (s) { A(v) => eff() > 0 && match (s) { B(w) => w > 0, _ => false }, _ => false };\n");
     assert!(out.contains("if ($tt_v2$y = eff() > 0) {"), "{out}");
     assert!(out.contains("$tt_v3$y = $tt_v2$y;"), "{out}");
-    assert!(out.contains("$tt_v3$y = $tt_v1$y;"), "{out}");
+    assert!(out.contains("$tt_v3$y = $tt_v2$y && $tt_v1$y;"), "{out}");
     assert!(out.contains("$tt_v0$y = $tt_v3$y;"), "{out}");
 }
 

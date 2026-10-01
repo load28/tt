@@ -153,7 +153,7 @@ postfix chain on the piped value, the value the head evaluates to.
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
 - [x] `cargo test` (targeted: `compile`, `snapshot`, `case_baselines`,
-  `lexer::queries`); the full gate is recorded in TASK-694, which ends
+  `lexer::queries`); the full gate is recorded in TASK-692, which ends
   this batch.
 - [x] `TT_MATRIX_CASES=all` `case_baselines` and `editor_cases` for the
   optional-chain companion and the `booleanLiterals` form.

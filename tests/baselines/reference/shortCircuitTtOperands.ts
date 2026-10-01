@@ -133,7 +133,7 @@ for (const left of [0, 1]) {
         }
       }
     }
-    $tt_v4 = $tt_v0;
+    $tt_v4 = $tt_v1 && $tt_v0;
   } else {
     $tt_v4 = $tt_v1;
   }
@@ -163,7 +163,7 @@ for (const left of [0, 1]) {
         }
       }
     }
-    $tt_v9 = $tt_v5;
+    $tt_v9 = $tt_v6 || $tt_v5;
   }
   
   $tt_v7($tt_v8, $tt_v9);
@@ -191,7 +191,7 @@ for (const left of [null, 0]) {
         }
       }
     }
-    $tt_v14 = $tt_v10;
+    $tt_v14 = $tt_v11 ?? $tt_v10;
   } else {
     $tt_v14 = $tt_v11;
   }
@@ -323,7 +323,7 @@ function tries(left: number | null): TResult<number, string> {
       return $tt_t0;
     }
     $tt_v36 = $tt_t0.value;
-    $tt_v38 = $tt_v36;
+    $tt_v38 = $tt_v37 ?? $tt_v36;
   } else {
     $tt_v38 = $tt_v37;
   }
@@ -354,7 +354,7 @@ function chain(a: boolean, b: boolean) {
         }
       }
     }
-    $tt_v41 = $tt_v39;
+    $tt_v41 = $tt_v40 && $tt_v39;
   } else {
     $tt_v41 = $tt_v40;
   }

@@ -87,7 +87,7 @@ None.
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
 - [x] `cargo test` (targeted: `--lib`, `compile`, `snapshot`,
-  `case_baselines`, `native`); the full gate is recorded in TASK-694.
+  `case_baselines`, `native`); the full gate is recorded in TASK-692.
 - [x] Baseline changes reviewed and committed with the change: the
   `mixedPatternsInEveryPosition.errors.txt` `--check-types` section loses
   only the `match-not-exhaustive` error.

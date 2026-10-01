@@ -294,7 +294,7 @@ function looped(n: number): TResult<number, string> {
           }
         }
       }
-      $tt_v11 = $tt_v9;
+      $tt_v11 = $tt_v10 && $tt_v9;
     } else {
       $tt_v11 = $tt_v10;
     }

@@ -129,7 +129,7 @@ export function k(o: O, s: string | null) {
         }
       }
     }
-    $tt_v5 = $tt_v3;
+    $tt_v5 = $tt_v4 && $tt_v3;
   } else {
     $tt_v5 = $tt_v4;
   }
@@ -186,7 +186,7 @@ export function l(o: O, init: { v: number } | undefined) {
         }
       }
     }
-    $tt_v11 = $tt_v9;
+    $tt_v11 = $tt_v10 || $tt_v9;
   }
   
   const b = $tt_v11;
@@ -211,7 +211,7 @@ export function l(o: O, init: { v: number } | undefined) {
         }
       }
     }
-    $tt_v14 = $tt_v12;
+    $tt_v14 = $tt_v13 && $tt_v12;
   } else {
     $tt_v14 = $tt_v13;
   }
@@ -225,7 +225,7 @@ export function m(s: string | null) {
     value: string | number | null;
 });
   $tt_v15: {
-    let $tt_v18: (number) | (string | null);
+    let $tt_v18: (number | "") | (string | null);
     let $tt_v17: string | null;
     if ($tt_v17 = s) {
       let $tt_v16: number;
@@ -235,7 +235,7 @@ export function m(s: string | null) {
         break $tt_v15;
       }
       $tt_v16 = $tt_t0.value;
-      $tt_v18 = $tt_v16;
+      $tt_v18 = $tt_v17 && $tt_v16;
     } else {
       $tt_v18 = $tt_v17;
     }
