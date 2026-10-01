@@ -6,7 +6,5 @@
 # names no case.
 match-not-exhaustive_missingCase_declarationInitializer	the editor publishes `match-not-exhaustive` at main.tt:5:17, and `ttc --check` does not report it there with those words and that width	TASK-701: Issue 1, the untyped check names the variant in its message and the typed check does not
 match-not-exhaustive_missingCase_jsxAttribute	the editor publishes `match-not-exhaustive` at main.ttx:5:27, and `ttc --check` does not report it there with those words and that width	TASK-701: Issue 1, the untyped check names the variant in its message and the typed check does not
-result-yield-crossing_yieldInside_jsxAttribute	`ttc --check` reports 2 tt diagnostic(s) in main.ttx, and the editor publishes 1	TASK-700: Issue 6, a crossing yield in a JSX expression is also reported as unparsable
-result-yield-crossing_yieldInside_jsxAttribute	`ttc --check-types` reports 2 tt diagnostic(s) in main.ttx, and the editor publishes 1	TASK-700: Issue 6, a crossing yield in a JSX expression is also reported as unparsable
 val-mutation_propertyWrite_componentBody	the editor publishes `val-mutation` with 1 related place(s), and `ttc --check` shows 0 other one(s)	TASK-701: Issue 2, the untyped check leaves out where the val binding is declared
 val-mutation_propertyWrite_functionBody	the editor publishes `val-mutation` with 1 related place(s), and `ttc --check` shows 0 other one(s)	TASK-701: Issue 2, the untyped check leaves out where the val binding is declared

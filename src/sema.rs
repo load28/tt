@@ -106,14 +106,12 @@ pub(crate) fn check_all(
     let mut checker = Checker {
         source,
         source_kind,
-        tokens,
         verify,
         errors: Vec::new(),
         result_completions,
-        function_targets: crate::flow::FunctionTargets::new(
-            tokens,
-            &semantic.hir.match_owned_tokens(tokens),
-        ),
+        function_targets: crate::flow::FunctionTargets::new(tokens, &|tokens| {
+            semantic.hir.match_owned_tokens(tokens)
+        }),
     };
     checker.visit_program(program, Ctx::Top, Place::Module);
     // One analysis, two reports. Resolution comes first — a pattern whose
@@ -202,7 +200,6 @@ pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> 
 struct Checker<'a> {
     source: &'a str,
     source_kind: crate::SourceKind,
-    tokens: &'a [crate::lexer::Token],
     verify: bool,
     /// Every violation found so far — the walk keeps going after each one.
     errors: Vec<TtError>,

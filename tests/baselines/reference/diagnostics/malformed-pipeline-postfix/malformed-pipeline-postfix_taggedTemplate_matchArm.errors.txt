@@ -1,11 +1,5 @@
 ==== ttc --out-dir (exit 1) ====
 ttc: ./harness.ts → $DIR/out/harness.ts
-error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
- --> ./main.tt:4:59
-  |
-4 |   return match (flip()) { true => note("operand", input) |> ?.toFixed`1`, false => note("other arm", 0) };
-  |                                                           ^
-
 error[malformed-pipeline-postfix]: pipeline: invalid optional postfix tail
  --> ./main.tt:4:70
   |
@@ -16,11 +10,6 @@ error[malformed-pipeline-postfix]: pipeline: invalid optional postfix tail
 
 
 ==== ttc --check-types (exit 1) ====
-error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
- --> main.tt:4:59
-  |
-4 |   return match (flip()) { true => note("operand", input) |> ?.toFixed`1`, false => note("other arm", 0) };
-  |                                                           ^
 error[malformed-pipeline-postfix]: pipeline: invalid optional postfix tail
  --> main.tt:4:70
   |

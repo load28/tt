@@ -1204,13 +1204,15 @@ look up."
     ///
     /// The exceptions are the diagnostics whose presence means the output
     /// cannot be valid TypeScript at all: text the parser could not claim
-    /// (a stray `|>` passes through verbatim and is not TS), a field type
+    /// (a stray `|>`, or a pipeline whose optional postfix tail is
+    /// malformed, passes through verbatim and is not TS), a field type
     /// that would be emitted verbatim into a type position, and the output
     /// self-check itself.
     pub fn blocks_projection(self) -> bool {
         matches!(
             self,
             DiagnosticCode::StrayPipe
+                | DiagnosticCode::MalformedPipelinePostfix
                 | DiagnosticCode::InvalidOptionalReceiver
                 | DiagnosticCode::StrayIfLet
                 | DiagnosticCode::IfLetPlacement

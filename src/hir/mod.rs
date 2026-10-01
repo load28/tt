@@ -109,6 +109,13 @@ impl HirFile {
         let hir = self;
         let first_from = |offset: usize, wanted: fn(&crate::lexer::TokenKind) -> bool| {
             let from = tokens.partition_point(|token| token.span.start < offset);
+            let outside = tokens.first().is_none_or(|first| offset < first.span.start)
+                || from
+                    .checked_sub(1)
+                    .is_some_and(|previous| tokens[previous].span.end > offset);
+            if outside {
+                return None;
+            }
             tokens[from..]
                 .iter()
                 .position(|token| wanted(&token.kind))

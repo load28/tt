@@ -45,7 +45,7 @@ fn class_code_outside_methods_is_its_own_function_target() {
             .position(|token| &source[token.span.start..token.span.end] == name)
             .expect("marker token")
     };
-    let targets = FunctionTargets::new(&tokens, &std::collections::HashSet::new());
+    let targets = FunctionTargets::new(&tokens, &|_| std::collections::HashSet::new());
     for (name, target) in [
         ("A", FunctionTarget::StaticBlock),
         ("B", FunctionTarget::ClassElement),
@@ -565,7 +565,7 @@ fn the_function_target_index_answers_every_position_as_the_scan_does() {
                 .collect(),
         ];
         for owned in &owned_sets {
-            let index = FunctionTargets::new(&tokens, owned);
+            let index = FunctionTargets::new(&tokens, &|_| owned.clone());
             for at in 0..tokens.len() + 3 {
                 assert_eq!(
                     index.at(at),

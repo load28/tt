@@ -715,6 +715,7 @@
 | TASK-707 | Report a statement a `result` block's `}` cuts off as the author's syntax error | Complete | 2026-10-01 | 2026-10-01 | [TASK-707](./TASK-707-result-body-end.md) |
 | TASK-708 | Retire `stray-result`, which no `result` block can reach | Complete | 2026-10-01 | 2026-10-01 | [TASK-708](./TASK-708-retire-stray-result.md) |
 | TASK-709 | Count a nested alternative's bindings when or-pattern alternatives are compared | Complete | 2026-10-01 | 2026-10-01 | [TASK-709](./TASK-709-nested-or-pattern-bindings.md) |
+| TASK-710 | Report a malformed postfix pipeline and a crossing `yield` once | Complete | 2026-10-01 | 2026-10-01 | [TASK-710](./TASK-710-one-diagnostic-per-cause.md) |
 | TASK-711 | Report an incomplete fragment in a construct where TypeScript stops | Complete | 2026-10-01 | 2026-10-01 | [TASK-711](./TASK-711-incomplete-fragment-position.md) |
 
 ## Next task number

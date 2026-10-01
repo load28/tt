@@ -6,11 +6,4 @@
 # tests/case_baselines.rs fails when a listed case agrees with its oracle,
 # is observed differently, or names no case. A name with `*` lists every
 # case it matches that observes the same thing (@expectDiagnostic cases).
-malformed-pipeline-postfix_taggedTemplate_ifLetBody	`ttc --out-dir` reports malformed-pipeline-postfix, source-not-typescript	TASK-700: Issue 1, a malformed postfix pipeline in a construct's body is reported twice
-malformed-pipeline-postfix_taggedTemplate_matchArm	`ttc --out-dir` reports malformed-pipeline-postfix, source-not-typescript	TASK-700: Issue 1, a malformed postfix pipeline in a construct's body is reported twice
 result-return-nested_*	`typedCheck` reports nothing	TASK-700: Issue 5, the tt-only typed check drops result-return-nested
-result-yield-crossing_yieldInside_jsxAttribute	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
-result-yield-crossing_yieldInside_jsxComponentProp	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
-result-yield-crossing_yieldInside_jsxNested	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
-result-yield-crossing_yieldInside_jsxSpreadAttribute	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable
-result-yield-crossing_yieldInside_templateLiteral	`ttc --out-dir` reports result-yield-crossing, source-not-typescript	TASK-700: Issue 6, a crossing yield in a template or JSX expression is also reported as unparsable

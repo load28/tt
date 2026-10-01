@@ -176,15 +176,10 @@ impl Checker<'_> {
     /// to return the `Err`: an ordinary function can; a constructor, a
     /// generator, class code outside a method, and a module's top level
     /// cannot. Inside a template literal, which the file's token stream
-    /// holds as one token, the boundary index cannot see the interpolation's
-    /// own functions, so a function written in the `try`'s region is the
-    /// target there, as the region's parse records.
+    /// holds as one token, the interpolation's own token stream is asked
+    /// ([`crate::flow::FunctionTargets::at_offset`]), so a generator written
+    /// there is the target as it is anywhere else.
     fn check_try(&mut self, stmt: &TryStmt, place: Place) {
-        let at = self
-            .tokens
-            .iter()
-            .position(|token| token.span.start >= stmt.span.start)
-            .unwrap_or(self.tokens.len());
         let function_target = match place {
             Place::ResultRegion if !stmt.in_function => {
                 self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
@@ -203,14 +198,7 @@ impl Checker<'_> {
                 self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
                 return;
             }
-            _ if at > 0 && self.tokens[at - 1].span.end > stmt.span.start => {
-                if stmt.in_function {
-                    Some(crate::flow::FunctionTarget::Ordinary)
-                } else {
-                    self.function_targets.at(at - 1)
-                }
-            }
-            _ => self.function_targets.at(at),
+            _ => self.function_targets.at_offset(stmt.span.start),
         };
         let (message, help) = match function_target {
             Some(crate::flow::FunctionTarget::Ordinary) => {

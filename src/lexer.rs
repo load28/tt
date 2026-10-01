@@ -174,28 +174,6 @@ pub(crate) fn lex(src_str: &str, start: usize, end: usize) -> Vec<Token> {
     lex_with_kind(src_str, start, end, SourceKind::TypeScript)
 }
 
-pub(crate) enum TypeScriptTokens<'a> {
-    Shared(&'a [Token]),
-    Lexed(Vec<Token>),
-}
-
-impl<'a> TypeScriptTokens<'a> {
-    pub(crate) fn of(src: &str, kind: SourceKind, tokens: &'a [Token]) -> Self {
-        if kind == SourceKind::TypeScript {
-            TypeScriptTokens::Shared(tokens)
-        } else {
-            TypeScriptTokens::Lexed(lex(src, 0, src.len()))
-        }
-    }
-
-    pub(crate) fn tokens(&self) -> &[Token] {
-        match self {
-            TypeScriptTokens::Shared(tokens) => tokens,
-            TypeScriptTokens::Lexed(tokens) => tokens,
-        }
-    }
-}
-
 /// Lexes a source range under its TypeScript surface kind.
 pub(crate) fn lex_with_kind(
     src_str: &str,

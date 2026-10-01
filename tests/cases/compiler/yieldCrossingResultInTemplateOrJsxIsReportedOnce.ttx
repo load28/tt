@@ -1,0 +1,39 @@
+// A `result` block inside a generator keeps the generator's `yield` legal
+// where it is written, so a `yield` in the block is one fault,
+// `result-yield-crossing`, wherever the generator stands: in a template
+// literal's interpolation, whose tokens are a stream of their own, and in a
+// JSX attribute or child, which a `.ttx` file's own token stream holds. It
+// is not reported again as TypeScript that does not parse.
+// @expectDiagnostic: result-yield-crossing
+// @baselines: errors.txt
+// @filename: tsconfig.json
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "jsx": "preserve",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  }
+}
+// @filename: main.ttx
+import type { TResult } from "@tt/std";
+declare function read(n: number): TResult<number, string>;
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      div: Record<string, unknown>;
+    }
+  }
+}
+export function template(input: number) {
+  return `${[...(function* () { const r = result { const n = try read(input); [|yield|] n; return n; }; yield r; })()]}`;
+}
+export function attribute(input: number) {
+  return <div data-value={[...(function* () { const r = result { const n = try read(input); [|yield|] n; return n; }; yield r; })()]} />;
+}
+export function child(input: number) {
+  return <div>{[...(function* () { const r = result { const n = try read(input); [|yield|] n; return n; }; yield r; })()]}</div>;
+}

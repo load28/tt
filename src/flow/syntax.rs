@@ -118,20 +118,27 @@ pub(crate) enum FunctionTarget {
 pub(crate) struct FunctionTargets {
     braced: Vec<Option<(usize, FunctionTarget)>>,
     arrows: Vec<(usize, usize)>,
+    spans: Vec<(usize, usize)>,
+    interpolations: Vec<(crate::ast::Span, FunctionTargets)>,
 }
 
 impl FunctionTargets {
-    pub(crate) fn new(tokens: &[Token], tt_owned: &std::collections::HashSet<usize>) -> Self {
+    pub(crate) fn new(
+        tokens: &[Token],
+        tt_owned: &dyn Fn(&[Token]) -> std::collections::HashSet<usize>,
+    ) -> Self {
+        let owned = tt_owned(tokens);
         let mut braced = Vec::with_capacity(tokens.len() + 1);
         let mut stack: Vec<Option<(usize, FunctionTarget)>> = Vec::new();
+        let mut interpolations = Vec::new();
         braced.push(None);
         for (index, token) in tokens.iter().enumerate() {
-            match token.kind {
+            match &token.kind {
                 TokenKind::Punct(b'{') => {
-                    let own = (!tt_owned.contains(&index)
+                    let own = (!owned.contains(&index)
                         && !index
                             .checked_sub(1)
-                            .is_some_and(|previous| tt_owned.contains(&previous)))
+                            .is_some_and(|previous| owned.contains(&previous)))
                     .then(|| function_target_brace(tokens, index))
                     .flatten()
                     .map(|target| (index, target));
@@ -141,6 +148,13 @@ impl FunctionTargets {
                 TokenKind::Punct(b'}') => {
                     stack.pop();
                 }
+                TokenKind::Template(parts) => {
+                    for part in parts.iter() {
+                        if let crate::lexer::TplPart::Interp { span, tokens } = part {
+                            interpolations.push((*span, FunctionTargets::new(tokens, tt_owned)));
+                        }
+                    }
+                }
                 _ => {}
             }
             braced.push(stack.last().copied().flatten());
@@ -149,11 +163,19 @@ impl FunctionTargets {
             .iter()
             .enumerate()
             .filter(|(arrow, token)| {
-                matches!(token.kind, TokenKind::Arrow) && !tt_owned.contains(arrow)
+                matches!(token.kind, TokenKind::Arrow) && !owned.contains(arrow)
             })
             .map(|(arrow, _)| (arrow, concise_arrow_end(tokens, arrow + 1)))
             .collect();
-        FunctionTargets { braced, arrows }
+        FunctionTargets {
+            braced,
+            arrows,
+            spans: tokens
+                .iter()
+                .map(|token| (token.span.start, token.span.end))
+                .collect(),
+            interpolations,
+        }
     }
 
     pub(crate) fn at(&self, at: usize) -> Option<FunctionTarget> {
@@ -172,6 +194,19 @@ impl FunctionTargets {
             }),
             (Some((_, target)), None) | (None, Some((_, target))) => Some(target),
             (None, None) => None,
+        }
+    }
+
+    pub(crate) fn at_offset(&self, offset: usize) -> Option<FunctionTarget> {
+        let at = self.spans.partition_point(|(start, _)| *start < offset);
+        match at.checked_sub(1) {
+            Some(token) if self.spans[token].1 > offset => self
+                .interpolations
+                .iter()
+                .find(|(span, _)| span.start <= offset && offset < span.end)
+                .and_then(|(_, inner)| inner.at_offset(offset))
+                .or_else(|| self.at(token)),
+            _ => self.at(at),
         }
     }
 }
