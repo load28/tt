@@ -443,7 +443,7 @@ fn a_hand_written_ts_file_imports_an_tt_file_by_the_specifier_it_writes() {
     // Positionless: the checker's answer is about the hand-written file as
     // a whole, so the block names the file and quotes nothing.
     assert!(
-        block(&out, "type mismatch: expected `number`").contains("--> src/use.ts"),
+        block(&out, "is not assignable to type 'number'").contains("--> src/use.ts"),
         "the .ts file's own error, in one project with the .tt: {out}"
     );
     assert!(

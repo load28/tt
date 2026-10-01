@@ -192,6 +192,9 @@ pub(crate) fn report(
             let file = files
                 .iter()
                 .find(|file| file.module_path == diagnostic.file)?;
+            if typescript_owned(file, diagnostic) {
+                return None;
+            }
             let (start, end) = diagnostic_span(diagnostic);
             let DiagnosticOrigin::Anchor(anchor) = projection::diagnostic_origin(file, start, end)?
             else {
@@ -202,7 +205,6 @@ pub(crate) fn report(
         .collect();
     let mut translated_seen: HashSet<(PathBuf, usize, AnchorKind, &'static str)> = HashSet::new();
     for diagnostic in type_diagnostics {
-        let (diagnostic_start, diagnostic_end) = diagnostic_span(diagnostic);
         let Some(file) = files.iter().find(|f| f.module_path == diagnostic.file) else {
             // A hand-written file: nothing was lowered, so TypeScript's own
             // coordinates already name the place. They arrive as UTF-16
@@ -222,9 +224,9 @@ pub(crate) fn report(
             };
             out.push(Diagnostic {
                 path: diagnostic.file.clone(),
-                position: at(diagnostic_start),
-                end: at(diagnostic_end),
-                message: diagnostic_message(diagnostic, &[]),
+                position: at(diagnostic.start),
+                end: at(diagnostic.end),
+                message: diagnostic.message.clone(),
                 code: Some(format!("ts{}", diagnostic.code)),
                 suggestions: Vec::new(),
                 labels: Vec::new(),
@@ -237,6 +239,12 @@ pub(crate) fn report(
         if projection::diagnostic_intersects_tt_error(file, diagnostic) {
             continue;
         }
+        let owned_by_typescript = typescript_owned(file, diagnostic);
+        let (diagnostic_start, diagnostic_end) = if owned_by_typescript {
+            (diagnostic.start, diagnostic.end)
+        } else {
+            diagnostic_span(diagnostic)
+        };
         let Some(origin) = projection::diagnostic_origin(file, diagnostic_start, diagnostic_end)
         else {
             out.push(Diagnostic {
@@ -384,7 +392,11 @@ pub(crate) fn report(
                     path: file.source_path.clone(),
                     position: Some(crate::line_col(&file.source, start)),
                     end: (end > start).then(|| crate::line_col(&file.source, end)),
-                    message: diagnostic_message(diagnostic, declared),
+                    message: if owned_by_typescript {
+                        ts_message(&diagnostic.message, declared)
+                    } else {
+                        diagnostic_message(diagnostic, declared)
+                    },
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
                     labels: checker_labels(files, file, None, diagnostic),

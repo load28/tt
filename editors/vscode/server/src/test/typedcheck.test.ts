@@ -69,7 +69,9 @@ test(
     assert.equal(unparsed.blocked, false);
     assert.ok(
       unparsed.diagnostics.some(
-        (d) => d.code === "ts2322" && d.message.startsWith("type mismatch"),
+        (d) =>
+          d.code === "ts2322" &&
+          d.message === "Type 'string' is not assignable to type 'number'.",
       ),
       JSON.stringify(unparsed.diagnostics),
     );
@@ -197,7 +199,7 @@ test(
 );
 
 test(
-  "the authoritative editor pass uses the compiler's structured type message",
+  "the authoritative editor pass reports plain TypeScript's error as TypeScript does",
   { skip: skipTyped, timeout },
   async () => {
     const dir = tmpProject();
@@ -214,11 +216,11 @@ test(
     const mismatch = result.diagnostics.find((d) => d.code === "ts2322");
     assert.equal(
       mismatch?.message,
-      "type mismatch: expected `string`, found `1`",
+      "Type 'number' is not assignable to type 'string'.",
     );
     assert.deepEqual(
       [mismatch?.line, mismatch?.col, mismatch?.endLine, mismatch?.endCol],
-      [1, 23, 1, 24],
+      [1, 7, 1, 12],
     );
   },
 );

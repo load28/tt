@@ -58,7 +58,7 @@ diagnostics: 2 diagnostic(s)
   7:7-7:13 "unused" hint TS6133: 'unused' is declared but its value is never read. [unnecessary]
 published: 2 diagnostic(s)
   7:7-7:13 "unused" hint TS6133 (ts): 'unused' is declared but its value is never read. [unnecessary]
-  7:24-7:29 "label" error ts2322 (ttc): type mismatch: expected `string | undefined`, found `number`
+  7:24-7:29 "label" error ts2322 (ttc): Type 'number' is not assignable to type 'string'.
     related plainTsx.ttx 1:74-1:79 "label": The expected type comes from property 'label' which is declared here on type '{ label?: string | undefined; onClick?: (() => void) | undefined; }'
 
 === parity with the TypeScript twin ===
@@ -67,7 +67,5 @@ hover attribute: same
 completions member: same
 references prop: same
 semanticTokens plainTsx.ttx: same
-diagnostics plainTsx.ttx: differs
-  tt only: 7:24-7:29 "label" error TS2322: type mismatch: expected `string | undefined`, found `number`
-  ts only: 7:24-7:29 "label" error TS2322: Type 'number' is not assignable to type 'string'.
+diagnostics plainTsx.ttx: same
 

@@ -353,7 +353,7 @@ fn an_editor_check_keeps_each_typescript_diagnostic_in_its_own_words() {
     assert_eq!(said("ts2554"), ["Expected 1 arguments, but got 0."], "{answers:?}");
     assert_eq!(
         said("ts2345"),
-        ["type mismatch: expected `string`, found `number`"],
+        ["Argument of type 'number' is not assignable to parameter of type 'string'."],
         "{answers:?}"
     );
     assert_eq!(diagnostics.len(), 2, "{answers:?}");

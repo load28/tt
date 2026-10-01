@@ -1,5 +1,11 @@
 # TASK-585: Render only TypeScript's assignability diagnostics as type mismatches, about their own subject
 
+> **Superseded in part by TASK-695**: an assignability diagnostic whose
+> span TypeScript places on user-written text is no longer rendered as a
+> type mismatch; ttc reports TypeScript's code, message, and range. The
+> rendering this record describes applies only to a diagnostic whose span
+> lands on code ttc generated.
+
 - **Status**: Complete
 - **Started**: 2026-09-29
 - **Completed**: 2026-09-30

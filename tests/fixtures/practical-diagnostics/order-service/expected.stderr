@@ -13,8 +13,8 @@ error[match-not-exhaustive]: match is not exhaustive: missing "Failed"
    |
    = help: add the missing arms: `Failed(reason) => undefined,`
    = help: or add a final `_` arm: `_ => undefined,`
-error[ts2322]: type mismatch: expected `number`, found `"three"`
-  --> src/checkout.tt:18:28
+error[ts2322]: Type 'string' is not assignable to type 'number'.
+  --> src/checkout.tt:18:9
    |
 18 |   const attempts: number = "three";
-   |                            ^^^^^^^
+   |         ^^^^^^^^

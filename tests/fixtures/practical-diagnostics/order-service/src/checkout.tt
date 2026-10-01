@@ -15,6 +15,6 @@ export function receipt(): TResult<string, string> {
     Pending => "pending",
     Paid(receiptId) => receiptId,
   };
-  const attempts: number = "three"; //~ ERROR[ts2322] type mismatch
+  const attempts: number = "three"; //~ ERROR[ts2322] is not assignable
   return Result.Ok(`${chargeId}:${receiptId}:${label}:${attempts}`);
 }

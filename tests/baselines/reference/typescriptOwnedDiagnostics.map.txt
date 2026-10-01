@@ -1,0 +1,6 @@
+//// [typescriptOwnedDiagnostics.tt] 4 mapping(s)
+1:1 -> 1:1 len 442  "// A checker diagnostic whose span TypeScript pl"...
+12:7 -> 12:11 len 1  "1"
+12:12 -> 12:7 len 3  "inc"
+12:15 -> 12:13 len 3  ");\n"
+

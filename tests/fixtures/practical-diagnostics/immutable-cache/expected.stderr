@@ -14,7 +14,7 @@ error[let-else-not-diverging]: let-else: every path through the `else` block mus
    |                               ^^^^
    |
    = help: end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` counts when both branches do)
-error[ts2345]: type mismatch: expected `string`, found `42`
+error[ts2345]: Argument of type 'number' is not assignable to parameter of type 'string'.
   --> src/cache.tt:16:22
    |
 16 | export const count = 42 |> format;

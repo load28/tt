@@ -172,6 +172,6 @@ test("the one-shot typed check reports UTF-16 columns after astral characters, a
     result.kind === "ok" ? result.diagnostics.find((d) => d.code === "ts2322")?.col : JSON.stringify(result);
 
   const engineColumn = column(await runTypedCheck(COMPILER, source, file, true));
-  assert.equal(engineColumn, source.indexOf('"wrong"') + 1);
+  assert.equal(engineColumn, source.indexOf("value:") + 1);
   assert.equal(column(await runTypedCheck(compiler, source, file, true)), engineColumn);
 });

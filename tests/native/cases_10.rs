@@ -138,8 +138,8 @@ fn a_type_error_keeps_its_rendering_while_an_open_document_does_not_parse() {
         mismatch(&before),
         vec![(
             serde_json::json!(1),
-            serde_json::json!(28),
-            serde_json::json!("type mismatch: expected `number`, found `\"x\"`"),
+            serde_json::json!(14),
+            serde_json::json!("Type 'string' is not assignable to type 'number'."),
         )]
     );
     assert!(
@@ -479,12 +479,12 @@ fn a_postfix_pipeline_result_mismatch_is_reported_on_the_pipeline() {
     )]);
     let out = check(&dir);
     assert!(!out.contains("this pipeline step expects"), "{out}");
-    let result = block(&out, "src/postfix.tt:2:10");
+    let result = block(&out, "src/postfix.tt:2:3");
     assert!(
-        result.contains("error[ts2322]: type mismatch: expected `number`, found `string`"),
+        result.contains("error[ts2322]: Type 'string' is not assignable to type 'number'."),
         "{out}"
     );
-    let annotation = block(&out, "src/postfix.tt:4:26");
+    let annotation = block(&out, "src/postfix.tt:4:14");
     assert!(annotation.contains("error[ts2322]"), "{out}");
     let argument = block(&out, "src/postfix.tt:6:20");
     assert!(argument.contains("error[ts2345]"), "{out}");

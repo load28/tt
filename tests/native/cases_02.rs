@@ -314,7 +314,7 @@ fn a_discarded_result_does_not_hide_the_file_s_type_errors() {
         "{out}"
     );
     assert!(
-        block(&out, "ts2322").contains("discarded.tt:6:26"),
+        block(&out, "ts2322").contains("discarded.tt:6:14"),
         "the file's type error is reported beside the tt error: {out}"
     );
 }
@@ -695,7 +695,7 @@ fn an_answer_past_the_pipe_buffer_still_arrives() {
     let out = check(&dir);
     assert_eq!(
         out.lines()
-            .filter(|l| l.contains("type mismatch: expected `number`"))
+            .filter(|l| l.contains("Type 'string' is not assignable to type 'number'."))
             .count(),
         400,
         "every diagnostic of a >64 KB answer arrives: {out}"
@@ -777,13 +777,13 @@ fn a_type_error_is_reported_at_its_position_in_the_tt_source() {
         "src/bad.tt",
         // A multi-byte prefix: TypeScript counts UTF-16 code units and the
         // `.tt` position is a byte offset, so the two have to be converted.
-        "export function go(): void {\n  const 한글: string = 1;\n}\n",
+        "export function go(): void {\n  /*한글*/ const bad: string = 1;\n}\n",
     )]);
     let out = check(&dir);
-    let reported = block(&out, "type mismatch:");
+    let reported = block(&out, "is not assignable");
     assert!(
-        reported.contains("--> src/bad.tt:2:22"),
-        "the diagnostic belongs at the incompatible expression in the .tt file: {out}"
+        reported.contains("--> src/bad.tt:2:16"),
+        "the diagnostic belongs at TypeScript's position in the .tt file: {out}"
     );
 }
 

@@ -637,10 +637,10 @@ fn a_byte_order_mark_moves_no_reported_position() {
         })
         .collect();
     let plain = &reports[0];
-    assert!(plain.contains("src/b.tt:1:19"), "{plain}");
-    assert!(plain.contains("src/b.tt:2:19"), "{plain}");
-    assert!(plain.contains("src/h.ts:1:26"), "{plain}");
-    assert!(plain.contains("\n  |                   ^^^\n"), "{plain}");
+    assert!(plain.contains("src/b.tt:1:7"), "{plain}");
+    assert!(plain.contains("src/b.tt:2:7"), "{plain}");
+    assert!(plain.contains("src/h.ts:1:14"), "{plain}");
+    assert!(plain.contains("\n  |       ^\n"), "{plain}");
     assert_eq!(reports[1], *plain);
 }
 
@@ -658,7 +658,7 @@ fn a_requested_file_outside_the_configuration_is_checked_in_its_inferred_project
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains("error[ts2322]"), "{stderr}");
-    assert!(stderr.contains("--> other/x.tt:1:19"), "{stderr}");
+    assert!(stderr.contains("--> other/x.tt:1:7"), "{stderr}");
     assert!(stderr.contains("error[val-mutation]"), "{stderr}");
 
     let out = run(&dir, &["--check-types", "src"]);
@@ -722,7 +722,7 @@ fn a_requested_file_outside_the_configuration_is_checked_in_its_inferred_project
     assert!(
         typed
             .iter()
-            .any(|d| d["code"] == "ts2322" && d["line"] == 1 && d["col"] == 19),
+            .any(|d| d["code"] == "ts2322" && d["line"] == 1 && d["col"] == 7),
         "{answers:?}"
     );
     assert!(typed.iter().any(|d| d["code"] == "val-mutation"), "{answers:?}");
@@ -920,7 +920,7 @@ fn the_standard_library_resolves_from_either_module_format_in_every_resolution_m
         let out = check(&dir);
         let label = format!("{package_type}/{module}/{resolution}/{verbatim}");
         assert!(
-            block(&out, "type mismatch: expected `string`").contains("--> src/s.tt"),
+            block(&out, "is not assignable to type 'string'").contains("--> src/s.tt"),
             "{label}: {out}"
         );
         assert_eq!(error_count(&out), 1, "{label}: {out}");
@@ -955,7 +955,7 @@ fn a_commonjs_file_requiring_the_standard_library_under_verbatim_module_syntax_i
         );
         let out = check(&dir);
         assert!(
-            block(&out, "type mismatch: expected `string`").contains("--> src/s.tt"),
+            block(&out, "is not assignable to type 'string'").contains("--> src/s.tt"),
             "{resolution}: {out}"
         );
         assert_eq!(error_count(&out), 1, "{resolution}: {out}");
@@ -1005,7 +1005,7 @@ fn tt_specifiers_resolve_under_node_esm_as_tsc_resolves_them() {
         with_tt_content_mapper(&dir);
         let out = check(&dir);
         assert!(
-            block(&out, "type mismatch: expected `string`").contains("--> src/c.ts"),
+            block(&out, "is not assignable to type 'string'").contains("--> src/c.ts"),
             "{module}: {out}"
         );
         assert_eq!(error_count(&out), 1, "{module}: {out}");
@@ -1026,7 +1026,7 @@ fn tt_specifiers_keep_resolving_in_commonjs_and_bundler_projects() {
         let out = check(&dir);
         let label = format!("{package_type}/{module}/{resolution}");
         assert!(
-            block(&out, "type mismatch: expected `string`").contains("--> src/c.ts"),
+            block(&out, "is not assignable to type 'string'").contains("--> src/c.ts"),
             "{label}: {out}"
         );
         assert_eq!(error_count(&out), 1, "{label}: {out}");
@@ -1051,7 +1051,7 @@ fn tt_specifiers_keep_resolving_in_commonjs_and_bundler_projects() {
     );
     let out = check(&dir);
     assert!(
-        block(&out, "type mismatch: expected `string`").contains("--> src/use.ts"),
+        block(&out, "is not assignable to type 'string'").contains("--> src/use.ts"),
         "{out}"
     );
     assert_eq!(error_count(&out), 1, "{out}");
@@ -1070,7 +1070,7 @@ fn a_project_with_another_content_mapper_runs_no_external_code() {
     fs::write(config, text).unwrap();
     let out = check(&dir);
     assert!(
-        block(&out, "type mismatch: expected `string`").contains("--> src/c.ts"),
+        block(&out, "is not assignable to type 'string'").contains("--> src/c.ts"),
         "{out}"
     );
     assert!(out.contains("ts100024"), "{out}");
@@ -1105,7 +1105,7 @@ fn scripts_of_one_program_check_without_colliding_generated_globals() {
     ]);
     let out = check(&dir);
     assert!(
-        block(&out, "type mismatch: expected `string`").contains("--> src/use.ts"),
+        block(&out, "is not assignable to type 'string'").contains("--> src/use.ts"),
         "{out}"
     );
     assert_eq!(error_count(&out), 1, "{out}");

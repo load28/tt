@@ -664,3 +664,10 @@ pub(super) fn typed_member_sources(
 
     Some(members)
 }
+
+pub(super) fn typescript_owned(file: &ProjectedDocument, diagnostic: &TsDiagnostic) -> bool {
+    matches!(
+        projection::diagnostic_origin(file, diagnostic.start, diagnostic.end),
+        Some(DiagnosticOrigin::Exact { .. })
+    )
+}

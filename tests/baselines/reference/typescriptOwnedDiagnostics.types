@@ -1,0 +1,24 @@
+=== typescriptOwnedDiagnostics.tt ===
+declare function total(): number;
+>total : function total(): number
+declare function takes(s: string): void;
+>takes : function takes(s: string): void
+>s : (parameter) s: string
+const inc = (n: number): number => n + 1;
+>inc : const inc: (n: number) => number
+>n : (parameter) n: number
+>n : (parameter) n: number
+export const annotated: string = total();
+>annotated : const annotated: string
+>total : function total(): number
+takes(total());
+>takes : function takes(s: string): void
+>total : function total(): number
+export function returned(): string {
+>returned : function returned(): string
+  return total();
+>total : function total(): number
+takes(1 |> inc);
+>takes : function takes(s: string): void
+>inc : const inc: (n: number) => number
+

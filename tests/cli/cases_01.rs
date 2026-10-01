@@ -37,14 +37,14 @@ fn tt_only_keeps_the_tt_layer_and_drops_the_type_layer() {
 
     let full = types_stderr_overlay(source, source, false);
     assert!(
-        full.contains("type mismatch: expected `number`, found `\"not a number\"`"),
+        full.contains("Type 'string' is not assignable to type 'number'."),
         "{full}"
     );
     assert!(full.contains("cannot call mutating method `set`"), "{full}");
 
     let tt_only = types_stderr_overlay(source, source, true);
     assert!(
-        !tt_only.contains("type mismatch:"),
+        !tt_only.contains("is not assignable"),
         "no type error should survive --tt-only:\n{tt_only}"
     );
     assert!(

@@ -81,7 +81,7 @@ fn every_line_break_style_reports_positions_in_each_consumers_lines() {
 
     let rendered = check(&dir);
     for (name, source) in &sources {
-        for (needle, code) in [("value;", "ts2322"), ("b.c", "val-mutation")] {
+        for (needle, code) in [("wrong", "ts2322"), ("b.c", "val-mutation")] {
             let (line, column) = rendered_position(source, source.rfind(needle).unwrap());
             let location = format!("src/{name}.tt:{line}:{column}");
             let block = block(&rendered, &location);
@@ -173,7 +173,7 @@ fn every_line_break_style_reports_positions_in_each_consumers_lines() {
         };
         assert_eq!(
             at(&of(&typed, "ts2322")),
-            one_based(source.rfind("value;").unwrap()),
+            one_based(source.rfind("wrong").unwrap()),
             "{name}: {typed:?}"
         );
         assert_eq!(

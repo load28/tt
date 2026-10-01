@@ -1,5 +1,11 @@
 # TASK-574: Report a postfix pipeline's result mismatch on the whole pipeline
 
+> **Superseded in part by TASK-695**: a pipeline's result or annotation
+> mismatch whose span TypeScript places on user-written text (the `return`
+> keyword, the declared name) is reported there in TypeScript's words; the
+> whole-pipeline anchor still owns a mismatch on generated code, such as a
+> pipeline passed as an argument.
+
 - **Status**: Complete
 - **Started**: 2026-09-30
 - **Completed**: 2026-09-30

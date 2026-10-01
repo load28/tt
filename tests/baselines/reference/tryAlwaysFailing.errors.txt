@@ -8,23 +8,21 @@ error[ts18046]: 'x' is of type 'unknown'.
   |
 9 |   return Result.Ok(x + 1);
   |                    ^
-error[ts2322]: type mismatch: expected `number`, found `unknown`
-  required type: `TResult<number, string>`
-  --> tryAlwaysFailing.tt:13:10
+error[ts2322]: Type 'TOk<unknown>' is not assignable to type 'TResult<number, string>'.
+  --> tryAlwaysFailing.tt:13:3
    |
 13 |   return Result.Ok(y);
-   |          ^^^^^^^^^^^^
+   |   ^^^^^^
 error[ts18046]: 'w' is of type 'unknown'.
   --> tryAlwaysFailing.tt:17:20
    |
 17 |   return Result.Ok(w + 1);
    |                    ^
-error[ts2322]: type mismatch: expected `string`, found `unknown`
-  required type: `TResult<string, string | number>`
-  --> tryAlwaysFailing.tt:21:10
+error[ts2322]: Type 'TOk<unknown>' is not assignable to type 'TResult<string, string | number>'.
+  --> tryAlwaysFailing.tt:21:3
    |
 21 |   return Result.Ok(u);
-   |          ^^^^^^^^^^^^
+   |   ^^^^^^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
 tryAlwaysFailing.ts(13,20): error TS18046: 'x' is of type 'unknown'.

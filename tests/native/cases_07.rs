@@ -279,7 +279,7 @@ fn a_typed_watch_reports_a_missing_configuration_and_recovers_when_it_returns() 
     );
     assert!(!restored.contains("error["), "{}", watch.seen);
     assert!(
-        edited.contains("error[ts2322]") && edited.contains("--> src/a.tt:1:26"),
+        edited.contains("error[ts2322]") && edited.contains("--> src/a.tt:1:14"),
         "{}",
         watch.seen
     );

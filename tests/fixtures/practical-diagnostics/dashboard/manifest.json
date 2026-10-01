@@ -17,7 +17,7 @@
       "code": "ts2322",
       "text": "count",
       "line": 17,
-      "message": "type mismatch: expected `number`, found `string`",
+      "message": "Type 'string' is not assignable to type 'number'.",
       "help": [],
       "labels": [
         {

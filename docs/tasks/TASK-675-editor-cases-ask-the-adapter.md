@@ -1,5 +1,10 @@
 # TASK-675: Baseline what the editor adapter publishes and offers in the editor cases
 
+> **Issue 1 resolved by TASK-695**: the typed pass reports a diagnostic
+> TypeScript places on user-written text as TypeScript does, so
+> `plainTypeScript`, `plainTsx`, and `twoErrorsAtOneCall` agree with their
+> twins.
+
 - **Status**: Complete
 - **Started**: 2026-09-30
 - **Completed**: 2026-09-30

@@ -449,7 +449,7 @@ fn check_types_leaves_published_outputs_out_of_the_program() {
         }
         let stderr = check(&root);
         assert_eq!(stderr.matches("error[").count(), 1, "{stderr}");
-        assert!(stderr.contains("src/m.tt:1:26"), "{stderr}");
+        assert!(stderr.contains("src/m.tt:1:14"), "{stderr}");
         assert!(
             !stderr.contains("m.ts") && !stderr.contains("ts2451"),
             "{stderr}"
@@ -493,9 +493,9 @@ fn an_import_decides_whether_an_owned_output_joins_the_program() {
     };
     let stderr = check("./m.tt");
     assert_eq!(stderr.matches("error[").count(), 1, "{stderr}");
-    assert!(stderr.contains("src/m.tt:2:21"), "{stderr}");
+    assert!(stderr.contains("src/m.tt:2:7"), "{stderr}");
     let stderr = check("./m.js");
-    assert!(stderr.contains("src/m.tt:2:21"), "{stderr}");
+    assert!(stderr.contains("src/m.tt:2:7"), "{stderr}");
     assert!(stderr.contains("src/m.ts:"), "{stderr}");
 }
 
@@ -581,14 +581,14 @@ fn typed_watch_checks_edits_made_while_the_configuration_was_malformed() {
     fs::write(root.join("src/a.tt"), "export const a: string = 1;\n").unwrap();
     wait_for(|| passes() > before);
     fs::write(root.join("tsconfig.json"), good).unwrap();
-    wait_for(|| settled_on("expected `string`"));
+    wait_for(|| settled_on("to type 'string'"));
     assert!(last().contains(" 1 reported in "), "{}", read());
 
     fs::write(root.join("tsconfig.json"), broken).unwrap();
     wait_for(|| read().matches("ts1136").count() > 1);
     fs::write(root.join("src/a.tt"), "export const a: number = \"x\";\n").unwrap();
     fs::write(root.join("tsconfig.json"), good).unwrap();
-    wait_for(|| settled_on("expected `number`"));
+    wait_for(|| settled_on("to type 'number'"));
     assert!(last().contains(" 1 reported in "), "{}", read());
 }
 

@@ -914,7 +914,7 @@ fn a_type_error_in_hand_written_typescript_quotes_its_line() {
         .expect("failed to run ttc");
     let err = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{err}");
-    assert!(err.contains("--> src/host.ts:2:26"), "{err}");
+    assert!(err.contains("--> src/host.ts:2:14"), "{err}");
     assert!(err.contains("export const c: string = b;"), "{err}");
     assert!(err.contains('^'), "{err}");
 }
@@ -1249,7 +1249,7 @@ fn types_join_storage_after_the_storage_its_values_read() {
 }
 
 #[test]
-fn types_renders_only_assignability_reports_as_type_mismatches() {
+fn types_reports_plain_typescript_diagnostics_in_typescripts_words() {
     require_types_toolchain!();
     // TASK-585: an arity error, a pipeline step's arity error and a JSX
     // element's missing props keep TypeScript's own sentence; the argument
@@ -1286,7 +1286,7 @@ fn types_renders_only_assignability_reports_as_type_mismatches() {
     );
     assert!(
         err.contains(
-            "error[ts2345]: type mismatch: expected `string`, found `number`\n --> src/a.tt:3:20"
+            "error[ts2345]: Argument of type 'number' is not assignable to parameter of type 'string'.\n --> src/a.tt:3:20"
         ),
         "{err}"
     );

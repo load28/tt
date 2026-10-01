@@ -640,7 +640,7 @@ test(
       const mismatch = published.diagnostics.find(
         (diagnostic: any) => diagnostic.code === "ts2322",
       );
-      assert.equal(covered(TTX_EDITOR_SOURCE, mismatch.range), "label");
+      assert.equal(covered(TTX_EDITOR_SOURCE, mismatch.range), "bad");
 
       const semantic = await client.request("textDocument/semanticTokens/full", {
         textDocument: { uri },
@@ -714,7 +714,7 @@ test(
       assert.deepEqual(seen, [
         ["unused", 4, [1]],
         ["old", 4, [2]],
-        ['"x"', 1, []],
+        ["wrong", 1, []],
       ]);
     } finally {
       stop();
@@ -753,7 +753,7 @@ test(
       ]);
       assert.deepEqual(seen, [
         ["(x, y)", 4, [1]],
-        ['"x"', 1, []],
+        ["wrong", 1, []],
       ]);
     } finally {
       stop();
@@ -1886,7 +1886,10 @@ test(
         const published = await next;
         assert.deepEqual(lineOne(published), lineOne(first), text);
       }
-      assert.match(lineOne(first)[0], /type mismatch/);
+      assert.match(
+        lineOne(first)[0],
+        /Type 'string' is not assignable to type 'number'/,
+      );
     } finally {
       stop();
     }

@@ -14,4 +14,4 @@ const label = match (state) { //~ ERROR[match-not-exhaustive] match is not exhau
   Ready(items) => `${items.length} items`,
 };
 
-export const Dashboard = () => <badge count="many">{label}</badge>; //~ ERROR[ts2322] type mismatch
+export const Dashboard = () => <badge count="many">{label}</badge>; //~ ERROR[ts2322] is not assignable
