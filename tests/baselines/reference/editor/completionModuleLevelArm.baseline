@@ -1,0 +1,111 @@
+=== completions /*arm*/ completionModuleLevelArm.tt:5:43 ===
+  | export const top = match (input) { 1 => f(input), 2 => { const b = f(input); return b; }, _ => input as number };
+  |                                           ^ /*arm*/
+completion: 1045 item(s), member false, probe no
+  f (Function, 11)
+  input (Variable, 11)
+  outcome (Variable, 11)
+  read (Function, 11)
+  scrutinee (Variable, 11)
+  top (Variable, 11)
+  ... 1039 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+  keywords: match (15), flow (15), result (15)
+patternCompletions: null
+editor completion: 1048 item(s)
+  f (Function, 211)
+  input (Variable, 211)
+  outcome (Variable, 211)
+  read (Function, 211)
+  scrutinee (Variable, 211)
+  top (Variable, 211)
+  ... 1042 global or keyword item(s) (sortText 215, no source)
+
+=== completions /*block*/ completionModuleLevelArm.tt:5:70 ===
+  | export const top = match (input) { 1 => f(input), 2 => { const b = f(input); return b; }, _ => input as number };
+  |                                                                      ^ /*block*/
+completion: 1045 item(s), member false, probe no
+  f (Function, 11)
+  input (Variable, 11)
+  outcome (Variable, 11)
+  read (Function, 11)
+  scrutinee (Variable, 11)
+  top (Variable, 11)
+  ... 1039 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+  keywords: match (15), flow (15), result (15)
+patternCompletions: null
+editor completion: 1048 item(s)
+  f (Function, 211)
+  input (Variable, 211)
+  outcome (Variable, 211)
+  read (Function, 211)
+  scrutinee (Variable, 211)
+  top (Variable, 211)
+  ... 1042 global or keyword item(s) (sortText 215, no source)
+
+=== completions /*typed*/ completionModuleLevelArm.tt:5:105 ===
+  | export const top = match (input) { 1 => f(input), 2 => { const b = f(input); return b; }, _ => input as number };
+  |                                                                                                         ^ /*typed*/
+completion: 2007 item(s), member false, probe no
+  Outcome (Class, 11)
+  ... 2006 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+patternCompletions: null
+editor completion: 2007 item(s)
+  Outcome (Class, 211)
+  ... 2006 global or keyword item(s) (sortText 215, no source)
+
+=== completions /*scrutinee*/ completionModuleLevelArm.tt:6:33 ===
+  | export const scrutinee = match (input) { _ => 0 };
+  |                                 ^ /*scrutinee*/
+completion: 1063 item(s), member false, probe no
+  f (Function, 11)
+  input (Variable, 11)
+  outcome (Variable, 11)
+  read (Function, 11)
+  scrutinee (Variable, 11)
+  top (Variable, 11)
+  ... 1057 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+  keywords: match (15), flow (15), result (15)
+patternCompletions: null
+editor completion: 1066 item(s)
+  f (Function, 211)
+  input (Variable, 211)
+  outcome (Variable, 211)
+  read (Function, 211)
+  scrutinee (Variable, 211)
+  top (Variable, 211)
+  ... 1060 global or keyword item(s) (sortText 215, no source)
+
+=== completions /*inResult*/ completionModuleLevelArm.tt:7:52 ===
+  | export const outcome = result { const k = try read(input); return { kind: "Ok", value: k }; };
+  |                                                    ^ /*inResult*/
+completion: 1045 item(s), member false, probe no
+  f (Function, 11)
+  input (Variable, 11)
+  outcome (Variable, 11)
+  read (Function, 11)
+  scrutinee (Variable, 11)
+  top (Variable, 11)
+  ... 1039 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+  keywords: match (15), flow (15), result (15)
+patternCompletions: null
+editor completion: 1048 item(s)
+  f (Function, 211)
+  input (Variable, 211)
+  outcome (Variable, 211)
+  read (Function, 211)
+  scrutinee (Variable, 211)
+  top (Variable, 211)
+  ... 1042 global or keyword item(s) (sortText 215, no source)
+
+=== parity with the TypeScript twin ===
+completions arm: same
+completions block: same
+completions typed: same
+completions scrutinee: same
+completions inResult: same
+

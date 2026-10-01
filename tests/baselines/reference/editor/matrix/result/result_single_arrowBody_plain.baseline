@@ -1,7 +1,0 @@
-differences from result_single_arrowBody_plain at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:4:80 ===
-  |   const inner = (input: number) => result { const n = try read(note("operand", input)); return n * 10; };
-  |                                                                                ^ /*operand*/
-  tt only: n (Variable)
-

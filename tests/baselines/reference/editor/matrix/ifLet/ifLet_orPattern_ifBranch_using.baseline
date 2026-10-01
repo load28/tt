@@ -10,7 +10,3 @@ differences from ifLet_orPattern_ifBranch_using at the questions listed in tests
   |                                                                                     ^ /*use*/
   tt only: main "value"
 
-=== semanticTokens main.tt ===
-  tt only: /*bind*/ variable []
-  ts only: /*bind*/ variable [declaration, local, readonly]
-

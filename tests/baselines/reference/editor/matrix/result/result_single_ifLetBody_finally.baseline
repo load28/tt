@@ -1,7 +1,0 @@
-differences from result_single_ifLetBody_finally at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:6:62 ===
-  |       return [n, result { const n = try read(note("operand", input)); return n * 10; }];
-  |                                                              ^ /*operand*/
-  tt only: n (Variable)
-

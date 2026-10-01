@@ -382,6 +382,7 @@ pub(super) fn emit_adt<'a>(
     push_generics(&mut out);
     out.push_lit(" =");
     let last = adt.variants.len().saturating_sub(1);
+    let (member, depth) = if last == 0 { ("", 1) } else { ("| ", 2) };
     for (index, variant) in adt.variants.iter().enumerate() {
         for comment in &variant.comments.leading {
             out.push_break(1);
@@ -394,29 +395,29 @@ pub(super) fn emit_adt<'a>(
                     !field.comments.leading.is_empty() || !field.comments.trailing.is_empty()
                 }) =>
             {
-                out.push_lit("| {");
-                out.push_break(3);
+                out.push_lit(format!("{member}{{"));
+                out.push_break(depth + 1);
                 out.push_lit(format!("kind: \"{}\";", variant.name));
                 for field in fields {
                     for comment in &field.comments.leading {
-                        out.push_break(3);
-                        push_comment(&mut out, comment, 3);
+                        out.push_break(depth + 1);
+                        push_comment(&mut out, comment, depth + 1);
                     }
-                    out.push_break(3);
+                    out.push_break(depth + 1);
                     declared(&mut out, &field.name, field.node);
                     annotation(field, &mut out);
                     out.push_lit(";");
-                    push_trailing_comments(&mut out, &field.comments.trailing, 3);
+                    push_trailing_comments(&mut out, &field.comments.trailing, depth + 1);
                 }
-                out.push_break(2);
+                out.push_break(depth);
                 out.push_lit("}");
             }
             Some(fields) if !fields.is_empty() => {
-                out.push_lit(format!("| {{ kind: \"{}\"; ", variant.name));
+                out.push_lit(format!("{member}{{ kind: \"{}\"; ", variant.name));
                 field_list(fields, "; ", &mut out);
                 out.push_lit(" }");
             }
-            _ => out.push_lit(format!("| {{ kind: \"{}\" }}", variant.name)),
+            _ => out.push_lit(format!("{member}{{ kind: \"{}\" }}", variant.name)),
         }
         if index == last {
             out.push_lit(";");

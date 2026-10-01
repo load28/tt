@@ -1,7 +1,0 @@
-differences from result_single_matchArm_optionalChain at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:4:67 ===
-  |   return match (flip()) { true => result { const n = try read(box(input)?.inner.value!); return n * 10; }, false => note("other arm", 0) };
-  |                                                                   ^ /*operand*/
-  tt only: n (Variable)
-

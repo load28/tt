@@ -10,7 +10,3 @@ differences from match_orPattern_jsxTernary_plain at the questions listed in tes
   |                                                            ^ /*bind*/
   tt only: main "value" -> value: ttRenamePlaceholder
 
-=== semanticTokens main.ttx ===
-  tt only: /*bind*/ variable []
-  ts only: /*bind*/ variable [declaration, local, readonly]
-

@@ -10,7 +10,3 @@ differences from ifLet_orPattern_tryBlock_spread at the questions listed in test
   |                                                                                ^ /*use*/
   tt only: main "value"
 
-=== semanticTokens main.tt ===
-  tt only: /*bind*/ variable []
-  ts only: /*bind*/ variable [declaration, local, readonly]
-

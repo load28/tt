@@ -1,7 +1,0 @@
-differences from result_returnsMatch_jsxComponentProp_optionalChain at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.ttx:4:55 ===
-  |   return <Show value={result { const n = try read(box(input)?.inner.value!); return match (n) { 2 => "two", _ => "other" }; }} />;
-  |                                                       ^ /*operand*/
-  tt only: n (Variable)
-

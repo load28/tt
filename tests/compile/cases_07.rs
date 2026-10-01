@@ -813,10 +813,19 @@ fn a_comment_after_the_last_field_or_case_stays_a_comment() {
 }
 
 #[test]
+fn a_variant_with_one_case_is_that_case_object_type() {
+    let output = ok("export variant Pub { Item(n: number) }\nvariant Lone { Only }\nvariant Noted {\n  Cell(\n    v: number // value\n  )\n}\n");
+    assert_eq!(
+        output.trim_end(),
+        "export type Pub =\n  { kind: \"Item\"; n: number };\nexport const Pub = {\n  Item: (n: number): Pub => ({ kind: \"Item\", n }),\n};\ntype Lone =\n  { kind: \"Only\" };\nconst Lone = {\n  Only: { kind: \"Only\" } as const,\n};\ntype Noted =\n  {\n    kind: \"Cell\";\n    v: number; // value\n  };\nconst Noted = {\n  Cell: (v: number): Noted => ({ kind: \"Cell\", v }),\n};"
+    );
+}
+
+#[test]
 fn comments_inside_a_field_type_stay_in_the_type() {
     let output = ok("variant Size { Px(value: /* css */ number | /* auto */ \"auto\") }\n");
     assert!(
-        output.contains("| { kind: \"Px\"; value: /* css */ number | /* auto */ \"auto\" };"),
+        output.contains("type Size =\n  { kind: \"Px\"; value: /* css */ number | /* auto */ \"auto\" };"),
         "{output}"
     );
     assert!(

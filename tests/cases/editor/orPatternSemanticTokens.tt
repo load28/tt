@@ -1,0 +1,12 @@
+// @semanticTokens: *
+export variant Token { Num(value: number), Neg(value: number), Word(text: string), End }
+declare const t: Token;
+export const top = match (t) { Num(value) | Neg(value) => value, _ => 0 };
+export function inner(u: Token): number {
+  const aliased = match (u) { Num(value: n) | Neg(value: n) => n, _ => 0 };
+  if let Num(value) | Neg(value) = u {
+    return value + aliased;
+  }
+  let Num(value: v) | Neg(value: v) = u else { return 0; };
+  return v;
+}

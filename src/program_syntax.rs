@@ -18,6 +18,7 @@
 //! of the toolchain does not transfer syntax ownership away from this SWC AST.
 
 mod collector;
+mod completion;
 mod projection;
 mod protocol;
 mod scopes;
@@ -48,6 +49,7 @@ use crate::hir::{self, BodyId, ExprId, NodeId};
 use crate::host_input::{HostInput, HostOrigin};
 
 use collector::*;
+pub(crate) use completion::CompletionScope;
 #[cfg(test)]
 use projection::ProjectionBuilder;
 pub(crate) use projection::{HostOwnerSyntax, ProgramSyntax, ProgramSyntaxError};

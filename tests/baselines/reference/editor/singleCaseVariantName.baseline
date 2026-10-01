@@ -1,0 +1,21 @@
+=== hover /*made*/ singleCaseVariantName.tt:3:14 ===
+  | export const made = Pub.Item(1);
+  |              ^ /*made*/
+hover: 3:14-3:18 "made"
+    const made: Pub
+ttSymbol: null
+
+=== hover /*unit*/ singleCaseVariantName.tt:4:14 ===
+  | export const unit: Lone = Lone.Only;
+  |              ^ /*unit*/
+hover: 4:14-4:18 "unit"
+    const unit: Lone
+ttSymbol: null
+
+=== signatureHelp /*arg*/ singleCaseVariantName.tt:3:30 ===
+  | export const made = Pub.Item(1);
+  |                              ^ /*arg*/
+signatureHelp: active signature 0, active parameter 0
+  Item(n: number): Pub
+    parameters: n: number
+

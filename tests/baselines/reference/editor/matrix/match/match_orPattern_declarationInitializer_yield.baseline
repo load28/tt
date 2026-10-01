@@ -10,12 +10,3 @@ differences from match_orPattern_declarationInitializer_yield at the questions l
   |                                             ^ /*bind*/
   tt only: main "value" -> value: ttRenamePlaceholder
 
-=== completions /*operand*/ main.tt:5:31 ===
-  |   const value = match ((yield input)) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") };
-  |                               ^ /*operand*/
-  tt only: value (Variable)
-
-=== semanticTokens main.tt ===
-  tt only: /*bind*/ variable []
-  ts only: /*bind*/ variable [declaration, local, readonly]
-

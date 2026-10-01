@@ -15,6 +15,7 @@ pub(crate) struct ProgramSyntax {
     pub(super) script: bool,
     pub(super) commonjs: bool,
     pub(super) globals: HashMap<SourceSpan, GlobalStatement>,
+    pub(super) completion_scopes: Vec<super::completion::CompletionScope>,
 }
 
 #[derive(Debug)]
@@ -151,6 +152,13 @@ impl ProgramSyntax {
             source_kind,
             tolerant,
         )?;
+        let completion_scopes = super::completion::completion_scopes(
+            &parsed.module,
+            parsed.start,
+            &projection.pending,
+            &projection.source_segments,
+            &projection.completion,
+        );
         let mut collector = ParentCollector::new(
             parsed.start,
             &projection.pending,
@@ -195,6 +203,7 @@ impl ProgramSyntax {
             script,
             commonjs,
             globals,
+            completion_scopes,
         };
         syntax.validate()?;
         Ok(syntax)
@@ -229,6 +238,11 @@ impl ProgramSyntax {
 
     pub(crate) fn owners(&self) -> impl Iterator<Item = &HostOwnerSyntax> {
         self.owners.iter()
+    }
+
+    /// What TypeScript's completion rules say at each construct's place.
+    pub(crate) fn completion_scopes(&self) -> &[super::completion::CompletionScope] {
+        &self.completion_scopes
     }
 
     pub(crate) fn directive_prologue_end(&self) -> Option<usize> {
@@ -492,6 +506,7 @@ pub(super) struct TtBindings {
 }
 
 pub(super) struct Projection {
+    pub(super) completion: super::completion::CompletionMarks,
     pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
     pub(super) tt_bindings: TtBindings,
     pub(super) code: String,
@@ -573,6 +588,7 @@ pub(super) enum OverlayMarker {
 }
 
 pub(super) struct ProjectionBuilder<'a> {
+    pub(super) completion: super::completion::CompletionMarks,
     pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
     pub(super) tt_bindings: TtBindings,
     pub(super) semantic: &'a SemanticFile,
@@ -593,6 +609,7 @@ impl<'a> ProjectionBuilder<'a> {
         tokens: &[crate::lexer::Token],
     ) -> Self {
         Self {
+            completion: super::completion::CompletionMarks::default(),
             arm_blocks: HashMap::new(),
             tt_bindings: TtBindings::default(),
             semantic,
@@ -609,6 +626,7 @@ impl<'a> ProjectionBuilder<'a> {
     pub(super) fn build(mut self) -> Result<Projection, ProgramSyntaxError> {
         self.emit_body(self.core.root)?;
         Ok(Projection {
+            completion: self.completion,
             arm_blocks: self.arm_blocks,
             tt_bindings: self.tt_bindings,
             code: self.code,
@@ -759,6 +777,14 @@ impl<'a> ProjectionBuilder<'a> {
                     let start = ProjectedByte(self.code.len());
                     self.emit_propagate(propagate)?;
                     if let Some(binding) = &propagate.binding {
+                        let declared = self.binding_identifier(binding.node)?;
+                        self.completion.bindings.insert(
+                            ProjectedSpan {
+                                start,
+                                end: ProjectedByte(self.code.len()),
+                            },
+                            declared,
+                        );
                         let names = self.binding_text_names(binding.node)?;
                         self.tt_bindings.statements.push((
                             ProjectedSpan {
@@ -1302,8 +1328,10 @@ impl<'a> ProjectionBuilder<'a> {
         Ok(())
     }
 
-    fn push_region_function(&mut self, is_async: bool, in_generator: bool) {
+    fn push_region_function(&mut self, is_async: bool, in_generator: bool) -> ProjectedByte {
         self.code.push('(');
+        let start = ProjectedByte(self.code.len());
+        self.completion.regions.insert(start, Vec::new());
         if is_async {
             self.code.push_str("async ");
         }
@@ -1312,6 +1340,7 @@ impl<'a> ProjectionBuilder<'a> {
         } else {
             "() => {"
         });
+        start
     }
 
     fn emit_inline_decision_bodies(
@@ -1388,12 +1417,19 @@ impl<'a> ProjectionBuilder<'a> {
             marker: OverlayMarker::DecisionCallExpression,
             synthetic_return: None,
         });
-        self.push_region_function(decision.is_async, decision.in_generator);
+        let region = self.push_region_function(decision.is_async, decision.in_generator);
         for subject in &decision.subjects {
+            let host = ProjectedByte(self.code.len());
             self.code.push('(');
             let segments_since = self.source_segments.len();
             self.emit_expr(subject.value)?;
             self.push_source_boundary(");", segments_since);
+            if let Some(hosts) = self.completion.regions.get_mut(&region) {
+                hosts.push(ProjectedSpan {
+                    start: host,
+                    end: ProjectedByte(self.code.len()),
+                });
+            }
         }
         for arm in &decision.arms {
             let mut names = Vec::new();
@@ -1499,6 +1535,22 @@ impl<'a> ProjectionBuilder<'a> {
             crate::core_ir::PatternPlan::Any | crate::core_ir::PatternPlan::Test(_) => {}
         }
         Ok(())
+    }
+
+    /// The name a declaration-form binding declares, when it is an
+    /// identifier rather than a destructuring pattern.
+    fn binding_identifier(&self, node: NodeId) -> Result<Option<String>, ProgramSyntaxError> {
+        let span = self.source_span(node)?;
+        let text = format!("({}) => 0", &self.source[span.start..span.end]);
+        let input = crate::host_input::HostInput::new(&text);
+        let mut parser = input.parser(crate::SourceKind::TypeScript);
+        Ok(match parser.parse_expr().as_deref() {
+            Ok(swc_ecma_ast::Expr::Arrow(arrow)) => match arrow.params.as_slice() {
+                [Pat::Ident(binding)] => Some(binding.id.sym.to_string()),
+                _ => None,
+            },
+            _ => None,
+        })
     }
 
     fn binding_text_names(&self, node: NodeId) -> Result<Vec<String>, ProgramSyntaxError> {

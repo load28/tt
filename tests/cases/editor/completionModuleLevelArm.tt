@@ -1,0 +1,9 @@
+// @completions: arm, block, typed, scrutinee, inResult
+// @parityIgnores: t, run, unwrap
+type Outcome = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+declare function f(n: number): number;
+declare function read(n: number): Outcome;
+declare const input: number;
+export const top = match (input) { 1 => f(/*arm*/input), 2 => { const b = f(/*block*/input); return b; }, _ => input as /*typed*/number };
+export const scrutinee = match (/*scrutinee*/input) { _ => 0 };
+export const outcome = result { const k = try read(/*inResult*/input); return { kind: "Ok", value: k }; };

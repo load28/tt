@@ -1,7 +1,0 @@
-differences from result_returnsMatch_returnOperand_plain at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:4:54 ===
-  |   return result { const n = try read(note("operand", input)); return match (n) { 2 => "two", _ => "other" }; };
-  |                                                      ^ /*operand*/
-  tt only: n (Variable)
-

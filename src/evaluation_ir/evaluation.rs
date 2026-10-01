@@ -1149,6 +1149,7 @@ impl EvaluationFile {
                 })
                 .collect(),
             owner_model_unavailable: false,
+            completion_scopes: Vec::new(),
         })
     }
 }

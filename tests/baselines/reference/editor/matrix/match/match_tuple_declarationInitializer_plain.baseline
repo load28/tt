@@ -1,7 +1,0 @@
-differences from match_tuple_declarationInitializer_plain at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:6:40 ===
-  |   const value = match (note("operand", input), note<Speed>("second", Speed.Fast)) { (Circle(r), Fast) => note("fast circle", r), (Rect(w), _) => note("rect", w), (_, Slow) => note("slow", 0), (Circle | Point, _) => note("rest", -1) };
-  |                                        ^ /*operand*/
-  tt only: value (Variable)
-

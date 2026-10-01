@@ -1,7 +1,0 @@
-differences from match_handWrittenUnion_declarationInitializer_plain at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:5:40 ===
-  |   const value = match (note("operand", input)) { Click(x) => note("click", x), Key(key) => note("key", key) };
-  |                                        ^ /*operand*/
-  tt only: value (Variable)
-

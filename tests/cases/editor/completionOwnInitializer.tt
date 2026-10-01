@@ -1,0 +1,21 @@
+// @completions: topScrutinee, scrutinee, shadow, inArrow, valueTry, statementTry, inResult, resultReturn
+type Outcome = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+variant Box { Full(same: number), Empty }
+declare const input: number;
+declare const box: Box;
+declare const xs: number[];
+declare function read(n: number): Outcome;
+declare function f(n: number): number;
+export const top = match (/*topScrutinee*/input) { 1 => 1, _ => 0 };
+export function g(): Outcome {
+  const value = match (/*scrutinee*/input) { _ => 1 };
+  const same = match (box) { Full(same) => /*shadow*/same, Empty => 0 };
+  const mapped = match (xs.map((x) => /*inArrow*/x)) { _ => 1 };
+  const t = f(try read(/*valueTry*/input));
+  const n = try read(/*statementTry*/input);
+  const r = result {
+    const k = try read(/*inResult*/input);
+    return { kind: "Ok", value: /*resultReturn*/k };
+  };
+  return { kind: "Ok", value: value + same + mapped + t + n + (r.kind === "Ok" ? r.value : 0) };
+}

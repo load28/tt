@@ -1,7 +1,0 @@
-differences from result_single_jsxFragment_spread at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.ttx:4:72 ===
-  |   return <>{note("before", "[")}{result { const n = try read(first(...[input])); return n * 10; }}{note("after", "]")}</>;
-  |                                                                        ^ /*operand*/
-  tt only: n (Variable)
-

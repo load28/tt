@@ -1,7 +1,0 @@
-differences from result_returnsMatch_templateLiteral_finally at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:5:81 ===
-  |     return `<${note("left", "L")}|${result { const n = try read(note("operand", input)); return match (n) { 2 => "two", _ => "other" }; }}|${note("right", "R")}>`;
-  |                                                                                 ^ /*operand*/
-  tt only: n (Variable)
-

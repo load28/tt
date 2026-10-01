@@ -1,0 +1,6 @@
+// @hover: made, unit
+// @signatureHelp: arg
+export variant Pub { Item(n: number) }
+export variant Lone { Only }
+export const /*made*/made = Pub.Item(/*arg*/1);
+export const /*unit*/unit: Lone = Lone.Only;

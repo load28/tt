@@ -1,7 +1,0 @@
-differences from result_single_loopBody_using at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:7:64 ===
-  |     collected.push(result { const n = try read(note("operand", input)); return n * 10; });
-  |                                                                ^ /*operand*/
-  tt only: n (Variable)
-

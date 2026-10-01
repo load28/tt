@@ -10,7 +10,3 @@ differences from match_orPattern_matchArm_spread at the questions listed in test
   |                                                                   ^ /*bind*/
   tt only: main "value" -> value: ttRenamePlaceholder
 
-=== semanticTokens main.tt ===
-  tt only: /*bind*/ variable []
-  ts only: /*bind*/ variable [declaration, local, readonly]
-

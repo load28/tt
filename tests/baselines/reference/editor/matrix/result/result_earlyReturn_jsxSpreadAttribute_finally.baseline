@@ -1,7 +1,0 @@
-differences from result_earlyReturn_jsxSpreadAttribute_finally at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.ttx:5:74 ===
-  |     return <div {...{ value: result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } return note("small", n); } }} />;
-  |                                                                          ^ /*operand*/
-  tt only: n (Variable)
-

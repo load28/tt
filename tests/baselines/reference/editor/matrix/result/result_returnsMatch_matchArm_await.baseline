@@ -1,7 +1,0 @@
-differences from result_returnsMatch_matchArm_await at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:4:75 ===
-  |   return match (flip()) { true => result { const n = try read(await later(input)); return match (n) { 2 => "two", _ => "other" }; }, false => note("other arm", 0) };
-  |                                                                           ^ /*operand*/
-  tt only: n (Variable)
-

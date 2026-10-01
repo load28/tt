@@ -1,7 +1,0 @@
-differences from result_nested_declarationInitializer_optionalChain at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:4:72 ===
-  |   const value = result { const inner = result { const n = try read(box(input)?.inner.value!); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; };
-  |                                                                        ^ /*operand*/
-  tt only: n (Variable)
-

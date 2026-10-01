@@ -1,7 +1,0 @@
-differences from result_earlyReturn_logicalAnd_using at the questions listed in tests/editor-matrix-differences.txt
-
-=== completions /*operand*/ main.tt:5:64 ===
-  |   return flip() && result { const n = try read(note("operand", input)); if (n > 2) { return note("big", n); } return note("small", n); };
-  |                                                                ^ /*operand*/
-  tt only: n (Variable)
-

@@ -20,6 +20,7 @@
 //! the buffer does not compile.
 
 mod project;
+mod scope;
 mod service;
 
 #[cfg(test)]
@@ -509,6 +510,9 @@ pub(crate) struct ServiceDoc {
     declared_names: Vec<crate::DeclaredName>,
     shared_bindings: Vec<crate::SharedBinding>,
     destructured_lists: Vec<crate::DestructuredList>,
+    /// What TypeScript's completion rules say at each construct's place
+    /// in the source, which lowering moves its code away from.
+    completion_scopes: Vec<crate::program_syntax::CompletionScope>,
     /// Parser-owned error ranges replaced only in this service projection.
     /// TypeScript diagnostics intersecting one are recovery cascades.
     recovered: Vec<(usize, usize)>,

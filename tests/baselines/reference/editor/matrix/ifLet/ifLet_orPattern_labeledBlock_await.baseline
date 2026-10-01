@@ -10,7 +10,3 @@ differences from ifLet_orPattern_labeledBlock_await at the questions listed in t
   |                                                                                 ^ /*use*/
   tt only: main "value"
 
-=== semanticTokens main.tt ===
-  tt only: /*bind*/ variable []
-  ts only: /*bind*/ variable [declaration, local, readonly]
-
