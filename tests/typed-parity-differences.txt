@@ -1,42 +1,11 @@
 # Differences between ttc --check-types and the pinned tsc over TypeScript's own test cases
 # (tests/corpus.rs, typescript_cases_type_check_as_typescript_does; TASK-717).
 # <case>\t<signature>\t<by-design|defect>\t<a document under docs/, or the TASK that records the repro>
-compiler/arrayFakeFlatNoCrashInferenceDeclarations.ts	-TS5088	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
 compiler/bluebirdStaticThis.ts	~TS2694@message	defect	TASK-717: TypeScript names a .tt module with its extension in a message (D4)
-compiler/computedPropertiesNarrowed.ts	-TS9010 -TS9038	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitCommonJsModuleReferencedType.ts	-TS2883	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitComputedPropertyNameSymbol1.ts	-TS4023	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitComputedPropertyNameSymbol2.ts	-TS4023	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitExpressionWithNonlocalPrivateUniqueSymbol.ts	-TS2527	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitInferredObjectLiteralWithThis.ts	-TS2527	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
 compiler/declarationEmitInvalidReferenceAllowJs.ts	~TS6231@message	by-design	docs/ai/tt.md (contentMappers registers .tt and .ttx): TypeScript lists them among the supported extensions
-compiler/declarationEmitIsolatedDeclarationErrorNotEmittedForNonEmittedFile.ts	-TS9010	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitMappedTypeTemplateTypeofSymbol.ts	-TS4118	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitMixinPrivateProtected.ts	-TS4094	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitObjectAssignedDefaultExport.ts	-TS2883	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitPrivatePromiseLikeInterface.ts	-TS7056	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitReadonlyComputedProperty.ts	-TS4023	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitUnsafeImportSymbolName.ts	-TS2883	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitUsingTypeAlias1.ts	-TS2883	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/declarationEmitVarInElidedBlock.ts	-TS4025	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/emitClassExpressionInDeclarationFile2.ts	-TS4094	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/globalThisDeclarationEmit.ts	-TS4025	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/hugeDeclarationOutputGetsTruncatedWithError.ts	-TS7056	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
 compiler/internalAliasInterfaceInsideLocalModuleWithoutExportAccessError.ts	~TS2694@message	defect	TASK-717: TypeScript names a .tt module with its extension in a message (D4)
 compiler/internalAliasUninitializedModuleInsideLocalModuleWithoutExportAccessError.ts	~TS2694@message	defect	TASK-717: TypeScript names a .tt module with its extension in a message (D4)
-compiler/isolatedDeclarationErrors.ts	-TS9007 -TS9023	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/isolatedDeclarationErrorsClassesExpressions.ts	-TS9021 -TS9022	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/isolatedDeclarationErrorsDefault.ts	-TS9013 -TS9017 -TS9037	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/isolatedDeclarationErrorsEnums.ts	-TS9020	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/isolatedDeclarationErrorsExpandoFunctions.ts	-TS9007 -TS9023	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/isolatedDeclarationErrorsExpressions.ts	-TS9010 -TS9011 -TS9012 -TS9017 -TS9018 -TS9019	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/isolatedDeclarationErrorsFunctionDeclarations.ts	-TS9007 -TS9011 -TS9013	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/isolatedDeclarationErrorsReturnTypes.ts	-TS9007	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/isolatedDeclarationsAddUndefined.ts	-TS9025	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
-compiler/isolatedDeclarationsTypePredicate.ts	-TS9007	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
 compiler/jsFileCompilationWithMapFileAsJs.ts	~TS6054@message	by-design	docs/ai/tt.md (contentMappers registers .tt and .ttx): TypeScript lists them among the supported extensions
 compiler/jsFileCompilationWithMapFileAsJsWithInlineSourceMap.ts	~TS6054@message	by-design	docs/ai/tt.md (contentMappers registers .tt and .ttx): TypeScript lists them among the supported extensions
 compiler/jsFileCompilationWithMapFileAsJsWithOutDir.ts	~TS6054@message	by-design	docs/ai/tt.md (contentMappers registers .tt and .ttx): TypeScript lists them among the supported extensions
-compiler/privateFieldsInClassExpressionDeclaration.ts	-TS4094	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)
 conformance/moduleResolution/bundler/bundlerImportTsExtensions.ts	~TS6054@message	by-design	docs/ai/tt.md (contentMappers registers .tt and .ttx): TypeScript lists them among the supported extensions
-conformance/node/legacyNodeModulesExportsSpecifierGenerationConditions.ts	-TS2883	defect	TASK-717: ttc --check-types does not report declaration diagnostics under declaration and noEmit (D3)

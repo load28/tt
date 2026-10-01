@@ -1,0 +1,20 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./a.tt → $DIR/out/a.ts
+ttc: ./b.tt → $DIR/out/b.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts9010]: Variable must have an explicit type annotation with --isolatedDeclarations.
+ --> a.tt:1:14
+  |
+1 | export const x = Math.random() ? 0 : 1;
+  |              ^
+  |              - Add a type annotation to the variable x.
+error[ts2322]: Type 'string' is not assignable to type 'number'.
+ --> b.tt:1:14
+  |
+1 | export const y: number = "s";
+  |              ^
+
+==== tsc on the emitted TypeScript (exit 1) ====
+a.ts(1,14): error TS9010: Variable must have an explicit type annotation with --isolatedDeclarations.
+b.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.

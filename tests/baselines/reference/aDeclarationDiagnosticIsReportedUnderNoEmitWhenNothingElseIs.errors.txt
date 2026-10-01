@@ -1,0 +1,13 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./a.tt → $DIR/out/a.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts9010]: Variable must have an explicit type annotation with --isolatedDeclarations.
+ --> a.tt:1:14
+  |
+1 | export const x = Math.random() ? 0 : 1;
+  |              ^
+  |              - Add a type annotation to the variable x.
+
+==== tsc on the emitted TypeScript (exit 2) ====
+a.ts(1,14): error TS9010: Variable must have an explicit type annotation with --isolatedDeclarations.

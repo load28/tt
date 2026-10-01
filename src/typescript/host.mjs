@@ -1000,7 +1000,8 @@ async function main() {
           ? originalSpan(configSpans.get(d.fileName), d.pos, d.end)
           : { start: d.pos, end: d.end };
       const reportable = (d) => (open.tsconfig && whole) || placed(d) !== null;
-      const listFilesOnly = program.getCompilerOptions().listFilesOnly === true;
+      const compilerOptions = program.getCompilerOptions();
+      const listFilesOnly = compilerOptions.listFilesOnly === true;
       const unparsed = new Set((job.unparsedDocuments ?? []).flatMap((module) => [module, served(module)]));
       const configuration = whole ? program.getConfigFileParsingDiagnostics() : [];
       const syntactic = program.getSyntacticDiagnostics(scope);
@@ -1011,8 +1012,23 @@ async function main() {
       const options = !stopped && whole ? program.getProgramDiagnostics() : [];
       stopped ||= options.some(reportable);
       const checked = !stopped && !listFilesOnly;
-      const semantic = checked ? unique(program.getSemanticDiagnostics(scope)) : [];
-      const late = checked && whole ? unique(program.getGlobalDiagnostics()) : [];
+      const semanticStage = checked ? program.getSemanticDiagnostics(scope) : [];
+      const lateStage = checked && whole ? program.getGlobalDiagnostics() : [];
+      const ttSources = new Set((job.modules ?? []).map((module) => loweredSource(module.path)));
+      const specifiers = [...(checked ? members : [])].flatMap((member) => {
+        const sourceFile = program.getSourceFile(member);
+        return sourceFile
+          ? loweredModuleSpecifiers(sourceFile, ttSources, SyntaxKind).map((literal) => ({ sourceFile, literal }))
+          : [];
+      });
+      const quiet = !stopped && specifiers.length === 0 && ![...semanticStage, ...lateStage].some(reportable);
+      const declares = compilerOptions.declaration === true || compilerOptions.composite === true;
+      const deferred = compilerOptions.noEmit === true || compilerOptions.noEmitOnError === true;
+      const declarationStage = !listFilesOnly && declares && (quiet || !deferred)
+        ? program.getDeclarationDiagnostics(scope)
+        : [];
+      const semantic = unique([...semanticStage, ...declarationStage]);
+      const late = unique(lateStage);
       for (const d of [...unique([...configuration, ...syntactic, ...options]), ...late]) {
         const span = placed(d);
         if (!span) {
@@ -1040,19 +1056,14 @@ async function main() {
           ...(related.length > 0 ? { related } : {}),
         });
       }
-      const ttSources = new Set((job.modules ?? []).map((module) => loweredSource(module.path)));
-      for (const member of checked ? members : []) {
-        const sourceFile = program.getSourceFile(member);
-        if (!sourceFile) continue;
-        for (const literal of loweredModuleSpecifiers(sourceFile, ttSources, SyntaxKind)) {
-          out.diagnostics.push({
-            file: sourceFile.fileName,
-            start: literal.getStart(sourceFile),
-            end: literal.end,
-            code: CANNOT_FIND_MODULE,
-            message: `Cannot find module '${literal.text}' or its corresponding type declarations.`,
-          });
-        }
+      for (const { sourceFile, literal } of specifiers) {
+        out.diagnostics.push({
+          file: sourceFile.fileName,
+          start: literal.getStart(sourceFile),
+          end: literal.end,
+          code: CANNOT_FIND_MODULE,
+          message: `Cannot find module '${literal.text}' or its corresponding type declarations.`,
+        });
       }
       /**
        * Whether a declaration lives in one of TypeScript's own lib files.

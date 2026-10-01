@@ -1,0 +1,6 @@
+=== a.tt ===
+export const x = Math.random() ? 0 : 1;
+>x : const x: 0 | 1
+>Math : var Math: Math
+>random : (method) Math.random(): number
+
