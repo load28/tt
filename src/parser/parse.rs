@@ -289,6 +289,7 @@ impl Parser<'_> {
 enum ExprFrame {
     Resume((usize, bool)),
     StatementHeader,
+    ForHeader(bool),
 }
 
 fn flush_verbatim(segments: &mut Vec<Segment>, start: usize, end: usize) {
@@ -868,7 +869,9 @@ impl Parser<'_> {
                 continue;
             }
 
-            if !dotted && is_pipe_boundary_word(word) {
+            let separates =
+                word != "in" || matches!(expr_stack.last(), Some(ExprFrame::ForHeader(false)));
+            if !dotted && separates && is_pipe_boundary_word(word) {
                 expr = (i + 1, false);
             }
             i += 1;
@@ -907,12 +910,16 @@ impl Parser<'_> {
         let fresh = (i + 1, false);
         let restore = |frame: Option<ExprFrame>| match frame {
             Some(ExprFrame::Resume(outer)) => outer,
-            Some(ExprFrame::StatementHeader) | None => fresh,
+            Some(ExprFrame::StatementHeader | ExprFrame::ForHeader(_)) | None => fresh,
         };
         match tok.kind {
             TokenKind::JsxRaw => *expr = fresh,
             TokenKind::Punct(b'(') if self.opens_statement_header(tokens, i) => {
-                stack.push(ExprFrame::StatementHeader);
+                stack.push(if self.opens_for_header(tokens, i) {
+                    ExprFrame::ForHeader(false)
+                } else {
+                    ExprFrame::StatementHeader
+                });
                 *expr = fresh;
             }
             _ if tok.opens_bracket() => {
@@ -930,7 +937,13 @@ impl Parser<'_> {
             _ if tok.closes_bracket() => {
                 *expr = restore(stack.pop());
             }
-            TokenKind::Punct(b';' | b',') => *expr = (i + 1, false),
+            TokenKind::Punct(b';') => {
+                if let Some(ExprFrame::ForHeader(initialized)) = stack.last_mut() {
+                    *initialized = true;
+                }
+                *expr = (i + 1, false);
+            }
+            TokenKind::Punct(b',') => *expr = (i + 1, false),
             TokenKind::Punct(b'=') if pipes::is_assignment_eq(self.bytes, tok.span) => {
                 *expr = (i + 1, false);
             }
@@ -950,6 +963,22 @@ impl Parser<'_> {
             TokenKind::Punct(b'?') => *expr = (i + 1, true),
             TokenKind::Arrow => *expr = (i + 1, false),
             _ => {}
+        }
+    }
+
+    fn opens_for_header(&self, tokens: &[Token], open_idx: usize) -> bool {
+        let word_at = |k: usize| {
+            tokens
+                .get(k)
+                .filter(|t| matches!(t.kind, TokenKind::Ident))
+                .map(|t| &self.src[t.span.start..t.span.end])
+        };
+        match open_idx.checked_sub(1).and_then(word_at) {
+            Some("for") => true,
+            Some("await") => open_idx
+                .checked_sub(2)
+                .is_some_and(|k| word_at(k) == Some("for")),
+            _ => false,
         }
     }
 

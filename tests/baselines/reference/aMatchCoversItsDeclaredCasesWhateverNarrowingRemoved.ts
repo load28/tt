@@ -1,0 +1,17 @@
+//// [aMatchCoversItsDeclaredCasesWhateverNarrowingRemoved.tt] ////
+// A match must cover its variant's declared cases on every surface. A
+// build has no types, so it cannot see that `if (s.kind === "Rect")`
+// already returned, and it reports `Rect` missing; `ttc --check-types`
+// answered from the narrowed type and accepted the match, so a program
+// the check accepted did not build. Both sections now report the same
+// hole. A literal match, which only the checker can judge, is still
+// reported by `--check-types` alone.
+variant Shape { Circle(r: number), Rect(w: number) }
+export function area(s: Shape): number {
+  if (s.kind === "Rect") return 0;
+  return match (s) { Circle(r) => r };
+}
+export function literal(n: 1 | 2): string {
+  return match (n) { 1 => "one" };
+}
+

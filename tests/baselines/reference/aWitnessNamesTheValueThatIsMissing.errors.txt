@@ -10,6 +10,14 @@ error[match-not-exhaustive]: match on variant Outer is not exhaustive: missing "
 
 
 ==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on variant Outer is not exhaustive: missing "Wrap(inner: No())"
+ --> aWitnessNamesTheValueThatIsMissing.tt:3:11
+  |
+3 | const a = match (o) { Wrap(inner: Yes(n)) => n, Bare => -1 };
+  |           ^^^^^^^^^
+  |
+  = help: add the missing arms: `, Wrap(inner: No()) => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
 error[ts2304]: Cannot find name 'o'.
  --> aWitnessNamesTheValueThatIsMissing.tt:3:18
   |

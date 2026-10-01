@@ -728,7 +728,8 @@
 | TASK-722 | Judge a pipeline step as the call it makes in the `val` call check | Complete | 2026-10-01 | 2026-10-01 | [TASK-722](./TASK-722-val-pass-through-pipelines.md) |
 | TASK-723 | Name a `.ttx` import's output as `tsc` names it under the project's `jsx` option | Complete | 2026-10-01 | 2026-10-01 | [TASK-723](./TASK-723-ttx-import-follows-jsx-emit.md) |
 | TASK-724 | Report `=>` after a later parenthesized item instead of asserting | Complete | 2026-10-01 | 2026-10-01 | [TASK-724](./TASK-724-arrow-after-a-later-parenthesized-item.md) |
+| TASK-725 | One exhaustiveness rule on every surface, and `in` inside a pipeline head | Complete | 2026-10-01 | 2026-10-01 | [TASK-725](./TASK-725-one-exhaustiveness-rule-and-in-heads.md) |
 
 ## Next task number
 
-**TASK-725**
+**TASK-726**

@@ -10,6 +10,14 @@ error[match-not-exhaustive]: match on built-in variant Result is not exhaustive:
 
 
 ==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on built-in variant Result is not exhaustive: missing "Ok(value: None())"
+ --> aNestedPatternCoversExactlyWhatItMatches.tt:2:11
+  |
+2 | const n = match (r) {
+  |           ^^^^^^^^^
+  |
+  = help: add the missing arms: `Ok(value: None()) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
 error[ts2304]: Cannot find name 'r'.
  --> aNestedPatternCoversExactlyWhatItMatches.tt:2:18
   |

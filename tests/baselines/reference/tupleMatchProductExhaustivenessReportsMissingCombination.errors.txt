@@ -10,6 +10,14 @@ error[match-not-exhaustive]: match on (Dir, Speed) is not exhaustive: missing (S
 
 
 ==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on (Dir, Speed) is not exhaustive: missing (South, Slow)
+ --> tupleMatchProductExhaustivenessReportsMissingCombination.tt:4:14
+  |
+4 | const step = match (d, s) {
+  |              ^^^^^^^^^^^^
+  |
+  = help: add the missing arms: `(South, Slow) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
 error[ts2304]: Cannot find name 'd'.
  --> tupleMatchProductExhaustivenessReportsMissingCombination.tt:4:21
   |

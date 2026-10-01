@@ -1,0 +1,45 @@
+=== main.tt ===
+class Box {}
+>Box : class Box
+const o: Record<string, number> = { a: 1, b: 2 };
+>o : const o: Record<string, number>
+>Record : type Record<K extends string | number | symbol, T> = { [P in K]: T; }
+>a : (property) a: number
+>b : (property) b: number
+const box: unknown = new Box();
+>box : const box: unknown
+>Box : constructor Box(): Box
+const keys = (value: object): string[] => Object.keys(value);
+>keys : const keys: (value: object) => string[]
+>value : (parameter) value: object
+>Object : var Object: ObjectConstructor
+>keys : (method) ObjectConstructor.keys(o: {}): string[]
+>value : (parameter) value: object
+console.log("a" in o |> String, box instanceof Box |> String, 2 > 1 |> String);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>o : const o: Record<string, number>
+>String : var String: (value?: any) => string
+>box : const box: unknown
+>Box : class Box
+>String : var String: StringConstructor
+>String : var String: StringConstructor
+for (const k in o |> keys) console.log(k);
+>k : const k: string
+>o : const o: Record<string, number>
+>keys : const keys: (value: object) => string[]
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>k : const k: string
+for (let i = 0; "a" in o |> Boolean; i++) {
+>i : let i: number
+>o : const o: Record<string, number>
+>Boolean : var Boolean: <boolean>(value?: boolean | undefined) => boolean
+>i : let i: number
+  console.log("loop", i);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>i : let i: number
+  if (i > 0) break;
+>i : let i: number
+

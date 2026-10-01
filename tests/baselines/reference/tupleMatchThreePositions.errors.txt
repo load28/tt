@@ -10,6 +10,14 @@ error[match-not-exhaustive]: match on (B, B, B) is not exhaustive: missing (F, F
 
 
 ==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on (B, B, B) is not exhaustive: missing (F, F, F)
+ --> tupleMatchThreePositions.tt:3:11
+  |
+3 | const r = match (x, y, z) {
+  |           ^^^^^^^^^^^^^^^
+  |
+  = help: add the missing arms: `(F, F, F) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
 error[ts2304]: Cannot find name 'x'.
  --> tupleMatchThreePositions.tt:3:18
   |

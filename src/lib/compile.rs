@@ -48,15 +48,16 @@ pub struct Options<'a> {
     ///
     /// ttc answers both on its own, from its variant declarations and a lexical
     /// scope model of its own, and those answers are what [`compile`]
-    /// reports by default. Both are approximations of TypeScript's:
-    /// exhaustiveness is the *declared* type's answer, so a case an earlier
-    /// guard already removed is still demanded and a variant from another
-    /// module has to be collected ([`Options::extern_variants`]); `val`'s
+    /// reports by default. Exhaustiveness is the *declared* type's answer,
+    /// which is the language's rule on every surface: a case an earlier
+    /// guard already removed is still demanded, and a variant from another
+    /// module has to be collected ([`Options::extern_variants`]). A caller
+    /// with a checker reports that answer too, and adds what the type at
+    /// each `match` shows where the declarations cannot answer; `val`'s
     /// pairing is a scope model, so shadowing and redeclaration are ttc's
-    /// reading rather than TypeScript's. A caller with a checker asks it
-    /// instead — the narrowed type at each `match`, and symbol identity for
-    /// each binding — and reports what it says. `ttc --check-types` does
-    /// exactly that ([`tag_matches`], [`literal_matches`], [`val_probes`]).
+    /// reading rather than TypeScript's, and a caller with a checker pairs
+    /// by symbol identity instead. `ttc --check-types` does exactly that
+    /// ([`tag_matches`], [`literal_matches`], [`val_probes`]).
     ///
     /// Every other tt-level check runs either way: duplicate cases,
     /// misplaced wildcards, bad field types, `val`'s call-capability rule.

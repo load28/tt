@@ -141,12 +141,8 @@ pub(crate) fn check_all(
 /// keeps one rule in one place), and it only produces entries it can name
 /// a replacement for. This function is the wording.
 /// The coverage holes of `analyses`, answered from the declarations the file
-/// can see — what `compile` reports when no checker is available.
-///
-/// The typed pass prefers the checker's alphabet, which is narrower: it
-/// knows what an earlier guard already removed. This is what it falls back
-/// to for a file the checker holds no answer about, so that file is still
-/// told about its holes rather than passing silently.
+/// can see — what `compile` reports, and what the typed pass reports for
+/// every file before it adds the holes only the checker's alphabet shows.
 pub(crate) fn coverage_errors(
     source: &str,
     analyses: &crate::analysis::PatternAnalyses,

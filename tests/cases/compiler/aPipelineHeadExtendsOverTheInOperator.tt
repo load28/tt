@@ -1,0 +1,33 @@
+// `|>` binds more loosely than every binary operator, so a head extends over
+// the relational `in` as it does over `instanceof` and `>`: `"a" in o |> f`
+// is `f("a" in o)`. The head tracker reset at every `in`, which only a
+// `for` head needs (`for (k in o |> keys)` pipes `o`; a `for` initializer
+// cannot hold the relational `in`), so the first line read as
+// `"a" in f(o)`. After a `for` head's first `;`, `in` is relational again.
+// The twin is the same program written as TypeScript.
+// @run: main.tt
+// @twin: twin.ts
+// @filename: main.tt
+export {};
+class Box {}
+const o: Record<string, number> = { a: 1, b: 2 };
+const box: unknown = new Box();
+const keys = (value: object): string[] => Object.keys(value);
+console.log("a" in o |> String, box instanceof Box |> String, 2 > 1 |> String);
+for (const k in o |> keys) console.log(k);
+for (let i = 0; "a" in o |> Boolean; i++) {
+  console.log("loop", i);
+  if (i > 0) break;
+}
+// @filename: twin.ts
+export {};
+class Box {}
+const o: Record<string, number> = { a: 1, b: 2 };
+const box: unknown = new Box();
+const keys = (value: object): string[] => Object.keys(value);
+console.log(String("a" in o), String(box instanceof Box), String(2 > 1));
+for (const k in keys(o)) console.log(k);
+for (let i = 0; Boolean("a" in o); i++) {
+  console.log("loop", i);
+  if (i > 0) break;
+}
