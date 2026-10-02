@@ -459,7 +459,7 @@ export const diagnostics = [
         family: "flow",
         kind: "value",
         lowPrecedence: true,
-        skip: ["templateLiteral", "conditionalTest"],
+        skip: ["templateLiteral", "compoundAssignment", "conditionalTest"],
         In: "number",
         inputs: "[1.25, 2]",
         bad: () => `flow |> [|.toFixed(1)|] |> String`,

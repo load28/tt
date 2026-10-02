@@ -205,6 +205,28 @@ parity; do not treat the interrupted logs as completed runs.
   rerun the matrix after the gate finishes. This was a verification orchestration
   error, not evidence of an editor defect.
 
+### Issue 5: The full compiler matrix found 106 missing diagnostic baselines
+
+- **Symptom**: `TT_MATRIX_CASES=all cargo test --release --test
+  case_baselines` failed 107 cases: 106 generated diagnostic cases in the
+  five assignment positions TASK-719 added (`andAssignment`,
+  `compoundAssignment`, `logicalAssignmentValue`, `nullishAssignment`,
+  `orAssignment`) had no `.errors.txt`, and
+  `flow-first-step-method_methodFirst_compoundAssignment_fixed` printed
+  `"start:(...a) => g(f(...a))"` where its twin printed the arrow's source.
+- **Cause**: A pull request runs a sample of the matrix, so the cases
+  outside it never had baselines generated. The diagnostics spec's `flow`
+  example did not skip `compoundAssignment`, which TASK-719 Decision and
+  Issue 2 skip for every `flow` because the value is a function whose
+  source text differs from the twin's.
+- **Resolution**: Added `compoundAssignment` to the `flow-first-step-method`
+  example's `skip` in `tests/matrix/diagnostics.mjs` and regenerated (two
+  cases removed). Checked that each of the other 105 new baselines reports
+  its directory's code at the construct in both `ttc --out-dir` and
+  `ttc --check-types` (the five `result-return-nested` cases report it from
+  `--check-types` only, as their existing `assignment` sibling does), then
+  accepted them.
+
 ### Remaining findings from the PR comment
 
 - TASK-692(a,c): The literal-zero type and the syntactic truthiness/nullishness
