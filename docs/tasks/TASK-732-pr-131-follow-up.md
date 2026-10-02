@@ -81,6 +81,25 @@ be profiled and fixed in its owning layer with byte-identical output.
   TASK-732 yield context; it cost 17 M more instructions than the cached
   context (a check on every pop and truncation) and was reverted.
 
+### Decision 5: Record the remaining compile cost as the PR's features' cost
+
+- **Context**: After Decision 4 one benchmark pass costs +11.1% instructions
+  against `b9b85bd`, and `scripts/bench-compare` still reports every case
+  over the 10% floor. The floor is the smallest change the comparison can
+  tell from noise (TASK-225 Decision 3), not an allowance; the failure
+  message asks whether the change costs this much or something regressed.
+- **Alternatives considered**: Restructure the token facts machine and the
+  lexer to win back the rest (hours of work with no assurance of reaching
+  the floor); raise the floor (it would stop measuring what TASK-225 set it
+  to measure).
+- **Decision and rationale**: The user chose to record the remaining cost.
+  No further duplicated computation was found: the rest is the work of the
+  PR's features (bracket pairing and stack growth for deep nesting, the
+  token facts machine's grammar contexts, comment and directive placement,
+  completion scopes, declarator ordering). The CI performance job will keep
+  failing on this PR until that cost is reduced; this record is the answer
+  to its message.
+
 ## Work log
 
 - 2026-10-01: Read PR metadata and its final comment; there are no inline
