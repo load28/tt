@@ -28,6 +28,38 @@ comment's list of unverified changes and remaining findings.
 - **Decision and rationale**: Run the actual gates and expanded samples;
   intermediate-tree results cannot establish the final tree's correctness.
 
+### Decision 2: Attribute the regression by instruction counts
+
+- **Context**: Time medians of identical binaries vary by 10–40% on this VM
+  (TASK-510 Decision 1); the time-based bisect landed on an editor-only commit.
+- **Alternatives considered**: Repeating timed runs per commit; a single
+  profile of base against head.
+- **Decision and rationale**: Build each revision's `benches/compile.rs` once
+  and count instructions of one pass (`TT_BENCH_ITERS=1`) with
+  `valgrind --tool=cachegrind --cache-sim=no`, as TASK-510 did. A head-only
+  profile cannot name commits, because the PR renamed and wrapped many of the
+  functions it would compare.
+
+### Decision 3: The attribution
+
+Whole-run instructions of one bench pass, first-parent commits, relative to
+`b9b85bd` (1.810 G):
+
+| Commit | Task | Δ instructions |
+|---|---|---|
+| `86e92d15` | TASK-665 directive and JSDoc comment placement | +34.3 M (+1.9 pt) |
+| `f4bbb790` | TASK-654 nesting depth through stack growth | +34.8 M (+1.9 pt) |
+| `943982c2` | merge of TASK-681–684 | +27.4 M (+1.5 pt) |
+| `b4fea63e` | TASK-687 completion scope in `ProgramSyntax` | +21.1 M (+1.2 pt) |
+| `019e328a` | TASK-732 yield context and else-continuation comments | +18.8 M (+1.0 pt) |
+| `f05e21b1` interval | not yet refined | +17.0 M (+0.9 pt) |
+| `fc1e8062` | TASK-593 earlier declarators before a later value | +16.1 M (+0.9 pt) |
+| `1ce50c0f` | merge of TASK-713–716 | +16.4 M (+0.9 pt) |
+| others | each under +0.7 pt | the rest |
+
+No single commit explains the budget overrun. Each listed cause still has to
+be profiled and fixed in its owning layer with byte-identical output.
+
 ## Work log
 
 - 2026-10-01: Read PR metadata and its final comment; there are no inline
@@ -60,6 +92,15 @@ comment's list of unverified changes and remaining findings.
 - 2026-10-02: Reproduced the performance failure locally with
   `scripts/bench-compare` (single file +16.7%, first snapshot +25.0%) and
   started bisecting the PR range on the single-file benchmark.
+- 2026-10-02: A time-based `git bisect` over the PR range named TASK-645, an
+  editor-only commit; single timed runs on this 4-core VM varied by more than
+  the 10% budget, so that result was discarded (Decision 2).
+- 2026-10-02: Counted instructions instead (Decision 2). One bench pass:
+  `b9b85bd` 1.810 G, `019e328a` 2.055 G (+13.5%, matching CI's +11.8–14.6%).
+  The callgrind profile of the head spreads the increase over lowering
+  planning, emission, `ProgramSyntax::build_with`, lexing, and the host syntax
+  check rather than one function. Sampled every seventh first-parent commit,
+  then every first-parent commit in the five largest intervals (Decision 3).
 
 ### Verification recovery
 
