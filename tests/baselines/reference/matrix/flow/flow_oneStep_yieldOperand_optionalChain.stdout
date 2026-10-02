@@ -1,0 +1,2 @@
+yieldOperand(7) => 14 | yield function; add 14
+yieldOperand(1) => null | yield function; add null

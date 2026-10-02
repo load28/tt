@@ -1,0 +1,2 @@
+labeledBlock({"kind":"Click","x":3}) => 3 | risky {"kind":"Click","x":3}; click 3; flip true
+labeledBlock({"kind":"Key","key":"k"}) => ["k"] | risky {"kind":"Key","key":"k"}; key "k"; flip false

@@ -1,0 +1,3 @@
+objectProperty({"kind":"Done","value":{"kind":"Some","value":7}}) => {"a":1,"value":7,"c":3} | a 1; yield {"kind":"Done","value":{"kind":"Some","value":7}}; some 7; c 3
+objectProperty({"kind":"Done","value":{"kind":"None"}}) => {"a":1,"value":0,"c":3} | a 1; yield {"kind":"Done","value":{"kind":"None"}}; none 0; c 3
+objectProperty({"kind":"Failed","error":"lost"}) => {"a":1,"value":"lost","c":3} | a 1; yield {"kind":"Failed","error":"lost"}; failed "lost"; c 3

@@ -28,16 +28,19 @@ use crate::SourceKind;
 use crate::ast::Span;
 use crate::scanner::*;
 
+mod comments;
 mod facts;
 mod names;
 pub(crate) mod pragmas;
 mod queries;
 mod validation;
+pub(crate) use comments::{comments, directive_governed_lines, leading_documentation};
 pub(crate) use facts::{TokenFacts, statement_only_keyword};
 pub(crate) use names::identifier_names_with_prefix;
 pub(crate) use queries::{
     AutomaticSemicolon, automatic_semicolons, contains_await, continues_statement,
-    has_top_level_comma, is_primary_expression, statement_continues_after, type_parameter_names,
+    has_top_level_comma, is_member_receiver, is_primary_expression, statement_continues_after,
+    type_parameter_names,
 };
 pub(crate) use validation::{host_syntax_check, host_syntax_error, host_syntax_error_in};
 
@@ -47,6 +50,17 @@ pub(crate) struct Token {
     pub kind: TokenKind,
     pub span: Span,
     pub facts: TokenFacts,
+    pub(crate) pairs: BracketPairs,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct BracketPairs {
+    any: usize,
+    same: usize,
+}
+
+impl BracketPairs {
+    const NONE: BracketPairs = BracketPairs { any: 0, same: 0 };
 }
 
 impl Token {
@@ -62,6 +76,20 @@ impl Token {
         }
     }
 
+    pub(crate) fn balancing_close(tokens: &[Token], open: usize) -> Option<usize> {
+        let distance = tokens.get(open)?.pairs.any;
+        (distance > 0)
+            .then_some(open + distance)
+            .filter(|&close| close < tokens.len())
+    }
+
+    pub(crate) fn matching_close(tokens: &[Token], open: usize) -> Option<usize> {
+        let distance = tokens.get(open)?.pairs.same;
+        (distance > 0)
+            .then_some(open + distance)
+            .filter(|&close| close < tokens.len())
+    }
+
     /// Whether this token closes a bracket pair: `)`, `]`, `}`, or the `>`
     /// that closes type arguments or parameters.
     pub(crate) fn closes_bracket(&self) -> bool {
@@ -71,6 +99,29 @@ impl Token {
             _ => false,
         }
     }
+}
+
+/// Whether `tokens[k]` is a statement-only keyword where it stands: an
+/// identifier spelling one ([`statement_only_keyword`]) that is not in a
+/// type position. After an `as` assertion (`x as const`) or a `<` that
+/// opens type parameters (`<const T>`), `const` is part of the type and
+/// continues the expression instead of ending it.
+pub(crate) fn statement_keyword_at(src: &str, tokens: &[Token], k: usize) -> bool {
+    let token = &tokens[k];
+    if !matches!(token.kind, TokenKind::Ident)
+        || !statement_only_keyword(&src[token.span.start..token.span.end])
+    {
+        return false;
+    }
+    let Some(previous) = k.checked_sub(1).map(|p| &tokens[p]) else {
+        return true;
+    };
+    let in_type = match previous.kind {
+        TokenKind::Ident => &src[previous.span.start..previous.span.end] == "as",
+        TokenKind::Punct(b'<') => previous.facts.opens_type_arguments(),
+        _ => false,
+    };
+    !in_type
 }
 
 /// What a [`Token`] is. Only the distinctions the parser consumes exist;
@@ -121,28 +172,6 @@ pub(crate) enum TplPart {
 /// Lexes `src[start..end]` into significant tokens.
 pub(crate) fn lex(src_str: &str, start: usize, end: usize) -> Vec<Token> {
     lex_with_kind(src_str, start, end, SourceKind::TypeScript)
-}
-
-pub(crate) enum TypeScriptTokens<'a> {
-    Shared(&'a [Token]),
-    Lexed(Vec<Token>),
-}
-
-impl<'a> TypeScriptTokens<'a> {
-    pub(crate) fn of(src: &str, kind: SourceKind, tokens: &'a [Token]) -> Self {
-        if kind == SourceKind::TypeScript {
-            TypeScriptTokens::Shared(tokens)
-        } else {
-            TypeScriptTokens::Lexed(lex(src, 0, src.len()))
-        }
-    }
-
-    pub(crate) fn tokens(&self) -> &[Token] {
-        match self {
-            TypeScriptTokens::Shared(tokens) => tokens,
-            TypeScriptTokens::Lexed(tokens) => tokens,
-        }
-    }
 }
 
 /// Lexes a source range under its TypeScript surface kind.
@@ -281,6 +310,18 @@ fn lex_region(
     source_kind: SourceKind,
     mode: facts::Start,
     braced: bool,
+    trace: TraceSink<'_>,
+) -> (Vec<Token>, usize) {
+    crate::stack::grow(|| lex_region_grown(src_str, start, end, source_kind, mode, braced, trace))
+}
+
+fn lex_region_grown(
+    src_str: &str,
+    start: usize,
+    end: usize,
+    source_kind: SourceKind,
+    mode: facts::Start,
+    braced: bool,
     mut trace: TraceSink<'_>,
 ) -> (Vec<Token>, usize) {
     let src = src_str.as_bytes();
@@ -330,6 +371,7 @@ fn lex_region(
                 kind,
                 span: span(i, e),
                 facts: machine.continuation(span(i, e)),
+                pairs: BracketPairs::NONE,
             });
             i = e;
             continue;
@@ -342,6 +384,7 @@ fn lex_region(
                 kind: TokenKind::Str,
                 span: span(i, e),
                 facts,
+                pairs: BracketPairs::NONE,
             });
             i = e;
             continue;
@@ -354,6 +397,7 @@ fn lex_region(
                 kind: TokenKind::Template(parts.into_boxed_slice()),
                 span: span(i, e),
                 facts,
+                pairs: BracketPairs::NONE,
             });
             i = e;
             continue;
@@ -362,7 +406,14 @@ fn lex_region(
         if source_kind.is_tsx()
             && c == b'<'
             && machine.operand_expected(i, line_break)
-            && let Some(jsx) = scan_jsx(src_str, i, end, source_kind, trace.as_deref_mut())
+            && let Some(jsx) = scan_jsx(
+                src_str,
+                i,
+                end,
+                source_kind,
+                machine.lookaheads(),
+                trace.as_deref_mut(),
+            )
         {
             if let Some(trace) = trace.as_deref_mut() {
                 trace.elements.push(i);
@@ -392,6 +443,7 @@ fn lex_region(
                 kind: TokenKind::Regex,
                 span: span(i, e),
                 facts,
+                pairs: BracketPairs::NONE,
             });
             i = e;
             continue;
@@ -404,6 +456,7 @@ fn lex_region(
                 kind: TokenKind::Ident,
                 span: span(i, j),
                 facts,
+                pairs: BracketPairs::NONE,
             });
             i = j;
             continue;
@@ -420,6 +473,7 @@ fn lex_region(
                 kind: TokenKind::Punct(c),
                 span: span(i, i + 1),
                 facts,
+                pairs: BracketPairs::NONE,
             });
             i += 1;
             continue;
@@ -448,6 +502,7 @@ fn lex_region(
             kind,
             span: span(i, i + len),
             facts,
+            pairs: BracketPairs::NONE,
         });
         i += len;
     };
@@ -455,7 +510,34 @@ fn lex_region(
     if let Some(trace) = trace {
         trace.statements.extend(statements);
     }
+    pair_brackets(&mut tokens);
     (tokens, close)
+}
+
+fn pair_brackets(tokens: &mut [Token]) {
+    let slot = |token: &Token| match token.kind {
+        TokenKind::Punct(b'(' | b')') => 0,
+        TokenKind::Punct(b'[' | b']') => 1,
+        TokenKind::Punct(b'{' | b'}') => 2,
+        _ => 3,
+    };
+    let mut any: Vec<usize> = Vec::new();
+    let mut same: [Vec<usize>; 4] = Default::default();
+    for index in 0..tokens.len() {
+        let token = &tokens[index];
+        if token.opens_bracket() {
+            any.push(index);
+            same[slot(token)].push(index);
+        } else if token.closes_bracket() {
+            let kind = slot(token);
+            if let Some(opener) = any.pop() {
+                tokens[opener].pairs.any = index - opener;
+            }
+            if let Some(opener) = same[kind].pop() {
+                tokens[opener].pairs.same = index - opener;
+            }
+        }
+    }
 }
 
 struct JsxExpression {
@@ -497,6 +579,10 @@ fn jsx_expression(
 /// appear as punctuation tokens.
 pub(crate) fn invalid_jsx_namespace_member(tokens: &[Token]) -> Option<Span> {
     fn in_tokens(tokens: &[Token]) -> Option<Span> {
+        crate::stack::grow(|| in_tokens_grown(tokens))
+    }
+
+    fn in_tokens_grown(tokens: &[Token]) -> Option<Span> {
         for (index, token) in tokens.iter().enumerate() {
             if let TokenKind::Template(parts) = &token.kind {
                 for part in parts.iter() {
@@ -562,7 +648,22 @@ pub(crate) fn invalid_jsx_namespace_member(tokens: &[Token]) -> Option<Span> {
 /// `src[start]` is a backtick — lexes the template into raw chunks and
 /// recursively lexed `${ }` interpolations. Returns the index just past
 /// the closing backtick (or `end` if unterminated).
+///
+/// An interpolation whose `}` is missing runs to `end` and ends the
+/// template, as TypeScript's scanner reads it: after `${` come expression
+/// tokens, whatever follows. The parts still cover the source once, in
+/// order — no raw chunk follows an interpolation that never closed.
 fn lex_template(
+    src_str: &str,
+    start: usize,
+    end: usize,
+    source_kind: SourceKind,
+    trace: TraceSink<'_>,
+) -> (usize, Vec<TplPart>) {
+    crate::stack::grow(|| lex_template_grown(src_str, start, end, source_kind, trace))
+}
+
+fn lex_template_grown(
     src_str: &str,
     start: usize,
     end: usize,
@@ -590,10 +691,6 @@ fn lex_template(
             return (i, parts);
         }
         if c == b'$' && at(src, i + 1, end) == Some(b'{') {
-            // An unterminated interpolation is still template text while the
-            // user is editing. Treating the remainder as an interpolation
-            // would give the parser an overlapping span when recovery finds a
-            // nested expression, violating source-preservation in codegen.
             let (tokens, close) = lex_region(
                 src_str,
                 i + 2,
@@ -603,9 +700,6 @@ fn lex_template(
                 true,
                 trace.as_deref_mut(),
             );
-            if close == end {
-                break;
-            }
             push_raw(&mut parts, raw_start, i);
             parts.push(TplPart::Interp {
                 span: Span {
@@ -614,6 +708,9 @@ fn lex_template(
                 },
                 tokens,
             });
+            if close == end {
+                return (end, parts);
+            }
             i = (close + 1).min(end);
             raw_start = i;
             continue;
@@ -638,10 +735,29 @@ fn scan_jsx(
     start: usize,
     end: usize,
     source_kind: SourceKind,
+    lookaheads: &facts::Lookaheads,
+    trace: TraceSink<'_>,
+) -> Option<ScannedJsx> {
+    crate::stack::grow(|| scan_jsx_grown(src_str, start, end, source_kind, lookaheads, trace))
+}
+
+fn scan_jsx_grown(
+    src_str: &str,
+    start: usize,
+    end: usize,
+    source_kind: SourceKind,
+    lookaheads: &facts::Lookaheads,
     mut trace: TraceSink<'_>,
 ) -> Option<ScannedJsx> {
     let src = src_str.as_bytes();
-    let opening = scan_jsx_opening(src_str, start, end, source_kind, trace.as_deref_mut())?;
+    let opening = scan_jsx_opening(
+        src_str,
+        start,
+        end,
+        source_kind,
+        lookaheads,
+        trace.as_deref_mut(),
+    )?;
     let mut tokens = jsx_region_tokens(start, opening.end, opening.expressions);
     let mut i = opening.end;
     if opening.self_closing {
@@ -662,6 +778,7 @@ fn scan_jsx(
                     end: close_end,
                 },
                 facts: TokenFacts::default(),
+                pairs: BracketPairs::NONE,
             });
             return Some(ScannedJsx {
                 end: close_end,
@@ -669,7 +786,14 @@ fn scan_jsx(
             });
         }
         if src[i] == b'<' {
-            let child = scan_jsx(src_str, i, end, source_kind, trace.as_deref_mut())?;
+            let child = scan_jsx(
+                src_str,
+                i,
+                end,
+                source_kind,
+                lookaheads,
+                trace.as_deref_mut(),
+            )?;
             if raw_start < i {
                 tokens.push(Token {
                     kind: TokenKind::JsxRaw,
@@ -678,6 +802,7 @@ fn scan_jsx(
                         end: i,
                     },
                     facts: TokenFacts::default(),
+                    pairs: BracketPairs::NONE,
                 });
             }
             tokens.extend(child.tokens);
@@ -696,6 +821,7 @@ fn scan_jsx(
                         end: i + 1,
                     },
                     facts: TokenFacts::default(),
+                    pairs: BracketPairs::NONE,
                 });
             }
             tokens.extend(expression.tokens);
@@ -706,6 +832,7 @@ fn scan_jsx(
                     end: close + 1,
                 },
                 facts: TokenFacts::default(),
+                pairs: BracketPairs::NONE,
             });
             i = close + 1;
             raw_start = i;
@@ -731,6 +858,7 @@ fn jsx_region_tokens(start: usize, end: usize, expressions: Vec<JsxExpression>) 
                 end: open + 1,
             },
             facts: TokenFacts::default(),
+            pairs: BracketPairs::NONE,
         });
         tokens.extend(expression_tokens);
         tokens.push(Token {
@@ -740,6 +868,7 @@ fn jsx_region_tokens(start: usize, end: usize, expressions: Vec<JsxExpression>) 
                 end: close + 1,
             },
             facts: TokenFacts::default(),
+            pairs: BracketPairs::NONE,
         });
         raw_start = close + 1;
     }
@@ -751,6 +880,7 @@ fn jsx_region_tokens(start: usize, end: usize, expressions: Vec<JsxExpression>) 
                 end,
             },
             facts: TokenFacts::default(),
+            pairs: BracketPairs::NONE,
         });
     }
     tokens
@@ -770,6 +900,7 @@ fn scan_jsx_opening(
     start: usize,
     end: usize,
     source_kind: SourceKind,
+    lookaheads: &facts::Lookaheads,
     mut trace: TraceSink<'_>,
 ) -> Option<JsxOpening> {
     let src = src_str.as_bytes();
@@ -787,12 +918,10 @@ fn scan_jsx_opening(
     let name = String::from_utf8(src[name_start..i].to_vec()).ok()?;
     let mut expressions = Vec::new();
     if at(src, i, end) == Some(b'<') {
-        i = facts::type_arguments_end(src, i, end)?;
+        i = facts::type_arguments_end(src, i, end, lookaheads)?;
     }
     loop {
-        while i < end && is_ws(src[i]) {
-            i += 1;
-        }
+        i = skip_trivia(src, i, end).0;
         match (at(src, i, end), at(src, i + 1, end)) {
             (Some(b'/'), Some(b'>')) => {
                 return Some(JsxOpening {
@@ -820,14 +949,10 @@ fn scan_jsx_opening(
             (Some(b), _) if b == b'"' || b == b'\'' => i = scan_string(src, i, end),
             (Some(b), _) if is_jsx_name_start(b) => {
                 i = scan_jsx_name(src, i, end)?;
-                while i < end && is_ws(src[i]) {
-                    i += 1;
-                }
+                i = skip_trivia(src, i, end).0;
                 if at(src, i, end) == Some(b'=') {
                     i += 1;
-                    while i < end && is_ws(src[i]) {
-                        i += 1;
-                    }
+                    i = skip_trivia(src, i, end).0;
                     match at(src, i, end)? {
                         b'"' | b'\'' => i = scan_string(src, i, end),
                         b'{' => {
@@ -861,9 +986,7 @@ fn scan_jsx_closing(src: &[u8], start: usize, end: usize, opening: Option<&str>)
             if &src[name_start..i] != opening.as_bytes() {
                 return None;
             }
-            while i < end && is_ws(src[i]) {
-                i += 1;
-            }
+            i = skip_trivia(src, i, end).0;
             (at(src, i, end) == Some(b'>')).then_some(i + 1)
         }
     }

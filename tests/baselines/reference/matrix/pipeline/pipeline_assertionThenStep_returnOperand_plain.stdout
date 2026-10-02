@@ -1,0 +1,2 @@
+returnOperand(123) => 3 | operand 123
+returnOperand(4) => 1 | operand 4

@@ -1,0 +1,33 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-placement]: `match` cannot be lowered from this conditional expression position without evaluating a skipped branch
+  --> ./main.tt:8:12
+   |
+ 8 |         case match (risky(input)) {
+   |  ____________^
+ 9 | |         // the radius, doubled
+10 | |         Circle(r) => note("circle", r * 2), // an area next
+11 | |         Rect(w, h) => note("rect", w * h), /* no area */ Point => note("point", 0)
+12 | |         // after the last arm
+13 | |       }:
+   | |_______^
+   |
+   = help: move the match into a function-body statement that can own its generated control flow
+
+
+==== ttc --check-types (exit 1) ====
+error[match-placement]: `match` cannot be lowered from this conditional expression position without evaluating a skipped branch
+  --> main.tt:8:12
+   |
+ 8 |         case match (risky(input)) {
+   |  ____________^
+ 9 | |         // the radius, doubled
+10 | |         Circle(r) => note("circle", r * 2), // an area next
+11 | |         Rect(w, h) => note("rect", w * h), /* no area */ Point => note("point", 0)
+12 | |         // after the last arm
+13 | |       }:
+   | |_______^
+   |
+   = help: move the match into a function-body statement that can own its generated control flow
+
+==== tsc on the emitted TypeScript (exit 0) ====

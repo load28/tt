@@ -1,0 +1,35 @@
+and true 1 {"kind":"Ok","value":2} and,read 1
+and false 1 false and
+and true -1 {"kind":"Err","error":"bad -1"} and,read -1
+and false -1 false and
+and true 0 {"kind":"Ok","value":0} and,read 0
+or true 1 true or
+or false 1 {"kind":"Ok","value":2} or,read 1
+or true -1 true or
+or false -1 {"kind":"Err","error":"bad -1"} or,read -1
+or true 0 true or
+nullish true 1 {"kind":"Ok","value":"1"} nullish,read 1
+nullish false 1 "set" nullish
+nullish true -1 {"kind":"Err","error":"bad -1"} nullish,read -1
+nullish false -1 "set" nullish
+nullish true 0 {"kind":"Ok","value":"0"} nullish,read 0
+ternary true 1 {"kind":"Ok","value":[1,2]} ternary,read 1,read 2
+ternary false 1 "no" ternary
+ternary true -1 {"kind":"Err","error":"bad -1"} ternary,read -1
+ternary false -1 "no" ternary
+ternary true 0 {"kind":"Ok","value":[0,1]} ternary,read 0,read 1
+optional true 1 "got {\"kind\":\"Ok\",\"value\":2}" callee,read 1
+optional false 1 undefined callee
+optional true -1 "got {\"kind\":\"Err\",\"error\":\"bad -1\"}" callee,read -1
+optional false -1 undefined callee
+optional true 0 "got {\"kind\":\"Ok\",\"value\":0}" callee,read 0
+arm true 1 {"kind":"Ok","value":2} arm,read 1
+arm false 1 {"kind":"Ok","value":false} arm
+arm true -1 {"kind":"Err","error":"bad -1"} arm,read -1
+arm false -1 {"kind":"Ok","value":false} arm
+arm true 0 {"kind":"Ok","value":0} arm
+later true 1 6 later
+later false 1 false later
+later true -1 8 later
+later false -1 false later
+later true 0 0 later

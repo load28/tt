@@ -1,0 +1,4 @@
+jsxSpreadAttribute({"kind":"Num","value":4}) => "<div value=-1></div>" | await; other -1
+jsxSpreadAttribute({"kind":"Neg","value":-3}) => "<div value=-1></div>" | await; other -1
+jsxSpreadAttribute({"kind":"Word","text":"hi"}) => "<div value=2></div>" | await; word 2
+jsxSpreadAttribute({"kind":"End"}) => "<div value=-1></div>" | await; other -1

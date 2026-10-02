@@ -1,0 +1,16 @@
+[
+  {
+    "code": "missing-pipeline-step",
+    "col": 27,
+    "endCol": 29,
+    "endLine": 2,
+    "line": 2,
+    "message": "pipeline: `|>` has no step",
+    "suggestions": [
+      {
+        "edit": null,
+        "message": "write the step after `|>`, or remove the `|>`"
+      }
+    ]
+  }
+]

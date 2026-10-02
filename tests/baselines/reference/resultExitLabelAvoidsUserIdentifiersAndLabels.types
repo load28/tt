@@ -1,0 +1,9 @@
+=== resultExitLabelAvoidsUserIdentifiersAndLabels.tt ===
+function run() { $tt_v0: while (ready()) { break $tt_v0; } const $tt_v1 = 0; const value = result { const item = try read(); return item; }; return value; }
+>run : function run(): any
+>$tt_v1 : const $tt_v1: 0
+>value : const value: any
+>item : const item: any
+>item : const item: any
+>value : const value: any
+

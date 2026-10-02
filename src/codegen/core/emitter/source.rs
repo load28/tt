@@ -2,6 +2,25 @@
 
 use super::*;
 
+/// What a tt value that has no lowering stands as: TypeScript's error type,
+/// so nothing the checker says past it is a consequence of the stand-in.
+/// The typed projection's recovery writes the same expression.
+pub(super) const RECOVERED_VALUE: &str = "(undefined as any)";
+
+fn push_source_edit<'a>(out: &mut Rope<'a>, edit: &LocalSourceEdit) {
+    match edit.result_return_mark {
+        Some((mark, ResultReturnBoundary::Start)) => {
+            out.push_lit(edit.text.clone());
+            out.push_result_return_start(mark.start);
+        }
+        Some((mark, ResultReturnBoundary::End)) => {
+            out.push_result_return_end(mark.start);
+            out.push_lit(edit.text.clone());
+        }
+        None => out.push_lit(edit.text.clone()),
+    }
+}
+
 impl<'a> Emitter<'a> {
     pub(super) fn exits_for_expr(&self, expr: ExprId) -> Vec<HostExit> {
         self.value_exits.get(&expr).cloned().unwrap_or_default()
@@ -104,6 +123,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn source_range_rope(&self, span: hir::Span) -> Rope<'a> {
+        crate::stack::grow(|| self.source_range_rope_grown(span))
+    }
+
+    fn source_range_rope_grown(&self, span: hir::Span) -> Rope<'a> {
         let mut rope = Rope::new();
         let mut insertions = self
             .owner_slot_index
@@ -180,6 +203,37 @@ impl<'a> Emitter<'a> {
             {
                 rope.append(self.emit_compose_suffix(rewrite));
             }
+            if let Some(documentation) = self.documentation_starts.get(&cursor)
+                && documentation.end <= span.end
+                && !self.emitted_documentation.contains(*documentation)
+            {
+                cursor = documentation.end;
+                continue;
+            }
+            self.open_declaration_blocks_at(cursor, &mut rope);
+            if let Some(split) = self.declarator_splits.iter().find(|split| {
+                split.separator.start == cursor
+                    && self.emitted_declarator_separators.claim(split.separator)
+            }) {
+                rope.push_lit(";");
+                cursor = split.separator.end;
+                continue;
+            }
+            let split_head = self.declarator_splits.iter().find(|split| {
+                split.at == cursor
+                    && self.emitted_declarator_separators.contains(split.separator)
+                    && self.emitted_declarator_heads.claim(split.separator)
+            });
+            if let Some(split) = split_head {
+                rope = rope.trim_end();
+                if self.opened_declaration_scopes.contains(split.statement) {
+                    rope.push_break(0);
+                } else {
+                    let mut separation = Rope::new();
+                    separation.push_break(0);
+                    rope.append(Rope::scoped(separation));
+                }
+            }
             while let Some(rewrite) = insertions.next_if(|rewrite| rewrite.owner.start == cursor) {
                 if !self.emitted_owner_rewrites.contains(rewrite.expr) {
                     self.emitted_owner_rewrites.mark(rewrite.expr);
@@ -196,6 +250,18 @@ impl<'a> Emitter<'a> {
             {
                 if self.emitted_compose_rewrites.claim(rewrite.owner) {
                     rope.append(self.emit_compose_rewrite(rewrite));
+                }
+            }
+            if let Some(documentation) = self.relocated_documentation(cursor) {
+                rope.append(documentation);
+            }
+            if let Some(split) = split_head {
+                rope.push_lit(split.head.clone());
+                if split.last
+                    && self.opened_declaration_scopes.contains(split.statement)
+                    && self.closed_declaration_scopes.claim(split.statement)
+                {
+                    rope.push_scope_close();
                 }
             }
             if let Some(rewrite) = self.loop_test_rewrites.iter().find(|rewrite| {
@@ -276,10 +342,10 @@ impl<'a> Emitter<'a> {
                         Some(expr) => {
                             let (kind, start, end, extent) = self.value_anchor(expr);
                             let mut name = Rope::new();
-                            name.push_lit(replacement.slot.clone());
+                            name.push_lit(replacement.written().to_owned());
                             rope.anchored(kind, start, end, extent, name);
                         }
-                        None => rope.push_lit(replacement.slot.clone()),
+                        None => rope.push_lit(replacement.written().to_owned()),
                     }
                     if replacement.jsx_child {
                         rope.push_lit("}");
@@ -332,7 +398,25 @@ impl<'a> Emitter<'a> {
                 .range(cursor.saturating_add(1)..span.end.max(cursor.saturating_add(1)))
                 .next()
                 .map_or(span.end, |(end, _)| *end);
+            let next_split = self
+                .declarator_splits
+                .iter()
+                .flat_map(|split| {
+                    [split.statement.start, split.separator.start, split.at]
+                        .into_iter()
+                        .chain(split.block.map(|block| block.start))
+                })
+                .filter(|boundary| cursor < *boundary && *boundary < span.end)
+                .min()
+                .unwrap_or(span.end);
+            let next_documentation = self
+                .documentation_starts
+                .range(cursor.saturating_add(1)..span.end.max(cursor.saturating_add(1)))
+                .next()
+                .map_or(span.end, |(start, _)| *start);
             let next = next_insertion
+                .min(next_documentation)
+                .min(next_split)
                 .min(next_owner_end)
                 .min(next_compose)
                 .min(next_propagation)
@@ -370,19 +454,17 @@ impl<'a> Emitter<'a> {
             if cursor < edit.span.start {
                 out.append(self.source_range_rope(hir::Span::new(cursor, edit.span.start)));
             }
-            match edit.result_return_mark {
-                Some((mark, ResultReturnBoundary::Start)) => {
-                    // The prefix ends immediately before the authored value.
-                    out.push_lit(edit.text.clone());
-                    out.push_result_return_start(mark.start);
-                }
-                Some((mark, ResultReturnBoundary::End)) => {
-                    // The suffix begins immediately after the authored value.
-                    out.push_result_return_end(mark.start);
-                    out.push_lit(edit.text.clone());
-                }
-                None => out.push_lit(edit.text.clone()),
+            // An edit that rewrites the head of a host owner (a return a
+            // value region turns into its exit) still runs the owner's
+            // prelude first.
+            if let Some(rewrite) = self.compose_rewrites.iter().find(|rewrite| {
+                rewrite.owner.start == edit.span.start
+                    && !self.emitted_compose_rewrites.contains(rewrite.owner)
+            }) {
+                self.emitted_compose_rewrites.claim(rewrite.owner);
+                out.append(self.emit_compose_rewrite(rewrite));
             }
+            push_source_edit(&mut out, edit);
             cursor = edit.span.end;
         }
         if cursor < span.end {
@@ -391,11 +473,47 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    /// Emits the file's root body. Every planned host prelude is written by
+    /// the one owner that consumes it; a prelude left unwritten would leave
+    /// its slots unassigned in the output.
+    pub(in super::super) fn emit_file(&self, root: hir::BodyId) -> Rope<'a> {
+        let out = self.emit_body(root);
+        if let Some(rewrite) = self
+            .compose_rewrites
+            .iter()
+            .find(|rewrite| !self.emitted_compose_rewrites.contains(rewrite.owner))
+        {
+            crate::ice::bug!(
+                "the planned prelude of the host owner at {}..{} was not emitted",
+                rewrite.owner.start,
+                rewrite.owner.end
+            );
+        }
+        out
+    }
+
     pub(in super::super) fn emit_body(&self, body: hir::BodyId) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_body_grown(body))
+    }
+
+    fn emit_body_grown(&self, body: hir::BodyId) -> Rope<'a> {
         self.emit_statements(&self.core.bodies[body.index()].statements)
     }
 
     pub(super) fn emit_body_with_exits(
+        &self,
+        body: hir::BodyId,
+        exits: &[HostExit],
+        continuation: &ValueContinuation<'_>,
+        label: Option<&str>,
+        generated_indent: &str,
+    ) -> Rope<'a> {
+        crate::stack::grow(|| {
+            self.emit_body_with_exits_grown(body, exits, continuation, label, generated_indent)
+        })
+    }
+
+    fn emit_body_with_exits_grown(
         &self,
         body: hir::BodyId,
         exits: &[HostExit],
@@ -483,7 +601,8 @@ impl<'a> Emitter<'a> {
         }
         edits.sort_unstable_by_key(|edit| edit.span.start);
         let mut out = Rope::new();
-        for statement in &self.core.bodies[body.index()].statements {
+        let statements = &self.core.bodies[body.index()].statements;
+        for (index, statement) in statements.iter().enumerate() {
             match statement {
                 Statement::Opaque(node) if !structured_returns.is_empty() => {
                     let span = self.span(*node);
@@ -538,9 +657,11 @@ impl<'a> Emitter<'a> {
                         )
                     })
                 }
-                _ => out.append(
-                    self.emit_statements_with_edits(std::slice::from_ref(statement), &edits),
-                ),
+                _ => {
+                    if self.emit_statement_with_edits(statement, &edits, &mut out) {
+                        out.append(self.edits_after_statement(statements, index, &edits));
+                    }
+                }
             }
         }
         out
@@ -577,6 +698,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_statements(&self, statements: &[Statement]) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_statements_grown(statements))
+    }
+
+    fn emit_statements_grown(&self, statements: &[Statement]) -> Rope<'a> {
         self.emit_statements_with_edits(statements, &[])
     }
 
@@ -586,7 +711,21 @@ impl<'a> Emitter<'a> {
         edits: &[LocalSourceEdit],
     ) -> Rope<'a> {
         let mut out = Rope::new();
-        for statement in statements {
+        for (index, statement) in statements.iter().enumerate() {
+            if self.emit_statement_with_edits(statement, edits, &mut out) {
+                out.append(self.edits_after_statement(statements, index, edits));
+            }
+        }
+        out
+    }
+
+    pub(super) fn emit_statement_with_edits(
+        &self,
+        statement: &Statement,
+        edits: &[LocalSourceEdit],
+        out: &mut Rope<'a>,
+    ) -> bool {
+        {
             let relocated_node = match statement {
                 Statement::Decision(decision) => Some(decision.extent),
                 Statement::Propagate(propagate) => Some(propagate.owner),
@@ -616,7 +755,7 @@ impl<'a> Emitter<'a> {
                                 .is_some_and(|expr| self.active_structured_exprs.contains(expr))
                     })
                 {
-                    continue;
+                    return false;
                 }
             }
             match statement {
@@ -633,22 +772,16 @@ impl<'a> Emitter<'a> {
                         span.end,
                         emit_adt(
                             adt,
+                            self.source,
                             |node| self.span(node),
                             self.ambient_items.contains(&adt.node),
                             self.source_kind,
                         ),
                     );
                 }
-                Statement::Import(import) => self.emit_import(import, &mut out),
+                Statement::Import(import) => self.emit_import(import, out),
                 Statement::Propagate(propagate) => {
-                    let owner = self.span(propagate.owner);
-                    if let Some(rewrite) = self
-                        .compose_rewrites
-                        .iter()
-                        .find(|rewrite| rewrite.owner == SourceSpan::from(owner))
-                    {
-                        out.append(self.emit_compose_rewrite(rewrite));
-                    }
+                    out.append(self.emit_propagate_owner_prelude(propagate));
                     let span = self.span(propagate.node);
                     let mut emitted = if self.is_for_initializer_propagation(propagate.node) {
                         self.emit_for_initializer_payload(propagate)
@@ -661,7 +794,7 @@ impl<'a> Emitter<'a> {
                     out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
                 Statement::Decision(decision) => {
-                    self.emit_statement_decision(decision, &mut out, &|body| {
+                    self.emit_statement_decision(decision, out, &|body| {
                         self.emit_statements_with_edits(
                             &self.core.bodies[body.index()].statements,
                             edits,
@@ -669,12 +802,64 @@ impl<'a> Emitter<'a> {
                     })
                 }
                 Statement::Expr(expr) if self.statement_expr_requires_lowering(*expr) => {
-                    self.emit_statement_expr(*expr, &mut out);
+                    self.emit_statement_expr(*expr, out);
                 }
                 Statement::Expr(expr) => out.append(self.emit_expr(*expr)),
             }
         }
+        true
+    }
+
+    pub(super) fn edits_after_statement(
+        &self,
+        statements: &[Statement],
+        index: usize,
+        edits: &[LocalSourceEdit],
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
+        let end = match &statements[index] {
+            Statement::Expr(expr) => structured_expr_span(self.semantic, self.core, *expr),
+            Statement::Decision(decision) => Some(self.span(decision.extent).into()),
+            Statement::Propagate(propagate) => Some(self.span(propagate.owner).into()),
+            Statement::Adt(adt) => Some(self.span(adt.node).into()),
+            Statement::Opaque(_) | Statement::Import(_) => None,
+        }
+        .map(|span: SourceSpan| span.end);
+        let Some(end) = end else {
+            return out;
+        };
+        let held = statements.iter().any(|statement| {
+            matches!(statement, Statement::Opaque(node) if {
+                let span = self.span(*node);
+                span.start <= end && end <= span.end
+            })
+        });
+        if held {
+            return out;
+        }
+        for edit in edits
+            .iter()
+            .filter(|edit| edit.span.start == end && edit.span.end == end)
+        {
+            push_source_edit(&mut out, edit);
+        }
         out
+    }
+
+    /// The values a `try` statement's operand holds run in the statement's
+    /// prelude, before the operand is read into the propagation temporary.
+    pub(super) fn emit_propagate_owner_prelude(&self, propagate: &Propagate) -> Rope<'a> {
+        let owner = SourceSpan::from(self.span(propagate.owner));
+        match self
+            .compose_rewrites
+            .iter()
+            .find(|rewrite| rewrite.owner == owner)
+        {
+            Some(rewrite) if self.emitted_compose_rewrites.claim(rewrite.owner) => {
+                self.emit_compose_rewrite(rewrite)
+            }
+            _ => Rope::new(),
+        }
     }
 
     pub(super) fn statement_expr_requires_lowering(&self, expr: ExprId) -> bool {
@@ -701,6 +886,7 @@ impl<'a> Emitter<'a> {
                 self.emitted_owner_rewrites.mark(expr);
                 out.append(self.emit_owner_slot_rewrite(rewrite));
             }
+            self.close_owner_blocks_at(rewrite.source.end, out);
             return;
         }
         if self.emitted_owner_rewrites.contains(expr) {
@@ -886,6 +1072,10 @@ impl<'a> Emitter<'a> {
     }
 
     fn collect_operand_value(&self, expr: ExprId, out: &mut Vec<(ExprId, String)>) {
+        crate::stack::grow(|| self.collect_operand_value_grown(expr, out));
+    }
+
+    fn collect_operand_value_grown(&self, expr: ExprId, out: &mut Vec<(ExprId, String)>) {
         if !self.core.has_statement_form(expr) || self.slot_exprs.contains_key(&expr) {
             return;
         }
@@ -910,6 +1100,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_expr(&self, expr: ExprId) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_expr_grown(expr))
+    }
+
+    fn emit_expr_grown(&self, expr: ExprId) -> Rope<'a> {
         // A structured expression can own the first byte of a host region.
         // Enter that region before substituting any captured source inside it,
         // just as the opaque-source traversal does at the same boundary.
@@ -980,7 +1174,15 @@ impl<'a> Emitter<'a> {
         {
             let mut out = Rope::new();
             if span.start == capture.source.start {
-                out.push_lit(capture.slot.clone());
+                let mut written = Rope::new();
+                written.push_lit(capture.written().to_owned());
+                match capture.anchor {
+                    Some(value) => {
+                        let (kind, start, end, extent) = self.value_anchor(value);
+                        out.anchored(kind, start, end, extent, written);
+                    }
+                    None => out.append(written),
+                }
             }
             return out;
         }
@@ -1030,7 +1232,9 @@ impl<'a> Emitter<'a> {
                 // The Core body retains a trailing statement/module frame
                 // (normally the authored semicolon) outside the direct
                 // expression and emits it after this value.
-                HostOwnerKind::Statement | HostOwnerKind::ModuleItem => {}
+                HostOwnerKind::Statement
+                | HostOwnerKind::ModuleItem
+                | HostOwnerKind::Declarator => {}
             }
             return out;
         }
@@ -1108,7 +1312,7 @@ impl<'a> Emitter<'a> {
                 let head = self.span(decision.head);
                 let extent = self.span(decision.extent);
                 let mut generated = Rope::new();
-                generated.push_lit("undefined");
+                generated.push_lit(RECOVERED_VALUE);
                 let mut out = Rope::new();
                 out.anchored(
                     AnchorKind::Match,
@@ -1137,13 +1341,26 @@ impl<'a> Emitter<'a> {
                     );
                 }
                 let span = self.span(propagate.node);
-                if !self.owner_model {
+                let mut generated = Rope::new();
+                if self.owner_model {
+                    generated.push_lit(RECOVERED_VALUE);
+                } else {
+                    // No owner to hold the early exit: the operand is still
+                    // the user's expression, evaluated where it stands as
+                    // the argument, and the glue only reads its success
+                    // payload under the Result ABI a statement `try` tests.
                     self.recovered_sources
                         .borrow_mut()
                         .push(SourceSpan::from(span));
+                    let result = self.generated_name("$tt_result");
+                    generated.push_lit(format!(
+                        "(({result}) => {{ if ({}) throw {result}; return {result}.{}; }})(",
+                        result_failure_test(&result, propagate.layout),
+                        propagate.layout.payload_field,
+                    ));
+                    generated.append(self.emit_expr(propagate.value));
+                    generated.push_lit(")");
                 }
-                let mut generated = Rope::new();
-                generated.push_lit("undefined");
                 let mut out = Rope::new();
                 out.anchored(AnchorKind::Try, span.start, span.end, span.end, generated);
                 out

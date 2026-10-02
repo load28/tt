@@ -1,0 +1,202 @@
+=== tryPropagationOrder.tt ===
+const log: string[] = [];
+>log : const log: string[]
+function step(label: string, ok: boolean): TResult<number, string> {
+>step : function step(label: string, ok: boolean): TResult<number, string>
+>label : (parameter) label: string
+>ok : (parameter) ok: boolean
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  log.push(label);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+  return ok ? Result.Ok(label.length) : Result.Err(`${label} failed`);
+>ok : (parameter) ok: boolean
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>label : (parameter) label: string
+>length : (property) String.length: number
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+>label : (parameter) label: string
+function flush(title: string, value: unknown) {
+>flush : function flush(title: string, value: unknown): void
+>title : (parameter) title: string
+>value : (parameter) value: unknown
+  console.log(`${title}: ${JSON.stringify(value)} after ${log.join(" ")}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>title : (parameter) title: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>value : (parameter) value: unknown
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+  log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+function add(a: number, b: number, c: number) {
+>add : function add(a: number, b: number, c: number): number
+>a : (parameter) a: number
+>b : (parameter) b: number
+>c : (parameter) c: number
+  log.push("add");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return a + b + c;
+>a : (parameter) a: number
+>b : (parameter) b: number
+>c : (parameter) c: number
+function operands(first: boolean, second: boolean): TResult<number, string> {
+>operands : function operands(first: boolean, second: boolean): TResult<number, string>
+>first : (parameter) first: boolean
+>second : (parameter) second: boolean
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const total = (try step("a", first)) + (try step("bb", second));
+>total : const total: number
+>step : function step(label: string, ok: boolean): TResult<number, string>
+>first : (parameter) first: boolean
+>step : function step(label: string, ok: boolean): TResult<number, string>
+>second : (parameter) second: boolean
+  log.push("after");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return Result.Ok(total);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>total : const total: number
+flush("operands ok", operands(true, true));
+>flush : function flush(title: string, value: unknown): void
+>operands : function operands(first: boolean, second: boolean): TResult<number, string>
+flush("first fails", operands(false, true));
+>flush : function flush(title: string, value: unknown): void
+>operands : function operands(first: boolean, second: boolean): TResult<number, string>
+flush("second fails", operands(true, false));
+>flush : function flush(title: string, value: unknown): void
+>operands : function operands(first: boolean, second: boolean): TResult<number, string>
+function args(fail: boolean): TResult<number, string> {
+>args : function args(fail: boolean): TResult<number, string>
+>fail : (parameter) fail: boolean
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  return Result.Ok(add(try step("x", true), try step("yy", !fail), try step("zzz", true)));
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>add : function add(a: number, b: number, c: number): number
+>step : function step(label: string, ok: boolean): TResult<number, string>
+>step : function step(label: string, ok: boolean): TResult<number, string>
+>fail : (parameter) fail: boolean
+>step : function step(label: string, ok: boolean): TResult<number, string>
+flush("arguments ok", args(false));
+>flush : function flush(title: string, value: unknown): void
+>args : function args(fail: boolean): TResult<number, string>
+flush("arguments fail", args(true));
+>flush : function flush(title: string, value: unknown): void
+>args : function args(fail: boolean): TResult<number, string>
+const block = (ok: boolean) => result {
+>block : const block: (ok: boolean) => Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>ok : (parameter) ok: boolean
+  const a = try step("first", true);
+>a : const a: number
+>step : function step(label: string, ok: boolean): TResult<number, string>
+  const b = try step("second", ok);
+>b : const b: number
+>step : function step(label: string, ok: boolean): TResult<number, string>
+>ok : (parameter) ok: boolean
+  log.push("tail");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return a * b;
+>a : const a: number
+>b : const b: number
+flush("block ok", block(true));
+>flush : function flush(title: string, value: unknown): void
+>block : const block: (ok: boolean) => Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+flush("block fail", block(false));
+>flush : function flush(title: string, value: unknown): void
+>block : const block: (ok: boolean) => Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+function statement(ok: boolean): TResult<string, string> {
+>statement : function statement(ok: boolean): TResult<string, string>
+>ok : (parameter) ok: boolean
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  try step("check", ok);
+>step : function step(label: string, ok: boolean): TResult<number, string>
+>ok : (parameter) ok: boolean
+  log.push("checked");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return Result.Ok("done");
+>Ok : const Ok: <string>(value: string) => Result.TOk<string>
+flush("statement ok", statement(true));
+>flush : function flush(title: string, value: unknown): void
+>statement : function statement(ok: boolean): TResult<string, string>
+flush("statement fail", statement(false));
+>flush : function flush(title: string, value: unknown): void
+>statement : function statement(ok: boolean): TResult<string, string>
+function inner(ok: boolean): TResult<number, string> {
+>inner : function inner(ok: boolean): TResult<number, string>
+>ok : (parameter) ok: boolean
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const outcome = result {
+>outcome : const outcome: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+    const v = try step("inner", ok);
+>v : const v: number
+>step : function step(label: string, ok: boolean): TResult<number, string>
+>ok : (parameter) ok: boolean
+    return v;
+>v : const v: number
+  log.push(`outcome ${outcome.kind}`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>outcome : const outcome: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>kind : (property) kind: "Err" | "Ok"
+  const w = try outcome;
+>w : const w: number
+>outcome : const outcome: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+  log.push("unwrapped");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return Result.Ok(w);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>w : const w: number
+flush("nested scope ok", inner(true));
+>flush : function flush(title: string, value: unknown): void
+>inner : function inner(ok: boolean): TResult<number, string>
+flush("nested scope fail", inner(false));
+>flush : function flush(title: string, value: unknown): void
+>inner : function inner(ok: boolean): TResult<number, string>
+function scaled(ok: boolean): TResult<number, string> {
+>scaled : function scaled(ok: boolean): TResult<number, string>
+>ok : (parameter) ok: boolean
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  return Result.Ok(try step("scaled", ok) * 1.5);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>step : function step(label: string, ok: boolean): TResult<number, string>
+>ok : (parameter) ok: boolean
+flush("binds tightly", scaled(true));
+>flush : function flush(title: string, value: unknown): void
+>scaled : function scaled(ok: boolean): TResult<number, string>
+function asserted(): TResult<number, string> {
+>asserted : function asserted(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  return Result.Ok(try step(("asserted" as const), true));
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>step : function step(label: string, ok: boolean): TResult<number, string>
+>const : type const = "asserted"
+flush("as const in the operand", asserted());
+>flush : function flush(title: string, value: unknown): void
+>asserted : function asserted(): TResult<number, string>
+

@@ -1,0 +1,25 @@
+//// [ttxLowersConstructsInJsxChildrenAndAttributes.ttx] 23 mapping(s)
+1:30 -> 20:29 len 6  "string"
+1:30 -> 23:18 len 6  "string"
+1:46 -> 25:3 len 29  "\ndeclare const state: State;\n"
+3:1 -> 45:1 len 24  "const child = <section>{"
+3:32 -> 29:17 len 5  "state"
+4:9 -> 32:15 len 5  "value"
+4:19 -> 33:22 len 24  "<strong>{value}</strong>"
+5:12 -> 37:22 len 18  "<span>empty</span>"
+6:2 -> 45:37 len 71  "}</section>;\nconst prop = <Panel before={mark(\"b"...
+7:66 -> 49:19 len 5  "state"
+8:9 -> 52:17 len 5  "value"
+8:19 -> 53:18 len 24  "<strong>{value}</strong>"
+9:12 -> 57:18 len 4  "null"
+10:2 -> 66:2 len 62  "} after={mark(\"after\")} />;\nconst ordered = (sta"...
+11:35 -> 87:10 len 15  "<Panel before={"
+11:50 -> 69:19 len 13  "mark(\"first\")"
+11:63 -> 87:31 len 9  "} value={"
+11:79 -> 71:19 len 5  "state"
+12:9 -> 74:17 len 5  "value"
+12:19 -> 75:18 len 5  "value"
+13:12 -> 79:18 len 2  "\"\""
+14:2 -> 87:46 len 25  "} after={mark(\"last\")} />"
+14:27 -> 88:2 len 2  ";\n"
+

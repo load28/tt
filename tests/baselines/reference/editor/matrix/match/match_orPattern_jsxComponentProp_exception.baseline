@@ -1,0 +1,12 @@
+differences from match_orPattern_jsxComponentProp_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== definition /*use*/ main.ttx:6:90 ===
+  |     return <Show value={match (risky(input)) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") }} />;
+  |                                                                                          ^ /*use*/
+  tt only: main "value"
+
+=== rename /*bind*/ main.ttx:6:52 ===
+  |     return <Show value={match (risky(input)) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") }} />;
+  |                                                    ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+

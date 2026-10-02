@@ -1,0 +1,35 @@
+// @origin: tests/integration/cases_04.rs::runtime_result_exits_cross_user_breakable_statements
+// @run: runtimeResultExitsCrossUserBreakableStatements.tt
+
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+const events: string[] = [];
+const step = (ok: boolean, name: string): Res<number, string> =>
+  ok ? Res.Ok(name.length) : Res.Err(name);
+
+const fromFor = (ok: boolean) => result {
+  for (const name of ["for"]) { return try step(ok, name); }
+  events.push("for-tail");
+  return 99;
+};
+const fromWhile = (ok: boolean) => result {
+  while (true) { return try step(ok, "while"); }
+  events.push("while-tail");
+  return 99;
+};
+const fromDo = (ok: boolean) => result {
+  do { return try step(ok, "do"); } while (false);
+  events.push("do-tail");
+  return 99;
+};
+const fromSwitch = (ok: boolean) => result {
+  switch (ok) { default: return try step(ok, "switch"); }
+  events.push("switch-tail");
+  return 99;
+};
+
+for (const run of [fromFor, fromWhile, fromDo, fromSwitch]) {
+  console.log(JSON.stringify(run(true)), JSON.stringify(run(false)));
+}
+console.log(events.join(","));
+
+export {};

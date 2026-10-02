@@ -1,0 +1,2 @@
+destructuringDefault(2.5) => "2.50" | source {}; operand 2.5; positive 2.5; finally 0
+destructuringDefault(-3) => undefined | source {}; operand -3; positive undefined; finally 0

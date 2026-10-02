@@ -1,0 +1,80 @@
+=== scopedGenericCallInstantiatesBeforeArmTypeShadowing.tt ===
+variant State { Ready(value: number), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: number) => State
+>value : (property) value: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+type Item = {kind: "item"; run: (x: number) => number};
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+const trace: string[] = [];
+>trace : const trace: string[]
+function original<T extends Item>(item: T) { trace.push("original:" + item.run(3)); }
+>original : function original<T extends Item>(item: T): void
+>T : (type parameter) T extends Item in original<T extends Item>(item: T): void
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>item : (parameter) item: T
+>T : (type parameter) T extends Item in original<T extends Item>(item: T): void
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>item : (parameter) item: T
+>run : (property) run: (x: number) => number
+let consume = original;
+>consume : let consume: <T extends Item>(item: T) => void
+>original : function original<T extends Item>(item: T): void
+consume<Item>(match (State.Ready(4)) {
+>consume : let consume: <T extends Item>(item: T) => void
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Ready : (property) Ready: (value: number) => State
+  Ready(value) => {
+>value : const value: number
+    type Item = never;
+>Item : type Item = never
+    consume = () => { trace.push("replaced"); };
+>consume : let consume: <T extends Item>(item: T) => void
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+    trace.push("arm");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+    return {kind: "item", run: x => x + value};
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+  Empty => ({kind: "item", run: x => x}),
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+console.log(trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

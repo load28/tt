@@ -1,0 +1,4 @@
+orAssignment("north") => 1 | flip true; target {"value":0}; n 1
+orAssignment("south") => "kept" | flip false; target {"value":"kept"}
+orAssignment("east") => 2 | flip true; target {"value":0}; se 2
+orAssignment("up") => "kept" | flip false; target {"value":"kept"}

@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[unknown-field]: variant Shape: case `Circle` has no field `radus`
+ --> ./main.tt:5:14
+  |
+5 |       Circle(radus) => radus,
+  |              ^^^^^
+  |
+  = help: a field with a similar name exists: `radius`
+
+
+==== ttc --check-types (exit 1) ====
+error[unknown-field]: variant Shape: case `Circle` has no field `radus`
+ --> main.tt:5:14
+  |
+5 |       Circle(radus) => radus,
+  |              ^^^^^
+  |
+  = help: a field with a similar name exists: `radius`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

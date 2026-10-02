@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_05.rs::the_runtime_import_never_displaces_a_directive_or_a_shebang
+"use client";
+declare function f(n: number): number;
+declare function g(n: number): number;
+export const a = f(4) |> g |> .toFixed(1);

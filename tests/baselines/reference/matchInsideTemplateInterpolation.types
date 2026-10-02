@@ -1,0 +1,4 @@
+=== matchInsideTemplateInterpolation.tt ===
+const s = `v=${match (x) { A => 1, _ => 0 }}`;
+>s : const s: string
+

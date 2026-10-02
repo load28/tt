@@ -1,0 +1,2 @@
+methodArgument(2) => ["receiver",1,4] | receiver {"tag":"receiver"}; a 1; risky 2; double 4
+methodArgument(5) => ["receiver",1,10] | receiver {"tag":"receiver"}; a 1; risky 5; double 10

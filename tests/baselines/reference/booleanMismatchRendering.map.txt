@@ -1,0 +1,6 @@
+//// [flags.tt] 1 mapping(s)
+1:1 -> 1:1 len 112  "export const ready: boolean = true;\nexport type "...
+
+//// [booleanMismatchRendering.tt] 1 mapping(s)
+1:1 -> 1:1 len 370  "import { ready, heading } from \"./flags.tt\";\ndec"...
+

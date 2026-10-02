@@ -1,0 +1,2 @@
+catchBlock(3) => [3,4] | throw "boom"; copy 4
+catchBlock(8) => [8,9] | throw "boom"; copy 9

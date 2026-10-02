@@ -1,0 +1,212 @@
+=== literalLeftOperandNarrowing.tt ===
+variant M { A(n: number), B }
+>M : type M = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => M
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+let reads = 0;
+>reads : let reads: number
+function read(): TResult<number, string> {
+>read : function read(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  reads += 1;
+>reads : let reads: number
+  return reads % 2 === 1 ? Result.Ok(reads * 10) : Result.Err(`read ${reads} failed`);
+>reads : let reads: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>reads : let reads: number
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+>reads : let reads: number
+export function orFalse() {
+>orFalse : function orFalse(): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+  return result { const a = false || try read(); return a; };
+>a : const a: number
+>read : function read(): TResult<number, string>
+>a : const a: number
+export function andTrue(m: M) {
+>andTrue : function andTrue(m: M): string
+>m : (parameter) m: M
+>M : type M = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const b = true && match (m) { A(n) => "a", B => "b" };
+>b : const b: string
+>m : (parameter) m: M
+>n : const n: number
+  return b;
+>b : const b: string
+export function nullishNull() {
+>nullishNull : function nullishNull(): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+  return result { const c = null ?? try read(); return c; };
+>c : const c: number
+>read : function read(): TResult<number, string>
+>c : const c: number
+export function nullishUndefined() {
+>nullishUndefined : function nullishUndefined(): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+  return result { const d = undefined ?? try read(); return d; };
+>d : const d: number
+>read : function read(): TResult<number, string>
+>d : const d: number
+export function numericLiterals(m: M) {
+>numericLiterals : function numericLiterals(m: M): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: readonly [number, string];
+>   }
+>m : (parameter) m: M
+>M : type M = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+    let e = 0 || try read();
+>e : let e: number
+>read : function read(): TResult<number, string>
+    const f = 1 && match (m) { A(n) => `${n}`, B => "b" };
+>f : const f: string
+>m : (parameter) m: M
+>n : const n: number
+>n : const n: number
+    return [e, f] as const;
+>e : let e: number
+>f : const f: string
+>const : type const = readonly [number, string]
+export function parenthesized(m: M) {
+>parenthesized : function parenthesized(m: M): number
+>m : (parameter) m: M
+>M : type M = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  let h = (false) || match (m) { A(n) => n, B => 0 };
+>h : let h: number
+>m : (parameter) m: M
+>n : const n: number
+>n : const n: number
+  return h;
+>h : let h: number
+const show = (label: string, value: unknown) => console.log(`${label}: ${JSON.stringify(value)}`);
+>show : const show: (label: string, value: unknown) => void
+>label : (parameter) label: string
+>value : (parameter) value: unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>label : (parameter) label: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>value : (parameter) value: unknown
+show("orFalse", orFalse());
+>show : const show: (label: string, value: unknown) => void
+>orFalse : function orFalse(): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+show("andTrue A", andTrue(M.A(1)));
+>show : const show: (label: string, value: unknown) => void
+>andTrue : function andTrue(m: M): string
+>M : const M: {
+>       A: (n: number) => M;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => M
+show("andTrue B", andTrue(M.B));
+>show : const show: (label: string, value: unknown) => void
+>andTrue : function andTrue(m: M): string
+>M : const M: {
+>       A: (n: number) => M;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+show("nullishNull", nullishNull());
+>show : const show: (label: string, value: unknown) => void
+>nullishNull : function nullishNull(): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+show("nullishUndefined", nullishUndefined());
+>show : const show: (label: string, value: unknown) => void
+>nullishUndefined : function nullishUndefined(): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+show("numericLiterals A", numericLiterals(M.A(4)));
+>show : const show: (label: string, value: unknown) => void
+>numericLiterals : function numericLiterals(m: M): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: readonly [number, string];
+>   }
+>M : const M: {
+>       A: (n: number) => M;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => M
+show("numericLiterals B", numericLiterals(M.B));
+>show : const show: (label: string, value: unknown) => void
+>numericLiterals : function numericLiterals(m: M): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: readonly [number, string];
+>   }
+>M : const M: {
+>       A: (n: number) => M;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+show("parenthesized A", parenthesized(M.A(9)));
+>show : const show: (label: string, value: unknown) => void
+>parenthesized : function parenthesized(m: M): number
+>M : const M: {
+>       A: (n: number) => M;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => M
+show("parenthesized B", parenthesized(M.B));
+>show : const show: (label: string, value: unknown) => void
+>parenthesized : function parenthesized(m: M): number
+>M : const M: {
+>       A: (n: number) => M;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+show("reads", reads);
+>show : const show: (label: string, value: unknown) => void
+>reads : let reads: number
+

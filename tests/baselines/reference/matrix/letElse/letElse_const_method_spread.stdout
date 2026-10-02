@@ -1,0 +1,2 @@
+method(2) => 2 | read 2
+method(-1) => "diverged" | read -1

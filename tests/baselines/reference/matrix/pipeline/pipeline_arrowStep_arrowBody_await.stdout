@@ -1,0 +1,2 @@
+arrowBody(8) => 9 | await; arrow 9
+arrowBody(9) => 10 | await; arrow 10

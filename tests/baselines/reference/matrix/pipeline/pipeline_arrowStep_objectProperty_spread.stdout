@@ -1,0 +1,2 @@
+objectProperty(8) => {"a":1,"value":9,"c":3} | a 1; arrow 9; c 3
+objectProperty(9) => {"a":1,"value":10,"c":3} | a 1; arrow 10; c 3

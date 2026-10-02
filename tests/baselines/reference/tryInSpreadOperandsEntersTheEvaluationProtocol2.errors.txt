@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryInSpreadOperandsEntersTheEvaluationProtocol2.tt → $DIR/out/tryInSpreadOperandsEntersTheEvaluationProtocol2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'read'.
+ --> tryInSpreadOperandsEntersTheEvaluationProtocol2.tt:1:39
+  |
+1 | function f() { const value = [ ...try read() ]; }
+  |                                       ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryInSpreadOperandsEntersTheEvaluationProtocol2.ts(2,16): error TS2304: Cannot find name 'read'.

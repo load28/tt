@@ -1,0 +1,14 @@
+=== aValMutationCoversTheBinding.tt ===
+function f() {
+>f : function f(): void
+  val const cfg = { a: 1 };
+>cfg : const cfg: {
+>       a: number;
+>   }
+>a : (property) a: number
+  cfg.a = 2;
+>cfg : const cfg: {
+>       a: number;
+>   }
+>a : (property) a: number
+

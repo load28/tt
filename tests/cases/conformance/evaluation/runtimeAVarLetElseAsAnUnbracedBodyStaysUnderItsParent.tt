@@ -1,0 +1,29 @@
+// @origin: tests/integration/cases_05.rs::runtime_a_var_let_else_as_an_unbraced_body_stays_under_its_parent
+// @run: runtimeAVarLetElseAsAnUnbracedBodyStaysUnderItsParent.tt
+
+variant O { Some(value: number), None }
+function h(c: boolean, o: O): number | undefined {
+  const read = () => hv;
+  if (c) var Some(value: hv) = o else { return 0; };
+  return read();
+}
+function w(xs: O[]): number {
+  const read = () => wv;
+  let i = 0;
+  while (i < xs.length) var Some(value: wv) = xs[i++] else { break; };
+  return read() ?? -1;
+}
+function e(c: boolean, o: O): number | undefined {
+  if (c) return -3; else var Some(value: ev) = o else { return 0; };
+  return ev;
+}
+function l(o: O): number {
+  lbl: var Some(value: lv) = o else { return -2; };
+  return lv + 1;
+}
+console.log(h(true, O.Some(5)), h(true, O.None), h(false, O.Some(5)));
+console.log(w([O.Some(1), O.Some(2), O.None, O.Some(9)]), w([]));
+console.log(e(true, O.None), e(false, O.Some(4)), e(false, O.None));
+console.log(l(O.Some(1)), l(O.None));
+
+export {};

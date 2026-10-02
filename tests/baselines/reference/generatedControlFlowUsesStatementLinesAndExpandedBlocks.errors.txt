@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./generatedControlFlowUsesStatementLinesAndExpandedBlocks.tt → $DIR/out/generatedControlFlowUsesStatementLinesAndExpandedBlocks.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'Result'.
+ --> generatedControlFlowUsesStatementLinesAndExpandedBlocks.tt:2:19
+  |
+2 | function f(e: E): Result<number, string> {
+  |                   ^^^^^^
+error[ts2304]: Cannot find name 'read'.
+ --> generatedControlFlowUsesStatementLinesAndExpandedBlocks.tt:3:21
+  |
+3 |   const value = try read();
+  |                     ^^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> generatedControlFlowUsesStatementLinesAndExpandedBlocks.tt:5:10
+  |
+5 |   return Result.Ok(value + matched);
+  |          ^^^^^^
+error[ts2304]: Cannot find name 'read'.
+  --> generatedControlFlowUsesStatementLinesAndExpandedBlocks.tt:23:14
+   |
+23 |   return try read();
+   |              ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+generatedControlFlowUsesStatementLinesAndExpandedBlocks.ts(26,19): error TS2304: Cannot find name 'Result'.
+generatedControlFlowUsesStatementLinesAndExpandedBlocks.ts(27,18): error TS2304: Cannot find name 'read'.
+generatedControlFlowUsesStatementLinesAndExpandedBlocks.ts(51,10): error TS2304: Cannot find name 'Result'.
+generatedControlFlowUsesStatementLinesAndExpandedBlocks.ts(84,18): error TS2304: Cannot find name 'read'.

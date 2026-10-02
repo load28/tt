@@ -1,0 +1,2 @@
+conditionalTest(7) => "truthy" | operand 7; then "truthy"
+conditionalTest(1) => "truthy" | operand 1; then "truthy"

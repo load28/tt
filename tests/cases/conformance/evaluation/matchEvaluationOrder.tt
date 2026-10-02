@@ -1,0 +1,50 @@
+// A match evaluates its scrutinee once, tests guards in arm order, runs one
+// arm, and keeps its place in the evaluation order of the expression around it.
+// @run: matchEvaluationOrder.tt
+variant Shape { Circle(r: number), Rect(w: number, h: number), Point }
+const log: string[] = [];
+function note<T>(label: string, value: T): T {
+  log.push(label);
+  return value;
+}
+function flush(title: string, value: unknown) {
+  console.log(`${title}: ${JSON.stringify(value)} after ${log.join(", ")}`);
+  log.length = 0;
+}
+const shapes = [Shape.Circle(1), Shape.Circle(2), Shape.Rect(3, 2), Shape.Rect(1, 4), Shape.Point];
+for (const shape of shapes) {
+  const value = match (note("scrutinee", shape)) {
+    Circle(r) if note("guard r > 1", r > 1) => note("big circle", r),
+    Circle(r) => note("circle", r * 10),
+    Rect(w, h) if note("guard w > h", w > h) => note("wide rect", w),
+    Rect(w, h) => note("rect", w * h),
+    Point => note("point", 0),
+  };
+  flush(JSON.stringify(shape), value);
+}
+function triple(a: number, b: number, c: number) {
+  return [a, b, c];
+}
+flush(
+  "arguments",
+  triple(note("argument 0", 1), match (note("argument 1 scrutinee", shapes[2])) { Rect(w) => note("argument 1 arm", w), _ => 0 }, note("argument 2", 3)),
+);
+flush(
+  "operands",
+  note("left", 1) + match (note("right scrutinee", shapes[1])) { Circle(r) => note("right arm", r), _ => 0 } * note("factor", 10),
+);
+const box = { v: 1 };
+function target() {
+  log.push("target");
+  return box;
+}
+target().v += match (note("assigned scrutinee", shapes[4])) { Point => note("assigned arm", (box.v = 100, 5)), _ => 0 };
+flush("compound assignment", box.v);
+const nested = match (match (note("inner scrutinee", shapes[3])) { Rect(w, h) => note("inner arm", w < h), _ => false }) {
+  true => note("outer true", "tall"),
+  false => note("outer false", "flat"),
+};
+flush("nested", nested);
+const text = `${note("before", "<")}${match (note("template scrutinee", shapes[0])) { Circle(r) => note("template arm", r), _ => 0 }}${note("after", ">")}`;
+flush("template", text);
+export {};

@@ -229,6 +229,35 @@ class Router {
 }
 
 #[test]
+fn method_named_match_whose_statements_read_as_a_guarded_arm() {
+    assert_passthrough(
+        r#"
+declare function A(n: unknown): void;
+declare function g(): void;
+class C {
+  match(n: number) {
+    A(n)
+    if (n > 0) g()
+  }
+}
+class D {
+  match(n: number) {
+    A(n), A(n)
+    if (n > 0) g()
+  }
+}
+const o = {
+  match(n: number) {
+    A(n)
+    if (n > 0)
+      (g)()
+  },
+};
+"#,
+    );
+}
+
+#[test]
 fn object_method_named_match() {
     assert_passthrough(
         r#"
@@ -629,6 +658,23 @@ fn call_named_match_followed_by_a_block() {
 }
 
 #[test]
+fn call_named_match_followed_by_a_block_of_any_content() {
+    // A line break before the `{` ends the call statement, whatever the
+    // block holds — arrows included, which read like arms.
+    let prelude = "declare function match(x: unknown): void;\ndeclare const x: unknown;\n";
+    for rest in [
+        "match(x)\n{ _ => 1 }\n",
+        "match(x)\n{ (_: unknown) => 1 }\n",
+        "match (x)\n{ A => 1, B => 2 }\n",
+        "match(x) /* a\n */ { _ => 1 }\n",
+        "const v = match(x)\n{ _ => 1 };\n",
+        "function f() {\n  return match(x)\n  { _ => 1 }\n}\n",
+    ] {
+        assert_passthrough(&format!("{prelude}{rest}"));
+    }
+}
+
+#[test]
 fn object_literal_with_numeric_and_string_keys() {
     assert_passthrough("const table = { 200: \"ok\", \"404\": \"missing\", true: 1 };\n");
 }
@@ -902,5 +948,29 @@ fn a_line_after_an_import_type_is_not_its_type_arguments() {
         "let x: import(\"x\").A<any>;\n",
     ] {
         assert_tsx_passthrough(source);
+    }
+}
+
+#[test]
+fn a_using_declaration_in_a_for_statement_and_a_function_as_an_if_clause() {
+    for source in [
+        "declare function res(): { [Symbol.dispose](): void };\nexport function f() {\n  for (using q = res(); ; ) { break; }\n  for (using q = res(), p = res(); q; ) { break; }\n}\n",
+        "declare function res(): { [Symbol.asyncDispose](): Promise<void> };\nexport async function f() {\n  for (await using q = res(); ;) { break; }\n}\n",
+        "if (Math.random()) function f() {}\nif (Math.random()) {} else function g() {}\n",
+    ] {
+        assert_passthrough(source);
+    }
+}
+
+#[test]
+fn rules_typescript_checks_after_parsing_are_left_to_typescript() {
+    for source in [
+        "function f(await: number) { return await; }\nasync function await(): Promise<void> {}\n",
+        "declare namespace N { var static: number; }\nexport {};\n",
+        "declare function eval(): void;\nexport {};\n",
+        "export class C { m(public x: number) {} }\n",
+        "export function g(a?: number = 1) { return a; }\n",
+    ] {
+        assert_passthrough(source);
     }
 }

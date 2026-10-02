@@ -1,0 +1,37 @@
+// A class static block is its own function-like boundary: its statements
+// cannot `return` (ECMA-262 ClassStaticBlockStatementList is parsed with
+// [~Return]), so a `try` statement there has no failure edge even when the
+// class is written inside a function. A method, an accessor, and an arrow in
+// a field initializer are functions of their own and keep theirs.
+// @expectErrors: try-placement
+// @baselines: errors.txt
+import type { TResult } from "@tt/std";
+declare function read(n: number): TResult<number, string>;
+export function declared(): TResult<number, string> {
+  class Holder {
+    static {
+      const v = try read(1);
+    }
+    method(): TResult<number, string> {
+      const m = try read(2);
+      return { kind: "Ok", value: m };
+    }
+    get value(): TResult<number, string> {
+      const g = try read(3);
+      return { kind: "Ok", value: g };
+    }
+    field = (): TResult<number, string> => {
+      const f = try read(4);
+      return { kind: "Ok", value: f };
+    };
+  }
+  return { kind: "Ok", value: new Holder().method().kind.length };
+}
+export function expression(): TResult<number, string> {
+  const Holder = class {
+    static {
+      try read(5);
+    }
+  };
+  return { kind: "Ok", value: Holder.name.length };
+}

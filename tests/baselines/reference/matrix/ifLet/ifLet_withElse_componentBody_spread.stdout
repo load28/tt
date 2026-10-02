@@ -1,0 +1,2 @@
+componentBody(3) => "<p>3</p>" | read 3; then 3
+componentBody(-3) => "<p>\"missing\"</p>" | read -3; else "missing"

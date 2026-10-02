@@ -249,7 +249,13 @@ impl Machine<'_> {
 
     pub(super) fn expr(&mut self, mut e: Expr, tok: &Tok<'_>) -> Out {
         match e.state {
-            State::Operand | State::ArrowBody => self.expr_operand(e, tok),
+            State::Operand | State::ArrowBody => {
+                let out = self.expr_operand(e, tok);
+                if matches!(out, Out::Consumed) && tok.kind != Tk::Arrow {
+                    self.mark(TokenFacts::OPERAND_START);
+                }
+                out
+            }
             State::After(after) => self.expr_after(e, after, tok),
             State::Name => match tok.kind {
                 Tk::Word => {

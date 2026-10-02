@@ -1,0 +1,12 @@
+differences from ifLet_orPattern_componentBody_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== definition /*use*/ main.ttx:8:87 ===
+  |     if let Num(value) | Neg(value) = box(input)?.inner.value! { seen = note("number", value); }
+  |                                                                                       ^ /*use*/
+  tt only: main "value"
+
+=== rename /*bind*/ main.ttx:8:16 ===
+  |     if let Num(value) | Neg(value) = box(input)?.inner.value! { seen = note("number", value); }
+  |                ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+

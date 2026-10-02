@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_09.rs::a_witness_names_the_value_that_is_missing
+variant Inner { Yes(n: number), No }
+variant Outer { Wrap(inner: Inner), Bare }
+const a = match (o) { Wrap(inner: Yes(n)) => n, Bare => -1 };

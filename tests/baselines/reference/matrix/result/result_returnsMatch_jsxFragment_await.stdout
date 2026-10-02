@@ -1,0 +1,3 @@
+jsxFragment(2) => "<>[{'kind':'Ok','value':'two'}]</>" | before "["; await; read 2; after "]"
+jsxFragment(7) => "<>[{'kind':'Ok','value':'other'}]</>" | before "["; await; read 7; after "]"
+jsxFragment(-1) => "<>[{'kind':'Err','error':'negative -1'}]</>" | before "["; await; read -1; after "]"

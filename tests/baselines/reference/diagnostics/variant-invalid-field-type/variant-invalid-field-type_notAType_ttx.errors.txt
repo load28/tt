@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[variant-invalid-field-type]: variant Shape: invalid type for field `r`: Expected ';', got '='
+ --> ./main.ttx:1:34
+  |
+1 | export variant Shape { Circle(r: number =) }
+  |                                  ^^^^^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[variant-invalid-field-type]: variant Shape: invalid type for field `r`: Expected ';', got '='
+ --> main.ttx:1:34
+  |
+1 | export variant Shape { Circle(r: number =) }
+  |                                  ^^^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

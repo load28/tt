@@ -1,0 +1,25 @@
+//// [runtimeAnIfLetAsAnUnbracedBodyKeepsItsParentAndItsElse.tt] 23 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:25 -> 3:28 len 6  "number"
+2:25 -> 6:17 len 6  "number"
+2:40 -> 8:3 len 66  "\nfunction f(xs: O[]): number {\n  let t = 0;\n  fo"...
+5:35 -> 14:15 len 5  "value"
+5:44 -> 12:20 len 1  "x"
+5:48 -> 15:7 len 11  "t += value;"
+5:69 -> 17:7 len 6  "break;"
+5:77 -> 19:4 len 63  "\n  return t;\n}\nfunction g(c: boolean, x: O): num"...
+9:22 -> 26:15 len 5  "value"
+9:31 -> 24:20 len 1  "x"
+9:35 -> 27:7 len 13  "return value;"
+9:58 -> 29:7 len 9  "return 2;"
+9:69 -> 31:4 len 72  "\n  else { return 3; }\n}\nfunction h(c: boolean, x"...
+13:22 -> 38:15 len 5  "value"
+13:31 -> 36:20 len 1  "x"
+13:35 -> 39:7 len 13  "return value;"
+14:10 -> 41:7 len 9  "return 3;"
+14:21 -> 43:4 len 87  "\n  return 4;\n}\nfunction k(xs: O[]): number {\n  l"...
+19:42 -> 51:15 len 5  "value"
+19:51 -> 49:20 len 1  "x"
+19:55 -> 52:7 len 42  "if (value > 5) continue outer; t += value;"
+19:99 -> 54:4 len 273  "\n  return t;\n}\nconsole.log(f([O.Some(1), O.Some("...
+

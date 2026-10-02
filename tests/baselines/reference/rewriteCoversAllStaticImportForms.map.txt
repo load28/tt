@@ -1,0 +1,3 @@
+//// [rewriteCoversAllStaticImportForms.tt] 1 mapping(s)
+1:1 -> 1:1 len 279  "\nimport def from \"./a.tt\";\nimport def2, { named "...
+

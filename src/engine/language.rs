@@ -19,7 +19,9 @@
 //! infallible), because the moment completion matters most is the moment
 //! the buffer does not compile.
 
+mod keyword_filter;
 mod project;
+mod scope;
 mod service;
 
 #[cfg(test)]
@@ -29,6 +31,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use super::documents::Texts;
 use super::project::Project;
 use super::projection::{self, module_path_of};
 use crate::EmitMapping;
@@ -85,14 +88,145 @@ pub struct HoverInfo {
     pub range: Range,
 }
 
+/// What kind of thing a completion entry offers: LSP 3.17's
+/// `CompletionItemKind`, whose values the service answers with and an
+/// editor shows as an icon.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompletionItemKind {
+    /// `Text` (1).
+    Text,
+    /// `Method` (2).
+    Method,
+    /// `Function` (3).
+    Function,
+    /// `Constructor` (4).
+    Constructor,
+    /// `Field` (5).
+    Field,
+    /// `Variable` (6).
+    Variable,
+    /// `Class` (7).
+    Class,
+    /// `Interface` (8).
+    Interface,
+    /// `Module` (9).
+    Module,
+    /// `Property` (10).
+    Property,
+    /// `Unit` (11).
+    Unit,
+    /// `Value` (12).
+    Value,
+    /// `Enum` (13).
+    Enum,
+    /// `Keyword` (14).
+    Keyword,
+    /// `Snippet` (15).
+    Snippet,
+    /// `Color` (16).
+    Color,
+    /// `File` (17).
+    File,
+    /// `Reference` (18).
+    Reference,
+    /// `Folder` (19).
+    Folder,
+    /// `EnumMember` (20).
+    EnumMember,
+    /// `Constant` (21).
+    Constant,
+    /// `Struct` (22).
+    Struct,
+    /// `Event` (23).
+    Event,
+    /// `Operator` (24).
+    Operator,
+    /// `TypeParameter` (25).
+    TypeParameter,
+}
+
+impl CompletionItemKind {
+    const ALL: [CompletionItemKind; 25] = [
+        CompletionItemKind::Text,
+        CompletionItemKind::Method,
+        CompletionItemKind::Function,
+        CompletionItemKind::Constructor,
+        CompletionItemKind::Field,
+        CompletionItemKind::Variable,
+        CompletionItemKind::Class,
+        CompletionItemKind::Interface,
+        CompletionItemKind::Module,
+        CompletionItemKind::Property,
+        CompletionItemKind::Unit,
+        CompletionItemKind::Value,
+        CompletionItemKind::Enum,
+        CompletionItemKind::Keyword,
+        CompletionItemKind::Snippet,
+        CompletionItemKind::Color,
+        CompletionItemKind::File,
+        CompletionItemKind::Reference,
+        CompletionItemKind::Folder,
+        CompletionItemKind::EnumMember,
+        CompletionItemKind::Constant,
+        CompletionItemKind::Struct,
+        CompletionItemKind::Event,
+        CompletionItemKind::Operator,
+        CompletionItemKind::TypeParameter,
+    ];
+
+    /// The kind an LSP `CompletionItemKind` value names, `None` for a value
+    /// LSP 3.17 does not define.
+    pub fn from_lsp(value: u64) -> Option<CompletionItemKind> {
+        let index = usize::try_from(value).ok()?.checked_sub(1)?;
+        CompletionItemKind::ALL.get(index).copied()
+    }
+
+    /// The kind's LSP `CompletionItemKind` value.
+    pub fn lsp(self) -> u8 {
+        CompletionItemKind::ALL
+            .iter()
+            .position(|kind| *kind == self)
+            .map_or(1, |index| index as u8 + 1)
+    }
+}
+
+/// Extra information about how a completion entry is rendered: LSP 3.17's
+/// `CompletionItemTag`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum CompletionItemTag {
+    /// `Deprecated` (1): the entry is shown struck through.
+    Deprecated,
+}
+
+impl CompletionItemTag {
+    /// The tag an LSP `CompletionItemTag` value names, `None` for a value
+    /// LSP 3.17 does not define.
+    pub fn from_lsp(value: u64) -> Option<CompletionItemTag> {
+        match value {
+            1 => Some(CompletionItemTag::Deprecated),
+            _ => None,
+        }
+    }
+
+    /// The tag's LSP `CompletionItemTag` value.
+    pub fn lsp(self) -> u8 {
+        match self {
+            CompletionItemTag::Deprecated => 1,
+        }
+    }
+}
+
 /// One completion entry, in the raw terms the adapter ranks and renders.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompletionItem {
     /// The name offered.
     pub label: String,
-    /// The service's element kind, normalized to the same strings the
-    /// editor has always mapped ("function", "method", "property", ...).
-    pub kind: String,
+    /// What the entry offers, as the service classified it; `None` when it
+    /// did not say.
+    pub kind: Option<CompletionItemKind>,
+    /// How the service says to render the entry: `Deprecated` for a
+    /// declaration marked `@deprecated`.
+    pub tags: Vec<CompletionItemTag>,
     /// The service's own sort text (the adapter adds its layer prefix).
     pub sort_text: String,
     /// Insertion text, independent of the decorated display label.
@@ -101,6 +235,24 @@ pub struct CompletionItem {
     pub filter_text: Option<String>,
     /// Whether insertion text uses snippet syntax.
     pub snippet: bool,
+    /// The source range the entry replaces, when it is not the word at the
+    /// position.
+    pub range: Option<Range>,
+    /// What the service shows right after the label (LSP 3.17
+    /// `CompletionItemLabelDetails.detail`).
+    pub label_detail: Option<String>,
+    /// What the service shows after that, the module an auto-import entry
+    /// imports from (`CompletionItemLabelDetails.description`).
+    pub description: Option<String>,
+    /// What the service shows beside the entry before it is resolved (LSP
+    /// 3.17 `CompletionItem.detail`): a path entry's file name.
+    pub detail: Option<String>,
+    /// Where the service says the entry comes from (TypeScript's
+    /// `CompletionEntry.source`: the module an auto-import entry imports
+    /// from, or the kind of snippet it is). With the label it identifies
+    /// the entry, as TypeScript identifies one to resolve: two exports of
+    /// one name from different modules are two entries.
+    pub source: Option<String>,
 }
 
 /// A completion answer.
@@ -125,6 +277,37 @@ pub struct CompletionDetail {
     pub signature: String,
     /// The entry's JSDoc, empty when it has none.
     pub documentation: String,
+    /// Edits elsewhere in the file that accepting the entry makes — the
+    /// import an auto-import completion adds. Empty when there are none,
+    /// and when any of them lands where the source has no counterpart: an
+    /// entry is accepted whole or offers no edits at all.
+    pub additional_edits: Vec<TextEdit>,
+}
+
+/// One entry of a file's outline, in its own source coordinates.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DocumentSymbol {
+    /// The declared name.
+    pub name: String,
+    /// What the service adds after the name, empty when nothing.
+    pub detail: String,
+    /// The LSP `SymbolKind` number the service gave it.
+    pub kind: u32,
+    /// The whole declaration.
+    pub range: Range,
+    /// The name, inside `range`.
+    pub selection_range: Range,
+    /// The declarations it contains.
+    pub children: Vec<DocumentSymbol>,
+}
+
+/// A replacement of one range of a source file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextEdit {
+    /// The range replaced, in the source.
+    pub range: Range,
+    /// What is written there.
+    pub new_text: String,
 }
 
 /// One edit of a rename, in the target file's own coordinates.
@@ -138,6 +321,16 @@ pub struct RenameEdit {
     /// dropping that expansion would silently rebind a different field.
     /// `None` means the bare new name.
     pub new_text: Option<String>,
+}
+
+/// What a rename at a position would replace, or why it is refused.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PrepareRename {
+    /// The range of the name the rename replaces there.
+    Range(Range),
+    /// The rename cannot be done whole there, with TypeScript's reason
+    /// when it gave one.
+    Refused(Option<String>),
 }
 
 /// The name a rename asks the service for, so every edit's text can be read
@@ -175,6 +368,31 @@ pub struct SignatureHelp {
     pub active_parameter: u32,
 }
 
+/// What asked for signature help (LSP 3.17 `SignatureHelpContext`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SignatureTrigger {
+    /// Invoked by the user (`SignatureHelpTriggerKind.Invoked`).
+    Invoked,
+    /// Typing this character (`SignatureHelpTriggerKind.TriggerCharacter`).
+    Character(String),
+    /// The cursor moved or the document changed while help was shown
+    /// (`SignatureHelpTriggerKind.ContentChange`).
+    ContentChange,
+}
+
+/// One classified token of a file, in its own source coordinates (never
+/// spans lines). The type and modifiers are LSP 3.17 names
+/// (`SemanticTokenTypes`, `SemanticTokenModifiers`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClassifiedToken {
+    /// Where, in the source.
+    pub range: Range,
+    /// The token type.
+    pub token_type: String,
+    /// The token modifiers.
+    pub modifiers: Vec<String>,
+}
+
 /// One TypeScript diagnostic, mapped onto the `.tt` source.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceDiagnostic {
@@ -184,12 +402,62 @@ pub struct ServiceDiagnostic {
     pub message: String,
     /// TypeScript's error number, 0 when it had none.
     pub code: u32,
-    /// True for a warning; everything else reported here is an error.
-    pub warning: bool,
+    /// How TypeScript ranked it.
+    pub severity: ServiceSeverity,
+    /// What the editor should show about the range besides a squiggle:
+    /// TypeScript's unused and deprecated suggestions carry these.
+    pub tags: Vec<ServiceTag>,
     /// Secondary places this diagnostic points at, each with its own words
     /// — served to the editor as LSP related information. Empty when the
     /// diagnostic has only its primary range.
     pub related: Vec<ServiceRelated>,
+}
+
+/// The LSP severity of a [`ServiceDiagnostic`] (3.17, `DiagnosticSeverity`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceSeverity {
+    /// A type error.
+    Error,
+    /// A warning.
+    Warning,
+    /// An informational message.
+    Information,
+    /// A suggestion — never a build failure; the editor fades or strikes
+    /// the range through by its [`ServiceTag`]s.
+    Hint,
+}
+
+impl ServiceSeverity {
+    /// The severity an LSP `DiagnosticSeverity` number names; an absent or
+    /// unknown one is an error, as LSP defines the default.
+    pub fn from_lsp(value: Option<u64>) -> ServiceSeverity {
+        match value {
+            Some(2) => ServiceSeverity::Warning,
+            Some(3) => ServiceSeverity::Information,
+            Some(4) => ServiceSeverity::Hint,
+            _ => ServiceSeverity::Error,
+        }
+    }
+}
+
+/// An LSP `DiagnosticTag` (3.15).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ServiceTag {
+    /// Unused or unnecessary code; the editor fades it.
+    Unnecessary,
+    /// Deprecated code; the editor strikes it through.
+    Deprecated,
+}
+
+impl ServiceTag {
+    /// The tag an LSP `DiagnosticTag` number names.
+    pub fn from_lsp(value: u64) -> Option<ServiceTag> {
+        match value {
+            1 => Some(ServiceTag::Unnecessary),
+            2 => Some(ServiceTag::Deprecated),
+            _ => None,
+        }
+    }
 }
 
 /// One secondary span of a [`ServiceDiagnostic`].
@@ -218,13 +486,15 @@ pub(crate) struct ServiceSession {
     docs: HashMap<PathBuf, Arc<ServiceDoc>>,
     /// The raw items of the last completion answer, so one can be resolved
     /// later: the server resolves the item it produced, not a name. Keyed
-    /// by (file, asked offset, label).
-    last_completion: HashMap<(PathBuf, usize, String), serde_json::Value>,
+    /// by (file, asked offset, label, source), the entry's identity.
+    last_completion: HashMap<CompletionKey, serde_json::Value>,
     /// The probe the last completion list was answered from, kept so
     /// resolving one of its items can install it again.
     last_probe: Option<ProbeDoc>,
     probe_count: u64,
 }
+
+type CompletionKey = (PathBuf, usize, String, Option<String>);
 
 /// One file's language-service projection: the source as it stands (open
 /// buffer or disk), the TypeScript it emits, and the byte mappings between
@@ -240,6 +510,10 @@ pub(crate) struct ServiceDoc {
     anchors: Vec<crate::EmitAnchor>,
     declared_names: Vec<crate::DeclaredName>,
     shared_bindings: Vec<crate::SharedBinding>,
+    destructured_lists: Vec<crate::DestructuredList>,
+    /// What TypeScript's completion rules say at each construct's place
+    /// in the source, which lowering moves its code away from.
+    completion_scopes: Vec<crate::program_syntax::CompletionScope>,
     /// Parser-owned error ranges replaced only in this service projection.
     /// TypeScript diagnostics intersecting one are recovery cascades.
     recovered: Vec<(usize, usize)>,
@@ -248,6 +522,13 @@ pub(crate) struct ServiceDoc {
     /// a provisional consequence.
     tt_diagnostics: Vec<crate::Diagnostic>,
     generated_names: HashSet<String>,
+    /// Glue written at a source point, for edits that land in it.
+    inserted: Vec<crate::InsertedGlue>,
+    /// Whether what TypeScript says about `code` is what it says about the
+    /// user's code: every byte of it is TypeScript the user wrote, glue of
+    /// a claimed construct, or a placeholder in `recovered`, so no tt text
+    /// stands in it as written. Its syntax errors are then the user's own.
+    faithful: bool,
 }
 
 /// A compiled completion probe: the buffer with `$tt_probe` spliced in at
@@ -256,16 +537,58 @@ pub(crate) struct ServiceDoc {
 struct ProbeDoc {
     path: PathBuf,
     code: String,
+    /// How the spliced source maps onto `code`.
+    mappings: Vec<EmitMapping>,
+    /// The source the probe was built from, without the placeholder.
+    source: String,
+    /// The byte offset in `source` the placeholder was spliced in at.
+    splice: usize,
     /// UTF-16 offset of the placeholder in `code` — where the service is
     /// asked.
     offset: usize,
     version: u64,
     generated_names: HashSet<String>,
+    inserted: Vec<crate::InsertedGlue>,
+}
+
+#[derive(Clone, Copy)]
+pub(super) struct ServedText<'a> {
+    code: &'a str,
+    mappings: &'a [EmitMapping],
+    inserted: &'a [crate::InsertedGlue],
+    source: &'a str,
+    splice: Option<usize>,
+}
+
+impl ServiceDoc {
+    fn served(&self) -> ServedText<'_> {
+        ServedText {
+            code: &self.code,
+            mappings: &self.mappings,
+            inserted: &self.inserted,
+            source: &self.source,
+            splice: None,
+        }
+    }
+}
+
+impl ProbeDoc {
+    fn served(&self) -> ServedText<'_> {
+        ServedText {
+            code: &self.code,
+            mappings: &self.mappings,
+            inserted: &self.inserted,
+            source: &self.source,
+            splice: Some(self.splice),
+        }
+    }
 }
 
 /// Inserted at the cursor to complete the construct being typed. `$`-led so
 /// it cannot collide with the name the user is in the middle of typing.
-const PROBE_NAME: &str = "$tt_probe";
+pub(super) const PROBE_NAME: &str = "$tt_probe";
+
+const WILDCARD_ARM: &str = "_ =>";
 
 use service::*;
 pub(super) use service::{

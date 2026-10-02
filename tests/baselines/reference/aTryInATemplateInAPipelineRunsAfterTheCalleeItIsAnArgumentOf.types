@@ -1,0 +1,189 @@
+=== aTryInATemplateInAPipelineRunsAfterTheCalleeItIsAnArgumentOf.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+type S = { kind: "Ok"; value: string } | { kind: "Err"; error: string };
+>S : type S = {
+>       kind: "Ok";
+>       value: string;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: string
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const order: string[] = [];
+>order : const order: string[]
+const wrap = (value: number) => { order.push("call"); return `<${value}>`; };
+>wrap : const wrap: (value: number) => string
+>value : (parameter) value: number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: number
+const callee = () => { order.push("callee"); return wrap; };
+>callee : const callee: () => (value: number) => string
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>wrap : const wrap: (value: number) => string
+const suffix = (tail: string) => { order.push("step"); return (value: string) => { order.push("apply"); return value + tail; }; };
+>suffix : const suffix: (tail: string) => (value: string) => string
+>tail : (parameter) tail: string
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: string
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: string
+>tail : (parameter) tail: string
+const okay = (name: string, value: number): R => { order.push(name); return { kind: "Ok", value }; };
+>okay : const okay: (name: string, value: number) => R
+>name : (parameter) name: string
+>value : (parameter) value: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+const fail = (name: string): R => { order.push(name); return { kind: "Err", error: name }; };
+>fail : const fail: (name: string) => R
+>name : (parameter) name: string
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>kind : (property) kind: "Err"
+>error : (property) error: string
+>name : (parameter) name: string
+const report = (value: S) => { console.log(order.join(","), value.kind === "Ok" ? value.value : value.error); order.length = 0; };
+>report : const report: (value: S) => void
+>value : (parameter) value: S
+>S : type S = {
+>       kind: "Ok";
+>       value: string;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>order : const order: string[]
+>join : (method) Array<string>.join(separator?: string): string
+>value : (parameter) value: S
+>kind : (property) kind: "Err" | "Ok"
+>value : (parameter) value: {
+>       kind: "Ok";
+>       value: string;
+>   }
+>value : (property) value: string
+>value : (parameter) value: {
+>       kind: "Err";
+>       error: string;
+>   }
+>error : (property) error: string
+>order : const order: string[]
+>length : (property) Array<string>.length: number
+function head(ok: boolean): S {
+>head : function head(ok: boolean): S
+>ok : (parameter) ok: boolean
+>S : type S = {
+>       kind: "Ok";
+>       value: string;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const value = `${callee()(try (ok ? okay("try", 1) : fail("err")))}!` |> String;
+>value : const value: string
+>callee : const callee: () => (value: number) => string
+>ok : (parameter) ok: boolean
+>okay : const okay: (name: string, value: number) => R
+>fail : const fail: (name: string) => R
+>String : var String: (value?: any) => string
+  return { kind: "Ok", value };
+>kind : (property) kind: "Ok"
+>value : (property) value: string
+function step(ok: boolean): S {
+>step : function step(ok: boolean): S
+>ok : (parameter) ok: boolean
+>S : type S = {
+>       kind: "Ok";
+>       value: string;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const value = "v" |> suffix(`${callee()(try (ok ? okay("try", 2) : fail("err")))}`);
+>value : const value: string
+>suffix : const suffix: (tail: string) => (value: string) => string
+>callee : const callee: () => (value: number) => string
+>ok : (parameter) ok: boolean
+>okay : const okay: (name: string, value: number) => R
+>fail : const fail: (name: string) => R
+  return { kind: "Ok", value };
+>kind : (property) kind: "Ok"
+>value : (property) value: string
+function nested(ok: boolean): S {
+>nested : function nested(ok: boolean): S
+>ok : (parameter) ok: boolean
+>S : type S = {
+>       kind: "Ok";
+>       value: string;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const value = callee()(`${callee()(try (ok ? okay("try", 3) : fail("err")))}`.length) |> String;
+>value : const value: string
+>callee : const callee: () => (value: number) => string
+>callee : const callee: () => (value: number) => string
+>ok : (parameter) ok: boolean
+>okay : const okay: (name: string, value: number) => R
+>fail : const fail: (name: string) => R
+>length : (property) String.length: number
+>String : var String: (value?: any) => string
+  return { kind: "Ok", value };
+>kind : (property) kind: "Ok"
+>value : (property) value: string
+report(head(true));
+>report : const report: (value: S) => void
+>head : function head(ok: boolean): S
+report(head(false));
+>report : const report: (value: S) => void
+>head : function head(ok: boolean): S
+report(step(true));
+>report : const report: (value: S) => void
+>step : function step(ok: boolean): S
+report(step(false));
+>report : const report: (value: S) => void
+>step : function step(ok: boolean): S
+report(nested(true));
+>report : const report: (value: S) => void
+>nested : function nested(ok: boolean): S
+report(nested(false));
+>report : const report: (value: S) => void
+>nested : function nested(ok: boolean): S
+

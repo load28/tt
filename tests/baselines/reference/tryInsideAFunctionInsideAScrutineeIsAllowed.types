@@ -1,0 +1,9 @@
+=== tryInsideAFunctionInsideAScrutineeIsAllowed.tt ===
+const x = match (run(() => { try g(); return h(); })) {
+>x : const x: any
+  Ok(value) => value,
+>value : const value: any
+>value : const value: any
+  Err(error) => 0,
+>error : const error: any
+

@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[result-continue-crossing]: `continue` cannot leave a `result` block
+ --> ./main.tt:6:18
+  |
+6 |       if (v > 9) continue;
+  |                  ^^^^^^^^
+  |
+  = help: continue only a loop written inside this `result` block
+
+
+==== ttc --check-types (exit 1) ====
+error[result-continue-crossing]: `continue` cannot leave a `result` block
+ --> main.tt:6:18
+  |
+6 |       if (v > 9) continue;
+  |                  ^^^^^^^^
+  |
+  = help: continue only a loop written inside this `result` block
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

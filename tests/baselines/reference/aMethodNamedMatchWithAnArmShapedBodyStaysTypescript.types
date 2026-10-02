@@ -1,0 +1,12 @@
+=== aMethodNamedMatchWithAnArmShapedBodyStaysTypescript.tt ===
+class C {
+>C : class C
+  match(x: number) { x }
+>match : (method) C.match(x: number): void
+>x : (parameter) x: number
+>x : (parameter) x: number
+  other(y: boolean) { if (y) return 1; }
+>other : (method) C.other(y: boolean): 1 | undefined
+>y : (parameter) y: boolean
+>y : (parameter) y: boolean
+

@@ -1,0 +1,17 @@
+// @origin: tests/integration/cases_04.rs::result_block_missing_an_error_type_is_a_type_error
+
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+variant UserError { NoUser() }
+variant CompanyError { NoCompany(id: number) }
+type User = { id: number; name: string; companyId: number };
+type Company = { id: number; name: string };
+declare function getUser(id: number): Res<User, UserError>;
+declare function getCompany(id: number): Res<Company, CompanyError>;
+
+const view = (id: number): Res<string, UserError> => result {
+  const user = try getUser(id);
+  const company = try getCompany(user.companyId);
+  return user.name + "@" + company.name;
+};
+
+export {};

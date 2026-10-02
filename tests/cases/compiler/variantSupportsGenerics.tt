@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_01.rs::variant_supports_generics
+variant Pair<T> { First, Second }

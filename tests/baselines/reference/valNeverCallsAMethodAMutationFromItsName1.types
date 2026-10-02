@@ -1,0 +1,16 @@
+=== valNeverCallsAMethodAMutationFromItsName1.tt ===
+class Query {
+>Query : class Query
+  set(key: string): Query {
+>set : (method) Query.set(key: string): Query
+>key : (parameter) key: string
+>Query : class Query
+    return new Query();
+>Query : constructor Query(): Query
+val const query = new Query();
+>query : const query: Query
+>Query : constructor Query(): Query
+query.set("name");
+>query : const query: Query
+>set : (method) Query.set(key: string): Query
+

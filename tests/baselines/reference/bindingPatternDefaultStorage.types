@@ -1,0 +1,116 @@
+=== bindingPatternDefaultStorage.tt ===
+variant S { A(n: number), B }
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => S
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function f(r: TResult<number, string>, s: S, flag: boolean): TResult<string, string> {
+>f : function f(r: TResult<number, string>, s: S, flag: boolean): TResult<string, string>
+>r : (parameter) r: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>s : (parameter) s: S
+>S : type S = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>flag : (parameter) flag: boolean
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const { a = 1 } = { a: try r };
+>a : const a: number
+>a : (property) a?: 1 | undefined
+>r : (parameter) r: TResult<number, string>
+  const [b = 2] = [try r];
+>b : const b: number
+>r : (parameter) r: TResult<number, string>
+  const { c = "x" } = { c: match (s) { A(n) => `n${n}`, B => "b" } };
+>c : const c: string
+>c : (property) c?: "x" | undefined
+>s : (parameter) s: S
+>n : const n: number
+>n : const n: number
+  const [d = 0] = [match (s) { A(n) => n, B => 5 }];
+>d : const d: number
+>s : (parameter) s: S
+>n : const n: number
+>n : const n: number
+  let { e = 1 } = { e: try r };
+>e : let e: number
+>e : (property) e?: number | undefined
+>r : (parameter) r: TResult<number, string>
+  const { n: { f = 1 } } = { n: { f: try r } };
+>n : (property) n: {
+>       f?: number;
+>   }
+>f : const f: number
+>n : (property) n: {
+>       f?: 1 | undefined;
+>   }
+>f : (property) f?: 1 | undefined
+>r : (parameter) r: TResult<number, string>
+  const [[g = 1]] = [[try r]];
+>g : const g: number
+>r : (parameter) r: TResult<number, string>
+  const { h = 1 } = { h: (flag ? try r : 3) };
+>h : const h: number
+>h : (property) h?: 1 | undefined
+>flag : (parameter) flag: boolean
+>r : (parameter) r: TResult<number, string>
+  const { i = 1 } = { i: flag && try r };
+>i : const i: number | false
+>i : (property) i?: 1 | undefined
+>flag : (parameter) flag: boolean
+>r : (parameter) r: TResult<number, string>
+  const { j = 1 }: { j?: number } = { j: try r };
+>j : const j: number
+>j : (property) j?: number | undefined
+>j : (property) j?: number | undefined
+>r : (parameter) r: TResult<number, string>
+  return Result.Ok(`${a},${b},${c},${d},${e},${f},${g},${h},${i},${j}`);
+>Ok : const Ok: <string>(value: string) => Result.TOk<string>
+>a : const a: number
+>b : const b: number
+>c : const c: string
+>d : const d: number
+>e : let e: number
+>f : const f: number
+>g : const g: number
+>h : const h: number
+>i : const i: number | false
+>j : const j: number
+console.log(JSON.stringify(f(Result.Ok(7), S.A(3), true)), JSON.stringify(f(Result.Err("no"), S.B, false)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>f : function f(r: TResult<number, string>, s: S, flag: boolean): TResult<string, string>
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => S
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>f : function f(r: TResult<number, string>, s: S, flag: boolean): TResult<string, string>
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+>S : const S: {
+>       A: (n: number) => S;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+

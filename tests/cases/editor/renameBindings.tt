@@ -1,0 +1,7 @@
+// @rename: scale, binding, library
+// @references: scale
+variant Shape { Circle(radius: number), Point }
+export function f(s: Shape, [|/*scale*/scale|]: number) {
+  console./*library*/log([|scale|]);
+  return match (s) { Circle(/*binding*/radius) => radius * [|scale|], Point => 0 };
+}

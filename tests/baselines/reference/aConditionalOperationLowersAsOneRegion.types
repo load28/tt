@@ -1,0 +1,7 @@
+=== aConditionalOperationLowersAsOneRegion.tt ===
+declare const flag: boolean;
+>flag : const flag: boolean
+export const a = flag && match (1) { 1 => 1, _ => 0 };
+>a : const a: number | false
+>flag : const flag: boolean
+

@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-placement]: `match` cannot be lowered from this repeated loop position without changing how often it evaluates
+ --> ./main.tt:7:50
+  |
+7 |   for (let round = 0; round < 1; round++, last = match ((yield input), note<Speed>("second", Speed.Fast)) { (Circle(r), Fast) => note("fast circle", r), (Rect(w), _) => note("rect", w), (_, Slow) => note("slow", 0), (Circle | Point, _) => note("rest", -1) }) {
+  |                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+
+==== ttc --check-types (exit 1) ====
+error[match-placement]: `match` cannot be lowered from this repeated loop position without changing how often it evaluates
+ --> main.tt:7:50
+  |
+7 |   for (let round = 0; round < 1; round++, last = match ((yield input), note<Speed>("second", Speed.Fast)) { (Circle(r), Fast) => note("fast circle", r), (Rect(w), _) => note("rect", w), (_, Slow) => note("slow", 0), (Circle | Point, _) => note("rest", -1) }) {
+  |                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the match into a function-body statement that can own its generated control flow
+
+==== tsc on the emitted TypeScript (exit 0) ====

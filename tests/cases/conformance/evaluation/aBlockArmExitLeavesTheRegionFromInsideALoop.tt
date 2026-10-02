@@ -1,0 +1,19 @@
+// @origin: tests/integration/cases_05.rs::a_block_arm_exit_leaves_the_region_from_inside_a_loop
+// @run: aBlockArmExitLeavesTheRegionFromInsideALoop.tt
+
+variant Pick { Scan(from: number), Zero }
+declare const nothing: number;
+function choose(p: Pick): number {
+  return match (p) {
+    Scan(from) => {
+      for (const x of [from, from + 1, from + 2]) {
+        if (x % 3 === 0) { return x; }
+      }
+      return -1;
+    },
+    Zero => 0,
+  };
+}
+console.log(choose(Pick.Scan(2)), choose(Pick.Scan(4)), choose(Pick.Zero));
+
+export {};

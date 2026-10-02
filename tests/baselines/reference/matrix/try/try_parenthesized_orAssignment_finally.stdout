@@ -1,0 +1,2 @@
+orAssignment(6) => {"kind":"Err","error":"negative -9"} | flip true; target {"value":0}; flip false; fallback -9; read -9; finally 0
+orAssignment(-6) => {"kind":"Err","error":"negative -9"} | flip true; target {"value":0}; flip false; fallback -9; read -9; finally 0

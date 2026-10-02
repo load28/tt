@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::if_let_inside_a_function_inside_an_expression_region_is_allowed
+const s = `${run(() => { if let A(x) = e { log(x); } return 1; })}`;

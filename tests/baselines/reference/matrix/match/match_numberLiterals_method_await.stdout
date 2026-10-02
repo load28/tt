@@ -1,0 +1,5 @@
+method(200) => true | this "holder"; await; success true
+method(201) => true | this "holder"; await; success true
+method(404) => false | this "holder"; await; missing false
+method(500) => false | this "holder"; await; guard true; server false
+method(7) => null | this "holder"; await; other null

@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::await_in_guard_makes_match_async
+async function f(x: T) { return match (x) { A(u) if await allowed(u) => 1, _ => 0 }; }

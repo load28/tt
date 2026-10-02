@@ -1,0 +1,3 @@
+//// [aFileWithoutTtConstructsStillReportsThroughTheOutputSelfCheck.tt] 1 mapping(s)
+1:1 -> 1:1 len 12  "const q = ;\n"
+

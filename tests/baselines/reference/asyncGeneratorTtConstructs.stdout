@@ -1,0 +1,9 @@
+run Fetch(2): 200 after scrutinee start scrutinee end guard start guard end big start big end
+run Fetch(1): 1 after scrutinee start scrutinee end guard start guard end small start small end
+run Skip: "skipped" after scrutinee start scrutinee end
+interleaved: [300,3,"skipped"] after scrutinee start scrutinee start tick scrutinee end scrutinee end guard start guard end big start big end
+load ok: {"kind":"Ok","value":2} after load start load end after load
+load err: {"kind":"Err","error":"no"} after load start load end
+generator total: 20 after fetch 1 fetch 2
+yield in scrutinee: ["got 5","got skip"] after ask 0 ask 1
+async generator: [7,-1,8] after fetch 7 start fetch 7 end fetch 8 start fetch 8 end

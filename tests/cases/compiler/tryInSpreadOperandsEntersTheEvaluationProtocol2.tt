@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::try_in_spread_operands_enters_the_evaluation_protocol
+function f() { const value = [ ...try read() ]; }

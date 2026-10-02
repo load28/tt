@@ -1,0 +1,2 @@
+conditionalBranch(4) => 2 | flip true; shape "#4"
+conditionalBranch(12) => "skipped" | flip false; else "skipped"

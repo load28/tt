@@ -1,0 +1,2 @@
+whileTest({"kind":"Click","x":3}) => 1 | yield {"kind":"Click","x":3}; click 3
+whileTest({"kind":"Key","key":"k"}) => 1 | yield {"kind":"Key","key":"k"}; key "k"

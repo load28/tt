@@ -1,0 +1,2 @@
+logicalAssignmentValue(2) => [6,6] | flip true; operand 2; receiver {"factor":3}; twice 6; finally 0
+logicalAssignmentValue(6) => ["kept","kept"] | flip false; finally 0

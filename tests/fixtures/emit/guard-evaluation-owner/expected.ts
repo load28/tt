@@ -33,7 +33,7 @@ export function guarded(left: boolean, right: boolean) {
               }
             }
           }
-          $tt_v3 = $tt_v2;
+          $tt_v3 = $tt_v1 && $tt_v2;
         } else {
           $tt_v3 = $tt_v1;
         }

@@ -1,0 +1,14 @@
+// @origin: tests/integration/cases_05.rs::an_unexpected_value_guard_survives_shadowed_globals
+// @run: anUnexpectedValueGuardSurvivesShadowedGlobals.tt
+
+const String = "shadow";
+const JSON = 1;
+function pick(n: unknown): number {
+  return match (n) { 1n => 1 };
+}
+for (const value of [2n, Symbol("s"), 3, "a", { a: 1 }]) {
+  try { pick(value); } catch (error) { console.log((error as Error).message); }
+}
+console.log(String, JSON);
+
+export {};

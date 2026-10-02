@@ -1,0 +1,24 @@
+=== variantWithPayloadEmitsUnionTypeAndConstructors.tt ===
+variant Shape {
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       width: number;
+>       height: number;
+>   } | {
+>       kind: "Point";
+>   }
+  Circle(radius: number),
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+  Rect(width: number, height: number),
+>Rect : (property) Rect: (width: number, height: number) => Shape
+>width : (property) width: number
+>height : (property) height: number
+  Point,
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+

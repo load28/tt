@@ -1,0 +1,2 @@
+logicalAssignmentValue(123) => [3,3] | flip true; operand 123
+logicalAssignmentValue(4) => ["kept","kept"] | flip false

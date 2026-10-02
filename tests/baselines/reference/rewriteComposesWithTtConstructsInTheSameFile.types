@@ -1,0 +1,28 @@
+=== rewriteComposesWithTtConstructsInTheSameFile.tt ===
+variant Shape { Circle(radius: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+const area = match (Shape.Point) {
+>area : const area: any
+>Shape : const Shape: {
+>       Circle: (radius: number) => Shape;
+>       Point: {
+>           readonly kind: "Point";
+>       };
+>   }
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+  Circle(radius) => radius,
+>radius : const radius: any
+>radius : const radius: any
+

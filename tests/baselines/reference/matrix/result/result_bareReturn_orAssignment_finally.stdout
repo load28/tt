@@ -1,0 +1,2 @@
+orAssignment(2) => {"kind":"Ok"} | flip true; target {"value":0}; operand 2; read 2; finally 0
+orAssignment(-1) => "kept" | flip false; target {"value":"kept"}; finally 0

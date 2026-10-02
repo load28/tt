@@ -1,0 +1,2 @@
+jsxChild(2) => "<p>{'kind':'Ok','value':20}</p>" | await; read 2
+jsxChild(-1) => "<p>{'kind':'Err','error':'negative -1'}</p>" | await; read -1

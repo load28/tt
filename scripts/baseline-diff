@@ -1,0 +1,57 @@
+#!/usr/bin/env node
+import { spawnSync } from "node:child_process";
+import { existsSync, readdirSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const LOCAL = join(ROOT, "tests/baselines/local");
+const REFERENCE = join(ROOT, "tests/baselines/reference");
+
+function walk(dir, out) {
+  if (!existsSync(dir)) return out;
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) walk(path, out);
+    else out.push(path);
+  }
+  return out;
+}
+
+function referenceOf(local) {
+  const inside = relative(LOCAL, local).split(sep).join("/");
+  return inside.startsWith("tests/") ? join(ROOT, inside) : join(REFERENCE, inside);
+}
+
+function external(tool, reference, local) {
+  const options = { cwd: ROOT, stdio: "inherit" };
+  if (process.platform === "win32") {
+    return spawnSync(`${tool} "${reference}" "${local}"`, { ...options, shell: true });
+  }
+  return spawnSync("sh", ["-c", `${tool} "$@"`, tool, reference, local], options);
+}
+
+const tool = process.env.DIFF;
+const files = walk(LOCAL, []).sort();
+if (files.length === 0) {
+  console.log("baseline-diff: tests/baselines/local is empty; every baseline the last run compared matched");
+  process.exit(0);
+}
+for (const file of files) {
+  const deleting = file.endsWith(".delete");
+  const target = referenceOf(deleting ? file.slice(0, -".delete".length) : file);
+  const reference = existsSync(target) ? relative(ROOT, target) : "/dev/null";
+  const local = deleting ? "/dev/null" : relative(ROOT, file);
+  const run = tool
+    ? external(tool, reference, local)
+    : spawnSync("git", ["--no-pager", "diff", "--no-index", "--", reference, local], {
+        cwd: ROOT,
+        stdio: "inherit",
+      });
+  const failure = run.error?.message ?? (run.status === 126 || run.status === 127 ? `exit ${run.status}` : null);
+  if (failure !== null) {
+    console.error(`baseline-diff: cannot run ${tool ? `DIFF=${tool}` : "git diff"}: ${failure}`);
+    process.exit(1);
+  }
+}
+console.log(`\nbaseline-diff: ${files.length} baseline(s) differ; accept them with scripts/baseline-accept`);

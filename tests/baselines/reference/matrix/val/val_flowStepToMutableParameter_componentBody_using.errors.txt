@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `p` of `bump` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> ./main.ttx:12:30
+   |
+12 |     (flow |> bump |> String)(cfg);
+   |                              ^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[val-pass]: cannot pass val binding `cfg` to mutable parameter `p` of `bump` (the parameter is not declared with `val`, so the function may mutate through it)
+  --> main.ttx:12:30
+   |
+12 |     (flow |> bump |> String)(cfg);
+   |                              ^^^
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,33 @@
+==== ttc --out-dir (exit 1) ====
+error[match-not-exhaustive]: match on (Dir, Speed) is not exhaustive: missing (South, Slow)
+ --> ./tupleMatchProductExhaustivenessReportsMissingCombination.tt:4:14
+  |
+4 | const step = match (d, s) {
+  |              ^^^^^^^^^^^^
+  |
+  = help: add the missing arms: `(South, Slow) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
+
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on (Dir, Speed) is not exhaustive: missing (South, Slow)
+ --> tupleMatchProductExhaustivenessReportsMissingCombination.tt:4:14
+  |
+4 | const step = match (d, s) {
+  |              ^^^^^^^^^^^^
+  |
+  = help: add the missing arms: `(South, Slow) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
+error[ts2304]: Cannot find name 'd'.
+ --> tupleMatchProductExhaustivenessReportsMissingCombination.tt:4:21
+  |
+4 | const step = match (d, s) {
+  |                     ^
+error[ts2304]: Cannot find name 's'.
+ --> tupleMatchProductExhaustivenessReportsMissingCombination.tt:4:24
+  |
+4 | const step = match (d, s) {
+  |                        ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

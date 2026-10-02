@@ -17,7 +17,8 @@ pub(super) struct Emitter<'a> {
     pub(super) source_kind: SourceKind,
     pub(super) direct_apply_inputs: HashSet<ExprId>,
     pub(super) member_apply_steps: HashMap<ExprId, crate::program_syntax::MemberCallee>,
-    pub(super) rewrite_imports: ImportRewrite,
+    pub(super) reference_apply_steps: HashSet<ExprId>,
+    pub(super) rewrite_imports: Option<RewrittenExtensions>,
     pub(super) std_imports: StdImports<'a>,
     pub(super) owner_slot_rewrites: Vec<OwnerSlotRewrite>,
     pub(super) owner_slot_index: crate::span_index::SpanIndex,
@@ -26,9 +27,19 @@ pub(super) struct Emitter<'a> {
     pub(super) propagation_index: crate::span_index::SpanIndex,
     pub(super) compose_rewrites: Vec<ComposeRewrite>,
     pub(super) compose_index: crate::span_index::SpanIndex,
+    pub(super) declarator_splits: Vec<DeclaratorSplitRewrite>,
+    pub(super) emitted_declarator_separators: ClosedComposeBlocks,
+    pub(super) emitted_declarator_heads: ClosedComposeBlocks,
+    pub(super) opened_declaration_scopes: ClosedComposeBlocks,
+    pub(super) closed_declaration_scopes: ClosedComposeBlocks,
     pub(super) loop_test_rewrites: Vec<LoopTestRewrite>,
     pub(super) loop_body_index: crate::span_index::SpanIndex,
     pub(super) active_capture_sources: RefCell<Vec<SourceSpan>>,
+    /// The values of the conditional operation being written that are
+    /// already in their slots: a later capture in the same branch reads a
+    /// value there instead of evaluating it again. Outside the operation its
+    /// result slot stands for them.
+    pub(super) delivered_conditional_values: RefCell<HashSet<ExprId>>,
     pub(super) source_replacements: Vec<SourceReplacement>,
     pub(super) replacement_index: crate::span_index::SpanIndex,
     pub(super) consumed_exprs: HashSet<ExprId>,
@@ -56,6 +67,9 @@ pub(super) struct Emitter<'a> {
     pub(super) host_string: String,
     pub(super) inline_subjects: HashMap<NodeId, Vec<String>>,
     pub(super) block_required_statements: HashSet<NodeId>,
+    pub(super) relocated_documentation: HashMap<usize, SourceSpan>,
+    pub(super) documentation_starts: std::collections::BTreeMap<usize, SourceSpan>,
+    pub(super) emitted_documentation: ClosedComposeBlocks,
     /// Statement owners that must open a block before their first hoisted
     /// prelude and close it after their last byte. Several entry points can
     /// write a prelude, and the owner's end can be reached by more than one
@@ -99,8 +113,61 @@ pub(super) struct Emitter<'a> {
     pub(super) used_expression_boundary: Cell<bool>,
     pub(super) used_pipe: Cell<bool>,
     pub(super) used_flow: Cell<bool>,
+    /// The standard-library modules the file's own imports named.
+    pub(super) imported_std: RefCell<Vec<crate::StdModule>>,
     pub(super) generated_names: RefCell<crate::generated_names::GeneratedNames>,
     pub(super) global_temps: HashMap<TempId, String>,
+    /// Every comment in the source, in source order.
+    pub(super) comments: &'a [crate::ast::Span],
+}
+
+impl<'a> Emitter<'a> {
+    /// Writes the comments in `gap`, the source between two match arms
+    /// ([`crate::core_ir::DecisionArm::gap`]), each on a line of its own at
+    /// `depth`, and says whether there were any. A line comment there ends
+    /// its line, so what follows starts on the next one.
+    pub(super) fn push_gap_comments(
+        &self,
+        gap: Option<crate::hir::Span>,
+        depth: u16,
+        out: &mut Rope<'a>,
+    ) -> bool {
+        let mut written = false;
+        for comment in gap_comments(self.comments, gap) {
+            out.push_break(depth);
+            out.push_src(&self.source[comment.start..comment.end], comment.start);
+            written = true;
+        }
+        written
+    }
+
+    /// Writes the comments in an arm's own source outside its guard and
+    /// body ([`crate::core_ir::DecisionArm::head`]), each on a line of its
+    /// own at `depth`, after the arm's lowering, and says whether there
+    /// were any.
+    pub(super) fn push_head_comments(
+        &self,
+        arm: &crate::core_ir::DecisionArm,
+        depth: u16,
+        out: &mut Rope<'a>,
+    ) -> bool {
+        let mut written = false;
+        for comment in head_comments(self.comments, &arm.head) {
+            out.push_break(depth);
+            out.push_src(&self.source[comment.start..comment.end], comment.start);
+            written = true;
+        }
+        written
+    }
+
+    pub(super) fn relocated_documentation(&self, statement: usize) -> Option<Rope<'a>> {
+        let span = *self.relocated_documentation.get(&statement)?;
+        self.emitted_documentation.claim(span).then(|| {
+            let mut out = Rope::new();
+            out.push_src(&self.source[span.start..span.end], span.start);
+            out
+        })
+    }
 }
 
 impl Emitter<'_> {
@@ -433,4 +500,23 @@ impl Drop for ResultFailureScope<'_> {
             registry.remove(&self.id);
         }
     }
+}
+
+/// The comments of `comments` that lie in an arm's `head` ranges.
+pub(super) fn head_comments<'c>(
+    comments: &'c [crate::ast::Span],
+    head: &'c [crate::hir::Span],
+) -> impl Iterator<Item = &'c crate::ast::Span> {
+    head.iter()
+        .flat_map(move |range| gap_comments(comments, Some(*range)))
+}
+
+/// The comments of `comments` that lie in `gap`.
+pub(super) fn gap_comments(
+    comments: &[crate::ast::Span],
+    gap: Option<crate::hir::Span>,
+) -> impl Iterator<Item = &crate::ast::Span> {
+    comments.iter().filter(move |comment| {
+        gap.is_some_and(|gap| gap.start <= comment.start && comment.end <= gap.end)
+    })
 }

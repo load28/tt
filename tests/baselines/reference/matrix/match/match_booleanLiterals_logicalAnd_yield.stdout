@@ -1,0 +1,2 @@
+logicalAnd(true) => 1 | flip true; yield true; yes 1
+logicalAnd(false) => false | flip false

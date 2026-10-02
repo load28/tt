@@ -1,0 +1,3 @@
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+declare function r(): R;
+export const a = result { const x = try r(); return `v`};

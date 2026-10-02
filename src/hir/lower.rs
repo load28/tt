@@ -70,6 +70,10 @@ impl Lower<'_> {
 
     /// A statement stream: one [`Body`] per `Program`.
     fn lower_body(&mut self, program: &ast::Program) -> BodyId {
+        crate::stack::grow(|| self.lower_body_grown(program))
+    }
+
+    fn lower_body_grown(&mut self, program: &ast::Program) -> BodyId {
         let mut stmts = Vec::with_capacity(program.segments.len());
         for segment in &program.segments {
             match segment {
@@ -126,6 +130,10 @@ impl Lower<'_> {
     /// richer (tt constructs inside the expression) becomes a [`Expr::Seq`]
     /// wrapping the lowered stream.
     fn lower_expr_program(&mut self, program: &ast::Program, span: Span) -> ExprId {
+        crate::stack::grow(|| self.lower_expr_program_grown(program, span))
+    }
+
+    fn lower_expr_program_grown(&mut self, program: &ast::Program, span: Span) -> ExprId {
         if let [ast::Segment::Verbatim(inner)] = program.segments.as_slice() {
             let node = self.node(Self::span(*inner), AstOrigin::OpaqueExpr);
             return self.hir.exprs.alloc(Expr::OpaqueTs(node));
@@ -179,6 +187,7 @@ impl Lower<'_> {
                             name: field.name.clone(),
                             optional: field.optional,
                             ty_text: field.ty.clone(),
+                            ty_span: Span::new(field.ty_off, field.ty_off + field.ty.len()),
                             comments: field.comments.clone(),
                         })
                     })
@@ -193,6 +202,7 @@ impl Lower<'_> {
             exported: decl.exported,
             declared: decl.declared,
             generics: decl.generics.clone(),
+            generics_span: Span::new(decl.generics_off, decl.generics_off + decl.generics.len()),
             variants,
         }));
         owner
@@ -223,16 +233,37 @@ impl Lower<'_> {
         let head = Span::new(expr.keyword_off, expr.scrutinee_span.end + 1);
         let node = self.node(head, AstOrigin::Match);
         let subject = self.lower_expr_program(&expr.scrutinee, Self::span(expr.scrutinee_span));
+        let ends: Vec<usize> = expr
+            .arms
+            .iter()
+            .map(|arm| arm_end(arm.body_span, arm.block, arm.missing))
+            .collect();
+        let (gaps, trailing) = arm_gaps(
+            expr.scrutinee_span.end,
+            expr.body_close,
+            expr.arms.iter().map(|arm| arm.pattern_span.start).zip(ends),
+        );
         let arms = expr
             .arms
             .iter()
-            .map(|arm| {
-                self.lower_arm(
+            .zip(gaps)
+            .map(|(arm, gap)| {
+                let mut lowered = self.lower_arm(
                     &arm.pattern,
                     arm.pattern_span,
                     &arm.guard,
-                    Some((&arm.body, arm.block, arm.diverges)),
-                )
+                    Some((
+                        &arm.body,
+                        arm_body_kind(arm.block, arm.diverges, arm.missing),
+                    )),
+                );
+                lowered.gap = Some(gap);
+                lowered.head = arm_head(
+                    arm.pattern_span.start,
+                    arm.guard.as_ref().map(|guard| guard.span),
+                    arm.body_span.start,
+                );
+                lowered
             })
             .collect();
         let site_node = self.node(head, AstOrigin::Match);
@@ -241,6 +272,7 @@ impl Lower<'_> {
             kind: SiteKind::Match,
             subjects: vec![subject],
             arms,
+            trailing: Some(trailing),
         });
         let extent = self.node(
             Span::new(expr.keyword_off, expr.body_close + 1),
@@ -257,10 +289,21 @@ impl Lower<'_> {
             .iter()
             .map(|(span, program)| self.lower_expr_program(program, Self::span(*span)))
             .collect();
+        let (gaps, trailing) = arm_gaps(
+            expr.head_span().end - 1,
+            expr.body_close,
+            expr.arms.iter().map(|arm| {
+                (
+                    arm.pattern_span.start,
+                    arm_end(arm.body_span, arm.block, arm.missing),
+                )
+            }),
+        );
         let arms = expr
             .arms
             .iter()
-            .map(|arm| {
+            .zip(gaps)
+            .map(|(arm, gap)| {
                 let pattern = match &arm.pattern {
                     ast::TuplePattern::Wildcard => {
                         self.alloc_pattern(Pat::Wildcard, Self::span(arm.pattern_span))
@@ -284,7 +327,13 @@ impl Lower<'_> {
                     pattern,
                     guard,
                     body: Some(body),
-                    body_kind: Some(arm_body_kind(arm.block, arm.diverges)),
+                    body_kind: Some(arm_body_kind(arm.block, arm.diverges, arm.missing)),
+                    gap: Some(gap),
+                    head: arm_head(
+                        arm.pattern_span.start,
+                        arm.guard.as_ref().map(|guard| guard.span),
+                        arm.body_span.start,
+                    ),
                 }
             })
             .collect();
@@ -294,6 +343,7 @@ impl Lower<'_> {
             kind: SiteKind::TupleMatch,
             subjects,
             arms,
+            trailing: Some(trailing),
         });
         let extent = self.node(
             Span::new(expr.keyword_off, expr.body_close + 1),
@@ -307,19 +357,21 @@ impl Lower<'_> {
         pattern: &ast::Pattern,
         pattern_span: ast::Span,
         guard: &Option<ast::GuardExpr>,
-        body: Option<(&ast::Program, bool, bool)>,
+        body: Option<(&ast::Program, ArmBodyKind)>,
     ) -> SiteArm {
         let pattern_id = self.lower_pattern(pattern, pattern_span.start);
         let node = self.node(Self::span(pattern_span), AstOrigin::Arm);
         let guard = guard.as_ref().map(|g| self.lower_guard(g));
-        let body_kind = body.map(|(_, block, diverges)| arm_body_kind(block, diverges));
-        let body = body.map(|(body, _, _)| self.lower_body(body));
+        let body_kind = body.map(|(_, kind)| kind);
+        let body = body.map(|(body, _)| self.lower_body(body));
         SiteArm {
             node,
             pattern: pattern_id,
             guard,
             body,
             body_kind,
+            gap: None,
+            head: Vec::new(),
         }
     }
 
@@ -389,6 +441,10 @@ impl Lower<'_> {
     }
 
     fn lower_tag_pattern(&mut self, alt: &ast::TagPattern) -> PatternId {
+        crate::stack::grow(|| self.lower_tag_pattern_grown(alt))
+    }
+
+    fn lower_tag_pattern_grown(&mut self, alt: &ast::TagPattern) -> PatternId {
         let path_node = self.node(
             Span::new(alt.tag_off, alt.tag_off + alt.tag.len()),
             AstOrigin::Pattern,
@@ -399,6 +455,9 @@ impl Lower<'_> {
                 .map(|binding| self.lower_field_pat(binding))
                 .collect()
         });
+        let list = alt
+            .list
+            .map(|list| self.node(Self::span(list), AstOrigin::Pattern));
         self.alloc_pattern(
             Pat::Constructor {
                 path: UnresolvedPath {
@@ -406,6 +465,7 @@ impl Lower<'_> {
                     name: alt.tag.clone(),
                 },
                 fields,
+                list,
             },
             Span::new(alt.tag_off, alt.end),
         )
@@ -419,17 +479,25 @@ impl Lower<'_> {
                 .map(|binding| self.lower_field_pat(binding))
                 .collect()
         });
+        let list = alt
+            .list
+            .map(|list| self.node(Self::span(list), AstOrigin::Pattern));
         self.alloc_pattern(
             Pat::Instance {
                 constructor,
                 path: alt.path.clone(),
                 fields,
+                list,
             },
             Span::new(alt.is_off, alt.end),
         )
     }
 
     fn lower_field_pat(&mut self, binding: &ast::Binding) -> FieldPat {
+        crate::stack::grow(|| self.lower_field_pat_grown(binding))
+    }
+
+    fn lower_field_pat_grown(&mut self, binding: &ast::Binding) -> FieldPat {
         let node = self.node(Self::span(binding.name_span), AstOrigin::PatternField);
         let field_binding = match &binding.nested {
             Some(inner) => FieldBinding::Nested(self.lower_tag_pattern(inner)),
@@ -497,7 +565,7 @@ impl Lower<'_> {
             .pattern_span(pattern)
             .unwrap_or(Self::span(stmt.head_span));
         let arm_node = self.node(pattern_span, AstOrigin::Arm);
-        let subject = self.lower_expr_program(&stmt.expr, Self::span(stmt.head_span));
+        let subject = self.lower_expr_program(&stmt.expr, Self::span(stmt.expr.span));
         let site_node = self.node(Self::span(stmt.head_span), AstOrigin::LetElse);
         let site = self.hir.sites.alloc(PatternSite {
             node: site_node,
@@ -511,19 +579,30 @@ impl Lower<'_> {
                 // construct; there is no body that runs "on match".
                 body: None,
                 body_kind: None,
+                gap: None,
+                head: vec![
+                    Span::new(stmt.head_span.start, stmt.expr.span.start),
+                    Span::new(stmt.expr.span.end, stmt.else_body.span.start),
+                ],
             }],
+            trailing: None,
         });
         let else_body = self.lower_body(&stmt.else_body);
         LetElseStmt {
             node,
             site,
             binding_mode: Self::binding_mode(&stmt.kw),
+            exported: stmt.exported,
             else_body,
             else_diverges: stmt.diverges,
         }
     }
 
     fn lower_if_let(&mut self, stmt: &ast::IfLetStmt) -> IfLetStmt {
+        crate::stack::grow(|| self.lower_if_let_grown(stmt))
+    }
+
+    fn lower_if_let_grown(&mut self, stmt: &ast::IfLetStmt) -> IfLetStmt {
         let node = self.node(Self::span(stmt.head_span), AstOrigin::IfLet);
         self.hir
             .source_map
@@ -540,7 +619,7 @@ impl Lower<'_> {
             .pattern_span(pattern)
             .unwrap_or(Self::span(stmt.head_span));
         let arm_node = self.node(pattern_span, AstOrigin::Arm);
-        let subject = self.lower_expr_program(&stmt.expr, Self::span(stmt.head_span));
+        let subject = self.lower_expr_program(&stmt.expr, Self::span(stmt.expr.span));
         let body = self.lower_body(&stmt.body);
         let site_node = self.node(Self::span(stmt.head_span), AstOrigin::IfLet);
         let site = self.hir.sites.alloc(PatternSite {
@@ -555,7 +634,19 @@ impl Lower<'_> {
                 // An `if let` body is executed, not yielded, so nothing
                 // reads this fact; it claims no divergence it has not proven.
                 body_kind: Some(ArmBodyKind::Block { completes: true }),
+                gap: None,
+                head: vec![
+                    Span::new(stmt.head_span.start, stmt.expr.span.start),
+                    Span::new(stmt.expr.span.end, stmt.body.span.start),
+                ],
             }],
+            trailing: stmt.else_part.as_ref().map(|continuation| {
+                let end = match continuation {
+                    ast::IfLetElse::Block(block) => block.span.start - 1,
+                    ast::IfLetElse::IfLet(inner) => inner.head_span.start,
+                };
+                Span::new(stmt.body.span.end + 1, end)
+            }),
         });
         let else_part = stmt.else_part.as_ref().map(|else_part| match else_part {
             ast::IfLetElse::Block(block) => IfLetElse::Block(self.lower_body(block)),
@@ -569,19 +660,7 @@ impl Lower<'_> {
     }
 
     fn lower_template(&mut self, template: &ast::Template) -> ExprId {
-        // The template's own extent: from its first raw chunk to its last.
-        let (start, end) = template
-            .chunks
-            .iter()
-            .filter_map(|chunk| match chunk {
-                ast::TemplateChunk::Raw(span) => Some((span.start, span.end)),
-                ast::TemplateChunk::Interp(_) => None,
-            })
-            .fold(None, |acc: Option<(usize, usize)>, (s, e)| match acc {
-                Some((min, max)) => Some((min.min(s), max.max(e))),
-                None => Some((s, e)),
-            })
-            .unwrap_or((0, 0));
+        let (start, end) = (template.span.start, template.span.end);
         let node = self.node(Span::new(start, end), AstOrigin::Template);
         let chunks = template
             .chunks
@@ -628,6 +707,7 @@ impl Lower<'_> {
                         ast::PipeStepKind::Postfix { optional } => {
                             PipeStepKind::Postfix { optional }
                         }
+                        ast::PipeStepKind::Missing => PipeStepKind::Missing,
                     },
                     body,
                 }
@@ -712,14 +792,56 @@ impl Lower<'_> {
 /// The arm body's kind, carrying the parser's flow answer for a block:
 /// `completes` is false only when every path out of the block leaves it,
 /// so nothing after the body can run.
-fn arm_body_kind(block: bool, diverges: bool) -> ArmBodyKind {
-    if block {
+fn arm_body_kind(block: bool, diverges: bool, missing: bool) -> ArmBodyKind {
+    if missing {
+        ArmBodyKind::Missing
+    } else if block {
         ArmBodyKind::Block {
             completes: !diverges,
         }
     } else {
         ArmBodyKind::Expression
     }
+}
+
+/// Where an arm's written text ends: past a block body's `}`, or at the end
+/// of its expression body (or, for an arm with no body, where it stops).
+fn arm_end(body: ast::Span, block: bool, missing: bool) -> usize {
+    if block && !missing {
+        body.end + 1
+    } else {
+        body.end
+    }
+}
+
+/// An arm's source from its pattern to its body, without its guard's
+/// condition, which is copied with its own comments.
+fn arm_head(pattern: usize, guard: Option<ast::Span>, body: usize) -> Vec<Span> {
+    match guard {
+        Some(guard) => vec![
+            Span::new(pattern, guard.start.max(pattern)),
+            Span::new(guard.end, body.max(guard.end)),
+        ],
+        None => vec![Span::new(pattern, body.max(pattern))],
+    }
+}
+
+/// The source between consecutive arms of a match whose scrutinee's `)` and
+/// body's `}` are at `open` and `close`, given each arm's pattern start and
+/// end: the gap before each arm (for the first, from the `)`, the body's
+/// `{` included), and the one after the last.
+fn arm_gaps(
+    open: usize,
+    close: usize,
+    arms: impl Iterator<Item = (usize, usize)>,
+) -> (Vec<Span>, Span) {
+    let mut previous = open + 1;
+    let mut gaps = Vec::new();
+    for (start, end) in arms {
+        gaps.push(Span::new(previous, start.max(previous)));
+        previous = end.max(start);
+    }
+    (gaps, Span::new(previous, close.max(previous)))
 }
 
 #[cfg(test)]
@@ -843,7 +965,7 @@ mod tests {
         let src = "const m = match (r) { Ok(value: Some(v)) => v, _ => 0 };\n";
         let hir = lower(src);
         let site = hir.sites.iter().next().unwrap().1;
-        let Pat::Constructor { path, fields } = &hir.patterns[site.arms[0].pattern] else {
+        let Pat::Constructor { path, fields, .. } = &hir.patterns[site.arms[0].pattern] else {
             panic!("expected a constructor");
         };
         assert_eq!(path.name, "Ok");

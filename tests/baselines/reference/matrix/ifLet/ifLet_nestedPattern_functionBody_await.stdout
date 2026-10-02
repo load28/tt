@@ -1,0 +1,3 @@
+functionBody({"kind":"Done","value":{"kind":"Some","value":5}}) => 5 | await; some 5
+functionBody({"kind":"Done","value":{"kind":"None"}}) => "other" | await
+functionBody({"kind":"Failed","error":"gone"}) => "other" | await

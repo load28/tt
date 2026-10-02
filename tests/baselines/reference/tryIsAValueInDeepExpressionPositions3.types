@@ -1,0 +1,5 @@
+=== tryIsAValueInDeepExpressionPositions3.tt ===
+function f(): TResult<string, string> { return Result.Ok(`v=${try read()}`); }
+>f : function f(): TResult<string, string>
+>TResult : type TResult = /*unresolved*/ any
+

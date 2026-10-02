@@ -1,0 +1,2 @@
+jsxSpreadAttribute(2.5) => "<div value='2.50'></div>" | positive 2.5
+jsxSpreadAttribute(-3) => "<div value=undefined></div>" | positive undefined

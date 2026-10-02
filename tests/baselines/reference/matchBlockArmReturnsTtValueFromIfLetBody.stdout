@@ -1,0 +1,5 @@
+1 1 one one <one>
+1 2 many many <many>
+1 -2 many none <many>
+1 0 none none none
+2 1 other other other

@@ -1,0 +1,6 @@
+// @origin: tests/compile.rs::statement_position_match_is_a_supported_owner
+variant R { Ok(value: number), Err(error: string) }
+const f = (x: number) => { match (R.Ok(x)) {
+Ok(value) => { console.log(value); },
+Err(error) => { console.log(error); },
+}; };

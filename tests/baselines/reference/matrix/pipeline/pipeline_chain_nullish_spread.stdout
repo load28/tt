@@ -1,0 +1,2 @@
+nullish(3) => "***6" | flip true; double 6
+nullish(12) => "set" | flip false; left "set"

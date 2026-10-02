@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_11.rs::sibling_matches_in_a_guard_have_one_complete_evaluation_owner
+const x = match (1) { 1 if (match (2) { 2 => true, _ => false }) && (match (3) { 3 => true, _ => false }) => 10, _ => 20 };

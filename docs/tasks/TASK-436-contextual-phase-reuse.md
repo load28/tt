@@ -1,5 +1,7 @@
 # TASK-436: Reuse contextual projections and checker answers across a project's files
 
+> Updated by [TASK-565](./TASK-565-shared-contextual-session.md): the cache and backend are no longer thread-local (Decision 2); one session per project is shared by every thread, and Decision 3's question is compared through a projection version instead of module by module.
+
 - **Status**: Complete
 - **Started**: 2026-09-27
 - **Completed**: 2026-09-27

@@ -1,0 +1,2 @@
+nestedBlock(3) => 6 | yield 3
+nestedBlock(8) => 16 | yield 8

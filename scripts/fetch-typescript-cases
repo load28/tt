@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# scripts/fetch-typescript-cases — TypeScript's own test cases, at the commit
+# the pinned TypeScript was built from, for tests/corpus.rs and
+# tests/editor_cases.rs.
+#
+# tests/typescript-cases.json names the repository, the commit (the
+# `gitHead` of the `typescript` package that package.json pins), and the git
+# tree id of each directory. This script makes a sparse, blobless, depth-1
+# checkout of exactly those directories and the upstream LICENSE.txt and
+# NOTICE.txt into target/typescript-cases/<commit>/, verifies every tree id,
+# and prints the directory. A verified checkout is reused. Nothing from it
+# is committed here; the files stay under the upstream Apache-2.0 license
+# whose text the checkout carries.
+#
+# Usage:
+#   scripts/fetch-typescript-cases          fetch (or reuse) and print the directory
+#   scripts/fetch-typescript-cases --path   print the directory without fetching
+
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
+MANIFEST="$ROOT/tests/typescript-cases.json"
+
+field() {
+  node -e 'const m = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); const v = process.argv[2].split(".").reduce((o, k) => o[k], m); console.log(Array.isArray(v) ? v.join("\n") : typeof v === "object" ? Object.entries(v).map(([k, t]) => k + " " + t).join("\n") : v);' "$MANIFEST" "$1"
+}
+
+REPOSITORY="$(field repository)"
+COMMIT="$(field commit)"
+DIR="$ROOT/target/typescript-cases/$COMMIT"
+
+if [ "${1:-}" = "--path" ]; then
+  printf '%s\n' "$DIR"
+  exit 0
+fi
+if [ "$#" -gt 0 ]; then
+  sed -n '2,/^$/s/^# \{0,1\}//p' "$0" >&2
+  exit 2
+fi
+
+verified() {
+  [ -d "$DIR/.git" ] || return 1
+  [ "$(git -C "$DIR" rev-parse HEAD 2> /dev/null)" = "$COMMIT" ] || return 1
+  while read -r path tree; do
+    [ "$(git -C "$DIR" rev-parse "HEAD:$path" 2> /dev/null)" = "$tree" ] || return 1
+    [ -d "$DIR/$path" ] || return 1
+  done < <(field trees)
+  while read -r notice; do
+    [ -f "$DIR/$notice" ] || return 1
+  done < <(field notices)
+}
+
+if ! verified; then
+  rm -rf "$DIR"
+  mkdir -p "$DIR"
+  git -C "$DIR" init -q
+  git -C "$DIR" remote add origin "$REPOSITORY"
+  patterns=()
+  while read -r path _; do patterns+=("/$path/"); done < <(field trees)
+  while read -r notice; do patterns+=("/$notice"); done < <(field notices)
+  git -C "$DIR" sparse-checkout set --no-cone "${patterns[@]}"
+  git -C "$DIR" fetch -q --depth 1 --filter=blob:none origin "$COMMIT"
+  git -C "$DIR" checkout -q FETCH_HEAD
+  verified || {
+    printf 'error: the checkout of %s at %s does not match tests/typescript-cases.json\n' "$REPOSITORY" "$COMMIT" >&2
+    exit 1
+  }
+fi
+printf '%s\n' "$DIR"

@@ -1,0 +1,8 @@
+// @hover: field, use, call
+// @references: field
+// @signatureHelp: args
+// @semanticTokens: *
+// @diagnostics: *
+export variant Shape { Circle(/*field*/radius: number), Point }
+export const c = Shape./*call*/Circle(/*args*/);
+export const area = (s: Shape) => s.kind === "Circle" ? s./*use*/radius : 0;

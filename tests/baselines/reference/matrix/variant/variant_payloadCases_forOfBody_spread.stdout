@@ -1,0 +1,2 @@
+forOfBody(4) => [[{"kind":"Circle","r":4},{"kind":"Rect","w":4,"h":2}],[{"kind":"Circle","r":4},{"kind":"Rect","w":4,"h":2}]] | round 0; round 1
+forOfBody(9) => [[{"kind":"Circle","r":9},{"kind":"Rect","w":9,"h":2}],[{"kind":"Circle","r":9},{"kind":"Rect","w":9,"h":2}]] | round 0; round 1

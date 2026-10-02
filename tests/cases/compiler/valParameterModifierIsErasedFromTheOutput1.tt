@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_07.rs::val_parameter_modifier_is_erased_from_the_output
+function read(val user: User) {
+  return user.name;
+}

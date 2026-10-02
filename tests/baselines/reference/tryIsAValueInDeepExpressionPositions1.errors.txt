@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryIsAValueInDeepExpressionPositions1.tt → $DIR/out/tryIsAValueInDeepExpressionPositions1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'TResult'.
+ --> tryIsAValueInDeepExpressionPositions1.tt:1:15
+  |
+1 | function f(): TResult<number, string> {
+  |               ^^^^^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> tryIsAValueInDeepExpressionPositions1.tt:2:10
+  |
+2 |   return Result.Ok(Math.round(try total() * 1.1));
+  |          ^^^^^^
+error[ts2304]: Cannot find name 'total'.
+ --> tryIsAValueInDeepExpressionPositions1.tt:2:35
+  |
+2 |   return Result.Ok(Math.round(try total() * 1.1));
+  |                                   ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryIsAValueInDeepExpressionPositions1.ts(1,15): error TS2304: Cannot find name 'TResult'.
+tryIsAValueInDeepExpressionPositions1.ts(3,18): error TS2304: Cannot find name 'total'.
+tryIsAValueInDeepExpressionPositions1.ts(8,10): error TS2304: Cannot find name 'Result'.

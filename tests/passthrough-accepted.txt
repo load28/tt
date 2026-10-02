@@ -1,0 +1,49 @@
+# Units of TypeScript's test cases (tests/typescript-cases.json) that ttc
+# intentionally does not pass through byte for byte.
+#
+# One line per unit: the case path under tests/cases (with #<unit> for a
+# case of several // @filename units), a tab, what the run observes, a tab,
+# and why that is intended. tests/corpus.rs fails when a listed unit comes
+# back unchanged, is observed differently, or is also in
+# tests/passthrough-triaged.txt.
+compiler/assignToInvalidLHS.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2364 for what the output self-check rejects
+compiler/declarationEmitInterfaceWithNonEntityNameExpressionHeritage.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2499 for what the output self-check rejects
+compiler/defaultArgsInOverloads.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2371 for what the output self-check rejects
+compiler/defaultValueInFunctionTypes.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2371 for what the output self-check rejects
+compiler/enumWithBigint.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2452 for what the output self-check rejects
+compiler/expressionsForbiddenInParameterInitializers.ts#bar.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2524 for what the output self-check rejects
+compiler/interfaceMayNotBeExtendedWitACall.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2499 for what the output self-check rejects
+compiler/jsxAttributeWithoutExpressionReact.tsx	rejected verify-failed	not valid TypeScript: TypeScript reports TS17000 for what the output self-check rejects
+compiler/misspelledNewMetaProperty.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS17012 for what the output self-check rejects
+compiler/noMappedGetSet.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2464 for what the output self-check rejects
+compiler/objectBindingPattern_restElementWithPropertyName.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2566 for what the output self-check rejects
+compiler/parseInvalidNonNullableTypes.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS17019 for what the output self-check rejects
+compiler/parseInvalidNullableTypes.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS17020 for what the output self-check rejects
+compiler/superNewCall1.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS17011 for what the output self-check rejects
+conformance/classes/members/privateNames/privateNameBadDeclaration.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS18016 for what the output self-check rejects
+conformance/classes/members/privateNames/privateNameEnum.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS18024 for what the output self-check rejects
+conformance/classes/members/privateNames/privateNameInObjectLiteral-1.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS18016 for what the output self-check rejects
+conformance/classes/members/privateNames/privateNameInObjectLiteral-2.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS18016 for what the output self-check rejects
+conformance/classes/members/privateNames/privateNameInObjectLiteral-3.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS18016 for what the output self-check rejects
+conformance/classes/propertyMemberDeclarations/propertyNamedConstructor.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS18006 for what the output self-check rejects
+conformance/es2019/importMeta/importMeta.ts#assignmentTargets.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2364 for what the output self-check rejects
+conformance/es2019/importMeta/importMeta.ts#moduleLookingFile01.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS17012 for what the output self-check rejects
+conformance/es2019/importMeta/importMeta.ts#scriptLookingFile01.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS17012 for what the output self-check rejects
+conformance/es6/functionDeclarations/FunctionDeclaration6_es6.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2523 for what the output self-check rejects
+conformance/es6/functionDeclarations/FunctionDeclaration7_es6.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2523 for what the output self-check rejects
+conformance/esDecorators/classDeclaration/esDecorators-classDeclaration-exportModifier.2.ts#file6.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS8038 for what the output self-check rejects
+conformance/esDecorators/classDeclaration/esDecorators-classDeclaration-exportModifier.2.ts#file7.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS8038 for what the output self-check rejects
+conformance/importDefer/importDeferFromInvalid.ts#b.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS18058 for what the output self-check rejects
+conformance/importDefer/importDeferInvalidDefault.ts#b.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS18058 for what the output self-check rejects
+conformance/importDefer/importDeferInvalidNamed.ts#b.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS18059 for what the output self-check rejects
+conformance/importDefer/importMetaPropertyInvalidInCall.ts#b.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS18061 for what the output self-check rejects
+conformance/parser/ecmascript2018/asyncGenerators/parser.asyncGenerators.classMethods.es2018.ts#yieldInParameterInitializerIsError.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2523 for what the output self-check rejects
+conformance/parser/ecmascript2018/asyncGenerators/parser.asyncGenerators.functionDeclarations.es2018.ts#yieldInParameterInitializerIsError.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2523 for what the output self-check rejects
+conformance/parser/ecmascript2018/asyncGenerators/parser.asyncGenerators.functionExpressions.es2018.ts#yieldInParameterInitializerIsError.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2523 for what the output self-check rejects
+conformance/parser/ecmascript2018/asyncGenerators/parser.asyncGenerators.objectLiteralMethods.es2018.ts#yieldInParameterInitializerIsError.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2523 for what the output self-check rejects
+conformance/parser/ecmascript5/Generics/parserGreaterThanTokenAmbiguity11.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2364 for what the output self-check rejects
+conformance/parser/ecmascript5/Generics/parserGreaterThanTokenAmbiguity15.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2364 for what the output self-check rejects
+conformance/parser/ecmascript5/Generics/parserGreaterThanTokenAmbiguity16.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2364 for what the output self-check rejects
+conformance/parser/ecmascript5/Generics/parserGreaterThanTokenAmbiguity20.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2364 for what the output self-check rejects
+conformance/types/objectTypeLiteral/callSignatures/callSignaturesWithParameterInitializers.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS2371 for what the output self-check rejects
+conformance/types/tuple/named/namedTupleMembersErrors.ts	rejected verify-failed	not valid TypeScript: TypeScript reports TS17019 for what the output self-check rejects

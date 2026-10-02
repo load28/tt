@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::duplicate_binding_within_one_pattern_is_an_error
+const n = match (r) { Ok(value: Some(value), error: value) => value, _ => 0 };

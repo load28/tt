@@ -1,0 +1,6 @@
+=== valParameterBesideAnElementAccessOfAVariableNamedVal2.tt ===
+const g = c ? (val [0]) : w => w;
+>g : const g: any
+>w : (parameter) w: any
+>w : (parameter) w: any
+

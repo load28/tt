@@ -1,0 +1,4 @@
+=== statementBodiedResultReturnsAPropagatedValue.tt ===
+const value = result { return try read(); };
+>value : const value: any
+

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./flowWithASingleStepIsThatStepAndNeedsNoHelper.tt → $DIR/out/flowWithASingleStepIsThatStepAndNeedsNoHelper.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'parse'.
+ --> flowWithASingleStepIsThatStepAndNeedsNoHelper.tt:1:19
+  |
+1 | const f = flow |> parse;
+  |                   ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+flowWithASingleStepIsThatStepAndNeedsNoHelper.ts(1,11): error TS2304: Cannot find name 'parse'.

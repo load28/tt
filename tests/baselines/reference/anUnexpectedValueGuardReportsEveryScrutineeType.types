@@ -1,0 +1,206 @@
+=== anUnexpectedValueGuardReportsEveryScrutineeType.tt ===
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const cyclic: { kind: string; self?: unknown } = { kind: "Z" };
+>cyclic : const cyclic: {
+>       kind: string;
+>       self?: unknown;
+>   }
+>kind : (property) kind: string
+>self : (property) self?: unknown
+>kind : (property) kind: string
+cyclic.self = cyclic;
+>cyclic : const cyclic: {
+>       kind: string;
+>       self?: unknown;
+>   }
+>self : (property) self?: unknown
+>cyclic : const cyclic: {
+>       kind: string;
+>       self?: unknown;
+>   }
+const values: unknown[] = [
+>values : const values: unknown[]
+  2n, -5n, Symbol("s"), "zz", 3, NaN, undefined, null, true,
+>Symbol : var Symbol: (description?: string | number) => symbol
+  { toJSON() { throw new Error("toJSON"); } }, cyclic, () => 1, { kind: "Q" },
+>toJSON : (method) toJSON(): never
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+>cyclic : const cyclic: {
+>       kind: string;
+>       self?: unknown;
+>   }
+>kind : (property) kind: string
+function statement(n: unknown): string {
+>statement : function statement(n: unknown): string
+>n : (parameter) n: unknown
+  return match (n) { 1n => "one", "a" => "a" };
+>n : (parameter) n: unknown
+function chain(n: unknown, ok: boolean): string {
+>chain : function chain(n: unknown, ok: boolean): string
+>n : (parameter) n: unknown
+>ok : (parameter) ok: boolean
+  return match (n) { 1n if ok => "one", "a" => "a" };
+>n : (parameter) n: unknown
+>ok : (parameter) ok: boolean
+type Item = { run: (x: number) => number };
+>Item : type Item = {
+>       run: (x: number) => number;
+>   }
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+const pair2 = (a: Item, b: Item) => a.run(1) + b.run(1);
+>pair2 : const pair2: (a: Item, b: Item) => number
+>a : (parameter) a: Item
+>Item : type Item = {
+>       run: (x: number) => number;
+>   }
+>b : (parameter) b: Item
+>Item : type Item = {
+>       run: (x: number) => number;
+>   }
+>a : (parameter) a: Item
+>run : (property) run: (x: number) => number
+>b : (parameter) b: Item
+>run : (property) run: (x: number) => number
+function inline(n: unknown): number {
+>inline : function inline(n: unknown): number
+>n : (parameter) n: unknown
+  return pair2(
+>pair2 : const pair2: (a: Item, b: Item) => number
+    match (n) { 1n => ({ run: x => x }), "a" => ({ run: x => x + 1 }) },
+>n : (parameter) n: unknown
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+    match (n) { 1n => ({ run: x => x }), "a" => ({ run: x => x + 1 }) },
+>n : (parameter) n: unknown
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+function kind(v: V): string {
+>kind : function kind(v: V): string
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  return match (v) { A => "a", B => "b" };
+>v : (parameter) v: V
+function pair(a: V, b: V): string {
+>pair : function pair(a: V, b: V): string
+>a : (parameter) a: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>b : (parameter) b: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  return match (a, b) { (A, A) => "aa", (B, _) => "b", (A, B) => "ab" };
+>a : (parameter) a: V
+>b : (parameter) b: V
+const report = (run: () => unknown) => {
+>report : const report: (run: () => unknown) => void
+>run : (parameter) run: () => unknown
+  try { run(); console.log("returned"); }
+>run : (parameter) run: () => unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+  catch (error) { console.log(error instanceof Error ? error.message : "not an Error: " + String(error)); }
+>error : var error: unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>error : var error: unknown
+>Error : var Error: ErrorConstructor
+>error : var error: Error
+>message : (property) Error.message: string
+>String : var String: (value?: any) => string
+>error : var error: unknown
+for (const value of values) {
+>value : const value: unknown
+>values : const values: unknown[]
+  report(() => statement(value));
+>report : const report: (run: () => unknown) => void
+>statement : function statement(n: unknown): string
+>value : const value: unknown
+  report(() => chain(value, true));
+>report : const report: (run: () => unknown) => void
+>chain : function chain(n: unknown, ok: boolean): string
+>value : const value: unknown
+  report(() => inline(value));
+>report : const report: (run: () => unknown) => void
+>inline : function inline(n: unknown): number
+>value : const value: unknown
+  if (value !== null && value !== undefined) report(() => kind(value as V));
+>value : const value: unknown
+>value : const value: {} | undefined
+>report : const report: (run: () => unknown) => void
+>kind : function kind(v: V): string
+>value : const value: {}
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+report(() => pair(V.A, 7n as unknown as V));
+>report : const report: (run: () => unknown) => void
+>pair : function pair(a: V, b: V): string
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+report(() => pair(V.A, { kind: "Nope" } as unknown as V));
+>report : const report: (run: () => unknown) => void
+>pair : function pair(a: V, b: V): string
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>kind : (property) kind: string
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+

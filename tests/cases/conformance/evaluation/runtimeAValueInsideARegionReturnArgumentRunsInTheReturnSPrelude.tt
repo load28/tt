@@ -1,0 +1,39 @@
+// @origin: tests/integration/cases_05.rs::runtime_a_value_inside_a_region_return_argument_runs_in_the_return_s_prelude
+// @run: runtimeAValueInsideARegionReturnArgumentRunsInTheReturnSPrelude.tt
+
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const trace: string[] = [];
+function ok(n: number): R { return { kind: "Ok", value: n }; }
+let s = (n: number): string => { trace.push("s" + n); return "s" + n; };
+function swap(n: number): number {
+  trace.push("swap");
+  const first = s;
+  s = (m) => { trace.push("late"); return first(m); };
+  return n;
+}
+function inResult(v: number) {
+  return result {
+    const q = try ok(1);
+    if (v > 5) return s(match (v) { 6 => swap(6), _ => 2 }) + q;
+    return [match (v) { 1 => "a", _ => "b" }, match (q) { 1 => "c", _ => "d" }].join("") + q;
+  };
+}
+function inArm(v: number) {
+  const x = match (v) {
+    1 => { const q = 1; if (q > 0) return s(match (v) { 1 => swap(1), _ => 2 }) + q; return "n"; },
+    2 => { return `${match (v) { 2 => "t", _ => "u" }}-`; },
+    _ => "x",
+  };
+  return x;
+}
+function template(v: number) {
+  return result { const q = try ok(1); return `${match (v) { 1 => "a", _ => "b" }}-${q}`; };
+}
+const base = s;
+console.log(JSON.stringify([inResult(6), inResult(1)]), JSON.stringify(trace));
+s = base;
+trace.length = 0;
+console.log(JSON.stringify([inArm(1), inArm(2), inArm(3)]), JSON.stringify(trace));
+console.log(JSON.stringify([template(1), template(2)]));
+
+export {};

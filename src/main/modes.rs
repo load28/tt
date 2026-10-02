@@ -27,7 +27,7 @@ pub(super) fn symbols_mode(jobs: &[Job]) -> ExitCode {
                 let mut o = format!("{{\"specifier\":{}", json_str(&import.specifier));
                 o.push_str(",\"names\":");
                 o.push_str(&names_json(&import.names));
-                let target = dir.join(&import.specifier);
+                let target = lexically_joined(dir, &import.specifier);
                 match fs::read_to_string(&target) {
                     Ok(imported_src) => {
                         o.push_str(&format!(
@@ -57,6 +57,23 @@ pub(super) fn symbols_mode(jobs: &[Job]) -> ExitCode {
     } else {
         ExitCode::SUCCESS
     }
+}
+
+fn lexically_joined(dir: &Path, specifier: &str) -> PathBuf {
+    use std::path::Component;
+    let mut joined = PathBuf::new();
+    for component in dir.join(specifier).components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir
+                if matches!(joined.components().next_back(), Some(Component::Normal(_))) =>
+            {
+                joined.pop();
+            }
+            _ => joined.push(component.as_os_str()),
+        }
+    }
+    joined
 }
 
 /// `--emit-map`: prints, as a JSON array on stdout, each input file's
@@ -170,6 +187,10 @@ pub(super) fn sidecar_mode(jobs: &[Job], decl_dir: &Path, inputs: &[String]) -> 
                 continue;
             }
         };
+        let source_dir = job.file.parent().unwrap_or(Path::new("."));
+        let declarations = ttc::source_specifiers(&declarations, |specifier| {
+            source_dir.join(specifier).is_file()
+        });
 
         // `-o` puts the declarations in their own tree (mirroring the input
         // layout); without it they sit next to the source.
@@ -334,29 +355,21 @@ pub(super) fn dependencies_mode(
     config: Option<&Path>,
     node: Option<&Path>,
 ) -> ExitCode {
-    let result = (|| -> Result<Vec<PathBuf>, String> {
+    let result = (|| -> Result<ttc::engine::Dependencies, String> {
         let engine = ttc::engine::Engine::new(node.map(Path::to_path_buf));
-        let mut project = engine.open_project(
-            inputs,
+        let inputs = ttc::engine::Inputs::collect(inputs)?;
+        let mut project = engine.open_inputs(
+            &inputs,
             &ttc::engine::ProjectOptions {
                 tsconfig: config.map(Path::to_path_buf),
                 out_dir: None,
             },
         )?;
-        let snapshot = project
-            .update(&project.initial_files())
-            .map_err(|error| error.error.message.clone())?;
-        let checked = project.check(&snapshot, &ttc::engine::CheckRequest::default())?;
-        if let Some(error) = checked.backend_error
-            && error.kind == ttc::engine::BackendErrorKind::Internal
-        {
-            return Err(error.message);
-        }
-        project.watch_paths().map_err(|error| error.to_string())
+        project.dependencies_of(&inputs)
     })();
     match result {
-        Ok(paths) => {
-            crate::out::line(&serde_json::json!(paths).to_string());
+        Ok(dependencies) => {
+            crate::out::line(&dependencies.to_json().to_string());
             ExitCode::SUCCESS
         }
         Err(error) => {

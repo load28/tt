@@ -1,0 +1,93 @@
+=== main.tt ===
+type O = { kind: "Some"; value: number } | { kind: "None" };
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>kind : (property) kind: "None"
+function opt(n: number): O {
+>opt : function opt(n: number): O
+>n : (parameter) n: number
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+  return n !== 0 ? { kind: "Some", value: n } : { kind: "None" };
+>n : (parameter) n: number
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "None"
+function whole(k: number, n: number): string {
+>whole : function whole(k: number, n: number): string
+>k : (parameter) k: number
+>n : (parameter) n: number
+  const v = match (k) {
+>v : const v: string
+>k : (parameter) k: number
+      if let Some(value: b) = opt(n) {
+>value : (property) value: number
+>b : const b: number
+>opt : function opt(n: number): O
+>n : (parameter) n: number
+        return match (b) { 1 => "one", _ => "many" };
+>b : const b: number
+  return v;
+>v : const v: string
+function nested(k: number, n: number): string {
+>nested : function nested(k: number, n: number): string
+>k : (parameter) k: number
+>n : (parameter) n: number
+  const v = match (k) {
+>v : const v: string
+>k : (parameter) k: number
+      if let Some(value: b) = opt(n) {
+>value : (property) value: number
+>b : const b: number
+>opt : function opt(n: number): O
+>n : (parameter) n: number
+        if (b > 0) return match (b) { 1 => "one", _ => "many" };
+>b : const b: number
+>b : const b: number
+  return v;
+>v : const v: string
+function template(k: number, n: number): string {
+>template : function template(k: number, n: number): string
+>k : (parameter) k: number
+>n : (parameter) n: number
+  const v = match (k) {
+>v : const v: string
+>k : (parameter) k: number
+      if let Some(value: b) = opt(n) {
+>value : (property) value: number
+>b : const b: number
+>opt : function opt(n: number): O
+>n : (parameter) n: number
+        return `<${match (b) { 1 => "one", _ => "many" }}>`;
+>b : const b: number
+  return v;
+>v : const v: string
+for (const [k, n] of [[1, 1], [1, 2], [1, -2], [1, 0], [2, 1]]) {
+>k : const k: number
+>n : const n: number
+  console.log(k, n, whole(k, n), nested(k, n), template(k, n));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>k : const k: number
+>n : const n: number
+>whole : function whole(k: number, n: number): string
+>k : const k: number
+>n : const n: number
+>nested : function nested(k: number, n: number): string
+>k : const k: number
+>n : const n: number
+>template : function template(k: number, n: number): string
+>k : const k: number
+>n : const n: number
+

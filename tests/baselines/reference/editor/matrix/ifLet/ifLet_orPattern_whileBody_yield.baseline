@@ -1,0 +1,12 @@
+differences from ifLet_orPattern_whileBody_yield at the questions listed in tests/editor-matrix-differences.txt
+
+=== rename /*bind*/ main.tt:8:16 ===
+  |     if let Num(value) | Neg(value) = (yield input) { seen = note("number", value); }
+  |                ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+
+=== definition /*use*/ main.tt:8:76 ===
+  |     if let Num(value) | Neg(value) = (yield input) { seen = note("number", value); }
+  |                                                                            ^ /*use*/
+  tt only: main "value"
+

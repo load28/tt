@@ -1,0 +1,3 @@
+18 receiver,subject,callee,arm,call,after
+14 receiver,subject,callee,call,after
+kept value,throws:3,caught

@@ -1,0 +1,6 @@
+//// [anInertPipelineInputUsesADirectCall.tt] 4 mapping(s)
+1:1 -> 1:1 len 14  "const value = "
+1:15 -> 1:22 len 1  "1"
+1:20 -> 1:15 len 6  "String"
+1:26 -> 1:24 len 2  ";\n"
+

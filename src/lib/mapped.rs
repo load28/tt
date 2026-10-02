@@ -4,8 +4,12 @@ use super::*;
 
 /// One chunk of emitted output copied verbatim from the source: `len` bytes
 /// starting at byte `src` of the source appear at byte `out` of the output.
-/// Produced by [`emit_mapped`]; chunks are non-overlapping in both
-/// coordinate spaces. Compiler-written glue has no mapping.
+/// Produced by [`emit_mapped`]; chunks never overlap in the output. Text
+/// the compiler passes through is copied once, so its chunks never overlap
+/// in the source either; a tt construct's own text that its lowering writes
+/// more than once (a variant field's type, in the union and in the
+/// constructor) is copied, and mapped, at each place. Compiler-written glue
+/// has no mapping.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EmitMapping {
     /// Byte offset of the chunk in the source.
@@ -59,6 +63,24 @@ pub struct ResultReturnTemp {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct DeclaredName {
+    pub src: usize,
+    pub src_end: usize,
+    pub out: usize,
+    pub out_end: usize,
+}
+
+/// Glue the emitter wrote at one point of the source rather than for a
+/// construct: the prelude of helpers and imports. Relative to the source
+/// text around it, everything in `out..out_end` stands at `src`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct InsertedGlue {
+    pub src: usize,
+    pub out: usize,
+    pub out_end: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct DestructuredList {
     pub src: usize,
     pub src_end: usize,
     pub out: usize,
@@ -140,10 +162,21 @@ pub struct EmitAnchor {
     /// where the emitter alone knows the relationship. A pipeline's
     /// per-step anchor names the step that produced the rejected value
     /// here, so a reporter can label it ("the piped value comes from this
-    /// step"). `None` when the construct has no such companion place.
+    /// step"). A `match`'s case label names the pattern it was written for,
+    /// and a diagnostic on the label is shown there. `None` when the
+    /// construct has no such companion place.
     pub context: Option<(usize, usize)>,
     /// What kind of construct wrote it.
     pub kind: AnchorKind,
+}
+
+impl EmitAnchor {
+    pub(crate) fn display(&self) -> (usize, usize) {
+        match (self.kind, self.context) {
+            (AnchorKind::Match, Some(pattern)) => pattern,
+            _ => (self.src, self.src_end),
+        }
+    }
 }
 
 /// Where a nested pattern's **receiver** landed in the emitted output.
@@ -184,9 +217,29 @@ pub struct MappedEmit {
     pub(crate) result_return_temps: Vec<ResultReturnTemp>,
     /// Byte offsets after generated value declaration identifiers.
     pub(crate) contextual_slots: Vec<usize>,
+    /// Those of [`MappedEmit::contextual_slots`] whose storage holds the
+    /// index of the arm a dispatch selected, not a value of the source.
+    pub(crate) selector_slots: Vec<usize>,
+    pub(crate) operand_slots: Vec<usize>,
+    pub(crate) asserted_slots: Vec<(usize, usize)>,
     pub(crate) generated_names: std::collections::HashSet<String>,
     pub(crate) declared_names: Vec<DeclaredName>,
     pub(crate) shared_bindings: Vec<SharedBinding>,
+    pub(crate) destructured_lists: Vec<DestructuredList>,
+    /// Glue written at a source point, ordered by output offset.
+    pub(crate) inserted: Vec<InsertedGlue>,
+    pub(crate) single_line_breaks: Vec<usize>,
+    /// What TypeScript's completion rules say at each construct's place.
+    pub(crate) completion_scopes: Vec<crate::program_syntax::CompletionScope>,
+    /// The compiler support modules the emitted code imports, in
+    /// [`StdModule::ALL`](crate::StdModule::ALL) order: the standard-library
+    /// modules the source imports, and the pipeline runtime when the
+    /// emission calls one of its helpers through an import. A build writes
+    /// exactly these modules for the outputs it writes.
+    pub support_imports: Vec<crate::StdModule>,
+    /// Whether the module is written with CommonJS syntax, so the support
+    /// modules it imports are the [`StdImports::commonjs`](crate::StdImports) ones.
+    pub commonjs: bool,
 }
 
 impl MappedEmit {
@@ -254,17 +307,40 @@ pub fn emit_mapped(source: &str) -> MappedEmit {
 /// [`emit_mapped`] under an explicit TypeScript surface kind.
 pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmit {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, source_kind);
-    let typescript_tokens = crate::lexer::TypeScriptTokens::of(source, source_kind, &tokens);
-    let semantics = analysis::coverage_semantics(source, &program, &[]);
-    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
+    emit_mapped_parsed(
+        source,
+        &Options {
+            source_kind,
+            rewrite_imports: ImportRewrite::Off,
+            ..Options::default()
+        },
+        &program,
+        &tokens,
+    )
+}
+
+/// [`emit_mapped`] over a parse the caller already has, under `options`'
+/// surface kind, imported variants, and import handling.
+pub(crate) fn emit_mapped_parsed(
+    source: &str,
+    options: &Options,
+    program: &ast::Program,
+    tokens: &[crate::lexer::Token],
+) -> MappedEmit {
+    let source_kind = options.source_kind;
+    let semantics = analysis::coverage_semantics(source, program, options.extern_variants);
+    let core = core_ir::lower_semantic(&semantics, source, tokens);
     // A buffer mid-edit is routinely not TypeScript yet, and this entry
     // point is infallible by contract: with no owner model there are no
     // host rewrites to plan, so every tt value the plan cannot own emits as
     // a recovery placeholder anchored to its construct — the same values
     // the plan refuses by placement. Reporting stays [`compile`]'s job.
-    let plan = codegen::lowering_plan(&semantics, &core, source, source_kind, &tokens)
-        .unwrap_or_else(|_| crate::evaluation_ir::LoweringPlan::without_owner_model());
-    let automatic_semicolons = crate::lexer::automatic_semicolons(&tokens);
+    let mut plan = codegen::lowering_plan(&semantics, &core, source, source_kind, tokens)
+        .unwrap_or_else(|_| {
+            crate::evaluation_ir::LoweringPlan::without_owner_model(source, source_kind)
+        });
+    let automatic_semicolons = crate::lexer::automatic_semicolons(tokens);
+    let comments = crate::lexer::comments(source, tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
@@ -272,10 +348,11 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
             text: source,
             kind: source_kind,
             automatic_semicolons: &automatic_semicolons,
+            comments: &comments,
         },
         &plan,
-        ImportRewrite::Off,
-        StdImports::default(),
+        options.rewrite_imports.extensions(options.jsx_preserve),
+        options.std_imports,
     );
     MappedEmit {
         code: flat.code,
@@ -285,9 +362,18 @@ pub fn emit_mapped_with_kind(source: &str, source_kind: SourceKind) -> MappedEmi
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
         contextual_slots: flat.contextual_slots,
+        selector_slots: flat.selector_slots,
+        operand_slots: flat.operand_slots,
+        asserted_slots: flat.asserted_slots,
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
+        destructured_lists: flat.destructured_lists,
+        inserted: flat.inserted,
+        single_line_breaks: flat.single_line_breaks,
+        completion_scopes: std::mem::take(&mut plan.completion_scopes),
+        support_imports: flat.support_imports,
+        commonjs: flat.commonjs,
     }
 }
 
@@ -361,7 +447,13 @@ pub(crate) fn val_probes_with_emit(
     emit: &MappedEmit,
 ) -> ValProbes {
     with_method_calls(
-        val::probes(source, tokens, &parser::val_modifiers(program)),
+        val::probes(
+            source,
+            source_kind,
+            tokens,
+            &parser::val_modifiers(program),
+            &parser::pipeline_shapes(program),
+        ),
         emit,
         source_kind,
     )
@@ -369,7 +461,13 @@ pub(crate) fn val_probes_with_emit(
 
 fn val_syntax_probes(source: &str, source_kind: SourceKind) -> ValProbes {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, source_kind);
-    val::probes(source, &tokens, &parser::val_modifiers(&program))
+    val::probes(
+        source,
+        source_kind,
+        &tokens,
+        &parser::val_modifiers(&program),
+        &parser::pipeline_shapes(&program),
+    )
 }
 
 fn with_method_calls(

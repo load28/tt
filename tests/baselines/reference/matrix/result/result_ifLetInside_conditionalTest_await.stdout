@@ -1,0 +1,2 @@
+conditionalTest(4) => "truthy" | await; read 4; direct 4; then "truthy"
+conditionalTest(-1) => "truthy" | await; read -1; fallback -7; read -7; then "truthy"

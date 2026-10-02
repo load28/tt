@@ -1,0 +1,19 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./main.tt → $DIR/out/main.ts
+ttc: ./shapes.tt → $DIR/out/shapes.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2307]: Cannot find module './shapes.tt.js' or its corresponding type declarations.
+ --> main.tt:1:24
+  |
+1 | import { shapeK } from "./shapes.tt.js";
+  |                        ^^^^^^^^^^^^^^^^
+error[ts2307]: Cannot find module './shapes.tt.js' or its corresponding type declarations.
+ --> main.tt:4:29
+  |
+4 | export const later = import("./shapes.tt.js");
+  |                             ^^^^^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+main.ts(1,24): error TS2307: Cannot find module './shapes.tt.js' or its corresponding type declarations.
+main.ts(4,29): error TS2307: Cannot find module './shapes.tt.js' or its corresponding type declarations.

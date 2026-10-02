@@ -1,0 +1,71 @@
+=== hover /*variantName*/ matchHoverAndDefinition.tt:2:25 ===
+  | export function area(s: Shape): number {
+  |                         ^ /*variantName*/
+hover: 2:25-2:30 "Shape"
+    type Shape = {
+        kind: "Circle";
+        radius: number;
+    } | {
+        kind: "Rect";
+        width: number;
+        height: number;
+    } | {
+        kind: "Point";
+    }
+ttSymbol: null
+
+=== hover /*tag*/ matchHoverAndDefinition.tt:4:5 ===
+  |     Circle(radius) => Math.PI * radius ** 2,
+  |     ^ /*tag*/
+hover: null
+ttSymbol: case Circle of Shape at 4:5-4:11 "Circle"
+    Shape.Circle(radius: number)
+  detail:
+    payload case — compiles to a constructor function of `variant Shape`
+  definition: matchHoverAndDefinition.tt 1:24-1:30 "Circle"
+
+=== hover /*binding*/ matchHoverAndDefinition.tt:4:12 ===
+  |     Circle(radius) => Math.PI * radius ** 2,
+  |            ^ /*binding*/
+hover: 4:12-4:18 "radius"
+    const radius: number
+ttSymbol: field radius of Shape at 4:12-4:18 "radius", binds
+    radius: number
+  detail:
+    payload field of `Shape.Circle` — the pattern binds it by name
+  definition: matchHoverAndDefinition.tt 1:31-1:37 "radius"
+
+=== hover /*use*/ matchHoverAndDefinition.tt:4:33 ===
+  |     Circle(radius) => Math.PI * radius ** 2,
+  |                                 ^ /*use*/
+hover: 4:33-4:39 "radius"
+    const radius: number
+ttSymbol: null
+
+=== definition /*tag*/ matchHoverAndDefinition.tt:4:5 ===
+  |     Circle(radius) => Math.PI * radius ** 2,
+  |     ^ /*tag*/
+definition: 1 location(s)
+  matchHoverAndDefinition.tt 1:24-1:30 "Circle"
+
+=== definition /*use*/ matchHoverAndDefinition.tt:4:33 ===
+  |     Circle(radius) => Math.PI * radius ** 2,
+  |                                 ^ /*use*/
+definition: 1 location(s)
+  matchHoverAndDefinition.tt 4:12-4:18 "radius"
+
+=== references /*binding*/ matchHoverAndDefinition.tt:4:12 ===
+  |     Circle(radius) => Math.PI * radius ** 2,
+  |            ^ /*binding*/
+references: 3 location(s)
+  matchHoverAndDefinition.tt 1:31-1:37 "radius" (definition)
+  matchHoverAndDefinition.tt 4:12-4:18 "radius"
+  matchHoverAndDefinition.tt 4:33-4:39 "radius"
+
+=== parity with the TypeScript twin ===
+hover variantName: same
+hover binding: same
+hover use: same
+definition use: same
+references binding: same
+

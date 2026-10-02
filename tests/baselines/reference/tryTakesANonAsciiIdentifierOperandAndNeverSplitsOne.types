@@ -1,0 +1,13 @@
+=== tryTakesANonAsciiIdentifierOperandAndNeverSplitsOne.tt ===
+declare function étry(): Result<number, string>;
+>étry : function étry(): Result<number, string>
+>Result : type Result = /*unresolved*/ any
+function r(): Result<number, string> {
+>r : function r(): Result<number, string>
+>Result : type Result = /*unresolved*/ any
+  const n = try étry();
+>n : const n: any
+>étry : function étry(): Result<number, string>
+  return Ok(n);
+>n : const n: any
+

@@ -1,0 +1,45 @@
+// Repro from TASK-626
+// @run: literalLeftOperandNarrowing.tt
+import type { TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
+variant M { A(n: number), B }
+let reads = 0;
+function read(): TResult<number, string> {
+  reads += 1;
+  return reads % 2 === 1 ? Result.Ok(reads * 10) : Result.Err(`read ${reads} failed`);
+}
+export function orFalse() {
+  return result { const a = false || try read(); return a; };
+}
+export function andTrue(m: M) {
+  const b = true && match (m) { A(n) => "a", B => "b" };
+  return b;
+}
+export function nullishNull() {
+  return result { const c = null ?? try read(); return c; };
+}
+export function nullishUndefined() {
+  return result { const d = undefined ?? try read(); return d; };
+}
+export function numericLiterals(m: M) {
+  return result {
+    let e = 0 || try read();
+    const f = 1 && match (m) { A(n) => `${n}`, B => "b" };
+    return [e, f] as const;
+  };
+}
+export function parenthesized(m: M) {
+  let h = (false) || match (m) { A(n) => n, B => 0 };
+  return h;
+}
+const show = (label: string, value: unknown) => console.log(`${label}: ${JSON.stringify(value)}`);
+show("orFalse", orFalse());
+show("andTrue A", andTrue(M.A(1)));
+show("andTrue B", andTrue(M.B));
+show("nullishNull", nullishNull());
+show("nullishUndefined", nullishUndefined());
+show("numericLiterals A", numericLiterals(M.A(4)));
+show("numericLiterals B", numericLiterals(M.B));
+show("parenthesized A", parenthesized(M.A(9)));
+show("parenthesized B", parenthesized(M.B));
+show("reads", reads);

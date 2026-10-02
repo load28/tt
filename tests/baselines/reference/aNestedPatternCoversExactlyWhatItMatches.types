@@ -1,0 +1,10 @@
+=== aNestedPatternCoversExactlyWhatItMatches.tt ===
+const n = match (r) {
+>n : const n: any
+  Ok(value: Some(value: v)) => v,
+>value : any
+>v : const v: any
+>v : const v: any
+  Err(error) => 0,
+>error : const error: any
+

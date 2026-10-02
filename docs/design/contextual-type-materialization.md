@@ -13,11 +13,133 @@ types at references to that symbol. Shadowed identifiers are separate symbols.
 An annotation is serialized in the declaration's scope. Conflicting contexts or
 indefinite types do not produce a guessed annotation.
 
+The declaration can enclose the scope the type was observed in: a class
+declared in a match arm's block is out of scope at the storage, and an outer
+declaration of the same name shadows it there (TASK-546). The declaration can
+also sit inside a scope that shadows the declaration the type refers to: a
+nested function's own type parameter `T`, or a local `interface Item`, while
+the arm values have the outer `T` or `Item` (TASK-575). The node builder
+writes both as the same name. The annotation's type node and the type are
+therefore walked together, and every name the node references (each type
+reference, type query and qualified name, resolved through its members) must
+resolve, at the declaration, to the symbol of the part of the type it was
+written for: the type parameter's own symbol, the alias or declaration a type
+reference instantiates, the value a type query names. A part of the node that
+uses a name and cannot be paired with a part of the type proves nothing, and
+the node is not taken either. Otherwise the storage has no annotation and
+TypeScript infers its type from its assignments.
+
+An annotation is the whole type: the node builder is asked with
+`NoTruncation` (TASK-553), since its default shortens a long type to
+`... N more ...`, which is neither the type nor TypeScript. With it, the
+node builder writes the cycle of a recursive anonymous type (the object
+literal `{ k: 1, m() { return this; } }`) as `any` one level down, where its
+default writes `...` (TASK-586). The walk that pairs the node's names with
+the type's symbols therefore pairs each `any` keyword too, and takes the
+node only when every `any` stands for the `any` type; otherwise the storage
+is typed from its values, which TASK-570 types as at their source position.
+
+Nor may an annotation name storage the lowering declared (TASK-552).
+TypeScript names a class expression after the binding it is assigned to, so
+the join of `class { q = 1 }` arms prints as `typeof $tt_v0`, the storage's
+own type query (TS2502). Every round tells the backend the declarations of
+all generated storage, the ones earlier rounds annotated included, and a
+name that resolves to one of them rejects the annotation.
+
+The same holds for a type TypeScript's node builder cannot write at the
+declaration at all, such as the instance or constructor type of an anonymous
+class (TASK-551): `typeToTypeNode` answers no node, and the storage is typed
+from its assignments. One such type never stops the file's compilation.
+
 Each round annotates previously unresolved declarations. An updated snapshot
 then exposes those contexts to nested values. Rounds stop when no additional
 facts are available; successful rounds strictly reduce the unresolved set.
 Type errors are reported by the subsequent TypeScript check, not used to drive
 this process. Context-only rounds do not compute diagnostics.
+
+## Values with no contextual type
+
+An assignment types its right operand by its target. A value written to
+storage declared `let $tt_v0;` is contextually typed by the storage's
+implicit `any`: a method of an object literal gets `this: any`, a function
+literal's return expression is typed against `any`, and a reference to a type
+parameter with a union constraint is read through its constraint. The source
+position the storage stands for can have no contextual type at all
+(`const b = match (n) { … }`), and there TypeScript types the value by itself
+(TASK-570).
+
+When contextual propagation reaches its first fixed point, every slot still
+without a contextual type is detached. A value written to it whose type
+TypeScript computes from its contextual type is first the `value` of an
+object literal an arm-local `const` holds, and the storage reads it from
+there:
+
+```ts
+const $tt_a0 = { value: ({ k: 1, m() { return this; } }) };
+$tt_v0 = $tt_a0.value;
+```
+
+Every other value is written directly, as before: `$tt_v0 = 1;`,
+`$tt_v0 = g();`.
+
+A logical operation writes its left operand to operand storage in the test
+of the `if` that branches on it (`if ($tt_v0 = l)`, TASK-595), where no
+`const` can be declared. There the value is carried in place, as the
+`value` of an object literal the test reads at once:
+`if ($tt_v0 = ({ value: [] }).value)`. An object literal that is the
+operand of a property access has no contextual type either. Operand
+storage (`MarkKind::OperandSlot`) holds the value of one operand of the
+source, so it is never annotated with a contextual type found where it is
+read: once contextual propagation has reached its fixed point, it is
+annotated with the widened type of the one value written to it, as a
+`const` initialized with that value would be typed.
+
+Operand storage settles in a round of its own, before any other join is
+inferred (TASK-626). A join that reads it through the branch it narrows
+(`$r = $l`) is typed by its declared type there: unannotated, `let $l;`
+assigned `false` evolves to `boolean`, which narrows to `true` where it is
+truthy, while its settled annotation `false` narrows to `never`. A round
+that annotates operand storage therefore infers no other join; the next
+join round reads the settled storage. Operand storage that cannot be
+annotated gives no answer, so it does not hold the joins back.
+
+An unannotated `const` initializer has no contextual type, and a property of
+an object literal that has none has none either. The value is a property
+rather than the initializer itself because TypeScript declares an unannotated
+variable by rules of its own: an empty array literal initializer declares an
+evolving array (TS7034 and TS7005 where it is read), and a `Symbol()`
+initializer of a `const` declares a `unique symbol`. A property only widens a
+fresh literal type, which storage with no contextual type widens anyway.
+
+Which values TypeScript types from their context follows its checker, read
+off the value's syntax tree (`typed_by_context` in `src/codegen/contextual.rs`).
+The checker consults the contextual type in typing an object literal (its
+properties, and `this` in its methods), an array literal (its elements), and
+a function expression or arrow function (its parameters and return
+expressions). `getContextualType` passes a position's contextual type on to
+the operand of parentheses, `as const`, a non-null assertion and `await`, to
+both branches of a conditional, to both operands of `||` and `??`, and to the
+right operand of `&&` and of the comma operator. Any other operand has a
+contextual type of its own (a call argument its parameter's, `as T` and
+`satisfies T` their `T`) or none. A class expression's members are not
+contextually typed. The remaining expressions type themselves under `any` as
+they do with no contextual type: a literal is kept literal only by a literal
+contextual type, and a generic call infers nothing from an `any` return
+context. A Result block's success value (`{ kind: "Ok" as const, value: … }`)
+is an object literal, so it is carried too.
+
+Storage for the index of the arm a dispatch selected is never detached: it
+holds no value of the source (`MarkKind::SelectorSlot`). The writes are the
+assignment statements the emission's syntax tree has for the slot's
+generated name, which is unique in its file; the lowering writes storage only
+in its own blocks and `switch` cases, where a `const` can be declared.
+
+The backend says whether an annotation is a contextual type or an inferred
+join (`ContextualSlotType::inferred`). A detached slot that a later round
+finds a contextual type for is written directly again, under that type. The
+arm-local `const`s are listed to the backend as settled storage, so no
+annotation names them. Without a TypeScript toolchain nothing is known about
+contextual types, and the unrefined emission assigns every value directly.
 
 ## Inferred joins
 
@@ -30,15 +152,94 @@ before the remaining union is serialized at the declaration. For example,
 inference without evolving an implicit `any[]`. Unresolved, error, `any`, and
 `unknown` inputs do not provide a definite annotation in that round.
 
+Each right-hand side is widened as TypeScript widens a value written to a
+mutable location (TASK-623): the checker's `getWidenedLiteralType` widens
+only a *fresh* literal type, the type of a literal expression, and keeps a
+*regular* one, the type of a declared literal, of `as const`, or of a
+narrowing (`checker.ts`, `getWidenedLiteralType` and
+`checkExpressionForMutableLocation`; TypeScript 2.1 release notes,
+"Better inference for literal types"). The API answers only regular types
+for expressions (`getTypeAtLocation` is `getRegularTypeOfExpression`), so
+the host reads freshness where the checker keeps it: a literal token (and
+`-`/`+` before a numeric one) is fresh, a name or property is as fresh as
+`getTypeOfSymbolAtLocation` says (a `const c = "a"` is), a call as fresh
+as its resolved signature's return type, and parentheses, `satisfies`, `!`,
+a conditional's branches, a comma's right operand, and the operands of
+`&&`, `||`, and `??` pass their operands' freshness through. With
+`a, b: "north" | "south"`, `match (o) { A => a, B => b }` is stored as
+`"north" | "south"`, and `match (o) { A => "x", B => "y" }` as `string`,
+as `let v = c ? "x" : "y"` is typed. A union with a fresh constituent is
+widened constituent by constituent, since the API builds no unions, and
+the constituents join as incoming types do. Storage is a mutable location
+even where the source's value is not: a `const d = match … { A => "x" … }`
+reads the widened `string`, where TypeScript keeps the fresh `"x"` for a
+`const`; no written annotation can carry freshness, which a later
+`let e = d` would widen again.
+
+Nor does an input typed through storage no round has settled yet (TASK-584).
+Such storage has no type of its own: without `noImplicitAny` it reads as
+`any`, and so does an evolving variable read in a closure. In
+`const g = match (flag) { true => [f()], false => [] }`, `f()` is then `any`
+while `f`'s own join is inferred in the same round, and `g` would keep
+`any[]` after `f` is annotated. A join whose annotation writes `any` and
+one of whose incoming values reads unsettled storage (directly, or through
+the initializer or body of an unannotated declaration in a lowered module,
+or the statement that contextually types an unannotated parameter) waits
+for a later round; the slot's own storage does not count. Joins therefore
+settle in dependency order, and a join that never stops depending on
+unsettled storage (a cycle) is left unannotated and typed from its
+assignments. An `any` of the source, such as `JSON.parse`'s, is annotated
+as soon as its inputs read only settled storage.
+
 A slot therefore holds values of one type. A structured pipeline writes the
 value piped into each step to a slot of its own and only its result to the
 pipeline's value slot (TASK-505), so no annotation has to cover the values of
 several steps.
 
+## Values under an assertion (TASK-596)
+
+TypeScript gives the operand of `as T`, `<T>e`, and `satisfies T` the
+contextual type `T` (through parentheses and `!`; `as const` passes the
+outer context on instead), so object-literal arms keep literal tags and
+callbacks get typed parameters. Neither is an assignment: `as T` only asks
+that the operand and `T` be comparable, and `satisfies T` asks that the
+operand be assignable to `T` while its type stays the operand's own
+(TypeScript handbook, "Type Assertions"; TypeScript 4.9 release notes,
+"The `satisfies` Operator"). Storage annotated with `T` would make both an
+assignment: `match … { A => x … } as number` with `x: unknown` reports
+TS2322, and `match … satisfies { a?: number }` reads back as `{ a?: number }`.
+
+Storage whose contextual type comes from such a read is therefore asserted
+storage. The backend answers the contextual type it found as provisional:
+the storage is annotated with `T` for one round, so the arms are typed
+under `T`. Once contextual propagation has settled (the join phase), the
+backend replaces it with the join of the arms' types under `T`: each is
+widened as TypeScript widens at a mutable location (a literal is kept only
+where `T` has a literal type of its kind, `isLiteralOfContextualType`, and
+fresh object literals are widened), subsumed constituents are removed as
+for any join, and the result is written if every part denotes its type at
+the declaration. A join that is `any`, `unknown`, or not writable clears the
+annotation, and the storage is typed from its assignments.
+
+Without the checker, codegen's syntactic annotation (the declared type of a
+declarator or a function's return type, for a value that is the whole
+initializer or returned expression) stops at an assertion: an outer
+declared type never reaches its operand (`const q: string = match … as
+unknown as string` leaves the storage unannotated). A `satisfies T` operand
+annotates its storage with `T` itself, which accepts exactly the values the
+operator accepts; the declaration is marked (`MarkKind::AssertedAnnotationEnd`),
+so when the checker is present that annotation is asserted storage too and
+is replaced in the same way.
+
 ## Project and output coordinates
 
 Project snapshots include lowered tt files, TypeScript sources and unsaved host
 overlays. Editor service projections use the same contextualized snapshot.
+A project reuses its last materialization for a snapshot that asks the same
+question (the projected modules, the modules served beside them, the listed
+sources, and the roots) while the host reports the same session and disk
+generation, so repeated editor requests on an unchanged project do not ask
+the checker again.
 Standalone file compilation discovers its configuration and candidate tt files,
 while the invoking working directory supplies the installed TypeScript client.
 An unnamed buffer uses that working directory as its inferred project.

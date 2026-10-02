@@ -2,26 +2,30 @@
 
 use super::*;
 
-/// Whether a `return` emitted at token index `at` of this statement
-/// stream would leave a **user-written function inside the stream** — the
-/// placement question `try` asks: its lowering emits a `return`, and that
-/// `return` must have a function of the user's to exit. At the top level
-/// of a module (or of a tt construct's own statement region, which
-/// forms an isolated value region) there is none; inside a `function`, a method, or
-/// an arrow body written in the region there is.
+/// Whether token index `at` of this statement stream stands inside a
+/// **function-like boundary written in the stream** — the placement
+/// question `try`, let-else, and `if let` ask: the exits their lowering
+/// emits (`return`, a labeled `break`) belong to that boundary, not to the
+/// stream's own region. At the top level of a module (or of a tt
+/// construct's own statement region: an isolated value region or a
+/// `result` block's body) there is none; inside a `function`, a method, or
+/// an arrow body written in the region there is, and so there is inside a
+/// class body or a class static block written there ([`FunctionTarget`]):
+/// code there is not evaluated by the region, and neither `return` nor a
+/// `break` to a label outside it is allowed there (ECMA-262 §15.7.1: a
+/// `ClassStaticBlockStatementList` is parsed `[~Return]` and may contain no
+/// undefined break target).
 ///
-/// The classification is per opening brace, and it is the lexer's: a `{`
-/// with the `function_body` fact ([`crate::lexer::TokenFacts`]) opens a
-/// body after `=>` or after a parameter list and its return type.
-/// Everything else — object literals, class and namespace bodies,
-/// control-statement bodies, bare blocks — is transparent or irrelevant:
-/// it never *provides* a function to return from, and never blocks an
-/// outer one from counting.
+/// The classification is per opening brace, and it is the lexer's
+/// ([`function_target_brace`]). Everything else — object literals,
+/// namespace bodies, control-statement bodies, bare blocks — is
+/// transparent: it never *provides* a boundary, and never blocks an outer
+/// one from counting.
 pub(crate) fn in_function_body(tokens: &[Token], at: usize) -> bool {
     let mut stack: Vec<bool> = Vec::new();
     for (k, t) in tokens.iter().enumerate().take(at) {
         match t.kind {
-            TokenKind::Punct(b'{') => stack.push(function_body_brace(tokens, k)),
+            TokenKind::Punct(b'{') => stack.push(function_target_brace(tokens, k).is_some()),
             TokenKind::Punct(b'}') => {
                 stack.pop();
             }
@@ -49,6 +53,12 @@ pub(crate) fn function_depth_at(tokens: &[Token], at: usize) -> usize {
     stack.into_iter().filter(|is_function| *is_function).count()
 }
 
+/// Number of function-like boundaries ([`FunctionTarget`]: user-written
+/// function bodies, concise arrow bodies, class bodies, and class static
+/// blocks) enclosing a token, skipping the braces and arrows of tt
+/// constructs in `tt_owned`. Each boundary is its own Result scope for a
+/// `try` written in it, so a speculative `result` claim counts them to find
+/// the `try`s whose nearest Result scope is the candidate block.
 pub(crate) fn user_function_depth_at(
     tokens: &[Token],
     at: usize,
@@ -58,7 +68,7 @@ pub(crate) fn user_function_depth_at(
     for (index, token) in tokens.iter().enumerate().take(at) {
         match token.kind {
             TokenKind::Punct(b'{') => stack.push(
-                function_body_brace(tokens, index)
+                function_target_brace(tokens, index).is_some()
                     && !tt_owned.contains(&index)
                     && !index
                         .checked_sub(1)
@@ -88,59 +98,47 @@ pub(crate) fn user_function_depth_at(
     braced + concise
 }
 
-/// Whether `at` is directly enclosed by a class static block. A nested
-/// user-written function remains its own Result scope, so callers combine
-/// this with [`function_target_at`] rather than treating every nested token
-/// as statically owned.
-pub(crate) fn in_static_block(src: &str, tokens: &[Token], at: usize) -> bool {
-    let mut stack: Vec<bool> = Vec::new();
-    for (index, token) in tokens.iter().enumerate().take(at) {
-        match token.kind {
-            TokenKind::Punct(b'{') => stack.push(
-                index
-                    .checked_sub(1)
-                    .and_then(|before| tokens.get(before))
-                    .is_some_and(|previous| {
-                        matches!(previous.kind, TokenKind::Ident)
-                            && &src[previous.span.start..previous.span.end] == "static"
-                    }),
-            ),
-            TokenKind::Punct(b'}') => {
-                stack.pop();
-            }
-            _ => {}
-        }
-    }
-    stack.into_iter().any(|is_static| is_static)
-}
-
-/// The kind of user-written function that an early `return` at a token can
-/// reach. Constructors and generators syntactically accept `return`, but a
-/// propagated Result would change their JavaScript completion contract.
+/// The innermost function-like boundary around a token: the kind of
+/// user-written function an early `return` at the token would leave, or the
+/// class code that has none. Constructors and generators syntactically
+/// accept `return`, but a propagated Result would change their JavaScript
+/// completion contract. A class static block and the rest of a class body
+/// outside its methods are boundaries too: code there is not evaluated by the
+/// function the class is written in (ECMA-262 §15.7), so a `return` written
+/// there cannot reach that function.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FunctionTarget {
     Ordinary,
     Constructor,
     Generator,
+    StaticBlock,
+    ClassElement,
 }
 
 pub(crate) struct FunctionTargets {
     braced: Vec<Option<(usize, FunctionTarget)>>,
     arrows: Vec<(usize, usize)>,
+    spans: Vec<(usize, usize)>,
+    interpolations: Vec<(crate::ast::Span, FunctionTargets)>,
 }
 
 impl FunctionTargets {
-    pub(crate) fn new(tokens: &[Token], tt_owned: &std::collections::HashSet<usize>) -> Self {
+    pub(crate) fn new(
+        tokens: &[Token],
+        tt_owned: &dyn Fn(&[Token]) -> std::collections::HashSet<usize>,
+    ) -> Self {
+        let owned = tt_owned(tokens);
         let mut braced = Vec::with_capacity(tokens.len() + 1);
         let mut stack: Vec<Option<(usize, FunctionTarget)>> = Vec::new();
+        let mut interpolations = Vec::new();
         braced.push(None);
         for (index, token) in tokens.iter().enumerate() {
-            match token.kind {
+            match &token.kind {
                 TokenKind::Punct(b'{') => {
-                    let own = (!tt_owned.contains(&index)
+                    let own = (!owned.contains(&index)
                         && !index
                             .checked_sub(1)
-                            .is_some_and(|previous| tt_owned.contains(&previous)))
+                            .is_some_and(|previous| owned.contains(&previous)))
                     .then(|| function_target_brace(tokens, index))
                     .flatten()
                     .map(|target| (index, target));
@@ -150,6 +148,13 @@ impl FunctionTargets {
                 TokenKind::Punct(b'}') => {
                     stack.pop();
                 }
+                TokenKind::Template(parts) => {
+                    for part in parts.iter() {
+                        if let crate::lexer::TplPart::Interp { span, tokens } = part {
+                            interpolations.push((*span, FunctionTargets::new(tokens, tt_owned)));
+                        }
+                    }
+                }
                 _ => {}
             }
             braced.push(stack.last().copied().flatten());
@@ -158,11 +163,19 @@ impl FunctionTargets {
             .iter()
             .enumerate()
             .filter(|(arrow, token)| {
-                matches!(token.kind, TokenKind::Arrow) && !tt_owned.contains(arrow)
+                matches!(token.kind, TokenKind::Arrow) && !owned.contains(arrow)
             })
             .map(|(arrow, _)| (arrow, concise_arrow_end(tokens, arrow + 1)))
             .collect();
-        FunctionTargets { braced, arrows }
+        FunctionTargets {
+            braced,
+            arrows,
+            spans: tokens
+                .iter()
+                .map(|token| (token.span.start, token.span.end))
+                .collect(),
+            interpolations,
+        }
     }
 
     pub(crate) fn at(&self, at: usize) -> Option<FunctionTarget> {
@@ -183,15 +196,30 @@ impl FunctionTargets {
             (None, None) => None,
         }
     }
+
+    pub(crate) fn at_offset(&self, offset: usize) -> Option<FunctionTarget> {
+        let at = self.spans.partition_point(|(start, _)| *start < offset);
+        match at.checked_sub(1) {
+            Some(token) if self.spans[token].1 > offset => self
+                .interpolations
+                .iter()
+                .find(|(span, _)| span.start <= offset && offset < span.end)
+                .and_then(|(_, inner)| inner.at_offset(offset))
+                .or_else(|| self.at(token)),
+            _ => self.at(at),
+        }
+    }
 }
 
 /// Returns the innermost user function enclosing `at`.
+#[cfg(test)]
 pub(crate) fn function_target_at(tokens: &[Token], at: usize) -> Option<FunctionTarget> {
     user_function_target_at(tokens, at, &std::collections::HashSet::new())
 }
 
 /// Returns the innermost user-written function enclosing `at`, skipping the
 /// match body braces and arm arrows in `tt_owned`, which open no function.
+#[cfg(test)]
 pub(crate) fn user_function_target_at(
     tokens: &[Token],
     at: usize,
@@ -271,19 +299,26 @@ pub(super) fn concise_arrow_end(tokens: &[Token], from: usize) -> usize {
     tokens.len()
 }
 
-/// The kind of user function the `{` at `brace` opens, if it opens one:
-/// the lexer's function-body facts ([`crate::lexer::TokenFacts`]).
+/// The function-like boundary the `{` at `brace` opens, if it opens one:
+/// the lexer's function-body, class-body, and static-block facts
+/// ([`crate::lexer::TokenFacts`]).
 pub(super) fn function_target_brace(tokens: &[Token], brace: usize) -> Option<FunctionTarget> {
     let facts = tokens.get(brace)?.facts;
-    facts
-        .function_body()
-        .then_some(if facts.constructor_body() {
+    if facts.function_body() {
+        Some(if facts.constructor_body() {
             FunctionTarget::Constructor
         } else if facts.generator_body() {
             FunctionTarget::Generator
         } else {
             FunctionTarget::Ordinary
         })
+    } else if facts.static_block() {
+        Some(FunctionTarget::StaticBlock)
+    } else if facts.class_body() {
+        Some(FunctionTarget::ClassElement)
+    } else {
+        None
+    }
 }
 
 /// Whether the `{` at token index `k` opens a function body (see

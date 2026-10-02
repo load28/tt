@@ -1,0 +1,2 @@
+jsxFragment(10) => "<>[9]</>" | before "["; flip true; lookup true; found 9; after "]"
+jsxFragment(20) => "<>[40]</>" | before "["; flip false; lookup false; double 40; after "]"

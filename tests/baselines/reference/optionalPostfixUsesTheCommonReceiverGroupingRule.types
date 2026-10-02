@@ -1,0 +1,8 @@
+=== optionalPostfixUsesTheCommonReceiverGroupingRule.tt ===
+const a = value |> ?.member;
+>a : const a: any
+const b = left + right |> ?.member;
+>b : const b: any
+const c = make() |> ?.member;
+>c : const c: any
+

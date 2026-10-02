@@ -1,0 +1,2 @@
+forUpdate(8) => 9 | body 0; arrow 9
+forUpdate(9) => null | body 0; arrow null

@@ -1,0 +1,2 @@
+switchDiscriminant({"kind":"Click","x":3}) => "default" | click 3; case 0
+switchDiscriminant({"kind":"Key","key":"k"}) => threw Cannot read properties of undefined (reading 'kind') | 

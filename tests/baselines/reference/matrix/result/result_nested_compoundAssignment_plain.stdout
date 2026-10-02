@@ -1,0 +1,2 @@
+compoundAssignment(2) => "start:[object Object]" | initial "start:"; target {"total":"start:"}; operand 2; read 2; inner {"kind":"Ok","value":3}
+compoundAssignment(-1) => "start:[object Object]" | initial "start:"; target {"total":"start:"}; operand -1; read -1; inner {"kind":"Err","error":"negative -1"}

@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in a constructor or generator — its `Err` propagation requires an ordinary function return
+ --> ./main.tt:7:7
+  |
+7 |       try read((yield input));
+  |       ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into an ordinary function, or handle the Result explicitly
+
+error[match-control-crossing]: `yield` cannot cross a match arm boundary
+ --> ./main.tt:7:17
+  |
+7 |       try read((yield input));
+  |                 ^^^^^
+  |
+  = help: yield outside the match, or yield inside a generator written in this arm
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a constructor or generator — its `Err` propagation requires an ordinary function return
+ --> main.tt:7:7
+  |
+7 |       try read((yield input));
+  |       ^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into an ordinary function, or handle the Result explicitly
+error[match-control-crossing]: `yield` cannot cross a match arm boundary
+ --> main.tt:7:17
+  |
+7 |       try read((yield input));
+  |                 ^^^^^
+  |
+  = help: yield outside the match, or yield inside a generator written in this arm
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,2 @@
+tryBlock(3) => 3 | await; param 3
+tryBlock(8) => 8 | await; param 8

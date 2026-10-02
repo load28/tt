@@ -1,0 +1,10 @@
+//// [nestedPatternMixesPlainBindingsAtEachLevel.tt] 8 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:1 -> 16:1 len 10  "const n = "
+2:18 -> 4:17 len 1  "r"
+3:8 -> 7:15 len 4  "left"
+3:26 -> 8:15 len 5  "value"
+3:37 -> 9:18 len 12  "left + value"
+4:8 -> 12:16 len 1  "0"
+5:2 -> 16:19 len 2  ";\n"
+

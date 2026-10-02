@@ -1,0 +1,155 @@
+=== resultBlockBindingsAreNarrowedSuccessValues.tt ===
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>T : (type parameter) T in type Res<T, E>
+>E : (type parameter) E in type Res<T, E>
+>Ok : (property) Ok: <T, E>(value: T) => Res<T, E>
+>value : (property) value: T
+>T : (type parameter) T in type Res<T, E>
+>Err : (property) Err: <T, E>(error: E) => Res<T, E>
+>error : (property) error: E
+>E : (type parameter) E in type Res<T, E>
+variant UserError { NoUser() }
+>UserError : type UserError = {
+>       kind: "NoUser";
+>   }
+>NoUser : (property) NoUser: () => UserError
+variant CompanyError { NoCompany(id: number) }
+>CompanyError : type CompanyError = {
+>       kind: "NoCompany";
+>       id: number;
+>   }
+>NoCompany : (property) NoCompany: (id: number) => CompanyError
+>id : (property) id: number
+type User = { id: number; name: string; companyId: number };
+>User : type User = {
+>       id: number;
+>       name: string;
+>       companyId: number;
+>   }
+>id : (property) id: number
+>name : (property) name: string
+>companyId : (property) companyId: number
+type Company = { id: number; name: string };
+>Company : type Company = {
+>       id: number;
+>       name: string;
+>   }
+>id : (property) id: number
+>name : (property) name: string
+declare function getUser(id: number): Res<User, UserError>;
+>getUser : function getUser(id: number): Res<User, UserError>
+>id : (parameter) id: number
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>User : type User = {
+>       id: number;
+>       name: string;
+>       companyId: number;
+>   }
+>UserError : type UserError = {
+>       kind: "NoUser";
+>   }
+declare function getCompany(id: number): Res<Company, CompanyError>;
+>getCompany : function getCompany(id: number): Res<Company, CompanyError>
+>id : (parameter) id: number
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>Company : type Company = {
+>       id: number;
+>       name: string;
+>   }
+>CompanyError : type CompanyError = {
+>       kind: "NoCompany";
+>       id: number;
+>   }
+const view = (id: number) => result {
+>view : const view: (id: number) => {
+>       kind: "Err";
+>       error: UserError;
+>   } | {
+>       kind: "Err";
+>       error: CompanyError;
+>   } | {
+>       kind: "Ok";
+>       value: {
+>           user: User;
+>           company: Company;
+>           label: string;
+>       };
+>   }
+>id : (parameter) id: number
+  const user = try getUser(id);
+>user : const user: User
+>getUser : function getUser(id: number): Res<User, UserError>
+>id : (parameter) id: number
+  const company = try getCompany(user.companyId);
+>company : const company: Company
+>getCompany : function getCompany(id: number): Res<Company, CompanyError>
+>user : const user: User
+>companyId : (property) companyId: number
+  const label: string = user.name.toUpperCase() + company.name;
+>label : const label: string
+>user : const user: User
+>name : (property) name: string
+>toUpperCase : (method) String.toUpperCase(): string
+>company : const company: Company
+>name : (property) name: string
+  return { user, company, label };
+>user : (property) user: User
+>company : (property) company: Company
+>label : (property) label: string
+const check = (id: number): string => match (view(id)) {
+>check : const check: (id: number) => string
+>id : (parameter) id: number
+>view : const view: (id: number) => {
+>       kind: "Err";
+>       error: UserError;
+>   } | {
+>       kind: "Err";
+>       error: CompanyError;
+>   } | {
+>       kind: "Ok";
+>       value: {
+>           user: User;
+>           company: Company;
+>           label: string;
+>       };
+>   }
+>id : (parameter) id: number
+  Ok(value) => value.label,
+>value : const value: {
+>       user: User;
+>       company: Company;
+>       label: string;
+>   }
+>value : const value: {
+>       user: User;
+>       company: Company;
+>       label: string;
+>   }
+>label : (property) label: string
+  Err(error) => match (error) {
+>error : const error: CompanyError | UserError
+>error : const error: CompanyError | UserError
+    NoCompany(id: missing) => "no company " + missing,
+>id : (property) id: number
+>missing : const missing: number
+>missing : const missing: number
+

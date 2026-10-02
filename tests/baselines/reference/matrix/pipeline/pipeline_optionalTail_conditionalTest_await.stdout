@@ -1,0 +1,2 @@
+conditionalTest(2.5) => "truthy" | await; positive 2.5; then "truthy"
+conditionalTest(-3) => "falsy" | await; positive undefined; else "falsy"

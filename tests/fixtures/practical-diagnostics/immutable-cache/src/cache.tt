@@ -13,4 +13,4 @@ export function selectedLabel(): string {
   return name;
 }
 
-export const count = 42 |> format; //~ ERROR[ts2345] type mismatch
+export const count = 42 |> format; //~ ERROR[ts2345] is not assignable

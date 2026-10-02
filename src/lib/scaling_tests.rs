@@ -34,6 +34,26 @@ fn assert_linear(small: &HashMap<&'static str, usize>, large: &HashMap<&'static 
 }
 
 #[test]
+fn yield_context_queries_do_linear_work_in_nested_expressions() {
+    let source = |n| {
+        format!(
+            "function* g() {{ const values = {}{}0{}; }}",
+            "[".repeat(n),
+            "yield 1, ".repeat(n),
+            "]".repeat(n),
+        )
+    };
+    let lex = |n| {
+        let text = source(n);
+        crate::lexer::lex(&text, 0, text.len());
+    };
+    let small = measure(|| lex(100));
+    let large = measure(|| lex(200));
+    assert!(small["yield context probes"] > 0);
+    assert_linear(&small, &large);
+}
+
+#[test]
 fn every_request_does_linear_work_in_the_number_of_statement_matches() {
     let small = measure(|| every_request(&statement_matches(150)));
     let large = measure(|| every_request(&statement_matches(300)));
@@ -48,6 +68,24 @@ fn every_request_does_linear_work_in_the_number_of_expression_matches() {
     let large = measure(|| every_request(&expression_matches(300)));
     assert_linear(&small, &large);
     assert!(large["concise arrow scans"] > 0);
+}
+
+fn nested_matches(depth: usize) -> String {
+    format!(
+        "export variant V {{ A(v: V), B }}\ndeclare const a: V;\nexport const x = {}1{};\nexport function f() {{ {}g();{} }}\n",
+        "match (a) { A(v) => ".repeat(depth),
+        ", B => 2 }".repeat(depth),
+        "if let A(v) = a { ".repeat(depth),
+        " }".repeat(depth),
+    )
+}
+
+#[test]
+fn every_request_does_linear_work_in_the_nesting_depth_of_matches() {
+    let small = measure(|| every_request(&nested_matches(60)));
+    let large = measure(|| every_request(&nested_matches(120)));
+    assert_linear(&small, &large);
+    assert!(large["arm outline steps"] > 0);
 }
 
 #[test]
@@ -96,6 +134,7 @@ fn projecting_a_file_for_a_snapshot_parses_it_once() {
             crate::engine::ProjectedDocument::project_for_snapshot(
                 Path::new("/scaling/module.tt"),
                 source.clone(),
+                false,
             )
             .expect("the module projects")
         });
@@ -125,7 +164,16 @@ fn many_utf16_offsets_answer_what_one_offset_answers() {
 }
 
 fn contextual_project(files: usize) -> (crate::test_workspace::Workspace, std::path::PathBuf) {
-    let root = crate::test_workspace::Workspace::with_subdir("contextual-scaling", "src");
+    contextual_files(
+        crate::test_workspace::Workspace::with_subdir("contextual-scaling", "src"),
+        files,
+    )
+}
+
+fn contextual_files(
+    root: crate::test_workspace::Workspace,
+    files: usize,
+) -> (crate::test_workspace::Workspace, std::path::PathBuf) {
     std::fs::write(
         root.join("tsconfig.json"),
         r#"{ "compilerOptions": { "strict": true, "target": "esnext", "module": "preserve", "moduleResolution": "bundler", "noEmit": true, "skipLibCheck": true }, "include": ["src"] }"#,
@@ -176,20 +224,21 @@ fn project_files_share_one_projection_each_and_one_checker_materialization() {
         return;
     }
     let files = 6;
-    let (_workspace, root) = contextual_project(files);
-    let fresh: Vec<String> = (0..files)
-        .map(|file| {
-            let root = root.clone();
-            std::thread::spawn(move || contextual_compile(&root, file))
-                .join()
-                .unwrap()
-        })
-        .collect();
+    // A reference answer comes from a project no other call has seen.
+    let fresh = |file: usize, dep: Option<&str>| {
+        let (_workspace, root) = contextual_project(files);
+        if let Some(dep) = dep {
+            std::fs::write(root.join("src/dep.ts"), dep).unwrap();
+        }
+        contextual_compile(&root, file)
+    };
+    let expected: Vec<String> = (0..files).map(|file| fresh(file, None)).collect();
     assert!(
-        fresh[1].contains("let $tt_v0: (string) | (number[]);"),
+        expected[1].contains("let $tt_v0: (string) | (number[]);"),
         "{}",
-        fresh[1]
+        expected[1]
     );
+    let (_workspace, root) = contextual_project(files);
     let mut shared = Vec::new();
     let first = measure(|| shared.push(contextual_compile(&root, 0)));
     let rest = measure(|| {
@@ -197,21 +246,191 @@ fn project_files_share_one_projection_each_and_one_checker_materialization() {
             shared.push(contextual_compile(&root, file));
         }
     });
-    assert_eq!(shared, fresh);
-    assert_eq!(first["contextual projections"], files - 1);
-    assert_eq!(rest["contextual projections"], files - 1);
+    assert_eq!(shared, expected);
+    assert_eq!(first["contextual projections"], files);
     assert!(first["contextual checker asks"] > 0);
+    assert_eq!(rest.get("contextual projections"), None);
     assert_eq!(rest.get("contextual checker asks"), None);
-    std::fs::write(root.join("src/dep.ts"), "export const d: boolean = true;\n").unwrap();
+    // Workers compiling the project in parallel share what it already knows.
+    let workers: Vec<_> = (0..files)
+        .map(|file| {
+            let root = root.clone();
+            std::thread::spawn(move || {
+                let mut output = String::new();
+                let counts = measure(|| output = contextual_compile(&root, file));
+                (output, counts)
+            })
+        })
+        .collect();
+    for (file, worker) in workers.into_iter().enumerate() {
+        let (output, counts) = worker.join().unwrap();
+        assert_eq!(output, expected[file]);
+        assert_eq!(counts.get("contextual projections"), None);
+        assert_eq!(counts.get("contextual checker asks"), None);
+    }
+    let dep = "export const d: boolean = true;\n";
+    std::fs::write(root.join("src/dep.ts"), dep).unwrap();
     let mut changed = String::new();
     let after = measure(|| changed = contextual_compile(&root, 0));
-    let expected = {
-        let root = root.clone();
-        std::thread::spawn(move || contextual_compile(&root, 0))
-            .join()
-            .unwrap()
-    };
-    assert_eq!(changed, expected);
+    assert_eq!(changed, fresh(0, Some(dep)));
     assert!(changed.contains("boolean"), "{changed}");
     assert!(after["contextual checker asks"] > 0);
+}
+
+fn toolchain_present() -> bool {
+    if crate::typescript::toolchain::client(Path::new(env!("CARGO_MANIFEST_DIR"))).is_ok() {
+        return true;
+    }
+    assert!(
+        std::env::var_os("TTC_REQUIRE_TSGO").is_none_or(|value| value.is_empty() || value == "0"),
+        "TTC_REQUIRE_TSGO is set but no TypeScript toolchain was found"
+    );
+    false
+}
+
+fn open_contextual_project(
+    engine: &crate::engine::Engine,
+    root: &Path,
+    documents: &[(std::path::PathBuf, String)],
+) -> crate::engine::Project {
+    let mut project = engine
+        .open_project(
+            &[root.join("src").to_string_lossy().into_owned()],
+            &crate::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    for (path, text) in documents {
+        project.open_document(path.clone(), text.clone());
+    }
+    project
+}
+
+fn project_emits(project: &mut crate::engine::Project) -> Vec<(std::path::PathBuf, String)> {
+    let files = project.initial_files();
+    let snapshot = project.update(&files).unwrap();
+    let mut emits: Vec<_> = snapshot
+        .files()
+        .iter()
+        .map(|file| (file.source_path.clone(), file.emit.code.clone()))
+        .collect();
+    emits.sort();
+    emits
+}
+
+#[test]
+fn project_requests_materialize_once_per_state_of_their_inputs() {
+    if !toolchain_present() {
+        return;
+    }
+    let (_workspace, root) = contextual_files(
+        crate::test_workspace::Workspace::in_repo_with_subdir("contextual-requests", "src"),
+        2,
+    );
+    let fresh = |documents: &[(std::path::PathBuf, String)]| {
+        project_emits(&mut open_contextual_project(
+            &crate::engine::Engine::new(None),
+            &root,
+            documents,
+        ))
+    };
+    let edited = root.join("src/f1.tt");
+    let dep = root.join("src/dep.ts");
+    let mut documents = vec![(edited.clone(), std::fs::read_to_string(&edited).unwrap())];
+    let engine = crate::engine::Engine::new(None);
+    let mut project = open_contextual_project(&engine, &root, &documents);
+    let hover = |project: &mut crate::engine::Project, character: u32| {
+        project
+            .hover(&edited, crate::engine::Position { line: 1, character })
+            .unwrap();
+    };
+    let asks = |counts: &HashMap<&'static str, usize>| {
+        counts.get("contextual checker asks").copied().unwrap_or(0)
+    };
+
+    let first = measure(|| hover(&mut project, 16));
+    assert!(asks(&first) > 0);
+    let repeated = measure(|| {
+        for character in [16, 34, 40, 60, 16] {
+            hover(&mut project, character);
+        }
+    });
+    assert_eq!(asks(&repeated), 0, "unchanged hovers materialize again");
+    let mut emits = Vec::new();
+    let unchanged = measure(|| emits = project_emits(&mut project));
+    assert_eq!(asks(&unchanged), 0);
+    assert_eq!(emits, fresh(&documents));
+
+    documents[0].1 = documents[0].1.replace("_ => [s]", "_ => [s, s]");
+    project.update_document(edited.clone(), documents[0].1.clone());
+    let changed = measure(|| hover(&mut project, 16));
+    assert!(asks(&changed) > 0, "an edited document reuses stale types");
+    let again = measure(|| hover(&mut project, 34));
+    assert_eq!(asks(&again), 0);
+    assert_eq!(project_emits(&mut project), fresh(&documents));
+
+    std::fs::write(&dep, "export const d: boolean = true;\n").unwrap();
+    let disk = measure(|| emits = project_emits(&mut project));
+    assert!(
+        asks(&disk) > 0,
+        "a disk dependency change reuses stale types"
+    );
+    assert!(
+        emits.iter().any(|(_, code)| code.contains("boolean")),
+        "{emits:?}"
+    );
+    assert_eq!(emits, fresh(&documents));
+
+    documents.push((dep.clone(), "export const d: number = 1;\n".to_owned()));
+    project.open_document(dep.clone(), documents[1].1.clone());
+    let overlay = measure(|| emits = project_emits(&mut project));
+    assert!(
+        asks(&overlay) > 0,
+        "a host overlay change reuses stale types"
+    );
+    assert!(
+        emits.iter().all(|(_, code)| !code.contains("boolean")),
+        "{emits:?}"
+    );
+    assert_eq!(emits, fresh(&documents));
+    let settled = measure(|| hover(&mut project, 16));
+    assert_eq!(asks(&settled), 0);
+}
+
+fn unbalanced_openers(kind: crate::SourceKind, source: &str) {
+    crate::engine::semantic_tokens_with_kind(source, kind);
+    let _ = crate::check_report(
+        source,
+        &crate::Options {
+            source_kind: kind,
+            ..crate::Options::default()
+        },
+    );
+}
+
+#[test]
+fn every_request_does_linear_work_in_unclosed_type_shaped_openers() {
+    let fuzzed = "\tK<-[(\tK<\tK<[({[( -[(\t(\tK<\tK<[({[(\tK<[({[(\tK<[({[<[({[(\tK<[({[(.....z.........\tK<[K<[({[(\tK<[({[<[({[(\tK<[({[(.....z.........\tK<[({[<0";
+    for kind in [crate::SourceKind::TypeScript, crate::SourceKind::Tsx] {
+        for (text, count) in [(fuzzed, 20), ("K<[({[(", 200)] {
+            let [one, two, four] = [1, 2, 4]
+                .map(|times| measure(|| unbalanced_openers(kind, &text.repeat(times * count))));
+            for (name, &work) in &four {
+                let at =
+                    |counts: &HashMap<&'static str, usize>| counts.get(name).copied().unwrap_or(0);
+                assert!(
+                    work.saturating_sub(at(&two)) <= 2 * at(&two).saturating_sub(at(&one)) + 64,
+                    "{kind:?} {name}: {} units for n openers, {} for 2n, {work} for 4n",
+                    at(&one),
+                    at(&two),
+                );
+            }
+            assert!(four["type argument lookahead steps"] > 0, "{kind:?}");
+            if text == fuzzed {
+                assert!(four["expression lookahead steps"] > 0, "{kind:?}");
+            }
+            if kind == crate::SourceKind::Tsx {
+                assert!(four["operand probe frames"] > 0);
+            }
+        }
+    }
 }

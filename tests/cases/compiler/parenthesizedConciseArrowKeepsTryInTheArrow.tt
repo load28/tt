@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::parenthesized_concise_arrow_keeps_try_in_the_arrow
+const f = () => (try next());

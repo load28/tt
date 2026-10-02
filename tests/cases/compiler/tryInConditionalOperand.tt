@@ -1,0 +1,47 @@
+// A `try` nested in an operand of a conditional operation keeps the
+// operation's evaluation: the operand runs only when the operation reaches
+// it, its values run left to right with the source between them, and an
+// `Err` leaves the function before anything after it. This holds for several
+// values in one branch of `&&`, `||`, `??`, and `? :`, and for an optional
+// call's argument that holds a value inside a larger expression.
+// @run: tryInConditionalOperand.tt
+import type { TResult } from "@tt/std";
+const log: string[] = [];
+function read(n: number): TResult<number, string> {
+  log.push(`read ${n}`);
+  return n >= 0 ? { kind: "Ok", value: n } : { kind: "Err", error: `bad ${n}` };
+}
+function note<T>(label: string, value: T): T {
+  log.push(label);
+  return value;
+}
+function sink(label: string): ((...values: unknown[]) => string) | undefined {
+  log.push(`callee ${label}`);
+  return label === "none" ? undefined : (...values: unknown[]) => values.join("|");
+}
+function logical(flag: boolean, n: number): TResult<unknown, string> {
+  const and = flag && (try read(n)) + note("middle", 10) + (try read(n + 1));
+  const or = !flag || (try read(n)) * (try read(n + 2));
+  const nullish = (flag ? null : "set") ?? (try read(n)) - (try read(n + 3));
+  return { kind: "Ok", value: [and, or, nullish] };
+}
+function ternary(flag: boolean, n: number): TResult<unknown, string> {
+  const both = flag ? (try read(n)) + (try read(n + 1)) : (try read(n + 2)) * 2;
+  const one = flag ? note("plain", 0) : [try read(n), note("after", 1), try read(n + 1)];
+  return { kind: "Ok", value: [both, one] };
+}
+function optional(label: string, n: number): TResult<unknown, string> {
+  const scaled = sink(label)?.(note("first", 1), try read(n) * 2, note("last", 3));
+  const member = sink(label)?.((try read(n)).toFixed(1), (try read(n)) + (try read(n + 1)));
+  return { kind: "Ok", value: [scaled, member] };
+}
+for (const [flag, n] of [[true, 1], [false, 1], [true, -2], [false, -2]] as const) {
+  log.length = 0;
+  console.log(JSON.stringify(logical(flag, n)), log.join(","));
+  log.length = 0;
+  console.log(JSON.stringify(ternary(flag, n)), log.join(","));
+}
+for (const [label, n] of [["some", 2], ["none", 2], ["some", -1], ["none", -1]] as const) {
+  log.length = 0;
+  console.log(JSON.stringify(optional(label, n)), log.join(","));
+}

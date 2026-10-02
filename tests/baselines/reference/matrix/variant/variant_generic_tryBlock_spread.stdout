@@ -1,0 +1,2 @@
+tryBlock(4) => {"kind":"Node","left":{"kind":"Leaf","value":4},"right":{"kind":"Node","left":{"kind":"Leaf","value":5},"right":{"kind":"Leaf","value":0}}} | 
+tryBlock(9) => {"kind":"Node","left":{"kind":"Leaf","value":9},"right":{"kind":"Node","left":{"kind":"Leaf","value":10},"right":{"kind":"Leaf","value":0}}} | 

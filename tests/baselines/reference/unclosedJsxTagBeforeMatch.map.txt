@@ -1,0 +1,8 @@
+//// [unclosedJsxTagBeforeMatch.ttx] 6 mapping(s)
+1:1 -> 19:1 len 216  "// An opening tag left unclosed before a `{match"...
+4:37 -> 28:3 len 74  "\nexport function App(s: Status) {\n  return (\n   "...
+9:15 -> 34:23 len 1  "s"
+9:28 -> 37:28 len 3  "\"i\""
+9:41 -> 41:28 len 3  "\"b\""
+9:46 -> 48:34 len 20  "}\n    </div>\n  );\n}\n"
+

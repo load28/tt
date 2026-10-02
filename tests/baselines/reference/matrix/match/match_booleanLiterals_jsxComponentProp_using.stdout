@@ -1,0 +1,2 @@
+jsxComponentProp(true) => "<Show 1>" | open res; operand true; yes 1; dispose res
+jsxComponentProp(false) => "<Show 0>" | open res; operand false; no 0; dispose res

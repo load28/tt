@@ -1,0 +1,119 @@
+=== runtimeOrPatternsInLetElseAndIfLet.tt ===
+variant Shape { Circle(r: number), Square(r: number), Dot }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       r: number;
+>   } | {
+>       kind: "Dot";
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>r : (property) r: number
+>Square : (property) Square: (r: number) => Shape
+>r : (property) r: number
+>Dot : (property) Dot: {
+>       readonly kind: "Dot";
+>   }
+function side(s: Shape): number {
+>side : function side(s: Shape): number
+>s : (parameter) s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       r: number;
+>   } | {
+>       kind: "Dot";
+>   }
+  const Circle(r) | Square(r) = s else { return 0; };
+>r : const r: number
+>r : const r: number
+>s : (parameter) s: Shape
+  return r;
+>r : const r: number
+function tell(s: Shape): string {
+>tell : function tell(s: Shape): string
+>s : (parameter) s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       r: number;
+>   } | {
+>       kind: "Dot";
+>   }
+  if let Circle(r) | Square(r) = s {
+>r : const r: number
+>r : const r: number
+>s : (parameter) s: Shape
+    return "sized " + r;
+>r : const r: number
+console.log(side(Shape.Circle(3)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>side : function side(s: Shape): number
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (r: number) => Shape;
+>       Dot: {
+>           readonly kind: "Dot";
+>       };
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+console.log(side(Shape.Square(4)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>side : function side(s: Shape): number
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (r: number) => Shape;
+>       Dot: {
+>           readonly kind: "Dot";
+>       };
+>   }
+>Square : (property) Square: (r: number) => Shape
+console.log(side(Shape.Dot));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>side : function side(s: Shape): number
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (r: number) => Shape;
+>       Dot: {
+>           readonly kind: "Dot";
+>       };
+>   }
+>Dot : (property) Dot: {
+>       readonly kind: "Dot";
+>   }
+console.log(tell(Shape.Square(5)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>tell : function tell(s: Shape): string
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (r: number) => Shape;
+>       Dot: {
+>           readonly kind: "Dot";
+>       };
+>   }
+>Square : (property) Square: (r: number) => Shape
+console.log(tell(Shape.Dot));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>tell : function tell(s: Shape): string
+>Shape : const Shape: {
+>       Circle: (r: number) => Shape;
+>       Square: (r: number) => Shape;
+>       Dot: {
+>           readonly kind: "Dot";
+>       };
+>   }
+>Dot : (property) Dot: {
+>       readonly kind: "Dot";
+>   }
+

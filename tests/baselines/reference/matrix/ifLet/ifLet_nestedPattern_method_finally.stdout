@@ -1,0 +1,3 @@
+method({"kind":"Done","value":{"kind":"Some","value":5}}) => 5 | operand {"kind":"Done","value":{"kind":"Some","value":5}}; some 5; finally 0
+method({"kind":"Done","value":{"kind":"None"}}) => "other" | operand {"kind":"Done","value":{"kind":"None"}}; finally 0
+method({"kind":"Failed","error":"gone"}) => "other" | operand {"kind":"Failed","error":"gone"}; finally 0

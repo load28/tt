@@ -1,0 +1,4 @@
+=== tryInsideAFunctionInsideATemplateInterpolationIsAllowed.tt ===
+const s = `${run(() => { try g(); return h(); })}`;
+>s : const s: string
+

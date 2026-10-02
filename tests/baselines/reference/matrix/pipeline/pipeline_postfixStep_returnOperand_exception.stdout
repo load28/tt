@@ -1,0 +1,2 @@
+returnOperand(1.25) => "1.3" | risky 1.25
+returnOperand(7) => "7.0" | risky 7

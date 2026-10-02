@@ -1,0 +1,14 @@
+// @origin: tests/integration.rs::generated_guards_reach_the_host_globals_past_a_shadowed_global_this
+// @run: generatedGuardsReachTheHostGlobalsPastAShadowedGlobalThis1.tt
+
+variant O { Some(value: number), None }
+function f(o: O, globalThis: unknown) { const Error = 5; return match (o) { Some(value) => value, None => Error }; }
+try { f({ kind: "Nope" } as unknown as O, 1); } catch (e) { console.log(e instanceof RangeError, (e as { message: string }).message); }
+function g(v: 1 | 2, s: "a" | "b", globalThis: unknown) {
+  const JSON = 1, String = 2;
+  return match (v) { 1 => JSON, 2 => String } + match (s) { "a" => 1, "b" => 2 };
+}
+try { g(3 as 1, "a", 1); } catch (e) { console.log((e as { message: string }).message); }
+try { g(1, "c" as "a", 1); } catch (e) { console.log((e as { message: string }).message); }
+
+export {};

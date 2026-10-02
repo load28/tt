@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aHandWrittenPayloadFieldIsNotAMisspelling.tt → $DIR/out/aHandWrittenPayloadFieldIsNotAMisspelling.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'o'.
+ --> aHandWrittenPayloadFieldIsNotAMisspelling.tt:1:18
+  |
+1 | const n = match (o) { Some(v) => v, None => 0 };
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aHandWrittenPayloadFieldIsNotAMisspelling.ts(21,17): error TS2304: Cannot find name 'o'.

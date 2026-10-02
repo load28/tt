@@ -49,6 +49,7 @@ mod help_tests;
 #[cfg(test)]
 mod test_workspace;
 
+use ttc::banner::{BannerPlacement, write_banner};
 use ttc::engine::collect_sources;
 use ttc::source_map::SourceMapRequest;
 use ttc::{
@@ -93,7 +94,8 @@ Options:
   --types               --check-types, and write the editor/typecheck
                         sidecars the compiler emits: <name>.tt.d.ts + .map
                         under -o (default .tt-types)
-  --project <path>      tsconfig.json the two modes above check against
+  --project <path>      tsconfig.json the two modes above check against, and
+                        whose `jsx` option names a .ttx import's output
                         (default: the nearest one at or above the inputs)
   --node <path>         node binary the TypeScript compiler's client runs
                         with (default: node on PATH)
@@ -113,8 +115,9 @@ Tooling options (bundler plugins, editors):
                         inline = a data: URL in the output itself
   --rewrite-imports <js|ts|off>
                         how relative .tt/.ttx specifiers are emitted:
-                        js = ./x.js/.jsx (default), ts = ./x.ts/.tsx,
-                        off = untouched
+                        js = ./x.js (default; a .ttx import becomes .jsx
+                        under the project's \"jsx\": \"preserve\", as tsc
+                        names its output), ts = ./x.ts/.tsx, off = untouched
   --sidecar <dir>       write <name>.tt.d.ts and .map next to each input from
                         <dir>/<path>/<name>.d.ts, where <path> is the input's
                         directory below the inputs' common directory (the
@@ -123,7 +126,7 @@ Tooling options (bundler plugins, editors):
   --symbols             print tt variant declarations (with positions) and the
                         direct .tt imports of each input as JSON; compiles
                         nothing (for language tooling)
-  --dependencies        print compiler dependency paths as JSON (including types)
+  --dependencies        print the files and directories a compile depends on as JSON
   --emit-map            print each input's emitted TypeScript plus source<->
                         output byte mappings as JSON; parse + emit only (no
                         tt-level checks, .tt specifiers untouched) — the

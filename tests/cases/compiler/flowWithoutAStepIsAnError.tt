@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::flow_without_a_step_is_an_error
+const f = flow |>;

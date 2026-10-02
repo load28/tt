@@ -1,0 +1,14 @@
+// @origin: tests/integration/cases_03.rs::a_materialized_pipeline_keeps_head_before_callee
+// @run: aMaterializedPipelineKeepsHeadBeforeCallee.tt
+
+variant E { A(value: number), B }
+const order: string[] = [];
+const head = (): E => { order.push("head"); return E.A(2); };
+const step = () => { order.push("step"); return (value: number) => {
+  order.push("call");
+  return value + 1;
+}; };
+const value = match (head()) { A(value) => value, B => 0 } |> step();
+console.log(order.join(","), value);
+
+export {};

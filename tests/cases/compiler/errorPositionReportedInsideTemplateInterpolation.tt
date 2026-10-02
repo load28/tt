@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::error_position_reported_inside_template_interpolation
+const s = `${match (x) { A => 1, A => 2 }}`;

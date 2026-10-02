@@ -1,0 +1,3 @@
+labeledBlock({"kind":"Done","value":{"kind":"Some","value":5}}) => 5 | some 5
+labeledBlock({"kind":"Done","value":{"kind":"None"}}) => "other" | 
+labeledBlock({"kind":"Failed","error":"gone"}) => "other" | 

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseEmitsGuardAndBind.tt → $DIR/out/letElseEmitsGuardAndBind.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseEmitsGuardAndBind.tt:2:23
+  |
+2 |   const Some(value) = find() else { return 0; };
+  |                       ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseEmitsGuardAndBind.ts(2,18): error TS2304: Cannot find name 'find'.

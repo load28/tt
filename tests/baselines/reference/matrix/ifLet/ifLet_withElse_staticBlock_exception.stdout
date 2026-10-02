@@ -1,0 +1,2 @@
+staticBlock(3) => 3 | risky 3; read 3; then 3
+staticBlock(-3) => "missing" | risky -3; read -3; else "missing"

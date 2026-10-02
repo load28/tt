@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./statementBodiedResultReturnsAPropagatedValue.tt → $DIR/out/statementBodiedResultReturnsAPropagatedValue.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'read'.
+ --> statementBodiedResultReturnsAPropagatedValue.tt:1:35
+  |
+1 | const value = result { return try read(); };
+  |                                   ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+statementBodiedResultReturnsAPropagatedValue.ts(3,18): error TS2304: Cannot find name 'read'.

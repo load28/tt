@@ -1,0 +1,2 @@
+tryBlock(3) => 13 | risky 3; original 13
+tryBlock(8) => 18 | risky 8; original 18

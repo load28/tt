@@ -1,0 +1,15 @@
+//// [typecheckWildcardMakesPartialMatchExhaustive.tt] 13 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:32 -> 3:31 len 6  "number"
+2:32 -> 7:20 len 6  "number"
+2:49 -> 4:24 len 6  "number"
+2:49 -> 8:13 len 6  "number"
+2:60 -> 4:35 len 6  "number"
+2:60 -> 8:24 len 6  "number"
+2:76 -> 10:3 len 25  "\nconst f = (s: Shape) => "
+3:32 -> 14:19 len 1  "s"
+4:10 -> 17:17 len 6  "radius"
+4:21 -> 18:18 len 6  "radius"
+5:8 -> 22:18 len 1  "0"
+6:2 -> 28:2 len 14  ";\n\nexport {};\n"
+

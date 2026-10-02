@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::match_in_spread_operands_enters_the_evaluation_protocol
+const value = { ...match (kind) { A => ({ a: 1 }), _ => ({}) } };

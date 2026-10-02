@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_05.rs::unparenthesized_ternary_next_to_pipeline_is_an_error
+const a = c ? x : y |> f;

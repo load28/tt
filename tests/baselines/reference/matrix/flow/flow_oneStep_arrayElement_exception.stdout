@@ -1,0 +1,2 @@
+arrayElement(7) => [0,null,2] | first 0; risky 7; last 2
+arrayElement(1) => [0,null,2] | first 0; risky 1; last 2

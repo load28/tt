@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+ --> ./main.tt:6:100
+  |
+6 |     collected = [...(function* () { const r = result { const n = try read(note("operand", input)); yield n; return n; }; yield r; })()];
+  |                                                                                                    ^^^^^
+  |
+  = help: yield outside this `result` block instead
+
+
+==== ttc --check-types (exit 1) ====
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+ --> main.tt:6:100
+  |
+6 |     collected = [...(function* () { const r = result { const n = try read(note("operand", input)); yield n; return n; }; yield r; })()];
+  |                                                                                                    ^^^^^
+  |
+  = help: yield outside this `result` block instead
+
+==== tsc on the emitted TypeScript (exit 0) ====

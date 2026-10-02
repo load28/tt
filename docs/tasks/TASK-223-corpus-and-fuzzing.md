@@ -1,5 +1,10 @@
 # TASK-223: 실세계 코퍼스 차등 테스트와 퍼징
 
+> **Superseded in part by TASK-637**: the `Soak` workflow now also runs on a
+> nightly schedule, fuzzing each target for two minutes; the full corpus and
+> the long fuzz runs stay manual (Decision 3). The fuzz target bodies moved to
+> `fuzz/src/lib.rs`, and committed crash inputs replay in `cargo test`.
+
 - **상태**: 완료
 - **시작일**: 2026-08-25
 - **완료일**: 2026-08-25

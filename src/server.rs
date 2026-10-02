@@ -9,14 +9,19 @@
 //! so a typed check after the first reuses the running compiler and every
 //! unchanged file's projection.
 //!
-//! The protocol is one JSON object per line, on stdin and stdout:
+//! The protocol is one JSON object per line, on stdin and stdout. Every
+//! non-blank line is answered by exactly one line, in the order the lines
+//! arrived, so an answer whose `id` is `null` answers the oldest line still
+//! unanswered:
 //!
 //! ```text
 //! → { "id": 1, "method": "check", "params": { "text", "filename"?, "verify"? } }
 //! ← { "id": 1, "result": { "diagnostics":
 //!        [{ "line", "col", "endLine", "endCol", "message", "code",
 //!           "suggestions": [{ "message", "edit": { "line", "col",
-//!             "endLine", "endCol", "replacement" } | null }] }] } }
+//!             "endLine", "endCol", "replacement" } | null }],
+//!           "labels"?: [{ "line", "col", "endLine", "endCol",
+//!             "message" }] }] } }
 //!
 //! → { "id": 2, "method": "emitMap", "params": { "text", "filename"? } }
 //! ← { "id": 2, "result": { "code", "mappings": [{ "src", "out", "len" }] } }
@@ -25,16 +30,41 @@
 //! ← { "id": 3, "result": { "blocked", "diagnostics":
 //!        [{ "path", "line", "col", "endLine", "endCol", "message", "code",
 //!           "suggestions" }] } }
+//! `blocked`: the pass checked none of the buffer's TypeScript — the
+//! project could not be read, or the buffer could not be lowered and its
+//! diagnostics are its tt-level ones alone.
 //!
 //! → { "id": 4, "method": "semanticTokens", "params": { "text" } }
-//! ← { "id": 4, "result": { "tokens": [{ "range", "kind" }] } }
+//! ← { "id": 4, "result": { "tokens": [{ "range", "kind", "modifiers" }] } }
+//!
+//! → { "method": "prepareRename", "params": { "path", "position" } }
+//! ← { "result": { "range" } | { "range": null, "refusal": string | null } }
+//! What the rename at the position replaces, or its refusal, with
+//! TypeScript's reason when it gave one.
+//!
+//! → { "method": "documentSemanticTokens", "params": { "path" } }
+//! ← { "result": { "tokens": [{ "range", "type", "modifiers" }] } }
+//! TypeScript's classification of the source text the emission copied,
+//! with the parser's classification of tt's constructs over it.
 //!
 //! → { "id": 5, "method": "ttSymbol", "params": { "path", "text", "position" } }
 //! ← { "id": 5, "result": { "kind", "range", "name", "variantName",
 //!                          "signature", "detail", "definition", "binds" } | null }
 //!
 //! → { "id": 6, "method": "ttCompletions", "params": { "path", "text", "position" } }
-//! ← { "id": 6, "result": { "items": [{ "label", "kind", "detail", "covered" }] } }
+//! ← { "id": 6, "result": { "items": [{ "label", "kind", "detail", "covered", "range" }],
+//!                          "member": { "receiver" } | null,
+//!                          "keywords": [{ "label", "sortText" }], "pattern" } }
+//! `member`: the cursor completes a member name; `receiver` is the path of
+//! names before the `.` (`Result`, `ns.Shape`), or null for any other
+//! expression. `keywords`: the tt keywords whose construct can be written
+//! at the position, with TypeScript's rank for a keyword. `pattern`: the
+//! position is a pattern position tt completes.
+//!
+//! → { "method": "patternCompletions", "params": { "path", "position" } }
+//! ← { "result": { "items": [{ "label", "kind", "detail", "covered", "range" }] } | null }
+//! The pattern completions at a pattern position with what the scrutinee's
+//! type admits, from the project's TypeScript; null elsewhere.
 //!
 //! → { "id": 7, "method": "ttHints", "params": { "path", "text" } }
 //! ← { "id": 7, "result": { "hints": [{ "kind", "range", "message" }] } }
@@ -43,13 +73,31 @@
 //! ← { "id": 8, "result": { "variants": [{ "name", "generics", "origin",
 //!        "specifier", "nameSpan", "span", "cases" }],
 //!        "matches": [{ "keyword", "bodyOpen", "bodyClose" }] } }
+//! `ttSymbol`, `ttCompletions`, `ttHints` and `declarations` answer from
+//! `text` without a project; the `.tt` files it imports are read as the
+//! session holds them open, else from disk.
 //!
 //! → { "id": 9, "method": "reloadProjects", "params": {} }
 //! ← { "id": 9, "result": {} }
 //! Project graphs and registered overlays are released. The client must
 //! replay its openDocument notifications before subsequent semantic requests.
 //!
+//! → { "id": 10, "method": "print", "params": { "path", "sourceMap"?,
+//!        "rewriteImports"?, "banner"?, "verify"? } }
+//! ← { "id": 10, "result": { "code": string | null, "messages": [string] } }
+//! `ttc -p` for the file on disk: `code` is what it prints on stdout and is
+//! null exactly when it exits unsuccessfully; `messages` is each message it
+//! writes to stderr. The options are its flags — `sourceMap` "off"
+//! (default) or "inline", `rewriteImports` "js" (default), "ts" or "off",
+//! `banner: false` for `--no-banner`, `verify: false` for `--no-verify`.
+//!
+//! → { "id": 11, "method": "dependencies", "params": { "path" } }
+//! ← { "id": 11, "result": { "files": [string], "directories": [string] } }
+//! `ttc --dependencies` for the file: the files whose change invalidates
+//! its compile, and the directories where a file added or removed does.
+//!
 //! ← { "id": N, "error": "sentence" }   // the request failed; the session lives
+//! ← { "id": null, "error": "sentence" } // a line with no id the server can read
 //! ```
 //!
 //! Every answer is computed by the same code the one-shot modes run —
@@ -61,39 +109,34 @@
 //! either way. A `typedCheck` overlay lasts one request: the answer is
 //! stateless, the reuse (projection cache, running compiler) is not.
 //!
+//! `print` is the command line's own `-p` compile, run in this process, so
+//! the TypeScript project that refines the generated storage annotations
+//! (`docs/design/contextual-type-materialization.md`) is opened by the
+//! first request and reused by every later one; a bundler asking once per
+//! module pays for it once per build. `dependencies` checks the file's live
+//! project, and checks it again only when one of the project's watch paths
+//! has changed since.
+//!
 //! Exit: end of stdin, code 0. A failed request never ends the session.
 
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::SystemTime;
 use ttc::lines::ProtocolPositions;
 
 use ttc::engine::{
-    CheckRequest, CompletionAnswer, Engine, Location, Position, Project, ProjectOptions, Range,
+    CheckRequest, CompletionAnswer, Engine, Location, Position, Project, Range, ServiceSeverity,
+    ServiceTag, SignatureTrigger, Workspace,
 };
-
-/// A project's identity: the `(tsconfig, root)` pair it was opened as.
-type Identity = (Option<PathBuf>, PathBuf);
-
-/// Everything the server keeps between requests.
-struct Sessions {
-    engine: Engine,
-    /// One live project per identity — the map a server exists to keep.
-    projects: HashMap<Identity, Project>,
-    /// The documents a consumer holds open, and which project each landed
-    /// in — so `closeDocument` releases the right overlay, and a
-    /// `typedCheck` for an open document leaves its overlay in place.
-    docs: HashMap<PathBuf, Identity>,
-}
 
 /// Runs the server until stdin closes.
 pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
-    let mut sessions = Sessions {
-        engine: Engine::new(node),
-        projects: HashMap::new(),
-        docs: HashMap::new(),
-    };
+    // One live project per identity, and the documents a consumer holds
+    // open in them — what a server exists to keep between requests.
+    let mut workspace = Workspace::new(Engine::new(node));
+    let mut checks = Checks::default();
 
     let stdin = std::io::stdin();
     let stdout = std::io::stdout();
@@ -109,7 +152,7 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
             Ok(line) => line.trim_end_matches(['\n', '\r']),
             Err(error) => {
                 let response = serde_json::json!({
-                    "id": null,
+                    "id": request_id(&String::from_utf8_lossy(&bytes)),
                     "error": format!("malformed request: the line is not UTF-8: {error}"),
                 });
                 let mut out = stdout.lock();
@@ -131,11 +174,11 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
         // already on stderr; stdout carries the answer, so the consumer
         // sees an error for this id and can ask the next question.
         //
-        // Unwind safety: the sessions map is kept. A panic aborts the work
+        // Unwind safety: the workspace is kept. A panic aborts the work
         // of one request, and what that work builds — a snapshot — is
         // immutable and installed whole or not at all, so the projects the
-        // map holds are the ones the last successful request left.
-        let response = match ttc::ice::catching(|| respond(&mut sessions, line)) {
+        // workspace holds are the ones the last successful request left.
+        let response = match ttc::ice::catching(|| respond(&mut workspace, &mut checks, line)) {
             Ok(response) => response,
             Err(message) => serde_json::json!({
                 "id": request_id(line),
@@ -153,42 +196,53 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// One request, one answer — errors included, so the session survives them.
 /// The `id` of a request the server could not answer.
 ///
 /// A response has to carry the id it answers or the consumer cannot match
-/// it to its question; when the request did not even parse, `null` is the
+/// it to its question; when the request's id cannot be read, `null` is the
 /// protocol's own answer for "no id".
 fn request_id(line: &str) -> serde_json::Value {
-    serde_json::from_str::<serde_json::Value>(line)
-        .map(|request| request["id"].clone())
+    serde_json::from_str::<HashMap<String, Box<serde_json::value::RawValue>>>(line)
+        .ok()
+        .and_then(|members| serde_json::from_str(members.get("id")?.get()).ok())
         .unwrap_or(serde_json::Value::Null)
 }
 
-fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
+/// One request, one answer — errors included, so the session survives them.
+fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_json::Value {
     use serde_json::json;
     ttc::ice::panic_for_test("server");
     let request: serde_json::Value = match serde_json::from_str(line) {
         Ok(value) => value,
-        Err(e) => return json!({ "id": null, "error": format!("malformed request: {e}") }),
+        Err(e) => {
+            return json!({ "id": request_id(line), "error": format!("malformed request: {e}") });
+        }
     };
     let id = request["id"].clone();
     let params = &request["params"];
     let result = match request["method"].as_str().unwrap_or_default() {
         "check" => check(params),
+        "print" => print(params),
+        "dependencies" => dependencies(workspace, checks, params),
         "emitMap" => emit_map(params),
-        "typedCheck" => typed_check(sessions, params),
-        "openDocument" | "updateDocument" => open_document(sessions, params),
-        "closeDocument" => close_document(sessions, params),
+        "typedCheck" => typed_check(workspace, params),
+        "openDocument" | "updateDocument" => {
+            *checks = Checks::default();
+            open_document(workspace, params)
+        }
+        "closeDocument" => {
+            *checks = Checks::default();
+            close_document(workspace, params)
+        }
         "reloadProjects" => {
+            *checks = Checks::default();
             // Filesystem/configuration topology changed. Clients replay open
             // buffers after this ordered barrier; old snapshots cannot leak
             // into a graph resolved against the new configuration.
-            sessions.projects.clear();
-            sessions.docs.clear();
+            workspace.reload();
             Ok(json!({}))
         }
-        "hover" => semantic(sessions, params, |project, path, position| {
+        "hover" => semantic(workspace, params, |project, path, position| {
             Ok(match project.hover(path, position)? {
                 None => serde_json::Value::Null,
                 Some(info) => json!({
@@ -198,7 +252,7 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 }),
             })
         }),
-        "definition" => semantic(sessions, params, |project, path, position| {
+        "definition" => semantic(workspace, params, |project, path, position| {
             let locations: Vec<_> = project
                 .definition(path, position)?
                 .into_iter()
@@ -206,8 +260,8 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 .collect();
             Ok(json!({ "locations": locations }))
         }),
-        "references" => semantic(sessions, params, |project, path, position| {
-            let locations: Vec<_> = project
+        "references" => spanning(workspace, params, |workspace, path, position| {
+            let locations: Vec<_> = workspace
                 .references(path, position)?
                 .into_iter()
                 .map(|reference| {
@@ -218,41 +272,67 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 .collect();
             Ok(json!({ "locations": locations }))
         }),
-        "completion" => semantic(sessions, params, |project, path, position| {
+        "completion" => semantic(workspace, params, |project, path, position| {
             let member = params["member"].as_bool().unwrap_or(false);
+            let trigger = params["triggerCharacter"].as_str();
             let CompletionAnswer {
                 items,
                 member,
                 probe,
-            } = project.completion(path, position, member)?;
+            } = project.triggered_completion(path, position, member, trigger)?;
             Ok(json!({
                 "items": items.iter().map(|item| json!({
                     "label": item.label,
-                    "kind": item.kind,
+                    "kind": item.kind.map(|kind| kind.lsp()),
+                    "tags": item.tags.iter().map(|tag| tag.lsp()).collect::<Vec<_>>(),
                     "sortText": item.sort_text,
                     "insertText": item.insert_text,
                     "filterText": item.filter_text,
                     "snippet": item.snippet,
+                    "range": item.range.map(range_json),
+                    "source": item.source,
+                    "detail": item.detail,
+                    "labelDetails": (item.label_detail.is_some() || item.description.is_some())
+                        .then(|| json!({
+                            "detail": item.label_detail,
+                            "description": item.description,
+                        })),
                 })).collect::<Vec<_>>(),
                 "member": member,
                 "probe": probe,
             }))
         }),
-        "completionResolve" => semantic(sessions, params, |project, path, position| {
+        "completionResolve" => semantic(workspace, params, |project, path, position| {
             let label = params["label"].as_str().unwrap_or_default();
+            let source = params["source"].as_str();
             let probe = params["probe"].as_u64();
             Ok(
-                match project.completion_resolve(path, position, label, probe)? {
+                match project.completion_resolve(path, position, label, source, probe)? {
                     None => serde_json::Value::Null,
-                    Some(detail) => json!({
-                        "signature": detail.signature,
-                        "documentation": detail.documentation,
-                    }),
+                    Some(detail) => {
+                        let mut answer = json!({
+                            "signature": detail.signature,
+                            "documentation": detail.documentation,
+                        });
+                        if !detail.additional_edits.is_empty() {
+                            answer["additionalEdits"] = detail
+                                .additional_edits
+                                .into_iter()
+                                .map(|edit| {
+                                    json!({
+                                        "range": range_json(edit.range),
+                                        "newText": edit.new_text,
+                                    })
+                                })
+                                .collect();
+                        }
+                        answer
+                    }
                 },
             )
         }),
-        "rename" => semantic(sessions, params, |project, path, position| {
-            Ok(match project.rename(path, position)? {
+        "rename" => spanning(workspace, params, |workspace, path, position| {
+            Ok(match workspace.rename(path, position)? {
                 None => json!({ "edits": serde_json::Value::Null }),
                 Some(edits) => json!({
                     "edits": edits.into_iter().map(|edit| {
@@ -266,29 +346,73 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                 }),
             })
         }),
-        "signatureHelp" => semantic(sessions, params, |project, path, position| {
-            Ok(match project.signature_help(path, position)? {
-                None => serde_json::Value::Null,
-                Some(help) => json!({
-                    "signatures": help.signatures.iter().map(|signature| json!({
-                        "label": signature.label,
-                        "documentation": signature.documentation,
-                        "parameters": signature.parameters.iter().map(|parameter| json!({
-                            "label": [parameter.label.0, parameter.label.1],
-                            "documentation": parameter.documentation,
-                        })).collect::<Vec<_>>(),
-                    })).collect::<Vec<_>>(),
-                    "activeSignature": help.active_signature,
-                    "activeParameter": help.active_parameter,
-                }),
+        "prepareRename" => spanning(workspace, params, |workspace, path, position| {
+            Ok(match workspace.prepare_rename(path, position)? {
+                ttc::engine::PrepareRename::Range(range) => json!({ "range": range_json(range) }),
+                ttc::engine::PrepareRename::Refused(reason) => {
+                    json!({ "range": null, "refusal": reason })
+                }
             })
         }),
+        "documentSymbols" => semantic(workspace, params, |project, path, _position| {
+            Ok(
+                json!({ "symbols": project.document_symbols(path)?.iter().map(symbol_json).collect::<Vec<_>>() }),
+            )
+        }),
+        "signatureHelp" => semantic(workspace, params, |project, path, position| {
+            let trigger = match (
+                params["triggerKind"].as_u64(),
+                params["triggerCharacter"].as_str(),
+            ) {
+                (Some(2), Some(character)) => SignatureTrigger::Character(character.to_string()),
+                (Some(3), _) => SignatureTrigger::ContentChange,
+                _ => SignatureTrigger::Invoked,
+            };
+            let retrigger = params["isRetrigger"].as_bool().unwrap_or(false);
+            Ok(
+                match project.triggered_signature_help(path, position, &trigger, retrigger)? {
+                    None => serde_json::Value::Null,
+                    Some(help) => json!({
+                        "signatures": help.signatures.iter().map(|signature| json!({
+                            "label": signature.label,
+                            "documentation": signature.documentation,
+                            "parameters": signature.parameters.iter().map(|parameter| json!({
+                                "label": [parameter.label.0, parameter.label.1],
+                                "documentation": parameter.documentation,
+                            })).collect::<Vec<_>>(),
+                        })).collect::<Vec<_>>(),
+                        "activeSignature": help.active_signature,
+                        "activeParameter": help.active_parameter,
+                    }),
+                },
+            )
+        }),
         "semanticTokens" => semantic_tokens(params),
-        "declarations" => declarations(params),
-        "ttSymbol" => tt_symbol(params),
-        "ttCompletions" => tt_completions(params),
-        "ttHints" => tt_hints(params),
-        "tsDiagnostics" => semantic(sessions, params, |project, path, _position| {
+        "patternCompletions" => semantic(workspace, params, |project, path, position| {
+            Ok(match project.pattern_completions(path, position)? {
+                None => serde_json::Value::Null,
+                Some(items) => json!({ "items": pattern_items_json(&items) }),
+            })
+        }),
+        "documentSemanticTokens" => semantic(workspace, params, |project, path, _position| {
+            let tokens: Vec<_> = project
+                .semantic_tokens(path)?
+                .into_iter()
+                .map(|token| {
+                    json!({
+                        "range": range_json(token.range),
+                        "type": token.token_type,
+                        "modifiers": token.modifiers,
+                    })
+                })
+                .collect();
+            Ok(json!({ "tokens": tokens }))
+        }),
+        "declarations" => declarations(workspace, params),
+        "ttSymbol" => tt_symbol(workspace, params),
+        "ttCompletions" => tt_completions(workspace, params),
+        "ttHints" => tt_hints(workspace, params),
+        "tsDiagnostics" => semantic(workspace, params, |project, path, _position| {
             let diagnostics: Vec<_> = project
                 .service_diagnostics(path)?
                 .into_iter()
@@ -297,8 +421,23 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                         "range": range_json(d.range),
                         "message": d.message,
                         "code": d.code,
-                        "warning": d.warning,
+                        "severity": match d.severity {
+                            ServiceSeverity::Error => "error",
+                            ServiceSeverity::Warning => "warning",
+                            ServiceSeverity::Information => "information",
+                            ServiceSeverity::Hint => "hint",
+                        },
                     });
+                    if !d.tags.is_empty() {
+                        entry["tags"] = d
+                            .tags
+                            .iter()
+                            .map(|tag| match tag {
+                                ServiceTag::Unnecessary => "unnecessary",
+                                ServiceTag::Deprecated => "deprecated",
+                            })
+                            .collect();
+                    }
                     // Secondary labeled spans ride only when there are any,
                     // so consumers of the existing shape see no new field
                     // until a diagnostic actually carries one.
@@ -321,7 +460,14 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
                     entry
                 })
                 .collect();
-            Ok(json!({ "diagnostics": diagnostics }))
+            // The tt diagnostics these state in TypeScript's own words: a
+            // consumer showing both layers shows the fact once.
+            let restates: Vec<_> = project
+                .service_restates(path)?
+                .into_iter()
+                .map(|code| code.as_str())
+                .collect();
+            Ok(json!({ "diagnostics": diagnostics, "restates": restates }))
         }),
         method => Err(format!("unknown method \"{method}\"")),
     };
@@ -334,83 +480,53 @@ fn respond(sessions: &mut Sessions, line: &str) -> serde_json::Value {
 /// Routes a semantic request to the live project the file belongs to. The
 /// position defaults to 0:0 for the requests that do not carry one.
 fn semantic(
-    sessions: &mut Sessions,
+    workspace: &mut Workspace,
     params: &serde_json::Value,
     handle: impl FnOnce(&mut Project, &Path, Position) -> Result<serde_json::Value, String>,
 ) -> Result<serde_json::Value, String> {
+    spanning(workspace, params, |workspace, path, position| {
+        handle(workspace.project_for(path)?, path, position)
+    })
+}
+
+/// Hands a request whose answer can span projects to the workspace.
+fn spanning(
+    workspace: &mut Workspace,
+    params: &serde_json::Value,
+    handle: impl FnOnce(&mut Workspace, &Path, Position) -> Result<serde_json::Value, String>,
+) -> Result<serde_json::Value, String> {
     let path = params["path"]
         .as_str()
-        .ok_or_else(|| "the request needs a \"path\"".to_string())?
-        .to_string();
+        .ok_or_else(|| "the request needs a \"path\"".to_string())?;
     let position = Position {
         line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
         character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
     };
-    let project = project_for(sessions, &path)?;
-    handle(project, Path::new(&path), position)
-}
-
-/// The live project `path` belongs to, opened on first use.
-fn project_for<'a>(sessions: &'a mut Sessions, path: &str) -> Result<&'a mut Project, String> {
-    let document = ttc::engine::normalize_document_path(Path::new(path))?;
-    if let Some(identity) = sessions.docs.get(&document).cloned() {
-        return sessions
-            .projects
-            .get_mut(&identity)
-            .ok_or_else(|| format!("the project for {} is not open", document.display()));
-    }
-    let options = ProjectOptions::default();
-    let identity = Engine::document_project_identity(&document, &options)?;
-    match sessions.projects.entry(identity) {
-        std::collections::hash_map::Entry::Occupied(entry) => Ok(entry.into_mut()),
-        std::collections::hash_map::Entry::Vacant(entry) => {
-            Ok(entry.insert(sessions.engine.open_document_project(&document, &options)?))
-        }
-    }
+    handle(workspace, Path::new(path), position)
 }
 
 /// `openDocument` / `updateDocument`: the consumer's buffer stands in for
 /// the file, in whichever project it belongs to, until `closeDocument`.
 fn open_document(
-    sessions: &mut Sessions,
-    params: &serde_json::Value,
-) -> Result<serde_json::Value, String> {
-    let path = params["path"]
-        .as_str()
-        .ok_or_else(|| "the request needs a \"path\"".to_string())?
-        .to_string();
-    let text = text_param(params)?.to_string();
-    let canonical = ttc::engine::normalize_document_path(Path::new(&path))?;
-    let options = ProjectOptions::default();
-    let identity = Engine::document_project_identity(&canonical, &options)?;
-    let project = match sessions.projects.entry(identity.clone()) {
-        std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
-        std::collections::hash_map::Entry::Vacant(entry) => entry.insert(
-            sessions
-                .engine
-                .open_document_project(&canonical, &options)?,
-        ),
-    };
-    project.open_document(canonical.clone(), text);
-    sessions.docs.insert(canonical, identity);
-    Ok(serde_json::json!({}))
-}
-
-/// `closeDocument`: the file's text is the disk's again.
-fn close_document(
-    sessions: &mut Sessions,
+    workspace: &mut Workspace,
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let canonical = ttc::engine::normalize_document_path(Path::new(path))
-        .unwrap_or_else(|_| PathBuf::from(path));
-    if let Some(identity) = sessions.docs.remove(&canonical)
-        && let Some(project) = sessions.projects.get_mut(&identity)
-    {
-        project.close_document(&canonical);
-    }
+    workspace.open_document(Path::new(path), text_param(params)?.to_string())?;
+    Ok(serde_json::json!({}))
+}
+
+/// `closeDocument`: the file's text is the disk's again.
+fn close_document(
+    workspace: &mut Workspace,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let path = params["path"]
+        .as_str()
+        .ok_or_else(|| "the request needs a \"path\"".to_string())?;
+    workspace.close_document(Path::new(path));
     Ok(serde_json::json!({}))
 }
 
@@ -458,6 +574,17 @@ fn range_json(range: Range) -> serde_json::Value {
 }
 
 /// A [`Location`] as the JSON the protocol speaks.
+fn symbol_json(symbol: &ttc::engine::DocumentSymbol) -> serde_json::Value {
+    serde_json::json!({
+        "name": symbol.name,
+        "detail": symbol.detail,
+        "kind": symbol.kind,
+        "range": range_json(symbol.range),
+        "selectionRange": range_json(symbol.selection_range),
+        "children": symbol.children.iter().map(symbol_json).collect::<Vec<_>>(),
+    })
+}
+
 fn location_json(location: Location) -> serde_json::Value {
     serde_json::json!({
         "path": location.path,
@@ -485,7 +612,7 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     // construct as written. Zero means "position only": the consumer
     // decides the width. `code` is the rule's stable identity.
     let report = ttc::ice::working_on(Path::new(filename.unwrap_or("<buffer>")), || {
-        ttc::compile_report(text, &options)
+        ttc::check_report(text, &options)
     });
     let positions = ProtocolPositions::new(text);
     let diagnostics: Vec<_> = report
@@ -495,7 +622,7 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
             let at = |offset: Option<usize>| offset.map_or((0, 0), |at| positions.of_byte(at));
             let (line, col) = at(d.start);
             let (end_line, end_col) = at(d.end);
-            json!({
+            let mut entry = json!({
                 "line": line,
                 "col": col,
                 "endLine": end_line,
@@ -503,7 +630,25 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
                 "message": d.message,
                 "code": d.code.as_str(),
                 "suggestions": suggestions_json(&d.suggestions, Some(text)),
-            })
+            });
+            if !d.labels.is_empty() {
+                entry["labels"] = d
+                    .labels
+                    .iter()
+                    .map(|label| {
+                        let (line, col) = positions.of_byte(label.start);
+                        let (end_line, end_col) = positions.of_byte(label.end);
+                        json!({
+                            "line": line,
+                            "col": col,
+                            "endLine": end_line,
+                            "endCol": end_col,
+                            "message": label.message,
+                        })
+                    })
+                    .collect();
+            }
+            entry
         })
         .collect();
     Ok(json!({ "diagnostics": diagnostics }))
@@ -517,14 +662,18 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
 /// (local, imported, built-in, under the compiler's shadowing) plus the
 /// buffer's `match` sites. This is the surface that replaces the editor's
 /// regex re-implementation of tt semantics (`engine::tt_declarations`).
-/// Text-only; `path` resolves the buffer's relative `.tt` imports.
-fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+/// Text-only; `path` resolves the buffer's relative `.tt` imports, read as
+/// the session holds them open.
+fn declarations(
+    workspace: &Workspace,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
     let text = text_param(params)?;
-    let decls = ttc::engine::tt_declarations(Path::new(path), text);
+    let decls = workspace.tt_declarations(Path::new(path), text);
     // The engine measures these in bytes; a consumer addresses the buffer
     // in UTF-16 code units, which is what the protocol counts. One
     // conversion here keeps the two from disagreeing about where a name is
@@ -596,8 +745,12 @@ fn declarations(params: &serde_json::Value) -> Result<serde_json::Value, String>
 /// Text-only like `semanticTokens`: the answer needs no project and no
 /// toolchain, because these names exist nowhere in the emitted TypeScript
 /// and are tt's to answer (`engine::names`). `path` is still required, to
-/// resolve the file's relative `.tt` imports.
-fn tt_symbol(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+/// resolve the file's relative `.tt` imports, which are read as the session
+/// holds them open.
+fn tt_symbol(
+    workspace: &Workspace,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
@@ -606,7 +759,7 @@ fn tt_symbol(params: &serde_json::Value) -> Result<serde_json::Value, String> {
         line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
         character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
     };
-    let Some(symbol) = ttc::engine::tt_symbol_at(Path::new(path), text_param(params)?, position)
+    let Some(symbol) = workspace.tt_symbol_at(Path::new(path), text_param(params)?, position)
     else {
         return Ok(serde_json::Value::Null);
     };
@@ -629,9 +782,32 @@ fn tt_symbol(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     }))
 }
 
+fn pattern_items_json(items: &[ttc::engine::TtCompletion]) -> Vec<serde_json::Value> {
+    items
+        .iter()
+        .map(|item| {
+            serde_json::json!({
+                "label": item.label,
+                "kind": match item.kind {
+                    ttc::engine::TtCompletionKind::Case => "case",
+                    ttc::engine::TtCompletionKind::Field => "field",
+                    ttc::engine::TtCompletionKind::Literal => "literal",
+                    ttc::engine::TtCompletionKind::Wildcard => "wildcard",
+                },
+                "detail": item.detail,
+                "covered": item.covered,
+                "range": item.range.map(range_json),
+            })
+        })
+        .collect()
+}
+
 /// What can be written at a pattern position — case tags, payload field
 /// names. Text-only, for the same reason [`tt_symbol`] is.
-fn tt_completions(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+fn tt_completions(
+    workspace: &Workspace,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
@@ -640,35 +816,36 @@ fn tt_completions(params: &serde_json::Value) -> Result<serde_json::Value, Strin
         line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
         character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
     };
-    let items: Vec<_> =
-        ttc::engine::tt_completions_at(Path::new(path), text_param(params)?, position)
+    let member = ttc::engine::member_access_at(Path::new(path), text_param(params)?, position)
+        .map(|access| json!({ "receiver": access.receiver }));
+    let items = pattern_items_json(&workspace.tt_completions_at(
+        Path::new(path),
+        text_param(params)?,
+        position,
+    ));
+    let pattern = workspace.is_pattern_position(Path::new(path), text_param(params)?, position);
+    let keywords: Vec<_> =
+        ttc::engine::tt_keywords_at(Path::new(path), text_param(params)?, position)
             .into_iter()
-            .map(|item| {
-                json!({
-                    "label": item.label,
-                    "kind": match item.kind {
-                        ttc::engine::TtCompletionKind::Case => "case",
-                        ttc::engine::TtCompletionKind::Field => "field",
-                        ttc::engine::TtCompletionKind::Wildcard => "wildcard",
-                    },
-                    "detail": item.detail,
-                    "covered": item.covered,
-                })
-            })
+            .map(|keyword| json!({ "label": keyword.label(), "sortText": keyword.sort_text() }))
             .collect();
-    Ok(json!({ "items": items }))
+    Ok(json!({ "items": items, "member": member, "keywords": keywords, "pattern": pattern }))
 }
 
 /// What tt has to say about a buffer that is not an error — today, the
 /// arms an earlier arm already covers. Text-only like [`tt_symbol`], and
 /// separate from `check` on purpose: a hint never fails a build, so it
 /// never travels in the diagnostics of a compile answer.
-fn tt_hints(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+fn tt_hints(
+    workspace: &Workspace,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let hints: Vec<_> = ttc::engine::tt_hints(Path::new(path), text_param(params)?)
+    let hints: Vec<_> = workspace
+        .tt_hints(Path::new(path), text_param(params)?)
         .into_iter()
         .map(|hint| {
             json!({
@@ -695,10 +872,139 @@ fn semantic_tokens(params: &serde_json::Value) -> Result<serde_json::Value, Stri
             json!({
                 "range": range_json(token.range),
                 "kind": token.kind.as_str(),
+                "modifiers": token.kind.modifiers(),
             })
         })
         .collect();
     Ok(json!({ "tokens": tokens }))
+}
+
+/// `-p <path>`: what the one-shot prints for the file on disk, with the
+/// options a bundler passes it. The compile is the command line's own
+/// ([`crate::build::print_input`]), so the bytes are the same; what a
+/// session adds is that the TypeScript project refining the output's
+/// storage annotations stays open between requests.
+fn print(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+    let path = params["path"]
+        .as_str()
+        .ok_or_else(|| "print needs a \"path\"".to_string())?;
+    let source_map = match params["sourceMap"].as_str().unwrap_or("off") {
+        "off" => crate::build::SourceMapMode::Off,
+        "inline" => crate::build::SourceMapMode::Inline,
+        other => {
+            return Err(format!(
+                "print: \"sourceMap\" expects off or inline (got {other})"
+            ));
+        }
+    };
+    let rewrite_imports = match params["rewriteImports"].as_str().unwrap_or("js") {
+        "js" => ttc::ImportRewrite::Js,
+        "ts" => ttc::ImportRewrite::Ts,
+        "off" => ttc::ImportRewrite::Off,
+        other => {
+            return Err(format!(
+                "print: \"rewriteImports\" expects js, ts, or off (got {other})"
+            ));
+        }
+    };
+    let jsx_preserve = crate::build::project_jsx_preserve(
+        rewrite_imports,
+        &[std::path::PathBuf::from(path)],
+        None,
+    )
+    .map_err(|error| format!("print: {error}"))?;
+    let printed = crate::build::print_input(
+        path,
+        &crate::build::BuildOptions {
+            banner: params["banner"].as_bool().unwrap_or(true),
+            print: true,
+            check: false,
+            verify: params["verify"].as_bool().unwrap_or(true),
+            rewrite_imports,
+            jsx_preserve,
+            source_map,
+            out_dir: None,
+            jobs: None,
+        },
+    );
+    Ok(serde_json::json!({ "code": printed.code, "messages": printed.messages }))
+}
+
+/// The stamps a project's watch paths had when it was last checked for
+/// `dependencies`, and the files that check covered, per project root.
+///
+/// `Project::watch_paths` names every path whose change invalidates a
+/// project check; while none of them has changed and the check would cover
+/// the same files, its answer stands. This is the rule `--check-types
+/// --watch` re-checks by, and what keeps a bundler's request per module
+/// from type-checking the whole project once per module.
+#[derive(Default)]
+struct Checks(HashMap<PathBuf, Checked>);
+
+struct Checked {
+    files: Vec<PathBuf>,
+    stamps: HashMap<PathBuf, SystemTime>,
+}
+
+fn stamps(paths: &[PathBuf]) -> HashMap<PathBuf, SystemTime> {
+    paths
+        .iter()
+        .map(|path| {
+            let stamp = std::fs::metadata(path)
+                .and_then(|meta| meta.modified())
+                .unwrap_or(SystemTime::UNIX_EPOCH);
+            (path.clone(), stamp)
+        })
+        .collect()
+}
+
+/// `--dependencies <path>`, answered by [`ttc::engine::Project::dependencies_of`]
+/// on the live project the file belongs to.
+fn dependencies(
+    workspace: &mut Workspace,
+    checks: &mut Checks,
+    params: &serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    let path = params["path"]
+        .as_str()
+        .ok_or_else(|| "dependencies needs a \"path\"".to_string())?;
+    let inputs = ttc::engine::Inputs::collect(&[path.to_string()])?;
+    let project = workspace.project_for(&inputs.files()[0])?;
+    let files = project
+        .candidates(&inputs)
+        .map_err(|error| error.to_string())?;
+    let watched = project.watch_paths().map_err(|error| error.to_string())?;
+    let current = stamps(&watched);
+    // The previous check stands for a file it covered; one it left out is
+    // a root by request, and is checked as one.
+    if let Some(checked) = checks.0.get(project.root())
+        && checked.files == files
+        && checked.stamps == current
+        && inputs.named().iter().all(|file| project.checked(file))
+    {
+        return project
+            .dependencies_for(&inputs)
+            .map(|dependencies| dependencies.to_json())
+            .map_err(|error| error.to_string());
+    }
+    checks.0.remove(project.root());
+    let dependencies = project.dependencies_of(&inputs)?;
+    let paths = project.watch_paths().map_err(|error| error.to_string())?;
+    // Stamps taken before the check stand for the paths that were already
+    // watched, so an edit made while it ran still invalidates it; the paths
+    // the check discovered start from now.
+    let mut recorded = current;
+    for (path, stamp) in stamps(&paths) {
+        recorded.entry(path).or_insert(stamp);
+    }
+    checks.0.insert(
+        project.root().to_path_buf(),
+        Checked {
+            files,
+            stamps: recorded,
+        },
+    );
+    Ok(dependencies.to_json())
 }
 
 /// `--emit-map` for a buffer: the emitted TypeScript and its byte mappings.
@@ -721,7 +1027,7 @@ fn emit_map(params: &serde_json::Value) -> Result<serde_json::Value, String> {
 /// it belongs to. `includeTypes` controls whether TypeScript diagnostics are
 /// included; typed tt facts are always computed by the same pass.
 fn typed_check(
-    sessions: &mut Sessions,
+    workspace: &mut Workspace,
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     use serde_json::json;
@@ -736,8 +1042,8 @@ fn typed_check(
     // A document the consumer holds open keeps its overlay after the check;
     // a one-off buffer's overlay is scoped to this request, so the answer
     // stays stateless while the projection cache keeps the incremental win.
-    let registered = sessions.docs.contains_key(&canonical);
-    let project = project_for(sessions, &path)?;
+    let registered = workspace.is_open(&canonical);
+    let project = workspace.project_for(&canonical)?;
 
     project.open_document(canonical.clone(), text);
     let files = {
@@ -836,7 +1142,7 @@ fn typed_check(
                         })
                     });
                     json!({
-                        "blocked": false,
+                        "blocked": snapshot.is_blocked(&canonical),
                         "diagnostics": diagnostics,
                         "backendError": backend_error,
                     })

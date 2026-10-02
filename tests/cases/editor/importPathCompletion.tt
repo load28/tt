@@ -1,0 +1,10 @@
+// @completions: specifier
+// @filename: main.tt
+import { kk } from "./sh/*specifier*/";
+export const z = kk;
+// @filename: shapes.tt
+export const kk = 1;
+// @filename: view.ttx
+export const vv = 1;
+// @filename: lib.ts
+export const ll = 1;

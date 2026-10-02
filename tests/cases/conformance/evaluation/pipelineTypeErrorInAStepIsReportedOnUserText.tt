@@ -1,0 +1,4 @@
+// @origin: tests/integration/cases_03.rs::pipeline_type_error_in_a_step_is_reported_on_user_text
+const n: number = 1 |> ((a: string) => a.length);
+
+export {};

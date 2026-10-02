@@ -1,0 +1,2 @@
+nullishAssignment(2) => 8 | open res; flip true; target {"value":null}; receiver {"factor":3}; operand 2; dispose res; twice 6; add 8
+nullishAssignment(7) => "kept" | open res; flip false; target {"value":"kept"}; dispose res

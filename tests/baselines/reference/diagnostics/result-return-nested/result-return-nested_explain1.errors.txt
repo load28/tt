@@ -1,0 +1,13 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./main.tt → $DIR/out/main.ts
+
+==== ttc --check-types (exit 1) ====
+error[result-return-nested]: `return` here would wrap an already-Result value
+ --> main.tt:5:12
+  |
+5 |     return read(v * 2);
+  |            ^^^^^^^^^^^
+  |
+  = help: propagate this Result instead: `try`
+
+==== tsc on the emitted TypeScript (exit 0) ====

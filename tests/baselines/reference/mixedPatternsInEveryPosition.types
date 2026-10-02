@@ -1,0 +1,18 @@
+=== mixedPatternsInEveryPosition.tt ===
+declare function consume(n: number): void;
+>consume : function consume(n: number): void
+>n : (parameter) n: number
+declare const flag: boolean;
+>flag : const flag: boolean
+consume(match (flag) { e => 1, false => 2 });
+>consume : function consume(n: number): void
+>flag : const flag: boolean
+const held = [match (flag) { true => 1, e => 2 }];
+>held : const held: number[]
+>flag : const flag: boolean
+export const later = () => consume(match (flag) { e => 1, _ => 2 } + match (flag) { false => 3, e => 4 });
+>later : const later: () => void
+>consume : function consume(n: number): void
+>flag : const flag: boolean
+>flag : const flag: boolean
+

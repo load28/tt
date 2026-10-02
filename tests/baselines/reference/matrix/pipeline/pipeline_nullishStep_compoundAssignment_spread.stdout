@@ -1,0 +1,2 @@
+compoundAssignment(10) => "start:9" | initial "start:"; target {"total":"start:"}; flip true; lookup true; found 9
+compoundAssignment(20) => "start:40" | initial "start:"; target {"total":"start:"}; flip false; lookup false; double 40

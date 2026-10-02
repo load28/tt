@@ -1,0 +1,44 @@
+//// [letElseIfLetDivergence.tt] 42 mapping(s)
+1:1 -> 1:1 len 154  "// let-else and if-let evaluate their initialize"...
+3:28 -> 4:27 len 6  "number"
+3:28 -> 8:16 len 6  "number"
+3:49 -> 5:28 len 6  "number"
+3:49 -> 9:17 len 6  "number"
+3:64 -> 11:3 len 364  "\nconst log: string[] = [];\nfunction flush(title:"...
+14:13 -> 26:11 len 5  "value"
+14:22 -> 22:18 len 11  "lookup(key)"
+14:41 -> 24:5 len 21  "return `miss ${key}`;"
+14:65 -> 26:28 len 234  "\n  log.push(\"bound\");\n  return `hit ${value}`;\n}"...
+23:38 -> 35:20 len 11  "lookup(key)"
+23:57 -> 37:7 len 9  "continue;"
+23:69 -> 39:30 len 229  "\n    seen.push(value);\n  }\n  return seen;\n}\nflus"...
+33:17 -> 53:15 len 5  "value"
+33:26 -> 49:22 len 11  "lookup(key)"
+33:45 -> 51:9 len 12  "break outer;"
+33:60 -> 53:32 len 164  "\n      seen.push(value);\n      break;\n    }\n  }\n"...
+42:14 -> 66:11 len 5  "value"
+42:23 -> 62:18 len 11  "lookup(key)"
+42:42 -> 64:5 len 36  "throw new Error(`not near: ${key}`);"
+42:81 -> 66:28 len 231  "\n  return value;\n}\nfor (const key of [\"b\", \"a\"])"...
+53:14 -> 80:15 len 5  "value"
+53:23 -> 78:20 len 26  "(log.push(\"first\"), first)"
+54:5 -> 81:7 len 28  "return `first hit ${value}`;"
+55:50 -> 83:22 len 28  "(log.push(\"second\"), second)"
+56:5 -> 86:9 len 21  "return `second ${v}`;"
+58:5 -> 88:9 len 17  "log.push(\"else\");"
+59:4 -> 91:4 len 243  "\n  return \"neither\";\n}\nflush(\"if let first\", des"...
+66:13 -> 102:11 len 5  "value"
+66:22 -> 98:18 len 36  "({ kind: \"Hit\", value: n }) as const"
+66:66 -> 100:5 len 10  "return -1;"
+66:79 -> 102:28 len 3  "\n  "
+67:14 -> 106:15 len 5  "value"
+67:21 -> 106:22 len 7  "doubled"
+67:32 -> 104:20 len 44  "({ kind: \"Hit\", value: value * 2 }) as const"
+68:5 -> 107:7 len 15  "return doubled;"
+69:4 -> 109:4 len 86  "\n  return value;\n}\nflush(\"as const initializers\""...
+74:12 -> 117:13 len 5  "value"
+74:19 -> 117:20 len 6  "scoped"
+74:29 -> 115:18 len 12  "Found.Hit(9)"
+75:3 -> 118:5 len 35  "log.push(`inner scoped ${scoped}`);"
+76:2 -> 120:2 len 44  "\nflush(\"binding scope\", scoped);\nexport {};\n"
+

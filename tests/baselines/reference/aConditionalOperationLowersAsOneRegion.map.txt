@@ -1,0 +1,10 @@
+//// [aConditionalOperationLowersAsOneRegion.tt] 8 mapping(s)
+1:1 -> 1:1 len 29  "declare const flag: boolean;\n"
+2:1 -> 24:1 len 17  "export const a = "
+2:18 -> 4:14 len 4  "flag"
+2:33 -> 7:19 len 1  "1"
+2:38 -> 9:12 len 1  "1"
+2:43 -> 10:18 len 1  "1"
+2:51 -> 14:18 len 1  "0"
+2:54 -> 24:24 len 2  ";\n"
+

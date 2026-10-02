@@ -1,0 +1,6 @@
+//// [pipelineTypeErrorInAStepIsReportedOnUserText.tt] 4 mapping(s)
+1:1 -> 1:1 len 18  "const n: number = "
+1:19 -> 1:45 len 1  "1"
+1:24 -> 1:19 len 25  "((a: string) => a.length)"
+1:49 -> 1:47 len 14  ";\n\nexport {};\n"
+

@@ -1,0 +1,2 @@
+nullishAssignment(2) => 12 | flip true; target {"value":null}; await; receiver {"factor":3}; add 4; twice 12
+nullishAssignment(3) => "kept" | flip false; target {"value":"kept"}

@@ -1,0 +1,7 @@
+differences from pipeline_overloadedStep_jsxTernary_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.ttx:4:52 ===
+  |   return <p>{flip() ? (box(input)?.inner.value! |> shape |> .length) : <i>none</i>}</p>;
+  |                                                    ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

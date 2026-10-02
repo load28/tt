@@ -12,12 +12,10 @@ pub(crate) fn lower_semantic(
     tokens: &[crate::lexer::Token],
 ) -> CoreFile {
     let temp_ordinals = temp_ordinals(semantic);
-    let tt_owned = tt_owned_tokens(semantic, tokens);
     let mut cx = Lowering {
         semantic,
         source,
         tokens,
-        tt_owned,
         function_targets: std::cell::OnceCell::new(),
         temp_ordinals,
     };
@@ -58,54 +56,8 @@ struct Lowering<'a> {
     semantic: &'a SemanticFile,
     source: &'a str,
     tokens: &'a [crate::lexer::Token],
-    tt_owned: HashSet<usize>,
     function_targets: std::cell::OnceCell<crate::flow::FunctionTargets>,
     temp_ordinals: HashMap<NodeId, u32>,
-}
-
-fn tt_owned_tokens(semantic: &SemanticFile, tokens: &[crate::lexer::Token]) -> HashSet<usize> {
-    let hir = &semantic.hir;
-    let first_from = |offset: usize, wanted: fn(&crate::lexer::TokenKind) -> bool| {
-        let from = tokens.partition_point(|token| token.span.start < offset);
-        tokens[from..]
-            .iter()
-            .position(|token| wanted(&token.kind))
-            .map(|index| from + index)
-    };
-    let span = |node: NodeId| {
-        hir.source_map
-            .node_span(node)
-            .unwrap_or_else(|| crate::ice::bug!("match syntax has no source span"))
-    };
-    let mut owned = HashSet::new();
-    for (_, expr) in hir.exprs.iter() {
-        let hir::Expr::Match { node, site, .. } = expr else {
-            continue;
-        };
-        owned.extend(first_from(span(*node).end, |kind| {
-            matches!(kind, crate::lexer::TokenKind::Punct(b'{'))
-        }));
-        for arm in &hir.sites[*site].arms {
-            if arm.body.is_none() {
-                continue;
-            }
-            let pattern_end = hir
-                .source_map
-                .pattern_span(arm.pattern)
-                .unwrap_or_else(|| crate::ice::bug!("match arm pattern has no source span"))
-                .end;
-            let guard_end = arm
-                .guard
-                .map_or(pattern_end, |guard| match &hir.exprs[guard] {
-                    hir::Expr::OpaqueTs(node) | hir::Expr::Seq { node, .. } => span(*node).end,
-                    _ => crate::ice::bug!("match guard is not an expression program"),
-                });
-            owned.extend(first_from(pattern_end.max(guard_end), |kind| {
-                matches!(kind, crate::lexer::TokenKind::Arrow)
-            }));
-        }
-    }
-    owned
 }
 
 impl Lowering<'_> {
@@ -122,6 +74,10 @@ impl Lowering<'_> {
     }
 
     fn lower_body(&mut self, body: &hir::Body) -> Body {
+        crate::stack::grow(|| self.lower_body_grown(body))
+    }
+
+    fn lower_body_grown(&mut self, body: &hir::Body) -> Body {
         let statements: Vec<_> = body
             .stmts
             .iter()
@@ -173,7 +129,7 @@ impl Lowering<'_> {
                         name: item.name.clone(),
                         exported: item.exported,
                         declared: item.declared,
-                        generics: item.generics.clone(),
+                        generics: item.generics_span,
                         variants: item
                             .variants
                             .iter()
@@ -191,7 +147,7 @@ impl Lowering<'_> {
                                                     node: field.node,
                                                     name: field.name.clone(),
                                                     optional: field.optional,
-                                                    ty_text: field.ty_text.clone(),
+                                                    ty_span: field.ty_span,
                                                     comments: field.comments.clone(),
                                                 }
                                             })
@@ -232,6 +188,7 @@ impl Lowering<'_> {
                     true,
                     DecisionKind::LetElse {
                         binding_mode: stmt.binding_mode,
+                        exported: stmt.exported,
                         direct_variants: direct_variant_alternatives(
                             &self.lower_pattern(site.arms[0].pattern, site.subjects.len()),
                         ),
@@ -307,6 +264,7 @@ impl Lowering<'_> {
                             hir::PipeStepKind::Postfix { optional } => {
                                 ApplyMode::Postfix { optional }
                             }
+                            hir::PipeStepKind::Missing => ApplyMode::Missing,
                         },
                     })
                     .collect(),
@@ -384,11 +342,14 @@ impl Lowering<'_> {
                 pattern: self.lower_pattern(arm.pattern, site.subjects.len()),
                 guard: arm.guard,
                 action: action(arm, arm.body_kind),
+                gap: arm.gap,
+                head: arm.head.clone(),
             })
             .collect();
         Decision {
             subjects,
             arms,
+            trailing: site.trailing,
             miss,
             head: site.node,
             extent,
@@ -399,6 +360,10 @@ impl Lowering<'_> {
     }
 
     fn lower_if_let(&mut self, stmt: &hir::IfLetStmt) -> Decision {
+        crate::stack::grow(|| self.lower_if_let_grown(stmt))
+    }
+
+    fn lower_if_let_grown(&mut self, stmt: &hir::IfLetStmt) -> Decision {
         let miss = match &stmt.else_part {
             Some(hir::IfLetElse::Block(body)) => MissAction::Execute(*body),
             Some(hir::IfLetElse::IfLet(inner)) => {
@@ -435,6 +400,15 @@ impl Lowering<'_> {
     }
 
     fn pattern_at(&self, pattern: hir::PatternId, place: Place, subjects: usize) -> PatternPlan {
+        crate::stack::grow(|| self.pattern_at_grown(pattern, place, subjects))
+    }
+
+    fn pattern_at_grown(
+        &self,
+        pattern: hir::PatternId,
+        place: Place,
+        subjects: usize,
+    ) -> PatternPlan {
         match &self.semantic.hir.patterns[pattern] {
             Pat::Wildcard => PatternPlan::Any,
             Pat::Or(alternatives) => PatternPlan::AnyOf(
@@ -483,6 +457,7 @@ impl Lowering<'_> {
             Pat::Instance {
                 constructor,
                 fields,
+                list,
                 ..
             } => {
                 let mut parts = vec![PatternPlan::Test(Test::InstanceOf {
@@ -504,11 +479,18 @@ impl Lowering<'_> {
                         source: field_place,
                         source_field: None,
                         binding,
+                        list: *list,
                     }));
                 }
                 PatternPlan::AllOf(parts)
             }
-            Pat::Constructor { path, fields } => {
+            Pat::Constructor { path, fields, list } => {
+                let list = list.filter(|_| {
+                    fields
+                        .iter()
+                        .flatten()
+                        .all(|field| matches!(field.binding, FieldBinding::Named { .. }))
+                });
                 let constructor = match self.semantic.resolution.uses.get(&path.node) {
                     Some(Res::Variant(reference)) => Constructor::Resolved {
                         reference: *reference,
@@ -546,6 +528,7 @@ impl Lowering<'_> {
                                     field.node,
                                 ),
                                 binding,
+                                list,
                             }));
                         }
                         FieldBinding::Nested(inner) => {
@@ -567,6 +550,10 @@ impl Lowering<'_> {
     }
 
     fn expr_subject_depth(&self, expr: ExprId) -> u32 {
+        crate::stack::grow(|| self.expr_subject_depth_grown(expr))
+    }
+
+    fn expr_subject_depth_grown(&self, expr: ExprId) -> u32 {
         match &self.semantic.hir.exprs[expr] {
             hir::Expr::Match { site, .. } => {
                 1 + self.subject_depth(&self.semantic.hir.sites[*site])
@@ -601,18 +588,23 @@ impl Lowering<'_> {
             .source_map
             .node_span(node)
             .unwrap_or_else(|| crate::ice::bug!("Core IR generator node has no source span"));
-        let at = self
-            .tokens
-            .partition_point(|token| token.span.start < span.start);
         self.function_targets
-            .get_or_init(|| crate::flow::FunctionTargets::new(self.tokens, &self.tt_owned))
-            .at(at)
+            .get_or_init(|| {
+                crate::flow::FunctionTargets::new(self.tokens, &|tokens| {
+                    self.semantic.hir.match_owned_tokens(tokens)
+                })
+            })
+            .at_offset(span.start)
             == Some(crate::flow::FunctionTarget::Generator)
     }
 }
 
 fn temp_ordinals(semantic: &SemanticFile) -> HashMap<NodeId, u32> {
     fn if_let_nodes(stmt: &hir::IfLetStmt, out: &mut Vec<NodeId>) {
+        crate::stack::grow(|| if_let_nodes_grown(stmt, out));
+    }
+
+    fn if_let_nodes_grown(stmt: &hir::IfLetStmt, out: &mut Vec<NodeId>) {
         out.push(stmt.node);
         if let Some(hir::IfLetElse::IfLet(inner)) = &stmt.else_part {
             if_let_nodes(inner, out);
@@ -670,6 +662,10 @@ fn resolved_hir_field(resolution: &Resolution, node: NodeId) -> Option<FieldId> 
 }
 
 fn pattern_has_literal(hir: &hir::HirFile, pattern: hir::PatternId) -> bool {
+    crate::stack::grow(|| pattern_has_literal_grown(hir, pattern))
+}
+
+fn pattern_has_literal_grown(hir: &hir::HirFile, pattern: hir::PatternId) -> bool {
     match &hir.patterns[pattern] {
         Pat::Literal(_) => true,
         Pat::Or(parts) | Pat::Tuple(parts) => {
@@ -698,12 +694,14 @@ fn match_kind(decision: &Decision) -> DecisionKind {
         && decision.arms.iter().all(|arm| {
             !pattern_has_nested_test(&arm.pattern) && !pattern_has_instance_test(&arm.pattern)
         });
+    let literal = |arm: &&DecisionArm| pattern_has_literal_test(&arm.pattern);
+    let tested = |arm: &&DecisionArm| !matches!(arm.pattern, PatternPlan::Any);
     let dispatch = if !switch {
         MatchDispatch::Conditional
-    } else if decision.arms.iter().all(|arm| {
-        matches!(arm.pattern, PatternPlan::Any) || pattern_has_literal_test(&arm.pattern)
-    }) {
+    } else if decision.arms.iter().filter(tested).all(|arm| literal(&arm)) {
         MatchDispatch::LiteralSwitch
+    } else if decision.arms.iter().filter(tested).any(|arm| literal(&arm)) {
+        MatchDispatch::Conditional
     } else {
         MatchDispatch::VariantSwitch
     };
@@ -799,7 +797,7 @@ fn validate(file: &CoreFile, semantic: &SemanticFile) {
                     validate_node(step.node, semantic);
                     validate_expr(step.value, file);
                     match step.mode {
-                        ApplyMode::Call | ApplyMode::Postfix { .. } => {}
+                        ApplyMode::Call | ApplyMode::Postfix { .. } | ApplyMode::Missing => {}
                     }
                 }
             }
@@ -851,6 +849,10 @@ fn validate_statement(statement: &Statement, file: &CoreFile, semantic: &Semanti
 }
 
 fn validate_decision(decision: &Decision, file: &CoreFile, semantic: &SemanticFile) {
+    crate::stack::grow(|| validate_decision_grown(decision, file, semantic));
+}
+
+fn validate_decision_grown(decision: &Decision, file: &CoreFile, semantic: &SemanticFile) {
     assert!(
         !decision.subjects.is_empty(),
         "Core IR decision has no subject"
@@ -889,7 +891,7 @@ fn validate_decision(decision: &Decision, file: &CoreFile, semantic: &SemanticFi
             ArmAction::Yield { body, kind } => {
                 validate_body(body, file);
                 match kind {
-                    ArmBodyKind::Expression | ArmBodyKind::Block { .. } => {}
+                    ArmBodyKind::Expression | ArmBodyKind::Block { .. } | ArmBodyKind::Missing => {}
                 }
             }
             ArmAction::Execute(body) => validate_body(body, file),
@@ -900,6 +902,10 @@ fn validate_decision(decision: &Decision, file: &CoreFile, semantic: &SemanticFi
 }
 
 fn validate_pattern_plan(plan: &PatternPlan, semantic: &SemanticFile) {
+    crate::stack::grow(|| validate_pattern_plan_grown(plan, semantic));
+}
+
+fn validate_pattern_plan_grown(plan: &PatternPlan, semantic: &SemanticFile) {
     match plan {
         PatternPlan::Any => {}
         PatternPlan::Test(test) => validate_test(test, semantic),
@@ -928,6 +934,10 @@ fn validate_pattern_plan(plan: &PatternPlan, semantic: &SemanticFile) {
 /// caught here, at the boundary that owns the invariant, rather than as an
 /// index panic inside emission.
 fn validate_plan_subjects(plan: &PatternPlan, subjects: usize) {
+    crate::stack::grow(|| validate_plan_subjects_grown(plan, subjects));
+}
+
+fn validate_plan_subjects_grown(plan: &PatternPlan, subjects: usize) {
     match plan {
         PatternPlan::Any => {}
         PatternPlan::Test(

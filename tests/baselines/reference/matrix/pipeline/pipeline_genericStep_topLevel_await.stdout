@@ -1,0 +1,2 @@
+topLevel(6) => 12 | await; keep 6; double 12
+topLevel(-2) => -4 | await; keep -2; double -4

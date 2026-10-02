@@ -1,0 +1,2 @@
+labeledBlock(2) => {"kind":"Ok","value":"checked"} | read 2
+labeledBlock(-1) => {"kind":"Err","error":"negative undefined"} | read undefined

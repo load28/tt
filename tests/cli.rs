@@ -74,8 +74,8 @@ fn a_project_writes_one_pipeline_runtime_and_imports_it() {
             source.join(format!("{name}.tt")),
             format!(
                 "declare function input_{name}(): number;\n\
-                 declare const step_{name}: (value: number) => number;\n\
-                 export const value_{name} = input_{name}() |> step_{name};\n"
+                 declare const step_{name}: () => (value: number) => number;\n\
+                 export const value_{name} = input_{name}() |> step_{name}();\n"
             ),
         )
         .unwrap();
@@ -100,6 +100,46 @@ fn a_project_writes_one_pipeline_runtime_and_imports_it() {
             code.contains("import { $tt_ap } from \"./tt/runtime.js\";"),
             "{code}"
         );
+    }
+}
+
+/// The runtime is written for an output that imports it, which is what
+/// codegen emitted rather than whether the source has a pipeline: a
+/// literal-headed pipeline lowers to a direct call, and a script inlines
+/// its helpers.
+#[test]
+fn a_pipeline_that_imports_no_runtime_writes_none() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("direct.tt"), "export const a = 1 |> String;\n").unwrap();
+    fs::write(
+        source.join("script.tt"),
+        "declare function input(): number;\n\
+         declare const step: (value: number) => number;\n\
+         const value = input() |> step;\n",
+    )
+    .unwrap();
+
+    for out in [None, Some(&out_dir)] {
+        let mut args = vec!["--no-banner"];
+        if let Some(out) = out {
+            args.extend(["-o", out.to_str().unwrap()]);
+        }
+        args.push(source.to_str().unwrap());
+        let output = ttc(&args);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let root = out.unwrap_or(&source);
+        for name in ["direct", "script"] {
+            let code = fs::read_to_string(root.join(format!("{name}.ts"))).unwrap();
+            assert!(!code.contains("runtime"), "{code}");
+        }
+        assert!(!root.join("tt").exists(), "{}", root.display());
     }
 }
 
@@ -185,8 +225,9 @@ fn a_source_cannot_claim_a_compiler_support_module_output() {
     fs::create_dir_all(source.join("tt")).unwrap();
     fs::write(
         source.join("main.tt"),
-        "const twice = (value: number): number => value * 2;\n\
-         export const result = 1 |> twice;\n",
+        "declare function input(): number;\n\
+         const twice = () => (value: number): number => value * 2;\n\
+         export const result = input() |> twice();\n",
     )
     .unwrap();
     fs::write(
@@ -236,9 +277,76 @@ fn an_output_directory_inside_the_input_is_not_recompiled() {
     assert!(!out_dir.join("alias/stale.ts").exists());
 }
 
+/// Only an output root strictly inside a directory input is excluded from
+/// it. The input itself, or a directory enclosing it, is where every source
+/// lives, and excluding it would leave nothing to compile.
+#[test]
+fn an_output_directory_that_is_or_encloses_the_input_keeps_its_sources() {
+    for (out, input, emitted) in [
+        (".", "src", "a.ts"),
+        ("src", "src", "src/a.ts"),
+        ("gen", "gen/src", "gen/a.ts"),
+    ] {
+        let dir = tmpdir();
+        fs::create_dir_all(dir.join(input)).unwrap();
+        fs::write(dir.join(input).join("a.tt"), "export const a = 1;\n").unwrap();
+
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["-o", out, input])
+            .current_dir(dir.path())
+            .output()
+            .expect("failed to run ttc");
+        assert!(
+            output.status.success(),
+            "-o {out} {input}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(dir.join(emitted).is_file(), "-o {out} {input}");
+    }
+}
+
+/// A directory the input reaches both by its own name and through a symlink
+/// is mirrored under its own name, wherever the alias sorts. A directory
+/// reached only through a symlink is still collected through it.
+#[cfg(unix)]
+#[test]
+fn a_directory_alias_does_not_move_the_real_directory_outputs() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let outside = dir.join("shared");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(source.join("lib")).unwrap();
+    fs::create_dir_all(&outside).unwrap();
+    fs::write(source.join("lib/x.tt"), "export const x = 1;\n").unwrap();
+    fs::write(outside.join("s.tt"), "export const s = 1;\n").unwrap();
+    fs::write(
+        source.join("main.tt"),
+        "import { x } from \"./lib/x.tt\";\nexport const y = x;\n",
+    )
+    .unwrap();
+    for alias in ["@lib", "zlib"] {
+        std::os::unix::fs::symlink("lib", source.join(alias)).unwrap();
+    }
+    std::os::unix::fs::symlink(&outside, source.join("linked")).unwrap();
+
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(out_dir.join("lib/x.ts").is_file());
+    assert!(out_dir.join("linked/s.ts").is_file());
+    for alias in ["@lib", "zlib"] {
+        assert!(!out_dir.join(alias).exists(), "{alias}");
+    }
+    let main = fs::read_to_string(out_dir.join("main.ts")).unwrap();
+    assert!(main.contains("\"./lib/x.js\""), "{main}");
+}
+
 #[test]
 fn mixed_source_project_preserves_all_directed_runtime_values() {
-    if !have("tsc") || !have("bun") || !have("node") {
+    if !common::tsc_available() || !have("bun") {
         return;
     }
 
@@ -276,7 +384,7 @@ fn mixed_source_project_preserves_all_directed_runtime_values() {
         })
         .collect();
     inputs.sort();
-    let output = Command::new("tsc")
+    let output = common::tsc()
         .args(&inputs)
         .args([
             "--strict",
@@ -532,8 +640,8 @@ fn modes_reject_options_they_would_otherwise_ignore() {
             "--types does not combine with --jobs",
         ),
         (
-            vec!["--project", "tsconfig.json", path],
-            "build mode does not combine with --project",
+            vec!["--check", "--project", "tsconfig.json", path],
+            "--check does not combine with --project",
         ),
         (
             vec!["--symbols", "--emit-map", path],
@@ -756,6 +864,62 @@ macro_rules! require_types_toolchain {
 }
 
 #[test]
+fn an_overlay_checks_a_buffer_whose_file_is_not_saved_yet() {
+    require_types_toolchain!();
+    use std::io::Write;
+    let dir = typed_workspace();
+    let src = dir.join("src");
+    fs::create_dir_all(&src).unwrap();
+    let file = src.join("new.tt");
+    let path = file.to_str().unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "--tt-only", "--overlay", path, path])
+        .current_dir(&dir)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"export variant V { A, B }\nexport const f = (v: V) => match (v) { A => 1 };\n")
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{err}");
+    assert!(
+        err.contains("match on variant V is not exhaustive: missing \"B\""),
+        "{err}"
+    );
+    assert!(!file.exists());
+}
+
+#[test]
+fn a_type_error_in_hand_written_typescript_quotes_its_line() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/main.tt"), "export const a = 1;\n").unwrap();
+    fs::write(
+        dir.join("src/host.ts"),
+        "export const b: number = 1;\nexport const c: string = b;\n",
+    )
+    .unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(1), "{err}");
+    assert!(err.contains("--> src/host.ts:2:14"), "{err}");
+    assert!(err.contains("export const c: string = b;"), "{err}");
+    assert!(err.contains('^'), "{err}");
+}
+
+#[test]
 fn types_reports_a_missing_literal_of_a_finite_union() {
     require_types_toolchain!();
     let err = types_stderr(
@@ -829,7 +993,7 @@ fn types_reports_program_diagnostics_without_a_file() {
 }
 
 #[test]
-fn types_reports_option_diagnostics_of_a_rewritten_configuration_without_a_position() {
+fn types_reports_option_diagnostics_of_a_served_configuration_at_the_option() {
     require_types_toolchain!();
     let (ok, err) = types_project_output(
         "{\n  \"compilerOptions\": { \"target\": \"es5x\" },\n  \"include\": [\"src/**/*.tt\"]\n}\n",
@@ -837,7 +1001,7 @@ fn types_reports_option_diagnostics_of_a_rewritten_configuration_without_a_posit
     );
     assert!(!ok, "{err}");
     assert!(err.contains("error[ts6046]"), "{err}");
-    assert!(err.contains("--> tsconfig.json\n"), "{err}");
+    assert!(err.contains("--> tsconfig.json:2:34\n"), "{err}");
 }
 
 #[test]
@@ -932,6 +1096,209 @@ fn types_skips_a_literal_match_with_a_wildcard() {
          export const pick = (x: D) => match (x) { \"north\" => 1, _ => 0 };\n",
     );
     assert!(!err.contains("not exhaustive"), "{err}");
+}
+
+#[test]
+fn types_type_a_value_with_no_contextual_type_as_at_its_source_position() {
+    require_types_toolchain!();
+    // TASK-570: `this` in the arm's method is the object literal, as in
+    // `n === 1 ? {…} : {…}`, not the `any` of the storage it is written to.
+    let err = types_stderr(
+        "export function f(n: number) {\n\
+         \x20 const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };\n\
+         \x20 return b.m().zzz;\n\
+         }\n",
+    );
+    assert!(err.contains("error[ts2339]"), "{err}");
+    assert!(err.contains("Property 'zzz' does not exist"), "{err}");
+    assert!(err.contains("--> src/main.tt:3:16"), "{err}");
+}
+
+#[test]
+fn types_type_a_recursive_anonymous_join_whole() {
+    require_types_toolchain!();
+    // TASK-586: the join's annotation would write the cycle one level down
+    // as `any` and hide the second call's missing property.
+    let err = types_stderr(
+        "export function f(n: number) {\n\
+         \x20 const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };\n\
+         \x20 return b.m().m().zzz;\n\
+         }\n",
+    );
+    assert!(err.contains("error[ts2339]"), "{err}");
+    assert!(err.contains("--> src/main.tt:3:20"), "{err}");
+}
+
+#[test]
+fn types_keep_declarations_written_before_a_variant_stopped_parsing() {
+    require_types_toolchain!();
+    // TASK-590: a malformed variant is reported once, its importers get no
+    // follow-on errors from its placeholder, and neither its declarations nor
+    // its importers' are replaced by ones emitted against the placeholder.
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"noEmit":true,"module":"esnext","moduleResolution":"bundler","target":"es2022"},"include":["src"]}"#,
+    )
+    .unwrap();
+    fs::write(dir.join("src/x.tt"), "export variant X { A, B }\n").unwrap();
+    fs::write(
+        dir.join("src/use.tt"),
+        "import { X } from \"./x.tt\";\nexport const a = X.A;\nexport const k: X = a;\n",
+    )
+    .unwrap();
+    fs::write(dir.join("src/ok.tt"), "export const ok = 1;\n").unwrap();
+    let types = || {
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["--types", "--json-report", "src"])
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc")
+    };
+    let first = types();
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let sidecar = |name: &str| fs::read_to_string(dir.join(".tt-types").join(name)).unwrap();
+    let (x, uses) = (sidecar("x.tt.d.ts"), sidecar("use.tt.d.ts"));
+    fs::write(dir.join("src/x.tt"), "export variant X { A, 1 }\n").unwrap();
+    let second = types();
+    let err = String::from_utf8_lossy(&second.stderr);
+    assert_eq!(err.matches("error[").count(), 1, "{err}");
+    assert!(err.contains("error[malformed-variant]"), "{err}");
+    assert_eq!(sidecar("x.tt.d.ts"), x);
+    assert_eq!(sidecar("use.tt.d.ts"), uses);
+    let report: serde_json::Value = serde_json::from_slice(&second.stdout).unwrap();
+    let written: Vec<&str> = report["written"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|path| path.as_str())
+        .collect();
+    assert!(
+        written.iter().any(|path| path.ends_with("ok.tt.d.ts"))
+            && !written
+                .iter()
+                .any(|path| path.ends_with("x.tt.d.ts") || path.ends_with("use.tt.d.ts")),
+        "{written:?}"
+    );
+}
+
+#[test]
+fn types_reports_nothing_for_storage_inside_a_shadowing_scope() {
+    require_types_toolchain!();
+    // TASK-575: `T` at the storage is `inner`'s own type parameter, not the
+    // `outer` one the arm values have.
+    let err = types_stderr(
+        "variant K { A, B }\n\
+         export function outer<T>(a: T) {\n\
+         \x20 function inner<T>(b: T, k: K) {\n\
+         \x20   const z = match (k) { A => a, B => a };\n\
+         \x20   return [z, b] as const;\n\
+         \x20 }\n\
+         \x20 return inner(\"s\", K.A);\n\
+         }\n",
+    );
+    assert!(!err.contains("error"), "{err}");
+}
+
+#[test]
+fn types_join_storage_after_the_storage_its_values_read() {
+    require_types_toolchain!();
+    // TASK-584: without `noImplicitAny`, storage no round has settled reads
+    // as `any`; `g`'s join waits for `f`'s storage instead of keeping
+    // `f(): any`, across modules too, and an `any` of the source stays.
+    let (ok, err) = types_project_output(
+        "{ \"compilerOptions\": { \"strict\": false, \"target\": \"es2022\", \"module\": \"esnext\", \"moduleResolution\": \"bundler\", \"noEmit\": true }, \"include\": [\"src\"] }\n",
+        &[
+            (
+                "src/a.tt",
+                "declare const flag: boolean;\n\
+                 export const f = () => match(flag) { true => [1], false => [2] };\n\
+                 export const g = match(flag) { true => [f()], false => [] };\n\
+                 export const bad = g[0]![0]!.toUpperCase();\n",
+            ),
+            (
+                "src/m.tt",
+                "declare const flag: boolean;\n\
+                 export const p = () => match(flag) { true => [JSON.parse(\"1\")], false => [JSON.parse(\"2\")] };\n",
+            ),
+            (
+                "src/b.tt",
+                "import { f } from \"./a.tt\";\n\
+                 import { p } from \"./m.tt\";\n\
+                 declare const flag: boolean;\n\
+                 export const g = match(flag) { true => [f()], false => [] };\n\
+                 export const bad = g[0]![0]!.toUpperCase();\n\
+                 export const q = match(flag) { true => [p()], false => [] };\n\
+                 export const worse = q[0]!.foo;\n",
+            ),
+        ],
+    );
+    assert!(!ok, "{err}");
+    assert_eq!(err.matches("error[").count(), 3, "{err}");
+    assert!(err.contains("--> src/a.tt:4:30"), "{err}");
+    assert!(err.contains("--> src/b.tt:5:30"), "{err}");
+    assert!(
+        err.contains("Property 'foo' does not exist on type 'any[]'"),
+        "{err}"
+    );
+}
+
+#[test]
+fn types_reports_plain_typescript_diagnostics_in_typescripts_words() {
+    require_types_toolchain!();
+    // TASK-585: an arity error, a pipeline step's arity error and a JSX
+    // element's missing props keep TypeScript's own sentence; the argument
+    // that does not fit its parameter is a mismatch of its own.
+    let (ok, err) = types_project_output(
+        "{ \"compilerOptions\": { \"strict\": true, \"target\": \"es2022\", \"module\": \"esnext\", \"moduleResolution\": \"bundler\", \"jsx\": \"preserve\", \"noEmit\": true }, \"include\": [\"src\"] }\n",
+        &[
+            (
+                "src/a.tt",
+                "function g(a: number): number { return a; }\n\
+                 function f(s: string): string { return s; }\n\
+                 export const r = f(g());\n\
+                 function scale(x: number, by: number): number { return x * by; }\n\
+                 declare const x: number;\n\
+                 export const y = x |> scale();\n",
+            ),
+            (
+                "src/b.ttx",
+                "declare global {\n\
+                 \x20 namespace JSX {\n\
+                 \x20   interface Element { readonly tag: string }\n\
+                 \x20   interface IntrinsicElements { div: {} }\n\
+                 \x20 }\n\
+                 }\n\
+                 function Row(props: { label: string }): JSX.Element { return { tag: props.label }; }\n\
+                 export const view = <Row />;\n",
+            ),
+        ],
+    );
+    assert!(!ok, "{err}");
+    assert!(
+        err.contains("error[ts2554]: Expected 1 arguments, but got 0.\n --> src/a.tt:3:20"),
+        "{err}"
+    );
+    assert!(
+        err.contains(
+            "error[ts2345]: Argument of type 'number' is not assignable to parameter of type 'string'.\n --> src/a.tt:3:20"
+        ),
+        "{err}"
+    );
+    assert!(
+        err.contains("error[ts2554]: Expected 2 arguments, but got 0.\n --> src/a.tt:6:23"),
+        "{err}"
+    );
+    assert!(
+        err.contains("error[ts2741]: Property 'label' is missing in type '{}' but required in type '{ label: string; }'."),
+        "{err}"
+    );
+    assert!(!err.contains("found `(props"), "{err}");
 }
 
 #[test]
@@ -1332,6 +1699,41 @@ fn a_source_map_follows_the_banner_past_a_shebang() {
     );
 }
 
+/// A file that is only a shebang, with no line break after it, keeps the
+/// shebang on generated line 1: the banner goes on a line of its own after
+/// it, and the map's only segment stays on the first line.
+#[test]
+fn a_source_map_keeps_a_lone_shebang_on_the_first_line() {
+    let dir = tmpdir();
+    let out_dir = dir.join("out");
+    let source = dir.join("only.tt");
+    fs::write(&source, "#!/usr/bin/env node").unwrap();
+    let output = ttc(&[
+        "--source-map",
+        "file",
+        "-o",
+        out_dir.to_str().unwrap(),
+        source.to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let code = fs::read_to_string(out_dir.join("only.ts")).unwrap();
+    assert!(
+        code.starts_with("#!/usr/bin/env node\n// @generated"),
+        "{code}"
+    );
+    let map = fs::read_to_string(out_dir.join("only.ts.map")).unwrap();
+    let mappings = map
+        .split("\"mappings\":\"")
+        .nth(1)
+        .and_then(|rest| rest.split('"').next())
+        .expect("a mappings field");
+    assert_eq!(mappings, "AAAA", "{map}");
+}
+
 /// A reader that stops reading is the reader's decision, not a compiler
 /// failure: `ttc --help | head` must end quietly rather than reporting an
 /// internal compiler error and exiting 101 (TASK-337).
@@ -1489,6 +1891,9 @@ fn a_named_file_that_is_not_a_source_is_reported() {
 
 #[path = "cli/dynamic_imports.rs"]
 mod dynamic_imports;
+
+#[path = "cli/server_print.rs"]
+mod server_print;
 
 /// `-o` mirrors input paths, and named files are inputs too: two of them
 /// under one directory keep the layout that makes a relative import between
@@ -1702,12 +2107,12 @@ fn watch_places_support_modules_by_the_whole_input_set() {
     fs::create_dir_all(input.join("sub")).unwrap();
     fs::write(
         input.join("a.tt"),
-        "export const x = (n: number) => n |> String;",
+        "export const x = (n: number) => n |> ((v: number) => String(v));",
     )
     .unwrap();
     fs::write(
         input.join("sub/b.tt"),
-        "export const x = (n: number) => n |> String;",
+        "export const x = (n: number) => n |> ((v: number) => String(v));",
     )
     .unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
@@ -1744,7 +2149,7 @@ fn watch_places_support_modules_by_the_whole_input_set() {
         );
         fs::write(
             input.join("sub/b.tt"),
-            "export const x = (n: number) => n |> String;\n",
+            "export const x = (n: number) => n |> ((v: number) => String(v));\n",
         )
         .unwrap();
         next_round();
@@ -1778,6 +2183,60 @@ fn watch_places_support_modules_by_the_whole_input_set() {
 /// toolchain that is not installed has to remove the refinement rather than
 /// the compilation.
 #[test]
+#[cfg(debug_assertions)]
+fn a_siblings_compiler_bug_is_its_own_and_the_printed_file_still_compiles() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::write(
+        dir.join("tsconfig.json"),
+        "{ \"compilerOptions\": { \"strict\": true, \"target\": \"esnext\", \"module\": \"esnext\", \"moduleResolution\": \"bundler\", \"noEmit\": true, \"types\": [] } }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("a.tt"),
+        "import { b } from \"./b.tt\";\n\
+         variant O { A(n: number), B }\n\
+         declare const o: O;\n\
+         export const a = match (o) { A(n) => n + b, B => b };\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("b.tt"),
+        "variant P { C(n: number), D }\n\
+         declare const p: P;\n\
+         export const b = match (p) { C(n) => n, D => 0 };\n",
+    )
+    .unwrap();
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(args)
+            .current_dir(&dir)
+            .env("TTC_PANIC_FOR_TEST", "projection:b.tt")
+            .env_remove("RUST_BACKTRACE")
+            .output()
+            .expect("failed to run ttc")
+    };
+    let printed = run(&["-p", "a.tt"]);
+    let stderr = String::from_utf8_lossy(&printed.stderr);
+    let stdout = String::from_utf8_lossy(&printed.stdout);
+    assert!(printed.status.success(), "{stderr}");
+    assert!(stdout.contains("export const a = $tt_v0"), "{stdout}");
+    assert!(
+        stderr.contains("while compiling: ") && stderr.contains("b.tt"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("a.tt"), "{stderr}");
+
+    let checked = run(&["--check-types", "."]);
+    let stderr = String::from_utf8_lossy(&checked.stderr);
+    assert_eq!(checked.status.code(), Some(101), "{stderr}");
+    assert!(
+        stderr.contains("while compiling: ") && stderr.contains("b.tt") && !stderr.contains("a.tt"),
+        "{stderr}"
+    );
+}
+
+#[test]
 fn a_missing_toolchain_does_not_stop_a_tt_level_check_or_print() {
     // Outside the repository: the toolchain is resolved by walking up from
     // the file, and every directory inside this checkout has the
@@ -1806,6 +2265,262 @@ fn a_missing_toolchain_does_not_stop_a_tt_level_check_or_print() {
             "{mode} demanded a toolchain: {stderr}"
         );
         assert!(output.status.success(), "{mode} failed: {stderr}");
+    }
+}
+
+/// An installed TypeScript whose host cannot start is as unavailable as one
+/// that is not installed: a runtime missing from `PATH`, or one that exits
+/// before the compiler answers, removes the refinement and leaves the tt
+/// layer, the printed module and the build to succeed.
+#[cfg(unix)]
+#[test]
+fn a_backend_that_cannot_start_does_not_stop_a_check_print_or_build() {
+    use std::os::unix::fs::PermissionsExt;
+    if !common::toolchain() {
+        return;
+    }
+    let dir = Workspace::in_repo_with_subdir("unstartable-backend", "src");
+    fs::write(
+        dir.join("src/a.tt"),
+        "variant T { A(x: number), B }\n\
+         export const f = (t: T) => match (t) { A(x) => x, B => 0 };\n",
+    )
+    .unwrap();
+    let empty = dir.join("no-runtime");
+    let dying = dir.join("dying-runtime");
+    fs::create_dir_all(&empty).unwrap();
+    fs::create_dir_all(&dying).unwrap();
+    fs::write(dying.join("node"), "#!/bin/sh\nexit 1\n").unwrap();
+    fs::set_permissions(dying.join("node"), fs::Permissions::from_mode(0o755)).unwrap();
+
+    for runtime in [&empty, &dying] {
+        for args in [
+            &["--check", "src/a.tt"][..],
+            &["-p", "src/a.tt"][..],
+            &["-o", "out", "src"][..],
+        ] {
+            let _ = fs::remove_dir_all(dir.join("out"));
+            let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+                .args(args)
+                .current_dir(&dir)
+                .env("PATH", runtime)
+                .output()
+                .expect("failed to run ttc");
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(
+                output.status.success(),
+                "{args:?} with {} failed: {stderr}",
+                runtime.display()
+            );
+            assert!(!stderr.contains("error"), "{args:?}: {stderr}");
+        }
+        assert!(dir.join("out/a.ts").is_file());
+
+        // The typed modes still report the tt layer and say the TypeScript
+        // layer did not run, exactly as with no toolchain installed.
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["--check-types", "src/a.tt"])
+            .current_dir(&dir)
+            .env("PATH", runtime)
+            .output()
+            .expect("failed to run ttc");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{stderr}");
+        assert!(
+            stderr.contains("the TypeScript layer did not run"),
+            "{stderr}"
+        );
+    }
+}
+
+/// `--check` writes nothing, and the TypeScript backend's only effect on a
+/// compile is the contextual annotation of the output — so `--check` never
+/// starts it, while a compile that prints its output does.
+#[cfg(unix)]
+#[test]
+fn check_does_not_start_the_typescript_backend() {
+    use std::os::unix::fs::PermissionsExt;
+    if !common::toolchain() {
+        return;
+    }
+    let dir = Workspace::in_repo_with_subdir("check-without-backend", "src");
+    fs::write(
+        dir.join("src/a.tt"),
+        "variant T { A(x: number), B }\n\
+         export const f = (t: T) => match (t) { A(x) => x, B => 0 };\n",
+    )
+    .unwrap();
+    let runtime = dir.join("runtime");
+    let started = dir.join("started");
+    fs::create_dir_all(&runtime).unwrap();
+    fs::write(
+        runtime.join("node"),
+        format!("#!/bin/sh\n: > '{}'\nexit 1\n", started.display()),
+    )
+    .unwrap();
+    fs::set_permissions(runtime.join("node"), fs::Permissions::from_mode(0o755)).unwrap();
+    let run = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(args)
+            .current_dir(&dir)
+            .env("PATH", &runtime)
+            .output()
+            .expect("failed to run ttc");
+        assert!(
+            output.status.success(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+
+    run(&["--check", "src"]);
+    run(&["--check", "src/a.tt"]);
+    assert!(!started.exists(), "--check started the TypeScript backend");
+    run(&["-p", "src/a.tt"]);
+    assert!(started.exists(), "-p did not ask the TypeScript backend");
+}
+
+/// The server's `check` is `--check` for a buffer, and starts no backend
+/// either: the editor asks it on every keystroke.
+#[cfg(unix)]
+#[test]
+fn the_servers_check_does_not_start_the_typescript_backend() {
+    use std::io::Write;
+    use std::os::unix::fs::PermissionsExt;
+    if !common::toolchain() {
+        return;
+    }
+    let dir = Workspace::in_repo_with_subdir("server-check-without-backend", "src");
+    let file = dir.join("src/a.tt");
+    let text = "variant T { A(x: number), B }\n\
+                export const f = (t: T) => match (t) { A(x) => x };\n";
+    fs::write(&file, text).unwrap();
+    let runtime = dir.join("runtime");
+    let started = dir.join("started");
+    fs::create_dir_all(&runtime).unwrap();
+    fs::write(
+        runtime.join("node"),
+        format!("#!/bin/sh\n: > '{}'\nexit 1\n", started.display()),
+    )
+    .unwrap();
+    fs::set_permissions(runtime.join("node"), fs::Permissions::from_mode(0o755)).unwrap();
+    let request = serde_json::json!({
+        "id": 1,
+        "method": "check",
+        "params": { "text": text, "filename": file },
+    });
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--server")
+        .current_dir(&dir)
+        .env("PATH", &runtime)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("failed to run ttc --server");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(format!("{request}\n").as_bytes())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    let answer: serde_json::Value = serde_json::from_str(
+        String::from_utf8_lossy(&output.stdout)
+            .lines()
+            .next()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        answer["result"]["diagnostics"][0]["code"], "match-not-exhaustive",
+        "{answer}"
+    );
+    assert!(
+        !started.exists(),
+        "the server's check started the TypeScript backend"
+    );
+}
+
+/// The contextual refinement of a build is one TypeScript session per
+/// project however many workers compile it: `-j 4` starts exactly the
+/// processes `-j 1` does, and writes the same output.
+#[cfg(unix)]
+#[test]
+fn parallel_workers_share_one_typescript_session_per_project() {
+    use std::os::unix::fs::PermissionsExt;
+    if !common::toolchain() {
+        return;
+    }
+    let Some(node) = std::env::var_os("PATH").and_then(|path| {
+        std::env::split_paths(&path)
+            .map(|dir| dir.join("node"))
+            .find(|node| node.is_file())
+    }) else {
+        assert!(!common::toolchain_required(), "no node on PATH");
+        return;
+    };
+    let dir = Workspace::in_repo_with_subdir("shared-session", "src");
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"module":"nodenext"}}"#,
+    )
+    .unwrap();
+    for index in 0..8 {
+        fs::write(
+            dir.join(format!("src/m{index}.tt")),
+            format!(
+                "variant T{index} {{ A(x: number), B }}\n\
+                 export const f{index} = (t: T{index}) => match (t) {{ A(x) => x, B => 0 }};\n"
+            ),
+        )
+        .unwrap();
+    }
+    let runtime = dir.join("runtime");
+    let log = dir.join("started");
+    fs::create_dir_all(&runtime).unwrap();
+    fs::write(
+        runtime.join("node"),
+        format!(
+            "#!/bin/sh\necho started >> '{}'\nexec '{}' \"$@\"\n",
+            log.display(),
+            node.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(runtime.join("node"), fs::Permissions::from_mode(0o755)).unwrap();
+    let path = std::env::join_paths(
+        std::iter::once(runtime.clone()).chain(std::env::split_paths(
+            &std::env::var_os("PATH").unwrap_or_default(),
+        )),
+    )
+    .unwrap();
+
+    let mut runs = Vec::new();
+    for jobs in ["1", "4"] {
+        let _ = fs::remove_file(&log);
+        let out = format!("out-{jobs}");
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["-j", jobs, "-o", &out, "src"])
+            .current_dir(&dir)
+            .env("PATH", &path)
+            .output()
+            .expect("failed to run ttc");
+        assert!(
+            output.status.success(),
+            "-j {jobs}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let started = fs::read_to_string(&log).unwrap_or_default().lines().count();
+        runs.push((jobs, started));
+    }
+    assert!(runs[0].1 > 0, "the build never asked TypeScript");
+    assert_eq!(runs[0].1, runs[1].1, "processes started per -j: {runs:?}");
+    for index in 0..8 {
+        let name = format!("m{index}.ts");
+        assert_eq!(
+            fs::read_to_string(dir.join("out-1").join(&name)).unwrap(),
+            fs::read_to_string(dir.join("out-4").join(&name)).unwrap()
+        );
     }
 }
 
@@ -1941,13 +2656,11 @@ fn server_lines(input: &[u8]) -> (Vec<String>, std::process::ExitStatus) {
         .stderr(std::process::Stdio::piped())
         .spawn()
         .expect("failed to run ttc");
-    child
-        .stdin
-        .take()
-        .expect("stdin piped")
-        .write_all(input)
-        .unwrap();
+    let mut stdin = child.stdin.take().expect("stdin piped");
+    let input = input.to_vec();
+    let writer = std::thread::spawn(move || stdin.write_all(&input));
     let out = child.wait_with_output().expect("failed to run ttc");
+    writer.join().unwrap().unwrap();
     let lines = String::from_utf8_lossy(&out.stdout)
         .lines()
         .map(str::to_owned)
@@ -1971,11 +2684,67 @@ fn a_server_line_that_is_not_utf8_is_answered_and_the_session_continues() {
     assert_eq!(lines.len(), 3, "{lines:#?}");
     assert!(lines[0].contains("\"id\":1"), "{}", lines[0]);
     assert!(
-        lines[1].contains("\"id\":null") && lines[1].contains("malformed request"),
+        lines[1].contains("\"id\":2") && lines[1].contains("malformed request"),
         "{}",
         lines[1]
     );
     assert!(lines[2].contains("\"id\":3"), "{}", lines[2]);
+}
+
+#[test]
+fn a_request_whose_parameters_do_not_decode_is_answered_under_its_id() {
+    let (lines, status) = server_lines(
+        br#"{"id":7,"method":"print","params":{"path":"/x\udc00.tt"}}
+{"method":"check","id":8,"params":{"text":"\ud800"}}
+{"id":"\udc00","method":"check"}
+not json
+{"id":9,"method":"check","params":{"text":"const a = 1;\n"}}
+"#,
+    );
+    assert!(status.success());
+    assert_eq!(lines.len(), 5, "{lines:#?}");
+    for (line, id) in lines.iter().zip(["7", "8", "null", "null"]) {
+        let answer: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(answer["id"].to_string(), id, "{line}");
+        assert!(
+            answer["error"]
+                .as_str()
+                .is_some_and(|error| error.starts_with("malformed request")),
+            "{line}"
+        );
+    }
+    assert!(lines[4].contains("\"id\":9"), "{}", lines[4]);
+}
+
+#[test]
+fn a_deeply_nested_match_is_answered_and_the_session_continues() {
+    let depth = 10_000;
+    let text = format!(
+        "export const x = {}1{};\n",
+        "match (a) { A => ".repeat(depth),
+        " }".repeat(depth)
+    );
+    let mut input = String::new();
+    for (id, method) in [(1, "ttHints"), (2, "semanticTokens"), (3, "declarations")] {
+        input.push_str(
+            &serde_json::json!({
+                "id": id,
+                "method": method,
+                "params": { "path": "/deep/main.tt", "text": text },
+            })
+            .to_string(),
+        );
+        input.push('\n');
+    }
+    input.push_str("{\"id\":4,\"method\":\"check\",\"params\":{\"text\":\"const a = 1;\\n\"}}\n");
+    let (lines, status) = server_lines(input.as_bytes());
+    assert!(status.success(), "{status}");
+    assert_eq!(lines.len(), 4, "{lines:#?}");
+    for (line, id) in lines.iter().zip(1..) {
+        let answer: serde_json::Value = serde_json::from_str(line).unwrap();
+        assert_eq!(answer["id"], id, "{line}");
+        assert!(answer["error"].is_null(), "{line}");
+    }
 }
 
 #[test]
@@ -2150,4 +2919,528 @@ fn json_report_belongs_to_one_types_run() {
         assert!(out.stdout.is_empty(), "{args:?} prints no report");
         assert!(err.contains(expected), "{args:?}:\n{err}");
     }
+}
+
+const TASK_598_MODULE: &str = "declare const path: { basename(s: string): string };\n\
+                               declare const input: string;\n\
+                               const f = flow |> ((s: string) => s.trim()) |> path.basename;\n\
+                               const g = input |> f;\n\
+                               export = { f, g };\n";
+
+/// TASK-598: a module written with CommonJS module syntax (`export =`,
+/// `import x = require(...)`) cannot import with ECMAScript syntax under
+/// `verbatimModuleSyntax`, so it declares its pipeline helpers itself, as
+/// a script does, and imports no runtime.
+#[test]
+fn a_commonjs_module_declares_its_pipeline_helpers() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("m.tt"), TASK_598_MODULE).unwrap();
+    fs::write(
+        source.join("r.tt"),
+        "import m = require(\"./m.js\");\n\
+         declare const step: () => (value: string) => string;\n\
+         export const value = m.g |> step();\n",
+    )
+    .unwrap();
+    let output = ttc(&[
+        "--no-banner",
+        "-o",
+        out_dir.to_str().unwrap(),
+        source.to_str().unwrap(),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for name in ["m", "r"] {
+        let code = fs::read_to_string(out_dir.join(format!("{name}.ts"))).unwrap();
+        assert!(!code.contains("runtime"), "{code}");
+        assert!(code.contains("var $tt_"), "{code}");
+    }
+    assert!(!out_dir.join("tt").exists());
+}
+
+#[test]
+fn a_commonjs_module_type_checks_under_verbatim_module_syntax() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    let source = dir.join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(dir.join("package.json"), "{ \"type\": \"commonjs\" }\n").unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        "{ \"compilerOptions\": { \"strict\": true, \"target\": \"es2022\", \"module\": \"nodenext\", \
+         \"verbatimModuleSyntax\": true, \"noEmit\": true, \"types\": [] }, \"include\": [\"src\", \"out\"] }\n",
+    )
+    .unwrap();
+    fs::write(source.join("m.tt"), TASK_598_MODULE).unwrap();
+    let checked = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let built = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["-o", "out", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    if !common::tsc_available() {
+        return;
+    }
+    let tsc = common::tsc()
+        .args(["-p", "tsconfig.json"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run tsc");
+    assert!(
+        tsc.status.success(),
+        "{}",
+        String::from_utf8_lossy(&tsc.stdout)
+    );
+}
+
+/// TASK-617: a module written with CommonJS syntax imports the standard
+/// library in that syntax too, from `tt/cjs/`, so the materialized modules
+/// type-check where it does; a module written with ECMAScript syntax keeps
+/// importing `tt/`.
+#[test]
+fn a_commonjs_module_imports_the_standard_library_in_commonjs_syntax() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    let source = dir.join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(dir.join("package.json"), "{ \"type\": \"commonjs\" }\n").unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        "{ \"compilerOptions\": { \"strict\": true, \"target\": \"es2022\", \"module\": \"nodenext\", \
+         \"verbatimModuleSyntax\": true, \"noEmit\": true, \"types\": [] }, \"include\": [\"src\", \"out\"] }\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("types.tt"),
+        "import type { TOption } from \"@tt/std\";\n\
+         const none: TOption<number> | undefined = undefined;\n\
+         export = none;\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("values.tt"),
+        "import option = require(\"@tt/std/option\");\n\
+         import result = require(\"@tt/std/result\");\n\
+         import type { TOption, TResult } from \"@tt/std\";\n\
+         const some: TOption<number> = option.Some(1);\n\
+         const ok: TResult<number, string> = option.okOr(some, \"none\");\n\
+         export = [some, ok, result.isOk(ok)];\n",
+    )
+    .unwrap();
+    let checked = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        checked.status.success(),
+        "{}",
+        String::from_utf8_lossy(&checked.stderr)
+    );
+    let built = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["-o", "out", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    let values = fs::read_to_string(dir.join("out/values.ts")).unwrap();
+    assert!(
+        values.contains("require(\"./tt/cjs/option.js\")")
+            && values.contains("from \"./tt/cjs/index.js\""),
+        "{values}"
+    );
+    let option = fs::read_to_string(dir.join("out/tt/cjs/option.ts")).unwrap();
+    assert!(option.contains("export = option;"), "{option}");
+    assert!(!dir.join("out/tt/option.ts").exists());
+    if !common::tsc_available() {
+        return;
+    }
+    let tsc = common::tsc()
+        .args(["-p", "tsconfig.json"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run tsc");
+    assert!(
+        tsc.status.success(),
+        "{}",
+        String::from_utf8_lossy(&tsc.stdout)
+    );
+}
+
+/// TASK-617: a module written with ECMAScript syntax keeps the
+/// ECMAScript-syntax standard library.
+#[test]
+fn an_ecmascript_module_keeps_the_standard_library_in_tt() {
+    let dir = tmpdir();
+    let source = dir.join("src");
+    let out_dir = dir.join("out");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("m.tt"),
+        "import { Some } from \"@tt/std/option\";\nexport const m = Some(1);\n",
+    )
+    .unwrap();
+    let output = ttc(&["-o", out_dir.to_str().unwrap(), source.to_str().unwrap()]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let code = fs::read_to_string(out_dir.join("m.ts")).unwrap();
+    assert!(code.contains("from \"./tt/option.js\""), "{code}");
+    assert!(out_dir.join("tt/option.ts").is_file());
+    assert!(!out_dir.join("tt/cjs").exists());
+}
+
+#[test]
+fn a_types_report_without_typescript_counts_only_what_it_printed() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/a.tt"), "export variant V { A, B }\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--types", "--json-report", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.contains("the TypeScript layer did not run"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("error["), "{stderr}");
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["checked"], false, "{report}");
+    assert_eq!(report["diagnostics"], 0, "{report}");
+}
+
+#[test]
+fn an_edited_output_written_in_place_is_one_refusal() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/a.tt"), "export variant V { A, B }\n").unwrap();
+    let build = || {
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .arg("src")
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc")
+    };
+    assert!(build().status.success());
+    let output = dir.join("src/a.ts");
+    let mut edited = fs::read_to_string(&output).unwrap();
+    edited.push_str("// edited\n");
+    fs::write(&output, &edited).unwrap();
+    let second = build();
+    let stderr = String::from_utf8_lossy(&second.stderr);
+    assert_eq!(second.status.code(), Some(1), "{stderr}");
+    assert_eq!(
+        stderr.trim_end(),
+        "ttc: src/a.ts: output is not owned by this input or has been edited; refusing to overwrite it — choose an empty output directory"
+    );
+    assert_eq!(fs::read_to_string(&output).unwrap(), edited);
+}
+
+#[test]
+fn symbols_resolve_an_import_to_a_normalized_path() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src/sub")).unwrap();
+    fs::write(dir.join("src/sub/b.tt"), "export variant B { X, Y }\n").unwrap();
+    fs::write(
+        dir.join("src/a.tt"),
+        "import { B } from \"./sub/b.tt\";\nimport { C } from \"../src/./sub/../c.tt\";\nexport const b = (v: B) => v;\n",
+    )
+    .unwrap();
+    fs::write(dir.join("src/c.tt"), "export variant C { Z }\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--symbols", "src/a.tt"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(output.status.success());
+    let symbols: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let resolved: Vec<&str> = symbols[0]["imports"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|import| import["resolved"].as_str().unwrap())
+        .collect();
+    assert_eq!(resolved, ["src/sub/b.tt", "src/c.tt"]);
+}
+
+/// A `.ttx` import names the file tsc writes for the `.tsx` ttc emits:
+/// `.jsx` under `"jsx": "preserve"` and `.js` under every other `jsx`
+/// value or none (typescript-go `GetOutputExtension`), read from the
+/// project's configuration through `extends` (a path, a package, a list
+/// whose later entry wins) in JSON with comments, or from `--project`.
+/// The emitted tree is then compiled by the pinned `tsc` with the same
+/// configuration (except without `jsx`, where tsc refuses a `.tsx` module
+/// with TS6142): the specifier names a file it wrote, and the program runs
+/// under Node.js where its output is JavaScript.
+#[test]
+fn a_ttx_import_names_the_output_tsc_writes_under_the_projects_jsx_option() {
+    if !common::tsc_available() {
+        return;
+    }
+    let base = r#""module": "nodenext", "target": "es2022", "strict": true, "rootDir": "out", "outDir": "js""#;
+    type ProjectFiles = Vec<(&'static str, String)>;
+    let cases: [(&str, ProjectFiles, &[&str], &str); 9] = [
+        (
+            "preserve",
+            vec![(
+                "tsconfig.json",
+                format!(
+                    r#"{{"compilerOptions": {{"jsx": "preserve", {base}}}, "include": ["out"]}}"#
+                ),
+            )],
+            &[],
+            "jsx",
+        ),
+        (
+            "react",
+            vec![(
+                "tsconfig.json",
+                format!(r#"{{"compilerOptions": {{"jsx": "react", {base}}}, "include": ["out"]}}"#),
+            )],
+            &[],
+            "js",
+        ),
+        (
+            "react-jsx",
+            vec![(
+                "tsconfig.json",
+                format!(
+                    r#"{{"compilerOptions": {{"jsx": "react-jsx", {base}}}, "include": ["out"]}}"#
+                ),
+            )],
+            &[],
+            "js",
+        ),
+        (
+            "react-jsxdev",
+            vec![(
+                "tsconfig.json",
+                format!(
+                    r#"{{"compilerOptions": {{"jsx": "react-jsxdev", {base}}}, "include": ["out"]}}"#
+                ),
+            )],
+            &[],
+            "js",
+        ),
+        (
+            "react-native",
+            vec![(
+                "tsconfig.json",
+                format!(
+                    r#"{{"compilerOptions": {{"jsx": "react-native", {base}}}, "include": ["out"]}}"#
+                ),
+            )],
+            &[],
+            "js",
+        ),
+        (
+            "unset",
+            vec![(
+                "tsconfig.json",
+                format!(r#"{{"compilerOptions": {{{base}}}, "include": ["out"]}}"#),
+            )],
+            &[],
+            "js",
+        ),
+        (
+            "extends a path, with comments",
+            vec![
+                (
+                    "tsconfig.json",
+                    format!(
+                        "{{\n  // the base sets jsx\n  \"extends\": \"./configs/base\",\n  \"compilerOptions\": {{{base},}},\n  \"include\": [\"out\"],\n}}\n"
+                    ),
+                ),
+                (
+                    "configs/base.json",
+                    r#"{"compilerOptions": {"jsx": "Preserve"}}"#.to_string(),
+                ),
+            ],
+            &[],
+            "jsx",
+        ),
+        (
+            "extends packages, the later one winning",
+            vec![
+                (
+                    "tsconfig.json",
+                    format!(
+                        r#"{{"extends": ["@cfg/preserve", "@cfg/react/strict.json"], "compilerOptions": {{{base}}}, "include": ["out"]}}"#
+                    ),
+                ),
+                (
+                    "node_modules/@cfg/preserve/package.json",
+                    r#"{"name": "@cfg/preserve", "tsconfig": "base.json"}"#.to_string(),
+                ),
+                (
+                    "node_modules/@cfg/preserve/base.json",
+                    r#"{"compilerOptions": {"jsx": "preserve"}}"#.to_string(),
+                ),
+                (
+                    "node_modules/@cfg/react/strict.json",
+                    r#"{"compilerOptions": {"jsx": "react-jsx"}}"#.to_string(),
+                ),
+            ],
+            &[],
+            "js",
+        ),
+        (
+            "--project",
+            vec![
+                (
+                    "tsconfig.json",
+                    format!(
+                        r#"{{"compilerOptions": {{"jsx": "react", {base}}}, "include": ["out"]}}"#
+                    ),
+                ),
+                (
+                    "tsconfig.preserve.json",
+                    format!(
+                        r#"{{"compilerOptions": {{"jsx": "preserve", {base}}}, "include": ["out"]}}"#
+                    ),
+                ),
+            ],
+            &["--project", "tsconfig.preserve.json"],
+            "jsx",
+        ),
+    ];
+    for (name, files, extra, extension) in cases {
+        let dir = tmpdir();
+        fs::write(dir.join("package.json"), r#"{"type": "module"}"#).unwrap();
+        for (path, text) in &files {
+            let path = dir.join(path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        }
+        fs::create_dir_all(dir.join("src")).unwrap();
+        fs::write(
+            dir.join("src/view.ttx"),
+            "export const label: string = \"view\";\n",
+        )
+        .unwrap();
+        fs::write(
+            dir.join("src/app.tt"),
+            "import { label } from \"./view.ttx\";\nconsole.log(label);\n",
+        )
+        .unwrap();
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .current_dir(&*dir)
+            .args(["-o", "out", "src"])
+            .args(extra)
+            .output()
+            .expect("ttc runs");
+        assert!(
+            output.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let app = fs::read_to_string(dir.join("out/app.ts")).unwrap();
+        assert!(
+            app.contains(&format!("from \"./view.{extension}\"")),
+            "{name}: {app}"
+        );
+        if name == "unset" {
+            continue;
+        }
+        let config = extra.get(1).copied().unwrap_or("tsconfig.json");
+        let output = common::tsc()
+            .current_dir(&*dir)
+            .args(["-p", config])
+            .output()
+            .expect("tsc runs");
+        assert!(
+            output.status.success(),
+            "{name}: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert!(dir.join(format!("js/view.{extension}")).is_file(), "{name}");
+        if extension == "js" {
+            let output = Command::new("node")
+                .arg(dir.join("js/app.js"))
+                .output()
+                .expect("node runs");
+            assert!(
+                output.status.success(),
+                "{name}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(String::from_utf8_lossy(&output.stdout), "view\n", "{name}");
+        }
+    }
+}
+
+/// A build with a `.ttx` source cannot name that module's output when the
+/// project's configuration cannot be read; it says so instead of guessing.
+/// A build without one does not need the answer.
+#[test]
+fn an_unreadable_jsx_option_fails_only_a_build_that_has_a_ttx_source() {
+    let dir = tmpdir();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"extends": "./missing.json"}"#,
+    )
+    .unwrap();
+    fs::write(dir.join("app.tt"), "export const a = 1;\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(&*dir)
+        .args(["-o", "out", "app.tt"])
+        .output()
+        .expect("ttc runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    fs::write(dir.join("view.ttx"), "export const v = 1;\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(&*dir)
+        .args(["-o", "out", "app.tt", "view.ttx"])
+        .output()
+        .expect("ttc runs");
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot read the project's `jsx` option")
+            && stderr.contains("cannot find the configuration it extends, \"./missing.json\""),
+        "{stderr}"
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .current_dir(&*dir)
+        .args(["-o", "out", "--rewrite-imports", "ts", "app.tt", "view.ttx"])
+        .output()
+        .expect("ttc runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

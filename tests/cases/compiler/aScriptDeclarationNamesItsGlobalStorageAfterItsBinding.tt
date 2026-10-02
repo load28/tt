@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_11.rs::a_script_declaration_names_its_global_storage_after_its_binding
+declare const o: { kind: "A" } | { kind: "B" };
+const total = match (o) { A => 1, B => 2 };
+let { kind } = match (o) { A => o, B => o };
+class Base extends (match (o) { A => Object, B => Object }) {}
+function f(x: typeof o) { return match (x) { A => 1, B => 2 }; }

@@ -1,0 +1,5 @@
+assignment(200) => true | initial 0; target {"value":0}; risky 200; success true
+assignment(201) => true | initial 0; target {"value":0}; risky 201; success true
+assignment(404) => "risky call 3" | initial 0; target {"value":0}; caught "risky call 3"
+assignment(500) => false | initial 0; target {"value":0}; risky 500; guard true; server false
+assignment(7) => null | initial 0; target {"value":0}; risky 7; other null

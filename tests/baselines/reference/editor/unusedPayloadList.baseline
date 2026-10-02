@@ -1,0 +1,14 @@
+=== diagnostics unusedPayloadList.tt ===
+diagnostics: 5 diagnostic(s)
+  5:6-5:12 "(x, y)" hint TS6198: All destructured elements are unused. [unnecessary]
+  6:11-6:17 "(x, y)" hint TS6198: All destructured elements are unused. [unnecessary]
+  7:6-7:12 "(v, w)" hint TS6198: All destructured elements are unused. [unnecessary]
+  10:11-10:23 "(x: p, y: q)" hint TS6198: All destructured elements are unused. [unnecessary]
+  11:36-11:53 "{ code, message }" hint TS6198: All destructured elements are unused. [unnecessary]
+published: 5 diagnostic(s)
+  5:6-5:12 "(x, y)" hint TS6198 (ts): All destructured elements are unused. [unnecessary]
+  6:11-6:17 "(x, y)" hint TS6198 (ts): All destructured elements are unused. [unnecessary]
+  7:6-7:12 "(v, w)" hint TS6198 (ts): All destructured elements are unused. [unnecessary]
+  10:11-10:23 "(x: p, y: q)" hint TS6198 (ts): All destructured elements are unused. [unnecessary]
+  11:36-11:53 "{ code, message }" hint TS6198 (ts): All destructured elements are unused. [unnecessary]
+

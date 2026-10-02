@@ -1,0 +1,2 @@
+objectProperty(1.5) => {"a":1,"c":3} | a 1; yield 1.5; c 3
+objectProperty(2) => {"a":1,"c":3} | a 1; yield 2; c 3

@@ -1,0 +1,2 @@
+laterDeclarator(2) => [1,null] | before 1; risky 2; receiver {"factor":3}
+laterDeclarator(3) => [1,null] | before 1; risky 3; receiver {"factor":3}

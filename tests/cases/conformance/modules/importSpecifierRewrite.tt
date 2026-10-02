@@ -1,0 +1,19 @@
+// @rewriteImports: js, ts, off
+// @filename: tsconfig.json
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  }
+}
+
+// @filename: token.tt
+export variant Token { Num(value: number), Eof }
+
+// @filename: main.tt
+import { Token } from "./token.tt";
+export const value = (t: Token): number => match (t) { Num(value) => value, Eof => 0 };

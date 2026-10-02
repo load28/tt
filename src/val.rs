@@ -38,6 +38,7 @@
 
 mod calls;
 mod checker;
+mod reference;
 mod targets;
 
 pub(crate) use calls::method_calls;
@@ -45,10 +46,11 @@ pub(crate) use calls::method_calls;
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use crate::ast::{ValModifier, ValModifierKind};
+use crate::SourceKind;
+use crate::ast::{Span, ValModifier, ValModifierKind};
 use crate::error::TtError;
 use crate::lexer::{Token, TokenKind, TplPart};
-use crate::parser::{dotted_at, find_close_at, is_param_modifier, is_reserved};
+use crate::parser::{PipelineShape, dotted_at, find_close_at, is_param_modifier, is_reserved};
 
 use checker::*;
 
@@ -244,7 +246,62 @@ struct Frame<'a> {
 struct ParamSig {
     /// `None` for a destructuring pattern, which has no single name.
     name: Option<String>,
-    is_val: bool,
+    val_at: Option<usize>,
+}
+
+impl ParamSig {
+    fn is_val(&self) -> bool {
+        self.val_at.is_some()
+    }
+}
+
+/// Where a `val` binding was declared, as a report about it points back:
+/// the `val` keyword, and the end of the modifier and the spaces and tabs
+/// after it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ValSite {
+    pub(crate) val_at: usize,
+    pub(crate) modifier_end: usize,
+}
+
+/// The one report of a mutation through a `val` binding, whichever path
+/// found it: the access path at `[start, end)` rooted at `name`, through
+/// the mutating built-in `method` when there is one. When the binding is
+/// known (`binding`, whose offsets are in the source that declares it),
+/// the report points at its `val` and offers to remove the modifier.
+pub(crate) fn mutation_error(
+    start: usize,
+    end: usize,
+    name: &str,
+    method: Option<&str>,
+    binding: Option<ValSite>,
+) -> TtError {
+    let message = match method {
+        Some(method) => format!(
+            "cannot call mutating method `{method}` through val binding `{name}` \
+             (the binding is declared with `val`, so every access path from it is read-only)"
+        ),
+        None => format!(
+            "cannot mutate through val binding `{name}` \
+             (the binding is declared with `val`, so every access path from it is read-only)"
+        ),
+    };
+    let error = TtError::span(start, end, message).code(crate::DiagnosticCode::ValMutation);
+    match binding {
+        Some(site) => error
+            .suggest(
+                "remove `val` if this binding is intended to be mutable",
+                site.val_at,
+                site.modifier_end,
+                "",
+            )
+            .label(
+                site.val_at,
+                site.val_at + "val".len(),
+                "the read-only binding is declared here",
+            ),
+        None => error,
+    }
 }
 
 /// One `val` binding, as a node a checker can resolve — half of the
@@ -382,23 +439,56 @@ enum Sink<'a> {
 
 /// Runs the `val` analysis over a whole file's token stream and returns
 /// **every** violation, in walk order (statement order).
-pub(crate) fn check_all(src: &str, tokens: &[Token], modifiers: &Modifiers) -> Vec<TtError> {
+pub(crate) fn check_all(
+    src: &str,
+    source_kind: SourceKind,
+    tokens: &[Token],
+    modifiers: &Modifiers,
+    pipelines: &[PipelineShape],
+) -> Vec<TtError> {
     let sink = RefCell::new(Vec::new());
-    run(src, tokens, modifiers, Sink::Report(&sink));
+    run(
+        src,
+        source_kind,
+        tokens,
+        modifiers,
+        pipelines,
+        Sink::Report(&sink),
+    );
     sink.into_inner()
 }
 
 /// Collects the file's `val` bindings and its mutations, unpaired — the
 /// input a checker pairs by symbol identity ([`ValProbes`]). Never reports.
-pub(crate) fn probes(src: &str, tokens: &[Token], modifiers: &Modifiers) -> ValProbes {
+pub(crate) fn probes(
+    src: &str,
+    source_kind: SourceKind,
+    tokens: &[Token],
+    modifiers: &Modifiers,
+    pipelines: &[PipelineShape],
+) -> ValProbes {
     let sink = RefCell::new(ValProbes::default());
-    run(src, tokens, modifiers, Sink::Probes(&sink));
+    run(
+        src,
+        source_kind,
+        tokens,
+        modifiers,
+        pipelines,
+        Sink::Probes(&sink),
+    );
     sink.into_inner()
 }
 
 /// The one walk both halves share. With a probe sink the walk is in probe
 /// mode: it reports nothing and collects instead.
-fn run(src: &str, tokens: &[Token], modifiers: &Modifiers, sink: Sink) {
+fn run(
+    src: &str,
+    source_kind: SourceKind,
+    tokens: &[Token],
+    modifiers: &Modifiers,
+    pipelines: &[PipelineShape],
+    sink: Sink,
+) {
     // Files that do not use the modifier — the overwhelming majority —
     // pay nothing.
     if modifiers.is_empty() {
@@ -423,16 +513,19 @@ fn run(src: &str, tokens: &[Token], modifiers: &Modifiers, sink: Sink) {
                         .iter()
                         .map(|param| ValParam {
                             name: param.name.clone(),
-                            is_val: param.is_val,
+                            is_val: param.is_val(),
                         })
                         .collect(),
                 }
             }));
     }
+    let applications = Applications::new(src, pipelines);
     let checker = Checker {
         src,
+        source_kind,
         modifiers,
         signatures: &signatures,
+        applications: &applications,
         sink,
     };
     let mut frames = vec![Frame {
@@ -442,6 +535,79 @@ fn run(src: &str, tokens: &[Token], modifiers: &Modifiers, sink: Sink) {
     let arms = checker.arm_arrows(tokens);
     checker.instantiate(tokens, 0, tokens.len(), &mut frames, true, &arms);
     checker.walk(tokens, &mut frames);
+}
+
+pub(super) struct Applications {
+    piped: HashMap<usize, Vec<Span>>,
+    flows: HashMap<usize, (usize, Span)>,
+}
+
+impl Applications {
+    fn new(src: &str, pipelines: &[PipelineShape]) -> Self {
+        let mut flows = HashMap::new();
+        for shape in pipelines.iter().filter(|shape| shape.head.is_none()) {
+            if let Some(step) = shape.first_call {
+                flows.insert(shape.span.start, (shape.span.end, step));
+            }
+        }
+        let mut resolved = HashMap::new();
+        for (&start, &(end, step)) in &flows {
+            if let Some(callee) = receiver(src, &flows, step) {
+                resolved.insert(start, (end, callee));
+            }
+        }
+        let mut piped: HashMap<usize, Vec<Span>> = HashMap::new();
+        for shape in pipelines {
+            if let (Some(head), Some(step)) = (shape.head, shape.first_call)
+                && let Some(callee) = receiver(src, &flows, step)
+            {
+                piped.entry(callee.start).or_default().push(head);
+            }
+        }
+        Applications {
+            piped,
+            flows: resolved,
+        }
+    }
+
+    pub(super) fn piped_into(&self, callee: usize) -> &[Span] {
+        self.piped.get(&callee).map_or(&[], Vec::as_slice)
+    }
+
+    pub(super) fn flow_at(&self, start: usize) -> Option<(usize, Span)> {
+        self.flows.get(&start).copied()
+    }
+}
+
+fn receiver(src: &str, flows: &HashMap<usize, (usize, Span)>, step: Span) -> Option<Span> {
+    let text = &src[step.start..step.end];
+    if is_identifier_text(text) {
+        return Some(step);
+    }
+    let inner = text.strip_prefix('(')?.strip_suffix(')')?;
+    let start = step.start + 1 + (inner.len() - inner.trim_start().len());
+    let end = step.end - 1 - (inner.len() - inner.trim_end().len());
+    let &(flow_end, first) = flows.get(&start)?;
+    if flow_end != end {
+        return None;
+    }
+    receiver(src, flows, first)
+}
+
+fn is_identifier_text(text: &str) -> bool {
+    let mut chars = text.chars();
+    chars
+        .next()
+        .is_some_and(|first| !first.is_ascii_digit() && is_identifier_char(first))
+        && chars.all(is_identifier_char)
+}
+
+fn is_identifier_char(c: char) -> bool {
+    if c.is_ascii() {
+        c.is_ascii_alphanumeric() || c == '_' || c == '$'
+    } else {
+        !c.is_whitespace() && !matches!(c, '\u{2028}' | '\u{2029}' | '\u{feff}')
+    }
 }
 
 /// Collects the parameter signatures of the file's named functions —
@@ -458,6 +624,15 @@ struct FnDecl<'a> {
 }
 
 fn collect_declarations<'a>(
+    src: &'a str,
+    tokens: &'a [Token],
+    modifiers: &Modifiers,
+    out: &mut Vec<FnDecl<'a>>,
+) {
+    crate::stack::grow(|| collect_declarations_grown(src, tokens, modifiers, out));
+}
+
+fn collect_declarations_grown<'a>(
     src: &'a str,
     tokens: &'a [Token],
     modifiers: &Modifiers,
@@ -612,6 +787,13 @@ fn function_value_at(
     }
 }
 
+fn token_range(tokens: &[Token], span: Span) -> Option<(usize, usize)> {
+    let start = tokens.partition_point(|token| token.span.start < span.start);
+    let end = tokens.partition_point(|token| token.span.end <= span.end);
+    (start < end && tokens[start].span.start == span.start && tokens[end - 1].span.end == span.end)
+        .then_some((start, end))
+}
+
 /// Splits a parenthesized list into its top-level entries as token index
 /// ranges. `open` is the `(` (or `[`/`{`); the ranges exclude the
 /// delimiters.
@@ -650,13 +832,13 @@ fn parse_params(src: &str, tokens: &[Token], modifiers: &Modifiers, open: usize)
         .into_iter()
         .map(|(start, end)| {
             let mut k = start;
-            let mut is_val = false;
+            let mut val_at = None;
             while k < end {
                 match &tokens[k].kind {
                     TokenKind::Ident => {
                         let word = &src[tokens[k].span.start..tokens[k].span.end];
                         if modifier_of(modifiers, &tokens[k]).is_some() {
-                            is_val = true;
+                            val_at = Some(tokens[k].span.start);
                             k += 1;
                             continue;
                         }
@@ -680,7 +862,7 @@ fn parse_params(src: &str, tokens: &[Token], modifiers: &Modifiers, open: usize)
                 }
                 _ => None,
             };
-            ParamSig { name, is_val }
+            ParamSig { name, val_at }
         })
         .collect()
 }
@@ -690,6 +872,15 @@ fn parse_params(src: &str, tokens: &[Token], modifiers: &Modifiers, open: usize)
 /// `[x, , y]`) and tt let-else patterns (`Tag(a, b: c)`), and returns the
 /// token index just past the target.
 fn collect_pattern_names<'a>(
+    src: &'a str,
+    tokens: &[Token],
+    start: usize,
+    out: &mut Vec<&'a str>,
+) -> usize {
+    crate::stack::grow(|| collect_pattern_names_grown(src, tokens, start, out))
+}
+
+fn collect_pattern_names_grown<'a>(
     src: &'a str,
     tokens: &[Token],
     start: usize,

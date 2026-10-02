@@ -1,0 +1,7 @@
+=== tryPreservesArgumentAndConditionalEvaluationOrder2.tt ===
+function f(maybe: any): TResult<number, string> { return Result.Ok(maybe?.(first(), try second(), third())); }
+>f : function f(maybe: any): TResult<number, string>
+>maybe : (parameter) maybe: any
+>TResult : type TResult = /*unresolved*/ any
+>maybe : (parameter) maybe: any
+

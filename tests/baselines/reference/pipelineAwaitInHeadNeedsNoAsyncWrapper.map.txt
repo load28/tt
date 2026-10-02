@@ -1,0 +1,6 @@
+//// [pipelineAwaitInHeadNeedsNoAsyncWrapper.tt] 4 mapping(s)
+1:1 -> 1:1 len 48  "async function f(p: Promise<string>) {\n  return "
+2:10 -> 2:43 len 7  "await p"
+2:21 -> 2:52 len 4  "norm"
+2:25 -> 2:57 len 4  ";\n}\n"
+

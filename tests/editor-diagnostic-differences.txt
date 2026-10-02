@@ -1,0 +1,6 @@
+# Editor cases with `// @expectDiagnostic` whose surfaces disagree: what the VS Code
+# adapter publishes against the case's [|ranges|], `ttc --check`, and `ttc --check-types`.
+# One line per difference: the case name, a tab, the failure's first line, a tab, and the
+# TASK-NNN that records the defect. tests/editor_cases.rs fails on a difference this file
+# does not list, on a listed one that no longer occurs, and, unfiltered, on a line that
+# names no case.

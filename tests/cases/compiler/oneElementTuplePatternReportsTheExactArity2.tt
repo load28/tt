@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_06.rs::one_element_tuple_pattern_reports_the_exact_arity
+const r = match (a) {
+  (A, B) => 1,
+  _ => 0,
+};

@@ -1,0 +1,51 @@
+==== ttc --out-dir (exit 1) ====
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+  --> ./main.ttx:11:79
+   |
+11 |   return `${[...(function* () { const r = result { const n = try read(input); yield n; return n; }; yield r; })()]}`;
+   |                                                                               ^^^^^
+   |
+   = help: yield outside this `result` block instead
+
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+  --> ./main.ttx:14:93
+   |
+14 |   return <div data-value={[...(function* () { const r = result { const n = try read(input); yield n; return n; }; yield r; })()]} />;
+   |                                                                                             ^^^^^
+   |
+   = help: yield outside this `result` block instead
+
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+  --> ./main.ttx:17:82
+   |
+17 |   return <div>{[...(function* () { const r = result { const n = try read(input); yield n; return n; }; yield r; })()]}</div>;
+   |                                                                                  ^^^^^
+   |
+   = help: yield outside this `result` block instead
+
+
+==== ttc --check-types (exit 1) ====
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+  --> main.ttx:11:79
+   |
+11 |   return `${[...(function* () { const r = result { const n = try read(input); yield n; return n; }; yield r; })()]}`;
+   |                                                                               ^^^^^
+   |
+   = help: yield outside this `result` block instead
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+  --> main.ttx:14:93
+   |
+14 |   return <div data-value={[...(function* () { const r = result { const n = try read(input); yield n; return n; }; yield r; })()]} />;
+   |                                                                                             ^^^^^
+   |
+   = help: yield outside this `result` block instead
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+  --> main.ttx:17:82
+   |
+17 |   return <div>{[...(function* () { const r = result { const n = try read(input); yield n; return n; }; yield r; })()]}</div>;
+   |                                                                                  ^^^^^
+   |
+   = help: yield outside this `result` block instead
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

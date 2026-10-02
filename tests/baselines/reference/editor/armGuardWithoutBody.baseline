@@ -1,0 +1,46 @@
+=== completions /*guard*/ armGuardWithoutBody.tt:6:30 ===
+  |     Rect(width) if width > li
+  |                              ^ /*guard*/
+completion: 1046 item(s), member false, probe no
+  Shape (Variable, 11)
+  arguments (Variable, 11)
+  g (Function, 11)
+  limit (Variable, 11)
+  s (Variable, 11)
+  width (Variable, 11)
+  ... 1040 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+  keywords: match (15), flow (15), result (15)
+patternCompletions: null
+editor completion: 1049 item(s)
+  Shape (Variable, 211)
+  arguments (Variable, 211)
+  g (Function, 211)
+  limit (Variable, 211)
+  s (Variable, 211)
+  width (Variable, 211)
+  ... 1043 global or keyword item(s) (sortText 215, no source)
+
+=== hover /*width*/ armGuardWithoutBody.tt:6:20 ===
+  |     Rect(width) if width > li
+  |                    ^ /*width*/
+hover: 6:20-6:25 "width"
+    const width: number
+ttSymbol: null
+
+=== definition /*width*/ armGuardWithoutBody.tt:6:20 ===
+  |     Rect(width) if width > li
+  |                    ^ /*width*/
+definition: 1 location(s)
+  armGuardWithoutBody.tt 6:10-6:15 "width"
+
+=== diagnostics armGuardWithoutBody.tt ===
+diagnostics: 2 diagnostic(s)
+  6:28-6:30 "li" error TS2304: Cannot find name 'li'.
+  2:7-2:12 "limit" hint TS6133: 'limit' is declared but its value is never read. [unnecessary]
+published: 4 diagnostic(s)
+  2:7-2:12 "limit" hint TS6133 (ts): 'limit' is declared but its value is never read. [unnecessary]
+  4:10-4:19 "match (s)" error match-not-exhaustive (ttc): match on variant Shape is not exhaustive: missing "Rect", "Point"
+  6:5-6:16 "Rect(width)" error missing-arm-body (ttc): match: this arm has no body
+  6:28-6:30 "li" error ts2304 (ttc): Cannot find name 'li'.
+

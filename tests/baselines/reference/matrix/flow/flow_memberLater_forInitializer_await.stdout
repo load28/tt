@@ -1,0 +1,2 @@
+forInitializer(2) => [null] | await; receiver {"factor":3}
+forInitializer(3) => [null] | await; receiver {"factor":3}

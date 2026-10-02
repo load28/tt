@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_06.rs::nested_pattern_in_tuple_match_elements
+
+const n = match (a, b) {
+  (Ok(value: Some(value: x)), Ok(value: Some(value: y))) => x + y,
+  _ => 0,
+};

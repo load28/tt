@@ -1,0 +1,15 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./anAssignmentCapturesItsTargetBeforeAHoistedRightOperand2.tt → $DIR/out/anAssignmentCapturesItsTargetBeforeAHoistedRightOperand2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2683]: 'this' implicitly has type 'any' because it does not have a type annotation.
+ --> anAssignmentCapturesItsTargetBeforeAHoistedRightOperand2.tt:8:3
+  |
+6 | export function g(): R {
+  |                 - An outer value of 'this' is shadowed by this container.
+7 |   state.v *= try read();
+8 |   this.v = try read();
+  |   ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+anAssignmentCapturesItsTargetBeforeAHoistedRightOperand2.ts(21,3): error TS2683: 'this' implicitly has type 'any' because it does not have a type annotation.

@@ -1,0 +1,4 @@
+jsxSpreadAttribute({}) => "<div value='range'></div>" | risky {}; range "range"
+jsxSpreadAttribute({}) => "<div value=1></div>" | risky {}; type 1
+jsxSpreadAttribute({}) => "risky call 3" | caught "risky call 3"
+jsxSpreadAttribute("text") => "<div value=null></div>" | risky "text"; other null

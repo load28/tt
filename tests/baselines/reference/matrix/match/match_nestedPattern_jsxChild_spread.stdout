@@ -1,0 +1,3 @@
+jsxChild({"kind":"Done","value":{"kind":"Some","value":7}}) => "<p>7</p>" | some 7
+jsxChild({"kind":"Done","value":{"kind":"None"}}) => "<p>0</p>" | none 0
+jsxChild({"kind":"Failed","error":"lost"}) => "<p>lost</p>" | failed "lost"

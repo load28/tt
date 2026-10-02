@@ -1,0 +1,4 @@
+jsxNested({}) => "<ul><li>1</li><li>range</li></ul>" | first 1; operand {}; range "range"; finally 0
+jsxNested({}) => "<ul><li>1</li><li>1</li></ul>" | first 1; operand {}; type 1; finally 0
+jsxNested({}) => "<ul><li>1</li><li>plain</li></ul>" | first 1; operand {}; error "plain"; finally 0
+jsxNested("text") => "<ul><li>1</li><li></li></ul>" | first 1; operand "text"; other null; finally 0

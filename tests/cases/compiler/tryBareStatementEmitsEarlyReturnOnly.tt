@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_02.rs::try_bare_statement_emits_early_return_only
+function f(): X {
+  try g();
+  return h();
+}

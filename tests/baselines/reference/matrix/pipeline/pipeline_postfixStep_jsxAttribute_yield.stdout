@@ -1,0 +1,2 @@
+jsxAttribute(1.25) => "<div data-value='1.3'></div>" | yield 1.25
+jsxAttribute(7) => "<div data-value='7.0'></div>" | yield 7

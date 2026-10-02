@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_04.rs::a_file_without_tt_constructs_still_reports_through_the_output_self_check
+const q = ;

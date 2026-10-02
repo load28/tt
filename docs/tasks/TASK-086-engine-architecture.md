@@ -1,5 +1,7 @@
 # TASK-086: Project/Snapshot 기반 Language Engine 아키텍처 재구성
 
+> Superseded in part by [TASK-535](./TASK-535-cross-project-references.md): the rejected "workspace multi-project service" row of `docs/design/engine-architecture.md` §D is now partly adopted. `engine::Workspace` holds every open project and answers references and rename from all of them together.
+
 - **상태**: 완료
 - **시작일**: 2026-08-19
 - **완료일**: 2026-08-19

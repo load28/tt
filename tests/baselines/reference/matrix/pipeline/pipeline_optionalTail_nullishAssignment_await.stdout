@@ -1,0 +1,2 @@
+nullishAssignment(2.5) => "2.50" | flip true; target {"value":null}; await; positive 2.5
+nullishAssignment(-3) => "kept" | flip false; target {"value":"kept"}

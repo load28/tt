@@ -1,0 +1,3 @@
+4
+4
+[{"kind":"Err","error":"small1"},{"kind":"Ok","value":12},{"kind":"Err","error":"small1"},{"kind":"Ok","value":2},{"kind":"Err","error":"small1"},{"kind":"Ok","value":5}]

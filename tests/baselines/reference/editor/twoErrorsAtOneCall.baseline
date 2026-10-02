@@ -1,0 +1,19 @@
+=== diagnostics twoErrorsAtOneCall.tt ===
+diagnostics: 4 diagnostic(s)
+  3:3-3:9 "return" error TS2322: Type 'number' is not assignable to type 'string'.
+  3:10-3:15 "total" error TS2554: Expected 1 arguments, but got 0.
+    related 1:24-1:36 "xs: number[]": An argument for 'xs' was not provided.
+  6:9-6:10 "x" error TS2322: Type 'number' is not assignable to type 'string'.
+  6:21-6:26 "total" error TS2554: Expected 1 arguments, but got 0.
+    related 1:24-1:36 "xs: number[]": An argument for 'xs' was not provided.
+published: 4 diagnostic(s)
+  3:3-3:9 "return" error ts2322 (ttc): Type 'number' is not assignable to type 'string'.
+  3:10-3:15 "total" error ts2554 (ttc): Expected 1 arguments, but got 0.
+    related twoErrorsAtOneCall.tt 1:24-1:36 "xs: number[]": An argument for 'xs' was not provided.
+  6:9-6:10 "x" error ts2322 (ttc): Type 'number' is not assignable to type 'string'.
+  6:21-6:26 "total" error ts2554 (ttc): Expected 1 arguments, but got 0.
+    related twoErrorsAtOneCall.tt 1:24-1:36 "xs: number[]": An argument for 'xs' was not provided.
+
+=== parity with the TypeScript twin ===
+diagnostics twoErrorsAtOneCall.tt: same
+

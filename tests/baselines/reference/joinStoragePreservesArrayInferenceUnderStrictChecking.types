@@ -1,0 +1,45 @@
+=== joinStoragePreservesArrayInferenceUnderStrictChecking.tt ===
+variant Shape { Circle(radius: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+declare const s: Shape;
+>s : const s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+export const spread = match(s) { Circle(radius) => [radius], Point => [] };
+>spread : const spread: number[]
+>s : const s: Shape
+>radius : const radius: number
+>radius : const radius: number
+spread.push(1);
+>spread : const spread: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+export const n: number = spread.length;
+>n : const n: number
+>spread : const spread: number[]
+>length : (property) Array<number>.length: number
+export const block = match(s) { Circle(radius) => { return [radius]; }, Point => { return []; } };
+>block : const block: number[]
+>s : const s: Shape
+>radius : const radius: number
+>radius : const radius: number
+block.push(2);
+>block : const block: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+const invalid: string[] = spread;
+>invalid : const invalid: string[]
+>spread : const spread: number[]
+

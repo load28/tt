@@ -1,0 +1,7 @@
+//// [matchInSpreadOperandsEntersTheEvaluationProtocol1.tt] 5 mapping(s)
+1:1 -> 9:1 len 19  "const value = { ..."
+1:27 -> 3:17 len 4  "kind"
+1:40 -> 9:42 len 10  "({ a: 1 })"
+1:57 -> 9:55 len 4  "({})"
+1:63 -> 9:60 len 4  " };\n"
+

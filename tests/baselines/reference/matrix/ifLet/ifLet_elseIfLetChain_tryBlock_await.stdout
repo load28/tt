@@ -1,0 +1,2 @@
+tryBlock(4) => 4 | await; read 4; first 4
+tryBlock(-4) => "negative -2" | await; read -4; second -2; read -2; second "negative -2"

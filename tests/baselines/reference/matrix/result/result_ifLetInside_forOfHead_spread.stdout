@@ -1,0 +1,2 @@
+forOfHead(4) => [{"kind":"Ok","value":4}] | read 4; direct 4
+forOfHead(-1) => [{"kind":"Err","error":"negative -7"}] | read -1; fallback -7; read -7

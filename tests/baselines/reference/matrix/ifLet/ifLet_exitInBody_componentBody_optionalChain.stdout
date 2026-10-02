@@ -1,0 +1,2 @@
+componentBody(2) => "<p>\"passed\"</p>" | read 2
+componentBody(-2) => "<p>diverged</p>" | read undefined; error "negative undefined"

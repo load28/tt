@@ -1,0 +1,5 @@
+//// [aCaseNamedLikeThePrototypeSetterIsAnOwnConstructorProperty2.tt] 3 mapping(s)
+1:34 -> 2:29 len 6  "number"
+1:34 -> 5:27 len 6  "number"
+1:46 -> 7:3 len 1  "\n"
+

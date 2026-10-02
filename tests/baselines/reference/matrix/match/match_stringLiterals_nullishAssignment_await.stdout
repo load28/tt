@@ -1,0 +1,4 @@
+nullishAssignment("north") => 1 | flip true; target {"value":null}; await; n 1
+nullishAssignment("south") => "kept" | flip false; target {"value":"kept"}
+nullishAssignment("east") => 2 | flip true; target {"value":null}; await; se 2
+nullishAssignment("up") => "kept" | flip false; target {"value":"kept"}

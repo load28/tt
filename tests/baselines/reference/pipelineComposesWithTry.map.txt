@@ -1,0 +1,7 @@
+//// [pipelineComposesWithTry.tt] 5 mapping(s)
+1:1 -> 1:1 len 41  "function f(): Result<number, string> {\n  "
+2:9 -> 6:9 len 1  "a"
+2:17 -> 2:51 len 9  "readCfg()"
+2:30 -> 2:62 len 4  "norm"
+2:35 -> 6:26 len 26  "\n  return Result.Ok(a);\n}\n"
+

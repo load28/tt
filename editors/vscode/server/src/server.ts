@@ -39,6 +39,7 @@ import {
   CodeActionKind,
   CompletionItem,
   CompletionItemKind,
+  CompletionItemTag,
   CompletionTriggerKind,
   createConnection,
   Diagnostic,
@@ -49,10 +50,12 @@ import {
   InitializeResult,
   InsertTextFormat,
   Location,
+  LSPErrorCodes,
   MarkupKind,
   ParameterInformation,
   ProposedFeatures,
   Range,
+  ResponseError,
   SemanticTokensBuilder,
   SignatureHelp,
   SignatureInformation,
@@ -67,16 +70,20 @@ import { isExternalChange } from "./watch";
 import { URI } from "vscode-uri";
 
 import * as analysis from "./analysis";
+import { publishedDiagnostics } from "./diagnostics";
 import * as engine from "./engine";
 import { NoticeLedger } from "./notices";
 import { applyFolderChange, containingRoot, folderRoots, sidecarLocation } from "./roots";
 import * as ttc from "./ttc";
+import * as fs from "node:fs";
 import * as path from "node:path";
 
 import * as sidecar from "./sidecar";
 
-const MEMBER_TRIGGER_CHARACTERS = ["."];
+const TYPESCRIPT_TRIGGER_CHARACTERS = [".", '"', "'", "`", "/", "@", "<", "#", " ", "*"];
 const PATTERN_TRIGGER_CHARACTERS = ["(", "|", "{", ","];
+const STRING_TRIGGER_CHARACTERS = ['"', "'"];
+const TYPESCRIPT_SIGNATURE_TRIGGER_CHARACTERS = ["(", ",", "<"];
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
@@ -84,6 +91,8 @@ const documents = new TextDocuments(TextDocument);
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
 let hasVersionedWorkspaceEditCapability = false;
+let hasLabelDetailsCapability = false;
+let completionTagSupport: CompletionItemTag[] = [];
 let workspaceRoots: string[] = [];
 /** What the server has already told the user it cannot do (notices.ts). */
 const notices = new NoticeLedger();
@@ -98,6 +107,11 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
   hasVersionedWorkspaceEditCapability = Boolean(
     params.capabilities.workspace?.workspaceEdit?.documentChanges,
   );
+  hasLabelDetailsCapability = Boolean(
+    params.capabilities.textDocument?.completion?.completionItem?.labelDetailsSupport,
+  );
+  completionTagSupport =
+    params.capabilities.textDocument?.completion?.completionItem?.tagSupport?.valueSet ?? [];
   workspaceRoots = folderRoots(params.workspaceFolders);
 
   return {
@@ -119,26 +133,27 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
         save: { includeText: false },
       },
       completionProvider: {
-        triggerCharacters: [...MEMBER_TRIGGER_CHARACTERS, ...PATTERN_TRIGGER_CHARACTERS],
+        triggerCharacters: [...TYPESCRIPT_TRIGGER_CHARACTERS, ...PATTERN_TRIGGER_CHARACTERS],
         // Signatures and documentation are fetched per entry, when the
         // editor asks for the one the user highlighted (onCompletionResolve).
         resolveProvider: true,
       },
       signatureHelpProvider: {
-        triggerCharacters: ["(", ","],
+        triggerCharacters: TYPESCRIPT_SIGNATURE_TRIGGER_CHARACTERS,
         retriggerCharacters: [")"],
       },
       hoverProvider: true,
       definitionProvider: true,
       referencesProvider: true,
-      renameProvider: true,
+      renameProvider: { prepareProvider: true },
       documentSymbolProvider: true,
       codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
-      // The parser's own classification of the ambiguous surface (a `flow`
-      // head split across lines, a plain function named `match`), layered
-      // over the TextMate grammar per the LSP semantic-tokens contract.
+      // TypeScript's classification of the source text, with the parser's
+      // own classification of tt's constructs over it (a `flow` head split
+      // across lines, a plain function named `match`), layered over the
+      // TextMate grammar per the LSP semantic-tokens contract.
       semanticTokensProvider: {
-        legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: [] },
+        legend: { tokenTypes: SEMANTIC_TOKEN_TYPES, tokenModifiers: SEMANTIC_TOKEN_MODIFIERS },
         full: true,
         range: false,
       },
@@ -274,21 +289,19 @@ function reloadProjectState(previous: ReadonlyMap<string, string>): void {
 interface Analyzed {
   version: number;
   text: string;
-  masked: string;
 }
 
 const analysisCache = new Map<string, Analyzed>();
 
-/** The text-shape half: the masked buffer for cursor-context questions
- * (member access, word boundaries). tt *semantics* — which variants are
- * visible, where the match sites are — are the compiler's answer
- * ([declarationsOf]), not this file's. */
+/** The text-shape half: the buffer for word-boundary questions. tt
+ * *semantics* — which variants are visible, where the match sites are —
+ * and the cursor's syntactic context are the compiler's answer
+ * ([declarationsOf], `ttCompletions`), not this file's. */
 function analyze(doc: TextDocument): Analyzed {
   const cached = analysisCache.get(doc.uri);
   if (cached && cached.version === doc.version) return cached;
   const text = doc.getText();
-  const masked = analysis.maskNonCode(text, doc.languageId === "ttx");
-  const result: Analyzed = { version: doc.version, text, masked };
+  const result: Analyzed = { version: doc.version, text };
   analysisCache.set(doc.uri, result);
   return result;
 }
@@ -435,6 +448,36 @@ function enginePath(doc: TextDocument): string | null {
   return uri.scheme === "file" ? uri.fsPath : null;
 }
 
+/**
+ * The URI the editor knows a file the engine names by.
+ *
+ * The engine identifies a file by its real path
+ * (`engine::normalize_document_path`), so a document opened through a
+ * symlink comes back under its target's name. An answer about that file —
+ * a rename edit, a location — belongs to the open document, not to a second
+ * editor on the target.
+ */
+function editorUri(file: string): string {
+  const real = realPath(file);
+  for (const doc of documents.all()) {
+    const docPath = enginePath(doc);
+    if (docPath !== null && (docPath === file || realPath(docPath) === real)) {
+      return doc.uri;
+    }
+  }
+  return URI.file(file).toString();
+}
+
+/** A path with its symlinks resolved, or the path itself when it does not
+ * exist yet (an unsaved buffer's leaf). */
+function realPath(file: string): string {
+  try {
+    return fs.realpathSync(file);
+  } catch {
+    return file;
+  }
+}
+
 /** A name for the buffer, whether or not it is a file on disk.
  *
  * The engine's text-only answers — the declarations in this buffer, the
@@ -474,50 +517,6 @@ interface TypedDiagnostics {
   diagnostics: Diagnostic[];
   replacesTypes: boolean;
 }
-/**
- * Adds the typed diagnostics that say something new.
- *
- * The two passes overlap: variant exhaustiveness is decided from the text by
- * `--check` and from the type by the typed pass, and both report it at the
- * same place. One squiggle per position: the authoritative compiler result
- * replaces the matching provisional checker result before the generation is
- * published.
- */
-function mergeTyped(
-  into: Diagnostic[],
-  typed: Diagnostic[],
-  replacesTypes = false,
-): void {
-  if (replacesTypes) {
-    // Language-service diagnostics are the fast provisional layer. Once the
-    // compiler answers with its structured checker diagnostics, replace that
-    // layer as a whole so consequences suppressed by the compiler cannot
-    // remain visible in the editor.
-    for (let i = into.length - 1; i >= 0; i--) {
-      if (into[i].source === "ts") into.splice(i, 1);
-    }
-  }
-  const positionKey = (d: Diagnostic) =>
-    `${d.range.start.line}:${d.range.start.character}`;
-  const codeKey = (d: Diagnostic) => String(d.code ?? "").replace(/^ts/, "");
-  for (const d of typed) {
-    const sameDiagnostic = into.findIndex(
-      (base) =>
-        positionKey(base) === positionKey(d) &&
-        codeKey(base) !== "" &&
-        codeKey(base) === codeKey(d),
-    );
-    if (sameDiagnostic >= 0) {
-      // The service answer is provisional. The compiler pass carries the
-      // structured TT rendering and replaces the same checker diagnostic.
-      into[sameDiagnostic] = d;
-      continue;
-    }
-    if (into.some((base) => positionKey(base) === positionKey(d))) continue;
-    into.push(d);
-  }
-}
-
 async function typedDiagnosticsFor(
   doc: TextDocument,
   compiler: string,
@@ -558,7 +557,9 @@ async function typedDiagnosticsFor(
   }
 
   return {
-    replacesTypes: includeTypes,
+    // A pass that checked none of the buffer's TypeScript has no checker
+    // answer to put in the service layer's place.
+    replacesTypes: includeTypes && !result.blocked,
     diagnostics: result.diagnostics
       .filter((d) => includeTypedTt || String(d.code ?? "").startsWith("ts"))
       .map((d) => toDiagnostic(doc, d)),
@@ -659,7 +660,6 @@ async function validate(
     return;
   }
 
-  const diagnostics = result.diagnostics.map((d) => toDiagnostic(current, d));
   const typed =
     settings.typedChecks || settings.typeDiagnostics
       ? typedDiagnosticsFor(
@@ -669,9 +669,9 @@ async function validate(
           settings.typedChecks,
         )
       : Promise.resolve(null);
-  const serviceTypes: Promise<Diagnostic[] | null> = settings.typeDiagnostics
+  const serviceTypes: Promise<TypeDiagnostics | null> = settings.typeDiagnostics
     ? typeDiagnostics(doc, compiler)
-    : Promise.resolve([]);
+    : Promise.resolve({ diagnostics: [], restates: [] });
   // Hints are not diagnostics of the compile: ttc never fails on one, and
   // they only reach the user here (`engine::hints`). Run every slower layer
   // together, then publish one complete generation.
@@ -707,31 +707,15 @@ async function validate(
           "output channel above for why the engine stopped answering.",
       );
     }
-    typeResults = [];
+    typeResults = { diagnostics: [], restates: [] };
   }
 
-  diagnostics.push(...typeResults, ...hints);
-  if (typedResult !== null) {
-    mergeTyped(
-      diagnostics,
-      typedResult.diagnostics,
-      typedResult.replacesTypes,
-    );
-  }
-  // The layers finish independently and typed diagnostics are merged last,
-  // but the user reads and fixes one file from top to bottom. Restore the
-  // compiler's source-order contract after the final merge so the Problems
-  // panel agrees with the CLI regardless of which layer authored a rule.
-  diagnostics.sort((left, right) => {
-    const start =
-      left.range.start.line - right.range.start.line ||
-      left.range.start.character - right.range.start.character;
-    if (start !== 0) return start;
-    const end =
-      left.range.end.line - right.range.end.line ||
-      left.range.end.character - right.range.end.character;
-    if (end !== 0) return end;
-    return String(left.code ?? "").localeCompare(String(right.code ?? ""));
+  const diagnostics = publishedDiagnostics({
+    text: result.diagnostics.map((d) => toDiagnostic(current, d)),
+    service: typeResults.diagnostics,
+    restates: typeResults.restates,
+    hints,
+    typed: typedResult,
   });
   void connection.sendDiagnostics({
     uri: doc.uri,
@@ -748,35 +732,56 @@ async function validate(
  * responsibility, never something to report at the user (CLAUDE.md, error
  * layers). This side only converts and version-gates.
  */
+const SERVICE_SEVERITY: Record<engine.EngineDiagnostic["severity"], DiagnosticSeverity> = {
+  error: DiagnosticSeverity.Error,
+  warning: DiagnosticSeverity.Warning,
+  information: DiagnosticSeverity.Information,
+  hint: DiagnosticSeverity.Hint,
+};
+
+const SERVICE_TAG: Record<NonNullable<engine.EngineDiagnostic["tags"]>[number], DiagnosticTag> = {
+  unnecessary: DiagnosticTag.Unnecessary,
+  deprecated: DiagnosticTag.Deprecated,
+};
+
+interface TypeDiagnostics {
+  diagnostics: Diagnostic[];
+  /** The codes of the compiler diagnostics these state in TypeScript's
+   * words (`engine.tsDiagnosticsAnswer`). */
+  restates: string[];
+}
+
 async function typeDiagnostics(
   doc: TextDocument,
   compiler: string,
-): Promise<Diagnostic[] | null> {
+): Promise<TypeDiagnostics | null> {
   const fsPath = enginePath(doc);
-  if (fsPath === null) return [];
-  const items = await engine.tsDiagnostics(compiler, fsPath, logEngine);
-  if (items === null) return null;
-  return items.map((d) => ({
-    severity: d.warning
-      ? DiagnosticSeverity.Warning
-      : DiagnosticSeverity.Error,
-    range: d.range,
-    message: d.message,
-    code: d.code,
-    source: "ts",
-    // The compiler's secondary labeled spans, as the LSP's own related
-    // information — the editor renders each as a clickable "here" link
-    // under the diagnostic.
-    relatedInformation: d.related?.length
-      ? d.related.map((r) => ({
-          location: {
-            uri: r.path ? URI.file(r.path).toString() : doc.uri,
-            range: r.range,
-          },
-          message: r.message,
-        }))
-      : undefined,
-  }));
+  if (fsPath === null) return { diagnostics: [], restates: [] };
+  const answer = await engine.tsDiagnosticsAnswer(compiler, fsPath, logEngine);
+  if (answer === null) return null;
+  return {
+    restates: answer.restates,
+    diagnostics: answer.diagnostics.map((d) => ({
+      severity: SERVICE_SEVERITY[d.severity],
+      tags: d.tags?.length ? d.tags.map((tag) => SERVICE_TAG[tag]) : undefined,
+      range: d.range,
+      message: d.message,
+      code: d.code,
+      source: "ts",
+      // The compiler's secondary labeled spans, as the LSP's own related
+      // information — the editor renders each as a clickable "here" link
+      // under the diagnostic.
+      relatedInformation: d.related?.length
+        ? d.related.map((r) => ({
+            location: {
+              uri: r.path ? editorUri(r.path) : doc.uri,
+              range: r.range,
+            },
+            message: r.message,
+          }))
+        : undefined,
+    })),
+  };
 }
 
 /**
@@ -846,7 +851,7 @@ function toDiagnostic(doc: TextDocument, d: ttc.TtcDiagnostic): Diagnostic {
     relatedInformation: d.labels?.length
       ? d.labels.map((label) => ({
           location: {
-            uri: label.path ? URI.file(label.path).toString() : doc.uri,
+            uri: label.path ? editorUri(label.path) : doc.uri,
             range: {
               start: {
                 line: Math.max(0, label.line - 1),
@@ -1054,29 +1059,19 @@ const KEYWORD_SNIPPETS: CompletionItem[] = [
   },
 ];
 
-/** TypeScript element-kind strings → LSP completion kinds. */
-const TS_COMPLETION_KINDS: Record<string, CompletionItemKind> = {
-  var: CompletionItemKind.Variable,
-  let: CompletionItemKind.Variable,
-  const: CompletionItemKind.Variable,
-  "local var": CompletionItemKind.Variable,
-  parameter: CompletionItemKind.Variable,
-  alias: CompletionItemKind.Reference,
-  function: CompletionItemKind.Function,
-  "local function": CompletionItemKind.Function,
-  method: CompletionItemKind.Method,
-  property: CompletionItemKind.Property,
-  getter: CompletionItemKind.Property,
-  setter: CompletionItemKind.Property,
-  class: CompletionItemKind.Class,
-  interface: CompletionItemKind.Interface,
-  type: CompletionItemKind.TypeParameter,
-  enum: CompletionItemKind.Enum,
-  "enum member": CompletionItemKind.EnumMember,
-  module: CompletionItemKind.Module,
-  keyword: CompletionItemKind.Keyword,
-  string: CompletionItemKind.Constant,
+const PATTERN_COMPLETION_KINDS: Record<engine.EngineTtCompletion["kind"], CompletionItemKind> = {
+  case: CompletionItemKind.EnumMember,
+  field: CompletionItemKind.Field,
+  literal: CompletionItemKind.Constant,
+  wildcard: CompletionItemKind.Keyword,
 };
+
+/** The tags of an entry the client said it renders (LSP 3.17
+ * `CompletionClientCapabilities.completionItem.tagSupport`), or none. */
+function supportedTags(tags: CompletionItemTag[] | undefined): CompletionItemTag[] | undefined {
+  const shown = (tags ?? []).filter((tag) => completionTagSupport.includes(tag));
+  return shown.length > 0 ? shown : undefined;
+}
 
 /** What a TS-delegated completion item carries so its signature and
  * documentation can be fetched when the editor asks for that one entry
@@ -1086,30 +1081,25 @@ interface TsCompletionData {
   uri: string;
   offset: number;
   name: string;
+  source?: string;
   /** The engine's probe the entry was listed from, when it came from one —
    * the detail must be fetched against that same text. */
   probe?: number;
 }
 
 /**
- * True when `offset` sits right after a member-access dot. `masked` is the
- * masked source (analysis.ts), so a `.` inside a string, comment or regex
- * is not one.
- */
-function atMemberAccess(masked: string, offset: number): boolean {
-  return offset > 0 && masked[offset - 1] === ".";
-}
-
-/**
- * TypeScript completions from the engine, sorted after the tt-specific
- * items (`2` prefix; tt items use `0`/`1`). The engine applies the whole
- * member/probe policy: at a member access only a member answer comes back,
- * probed from the mended source when the buffer's own text cannot answer.
+ * TypeScript completions from the engine, under a `2` prefix: after the
+ * tt items that own a position outright (`0`/`1`: a variant's constructors
+ * after its `.`), and ranked as TypeScript ranks them, the tt keywords
+ * among its own. The engine applies the whole member/probe policy: at a
+ * member access only a member answer comes back, probed from the mended
+ * source when the buffer's own text cannot answer.
  */
 async function tsCompletions(
   doc: TextDocument,
   offset: number,
   atMember: boolean,
+  trigger: string | undefined,
 ): Promise<CompletionItem[]> {
   const fsPath = enginePath(doc);
   if (fsPath === null) return [];
@@ -1118,20 +1108,33 @@ async function tsCompletions(
     fsPath,
     doc.positionAt(offset),
     atMember,
+    trigger,
     logEngine,
   );
   if (!list) return [];
   return list.items.map((entry) => ({
     label: entry.label,
-    kind: TS_COMPLETION_KINDS[entry.kind] ?? CompletionItemKind.Text,
+    kind: entry.kind ?? undefined,
+    tags: supportedTags(entry.tags),
+    detail: entry.detail ?? undefined,
     sortText: `2${entry.sortText}`,
-    insertText: entry.insertText ?? undefined,
+    insertText: entry.range ? undefined : (entry.insertText ?? undefined),
+    textEdit: entry.range
+      ? { range: entry.range, newText: entry.insertText ?? entry.label }
+      : undefined,
     filterText: entry.filterText ?? undefined,
+    labelDetails: hasLabelDetailsCapability && entry.labelDetails
+      ? {
+          detail: entry.labelDetails.detail ?? undefined,
+          description: entry.labelDetails.description ?? undefined,
+        }
+      : undefined,
     insertTextFormat: entry.snippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
     data: {
       uri: doc.uri,
       offset,
       name: entry.label,
+      source: entry.source ?? undefined,
       probe: list.probe ?? undefined,
     } satisfies TsCompletionData,
   }));
@@ -1140,66 +1143,77 @@ async function tsCompletions(
 connection.onCompletion(async (params): Promise<CompletionItem[]> => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return [];
-  const { masked } = analyze(doc);
   const offset = doc.offsetAt(params.position);
-  const visible = (await declarationsOf(doc)).variants;
   const trigger =
     params.context?.triggerKind === CompletionTriggerKind.TriggerCharacter
       ? params.context.triggerCharacter
       : undefined;
 
-  // `Variant.` member access → the variant's case constructors, then everything
-  // else TypeScript offers on that same object. Both halves are needed:
-  // the constructors are tt's (case signature, field snippet, tags an
-  // unimported built-in still has), while the rest of a standard-library
-  // namespace — `Result.map`, `Option.unwrapOrElse`, the `*P` pipeline
-  // variants — is ordinary TypeScript the service already types. Returning
-  // only the constructors hid every combinator behind `Result.`/`Option.`
-  // (TASK-062). Any other member access (`obj.`) is TypeScript's alone.
-  const base = analysis.memberAccessAt(masked, offset);
-  if (base !== null) {
-    const e = visible.find((x) => x.name === base);
-    const members = await tsCompletions(doc, offset, true);
-    if (!e) return members;
-    const items = e.cases.map((c) => constructorItem(e, c));
-    const tags = new Set(items.map((i) => i.label));
-    return items.concat(members.filter((i) => !tags.has(i.label)));
-  }
-
-  // A `.` with no identifier in front of it is a member access all the same
-  // (`x |> .`, `f().`, `(a + b).`): members belong there, and nothing else —
-  // no variant names, no keyword snippets.
-  if (atMemberAccess(masked, offset)) {
-    return tsCompletions(doc, offset, true);
-  }
-  if (trigger !== undefined && !PATTERN_TRIGGER_CHARACTERS.includes(trigger)) {
-    return [];
-  }
-
-  // A pattern position — an arm, an `if let`, a payload field list, a
-  // nested pattern — is tt's alone: case tags and field names exist
-  // nowhere in the emitted TypeScript, so the service has nothing to
-  // complete there. The engine answers from the compiler's own
-  // declaration table, under the same shadowing the compiler resolves
-  // with, and knows the positions this server never did (`if let`,
-  // let-else payloads, nested patterns).
-  const ttItemsHere = await engine.ttCompletions(
+  // The engine reads the position from the buffer's tokens: whether the
+  // name being typed follows a `.` or `?.`, and the pattern completions tt
+  // owns there.
+  const here = await engine.ttCompletions(
     await compilerOf(doc),
     bufferPath(doc),
     doc.getText(),
     params.position,
     logEngine,
   );
-  if (ttItemsHere.length > 0) {
-    return ttItemsHere.map((item) => ({
+
+  // A member name is being typed: members belong there, and nothing else —
+  // no variant names, no keyword snippets — whatever the receiver is
+  // (`x |> .`, `f().t`, `s.trim().ma`). After `Variant.` the variant's case
+  // constructors come first, then everything else TypeScript offers on that
+  // same object. Both halves are needed: the constructors are tt's (case
+  // signature, field snippet, tags an unimported built-in still has), while
+  // the rest of a standard-library namespace — `Result.map`,
+  // `Option.unwrapOrElse`, the `*P` pipeline variants — is ordinary
+  // TypeScript the service already types. Returning only the constructors
+  // hid every combinator behind `Result.`/`Option.` (TASK-062).
+  if (here.member !== null) {
+    const receiver = here.member.receiver;
+    const members = await tsCompletions(doc, offset, true, trigger);
+    const visible = (await declarationsOf(doc)).variants;
+    const e = visible.find((x) => x.name === receiver);
+    if (!e) return members;
+    const items = e.cases.map((c) => constructorItem(e, c));
+    const tags = new Set(items.map((i) => i.label));
+    return items.concat(members.filter((i) => !tags.has(i.label)));
+  }
+  const literalPattern =
+    trigger !== undefined && STRING_TRIGGER_CHARACTERS.includes(trigger) && here.pattern;
+  if (
+    trigger !== undefined &&
+    TYPESCRIPT_TRIGGER_CHARACTERS.includes(trigger) &&
+    !literalPattern
+  ) {
+    return tsCompletions(doc, offset, false, trigger);
+  }
+  if (
+    trigger !== undefined &&
+    !PATTERN_TRIGGER_CHARACTERS.includes(trigger) &&
+    !literalPattern
+  ) {
+    return [];
+  }
+
+  // A pattern position — an arm, an `if let`, a payload field list, a
+  // nested pattern — is tt's: the engine answers from the compiler's own
+  // declaration table, under the same shadowing the compiler resolves
+  // with, and asks TypeScript what the scrutinee's type admits (the tags
+  // or literals of its discriminant, the properties of the selected case).
+  // Without a served file the declaration table answers alone.
+  if (here.pattern) {
+    const fsPath = enginePath(doc);
+    const typed =
+      fsPath === null
+        ? null
+        : await engine.patternCompletions(await compilerOf(doc), fsPath, params.position, logEngine);
+    return (typed ?? here.items).map((item) => ({
       label: item.label,
-      kind:
-        item.kind === "case"
-          ? CompletionItemKind.EnumMember
-          : item.kind === "field"
-            ? CompletionItemKind.Field
-            : CompletionItemKind.Keyword,
+      kind: PATTERN_COMPLETION_KINDS[item.kind],
       detail: item.detail,
+      textEdit: item.range ? { range: item.range, newText: item.label } : undefined,
       // An arm already written stays in the list — a guard may repeat a
       // tag — but sorts after the ones still missing.
       sortText: `${item.covered ? 1 : 0}${item.label}`,
@@ -1212,23 +1226,20 @@ connection.onCompletion(async (params): Promise<CompletionItem[]> => {
     return [];
   }
 
-  // General position → variant names + tt keyword snippets, then everything
-  // TypeScript would offer in a .ts file (sorted after the tt items).
-  const items: CompletionItem[] = visible.map((e) => ({
-    label: e.name,
-    kind: CompletionItemKind.Enum,
-    detail:
-      e.origin === "builtin"
-        ? `built-in variant ${e.name}${e.generics}`
-        : e.origin === "imported"
-          ? `variant ${e.name}${e.generics}${e.specifier ? ` — ${e.specifier}` : ""}`
-          : `variant ${e.name}${e.generics}`,
-    sortText: `0${e.name}`,
-  }));
-  const ttItems = items.concat(KEYWORD_SNIPPETS);
-  const seen = new Set(ttItems.map((i) => i.label));
-  return ttItems.concat(
-    (await tsCompletions(doc, offset, false)).filter((i) => !seen.has(i.label)),
+  // General position → what TypeScript would offer in a .ts file, ranked
+  // as TypeScript ranks it, with the tt keywords whose construct can begin
+  // here among TypeScript's own keywords. The engine reads the grammar
+  // position from the buffer's tokens, so a property name, a JSX attribute,
+  // an import specifier or a type gets none. A variant's name is
+  // TypeScript's to offer: the emission declares it, and the service lists
+  // it where it is in scope and valid.
+  const snippets = here.keywords.flatMap((keyword): CompletionItem[] => {
+    const snippet = KEYWORD_SNIPPETS.find((item) => item.label === keyword.label);
+    return snippet ? [{ ...snippet, sortText: `2${keyword.sortText}` }] : [];
+  });
+  const seen = new Set(snippets.map((i) => i.label));
+  return snippets.concat(
+    (await tsCompletions(doc, offset, false, undefined)).filter((i) => !seen.has(i.label)),
   );
 });
 
@@ -1252,6 +1263,7 @@ connection.onCompletionResolve(
       fsPath,
       doc.positionAt(data.offset),
       data.name,
+      data.source,
       data.probe,
       logEngine,
     );
@@ -1262,6 +1274,9 @@ connection.onCompletionResolve(
         kind: MarkupKind.Markdown,
         value: detail.documentation,
       };
+    }
+    if (detail.additionalEdits?.length) {
+      item.additionalTextEdits = detail.additionalEdits;
     }
     return item;
   },
@@ -1285,6 +1300,7 @@ connection.onSignatureHelp(async (params): Promise<SignatureHelp | null> => {
     await compilerOf(doc),
     fsPath,
     params.position,
+    params.context,
     logEngine,
   );
   if (!help || help.signatures.length === 0) return null;
@@ -1373,10 +1389,33 @@ connection.onHover(async (params) => {
     logEngine,
   );
   if (!sym) return tsHover(doc, params.position);
+  // A shorthand pattern name is also the binding it declares, and a
+  // binding hovers with its own type — `Some(value)` over a
+  // `TOption<number>` is `const value: number`, as `const { value } = o` is
+  // in TypeScript — not the field's declared `value: T`.
+  if (sym.binds) {
+    const binding = await tsHover(doc, params.position);
+    if (binding) return binding;
+  }
+  // The declaration's own JSDoc, which the emission carries onto the names
+  // TypeScript knows it by.
+  // An untitled buffer's declarations are in its text, not in a file the
+  // engine can serve.
+  const served =
+    sym.definition && !(enginePath(doc) === null && sym.definition.path === bufferPath(doc));
+  const declared = served && sym.definition
+    ? await engine.hover(
+        await compilerOf(doc),
+        sym.definition.path,
+        sym.definition.range.start,
+        logEngine,
+      )
+    : null;
+  const documentation = declared?.documentation ? `${declared.documentation}\n\n` : "";
   return {
     contents: {
       kind: MarkupKind.Markdown,
-      value: `\`\`\`tt\n${sym.signature}\n\`\`\`\n${sym.detail}`,
+      value: `\`\`\`tt\n${sym.signature}\n\`\`\`\n${documentation}${sym.detail}`,
     },
     range: sym.range,
   };
@@ -1426,12 +1465,9 @@ connection.onDefinition(async (params) => {
       const target =
         sym.definition.path === bufferPath(doc) && enginePath(doc) === null
           ? doc.uri
-          : URI.file(sym.definition.path).toString();
+          : editorUri(sym.definition.path);
       return Location.create(target, sym.definition.range);
     }
-    // A built-in case has no declaration to open; nothing else does either
-    // once the engine has claimed the position.
-    if (sym) return null;
   }
 
   // Everything else — ordinary TypeScript symbols, and built-in variant
@@ -1447,7 +1483,7 @@ connection.onDefinition(async (params) => {
   );
   if (locations.length === 0) return null;
   return locations.map((l) =>
-    Location.create(URI.file(l.path).toString(), l.range),
+    Location.create(editorUri(l.path), l.range),
   );
 });
 
@@ -1459,14 +1495,45 @@ connection.onReferences(async (params): Promise<Location[] | null> => {
   const fsPath = enginePath(doc);
   if (fsPath === null) return null;
   // Delegated wholesale to the engine: TypeScript resolves the passthrough
-  // region exactly, and tt-specific spans degrade to an empty result.
+  // region, and a tt name's declaration and patterns are the engine's own.
   const references = (
     await engine.references(await compilerOf(doc), fsPath, params.position, logEngine)
   ).filter((r) => params.context.includeDeclaration || !r.isDefinition);
   if (references.length === 0) return null;
   return references.map((r) =>
-    Location.create(URI.file(r.path).toString(), r.range),
+    Location.create(editorUri(r.path), r.range),
   );
+});
+
+connection.onPrepareRename(async (params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return null;
+  const fsPath = enginePath(doc);
+  if (fsPath === null) return null;
+  const sym = await engine.ttSymbol(
+    await compilerOf(doc),
+    fsPath,
+    doc.getText(),
+    params.position,
+    logEngine,
+  );
+  if (sym && !sym.binds) {
+    throw new ResponseError(
+      LSPErrorCodes.RequestFailed,
+      `A tt ${sym.kind === "variant" ? "variant" : sym.kind === "case" ? "case tag" : "payload field"} cannot be renamed.`,
+    );
+  }
+  const prepared = await engine.prepareRename(
+    await compilerOf(doc),
+    fsPath,
+    params.position,
+    logEngine,
+  );
+  if (prepared?.refusal) {
+    throw new ResponseError(LSPErrorCodes.RequestFailed, prepared.refusal);
+  }
+  if (!prepared?.range) return null;
+  return { range: prepared.range, placeholder: doc.getText(prepared.range) };
 });
 
 connection.onRenameRequest(async (params) => {
@@ -1510,7 +1577,7 @@ connection.onRenameRequest(async (params) => {
       edit.newText === null
         ? params.newName
         : edit.newText.split(engine.RENAME_PLACEHOLDER).join(params.newName);
-    const target = URI.file(edit.path).toString();
+    const target = editorUri(edit.path);
     (changes[target] ??= []).push(TextEdit.replace(edit.range, newText));
   }
   return { changes };
@@ -1521,8 +1588,16 @@ connection.onRenameRequest(async (params) => {
 connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return [];
-  const decls = await declarationsOf(doc);
-  const out: DocumentSymbol[] = [];
+  const fsPath = enginePath(doc);
+  const [decls, declared] = await Promise.all([
+    declarationsOf(doc),
+    fsPath === null
+      ? Promise.resolve([])
+      : compilerOf(doc).then((compiler) =>
+          engine.documentSymbols(compiler, fsPath, logEngine),
+        ),
+  ]);
+  const out = declared.map(toDocumentSymbol);
   for (const e of decls.variants) {
     // Only this file's declarations belong in its outline.
     if (e.origin !== "local" || !e.span || !e.nameSpan) continue;
@@ -1530,7 +1605,7 @@ connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
       start: doc.positionAt(e.span.start),
       end: doc.positionAt(e.span.end),
     };
-    out.push({
+    insertSymbol(out, {
       name: `${e.name}${e.generics}`,
       kind: SymbolKind.Enum,
       range,
@@ -1563,6 +1638,36 @@ connection.onDocumentSymbol(async (params): Promise<DocumentSymbol[]> => {
   }
   return out;
 });
+
+function toDocumentSymbol(symbol: engine.EngineDocumentSymbol): DocumentSymbol {
+  return {
+    name: symbol.name,
+    detail: symbol.detail === "" ? undefined : symbol.detail,
+    // LSP 3.17 numbers `SymbolKind` 1–26 on both sides.
+    kind: symbol.kind as SymbolKind,
+    range: symbol.range,
+    selectionRange: symbol.selectionRange,
+    children: symbol.children.map(toDocumentSymbol),
+  };
+}
+
+/** Places `symbol` among `siblings` in source order, inside the innermost
+ * one whose range contains it (a `variant` in a `namespace`). */
+function insertSymbol(siblings: DocumentSymbol[], symbol: DocumentSymbol): void {
+  const before = (a: engine.EnginePosition, b: engine.EnginePosition) =>
+    a.line < b.line || (a.line === b.line && a.character <= b.character);
+  const parent = siblings.find(
+    (candidate) =>
+      before(candidate.range.start, symbol.range.start) &&
+      before(symbol.range.end, candidate.range.end),
+  );
+  if (parent) {
+    insertSymbol((parent.children ??= []), symbol);
+    return;
+  }
+  const at = siblings.findIndex((sibling) => !before(sibling.range.start, symbol.range.start));
+  siblings.splice(at < 0 ? siblings.length : at, 0, symbol);
+}
 
 // ------------------------------------------------------------ code actions
 
@@ -1628,32 +1733,70 @@ connection.onCodeAction(async (params): Promise<CodeAction[]> => {
 
 // -------------------------------------------------------- semantic tokens
 
-/** The legend, fixed at initialize: the LSP standard token types the engine
- * reports (engine.ts `EngineSemanticToken.kind`), in the order the encoded
- * data indexes them. */
+/** The legend, fixed at initialize: the LSP 3.17 standard token types and
+ * modifiers, and TypeScript's own `local` modifier, in the order the encoded
+ * data indexes them. TypeScript's classification and tt's both name tokens
+ * from these lists. */
 const SEMANTIC_TOKEN_TYPES = [
-  "keyword",
+  "namespace",
+  "type",
+  "class",
   "enum",
-  "enumMember",
+  "interface",
+  "struct",
+  "typeParameter",
+  "parameter",
   "variable",
   "property",
+  "enumMember",
+  "event",
   "function",
+  "method",
+  "macro",
+  "keyword",
+  "modifier",
+  "comment",
+  "string",
+  "number",
+  "regexp",
   "operator",
+  "decorator",
 ];
+
+const SEMANTIC_TOKEN_MODIFIERS = [
+  "declaration",
+  "definition",
+  "readonly",
+  "static",
+  "deprecated",
+  "abstract",
+  "async",
+  "modification",
+  "documentation",
+  "defaultLibrary",
+  "local",
+];
+
+async function classifiedTokens(doc: TextDocument): Promise<engine.EngineClassifiedToken[] | null> {
+  const compiler = await compilerOf(doc);
+  const fsPath = enginePath(doc);
+  const served =
+    fsPath === null ? null : await engine.documentSemanticTokens(compiler, fsPath, logEngine);
+  if (served) return served;
+  const parsed = await engine.semanticTokens(compiler, doc.getText(), bufferPath(doc), logEngine);
+  return (
+    parsed?.map((token) => ({
+      range: token.range,
+      type: token.kind,
+      modifiers: token.modifiers ?? [],
+    })) ?? null
+  );
+}
 
 connection.languages.semanticTokens.on(async (params) => {
   const doc = documents.get(params.textDocument.uri);
   if (!doc) return { data: [] };
-  // Text-based and parse-only on the engine side: it answers for unsaved
-  // and untitled buffers alike, with or without a TypeScript toolchain.
-  const tokens = await engine.semanticTokens(
-    await compilerOf(doc),
-    doc.getText(),
-    bufferPath(doc),
-    logEngine,
-  );
-  // Engine unavailable: no answer beats a wrong empty one — the grammar's
-  // colors stand alone, exactly as they do for every other engine feature.
+  const tokens = await classifiedTokens(doc);
   if (!tokens) return { data: [] };
 
   const builder = new SemanticTokensBuilder();
@@ -1662,12 +1805,16 @@ connection.languages.semanticTokens.on(async (params) => {
       line: token.range.start.line,
       character: token.range.start.character,
       length: token.range.end.character - token.range.start.character,
-      type: SEMANTIC_TOKEN_TYPES.indexOf(token.kind),
+      type: SEMANTIC_TOKEN_TYPES.indexOf(token.type),
+      modifiers: token.modifiers.reduce((bits, name) => {
+        const index = SEMANTIC_TOKEN_MODIFIERS.indexOf(name);
+        return index < 0 ? bits : bits | (1 << index);
+      }, 0),
     }))
     .filter((token) => token.type >= 0 && token.length > 0)
     .sort((a, b) => a.line - b.line || a.character - b.character);
   for (const token of ordered) {
-    builder.push(token.line, token.character, token.length, token.type, 0);
+    builder.push(token.line, token.character, token.length, token.type, token.modifiers);
   }
   return builder.build();
 });

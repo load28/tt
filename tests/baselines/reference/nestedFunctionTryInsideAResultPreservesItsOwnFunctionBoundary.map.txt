@@ -1,0 +1,9 @@
+//// [nestedFunctionTryInsideAResultPreservesItsOwnFunctionBoundary.tt] 7 mapping(s)
+1:1 -> 17:1 len 14  "const value = "
+1:24 -> 3:3 len 22  "const inner = () => { "
+1:46 -> 9:3 len 7  "return "
+1:57 -> 4:18 len 6  "step()"
+1:63 -> 9:16 len 5  "; }; "
+1:79 -> 9:36 len 7  "inner()"
+1:89 -> 17:27 len 2  ";\n"
+

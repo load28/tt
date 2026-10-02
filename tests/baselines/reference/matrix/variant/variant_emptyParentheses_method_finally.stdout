@@ -1,0 +1,2 @@
+method(4) => [{"kind":"Now"},{"kind":"Later","at":4}] | operand 4; finally 0
+method(9) => [{"kind":"Now"},{"kind":"Later","at":9}] | operand 9; finally 0

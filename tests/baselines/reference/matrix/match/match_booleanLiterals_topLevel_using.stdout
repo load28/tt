@@ -1,0 +1,2 @@
+topLevel(true) => 1 | open res; operand true; yes 1
+topLevel(false) => 0 | operand false; no 0

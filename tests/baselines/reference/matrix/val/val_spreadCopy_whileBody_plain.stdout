@@ -1,0 +1,2 @@
+whileBody(3) => [3,4] | test true; operand 3; copy 4
+whileBody(8) => [8,9] | test true; operand 8; copy 9

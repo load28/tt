@@ -1,0 +1,2 @@
+ifBranch(3) => [3,4] | enter true; copy 4
+ifBranch(8) => [null,null] | enter true; copy null

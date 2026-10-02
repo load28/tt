@@ -1,0 +1,2 @@
+catchBlock(4) => [{"kind":"North"},{"kind":"South"},4] | throw "boom"; operand 4; operand 4
+catchBlock(9) => [{"kind":"North"},{"kind":"South"},9] | throw "boom"; operand 9; operand 9

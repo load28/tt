@@ -1,0 +1,12 @@
+//// [tupleMatchProductExhaustivenessReportsMissingCombination.tt] 10 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:31 -> 26:3 len 1  "\n"
+3:31 -> 33:3 len 1  "\n"
+4:1 -> 54:1 len 13  "const step = "
+4:21 -> 36:18 len 1  "d"
+4:24 -> 37:18 len 1  "s"
+5:20 -> 40:21 len 1  "2"
+6:20 -> 44:21 len 1  "1"
+7:20 -> 48:21 len 2  "-1"
+8:2 -> 54:25 len 2  ";\n"
+

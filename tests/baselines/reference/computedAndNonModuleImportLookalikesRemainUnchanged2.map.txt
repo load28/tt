@@ -1,0 +1,3 @@
+//// [computedAndNonModuleImportLookalikesRemainUnchanged2.tt] 1 mapping(s)
+1:1 -> 1:1 len 26  "const load = import(path);"
+

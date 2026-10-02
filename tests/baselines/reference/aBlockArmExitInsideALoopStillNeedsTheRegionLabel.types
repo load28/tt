@@ -1,0 +1,6 @@
+=== aBlockArmExitInsideALoopStillNeedsTheRegionLabel.tt ===
+const v = match (s) { "a" => { for (const x of xs) { return x; } return 0; }, _ => 0 };
+>v : const v: any
+>x : const x: any
+>x : const x: any
+

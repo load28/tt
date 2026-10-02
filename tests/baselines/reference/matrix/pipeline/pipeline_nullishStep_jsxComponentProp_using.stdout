@@ -1,0 +1,2 @@
+jsxComponentProp(10) => "<Show 9>" | open res; operand 10; flip true; lookup true; found 9; dispose res
+jsxComponentProp(20) => "<Show 40>" | open res; operand 20; flip false; lookup false; double 40; dispose res

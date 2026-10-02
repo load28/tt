@@ -1,0 +1,2 @@
+ifLetBody(2) => [1,6] | head 1; read 1; yield 2; receiver {"factor":3}; twice 6
+ifLetBody(6) => [1,18] | head 1; read 1; yield 6; receiver {"factor":3}; twice 18

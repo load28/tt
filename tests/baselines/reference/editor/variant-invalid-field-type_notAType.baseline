@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  1:34-1:42 "number =" error variant-invalid-field-type (ttc): variant Shape: invalid type for field `r`: Expected ';', got '='
+

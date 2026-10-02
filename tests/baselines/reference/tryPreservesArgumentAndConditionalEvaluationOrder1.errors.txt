@@ -1,0 +1,42 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryPreservesArgumentAndConditionalEvaluationOrder1.tt → $DIR/out/tryPreservesArgumentAndConditionalEvaluationOrder1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'TResult'.
+ --> tryPreservesArgumentAndConditionalEvaluationOrder1.tt:1:28
+  |
+1 | function f(flag: boolean): TResult<number, string> {
+  |                            ^^^^^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> tryPreservesArgumentAndConditionalEvaluationOrder1.tt:2:10
+  |
+2 |   return Result.Ok(call(first(), flag && try second(), third()));
+  |          ^^^^^^
+error[ts2304]: Cannot find name 'call'.
+ --> tryPreservesArgumentAndConditionalEvaluationOrder1.tt:2:20
+  |
+2 |   return Result.Ok(call(first(), flag && try second(), third()));
+  |                    ^^^^
+error[ts2304]: Cannot find name 'first'.
+ --> tryPreservesArgumentAndConditionalEvaluationOrder1.tt:2:25
+  |
+2 |   return Result.Ok(call(first(), flag && try second(), third()));
+  |                         ^^^^^
+error[ts2304]: Cannot find name 'second'.
+ --> tryPreservesArgumentAndConditionalEvaluationOrder1.tt:2:46
+  |
+2 |   return Result.Ok(call(first(), flag && try second(), third()));
+  |                                              ^^^^^^
+error[ts2304]: Cannot find name 'third'.
+ --> tryPreservesArgumentAndConditionalEvaluationOrder1.tt:2:56
+  |
+2 |   return Result.Ok(call(first(), flag && try second(), third()));
+  |                                                        ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryPreservesArgumentAndConditionalEvaluationOrder1.ts(1,28): error TS2304: Cannot find name 'TResult'.
+tryPreservesArgumentAndConditionalEvaluationOrder1.ts(3,19): error TS2304: Cannot find name 'call'.
+tryPreservesArgumentAndConditionalEvaluationOrder1.ts(4,19): error TS2304: Cannot find name 'first'.
+tryPreservesArgumentAndConditionalEvaluationOrder1.ts(8,20): error TS2304: Cannot find name 'second'.
+tryPreservesArgumentAndConditionalEvaluationOrder1.ts(18,10): error TS2304: Cannot find name 'Result'.
+tryPreservesArgumentAndConditionalEvaluationOrder1.ts(18,43): error TS2304: Cannot find name 'third'.

@@ -1,0 +1,3 @@
+matchBlockArm({"kind":"Num","value":1}) => 1 | arm true; await; number 1
+matchBlockArm({"kind":"Neg","value":-1}) => -1 | arm true; await; number -1
+matchBlockArm({"kind":"Word","text":"w"}) => "none" | arm true; await

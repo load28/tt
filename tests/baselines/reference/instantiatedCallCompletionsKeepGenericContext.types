@@ -1,0 +1,68 @@
+=== instantiatedCallCompletionsKeepGenericContext.tt ===
+variant State { Ready(value: number), Empty }
+>State : type State = {
+>       kind: "Ready";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Ready : (property) Ready: (value: number) => State
+>value : (property) value: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+type Item = {kind: "item"; run: (x: number) => number};
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+const trace: string[] = [];
+>trace : const trace: string[]
+function generic<T>(value: T): T { trace.push("call"); return value; }
+>generic : function generic<T>(value: T): T
+>T : (type parameter) T in generic<T>(value: T): T
+>value : (parameter) value: T
+>T : (type parameter) T in generic<T>(value: T): T
+>T : (type parameter) T in generic<T>(value: T): T
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: T
+const item = generic<Item>(match (State.Ready(3)) {
+>item : const item: Item
+>generic : function generic<T>(value: T): T
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>State : const State: {
+>       Ready: (value: number) => State;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Ready : (property) Ready: (value: number) => State
+  Ready(value) => { trace.push("arm"); return {kind: "item", run: x => x + value}; },
+>value : const value: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>value : const value: number
+  Empty => ({kind: "item", run: x => x}),
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+console.log(item.run(1), trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>item : const item: Item
+>run : (property) run: (x: number) => number
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

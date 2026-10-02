@@ -1,0 +1,2 @@
+switchClause(3) => 3 | discriminant 1; risky 3; read 3; then 3
+switchClause(-3) => "missing" | discriminant 1; risky -3; read -3; else "missing"

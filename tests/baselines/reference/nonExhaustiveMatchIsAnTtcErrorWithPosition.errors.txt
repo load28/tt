@@ -1,0 +1,23 @@
+==== ttc --out-dir (exit 1) ====
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Rect"
+ --> ./nonExhaustiveMatchIsAnTtcErrorWithPosition.tt:2:25
+  |
+2 | const f = (s: Shape) => match (s) {
+  |                         ^^^^^^^^^
+  |
+  = help: add the missing arms: `Rect(w, h) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
+
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Rect"
+ --> nonExhaustiveMatchIsAnTtcErrorWithPosition.tt:2:25
+  |
+2 | const f = (s: Shape) => match (s) {
+  |                         ^^^^^^^^^
+  |
+  = help: add the missing arms: `Rect(w, h) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

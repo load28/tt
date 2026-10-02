@@ -1,0 +1,27 @@
+==== ttc --out-dir (exit 1) ====
+error[match-wildcard-not-last]: match: the wildcard arm `_` must be the last arm
+ --> ./tupleMatchBareWildcardArmSkipsTheCheckAndMustBeLast2.tt:2:3
+  |
+2 |   _ => 0,
+  |   ^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'a'.
+ --> tupleMatchBareWildcardArmSkipsTheCheckAndMustBeLast2.tt:1:18
+  |
+1 | const r = match (a, b) {
+  |                  ^
+error[ts2304]: Cannot find name 'b'.
+ --> tupleMatchBareWildcardArmSkipsTheCheckAndMustBeLast2.tt:1:21
+  |
+1 | const r = match (a, b) {
+  |                     ^
+error[match-wildcard-not-last]: match: the wildcard arm `_` must be the last arm
+ --> tupleMatchBareWildcardArmSkipsTheCheckAndMustBeLast2.tt:2:3
+  |
+2 |   _ => 0,
+  |   ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

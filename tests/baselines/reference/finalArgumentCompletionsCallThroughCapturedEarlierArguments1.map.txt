@@ -1,0 +1,8 @@
+//// [finalArgumentCompletionsCallThroughCapturedEarlierArguments1.tt] 6 mapping(s)
+1:1 -> 2:19 len 4  "pair"
+1:6 -> 3:19 len 7  "first()"
+1:22 -> 5:19 len 1  "x"
+1:29 -> 8:17 len 1  "v"
+1:35 -> 9:24 len 1  "v"
+1:43 -> 13:24 len 1  "0"
+

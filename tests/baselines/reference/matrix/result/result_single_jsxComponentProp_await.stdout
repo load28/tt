@@ -1,0 +1,2 @@
+jsxComponentProp(2) => "<Show {'kind':'Ok','value':20}>" | await; read 2
+jsxComponentProp(-1) => "<Show {'kind':'Err','error':'negative -1'}>" | await; read -1

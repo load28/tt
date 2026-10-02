@@ -1,0 +1,14 @@
+//// [fullMatchOnBuiltinVariantsCompiles.tt] 12 mapping(s)
+1:1 -> 19:1 len 34  "\nconst f = (o: Option<number>) => "
+2:41 -> 23:19 len 1  "o"
+2:51 -> 26:17 len 5  "value"
+2:61 -> 27:18 len 5  "value"
+2:76 -> 31:18 len 1  "0"
+2:79 -> 40:2 len 43  ";\nconst g = (r: Result<number, string>) => "
+3:49 -> 44:19 len 1  "r"
+3:57 -> 47:17 len 5  "value"
+3:67 -> 48:18 len 5  "value"
+3:78 -> 52:17 len 5  "error"
+3:88 -> 53:18 len 12  "error.length"
+3:102 -> 62:2 len 2  ";\n"
+

@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_03.rs::let_else_or_pattern_with_a_bare_alternative_checks_only
+variant E { A(x: number), B(x: number), C }
+function f(e: E): number {
+  const A() | C = e else { return 0; };
+  return 1;
+}

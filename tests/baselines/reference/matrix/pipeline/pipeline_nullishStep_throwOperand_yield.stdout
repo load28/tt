@@ -1,0 +1,2 @@
+throwOperand(10) => threw 9 | yield 10; flip true; lookup true; found 9
+throwOperand(20) => threw 40 | yield 20; flip false; lookup false; double 40

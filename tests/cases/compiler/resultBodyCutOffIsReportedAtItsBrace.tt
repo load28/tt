@@ -1,0 +1,38 @@
+// A `result` block's body is TypeScript statements, and the block's `}`
+// ends them. A statement the `}` cuts off is the author's syntax error,
+// reported as `source-not-typescript` at the `}`, where TypeScript reports
+// it for the same statements in a block: an operator without its right
+// operand (TS1109), a member access without its name (TS1003), an `if`
+// without its statement, and a label without its statement (TS1109). None
+// of them is a lowering failure, and the statement before the `}` does not
+// take the block's own success path as its body.
+// @expectErrors: source-not-typescript
+// @baselines: errors.txt
+// @filename: operator.tt
+import type { TResult } from "@tt/std";
+declare function read(n: number): TResult<number, string>;
+export function f(x: number) {
+  const r = result { return try read(x) + };
+  return r;
+}
+// @filename: member.tt
+import type { TResult } from "@tt/std";
+declare function read(n: number): TResult<number, string>;
+export function f(x: number) {
+  const r = result { const n = try read(x); return n.toFixed. };
+  return r;
+}
+// @filename: ifWithoutStatement.tt
+import type { TResult } from "@tt/std";
+declare function read(n: number): TResult<number, string>;
+export function f(x: number) {
+  const r = result { const n = try read(x); if (n > 1) };
+  return r;
+}
+// @filename: labelWithoutStatement.tt
+import type { TResult } from "@tt/std";
+declare function read(n: number): TResult<number, string>;
+export function f(x: number) {
+  const r = result { const n = try read(x); return n; done: };
+  return r;
+}

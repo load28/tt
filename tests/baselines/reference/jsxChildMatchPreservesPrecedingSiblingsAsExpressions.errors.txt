@@ -1,0 +1,54 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./jsxChildMatchPreservesPrecedingSiblingsAsExpressions.ttx → $DIR/out/jsxChildMatchPreservesPrecedingSiblingsAsExpressions.tsx
+
+==== ttc --check-types (exit 1) ====
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxChildMatchPreservesPrecedingSiblingsAsExpressions.ttx:3:14
+  |
+3 | const view = <main><h1>title</h1><form>form</form>{match (value) {
+  |              ^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxChildMatchPreservesPrecedingSiblingsAsExpressions.ttx:3:20
+  |
+3 | const view = <main><h1>title</h1><form>form</form>{match (value) {
+  |                    ^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxChildMatchPreservesPrecedingSiblingsAsExpressions.ttx:3:29
+  |
+3 | const view = <main><h1>title</h1><form>form</form>{match (value) {
+  |                             ^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxChildMatchPreservesPrecedingSiblingsAsExpressions.ttx:3:34
+  |
+3 | const view = <main><h1>title</h1><form>form</form>{match (value) {
+  |                                  ^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxChildMatchPreservesPrecedingSiblingsAsExpressions.ttx:3:44
+  |
+3 | const view = <main><h1>title</h1><form>form</form>{match (value) {
+  |                                            ^^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxChildMatchPreservesPrecedingSiblingsAsExpressions.ttx:4:18
+  |
+4 |   Some(value) => <p>{value}</p>, None => null,
+  |                  ^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxChildMatchPreservesPrecedingSiblingsAsExpressions.ttx:4:28
+  |
+4 |   Some(value) => <p>{value}</p>, None => null,
+  |                            ^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> jsxChildMatchPreservesPrecedingSiblingsAsExpressions.ttx:5:3
+  |
+5 | }}</main>;
+  |   ^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+jsxChildMatchPreservesPrecedingSiblingsAsExpressions.tsx(28,22): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxChildMatchPreservesPrecedingSiblingsAsExpressions.tsx(28,31): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxChildMatchPreservesPrecedingSiblingsAsExpressions.tsx(29,22): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxChildMatchPreservesPrecedingSiblingsAsExpressions.tsx(29,32): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxChildMatchPreservesPrecedingSiblingsAsExpressions.tsx(35,21): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxChildMatchPreservesPrecedingSiblingsAsExpressions.tsx(35,31): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxChildMatchPreservesPrecedingSiblingsAsExpressions.tsx(47,14): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+jsxChildMatchPreservesPrecedingSiblingsAsExpressions.tsx(47,59): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.

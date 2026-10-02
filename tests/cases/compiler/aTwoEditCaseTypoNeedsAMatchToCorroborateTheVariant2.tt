@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::a_two_edit_case_typo_needs_a_match_to_corroborate_the_variant
+variant Shape { Circle(radius: number), Empty }
+function f(): number {
+  const Cyrcla(radius) = s else { return 0; };
+  return radius;
+}

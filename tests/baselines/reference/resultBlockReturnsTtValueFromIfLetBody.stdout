@@ -1,0 +1,4 @@
+0 [{"kind":"Ok","value":0},{"kind":"Ok","value":"none"},{"kind":"Err","error":"neg -1"},{"kind":"Ok","value":0},{"kind":"Ok","value":""}] rd 0,rd -1,rd 0
+1 [{"kind":"Ok","value":1},{"kind":"Ok","value":"one"},{"kind":"Ok","value":1},{"kind":"Ok","value":0},{"kind":"Ok","value":"<one>"}] rd 1,rd 1,rd 1
+2 [{"kind":"Ok","value":2},{"kind":"Ok","value":"many"},{"kind":"Ok","value":2},{"kind":"Ok","value":2},{"kind":"Ok","value":"<many>"}] rd 2,rd 2,rd 2,rd 2
+-3 [{"kind":"Err","error":"neg -3"},{"kind":"Err","error":"neg -3"},{"kind":"Ok","value":-3},{"kind":"Ok","value":0},{"kind":"Err","error":"neg -3"}] rd -3,rd -3,rd -3

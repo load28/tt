@@ -1,0 +1,2 @@
+functionBody(4) => [{"kind":"kind","value":4},{"kind":"other"}] | 
+functionBody(9) => [{"kind":"kind","value":9},{"kind":"other"}] | 

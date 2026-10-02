@@ -1,0 +1,2 @@
+labeledBlock(4) => [{"kind":"North"},{"kind":"South"},4] | risky 4; operand 4
+labeledBlock(9) => [{"kind":"North"},{"kind":"South"},9] | risky 9; operand 9

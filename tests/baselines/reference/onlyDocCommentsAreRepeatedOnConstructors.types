@@ -1,0 +1,16 @@
+=== onlyDocCommentsAreRepeatedOnConstructors.tt ===
+variant Mode {
+>Mode : type Mode = {
+>       kind: "Read";
+>   } | {
+>       kind: "Write";
+>       path: string;
+>   }
+  Read, /* block */
+>Read : (property) Read: {
+>       readonly kind: "Read";
+>   }
+  Write(/** Target path. */ path: string),
+>Write : (property) Write: (path: string) => Mode
+>path : (property) path: string
+

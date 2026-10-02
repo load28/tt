@@ -1,0 +1,2 @@
+functionBody(3) => 4 | risky 3; read 3; reassigned 4
+functionBody(-3) => "diverged" | risky -3; read -3

@@ -1,0 +1,2 @@
+awaitOperand(true) => 1 | yes 1
+awaitOperand(false) => threw tt match: unexpected literal undefined | 

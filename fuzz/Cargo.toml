@@ -18,6 +18,12 @@ publish = false
 [package.metadata]
 cargo-fuzz = true
 
+[lib]
+name = "ttc_fuzz"
+path = "src/lib.rs"
+test = false
+doc = false
+
 [dependencies]
 libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }

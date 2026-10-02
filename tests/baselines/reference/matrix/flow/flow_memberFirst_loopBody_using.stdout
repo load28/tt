@@ -1,0 +1,2 @@
+loopBody(2) => [null,null] | open res; receiver {"factor":3}; operand 2; receiver {"factor":3}; operand 2; dispose res
+loopBody(7) => [null,null] | open res; receiver {"factor":3}; operand 7; receiver {"factor":3}; operand 7; dispose res

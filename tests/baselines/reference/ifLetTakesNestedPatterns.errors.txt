@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./ifLetTakesNestedPatterns.tt → $DIR/out/ifLetTakesNestedPatterns.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'Res'.
+ --> ifLetTakesNestedPatterns.tt:1:15
+  |
+1 | function f(r: Res) {
+  |               ^^^
+error[ts2304]: Cannot find name 'use'.
+ --> ifLetTakesNestedPatterns.tt:2:42
+  |
+2 |   if let Ok(value: Some(value: v)) = r { use(v); }
+  |                                          ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+ifLetTakesNestedPatterns.ts(1,15): error TS2304: Cannot find name 'Res'.
+ifLetTakesNestedPatterns.ts(6,7): error TS2304: Cannot find name 'use'.

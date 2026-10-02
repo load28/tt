@@ -1,0 +1,303 @@
+=== conditionalOperationNarrowing.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function g(n: number): TResult<number, string> {
+>g : function g(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  return n > 2 ? Result.Ok(n) : Result.Err(`short ${n}`);
+>n : (parameter) n: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+>n : (parameter) n: number
+export function h(o: O, cfg: { name?: string }) {
+>h : function h(o: O, cfg: {
+>       name?: string;
+>   }): string
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>cfg : (parameter) cfg: {
+>       name?: string;
+>   }
+>name : (property) name?: string | undefined
+  return cfg.name ? match (o) { A(n) => cfg.name.slice(n), B => cfg.name } : "anon";
+>cfg : (parameter) cfg: {
+>       name?: string;
+>   }
+>name : (property) name?: string | undefined
+>o : (parameter) o: O
+>n : const n: number
+>cfg : (parameter) cfg: {
+>       name?: string;
+>   }
+>name : (property) name?: string
+>slice : (method) String.slice(start?: number, end?: number): string
+>n : const n: number
+>cfg : (parameter) cfg: {
+>       name?: string;
+>   }
+>name : (property) name?: string
+export function k(o: O, s: string | null) {
+>k : function k(o: O, s: string | null): string | null
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>s : (parameter) s: string | null
+  return s && match (o) { A(n) => s.charAt(n), B => s };
+>s : (parameter) s: string | null
+>o : (parameter) o: O
+>n : const n: number
+>s : (parameter) s: string
+>charAt : (method) String.charAt(pos: number): string
+>n : const n: number
+>s : (parameter) s: string
+export function l(o: O, init: { v: number } | undefined) {
+>l : function l(o: O, init: {
+>       v: number;
+>   } | undefined): (number | boolean)[]
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>init : (parameter) init: {
+>       v: number;
+>   } | undefined
+>v : (property) v: number
+  let u = init;
+>u : let u: {
+>       v: number;
+>   } | undefined
+>init : (parameter) init: {
+>       v: number;
+>   } | undefined
+  u = init;
+>u : let u: {
+>       v: number;
+>   } | undefined
+>init : (parameter) init: {
+>       v: number;
+>   } | undefined
+  const a = u ? match (o) { A(n) => u.v + n, B => u.v } : 0;
+>a : const a: number
+>u : let u: {
+>       v: number;
+>   } | undefined
+>o : (parameter) o: O
+>n : const n: number
+>u : let u: {
+>       v: number;
+>   }
+>v : (property) v: number
+>n : const n: number
+>u : let u: {
+>       v: number;
+>   }
+>v : (property) v: number
+  const b = !u || match (o) { A(n) => u.v > n, B => u.v > 0 };
+>b : const b: boolean
+>u : let u: {
+>       v: number;
+>   } | undefined
+>o : (parameter) o: O
+>n : const n: number
+>u : let u: {
+>       v: number;
+>   }
+>v : (property) v: number
+>n : const n: number
+>u : let u: {
+>       v: number;
+>   }
+>v : (property) v: number
+  const c = u !== undefined && u.v > 0 && match (o) { A(n) => u.v + n, B => 1 };
+>c : const c: number | false
+>u : let u: {
+>       v: number;
+>   } | undefined
+>u : let u: {
+>       v: number;
+>   }
+>v : (property) v: number
+>o : (parameter) o: O
+>n : const n: number
+>u : let u: {
+>       v: number;
+>   }
+>v : (property) v: number
+>n : const n: number
+  return [a, b, c];
+>a : const a: number
+>b : const b: boolean
+>c : const c: number | false
+export function m(s: string | null) {
+>m : function m(s: string | null): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: string | number | null;
+>   }
+>s : (parameter) s: string | null
+  return result { const x = s && try g(s.length); return x; };
+>x : const x: string | number | null
+>s : (parameter) s: string | null
+>g : function g(n: number): TResult<number, string>
+>s : (parameter) s: string
+>length : (property) String.length: number
+>x : const x: string | number | null
+let reads = 0;
+>reads : let reads: number
+const counted = {
+>counted : const counted: {
+>       readonly name: string;
+>   }
+  get name() {
+>name : (accessor) name: string
+    reads += 1;
+>reads : let reads: number
+const log = (label: string, value: unknown) => {
+>log : const log: (label: string, value: unknown) => void
+>label : (parameter) label: string
+>value : (parameter) value: unknown
+  console.log(`${label}: ${JSON.stringify(value)} (name read ${reads} time(s))`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>label : (parameter) label: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>value : (parameter) value: unknown
+>reads : let reads: number
+  reads = 0;
+>reads : let reads: number
+log("h A(2) counted", h(O.A(2), counted));
+>log : const log: (label: string, value: unknown) => void
+>h : function h(o: O, cfg: {
+>       name?: string;
+>   }): string
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+>counted : const counted: {
+>       readonly name: string;
+>   }
+log("h B counted", h(O.B, counted));
+>log : const log: (label: string, value: unknown) => void
+>h : function h(o: O, cfg: {
+>       name?: string;
+>   }): string
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>counted : const counted: {
+>       readonly name: string;
+>   }
+log("h A(1) unnamed", h(O.A(1), {}));
+>log : const log: (label: string, value: unknown) => void
+>h : function h(o: O, cfg: {
+>       name?: string;
+>   }): string
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+log("k A(1) text", k(O.A(1), "text"));
+>log : const log: (label: string, value: unknown) => void
+>k : function k(o: O, s: string | null): string | null
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+log("k B null", k(O.B, null));
+>log : const log: (label: string, value: unknown) => void
+>k : function k(o: O, s: string | null): string | null
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+log("l A(1) v=2", l(O.A(1), { v: 2 }));
+>log : const log: (label: string, value: unknown) => void
+>l : function l(o: O, init: {
+>       v: number;
+>   } | undefined): (number | boolean)[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+>v : (property) v: number
+log("l B undefined", l(O.B, undefined));
+>log : const log: (label: string, value: unknown) => void
+>l : function l(o: O, init: {
+>       v: number;
+>   } | undefined): (number | boolean)[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+log("m long", m("long"));
+>log : const log: (label: string, value: unknown) => void
+>m : function m(s: string | null): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: string | number | null;
+>   }
+log("m short", m("ab"));
+>log : const log: (label: string, value: unknown) => void
+>m : function m(s: string | null): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: string | number | null;
+>   }
+log("m null", m(null));
+>log : const log: (label: string, value: unknown) => void
+>m : function m(s: string | null): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: string | number | null;
+>   }
+

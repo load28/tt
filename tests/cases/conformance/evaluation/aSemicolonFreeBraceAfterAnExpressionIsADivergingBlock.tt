@@ -1,0 +1,35 @@
+// @origin: tests/integration.rs::a_semicolon_free_brace_after_an_expression_is_a_diverging_block
+// @run: aSemicolonFreeBraceAfterAnExpressionIsADivergingBlock.tt
+type Opt = { kind: "Some"; value: number } | { kind: "None" }
+let foo = 0, Foo = 0
+function unwrap(o: Opt): number {
+let Some(value) = o else {
+foo
+Foo
+{ return -1 }
+};
+return value
+}
+function arm(o: Opt): number {
+const n: number = match (o) {
+Some(value) => {
+foo
+{ return value * 2 }
+},
+None => 0,
+}
+return n
+}
+function body(o: Opt): number {
+if let Some(value) = o {
+Foo
+{ return value + 1 }
+} else {
+foo
+{ return -2 }
+}
+}
+console.log([unwrap({ kind: "Some", value: 3 }), unwrap({ kind: "None" })].join(","))
+console.log([arm({ kind: "Some", value: 3 }), body({ kind: "Some", value: 3 }), body({ kind: "None" })].join(","))
+
+export {};

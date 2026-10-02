@@ -1,0 +1,2 @@
+logicalAssignmentValue(5) => [15,15] | flip true; risky 5; map 15
+logicalAssignmentValue(0) => ["kept","kept"] | flip false

@@ -17,10 +17,11 @@ const compiler = process.env.TTC_BINARY ?? join(
   process.platform === 'win32' ? 'ttc.exe' : 'ttc',
 )
 
-function run(command, args, cwd, temporaryDirectory) {
+function run(command, args, cwd, temporaryDirectory, timeout) {
   const result = spawnSync(command, args, {
     cwd,
     encoding: 'utf8',
+    timeout,
     env: {
       ...process.env,
       TTC_BINARY: compiler,
@@ -90,4 +91,26 @@ test('a freshly resolved Bun scaffold type-checks and builds', { timeout: 180_00
   run('bun', ['run', 'build'], root, temporaryDirectory)
 
   await assert.rejects(access(join(root, '.tt-types'), constants.F_OK))
+
+  // The dev server compiles the module a browser asks for, and a closed
+  // server leaves nothing behind that keeps its process alive: `run`
+  // fails when the script does not exit on its own.
+  await writeFile(join(temporaryDirectory, 'dev.mjs'), devRequest)
+  const served = JSON.parse(
+    run('node', [join(temporaryDirectory, 'dev.mjs')], root, temporaryDirectory, 60_000),
+  )
+  assert.equal(served.status, 200, served.body)
+  assert.match(served.body, /@generated from app\.tt by ttc/)
 })
+
+const devRequest = `import { createServer } from 'vite'
+const server = await createServer({ server: { port: 0 }, logLevel: 'error' })
+await server.listen()
+const request = (path) => fetch(new URL(path, server.resolvedUrls.local[0]))
+// In the order a browser asks: the entry, then the module it imports.
+await (await request('/src/main.ts')).text()
+const response = await request('/src/app.tt?import&lang.ts')
+const body = await response.text()
+await server.close()
+console.log(JSON.stringify({ status: response.status, body }))
+`

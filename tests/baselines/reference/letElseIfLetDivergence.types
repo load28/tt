@@ -1,0 +1,324 @@
+=== letElseIfLetDivergence.tt ===
+variant Found { Hit(value: number), Near(value: number), Miss }
+>Found : type Found = {
+>       kind: "Hit";
+>       value: number;
+>   } | {
+>       kind: "Near";
+>       value: number;
+>   } | {
+>       kind: "Miss";
+>   }
+>Hit : (property) Hit: (value: number) => Found
+>value : (property) value: number
+>Near : (property) Near: (value: number) => Found
+>value : (property) value: number
+>Miss : (property) Miss: {
+>       readonly kind: "Miss";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+function flush(title: string, value: unknown) {
+>flush : function flush(title: string, value: unknown): void
+>title : (parameter) title: string
+>value : (parameter) value: unknown
+  console.log(`${title}: ${JSON.stringify(value)} after ${log.join(" ")}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>title : (parameter) title: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>value : (parameter) value: unknown
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+  log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+function lookup(key: string): Found {
+>lookup : function lookup(key: string): Found
+>key : (parameter) key: string
+>Found : type Found = {
+>       kind: "Hit";
+>       value: number;
+>   } | {
+>       kind: "Near";
+>       value: number;
+>   } | {
+>       kind: "Miss";
+>   }
+  log.push(`lookup ${key}`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>key : (parameter) key: string
+  return key === "a" ? Found.Hit(1) : key === "b" ? Found.Near(2) : Found.Miss;
+>key : (parameter) key: string
+>Found : const Found: {
+>       Hit: (value: number) => Found;
+>       Near: (value: number) => Found;
+>       Miss: {
+>           readonly kind: "Miss";
+>       };
+>   }
+>Hit : (property) Hit: (value: number) => Found
+>key : (parameter) key: string
+>Found : const Found: {
+>       Hit: (value: number) => Found;
+>       Near: (value: number) => Found;
+>       Miss: {
+>           readonly kind: "Miss";
+>       };
+>   }
+>Near : (property) Near: (value: number) => Found
+>Found : const Found: {
+>       Hit: (value: number) => Found;
+>       Near: (value: number) => Found;
+>       Miss: {
+>           readonly kind: "Miss";
+>       };
+>   }
+>Miss : (property) Miss: {
+>       readonly kind: "Miss";
+>   }
+function viaReturn(key: string): string {
+>viaReturn : function viaReturn(key: string): string
+>key : (parameter) key: string
+  const Hit(value) = lookup(key) else { return `miss ${key}`; };
+>value : const value: number
+>lookup : function lookup(key: string): Found
+>key : (parameter) key: string
+>key : (parameter) key: string
+  log.push("bound");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return `hit ${value}`;
+>value : const value: number
+flush("return hit", viaReturn("a"));
+>flush : function flush(title: string, value: unknown): void
+>viaReturn : function viaReturn(key: string): string
+flush("return miss", viaReturn("z"));
+>flush : function flush(title: string, value: unknown): void
+>viaReturn : function viaReturn(key: string): string
+function viaContinue(keys: string[]): number[] {
+>viaContinue : function viaContinue(keys: string[]): number[]
+>keys : (parameter) keys: string[]
+  const seen: number[] = [];
+>seen : const seen: number[]
+  for (const key of keys) {
+>key : const key: string
+>keys : (parameter) keys: string[]
+    const Hit(value) | Near(value) = lookup(key) else { continue; };
+>value : const value: number
+>value : const value: number
+>lookup : function lookup(key: string): Found
+>key : const key: string
+    seen.push(value);
+>seen : const seen: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>value : const value: number
+  return seen;
+>seen : const seen: number[]
+flush("continue", viaContinue(["a", "z", "b", "a"]));
+>flush : function flush(title: string, value: unknown): void
+>viaContinue : function viaContinue(keys: string[]): number[]
+function viaBreak(keys: string[]): number[] {
+>viaBreak : function viaBreak(keys: string[]): number[]
+>keys : (parameter) keys: string[]
+  const seen: number[] = [];
+>seen : const seen: number[]
+  outer: for (const key of keys) {
+>key : const key: string
+>keys : (parameter) keys: string[]
+      const Hit(value) = lookup(key) else { break outer; };
+>value : const value: number
+>lookup : function lookup(key: string): Found
+>key : const key: string
+      seen.push(value);
+>seen : const seen: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>value : const value: number
+  return seen;
+>seen : const seen: number[]
+flush("labeled break", viaBreak(["a", "a", "b", "a"]));
+>flush : function flush(title: string, value: unknown): void
+>viaBreak : function viaBreak(keys: string[]): number[]
+function viaThrow(key: string): number {
+>viaThrow : function viaThrow(key: string): number
+>key : (parameter) key: string
+  const Near(value) = lookup(key) else { throw new Error(`not near: ${key}`); };
+>value : const value: number
+>lookup : function lookup(key: string): Found
+>key : (parameter) key: string
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+>key : (parameter) key: string
+  return value;
+>value : const value: number
+for (const key of ["b", "a"]) {
+>key : const key: string
+    flush(`throw ${key}`, viaThrow(key));
+>flush : function flush(title: string, value: unknown): void
+>key : const key: string
+>viaThrow : function viaThrow(key: string): number
+>key : const key: string
+  } catch (e) {
+>e : var e: unknown
+    flush(`throw ${key}`, (e as Error).message);
+>flush : function flush(title: string, value: unknown): void
+>key : const key: string
+>e : var e: unknown
+>Error : interface Error
+>message : (property) Error.message: string
+function describe(first: Found, second: Found): string {
+>describe : function describe(first: Found, second: Found): string
+>first : (parameter) first: Found
+>Found : type Found = {
+>       kind: "Hit";
+>       value: number;
+>   } | {
+>       kind: "Near";
+>       value: number;
+>   } | {
+>       kind: "Miss";
+>   }
+>second : (parameter) second: Found
+>Found : type Found = {
+>       kind: "Hit";
+>       value: number;
+>   } | {
+>       kind: "Near";
+>       value: number;
+>   } | {
+>       kind: "Miss";
+>   }
+  if let Hit(value) = (log.push("first"), first) {
+>value : const value: number
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>first : (parameter) first: Found
+    return `first hit ${value}`;
+>value : const value: number
+  } else if let Hit(value: v) | Near(value: v) = (log.push("second"), second) {
+>v : const v: number
+>v : const v: number
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>second : (parameter) second: Found
+    return `second ${v}`;
+>v : const v: number
+    log.push("else");
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+flush("if let first", describe(Found.Hit(1), Found.Miss));
+>flush : function flush(title: string, value: unknown): void
+>describe : function describe(first: Found, second: Found): string
+>Found : const Found: {
+>       Hit: (value: number) => Found;
+>       Near: (value: number) => Found;
+>       Miss: {
+>           readonly kind: "Miss";
+>       };
+>   }
+>Hit : (property) Hit: (value: number) => Found
+>Found : const Found: {
+>       Hit: (value: number) => Found;
+>       Near: (value: number) => Found;
+>       Miss: {
+>           readonly kind: "Miss";
+>       };
+>   }
+>Miss : (property) Miss: {
+>       readonly kind: "Miss";
+>   }
+flush("if let second", describe(Found.Miss, Found.Near(5)));
+>flush : function flush(title: string, value: unknown): void
+>describe : function describe(first: Found, second: Found): string
+>Found : const Found: {
+>       Hit: (value: number) => Found;
+>       Near: (value: number) => Found;
+>       Miss: {
+>           readonly kind: "Miss";
+>       };
+>   }
+>Miss : (property) Miss: {
+>       readonly kind: "Miss";
+>   }
+>Found : const Found: {
+>       Hit: (value: number) => Found;
+>       Near: (value: number) => Found;
+>       Miss: {
+>           readonly kind: "Miss";
+>       };
+>   }
+>Near : (property) Near: (value: number) => Found
+flush("if let neither", describe(Found.Miss, Found.Miss));
+>flush : function flush(title: string, value: unknown): void
+>describe : function describe(first: Found, second: Found): string
+>Found : const Found: {
+>       Hit: (value: number) => Found;
+>       Near: (value: number) => Found;
+>       Miss: {
+>           readonly kind: "Miss";
+>       };
+>   }
+>Miss : (property) Miss: {
+>       readonly kind: "Miss";
+>   }
+>Found : const Found: {
+>       Hit: (value: number) => Found;
+>       Near: (value: number) => Found;
+>       Miss: {
+>           readonly kind: "Miss";
+>       };
+>   }
+>Miss : (property) Miss: {
+>       readonly kind: "Miss";
+>   }
+function asserted(n: number): number {
+>asserted : function asserted(n: number): number
+>n : (parameter) n: number
+  const Hit(value) = ({ kind: "Hit", value: n }) as const else { return -1; };
+>value : const value: number
+>kind : (property) kind: "Hit"
+>value : (property) value: number
+>n : (parameter) n: number
+>const : type const = {
+>       readonly kind: "Hit";
+>       readonly value: number;
+>   }
+  if let Hit(value: doubled) = ({ kind: "Hit", value: value * 2 }) as const {
+>value : (property) value: number
+>doubled : const doubled: number
+>kind : (property) kind: "Hit"
+>value : (property) value: number
+>value : const value: number
+>const : type const = {
+>       readonly kind: "Hit";
+>       readonly value: number;
+>   }
+    return doubled;
+>doubled : const doubled: number
+  return value;
+>value : const value: number
+flush("as const initializers", asserted(4));
+>flush : function flush(title: string, value: unknown): void
+>asserted : function asserted(n: number): number
+let scoped = "outer";
+>scoped : let scoped: string
+if let Hit(value: scoped) = Found.Hit(9) {
+>value : (property) value: number
+>scoped : const scoped: number
+>Found : const Found: {
+>       Hit: (value: number) => Found;
+>       Near: (value: number) => Found;
+>       Miss: {
+>           readonly kind: "Miss";
+>       };
+>   }
+>Hit : (property) Hit: (value: number) => Found
+  log.push(`inner scoped ${scoped}`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>scoped : const scoped: number
+flush("binding scope", scoped);
+>flush : function flush(title: string, value: unknown): void
+>scoped : let scoped: string
+

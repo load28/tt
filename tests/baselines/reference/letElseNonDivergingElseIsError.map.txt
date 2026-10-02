@@ -1,0 +1,7 @@
+//// [letElseNonDivergingElseIsError.tt] 5 mapping(s)
+1:1 -> 1:1 len 25  "function f(): number {\n  "
+2:14 -> 6:11 len 1  "v"
+2:19 -> 2:18 len 6  "find()"
+2:33 -> 4:5 len 6  "log();"
+2:42 -> 6:24 len 15  "\n  return v;\n}\n"
+

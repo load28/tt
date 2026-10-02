@@ -1,0 +1,41 @@
+=== generatedValueSlotsPreserveAuthoredContextualTypes1.tt ===
+type TResult<T, E> = { kind: "Ok"; value: T } | { kind: "Err"; error: E };
+>TResult : type TResult<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>T : (type parameter) T in type TResult<T, E>
+>E : (type parameter) E in type TResult<T, E>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type TResult<T, E>
+>kind : (property) kind: "Err"
+>error : (property) error: E
+>E : (type parameter) E in type TResult<T, E>
+declare const g: () => TResult<number, string>;
+>g : const g: () => TResult<number, string>
+>TResult : type TResult<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+const f = (): TResult<readonly number[], string> => result {
+>f : const f: () => TResult<readonly number[], string>
+>TResult : type TResult<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+const n = try g(); if (n === 0) return []; return [n];
+>n : const n: number
+>g : const g: () => TResult<number, string>
+>n : const n: number
+>n : const n: number
+

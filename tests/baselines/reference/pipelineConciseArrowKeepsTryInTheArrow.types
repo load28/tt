@@ -1,0 +1,5 @@
+=== pipelineConciseArrowKeepsTryInTheArrow.tt ===
+const f = value |> (x => try next());
+>f : const f: any
+>x : (parameter) x: any
+

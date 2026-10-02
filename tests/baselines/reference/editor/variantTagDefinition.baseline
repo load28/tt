@@ -1,0 +1,36 @@
+=== definition /*imported*/ main.tt:7:22 ===
+  |   return match (s) { Circle(radius) => radius + r + n, Point => 0 };
+  |                      ^ /*imported*/
+definition: 1 location(s)
+  shapes.tt 1:24-1:30 "Circle"
+
+=== definition /*field*/ main.tt:5:14 ===
+  |   let Circle(radius: r) = s else { return 0; };
+  |              ^ /*field*/
+definition: 1 location(s)
+  shapes.tt 1:31-1:37 "radius"
+
+=== definition /*ifLet*/ main.tt:4:10 ===
+  |   if let Circle(radius) = s { return radius; }
+  |          ^ /*ifLet*/
+definition: 1 location(s)
+  shapes.tt 1:24-1:30 "Circle"
+
+=== definition /*letElse*/ main.tt:5:7 ===
+  |   let Circle(radius: r) = s else { return 0; };
+  |       ^ /*letElse*/
+definition: 1 location(s)
+  shapes.tt 1:24-1:30 "Circle"
+
+=== definition /*local*/ main.tt:6:25 ===
+  |   const n = match (l) { One(value: v) => v, Two => 0 };
+  |                         ^ /*local*/
+definition: 1 location(s)
+  main.tt 2:17-2:20 "One"
+
+=== definition /*alias*/ main.tt:6:29 ===
+  |   const n = match (l) { One(value: v) => v, Two => 0 };
+  |                             ^ /*alias*/
+definition: 1 location(s)
+  main.tt 2:21-2:26 "value"
+

@@ -1,0 +1,2 @@
+optionalCall(2) => [[{"kind":"Ok"}],null] | callee true; risky 2; read 2; callee false
+optionalCall(-1) => [[{"kind":"Err","error":"negative -1"}],null] | callee true; risky -1; read -1; callee false

@@ -1,0 +1,37 @@
+==== ttc --out-dir (exit 1) ====
+error[val-pass]: cannot pass val binding `user` to mutable parameter `user` of `update` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./valArgumentMayOnlyReachAValParameter2.tt:4:10
+  |
+4 |   update(user);
+  |          ^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'User'.
+ --> valArgumentMayOnlyReachAValParameter2.tt:1:25
+  |
+1 | function read(val user: User) { log(user.name); }
+  |                         ^^^^
+error[ts2304]: Cannot find name 'log'.
+ --> valArgumentMayOnlyReachAValParameter2.tt:1:33
+  |
+1 | function read(val user: User) { log(user.name); }
+  |                                 ^^^
+error[ts2304]: Cannot find name 'User'.
+ --> valArgumentMayOnlyReachAValParameter2.tt:2:23
+  |
+2 | function update(user: User) { user.name = "Lee"; }
+  |                       ^^^^
+error[ts2304]: Cannot find name 'User'.
+ --> valArgumentMayOnlyReachAValParameter2.tt:3:28
+  |
+3 | function process(val user: User) {
+  |                            ^^^^
+error[val-pass]: cannot pass val binding `user` to mutable parameter `user` of `update` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> valArgumentMayOnlyReachAValParameter2.tt:4:10
+  |
+4 |   update(user);
+  |          ^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

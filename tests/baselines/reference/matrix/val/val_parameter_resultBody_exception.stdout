@@ -1,0 +1,2 @@
+resultBody(3) => {"kind":"Ok","value":[1,3]} | base 1; read 1; risky 3; param 3
+resultBody(8) => {"kind":"Ok","value":[1,8]} | base 1; read 1; risky 8; param 8

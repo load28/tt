@@ -1,0 +1,33 @@
+=== aCrFileEmitsTheSameLayoutWithItsOwnLineEnding2.tt ===
+variant Shape { Circle(r: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>r : (property) r: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+declare const s: Shape;
+>s : const s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Point";
+>   }
+function f() {
+>f : function f(): string
+  const a = match (s) {
+>a : const a: number
+>s : const s: Shape
+    Circle(r) => r,
+>r : const r: number
+>r : const r: number
+  return a |> String;
+>a : const a: number
+>String : var String: StringConstructor
+

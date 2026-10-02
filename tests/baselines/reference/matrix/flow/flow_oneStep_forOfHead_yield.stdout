@@ -1,0 +1,2 @@
+forOfHead(7) => [null] | yield 7
+forOfHead(1) => [null] | yield 1

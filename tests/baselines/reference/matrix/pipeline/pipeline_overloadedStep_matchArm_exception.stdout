@@ -1,0 +1,2 @@
+matchArm(4) => 2 | flip true; risky 4; shape "#4"
+matchArm(12) => 0 | flip false; other arm 0

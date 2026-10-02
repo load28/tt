@@ -44,6 +44,56 @@ test("a new file is type-checked before its first save", { skip: skipTyped, time
 });
 
 test(
+  "a clean file beside a failing one gets an answer, a buffer mid-edit is checked, and one that cannot lower says it was not",
+  { skip: skipTyped, timeout },
+  async () => {
+    const dir = tmpProject();
+    fs.writeFileSync(path.join(dir, "broken.tt"), "export const wrong: number = \"x\";\n");
+    const clean = path.join(dir, "clean.tt");
+    const source = "export const right: number = 1;\n";
+    fs.writeFileSync(clean, source);
+
+    const checked = await runTypedCheck(COMPILER, source, clean, true);
+    assert.deepEqual(checked, { kind: "ok", blocked: false, diagnostics: [] });
+
+    // TypeScript that does not parse yet is checked through the buffer's
+    // faithful projection: its type errors keep their rendering.
+    const unparsed = await runTypedCheck(
+      COMPILER,
+      "export const right: number = \"x\";\nMath.max(1,\n",
+      clean,
+      true,
+    );
+    assert.equal(unparsed.kind, "ok", JSON.stringify(unparsed));
+    if (unparsed.kind !== "ok") return;
+    assert.equal(unparsed.blocked, false);
+    assert.ok(
+      unparsed.diagnostics.some(
+        (d) =>
+          d.code === "ts2322" &&
+          d.message === "Type 'string' is not assignable to type 'number'.",
+      ),
+      JSON.stringify(unparsed.diagnostics),
+    );
+
+    // tt text left as written cannot be lowered at all.
+    const unlowered = await runTypedCheck(
+      COMPILER,
+      "export const right: number = \"x\";\nfunction f() { try g() }\n",
+      clean,
+      true,
+    );
+    assert.equal(unlowered.kind, "ok", JSON.stringify(unlowered));
+    if (unlowered.kind !== "ok") return;
+    assert.equal(unlowered.blocked, true);
+    assert.deepEqual(
+      unlowered.diagnostics.map((d) => d.code),
+      ["verify-failed"],
+    );
+  },
+);
+
+test(
   "an internal backend failure is distinct from toolchain availability",
   { skip: skipTyped, timeout },
   async () => {
@@ -149,7 +199,7 @@ test(
 );
 
 test(
-  "the authoritative editor pass uses the compiler's structured type message",
+  "the authoritative editor pass reports plain TypeScript's error as TypeScript does",
   { skip: skipTyped, timeout },
   async () => {
     const dir = tmpProject();
@@ -166,11 +216,11 @@ test(
     const mismatch = result.diagnostics.find((d) => d.code === "ts2322");
     assert.equal(
       mismatch?.message,
-      "type mismatch: expected `string`, found `1`",
+      "Type 'number' is not assignable to type 'string'.",
     );
     assert.deepEqual(
       [mismatch?.line, mismatch?.col, mismatch?.endLine, mismatch?.endCol],
-      [1, 23, 1, 24],
+      [1, 7, 1, 12],
     );
   },
 );

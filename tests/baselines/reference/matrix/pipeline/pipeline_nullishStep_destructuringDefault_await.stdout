@@ -1,0 +1,2 @@
+destructuringDefault(10) => 9 | source {}; await; flip true; lookup true; found 9
+destructuringDefault(20) => 40 | source {}; await; flip false; lookup false; double 40

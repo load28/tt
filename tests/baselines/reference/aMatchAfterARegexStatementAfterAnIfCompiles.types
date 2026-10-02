@@ -1,0 +1,18 @@
+=== aMatchAfterARegexStatementAfterAnIfCompiles.tt ===
+declare const x: Option<number>;
+>x : const x: Option<number>
+>Option : type Option = /*unresolved*/ any
+export function f(s: string) {
+>f : function f(s: string): any
+>s : (parameter) s: string
+  if (!s) return;
+>s : (parameter) s: string
+  /`/.test(s) && s;
+>test : (method) RegExp.test(string: string): boolean
+>s : (parameter) s: string
+>s : (parameter) s: string
+  return match (x) { Some(v) => v, None => 0 };
+>x : const x: Option<number>
+>v : const v: Option<number>
+>v : const v: Option<number>
+

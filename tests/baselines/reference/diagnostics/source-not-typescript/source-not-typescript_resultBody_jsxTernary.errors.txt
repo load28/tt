@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[source-not-typescript]: the TypeScript here does not parse: Expected '</', got ';'. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./main.ttx:4:76
+  |
+4 |   return <p>{flip() ? result { const n = try read(note("operand", input)) *; return n; } : <i>none</i>}</p>;
+  |                                                                            ^
+
+
+==== ttc --check-types (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expected '</', got ';'. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> main.ttx:4:76
+  |
+4 |   return <p>{flip() ? result { const n = try read(note("operand", input)) *; return n; } : <i>none</i>}</p>;
+  |                                                                            ^
+
+==== tsc on the emitted TypeScript (exit 0) ====

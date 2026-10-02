@@ -1,0 +1,2 @@
+forOfHead(10) => [9] | yield 10; flip true; lookup true; found 9
+forOfHead(20) => [40] | yield 20; flip false; lookup false; double 40

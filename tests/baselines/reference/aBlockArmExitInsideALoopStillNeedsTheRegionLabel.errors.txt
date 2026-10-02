@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aBlockArmExitInsideALoopStillNeedsTheRegionLabel.tt → $DIR/out/aBlockArmExitInsideALoopStillNeedsTheRegionLabel.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 's'.
+ --> aBlockArmExitInsideALoopStillNeedsTheRegionLabel.tt:1:18
+  |
+1 | const v = match (s) { "a" => { for (const x of xs) { return x; } return 0; }, _ => 0 };
+  |                  ^
+error[ts2304]: Cannot find name 'xs'.
+ --> aBlockArmExitInsideALoopStillNeedsTheRegionLabel.tt:1:48
+  |
+1 | const v = match (s) { "a" => { for (const x of xs) { return x; } return 0; }, _ => 0 };
+  |                                                ^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aBlockArmExitInsideALoopStillNeedsTheRegionLabel.ts(3,17): error TS2304: Cannot find name 's'.
+aBlockArmExitInsideALoopStillNeedsTheRegionLabel.ts(6,23): error TS2304: Cannot find name 'xs'.

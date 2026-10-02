@@ -37,8 +37,9 @@ pub struct ProjectedDocument {
     /// Whether the file imports any `@tt/std` entry — decides whether the
     /// standard-library package joins the project graph.
     pub(crate) imports_std: bool,
-    /// Whether lowering needs the compiler-owned pipeline runtime module.
-    pub(crate) uses_pipeline: bool,
+    /// Whether the lowered module imports the compiler-owned pipeline
+    /// runtime — what codegen emitted, not whether the source has a pipeline.
+    pub(crate) imports_runtime: bool,
     /// The literal-match exhaustiveness probes of this file.
     pub(crate) literal_probes: Vec<LiteralMatch>,
     /// The tag-match exhaustiveness probes of this file.
@@ -59,6 +60,15 @@ pub struct ProjectedDocument {
     /// typed projection. Diagnostics originating inside these ranges are
     /// recovery effects; diagnostics elsewhere remain reportable.
     pub(crate) recovered: Vec<(usize, usize)>,
+    /// Whether a recovery stands for one of the file's declarations
+    /// ([`crate::ProjectionReport::recovered_declarations`]): the
+    /// declarations emitted from this projection are not the file's own.
+    pub(crate) recovered_declaration: bool,
+    /// Whether `emit` is the faithful projection of a document whose
+    /// TypeScript does not parse ([`crate::ProjectionReport::withheld`]).
+    /// Only a document held open is checked through one, as an editor
+    /// checks a `.ts` buffer mid-edit; no declarations are written from it.
+    pub(crate) unparsed: bool,
     /// The variants the file exports, under their exported names, parsed
     /// once per content version — what an importer's extern collection
     /// reads, so a file that did not change is never re-parsed for its
@@ -70,6 +80,12 @@ pub struct ProjectedDocument {
 }
 
 impl ProjectedDocument {
+    /// The TypeScript this document lowered to: the text the checker and
+    /// the language service read in its place.
+    pub fn code(&self) -> &str {
+        &self.emit.code
+    }
+
     /// The variants the file exports ([`crate::exported_variant_symbols`]),
     /// computed on first use and pinned to this projection's content version.
     pub(crate) fn exported_variant_symbols(&self) -> &[crate::VariantSymbol] {
@@ -98,7 +114,7 @@ impl ProjectedDocument {
         source_path: &Path,
         source: String,
     ) -> Result<ProjectedDocument, CompileError> {
-        Self::project_for_snapshot(source_path, source).map_err(|blocked| {
+        Self::project_for_snapshot(source_path, source, false).map_err(|blocked| {
             blocked
                 .diagnostics
                 .first()
@@ -110,9 +126,15 @@ impl ProjectedDocument {
         })
     }
 
+    /// The projection a snapshot holds for `source`. A file whose
+    /// TypeScript does not parse is blocked, as `tsc` reports only its
+    /// syntax errors while there are any, unless it is `open`: a document
+    /// being edited is checked through its faithful projection, so its type
+    /// errors keep the checker's facts while a syntax error is transient.
     pub(crate) fn project_for_snapshot(
         source_path: &Path,
         source: String,
+        open: bool,
     ) -> Result<ProjectedDocument, BlockedFile> {
         let options = Options {
             filename: Some(source_path.to_str().unwrap_or("<input>")),
@@ -131,18 +153,22 @@ impl ProjectedDocument {
         let source_kind = options.source_kind;
         let (program, tokens) = crate::parser::lex_and_parse_with_kind(&source, source_kind);
         let report = crate::compile_projection_report_parsed(&source, &options, &program, &tokens);
-        let Some(emit) = report.emit else {
-            return Err(BlockedFile::new(
-                source_path.to_path_buf(),
-                source,
-                report.diagnostics,
-            ));
+        let (emit, unparsed) = match (report.emit, report.withheld) {
+            (Some(emit), _) => (emit, false),
+            (None, Some(withheld)) if open => (withheld, true),
+            (None, _) => {
+                return Err(BlockedFile::new(
+                    source_path.to_path_buf(),
+                    source,
+                    report.diagnostics,
+                ));
+            }
         };
         let scan = crate::scan_module_of(&source, &program);
         Ok(ProjectedDocument {
             module_path: module_path_of(source_path),
             imports_std: scan.imports_std,
-            uses_pipeline: scan.uses_pipeline,
+            imports_runtime: emit.support_imports.contains(&crate::StdModule::Runtime),
             literal_probes: crate::probe::literal_matches_of(&source, &program),
             tag_probes: crate::probe::tag_matches_of(&source, &program),
             payload_probes: crate::probe::payload_probes_of(&program),
@@ -152,6 +178,8 @@ impl ProjectedDocument {
             emit,
             tt_diagnostics: report.diagnostics,
             recovered: report.recovered,
+            recovered_declaration: !report.recovered_declarations.is_empty(),
+            unparsed,
             exported_variant_symbols: std::sync::OnceLock::new(),
             imports: scan.imports,
         })
@@ -176,18 +204,24 @@ pub(crate) fn module_path_of(source_path: &Path) -> PathBuf {
     PathBuf::from(name)
 }
 
-/// Where one standard-library module sits in the project graph.
+/// The standard-library packages a snapshot's files need, in
+/// [`crate::StdPackage::ALL`] order.
 ///
-/// It is a module of the project like any other — served from the same
-/// layered file system, resolved by ordinary node resolution — so the
-/// specifier stays bare in the source and in every declaration emitted from
-/// it. Nothing is written to the user's `node_modules`.
-pub(crate) fn std_module_path(module: crate::StdModule) -> PathBuf {
-    let package = match module {
-        crate::StdModule::Runtime => crate::StdPackage::Runtime,
-        _ => crate::StdPackage::Std,
-    };
-    std_package_dir(package).join(crate::StdPackage::file_name(module))
+/// Each is a package of the project like any other — served from the same
+/// layered file system under `node_modules`, resolved by ordinary node
+/// resolution — so the specifier stays bare in the source and in every
+/// declaration emitted from it. Nothing is written to the user's
+/// `node_modules`.
+pub(crate) fn served_std_packages(files: &[Arc<ProjectedDocument>]) -> Vec<crate::StdPackage> {
+    crate::StdPackage::ALL
+        .into_iter()
+        .filter(|package| {
+            files.iter().any(|file| match package {
+                crate::StdPackage::Std => file.imports_std,
+                crate::StdPackage::Runtime => file.imports_runtime,
+            })
+        })
+        .collect()
 }
 
 fn std_package_dir(package: crate::StdPackage) -> PathBuf {
@@ -229,15 +263,8 @@ pub(crate) fn assemble(
     };
     let mut probes = Probes::default();
 
-    if files.iter().any(|f| f.imports_std) {
-        query
-            .modules
-            .extend(std_package_modules(root, crate::StdPackage::Std));
-    }
-    if files.iter().any(|f| f.uses_pipeline) {
-        query
-            .modules
-            .extend(std_package_modules(root, crate::StdPackage::Runtime));
+    for package in served_std_packages(files) {
+        query.modules.extend(std_package_modules(root, package));
     }
 
     for file in files {
@@ -245,6 +272,9 @@ pub(crate) fn assemble(
             path: file.module_path.clone(),
             text: file.emit.code.clone(),
         });
+        if file.unparsed {
+            query.unparsed_documents.push(file.module_path.clone());
+        }
 
         for result_return in &file.emit.result_return_temps {
             query.result_shapes.push(ResultShapeQuery {
@@ -342,6 +372,7 @@ pub(crate) fn assemble(
             query.symbols.push(SymbolQuery {
                 module: file.module_path.clone(),
                 position,
+                binding: true,
             });
             probes.val_bindings.push(ValBindingAnchor {
                 root: query.symbols.len() - 1,
@@ -377,6 +408,7 @@ pub(crate) fn assemble(
                         query.symbols.push(SymbolQuery {
                             module: file.module_path.clone(),
                             position,
+                            binding: false,
                         });
                         Some(query.symbols.len() - 1)
                     }
@@ -387,6 +419,7 @@ pub(crate) fn assemble(
             query.symbols.push(SymbolQuery {
                 module: file.module_path.clone(),
                 position: root,
+                binding: false,
             });
             probes.mutations.push(MutationAnchor {
                 anchor: SourceAnchor {
@@ -410,6 +443,7 @@ pub(crate) fn assemble(
             query.symbols.push(SymbolQuery {
                 module: file.module_path.clone(),
                 position,
+                binding: false,
             });
             probes.functions.push(FnAnchor {
                 root: query.symbols.len() - 1,
@@ -426,11 +460,13 @@ pub(crate) fn assemble(
             query.symbols.push(SymbolQuery {
                 module: file.module_path.clone(),
                 position,
+                binding: false,
             });
             let root = query.symbols.len() - 1;
             query.symbols.push(SymbolQuery {
                 module: file.module_path.clone(),
                 position: callee_position,
+                binding: false,
             });
             probes.passes.push(PassAnchor {
                 anchor: SourceAnchor {
@@ -491,6 +527,16 @@ pub(crate) fn assemble(
         path: module_path_of(&file.source_path),
         text: "export {};\n".to_string(),
     }));
+    query.syntax_blocked.extend(
+        blocked
+            .iter()
+            .filter(|file| {
+                file.diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic.code.restates_typescript_syntax())
+            })
+            .map(|file| module_path_of(&file.source_path)),
+    );
 
     (query, probes)
 }
@@ -718,25 +764,30 @@ fn source_extent(origin: mapper::DiagnosticOrigin) -> (usize, usize) {
 
 /// Whether a checker diagnostic origin is already explained by a direct TT
 /// cause. Display spans may be narrow; syntax-owner identity is what links
-/// a cause to consequences emitted elsewhere in the same lowering.
+/// a cause to consequences emitted elsewhere in the same lowering. A tt
+/// restatement of TypeScript's syntax verdict is no such cause: the
+/// checker's diagnostic there is the verdict itself.
 pub(crate) fn origin_intersects_tt_error(
     origin: mapper::DiagnosticOrigin,
     tt_diagnostics: &[crate::Diagnostic],
 ) -> bool {
     let (start, end) = source_extent(origin);
-    tt_diagnostics.iter().any(|tt| {
-        if let (mapper::DiagnosticOrigin::Anchor(anchor), Some(owner)) = (origin, tt.owner)
-            && owner.start == anchor.src
-            && owner.end == anchor.owner_end
-        {
-            return true;
-        }
-        let Some(tt_start) = tt.start else {
-            return false;
-        };
-        let tt_end = tt.end.unwrap_or_else(|| tt_start.saturating_add(1));
-        start < tt_end && tt_start < end
-    })
+    tt_diagnostics
+        .iter()
+        .filter(|tt| !tt.code.restates_typescript_syntax())
+        .any(|tt| {
+            if let (mapper::DiagnosticOrigin::Anchor(anchor), Some(owner)) = (origin, tt.owner)
+                && owner.start == anchor.src
+                && owner.end == anchor.owner_end
+            {
+                return true;
+            }
+            let Some(tt_start) = tt.start else {
+                return false;
+            };
+            let tt_end = tt.end.unwrap_or_else(|| tt_start.saturating_add(1));
+            start < tt_end && tt_start < end
+        })
 }
 
 pub(crate) fn diagnostic_intersects_recovery(
@@ -754,7 +805,9 @@ pub(crate) fn diagnostic_intersects_recovery(
 
 /// Whether a checker diagnostic covers source already owned by a direct TT
 /// cause. The mismatch span, when available, is the checker's more precise
-/// statement of where the consequence originated.
+/// statement of where the consequence originated; a property missing from
+/// a value originates where that value is, so the receiver of the lookup
+/// is owned as well.
 pub(crate) fn diagnostic_intersects_tt_error(
     file: &ProjectedDocument,
     diagnostic: &crate::typescript::backend::Diagnostic,
@@ -765,10 +818,14 @@ pub(crate) fn diagnostic_intersects_tt_error(
         .map_or((diagnostic.start, diagnostic.end), |mismatch| {
             (mismatch.start, mismatch.end)
         });
-    let Some(origin) = diagnostic_origin(file, diagnostic_start, diagnostic_end) else {
-        return false;
-    };
-    origin_intersects_tt_error(origin, &file.tt_diagnostics)
+    [
+        Some((diagnostic_start, diagnostic_end)),
+        diagnostic.receiver,
+    ]
+    .into_iter()
+    .flatten()
+    .filter_map(|(start, end)| diagnostic_origin(file, start, end))
+    .any(|origin| origin_intersects_tt_error(origin, &file.tt_diagnostics))
 }
 
 #[cfg(test)]
@@ -791,6 +848,7 @@ mod tests {
             code,
             message: message.to_string(),
             mismatch: None,
+            receiver: None,
             related: Vec::new(),
         }
     }
@@ -806,7 +864,7 @@ mod tests {
 
     #[test]
     fn parser_error_nodes_recover_only_their_own_source_ranges() {
-        let source = "const broken = 1 |> ;\n\
+        let source = "const broken = ready ? 1 : 2 |> f;\n\
             const independent: string = 1;\n\
             const optional = value |> ?.member + 1;\n\
             const malformed = match value { Missing => 0 };\n";
@@ -934,9 +992,13 @@ mod tests {
 
     #[test]
     fn text_that_cannot_lower_gets_an_engine_only_error_node() {
-        let file = project("const x = 1 |> ;\n");
-        assert_eq!(file.recovered, [(10, 14)]);
-        assert!(file.emit.code.contains("const x = 0"), "{}", file.emit.code);
+        let file = project("const x = a ? 1 : 2 |> f;\n");
+        assert_eq!(file.recovered, [(18, 24)]);
+        assert!(
+            file.emit.code.contains("const x = a ? 1 : 0     ;"),
+            "{}",
+            file.emit.code
+        );
         assert_eq!(file.tt_diagnostics.len(), 1);
         assert_eq!(
             file.tt_diagnostics[0].code,

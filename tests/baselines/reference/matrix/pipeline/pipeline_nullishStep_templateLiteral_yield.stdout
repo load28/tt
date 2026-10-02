@@ -1,0 +1,2 @@
+templateLiteral(10) => "<L|9|R>" | left "L"; yield 10; flip true; lookup true; found 9; right "R"
+templateLiteral(20) => "<L|40|R>" | left "L"; yield 20; flip false; lookup false; double 40; right "R"

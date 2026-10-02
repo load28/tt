@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::literal_match_with_a_guard_becomes_an_if_chain
+const v = match (code) { 200 if ok => 1, 200 => 2, _ => 3 };

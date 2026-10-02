@@ -1,0 +1,20 @@
+=== singlePatternSpellingWithoutASubjectOwnerWaitsForTypescript1.tt ===
+variant Shape { Circle(radius: number), Empty }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+function f(): number {
+>f : function f(): number
+  const Circel(radius) = s else { return 0; };
+>radius : const radius: any
+  return radius;
+>radius : const radius: any
+

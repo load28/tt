@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_11.rs::a_wrapped_concise_arrow_value_lowers_to_a_block_body_not_an_iife
+variant V { A(n: number), B }
+const g = async (p: Promise<V>) => match (await p) { A(n) => n, B => 0 } as number;
+const h = (v: V) => match (v) { A(n) => n, B => 0 } satisfies number;
+const i = (v: V) => (match (v) { A(n) => n, B => 0 }) as number;
+const j = (v: V) => (match (v) { A(n) => n, B => 0 });

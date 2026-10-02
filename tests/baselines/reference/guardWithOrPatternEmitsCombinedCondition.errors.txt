@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./guardWithOrPatternEmitsCombinedCondition.tt → $DIR/out/guardWithOrPatternEmitsCombinedCondition.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> guardWithOrPatternEmitsCombinedCondition.tt:1:18
+  |
+1 | const r = match (x) { A(v) | B(v) if v > 0 => v, _ => 0 };
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+guardWithOrPatternEmitsCombinedCondition.ts(3,17): error TS2304: Cannot find name 'x'.

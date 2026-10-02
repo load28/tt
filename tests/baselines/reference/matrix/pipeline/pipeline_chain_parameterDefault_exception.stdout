@@ -1,0 +1,2 @@
+parameterDefault(3) => "***6" | risky 3; double 6
+parameterDefault(12) => "**24" | risky 12; double 24

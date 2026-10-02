@@ -2,10 +2,10 @@
 
 use super::*;
 
-/// [`Coverage`] of a single match, when the question means something: a tag
-/// match with no wildcard arm whose tags identify a known variant — and,
-/// whenever the tags identify one, wildcard or not, the arms that match
-/// nothing an earlier arm has not.
+/// [`Coverage`] of a single match, when the question means something: a
+/// match that asks [`CoverageQuestion::Tags`] and whose tags identify a
+/// known variant — and, whenever the tags identify one, whatever the
+/// question, the arms that match nothing an earlier arm has not.
 ///
 /// The arms become a one-column matrix and the algorithm answers
 /// ([`usefulness`]). Guarded arms stay out of it — a guard may be false —
@@ -16,29 +16,62 @@ pub(super) fn coverage_of(expr: &MatchExpr, table: &Table) -> (Option<Coverage>,
     let Some(rows) = match_rows(expr) else {
         return (None, Vec::new());
     };
-    // Several variants can hold every tag. The one the arms *satisfy* is the
-    // subject if there is one; otherwise the one they leave least of —
-    // the rule sema has always reported, now measured in witnesses.
     let cx = Alphabets::of(table);
+    let Some((entry, missing)) = subject_of(&rows, table, &[]) else {
+        return (None, Vec::new());
+    };
+    let unreachable = unreachable_arms(&rows.arm_rows, &[ColTy::Variant(entry)], &cx);
+    let coverage = (coverage_question(expr) == CoverageQuestion::Tags)
+        .then(|| Coverage::of(vec![Some(entry.covered_variant())], rows.covered, missing));
+    (coverage, unreachable)
+}
+
+/// The variant a single match is reported against. Several variants can
+/// hold every tag the arms write and, on the typed path, every constituent
+/// the checker names (`alphabet`); the one the arms *satisfy* is the
+/// subject if there is one, otherwise the one they leave least of. Both
+/// paths name the subject by this one rule, so a coverage diagnostic says
+/// the same thing whichever answered it.
+fn subject_of<'t>(
+    rows: &MatchRows<'_>,
+    table: &'t Table,
+    alphabet: &[String],
+) -> Option<(&'t Entry, usefulness::Missing)> {
+    let cx = Alphabets::of(table);
+    let tags: Vec<&str> = rows
+        .tags
+        .iter()
+        .copied()
+        .chain(alphabet.iter().map(String::as_str))
+        .collect();
     let mut best: Option<(&Entry, usefulness::Missing)> = None;
-    for entry in table.candidates(&rows.tags) {
+    for entry in table.candidates(&tags) {
         let types = [ColTy::Variant(entry)];
         let missing = usefulness::missing(&rows.rows, &types, &cx);
         if missing.total == 0 {
-            best = Some((entry, missing));
-            break;
+            return Some((entry, missing));
         }
         if best.as_ref().is_none_or(|(_, m)| missing.total < m.total) {
             best = Some((entry, missing));
         }
     }
-    let Some((entry, missing)) = best else {
-        return (None, Vec::new());
-    };
-    let unreachable = unreachable_arms(&rows.arm_rows, &[ColTy::Variant(entry)], &cx);
-    let coverage = (!rows.wildcard)
-        .then(|| Coverage::of(vec![Some(entry.covered_variant())], rows.covered, missing));
-    (coverage, unreachable)
+    best
+}
+
+/// The variant one position of a tuple match is reported against: the
+/// first declaration holding every tag the arms write there and every
+/// constituent the checker names (`alphabet`, empty on the default path).
+fn position_subject<'t>(
+    table: &'t Table,
+    written: &[&str],
+    alphabet: &[String],
+) -> Option<&'t Entry> {
+    let tags: Vec<&str> = written
+        .iter()
+        .copied()
+        .chain(alphabet.iter().map(String::as_str))
+        .collect();
+    table.candidates(&tags).first().copied()
 }
 
 /// The same answer for a subject the caller names — the typed path, where
@@ -48,14 +81,13 @@ pub(super) fn coverage_of(expr: &MatchExpr, table: &Table) -> (Option<Coverage>,
 pub(crate) fn checked_coverage(
     source: &str,
     source_kind: crate::SourceKind,
-    externs: &[VariantSymbol],
+    externs: &[crate::resolve::ExternDecl],
     members: &[(usize, Vec<Vec<String>>)],
     payloads: &[PayloadAlphabet],
 ) -> Vec<(usize, Coverage)> {
     let program = crate::parser::parse_with_kind(source, source_kind);
-    let decls: Vec<crate::resolve::ExternDecl> = externs.iter().map(Into::into).collect();
     let mut hir = crate::hir::lower_program(crate::hir::FileId(0), source, &program);
-    let resolution = crate::resolve::resolve_file(&mut hir, &decls);
+    let resolution = crate::resolve::resolve_file(&mut hir, externs);
     let table = Table::from_resolution(&resolution);
     let mut found = Vec::new();
     let mut matches = Vec::new();
@@ -69,7 +101,10 @@ pub(crate) fn checked_coverage(
             continue;
         };
         let entry = table.entry_of_members(tags);
-        let Some(rows) = match_rows(expr).filter(|rows| !rows.wildcard) else {
+        if coverage_question(expr) != CoverageQuestion::Tags {
+            continue;
+        }
+        let Some(rows) = match_rows(expr) else {
             continue;
         };
         let cx = Alphabets {
@@ -85,10 +120,11 @@ pub(crate) fn checked_coverage(
                 .collect(),
         };
         let types = [ColTy::Variant(&entry)];
+        let subject = subject_of(&rows, &table, tags).map(|(entry, _)| entry.covered_variant());
         found.push((
             expr.keyword_off,
             Coverage::of(
-                vec![None],
+                vec![subject],
                 rows.covered,
                 usefulness::missing(&rows.rows, &types, &cx),
             ),
@@ -149,10 +185,20 @@ pub(crate) fn checked_coverage(
                 })
                 .collect(),
         };
+        let subjects = positions
+            .iter()
+            .zip(&written)
+            .map(|(tags, written)| {
+                (!written.is_empty())
+                    .then(|| position_subject(&table, written, tags))
+                    .flatten()
+                    .map(Entry::covered_variant)
+            })
+            .collect();
         found.push((
             expr.keyword_off,
             Coverage::of(
-                vec![None; arity],
+                subjects,
                 Vec::new(),
                 usefulness::missing(&rows, &types, &cx),
             ),
@@ -188,6 +234,14 @@ pub(super) fn tuple_position_tags(expr: &TupleMatchExpr, arity: usize) -> Vec<Ve
 /// Every single `match` of a program, nested ones included, in source
 /// order.
 pub(super) fn collect_matches<'a>(
+    program: &'a Program,
+    out: &mut Vec<&'a MatchExpr>,
+    tuples: &mut Vec<&'a TupleMatchExpr>,
+) {
+    crate::stack::grow(|| collect_matches_grown(program, out, tuples));
+}
+
+fn collect_matches_grown<'a>(
     program: &'a Program,
     out: &mut Vec<&'a MatchExpr>,
     tuples: &mut Vec<&'a TupleMatchExpr>,
@@ -260,6 +314,14 @@ pub(super) fn collect_if_let_matches<'a>(
     out: &mut Vec<&'a MatchExpr>,
     tuples: &mut Vec<&'a TupleMatchExpr>,
 ) {
+    crate::stack::grow(|| collect_if_let_matches_grown(stmt, out, tuples));
+}
+
+fn collect_if_let_matches_grown<'a>(
+    stmt: &'a IfLetStmt,
+    out: &mut Vec<&'a MatchExpr>,
+    tuples: &mut Vec<&'a TupleMatchExpr>,
+) {
     collect_matches(&stmt.expr, out, tuples);
     collect_matches(&stmt.body, out, tuples);
     match &stmt.else_part {
@@ -269,23 +331,53 @@ pub(super) fn collect_if_let_matches<'a>(
     }
 }
 
+/// The exhaustiveness question a single-scrutinee match asks. The untyped
+/// coverage ([`coverage_of`]) and the typed probes ([`crate::probe`]) both
+/// answer only the question this names, so a match is never checked for
+/// coverage by one pass and exempt in the other.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum CoverageQuestion {
+    /// No question: a `_` arm covers every value; an `is` arm makes the
+    /// final wildcard the whole rule (class hierarchies are open); tag
+    /// patterns mixed with literal or `is` patterns have no one
+    /// discriminant, and `match-mixed-patterns` reports the cause rather
+    /// than its effects; or no arm has a pattern at all.
+    None,
+    /// Which literals of the scrutinee's type the arms leave out.
+    Literals,
+    /// Which constructors of the variant the arms leave out.
+    Tags,
+}
+
+/// The [`CoverageQuestion`] `expr`'s arms ask.
+pub(crate) fn coverage_question(expr: &MatchExpr) -> CoverageQuestion {
+    let (mut tags, mut literals) = (false, false);
+    for arm in &expr.arms {
+        match arm.pattern {
+            Pattern::Wildcard | Pattern::Instances(_) => return CoverageQuestion::None,
+            Pattern::Tags(_) => tags = true,
+            Pattern::Literals(_) => literals = true,
+        }
+    }
+    match (tags, literals) {
+        (true, false) => CoverageQuestion::Tags,
+        (false, true) => CoverageQuestion::Literals,
+        (true, true) | (false, false) => CoverageQuestion::None,
+    }
+}
+
 /// One match's arms as the algorithm's input: the tags they name, the tags
 /// they cover outright, the matrix, the per-arm rows reachability needs
-/// (an unguarded wildcard arm among them), and whether the match has a
-/// wildcard arm. `None` when no arm carries a tag pattern.
+/// (an unguarded wildcard arm among them). `None` when no arm carries a tag
+/// pattern.
 pub(super) struct MatchRows<'a> {
     tags: Vec<&'a str>,
     covered: Vec<String>,
     rows: Vec<Vec<Cell<'a>>>,
     arm_rows: Vec<(usize, Vec<Vec<Cell<'a>>>)>,
-    wildcard: bool,
 }
 
 pub(super) fn match_rows(expr: &MatchExpr) -> Option<MatchRows<'_>> {
-    let wildcard = expr
-        .arms
-        .iter()
-        .any(|a| matches!(a.pattern, Pattern::Wildcard));
     // Identification uses every arm's tags, guarded ones included.
     let mut tags: Vec<&str> = Vec::new();
     let mut covered: Vec<String> = Vec::new();
@@ -327,7 +419,6 @@ pub(super) fn match_rows(expr: &MatchExpr) -> Option<MatchRows<'_>> {
         covered,
         rows,
         arm_rows,
-        wildcard,
     })
 }
 
@@ -379,7 +470,7 @@ pub(super) fn tuple_coverage_of(
         }
         // A position whose tags name no variant makes the whole question
         // unanswerable — the same conservatism as before.
-        let Some(entry) = table.candidates(tags).first().copied() else {
+        let Some(entry) = position_subject(table, tags, &[]) else {
             return (None, Vec::new());
         };
         positions.push(Some(entry.covered_variant()));

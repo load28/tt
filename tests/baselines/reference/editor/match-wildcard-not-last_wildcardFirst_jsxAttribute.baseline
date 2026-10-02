@@ -1,0 +1,7 @@
+=== diagnostics main.ttx ===
+diagnostics: 1 diagnostic(s)
+  1:32-1:40 "Fragment" hint TS6133: 'Fragment' is declared but its value is never read. [unnecessary]
+published: 2 diagnostic(s)
+  1:32-1:40 "Fragment" hint TS6133 (ts): 'Fragment' is declared but its value is never read. [unnecessary]
+  4:60-4:61 "_" error match-wildcard-not-last (ttc): match: the wildcard arm `_` must be the last arm
+

@@ -1,0 +1,2 @@
+orAssignment(2) => 12 | flip true; target {"value":0}; receiver {"factor":3}; add 4; twice 12
+orAssignment(3) => "kept" | flip false; target {"value":"kept"}

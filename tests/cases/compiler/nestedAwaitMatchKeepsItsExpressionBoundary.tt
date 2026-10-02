@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::nested_await_match_keeps_its_expression_boundary
+async function f(x: T) { return consume(match (x) { A(url) => await fetch(url), _ => null }); }

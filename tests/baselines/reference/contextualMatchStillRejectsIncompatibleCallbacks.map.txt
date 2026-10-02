@@ -1,0 +1,11 @@
+//// [contextualMatchStillRejectsIncompatibleCallbacks.tt] 9 mapping(s)
+1:1 -> 19:1 len 98  "\ndeclare const flag: boolean;\ndeclare function c"...
+4:1 -> 23:17 len 7  "consume"
+4:8 -> 32:7 len 1  "("
+4:16 -> 25:17 len 4  "flag"
+5:3 -> 27:10 len 4  "true"
+5:11 -> 32:24 len 32  "({run: (x: string) => x.length})"
+6:3 -> 28:10 len 5  "false"
+6:12 -> 32:59 len 19  "({run: x => x + 1})"
+7:2 -> 32:79 len 15  ");\n\nexport {};\n"
+

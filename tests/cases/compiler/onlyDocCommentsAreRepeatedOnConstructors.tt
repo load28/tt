@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_07.rs::only_doc_comments_are_repeated_on_constructors
+variant Mode {
+  // internal note
+  /** Read only. */
+  Read, /* block */
+  Write(/** Target path. */ path: string),
+}

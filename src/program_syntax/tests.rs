@@ -214,7 +214,8 @@ fn an_incomplete_source_expression_owns_the_generated_closing_boundary() {
     // SWC reports this at the generated `)` after `radius.`, not on the
     // copied dot. The owner projection records that fixed delimiter as
     // the boundary of the copied arm expression, so malformed user text
-    // remains an input failure instead of becoming an ICE.
+    // remains an input failure instead of becoming an ICE, reported at the
+    // `,` that ends the arm, where TypeScript reports TS1003.
     let source = "variant Shape { Circle(radius: number), Point }\n\
                       declare const shape: Shape;\n\
                       const label = match (shape) {\n\
@@ -225,7 +226,7 @@ fn an_incomplete_source_expression_owns_the_generated_closing_boundary() {
     let ProgramSyntaxError::SourceNotTypeScript { source: at, .. } = error else {
         panic!("expected a source-caused failure, got {error:?}");
     };
-    assert_eq!(&source[at..at + 1], ".");
+    assert_eq!(&source[at..at + 1], ",");
 }
 
 #[test]
@@ -462,7 +463,7 @@ fn a_script_classifies_each_global_statement_by_the_bindings_it_declares() {
         .overlay
         .iter()
         .filter(|entry| entry.category == SyntaxCategory::Expression)
-        .map(|entry| script.globals().get(&entry.host_owner.anchor()).cloned())
+        .map(|entry| script.globals().get(&entry.host_owner.statement()).cloned())
         .collect();
     assert_eq!(
         classes,
@@ -647,6 +648,9 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
                 ConditionalBranch::Consequent => "conditional-consequent",
                 ConditionalBranch::Alternate => "conditional-alternate",
                 ConditionalBranch::OptionalCallArgument(_) => "conditional-optional-call-argument",
+                ConditionalBranch::LogicalAssignmentRight { .. } => {
+                    "conditional-logical-assignment-right"
+                }
             },
             HostEvaluationOperation::Reference(position) => match position {
                 ReferencePosition::CallCallee => "reference-call-callee",
@@ -675,6 +679,7 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
             EvaluationOwner::ClassInitializer => "class-field",
             EvaluationOwner::ClassDefinition => "class-definition",
             EvaluationOwner::StaticBlock => "static-block",
+            EvaluationOwner::EnumInitializer => "enum-member",
         }
     }
 
@@ -849,6 +854,10 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
             crate::SourceKind::TypeScript,
             format!("switch (value) {{ case {expression}: break; }}"),
         ),
+        (
+            crate::SourceKind::TypeScript,
+            format!("enum E {{ P = 1, Q = {expression} }}"),
+        ),
     ];
 
     let mut operations = BTreeSet::new();
@@ -912,6 +921,7 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
             "class-definition",
             "class-field",
             "constructor",
+            "enum-member",
             "function",
             "generator",
             "module",

@@ -1,0 +1,2 @@
+labeledBlock(4) => [5,0] | operand 4; add 5; neg 0; finally 0
+labeledBlock(9) => [10,0] | operand 9; add 10; neg 0; finally 0

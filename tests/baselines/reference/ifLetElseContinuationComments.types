@@ -1,0 +1,89 @@
+=== ifLetElseContinuationComments.tt ===
+export variant V { A(value: number), B(value: number), C }
+>V : type V = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>       value: number;
+>   } | {
+>       kind: "C";
+>   }
+>A : (property) A: (value: number) => V
+>value : (property) value: number
+>B : (property) B: (value: number) => V
+>value : (property) value: number
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+export function read(v: V): number {
+>read : function read(v: V): number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>       value: number;
+>   } | {
+>       kind: "C";
+>   }
+  if let A(value) = v {
+>value : const value: number
+>v : (parameter) v: V
+    return value;
+>value : const value: number
+  } /* before else */ else /* after else */ if /* nested head */ let B(value) = v {
+>value : const value: number
+>v : (parameter) v: V
+    return value * 2;
+>value : const value: number
+console.log([V.A(2), V.B(3), V.C].map(read).join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>V : const V: {
+>       A: (value: number) => V;
+>       B: (value: number) => V;
+>       C: {
+>           readonly kind: "C";
+>       };
+>   }
+>A : (property) A: (value: number) => V
+>V : const V: {
+>       A: (value: number) => V;
+>       B: (value: number) => V;
+>       C: {
+>           readonly kind: "C";
+>       };
+>   }
+>B : (property) B: (value: number) => V
+>V : const V: {
+>       A: (value: number) => V;
+>       B: (value: number) => V;
+>       C: {
+>           readonly kind: "C";
+>       };
+>   }
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+>map : (method) Array<{ kind: "A"; value: number; } | { kind: "B"; value: number; } | { readonly kind: "C"; }>.map<number>(callbackfn: (value: {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>       value: number;
+>   } | {
+>       readonly kind: "C";
+>   }, index: number, array: ({
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>       value: number;
+>   } | {
+>       readonly kind: "C";
+>   })[]) => number, thisArg?: any): number[]
+>read : function read(v: V): number
+>join : (method) Array<number>.join(separator?: string): string
+

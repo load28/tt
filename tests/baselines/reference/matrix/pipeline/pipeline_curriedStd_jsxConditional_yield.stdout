@@ -1,0 +1,2 @@
+jsxConditional(5) => "<p>15</p>" | flip true; yield 5; map 15
+jsxConditional(0) => "<p></p>" | flip false

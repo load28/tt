@@ -1,0 +1,8 @@
+=== optionalPostfixStepEmitsTheCompleteChain.tt ===
+const a = x |> ?.trim();
+>a : const a: any
+const b = xs |> ?.[key]?.value;
+>b : const b: any
+const c = fn |> ?.(arg).value?.();
+>c : const c: any
+

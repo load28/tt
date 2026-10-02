@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_09.rs::a_capture_never_escapes_a_generated_conditional_region
+declare const flag: boolean;
+declare function id(v: number): number;
+export const short = flag && id(match (flag) { true => 1, _ => 0 });

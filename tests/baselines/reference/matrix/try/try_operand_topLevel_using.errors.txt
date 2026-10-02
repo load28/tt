@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+ --> ./main.tt:6:14
+  |
+6 | const top0 = try read(note("operand", input));
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+ --> ./main.tt:9:14
+  |
+9 | const top1 = try read(note("operand", input));
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+ --> main.tt:6:14
+  |
+6 | const top0 = try read(note("operand", input));
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+ --> main.tt:9:14
+  |
+9 | const top1 = try read(note("operand", input));
+  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+==== tsc on the emitted TypeScript (exit 0) ====

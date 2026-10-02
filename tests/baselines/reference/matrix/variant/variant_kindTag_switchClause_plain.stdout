@@ -1,0 +1,2 @@
+switchClause(4) => [{"kind":"kind","value":4},{"kind":"other"}] | discriminant 1; operand 4
+switchClause(9) => [{"kind":"kind","value":9},{"kind":"other"}] | discriminant 1; operand 9

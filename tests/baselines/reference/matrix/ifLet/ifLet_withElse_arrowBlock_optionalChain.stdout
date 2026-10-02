@@ -1,0 +1,2 @@
+arrowBlock(3) => 3 | read 3; then 3
+arrowBlock(-3) => "missing" | read undefined; else "missing"

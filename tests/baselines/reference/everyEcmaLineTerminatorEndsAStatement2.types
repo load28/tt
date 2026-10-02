@@ -1,0 +1,24 @@
+=== everyEcmaLineTerminatorEndsAStatement2.tt ===
+type K = string;
+>K : type K = string
+declare const o: unknown;
+>o : const o: unknown
+declare const x: object;
+>x : const x: object
+declare const e: Error;
+>e : const e: Error
+>Error : interface Error
+export function f(v: Option<number>): number {
+>f : function f(v: Option<number>): number
+>v : (parameter) v: Option<number>
+>Option : type Option = /*unresolved*/ any
+  const Some(value) = v else {
+>value : const value: Option<number>
+>v : (parameter) v: Option<number>
+    const a = 1
+>a : const a: 1
+    throw e
+>e : const e: Error
+  return value;
+>value : const value: Option<number>
+

@@ -19,14 +19,14 @@
  * a watch or an editor viable — reopening a real project per keystroke is
  * not.
  *
- *   open   { apiModule, cwd, tsconfig (nullable) }
+ *   open   { apiModule, cwd, tsconfig (nullable), outputs: [dir] }
  *       →  { ok: true }
  *
  *   ask    { modules: [{ path, text }],   // lowered .tt → x.tt.ts / x.ttx.tsx
  *            roots: [path],               // requested and open modules
  *            literalChecks: [{ module, start, covered: [...] }],
  *            tagChecks: [{ module, start, covered: [...] }],
- *            symbolChecks: [{ module, start }],
+ *            symbolChecks: [{ module, start, binding }],
  *            resultShapeChecks: [{ module, start, end }],
  *            emitDeclarations: boolean }
  *       →  { diagnostics: [{ file, start, end, code, message, mismatch? }],
@@ -39,6 +39,12 @@
  *
  * An `ask` may also answer `{ error: "..." }`, which fails that request
  * without ending the session. EOF on stdin ends it.
+ *
+ * While it answers a request, the host may ask ttc which listed files are
+ * ttc's own outputs, which no directory listing admits to the program:
+ *
+ *   ←  { ownedOutputs: [path] }
+ *   →  { owned: [path] }
  *
  * `start`/`end` are UTF-16 code-unit offsets — TypeScript's own coordinate
  * space. Mapping them back to `.tt` byte positions is ttc's job (`mapper`),
@@ -57,7 +63,6 @@
 import { createHash } from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -88,6 +93,105 @@ function publishFile(file, text) {
   fs.writeFileSync(staging, text);
   fs.renameSync(staging, file);
 }
+function jsoncTree(text) {
+  let at = 0;
+  const skip = () => {
+    for (;;) {
+      if (/\s|﻿/.test(text[at] ?? "")) at += 1;
+      else if (text.startsWith("//", at)) at = text.indexOf("\n", at) < 0 ? text.length : text.indexOf("\n", at);
+      else if (text.startsWith("/*", at)) {
+        const close = text.indexOf("*/", at + 2);
+        if (close < 0) return false;
+        at = close + 2;
+      } else return true;
+    }
+  };
+  const string = () => {
+    const quote = text[at];
+    const start = at;
+    for (at += 1; at < text.length && text[at] !== quote; at += text[at] === "\\" ? 2 : 1) {}
+    if (at >= text.length) return null;
+    at += 1;
+    const raw = text.slice(start, at);
+    let key;
+    try { key = JSON.parse(quote === '"' ? raw : `"${raw.slice(1, -1).replaceAll('"', '\\"')}"`); } catch { key = raw; }
+    return { kind: "string", start, end: at, key };
+  };
+  const value = () => {
+    if (!skip()) return null;
+    const start = at;
+    const open = text[at];
+    if (open === '"' || open === "'") return string();
+    if (open === "{" || open === "[") {
+      const close = open === "{" ? "}" : "]";
+      const node = open === "{" ? { kind: "object", start, members: [] } : { kind: "array", start, elements: [] };
+      at += 1;
+      let previousComma = null;
+      for (;;) {
+        if (!skip()) return null;
+        if (text[at] === close) { at += 1; node.end = at; return node; }
+        let entry;
+        if (open === "{") {
+          const name = text[at] === '"' || text[at] === "'" ? string() : null;
+          if (!name || !skip() || text[at] !== ":") return null;
+          at += 1;
+          const member = value();
+          if (!member) return null;
+          entry = { key: name.key, start: name.start, end: member.end, value: member, previousComma, comma: null };
+          node.members.push(entry);
+        } else {
+          entry = value();
+          if (!entry) return null;
+          node.elements.push(entry);
+        }
+        if (!skip()) return null;
+        if (text[at] === ",") {
+          entry.comma = at;
+          previousComma = at;
+          at += 1;
+        } else if (text[at] !== close) return null;
+      }
+    }
+    while (at < text.length && !/[\s,:{}[\]"'/]/.test(text[at])) at += 1;
+    return at > start ? { kind: "literal", start, end: at } : null;
+  };
+  if (skip() && at === text.length) return { kind: "empty", start: at, end: at, members: [] };
+  const root = value();
+  return root && skip() && at === text.length ? root : null;
+}
+
+function editedText(text, edits) {
+  const ordered = [...edits].sort((a, b) => a.start - b.start);
+  let served = "";
+  let from = 0;
+  const spans = [];
+  for (const edit of ordered) {
+    served += text.slice(from, edit.start);
+    spans.push({ servedStart: served.length, servedEnd: served.length + edit.text.length, start: edit.start, end: edit.end });
+    served += edit.text;
+    from = edit.end;
+  }
+  return { text: served + text.slice(from), spans };
+}
+
+function originalSpan(spans, start, end) {
+  const inserted = spans.find((span) =>
+    span.start === span.end && span.servedStart <= start && end <= span.servedEnd && span.servedStart < span.servedEnd);
+  if (inserted) return null;
+  const original = (offset, closing) => {
+    let delta = 0;
+    for (const span of spans) {
+      if (offset < span.servedStart || (closing && offset === span.servedStart)) return offset + delta;
+      if (offset < span.servedEnd || (closing && offset === span.servedEnd)) return closing ? span.end : span.start;
+      delta = span.end - span.servedEnd;
+    }
+    return offset + delta;
+  };
+  return { start: original(start, false), end: original(end, true) };
+}
+
+const CANNOT_READ_FILE = 5083;
+const CANNOT_FIND_MODULE = 2307;
 const LOWERED = /\.(?:tt\.ts|ttx\.tsx)$/;
 const TT_SOURCE = /\.ttx?$/;
 const MAPPED_DECLARATION = /\.d\.(ttx?)\.ts$/;
@@ -163,7 +267,6 @@ function lineReader() {
       try {
         n = fs.readSync(0, buf, 0, buf.length, null);
       } catch (e) {
-        if (e.code === "EAGAIN") continue;
         if (e.code === "EOF") n = 0;
         else throw e;
       }
@@ -184,14 +287,33 @@ function diskVersion(file) {
   catch { return null; }
 }
 
-function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links) {
+function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links, outputs, ownedOutputs) {
+  // The packages this host publishes and links into the project are its
+  // own, not project inputs: they are neither dependencies nor listings.
+  const published = (p) => [...links].some(([link, target]) =>
+    [link, target].some((root) => p === root || p.startsWith(root + "/")));
+  // What ttc writes into an output directory is never a project input, as
+  // `tsc` leaves its own outputs out of a default `include`: no glob finds
+  // them, while `files` entries and imports still resolve there. Those are
+  // the declaration sidecars it names after their sources (`x.tt.d.ts`,
+  // `x.ttx.d.ts`, each with its `.map`) and the support package it owns at
+  // the output root's `tt/`. The directory may also hold the sources
+  // themselves (sidecars beside them), which stay inputs.
+  const outputRoot = (d) => {
+    let real = d;
+    try { real = fs.realpathSync(d); } catch {}
+    real = real.replaceAll("\\", "/");
+    const root = outputs.find((dir) => real === dir || real.startsWith(dir + "/"));
+    return root === undefined ? undefined : { root, real };
+  };
+  const writtenByTtc = (name) => /\.ttx?\.d\.ts(\.map)?$/.test(name);
   return {
     // A `.tt` source the engine did not serve does not exist for TypeScript:
     // its text is tt, not the lowered module.
     fileExists: (f) => (files.has(f) ? true : TT_SOURCE.test(f) ? false : undefined),
     // `undefined` falls back to the real disk; `null` would mean "absent".
     readFile: (f) => {
-      if (!files.has(f) && !dependencies.has(f)) dependencies.set(f, diskVersion(f));
+      if (!files.has(f) && !dependencies.has(f) && !published(f)) dependencies.set(f, diskVersion(f));
       if (configFiles.has(f)) return configFiles.get(f);
       if (files.has(f)) return files.get(f);
       return TT_SOURCE.test(f) ? null : undefined;
@@ -204,16 +326,26 @@ function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, list
       return undefined;
     },
     getAccessibleEntries: (d) => {
+      const inOutput = outputRoot(d);
       let real = { files: [], directories: [] };
       try {
         for (const e of fs.readdirSync(d, { withFileTypes: true })) {
-          if (e.isDirectory()) real.directories.push(e.name);
-          else real.files.push(e.name);
+          if (e.isDirectory()) {
+            if (!(inOutput && inOutput.real === inOutput.root && e.name === "tt")) {
+              real.directories.push(e.name);
+            }
+          } else if (!(inOutput && writtenByTtc(e.name))) {
+            real.files.push(e.name);
+          }
         }
       } catch {
         if (!dirs.has(d)) return undefined;
       }
-      listings.set(d, new Set([...real.files, ...real.directories]));
+      if (!published(d)) listings.set(d, new Set([...real.files, ...real.directories]));
+      if (!published(d) && real.files.length > 0) {
+        const owned = ownedOutputs(real.files.map((name) => path.join(d, name)));
+        real.files = real.files.filter((name) => !owned.has(path.join(d, name)));
+      }
       const here = [...files.keys()].filter((f) => path.dirname(f) === d && !aliases.has(f));
       const names = new Set(real.files.map((f) => f));
       for (const f of here) {
@@ -243,17 +375,25 @@ async function main() {
   }
 
   let API;
+  let SymbolFlags;
   let TypeFlags;
+  let NodeBuilderFlags;
   let isExpression;
   let isIdentifier;
   let isVariableDeclaration;
   let isBinaryExpression;
+  let isStatement;
   let SyntaxKind;
   try {
-    ({ API, TypeFlags } = await import(open.apiModule));
-    ({ isExpression, isIdentifier, isVariableDeclaration, isBinaryExpression, SyntaxKind } = await import(
-      path.resolve(path.dirname(open.apiModule), "../../ast/index.js")
-    ));
+    ({ API, SymbolFlags, TypeFlags, NodeBuilderFlags } = await import(open.apiModule));
+    ({
+      isExpression,
+      isIdentifier,
+      isVariableDeclaration,
+      isBinaryExpression,
+      isStatement,
+      SyntaxKind,
+    } = await import(path.resolve(path.dirname(open.apiModule), "../../ast/index.js")));
   } catch (e) {
     fail(2, "ttc host: cannot load the TypeScript API from " + open.apiModule + ": " + e.message);
   }
@@ -264,13 +404,16 @@ async function main() {
   const files = new Map();
   const dirs = new Set();
   const configFiles = new Map();
+  const configSpans = new Map();
   const dependencies = new Map();
   const listings = new Map();
   const links = new Map();
   const aliases = new Set();
+  const outputs = (open.outputs ?? []).map((dir) => path.resolve(dir).replaceAll("\\", "/"));
   const pendingDisk = { created: [], changed: [], deleted: [] };
   let diskGeneration = 0;
   let mapped = false;
+  let carried = false;
   const mapperPackage = path.join(
     path.dirname(fileURLToPath(import.meta.url)),
     `typed-engine-mapper-${createHash("sha256").update(process.execPath).digest("hex").slice(0, 16)}`,
@@ -280,8 +423,14 @@ async function main() {
   const connect = () => new API({
     cwd: open.cwd,
     runExternalCode: mapped,
-    fs: layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links),
+    fs: layeredFileSystem(files, aliases, dirs, configFiles, dependencies, listings, links, outputs, ownedOutputs),
   });
+  function ownedOutputs(paths) {
+    writeLine(JSON.stringify({ ownedOutputs: paths }));
+    const line = readLine();
+    if (line === null) throw new Error("ttc closed the session while the host asked about its outputs");
+    return new Set(JSON.parse(line).owned);
+  }
   let api = connect();
   writeLine(JSON.stringify({ ok: true }));
 
@@ -303,7 +452,6 @@ async function main() {
           answer = configuredMappers();
         } else {
           answer = handle(job);
-          opened = true;
         }
       } catch (e) {
         // The Rust boundary classifies this as an internal compiler error.
@@ -465,6 +613,18 @@ async function main() {
       // as modules; never alter source strings or infer membership from a scan.
       const previous = new Map(configFiles);
       configFiles.clear();
+      configSpans.clear();
+      // A configuration TypeScript cannot read is TS5083, the diagnostic
+      // `tsc` reports for it. No project exists until it can be read again,
+      // and then it is opened afresh.
+      const unreadable = api.readConfigFile(open.tsconfig).error;
+      if (unreadable?.code === CANNOT_READ_FILE) {
+        if (opened) reconnect();
+        out.projectDiagnostics.push({ file: open.tsconfig, code: unreadable.code, message: unreadable.text });
+        out.dependencies = [...dependencies.keys()];
+        out.directories = [...listings.keys()];
+        return engineAnswer(out);
+      }
       const wanted = !foreignMappers(api.parseConfigFile(open.tsconfig));
       if (wanted !== mapped) {
         mapped = wanted;
@@ -476,7 +636,11 @@ async function main() {
         if (!file.endsWith(".json") || !(files.has(file) || fs.existsSync(file))) continue;
         const { config, error } = api.readConfigFile(file);
         if (error || !config || typeof config !== "object") continue;
-        let changed = false;
+        const text = files.has(file) ? files.get(file) : fs.readFileSync(file, "utf8");
+        const tree = jsoncTree(text);
+        if (tree?.kind !== "object" && tree?.kind !== "empty") continue;
+        const member = (key) => tree.members.findLast((entry) => entry.key === key);
+        const edits = [];
         // Unmapped, a pattern naming `.tt` names the lowered `.tt.ts`. Mapped,
         // user patterns already name what TypeScript sees; only a
         // configuration the engine serves names its modules by the engine's
@@ -485,33 +649,51 @@ async function main() {
           ? (files.has(file) ? served : null)
           : (entry) => entry + (entry.endsWith(".ttx") ? ".tsx" : entry.endsWith(".tt") ? ".ts" : "");
         for (const key of rename ? ["files", "include", "exclude"] : []) {
-          if (!Array.isArray(config[key])) continue;
-          config[key] = config[key].map(entry => {
-            if (typeof entry !== "string") return entry;
+          const list = member(key)?.value;
+          if (!Array.isArray(config[key]) || list?.kind !== "array") continue;
+          config[key].forEach((entry, index) => {
+            const element = list.elements[index];
+            if (typeof entry !== "string" || element?.kind !== "string") return;
             const renamed = rename(entry);
-            changed ||= renamed !== entry;
-            return renamed;
+            if (renamed !== entry) edits.push({ start: element.start, end: element.end, text: JSON.stringify(renamed) });
           });
         }
-        if (Array.isArray(config.contentMappers)) {
-          const mappers = config.contentMappers
+        const mappers = member("contentMappers");
+        if (mapped && path.resolve(file) === path.resolve(open.tsconfig)) {
+          const own = JSON.stringify([{ package: MAPPER_PACKAGE, extensions: [".tt", ".ttx"] }]);
+          edits.push(mappers
+            ? { start: mappers.value.start, end: mappers.value.end, text: own }
+            : tree.kind === "empty"
+              ? { start: tree.start, end: tree.start, text: `{"contentMappers":${own}}` }
+              : { start: tree.start + 1, end: tree.start + 1, text: `"contentMappers":${own}${tree.members.length > 0 ? "," : ""}` });
+        } else if (Array.isArray(config.contentMappers) && mappers) {
+          let filtered = false;
+          const kept = config.contentMappers
             .map(entry => {
               if (!entry || typeof entry !== "object" || !Array.isArray(entry.extensions)) return entry;
               const extensions = entry.extensions.filter(extension => extension !== ".tt" && extension !== ".ttx");
               if (extensions.length === entry.extensions.length) return entry;
-              changed = true;
+              filtered = true;
               return extensions.length > 0 ? { ...entry, extensions } : null;
             })
             .filter(entry => entry !== null);
-          if (mappers.length > 0) config.contentMappers = mappers;
-          else delete config.contentMappers;
+          if (filtered && kept.length > 0) {
+            edits.push({ start: mappers.value.start, end: mappers.value.end, text: JSON.stringify(kept) });
+          } else if (filtered) {
+            edits.push(mappers.comma !== null
+              ? { start: mappers.start, end: mappers.comma + 1, text: "" }
+              : { start: mappers.previousComma ?? mappers.start, end: mappers.end, text: "" });
+          }
         }
-        if (mapped && path.resolve(file) === path.resolve(open.tsconfig)) {
-          config.contentMappers = [{ package: MAPPER_PACKAGE, extensions: [".tt", ".ttx"] }];
-          changed = true;
+        if (edits.length > 0) {
+          const edited = editedText(text, edits);
+          configFiles.set(file, edited.text);
+          configSpans.set(file, edited.spans);
         }
-        if (changed) configFiles.set(file, JSON.stringify(config));
       }
+      const carries = mapped && configFiles.has(open.tsconfig);
+      if (opened && carries !== carried) reconnect();
+      carried = carries;
       for (const file of new Set([...previous.keys(), ...configFiles.keys()])) {
         if (previous.get(file) !== configFiles.get(file)) changes.changed.push(file);
       }
@@ -539,6 +721,7 @@ async function main() {
     if (!project) {
       throw new Error("no project for " + (open.tsconfig ?? paths[0] ?? "<nothing>"));
     }
+    opened = true;
 
     // The candidate modules come from a filesystem scan so the layered
     // filesystem can implement tsconfig globs and module resolution. The
@@ -579,74 +762,225 @@ async function main() {
 
     const contextual = ({ project, members }) => {
       const checker = project.checker;
-      for (const [index, slot] of (job.contextualSlots ?? []).entries()) {
-        if (!members.has(slot.module)) continue;
+      // The storage the lowering declared in each module, annotated or not,
+      // and the consts that carry values to detached storage. TypeScript
+      // can name a type after it (a class expression assigned to it is
+      // `typeof $tt_v0`), and an annotation that did would read the
+      // compiler's glue, or itself (TS2502).
+      const storage = new Map();
+      const storageOf = (module, source) => {
+        let symbols = storage.get(module);
+        if (symbols) return symbols;
+        const ends = new Set((job.contextualSlots ?? [])
+          .filter((slot) => slot.module === module)
+          .map((slot) => slot.declarationEnd));
+        symbols = new Set();
+        walkTree(source, (node) => {
+          if (isVariableDeclaration(node) && isIdentifier(node.name) && ends.has(node.name.end)) {
+            const declared = checker.getSymbolAtLocation(node.name);
+            if (declared) symbols.add(declared.id);
+          }
+        });
+        storage.set(module, symbols);
+        return symbols;
+      };
+      // The storage no round has settled yet, and whether a node reads it,
+      // directly or through a declaration whose inferred type is computed
+      // from it: an unannotated variable's initializer, an unannotated
+      // function's body, and for an unannotated parameter the statement
+      // whose context types it. Only the lowered modules declare storage,
+      // so only their declarations are followed.
+      let pending;
+      const pendingStorage = () => {
+        if (pending) return pending;
+        pending = new Set();
+        const ends = new Map();
+        for (const slot of job.contextualSlots ?? []) {
+          if (slot.settled || !members.has(slot.module)) continue;
+          if (!ends.has(slot.module)) ends.set(slot.module, new Set());
+          ends.get(slot.module).add(slot.declarationEnd);
+        }
+        for (const [module, declared] of ends) {
+          const source = project.program.getSourceFile(module);
+          if (!source) continue;
+          walkTree(source, (node) => {
+            if (isVariableDeclaration(node) && isIdentifier(node.name) && declared.has(node.name.end)) {
+              const symbol = checker.getSymbolAtLocation(node.name);
+              if (symbol) pending.add(symbol.id);
+            }
+          });
+        }
+        return pending;
+      };
+      const readsPending = (node, own) => {
+        const followed = new Set([own]);
+        const reads = (node) => {
+          const names = [];
+          walkTree(node, (child) => {
+            if (isIdentifier(child)) names.push(child);
+          });
+          if (!names.length) return false;
+          for (let symbol of checker.getSymbolAtLocation(names)) {
+            if (!symbol) continue;
+            if (symbol.flags & SymbolFlags.Alias) symbol = checker.getAliasedSymbol(symbol);
+            if (followed.has(symbol.id)) continue;
+            followed.add(symbol.id);
+            if (pendingStorage().has(symbol.id)) return true;
+            for (const handle of symbol.declarations ?? []) {
+              if (!members.has(String(handle.path))) continue;
+              let declaration = handle.resolve(project);
+              if (declaration?.kind === SyntaxKind.Parameter && !declaration.type) {
+                while (declaration.parent && !isStatement(declaration)) declaration = declaration.parent;
+              }
+              if (declaration && reads(declaration)) return true;
+            }
+          }
+          return false;
+        };
+        return reads(node);
+      };
+      const writesAny = (node) => walkTree(node, (child) => child.kind === SyntaxKind.AnyKeyword || undefined);
+      const syntaxIndexes = new Map();
+      const syntaxOf = (module, source) => {
+        let syntax = syntaxIndexes.get(module);
+        if (syntax) return syntax;
+        syntax = { declarations: new Map(), identifiers: new Map(), assignments: new Map() };
+        const add = (map, key, node) => {
+          const nodes = map.get(key);
+          if (nodes) nodes.push(node);
+          else map.set(key, [node]);
+        };
+        walkTree(source, (node) => {
+          if (isVariableDeclaration(node) && isIdentifier(node.name)) syntax.declarations.set(node.name.end, node);
+          if (isIdentifier(node)) add(syntax.identifiers, node.text, node);
+          if (isBinaryExpression(node) && node.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(node.left)) {
+            add(syntax.assignments, node.left.text, node);
+          }
+        });
+        syntaxIndexes.set(module, syntax);
+        return syntax;
+      };
+      const entries = [...(job.contextualSlots ?? []).entries()];
+      let operandsSettling = false;
+      for (const [index, slot] of [...entries.filter(([, slot]) => slot.operand), ...entries.filter(([, slot]) => !slot.operand)]) {
+        if (slot.settled || !members.has(slot.module)) continue;
         const source = project.program.getSourceFile(slot.module);
         if (!source) continue;
-        let declaration;
-        const identifiers = [];
-        const assignments = [];
-        const visit = (node) => {
-          if (isVariableDeclaration(node) && isIdentifier(node.name) &&
-              node.name.end === slot.declarationEnd && !node.type) declaration = node;
-          if (isIdentifier(node)) identifiers.push(node);
-          if (isBinaryExpression(node) && node.operatorToken.kind === SyntaxKind.EqualsToken && isIdentifier(node.left)) assignments.push(node);
-          node.forEachChild(visit);
-        };
-        visit(source);
-        if (!declaration) continue;
+        const syntax = syntaxOf(slot.module, source);
+        const declaration = syntax.declarations.get(slot.declarationEnd);
+        if (!declaration || (declaration.type && !slot.asserted)) continue;
+        const identifiers = syntax.identifiers.get(declaration.name.text) ?? [];
+        const assignments = syntax.assignments.get(declaration.name.text) ?? [];
         const symbol = checker.getSymbolAtLocation(declaration.name);
         if (!symbol) continue;
         const declaredType = declaration.initializer ? checker.getTypeAtLocation(declaration.name) : undefined;
+        // The annotation is written at the storage declaration, which may
+        // enclose the scope the type was observed in (a class declared in a
+        // match arm's block is out of scope there) or sit in a scope where
+        // another declaration of the same name shadows the one the type
+        // refers to. An annotation is written only when the node denotes
+        // the type at the declaration: every name it references resolves
+        // there to the symbol the type itself refers to, and none to
+        // storage the lowering declared. It is written without truncation:
+        // a truncated type is not the type (`... 3 more ...` is not even
+        // TypeScript).
+        const generated = storageOf(slot.module, source);
+        const annotation = (type) => {
+          const node = typeNode(checker, type, declaration, NodeBuilderFlags.NoTruncation);
+          return node && denotes(checker, node, type, declaration, generated, { SyntaxKind, SymbolFlags, TypeFlags })
+            ? node : undefined;
+        };
+        const incomingOf = () => assignments.filter(assignment =>
+          assignment.left.text === declaration.name.text &&
+          checker.getSymbolAtLocation(assignment.left)?.id === symbol.id);
+        const joinOf = (types) => types.flatMap((type, index) => types.some((other, otherIndex) =>
+          index !== otherIndex && checker.isTypeAssignableTo(type, other) &&
+          (!checker.isTypeAssignableTo(other, type) || otherIndex < index)) ? [] : [index]);
+        const indefinite = (type) => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType();
+        if (slot.asserted) {
+          if (!job.inferJoinTypes || operandsSettling || !declaration.type || declaration.initializer) continue;
+          const context = checker.getTypeFromTypeNode(declaration.type);
+          const incoming = incomingOf();
+          if (!incoming.length) continue;
+          const types = incoming.flatMap(assignment =>
+            widenedIn(checker, checker.getTypeAtLocation(assignment.right), context, TypeFlags,
+              freshLiterals(checker, assignment.right, SyntaxKind, TypeFlags)));
+          const cleared = { index, inferred: true, annotation: null };
+          if (types.some(indefinite)) { out.contextualSlots.push(cleared); continue; }
+          const annotations = joinOf(types).map(index => annotation(types[index]));
+          if (!annotations.length || !annotations.every(Boolean)) { out.contextualSlots.push(cleared); continue; }
+          if (annotations.some(writesAny) && incoming.some((assignment) => readsPending(assignment.right, symbol.id))) continue;
+          const texts = annotations.map((node) => project.emitter.printNode(node));
+          out.contextualSlots.push({ index, inferred: true, annotation: texts.length === 1
+            ? texts[0] : texts.map(t => `(${t})`).join(" | ") });
+          continue;
+        }
+        if (slot.operand) {
+          if (!job.inferJoinTypes || declaration.initializer) continue;
+          const incoming = incomingOf();
+          if (incoming.length !== 1) continue;
+          const type = checker.getWidenedType(checker.getTypeAtLocation(incoming[0].right));
+          if ((type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType()) continue;
+          const node = annotation(type);
+          if (!node || (writesAny(node) && readsPending(incoming[0].right, symbol.id))) continue;
+          operandsSettling = true;
+          out.contextualSlots.push({ index, inferred: true, annotation: project.emitter.printNode(node) });
+          continue;
+        }
         let expected;
         let ambiguous = false;
+        let provisional = true;
         for (const identifier of identifiers) {
           if (identifier === declaration.name || identifier.text !== declaration.name.text) continue;
           if (checker.getSymbolAtLocation(identifier)?.id !== symbol.id) continue;
           // A use narrowed by control flow cannot supply the declaration's
           // type: doing so would reject the initializer's other constituents.
           if (declaredType && checker.getTypeAtLocation(identifier).id !== declaredType.id) continue;
+          if (impliedByBindingPattern(identifier, SyntaxKind)) continue;
           const context = checker.getContextualType(identifier);
           if (!context || (context.flags & (TypeFlags.Any | TypeFlags.Unknown)) || context.isErrorType()) continue;
           if (expected && expected.id !== context.id) { ambiguous = true; break; }
           expected = context;
+          provisional &&= assertionOperand(identifier, SyntaxKind);
         }
-        if (job.inferJoinTypes && !expected && !ambiguous && !declaration.initializer) {
+        if (job.inferJoinTypes && !operandsSettling && !expected && !ambiguous && !declaration.initializer) {
           // A statement join must have the union of its incoming value types.
           // In particular, TS's evolving-array inference at assignment sites is
           // not expression inference. Ask for each RHS type in its branch scope
           // and serialize it at the declaration; never infer from diagnostic text.
-          const incoming = assignments.filter(assignment =>
-            assignment.left.text === declaration.name.text &&
-            checker.getSymbolAtLocation(assignment.left)?.id === symbol.id);
-          const types = incoming.map(assignment =>
-            checker.getWidenedType(checker.getBaseTypeOfLiteralType(checker.getTypeAtLocation(assignment.right))));
+          const incoming = incomingOf();
+          const types = incoming.flatMap(assignment =>
+            widenedAtMutable(checker, checker.getTypeAtLocation(assignment.right),
+              freshLiterals(checker, assignment.right, SyntaxKind, TypeFlags)));
           if (!types.length || types.some(type => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType())) continue;
           // Remove constituents subsumed by another incoming type. This is the
           // checker's assignability relation, including never[] <: number[].
-          const joined = types.filter((type, index) => !types.some((other, otherIndex) =>
-            index !== otherIndex && checker.isTypeAssignableTo(type, other) &&
-            (!checker.isTypeAssignableTo(other, type) || otherIndex < index)));
-          const annotations = joined.map(type => {
-            const node = checker.typeToTypeNode(type, declaration);
-            return node && project.emitter.printNode(node);
-          });
-          if (annotations.length && annotations.every(Boolean)) {
-            out.contextualSlots.push({ index, annotation: annotations.length === 1
-              ? annotations[0] : annotations.map(t => `(${t})`).join(" | ") });
-          }
+          const joined = joinOf(types);
+          const annotations = joined.map(index => annotation(types[index]));
+          if (!annotations.length || !annotations.every(Boolean)) continue;
+          // An incoming value that reads storage no round has settled yet
+          // is typed by that storage's `any` where it has no type of its
+          // own (without `noImplicitAny`, or where an evolving variable is
+          // read in a closure), and a join computed from it would keep that
+          // `any` after the storage is settled. Such a join waits for a
+          // later round, when its inputs are typed by their settled
+          // storage.
+          if (annotations.some(writesAny) && incoming.some((assignment) => readsPending(assignment.right, symbol.id))) continue;
+          const texts = annotations.map((node) => project.emitter.printNode(node));
+          out.contextualSlots.push({ index, inferred: true, annotation: texts.length === 1
+            ? texts[0] : texts.map(t => `(${t})`).join(" | ") });
           continue;
         }
         if (!expected || ambiguous) continue;
-        const node = checker.typeToTypeNode(expected, declaration);
-        if (node) out.contextualSlots.push({ index, annotation: project.emitter.printNode(node) });
+        const node = annotation(expected);
+        if (node) out.contextualSlots.push({ index, inferred: false, provisional, annotation: project.emitter.printNode(node) });
       }
     };
     for (const group of groups) contextual(group);
-    if (job.contextualOnly) { out.dependencies = [...dependencies.keys(), ...listings.keys()]; return engineAnswer(out); }
+    if (job.contextualOnly) { out.dependencies = [...dependencies.keys()]; out.directories = [...listings.keys()]; return engineAnswer(out); }
     const reported = new Set();
     const unique = (diagnostics) => diagnostics.filter((d) => {
-      const key = JSON.stringify([d.fileName ?? null, d.pos, d.end, d.code, d.text]);
+      const key = JSON.stringify([d.fileName ?? null, d.pos, d.end, d.code, messageText(d)]);
       if (reported.has(key)) return false;
       reported.add(key);
       return true;
@@ -660,40 +994,75 @@ async function main() {
       const checker = project.checker;
       const program = project.program;
       const scope = whole ? undefined : [...members];
-      const structural = unique([
-        ...(whole
-          ? [
-            ...program.getConfigFileParsingDiagnostics(),
-            ...program.getProgramDiagnostics(),
-            ...program.getGlobalDiagnostics(),
-          ]
-          : []),
-        ...program.getSyntacticDiagnostics(scope),
-      ]);
-      const semantic = unique(program.getSemanticDiagnostics(scope));
-      const late = whole ? unique(program.getGlobalDiagnostics()) : [];
-      for (const d of [...structural, ...late]) {
-        if (!d.fileName || configFiles.has(d.fileName) || d.pos < 0) {
-          if (open.tsconfig && whole) out.projectDiagnostics.push({ file: d.fileName ?? null, code: d.code, message: d.text });
+      const placed = (d) => !d.fileName || d.pos < 0
+        ? null
+        : configSpans.has(d.fileName)
+          ? originalSpan(configSpans.get(d.fileName), d.pos, d.end)
+          : { start: d.pos, end: d.end };
+      const reportable = (d) => (open.tsconfig && whole) || placed(d) !== null;
+      const compilerOptions = program.getCompilerOptions();
+      const listFilesOnly = compilerOptions.listFilesOnly === true;
+      const unparsed = new Set((job.unparsedDocuments ?? []).flatMap((module) => [module, served(module)]));
+      const configuration = whole ? program.getConfigFileParsingDiagnostics() : [];
+      const syntactic = program.getSyntacticDiagnostics(scope);
+      const unparsable = (job.syntaxBlocked ?? []).some((module) => whole
+        ? program.getSourceFile(served(module)) !== undefined
+        : members.has(module) || members.has(served(module)));
+      let stopped = unparsable || syntactic.some((d) => reportable(d) && !unparsed.has(d.fileName));
+      const options = !stopped && whole ? program.getProgramDiagnostics() : [];
+      stopped ||= options.some(reportable);
+      const checked = !stopped && !listFilesOnly;
+      const semanticStage = checked ? program.getSemanticDiagnostics(scope) : [];
+      const lateStage = checked && whole ? program.getGlobalDiagnostics() : [];
+      const ttSources = new Set((job.modules ?? []).map((module) => loweredSource(module.path)));
+      const specifiers = [...(checked ? members : [])].flatMap((member) => {
+        const sourceFile = program.getSourceFile(member);
+        return sourceFile
+          ? loweredModuleSpecifiers(sourceFile, ttSources, SyntaxKind).map((literal) => ({ sourceFile, literal }))
+          : [];
+      });
+      const quiet = !stopped && specifiers.length === 0 && ![...semanticStage, ...lateStage].some(reportable);
+      const declares = compilerOptions.declaration === true || compilerOptions.composite === true;
+      const deferred = compilerOptions.noEmit === true || compilerOptions.noEmitOnError === true;
+      const declarationStage = !listFilesOnly && declares && (quiet || !deferred)
+        ? program.getDeclarationDiagnostics(scope)
+        : [];
+      const semantic = unique([...semanticStage, ...declarationStage]);
+      const late = unique(lateStage);
+      for (const d of [...unique([...configuration, ...syntactic, ...options]), ...late]) {
+        const span = placed(d);
+        if (!span) {
+          if (open.tsconfig && whole) out.projectDiagnostics.push({ file: d.fileName ?? null, code: d.code, message: messageText(d) });
           continue;
         }
-        out.diagnostics.push({ file: d.fileName, start: d.pos, end: d.end, code: d.code, message: d.text });
+        out.diagnostics.push({ file: d.fileName, start: span.start, end: span.end, code: d.code, message: messageText(d) });
       }
       for (const d of semantic) {
         if (!d.fileName) {
-          if (open.tsconfig && whole) out.projectDiagnostics.push({ file: null, code: d.code, message: d.text });
+          if (open.tsconfig && whole) out.projectDiagnostics.push({ file: null, code: d.code, message: messageText(d) });
           continue;
         }
-        const mismatch = contextualMismatch(project, checker, d, isExpression);
+        const mismatch = contextualMismatch(project, checker, d, isExpression, SyntaxKind, TypeFlags);
+        const receiver = lookupReceiver(project, d, SyntaxKind);
         const related = relatedPlaces(d);
         out.diagnostics.push({
           file: d.fileName,
           start: d.pos,
           end: d.end,
           code: d.code,
-          message: d.text,
+          message: messageText(d),
           ...(mismatch ? { mismatch } : {}),
+          ...(receiver ? { receiver } : {}),
           ...(related.length > 0 ? { related } : {}),
+        });
+      }
+      for (const { sourceFile, literal } of specifiers) {
+        out.diagnostics.push({
+          file: sourceFile.fileName,
+          start: literal.getStart(sourceFile),
+          end: literal.end,
+          code: CANNOT_FIND_MODULE,
+          message: `Cannot find module '${literal.text}' or its corresponding type declarations.`,
         });
       }
       /**
@@ -841,7 +1210,9 @@ async function main() {
           () => positions.map((p) => checker.getSymbolAtPosition(module, p)),
         ));
       symbolChecks.forEach((entry, at) => {
-        const symbol = symbols[at];
+        const symbol = entry.check.binding
+          ? declaredBinding(checker, symbols[at], entry.check, { SyntaxKind, SymbolFlags })
+          : symbols[at];
         if (!symbol) return; // `any`, unresolved — never a verdict
         const declarations = symbol.declarations ?? [];
         out.symbols.push({
@@ -874,17 +1245,364 @@ async function main() {
         out.declarations.push({ path, text: file.text });
       }
     }
-    out.dependencies = [...dependencies.keys(), ...listings.keys()];
+    out.dependencies = [...dependencies.keys()];
+    out.directories = [...listings.keys()];
     return engineAnswer(out);
   }
 }
 
 /**
- * Finds the expression TypeScript compared with a contextual type for a
- * diagnostic. This is syntax-neutral: return values, annotated initializers,
- * call arguments and future lowered constructs all participate through the
- * checker’s contextual typing relation.
+ * The type node TypeScript's node builder writes for `type` at `location`,
+ * or `undefined` when it cannot write one: the node builder gives up on a
+ * type it cannot name there (the instance or constructor type of an
+ * anonymous class), which is `typeToTypeNode`'s documented `undefined`.
+ *
+ * The server sends that answer as an encoded `null`, while this client
+ * treats only an empty payload as no node and hands the four bytes to its
+ * node decoder, which throws. The same session still answers a second
+ * question about the same type, which tells that answer apart from a
+ * session that stopped answering; a session failure propagates.
  */
+function impliedByBindingPattern(node, SyntaxKind) {
+  for (let current = node; ;) {
+    const parent = current.parent;
+    if (!parent) return false;
+    switch (parent.kind) {
+      case SyntaxKind.ParenthesizedExpression:
+      case SyntaxKind.ArrayLiteralExpression:
+      case SyntaxKind.ObjectLiteralExpression:
+        break;
+      case SyntaxKind.PropertyAssignment:
+        if (parent.initializer !== current) return false;
+        break;
+      case SyntaxKind.ConditionalExpression:
+        if (parent.condition === current) return false;
+        break;
+      case SyntaxKind.BinaryExpression: {
+        const operator = parent.operatorToken.kind;
+        if (operator !== SyntaxKind.BarBarToken && operator !== SyntaxKind.QuestionQuestionToken &&
+            !((operator === SyntaxKind.AmpersandAmpersandToken || operator === SyntaxKind.CommaToken) &&
+              parent.right === current)) return false;
+        break;
+      }
+      case SyntaxKind.VariableDeclaration:
+        return parent.initializer === current && !parent.type &&
+          (parent.name.kind === SyntaxKind.ObjectBindingPattern ||
+            parent.name.kind === SyntaxKind.ArrayBindingPattern);
+      default:
+        return false;
+    }
+    current = parent;
+  }
+}
+
+function assertionOperand(node, SyntaxKind) {
+  let operand = node;
+  while (operand.parent && (operand.parent.kind === SyntaxKind.ParenthesizedExpression ||
+      operand.parent.kind === SyntaxKind.NonNullExpression)) operand = operand.parent;
+  const parent = operand.parent;
+  if (!parent || parent.expression !== operand) return false;
+  if (parent.kind === SyntaxKind.SatisfiesExpression) return true;
+  if (parent.kind !== SyntaxKind.AsExpression && parent.kind !== SyntaxKind.TypeAssertionExpression) return false;
+  const type = parent.type;
+  return !(type.kind === SyntaxKind.TypeReference && type.typeName.kind === SyntaxKind.Identifier &&
+    type.typeName.text === "const" && !type.typeArguments);
+}
+
+function widenedIn(checker, type, context, TypeFlags, fresh) {
+  const kinds = (candidate, flags) => !!(candidate.flags & flags) ||
+    ((candidate.isUnionType() || candidate.isIntersectionType()) && candidate.getTypes().some((t) => kinds(t, flags)));
+  const literalOf = (candidate, target) => {
+    if (target.isUnionType() || target.isIntersectionType()) return target.getTypes().some((t) => literalOf(candidate, t));
+    if (target.flags & TypeFlags.InstantiableNonPrimitive) {
+      const constraint = checker.getBaseConstraintOfType(target);
+      if (!constraint) return false;
+      return kinds(constraint, TypeFlags.String) && kinds(candidate, TypeFlags.StringLiteral) ||
+        kinds(constraint, TypeFlags.Number) && kinds(candidate, TypeFlags.NumberLiteral) ||
+        kinds(constraint, TypeFlags.BigInt) && kinds(candidate, TypeFlags.BigIntLiteral) ||
+        kinds(constraint, TypeFlags.ESSymbol) && kinds(candidate, TypeFlags.UniqueESSymbol) ||
+        literalOf(candidate, constraint);
+    }
+    return !!(target.flags & (TypeFlags.StringLiteral | TypeFlags.Index | TypeFlags.TemplateLiteral | TypeFlags.StringMapping)) && kinds(candidate, TypeFlags.StringLiteral) ||
+      !!(target.flags & TypeFlags.NumberLiteral) && kinds(candidate, TypeFlags.NumberLiteral) ||
+      !!(target.flags & TypeFlags.BigIntLiteral) && kinds(candidate, TypeFlags.BigIntLiteral) ||
+      !!(target.flags & TypeFlags.BooleanLiteral) && kinds(candidate, TypeFlags.BooleanLiteral) ||
+      !!(target.flags & TypeFlags.UniqueESSymbol) && kinds(candidate, TypeFlags.UniqueESSymbol);
+  };
+  return literalOf(type, context) ? [checker.getWidenedType(type)] : widenedAtMutable(checker, type, fresh);
+}
+
+function freshLiterals(checker, node, SyntaxKind, TypeFlags) {
+  const literal = TypeFlags.StringLiteral | TypeFlags.NumberLiteral | TypeFlags.BigIntLiteral |
+    TypeFlags.BooleanLiteral | TypeFlags.EnumLiteral;
+  const fresh = new Set();
+  const addFresh = (type) => {
+    if (!type) return;
+    if (type.isUnionType()) { for (const constituent of type.getTypes()) addFresh(constituent); return; }
+    const regular = (type.flags & literal) ? type.getRegularType() : undefined;
+    if (regular && regular.id !== type.id) fresh.add(regular.id);
+  };
+  const addRegular = (type) => {
+    if (!type) return;
+    if (type.isUnionType()) { for (const constituent of type.getTypes()) addRegular(constituent); return; }
+    if (type.flags & literal) fresh.add(type.id);
+  };
+  const pending = [node];
+  while (pending.length > 0) {
+    const expression = pending.pop();
+    switch (expression.kind) {
+      case SyntaxKind.StringLiteral:
+      case SyntaxKind.NoSubstitutionTemplateLiteral:
+      case SyntaxKind.NumericLiteral:
+      case SyntaxKind.BigIntLiteral:
+      case SyntaxKind.TrueKeyword:
+      case SyntaxKind.FalseKeyword:
+        addRegular(checker.getTypeAtLocation(expression));
+        continue;
+      case SyntaxKind.PrefixUnaryExpression:
+        if ((expression.operator === SyntaxKind.MinusToken || expression.operator === SyntaxKind.PlusToken) &&
+            (expression.operand.kind === SyntaxKind.NumericLiteral || expression.operand.kind === SyntaxKind.BigIntLiteral)) {
+          addRegular(checker.getTypeAtLocation(expression));
+        }
+        continue;
+      case SyntaxKind.ParenthesizedExpression:
+      case SyntaxKind.SatisfiesExpression:
+      case SyntaxKind.NonNullExpression:
+        pending.push(expression.expression);
+        continue;
+      case SyntaxKind.ConditionalExpression:
+        pending.push(expression.whenFalse, expression.whenTrue);
+        continue;
+      case SyntaxKind.BinaryExpression: {
+        const operator = expression.operatorToken.kind;
+        if (operator === SyntaxKind.CommaToken) pending.push(expression.right);
+        if (operator === SyntaxKind.AmpersandAmpersandToken || operator === SyntaxKind.BarBarToken ||
+            operator === SyntaxKind.QuestionQuestionToken) {
+          pending.push(expression.right, expression.left);
+        }
+        continue;
+      }
+      case SyntaxKind.Identifier:
+      case SyntaxKind.PropertyAccessExpression: {
+        const name = expression.kind === SyntaxKind.Identifier ? expression : expression.name;
+        const symbol = checker.getSymbolAtLocation(name);
+        if (symbol) addFresh(checker.getTypeOfSymbolAtLocation(symbol, name));
+        continue;
+      }
+      case SyntaxKind.CallExpression:
+      case SyntaxKind.NewExpression:
+      case SyntaxKind.TaggedTemplateExpression: {
+        const signature = checker.getResolvedSignature(expression);
+        if (signature) addFresh(checker.getReturnTypeOfSignature(signature));
+        continue;
+      }
+      default:
+    }
+  }
+  return fresh;
+}
+
+function widenedAtMutable(checker, type, fresh) {
+  const holdsFresh = (candidate) => candidate.isUnionType()
+    ? candidate.getTypes().some(holdsFresh) : fresh.has(candidate.id);
+  if (type.isUnionType() && holdsFresh(type)) {
+    return type.getTypes().flatMap((constituent) => widenedAtMutable(checker, constituent, fresh));
+  }
+  return [checker.getWidenedType(fresh.has(type.id) ? checker.getBaseTypeOfLiteralType(type) : type)];
+}
+
+function typeNode(checker, type, location, flags) {
+  try {
+    return checker.typeToTypeNode(type, location, flags);
+  } catch (error) {
+    checker.typeToString(type, location);
+    return undefined;
+  }
+}
+
+/**
+ * Whether the node the node builder wrote for `type` denotes that type at
+ * `location`. The node builder writes a symbol by its name whether or not
+ * the name reaches that symbol from `location`: a type parameter or a local
+ * interface shadowing another of the same name prints as the same `T` or
+ * `Item`. So the node and the type are walked together, and each name the
+ * node uses must resolve at `location` to the symbol of the part of the
+ * type it was written for: the type parameter's own symbol, the alias or
+ * declaration a type reference instantiates, the value a type query names.
+ * A name that resolves to a symbol in `excluded` (generated storage) denotes
+ * nothing. An `any` keyword must be written for the `any` type: the node
+ * builder writes the cycle of a recursive anonymous type as `any` too. A part of the node that uses a name and cannot be paired with a
+ * part of the type is not proven to denote it, so the node does not either.
+ */
+function denotes(checker, node, type, location, excluded, { SyntaxKind, SymbolFlags, TypeFlags }) {
+  const K = SyntaxKind;
+  const named = (n) => walkTree(n, (child) =>
+    child.kind === K.TypeReference || child.kind === K.TypeQuery || child.kind === K.ImportType ||
+    child.kind === K.ComputedPropertyName || child.kind === K.AnyKeyword || undefined);
+  const aliased = (symbol) => (symbol.flags & SymbolFlags.Alias ? checker.getAliasedSymbol(symbol) : symbol);
+  const entity = (name, meaning) => {
+    const members = [];
+    while (name.kind === K.QualifiedName) {
+      members.unshift(name.right.text);
+      name = name.left;
+    }
+    let symbol = checker.resolveName(name.text, members.length ? SymbolFlags.Namespace | SymbolFlags.Value : meaning, location);
+    if (!symbol || excluded.has(symbol.id)) return undefined;
+    for (const member of members) {
+      symbol = aliased(symbol).getExports().get(member.startsWith("__") ? "_" + member : member);
+      if (!symbol) return undefined;
+    }
+    return aliased(symbol);
+  };
+  const referenceArguments = (t) => {
+    if (!t.isTypeReference()) return [];
+    const outer = t.getTarget().getOuterTypeParameters()?.length ?? 0;
+    return checker.getTypeArguments(t).slice(outer);
+  };
+  const constituents = (t) => (t.isUnionType() || t.isIntersectionType() ? t.getTypes() : [t]);
+  const pairs = (nodes, types, scope) =>
+    !nodes || nodes.every((n, i) => i < types.length && walk(n, types[i], scope));
+  const optional = (n, t, question, scope) =>
+    walk(n, t, scope) || (!!question && walk(n, t.getNonNullableType(), scope));
+  const key = (name) =>
+    name.kind === K.Identifier || name.kind === K.PrivateIdentifier || name.kind === K.StringLiteral ||
+    name.kind === K.NumericLiteral ? name.text : undefined;
+  const signature = (n, sig, scope) => {
+    if (!sig) return false;
+    const parameters = sig.getTypeParameters() ?? [];
+    const declared = n.typeParameters ?? [];
+    if (n.typeParameters && declared.length !== parameters.length) return false;
+    if (declared.length) {
+      scope = new Map(scope);
+      declared.forEach((p, i) => scope.set(p.name.text, parameters[i]));
+      for (const [i, p] of declared.entries()) {
+        if (p.constraint && !walk(p.constraint, checker.getConstraintOfTypeParameter(parameters[i]), scope)) return false;
+        if (p.default && !walk(p.default, checker.getDefaultFromTypeParameter(parameters[i]), scope)) return false;
+      }
+    }
+    let written = [...n.parameters];
+    if (written[0]?.name.kind === K.Identifier && written[0].name.text === "this") {
+      const self = sig.getThisParameter();
+      if (written[0].type && (!self || !walk(written[0].type, checker.getTypeOfSymbol(self), scope))) return false;
+      written = written.slice(1);
+    }
+    const symbols = sig.getParameters();
+    for (const [i, p] of written.entries()) {
+      if (!p.type || !named(p.type)) continue;
+      if (i >= symbols.length || !optional(p.type, checker.getTypeOfSymbol(symbols[i]), p.questionToken, scope)) return false;
+    }
+    if (!n.type || !named(n.type)) return true;
+    if (n.type.kind === K.TypePredicate) {
+      const predicate = checker.getTypePredicateOfSignature(sig);
+      return !n.type.type || (!!predicate?.type && walk(n.type.type, predicate.type, scope));
+    }
+    return walk(n.type, sig.getReturnType(), scope);
+  };
+  const walk = (n, t, scope) => {
+    if (!named(n)) return true;
+    if (!t) return false;
+    switch (n.kind) {
+      case K.AnyKeyword:
+        return !!(t.flags & TypeFlags.Any);
+      case K.ParenthesizedType:
+        return walk(n.type, t, scope);
+      case K.TypeReference: {
+        const local = n.typeName.kind === K.Identifier ? scope.get(n.typeName.text) : undefined;
+        if (local) return t.id === local.id && !n.typeArguments;
+        const symbol = entity(n.typeName, SymbolFlags.Type);
+        if (!symbol) return false;
+        const alias = t.getAliasSymbol();
+        if (alias && alias.id === symbol.id) return pairs(n.typeArguments, t.getAliasTypeArguments(), scope);
+        const own = t.getSymbol();
+        return !!own && own.id === symbol.id && pairs(n.typeArguments, referenceArguments(t), scope);
+      }
+      case K.TypeQuery: {
+        const symbol = entity(n.exprName, SymbolFlags.Value);
+        const own = t.getSymbol();
+        return !!symbol && !!own && own.id === symbol.id && !n.typeArguments;
+      }
+      case K.ImportType: {
+        if (!n.qualifier) return !n.typeArguments;
+        const name = n.qualifier.kind === K.QualifiedName ? n.qualifier.right.text : n.qualifier.text;
+        const alias = t.getAliasSymbol();
+        if (alias?.name === name) return pairs(n.typeArguments, t.getAliasTypeArguments(), scope);
+        return t.getSymbol()?.name === name && pairs(n.typeArguments, referenceArguments(t), scope);
+      }
+      case K.UnionType:
+      case K.IntersectionType:
+        return n.types.every((child) => !named(child) || constituents(t).some((c) => walk(child, c, scope)));
+      case K.ArrayType:
+        return walk(n.elementType, referenceArguments(t)[0], scope);
+      case K.TupleType: {
+        const elements = referenceArguments(t);
+        return n.elements.every((element, i) => {
+          let written = element;
+          if (written.kind === K.NamedTupleMember) written = written.type;
+          if (written.kind === K.OptionalType) written = written.type;
+          const rest = written.kind === K.RestType || element.dotDotDotToken;
+          if (written.kind === K.RestType) written = written.type;
+          if (rest && written.kind === K.ArrayType) written = written.elementType;
+          return walk(written, elements[i], scope);
+        });
+      }
+      case K.TypeOperator:
+        return n.operator === K.ReadonlyKeyword && walk(n.type, t, scope);
+      case K.IndexedAccessType:
+        return t.isIndexedAccessType() && walk(n.objectType, t.getObjectType(), scope) &&
+          walk(n.indexType, t.getIndexType(), scope);
+      case K.FunctionType:
+        return t.getCallSignatures().length === 1 && signature(n, t.getCallSignatures()[0], scope);
+      case K.ConstructorType:
+        return t.getConstructSignatures().length === 1 && signature(n, t.getConstructSignatures()[0], scope);
+      case K.TypeLiteral: {
+        const calls = t.getCallSignatures();
+        const constructs = t.getConstructSignatures();
+        const indexes = checker.getIndexInfosOfType(t);
+        const seen = { call: 0, construct: 0, index: 0, methods: new Map() };
+        return n.members.every((member) => {
+          switch (member.kind) {
+            case K.CallSignature:
+              return !named(member) || signature(member, calls[seen.call++], scope);
+            case K.ConstructSignature:
+              return !named(member) || signature(member, constructs[seen.construct++], scope);
+            case K.IndexSignature: {
+              const info = indexes[seen.index++];
+              return !named(member) || (!!info && walk(member.parameters[0].type, info.keyType, scope) &&
+                walk(member.type, info.valueType, scope));
+            }
+            default: {
+              if (!named(member)) return true;
+              const name = key(member.name);
+              const property = name === undefined ? undefined : checker.getPropertyOfType(t, name);
+              if (!property) return false;
+              const declared = checker.getTypeOfSymbol(property);
+              if (member.kind === K.MethodSignature) {
+                const index = seen.methods.get(name) ?? 0;
+                seen.methods.set(name, index + 1);
+                return signature(member, declared.getCallSignatures()[index], scope);
+              }
+              if (member.kind === K.PropertySignature || member.kind === K.GetAccessor) {
+                return optional(member.type, declared, member.questionToken, scope);
+              }
+              if (member.kind === K.SetAccessor) return walk(member.parameters[0].type, declared, scope);
+              return false;
+            }
+          }
+        });
+      }
+      default:
+        return false;
+    }
+  };
+  return walk(node, type, new Map());
+}
+
+function messageText(diagnostic, level = 0) {
+  let text = (level > 0 ? "\n" + "  ".repeat(level) : "") + diagnostic.text;
+  for (const child of diagnostic.messageChain ?? []) text += messageText(child, level + 1);
+  return text;
+}
+
 /**
  * The checker's own related places — "the expected type comes from this
  * declaration", "first declared here" — normalized to the diagnostic item
@@ -908,78 +1626,202 @@ function relatedPlaces(diagnostic) {
   return out;
 }
 
-function contextualMismatch(project, checker, diagnostic, isExpression) {
+/**
+ * TypeScript's diagnostics that report a source type not assignable to a
+ * target type: the head messages of its assignability relation
+ * (`Type '{0}' is not assignable to type '{1}'`, the argument, missing
+ * property, weak type, `exactOptionalPropertyTypes` and `satisfies` forms).
+ * Any other diagnostic, an arity error at an argument included, is not a
+ * statement about an expression's type and its context.
+ */
+const ASSIGNABILITY_CODES = new Set([
+  1360, 2322, 2345, 2375, 2379, 2412, 2418, 2559, 2560, 2719, 2739, 2740, 2741, 2820,
+]);
+
+/**
+ * The expression an assignability diagnostic is about, with its type and
+ * its contextual type. TypeScript reports the relation of an expression's
+ * type to its contextual type at an error node that is either that
+ * expression or stands for it: the name of the declaration, property or JSX
+ * attribute it initializes, the `return` statement it is returned by, the
+ * target it is assigned to, or the tag name of the JSX element its
+ * attributes are passed to. The subject is found from the error node by
+ * that role, never by searching the span for some expression that does not
+ * fit its context. A JSX attribute is typed by its name, which TypeScript
+ * gives the attribute's type and the attribute's contextual type.
+ */
+function contextualMismatch(project, checker, diagnostic, isExpression, SyntaxKind, TypeFlags) {
+  if (!ASSIGNABILITY_CODES.has(diagnostic.code)) return null;
   const sourceFile = project.program.getSourceFile(diagnostic.fileName);
   if (!sourceFile) return null;
+  const K = SyntaxKind;
 
-  const chain = [];
-  const visit = (node) => {
-    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return;
-    chain.push(node);
-    node.forEachChild(visit);
+  const starting = [];
+  walkTree(sourceFile, (node) => {
+    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return false;
+    if (node.getStart(sourceFile) === diagnostic.pos) starting.push(node);
+  });
+
+  const same = (left, right) => !!left && !!right && left.kind === right.kind && left.pos === right.pos && left.end === right.end;
+  const valueOf = (node) => {
+    const parent = node.parent;
+    if (node.kind === K.ReturnStatement) return node.expression;
+    if (!parent) return undefined;
+    if (parent.kind === K.JsxAttribute && same(parent.name, node)) return node;
+    if (same(parent.name, node) && parent.initializer) {
+      return parent.initializer;
+    }
+    if ((parent.kind === K.JsxOpeningElement || parent.kind === K.JsxSelfClosingElement) && same(parent.tagName, node)) {
+      return parent.attributes;
+    }
+    if (parent.kind === K.BinaryExpression && same(parent.left, node) && parent.operatorToken.kind === K.EqualsToken) {
+      return parent.right;
+    }
+    return undefined;
   };
-  visit(sourceFile);
+  let expression;
+  for (let i = starting.length - 1; i >= 0 && !expression; i--) {
+    const node = starting[i];
+    expression = valueOf(node) ?? (isExpression(node) && node.end === diagnostic.end ? node : undefined);
+  }
+  if (!expression) return null;
 
-  for (let i = chain.length - 1; i >= 0; i--) {
-    const node = chain[i];
-    const candidates = [];
-    if (isExpression(node)) candidates.push(node);
-    node.forEachChild((child) => {
-      if (isExpression(child)) candidates.push(child);
-    });
-    candidates.sort((left, right) => right.getWidth(sourceFile) - left.getWidth(sourceFile));
-    for (const expression of candidates) {
-      let found;
-      let expected;
-      try {
-        found = checker.getTypeAtLocation(expression);
-        expected = checker.getContextualType(expression);
-      } catch {
-        continue;
-      }
-      if (!found || !expected || found.isErrorType?.() || expected.isErrorType?.()) continue;
-      if (checker.isTypeAssignableTo(found, expected)) continue;
-      let declaration;
-      try {
-        const symbol = checker.getSymbolAtPosition(
-          sourceFile.fileName,
-          expression.getStart(sourceFile),
-        );
-        const handle = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
-        const node = handle?.resolve?.(project);
-        const file = node?.getSourceFile?.();
-        if (node && file && handle) {
-          declaration = {
-            file: file.fileName,
-            start: node.getStart(file),
-            end: node.getEnd(),
-          };
-        }
-      } catch {
-        declaration = undefined;
-      }
-      return {
-        start: expression.getStart(sourceFile),
-        end: expression.getEnd(),
-        expected: checker.typeToString(expected),
-        found: checker.typeToString(found),
-        differences: incompatibleLeaves(checker, found, expected),
-        ...(declaration ? { declaration } : {}),
+  let found;
+  let expected;
+  try {
+    found = checker.getTypeAtLocation(expression);
+    expected = checker.getContextualType(expression);
+  } catch {
+    return null;
+  }
+  if (!found || !expected || found.isErrorType?.() || expected.isErrorType?.()) return null;
+  if (checker.isTypeAssignableTo(found, expected)) return null;
+  let declaration;
+  try {
+    const symbol = checker.getSymbolAtPosition(
+      sourceFile.fileName,
+      expression.getStart(sourceFile),
+    );
+    const handle = symbol?.valueDeclaration ?? symbol?.declarations?.[0];
+    const node = handle?.resolve?.(project);
+    const file = node?.getSourceFile?.();
+    if (node && file && handle) {
+      declaration = {
+        file: file.fileName,
+        start: node.getStart(file),
+        end: node.getEnd(),
       };
     }
+  } catch {
+    declaration = undefined;
   }
-  return null;
+  return {
+    start: expression.getStart(sourceFile),
+    end: expression.getEnd(),
+    expected: checker.typeToString(expected),
+    found: checker.typeToString(found),
+    differences: incompatibleLeaves(checker, found, expected, TypeFlags),
+    ...(declaration ? { declaration } : {}),
+  };
+}
+
+/**
+ * TypeScript's diagnostics that say a property does not exist on a type,
+ * reported at the property's name.
+ */
+const MISSING_PROPERTY_CODES = new Set([2339, 2551]);
+
+/**
+ * The value a missing property was looked up on: the object of the
+ * property access whose name the diagnostic is at, or the value an object
+ * binding pattern destructures when the name is one of its elements.
+ */
+function lookupReceiver(project, diagnostic, SyntaxKind) {
+  if (!MISSING_PROPERTY_CODES.has(diagnostic.code)) return null;
+  const sourceFile = project.program.getSourceFile(diagnostic.fileName);
+  if (!sourceFile) return null;
+  const K = SyntaxKind;
+  let name;
+  walkTree(sourceFile, (node) => {
+    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return false;
+    if (node.getStart(sourceFile) === diagnostic.pos && node.end === diagnostic.end) name = node;
+  });
+  const parent = name?.parent;
+  let receiver;
+  if ((parent?.kind === K.PropertyAccessExpression && parent.name === name) ||
+      (parent?.kind === K.ElementAccessExpression && parent.argumentExpression === name)) {
+    receiver = parent.expression;
+  } else if (parent?.kind === K.BindingElement && (parent.propertyName ?? parent.name) === name &&
+      parent.parent?.kind === K.ObjectBindingPattern) {
+    receiver = parent.parent.parent?.initializer;
+  }
+  return receiver ? { start: receiver.getStart(sourceFile), end: receiver.getEnd() } : null;
 }
 
 /** The innermost expression whose source range contains the emitted value. */
 function smallestExpressionCovering(sourceFile, start, end, isExpression) {
   let found = null;
-  const visit = (node) => {
-    if (node.getStart(sourceFile) > start || node.end < end) return;
+  walkTree(sourceFile, (node) => {
+    if (node.getStart(sourceFile) > start || node.end < end) return false;
     if (isExpression(node)) found = node;
-    node.forEachChild(visit);
+  });
+  return found;
+}
+
+function walkTree(root, enter) {
+  const pending = [root];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    const entered = enter(node);
+    if (entered === true) return true;
+    if (entered === false) continue;
+    const children = [];
+    node.forEachChild((child) => {
+      children.push(child);
+    });
+    for (let index = children.length - 1; index >= 0; index--) pending.push(children[index]);
+  }
+  return false;
+}
+
+/** The `.tt`/`.ttx` source a lowered module's engine name stands for. */
+function loweredSource(file) {
+  return LOWERED.test(file) ? file.slice(0, file.lastIndexOf(".")) : file;
+}
+
+/**
+ * The relative module specifiers of `sourceFile` that reach a served tt
+ * module only through the name ttc serves it under.
+ *
+ * A tt module `x.tt` is served as `x.tt.ts` (`x.ttx` as `x.ttx.tsx`), and
+ * TypeScript's resolution of a relative specifier appends or substitutes a
+ * TypeScript extension (`./x.tt` → `x.tt.ts`; `./x.tt.js` → `x.tt.ts`, the
+ * `.js` → `.ts` substitution of TypeScript's module resolution reference;
+ * `./x.tt.ts` with `allowImportingTsExtensions`). Only `./x.tt` names the
+ * module outside ttc: the source is `x.tt` and its output is `x.ts`, so a
+ * specifier naming `x.tt.js` or `x.tt.ts` names no file on disk or in the
+ * output, where TypeScript reports TS2307 for it. A file of that name that
+ * does exist on disk is the user's own and is left alone.
+ */
+function loweredModuleSpecifiers(sourceFile, ttSources, SyntaxKind) {
+  const found = [];
+  const consider = (literal) => {
+    if (!literal || literal.kind !== SyntaxKind.StringLiteral) return;
+    const specifier = literal.text;
+    if (!specifier.startsWith("./") && !specifier.startsWith("../")) return;
+    const target = path.resolve(path.dirname(sourceFile.fileName), specifier);
+    const match = /^(.*\.tt)\.(?:ts|js)$|^(.*\.ttx)\.(?:tsx|jsx|js)$/.exec(target);
+    const source = match && (match[1] ?? match[2]);
+    if (!source || !ttSources.has(source) || fs.existsSync(target)) return;
+    found.push(literal);
   };
-  visit(sourceFile);
+  walkTree(sourceFile, (node) => {
+    if (node.kind === SyntaxKind.ImportDeclaration || node.kind === SyntaxKind.ExportDeclaration) {
+      consider(node.moduleSpecifier);
+    } else if (node.kind === SyntaxKind.CallExpression && node.expression.kind === SyntaxKind.ImportKeyword) {
+      consider(node.arguments[0]);
+    }
+  });
   return found;
 }
 
@@ -1005,7 +1847,7 @@ function typeArguments(checker, type) {
  * smallest checker-proven incompatible pair. No language construct or type
  * name is special-cased here.
  */
-function incompatibleLeaf(checker, found, expected, depth = 0) {
+function incompatibleLeaf(checker, found, expected, TypeFlags, depth = 0) {
   if (depth >= 8 || checker.isTypeAssignableTo(found, expected)) return null;
 
   const identity = typeIdentity(found);
@@ -1020,10 +1862,8 @@ function incompatibleLeaf(checker, found, expected, depth = 0) {
         for (let i = 0; i < foundArgs.length; i++) {
           if (!checker.isTypeAssignableTo(foundArgs[i], expectedArgs[i])) {
             return (
-              incompatibleLeaf(checker, foundArgs[i], expectedArgs[i], depth + 1) ?? {
-                expected: checker.typeToString(expectedArgs[i]),
-                found: checker.typeToString(foundArgs[i]),
-              }
+              incompatibleLeaf(checker, foundArgs[i], expectedArgs[i], TypeFlags, depth + 1) ??
+              relationPair(checker, foundArgs[i], expectedArgs[i], TypeFlags)
             );
           }
         }
@@ -1031,7 +1871,7 @@ function incompatibleLeaf(checker, found, expected, depth = 0) {
       // Two instantiations of one declaration with no retained type
       // arguments (an instantiated object literal, e.g. a lowered variant
       // case) differ where a declared property differs.
-      const property = propertyLeaf(checker, found, counterpart, depth);
+      const property = propertyLeaf(checker, found, counterpart, TypeFlags, depth);
       if (property) return property;
     }
   }
@@ -1051,20 +1891,15 @@ function incompatibleLeaf(checker, found, expected, depth = 0) {
         !checker.isTypeAssignableTo(foundReturn, expectedReturn)
       ) {
         return (
-          incompatibleLeaf(checker, foundReturn, expectedReturn, depth + 1) ?? {
-            expected: checker.typeToString(expectedReturn),
-            found: checker.typeToString(foundReturn),
-          }
+          incompatibleLeaf(checker, foundReturn, expectedReturn, TypeFlags, depth + 1) ??
+          relationPair(checker, foundReturn, expectedReturn, TypeFlags)
         );
       }
     }
   } catch {
     // Fall through to the complete pair.
   }
-  return {
-    expected: checker.typeToString(expected),
-    found: checker.typeToString(found),
-  };
+  return relationPair(checker, found, expected, TypeFlags);
 }
 
 /**
@@ -1075,7 +1910,7 @@ function incompatibleLeaf(checker, found, expected, depth = 0) {
  * more than one differing — keeps the complete pair. The property APIs are
  * optional on the native bridge.
  */
-function propertyLeaf(checker, found, expected, depth) {
+function propertyLeaf(checker, found, expected, TypeFlags, depth) {
   try {
     const properties = found.getProperties?.() ?? [];
     if (properties.length === 0) return null;
@@ -1097,28 +1932,71 @@ function propertyLeaf(checker, found, expected, depth) {
     }
     if (shared === 0 || incompatible !== 1 || !pair) return null;
     return (
-      incompatibleLeaf(checker, pair.foundType, pair.expectedType, depth + 1) ?? {
-        expected: checker.typeToString(pair.expectedType),
-        found: checker.typeToString(pair.foundType),
-      }
+      incompatibleLeaf(checker, pair.foundType, pair.expectedType, TypeFlags, depth + 1) ??
+      relationPair(checker, pair.foundType, pair.expectedType, TypeFlags)
     );
   } catch {
     return null;
   }
 }
 
-function incompatibleLeaves(checker, found, expected) {
+function relationPair(checker, found, expected, TypeFlags) {
+  const generalized =
+    !(expected.flags & TypeFlags.Never) &&
+    isLiteralType(found, TypeFlags) &&
+    !couldHaveTopLevelSingletonTypes(checker, expected, TypeFlags);
+  const shown = generalized ? checker.getBaseTypeOfLiteralType(found) : found;
+  return { expected: checker.typeToString(expected), found: checker.typeToString(shown) };
+}
+
+function isLiteralType(type, TypeFlags) {
+  if (type.flags & TypeFlags.Boolean) return true;
+  if (type.flags & TypeFlags.Union) {
+    return !!(type.flags & TypeFlags.EnumLiteral) ||
+      typeConstituents(type).every((member) => !!(member.flags & TypeFlags.Unit));
+  }
+  return !!(type.flags & TypeFlags.Unit);
+}
+
+function couldHaveTopLevelSingletonTypes(checker, type, TypeFlags) {
+  if (type.flags & TypeFlags.Boolean) return false;
+  if (type.flags & TypeFlags.UnionOrIntersection) {
+    return (type.getTypes?.() ?? []).some((member) => couldHaveTopLevelSingletonTypes(checker, member, TypeFlags));
+  }
+  if (type.flags & TypeFlags.Instantiable) {
+    const constraint = type.flags & TypeFlags.TypeParameter
+      ? checker.getConstraintOfTypeParameter(type)
+      : checker.getBaseConstraintOfType(type);
+    if (constraint && constraint !== type) return couldHaveTopLevelSingletonTypes(checker, constraint, TypeFlags);
+  }
+  return !!(type.flags & (TypeFlags.Unit | TypeFlags.TemplateLiteral | TypeFlags.StringMapping));
+}
+
+function incompatibleLeaves(checker, found, expected, TypeFlags) {
   const leaves = [];
   const seen = new Set();
-  for (const constituent of typeConstituents(found)) {
-    if (checker.isTypeAssignableTo(constituent, expected)) continue;
-    const leaf = incompatibleLeaf(checker, constituent, expected);
-    if (!leaf) continue;
+  const constituents = typeConstituents(found);
+  const wholeExpected = checker.typeToString(expected);
+  let unreduced = constituents.length > 1;
+  for (const constituent of constituents) {
+    if (checker.isTypeAssignableTo(constituent, expected)) {
+      unreduced = false;
+      continue;
+    }
+    const leaf = incompatibleLeaf(checker, constituent, expected, TypeFlags);
+    if (!leaf) {
+      unreduced = false;
+      continue;
+    }
+    if (leaf.expected !== wholeExpected || leaf.found !== relationPair(checker, constituent, expected, TypeFlags).found) {
+      unreduced = false;
+    }
     const key = `${leaf.expected}\0${leaf.found}`;
     if (seen.has(key)) continue;
     seen.add(key);
     leaves.push(leaf);
   }
+  if (unreduced) return [relationPair(checker, found, expected, TypeFlags)];
   return leaves;
 }
 
@@ -1210,6 +2088,20 @@ function isDefiniteResult(type, constituentsOf, kindSymbolOf, checker) {
     tags.add(tag);
   }
   return tags.size === 2;
+}
+
+function declaredBinding(checker, symbol, check, { SyntaxKind, SymbolFlags }) {
+  if (!symbol || !(symbol.flags & SymbolFlags.Property) ||
+      symbol.valueDeclaration?.kind !== SyntaxKind.Parameter) {
+    return symbol;
+  }
+  const parameter = checker.resolveName(
+    symbol.name,
+    SymbolFlags.FunctionScopedVariable,
+    { document: check.module, position: check.start },
+    true,
+  );
+  return parameter?.valueDeclaration?.kind === SyntaxKind.Parameter ? parameter : symbol;
 }
 
 /**

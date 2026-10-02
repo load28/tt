@@ -1,0 +1,2 @@
+{"kind":"Ok","value":"abc"} a,b,c
+{"kind":"Err","error":"failed:b"} a,b

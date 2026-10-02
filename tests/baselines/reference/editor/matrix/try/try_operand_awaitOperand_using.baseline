@@ -1,0 +1,5 @@
+differences from try_operand_awaitOperand_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await (unwrap(read(note(\"operand\", input))))" hint TS80007: 'await' has no effect on the type of this expression.
+

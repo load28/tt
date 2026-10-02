@@ -1,19 +1,27 @@
 # The gates that look for bugs rather than confirming known answers: the
 # whole corpus, and the two fuzz targets (docs/tasks/TASK-223).
 #
-# Manual, like `CI` — this repository is on the free plan, and a weekly run
-# of a full differential plus two quarter-hour fuzzers is real money for a
-# yield nobody can predict. Dispatch it when a change deserves it: the
+# The long runs are manual — this repository is on the free plan, and a
+# weekly full differential plus two quarter-hour fuzzers is real money for a
+# yield nobody can predict. Dispatch them when a change deserves it: the
 # parser, the scanner, codegen, or anything else that decides what tt claims.
 #
 # Locally, without spending anything:
 #
 #     TTC_CORPUS_FULL=1 TTC_REQUIRE_CORPUS=1 cargo test --test corpus --release
-#     cd fuzz && cargo +nightly fuzz run compile_any_bytes -- -max_total_time=900
+#     node scripts/fuzz-seed-corpus
+#     cd fuzz && cargo +nightly fuzz run compile_any_bytes corpus/compile_any_bytes regressions/compile_any_bytes -- -max_total_time=900
 #     cd fuzz && cargo +nightly fuzz run generated_tt_compiles -- -max_total_time=900
+#
+# The schedule runs each fuzz target for two minutes a night, seeded from
+# the case corpus and the committed crash inputs (docs/tasks/TASK-637). It is
+# a workflow of its own so that a finding, which depends on luck, never
+# decides whether CI's scheduled run publishes a Nightly.
 name: Soak
 
 on:
+  schedule:
+    - cron: "40 4 * * *"
   workflow_dispatch:
     inputs:
       fuzz_seconds:
@@ -23,6 +31,7 @@ on:
 jobs:
   corpus:
     name: differential — the whole corpus
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -75,11 +84,21 @@ jobs:
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Seed the corpus from the case files
+        run: node scripts/fuzz-seed-corpus
+
       - name: Fuzz
         working-directory: fuzz
         run: |
-          cargo +nightly fuzz run ${{ matrix.target }} -- \
-            -max_total_time=${{ github.event.inputs.fuzz_seconds || 900 }} \
+          dirs="corpus/${{ matrix.target }}"
+          mkdir -p "$dirs"
+          if [ -d "regressions/${{ matrix.target }}" ]; then dirs="$dirs regressions/${{ matrix.target }}"; fi
+          cargo +nightly fuzz run ${{ matrix.target }} $dirs -- \
+            -max_total_time=${{ github.event.inputs.fuzz_seconds || 120 }} \
             -rss_limit_mb=4096
 
       # A crash is a file. Without this the run says "failed" and the input

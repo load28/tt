@@ -1,0 +1,4 @@
+//// [valParameterModifierIsErasedFromTheOutput2.tt] 2 mapping(s)
+1:1 -> 1:1 len 14  "const read = ("
+1:19 -> 1:15 len 26  "user: User) => user.name;\n"
+

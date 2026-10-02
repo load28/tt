@@ -1,0 +1,4 @@
+forTest("north") => 1 | operand "north"; n 1; finally 0
+forTest("south") => 1 | operand "south"; se 2; finally 0
+forTest("east") => 1 | operand "east"; se 2; finally 0
+forTest("up") => 0 | operand "up"; other 0; finally 0

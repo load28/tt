@@ -1,0 +1,2 @@
+ifBranch(4) => [{"kind":"North"},{"kind":"South"},4] | enter true; operand 4
+ifBranch(9) => [{"kind":"North"},{"kind":"South"},9] | enter true; operand 9

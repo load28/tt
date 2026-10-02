@@ -1,0 +1,7 @@
+differences from pipeline_overloadedStep_matchArm_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:5:53 ===
+  |     return match (flip()) { true => risky(input) |> shape |> .length, false => note("other arm", 0) };
+  |                                                     ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

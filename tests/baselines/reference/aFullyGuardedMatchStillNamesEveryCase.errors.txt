@@ -1,0 +1,28 @@
+==== ttc --out-dir (exit 1) ====
+error[match-not-exhaustive]: match on built-in variant Option is not exhaustive: missing "Some", "None"
+ --> ./aFullyGuardedMatchStillNamesEveryCase.tt:1:34
+  |
+1 | const f = (o: Option<number>) => match (o) { Some(value) if value > 0 => value };
+  |                                  ^^^^^^^^^
+  |
+  = help: add the missing arms: `, Some(value) => undefined, None => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2749]: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'?
+ --> aFullyGuardedMatchStillNamesEveryCase.tt:1:15
+  |
+1 | const f = (o: Option<number>) => match (o) { Some(value) if value > 0 => value };
+  |               ^^^^^^
+error[match-not-exhaustive]: match on built-in variant Option is not exhaustive: missing "Some", "None"
+ --> aFullyGuardedMatchStillNamesEveryCase.tt:1:34
+  |
+1 | const f = (o: Option<number>) => match (o) { Some(value) if value > 0 => value };
+  |                                  ^^^^^^^^^
+  |
+  = help: add the missing arms: `, Some(value) => undefined, None => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,20 @@
+=== isPatternsLowerToHostOwnedInstanceofControlFlow.tt ===
+const msg = match (err) {
+>msg : const msg: string
+is SyntaxError { message } if message.length > 0 => `syntax: ${message}`,
+>SyntaxError : var SyntaxError: SyntaxErrorConstructor
+>message : const message: string
+>message : const message: string
+>length : (property) String.length: number
+>message : const message: string
+is RangeError | is TypeError => "bad value",
+>RangeError : var RangeError: RangeErrorConstructor
+>TypeError : var TypeError: TypeErrorConstructor
+is Error { message: detail } => detail,
+>Error : var Error: ErrorConstructor
+>message : (property) Error.message: string
+>detail : const detail: string
+>detail : const detail: string
+_ => String(err),
+>String : var String: (value?: any) => string
+

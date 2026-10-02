@@ -1,0 +1,68 @@
+=== anOptionalMemberStepIsTheOptionalCall.tt ===
+class C { k = 3; m(x: number) { return x * this.k; } }
+>C : class C
+>k : (property) C.k: number
+>m : (method) C.m(x: number): number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>k : (property) C.k: number
+const pick = <T,>(value: T): T => [value][0];
+>pick : const pick: <T>(value: T) => T
+>T : (type parameter) T in <T>(value: T): T
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(value: T): T
+>T : (type parameter) T in <T>(value: T): T
+>value : (parameter) value: T
+const o: C | undefined = pick<C | undefined>(new C());
+>o : const o: C | undefined
+>C : class C
+>pick : const pick: <C | undefined>(value: C | undefined) => C | undefined
+>C : class C
+>C : constructor C(): C
+const none: C | undefined = pick<C | undefined>(undefined);
+>none : const none: C | undefined
+>C : class C
+>pick : const pick: <C | undefined>(value: C | undefined) => C | undefined
+>C : class C
+const nested: { c?: C } | undefined = pick<{ c?: C } | undefined>({ c: new C() });
+>nested : const nested: {
+>       c?: C;
+>   } | undefined
+>c : (property) c?: C | undefined
+>C : class C
+>pick : const pick: <{
+>       c?: C;
+>   } | undefined>(value: {
+>       c?: C;
+>   } | undefined) => {
+>       c?: C;
+>   } | undefined
+>c : (property) c?: C | undefined
+>C : class C
+>c : (property) c?: C | undefined
+>C : constructor C(): C
+const order: string[] = [];
+>order : const order: string[]
+const head = () => { order.push("head"); return 2; };
+>head : const head: () => number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+console.log(JSON.stringify([head() |> o?.m, head() |> none?.m, head() |> nested?.c?.m, order]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>head : const head: () => number
+>o : const o: C | undefined
+>m : (method) C.m(x: number): number
+>head : const head: () => number
+>none : const none: C | undefined
+>m : (method) C.m(x: number): number
+>head : const head: () => number
+>nested : const nested: {
+>       c?: C;
+>   } | undefined
+>c : (property) c?: C | undefined
+>m : (method) C.m(x: number): number
+>order : const order: string[]
+

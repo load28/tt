@@ -258,3 +258,101 @@ fn declarations_with_no_source_match_are_skipped_without_panicking() {
     let segments = decode(&field(&sidecar.map, "\"mappings\":\""));
     assert!(segments.is_empty(), "{segments:?}");
 }
+
+/// The name segments of a map: every segment but a line's column-0 one.
+fn name_segments(map: &str) -> Vec<(usize, usize, usize, usize)> {
+    decode(&field(map, "\"mappings\":\""))
+        .into_iter()
+        .filter(|segment| segment.generated_column > 0)
+        .map(|segment| {
+            (
+                segment.generated_line,
+                segment.generated_column,
+                segment.source_line,
+                segment.source_column,
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn a_name_maps_to_the_module_level_declaration_that_exports_it() {
+    // An inner local of the same name comes first in the text, and each name
+    // also occurs inside an earlier word on its own line: `port` and `ex` in
+    // `export`, `a` in `declare`.
+    let source = "function sum() {\n  const total = 1;\n  return total;\n}\nexport const total = 2;\nexport function port(): number { return sum(); }\nexport const ex = 3;\nexport let a = 1;\n";
+    let declarations = "export declare const total = 2;\nexport declare function port(): number;\nexport declare const ex = 3;\nexport declare let a: number;\n";
+    let sidecar = build_sidecar(source, declarations, "loc.tt");
+    assert_eq!(
+        name_segments(&sidecar.map),
+        [
+            (1, 21, 4, 13),
+            (2, 24, 5, 16),
+            (3, 21, 6, 13),
+            (4, 19, 7, 11)
+        ],
+        "{}",
+        sidecar.map
+    );
+}
+
+#[test]
+fn every_name_a_declaration_line_declares_gets_its_own_segment() {
+    let source = "const pair = { left: 1, right: 2 };\nexport const b = 1, c = \"c\";\nexport const { left, right } = pair;\n";
+    let declarations = "export declare const b = 1, c = \"c\";\nexport declare const left: number, right: number;\n";
+    let sidecar = build_sidecar(source, declarations, "pair.tt");
+    assert_eq!(
+        name_segments(&sidecar.map),
+        [
+            (1, 21, 1, 13),
+            (1, 28, 1, 20),
+            (2, 21, 2, 15),
+            (2, 35, 2, 21)
+        ],
+        "{}",
+        sidecar.map
+    );
+}
+
+#[test]
+fn a_shebang_stays_first_and_the_banner_goes_below_it() {
+    // TypeScript keeps a source's shebang as the first line of the
+    // declarations it emits, and a `#!` anywhere else does not parse
+    // (TS18026). The banner takes the line below it, as in a compiled module.
+    let source = "#!/usr/bin/env node\nexport const q = match (1) { 1 => 2, _ => 3 };\n";
+    let declarations = "#!/usr/bin/env node\nexport declare const q: number;\n";
+    let sidecar = build_sidecar(source, declarations, "cli.tt");
+    let lines: Vec<&str> = sidecar.declarations.lines().collect();
+    assert_eq!(
+        lines,
+        [
+            "#!/usr/bin/env node",
+            "// @generated from cli.tt by ttc --sidecar — do not edit.",
+            "export declare const q: number;",
+            "//# sourceMappingURL=cli.tt.d.ts.map",
+        ]
+    );
+    let segments = decode(&field(&sidecar.map, "\"mappings\":\""));
+    let named: Vec<_> = segments
+        .iter()
+        .filter(|segment| segment.generated_column != 0)
+        .map(|segment| {
+            (
+                segment.generated_line,
+                segment.generated_column,
+                segment.source_line,
+                segment.source_column,
+            )
+        })
+        .collect();
+    assert_eq!(named, [(2, 21, 1, 13)], "{segments:?}");
+}
+
+#[test]
+fn a_file_that_is_only_a_shebang_keeps_it_first() {
+    let sidecar = build_sidecar("#!/usr/bin/env node", "#!/usr/bin/env node", "cli.tt");
+    assert_eq!(
+        sidecar.declarations,
+        "#!/usr/bin/env node\n// @generated from cli.tt by ttc --sidecar — do not edit.\n//# sourceMappingURL=cli.tt.d.ts.map\n"
+    );
+}

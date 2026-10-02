@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./moduleAugmentationNameIsRewritten1.tt → $DIR/out/moduleAugmentationNameIsRewritten1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2664]: Invalid module name in augmentation, module './token.tt' cannot be found.
+ --> moduleAugmentationNameIsRewritten1.tt:1:16
+  |
+1 | declare module "./token.tt" {
+  |                ^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+moduleAugmentationNameIsRewritten1.ts(1,16): error TS2664: Invalid module name in augmentation, module './token.js' cannot be found.

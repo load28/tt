@@ -1,0 +1,8 @@
+# Generated and hand-written cases whose oracle (@twin or @expectErrors)
+# disagrees with ttc: known defects, each with the task that tracks it.
+#
+# One line per case: the case name, a tab, what the run observes (as the
+# failure prints it), a tab, and the TASK-NNN that tracks the defect.
+# tests/case_baselines.rs fails when a listed case agrees with its oracle,
+# is observed differently, or names no case. A name with `*` lists every
+# case it matches that observes the same thing (@expectDiagnostic cases).

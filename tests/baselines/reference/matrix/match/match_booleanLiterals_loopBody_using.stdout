@@ -1,0 +1,2 @@
+loopBody(true) => [1,1] | open res; operand true; yes 1; operand true; yes 1; dispose res
+loopBody(false) => [0,0] | open res; operand false; no 0; operand false; no 0; dispose res

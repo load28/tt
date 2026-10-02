@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::fully_guarded_match_is_not_exhaustive
+const f = (o: Option<number>) => match (o) { Some(value) if value > 0 => value };

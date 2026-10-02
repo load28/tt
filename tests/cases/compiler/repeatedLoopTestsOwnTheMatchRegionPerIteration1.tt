@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_01.rs::repeated_loop_tests_own_the_match_region_per_iteration
+while (match (next()) { is Error => false, _ => true }) { work(); }

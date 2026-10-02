@@ -1,0 +1,90 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./ttxLowersConstructsInJsxChildrenAndAttributes.ttx → $DIR/out/ttxLowersConstructsInJsxChildrenAndAttributes.tsx
+
+==== ttc --check-types (exit 1) ====
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:3:15
+  |
+3 | const child = <section>{match (state) {
+  |               ^^^^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:4:19
+  |
+4 |   Ready(value) => <strong>{value}</strong>,
+  |                   ^^^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:4:34
+  |
+4 |   Ready(value) => <strong>{value}</strong>,
+  |                                  ^^^^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:5:12
+  |
+5 |   Empty => <span>empty</span>,
+  |            ^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:5:23
+  |
+5 |   Empty => <span>empty</span>,
+  |                       ^^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:6:3
+  |
+6 | }}</section>;
+  |   ^^^^^^^^^^
+error[ts2304]: Cannot find name 'Panel'.
+ --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:7:15
+  |
+7 | const prop = <Panel before={mark("before")} render={() => match (state) {
+  |               ^^^^^
+error[ts2304]: Cannot find name 'mark'.
+ --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:7:29
+  |
+7 | const prop = <Panel before={mark("before")} render={() => match (state) {
+  |                             ^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:8:19
+  |
+8 |   Ready(value) => <strong>{value}</strong>,
+  |                   ^^^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:8:34
+  |
+8 |   Ready(value) => <strong>{value}</strong>,
+  |                                  ^^^^^^^^^
+error[ts2304]: Cannot find name 'mark'.
+  --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:10:11
+   |
+10 | }} after={mark("after")} />;
+   |           ^^^^
+error[ts2304]: Cannot find name 'Panel'.
+  --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:11:36
+   |
+11 | const ordered = (state: State) => <Panel before={mark("first")} value={match (state) {
+   |                                    ^^^^^
+error[ts2304]: Cannot find name 'mark'.
+  --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:11:50
+   |
+11 | const ordered = (state: State) => <Panel before={mark("first")} value={match (state) {
+   |                                                  ^^^^
+error[ts2304]: Cannot find name 'mark'.
+  --> ttxLowersConstructsInJsxChildrenAndAttributes.ttx:14:11
+   |
+14 | }} after={mark("last")} />;
+   |           ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(33,22): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(33,37): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(37,22): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(37,33): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(45,15): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(45,38): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(46,15): error TS2304: Cannot find name 'Panel'.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(46,29): error TS2304: Cannot find name 'mark'.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(53,18): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(53,33): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(66,11): error TS2304: Cannot find name 'mark'.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(69,19): error TS2304: Cannot find name 'mark'.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(87,11): error TS2304: Cannot find name 'Panel'.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(87,55): error TS2304: Cannot find name 'mark'.

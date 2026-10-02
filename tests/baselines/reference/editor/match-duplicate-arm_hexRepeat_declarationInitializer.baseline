@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  4:71-4:74 "0x1" error match-duplicate-arm (ttc): match: duplicate arm 1
+

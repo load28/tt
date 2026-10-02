@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::propagation_uses_a_type_clean_structural_result_discriminator
+function run() { const value = try Result.Err("boom"); return Result.Ok(value); }

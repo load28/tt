@@ -1,0 +1,9 @@
+=== diagnostics main.tt ===
+diagnostics: 2 diagnostic(s)
+  1:10-1:14 "note" hint TS6133: 'note' is declared but its value is never read. [unnecessary]
+  3:16-3:21 "input" hint TS6133: 'input' is declared but its value is never read. [unnecessary]
+published: 3 diagnostic(s)
+  1:10-1:14 "note" hint TS6133 (ts): 'note' is declared but its value is never read. [unnecessary]
+  3:16-3:21 "input" hint TS6133 (ts): 'input' is declared but its value is never read. [unnecessary]
+  4:35-4:112 "match (note(\"operand\", input)) { 1 => note(\"one\", 1), _ => note(\"other\", 0) }" error match-placement (ttc): `match` cannot be used in a parameter initializer — this TypeScript boundary has no statement position
+

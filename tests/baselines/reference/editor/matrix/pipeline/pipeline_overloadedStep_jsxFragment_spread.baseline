@@ -1,0 +1,7 @@
+differences from pipeline_overloadedStep_jsxFragment_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.ttx:4:55 ===
+  |   return <>{note("before", "[")}{first(...[input]) |> shape |> .length}{note("after", "]")}</>;
+  |                                                       ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

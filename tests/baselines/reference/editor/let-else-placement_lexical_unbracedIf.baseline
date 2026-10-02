@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  4:28-4:77 "const Ok(value: v) = read(note(\"operand\", input))" error let-else-placement (ttc): a let-else declaring `const` or `let` cannot be the unbraced body of an `if`, loop, or label — TypeScript allows no lexical declaration there
+

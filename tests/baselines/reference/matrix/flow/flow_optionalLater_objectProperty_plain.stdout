@@ -1,0 +1,3 @@
+objectProperty(4) => {"a":1,"c":3} | a 1; operand 4; flip true; maybe true; c 3
+objectProperty(6) => {"a":1,"c":3} | a 1; operand 6; flip false; maybe false; c 3
+objectProperty(8) => {"a":1,"c":3} | a 1; operand 8; flip true; maybe true; c 3

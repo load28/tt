@@ -1,0 +1,2 @@
+labeledBlock(2) => 6 | operand 2; flip true; double 4; add 6
+labeledBlock(5) => [null] | operand 5; flip false

@@ -1,0 +1,2 @@
+yieldOperand(1.5) => "3.0" | risky 1.5; yield function; add 3
+yieldOperand(2) => "4.0" | risky 2; yield function; add 4

@@ -1,0 +1,39 @@
+==== ttc --out-dir (exit 0) ====
+ttc: std → $DIR/out/tt
+ttc: ./tryAlwaysFailing.tt → $DIR/out/tryAlwaysFailing.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts18046]: 'x' is of type 'unknown'.
+ --> tryAlwaysFailing.tt:9:20
+  |
+9 |   return Result.Ok(x + 1);
+  |                    ^
+error[ts2322]: Type 'TOk<unknown>' is not assignable to type 'TResult<number, string>'.
+  Type 'TOk<unknown>' is not assignable to type 'TOk<number>'.
+    Type 'unknown' is not assignable to type 'number'.
+  --> tryAlwaysFailing.tt:13:3
+   |
+13 |   return Result.Ok(y);
+   |   ^^^^^^
+error[ts18046]: 'w' is of type 'unknown'.
+  --> tryAlwaysFailing.tt:17:20
+   |
+17 |   return Result.Ok(w + 1);
+   |                    ^
+error[ts2322]: Type 'TOk<unknown>' is not assignable to type 'TResult<string, string | number>'.
+  Type 'TOk<unknown>' is not assignable to type 'TOk<string>'.
+    Type 'unknown' is not assignable to type 'string'.
+  --> tryAlwaysFailing.tt:21:3
+   |
+21 |   return Result.Ok(u);
+   |   ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryAlwaysFailing.ts(13,20): error TS18046: 'x' is of type 'unknown'.
+tryAlwaysFailing.ts(21,3): error TS2322: Type 'TOk<unknown>' is not assignable to type 'TResult<number, string>'.
+  Type 'TOk<unknown>' is not assignable to type 'TOk<number>'.
+    Type 'unknown' is not assignable to type 'number'.
+tryAlwaysFailing.ts(44,20): error TS18046: 'w' is of type 'unknown'.
+tryAlwaysFailing.ts(52,3): error TS2322: Type 'TOk<unknown>' is not assignable to type 'TResult<string, string | number>'.
+  Type 'TOk<unknown>' is not assignable to type 'TOk<string>'.
+    Type 'unknown' is not assignable to type 'string'.

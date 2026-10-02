@@ -9,19 +9,14 @@ use super::*;
 /// CLI's contract.
 pub(super) fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_>) -> ExitCode {
     let engine = ttc::engine::Engine::new(options.node.map(Path::to_path_buf));
-    let report = match engine.open_project(
-        inputs,
-        &ttc::engine::ProjectOptions {
-            tsconfig: options.project.map(Path::to_path_buf),
-            out_dir: options.out_dir.map(Path::to_path_buf),
-        },
-    ) {
+    let project_options = ttc::engine::ProjectOptions {
+        tsconfig: options.project.map(Path::to_path_buf),
+        out_dir: options.out_dir.map(Path::to_path_buf),
+    };
+    let report = match open_typed_project(&engine, inputs, &project_options, options) {
         Ok(mut project) => {
-            for (path, text) in options.overlay {
-                project.open_document(path.clone(), text.clone());
-            }
             if options.watch {
-                return typed_watch(&mut project, options);
+                return typed_watch(&engine, project, inputs, &project_options, options);
             }
             let mut files = project.initial_files();
             files.extend(
@@ -35,18 +30,50 @@ pub(super) fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_
             files.dedup();
             typed_pass(&mut project, &files, options).unwrap_or_else(|e| {
                 eprintln!("ttc: {e}");
-                TypedReport::unchecked()
+                TypedReport::unchecked(0)
             })
         }
         Err(e) => {
             eprintln!("ttc: {e}");
-            TypedReport::unchecked()
+            TypedReport::unchecked(0)
         }
     };
     if options.json_report {
         crate::out::line(&report.to_json());
     }
     report.exit_code()
+}
+
+/// Opens the project `inputs` belong to, with the overlays standing in for
+/// their files.
+fn open_typed_project(
+    engine: &ttc::engine::Engine,
+    inputs: &[String],
+    project_options: &ttc::engine::ProjectOptions,
+    options: &TypedCheckOptions<'_>,
+) -> Result<ttc::engine::Project, String> {
+    let unsaved = |input: &String| {
+        let path = Path::new(input);
+        (!path.exists())
+            .then(|| ttc::engine::normalize_document_path(path).ok())
+            .flatten()
+            .filter(|document| options.overlay.contains_key(document))
+    };
+    let on_disk: Vec<String> = inputs
+        .iter()
+        .filter(|input| unsaved(input).is_none())
+        .cloned()
+        .collect();
+    let mut project = match inputs.iter().find_map(unsaved) {
+        Some(document) if on_disk.is_empty() => {
+            engine.open_document_project(&document, project_options)?
+        }
+        _ => engine.open_project(&on_disk, project_options)?,
+    };
+    for (path, text) in options.overlay {
+        project.open_document(path.clone(), text.clone());
+    }
+    Ok(project)
 }
 
 /// What the typed modes were asked for, beside their inputs.
@@ -78,9 +105,9 @@ pub(super) struct TypedReport {
 }
 
 impl TypedReport {
-    fn unchecked() -> Self {
+    fn unchecked(reported: usize) -> Self {
         Self {
-            reported: 1,
+            reported,
             blocked: true,
             writes: WriteOutcome::default(),
         }
@@ -152,7 +179,7 @@ pub(super) fn typed_pass(
                 "{}",
                 ttc::render::compile_error(&blocked.error, None, &shown(&blocked.path), styles())
             );
-            return Ok(TypedReport::unchecked());
+            return Ok(TypedReport::unchecked(1));
         }
     };
     let checked = project.check(
@@ -183,11 +210,16 @@ pub(super) fn typed_pass(
     // against text that was never saved, and quoting the disk would draw a
     // caret under a line the compiler did not see.
     for diagnostic in &checked.diagnostics {
+        let disk = snapshot
+            .source_of(&diagnostic.path)
+            .is_none()
+            .then(|| fs::read_to_string(&diagnostic.path).ok())
+            .flatten();
         eprintln!(
             "{}",
             ttc::render::engine_diagnostic(
                 diagnostic,
-                snapshot.source_of(&diagnostic.path),
+                snapshot.source_of(&diagnostic.path).or(disk.as_deref()),
                 &shown(&diagnostic.path),
                 styles(),
             )
@@ -204,7 +236,7 @@ pub(super) fn typed_pass(
         eprintln!("ttc: {error}");
         eprintln!("ttc: the TypeScript layer did not run — only tt-level diagnostics are shown");
         return Ok(TypedReport {
-            reported: checked.diagnostics.len().max(1),
+            reported: checked.diagnostics.len(),
             blocked: true,
             writes,
         });
@@ -222,13 +254,40 @@ pub(super) fn typed_pass(
 /// makes the wait a re-check rather than a cold start — and the engine's
 /// projection cache means only the files that changed are re-lowered.
 pub(super) fn typed_watch(
-    project: &mut ttc::engine::Project,
+    engine: &ttc::engine::Engine,
+    mut project: ttc::engine::Project,
+    inputs: &[String],
+    project_options: &ttc::engine::ProjectOptions,
     options: &TypedCheckOptions<'_>,
 ) -> ExitCode {
     let mut stamps: std::collections::HashMap<PathBuf, std::time::SystemTime> =
         std::collections::HashMap::new();
     let mut first = true;
+    let mut reopen_error = None;
     loop {
+        // A discovered configuration created or deleted since the last pass
+        // puts the inputs in another project, as a fresh run would find them.
+        let identity = ttc::engine::Engine::project_identity(inputs, project_options);
+        if project_options.tsconfig.is_none()
+            && let Ok((tsconfig, root)) = &identity
+            && (tsconfig.as_deref(), root.as_path()) != project.identity()
+        {
+            match open_typed_project(engine, inputs, project_options, options) {
+                Ok(reopened) => {
+                    project = reopened;
+                    reopen_error = None;
+                }
+                Err(e) => {
+                    if reopen_error.as_ref() != Some(&e) {
+                        eprintln!("ttc: {e}");
+                        reopen_error = Some(e);
+                    }
+                    thread::sleep(WATCH_INTERVAL);
+                    continue;
+                }
+            }
+        }
+        let project = &mut project;
         let files = match project.scan() {
             Ok(files) => files,
             // A file can disappear mid-edit; keep watching rather than
@@ -351,12 +410,18 @@ pub(super) fn write_declarations(
                 })
         });
     if let Some(error) = collision {
-        for (path, _) in &std_files {
-            outcome.fail(path, error.clone());
-        }
-        for target in &targets {
-            outcome.fail(target, error.clone());
-            outcome.fail(&target.with_extension("ts.map"), error.clone());
+        // Every planned file fails once. The plan is of files, and colliding
+        // declarations are two claims on one of them.
+        let mut planned = HashSet::new();
+        let files = std_files.iter().map(|(path, _)| path.clone()).chain(
+            targets
+                .iter()
+                .flat_map(|target| [target.clone(), target.with_extension("ts.map")]),
+        );
+        for path in files {
+            if planned.insert(normalized_absolute(&path)) {
+                outcome.fail(&path, error.clone());
+            }
         }
         return outcome;
     }

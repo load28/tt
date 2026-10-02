@@ -48,6 +48,8 @@ impl EvaluationFile {
             regions: Vec::new(),
             seen: HashSet::new(),
             next_value: 0,
+            nested_owners: HashMap::new(),
+            enclosing: HashMap::new(),
         };
         builder.walk_body(core.root, None)?;
         if let Some(root) = builder.hosts.keys().copied().next() {
@@ -64,6 +66,7 @@ impl EvaluationFile {
                 .map(|(_, _, _, _, source, _, _)| source)
                 .collect(),
             script: syntax.is_script(),
+            commonjs: syntax.uses_commonjs_syntax(),
             globals: syntax.globals().clone(),
         };
         file.validate()?;
@@ -74,7 +77,7 @@ impl EvaluationFile {
         let mut region = region;
         loop {
             match &region.placement {
-                RegionPlacement::Host { host_owner, .. } => return Some(host_owner.anchor()),
+                RegionPlacement::Host { host_owner, .. } => return Some(host_owner.statement()),
                 RegionPlacement::Nested { parent, .. } => {
                     region = &self.regions[parent.0 as usize];
                 }
@@ -175,6 +178,37 @@ impl EvaluationFile {
             })
             .collect();
         owners.sort_unstable_by_key(|(owner, _)| owner.span.start);
+        // The heads of the let-else and `if let` statements each owner
+        // hosts: the bounds of the values their subjects contain.
+        let mut statement_decisions: HashMap<HostOwner, Vec<SourceSpan>> = HashMap::new();
+        for region in &self.regions {
+            let Some(CoreRoot::Decision(_)) = region.root else {
+                continue;
+            };
+            let source = match &region.placement {
+                RegionPlacement::Host { source, .. } => *source,
+                RegionPlacement::Nested {
+                    source: Some(source),
+                    ..
+                } => *source,
+                RegionPlacement::Nested { source: None, .. } | RegionPlacement::SourceEdit => {
+                    continue;
+                }
+            };
+            let mut host = region;
+            let owner = loop {
+                match &host.placement {
+                    RegionPlacement::Host { host_owner, .. } => break Some(*host_owner),
+                    RegionPlacement::Nested { parent, .. } => {
+                        host = &self.regions[parent.0 as usize];
+                    }
+                    RegionPlacement::SourceEdit => break None,
+                }
+            };
+            if let Some(owner) = owner {
+                statement_decisions.entry(owner).or_default().push(source);
+            }
+        }
         let mut next_slot = 0u32;
         let mut occupied_names = self.occupied_names.clone();
         let mut slot_names = Vec::new();
@@ -262,17 +296,28 @@ impl EvaluationFile {
             // those children at their exact position and writes their
             // already allocated slots; planning the children again as
             // sibling owner actions would either run them twice or consume
-            // authored syntax that still contains the outer construct.
+            // authored syntax that still contains the outer construct. A
+            // let-else or `if let` owns the values in its subject the same
+            // way: it evaluates the subject into its own temporary.
+            let outers: Vec<SourceSpan> = values
+                .iter()
+                .filter(|outer| outer.capability == TargetCapability::StatementRegion)
+                .map(|outer| outer.source)
+                .chain(
+                    statement_decisions
+                        .get(&owner)
+                        .into_iter()
+                        .flatten()
+                        .copied(),
+                )
+                .collect();
             let owned_children: HashSet<_> = values
                 .iter()
                 .filter(|child| {
-                    values.iter().any(|outer| {
-                        outer.expr != child.expr
-                            && outer.capability == TargetCapability::StatementRegion
-                            && outer.source.start <= child.source.start
-                            && child.source.end <= outer.source.end
-                            && (outer.source.start < child.source.start
-                                || child.source.end < outer.source.end)
+                    outers.iter().any(|outer| {
+                        outer.start <= child.source.start
+                            && child.source.end <= outer.end
+                            && (outer.start < child.source.start || child.source.end < outer.end)
                     })
                 })
                 .map(|child| child.expr)
@@ -284,20 +329,20 @@ impl EvaluationFile {
                     .filter(|value| owned_children.contains(&value.expr) && !value.exits.is_empty())
                     .map(|value| (value.expr, value.exits.clone())),
             );
-            let mut owned_groups: Vec<(ExprId, Vec<PlannedValue>)> = Vec::new();
+            let mut owned_groups: Vec<(SourceSpan, Vec<PlannedValue>)> = Vec::new();
             for child in values
                 .iter()
                 .filter(|value| owned_children.contains(&value.expr))
             {
-                let Some(outer) = values
+                let Some(outer) = outers
                     .iter()
+                    .copied()
                     .filter(|outer| {
-                        outer.expr != child.expr
-                            && outer.capability == TargetCapability::StatementRegion
-                            && outer.source.start <= child.source.start
-                            && child.source.end <= outer.source.end
+                        *outer != child.source
+                            && outer.start <= child.source.start
+                            && child.source.end <= outer.end
                     })
-                    .min_by_key(|outer| outer.source.end - outer.source.start)
+                    .min_by_key(|outer| outer.end - outer.start)
                 else {
                     continue;
                 };
@@ -306,9 +351,9 @@ impl EvaluationFile {
                     .steps()
                     .iter()
                     .take_while(|step| {
-                        outer.source.start <= step.parent.start
-                            && step.parent.end <= outer.source.end
-                            && step.parent != outer.source
+                        outer.start <= step.parent.start
+                            && step.parent.end <= outer.end
+                            && step.parent != outer
                     })
                     .cloned()
                     .collect();
@@ -329,12 +374,9 @@ impl EvaluationFile {
                     capability,
                     ..child.clone()
                 };
-                match owned_groups
-                    .iter_mut()
-                    .find(|(group, _)| *group == outer.expr)
-                {
+                match owned_groups.iter_mut().find(|(group, _)| *group == outer) {
                     Some((_, group)) => group.push(owned),
-                    None => owned_groups.push((outer.expr, vec![owned])),
+                    None => owned_groups.push((outer, vec![owned])),
                 }
             }
             for (_, mut group) in owned_groups {
@@ -404,7 +446,7 @@ impl EvaluationFile {
                     );
                 }
             }
-            slot_anchors.resize(slot_names.len(), Some(owner.anchor()));
+            slot_anchors.resize(slot_names.len(), Some(owner.statement()));
             rewrites.push(HostRewrite {
                 owner,
                 values,
@@ -415,16 +457,6 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
             };
-            if matches!(
-                &core.exprs[expr.index()],
-                Expr::Propagate(Propagate {
-                    exit: ExitTarget::ResultRegion(_),
-                    ..
-                })
-            ) && matches!(&region.placement, RegionPlacement::Nested { protocol, .. } if protocol.steps().is_empty())
-            {
-                continue;
-            }
             if region.result.is_none() || value_slots.contains_key(&expr) {
                 continue;
             }
@@ -490,6 +522,7 @@ impl EvaluationFile {
                 protocol,
                 source,
                 exits,
+                ..
             } = &region.placement
             else {
                 continue;
@@ -605,26 +638,6 @@ impl EvaluationFile {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
             };
-            let Expr::Propagate(propagate) = &core.exprs[expr.index()] else {
-                continue;
-            };
-            if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
-                continue;
-            }
-            let RegionPlacement::Host {
-                context, source, ..
-            } = &region.placement
-            else {
-                continue;
-            };
-            if context.continuation == HostContinuation::ForInitialize {
-                return Err(EvaluationError::UnsupportedForInitializer { source: *source });
-            }
-        }
-        for region in &self.regions {
-            let Some(CoreRoot::Expr(expr)) = region.root else {
-                continue;
-            };
             if !matches!(core.exprs[expr.index()], Expr::ResultRegion(_)) {
                 continue;
             }
@@ -639,37 +652,6 @@ impl EvaluationFile {
             }
         }
         let mut unsupported_expression_propagations = Vec::new();
-        // Core arm bodies are flat arena entries, so build their ownership
-        // index once. Propagation placement then answers by ExprId instead of
-        // rescanning every decision and arm for every value region.
-        let isolated_arm_values: HashSet<_> = core
-            .exprs
-            .iter()
-            .filter_map(|candidate| {
-                let Expr::Decision(decision) = candidate else {
-                    return None;
-                };
-                Some(decision)
-            })
-            .flat_map(|decision| &decision.arms)
-            .filter_map(|arm| match arm.action {
-                ArmAction::Yield {
-                    body,
-                    kind: ArmBodyKind::Block { .. },
-                }
-                | ArmAction::Execute(body) => Some(body),
-                ArmAction::Yield {
-                    kind: ArmBodyKind::Expression,
-                    ..
-                }
-                | ArmAction::BindThrough(_) => None,
-            })
-            .flat_map(|body| &core.bodies[body.index()].statements)
-            .filter_map(|statement| match statement {
-                Statement::Expr(value) => Some(*value),
-                _ => None,
-            })
-            .collect();
         for region in &self.regions {
             let Some(CoreRoot::Expr(expr)) = region.root else {
                 continue;
@@ -682,11 +664,6 @@ impl EvaluationFile {
             }
             let mut host_region = region;
             let mut covered_by_parent_propagation = false;
-            // A value-form propagation emitted directly by a decision arm
-            // cannot use the enclosing function's failure edge: the arm is
-            // an isolated value region even when SWC identifies the nested
-            // `return` statement as its own host owner.
-            let crossed_value_region = isolated_arm_values.contains(&expr);
             while let RegionPlacement::Nested { parent, .. } = host_region.placement {
                 host_region = &self.regions[parent.0 as usize];
                 covered_by_parent_propagation |= host_region.root.is_some_and(|root| {
@@ -714,13 +691,12 @@ impl EvaluationFile {
                     .unwrap_or(TargetCapability::StatementRegion),
                 _ => TargetCapability::StatementRegion,
             };
-            let reason = match (crossed_value_region, context.owner, capability) {
-                (true, _, _) => ExpressionBoundaryReason::OwnerTakesNoStatements,
-                (false, EvaluationOwner::FunctionBody, TargetCapability::StatementRegion) => {
+            let reason = match (context.owner, capability) {
+                (EvaluationOwner::FunctionBody, TargetCapability::StatementRegion) => {
                     continue;
                 }
-                (false, _, TargetCapability::ExpressionBoundary(reason)) => reason,
-                (false, _, TargetCapability::StatementRegion) => {
+                (_, TargetCapability::ExpressionBoundary(reason)) => reason,
+                (_, TargetCapability::StatementRegion) => {
                     ExpressionBoundaryReason::OwnerTakesNoStatements
                 }
             };
@@ -845,7 +821,8 @@ impl EvaluationFile {
                 None => match context.owner {
                     EvaluationOwner::ParameterInitializer
                     | EvaluationOwner::ClassInitializer
-                    | EvaluationOwner::ClassDefinition => {
+                    | EvaluationOwner::ClassDefinition
+                    | EvaluationOwner::EnumInitializer => {
                         ExpressionBoundaryReason::OwnerTakesNoStatements
                     }
                     _ => ExpressionBoundaryReason::ValueHasNoStatementForm,
@@ -889,7 +866,7 @@ impl EvaluationFile {
         let mut match_subject_names = HashMap::new();
         let mut taken_subject_names = 0;
         for rewrite in &rewrites {
-            let binding = global_bindings.get(&rewrite.owner.anchor()).copied();
+            let binding = global_bindings.get(&rewrite.owner.statement()).copied();
             for value in &rewrite.values {
                 if let Expr::Decision(decision) = &core.exprs[value.expr.index()] {
                     let names = decision
@@ -978,6 +955,26 @@ impl EvaluationFile {
                         context, source, ..
                     },
                 ) if context.requires_block => Some((node, *source)),
+                (
+                    Some(CoreRoot::Propagate(node)),
+                    RegionPlacement::Nested {
+                        context: Some(context),
+                        source: Some(source),
+                        ..
+                    },
+                ) if context.requires_block
+                    && context.continuation != HostContinuation::ForInitialize =>
+                {
+                    Some((node, *source))
+                }
+                (
+                    Some(CoreRoot::Decision(node)),
+                    RegionPlacement::Nested {
+                        context: Some(context),
+                        source: Some(source),
+                        ..
+                    },
+                ) if context.requires_block => Some((node, *source)),
                 _ => None,
             })
             .collect();
@@ -1018,7 +1015,7 @@ impl EvaluationFile {
             else {
                 continue;
             };
-            let Some(global) = self.globals.get(&host_owner.anchor()) else {
+            let Some(global) = self.globals.get(&host_owner.statement()) else {
                 continue;
             };
             let Some(decision) = statement_decision(core, extent) else {
@@ -1040,6 +1037,7 @@ impl EvaluationFile {
         }
         Ok(LoweringPlan {
             script: self.script,
+            commonjs: self.commonjs,
             global_temps,
             shadowed_globals,
             host_global_aliases,
@@ -1124,7 +1122,7 @@ impl EvaluationFile {
                             ..
                         },
                     ) if (context.requires_block
-                        || self.globals.get(&host_owner.anchor())
+                        || self.globals.get(&host_owner.statement())
                             == Some(&GlobalStatement::Enclose))
                         && match root {
                             CoreRoot::Expr(_) => true,
@@ -1134,7 +1132,7 @@ impl EvaluationFile {
                             CoreRoot::Adt(_) | CoreRoot::Decision(_) => false,
                         } =>
                     {
-                        Some(host_owner.anchor())
+                        Some(host_owner.statement())
                     }
                     _ => None,
                 })
@@ -1152,6 +1150,7 @@ impl EvaluationFile {
                 })
                 .collect(),
             owner_model_unavailable: false,
+            completion_scopes: Vec::new(),
         })
     }
 }

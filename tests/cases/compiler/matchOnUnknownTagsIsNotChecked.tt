@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_02.rs::match_on_unknown_tags_is_not_checked
+
+type AppEvent = { kind: "click"; x: number } | { kind: "key"; code: string };
+const f = (e: AppEvent) => match (e) {
+  click(x) => x,
+};

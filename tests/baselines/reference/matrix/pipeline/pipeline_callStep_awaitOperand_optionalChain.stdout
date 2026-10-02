@@ -1,0 +1,2 @@
+awaitOperand(2) => 4 | double 4
+awaitOperand(5) => null | double null

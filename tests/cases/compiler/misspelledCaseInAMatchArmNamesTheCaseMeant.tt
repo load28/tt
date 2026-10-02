@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::misspelled_case_in_a_match_arm_names_the_case_meant
+variant Shape { Circle(radius: number), Empty }
+const a = match (s) {
+  Circel(radius) => radius,
+  Empty => 0,
+};

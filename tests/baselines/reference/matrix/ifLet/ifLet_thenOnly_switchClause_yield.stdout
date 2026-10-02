@@ -1,0 +1,2 @@
+switchClause(2) => 2 | discriminant 1; yield 2; read 2; then 2
+switchClause(-1) => "none" | discriminant 1; yield -1; read -1

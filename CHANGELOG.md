@@ -34,6 +34,23 @@
 
 ### Changed
 
+- **A `.ttx` import names the file `tsc` writes** (TASK-723). With the default
+  `--rewrite-imports js`, `./view.ttx` becomes `./view.jsx` only when the
+  project compiles with `"jsx": "preserve"` and `./view.js` under every other
+  `jsx` value, read from the `tsconfig.json` `--project` names (now accepted
+  by builds and `-p`) or the nearest one above the inputs. Under `react-jsx`
+  the old `.jsx` named no file and the program failed with
+  `ERR_MODULE_NOT_FOUND`. The library's `Options::jsx_preserve` carries the
+  setting, and `ImportRewrite::source_candidates` lists every source a
+  rewritten specifier can come from.
+
+- **`ttc --dependencies` separates directories from files** (TASK-580). It
+  prints `{"files": [...], "directories": [...]}` instead of one array, and
+  the server's `dependencies` answers the same object. `@openload28/unplugin-tt`
+  registers each kind through the bundler's own watch API, so the Vite dev
+  server no longer answers 500 for `.tt` modules or keeps its process alive
+  after `close()`.
+
 - **TypeScript는 프로젝트가 설치한 npm 패키지 하나에서만 온다**
   (TASK-255, TASK-256). ttc가 구동하는 TypeScript 7은 이제 그 프로젝트의
   `node_modules`에서만 해석되고, 다른 것을 지목할 방법이 없다.

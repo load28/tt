@@ -1,0 +1,16 @@
+=== tagsOfAHandWrittenUnionAreNotResolutionErrors.tt ===
+type Msg = { kind: "Ping" } | { kind: "Pong"; n: number };
+>Msg : type Msg = {
+>       kind: "Ping";
+>   } | {
+>       kind: "Pong";
+>       n: number;
+>   }
+>kind : (property) kind: "Ping"
+>kind : (property) kind: "Pong"
+>n : (property) n: number
+const a = match (m) { Ping => 0, Pong(n) => n, _ => -1 };
+>a : const a: any
+>n : const n: any
+>n : const n: any
+

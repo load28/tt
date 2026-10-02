@@ -1,0 +1,8 @@
+==== node main.js (exit 1) ====
+file://$DIR/run/main.js:59
+    switch ($tt_m.kind) {
+                  ^
+
+TypeError: Cannot read properties of undefined (reading 'kind')
+    at file://$DIR/run/main.js:59:19
+

@@ -1,0 +1,15 @@
+//// [aRecursiveAnonymousTypeIsNeverAnnotatedWithItsElidedCycle2.tt] 13 mapping(s)
+1:1 -> 1:1 len 93  "\nfunction mk(k: number) { return { k, m() { retu"...
+4:3 -> 18:3 len 10  "const b = "
+4:20 -> 6:19 len 1  "n"
+4:25 -> 8:12 len 1  "1"
+4:30 -> 9:18 len 32  "({ k: 1, m() { return this; } })"
+4:69 -> 13:18 len 32  "({ k: 2, m() { return this; } })"
+4:103 -> 18:19 len 4  ";\n  "
+5:3 -> 33:3 len 10  "const c = "
+5:20 -> 21:19 len 1  "n"
+5:25 -> 23:12 len 1  "1"
+5:30 -> 24:18 len 5  "mk(3)"
+5:42 -> 28:18 len 5  "mk(4)"
+5:49 -> 33:19 len 94  ";\n  return [b.m().m().k, c.m().m().k].join(\",\");"...
+

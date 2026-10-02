@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_06.rs::nested_pattern_arm_may_repeat_a_tag
+
+const n = match (r) {
+  Ok(value: Some(value: v)) => v,
+  Ok(value) => 0,
+  Err(error) => -1,
+};

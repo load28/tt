@@ -1,0 +1,2 @@
+labeledBlock(3) => 3 | open res; operand 3; read 3; then 3; dispose res
+labeledBlock(-3) => "missing" | open res; operand -3; read -3; else "missing"; dispose res

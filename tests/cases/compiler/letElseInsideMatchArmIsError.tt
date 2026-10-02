@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_04.rs::let_else_inside_match_arm_is_error
+const x = match (r) {
+  Ok(value) => { const Some(v) = h(value) else { return 0; }; return v; },
+  _ => 0,
+};

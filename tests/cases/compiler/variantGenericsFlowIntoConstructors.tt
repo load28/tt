@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_01.rs::variant_generics_flow_into_constructors
+variant Option<T> {
+  Some(value: T),
+  None,
+}

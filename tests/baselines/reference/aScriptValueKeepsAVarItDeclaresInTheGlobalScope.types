@@ -1,0 +1,19 @@
+=== aScriptValueKeepsAVarItDeclaresInTheGlobalScope.tt ===
+declare const o: { kind: "A" } | { kind: "B" };
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>kind : (property) kind: "A"
+>kind : (property) kind: "B"
+const total = match (o) { A => { var seen = 1; return seen; }, B => 2 };
+>total : const total: number
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>seen : var seen: number
+>seen : var seen: number
+

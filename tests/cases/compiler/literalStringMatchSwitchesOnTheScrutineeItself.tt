@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_07.rs::literal_string_match_switches_on_the_scrutinee_itself
+
+const label = match (dir) {
+  "north" => "N",
+  "south" => "S",
+  _ => "?",
+};

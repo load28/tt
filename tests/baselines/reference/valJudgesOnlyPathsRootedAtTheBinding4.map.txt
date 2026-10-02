@@ -1,0 +1,3 @@
+//// [valJudgesOnlyPathsRootedAtTheBinding4.tt] 1 mapping(s)
+1:5 -> 1:1 len 43  "const o = { p: 1 };\n[...o.p] = [1] as any;\n"
+

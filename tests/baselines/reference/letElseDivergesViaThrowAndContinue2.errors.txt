@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseDivergesViaThrowAndContinue2.tt → $DIR/out/letElseDivergesViaThrowAndContinue2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'xs'.
+ --> letElseDivergesViaThrowAndContinue2.tt:2:19
+  |
+2 |   for (const x of xs) {
+  |                   ^^
+error[ts2304]: Cannot find name 'find'.
+ --> letElseDivergesViaThrowAndContinue2.tt:3:21
+  |
+3 |     const Some(v) = find(x) else { continue; };
+  |                     ^^^^
+error[ts2304]: Cannot find name 'use'.
+ --> letElseDivergesViaThrowAndContinue2.tt:4:5
+  |
+4 |     use(v);
+  |     ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseDivergesViaThrowAndContinue2.ts(2,19): error TS2304: Cannot find name 'xs'.
+letElseDivergesViaThrowAndContinue2.ts(3,20): error TS2304: Cannot find name 'find'.
+letElseDivergesViaThrowAndContinue2.ts(8,5): error TS2304: Cannot find name 'use'.

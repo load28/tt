@@ -56,6 +56,7 @@ mod analysis;
 #[path = "lib/api.rs"]
 mod api;
 mod ast;
+pub mod banner;
 mod codegen;
 #[path = "lib/compile.rs"]
 mod compile;
@@ -73,6 +74,7 @@ mod lexer;
 pub mod lines;
 #[path = "lib/mapped.rs"]
 mod mapped;
+pub mod ownership;
 mod parser;
 mod probe;
 mod program_syntax;
@@ -96,13 +98,15 @@ pub use analysis::{
     SiteKind, UnresolvedName, pattern_analyses,
 };
 pub use ast::ArmsTail;
-pub use diagnostics::{Diagnostic, DiagnosticCode, DiagnosticOwner, Edit, Severity, Suggestion};
+pub use diagnostics::{
+    Diagnostic, DiagnosticCode, DiagnosticLabel, DiagnosticOwner, Edit, Severity, Suggestion,
+};
 pub use error::CompileError;
 pub use probe::{
     Literal, LiteralMatch, PayloadProbe, TagMatch, literal_matches, literal_matches_with_kind,
     payload_probes, payload_probes_with_kind, tag_matches, tag_matches_with_kind,
 };
-pub use sidecar::{Sidecar, build_sidecar};
+pub use sidecar::{Sidecar, build_sidecar, source_specifiers};
 pub use stdlib::{
     GENERATED_BANNER, RUNTIME_SOURCE, STD_OPTION_SOURCE, STD_PACKAGE_COMMONJS_DIR,
     STD_RESULT_SOURCE, STD_SPECIFIER, STD_TYPES_SOURCE, StdImports, StdModule, StdPackage,

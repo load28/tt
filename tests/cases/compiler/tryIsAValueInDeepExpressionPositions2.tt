@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::try_is_a_value_in_deep_expression_positions
+function f(flag: boolean): TResult<number, string> { const value = try (flag ? left() : right()); return Result.Ok(value); }

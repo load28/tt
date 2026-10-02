@@ -9,6 +9,7 @@ npm/*
 !npm/tt-lang/
 !npm/tt-lang/**
 *.tsbuildinfo
+fix_baselines.patch
 *.log
 
 # ttc sidecar output (ttc --types)
@@ -29,3 +30,6 @@ npm/tt-lang/tt-dev.local.json
 
 # 표준 라이브러리 자동 방출물 (examples 컴파일 시)
 examples/tt/
+
+# New baselines of the last test run, for review and scripts/baseline-accept
+tests/baselines/local/

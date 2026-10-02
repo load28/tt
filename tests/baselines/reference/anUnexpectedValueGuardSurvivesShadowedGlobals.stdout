@@ -1,0 +1,6 @@
+tt match: unexpected literal 2n
+tt match: unexpected literal Symbol(s)
+tt match: unexpected literal 3
+tt match: unexpected literal "a"
+tt match: unexpected literal {"a":1}
+shadow 1

@@ -1,0 +1,11 @@
+return hit: "hit 1" after lookup a bound
+return miss: "miss z" after lookup z
+continue: [1,2,1] after lookup a lookup z lookup b lookup a
+labeled break: [1,1] after lookup a lookup a lookup b
+throw b: 2 after lookup b
+throw a: "not near: a" after lookup a
+if let first: "first hit 1" after first
+if let second: "second 5" after first second
+if let neither: "neither" after first second else
+as const initializers: 8 after 
+binding scope: "outer" after inner scoped 9

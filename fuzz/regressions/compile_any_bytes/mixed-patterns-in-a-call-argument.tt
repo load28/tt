@@ -1,0 +1,3 @@
+declare function consume(n: number): void;
+declare const flag: boolean;
+consume(match (flag) { e => 1, false => 2 });

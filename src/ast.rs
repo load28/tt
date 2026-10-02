@@ -50,12 +50,29 @@ pub(crate) struct Program {
     /// would fail the self-check without a position — the semantic phase
     /// reports these as tt errors instead (the parser stays infallible).
     pub stray_pipes: Vec<usize>,
-    /// Byte offsets of `if let` sequences that could not be claimed as an
-    /// `if let` statement — same reporting story as [`Self::stray_pipes`]
-    /// (an undotted `if` followed by `let` is never valid TypeScript).
-    pub stray_if_lets: Vec<usize>,
-    /// Byte offsets of `result { ... }` blocks that could not be claimed.
-    pub stray_results: Vec<usize>,
+    /// `if let` statements that could not be claimed, each at the place its
+    /// parse stopped — same reporting story as [`Self::stray_pipes`] (an
+    /// undotted `if` followed by `let` is never valid TypeScript).
+    pub stray_if_lets: Vec<StrayIfLet>,
+}
+
+impl Drop for Program {
+    fn drop(&mut self) {
+        let segments = std::mem::take(&mut self.segments);
+        crate::stack::grow(|| drop(segments));
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StrayIfLet {
+    pub span: Span,
+    pub kind: StrayIfLetKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StrayIfLetKind {
+    Head,
+    ElseContinuation,
 }
 
 /// A tt-shaped source region which the parser deliberately left verbatim.
@@ -147,10 +164,16 @@ pub(crate) enum RecoveryKind {
     Expression,
     /// Replace an invalid statement with an empty statement.
     Statement,
+    OperandHead,
     /// Replace an invalid TypeScript type fragment with a literal type.
     Type,
     /// Replace an invalid variant declaration with a value-and-type placeholder.
-    VariantDecl { name: String, exported: bool },
+    /// `generics` is its type parameter list as written (`<T>`), or empty.
+    VariantDecl {
+        name: String,
+        generics: String,
+        exported: bool,
+    },
 }
 
 /// One top-level piece of a [`Program`], in source order.
@@ -251,6 +274,9 @@ pub(crate) enum PipeStepKind {
     /// whether the tail begins with `?.` rather than `.`; the parser has
     /// already validated the complete tail before constructing this node.
     Postfix { optional: bool },
+    /// No step was written after the `|>`: a syntax error node, spanning
+    /// nothing at the end of the `|>`.
+    Missing,
 }
 
 /// A statement-bodied tt `result { ... }` computation block. Direct `try`
@@ -358,6 +384,10 @@ pub(crate) struct LetElseStmt {
     /// `else`'s exits must not leave the construct's value region, so without a
     /// function written there the statement is rejected.
     pub in_function: bool,
+    /// Whether an `export` modifier precedes the declaration keyword
+    /// outside a function body; [`Self::owner_span`] then starts at it and
+    /// the bindings are exported.
+    pub exported: bool,
 }
 
 /// A structurally parsed tt `if let` statement:
@@ -470,6 +500,8 @@ pub(crate) struct VariantDecl {
     /// Complete source owner from `variant` or `export` through the closing
     /// brace.
     pub span: Span,
+    /// Byte offset of the `variant` keyword.
+    pub keyword_off: usize,
     pub name: String,
     /// Byte offset of the name, for error reporting and the symbol API.
     pub name_off: usize,
@@ -478,6 +510,9 @@ pub(crate) struct VariantDecl {
     pub declared: bool,
     /// The verbatim `<...>` generic parameter list, or `""`.
     pub generics: String,
+    /// Byte offset of [`VariantDecl::generics`] (just past the name when
+    /// there is none).
+    pub generics_off: usize,
     pub cases: Vec<VariantCase>,
 }
 
@@ -617,6 +652,7 @@ pub(crate) struct TupleArm {
     /// Whether every path out of a block body leaves it — see
     /// [`Arm::diverges`].
     pub diverges: bool,
+    pub missing: bool,
 }
 
 /// A tuple arm's pattern.
@@ -653,6 +689,7 @@ pub(crate) struct Arm {
     /// already yielded the arm's value, so the lowering's fall-through to
     /// `undefined` can never run. False for an expression body.
     pub diverges: bool,
+    pub missing: bool,
 }
 
 /// The `if <cond>` guard of a match arm.
@@ -705,6 +742,7 @@ pub(crate) struct InstancePattern {
     /// written. An empty list is retained so sema can issue the dedicated
     /// "remove the braces" diagnostic.
     pub bindings: Option<Vec<Binding>>,
+    pub list: Option<Span>,
 }
 
 /// One literal alternative inside a pattern.
@@ -827,6 +865,7 @@ pub(crate) struct TagPattern {
     pub end: usize,
     /// `None` = no parens at all; `Some(vec)` = a (possibly empty) binding list.
     pub bindings: Option<Vec<Binding>>,
+    pub list: Option<Span>,
 }
 
 /// One binding inside a pattern's parens: `name`, `name: alias`, or —
@@ -854,8 +893,12 @@ pub(crate) struct Binding {
 /// A template literal split into raw text and recursively parsed
 /// interpolations. Raw chunks include the surrounding backticks and the
 /// literal text; codegen re-emits `${` and `}` around each interpolation.
+/// An unterminated template may end with an interpolation that never
+/// closed.
 #[derive(Debug)]
 pub(crate) struct Template {
+    /// The whole literal, from its opening backtick.
+    pub span: Span,
     pub chunks: Vec<TemplateChunk>,
 }
 

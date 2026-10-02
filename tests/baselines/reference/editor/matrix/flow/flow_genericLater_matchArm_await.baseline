@@ -1,0 +1,8 @@
+differences from flow_genericLater_matchArm_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:4:72 ===
+  |   return match (flip()) { true => flow |> adder(await later(input)) |> keep, false => note("other arm", 0) };
+  |                                                                        ^ /*call*/
+  tt only: (alias) function keep<T>(value: T): T
+  ts only: (alias) function keep<number>(value: number): number
+

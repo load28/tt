@@ -1,0 +1,3 @@
+componentBody({"kind":"Num","value":1}) => "<p>1</p>" | number 1
+componentBody({"kind":"Neg","value":-1}) => "<p>-1</p>" | number -1
+componentBody({"kind":"Word","text":"w"}) => "<p>\"none\"</p>" | 

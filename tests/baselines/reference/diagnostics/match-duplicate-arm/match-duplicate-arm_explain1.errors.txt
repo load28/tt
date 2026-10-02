@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[match-duplicate-arm]: match: duplicate arm 200
+ --> ./main.tt:5:7
+  |
+5 |       0xc8 => "also ok",
+  |       ^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[match-duplicate-arm]: match: duplicate arm 200
+ --> main.tt:5:7
+  |
+5 |       0xc8 => "also ok",
+  |       ^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,2 @@
+switchClause(4) => {"kind":"Node","left":{"kind":"Leaf","value":4},"right":{"kind":"Node","left":{"kind":"Leaf","value":5},"right":{"kind":"Leaf","value":0}}} | discriminant 1; operand 4; operand 4; finally 0
+switchClause(9) => {"kind":"Node","left":{"kind":"Leaf","value":9},"right":{"kind":"Node","left":{"kind":"Leaf","value":10},"right":{"kind":"Leaf","value":0}}} | discriminant 1; operand 9; operand 9; finally 0

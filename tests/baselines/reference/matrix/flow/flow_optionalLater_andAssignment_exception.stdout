@@ -1,0 +1,3 @@
+andAssignment(4) => 0 | flip true; target {"value":0}
+andAssignment(6) => 36 | flip false; target {"value":"kept"}; risky 6; flip true; maybe true; add 12; twice 36
+andAssignment(8) => 48 | flip false; target {"value":"kept"}; risky 8; flip true; maybe true; add 16; twice 48

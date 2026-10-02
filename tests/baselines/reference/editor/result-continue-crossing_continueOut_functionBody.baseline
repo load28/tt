@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  5:111-5:119 "continue" error result-continue-crossing (ttc): `continue` cannot leave a `result` block
+

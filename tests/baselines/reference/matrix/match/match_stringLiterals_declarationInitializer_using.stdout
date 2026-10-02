@@ -1,0 +1,4 @@
+declarationInitializer("north") => 1 | open res; operand "north"; n 1; dispose res
+declarationInitializer("south") => 2 | open res; operand "south"; se 2; dispose res
+declarationInitializer("east") => 2 | open res; operand "east"; se 2; dispose res
+declarationInitializer("up") => 0 | open res; operand "up"; other 0; dispose res

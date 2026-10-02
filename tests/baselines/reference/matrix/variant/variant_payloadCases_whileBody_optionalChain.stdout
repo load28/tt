@@ -1,0 +1,2 @@
+whileBody(4) => [{"kind":"Circle","r":4},{"kind":"Rect","h":2}] | test true
+whileBody(9) => [{"kind":"Circle","r":9},{"kind":"Rect","h":2}] | test true

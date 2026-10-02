@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::file_without_flow_gets_no_composition_helper
+const a = x |> f;

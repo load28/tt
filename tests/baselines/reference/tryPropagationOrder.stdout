@@ -1,0 +1,13 @@
+operands ok: {"kind":"Ok","value":3} after a bb after
+first fails: {"kind":"Err","error":"a failed"} after a
+second fails: {"kind":"Err","error":"bb failed"} after a bb
+arguments ok: {"kind":"Ok","value":6} after x yy zzz add
+arguments fail: {"kind":"Err","error":"yy failed"} after x yy
+block ok: {"kind":"Ok","value":30} after first second tail
+block fail: {"kind":"Err","error":"second failed"} after first second
+statement ok: {"kind":"Ok","value":"done"} after check checked
+statement fail: {"kind":"Err","error":"check failed"} after check
+nested scope ok: {"kind":"Ok","value":5} after inner outcome Ok unwrapped
+nested scope fail: {"kind":"Err","error":"inner failed"} after inner outcome Err
+binds tightly: {"kind":"Ok","value":9} after scaled
+as const in the operand: {"kind":"Ok","value":8} after asserted

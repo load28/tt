@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 1) ====
+error[val-mutation]: cannot mutate through val binding `o` (the binding is declared with `val`, so every access path from it is read-only)
+ --> ./valJudgesOnlyPathsRootedAtTheBinding4.tt:2:5
+  |
+1 | val const o = { p: 1 };
+  | --- the read-only binding is declared here
+2 | [...o.p] = [1] as any;
+  |     ^
+  |
+  = help: remove `val` if this binding is intended to be mutable
+
+
+==== ttc --check-types (exit 1) ====
+error[val-mutation]: cannot mutate through val binding `o` (the binding is declared with `val`, so every access path from it is read-only)
+ --> valJudgesOnlyPathsRootedAtTheBinding4.tt:2:5
+  |
+1 | val const o = { p: 1 };
+  | --- the read-only binding is declared here
+2 | [...o.p] = [1] as any;
+  |     ^
+  |
+  = help: remove `val` if this binding is intended to be mutable
+error[ts2322]: Type 'any[]' is not assignable to type 'number'.
+ --> valJudgesOnlyPathsRootedAtTheBinding4.tt:2:5
+  |
+2 | [...o.p] = [1] as any;
+  |     ^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

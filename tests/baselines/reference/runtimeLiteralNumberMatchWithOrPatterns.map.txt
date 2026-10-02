@@ -1,0 +1,13 @@
+//// [runtimeLiteralNumberMatchWithOrPatterns.tt] 11 mapping(s)
+1:1 -> 19:1 len 50  "\nfunction status(code: 200 | 201 | 404 | 500) {\n"...
+3:3 -> 42:3 len 7  "return "
+3:17 -> 23:19 len 4  "code"
+4:5 -> 25:12 len 3  "200"
+4:11 -> 25:22 len 3  "201"
+4:18 -> 26:18 len 9  "\"success\""
+5:5 -> 29:12 len 3  "404"
+5:12 -> 30:18 len 11  "\"not found\""
+6:5 -> 33:12 len 3  "500"
+6:12 -> 34:18 len 14  "\"server error\""
+7:4 -> 42:16 len 82  ";\n}\n\nconsole.log(status(200), status(201), statu"...
+

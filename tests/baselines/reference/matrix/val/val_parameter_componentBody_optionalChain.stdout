@@ -1,0 +1,2 @@
+componentBody(3) => "<p>3</p>" | param 3
+componentBody(8) => "<p>undefined</p>" | param undefined

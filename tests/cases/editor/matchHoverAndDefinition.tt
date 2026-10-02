@@ -1,0 +1,11 @@
+// @hover: variantName, tag, binding, use
+// @definition: tag, use
+// @references: binding
+export variant Shape { Circle([|radius|]: number), Rect(width: number, height: number), Point }
+export function area(s: /*variantName*/Shape): number {
+  return match (s) {
+    /*tag*/Circle([|/*binding*/radius|]) => Math.PI * /*use*/[|radius|] ** 2,
+    Rect(width, height) => width * height,
+    Point => 0,
+  };
+}

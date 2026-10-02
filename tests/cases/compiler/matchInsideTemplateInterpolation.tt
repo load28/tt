@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::match_inside_template_interpolation
+const s = `v=${match (x) { A => 1, _ => 0 }}`;

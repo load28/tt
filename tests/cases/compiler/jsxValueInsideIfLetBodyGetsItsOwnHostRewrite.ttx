@@ -1,0 +1,9 @@
+// @origin: tests/compile.rs::jsx_value_inside_if_let_body_gets_its_own_host_rewrite
+variant E { A(value: string), B }
+const view = (node: E) => {
+  if let A(value) = node {
+    return <section data-kind={match (node) { A => "a", B => "b" }}>{value |> .trim()}</section>;
+  } else {
+    return null;
+  }
+};

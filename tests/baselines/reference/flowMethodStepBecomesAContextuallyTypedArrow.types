@@ -1,0 +1,4 @@
+=== flowMethodStepBecomesAContextuallyTypedArrow.tt ===
+const f = flow |> parse |> .toFixed(1);
+>f : const f: (...a: unknown[]) => any
+

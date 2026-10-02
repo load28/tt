@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_07.rs::ordinary_result_success_returns_from_expression_boundaries
+class Box { field = result { const value = try read(); return value; }; }
+class SwitchBox { field = result { const value = try read(); switch (value) { case 0: return 0; default: return value; } }; }
+function withDefault(value = result { const item = try read(); return item; }) { return value; }
+function* values() { yield result { const item = try read(); return item; }; }
+const text = `value=${result { const item = try read(); return item; }}`;

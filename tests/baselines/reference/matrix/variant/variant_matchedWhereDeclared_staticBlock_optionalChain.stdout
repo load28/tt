@@ -1,0 +1,2 @@
+staticBlock(4) => [5,0] | add 5; neg 0
+staticBlock(9) => [null,0] | add null; neg 0

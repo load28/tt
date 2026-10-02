@@ -209,6 +209,58 @@ fn watch_rebuilds_importers_of_a_deleted_or_renamed_file() {
     }
 }
 
+#[test]
+fn watch_rebuilds_an_input_when_a_tt_file_it_imports_changes() {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let root = Workspace::new("watch-imported-non-input");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::create_dir_all(root.join("shared")).unwrap();
+    fs::write(root.join("shared/s.tt"), "export variant S { A, B }\n").unwrap();
+    fs::write(
+        root.join("src/u.tt"),
+        "import { S } from \"../shared/s.tt\";\nexport const f = (s: S) => match (s) { A => 1, B => 2 };\n",
+    )
+    .unwrap();
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
+    command
+        .current_dir(&root)
+        .args(["--watch", "-o", "out", "src"])
+        .stderr(Stdio::piped())
+        .stdout(Stdio::null());
+    root.isolate_unfinalized_child_profile(&mut command);
+    let mut child = command.spawn().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let (send, receive) = mpsc::channel();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines() {
+            let _ = send.send(line.unwrap());
+        }
+    });
+    let round = || loop {
+        let line = receive.recv_timeout(Duration::from_secs(10)).unwrap();
+        if line.contains("file(s)") {
+            return line;
+        }
+    };
+    let result = std::panic::catch_unwind(|| {
+        assert_eq!(round(), "ttc: 1 file(s) ok — watching");
+        assert!(round().contains("Ctrl-C"));
+        fs::write(root.join("shared/s.tt"), "export variant S { A, B, C }\n").unwrap();
+        assert_eq!(round(), "ttc: 1 file(s) rebuilt, with errors — watching");
+        fs::write(root.join("shared/s.tt"), "export variant S { A, B }\n").unwrap();
+        assert_eq!(round(), "ttc: 1 file(s) ok — watching");
+    });
+    let _ = child.kill();
+    let _ = child.wait();
+    reader.join().unwrap();
+    if let Err(error) = result {
+        std::panic::resume_unwind(error);
+    }
+}
+
 fn have_node() -> bool {
     Command::new("node")
         .arg("--version")
@@ -347,6 +399,54 @@ fn sidecars_read_declarations_from_the_layout_tsc_emits() {
             .unwrap()
             .contains("const y = 2")
     );
+}
+
+/// tsc's declarations for ttc's output name a tt module by the file it
+/// compiles to; a sidecar is read where the source is, so it names that
+/// module as the source does — the spelling `--types` writes. A specifier
+/// that names hand-written TypeScript, or a package, stays as tsc wrote it.
+#[test]
+fn sidecars_name_tt_modules_as_the_source_does() {
+    let root = Workspace::new("sidecar-specifiers");
+    let declarations = "import { K } from \"./sub/m.js\";\n\
+        import type { V } from './sub/v.jsx';\n\
+        import type { W } from './sub/w.js';\n\
+        import { h } from \"./h.js\";\n\
+        export * from \"./sub/m.ts\";\n\
+        export { K } from \"pkg/m.js\";\n\
+        export declare const k: K;\n\
+        export type T = import(\"./sub/m.js\").K | V | W | typeof h;\n";
+    write_all(
+        &root,
+        &[
+            ("src/sub/m.tt", "export variant K { A, B }\n"),
+            ("src/sub/v.ttx", "export type V = number;\n"),
+            ("src/sub/w.ttx", "export type W = string;\n"),
+            ("src/h.ts", "export const h = 1;\n"),
+            (
+                "src/u.tt",
+                "import { K } from \"./sub/m.tt\";\nexport const k: K = K.A;\n",
+            ),
+            ("decl/u.d.ts", declarations),
+            ("decl/sub/m.d.ts", "export type K = { kind: \"A\" };\n"),
+            ("decl/sub/v.d.ts", "export type V = number;\n"),
+            ("decl/sub/w.d.ts", "export type W = string;\n"),
+        ],
+    );
+    let expected = "import { K } from \"./sub/m.tt\";\n\
+        import type { V } from './sub/v.ttx';\n\
+        import type { W } from './sub/w.ttx';\n\
+        import { h } from \"./h.js\";\n\
+        export * from \"./sub/m.tt\";\n\
+        export { K } from \"pkg/m.js\";\n\
+        export declare const k: K;\n\
+        export type T = import(\"./sub/m.tt\").K | V | W | typeof h;\n";
+    success(run(&root, &["--sidecar", "decl", "src"]));
+    success(run(&root, &["--sidecar", "decl", "-o", "types", "src"]));
+    for sidecar in ["src/u.tt.d.ts", "types/u.tt.d.ts"] {
+        let written = fs::read_to_string(root.join(sidecar)).unwrap();
+        assert!(written.contains(expected), "{sidecar}:\n{written}");
+    }
 }
 
 #[test]

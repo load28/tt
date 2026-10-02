@@ -1,0 +1,2 @@
+whileBody(4) => [{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":4},{"kind":"Get","url":"c"},{"kind":"Head"}] | open res; test true; operand 4; dispose res
+whileBody(9) => [{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":9},{"kind":"Get","url":"c"},{"kind":"Head"}] | open res; test true; operand 9; dispose res

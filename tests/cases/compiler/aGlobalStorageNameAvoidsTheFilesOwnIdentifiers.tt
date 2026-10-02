@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_11.rs::a_global_storage_name_avoids_the_files_own_identifiers
+declare const $tt_v0$total: number;
+declare const o: { kind: "A" } | { kind: "B" };
+const total = match (o) { A => $tt_v0$total, B => 2 };

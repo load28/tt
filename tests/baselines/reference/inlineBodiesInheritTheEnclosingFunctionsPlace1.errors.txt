@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./inlineBodiesInheritTheEnclosingFunctionsPlace1.tt → $DIR/out/inlineBodiesInheritTheEnclosingFunctionsPlace1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'Result'.
+ --> inlineBodiesInheritTheEnclosingFunctionsPlace1.tt:2:19
+  |
+2 | function f(e: E): Result<number, string> {
+  |                   ^^^^^^
+error[ts2304]: Cannot find name 'g'.
+ --> inlineBodiesInheritTheEnclosingFunctionsPlace1.tt:4:19
+  |
+4 |     const n = try g(x);
+  |                   ^
+error[ts2304]: Cannot find name 'Result'.
+ --> inlineBodiesInheritTheEnclosingFunctionsPlace1.tt:5:12
+  |
+5 |     return Result.Ok(n);
+  |            ^^^^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> inlineBodiesInheritTheEnclosingFunctionsPlace1.tt:7:10
+  |
+7 |   return Result.Ok(0);
+  |          ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+inlineBodiesInheritTheEnclosingFunctionsPlace1.ts(8,19): error TS2304: Cannot find name 'Result'.
+inlineBodiesInheritTheEnclosingFunctionsPlace1.ts(13,22): error TS2304: Cannot find name 'g'.
+inlineBodiesInheritTheEnclosingFunctionsPlace1.ts(18,12): error TS2304: Cannot find name 'Result'.
+inlineBodiesInheritTheEnclosingFunctionsPlace1.ts(21,10): error TS2304: Cannot find name 'Result'.

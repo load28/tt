@@ -1,0 +1,2 @@
+jsxNested(10) => "<ul><li>1</li><li>9</li></ul>" | first 1; operand 10; flip true; lookup true; found 9; finally 0
+jsxNested(20) => "<ul><li>1</li><li>40</li></ul>" | first 1; operand 20; flip false; lookup false; double 40; finally 0

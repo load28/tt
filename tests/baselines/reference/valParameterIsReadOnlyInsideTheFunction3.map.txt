@@ -1,0 +1,3 @@
+//// [valParameterIsReadOnlyInsideTheFunction3.tt] 1 mapping(s)
+1:1 -> 1:1 len 53  "function update(user: User) {\n  user.name = \"Lee"...
+

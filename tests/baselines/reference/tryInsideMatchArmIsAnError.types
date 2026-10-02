@@ -1,0 +1,11 @@
+=== tryInsideMatchArmIsAnError.tt ===
+const x = match (r) {
+>x : const x: any
+  Ok(value) => { const y = try f(value); return y; },
+>value : const value: any
+>y : const y: any
+>y : const y: any
+  Err(error) => fallback(error),
+>error : const error: any
+>error : const error: any
+

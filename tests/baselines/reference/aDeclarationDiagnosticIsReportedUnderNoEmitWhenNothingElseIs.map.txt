@@ -1,0 +1,3 @@
+//// [a.tt] 1 mapping(s)
+1:1 -> 1:1 len 40  "export const x = Math.random() ? 0 : 1;\n"
+

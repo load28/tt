@@ -1,0 +1,12 @@
+//// [rewriteComposesWithTtConstructsInTheSameFile.tt] 10 mapping(s)
+1:1 -> 19:1 len 41  "\nimport { CalcError } from \"./error.tt\";\n"
+3:32 -> 22:31 len 6  "number"
+3:32 -> 25:20 len 6  "number"
+3:48 -> 27:3 len 1  "\n"
+4:1 -> 46:1 len 13  "const area = "
+4:21 -> 30:17 len 11  "Shape.Point"
+5:10 -> 33:15 len 6  "radius"
+5:21 -> 34:16 len 6  "radius"
+6:12 -> 38:16 len 1  "0"
+7:2 -> 46:20 len 2  ";\n"
+

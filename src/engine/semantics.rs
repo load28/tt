@@ -79,6 +79,20 @@ pub struct Diagnostic {
     pub labels: Vec<DiagnosticLabel>,
 }
 
+impl Diagnostic {
+    /// Whether the diagnostic states a tt rule, whatever answered it — a
+    /// projection, the declarations, or the checker (a `match`'s missing
+    /// cases, a `val` binding's mutation, a `return` of a Result) — rather
+    /// than TypeScript's own verdict on the user's code. These are the
+    /// layer a tt-only check reports ([`super::CheckRequest::tt_only`]).
+    pub(crate) fn states_tt_rule(&self) -> bool {
+        self.code
+            .as_deref()
+            .and_then(crate::DiagnosticCode::parse)
+            .is_some()
+    }
+}
+
 /// One secondary span of a [`Diagnostic`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiagnosticLabel {
@@ -207,7 +221,7 @@ type MatchAlphabets = (usize, Vec<Vec<String>>);
 pub(crate) struct FileSemantics {
     /// The imported declarations in this file's scope (aliases applied) —
     /// half of the cache key, and `checked_coverage`'s input.
-    pub externs: Vec<crate::VariantSymbol>,
+    pub externs: Vec<crate::resolve::ImportedVariant>,
     /// The file's pattern analyses over those externs.
     pub analyses: crate::PatternAnalyses,
 }

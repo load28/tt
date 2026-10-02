@@ -1,0 +1,5 @@
+topLevel(200) => true | await; success true
+topLevel(201) => true | await; success true
+topLevel(404) => false | await; missing false
+topLevel(500) => false | await; guard true; server false
+topLevel(7) => null | await; other null

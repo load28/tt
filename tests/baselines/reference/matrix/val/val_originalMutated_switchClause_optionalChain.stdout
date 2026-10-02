@@ -1,0 +1,2 @@
+switchClause(3) => 13 | discriminant 1; original 13
+switchClause(8) => null | discriminant 1; original null

@@ -226,6 +226,37 @@ fn an_imported_case_without_declaration_ownership_uses_checker_evidence() {
     );
 }
 
+/// TASK-620: a case the scrutinee cannot be is reported at the pattern that
+/// names it, one diagnostic per pattern, while the missing case stays at
+/// the match.
+#[test]
+fn an_impossible_case_is_reported_at_its_pattern() {
+    require_tsgo!();
+    let source = "variant S { A, B }\n\
+        declare const s: S;\n\
+        export const r = match (s) { A => 1, Zzz => 2 };\n\
+        match (s) { A => {}, B => {}, Yyy | Www => {} }\n";
+    let dir = project(&[("src/m.tt", source)]);
+
+    let out = check(&dir);
+    for (line, column) in [(3, 38), (4, 31), (4, 37)] {
+        assert!(
+            out.contains(&format!("src/m.tt:{line}:{column}")),
+            "the impossible case is underlined where it is written: {out}"
+        );
+    }
+    assert!(out.contains("missing \"B\""), "{out}");
+
+    let answer = typed_server(&dir, "src/m.tt", source);
+    let diagnostics = answer["result"]["diagnostics"].as_array().unwrap();
+    let cases: Vec<&str> = diagnostics
+        .iter()
+        .filter(|diagnostic| diagnostic["code"] == "ts2678")
+        .map(|diagnostic| source_slice(source, diagnostic))
+        .collect();
+    assert_eq!(cases, ["Zzz", "Yyy", "Www"], "{answer}");
+}
+
 #[test]
 fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
     require_tsgo!();
@@ -260,6 +291,56 @@ fn parser_errors_do_not_hide_an_independent_type_error_in_the_same_file() {
             && out.contains("required type: `TResult<number, string>`"),
         "the independent bindNonResult type error survives recovery: {out}"
     );
+}
+
+#[test]
+fn a_discarded_result_does_not_hide_the_file_s_type_errors() {
+    require_tsgo!();
+    // TASK-548: a discarded `result` block is a recoverable tt error; the
+    // typed projection recovers every one of them, the second found only
+    // once the first is recovered.
+    let dir = project(&[(
+        "src/discarded.tt",
+        "import * as Result from \"@tt/std/result\";\n\
+         export function run() {\n\
+         \x20 result { const q = try Result.Ok(1); return q; };\n\
+         \x20 result { const r = try Result.Ok(2); return r; };\n\
+         }\n\
+         export const z: string = 1;\n",
+    )]);
+    let out = check(&dir);
+    assert!(
+        block(&out, "result-value-discarded").contains("discarded.tt:3:3"),
+        "{out}"
+    );
+    assert!(
+        block(&out, "ts2322").contains("discarded.tt:6:14"),
+        "the file's type error is reported beside the tt error: {out}"
+    );
+}
+
+#[test]
+fn a_result_without_a_success_value_owns_its_slot_s_consequence() {
+    require_tsgo!();
+    // TASK-548: the slot read in place of the block is anchored to it, so
+    // TypeScript's use-before-assignment error there is the tt error's
+    // consequence, not a second diagnostic.
+    let dir = project(&[(
+        "src/fallthrough.tt",
+        "import type { TResult } from \"@tt/std\";\n\
+         declare function fetchJob(): TResult<string, \"offline\">;\n\
+         declare function persist(job: string): void;\n\
+         export const queued = result {\n\
+         \x20 const job = try fetchJob();\n\
+         \x20 persist(job);\n\
+         };\n",
+    )]);
+    let out = check(&dir);
+    assert!(
+        block(&out, "result-no-success-value").contains("fallthrough.tt:4:23"),
+        "{out}"
+    );
+    assert!(!out.contains("ts2454"), "{out}");
 }
 
 #[test]
@@ -313,7 +394,7 @@ fn literal_exhaustiveness_uses_the_narrowed_type_at_the_match() {
 }
 
 #[test]
-fn variant_exhaustiveness_uses_the_narrowed_type_at_the_match() {
+fn variant_exhaustiveness_uses_the_declared_cases_at_the_match() {
     require_tsgo!();
     let dir = project(&[(
         "src/shape.tt",
@@ -327,12 +408,8 @@ fn variant_exhaustiveness_uses_the_narrowed_type_at_the_match() {
     )]);
     let out = check(&dir);
     assert!(
-        out.contains("missing \"Square\""),
-        "the narrowed type still allows Square: {out}"
-    );
-    assert!(
-        !out.contains("Point"),
-        "the guard removed Point before the match: {out}"
+        out.contains("missing \"Square\", \"Point\""),
+        "the guard does not remove a declared case: {out}"
     );
 }
 
@@ -614,7 +691,7 @@ fn an_answer_past_the_pipe_buffer_still_arrives() {
     let out = check(&dir);
     assert_eq!(
         out.lines()
-            .filter(|l| l.contains("type mismatch: expected `number`"))
+            .filter(|l| l.contains("Type 'string' is not assignable to type 'number'."))
             .count(),
         400,
         "every diagnostic of a >64 KB answer arrives: {out}"
@@ -696,13 +773,13 @@ fn a_type_error_is_reported_at_its_position_in_the_tt_source() {
         "src/bad.tt",
         // A multi-byte prefix: TypeScript counts UTF-16 code units and the
         // `.tt` position is a byte offset, so the two have to be converted.
-        "export function go(): void {\n  const 한글: string = 1;\n}\n",
+        "export function go(): void {\n  /*한글*/ const bad: string = 1;\n}\n",
     )]);
     let out = check(&dir);
-    let reported = block(&out, "type mismatch:");
+    let reported = block(&out, "is not assignable");
     assert!(
-        reported.contains("--> src/bad.tt:2:22"),
-        "the diagnostic belongs at the incompatible expression in the .tt file: {out}"
+        reported.contains("--> src/bad.tt:2:16"),
+        "the diagnostic belongs at TypeScript's position in the .tt file: {out}"
     );
 }
 
@@ -723,7 +800,7 @@ fn typed_exhaustiveness_sees_a_hole_inside_a_payload() {
     )]);
     let out = check(&dir);
     assert!(
-        out.contains("match is not exhaustive: missing \"Wrap(inner: No())\""),
+        out.contains("match on variant Outer is not exhaustive: missing \"Wrap(inner: No())\""),
         "the typed path sees the payload hole: {out}"
     );
 }

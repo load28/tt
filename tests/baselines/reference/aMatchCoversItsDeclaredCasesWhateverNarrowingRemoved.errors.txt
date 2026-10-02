@@ -1,0 +1,31 @@
+==== ttc --out-dir (exit 1) ====
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Rect"
+  --> ./aMatchCoversItsDeclaredCasesWhateverNarrowingRemoved.tt:11:10
+   |
+11 |   return match (s) { Circle(r) => r };
+   |          ^^^^^^^^^
+   |
+   = help: add the missing arms: `, Rect(w) => undefined,`
+   = help: or add a final `_` arm: `, _ => undefined,`
+
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Rect"
+  --> aMatchCoversItsDeclaredCasesWhateverNarrowingRemoved.tt:11:10
+   |
+11 |   return match (s) { Circle(r) => r };
+   |          ^^^^^^^^^
+   |
+   = help: add the missing arms: `, Rect(w) => undefined,`
+   = help: or add a final `_` arm: `, _ => undefined,`
+error[match-not-exhaustive]: match on literal union is not exhaustive: missing 2
+  --> aMatchCoversItsDeclaredCasesWhateverNarrowingRemoved.tt:14:10
+   |
+14 |   return match (n) { 1 => "one" };
+   |          ^^^^^^^^^
+   |
+   = help: add the missing arms: `, 2 => undefined,`
+   = help: or add a final `_` arm: `, _ => undefined,`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

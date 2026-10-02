@@ -1,0 +1,2 @@
+constructorBody(2) => 2 | risky 2; read 2; then 2
+constructorBody(-1) => "none" | risky -1; read -1

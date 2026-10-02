@@ -1,0 +1,2 @@
+whileBody(3) => {"n":3} | test true; operand 3; caught {"n":3}; finally 0
+whileBody(8) => {"n":8} | test true; operand 8; caught {"n":8}; finally 0

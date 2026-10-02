@@ -1,0 +1,2 @@
+logicalAssignmentValue(2) => [null,null] | flip true; receiver {"factor":3}; await
+logicalAssignmentValue(7) => ["kept","kept"] | flip false

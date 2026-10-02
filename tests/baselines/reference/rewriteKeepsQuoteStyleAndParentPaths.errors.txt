@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./rewriteKeepsQuoteStyleAndParentPaths.tt → $DIR/out/rewriteKeepsQuoteStyleAndParentPaths.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2307]: Cannot find module './x.tt' or its corresponding type declarations.
+ --> rewriteKeepsQuoteStyleAndParentPaths.tt:1:15
+  |
+1 | import a from './x.tt';
+  |               ^^^^^^^^
+error[ts2307]: Cannot find module '../up/y.tt' or its corresponding type declarations.
+ --> rewriteKeepsQuoteStyleAndParentPaths.tt:2:15
+  |
+2 | import b from "../up/y.tt";
+  |               ^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+rewriteKeepsQuoteStyleAndParentPaths.ts(1,15): error TS2307: Cannot find module './x.js' or its corresponding type declarations.
+rewriteKeepsQuoteStyleAndParentPaths.ts(2,15): error TS2307: Cannot find module '../up/y.js' or its corresponding type declarations.

@@ -1,0 +1,4 @@
+jsxFragment("north") => "<>[1]</>" | before "["; yield "north"; n 1; after "]"
+jsxFragment("south") => "<>[2]</>" | before "["; yield "south"; se 2; after "]"
+jsxFragment("east") => "<>[2]</>" | before "["; yield "east"; se 2; after "]"
+jsxFragment("up") => "<>[0]</>" | before "["; yield "up"; other 0; after "]"

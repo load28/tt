@@ -1,0 +1,66 @@
+//// [scopedGenericCallRetainsExplicitTypeArguments.tt] ////
+
+variant State { Ready(value: number), Empty }
+type Item = {kind: "item"; run: (x: number) => number};
+declare const state: State;
+declare function consume<T>(item: T): void;
+consume<Item>(match (state) {
+    Ready(value) => ({kind: "item", run: x => x + value}),
+    Empty => ({kind: "item", run: x => x}),
+});
+
+export {};
+
+
+//// [scopedGenericCallRetainsExplicitTypeArguments.ts]
+function $tt_show(value: unknown): string {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "bigint") {
+    return String(value) + "n";
+  }
+  if (typeof value === "object" || typeof value === "function") {
+    try {
+      const text = JSON.stringify(value);
+      if (typeof text === "string") {
+        return text;
+      }
+    } catch {}
+    return typeof value;
+  }
+  return String(value);
+}
+
+type State =
+  | { kind: "Ready"; value: number }
+  | { kind: "Empty" };
+const State = {
+  Ready: (value: number): State => ({ kind: "Ready", value }),
+  Empty: { kind: "Empty" } as const,
+};
+type Item = {kind: "item"; run: (x: number) => number};
+declare const state: State;
+declare function consume<T>(item: T): void;
+const $tt_v1 = (consume);
+const $tt_v2 = $tt_v1<Item>;
+{
+  const $tt_m = state;
+  switch ($tt_m.kind) {
+    case "Ready": {
+      const { value } = $tt_m;
+      $tt_v2(({kind: "item", run: x => x + value}));
+      break;
+    }
+    case "Empty": {
+      $tt_v2(({kind: "item", run: x => x}));
+      break;
+    }
+    default: {
+      throw new Error("tt match: unexpected case " + $tt_show($tt_m));
+    }
+  }
+}
+
+
+export {};

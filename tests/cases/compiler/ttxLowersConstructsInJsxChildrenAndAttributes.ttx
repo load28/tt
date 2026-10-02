@@ -1,0 +1,15 @@
+// @origin: tests/compile/cases_01.rs::ttx_lowers_constructs_in_jsx_children_and_attributes
+variant State { Ready(value: string), Empty }
+declare const state: State;
+const child = <section>{match (state) {
+  Ready(value) => <strong>{value}</strong>,
+  Empty => <span>empty</span>,
+}}</section>;
+const prop = <Panel before={mark("before")} render={() => match (state) {
+  Ready(value) => <strong>{value}</strong>,
+  Empty => null,
+}} after={mark("after")} />;
+const ordered = (state: State) => <Panel before={mark("first")} value={match (state) {
+  Ready(value) => value,
+  Empty => "",
+}} after={mark("last")} />;

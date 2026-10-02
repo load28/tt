@@ -10,7 +10,7 @@ mod planning;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 
-use super::rope::{Flat, Rope, SourcePreservation};
+use super::rope::{Flat, GovernedStatement, Rope, SourcePreservation};
 use crate::analysis::SemanticFile;
 use crate::core_ir::*;
 use crate::evaluation_ir::{
@@ -22,9 +22,9 @@ use crate::hir::ids::Idx;
 use crate::hir::{self, ArmBodyKind, BindingMode, ExprId, NodeId};
 use crate::program_syntax::{
     ConditionalBranch, EvaluationInputMode, HostContinuation, HostEvaluationOperation, HostExit,
-    HostOwnerKind, LoopTestKind, SourceSpan,
+    HostOwnerKind, LoopTestKind, OptionalCallTest, SourceSpan,
 };
-use crate::{AnchorKind, ImportRewrite, SourceKind, StdImports};
+use crate::{AnchorKind, RewrittenExtensions, SourceKind, StdImports};
 
 use emitter::*;
 use planning::*;
@@ -77,7 +77,7 @@ pub(crate) fn lowering_plan_with(
     tokens: &[crate::lexer::Token],
     tolerant: bool,
 ) -> Result<LoweringPlan, LoweringFailure> {
-    if !core.requires_host_lowering() {
+    if !core.requires_host_lowering() && !core.imports_std() {
         return Ok(LoweringPlan::default());
     }
     let primary_source = || {
@@ -91,7 +91,7 @@ pub(crate) fn lowering_plan_with(
                 end: source.len(),
             })
     };
-    let syntax = match crate::program_syntax::ProgramSyntax::build_with(
+    let mut syntax = match crate::program_syntax::ProgramSyntax::build_with(
         semantic,
         core,
         source,
@@ -117,15 +117,17 @@ pub(crate) fn lowering_plan_with(
     let evaluation =
         crate::evaluation_ir::EvaluationFile::build(&syntax, core).map_err(|error| {
             LoweringFailure::Evaluation {
+                source: error.source().unwrap_or_else(primary_source),
                 error,
-                source: primary_source(),
             }
         })?;
-    let plan = evaluation
+    let mut plan = evaluation
         .lowering_plan(core)
         .map_err(|error| LoweringFailure::Evaluation {
+            source: error
+                .source()
+                .unwrap_or_else(|| evaluation.primary_source()),
             error,
-            source: evaluation.primary_source(),
         })?;
     // The plan validators are pipeline stages, not tests: a violated
     // evaluation contract fails the build here, before emission starts
@@ -136,7 +138,107 @@ pub(crate) fn lowering_plan_with(
     if let Err(error) = evaluation.validate_reference(&plan) {
         error.raise();
     }
+    plan.completion_scopes = syntax.take_completion_scopes();
     Ok(plan)
+}
+
+fn governed_statements(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    target: &TargetRewritePlan,
+    governed: &[crate::ast::Span],
+) -> Vec<GovernedStatement> {
+    if governed.is_empty() {
+        return Vec::new();
+    }
+    let node_span = |node| {
+        semantic
+            .hir
+            .source_map
+            .node_span(node)
+            .map(SourceSpan::from)
+    };
+    let lowered = core
+        .bodies
+        .iter()
+        .flat_map(|body| &body.statements)
+        .filter_map(|statement| match statement {
+            Statement::Propagate(propagate) => node_span(propagate.owner),
+            Statement::Decision(decision) => node_span(decision.extent),
+            Statement::Expr(expr) => structured_expr_span(semantic, core, *expr),
+            Statement::Adt(adt) => node_span(adt.node),
+            Statement::Opaque(_) | Statement::Import(_) => None,
+        });
+    let owners = target
+        .owner_slots
+        .iter()
+        .map(|rewrite| rewrite.owner)
+        .chain(target.composes.iter().map(|rewrite| rewrite.owner))
+        .chain(
+            target
+                .for_initializer_propagations
+                .iter()
+                .map(|rewrite| rewrite.owner),
+        )
+        .chain(target.loop_tests.iter().map(|rewrite| rewrite.owner))
+        .chain(target.declarator_splits.iter().map(|split| split.statement));
+    let mut statements: Vec<GovernedStatement> = lowered
+        .chain(owners)
+        .filter_map(|span| {
+            let line = governed
+                .iter()
+                .find(|line| line.start <= span.start && span.start <= line.end)?;
+            Some(GovernedStatement {
+                start: span.start,
+                end: span.end.max(line.end),
+                line_end: line.end,
+            })
+        })
+        .collect();
+    statements.extend(decisions(core).flat_map(|decision| {
+        let ends = decision
+            .arms
+            .iter()
+            .skip(1)
+            .map(|arm| arm.gap)
+            .chain([decision.trailing]);
+        decision
+            .arms
+            .iter()
+            .zip(ends)
+            .filter_map(|(arm, end)| {
+                let start = arm.gap?.end;
+                let end = end?.start;
+                let line = governed
+                    .iter()
+                    .find(|line| line.start <= start && start <= line.end)?;
+                Some(GovernedStatement {
+                    start,
+                    end: end.max(line.end),
+                    line_end: line.end,
+                })
+            })
+            .collect::<Vec<_>>()
+    }));
+    statements.sort_unstable_by_key(|statement| (statement.start, statement.end));
+    statements.dedup();
+    statements
+}
+
+/// Every pattern decision of the file: those written as statements and
+/// those inside expressions.
+fn decisions(core: &CoreFile) -> impl Iterator<Item = &Decision> {
+    core.bodies
+        .iter()
+        .flat_map(|body| &body.statements)
+        .filter_map(|statement| match statement {
+            Statement::Decision(decision) => Some(decision),
+            _ => None,
+        })
+        .chain(core.exprs.iter().filter_map(|expr| match expr {
+            Expr::Decision(decision) => Some(decision),
+            _ => None,
+        }))
 }
 
 fn span_index(spans: impl Iterator<Item = SourceSpan>) -> crate::span_index::SpanIndex {
@@ -169,6 +271,7 @@ pub(crate) struct EmitSource<'a> {
     pub(crate) text: &'a str,
     pub(crate) kind: SourceKind,
     pub(crate) automatic_semicolons: &'a [crate::lexer::AutomaticSemicolon],
+    pub(crate) comments: &'a [crate::ast::Span],
 }
 
 pub(crate) fn emit_with_map<'a>(
@@ -176,18 +279,26 @@ pub(crate) fn emit_with_map<'a>(
     core: &'a CoreFile,
     emit_source: EmitSource<'a>,
     lowering_plan: &LoweringPlan,
-    rewrite_imports: ImportRewrite,
+    rewrite_imports: Option<RewrittenExtensions>,
     std_imports: StdImports<'a>,
 ) -> Flat {
     let EmitSource {
         text: source,
         kind: source_kind,
         automatic_semicolons,
+        comments,
     } = emit_source;
+    let governed = crate::lexer::directive_governed_lines(source, comments);
     let target = TargetRewritePlan::build(semantic, core, source, lowering_plan);
     let script = target.script;
+    let std_imports = match std_imports.commonjs {
+        Some(commonjs) if target.commonjs && !script => *commonjs,
+        _ => std_imports,
+    };
+    let local_runtime = script || target.commonjs;
     let direct_apply_inputs = direct_apply_inputs(semantic, core, source, source_kind);
     let member_apply_steps = member_apply_steps(semantic, core, source, source_kind);
+    let reference_apply_steps = reference_apply_steps(semantic, core, source, source_kind);
     let mut relocated: Vec<SourceSpan> = target
         .source_replacements
         .iter()
@@ -228,6 +339,59 @@ pub(crate) fn emit_with_map<'a>(
         .chain(&target.recovered_matches)
         .map(|(_, span)| *span)
         .collect();
+    let governed_statements = governed_statements(semantic, core, &target, &governed);
+    let for_initializer_nodes: HashSet<NodeId> = target
+        .for_initializer_propagations
+        .iter()
+        .map(|rewrite| rewrite.node)
+        .collect();
+    let rebuilt_statements = core
+        .bodies
+        .iter()
+        .flat_map(|body| &body.statements)
+        .filter_map(|statement| match statement {
+            Statement::Propagate(propagate)
+                if propagate.binding.is_some()
+                    && !for_initializer_nodes.contains(&propagate.node) =>
+            {
+                Some(propagate.owner)
+            }
+            Statement::Decision(decision)
+                if matches!(decision.kind, DecisionKind::LetElse { .. }) =>
+            {
+                Some(decision.extent)
+            }
+            _ => None,
+        })
+        .filter_map(|node| semantic.hir.source_map.node_span(node))
+        .map(|span| span.start);
+    let relocated_documentation: HashMap<usize, SourceSpan> = target
+        .owner_slots
+        .iter()
+        .map(|rewrite| rewrite.owner.start)
+        .chain(
+            target
+                .for_initializer_propagations
+                .iter()
+                .map(|rewrite| rewrite.owner.start),
+        )
+        .chain(target.composes.iter().map(|rewrite| rewrite.owner.start))
+        .chain(rebuilt_statements)
+        .filter_map(|statement| {
+            crate::lexer::leading_documentation(source, comments, &governed, statement).map(
+                |span| {
+                    (
+                        statement,
+                        SourceSpan {
+                            start: span.start,
+                            end: span.end,
+                        },
+                    )
+                },
+            )
+        })
+        .collect();
+    relocated.extend(relocated_documentation.values().copied());
     let emitter = Emitter {
         semantic,
         core,
@@ -235,6 +399,7 @@ pub(crate) fn emit_with_map<'a>(
         source_kind,
         direct_apply_inputs,
         member_apply_steps,
+        reference_apply_steps,
         rewrite_imports,
         std_imports,
         owner_slot_index: span_index(target.owner_slots.iter().map(|rewrite| rewrite.owner)),
@@ -255,6 +420,11 @@ pub(crate) fn emit_with_map<'a>(
         for_initializer_propagations: target.for_initializer_propagations,
         compose_index: span_index(target.composes.iter().map(|rewrite| rewrite.owner)),
         compose_rewrites: target.composes,
+        declarator_splits: target.declarator_splits,
+        emitted_declarator_separators: ClosedComposeBlocks::default(),
+        emitted_declarator_heads: ClosedComposeBlocks::default(),
+        opened_declaration_scopes: ClosedComposeBlocks::default(),
+        closed_declaration_scopes: ClosedComposeBlocks::default(),
         loop_body_index: span_index(target.loop_tests.iter().map(|rewrite| rewrite.body)),
         loop_test_rewrites: target.loop_tests,
         replacement_index: span_index(
@@ -265,6 +435,7 @@ pub(crate) fn emit_with_map<'a>(
         ),
         source_replacements: target.source_replacements,
         active_capture_sources: RefCell::new(Vec::new()),
+        delivered_conditional_values: RefCell::new(HashSet::new()),
         consumed_exprs: target.consumed_exprs,
         arrow_returns_by_expr: target.arrow_returns.iter().enumerate().rev().fold(
             HashMap::new(),
@@ -304,6 +475,12 @@ pub(crate) fn emit_with_map<'a>(
         host_string: target.host_string,
         inline_subjects: target.inline_subjects,
         block_required_statements: target.block_required_statements,
+        documentation_starts: relocated_documentation
+            .values()
+            .map(|span| (span.start, *span))
+            .collect(),
+        relocated_documentation,
+        emitted_documentation: ClosedComposeBlocks::default(),
         block_required_by_end: target.block_required_owners.iter().fold(
             std::collections::BTreeMap::new(),
             |mut by_end: std::collections::BTreeMap<usize, Vec<SourceSpan>>, owner| {
@@ -329,12 +506,14 @@ pub(crate) fn emit_with_map<'a>(
         used_expression_boundary: Cell::new(false),
         used_pipe: Cell::new(false),
         used_flow: Cell::new(false),
+        imported_std: RefCell::new(Vec::new()),
         generated_names: RefCell::new(lowering_plan.generated_names().cloned().unwrap_or_else(
             || crate::generated_names::GeneratedNames::for_source(source, source_kind),
         )),
         global_temps: target.global_temps,
+        comments,
     };
-    let mut output = emitter.emit_body(core.root);
+    let mut output = emitter.emit_file(core.root);
     let used_pipe = emitter.used_pipe.get();
     let used_flow = emitter.used_flow.get();
     let used_show = emitter.used_match_show.get();
@@ -353,34 +532,39 @@ pub(crate) fn emit_with_map<'a>(
         .map(|(export, _)| (export, emitter.generated_name(export)))
         .collect();
     let show = used_show.then(|| match_show_body(&emitter.host_json, &emitter.host_string));
-    let mut prelude = String::new();
+    let mut prelude: Vec<String> = Vec::new();
+    if target.commonjs && !script {
+        for (export, local) in &runtime_helpers {
+            prelude.push(script_runtime_helper(export, local));
+        }
+    }
     if script {
         for alias in &aliases {
-            prelude.push_str(&format!("var {} = {};\n", alias.name, alias.capture));
+            prelude.push(format!("var {} = {};\n", alias.name, alias.capture));
         }
         for (export, local) in &runtime_helpers {
-            prelude.push_str(&script_runtime_helper(export, local));
+            prelude.push(script_runtime_helper(export, local));
         }
         if emitter.used_match_raise.get() {
-            prelude.push_str(&format!(
+            prelude.push(format!(
                 "var {}: (error: unknown) => never = function (error) {{ throw error; }};\n",
                 emitter.match_raise_name
             ));
         }
         if let Some(body) = &show {
-            prelude.push_str(&format!(
+            prelude.push(format!(
                 "var {}: (value: unknown) => string = function (value) {body};\n",
                 emitter.match_show_name
             ));
         }
         if emitter.used_expression_boundary.get() {
-            prelude.push_str(&format!(
+            prelude.push(format!(
                 "var {}: <T>(run: () => T) => T = function (run) {{ return run(); }};\n",
                 emitter.expression_boundary_name
             ));
         }
     } else {
-        if !runtime_helpers.is_empty() {
+        if !local_runtime && !runtime_helpers.is_empty() {
             let names = runtime_helpers
                 .iter()
                 .map(|(export, local)| {
@@ -395,19 +579,44 @@ pub(crate) fn emit_with_map<'a>(
             let runtime = std_imports
                 .get(crate::StdModule::Runtime)
                 .unwrap_or_else(|| crate::StdModule::Runtime.specifier());
-            prelude.push_str(&format!("import {{ {names} }} from \"{runtime}\";\n"));
+            prelude.push(format!("import {{ {names} }} from \"{runtime}\";\n"));
         }
         for alias in &aliases {
-            prelude.push_str(&format!("const {} = {};\n", alias.name, alias.capture));
+            prelude.push(format!("const {} = {};\n", alias.name, alias.capture));
+        }
+        // The helpers are declarations no source text owns, so they go
+        // where no source text comes before them: a bracket the user left
+        // open cannot take them into its own syntax. A function
+        // declaration is hoisted, so where it stands in the module does
+        // not change what it means.
+        if emitter.used_match_raise.get() {
+            prelude.push(format!(
+                "function {}(error: unknown): never {{ throw error; }}\n",
+                emitter.match_raise_name
+            ));
+        }
+        if let Some(body) = &show {
+            prelude.push(format!(
+                "function {}(value: unknown): string {body}\n",
+                emitter.match_show_name
+            ));
+        }
+        if emitter.used_expression_boundary.get() {
+            prelude.push(format!(
+                "function {}<T>(run: () => T): T {{ return run(); }}\n",
+                emitter.expression_boundary_name
+            ));
         }
     }
     if !prelude.is_empty() {
         // Which helpers the file needs is only known once the whole file
         // is emitted, but where an import belongs is the top — after
         // anything that has to come before one (TASK-219).
+        // TypeScript reads a file's pragmas only before its first token, in
+        // a module as in a script.
         let (mut at, after_code) =
             module_import_position(source, lowering_plan.directive_prologue_end());
-        if script && !after_code {
+        if !after_code {
             at = crate::lexer::pragmas::after_file_pragmas(source, at);
         }
         // A prologue that runs to the end of the file leaves nothing to
@@ -418,36 +627,10 @@ pub(crate) fn emit_with_map<'a>(
         } else {
             ""
         };
-        output.insert_lit_at_source(at, format!("{separator}{prelude}"));
-    }
-    if !script {
-        if emitter.used_match_raise.get() {
-            if !output.ends_with_newline() {
-                output.push_lit("\n");
-            }
-            output.push_lit(format!(
-                "function {}(error: unknown): never {{ throw error; }}\n",
-                emitter.match_raise_name
-            ));
+        if let Some(first) = prelude.first_mut() {
+            first.insert_str(0, separator);
         }
-        if let Some(body) = &show {
-            if !output.ends_with_newline() {
-                output.push_lit("\n");
-            }
-            output.push_lit(format!(
-                "function {}(value: unknown): string {body}\n",
-                emitter.match_show_name
-            ));
-        }
-        if emitter.used_expression_boundary.get() {
-            if !output.ends_with_newline() {
-                output.push_lit("\n");
-            }
-            output.push_lit(format!(
-                "function {}<T>(run: () => T): T {{ return run(); }}\n",
-                emitter.expression_boundary_name
-            ));
-        }
+        output.insert_declarations_at_source(at, prelude);
     }
     // A block arm's `return` frame (the keyword, and anything after the
     // argument) is claimed by the exit rewrite, as is the operator frame of
@@ -496,8 +679,31 @@ pub(crate) fn emit_with_map<'a>(
     rewritten.extend(rewritten_operations);
     rewritten.extend(target_recovered_propagations);
     rewritten.extend(emitter.recovered_sources.take());
+    let arm_comments: Vec<SourceSpan> = decisions(core)
+        .flat_map(|decision| {
+            decision
+                .arms
+                .iter()
+                .map(|arm| arm.gap)
+                .chain([decision.trailing])
+                .flat_map(|gap| emitter::gap_comments(comments, gap))
+                .chain(
+                    decision
+                        .arms
+                        .iter()
+                        .flat_map(|arm| emitter::head_comments(comments, &arm.head)),
+                )
+        })
+        .map(|comment| SourceSpan {
+            start: comment.start,
+            end: comment.end,
+        })
+        .collect();
+    let mut owned = pass_through_spans(semantic, core);
+    owned.extend(arm_comments.iter().copied());
+    relocated.extend(arm_comments);
     let preservation = SourcePreservation {
-        owned: pass_through_spans(semantic, core),
+        owned,
         relocated,
         rewritten,
     };
@@ -505,7 +711,13 @@ pub(crate) fn emit_with_map<'a>(
         .iter()
         .map(|boundary| boundary.next)
         .collect();
-    let mut flat = output.flatten(source, source_kind, &boundaries, &preservation);
+    let mut flat = output.flatten(
+        source,
+        source_kind,
+        &boundaries,
+        &preservation,
+        &governed_statements,
+    );
     for result_return in &mut flat.result_return_temps {
         result_return.src_end = result_return_args
             .iter()
@@ -513,5 +725,15 @@ pub(crate) fn emit_with_map<'a>(
             .map_or(result_return.src, |argument| argument.end);
     }
     flat.generated_names = emitter.generated_names.into_inner().into_allocated();
+    flat.commonjs = target.commonjs && !script;
+    let imports_runtime = !local_runtime && !runtime_helpers.is_empty();
+    let imported_std = emitter.imported_std.into_inner();
+    flat.support_imports = crate::StdModule::ALL
+        .into_iter()
+        .filter(|module| {
+            imported_std.contains(module)
+                || (*module == crate::StdModule::Runtime && imports_runtime)
+        })
+        .collect();
     flat
 }

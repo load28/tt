@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./a.tt → $DIR/out/a.ts
+error[verify-failed]: generated TypeScript failed to parse: unbalanced TypeScript delimiter. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.
+ --> ./b.ts:1:18
+  |
+1 | export const y = (1;
+  |                  ^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts1005]: ')' expected.
+ --> b.ts:1:20
+  |
+1 | export const y = (1;
+  |                    ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+a.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.

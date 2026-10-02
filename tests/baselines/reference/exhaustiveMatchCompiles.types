@@ -1,0 +1,43 @@
+=== exhaustiveMatchCompiles.tt ===
+variant Shape { Circle(radius: number), Rect(w: number, h: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Rect : (property) Rect: (w: number, h: number) => Shape
+>w : (property) w: number
+>h : (property) h: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+const f = (s: Shape) => match (s) {
+>f : const f: (s: Shape) => number
+>s : (parameter) s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>       h: number;
+>   } | {
+>       kind: "Point";
+>   }
+>s : (parameter) s: Shape
+  Circle(radius) => radius,
+>radius : const radius: number
+>radius : const radius: number
+  Rect(w, h) => w * h,
+>w : const w: number
+>h : const h: number
+>w : const w: number
+>h : const h: number
+

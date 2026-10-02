@@ -1,0 +1,10 @@
+// @origin: tests/compile.rs::jsx_match_composes_a_result_scrutinee_once
+import type { TResult } from "@tt/std";
+declare const outcome: TResult<string, string>;
+const view = <aside>{match (result {
+  const value = try outcome;
+  return value |> .toUpperCase();
+}) {
+  Ok(value) => <b>{value}</b>,
+  Err(error) => <code>{error}</code>,
+}}</aside>;

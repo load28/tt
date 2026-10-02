@@ -1,0 +1,2 @@
+nullishAssignment(true) => 1 | flip true; target {"value":null}; operand true; yes 1
+nullishAssignment(false) => "kept" | flip false; target {"value":"kept"}

@@ -58,6 +58,9 @@ pub(crate) struct NativeBackend {
     toolchain: Client,
     /// The `node` binary that runs the host (`--node`, else `node` on PATH).
     node: PathBuf,
+    /// Directories ttc writes this project's outputs to; the program never
+    /// takes an input from them.
+    outputs: Vec<PathBuf>,
     session: RefCell<Option<Session>>,
     observed: std::cell::Cell<Option<(u64, u64, bool)>>,
 }
@@ -81,9 +84,36 @@ impl NativeBackend {
         Ok(NativeBackend {
             toolchain: toolchain::client(from)?,
             node: node.unwrap_or_else(|| PathBuf::from("node")),
+            outputs: Vec::new(),
             session: RefCell::new(None),
             observed: std::cell::Cell::new(None),
         })
+    }
+
+    /// Leaves `dir`, where ttc writes this project's outputs, out of the
+    /// files the program's `include` finds — the rule `tsc` applies to its
+    /// own output directory.
+    pub(crate) fn excluding_output(mut self, dir: PathBuf) -> NativeBackend {
+        self.outputs.push(dir);
+        self
+    }
+
+    /// Makes the host serve this project, starting it unless it already
+    /// does. This is where the backend becomes available or is found not to
+    /// be: every way the host can fail to come up is
+    /// [`FailureKind::Unavailable`] except a rejection of ttc's own request.
+    pub(crate) fn open(&self, tsconfig: Option<&Path>, root: &Path) -> Result<(), Failure> {
+        let wanted = (tsconfig.map(Path::to_path_buf), root.to_path_buf());
+        let mut slot = self.session.borrow_mut();
+        // A question about a different project needs its own session: the
+        // project is opened once and never reopened.
+        if slot.as_ref().is_some_and(|s| s.opened != wanted) {
+            *slot = None;
+        }
+        if slot.is_none() {
+            *slot = Some(self.start(tsconfig, root)?);
+        }
+        Ok(())
     }
 
     /// Starts the host and opens the project.
@@ -113,17 +143,17 @@ impl NativeBackend {
             "apiModule": self.toolchain.api,
             "cwd": root,
             "tsconfig": tsconfig,
+            "outputs": self.outputs,
         });
         writeln!(stdin, "{open}")
             .map_err(|e| Failure::unavailable(format!("cannot start the host: {e}")))?;
 
-        let mut ack = String::new();
-        if stdout
-            .read_line(&mut ack)
-            .map_err(|e| Failure::unavailable(e.to_string()))?
-            == 0
-        {
-            return Err(host_died(&mut child));
+        match read_answer(&mut stdin, &mut stdout) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                return Err(host_died(&mut child, Phase::Starting));
+            }
+            Err(e) => return Err(Failure::unavailable(e.to_string())),
         }
         Ok(Session {
             child,
@@ -135,10 +165,17 @@ impl NativeBackend {
     }
 }
 
+/// Whether the host had acknowledged the open request when it died.
+#[derive(Clone, Copy)]
+enum Phase {
+    Starting,
+    Serving,
+}
+
 /// What the host said on its way out. A crash before the first answer is
-/// usually a missing API or an unreadable client, and its message is on
-/// stderr.
-fn host_died(child: &mut Child) -> Failure {
+/// usually a missing API, an unreadable client, or a runtime that cannot
+/// start the compiler, and its message is on stderr.
+fn host_died(child: &mut Child, phase: Phase) -> Failure {
     let status = child.wait().ok();
     let mut stderr = String::new();
     if let Some(mut pipe) = child.stderr.take() {
@@ -162,10 +199,14 @@ fn host_died(child: &mut Child) -> Failure {
             stderr
         }
     );
-    if status.and_then(|s| s.code()) == Some(2) {
-        Failure::unavailable(message)
-    } else {
-        Failure::internal(message)
+    // Before the acknowledgement the compiler has not been reached, so a
+    // death then is unavailability — unless the host rejected the open
+    // request ttc wrote (exit 3), which is ttc breaking its own protocol.
+    let code = status.and_then(|s| s.code());
+    match phase {
+        Phase::Starting if code != Some(3) => Failure::unavailable(message),
+        _ if code == Some(2) => Failure::unavailable(message),
+        _ => Failure::internal(message),
     }
 }
 
@@ -217,20 +258,14 @@ impl NativeBackend {
         tsconfig: &Path,
         root: &Path,
     ) -> Result<Vec<serde_json::Value>, Failure> {
-        let wanted = (Some(tsconfig.to_path_buf()), root.to_path_buf());
+        self.open(Some(tsconfig), root)?;
         let mut slot = self.session.borrow_mut();
-        if slot.as_ref().is_some_and(|s| s.opened != wanted) {
-            *slot = None;
-        }
-        if slot.is_none() {
-            *slot = Some(self.start(Some(tsconfig), root)?);
-        }
         let session = slot.as_mut().expect("started");
         let line = match exchange(session, r#"{"configuredMappers":true}"#) {
             Ok(line) => line,
             Err(_) => {
                 let mut session = slot.take().expect("started");
-                return Err(host_died(&mut session.child));
+                return Err(host_died(&mut session.child, Phase::Serving));
             }
         };
         let value: serde_json::Value = serde_json::from_str(line.trim()).map_err(|e| {
@@ -251,16 +286,8 @@ impl NativeBackend {
 
 impl TypeScriptBackend for NativeBackend {
     fn ask(&self, tsconfig: Option<&Path>, root: &Path, query: &Query) -> Result<Answers, Failure> {
-        let wanted = (tsconfig.map(Path::to_path_buf), root.to_path_buf());
+        self.open(tsconfig, root)?;
         let mut slot = self.session.borrow_mut();
-        // A question about a different project needs its own session: the
-        // project is opened once and never reopened.
-        if slot.as_ref().is_some_and(|s| s.opened != wanted) {
-            *slot = None;
-        }
-        if slot.is_none() {
-            *slot = Some(self.start(tsconfig, root)?);
-        }
         let session = slot.as_mut().expect("started");
 
         let job = job_json(query);
@@ -281,7 +308,7 @@ impl TypeScriptBackend for NativeBackend {
                 // The host is gone; take its last words, and let the next
                 // question start a fresh one.
                 let mut session = slot.take().expect("started");
-                Err(host_died(&mut session.child))
+                Err(host_died(&mut session.child, Phase::Serving))
             }
         }
     }
@@ -291,11 +318,34 @@ impl TypeScriptBackend for NativeBackend {
 fn exchange(session: &mut Session, request: &str) -> std::io::Result<String> {
     writeln!(session.stdin, "{request}")?;
     session.stdin.flush()?;
-    let mut line = String::new();
-    if session.stdout.read_line(&mut line)? == 0 {
-        return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
+    read_answer(&mut session.stdin, &mut session.stdout)
+}
+
+/// The host's answer to the request in flight, after answering the
+/// questions it asks ttc on the way (see `host.mjs`).
+fn read_answer(
+    stdin: &mut ChildStdin,
+    stdout: &mut BufReader<ChildStdout>,
+) -> std::io::Result<String> {
+    loop {
+        let mut line = String::new();
+        if stdout.read_line(&mut line)? == 0 {
+            return Err(std::io::Error::from(std::io::ErrorKind::UnexpectedEof));
+        }
+        if !line.starts_with(r#"{"ownedOutputs":"#) {
+            return Ok(line);
+        }
+        let question: serde_json::Value = serde_json::from_str(line.trim())?;
+        let owned: Vec<&str> = question["ownedOutputs"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(serde_json::Value::as_str)
+            .filter(|path| crate::ownership::owned_output(Path::new(path)))
+            .collect();
+        writeln!(stdin, "{}", serde_json::json!({ "owned": owned }))?;
+        stdin.flush()?;
     }
-    Ok(line)
 }
 
 /// One `ask` — see `host.mjs` for the protocol.
@@ -322,17 +372,25 @@ fn job_json(query: &Query) -> serde_json::Value {
             }))
             .collect::<Vec<_>>(),
         "symbolChecks": query.symbols.iter()
-            .map(|v| json!({ "module": v.module, "start": v.position }))
+            .map(|v| json!({ "module": v.module, "start": v.position, "binding": v.binding }))
             .collect::<Vec<_>>(),
         "resultShapeChecks": query.result_shapes.iter()
             .map(|v| json!({ "module": v.module, "start": v.start, "end": v.end }))
             .collect::<Vec<_>>(),
         "contextualSlots": query.contextual_slots.iter()
-            .map(|v| json!({ "module": v.module, "declarationEnd": v.declaration_end }))
+            .map(|v| json!({
+                "module": v.module,
+                "declarationEnd": v.declaration_end,
+                "settled": v.settled,
+                "operand": v.operand,
+                "asserted": v.asserted,
+            }))
             .collect::<Vec<_>>(),
         "contextualOnly": query.contextual_only,
         "inferJoinTypes": query.infer_join_types,
         "emitDeclarations": query.emit_declarations,
+        "unparsedDocuments": query.unparsed_documents,
+        "syntaxBlocked": query.syntax_blocked,
     })
 }
 
@@ -368,12 +426,16 @@ fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
     let project_modules = value["projectModules"]
         .as_array()
         .ok_or_else(|| Failure::internal("the TypeScript backend answer omitted projectModules"))?;
-    answers.dependencies = value["dependencies"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|path| path.as_str().map(PathBuf::from))
-        .collect();
+    let paths = |key: &str| -> Vec<PathBuf> {
+        value[key]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|path| path.as_str().map(PathBuf::from))
+            .collect()
+    };
+    answers.dependencies = paths("dependencies");
+    answers.directories = paths("directories");
     answers.project_modules = Some(
         project_modules
             .iter()
@@ -385,13 +447,25 @@ fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
             .as_u64()
             .ok_or_else(|| Failure::internal("contextual slot answer omitted index"))?
             as usize;
-        let annotation = slot["annotation"]
-            .as_str()
-            .filter(|text| !text.is_empty())
-            .ok_or_else(|| Failure::internal("contextual slot answer omitted annotation"))?;
+        let annotation = match &slot["annotation"] {
+            serde_json::Value::Null => None,
+            annotation => Some(
+                annotation
+                    .as_str()
+                    .filter(|text| !text.is_empty())
+                    .ok_or_else(|| Failure::internal("contextual slot answer omitted annotation"))?
+                    .to_owned(),
+            ),
+        };
+        let inferred = slot["inferred"]
+            .as_bool()
+            .ok_or_else(|| Failure::internal("contextual slot answer omitted its kind"))?;
+        let provisional = slot["provisional"].as_bool().unwrap_or(false);
         answers.contextual_slots.push(ContextualSlotType {
             index,
-            annotation: annotation.into(),
+            annotation,
+            inferred,
+            provisional,
         });
     }
     for d in array(&value, "diagnostics") {
@@ -402,6 +476,10 @@ fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
             code: d["code"].as_u64().unwrap_or_default() as u32,
             message: d["message"].as_str().unwrap_or_default().to_string(),
             mismatch: parse_type_mismatch(&d["mismatch"]),
+            receiver: d["receiver"]["start"]
+                .as_u64()
+                .zip(d["receiver"]["end"].as_u64())
+                .map(|(start, end)| (start as usize, end as usize)),
             related: d["related"]
                 .as_array()
                 .map(|entries| {
@@ -609,6 +687,9 @@ const result = consume(slot);
             contextual_slots: vec![ContextualSlotQuery {
                 module,
                 declaration_end: text.find("let slot;").unwrap() + "let slot".len(),
+                settled: false,
+                operand: false,
+                asserted: false,
             }],
             ..Query::default()
         };
@@ -617,13 +698,74 @@ const result = consume(slot);
             answer.contextual_slots,
             vec![ContextualSlotType {
                 index: 0,
-                annotation: "Item".into()
+                annotation: Some("Item".into()),
+                inferred: false,
+                provisional: false,
             }]
         );
         let mut typed = query;
         typed.modules[0].text = text.replacen("let slot;", "let slot: Item;", 1);
         typed.contextual_slots.clear();
         let answer = backend.ask(None, root, &typed).expect("annotated snapshot");
+        assert!(answer.diagnostics.is_empty(), "{:?}", answer.diagnostics);
+    }
+}
+
+#[cfg(all(test, unix))]
+mod idle_tests {
+    use super::*;
+
+    fn cpu_seconds(pid: u32) -> f64 {
+        let out = Command::new("ps")
+            .args(["-o", "time=", "-p", &pid.to_string()])
+            .output()
+            .expect("ps");
+        let text = String::from_utf8(out.stdout).expect("ps prints ASCII");
+        let text = text.trim();
+        let (days, clock) = match text.split_once('-') {
+            Some((days, clock)) => (days.parse::<f64>().expect("days"), clock),
+            None => (0.0, text),
+        };
+        let fields = clock
+            .split(':')
+            .map(|field| field.parse::<f64>().expect("a time field"))
+            .fold(0.0, |total, field| total * 60.0 + field);
+        days * 86_400.0 + fields
+    }
+
+    #[test]
+    fn an_idle_host_waits_for_the_next_request_without_spending_cpu() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let backend = NativeBackend::new(None, root).expect("pinned TypeScript toolchain");
+        let query = Query {
+            modules: vec![Module {
+                path: root.join("idle-host-probe.ts"),
+                text: "export const answer: number = 42;\n".into(),
+            }],
+            ..Query::default()
+        };
+        backend.ask(None, root, &query).expect("a first answer");
+        let pid = backend
+            .session
+            .borrow()
+            .as_ref()
+            .expect("started")
+            .child
+            .id();
+
+        let window = std::time::Duration::from_secs(4);
+        let before = cpu_seconds(pid);
+        std::thread::sleep(window);
+        let spent = cpu_seconds(pid) - before;
+        assert!(
+            spent < 2.0,
+            "the host spent {spent} s of CPU in {} s with no request to answer",
+            window.as_secs()
+        );
+
+        let answer = backend
+            .ask(None, root, &query)
+            .expect("an answer after idling");
         assert!(answer.diagnostics.is_empty(), "{:?}", answer.diagnostics);
     }
 }

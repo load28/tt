@@ -1,0 +1,3 @@
+switchCaseTest(4) => "default" | discriminant 0; await; flip true; maybe true
+switchCaseTest(6) => "default" | discriminant 0; await; flip false; maybe false
+switchCaseTest(8) => "default" | discriminant 0; await; flip true; maybe true

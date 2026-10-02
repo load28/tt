@@ -1,0 +1,16 @@
+0 && match: 0 after left
+0 || match: 3 after left scrutinee off
+1 && match: 2 after left scrutinee on
+1 || match: 1 after left
+null ?? match: 4 after left scrutinee on
+0 ?? match: 0 after left
+true ? match : other: 2 after test scrutinee off
+false ? match : other: 0 after test otherwise
+absent?.(): undefined after 
+present?.(): 1 after argument scrutinee this is the runner
+missing receiver?.m(): undefined after 
+null ?? try: {"kind":"Ok","value":7} after left read
+1 ?? try: {"kind":"Ok","value":1} after left
+true && true && match: "reached" after a b scrutinee on
+true && false && match: false after a b
+false && ... && match: false after a

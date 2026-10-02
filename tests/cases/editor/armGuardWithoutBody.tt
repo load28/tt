@@ -1,0 +1,12 @@
+// @completions: guard
+// @hover: width
+// @definition: width
+// @diagnostics: *
+export variant Shape { Circle(radius: number), Rect(width: number), Point }
+const limit = 1;
+export function g(s: Shape) {
+  return match (s) {
+    Circle(radius) => radius,
+    Rect(width) if /*width*/width > li/*guard*/
+  };
+}

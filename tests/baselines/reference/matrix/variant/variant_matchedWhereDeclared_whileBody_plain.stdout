@@ -1,0 +1,2 @@
+whileBody(4) => [5,0] | test true; operand 4; add 5; neg 0
+whileBody(9) => [10,0] | test true; operand 9; add 10; neg 0

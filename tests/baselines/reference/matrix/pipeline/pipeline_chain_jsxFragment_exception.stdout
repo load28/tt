@@ -1,0 +1,2 @@
+jsxFragment(3) => "<>[***6]</>" | before "["; risky 3; double 6; after "]"
+jsxFragment(12) => "<>[**24]</>" | before "["; risky 12; double 24; after "]"

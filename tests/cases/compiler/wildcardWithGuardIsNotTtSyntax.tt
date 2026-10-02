@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::wildcard_with_guard_is_not_tt_syntax
+const r = match (x) { A => 1, _ if c => 0 };

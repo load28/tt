@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_03.rs::let_else_emits_guard_and_bind
+function f(): number {
+  const Some(value) = find() else { return 0; };
+  return value;
+}

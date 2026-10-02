@@ -1,0 +1,40 @@
+=== aConditionalOperandOwnsItsBranchInAPipelineHead.tt ===
+declare function f(a: any, b?: any): any;
+>f : function f(a: any, b?: any): any
+>a : (parameter) a: any
+>b : (parameter) b: any
+declare function g(): any;
+>g : function g(): any
+declare class C { constructor(a: any); }
+>C : class C
+>a : (parameter) a: any
+declare const n: number;
+>n : const n: number
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+declare function r(): R;
+>r : function r(): R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+export const v = g() && f(match (n) { 0 => 1, _ => 2 }) |> String;
+>v : const v: string
+>g : function g(): any
+>f : function f(a: any, b?: any): any
+>n : const n: number
+>String : var String: (value?: any) => string
+

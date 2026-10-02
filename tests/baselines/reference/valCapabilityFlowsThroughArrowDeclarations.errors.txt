@@ -1,0 +1,27 @@
+==== ttc --out-dir (exit 1) ====
+error[val-pass]: cannot pass val binding `user` to mutable parameter `user` of `update` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./valCapabilityFlowsThroughArrowDeclarations.tt:3:10
+  |
+3 |   update(user);
+  |          ^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'User'.
+ --> valCapabilityFlowsThroughArrowDeclarations.tt:1:23
+  |
+1 | const update = (user: User) => { user.name = "x"; };
+  |                       ^^^^
+error[ts2304]: Cannot find name 'User'.
+ --> valCapabilityFlowsThroughArrowDeclarations.tt:2:28
+  |
+2 | function process(val user: User) {
+  |                            ^^^^
+error[val-pass]: cannot pass val binding `user` to mutable parameter `user` of `update` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> valCapabilityFlowsThroughArrowDeclarations.tt:3:10
+  |
+3 |   update(user);
+  |          ^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

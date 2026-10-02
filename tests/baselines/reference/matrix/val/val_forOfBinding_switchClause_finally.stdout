@@ -1,0 +1,2 @@
+switchClause(3) => 4 | discriminant 1; operand 3; item 3; item 1; finally 0
+switchClause(8) => 9 | discriminant 1; operand 8; item 8; item 1; finally 0

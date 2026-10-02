@@ -1,0 +1,24 @@
+// @origin: tests/integration/cases_03.rs::runtime_nested_pattern_falls_through_on_inner_mismatch
+// @run: runtimeNestedPatternFallsThroughOnInnerMismatch.tt
+
+variant Opt { Some(value: number), None }
+variant Res { Ok(value: Opt), Err(error: string) }
+
+function grade(r: Res): string {
+  return match (r) {
+    Ok(value: Some(value: v)) if v > 9000 => "over",
+    Ok(value: Some(value: v)) => "num:" + v,
+    Ok(value: None()) => "empty",
+    Err(error) => "err:" + error,
+    // v1 exhaustiveness: nested arms cover nothing, so `Ok` counts as
+    // uncovered without a final wildcard (documented, like guards).
+    _ => "unreachable",
+  };
+}
+
+console.log(grade(Res.Ok(Opt.Some(9001))));
+console.log(grade(Res.Ok(Opt.Some(3))));
+console.log(grade(Res.Ok(Opt.None)));
+console.log(grade(Res.Err("boom")));
+
+export {};

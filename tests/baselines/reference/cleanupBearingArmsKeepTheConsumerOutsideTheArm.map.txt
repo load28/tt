@@ -1,0 +1,27 @@
+//// [cleanupBearingArmsKeepTheConsumerOutsideTheArm.tt] 25 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:30 -> 21:29 len 6  "number"
+2:30 -> 24:18 len 6  "number"
+2:46 -> 26:3 len 166  "\ntype Item = {kind: \"item\"; run: (x: number) => "...
+6:1 -> 54:1 len 18  "const finalized = "
+6:19 -> 31:17 len 7  "consume"
+6:26 -> 54:25 len 1  "("
+6:34 -> 33:17 len 14  "State.Ready(3)"
+7:9 -> 36:15 len 5  "value"
+8:5 -> 37:7 len 37  "try {\n      trace.push(\"arm\");\n      "
+10:14 -> 39:18 len 54  "{kind: \"item\" as const, run: (x: number) => x + "...
+10:69 -> 40:15 len 51  "\n    } finally {\n      trace.push(\"finally\");\n  "...
+15:12 -> 46:16 len 48  "({kind: \"item\" as const, run: (x: number) => x})"
+16:2 -> 54:32 len 173  ");\nconsole.log(finalized, trace.join(\",\"));\ntrac"...
+21:3 -> 60:19 len 16  "throwingConsumer"
+21:19 -> 84:9 len 1  "("
+21:27 -> 62:19 len 14  "State.Ready(2)"
+22:11 -> 65:17 len 5  "value"
+23:7 -> 66:9 len 14  "try {\n        "
+24:16 -> 67:20 len 54  "{kind: \"item\" as const, run: (x: number) => x + "...
+24:71 -> 68:17 len 56  "\n      } catch {\n        trace.push(\"handler\");\n"...
+27:16 -> 71:20 len 46  "{kind: \"item\" as const, run: (x: number) => x}"
+27:63 -> 72:17 len 8  "\n      }"
+30:14 -> 76:18 len 48  "({kind: \"item\" as const, run: (x: number) => x})"
+31:4 -> 84:16 len 87  ");\n} catch { trace.push(\"caught outside\"); }\ncon"...
+

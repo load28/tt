@@ -1,0 +1,25 @@
+// @origin: tests/integration/contextual.rs::generated_storage_names_no_type_declared_inside_an_arm
+// @run: generatedStorageNamesNoTypeDeclaredInsideAnArm.tt
+
+variant S { A, B }
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+function read(): R { return { kind: "Ok", value: 1 }; }
+class Loc { other = 1; }
+function inner(s: S) {
+  const v = match (s) { A => { class Loc { tag = "a"; } return new Loc(); }, B => ({ tag: "b" }) };
+  return v.tag;
+}
+function inResult(s: S) {
+  return result {
+    const n = try read();
+    const v = match (s) { A => { class Loc { tag = "a" + n; } return new Loc(); }, B => ({ tag: "b" }) };
+    return v.tag;
+  };
+}
+function unnamed(s: S) {
+  const v = match (s) { A => { class Hidden { tag = "h"; } return new Hidden(); }, B => ({ tag: "b" }) };
+  return v.tag;
+}
+console.log(inner(S.A), inner(S.B), JSON.stringify(inResult(S.A)), unnamed(S.A), new Loc().other);
+
+export {};

@@ -1,0 +1,2 @@
+forUpdate(4) => 7 | open res; body 0; operand 4; step 3; add 7; dispose res
+forUpdate(-1) => 2 | open res; body 0; operand -1; step 3; add 2; dispose res

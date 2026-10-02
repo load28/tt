@@ -1,0 +1,2 @@
+compoundAssignment(1.25) => "start:1.3" | open res; initial "start:"; target {"total":"start:"}; operand 1.25; dispose res
+compoundAssignment(7) => "start:7.0" | open res; initial "start:"; target {"total":"start:"}; operand 7; dispose res

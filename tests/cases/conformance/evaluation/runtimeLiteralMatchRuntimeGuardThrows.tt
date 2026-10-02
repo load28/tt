@@ -1,0 +1,18 @@
+// @origin: tests/integration/cases_04.rs::runtime_literal_match_runtime_guard_throws
+// @run: runtimeLiteralMatchRuntimeGuardThrows.tt
+
+function label(dir: string) {
+  return match (dir as "a" | "b") {
+    "a" => 1,
+    "b" => 2,
+  };
+}
+
+try {
+  label("zzz");
+  console.log("no throw");
+} catch (e) {
+  console.log((e as Error).message);
+}
+
+export {};

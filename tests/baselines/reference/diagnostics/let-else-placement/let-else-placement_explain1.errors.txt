@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[let-else-placement]: a let-else declaring `const` or `let` cannot be the unbraced body of an `if`, loop, or label — TypeScript allows no lexical declaration there
+ --> ./main.tt:3:14
+  |
+3 |   if (round) const Circle(r) = s else { return 0; };
+  |              ^^^^^^^^^^^^^^^^^^^
+  |
+  = help: wrap the statement in braces to give its binding a block
+
+
+==== ttc --check-types (exit 1) ====
+error[let-else-placement]: a let-else declaring `const` or `let` cannot be the unbraced body of an `if`, loop, or label — TypeScript allows no lexical declaration there
+ --> main.tt:3:14
+  |
+3 |   if (round) const Circle(r) = s else { return 0; };
+  |              ^^^^^^^^^^^^^^^^^^^
+  |
+  = help: wrap the statement in braces to give its binding a block
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

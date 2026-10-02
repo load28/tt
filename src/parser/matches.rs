@@ -33,11 +33,14 @@ pub(super) fn parse_match<'t>(
     cur: Cursor<'t>,
     kw_span: Span,
 ) -> Claim<(Cursor<'t>, usize, ParsedMatch)> {
-    if let Some(parsed) = parse_match_complete(cur, kw_span) {
+    if let Some(parsed) = parse_match_complete(cur, kw_span, false) {
         return Claim::Parsed(parsed);
     }
     let body_open = match_body_open(cur.tokens, cur.idx);
-    if body_open.is_some_and(|open| body_reads_as_arms(cur.parser.src, cur.tokens, open)) {
+    if body_open.is_some_and(|open| body_reads_as_arms(&cur, open)) {
+        if let Some(parsed) = parse_match_complete(cur, kw_span, true) {
+            return Claim::Parsed(parsed);
+        }
         let end = body_open
             .and_then(|open| super::cursor::find_close_at(cur.tokens, open))
             .and_then(|close| cur.tokens.get(close))
@@ -121,12 +124,24 @@ pub(super) fn match_body_open(tokens: &[Token], after_keyword: usize) -> Option<
     match tokens.get(after_keyword)?.kind {
         TokenKind::Punct(b'(') => {
             let open = find_close_at(tokens, after_keyword)? + 1;
-            matches!(tokens.get(open)?.kind, TokenKind::Punct(b'{')).then_some(open)
+            opens_match_body(tokens.get(open)?).then_some(open)
         }
         TokenKind::Ident => (after_keyword..tokens.len())
-            .find(|&index| matches!(tokens[index].kind, TokenKind::Punct(b'{'))),
+            .find(|&index| matches!(tokens[index].kind, TokenKind::Punct(b'{')))
+            .filter(|&index| opens_match_body(&tokens[index])),
         _ => None,
     }
+}
+
+/// Whether `token`, after a match head, opens the match's body.
+///
+/// Only a brace on the head's line does. A line terminator before the brace
+/// ends the head: `match(x)` is then a complete call, which no production
+/// continues with `{`, so TypeScript inserts a semicolon (ECMA-262
+/// §12.10.1) and the brace opens a block statement. The lexer's token facts
+/// read a match head the same way (TASK-491).
+pub(super) fn opens_match_body(token: &Token) -> bool {
+    matches!(token.kind, TokenKind::Punct(b'{')) && !token.facts.line_break_before()
 }
 
 fn has_instance_call_pattern(src: &str, tokens: &[Token], body_open: usize) -> bool {
@@ -278,7 +293,8 @@ fn value_element(elements: Cursor) -> Option<TupleValueElement> {
 /// Depth matters: the arrow in `return f(y => y)` belongs to a call, not to
 /// the block, which is exactly why "contains an arrow anywhere" claimed
 /// every un-annotated method whose body happened to use one.
-fn body_reads_as_arms(src: &str, tokens: &[Token], open: usize) -> bool {
+fn body_reads_as_arms(cur: &Cursor<'_>, open: usize) -> bool {
+    let (src, tokens) = (cur.parser.src, cur.tokens);
     let Some(first) = tokens.get(open + 1) else {
         return false;
     };
@@ -294,7 +310,7 @@ fn body_reads_as_arms(src: &str, tokens: &[Token], open: usize) -> bool {
             _ if token.opens_bracket() => depth += 1,
             TokenKind::Punct(b'}') => {
                 if depth == 0 {
-                    return false; // the body ended with no arm in it
+                    return guard_outside_statements(cur, open);
                 }
                 depth -= 1;
             }
@@ -307,9 +323,51 @@ fn body_reads_as_arms(src: &str, tokens: &[Token], open: usize) -> bool {
     false
 }
 
+fn guard_outside_statements(cur: &Cursor<'_>, open: usize) -> bool {
+    let Some(close) = find_close_at(cur.tokens, open) else {
+        return false;
+    };
+    let mut arms = cur.sub(open + 1, close, cur.tokens[close].span.start);
+    loop {
+        let wildcard = if arms.at_punct(b'(') {
+            let Some(end) = arms.find_close() else {
+                return false;
+            };
+            let elements = arms.sub(arms.idx + 1, end, arms.tokens[end].span.start);
+            if parse_tuple_elems(elements).is_none() {
+                return false;
+            }
+            arms.idx = end + 1;
+            false
+        } else {
+            match parse_arm_pattern(&mut arms) {
+                Some(pattern) => matches!(pattern, Pattern::Wildcard),
+                None => return false,
+            }
+        };
+        if arms.eat_punct(b',').is_some() {
+            continue;
+        }
+        let Some(keyword) = arms.peek() else {
+            return false;
+        };
+        if wildcard || !matches!(keyword.kind, TokenKind::Ident) || arms.text(keyword) != "if" {
+            return false;
+        }
+        let same_line = !keyword.facts.line_break_before()
+            && !matches!(arms.tokens[arms.idx - 1].kind, TokenKind::Punct(b'}'));
+        let parenthesized = arms
+            .tokens
+            .get(arms.idx + 1)
+            .is_some_and(|token| matches!(token.kind, TokenKind::Punct(b'(')));
+        return same_line || !parenthesized;
+    }
+}
+
 fn parse_match_complete<'t>(
     mut cur: Cursor<'t>,
     kw_span: Span,
+    open_arms: bool,
 ) -> Option<(Cursor<'t>, usize, ParsedMatch)> {
     if !cur.at_punct(b'(') {
         return None;
@@ -328,7 +386,7 @@ fn parse_match_complete<'t>(
     }
     cur.idx = close + 1;
 
-    if !cur.at_punct(b'{') {
+    if !cur.peek().is_some_and(opens_match_body) {
         return None;
     }
     let body_open = cur.idx;
@@ -339,7 +397,7 @@ fn parse_match_complete<'t>(
     // Tuple attempt first (arm-driven). One side may have arity one when
     // the other proves tuple intent, so sema can report the exact mismatch.
     if let Some(parts) = split_scrutinees(&cur, open, close)
-        && let Some(arms) = parse_tuple_arms(arms_cur)
+        && let Some(arms) = parse_tuple_arms(arms_cur, open_arms)
         && !arms.is_empty()
         && (parts.len() > 1
             || arms
@@ -377,7 +435,7 @@ fn parse_match_complete<'t>(
         ));
     }
 
-    let arms = match parse_arms(arms_cur) {
+    let arms = match parse_arms(arms_cur, open_arms) {
         Some(arms) if !arms.is_empty() => arms,
         _ => return None,
     };
@@ -495,12 +553,14 @@ pub(super) fn outline_arms(src: &str, tokens: &[Token]) -> Vec<ArmOutline> {
     };
     let mut arms = Vec::new();
     let mut arm = open_arm(0);
-    let mut depth = 0usize;
-    for (index, token) in tokens.iter().enumerate() {
+    let mut index = 0;
+    while let Some(token) = tokens.get(index) {
+        crate::work::tick("arm outline steps");
         match token.kind {
-            _ if token.opens_bracket() => depth += 1,
-            _ if token.closes_bracket() => depth = depth.saturating_sub(1),
-            _ if depth > 0 => {}
+            _ if token.opens_bracket() => match Token::balancing_close(tokens, index) {
+                Some(close) => index = close,
+                None => break,
+            },
             TokenKind::Punct(b',') => {
                 arm.end = index;
                 arms.push(arm);
@@ -516,6 +576,7 @@ pub(super) fn outline_arms(src: &str, tokens: &[Token]) -> Vec<ArmOutline> {
             }
             _ => {}
         }
+        index += 1;
     }
     arms.push(arm);
     arms
@@ -583,8 +644,8 @@ fn recover_match_arms(mut cur: Cursor) -> Option<Vec<Span>> {
     }
     let close = cur.find_close()?;
     let body = cur.sub(cur.idx + 1, close, cur.tokens[close].span.start);
-    let (single, single_errors) = parse_arm_list(body, parse_arm);
-    let (tuple, tuple_errors) = parse_arm_list(body, parse_tuple_arm);
+    let (single, single_errors) = parse_arm_list(body, parse_open_arm);
+    let (tuple, tuple_errors) = parse_arm_list(body, parse_open_tuple_arm);
     // A bare wildcard belongs to both grammars and supplies no evidence of
     // either form. Only discriminating patterns choose the recovery grammar.
     let single_form = single
@@ -627,11 +688,19 @@ fn arms_tail(arms: &Cursor, last_start: usize) -> Option<ArmsTail> {
     })
 }
 
-fn parse_arms(cur: Cursor<'_>) -> Option<Vec<ArmSyntax<'_, Pattern>>> {
-    parse_strict_arm_list(cur, parse_arm)
+fn parse_arms(cur: Cursor<'_>, open_arms: bool) -> Option<Vec<ArmSyntax<'_, Pattern>>> {
+    parse_strict_arm_list(cur, if open_arms { parse_open_arm } else { parse_arm })
 }
 
 fn parse_arm<'t>(cur: &mut Cursor<'t>) -> Option<ArmSyntax<'t, Pattern>> {
+    parse_single_arm(cur, false)
+}
+
+fn parse_open_arm<'t>(cur: &mut Cursor<'t>) -> Option<ArmSyntax<'t, Pattern>> {
+    parse_single_arm(cur, true)
+}
+
+fn parse_single_arm<'t>(cur: &mut Cursor<'t>, open: bool) -> Option<ArmSyntax<'t, Pattern>> {
     let pattern_start = cur.peek()?.span.start;
     let pattern = parse_arm_pattern(cur)?;
     let pattern_end = cur.tokens.get(cur.idx.checked_sub(1)?)?.span.end;
@@ -639,7 +708,7 @@ fn parse_arm<'t>(cur: &mut Cursor<'t>) -> Option<ArmSyntax<'t, Pattern>> {
     // Only tag and literal patterns take a guard — `_ if` never parses,
     // so it passes through.
     let allow_guard = !matches!(pattern, Pattern::Wildcard);
-    let tail = parse_arm_tail(cur, allow_guard)?;
+    let tail = parse_arm_tail(cur, allow_guard, open)?;
 
     Some(ArmSyntax {
         pattern,
@@ -708,6 +777,7 @@ fn parse_instance_pattern(cur: &mut Cursor) -> Option<InstancePattern> {
     }
 
     let mut bindings = None;
+    let mut list = None;
     let mut end = path_end;
     if cur.at_punct(b'{') {
         let open = cur.idx;
@@ -717,6 +787,10 @@ fn parse_instance_pattern(cur: &mut Cursor) -> Option<InstancePattern> {
             false,
         )?);
         end = cur.tokens[close].span.end;
+        list = Some(Span {
+            start: cur.tokens[open].span.start,
+            end,
+        });
         cur.idx = close + 1;
     }
     Some(InstancePattern {
@@ -728,17 +802,36 @@ fn parse_instance_pattern(cur: &mut Cursor) -> Option<InstancePattern> {
         is_off,
         end,
         bindings,
+        list,
     })
 }
 
 /// Parses tuple arms: `(elem, elem, ...) (if guard)? => body` with an
 /// optional final bare `_` arm. `None` unless *every* arm has that shape —
 /// the caller then falls back to single-match arms.
-fn parse_tuple_arms(cur: Cursor<'_>) -> Option<Vec<ArmSyntax<'_, TuplePattern>>> {
-    parse_strict_arm_list(cur, parse_tuple_arm)
+fn parse_tuple_arms(cur: Cursor<'_>, open_arms: bool) -> Option<Vec<ArmSyntax<'_, TuplePattern>>> {
+    parse_strict_arm_list(
+        cur,
+        if open_arms {
+            parse_open_tuple_arm
+        } else {
+            parse_tuple_arm
+        },
+    )
 }
 
 fn parse_tuple_arm<'t>(cur: &mut Cursor<'t>) -> Option<ArmSyntax<'t, TuplePattern>> {
+    parse_tuple_arm_with(cur, false)
+}
+
+fn parse_open_tuple_arm<'t>(cur: &mut Cursor<'t>) -> Option<ArmSyntax<'t, TuplePattern>> {
+    parse_tuple_arm_with(cur, true)
+}
+
+fn parse_tuple_arm_with<'t>(
+    cur: &mut Cursor<'t>,
+    open: bool,
+) -> Option<ArmSyntax<'t, TuplePattern>> {
     let first = cur.peek()?;
     let pattern_start = first.span.start;
 
@@ -759,7 +852,7 @@ fn parse_tuple_arm<'t>(cur: &mut Cursor<'t>) -> Option<ArmSyntax<'t, TuplePatter
     let pattern_end = cur.tokens.get(cur.idx.checked_sub(1)?)?.span.end;
 
     let allow_guard = matches!(pattern, TuplePattern::Elems(_));
-    let tail = parse_arm_tail(cur, allow_guard)?;
+    let tail = parse_arm_tail(cur, allow_guard, open)?;
 
     Some(ArmSyntax {
         pattern,
@@ -813,14 +906,25 @@ fn parse_tag_alternatives(cur: &mut Cursor) -> Option<Vec<TagPattern>> {
 /// (refused when `allow_guard` is false), the `=>`, and the expression or
 /// block body. Shared between single-match and tuple-match arms.
 #[allow(clippy::type_complexity)]
-fn parse_arm_tail<'t>(cur: &mut Cursor<'t>, allow_guard: bool) -> Option<ArmTailSyntax<'t>> {
+fn parse_arm_tail<'t>(
+    cur: &mut Cursor<'t>,
+    allow_guard: bool,
+    open: bool,
+) -> Option<ArmTailSyntax<'t>> {
     let mut guard = None;
     if allow_guard
         && matches!(cur.peek(), Some(t) if matches!(t.kind, TokenKind::Ident) && cur.text(t) == "if")
     {
         cur.bump();
         let g_start = cur.stop_byte_at(cur.idx);
-        let (arrow_idx, g_end) = guard_end(cur)?;
+        let (arrow_idx, g_end) = match guard_end(cur) {
+            Some(end) => end,
+            None if open && guard_runs_to_end(cur) => (
+                cur.tokens.len(),
+                cur.tokens[cur.idx..].last().map_or(g_start, |t| t.span.end),
+            ),
+            None => return None,
+        };
         if cur.parser.src[g_start..g_end].trim().is_empty() {
             return None;
         }
@@ -834,10 +938,30 @@ fn parse_arm_tail<'t>(cur: &mut Cursor<'t>, allow_guard: bool) -> Option<ArmTail
         cur.idx = arrow_idx;
     }
 
+    let missing = |cur: &Cursor<'t>, guard| {
+        let at = cur
+            .idx
+            .checked_sub(1)
+            .and_then(|previous| cur.tokens.get(previous))
+            .map_or(cur.range_end, |t| t.span.end);
+        Some(ArmTailSyntax {
+            guard,
+            body_span: Span { start: at, end: at },
+            body_tokens: &[],
+            block: false,
+            missing: true,
+        })
+    };
+    if open && guard.is_some() && cur.peek().is_none() {
+        return missing(cur, guard);
+    }
     if !matches!(cur.peek().map(|t| &t.kind), Some(TokenKind::Arrow)) {
         return None;
     }
     cur.bump();
+    if open && cur.peek().is_none() {
+        return missing(cur, guard);
+    }
 
     // body: `{ ... }` block or a single expression
     let body_span;
@@ -875,6 +999,7 @@ fn parse_arm_tail<'t>(cur: &mut Cursor<'t>, allow_guard: bool) -> Option<ArmTail
         body_span,
         body_tokens,
         block,
+        missing: false,
     })
 }
 
@@ -897,6 +1022,7 @@ impl ArmSyntax<'_, Pattern> {
             body: tail.body,
             block: tail.block,
             diverges: tail.diverges,
+            missing: tail.missing,
         }
     }
 }
@@ -912,6 +1038,7 @@ impl ArmSyntax<'_, TuplePattern> {
             body: tail.body,
             block: tail.block,
             diverges: tail.diverges,
+            missing: tail.missing,
         }
     }
 }
@@ -921,6 +1048,7 @@ struct ArmTailSyntax<'t> {
     body_span: Span,
     body_tokens: &'t [Token],
     block: bool,
+    missing: bool,
 }
 
 impl ArmTailSyntax<'_> {
@@ -930,6 +1058,7 @@ impl ArmTailSyntax<'_> {
             body_span,
             body_tokens,
             block,
+            missing,
         } = self;
         let guard = guard.map(|(span, tokens)| GuardExpr {
             span,
@@ -954,6 +1083,7 @@ impl ArmTailSyntax<'_> {
             body,
             block,
             diverges,
+            missing,
         }
     }
 }
@@ -971,6 +1101,7 @@ struct ArmTail {
     /// `undefined` is unreachable. Always false for an expression body,
     /// which yields by being evaluated.
     diverges: bool,
+    missing: bool,
 }
 
 /// Parses one `Tag` / `Tag(bindings...)` alternative starting at the
@@ -989,6 +1120,7 @@ pub(super) fn parse_alternative(cur: &mut Cursor, allow_nested: bool) -> Option<
         return None;
     }
     let mut bindings = None;
+    let mut list = None;
     let mut end = tag_span.end;
     if cur.at_punct(b'(') {
         let open = cur.idx;
@@ -998,6 +1130,10 @@ pub(super) fn parse_alternative(cur: &mut Cursor, allow_nested: bool) -> Option<
             allow_nested,
         )?);
         end = cur.tokens[close].span.end;
+        list = Some(Span {
+            start: cur.tokens[open].span.start,
+            end,
+        });
         cur.idx = close + 1;
     }
     Some(TagPattern {
@@ -1005,6 +1141,7 @@ pub(super) fn parse_alternative(cur: &mut Cursor, allow_nested: bool) -> Option<
         tag_off: tag_span.start,
         end,
         bindings,
+        list,
     })
 }
 
@@ -1013,7 +1150,11 @@ pub(super) fn parse_alternative(cur: &mut Cursor, allow_nested: bool) -> Option<
 /// identifier directly followed by parens — is a nested tag pattern
 /// instead of an alias (match patterns only; let-else keeps aliases only).
 /// None on failure.
-pub(super) fn parse_bindings(mut cur: Cursor, allow_nested: bool) -> Option<Vec<Binding>> {
+pub(super) fn parse_bindings(cur: Cursor, allow_nested: bool) -> Option<Vec<Binding>> {
+    crate::stack::grow(|| parse_bindings_grown(cur, allow_nested))
+}
+
+fn parse_bindings_grown(mut cur: Cursor, allow_nested: bool) -> Option<Vec<Binding>> {
     let mut bindings = Vec::new();
     loop {
         if cur.peek().is_none() {
@@ -1043,6 +1184,10 @@ pub(super) fn parse_bindings(mut cur: Cursor, allow_nested: bool) -> Option<Vec<
                     tag_off: rhs_span.start,
                     end: cur.tokens[close].span.end,
                     bindings: Some(inner),
+                    list: Some(Span {
+                        start: cur.tokens[open].span.start,
+                        end: cur.tokens[close].span.end,
+                    }),
                 });
             } else {
                 alias = Some(rhs.to_string());
@@ -1091,23 +1236,39 @@ fn guard_end(cur: &Cursor) -> Option<(usize, usize)> {
     None
 }
 
+fn guard_runs_to_end(cur: &Cursor) -> bool {
+    let mut depth = 0usize;
+    for t in &cur.tokens[cur.idx..] {
+        match t.kind {
+            TokenKind::Arrow if depth == 0 => return false,
+            _ if t.opens_bracket() => depth += 1,
+            _ if t.closes_bracket() => {
+                if depth == 0 {
+                    return false;
+                }
+                depth -= 1;
+            }
+            TokenKind::Punct(b',' | b';') if depth == 0 => return false,
+            _ => {}
+        }
+    }
+    depth == 0
+}
+
 /// Scans an arm's expression body from `cur.idx` until a top-level `,` or
 /// closing bracket, returning the stopping token index and byte offset
 /// (the region end when the tokens run out).
 fn expr_body_end(cur: &Cursor) -> (usize, usize) {
-    let mut depth = 0usize;
     let mut k = cur.idx;
     while k < cur.tokens.len() {
         let t = &cur.tokens[k];
         match t.kind {
-            _ if t.opens_bracket() => depth += 1,
-            _ if t.closes_bracket() => {
-                if depth == 0 {
-                    return (k, t.span.start);
-                }
-                depth -= 1;
-            }
-            TokenKind::Punct(b',') if depth == 0 => return (k, t.span.start),
+            _ if t.opens_bracket() => match Token::balancing_close(cur.tokens, k) {
+                Some(close) => k = close,
+                None => return (cur.tokens.len(), cur.range_end),
+            },
+            _ if t.closes_bracket() => return (k, t.span.start),
+            TokenKind::Punct(b',') => return (k, t.span.start),
             _ => {}
         }
         k += 1;

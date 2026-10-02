@@ -1,0 +1,10 @@
+//// [tupleMatchBareWildcardArmSkipsTheCheckAndMustBeLast1.tt] 8 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:32 -> 8:3 len 1  "\n"
+3:1 -> 22:1 len 10  "const r = "
+3:18 -> 11:18 len 1  "a"
+3:21 -> 12:18 len 1  "b"
+4:21 -> 15:18 len 1  "1"
+5:8 -> 18:16 len 1  "0"
+6:2 -> 22:19 len 2  ";\n"
+

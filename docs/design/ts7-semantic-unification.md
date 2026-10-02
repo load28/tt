@@ -288,13 +288,17 @@ position API 폐기 시의 Node 전환 시나리오. 코드 없음(이 문서가
 
 ## 4. 검증 테스트
 
-원안 12의 목록 중 상당수는 `tests/native.rs`에 이미 있다:
-shadowing(`a_shadowing_binding_is_a_different_binding`), parameter 경계
-(`val_holds_on_a_parameter_and_across_a_function_boundary`), 사용자 정의
-mutator 이름(`val_mutation_is_decided_by_the_method_the_call_resolves_to`),
-literal/variant narrowing(`*_uses_the_narrowed_type_at_the_match`), any 수신자
-(`an_any_receiver_is_never_called_a_mutation`), passthrough 계약
-(`tests/passthrough.rs`). 이들은 **회귀 게이트로 그대로 쓴다**.
+Many checks from section 12 of the original proposal already run in the
+`tests/native.rs` suite: shadowing
+(`a_shadowing_binding_is_a_different_binding`), parameter boundaries
+(`val_holds_on_a_parameter_and_across_a_function_boundary`), resolved mutator
+identity (`val_mutation_is_decided_by_the_method_the_call_resolves_to`),
+literal narrowing (`literal_exhaustiveness_uses_the_narrowed_type_at_the_match`),
+declared variant cases (`variant_exhaustiveness_uses_the_declared_cases_at_the_match`),
+and any receivers (`an_any_receiver_is_never_called_a_mutation`). The
+pass-through contract runs in `tests/passthrough.rs`. These remain regression
+gates; the variant check deliberately uses the declared cases rather than
+the checker's control-flow narrowing.
 
 새로 추가할 것:
 

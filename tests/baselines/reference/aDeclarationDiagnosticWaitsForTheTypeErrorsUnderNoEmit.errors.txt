@@ -1,0 +1,13 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./a.tt → $DIR/out/a.ts
+ttc: ./b.tt → $DIR/out/b.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2322]: Type 'string' is not assignable to type 'number'.
+ --> b.tt:1:14
+  |
+1 | export const y: number = "s";
+  |              ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+b.ts(1,14): error TS2322: Type 'string' is not assignable to type 'number'.

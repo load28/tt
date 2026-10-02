@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalMatchBlockBodiesBreakOutOfTheSwitch.tt → $DIR/out/literalMatchBlockBodiesBreakOutOfTheSwitch.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 's'.
+ --> literalMatchBlockBodiesBreakOutOfTheSwitch.tt:1:18
+  |
+1 | const v = match (s) { "a" => { return 1; }, _ => 0 };
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalMatchBlockBodiesBreakOutOfTheSwitch.ts(3,17): error TS2304: Cannot find name 's'.

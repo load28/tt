@@ -1,0 +1,9 @@
+//// [literalAndTagPatternsCannotBeMixedInEitherOrder.tt] 7 mapping(s)
+1:1 -> 35:1 len 10  "const v = "
+1:18 -> 21:17 len 1  "x"
+1:23 -> 23:19 len 6  "\"none\""
+1:33 -> 24:18 len 1  "0"
+1:41 -> 28:15 len 1  "v"
+1:47 -> 29:18 len 1  "v"
+1:50 -> 35:19 len 1  ";"
+

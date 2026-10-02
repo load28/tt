@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[variant-default-export]: variant `Bad` cannot be a default export
+ --> ./main.tt:4:8
+  |
+4 | export default variant Bad { A }
+  |        ^^^^^^^
+  |
+  = help: export it by name and import it as `{ Bad }`
+
+
+==== ttc --check-types (exit 1) ====
+error[variant-default-export]: variant `Bad` cannot be a default export
+ --> main.tt:4:8
+  |
+4 | export default variant Bad { A }
+  |        ^^^^^^^
+  |
+  = help: export it by name and import it as `{ Bad }`
+
+==== tsc on the emitted TypeScript (exit 0) ====

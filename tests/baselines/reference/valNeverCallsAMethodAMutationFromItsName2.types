@@ -1,0 +1,16 @@
+=== valNeverCallsAMethodAMutationFromItsName2.tt ===
+class Collection {
+>Collection : class Collection
+  add(v: number): Collection {
+>add : (method) Collection.add(v: number): Collection
+>v : (parameter) v: number
+>Collection : class Collection
+    return new Collection();
+>Collection : constructor Collection(): Collection
+val const collection = new Collection();
+>collection : const collection: Collection
+>Collection : constructor Collection(): Collection
+collection.add(1);
+>collection : const collection: Collection
+>add : (method) Collection.add(v: number): Collection
+

@@ -1,0 +1,38 @@
+==== ttc --out-dir (exit 1) ====
+error[match-not-exhaustive]: match on (S, T) is not exhaustive: missing (A, D), (B, C), (B, D)
+ --> ./aTupleMatchCoversEveryScrutinee.tt:3:11
+  |
+3 | const v = match (s, t) { (A(x), C) => x };
+  |           ^^^^^^^^^^^^
+  |
+  = help: add the missing arms: `, (A(x), D) => undefined, (B, C) => undefined, (B, D) => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on (S, T) is not exhaustive: missing (A, D), (B, C), (B, D)
+ --> aTupleMatchCoversEveryScrutinee.tt:3:11
+  |
+3 | const v = match (s, t) { (A(x), C) => x };
+  |           ^^^^^^^^^^^^
+  |
+  = help: add the missing arms: `, (A(x), D) => undefined, (B, C) => undefined, (B, D) => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+error[ts2552]: Cannot find name 's'. Did you mean 'S'?
+ --> aTupleMatchCoversEveryScrutinee.tt:3:18
+  |
+1 | variant S { A(x: number), B }
+  |         - 'S' is declared here.
+2 | variant T { C(), D }
+3 | const v = match (s, t) { (A(x), C) => x };
+  |                  ^
+error[ts2552]: Cannot find name 't'. Did you mean 'T'?
+ --> aTupleMatchCoversEveryScrutinee.tt:3:21
+  |
+2 | variant T { C(), D }
+  |         - 'T' is declared here.
+3 | const v = match (s, t) { (A(x), C) => x };
+  |                     ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

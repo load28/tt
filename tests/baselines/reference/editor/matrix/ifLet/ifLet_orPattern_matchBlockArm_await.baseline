@@ -1,0 +1,12 @@
+differences from ifLet_orPattern_matchBlockArm_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== rename /*bind*/ main.tt:8:18 ===
+  |       if let Num(value) | Neg(value) = await later(input) { seen = note("number", value); }
+  |                  ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+
+=== definition /*use*/ main.tt:8:83 ===
+  |       if let Num(value) | Neg(value) = await later(input) { seen = note("number", value); }
+  |                                                                                   ^ /*use*/
+  tt only: main "value"
+

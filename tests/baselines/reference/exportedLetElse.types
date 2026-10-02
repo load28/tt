@@ -1,0 +1,87 @@
+=== boxes.tt ===
+export variant Box { Full(value: number), Half(value: number), Empty }
+>Box : type Box = {
+>       kind: "Full";
+>       value: number;
+>   } | {
+>       kind: "Half";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Full : (property) Full: (value: number) => Box
+>value : (property) value: number
+>Half : (property) Half: (value: number) => Box
+>value : (property) value: number
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+const box: Box = Box.Full(3);
+>box : const box: Box
+>Box : type Box = {
+>       kind: "Full";
+>       value: number;
+>   } | {
+>       kind: "Half";
+>       value: number;
+>   } | {
+>       kind: "Empty";
+>   }
+>Box : const Box: {
+>       Full: (value: number) => Box;
+>       Half: (value: number) => Box;
+>       Empty: {
+>           readonly kind: "Empty";
+>       };
+>   }
+>Full : (property) Full: (value: number) => Box
+export const Full(value: size) = box else { throw new Error("empty"); };
+>value : (property) value: number
+>size : const size: number
+>box : const box: Box
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+export let Full(value: counter) | Half(value: counter) = box else { throw new Error("empty"); };
+>counter : let counter: number
+>counter : let counter: number
+>box : const box: Box
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+export namespace Nested {
+>Nested : namespace Nested
+  export var Full(value: inner) = box else { throw new Error("empty"); };
+>value : (property) value: number
+>inner : var inner: number
+>box : const box: Box
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+
+=== only.tt ===
+const found: { kind: "Some"; value: string } | { kind: "None" } = { kind: "Some", value: "only" };
+>found : const found: {
+>       kind: "Some";
+>       value: string;
+>   } | {
+>       kind: "None";
+>   }
+>kind : (property) kind: "Some"
+>value : (property) value: string
+>kind : (property) kind: "None"
+>kind : (property) kind: "Some"
+>value : (property) value: string
+export const Some(value: label) = found else { throw new Error("none"); };
+>value : (property) value: string
+>label : const label: string
+>found : const found: {
+>       kind: "Some";
+>       value: string;
+>   }
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+
+=== main.tt ===
+console.log(`size=${size} counter=${counter} inner=${Nested.inner} label=${label}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>size : (alias) const size: number
+>counter : (alias) let counter: number
+>Nested : (alias) namespace Nested
+>inner : var Nested.inner: number
+>label : (alias) const label: string
+

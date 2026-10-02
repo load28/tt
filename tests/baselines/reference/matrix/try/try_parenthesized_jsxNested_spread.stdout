@@ -1,0 +1,2 @@
+jsxNested(6) => {"kind":"Ok","value":"<ul><li>1</li><li>6</li></ul>"} | first 1; flip true; read 6
+jsxNested(-6) => {"kind":"Err","error":"negative -9"} | first 1; flip false; fallback -9; read -9

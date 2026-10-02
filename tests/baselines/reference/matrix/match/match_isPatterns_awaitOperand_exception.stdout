@@ -1,0 +1,4 @@
+awaitOperand({}) => "range" | risky {}; range "range"
+awaitOperand({}) => 1 | risky {}; type 1
+awaitOperand({}) => "risky call 3" | caught "risky call 3"
+awaitOperand("text") => null | risky "text"; other null

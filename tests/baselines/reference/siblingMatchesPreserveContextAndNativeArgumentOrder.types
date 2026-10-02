@@ -1,0 +1,132 @@
+=== siblingMatchesPreserveContextAndNativeArgumentOrder.tt ===
+const trace: string[] = [];
+>trace : const trace: string[]
+type Item = {kind: "item"; run: (x: number) => number};
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+function mark<T>(name: string, value: T): T { trace.push(name); return value; }
+>mark : function mark<T>(name: string, value: T): T
+>T : (type parameter) T in mark<T>(name: string, value: T): T
+>name : (parameter) name: string
+>value : (parameter) value: T
+>T : (type parameter) T in mark<T>(name: string, value: T): T
+>T : (type parameter) T in mark<T>(name: string, value: T): T
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>value : (parameter) value: T
+let flag: boolean = true;
+>flag : let flag: boolean
+const receiver = {
+>receiver : const receiver: {
+>       base: number;
+>       readonly pair: (this: {
+>           base: number;
+>       }, a: Item, between: number, b: Item) => number;
+>   }
+  base: 10,
+>base : (property) base: number
+  get pair() {
+>pair : (accessor) pair: (this: {
+>       base: number;
+>   }, a: Item, between: number, b: Item) => number
+    trace.push("callee");
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+    return function(this: {base: number}, a: Item, between: number, b: Item) {
+>this : (parameter) this: {
+>       base: number;
+>   }
+>base : (property) base: number
+>a : (parameter) a: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+>between : (parameter) between: number
+>b : (parameter) b: Item
+>Item : type Item = {
+>       kind: "item";
+>       run: (x: number) => number;
+>   }
+      trace.push("call"); return this.base + a.run(between) + b.run(2);
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>base : (property) base: number
+>a : (parameter) a: Item
+>run : (property) run: (x: number) => number
+>between : (parameter) between: number
+>b : (parameter) b: Item
+>run : (property) run: (x: number) => number
+const result = mark("receiver", receiver).pair(
+>result : const result: number
+>mark : function mark<{
+>       base: number;
+>       readonly pair: (this: {
+>           base: number;
+>       }, a: Item, between: number, b: Item) => number;
+>   }>(name: string, value: {
+>       base: number;
+>       readonly pair: (this: {
+>           base: number;
+>       }, a: Item, between: number, b: Item) => number;
+>   }): {
+>       base: number;
+>       readonly pair: (this: {
+>           base: number;
+>       }, a: Item, between: number, b: Item) => number;
+>   }
+>receiver : const receiver: {
+>       base: number;
+>       readonly pair: (this: {
+>           base: number;
+>       }, a: Item, between: number, b: Item) => number;
+>   }
+>pair : (accessor) pair: (this: {
+>       base: number;
+>   }, a: Item, between: number, b: Item) => number
+  match (mark("subject1", flag)) {
+>mark : function mark<true>(name: string, value: true): true
+>flag : let flag: true
+    true => (trace.push("arm1"), flag = false, {kind: "item", run: x => x + 1}),
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>flag : let flag: boolean
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+    false => ({kind: "item", run: x => x}),
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+  mark("between", 3),
+>mark : function mark<3>(name: string, value: 3): 3
+  match (mark("subject2", flag)) {
+>mark : function mark<boolean>(name: string, value: boolean): boolean
+>flag : let flag: boolean
+    true => ({kind: "item", run: x => x}),
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+    false => { return (trace.push("arm2"), {kind: "item", run: x => x + 2}); },
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>kind : (property) kind: "item"
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+console.log(result, trace.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>result : const result: number
+>trace : const trace: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

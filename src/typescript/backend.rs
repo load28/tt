@@ -116,6 +116,7 @@ pub(crate) struct SymbolQuery {
     pub module: PathBuf,
     /// UTF-16 offset of the identifier in that module.
     pub position: usize,
+    pub binding: bool,
 }
 
 /// Whether the type at a position is definitely the two-case Result shape.
@@ -136,13 +137,23 @@ pub(crate) struct ContextualSlotQuery {
     pub module: PathBuf,
     /// UTF-16 end of the declaration identifier, where an annotation belongs.
     pub declaration_end: usize,
+    /// Storage that is not asked about: annotated by an earlier round, or a
+    /// `const` holding a value on its way to detached storage. Like every
+    /// slot, never named by another slot's annotation.
+    pub settled: bool,
+    pub operand: bool,
+    pub asserted: bool,
 }
 
 /// A type expressed in the lexical scope of the generated declaration.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ContextualSlotType {
     pub index: usize,
-    pub annotation: String,
+    pub annotation: Option<String>,
+    /// Joined from the values assigned to the storage, rather than the
+    /// contextual type at its uses.
+    pub inferred: bool,
+    pub provisional: bool,
 }
 
 /// Everything asked of one project graph, in one round trip.
@@ -172,6 +183,11 @@ pub(crate) struct Query {
     /// never writes declaration syntax of its own: the compiler emits for a
     /// lowered module exactly what it would for a hand-written one.
     pub emit_declarations: bool,
+    /// Modules of documents held open whose TypeScript does not parse, served
+    /// through their faithful projection.
+    pub unparsed_documents: Vec<PathBuf>,
+    /// Modules whose source TypeScript does not parse, served as placeholders.
+    pub syntax_blocked: Vec<PathBuf>,
 }
 
 /// One TypeScript diagnostic, in TypeScript's coordinates. Mapping it back
@@ -190,6 +206,12 @@ pub(crate) struct Diagnostic {
     /// expression and its contextual type. The raw message remains the
     /// lossless fallback; renderers prefer these facts.
     pub mismatch: Option<TypeMismatch>,
+    /// UTF-16 range of the value a property lookup was made on, when the
+    /// diagnostic says a property does not exist on it: the object of
+    /// `value.name`, or the value an object binding pattern destructures.
+    /// The property is reported at its own name; the value it is missing
+    /// from is where the lookup came from.
+    pub receiver: Option<(usize, usize)>,
     /// The checker's own related places — "the expected type comes from
     /// this declaration", "first declared here" — each in the coordinates
     /// of the file it names. Empty when the checker offered none.
@@ -308,8 +330,11 @@ pub(crate) struct Answers {
     /// `None` means the backend did not run; an empty program is different
     /// from an unavailable answer.
     pub project_modules: Option<Vec<PathBuf>>,
-    /// Files and directories read while resolving the configured program.
+    /// Files read while resolving the configured program.
     pub dependencies: Vec<PathBuf>,
+    /// Directories listed while resolving it: a file added to or removed
+    /// from one can change the program.
+    pub directories: Vec<PathBuf>,
     pub diagnostics: Vec<Diagnostic>,
     pub project_diagnostics: Vec<ProjectDiagnostic>,
     pub literal_missing: Vec<LiteralMissing>,

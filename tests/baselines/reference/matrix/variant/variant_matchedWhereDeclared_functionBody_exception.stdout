@@ -1,0 +1,2 @@
+functionBody(4) => [5,0] | risky 4; add 5; neg 0
+functionBody(9) => [10,0] | risky 9; add 10; neg 0

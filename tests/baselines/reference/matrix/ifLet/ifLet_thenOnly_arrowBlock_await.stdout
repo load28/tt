@@ -1,0 +1,2 @@
+arrowBlock(2) => 2 | await; read 2; then 2
+arrowBlock(-1) => "none" | await; read -1

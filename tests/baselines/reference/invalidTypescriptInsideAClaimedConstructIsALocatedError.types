@@ -1,0 +1,10 @@
+=== invalidTypescriptInsideAClaimedConstructIsALocatedError.tt ===
+const r = result {
+>r : const r: any
+  const a = try f();
+>a : const a: any
+  const b = ;
+>b : const b: any
+  return a;
+>a : const a: any
+

@@ -1,0 +1,3 @@
+jsxChild(3) => "<p>{'kind':'Ok','value':3}</p>" | read 3; big 3
+jsxChild(1) => "<p>{'kind':'Err','error':'negative undefined'}</p>" | read undefined
+jsxChild(-1) => "<p>{'kind':'Err','error':'negative -1'}</p>" | read -1

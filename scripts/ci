@@ -11,7 +11,7 @@
 # The stages, in the order they run:
 #
 #   agents      the agent entrypoint contract (CLAUDE.md, doctor)
-#   rust        cargo fmt --check, clippy -D warnings, cargo test
+#   rust        cargo fmt --check, clippy -D warnings, cargo test, unused baselines
 #   npm         the npm release tooling and project initializer tests
 #   website     the typed and statically rendered public site
 #   native      the type checking modes against TypeScript 7
@@ -178,14 +178,12 @@ note "  node:  $(node --version)"
 if [ -n "$TS_VERSION" ]; then
   note "  ts:    $TS_VERSION"
 else
-  warn "TypeScript is not installed (npm ci at the repository root); the native stage cannot run"
+  warn "TypeScript is not installed (npm ci at the repository root): the integration tests skip their type checks and the native stage cannot run"
 fi
 
 # Tools CI installs before testing. Without them the suites do not fail —
 # they skip, and a skipped suite is green in every other way, which is the
 # thing this repository keeps guarding against. So name what goes missing.
-have tsc \
-  || warn "tsc is not on PATH: the integration tests will skip their type checks (npm i -g typescript@6)"
 if ! have rolldown && [ ! -x "$TT_ROOT/website/node_modules/.bin/rolldown" ]; then
   warn "rolldown is not on PATH: the std tree-shaking regression will skip (npm i -g rolldown@1.2.5)"
 fi
@@ -223,7 +221,24 @@ stage_rust() {
   # The emit fixtures pin the artifact a configured checkout produces,
   # annotations included, so without a TypeScript they skip — and a skipped
   # contract is green in every other way. The gate says one must be there.
-  run env TTC_REQUIRE_TSGO=1 cargo test || return 1
+  cases_required=1
+  run scripts/fetch-typescript-cases > /dev/null || {
+    warn "TypeScript's test cases could not be fetched: the passthrough parity sample in tests/corpus.rs will skip"
+    cases_required=0
+  }
+  (cd "$TT_ROOT/editors/vscode" && npm_install_if_stale) || return 1
+  (cd "$TT_ROOT/editors/vscode" && run npm run compile) || return 1
+  rm -rf "$TT_ROOT/tests/baselines/local"
+  tracking="$(mktemp -d)"
+  run env TTC_REQUIRE_TSGO=1 TT_REQUIRE_EXTENSION=1 TTC_REQUIRE_TYPESCRIPT_CASES="$cases_required" TT_BASELINE_TRACKING_DIR="$tracking" cargo test || {
+    rm -rf "$tracking"
+    return 1
+  }
+  run node scripts/check-baselines --tracking "$tracking" || {
+    rm -rf "$tracking"
+    return 1
+  }
+  rm -rf "$tracking"
   run cargo check --manifest-path fuzz/Cargo.toml --all-targets --locked || return 1
 }
 

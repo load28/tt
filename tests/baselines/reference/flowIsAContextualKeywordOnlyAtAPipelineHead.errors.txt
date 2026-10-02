@@ -1,0 +1,42 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./flowIsAContextualKeywordOnlyAtAPipelineHead.tt → $DIR/out/flowIsAContextualKeywordOnlyAtAPipelineHead.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'flow'.
+ --> flowIsAContextualKeywordOnlyAtAPipelineHead.tt:1:12
+  |
+1 | const a = (flow) |> f;
+  |            ^^^^
+error[ts2304]: Cannot find name 'f'.
+ --> flowIsAContextualKeywordOnlyAtAPipelineHead.tt:1:21
+  |
+1 | const a = (flow) |> f;
+  |                     ^
+error[ts2304]: Cannot find name 'o'.
+ --> flowIsAContextualKeywordOnlyAtAPipelineHead.tt:2:11
+  |
+2 | const b = o.flow |> f;
+  |           ^
+error[ts2304]: Cannot find name 'f'.
+ --> flowIsAContextualKeywordOnlyAtAPipelineHead.tt:2:21
+  |
+2 | const b = o.flow |> f;
+  |                     ^
+error[ts2304]: Cannot find name 'flow'.
+ --> flowIsAContextualKeywordOnlyAtAPipelineHead.tt:3:11
+  |
+3 | const c = flow() |> f;
+  |           ^^^^
+error[ts2304]: Cannot find name 'f'.
+ --> flowIsAContextualKeywordOnlyAtAPipelineHead.tt:3:21
+  |
+3 | const c = flow() |> f;
+  |                     ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+flowIsAContextualKeywordOnlyAtAPipelineHead.ts(1,45): error TS2304: Cannot find name 'flow'.
+flowIsAContextualKeywordOnlyAtAPipelineHead.ts(1,52): error TS2304: Cannot find name 'f'.
+flowIsAContextualKeywordOnlyAtAPipelineHead.ts(2,44): error TS2304: Cannot find name 'o'.
+flowIsAContextualKeywordOnlyAtAPipelineHead.ts(2,52): error TS2304: Cannot find name 'f'.
+flowIsAContextualKeywordOnlyAtAPipelineHead.ts(3,44): error TS2304: Cannot find name 'flow'.
+flowIsAContextualKeywordOnlyAtAPipelineHead.ts(3,52): error TS2304: Cannot find name 'f'.

@@ -1,0 +1,65 @@
+=== aValueWithNoContextualTypeIsTypedAsAtItsSourcePosition2.tt ===
+function pick(n: number) {
+>pick : function pick(n: number): string
+>n : (parameter) n: number
+  const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };
+>b : const b: {
+>       k: number;
+>       m(): {
+>           k: number;
+>           m(): ...;
+>       };
+>   }
+>n : (parameter) n: number
+>k : (property) k: number
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+>k : (property) k: number
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+  const f = match (n) { 1 => () => b.m().k, _ => function () { return 0; } };
+>f : const f: () => number
+>n : (parameter) n: number
+>b : const b: {
+>       k: number;
+>       m(): {
+>           k: number;
+>           m(): ...;
+>       };
+>   }
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+>k : (property) k: number
+  const xs = match (n) { 1 => [n], _ => [] };
+>xs : const xs: number[]
+>n : (parameter) n: number
+>n : (parameter) n: number
+  return [b.m().k, f(), xs.length].join(",");
+>b : const b: {
+>       k: number;
+>       m(): {
+>           k: number;
+>           m(): ...;
+>       };
+>   }
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+>k : (property) k: number
+>f : const f: () => number
+>xs : const xs: number[]
+>length : (property) Array<number>.length: number
+>join : (method) Array<number>.join(separator?: string): string
+console.log(pick(1), pick(2));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pick : function pick(n: number): string
+>pick : function pick(n: number): string
+

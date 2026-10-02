@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_01.rs::result_region_pipeline_head_completes_before_the_pipeline_step
+variant R { Ok(value: number), Err(error: string) }
+declare const g: () => R; declare const unwrap: (x: R) => number;
+const f = (): number => { const n = result {
+const value = try g(); return value * 2;
+} |> unwrap; return n; };

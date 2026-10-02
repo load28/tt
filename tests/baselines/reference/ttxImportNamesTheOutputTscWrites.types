@@ -1,0 +1,18 @@
+=== view.ttx ===
+export const label: string = "view";
+>label : const label: string
+export const lazy = () => import("./lazy.ttx");
+>lazy : const lazy: () => Promise<typeof import("./lazy.ttx")>
+
+=== lazy.ttx ===
+export const later: string = "lazy";
+>later : const later: string
+
+=== main.tt ===
+console.log(label, (await lazy()).later);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>label : (alias) const label: string
+>lazy : (alias) const lazy: () => Promise<typeof import("./lazy.ttx")>
+>later : const later: string
+

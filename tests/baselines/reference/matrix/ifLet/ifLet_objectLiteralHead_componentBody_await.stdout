@@ -1,0 +1,2 @@
+componentBody(6) => "<p>6</p>" | await; some 6
+componentBody(9) => "<p>9</p>" | await; some 9

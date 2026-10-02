@@ -1,0 +1,3 @@
+[{"kind":"Err","error":"small10"},{"kind":"Ok","value":20}] ["swap","r10","swap","late","r20"]
+[{"kind":"Err","error":"small10"},{"kind":"Ok","value":21},{"kind":"Err","error":"small10"},{"kind":"Ok","value":0}]
+[{"kind":"Err","error":"small10"},{"kind":"Ok","value":20},{"kind":"Err","error":"small10"},{"kind":"Ok","value":20},{"kind":"Ok","value":20},{"kind":"Err","error":"small0"}]

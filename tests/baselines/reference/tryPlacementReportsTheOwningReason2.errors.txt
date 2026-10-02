@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[try-placement]: `try` cannot be used in a parameter initializer — this TypeScript control-flow boundary has no statement position for its `Err` propagation
+ --> ./tryPlacementReportsTheOwningReason2.tt:1:20
+  |
+1 | function f(value = try read()) { return value; }
+  |                    ^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a parameter initializer — this TypeScript control-flow boundary has no statement position for its `Err` propagation
+ --> tryPlacementReportsTheOwningReason2.tt:1:20
+  |
+1 | function f(value = try read()) { return value; }
+  |                    ^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,2 @@
+loopBody(4) => [7,7] | yield 4; step 3; add 7; yield 4; step 3; add 7
+loopBody(-1) => [2,2] | yield -1; step 3; add 2; yield -1; step 3; add 2

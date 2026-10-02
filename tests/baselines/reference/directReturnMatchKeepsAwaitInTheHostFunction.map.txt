@@ -1,0 +1,9 @@
+//// [directReturnMatchKeepsAwaitInTheHostFunction.tt] 7 mapping(s)
+1:1 -> 1:1 len 25  "async function f(x: T) { "
+1:26 -> 16:1 len 7  "return "
+1:40 -> 3:17 len 1  "x"
+1:47 -> 6:15 len 3  "url"
+1:55 -> 7:16 len 16  "await fetch(url)"
+1:78 -> 11:16 len 4  "null"
+1:84 -> 16:14 len 3  "; }"
+

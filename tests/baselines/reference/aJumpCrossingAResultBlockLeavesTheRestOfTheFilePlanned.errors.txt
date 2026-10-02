@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+error[result-break-crossing]: `break` cannot leave a `result` block
+ --> ./aJumpCrossingAResultBlockLeavesTheRestOfTheFilePlanned.tt:3:70
+  |
+3 | function f() { for (;;) { const r = result { const v = try x; if (v) break; return v; }; } }
+  |                                                                      ^^^^^
+  |
+  = help: break only a loop or switch written inside this `result` block
+
+error[try-placement]: `try` cannot be used in a class field initializer — this TypeScript control-flow boundary has no statement position for its `Err` propagation
+ --> ./aJumpCrossingAResultBlockLeavesTheRestOfTheFilePlanned.tt:4:15
+  |
+4 | class C { y = try x; }
+  |               ^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[result-break-crossing]: `break` cannot leave a `result` block
+ --> aJumpCrossingAResultBlockLeavesTheRestOfTheFilePlanned.tt:3:70
+  |
+3 | function f() { for (;;) { const r = result { const v = try x; if (v) break; return v; }; } }
+  |                                                                      ^^^^^
+  |
+  = help: break only a loop or switch written inside this `result` block
+error[try-placement]: `try` cannot be used in a class field initializer — this TypeScript control-flow boundary has no statement position for its `Err` propagation
+ --> aJumpCrossingAResultBlockLeavesTheRestOfTheFilePlanned.tt:4:15
+  |
+4 | class C { y = try x; }
+  |               ^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

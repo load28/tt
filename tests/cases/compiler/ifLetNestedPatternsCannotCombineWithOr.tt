@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_03.rs::if_let_nested_patterns_cannot_combine_with_or
+function g(o: X): number {
+  if let Some(value: Ok(v)) | None() = o {
+    return 1;
+  }
+  return 0;
+}

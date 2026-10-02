@@ -1,0 +1,3 @@
+catchBlock({"kind":"Num","value":1}) => 1 | throw "boom"; number 1
+catchBlock({"kind":"Neg","value":-1}) => threw Cannot read properties of undefined (reading 'kind') | throw "boom"
+catchBlock({"kind":"Word","text":"w"}) => "none" | throw "boom"

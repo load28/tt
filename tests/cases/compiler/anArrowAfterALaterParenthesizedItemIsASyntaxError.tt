@@ -1,0 +1,8 @@
+// `=>` after the second item of a parenthesized list (`(a, b() => 1)`) is
+// a syntax error TypeScript reports at the `=>` ("')' expected"). The
+// vendored parser's recovery for an arrow function whose parameter it read
+// as a parenthesized item asserted that the list held one item, so a debug
+// build stopped with an internal error instead of reporting the error.
+declare const a: number;
+declare function b(): number;
+(a, b() => 1);

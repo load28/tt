@@ -1,0 +1,2 @@
+jsxChild(2) => "<p>{'kind':'Ok','value':20}</p>" | open res; operand 2; read 2; dispose res
+jsxChild(-1) => "<p>{'kind':'Err','error':'negative -1'}</p>" | open res; operand -1; read -1; dispose res

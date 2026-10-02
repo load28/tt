@@ -1,0 +1,2 @@
+conditionalBranch(true) => 1 | flip true; yield true; yes 1
+conditionalBranch(false) => "skipped" | flip false; else "skipped"

@@ -1,0 +1,2 @@
+matchBlockArm(4) => [{"kind":"Now"},{"kind":"Later","at":4}] | arm true; risky 4
+matchBlockArm(9) => [{"kind":"Now"},{"kind":"Later","at":9}] | arm true; risky 9

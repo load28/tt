@@ -1,0 +1,2 @@
+forOfBody(6) => [6,6] | round 0; await; some 6; round 1; await; some 6
+forOfBody(9) => [9,9] | round 0; await; some 9; round 1; await; some 9

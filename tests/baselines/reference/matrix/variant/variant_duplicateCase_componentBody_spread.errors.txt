@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[variant-duplicate-case]: variant Bad: duplicate case "A"
+ --> ./main.ttx:6:25
+  |
+6 |     variant Bad { A, B, A }
+  |                         ^
+
+
+==== ttc --check-types (exit 1) ====
+error[variant-duplicate-case]: variant Bad: duplicate case "A"
+ --> main.ttx:6:25
+  |
+6 |     variant Bad { A, B, A }
+  |                         ^
+
+==== tsc on the emitted TypeScript (exit 0) ====

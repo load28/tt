@@ -1,0 +1,22 @@
+==== ttc --out-dir (exit 1) ====
+error[malformed-match]: invalid match arm: expected `<pattern> => <body>`
+ --> ./wildcardWithGuardIsNotTtSyntax.tt:1:31
+  |
+1 | const r = match (x) { A => 1, _ if c => 0 };
+  |                               ^^^^^^^^^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> wildcardWithGuardIsNotTtSyntax.tt:1:18
+  |
+1 | const r = match (x) { A => 1, _ if c => 0 };
+  |                  ^
+error[malformed-match]: invalid match arm: expected `<pattern> => <body>`
+ --> wildcardWithGuardIsNotTtSyntax.tt:1:31
+  |
+1 | const r = match (x) { A => 1, _ if c => 0 };
+  |                               ^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

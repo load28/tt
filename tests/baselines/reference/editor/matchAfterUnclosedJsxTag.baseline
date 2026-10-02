@@ -1,0 +1,17 @@
+=== diagnostics matchAfterUnclosedJsxTag.ttx ===
+diagnostics: 6 diagnostic(s)
+  10:8-10:9 "m" error TS1005: '...' expected.
+  11:5-11:7 "</" error TS1003: Identifier expected.
+  8:5-8:10 "<div>" error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+  10:20-10:24 "Idle" error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists. (in code ttc generated for this construct)
+  10:20-10:24 "Idle" error TS2698: Spread types may only be created from object types. (in code ttc generated for this construct)
+  11:5-11:11 "</div>" error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+  restates: source-not-typescript
+published: 6 diagnostic(s)
+  8:5-8:10 "<div>" error ts7026 (ttc): JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+  10:8-10:13 "match" error ts1005 (ttc): '...' expected.
+  10:20-10:24 "Idle" error ts2698 (ttc): Spread types may only be created from object types. (in code ttc generated for this construct)
+  10:20-10:24 "Idle" error ts7026 (ttc): JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists. (in code ttc generated for this construct)
+  11:5-11:7 "</" error ts1003 (ttc): Identifier expected.
+  11:5-11:11 "</div>" error ts7026 (ttc): JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+

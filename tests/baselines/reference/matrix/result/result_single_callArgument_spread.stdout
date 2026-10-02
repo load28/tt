@@ -1,0 +1,2 @@
+callArgument(2) => [1,{"kind":"Ok","value":20},3] | a 1; read 2; c 3
+callArgument(-1) => [1,{"kind":"Err","error":"negative -1"},3] | a 1; read -1; c 3

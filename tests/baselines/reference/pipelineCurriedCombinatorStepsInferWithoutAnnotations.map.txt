@@ -1,0 +1,7 @@
+//// [pipelineCurriedCombinatorStepsInferWithoutAnnotations.tt] 5 mapping(s)
+1:1 -> 2:1 len 571  "\ntype TOption<T> = { kind: \"Some\"; value: T } | "...
+18:23 -> 19:37 len 7  "half(4)"
+18:34 -> 19:46 len 23  "Option.mapP(x => x + 1)"
+18:61 -> 19:72 len 19  "Option.unwrapOrP(0)"
+18:84 -> 19:92 len 25  ".toFixed(1);\n\nexport {};\n"
+

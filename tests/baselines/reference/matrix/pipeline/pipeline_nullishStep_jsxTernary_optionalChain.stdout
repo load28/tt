@@ -1,0 +1,2 @@
+jsxTernary(10) => "<p>20</p>" | flip true; flip false; lookup false; double 20
+jsxTernary(20) => "<p>null</p>" | flip true; flip false; lookup false; double null

@@ -31,6 +31,7 @@ use std::path::{Path, PathBuf};
 use crate::analysis::{DeclaredVariant, NameKind, Origin};
 use crate::{MatchConstructor, PayloadField, VariantCaseSymbol, VariantSymbol};
 
+use super::documents::Texts;
 use super::language::{Location, Position, Range};
 
 /// What a tt name names.
@@ -70,15 +71,27 @@ pub struct TtSymbol {
 /// The tt name at `position`, or `None` when the position is not on one.
 ///
 /// `path` is the file the source belongs to; it is used to resolve
-/// relative `.tt` imports (from disk — an unsaved imported file is seen as
-/// last saved) and to name the file a definition lives in.
+/// relative `.tt` imports and to name the file a definition lives in.
+///
+/// This is the stand-alone question: an imported file is read as saved. A
+/// session asks [`super::Workspace::tt_symbol_at`], which reads its open
+/// documents.
 pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtSymbol> {
+    symbol_at(path, source, position, Texts::Disk)
+}
+
+pub(super) fn symbol_at(
+    path: &Path,
+    source: &str,
+    position: Position,
+    texts: Texts<'_>,
+) -> Option<TtSymbol> {
     let offset = super::language::source_byte(source, position);
     let locals = crate::variant_symbols_with_kind(
         source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
     );
-    let analyses = super::language::analyses_for(path, source);
+    let analyses = super::language::analyses_for(path, source, texts);
 
     // 1. Inside a variant declaration: the name, a case tag, a field name.
     //    These bytes have no counterpart in the output at all.
@@ -110,7 +123,7 @@ pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtS
                 TtSymbolKind::Case,
                 case_signature(&declared.name, constructor),
                 case_detail(declared, constructor),
-                case_definition(path, source, &locals, declared, &resolved.name),
+                case_definition(path, source, &locals, declared, &resolved.name, texts),
             )
         }
         NameKind::Field => {
@@ -129,7 +142,7 @@ pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtS
                     "payload field of `{}.{tag}` — the pattern binds it by name",
                     declared.name
                 ),
-                field_definition(path, source, &locals, declared, tag, &resolved.name),
+                field_definition(path, source, &locals, declared, tag, &resolved.name, texts),
             )
         }
     };
@@ -145,7 +158,74 @@ pub fn tt_symbol_at(path: &Path, source: &str, position: Position) -> Option<TtS
     })
 }
 
-/// The symbol at `offset` when it sits inside one of this file's own variant
+/// Every name in `source`'s patterns that resolves to the tt declaration at
+/// `target` — the case tags and payload fields TypeScript never sees, since
+/// they lower to string literals and destructuring keys. A name resolves
+/// here by the same rule it does for [`tt_symbol_at`], so a pattern is a
+/// reference exactly when go-to-definition from it lands on `target`.
+pub(super) fn tt_pattern_references(
+    path: &Path,
+    source: &str,
+    target: &Location,
+    texts: Texts<'_>,
+) -> Vec<Range> {
+    let locals = crate::variant_symbols_with_kind(
+        source,
+        crate::SourceKind::from_path(path).unwrap_or_default(),
+    );
+    let analyses = super::language::analyses_for(path, source, texts);
+    let mut definitions = std::collections::HashMap::new();
+    let mut out = Vec::new();
+    for resolved in &analyses.resolved {
+        let key = (
+            resolved.kind == NameKind::Case,
+            resolved.variant_name.clone(),
+            resolved.tag.clone(),
+            resolved.name.clone(),
+        );
+        let definition = definitions
+            .entry(key)
+            .or_insert_with(|| {
+                let declared = analyses
+                    .declarations
+                    .iter()
+                    .find(|d| d.name == resolved.variant_name)?;
+                match resolved.kind {
+                    NameKind::Case => {
+                        case_definition(path, source, &locals, declared, &resolved.name, texts)
+                    }
+                    NameKind::Field => field_definition(
+                        path,
+                        source,
+                        &locals,
+                        declared,
+                        resolved.tag.as_deref()?,
+                        &resolved.name,
+                        texts,
+                    ),
+                }
+            })
+            .clone();
+        if definition.is_some_and(|definition| same_location(&definition, target)) {
+            out.push(super::language::span_range(
+                source,
+                resolved.start,
+                resolved.end,
+            ));
+        }
+    }
+    out
+}
+
+/// Whether two locations name the same range of the same file, however
+/// each path was spelled.
+pub(crate) fn same_location(a: &Location, b: &Location) -> bool {
+    let file =
+        |path: &Path| super::normalize_document_path(path).unwrap_or_else(|_| path.to_path_buf());
+    a.range == b.range && file(&a.path) == file(&b.path)
+}
+
+/// The symbol at `offset` when it sits inside one of this file's own variant/// The symbol at `offset` when it sits inside one of this file's own variant
 /// declarations — the one region that lowers to text with no mapping at
 /// all, so nothing else can answer for it.
 fn declaration_at(
@@ -260,6 +340,7 @@ fn case_definition(
     locals: &[VariantSymbol],
     declared: &DeclaredVariant,
     tag: &str,
+    texts: Texts<'_>,
 ) -> Option<Location> {
     if let Some(local) = locals.iter().find(|d| d.name == declared.name) {
         let case = local.cases.iter().find(|c| c.tag == tag)?;
@@ -268,7 +349,7 @@ fn case_definition(
             range: super::language::span_range(source, case.offset, case.offset + case.tag.len()),
         });
     }
-    let (target, text, imported) = imported_declaration(path, source, declared)?;
+    let (target, text, imported) = imported_declaration(path, source, declared, texts)?;
     let case = imported.cases.iter().find(|c| c.tag == tag)?;
     Some(Location {
         path: target,
@@ -283,6 +364,7 @@ fn field_definition(
     declared: &DeclaredVariant,
     tag: &str,
     name: &str,
+    texts: Texts<'_>,
 ) -> Option<Location> {
     let find = |declaration: &VariantSymbol| -> Option<(usize, usize)> {
         let case = declaration.cases.iter().find(|c| c.tag == tag)?;
@@ -296,7 +378,7 @@ fn field_definition(
             range: super::language::span_range(source, start, end),
         });
     }
-    let (target, text, imported) = imported_declaration(path, source, declared)?;
+    let (target, text, imported) = imported_declaration(path, source, declared, texts)?;
     let (start, end) = find(&imported)?;
     Some(Location {
         path: target,
@@ -311,27 +393,29 @@ fn imported_declaration(
     path: &Path,
     source: &str,
     declared: &DeclaredVariant,
+    texts: Texts<'_>,
 ) -> Option<(PathBuf, String, VariantSymbol)> {
     let Origin::Imported { .. } = declared.origin else {
         return None;
     };
-    let texts = std::cell::RefCell::new(std::collections::HashMap::new());
+    let read = std::cell::RefCell::new(std::collections::HashMap::new());
     let imports = crate::tt_imports_with_kind(
         source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
     );
     let (target, found) = super::language::imported_variants(path, &imports, &|target| {
-        let text = std::fs::read_to_string(target).ok()?;
+        let text = texts.read(target)?;
         let exported = crate::exported_variant_symbols_with_kind(
             &text,
             crate::SourceKind::from_path(target).unwrap_or_default(),
         );
-        texts.borrow_mut().insert(target.to_path_buf(), text);
+        read.borrow_mut().insert(target.to_path_buf(), text);
         Some(exported)
     })
     .into_iter()
+    .map(|(target, imported)| (target, imported.symbol))
     .find(|(_, symbol)| symbol.name == declared.name)?;
-    let text = texts.borrow_mut().remove(&target)?;
+    let text = read.borrow_mut().remove(&target)?;
     Some((target, text, found))
 }
 

@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[malformed-variant]: tt `variant` could not be parsed
+ --> ./main.ttx:1:8
+  |
+1 | export variant Shape { Circle(r: number) Point }
+  |        ^^^^^^^
+  |
+  = help: a case is `Case` or `Case(field: Type)`
+
+
+==== ttc --check-types (exit 1) ====
+error[malformed-variant]: tt `variant` could not be parsed
+ --> main.ttx:1:8
+  |
+1 | export variant Shape { Circle(r: number) Point }
+  |        ^^^^^^^
+  |
+  = help: a case is `Case` or `Case(field: Type)`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

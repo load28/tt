@@ -1,0 +1,28 @@
+//// [scopedSiblingCompletionsPreserveOrderAndSlots.tt] 26 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:30 -> 21:29 len 6  "number"
+2:30 -> 24:18 len 6  "number"
+2:46 -> 26:3 len 382  "\ntype Item = {kind: \"item\"; run: (x: number) => "...
+11:3 -> 71:3 len 15  "const result = "
+11:18 -> 37:19 len 4  "pair"
+12:12 -> 39:19 len 23  "mark(\"subject1\", state)"
+13:13 -> 42:17 len 5  "value"
+13:23 -> 43:18 len 93  "(trace.push(\"arm1\"), shared = value, {kind: \"ite"...
+14:16 -> 47:18 len 48  "({kind: \"item\" as const, run: (x: number) => x})"
+16:12 -> 56:19 len 28  "mark(\"subject2\", shared > 5)"
+17:7 -> 58:12 len 4  "true"
+17:15 -> 59:33 len 62  "(trace.push(\"arm2:big\"), {kind: \"item\", run: x ="...
+18:7 -> 62:12 len 5  "false"
+18:16 -> 63:33 len 64  "(trace.push(\"arm2:small\"), {kind: \"item\", run: x"...
+20:4 -> 71:24 len 156  ";\n  console.log(result, trace.join(\",\"));\n}\nfunc"...
+26:3 -> 78:19 len 4  "pair"
+27:12 -> 80:19 len 14  "State.Ready(1)"
+27:36 -> 83:17 len 5  "value"
+27:46 -> 84:18 len 77  "(trace.push(\"first\"), {kind: \"item\" as const, ru"...
+27:134 -> 88:18 len 48  "({kind: \"item\" as const, run: (x: number) => x})"
+28:12 -> 97:19 len 17  "throwingSubject()"
+28:39 -> 100:17 len 5  "value"
+28:49 -> 101:24 len 37  "({kind: \"item\", run: x => x + value})"
+28:97 -> 105:24 len 29  "({kind: \"item\", run: x => x})"
+29:5 -> 113:3 len 77  "\n} catch { trace.push(\"caught\"); }\nconsole.log(t"...
+

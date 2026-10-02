@@ -1,0 +1,11 @@
+member step: 2 after head receiver add on counter
+this in method: 13 after add on counter add on counter
+computed member: 9 after key add on counter
+optional absent: undefined after head find false
+optional present: 14 after head find true add on counter
+optional tail then step: "undefined" after 
+flow built: "nothing yet" after 
+flow called: "008" after double
+postfix chain: ["a","b"] after 
+nested pipelines: "[17,18,20]" after add on counter add on counter add on counter
+final count: 20 after 

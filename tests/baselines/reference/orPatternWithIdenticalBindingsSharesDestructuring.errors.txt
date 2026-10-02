@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./orPatternWithIdenticalBindingsSharesDestructuring.tt → $DIR/out/orPatternWithIdenticalBindingsSharesDestructuring.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> orPatternWithIdenticalBindingsSharesDestructuring.tt:1:18
+  |
+1 | const r = match (x) { A(v) | B(v) => v, _ => 0 };
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+orPatternWithIdenticalBindingsSharesDestructuring.ts(3,17): error TS2304: Cannot find name 'x'.

@@ -1,0 +1,2 @@
+functionBody(3) => 6 | operand 3; finally 0
+functionBody(8) => 16 | operand 8; finally 0

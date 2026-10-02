@@ -1,0 +1,2 @@
+laterDeclarator(4) => [1,{"kind":"Ok","value":4}] | before 1; read 4; direct 4
+laterDeclarator(-1) => [1,{"kind":"Err","error":"negative -7"}] | before 1; read -1; fallback -7; read -7

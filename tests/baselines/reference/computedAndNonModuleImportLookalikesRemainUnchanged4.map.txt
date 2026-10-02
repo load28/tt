@@ -1,0 +1,3 @@
+//// [computedAndNonModuleImportLookalikesRemainUnchanged4.tt] 1 mapping(s)
+1:1 -> 1:1 len 43  "const load = object.import('./feature.tt');"
+

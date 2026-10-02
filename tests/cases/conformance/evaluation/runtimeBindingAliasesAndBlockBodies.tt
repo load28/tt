@@ -1,0 +1,25 @@
+// @origin: tests/integration.rs::runtime_binding_aliases_and_block_bodies
+// @run: runtimeBindingAliasesAndBlockBodies.tt
+
+variant Msg {
+  Quit,
+  Move(x: number, y: number),
+  Write(text: string),
+}
+
+function describe(m: Msg): string {
+  return match (m) {
+    Move(x: px, y: py) => {
+      const sum = px + py;
+      return "move:" + sum;
+    },
+    Write(text) => "write:" + text,
+    Quit => "quit",
+  };
+}
+
+console.log(describe(Msg.Move(2, 3)));
+console.log(describe(Msg.Write("hi")));
+console.log(describe(Msg.Quit));
+
+export {};

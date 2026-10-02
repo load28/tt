@@ -1,0 +1,2 @@
+doWhileTest(2) => 2 | operand 2
+doWhileTest(5) => 2 | operand 5

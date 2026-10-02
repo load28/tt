@@ -1,0 +1,2 @@
+jsxConditional(4) => {"kind":"Ok","value":"<p>9</p>"} | flip true; operand 4; read 4; second 5; read 5
+jsxConditional(-4) => {"kind":"Ok","value":"<p></p>"} | flip false

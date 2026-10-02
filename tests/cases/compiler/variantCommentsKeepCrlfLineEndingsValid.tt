@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_07.rs::variant_comments_keep_crlf_line_endings_valid
+variant Flag {
+  /** On. */
+  On, // yes
+  Off,
+}

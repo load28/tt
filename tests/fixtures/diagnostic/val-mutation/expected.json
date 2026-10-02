@@ -4,17 +4,86 @@
     "col": 3,
     "endCol": 8,
     "endLine": 3,
+    "labels": [
+      {
+        "col": 3,
+        "endCol": 6,
+        "endLine": 2,
+        "line": 2,
+        "message": "the read-only binding is declared here"
+      }
+    ],
     "line": 3,
     "message": "cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)",
-    "suggestions": []
+    "suggestions": [
+      {
+        "edit": {
+          "col": 3,
+          "endCol": 7,
+          "endLine": 2,
+          "line": 2,
+          "replacement": ""
+        },
+        "message": "remove `val` if this binding is intended to be mutable"
+      }
+    ]
   },
   {
     "code": "val-mutation",
     "col": 3,
     "endCol": 8,
     "endLine": 4,
+    "labels": [
+      {
+        "col": 3,
+        "endCol": 6,
+        "endLine": 2,
+        "line": 2,
+        "message": "the read-only binding is declared here"
+      }
+    ],
     "line": 4,
     "message": "cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)",
-    "suggestions": []
+    "suggestions": [
+      {
+        "edit": {
+          "col": 3,
+          "endCol": 7,
+          "endLine": 2,
+          "line": 2,
+          "replacement": ""
+        },
+        "message": "remove `val` if this binding is intended to be mutable"
+      }
+    ]
+  },
+  {
+    "code": "val-mutation",
+    "col": 11,
+    "endCol": 16,
+    "endLine": 5,
+    "labels": [
+      {
+        "col": 3,
+        "endCol": 6,
+        "endLine": 2,
+        "line": 2,
+        "message": "the read-only binding is declared here"
+      }
+    ],
+    "line": 5,
+    "message": "cannot mutate through val binding `state` (the binding is declared with `val`, so every access path from it is read-only)",
+    "suggestions": [
+      {
+        "edit": {
+          "col": 3,
+          "endCol": 7,
+          "endLine": 2,
+          "line": 2,
+          "replacement": ""
+        },
+        "message": "remove `val` if this binding is intended to be mutable"
+      }
+    ]
   }
 ]

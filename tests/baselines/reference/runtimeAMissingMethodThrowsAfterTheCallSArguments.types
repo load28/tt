@@ -1,0 +1,83 @@
+=== runtimeAMissingMethodThrowsAfterTheCallSArguments.tt ===
+const trace: string[] = [];
+>trace : const trace: string[]
+function m(): number { trace.push("m"); return 1; }
+>m : function m(): number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+type O = { k: number; add(x: number): number; id<T>(v: T): T; missing?: (x: number) => number };
+>O : type O = {
+>       k: number;
+>       add(x: number): number;
+>       id<T>(v: T): T;
+>       missing?: (x: number) => number;
+>   }
+>k : (property) k: number
+>add : (method) add(x: number): number
+>x : (parameter) x: number
+>id : (method) id<T>(v: T): T
+>T : (type parameter) T in id<T>(v: T): T
+>v : (parameter) v: T
+>T : (type parameter) T in id<T>(v: T): T
+>T : (type parameter) T in id<T>(v: T): T
+>missing : (property) missing?: ((x: number) => number) | undefined
+>x : (parameter) x: number
+const o: O = { k: 5, add(x: number) { return x + this.k; }, id<T>(v: T): T { return v; } };
+>o : const o: O
+>O : type O = {
+>       k: number;
+>       add(x: number): number;
+>       id<T>(v: T): T;
+>       missing?: (x: number) => number;
+>   }
+>k : (property) k: number
+>add : (method) add(x: number): number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>k : (property) k: number
+>id : (method) id<T>(v: T): T
+>T : (type parameter) T in id<T>(v: T): T
+>v : (parameter) v: T
+>T : (type parameter) T in id<T>(v: T): T
+>T : (type parameter) T in id<T>(v: T): T
+>v : (parameter) v: T
+function attempt(f: () => unknown): string {
+>attempt : function attempt(f: () => unknown): string
+>f : (parameter) f: () => unknown
+  try { return String(f()); } catch (e) { return (e as Error).constructor.name; }
+>String : var String: (value?: any) => string
+>f : (parameter) f: () => unknown
+>e : var e: unknown
+>e : var e: unknown
+>Error : interface Error
+>constructor : (property) Object.constructor: Function
+>name : (property) Function.name: string
+const missing = attempt(() => o.missing!(match (m()) { 1 => 10, _ => 20 }));
+>missing : const missing: string
+>attempt : function attempt(f: () => unknown): string
+>o : const o: O
+>missing : (property) missing?: ((x: number) => number) | undefined
+>m : function m(): number
+const n: number = o.id(match (m()) { 1 => 10, _ => 20 });
+>n : const n: number
+>o : const o: O
+>id : (method) id<10 | 20>(v: 10 | 20): 10 | 20
+>m : function m(): number
+const piped = o |> .add(match (m()) { 1 => 1, _ => 2 });
+>piped : const piped: number
+>o : const o: O
+>add : (method) add(x: number): number
+>m : function m(): number
+console.log(missing, n, o.add(match (m()) { 1 => 10, _ => 20 }), piped, JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>missing : const missing: string
+>n : const n: number
+>o : const o: O
+>add : (method) add(x: number): number
+>m : function m(): number
+>piped : const piped: number
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+

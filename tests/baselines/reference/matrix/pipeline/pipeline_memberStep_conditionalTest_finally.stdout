@@ -1,0 +1,2 @@
+conditionalTest(2) => "truthy" | operand 2; receiver {"factor":3}; twice 6; then "truthy"; finally 0
+conditionalTest(6) => "truthy" | operand 6; receiver {"factor":3}; twice 18; then "truthy"; finally 0

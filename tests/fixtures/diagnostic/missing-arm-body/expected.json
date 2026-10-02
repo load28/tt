@@ -1,0 +1,16 @@
+[
+  {
+    "code": "missing-arm-body",
+    "col": 5,
+    "endCol": 16,
+    "endLine": 4,
+    "line": 4,
+    "message": "match: this arm has no body",
+    "suggestions": [
+      {
+        "edit": null,
+        "message": "write `=> <body>` after the guard, or the body after `=>`"
+      }
+    ]
+  }
+]

@@ -1,0 +1,2 @@
+jsxTernary(4) => "<p>2</p>" | flip true; shape "#4"
+jsxTernary(12) => "<p><i>none</i></p>" | flip false

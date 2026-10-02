@@ -1,0 +1,2 @@
+componentBody(4) => "<p>4</p>" | read 4; first 4
+componentBody(-4) => "<p>\"negative -2\"</p>" | read undefined; second -2; read -2; second "negative -2"

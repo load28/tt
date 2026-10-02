@@ -1,0 +1,7 @@
+=== diagnostics main.tt ===
+diagnostics: 1 diagnostic(s)
+  5:17-5:47 "match (note(\"operand\", input))" error TS2339: match on a tag pattern needs a value with a `kind` discriminant — this scrutinee has none (a plain TypeScript `enum` is not one) (in tt's names: Property 'r' does not exist on type 'Shape.Circle | Shape.Rect'.) (ts2339: Property 'r' does not exist on type '{ kind: "Circle"; r: number; } | { kind: "Rect"; w: number; h: number; }'.)
+published: 2 diagnostic(s)
+  5:17-5:47 "match (note(\"operand\", input))" error ts2339 (ttc): match on a tag pattern needs a value with a `kind` discriminant — this scrutinee has none (a plain TypeScript `enum` is not one) (in tt's names: Property 'r' does not exist on type 'Shape.Circle | Shape.Rect'.) (ts2339: Property 'r' does not exist on type '{ kind: "Circle"; r: number; } | { kind: "Rect"; w: number; h: number; }'.)
+  5:62-5:66 "Rect" error match-or-binding-mismatch (ttc): match: or-pattern alternatives must bind the same names — `r` is bound in `Circle(...)` but not in `Rect(...)`
+

@@ -20,6 +20,7 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use super::documents::Documents;
 use super::projection::{self, ProjectedDocument};
 use super::semantics::{self, Checked, FileSemantics};
 use super::snapshot::Snapshot;
@@ -47,10 +48,31 @@ pub struct Blocked {
 pub struct CheckRequest {
     /// Emit declarations and return them (`--types`). A plain check does not.
     pub emit_declarations: bool,
-    /// Report only the tt layer. The type layer is TypeScript's answer about
-    /// the user's own code, and a caller that already has it from somewhere
-    /// else (an editor with a live language server) would show it twice.
+    /// Report only the tt layer: every diagnostic of a tt rule, the ones
+    /// the checker's answers decide included, and none of TypeScript's own.
+    /// The type layer is TypeScript's answer about the user's own code, and
+    /// a caller that already has it from somewhere else (an editor with a
+    /// live language server) would show it twice.
     pub tt_only: bool,
+}
+
+/// The paths a compile depends on, split as a build integration watches
+/// them: a file by its content, a directory by the entries it lists.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Dependencies {
+    /// Files whose content the compile reads, sorted, and the configuration
+    /// paths whose absence it relies on.
+    pub files: Vec<PathBuf>,
+    /// Directories whose entries the compile lists, sorted.
+    pub directories: Vec<PathBuf>,
+}
+
+impl Dependencies {
+    /// The JSON `--dependencies` prints and the server's `dependencies`
+    /// answers: `{ "files": [...], "directories": [...] }`.
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({ "files": self.files, "directories": self.directories })
+    }
 }
 
 /// One workspace's compiler state: documents, projections, and the session.
@@ -58,6 +80,9 @@ pub struct CheckRequest {
 pub struct Project {
     pub(crate) root: PathBuf,
     tsconfig: Option<PathBuf>,
+    /// Whether `tsconfig` was found by discovery from the inputs rather
+    /// than named.
+    pub(super) discovers_config: bool,
     /// The output tree a scan must not descend into (`--types`'s sidecar
     /// directory).
     out_dir: Option<PathBuf>,
@@ -67,6 +92,11 @@ pub struct Project {
     pub(super) input_roots: Vec<PathBuf>,
     pub(super) named: Vec<PathBuf>,
     dependencies: RefCell<HashSet<PathBuf>>,
+    /// Directories the compiler listed while resolving the program.
+    directories: RefCell<HashSet<PathBuf>>,
+    /// The sources the last check's TypeScript programs contained, or
+    /// `None` when that check had no TypeScript program to leave one out.
+    members: RefCell<Option<HashSet<PathBuf>>>,
     /// Candidate files for the first layered-filesystem pass, fixed at open:
     /// the project scan together with the inputs the caller named. The
     /// configured TypeScript program filters these to actual members.
@@ -75,8 +105,12 @@ pub struct Project {
     /// `tsconfig.json` to decide the program's files — see
     /// [`crate::typescript::backend::Query::sources`].
     sources: Vec<PathBuf>,
-    /// Unsaved text standing in for files on disk, keyed by canonical path.
-    pub(crate) overlays: HashMap<PathBuf, String>,
+    /// Unsaved text standing in for files on disk, keyed by canonical path
+    /// — the engine's store, shared with every project it opened.
+    pub(crate) overlays: Documents,
+    /// The documents opened through this project: the files that are roots
+    /// by request here, whatever the configuration includes.
+    pub(super) opened: HashSet<PathBuf>,
     /// Projections by path, kept across snapshots. An entry is reused when
     /// the file's current text equals the projected text.
     cache: HashMap<PathBuf, Arc<ProjectedDocument>>,
@@ -94,6 +128,11 @@ pub struct Project {
     /// recomputing, over the project's lifetime — observability for the
     /// invalidation contract (and its tests).
     pattern_analysis_cache_hits: Cell<usize>,
+    /// The last contextual materialization, reused by the next snapshot
+    /// that asks the same question over the same disk generation: a request
+    /// on an unchanged project asks the checker nothing, as a language
+    /// service reuses its program while the project version is unchanged.
+    materialized: RefCell<Option<Materialized>>,
     next_snapshot: u64,
     /// The language-service half — the running `tsgo --lsp` conversation —
     /// started by the first editor question ([`crate::engine::language`]).
@@ -113,18 +152,23 @@ impl Project {
         Project {
             root,
             tsconfig,
+            discovers_config: false,
             out_dir,
             requested: collected.into_iter().collect(),
             input_roots: Vec::new(),
             named: Vec::new(),
             dependencies: RefCell::new(HashSet::new()),
+            directories: RefCell::new(HashSet::new()),
+            members: RefCell::new(None),
             initial,
             sources,
-            overlays: HashMap::new(),
+            overlays: Documents::default(),
+            opened: HashSet::new(),
             cache: HashMap::new(),
             backend,
             pattern_analysis_cache: RefCell::new(HashMap::new()),
             pattern_analysis_cache_hits: Cell::new(0),
+            materialized: RefCell::new(None),
             next_snapshot: 0,
             service: None,
         }
@@ -143,6 +187,12 @@ impl Project {
         &self.root
     }
 
+    /// The `(tsconfig, root)` pair this project was opened as — what
+    /// [`super::Engine::project_identity`] answers for its inputs.
+    pub fn identity(&self) -> (Option<&Path>, &Path) {
+        (self.tsconfig.as_deref(), &self.root)
+    }
+
     /// The inputs' own `.tt` files: what an emitting pass writes for.
     pub fn requested(&self) -> &HashSet<PathBuf> {
         &self.requested
@@ -153,18 +203,25 @@ impl Project {
     /// checked as part of the project it belongs to: the module keeps its
     /// real path — so its imports, and the imports that name it, resolve
     /// exactly as they do on disk — and only its text is the unsaved one.
+    ///
+    /// The text is the file's for every project the same [`super::Engine`]
+    /// opened, so a project that imports the file compiles the buffer too;
+    /// the document is a root by request only here.
     pub fn open_document(&mut self, path: PathBuf, text: String) {
-        self.overlays.insert(path, text);
+        self.opened.insert(path.clone());
+        self.overlays.set(path, text);
     }
 
     /// Replaces an open document's text. The next [`Project::update`] sees
     /// the new text; snapshots already taken keep the old one.
     pub fn update_document(&mut self, path: PathBuf, text: String) {
-        self.overlays.insert(path, text);
+        self.open_document(path, text);
     }
 
-    /// Closes an open document: the file's text is the disk's again.
+    /// Closes an open document: the file's text is the disk's again, for
+    /// every project.
     pub fn close_document(&mut self, path: &Path) {
+        self.opened.remove(path);
         self.overlays.remove(path);
     }
 
@@ -179,23 +236,48 @@ impl Project {
         Ok(candidates)
     }
 
-    /// Source, configuration, and compiler-resolved dependency paths whose
-    /// changes invalidate a project check. Directory membership is rescanned.
+    /// Every path whose change invalidates a project check: the files and
+    /// directories of [`Project::dependencies`] together.
     pub fn watch_paths(&self) -> std::io::Result<Vec<PathBuf>> {
-        let mut paths = project_sources(
+        let Dependencies {
+            mut files,
+            directories,
+        } = self.dependencies()?;
+        files.extend(directories);
+        files.sort();
+        files.dedup();
+        Ok(files)
+    }
+
+    /// What a project check depends on: the source, configuration, and
+    /// compiler-resolved files it reads, and the directories whose listing
+    /// it reads — a file added to or removed from one can change the
+    /// program, while the directory is not itself an input.
+    ///
+    /// A project without a configuration takes its program from the walk
+    /// of its root, so the directories that walk listed are dependencies
+    /// too.
+    pub fn dependencies(&self) -> std::io::Result<Dependencies> {
+        let (mut files, walked) = project_tree(
             &self.root,
             self.out_dir.as_deref(),
             &["tt", "ttx", "ts", "tsx", "mts", "cts", "json"],
         )?;
-        paths.extend(self.dependencies.borrow().iter().cloned());
-        paths.extend(self.requested.iter().cloned());
-        paths.extend(self.cache.keys().cloned());
+        files.extend(self.dependencies.borrow().iter().cloned());
+        files.extend(self.requested.iter().cloned());
+        files.extend(self.cache.keys().cloned());
         if let Some(config) = &self.tsconfig {
-            paths.push(config.clone());
+            files.push(config.clone());
         }
-        paths.sort();
-        paths.dedup();
-        Ok(paths)
+        files.sort();
+        files.dedup();
+        let mut directories: Vec<_> = self.directories.borrow().iter().cloned().collect();
+        if self.tsconfig.is_none() {
+            directories.extend(walked);
+        }
+        directories.sort();
+        directories.dedup();
+        Ok(Dependencies { files, directories })
     }
 
     /// The candidate set the first pass layers, decided when the project was
@@ -204,6 +286,27 @@ impl Project {
     /// own configuration does not list it.
     pub fn initial_files(&self) -> Vec<PathBuf> {
         self.initial.clone()
+    }
+
+    /// Whether `path` is part of what this project compiles, as far as the
+    /// engine can tell: a document opened through it, a tt module its
+    /// graph reaches from its candidates (taken fresh), or a file its
+    /// compiler read in a typed check. A project serves its TypeScript no
+    /// tt module outside that graph, so for tt sources this is exactly what
+    /// its program can contain — TypeScript's `containsFile`.
+    pub fn sees(&mut self, path: &Path) -> Result<bool, String> {
+        let path = super::normalize_document_path(path)?;
+        if self.opened.contains(&path) || self.dependencies.borrow().contains(&path) {
+            return Ok(true);
+        }
+        let snapshot = self
+            .update(&self.initial_files())
+            .map_err(|blocked| blocked.error.to_string())?;
+        Ok(snapshot.files().iter().any(|file| file.source_path == path)
+            || snapshot
+                .blocked()
+                .iter()
+                .any(|file| file.source_path == path))
     }
 
     /// Takes a snapshot of `files` and their reachable tt imports: overlay text where a
@@ -222,6 +325,12 @@ impl Project {
         );
         if self.tsconfig.is_none() {
             self.sources = project_sources(&self.root, self.out_dir.as_deref(), TS_EXTENSIONS)
+                .map(|sources| {
+                    sources
+                        .into_iter()
+                        .filter(|source| !crate::ownership::owned_output(source))
+                        .collect()
+                })
                 .map_err(|error| {
                     Box::new(Blocked {
                         path: self.root.clone(),
@@ -236,12 +345,20 @@ impl Project {
                     })
                 })?;
         }
+        if let Some(unnamed) = self.sources.iter().find(|path| path.to_str().is_none()) {
+            return Err(unnameable(unnamed));
+        }
         let mut projected = Vec::with_capacity(files.len());
         let mut blocked_files = Vec::new();
         let mut cache = HashMap::with_capacity(files.len());
         // Projection already owns each content version's import metadata.
         // Follow those edges here instead of reading and parsing every input
         // once for discovery and again for projection.
+        let documents = self.overlays.clone();
+        let overlays = documents.read();
+        if let Some(unnamed) = overlays.keys().find(|path| path.to_str().is_none()) {
+            return Err(unnameable(unnamed));
+        }
         let mut pending = files.to_vec();
         let mut seen: HashSet<_> = files.iter().cloned().collect();
         let mut cursor = 0;
@@ -249,7 +366,10 @@ impl Project {
             let file = pending[cursor].clone();
             cursor += 1;
             let file = &file;
-            let text = match self.overlays.get(file) {
+            if file.to_str().is_none() {
+                return Err(unnameable(file));
+            }
+            let text = match overlays.get(file) {
                 Some(text) => text.clone(),
                 None => std::fs::read_to_string(file).map_err(|e| {
                     Box::new(Blocked {
@@ -265,15 +385,24 @@ impl Project {
                     })
                 })?,
             };
+            let open = self.opened.contains(file);
             let doc = match self.cache.get(file) {
-                Some(cached) if cached.source == text => Some(cached.clone()),
-                _ => match ProjectedDocument::project_for_snapshot(file, text) {
+                Some(cached) if cached.source == text && (open || !cached.unparsed) => {
+                    Some(cached.clone())
+                }
+                _ => match crate::ice::working_on(file, || {
+                    crate::ice::panic_for_test(&format!(
+                        "projection:{}",
+                        file.file_name().unwrap_or_default().to_string_lossy()
+                    ));
+                    ProjectedDocument::project_for_snapshot(file, text, open)
+                }) {
                     Ok(doc) => Some(Arc::new(doc)),
                     Err(blocked) => {
                         discover_imports(
                             file,
                             blocked.tt_imports(),
-                            &self.overlays,
+                            &overlays,
                             &mut pending,
                             &mut seen,
                         );
@@ -283,13 +412,7 @@ impl Project {
                 },
             };
             if let Some(doc) = doc {
-                discover_imports(
-                    file,
-                    doc.tt_imports(),
-                    &self.overlays,
-                    &mut pending,
-                    &mut seen,
-                );
+                discover_imports(file, doc.tt_imports(), &overlays, &mut pending, &mut seen);
                 cache.insert(file.clone(), doc.clone());
                 projected.push(doc);
             }
@@ -298,10 +421,32 @@ impl Project {
         // blocked update above leaves the previous cache intact instead, so
         // the files that were fine keep their projections.
         self.cache = cache;
+        let blocked = |failure: crate::typescript::backend::Failure| {
+            Box::new(Blocked {
+                path: self.root.clone(),
+                error: CompileError {
+                    message: failure.message,
+                    filename: None,
+                    line: 0,
+                    col: 0,
+                    end_line: 0,
+                    end_col: 0,
+                },
+            })
+        };
+        // A backend that cannot start leaves the projections unrefined, as a
+        // missing toolchain does; `check` reports it as unavailable.
+        let available =
+            |backend: &NativeBackend| match backend.open(self.tsconfig.as_deref(), &self.root) {
+                Ok(()) => Ok(true),
+                Err(failure) if failure.kind == FailureKind::Unavailable => Ok(false),
+                Err(failure) => Err(blocked(failure)),
+            };
         if projected
             .iter()
             .any(|doc| !doc.emit.contextual_slots.is_empty())
             && let Ok(backend) = &self.backend
+            && available(backend)?
         {
             let (mut query, _) =
                 projection::assemble(&projected, &blocked_files, &self.root, &self.sources);
@@ -309,7 +454,7 @@ impl Project {
                 .modules
                 .retain(|module| !projected.iter().any(|doc| doc.module_path == module.path));
             query.modules.extend(
-                self.overlays
+                overlays
                     .iter()
                     .filter(|(path, _)| is_host_source(path))
                     .map(|(path, text)| crate::typescript::backend::Module {
@@ -317,35 +462,35 @@ impl Project {
                         text: text.clone(),
                     }),
             );
-            let mut modules: Vec<_> = projected
-                .iter()
-                .map(|doc| (doc.module_path.clone(), doc.emit.clone()))
-                .collect();
-            crate::typescript::contextual::materialize(
-                backend,
-                self.tsconfig.as_deref(),
-                &self.root,
-                &mut modules,
-                &query.modules,
-                &query.sources,
-                &self.roots(&projected),
-            )
-            .map_err(|failure| {
-                Box::new(Blocked {
-                    path: self.root.clone(),
-                    error: CompileError {
-                        message: failure.message,
-                        filename: None,
-                        line: 0,
-                        col: 0,
-                        end_line: 0,
-                        end_col: 0,
-                    },
-                })
-            })?;
-            for (doc, (_, emit)) in projected.iter_mut().zip(modules) {
-                if doc.emit != emit {
-                    Arc::make_mut(doc).emit = emit;
+            let mut order: Vec<usize> = (0..projected.len()).collect();
+            order.sort_by(|&left, &right| {
+                projected[left]
+                    .module_path
+                    .cmp(&projected[right].module_path)
+            });
+            let mut roots = self.roots(&projected, &[]);
+            roots.sort();
+            query
+                .modules
+                .sort_by(|left, right| left.path.cmp(&right.path));
+            let question = ContextualQuestion {
+                modules: order
+                    .iter()
+                    .map(|&index| {
+                        (
+                            projected[index].module_path.clone(),
+                            projected[index].emit.clone(),
+                        )
+                    })
+                    .collect(),
+                support: query.modules,
+                sources: query.sources,
+                roots,
+            };
+            let emits = self.contextual_emits(backend, question).map_err(blocked)?;
+            for (&index, emit) in order.iter().zip(emits) {
+                if projected[index].emit != emit {
+                    Arc::make_mut(&mut projected[index]).emit = emit;
                 }
             }
         }
@@ -354,13 +499,48 @@ impl Project {
             id: self.next_snapshot,
             files: projected,
             blocked: blocked_files,
-            host_overlays: self
-                .overlays
+            host_overlays: overlays
                 .iter()
                 .filter(|(path, _)| is_host_source(path))
                 .map(|(path, text)| (path.clone(), text.clone()))
                 .collect(),
         })
+    }
+
+    /// The refined emits of `question`'s modules, in its order: the last
+    /// materialization's when it answered the same question over the same
+    /// host session and disk generation, a new materialization otherwise.
+    fn contextual_emits(
+        &self,
+        backend: &NativeBackend,
+        question: ContextualQuestion,
+    ) -> Result<Vec<crate::MappedEmit>, crate::typescript::backend::Failure> {
+        let config = self.tsconfig.as_deref();
+        if let Some(last) = self.materialized.borrow().as_ref()
+            && last.question == question
+            && backend.current_generation(config, &self.root) == Some(last.generation)
+        {
+            return Ok(last.emits.clone());
+        }
+        let mut modules = question.modules.clone();
+        backend.observe_generations();
+        crate::typescript::contextual::materialize(
+            backend,
+            config,
+            &self.root,
+            &mut modules,
+            &question.support,
+            &question.sources,
+            &question.roots,
+        )?;
+        let emits: Vec<_> = modules.into_iter().map(|(_, emit)| emit).collect();
+        *self.materialized.borrow_mut() =
+            backend.stable_generation().map(|generation| Materialized {
+                question,
+                generation,
+                emits: emits.clone(),
+            });
+        Ok(emits)
     }
 
     /// How many per-file semantic computations the cross-snapshot cache
@@ -395,7 +575,7 @@ impl Project {
         &self,
         path: &Path,
         source: &str,
-        externs: Vec<crate::VariantSymbol>,
+        externs: Vec<crate::resolve::ImportedVariant>,
     ) -> Arc<FileSemantics> {
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         source.hash(&mut hasher);
@@ -409,9 +589,10 @@ impl Project {
                 .set(self.pattern_analysis_cache_hits.get() + 1);
             return cached.value.clone();
         }
+        let decls: Vec<crate::resolve::ExternDecl> = externs.iter().map(Into::into).collect();
         let analyses = crate::analysis::pattern_analyses_with_kind(
             source,
-            &externs,
+            &decls,
             crate::SourceKind::from_path(path).unwrap_or_default(),
         );
         let value = Arc::new(FileSemantics { externs, analyses });
@@ -438,7 +619,7 @@ impl Project {
                 crate::SourceKind::from_path(path).unwrap_or_default(),
             ),
             &|target| {
-                let text = match self.overlays.get(target) {
+                let text = match self.overlays.read().get(target) {
                     Some(text) => text.clone(),
                     None => std::fs::read_to_string(target).ok()?,
                 };
@@ -456,15 +637,77 @@ impl Project {
         self.pattern_analysis(path, source, externs)
     }
 
-    fn roots(&self, files: &[Arc<ProjectedDocument>]) -> Vec<PathBuf> {
+    fn roots(&self, files: &[Arc<ProjectedDocument>], requested: &[PathBuf]) -> Vec<PathBuf> {
         files
             .iter()
             .filter(|file| {
                 self.named.contains(&file.source_path)
-                    || self.overlays.contains_key(&file.source_path)
+                    || self.opened.contains(&file.source_path)
+                    || requested.contains(&file.source_path)
             })
             .map(|file| file.module_path.clone())
             .collect()
+    }
+
+    /// The candidates a check of `inputs` covers: the project scan and
+    /// every tt source the inputs reach.
+    pub fn candidates(&self, inputs: &super::Inputs) -> std::io::Result<Vec<PathBuf>> {
+        let mut files = self.scan()?;
+        files.extend(inputs.files().iter().cloned());
+        files.sort();
+        files.dedup();
+        Ok(files)
+    }
+
+    /// `--dependencies <inputs>`: checks the project with every candidate,
+    /// the files the inputs name being roots by request (checked even when
+    /// the configuration leaves them out), and answers what that check
+    /// depends on. The command line and the server's `dependencies` both
+    /// answer through this.
+    pub fn dependencies_of(&mut self, inputs: &super::Inputs) -> Result<Dependencies, String> {
+        self.check_for_dependencies(inputs)?;
+        self.dependencies_for(inputs)
+            .map_err(|error| error.to_string())
+    }
+
+    /// [`Project::dependencies`], with what deciding `inputs`' project read:
+    /// the `tsconfig.json` paths configuration discovery probed for them,
+    /// existing or not, as tsserver watches them for an inferred project.
+    /// Creating one of them, or deleting the one found, puts the inputs in
+    /// another project.
+    pub fn dependencies_for(&self, inputs: &super::Inputs) -> std::io::Result<Dependencies> {
+        let mut dependencies = self.dependencies()?;
+        if self.discovers_config {
+            dependencies
+                .files
+                .extend(tsconfig_lookup(&inputs.collected));
+            dependencies.files.sort();
+            dependencies.files.dedup();
+        }
+        Ok(dependencies)
+    }
+
+    fn check_for_dependencies(&mut self, inputs: &super::Inputs) -> Result<(), String> {
+        let files = self.candidates(inputs).map_err(|error| error.to_string())?;
+        let snapshot = self
+            .update(&files)
+            .map_err(|blocked| blocked.error.message.clone())?;
+        let checked = self.check_requested(&snapshot, &CheckRequest::default(), &inputs.named)?;
+        if let Some(error) = checked.backend_error
+            && error.kind == super::BackendErrorKind::Internal
+        {
+            return Err(error.message);
+        }
+        Ok(())
+    }
+
+    /// Whether the last check covered `path`: its TypeScript programs
+    /// contained it, or it had none to leave it out of.
+    pub fn checked(&self, path: &Path) -> bool {
+        self.members
+            .borrow()
+            .as_ref()
+            .is_none_or(|members| members.contains(path))
     }
 
     /// Checks a snapshot: asks the running compiler about it and returns
@@ -472,6 +715,17 @@ impl Project {
     /// the request wants them. The session persists across calls; only what
     /// changed since the last ask travels.
     pub fn check(&self, snapshot: &Snapshot, request: &CheckRequest) -> Result<Checked, String> {
+        self.check_requested(snapshot, request, &[])
+    }
+
+    /// [`Project::check`] with `requested` roots by request besides the
+    /// named and open files, for this check only.
+    fn check_requested(
+        &self,
+        snapshot: &Snapshot,
+        request: &CheckRequest,
+        requested: &[PathBuf],
+    ) -> Result<Checked, String> {
         let semantics = self.file_semantics(snapshot);
         let (mut query, probes) = projection::assemble(
             snapshot.files(),
@@ -480,7 +734,7 @@ impl Project {
             &self.sources,
         );
         query.emit_declarations = request.emit_declarations;
-        query.roots = self.roots(snapshot.files());
+        query.roots = self.roots(snapshot.files(), requested);
         query
             .modules
             .extend(snapshot.host_overlays.iter().map(|(path, text)| {
@@ -517,8 +771,19 @@ impl Project {
         self.dependencies
             .borrow_mut()
             .extend(answers.dependencies.iter().cloned());
+        self.directories
+            .borrow_mut()
+            .extend(answers.directories.iter().cloned());
+        *self.members.borrow_mut() = answers.project_modules.as_ref().map(|modules| {
+            snapshot
+                .files()
+                .iter()
+                .filter(|file| modules.contains(&file.module_path))
+                .map(|file| file.source_path.clone())
+                .collect()
+        });
         let declarations = if request.emit_declarations && backend_error.is_none() {
-            semantics::match_declarations(snapshot, &answers, &self.root, &self.requested)
+            semantics::match_declarations(snapshot, &answers, &self.requested)
         } else {
             Default::default()
         };
@@ -537,6 +802,20 @@ impl Project {
     }
 }
 
+fn unnameable(path: &Path) -> Box<Blocked> {
+    Box::new(Blocked {
+        path: path.to_path_buf(),
+        error: CompileError {
+            message: "path is not valid UTF-8, so TypeScript cannot name this file".to_string(),
+            filename: Some(path.display().to_string()),
+            line: 0,
+            col: 0,
+            end_line: 0,
+            end_col: 0,
+        },
+    })
+}
+
 /// Host files retain their original paths and syntax in backend overlays.
 pub(super) fn is_host_source(path: &Path) -> bool {
     path.extension()
@@ -552,6 +831,27 @@ struct CachedPatternAnalysis {
     value: Arc<FileSemantics>,
 }
 
+/// Everything a contextual materialization is asked besides the project's
+/// fixed configuration and root, in path order: the projected modules as
+/// lowered, the modules served beside them, the listed hand-written
+/// sources, and the roots by request.
+#[derive(Debug, PartialEq)]
+struct ContextualQuestion {
+    modules: Vec<(PathBuf, crate::MappedEmit)>,
+    support: Vec<crate::typescript::backend::Module>,
+    sources: Vec<PathBuf>,
+    roots: Vec<PathBuf>,
+}
+
+/// One materialization, kept while its question and the host's disk
+/// generation stay the same.
+#[derive(Debug)]
+struct Materialized {
+    question: ContextualQuestion,
+    generation: (u64, u64),
+    emits: Vec<crate::MappedEmit>,
+}
+
 /// Every file of the project with one of `extensions`, as absolute paths.
 /// `node_modules`, dot directories and the output tree are skipped — nothing
 /// there is a source.
@@ -560,13 +860,24 @@ pub(crate) fn project_sources(
     out_dir: Option<&Path>,
     extensions: &[&str],
 ) -> std::io::Result<Vec<PathBuf>> {
+    project_tree(root, out_dir, extensions).map(|(files, _)| files)
+}
+
+/// [`project_sources`], with the directories the walk listed to find them.
+fn project_tree(
+    root: &Path,
+    out_dir: Option<&Path>,
+    extensions: &[&str],
+) -> std::io::Result<(Vec<PathBuf>, Vec<PathBuf>)> {
     let mut directories = SourceDirectories::new(out_dir);
     let mut files = Vec::new();
+    let mut listed = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(dir) = stack.pop() {
         if !directories.enter(&dir)? {
             continue;
         }
+        listed.push(super::paths::canonical(&dir)?);
         for entry in std::fs::read_dir(&dir)? {
             let entry = entry?;
             let path = entry.path();
@@ -590,24 +901,40 @@ pub(crate) fn project_sources(
     files.sort();
     // File symlinks can share an identity even when directories were visited once.
     files.dedup();
-    Ok(files)
+    listed.sort();
+    Ok((files, listed))
 }
 
 /// The nearest `tsconfig.json` at or above the inputs' common directory.
 pub(crate) fn find_tsconfig(files: &[PathBuf]) -> Option<PathBuf> {
-    let mut dir = files.first()?.parent()?.to_path_buf();
+    tsconfig_lookup(files)
+        .pop()
+        .filter(|candidate| candidate.is_file())
+}
+
+/// Every `tsconfig.json` path [`find_tsconfig`] probes, nearest first, up
+/// to the one it finds: creating one of the others, or deleting the last,
+/// changes which configuration the inputs belong to.
+pub(crate) fn tsconfig_lookup(files: &[PathBuf]) -> Vec<PathBuf> {
+    let mut probed = Vec::new();
+    let Some(mut dir) = files
+        .first()
+        .and_then(|file| file.parent())
+        .map(Path::to_path_buf)
+    else {
+        return probed;
+    };
     while !files.iter().all(|file| file.starts_with(&dir)) {
         if !dir.pop() {
-            return None;
+            return probed;
         }
     }
     loop {
         let candidate = dir.join("tsconfig.json");
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-        if !dir.pop() {
-            return None;
+        let found = candidate.is_file();
+        probed.push(candidate);
+        if found || !dir.pop() {
+            return probed;
         }
     }
 }
@@ -620,15 +947,28 @@ pub(crate) fn find_tsconfig(files: &[PathBuf]) -> Option<PathBuf> {
 /// to the build driver. Typed callers collect tt roots only, so emitted
 /// `.tt.d.ts`/`.ttx.d.ts` sidecars are not inputs. Project candidate scans
 /// independently exclude their configured output tree.
+///
+/// Files keep the spelling the walk reached them by, and the CLI mirrors
+/// that spelling under `-o`. A directory is walked once, under the spelling
+/// that reaches it from `entry` without a symlink when one exists; only a
+/// directory the link-free walk never reaches is taken through its first
+/// alias in sorted order.
 pub fn collect_sources(
     entry: &Path,
     include_ts: bool,
     out: &mut Vec<PathBuf>,
 ) -> std::io::Result<()> {
-    collect_sources_in(entry, include_ts, out, &mut SourceDirectories::new(None))
+    collect_sources_in(
+        entry,
+        entry,
+        include_ts,
+        out,
+        &mut SourceDirectories::new(None),
+    )
 }
 
 fn collect_sources_in(
+    root: &Path,
     entry: &Path,
     include_ts: bool,
     out: &mut Vec<PathBuf>,
@@ -683,8 +1023,8 @@ fn collect_sources_in(
             // about a directory that plainly does.
             let meta = std::fs::metadata(&child).map_err(|e| named(&child, e))?;
             if meta.is_dir() {
-                if !excluded_source_entry(&child) {
-                    collect_sources_in(&child, include_ts, out, directories)?;
+                if !excluded_source_entry(&child) && !alias_of_walked_directory(root, &child)? {
+                    collect_sources_in(root, &child, include_ts, out, directories)?;
                 }
             } else if meta.is_file() && is_source(&child, include_ts) {
                 out.push(child);
@@ -692,6 +1032,36 @@ fn collect_sources_in(
         }
     }
     Ok(())
+}
+
+/// Whether `dir` is a symlink to a directory the walk from `root` also
+/// reaches without following one. That directory is walked under its own
+/// name, wherever the alias sorts, so which spelling the walk keeps — and
+/// where a build mirrors its files — does not depend on how the alias is
+/// named. A target outside that link-free walk, or behind an excluded
+/// entry, is reached only through its aliases.
+fn alias_of_walked_directory(root: &Path, dir: &Path) -> std::io::Result<bool> {
+    let is_link = |path: &Path| {
+        std::fs::symlink_metadata(path)
+            .map(|meta| meta.file_type().is_symlink())
+            .map_err(|error| named(path, error))
+    };
+    if !is_link(dir)? {
+        return Ok(false);
+    }
+    let identity = super::paths::canonical(dir).map_err(|error| named(dir, error))?;
+    let base = super::paths::canonical(root).map_err(|error| named(root, error))?;
+    let Ok(relative) = identity.strip_prefix(&base) else {
+        return Ok(false);
+    };
+    let mut path = root.to_path_buf();
+    for component in relative.components() {
+        path.push(component);
+        if excluded_source_entry(&path) || is_link(&path)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 /// Exclude generated and vendored entries before probing their targets.

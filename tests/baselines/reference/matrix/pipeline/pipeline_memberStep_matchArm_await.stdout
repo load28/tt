@@ -1,0 +1,2 @@
+matchArm(2) => 6 | flip true; await; receiver {"factor":3}; twice 6
+matchArm(6) => 0 | flip false; other arm 0

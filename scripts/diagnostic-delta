@@ -1,0 +1,284 @@
+#!/usr/bin/env node
+import { spawnSync } from "node:child_process";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const WORK = join(ROOT, ".tt-dev/delta");
+const BASE_TREE = join(ROOT, ".tt-dev/delta-base");
+const TIMEOUT = 180_000;
+const SHOWN_LINES = 60;
+
+const TSCONFIG = {
+  compilerOptions: {
+    target: "es2022",
+    module: "preserve",
+    moduleResolution: "bundler",
+    jsx: "preserve",
+    strict: true,
+    skipLibCheck: true,
+    noEmit: true,
+  },
+};
+
+function usage() {
+  console.error(
+    [
+      "usage: node scripts/diagnostic-delta [--base <ref>] [--report <file>] [--keep]",
+      "",
+      "Builds ttc at the merge base of HEAD and <ref> (default origin/main) and from the working tree, runs both",
+      "over the pinned real programs, and reports every difference in their diagnostics and output.",
+      "Fails on a new internal compiler error, and on changed output when the change touches no baseline.",
+    ].join("\n"),
+  );
+  process.exit(2);
+}
+
+function parseArgs(argv) {
+  const options = { base: "origin/main", report: undefined, keep: false };
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i];
+    if (arg === "--base" && argv[i + 1]) options.base = argv[++i];
+    else if (arg === "--report" && argv[i + 1]) options.report = resolve(argv[++i]);
+    else if (arg === "--keep") options.keep = true;
+    else usage();
+  }
+  return options;
+}
+
+function run(command, args, options = {}) {
+  const result = spawnSync(command, args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, ...options });
+  if (result.error) throw result.error;
+  return result;
+}
+
+function must(command, args, options = {}) {
+  const result = run(command, args, { stdio: ["ignore", "inherit", "inherit"], ...options });
+  if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} exited with ${result.status}`);
+  return result;
+}
+
+function git(args) {
+  return run("git", args, { cwd: ROOT }).stdout.trim();
+}
+
+function build(tree, label, extra = []) {
+  console.log(`==> building ttc at ${label}`);
+  must("cargo", ["build", "--bin", "ttc", ...extra], { cwd: tree });
+  const binary = join(tree, "target/debug", process.platform === "win32" ? "ttc.exe" : "ttc");
+  const copy = join(WORK, `ttc-${label}${process.platform === "win32" ? ".exe" : ""}`);
+  copyFileSync(binary, copy);
+  return copy;
+}
+
+function topicLanguage(id) {
+  return id === "cli" || id === "install" || id === "release" ? undefined : id === "ttx" ? "ttx" : "tt";
+}
+
+async function programs(dir) {
+  const out = [];
+  const copy = (name, source) => {
+    const target = join(dir, name);
+    cpSync(source, target, { recursive: true });
+    out.push({ name, dir: target, origin: relative(ROOT, source) });
+  };
+  const fixtures = join(ROOT, "tests/fixtures/practical-diagnostics");
+  for (const entry of readdirSync(fixtures).sort()) {
+    if (statSync(join(fixtures, entry)).isDirectory()) copy(`practical-diagnostics-${entry}`, join(fixtures, entry));
+  }
+  copy("mixed-source-matrix", join(ROOT, "tests/fixtures/mixed-source-matrix"));
+  copy("mixed-source-runtime", join(ROOT, "tests/fixtures/mixed-source-runtime"));
+
+  const content = JSON.parse(readFileSync(join(ROOT, "website/src/content.json"), "utf8"));
+  for (const [id, topic] of Object.entries(content.topics).sort(([a], [b]) => a.localeCompare(b))) {
+    const language = topicLanguage(id);
+    if (!language) continue;
+    const target = join(dir, `website-${id}`);
+    mkdirSync(target, { recursive: true });
+    writeFileSync(join(target, `example.${language}`), topic.code.endsWith("\n") ? topic.code : `${topic.code}\n`);
+    writeFileSync(join(target, "tsconfig.json"), `${JSON.stringify(TSCONFIG, null, 2)}\n`);
+    out.push({ name: `website-${id}`, dir: target, origin: `website/src/content.json topics.${id}.code` });
+  }
+
+  const installer = await import(pathToFileURL(join(ROOT, "packages/create-tt/src/installer.js")).href);
+  const starter = join(dir, "create-tt-starter");
+  await installer.createProject({ directory: starter, packageManager: "npm" });
+  out.push({ name: "create-tt-starter", dir: starter, origin: "packages/create-tt createProject()" });
+  return out;
+}
+
+function files(dir, base, out) {
+  if (!existsSync(dir)) return out;
+  for (const name of readdirSync(dir).sort()) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) files(path, base, out);
+    else if (!name.startsWith(".")) out.push(relative(base, path).split(sep).join("/"));
+  }
+  return out;
+}
+
+function observe(binary, program, side) {
+  const normalize = (text, extra = []) => {
+    let result = text.replace(/\r\n/g, "\n");
+    for (const [from, to] of [[program.dir, "$DIR"], ...extra]) result = result.split(from).join(to);
+    return result.split("\\").join("/");
+  };
+  const results = {};
+  const invoke = (args) => {
+    const env = { ...process.env, RUST_BACKTRACE: "0" };
+    const result = spawnSync(binary, args, { cwd: program.dir, env, encoding: "utf8", timeout: TIMEOUT, maxBuffer: 64 * 1024 * 1024 });
+    const status = result.error ? `error ${result.error.code ?? result.error.message}` : result.status === null ? `signal ${result.signal}` : result.status;
+    return { status, text: `${result.stdout ?? ""}${result.stderr ?? ""}` };
+  };
+  for (const [command, args] of [
+    ["--check", ["--check", "."]],
+    ["--check-types", ["--check-types", "."]],
+  ]) {
+    const { status, text } = invoke(args);
+    results[command] = { status, text: normalize(text) };
+  }
+  const outDir = join(WORK, `out-${side}`, program.name);
+  rmSync(outDir, { recursive: true, force: true });
+  const emitted = invoke(["--no-banner", "--jobs", "1", "--out-dir", outDir, "."]);
+  let text = normalize(emitted.text, [[outDir, "$OUT"]]);
+  for (const file of files(outDir, outDir, [])) {
+    text += `\n//// [${file}]\n${readFileSync(join(outDir, file), "utf8")}`;
+  }
+  results["--out-dir"] = { status: emitted.status, text };
+  return results;
+}
+
+function ice({ status, text }) {
+  return status === 101 || /internal compiler error/i.test(text);
+}
+
+function lineDiff(before, after) {
+  const a = before.split("\n");
+  const b = after.split("\n");
+  let head = 0;
+  while (head < a.length && head < b.length && a[head] === b[head]) head++;
+  let tail = 0;
+  while (tail < a.length - head && tail < b.length - head && a[a.length - 1 - tail] === b[b.length - 1 - tail]) tail++;
+  const lines = [];
+  if (head > 0) lines.push(`@@ after ${head} identical line(s) @@`);
+  for (const line of a.slice(head, a.length - tail)) lines.push(`- ${line}`);
+  for (const line of b.slice(head, b.length - tail)) lines.push(`+ ${line}`);
+  if (lines.length > SHOWN_LINES) {
+    const hidden = lines.length - SHOWN_LINES;
+    lines.length = SHOWN_LINES;
+    lines.push(`... ${hidden} more line(s)`);
+  }
+  return lines.join("\n");
+}
+
+function baselineChanges(base) {
+  const paths = ["tests/baselines/reference", "tests/fixtures"];
+  const names = [
+    git(["diff", "--name-only", base, "--", ...paths]),
+    git(["ls-files", "--others", "--exclude-standard", "--", ...paths]),
+  ].join("\n");
+  return names
+    .split("\n")
+    .filter(Boolean)
+    .filter((path) => path.startsWith("tests/baselines/reference/") || path.split("/").pop().startsWith("expected."));
+}
+
+async function main() {
+  const options = parseArgs(process.argv.slice(2));
+  const head = git(["rev-parse", "HEAD"]);
+  const base = git(["merge-base", "HEAD", options.base]);
+  if (!base) {
+    console.error(`error: no merge base between HEAD and ${options.base}; fetch it or pass --base <ref>`);
+    process.exit(1);
+  }
+  const edited = git(["status", "--porcelain"]) !== "";
+  console.log(`==> head: ${head.slice(0, 12)}${edited ? " and the working tree's changes" : ""}`);
+  console.log(`==> base: ${base.slice(0, 12)} (merge base with ${options.base})`);
+  if (base === head && !edited) {
+    console.log("head is the base revision; nothing to compare.");
+    return 0;
+  }
+
+  rmSync(WORK, { recursive: true, force: true });
+  mkdirSync(WORK, { recursive: true });
+  run("git", ["worktree", "remove", "--force", BASE_TREE], { cwd: ROOT });
+  const cleanup = () => {
+    if (!options.keep) {
+      run("git", ["worktree", "remove", "--force", BASE_TREE], { cwd: ROOT });
+      rmSync(BASE_TREE, { recursive: true, force: true });
+      rmSync(WORK, { recursive: true, force: true });
+    }
+  };
+  let report;
+  let failed = false;
+  try {
+    const headBinary = build(ROOT, "head");
+    must("git", ["worktree", "add", "--detach", "--quiet", BASE_TREE, base], { cwd: ROOT });
+    const baseBinary = build(BASE_TREE, "base", ["--config", "profile.dev.debug=0"]);
+
+    const pinned = await programs(join(WORK, "programs"));
+    console.log(`==> ${pinned.length} programs`);
+    const rows = [];
+    const details = [];
+    const newIces = [];
+    let changed = 0;
+    for (const program of pinned) {
+      const before = observe(baseBinary, program, "base");
+      const after = observe(headBinary, program, "head");
+      for (const command of Object.keys(after)) {
+        const b = before[command];
+        const a = after[command];
+        const same = b.status === a.status && b.text === a.text;
+        let verdict = same ? "same" : "changed";
+        if (ice(a) && !ice(b)) {
+          verdict = "NEW ICE";
+          newIces.push(`${program.name} ${command}`);
+        } else if (ice(b) && !ice(a)) {
+          verdict = "ICE fixed";
+        }
+        if (!same) changed++;
+        rows.push(`| ${program.name} | \`${command}\` | ${b.status} | ${a.status} | ${verdict} |`);
+        if (!same) {
+          details.push(
+            `### ${program.name} \`${command}\`\n\nFrom \`${program.origin}\`. Exit ${b.status} → ${a.status}.\n\n\`\`\`diff\n${lineDiff(b.text, a.text)}\n\`\`\``,
+          );
+        }
+      }
+    }
+    const baselines = baselineChanges(base);
+    const problems = [];
+    if (newIces.length > 0) problems.push(`${newIces.length} new internal compiler error(s): ${newIces.join(", ")}`);
+    if (changed > 0 && baselines.length === 0) {
+      problems.push(
+        `${changed} output(s) changed, but the change touches no baseline: pin the new behaviour with a case under tests/cases/ (AGENTS.md)`,
+      );
+    }
+    failed = problems.length > 0;
+    report = [
+      "# Diagnostic delta",
+      "",
+      `Base \`${base.slice(0, 12)}\` → head \`${head.slice(0, 12)}\`: ${pinned.length} programs, ${rows.length} runs, ${changed} changed, ${newIces.length} new ICE(s); ${baselines.length} baseline file(s) changed.`,
+      "",
+      ...(problems.length > 0 ? ["**Failed:**", "", ...problems.map((p) => `- ${p}`), ""] : []),
+      "| Program | Command | Base exit | Head exit | Result |",
+      "| --- | --- | --- | --- | --- |",
+      ...rows,
+      "",
+      ...details,
+      "",
+    ].join("\n");
+  } finally {
+    cleanup();
+  }
+  if (options.report) writeFileSync(options.report, report);
+  console.log(`\n${report}`);
+  return failed ? 1 : 0;
+}
+
+process.exit(
+  await main().catch((error) => {
+    console.error(`error: ${error.message}`);
+    return 1;
+  }),
+);

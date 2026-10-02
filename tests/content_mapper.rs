@@ -19,19 +19,13 @@ use std::process::Command;
 
 mod common;
 use common::Workspace;
+use common::toolchain_required as required;
 
-/// The repository's installed `typescript/lib/tsc.js`, searched upwards
-/// the way `toolchain.rs` searches.
+/// The pinned TypeScript's `lib/tsc.js` (`common::typescript`).
 fn tsc_entry() -> Option<PathBuf> {
-    let mut dir = Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    while let Some(current) = dir {
-        let entry = current.join("node_modules/typescript/lib/tsc.js");
-        if entry.exists() {
-            return Some(entry);
-        }
-        dir = current.parent().map(Path::to_path_buf);
-    }
-    None
+    common::typescript()
+        .map(|dir| dir.join("lib/tsc.js"))
+        .filter(|entry| entry.exists())
 }
 
 fn have_node() -> bool {
@@ -40,11 +34,6 @@ fn have_node() -> bool {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false)
-}
-
-/// True when the caller has declared that a toolchain must be present.
-fn required() -> bool {
-    std::env::var_os("TTC_REQUIRE_TSGO").is_some_and(|v| !v.is_empty() && v != "0")
 }
 
 /// Whether the installed TypeScript knows `--runExternalCode` — the gate
@@ -829,4 +818,30 @@ fn a_tt_diagnostic_lands_on_the_line_every_terminator_starts() {
             "{name}: expected the diagnostic at its source line, got:\n{text}"
         );
     }
+}
+
+#[test]
+fn a_type_error_in_a_variant_field_reports_at_the_field_type() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    // The field's type is written in the union and in the constructor; both
+    // copies map to the one place the user wrote it.
+    fs::write(
+        project.path().join("src/price.tt"),
+        "export interface Money { cents: number }\nexport variant Price { Fixed(amount: Mony), Free }\n",
+    )
+    .unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { Price } from \"./price.tt\";\nexport const p: Price = Price.Free;\n",
+    )
+    .unwrap();
+
+    let (ok, text) = check(&tsc, &project);
+    assert!(!ok);
+    assert!(
+        text.contains("price.tt(2,38): error TS2552"),
+        "expected the checker's error at the field type, got:\n{text}"
+    );
+    assert!(!text.contains("price.tt(2,16)"), "{text}");
 }

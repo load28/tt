@@ -1,0 +1,22 @@
+// @origin: tests/integration/contextual.rs::an_annotation_names_the_declarations_its_type_refers_to
+// @run: anAnnotationNamesTheDeclarationsItsTypeRefersTo.tt
+
+variant K { A, B }
+interface Item { a: number }
+function outer<T>(a: T) {
+  function inner<T>(b: T, k: K) {
+    const z = match (k) { A => a, B => a };
+    return [z, b] as const;
+  }
+  return inner("s", K.A);
+}
+function local(i: Item, k: K) {
+  interface Item { b: string }
+  const x: Item = { b: "s" };
+  const z = match (k) { A => i, B => i };
+  const y = match (k) { A => x, B => x };
+  return [z.a, y.b];
+}
+console.log(JSON.stringify([outer(1), local({ a: 2 }, K.B)]));
+
+export {};

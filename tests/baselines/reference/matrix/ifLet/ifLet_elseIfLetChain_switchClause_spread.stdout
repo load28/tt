@@ -1,0 +1,2 @@
+switchClause(4) => 4 | discriminant 1; read 4; first 4
+switchClause(-4) => "negative -2" | discriminant 1; read -4; second -2; read -2; second "negative -2"

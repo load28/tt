@@ -1,0 +1,2 @@
+labeledBlock(3) => [3,4] | operand 3; copy 4; finally 0
+labeledBlock(8) => [8,9] | operand 8; copy 9; finally 0

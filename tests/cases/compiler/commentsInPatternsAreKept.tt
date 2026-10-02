@@ -1,0 +1,68 @@
+// @run: commentsInPatternsAreKept.tt
+// A comment written in a pattern, between a pattern and its guard or `=>`,
+// between a match's scrutinee and its `{`, or in an `if let` or a let-else
+// before its block reaches the output: the lowering rewrites that text into
+// tests and destructuring, so each comment is written, in source order, on
+// a line of its own after the arm (or the statement) it was written in.
+// What the program does is unchanged.
+export variant Shape { Circle(radius: number), Square(side: number), Point }
+export variant Maybe { Some(value: number), None }
+export variant Box { Full(item: Maybe), Empty }
+
+export function size(shape: Shape): number {
+  return match (shape) /* by kind */ {
+    Circle(/* the radius */ radius: r) /* doubled */ => r * 2,
+    Square(side /* a side */ : /* named */ s) => s,
+    Point // no area
+      => 0,
+  };
+}
+
+export function guarded(shape: Shape): string {
+  return match (shape) {
+    Circle(radius: r) /* before the guard */ if r > 1 /* after the guard */ => "big",
+    _ /* anything else */ => "other",
+  };
+}
+
+export function nested(box: Box): number {
+  return match (box) {
+    Full(item: Some(/* deep */ value: v)) => v,
+    _ => -1,
+  };
+}
+
+export function literal(n: number): string {
+  return `${match (n) { 1 /* one */ | /* or two */ 2 => "low", _ => "high" }}`;
+}
+
+export function pair(a: Shape, b: Shape): string {
+  return match (a, b) {
+    (Circle(radius: r) /* first */, /* second */ Point) => `circle ${r} and point`,
+    _ => "other pair",
+  };
+}
+
+export function chain(shape: Shape): number {
+  if /* a */ let Circle(/* c */ radius: r) = shape /* then */ {
+    return r;
+  } else if let Square(// a line comment
+    side: s) = shape {
+    return s;
+  } else {
+    return 0;
+  }
+}
+
+export function bound(shape: Shape): number {
+  const /* k */ Square(side: s) /* l */ = shape /* m */ else { return -1; };
+  return s;
+}
+
+const shapes = [Shape.Circle(2), Shape.Square(3), Shape.Point];
+console.log(shapes.map(size).join(","));
+console.log(shapes.map(guarded).join(","));
+console.log([nested(Box.Full(Maybe.Some(4))), nested(Box.Full(Maybe.None)), nested(Box.Empty)].join(","));
+console.log([1, 2, 3].map(literal).join(","));
+console.log(pair(Shape.Circle(1), Shape.Point), pair(Shape.Point, Shape.Point));
+console.log(shapes.map(chain).join(","), shapes.map(bound).join(","));

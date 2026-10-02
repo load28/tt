@@ -1,0 +1,2 @@
+returnOperand(2) => {"kind":"Ok","value":20} | read 2
+returnOperand(-1) => {"kind":"Err","error":"negative undefined"} | read undefined

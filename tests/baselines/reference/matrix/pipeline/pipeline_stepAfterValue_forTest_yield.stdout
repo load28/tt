@@ -1,0 +1,2 @@
+forTest(4) => 1 | yield 4; step 3; add 7
+forTest(-1) => 1 | yield -1; step 3; add 2

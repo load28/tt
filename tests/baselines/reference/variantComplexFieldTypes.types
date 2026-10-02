@@ -1,0 +1,31 @@
+=== variantComplexFieldTypes.tt ===
+variant Node {
+>Node : type Node = {
+>       kind: "Leaf";
+>       entries: Map<string, number[]>;
+>   } | {
+>       kind: "Branch";
+>       children: Array<string>;
+>       meta: {
+>           tag: string;
+>           depth: number;
+>       };
+>   }
+  Leaf(entries: Map<string, number[]>),
+>Leaf : (property) Leaf: (entries: Map<string, number[]>) => Node
+>entries : (property) entries: Map<string, number[]>
+>Map : interface Map<K, V>
+  Branch(children: Array<string>, meta: { tag: string, depth: number }),
+>Branch : (property) Branch: (children: Array<string>, meta: {
+>       tag: string;
+>       depth: number;
+>   }) => Node
+>children : (property) children: string[]
+>Array : interface Array<T>
+>meta : (property) meta: {
+>       tag: string;
+>       depth: number;
+>   }
+>tag : (property) tag: string
+>depth : (property) depth: number
+

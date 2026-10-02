@@ -98,6 +98,13 @@ pub(crate) fn arm_headers(src: &str, tokens: &[Token], open: usize) -> Vec<ArmHe
         .collect()
 }
 
+pub(crate) fn pattern_of(text: &str) -> Option<Pattern> {
+    let parser = Parser::new(text);
+    let tokens = crate::lexer::lex(text, 0, text.len());
+    let mut cur = Cursor::new(&parser, &tokens, 0, text.len());
+    matches::parse_arm_pattern(&mut cur).filter(|_| cur.peek().is_none())
+}
+
 /// Whether the `{` at `brace` opens the body of a match.
 fn opens_match_body(src: &str, tokens: &[Token], brace: usize) -> bool {
     (0..brace).rev().any(|keyword| {

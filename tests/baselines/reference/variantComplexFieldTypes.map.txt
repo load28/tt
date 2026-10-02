@@ -1,0 +1,10 @@
+//// [variantComplexFieldTypes.tt] 8 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+3:17 -> 3:30 len 21  "Map<string, number[]>"
+3:17 -> 6:19 len 21  "Map<string, number[]>"
+4:20 -> 4:33 len 13  "Array<string>"
+4:20 -> 7:22 len 13  "Array<string>"
+4:41 -> 4:54 len 30  "{ tag: string, depth: number }"
+4:41 -> 7:43 len 30  "{ tag: string, depth: number }"
+5:2 -> 8:3 len 1  "\n"
+

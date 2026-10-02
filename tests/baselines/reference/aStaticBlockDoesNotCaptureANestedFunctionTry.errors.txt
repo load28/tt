@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aStaticBlockDoesNotCaptureANestedFunctionTry.tt → $DIR/out/aStaticBlockDoesNotCaptureANestedFunctionTry.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'read'.
+ --> aStaticBlockDoesNotCaptureANestedFunctionTry.tt:1:44
+  |
+1 | class C { static { const run = () => { try read(); }; } }
+  |                                            ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aStaticBlockDoesNotCaptureANestedFunctionTry.ts(1,55): error TS2304: Cannot find name 'read'.

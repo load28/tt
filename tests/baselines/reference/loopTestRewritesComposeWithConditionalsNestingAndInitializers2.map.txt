@@ -1,0 +1,15 @@
+//// [loopTestRewritesComposeWithConditionalsNestingAndInitializers2.tt] 13 mapping(s)
+1:1 -> 1:1 len 60  "declare function a(): number; declare function b"...
+2:15 -> 5:19 len 3  "a()"
+2:22 -> 7:12 len 1  "1"
+2:27 -> 8:18 len 4  "true"
+2:38 -> 12:18 len 5  "false"
+2:47 -> 17:25 len 2  "{ "
+2:63 -> 20:21 len 3  "b()"
+2:70 -> 22:14 len 1  "2"
+2:75 -> 23:20 len 4  "true"
+2:86 -> 27:20 len 5  "false"
+2:95 -> 32:27 len 11  "{ work(); }"
+2:106 -> 32:39 len 2  " }"
+2:108 -> 32:42 len 1  "\n"
+

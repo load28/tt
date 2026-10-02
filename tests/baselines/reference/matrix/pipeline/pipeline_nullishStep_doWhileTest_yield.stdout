@@ -1,0 +1,2 @@
+doWhileTest(10) => 2 | yield 10; flip true; lookup true; found 9
+doWhileTest(20) => 2 | yield 20; flip false; lookup false; double 40

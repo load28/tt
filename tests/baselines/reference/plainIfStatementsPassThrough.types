@@ -1,0 +1,4 @@
+=== plainIfStatementsPassThrough.tt ===
+const z = cond ? 1 : 2;
+>z : const z: 1 | 2
+

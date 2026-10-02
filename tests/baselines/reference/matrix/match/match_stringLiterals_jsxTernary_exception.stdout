@@ -1,0 +1,4 @@
+jsxTernary("north") => "<p>1</p>" | flip true; risky "north"; n 1
+jsxTernary("south") => "<p><i>none</i></p>" | flip false
+jsxTernary("east") => "<p>2</p>" | flip true; risky "east"; se 2
+jsxTernary("up") => "<p><i>none</i></p>" | flip false

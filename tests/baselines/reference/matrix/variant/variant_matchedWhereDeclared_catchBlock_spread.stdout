@@ -1,0 +1,2 @@
+catchBlock(4) => [5,0] | throw "boom"; add 5; neg 0
+catchBlock(9) => [10,0] | throw "boom"; add 10; neg 0

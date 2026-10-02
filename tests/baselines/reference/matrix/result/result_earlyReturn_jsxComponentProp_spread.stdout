@@ -1,0 +1,3 @@
+jsxComponentProp(3) => "<Show {'kind':'Ok','value':3}>" | read 3; big 3
+jsxComponentProp(1) => "<Show {'kind':'Ok','value':1}>" | read 1; small 1
+jsxComponentProp(-1) => "<Show {'kind':'Err','error':'negative -1'}>" | read -1

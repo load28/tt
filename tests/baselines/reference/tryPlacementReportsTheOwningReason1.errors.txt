@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> ./tryPlacementReportsTheOwningReason1.tt:1:39
+  |
+1 | function f() { for (let i = 0; i < 1; try advance()) {} }
+  |                                       ^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> tryPlacementReportsTheOwningReason1.tt:1:39
+  |
+1 | function f() { for (let i = 0; i < 1; try advance()) {} }
+  |                                       ^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

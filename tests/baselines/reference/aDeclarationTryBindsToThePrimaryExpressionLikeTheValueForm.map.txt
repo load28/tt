@@ -1,0 +1,6 @@
+//// [aDeclarationTryBindsToThePrimaryExpressionLikeTheValueForm.tt] 4 mapping(s)
+1:1 -> 1:1 len 105  "declare function total(): { kind: \"Ok\"; value: n"...
+2:16 -> 8:1 len 10  "const x = "
+2:30 -> 3:16 len 7  "total()"
+2:37 -> 8:17 len 20  " * 1.1; return x; }\n"
+

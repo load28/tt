@@ -1,0 +1,78 @@
+=== resultBodyUsesThePlannedSlotForAJsxChildMatch.ttx ===
+variant E { A, B }
+>E : type E = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+variant F { Yes, No }
+>F : type F = {
+>       kind: "Yes";
+>   } | {
+>       kind: "No";
+>   }
+>Yes : (property) Yes: {
+>       readonly kind: "Yes";
+>   }
+>No : (property) No: {
+>       readonly kind: "No";
+>   }
+declare function step(n: number): number;
+>step : function step(n: number): number
+>n : (parameter) n: number
+declare function fallible(n: number): TResult<number, string>;
+>fallible : function fallible(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+export function run(e: E, f: F, n: number): number {
+>run : function run(e: E, f: F, n: number): number
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>f : (parameter) f: F
+>F : type F = {
+>       kind: "Yes";
+>   } | {
+>       kind: "No";
+>   }
+>n : (parameter) n: number
+  const value = result {
+>value : const value: TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+    const first = try fallible(n);
+>first : const first: number
+>fallible : function fallible(n: number): TResult<number, string>
+>n : (parameter) n: number
+    const chosen = match (e) { A => 1, B => 2 };
+>chosen : const chosen: number
+>e : (parameter) e: E
+    const view = <section data-value={chosen}>{match (f) {
+>view : const view: any
+>chosen : const chosen: number
+>f : (parameter) f: F
+      Yes => <strong>{chosen |> step}</strong>,
+>chosen : const chosen: number
+>step : function step(n: number): number
+    void view;
+>view : const view: any
+    return first + chosen;
+>first : const first: number
+>chosen : const chosen: number
+  return value.kind === "Ok" ? 0 : 1;
+>value : const value: TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>kind : (property) kind: "Err" | "Ok"
+

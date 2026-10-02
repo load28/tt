@@ -1,0 +1,2 @@
+forUpdate(2) => {"kind":"Ok","value":6} | body 0; await; read 2; inner {"kind":"Ok","value":3}
+forUpdate(-1) => {"kind":"Err","error":"negative -1"} | body 0; await; read -1; inner {"kind":"Err","error":"negative -1"}

@@ -1,0 +1,15 @@
+//// [aContextualThisTypeStillReachesTheArmValues1.tt] 13 mapping(s)
+1:1 -> 1:1 len 95  "\ndeclare const n: number;\ntype Methods = { k: nu"...
+4:1 -> 18:1 len 19  "const d: Methods = "
+4:27 -> 6:17 len 1  "n"
+4:32 -> 8:10 len 1  "1"
+4:37 -> 9:16 len 41  "({ k: 1, m() { return this.q.length; } })"
+4:85 -> 13:16 len 41  "({ k: 2, m() { return this.q.length; } })"
+4:128 -> 18:26 len 2  ";\n"
+5:1 -> 33:1 len 19  "const e: Methods = "
+5:27 -> 21:17 len 1  "n"
+5:32 -> 23:10 len 1  "1"
+5:37 -> 24:16 len 34  "({ k: 1, m() { return this.k; } })"
+5:78 -> 28:16 len 29  "({ k: 2, m() { return 0; } })"
+5:109 -> 33:26 len 14  ";\n\nexport {};\n"
+

@@ -1,0 +1,11 @@
+//// [impossibleCaseAtPattern.tt] 9 mapping(s)
+1:1 -> 19:1 len 23  "// Repro from TASK-620\n"
+2:19 -> 26:3 len 21  "\ndeclare const s: S;\n"
+4:1 -> 45:1 len 17  "export const r = "
+4:25 -> 30:17 len 1  "s"
+4:35 -> 33:16 len 1  "1"
+4:45 -> 37:16 len 1  "2"
+4:48 -> 45:24 len 2  ";\n"
+5:8 -> 48:17 len 1  "s"
+5:48 -> 70:1 len 1  "\n"
+

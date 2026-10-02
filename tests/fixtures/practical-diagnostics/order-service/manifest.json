@@ -5,7 +5,7 @@
       "code": "unknown-field",
       "text": "receipt",
       "line": 11,
-      "message": "imported variant PaymentState: case `Paid` has no field `receipt`",
+      "message": "variant PaymentState (imported from \"./domain.tt\"): case `Paid` has no field `receipt`",
       "help": ["a field with a similar name exists"],
       "cliHelp": ["a field with a similar name exists: `receiptId`"],
       "labels": []
@@ -14,7 +14,7 @@
       "code": "match-not-exhaustive",
       "text": "match (state)",
       "line": 14,
-      "message": "match is not exhaustive: missing \"Failed\"",
+      "message": "match on variant PaymentState (imported from \"./domain.tt\") is not exhaustive: missing \"Failed\"",
       "help": ["add the missing arms", "or add a final `_` arm"],
       "cliHelp": [
         "add the missing arms: `Failed(reason) => undefined,`",
@@ -24,9 +24,9 @@
     },
     {
       "code": "ts2322",
-      "text": "\"three\"",
+      "text": "attempts",
       "line": 18,
-      "message": "type mismatch: expected `number`, found `\"three\"`",
+      "message": "Type 'string' is not assignable to type 'number'.",
       "help": [],
       "labels": []
     }

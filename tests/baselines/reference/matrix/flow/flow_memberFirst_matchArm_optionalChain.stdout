@@ -1,0 +1,2 @@
+matchArm(2) => 8 | flip true; receiver {"factor":3}; twice 6; add 8
+matchArm(7) => 0 | flip false; other arm 0

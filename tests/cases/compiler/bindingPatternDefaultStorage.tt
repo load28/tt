@@ -1,0 +1,23 @@
+// A tt value in the initializer of a declaration that destructures with a
+// default is typed as TypeScript types it there: the binding pattern's
+// implied type (`{ a?: 1 }` for `{ a = 1 }`) is a contextual type only,
+// never a constraint, so the generated storage is not annotated with it.
+// An annotated declaration still gives its type.
+// @run: bindingPatternDefaultStorage.tt
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+variant S { A(n: number), B }
+function f(r: TResult<number, string>, s: S, flag: boolean): TResult<string, string> {
+  const { a = 1 } = { a: try r };
+  const [b = 2] = [try r];
+  const { c = "x" } = { c: match (s) { A(n) => `n${n}`, B => "b" } };
+  const [d = 0] = [match (s) { A(n) => n, B => 5 }];
+  let { e = 1 } = { e: try r };
+  const { n: { f = 1 } } = { n: { f: try r } };
+  const [[g = 1]] = [[try r]];
+  const { h = 1 } = { h: (flag ? try r : 3) };
+  const { i = 1 } = { i: flag && try r };
+  const { j = 1 }: { j?: number } = { j: try r };
+  return Result.Ok(`${a},${b},${c},${d},${e},${f},${g},${h},${i},${j}`);
+}
+console.log(JSON.stringify(f(Result.Ok(7), S.A(3), true)), JSON.stringify(f(Result.Err("no"), S.B, false)));

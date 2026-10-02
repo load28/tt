@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-crosses-value-region]: `try` crosses an isolated value region whose exits cannot target the enclosing `result` block
+ --> ./main.tt:4:40
+  |
+4 |   return flip() && result { return `<${try read(note("operand", input))}>`; };
+  |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: extract the affected expression into a nested function when doing so preserves its captures and evaluation order
+
+
+==== ttc --check-types (exit 1) ====
+error[try-crosses-value-region]: `try` crosses an isolated value region whose exits cannot target the enclosing `result` block
+ --> main.tt:4:40
+  |
+4 |   return flip() && result { return `<${try read(note("operand", input))}>`; };
+  |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: extract the affected expression into a nested function when doing so preserves its captures and evaluation order
+
+==== tsc on the emitted TypeScript (exit 0) ====

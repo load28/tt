@@ -1,0 +1,15 @@
+//// [aWitnessCanBePastedBackAsAnArm2.tt] 13 mapping(s)
+1:24 -> 20:23 len 6  "number"
+1:24 -> 23:12 len 6  "number"
+1:37 -> 25:3 len 1  "\n"
+2:29 -> 27:28 len 5  "Inner"
+2:29 -> 30:17 len 5  "Inner"
+2:43 -> 32:3 len 25  "\ndeclare const o: Outer;\n"
+4:1 -> 54:1 len 10  "const a = "
+4:18 -> 36:17 len 1  "o"
+5:19 -> 39:15 len 1  "n"
+5:26 -> 40:18 len 1  "n"
+6:11 -> 44:18 len 2  "-1"
+7:24 -> 48:18 len 1  "0"
+8:2 -> 54:19 len 2  ";\n"
+

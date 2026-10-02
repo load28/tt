@@ -1,0 +1,55 @@
+=== typecheckValBindingsArePlainTypescript.tt ===
+type User = { name: string; tags: string[] };
+>User : type User = {
+>       name: string;
+>       tags: string[];
+>   }
+>name : (property) name: string
+>tags : (property) tags: string[]
+val const user: User = { name: "Kim", tags: ["dev"] };
+>user : const user: User
+>User : type User = {
+>       name: string;
+>       tags: string[];
+>   }
+>name : (property) name: string
+>tags : (property) tags: string[]
+function inspect(val u: User): string {
+>inspect : function inspect(u: User): string
+>u : (parameter) u: User
+>User : type User = {
+>       name: string;
+>       tags: string[];
+>   }
+  return u.name + u.tags.length;
+>u : (parameter) u: User
+>name : (property) name: string
+>u : (parameter) u: User
+>tags : (property) tags: string[]
+>length : (property) Array<string>.length: number
+val let state = { count: 0 };
+>state : let state: {
+>       count: number;
+>   }
+>count : (property) count: number
+state = { ...state, count: state.count + 1 };
+>state : let state: {
+>       count: number;
+>   }
+>state : let state: {
+>       count: number;
+>   }
+>count : (property) count: number
+>state : let state: {
+>       count: number;
+>   }
+>count : (property) count: number
+const label = inspect(user) + state.count;
+>label : const label: string
+>inspect : function inspect(u: User): string
+>user : const user: User
+>state : let state: {
+>       count: number;
+>   }
+>count : (property) count: number
+

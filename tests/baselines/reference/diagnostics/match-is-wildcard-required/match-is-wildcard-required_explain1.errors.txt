@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[match-is-wildcard-required]: match: an `is` match requires a final wildcard arm `_`
+ --> ./main.tt:3:5
+  |
+3 |     match (value) {
+  |     ^^^^^
+  |
+  = help: add `_ => <fallback>` as the last arm
+
+
+==== ttc --check-types (exit 1) ====
+error[match-is-wildcard-required]: match: an `is` match requires a final wildcard arm `_`
+ --> main.tt:3:5
+  |
+3 |     match (value) {
+  |     ^^^^^
+  |
+  = help: add `_ => <fallback>` as the last arm
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

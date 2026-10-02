@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./inertArgumentsAreNotCapturedOutOfTheirContextualPosition2.tt → $DIR/out/inertArgumentsAreNotCapturedOutOfTheirContextualPosition2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'make'.
+ --> inertArgumentsAreNotCapturedOutOfTheirContextualPosition2.tt:1:16
+  |
+1 | const items = [make(), match (x) { A(v) => v, _ => 0 }];
+  |                ^^^^
+error[ts2304]: Cannot find name 'x'.
+ --> inertArgumentsAreNotCapturedOutOfTheirContextualPosition2.tt:1:31
+  |
+1 | const items = [make(), match (x) { A(v) => v, _ => 0 }];
+  |                               ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+inertArgumentsAreNotCapturedOutOfTheirContextualPosition2.ts(2,23): error TS2304: Cannot find name 'make'.
+inertArgumentsAreNotCapturedOutOfTheirContextualPosition2.ts(4,17): error TS2304: Cannot find name 'x'.

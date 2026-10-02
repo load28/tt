@@ -1,0 +1,23 @@
+=== expressionBodiedArrowMatchBecomesABlockWithoutAnIife.tt ===
+variant E { A, B }
+>E : type E = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const f = (e: E) => match (e) { A => 1, B => 2 };
+>f : const f: (e: E) => number
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>e : (parameter) e: E
+

@@ -1,0 +1,5 @@
+jsxFragment({"kind":"Circle","r":1}) => "<>[1]</>" | open res; before "["; operand {"kind":"Circle","r":1}; guard big false; small 1; after "]"; dispose res
+jsxFragment({"kind":"Circle","r":5}) => "<>[5]</>" | open res; before "["; operand {"kind":"Circle","r":5}; guard big true; big 5; after "]"; dispose res
+jsxFragment({"kind":"Rect","w":4,"h":2}) => "<>[4]</>" | open res; before "["; operand {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4; after "]"; dispose res
+jsxFragment({"kind":"Rect","w":1,"h":3}) => "<>[3]</>" | open res; before "["; operand {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3; after "]"; dispose res
+jsxFragment({"kind":"Point"}) => "<>[0]</>" | open res; before "["; operand {"kind":"Point"}; point 0; after "]"; dispose res

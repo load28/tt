@@ -1,0 +1,2 @@
+jsxConditional(2.5) => "<p>2.50</p>" | flip true; positive 2.5
+jsxConditional(-3) => "<p></p>" | flip false

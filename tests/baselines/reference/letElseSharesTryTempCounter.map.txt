@@ -1,0 +1,10 @@
+//// [letElseSharesTryTempCounter.tt] 8 mapping(s)
+1:1 -> 1:1 len 20  "function f(): X {\n  "
+2:9 -> 6:9 len 1  "n"
+2:17 -> 2:18 len 3  "g()"
+2:21 -> 6:26 len 3  "\n  "
+3:14 -> 11:11 len 1  "v"
+3:19 -> 7:18 len 4  "h(n)"
+3:31 -> 9:5 len 18  "return fallback();"
+3:52 -> 11:24 len 21  "\n  return wrap(v);\n}\n"
+

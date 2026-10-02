@@ -1,0 +1,20 @@
+//// [tryBindsToAPrivateMemberOperand.tt] 18 mapping(s)
+1:23 -> 2:26 len 6  "number"
+1:23 -> 5:15 len 6  "number"
+1:43 -> 3:27 len 6  "string"
+1:43 -> 6:16 len 6  "string"
+1:52 -> 7:3 len 103  "\nclass C {\n#v: R = R.Ok(1);\n#c: C = this;\n#case:"...
+8:7 -> 18:7 len 1  "a"
+8:15 -> 14:16 len 7  "this.#v"
+8:23 -> 18:24 len 1  "\n"
+9:5 -> 19:16 len 7  "this.#v"
+9:13 -> 22:2 len 1  "\n"
+10:7 -> 27:7 len 1  "b"
+10:15 -> 23:16 len 11  "this.#c?.#v"
+10:27 -> 27:24 len 1  "\n"
+11:5 -> 28:16 len 10  "this.#case"
+11:16 -> 31:2 len 1  "\n"
+12:1 -> 38:1 len 10  "const d = "
+12:15 -> 33:16 len 13  "this.#match()"
+12:28 -> 38:17 len 34  " * 2;\nreturn R.Ok(a + b + d);\n}\n}\n"
+

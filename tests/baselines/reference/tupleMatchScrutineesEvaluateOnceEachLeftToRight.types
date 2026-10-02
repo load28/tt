@@ -1,0 +1,42 @@
+=== tupleMatchScrutineesEvaluateOnceEachLeftToRight.tt ===
+variant Coin { Heads(), Tails }
+>Coin : type Coin = {
+>       kind: "Heads";
+>   } | {
+>       kind: "Tails";
+>   }
+>Heads : (property) Heads: () => Coin
+>Tails : (property) Tails: {
+>       readonly kind: "Tails";
+>   }
+const order: string[] = [];
+>order : const order: string[]
+function heads(name: string): Coin { order.push(name); return Coin.Heads(); }
+>heads : function heads(name: string): Coin
+>name : (parameter) name: string
+>Coin : type Coin = {
+>       kind: "Heads";
+>   } | {
+>       kind: "Tails";
+>   }
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+>Coin : const Coin: {
+>       Heads: () => Coin;
+>       Tails: {
+>           readonly kind: "Tails";
+>       };
+>   }
+>Heads : (property) Heads: () => Coin
+const r = match (heads("a"), heads("b")) {
+>r : const r: number
+>heads : function heads(name: string): Coin
+>heads : function heads(name: string): Coin
+console.log(order.join(","), r);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>order : const order: string[]
+>join : (method) Array<string>.join(separator?: string): string
+>r : const r: number
+

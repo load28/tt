@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryAssignmentInForInitializerRunsBeforeTheLoop.tt → $DIR/out/tryAssignmentInForInitializerRunsBeforeTheLoop.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'i'.
+ --> tryAssignmentInForInitializerRunsBeforeTheLoop.tt:1:21
+  |
+1 | function f() { for (i = try next();;) {} }
+  |                     ^
+error[ts2304]: Cannot find name 'next'.
+ --> tryAssignmentInForInitializerRunsBeforeTheLoop.tt:1:29
+  |
+1 | function f() { for (i = try next();;) {} }
+  |                             ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryAssignmentInForInitializerRunsBeforeTheLoop.ts(2,16): error TS2304: Cannot find name 'next'.
+tryAssignmentInForInitializerRunsBeforeTheLoop.ts(7,6): error TS2304: Cannot find name 'i'.

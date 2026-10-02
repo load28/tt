@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in the right operand of a logical assignment whose value is used — the operand runs only when the target's value does not decide the result, and no statement form reads the target once, skips the operand, and keeps TypeScript's narrowing of the target
+ --> ./main.tt:6:31
+  |
+6 |   return Result.Ok([(slot ??= try read(note("operand", input))), slot]);
+  |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: write the logical assignment as a statement of its own (`target ??= value;`), then read the target where its value was used
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in the right operand of a logical assignment whose value is used — the operand runs only when the target's value does not decide the result, and no statement form reads the target once, skips the operand, and keeps TypeScript's narrowing of the target
+ --> main.tt:6:31
+  |
+6 |   return Result.Ok([(slot ??= try read(note("operand", input))), slot]);
+  |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: write the logical assignment as a statement of its own (`target ??= value;`), then read the target where its value was used
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,2 @@
+jsxChild(2.5) => "<p>2.50</p>" | operand 2.5; positive 2.5; finally 0
+jsxChild(-3) => "<p></p>" | operand -3; positive undefined; finally 0

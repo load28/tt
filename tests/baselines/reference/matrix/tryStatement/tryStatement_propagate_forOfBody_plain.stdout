@@ -1,0 +1,2 @@
+forOfBody(2) => {"kind":"Ok","value":["checked","checked"]} | round 0; operand 2; read 2; round 1; operand 2; read 2
+forOfBody(-1) => {"kind":"Err","error":"negative -1"} | round 0; operand -1; read -1

@@ -1,0 +1,14 @@
+//// [anUnexpectedCaseReportsItsOwnMatchSubject.tt] 12 mapping(s)
+1:1 -> 19:1 len 75  "\nconst pick = (s: string) => s as \"a\" | \"b\";\nfun"...
+4:3 -> 54:3 len 7  "return "
+4:24 -> 25:21 len 7  "pick(s)"
+4:35 -> 27:14 len 3  "\"a\""
+4:42 -> 28:21 len 9  "pick(\"z\")"
+4:53 -> 31:14 len 3  "\"b\""
+4:60 -> 32:21 len 9  "pick(\"b\")"
+4:75 -> 41:12 len 3  "\"a\""
+4:82 -> 42:18 len 1  "1"
+4:85 -> 45:12 len 3  "\"b\""
+4:92 -> 46:18 len 1  "2"
+4:95 -> 54:16 len 118  ";\n}\ntry { outer(\"a\"); } catch (error) { console."...
+

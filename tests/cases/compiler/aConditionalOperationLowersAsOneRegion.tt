@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_09.rs::a_conditional_operation_lowers_as_one_region
+declare const flag: boolean;
+export const a = flag && match (1) { 1 => 1, _ => 0 };

@@ -1,0 +1,9 @@
+//// [anInitializerInsideACallbackStillLowersToStatements.tt] 7 mapping(s)
+1:1 -> 1:1 len 54  "declare function f(cb: () => number): void;\nf(()"...
+2:11 -> 16:1 len 10  "const x = "
+2:28 -> 4:17 len 1  "1"
+2:33 -> 6:10 len 1  "1"
+2:38 -> 7:16 len 1  "1"
+2:46 -> 11:16 len 1  "0"
+2:49 -> 16:17 len 16  "; return x; });\n"
+

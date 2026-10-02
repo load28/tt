@@ -1,0 +1,48 @@
+// Repro from TASK-601
+// @run: forInitializerOperands.tt
+import type { TResult } from "@tt/std";
+import * as Result from "@tt/std/result";
+variant O { A(n: number), B }
+const log: string[] = [];
+function flush(label: string, value: unknown) {
+  console.log(`${label}: ${JSON.stringify(value)} after ${log.join(" ")}`);
+  log.length = 0;
+}
+function r(ok: boolean): TResult<number, string> {
+  log.push("r");
+  return ok ? Result.Ok(10) : Result.Err("r failed");
+}
+function g(n: number): number {
+  log.push(`g(${n})`);
+  return n * 2;
+}
+export function firstDeclarator(ok: boolean): TResult<number[], string> {
+  const out: number[] = [];
+  for (let x = try r(ok), i = 0; i < 3; i++) {
+    log.push(`body ${i}`);
+    out.push(x + i);
+  }
+  return Result.Ok(out);
+}
+export function operand(o: O): number[] {
+  const out: number[] = [];
+  for (let x = g(match (o) { A(n) => n, B => 0 }); x < 10; x += 3) {
+    out.push(x);
+  }
+  return out;
+}
+export function assignment(o: O): number[] {
+  const out: number[] = [];
+  let x: number;
+  let i: number;
+  for (x = match (o) { A(n) => n, B => 5 }, i = 0; i < 2; i++) {
+    out.push(x + i);
+  }
+  return out;
+}
+flush("firstDeclarator ok", firstDeclarator(true));
+flush("firstDeclarator err", firstDeclarator(false));
+flush("operand A(2)", operand(O.A(2)));
+flush("operand B", operand(O.B));
+flush("assignment A(7)", assignment(O.A(7)));
+flush("assignment B", assignment(O.B));

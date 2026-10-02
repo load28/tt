@@ -1,0 +1,2 @@
+switchDiscriminant(2) => "default" | yield 2; receiver {"factor":3}; twice 6; case 0
+switchDiscriminant(6) => "default" | yield 6; receiver {"factor":3}; twice 18; case 0

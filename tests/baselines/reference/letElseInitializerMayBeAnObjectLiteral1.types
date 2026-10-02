@@ -1,0 +1,14 @@
+=== letElseInitializerMayBeAnObjectLiteral1.tt ===
+function f(n: number) {
+>f : function f(n: number): number | undefined
+>n : (parameter) n: number
+  const Some(value: v) = { kind: "Some" as const, value: n } else { return; };
+>value : (property) value: number
+>v : const v: number
+>kind : (property) kind: "Some"
+>const : type const = "Some"
+>value : (property) value: number
+>n : (parameter) n: number
+  return v;
+>v : const v: number
+

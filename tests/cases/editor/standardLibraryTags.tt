@@ -1,0 +1,7 @@
+// @definition: ok, err, some, none, value
+// @hover: ok, value
+import type { TResult, TOption } from "@tt/std";
+declare const r: TResult<number, string>;
+declare const o: TOption<number>;
+export const a = match (r) { /*ok*/Ok(/*value*/value) => value, /*err*/Err(error) => error.length };
+export const b = match (o) { /*some*/Some(value: x) => x, /*none*/None => 0 };

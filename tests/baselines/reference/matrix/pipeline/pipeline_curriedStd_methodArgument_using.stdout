@@ -1,0 +1,2 @@
+methodArgument(5) => ["receiver",1,15] | open res; receiver {"tag":"receiver"}; a 1; operand 5; map 15; dispose res
+methodArgument(0) => ["receiver",1,-1] | open res; receiver {"tag":"receiver"}; a 1; operand 0; dispose res

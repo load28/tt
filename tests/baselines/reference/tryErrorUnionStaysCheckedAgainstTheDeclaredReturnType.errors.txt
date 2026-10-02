@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryErrorUnionStaysCheckedAgainstTheDeclaredReturnType.tt → $DIR/out/tryErrorUnionStaysCheckedAgainstTheDeclaredReturnType.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2307]: Cannot find module './tt/index.js' or its corresponding type declarations.
+ --> tryErrorUnionStaysCheckedAgainstTheDeclaredReturnType.tt:2:30
+  |
+2 | import type { TResult } from "./tt/index.js";
+  |                              ^^^^^^^^^^^^^^^
+error[ts2307]: Cannot find module './tt/result.js' or its corresponding type declarations.
+ --> tryErrorUnionStaysCheckedAgainstTheDeclaredReturnType.tt:3:25
+  |
+3 | import * as Result from "./tt/result.js";
+  |                         ^^^^^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryErrorUnionStaysCheckedAgainstTheDeclaredReturnType.ts(2,30): error TS2307: Cannot find module './tt/index.js' or its corresponding type declarations.
+tryErrorUnionStaysCheckedAgainstTheDeclaredReturnType.ts(3,25): error TS2307: Cannot find module './tt/result.js' or its corresponding type declarations.

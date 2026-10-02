@@ -1,0 +1,6 @@
+=== flowStepCanBeAParenthesizedArrow.tt ===
+const f = flow |> parse |> (n => n + 1);
+>f : const f: (...a: unknown[]) => any
+>n : (parameter) n: unknown
+>n : (parameter) n: unknown
+

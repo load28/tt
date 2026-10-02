@@ -1,0 +1,2 @@
+forOfBody(3) => [4,4] | round 0; await; read 3; reassigned 4; round 1; await; read 3; reassigned 4
+forOfBody(-3) => [] | round 0; await; read -3; round 1; await; read -3

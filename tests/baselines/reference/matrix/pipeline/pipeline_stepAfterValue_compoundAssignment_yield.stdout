@@ -1,0 +1,2 @@
+compoundAssignment(4) => "start:7" | initial "start:"; target {"total":"start:"}; yield 4; step 3; add 7
+compoundAssignment(-1) => "start:2" | initial "start:"; target {"total":"start:"}; yield -1; step 3; add 2

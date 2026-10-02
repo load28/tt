@@ -1,0 +1,66 @@
+==== ttc --out-dir (exit 1) ====
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> ./mixedPatternsAskNoCoverage.tt:8:36
+  |
+8 | export const tagLast = match (v) { "x" => 1, A => 2 };
+  |                                    ^^^
+  |
+  = help: split them into two matches
+
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> ./mixedPatternsAskNoCoverage.tt:9:51
+  |
+9 | export const literalLast = match (flag) { A => 1, false => 2 };
+  |                                                   ^^^^^
+  |
+  = help: split them into two matches
+
+error[match-is-wildcard-required]: match: an `is` match requires a final wildcard arm `_`
+  --> ./mixedPatternsAskNoCoverage.tt:10:29
+   |
+10 | export const instanceLast = match (v) { A => 1, is Error => 2 };
+   |                             ^^^^^
+   |
+   = help: add `_ => <fallback>` as the last arm
+
+error[match-mixed-patterns]: match: cannot mix tag patterns and `is` patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+  --> ./mixedPatternsAskNoCoverage.tt:10:49
+   |
+10 | export const instanceLast = match (v) { A => 1, is Error => 2 };
+   |                                                 ^^^^^^^^
+   |
+   = help: split them into two matches
+
+
+==== ttc --check-types (exit 1) ====
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> mixedPatternsAskNoCoverage.tt:8:36
+  |
+8 | export const tagLast = match (v) { "x" => 1, A => 2 };
+  |                                    ^^^
+  |
+  = help: split them into two matches
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> mixedPatternsAskNoCoverage.tt:9:51
+  |
+9 | export const literalLast = match (flag) { A => 1, false => 2 };
+  |                                                   ^^^^^
+  |
+  = help: split them into two matches
+error[match-is-wildcard-required]: match: an `is` match requires a final wildcard arm `_`
+  --> mixedPatternsAskNoCoverage.tt:10:29
+   |
+10 | export const instanceLast = match (v) { A => 1, is Error => 2 };
+   |                             ^^^^^
+   |
+   = help: add `_ => <fallback>` as the last arm
+error[match-mixed-patterns]: match: cannot mix tag patterns and `is` patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+  --> mixedPatternsAskNoCoverage.tt:10:49
+   |
+10 | export const instanceLast = match (v) { A => 1, is Error => 2 };
+   |                                                 ^^^^^^^^
+   |
+   = help: split them into two matches
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

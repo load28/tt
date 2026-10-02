@@ -1,0 +1,4 @@
+forOfHead({"kind":"Num","value":4}) => [4] | await; number 4
+forOfHead({"kind":"Neg","value":-3}) => [-3] | await; number -3
+forOfHead({"kind":"Word","text":"hi"}) => ["hi"] | await; word "hi"
+forOfHead({"kind":"End"}) => [""] | await; end ""

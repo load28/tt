@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  1:43-1:49 "Circle" error variant-duplicate-case (ttc): variant Shape: duplicate case "Circle"
+

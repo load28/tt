@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valArgumentMayOnlyReachAValParameter1.tt → $DIR/out/valArgumentMayOnlyReachAValParameter1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'User'.
+ --> valArgumentMayOnlyReachAValParameter1.tt:1:25
+  |
+1 | function read(val user: User) { log(user.name); }
+  |                         ^^^^
+error[ts2304]: Cannot find name 'log'.
+ --> valArgumentMayOnlyReachAValParameter1.tt:1:33
+  |
+1 | function read(val user: User) { log(user.name); }
+  |                                 ^^^
+error[ts2304]: Cannot find name 'User'.
+ --> valArgumentMayOnlyReachAValParameter1.tt:2:23
+  |
+2 | function update(user: User) { user.name = "Lee"; }
+  |                       ^^^^
+error[ts2304]: Cannot find name 'User'.
+ --> valArgumentMayOnlyReachAValParameter1.tt:3:28
+  |
+3 | function process(val user: User) {
+  |                            ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valArgumentMayOnlyReachAValParameter1.ts(1,21): error TS2304: Cannot find name 'User'.
+valArgumentMayOnlyReachAValParameter1.ts(1,29): error TS2304: Cannot find name 'log'.
+valArgumentMayOnlyReachAValParameter1.ts(2,23): error TS2304: Cannot find name 'User'.
+valArgumentMayOnlyReachAValParameter1.ts(3,24): error TS2304: Cannot find name 'User'.

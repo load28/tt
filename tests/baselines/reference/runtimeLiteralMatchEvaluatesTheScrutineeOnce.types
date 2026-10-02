@@ -1,0 +1,16 @@
+=== runtimeLiteralMatchEvaluatesTheScrutineeOnce.tt ===
+let calls = 0;
+>calls : let calls: number
+function getValue(): string {
+>getValue : function getValue(): string
+  calls += 1;
+>calls : let calls: number
+const picked = match (getValue()) {
+>picked : const picked: number
+>getValue : function getValue(): string
+console.log(picked, calls);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>picked : const picked: number
+>calls : let calls: number
+

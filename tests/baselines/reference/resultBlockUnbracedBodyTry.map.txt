@@ -1,0 +1,75 @@
+//// [resultBlockUnbracedBodyTry.tt] 73 mapping(s)
+1:1 -> 19:1 len 289  "// A `try` in a `result` block that sits in the "...
+6:18 -> 25:21 len 6  "number"
+6:18 -> 28:10 len 6  "number"
+6:30 -> 30:3 len 192  "\nconst ok = (n: number): TResult<number, string>"...
+10:3 -> 50:3 len 7  "return "
+11:5 -> 36:5 len 7  "if (c) "
+11:23 -> 37:22 len 1  "r"
+11:25 -> 44:6 len 5  "\n    "
+12:12 -> 46:46 len 1  "0"
+13:4 -> 50:16 len 63  ";\n}\nfunction paren(c: boolean, r: TResult<number"...
+16:3 -> 69:3 len 7  "return "
+17:5 -> 55:5 len 7  "if (c) "
+17:19 -> 61:46 len 1  "("
+17:24 -> 56:22 len 1  "r"
+17:25 -> 61:59 len 1  ")"
+17:27 -> 63:6 len 5  "\n    "
+18:12 -> 65:46 len 1  "0"
+19:4 -> 69:16 len 67  ";\n}\nfunction statement(c: boolean, r: TResult<nu"...
+22:3 -> 86:3 len 7  "return "
+23:5 -> 74:5 len 7  "if (c) "
+23:16 -> 75:22 len 1  "r"
+23:18 -> 80:6 len 5  "\n    "
+24:12 -> 82:46 len 1  "1"
+25:4 -> 86:16 len 66  ";\n}\nfunction elseBody(c: boolean, r: TResult<num"...
+28:3 -> 105:3 len 7  "return "
+29:5 -> 91:5 len 15  "if (c) {} else "
+29:31 -> 92:22 len 1  "r"
+29:33 -> 99:6 len 5  "\n    "
+30:12 -> 101:46 len 1  "2"
+31:4 -> 105:16 len 76  ";\n}\nfunction elseIf(c: boolean, d: boolean, r: T"...
+34:3 -> 132:3 len 7  "return "
+35:5 -> 110:5 len 7  "if (c) "
+35:19 -> 110:53 len 1  "3"
+35:21 -> 110:73 len 17  "\n    else if (d) "
+36:21 -> 112:22 len 1  "r"
+36:23 -> 117:6 len 18  "\n    else if (!d) "
+37:29 -> 119:22 len 1  "r"
+37:31 -> 126:6 len 5  "\n    "
+38:12 -> 128:46 len 1  "4"
+39:4 -> 132:16 len 78  ";\n}\nfunction nestedIf(c: boolean, d: boolean, r:"...
+42:3 -> 157:3 len 7  "return "
+43:5 -> 137:5 len 14  "if (c) if (d) "
+43:23 -> 138:22 len 1  "r"
+43:25 -> 143:6 len 6  " else "
+43:42 -> 144:22 len 1  "r"
+43:44 -> 151:6 len 5  "\n    "
+44:12 -> 153:46 len 1  "5"
+45:4 -> 157:16 len 54  ";\n}\nfunction loopBody(r: TResult<number, string>"...
+48:3 -> 172:3 len 7  "return "
+49:5 -> 162:5 len 9  "for (;;) "
+49:25 -> 163:22 len 1  "r"
+50:4 -> 172:16 len 72  ";\n}\nfunction whileBody(r: TResult<number, string"...
+54:3 -> 190:3 len 7  "return "
+55:5 -> 178:5 len 20  "while (turns++ < 2) "
+55:29 -> 179:22 len 1  "r"
+55:31 -> 184:6 len 5  "\n    "
+56:12 -> 186:46 len 5  "turns"
+57:4 -> 190:16 len 55  ";\n}\nfunction labelBody(r: TResult<number, string"...
+60:3 -> 205:3 len 7  "return "
+61:5 -> 195:5 len 6  "done: "
+61:22 -> 196:23 len 1  "r"
+62:4 -> 205:16 len 77  ";\n}\nfunction returnedMatch(c: boolean, s: S, r: "...
+65:3 -> 241:3 len 7  "return "
+66:11 -> 215:11 len 4  "base"
+66:22 -> 210:21 len 1  "r"
+66:24 -> 215:32 len 12  "\n    if (c) "
+67:26 -> 218:23 len 1  "s"
+67:33 -> 221:21 len 1  "n"
+67:39 -> 222:52 len 8  "n + base"
+67:54 -> 226:52 len 2  "-1"
+67:59 -> 235:6 len 5  "\n    "
+68:12 -> 237:46 len 1  "6"
+69:4 -> 241:16 len 593  ";\n}\nfor (const r of [ok(5), bad(\"no\")]) {\n  cons"...
+

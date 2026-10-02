@@ -1,0 +1,3 @@
+forOfBody({"kind":"Rect","w":2,"h":3}) => [[2,3],[2,3]] | round 0; operand {"kind":"Rect","w":2,"h":3}; round 1; operand {"kind":"Rect","w":2,"h":3}; finally 0
+forOfBody({"kind":"Circle","r":1}) => [] | round 0; operand {"kind":"Circle","r":1}; round 1; operand {"kind":"Circle","r":1}; finally 0
+forOfBody({"kind":"Point"}) => [] | round 0; operand {"kind":"Point"}; round 1; operand {"kind":"Point"}; finally 0

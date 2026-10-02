@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const LOCAL = join(ROOT, "tests/baselines/local");
+const REFERENCE = join(ROOT, "tests/baselines/reference");
+
+function walk(dir, out) {
+  if (!existsSync(dir)) return out;
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) walk(path, out);
+    else out.push(path);
+  }
+  return out;
+}
+
+function referenceOf(local) {
+  const inside = relative(LOCAL, local).split(sep).join("/");
+  return inside.startsWith("tests/") ? join(ROOT, inside) : join(REFERENCE, inside);
+}
+
+const files = walk(LOCAL, []).sort();
+let copied = 0;
+let deleted = 0;
+for (const file of files) {
+  if (file.endsWith(".delete")) {
+    const target = referenceOf(file.slice(0, -".delete".length));
+    rmSync(target, { force: true });
+    console.log(`deleted  ${relative(ROOT, target)}`);
+    deleted += 1;
+  } else {
+    const target = referenceOf(file);
+    mkdirSync(dirname(target), { recursive: true });
+    copyFileSync(file, target);
+    console.log(`accepted ${relative(ROOT, target)}`);
+    copied += 1;
+  }
+}
+rmSync(LOCAL, { recursive: true, force: true });
+console.log(`baseline-accept: ${copied} accepted, ${deleted} deleted; review with git diff -- tests/baselines tests/fixtures`);

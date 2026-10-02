@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./pipelineInsideMatchScrutineeArmAndTemplate.tt → $DIR/out/pipelineInsideMatchScrutineeArmAndTemplate.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> pipelineInsideMatchScrutineeArmAndTemplate.tt:2:18
+  |
+2 | const r = match (x |> norm) {
+  |                  ^
+error[ts2304]: Cannot find name 'norm'.
+ --> pipelineInsideMatchScrutineeArmAndTemplate.tt:2:23
+  |
+2 | const r = match (x |> norm) {
+  |                       ^^^^
+error[ts2304]: Cannot find name 'double'.
+ --> pipelineInsideMatchScrutineeArmAndTemplate.tt:3:16
+  |
+3 |   A(v) => v |> double,
+  |                ^^^^^^
+error[ts2304]: Cannot find name 'x'.
+ --> pipelineInsideMatchScrutineeArmAndTemplate.tt:6:16
+  |
+6 | const t = `n=${x |> f}`;
+  |                ^
+error[ts2304]: Cannot find name 'f'.
+ --> pipelineInsideMatchScrutineeArmAndTemplate.tt:6:21
+  |
+6 | const t = `n=${x |> f}`;
+  |                     ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+pipelineInsideMatchScrutineeArmAndTemplate.ts(28,50): error TS2304: Cannot find name 'x'.
+pipelineInsideMatchScrutineeArmAndTemplate.ts(28,53): error TS2304: Cannot find name 'norm'.
+pipelineInsideMatchScrutineeArmAndTemplate.ts(32,54): error TS2304: Cannot find name 'double'.
+pipelineInsideMatchScrutineeArmAndTemplate.ts(45,49): error TS2304: Cannot find name 'x'.
+pipelineInsideMatchScrutineeArmAndTemplate.ts(45,52): error TS2304: Cannot find name 'f'.

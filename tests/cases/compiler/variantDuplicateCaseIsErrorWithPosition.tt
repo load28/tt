@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_01.rs::variant_duplicate_case_is_error_with_position
+const a = 1;
+variant X { A(v: number), A }

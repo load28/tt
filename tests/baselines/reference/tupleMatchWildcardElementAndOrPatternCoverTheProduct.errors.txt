@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tupleMatchWildcardElementAndOrPatternCoverTheProduct.tt → $DIR/out/tupleMatchWildcardElementAndOrPatternCoverTheProduct.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'd'.
+ --> tupleMatchWildcardElementAndOrPatternCoverTheProduct.tt:4:21
+  |
+4 | const step = match (d, s) {
+  |                     ^
+error[ts2304]: Cannot find name 's'.
+ --> tupleMatchWildcardElementAndOrPatternCoverTheProduct.tt:4:24
+  |
+4 | const step = match (d, s) {
+  |                        ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tupleMatchWildcardElementAndOrPatternCoverTheProduct.ts(40,18): error TS2304: Cannot find name 'd'.
+tupleMatchWildcardElementAndOrPatternCoverTheProduct.ts(41,18): error TS2304: Cannot find name 's'.

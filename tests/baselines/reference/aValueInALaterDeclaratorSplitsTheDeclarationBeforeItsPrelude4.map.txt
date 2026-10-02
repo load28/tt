@@ -1,0 +1,12 @@
+//// [aValueInALaterDeclaratorSplitsTheDeclarationBeforeItsPrelude4.tt] 10 mapping(s)
+1:1 -> 1:1 len 82  "import * as Result from \"@tt/std/result\";\nimport"...
+3:18 -> 4:21 len 6  "number"
+3:18 -> 7:10 len 6  "number"
+3:30 -> 9:3 len 181  "\ndeclare const o: O;\ndeclare function t(s: strin"...
+8:21 -> 24:9 len 4  "b = "
+8:40 -> 22:11 len 1  "x"
+8:48 -> 17:20 len 4  "r(a)"
+8:53 -> 22:28 len 1  " "
+8:61 -> 22:70 len 1  "x"
+8:65 -> 24:19 len 27  ";\n  return Result.Ok(0);\n}\n"
+

@@ -1,0 +1,7 @@
+//// [letElseEmitsGuardAndBind.tt] 5 mapping(s)
+1:1 -> 1:1 len 25  "function f(): number {\n  "
+2:14 -> 6:11 len 5  "value"
+2:23 -> 2:18 len 6  "find()"
+2:37 -> 4:5 len 9  "return 0;"
+2:49 -> 6:28 len 19  "\n  return value;\n}\n"
+

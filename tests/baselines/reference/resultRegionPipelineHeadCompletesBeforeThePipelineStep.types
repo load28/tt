@@ -1,0 +1,42 @@
+=== resultRegionPipelineHeadCompletesBeforeThePipelineStep.tt ===
+variant R { Ok(value: number), Err(error: string) }
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>Ok : (property) Ok: (value: number) => R
+>value : (property) value: number
+>Err : (property) Err: (error: string) => R
+>error : (property) error: string
+declare const g: () => R; declare const unwrap: (x: R) => number;
+>g : const g: () => R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>unwrap : const unwrap: (x: R) => number
+>x : (parameter) x: R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+const f = (): number => { const n = result {
+>f : const f: () => number
+>n : const n: number
+const value = try g(); return value * 2;
+>value : const value: number
+>g : const g: () => R
+>value : const value: number
+} |> unwrap; return n; };
+>unwrap : const unwrap: (x: R) => number
+>n : const n: number
+

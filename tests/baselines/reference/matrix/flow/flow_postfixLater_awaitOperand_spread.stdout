@@ -1,0 +1,2 @@
+awaitOperand(1.5) => "3.0" | add 3
+awaitOperand(2) => "4.0" | add 4

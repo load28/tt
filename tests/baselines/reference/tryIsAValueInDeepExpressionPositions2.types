@@ -1,0 +1,9 @@
+=== tryIsAValueInDeepExpressionPositions2.tt ===
+function f(flag: boolean): TResult<number, string> { const value = try (flag ? left() : right()); return Result.Ok(value); }
+>f : function f(flag: boolean): TResult<number, string>
+>flag : (parameter) flag: boolean
+>TResult : type TResult = /*unresolved*/ any
+>value : const value: any
+>flag : (parameter) flag: boolean
+>value : const value: any
+

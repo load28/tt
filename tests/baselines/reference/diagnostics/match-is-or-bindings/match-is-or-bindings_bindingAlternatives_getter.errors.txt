@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-is-or-bindings]: match: an `is` or-pattern cannot bind properties
+ --> ./main.tt:6:47
+  |
+6 |       return match (note("operand", input)) { is TypeError { message } | is RangeError { message } => note("bad", message), _ => note("other", "") };
+  |                                               ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: use type-only alternatives or split them into separate arms
+
+
+==== ttc --check-types (exit 1) ====
+error[match-is-or-bindings]: match: an `is` or-pattern cannot bind properties
+ --> main.tt:6:47
+  |
+6 |       return match (note("operand", input)) { is TypeError { message } | is RangeError { message } => note("bad", message), _ => note("other", "") };
+  |                                               ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: use type-only alternatives or split them into separate arms
+
+==== tsc on the emitted TypeScript (exit 0) ====

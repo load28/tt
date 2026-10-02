@@ -126,11 +126,38 @@ Nightly와 Beta·RC·Stable·Patch의 개발자 절차 및 운영 기준은 [`do
 - 스캐너와 변환기는 ASCII 바이트만 판단하고 멀티바이트 UTF-8은 불투명하게
   통과시킵니다.
 - 내부 오류는 바이트 오프셋을 담고 사용자 line/column 변환은 공개 경계에서 합니다.
-- 새 기능은 출력 계약이면 `tests/compile.rs`, TS 통과 계약이면
-  `tests/passthrough.rs`, 타입·런타임 의미이면 통합 테스트를 추가합니다.
+- A new feature's emitted output, diagnostics, type-check result, or
+  runtime behaviour is pinned by case files under `tests/cases/` (see
+  below). `tests/compile.rs` and `tests/integration.rs` hold what a case
+  does not observe: library APIs other than the emission, non-default
+  `Options`, and the CLI or processes. The TS pass-through contract goes in
+  `tests/passthrough.rs`.
   방출된 TypeScript나 렌더된 진단처럼 **산출물 전체**가 계약인 것은
   `tests/fixtures/` 스냅샷으로 고정하고(`UPDATE_EXPECT=1 cargo test --test
   snapshot`), 갱신된 diff를 읽고 검토합니다.
+- The default regression test for a bug fix is one case file under
+  `tests/cases/compiler/` (or `tests/cases/conformance/<feature>/`), with
+  `// @filename:` units when the bug needs several files. Its baselines in
+  `tests/baselines/reference/` (`.ts`, `.errors.txt`, `.map.txt`, `.types`)
+  are generated with `UPDATE_EXPECT=1 cargo test --test case_baselines`;
+  see "Adding a test case" in `CONTRIBUTING.md`. When the bug is what the
+  emitted program does at runtime (evaluation order, double evaluation,
+  `this`, short-circuiting), the case also carries `// @run: <unit>`, and
+  its `.stdout` (and `.stderr`) runtime baselines pin the behaviour. An editor fix is pinned by
+  a case under `tests/cases/editor/` with `/*marker*/`s and verb lines
+  (`UPDATE_EXPECT=1 cargo test --test editor_cases`); see "Adding an editor
+  case".
+- Every bug fix includes at least one test that fails without the fix's
+  non-test changes. Run it against the unfixed code, and record its path
+  and the failure it reported in the task record's "Regression test (fails
+  before the fix)" section; `scripts/check-task-index` requires that
+  section from TASK-636 on. A task that fixes no bug says `Not applicable:`
+  and why.
+- Commit baseline changes (`tests/baselines/reference/`,
+  `tests/fixtures/**/expected.*`) in the same commit as the change that
+  causes them, after reading their diff: an unrelated-looking baseline
+  change is a clue about something the change did not intend. CI fails on
+  a missing, modified, or unused baseline.
 - 기존 사용자 변경을 보존하고 관련 없는 dirty 파일을 수정하지 않습니다.
 
 변경 완료 전 로컬 게이트를 실행합니다. GitHub Actions의 `CI`도 `main`과

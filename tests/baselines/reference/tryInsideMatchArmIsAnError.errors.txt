@@ -1,0 +1,31 @@
+==== ttc --out-dir (exit 1) ====
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+ --> ./tryInsideMatchArmIsAnError.tt:2:28
+  |
+2 |   Ok(value) => { const y = try f(value); return y; },
+  |                            ^^^^^^^^^^^^
+  |
+  = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'r'.
+ --> tryInsideMatchArmIsAnError.tt:1:18
+  |
+1 | const x = match (r) {
+  |                  ^
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+ --> tryInsideMatchArmIsAnError.tt:2:28
+  |
+2 |   Ok(value) => { const y = try f(value); return y; },
+  |                            ^^^^^^^^^^^^
+  |
+  = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+error[ts2304]: Cannot find name 'fallback'.
+ --> tryInsideMatchArmIsAnError.tt:3:17
+  |
+3 |   Err(error) => fallback(error),
+  |                 ^^^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

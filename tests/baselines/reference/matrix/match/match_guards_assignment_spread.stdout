@@ -1,0 +1,5 @@
+assignment({"kind":"Circle","r":1}) => 1 | initial 0; target {"value":0}; guard big false; small 1
+assignment({"kind":"Circle","r":5}) => 5 | initial 0; target {"value":0}; guard big true; big 5
+assignment({"kind":"Rect","w":4,"h":2}) => 4 | initial 0; target {"value":0}; guard wide true; wide 4
+assignment({"kind":"Rect","w":1,"h":3}) => 3 | initial 0; target {"value":0}; guard wide false; tall 3
+assignment({"kind":"Point"}) => 0 | initial 0; target {"value":0}; point 0

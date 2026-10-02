@@ -1,0 +1,2 @@
+ifBranch(2) => {"kind":"Ok","value":"checked"} | enter true; risky 2; read 2
+ifBranch(-1) => {"kind":"Err","error":"negative -1"} | enter true; risky -1; read -1

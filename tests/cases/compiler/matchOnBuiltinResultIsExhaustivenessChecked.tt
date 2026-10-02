@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::match_on_builtin_result_is_exhaustiveness_checked
+const f = (r: Result<number, string>) => match (r) { Err(error) => error };

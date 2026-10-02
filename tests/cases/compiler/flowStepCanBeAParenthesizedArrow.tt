@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::flow_step_can_be_a_parenthesized_arrow
+const f = flow |> parse |> (n => n + 1);

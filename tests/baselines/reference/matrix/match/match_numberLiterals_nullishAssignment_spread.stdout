@@ -1,0 +1,5 @@
+nullishAssignment(200) => true | flip true; target {"value":null}; success true
+nullishAssignment(201) => "kept" | flip false; target {"value":"kept"}
+nullishAssignment(404) => false | flip true; target {"value":null}; missing false
+nullishAssignment(500) => "kept" | flip false; target {"value":"kept"}
+nullishAssignment(7) => null | flip true; target {"value":null}; other null

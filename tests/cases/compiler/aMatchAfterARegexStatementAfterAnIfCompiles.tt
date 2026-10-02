@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_13.rs::a_match_after_a_regex_statement_after_an_if_compiles
+declare const x: Option<number>;
+export function f(s: string) {
+  if (!s) return;
+  /`/.test(s) && s;
+  return match (x) { Some(v) => v, None => 0 };
+}

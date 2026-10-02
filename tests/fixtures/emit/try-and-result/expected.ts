@@ -27,7 +27,8 @@ export function load(id: string): TResult<{ name: string; title: string }, strin
     }
     const company = $tt_t1.value;
     {
-      $tt_v0 = { kind: "Ok" as const, value: { name, title: company.title } };
+      const $tt_a0 = { value: { kind: "Ok" as const, value: { name, title: company.title } } };
+      $tt_v0 = $tt_a0.value;
       break $tt_v0;
     }
   }

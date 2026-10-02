@@ -1,0 +1,2 @@
+jsxConditional(2) => "<p>{'kind':'Ok','value':20}</p>" | flip true; risky 2; read 2
+jsxConditional(-1) => "<p></p>" | flip false

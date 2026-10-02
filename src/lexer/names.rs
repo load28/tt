@@ -19,6 +19,10 @@ pub(crate) fn identifier_names_with_prefix(
 }
 
 fn collect(src: &str, tokens: &[Token], prefix: &str, names: &mut HashSet<String>) {
+    crate::stack::grow(|| collect_grown(src, tokens, prefix, names));
+}
+
+fn collect_grown(src: &str, tokens: &[Token], prefix: &str, names: &mut HashSet<String>) {
     let mut covered = 0;
     for token in tokens {
         match &token.kind {

@@ -1,0 +1,5 @@
+//// [aStaticBlockDoesNotCaptureANestedFunctionTry.tt] 3 mapping(s)
+1:1 -> 1:1 len 39  "class C { static { const run = () => { "
+1:44 -> 1:55 len 6  "read()"
+1:51 -> 4:2 len 8  " }; } }\n"
+

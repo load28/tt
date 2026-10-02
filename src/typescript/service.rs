@@ -125,7 +125,54 @@ pub(crate) struct Service {
     opened: HashMap<String, i64>,
     alive: bool,
     serves_sources: bool,
+    semantic_legend: SemanticLegend,
 }
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct SemanticLegend {
+    pub types: Vec<String>,
+    pub modifiers: Vec<String>,
+}
+
+pub(crate) const SEMANTIC_TOKEN_TYPES: [&str; 23] = [
+    "namespace",
+    "type",
+    "class",
+    "enum",
+    "interface",
+    "struct",
+    "typeParameter",
+    "parameter",
+    "variable",
+    "property",
+    "enumMember",
+    "event",
+    "function",
+    "method",
+    "macro",
+    "keyword",
+    "modifier",
+    "comment",
+    "string",
+    "number",
+    "regexp",
+    "operator",
+    "decorator",
+];
+
+pub(crate) const SEMANTIC_TOKEN_MODIFIERS: [&str; 11] = [
+    "declaration",
+    "definition",
+    "readonly",
+    "static",
+    "deprecated",
+    "abstract",
+    "async",
+    "modification",
+    "documentation",
+    "defaultLibrary",
+    "local",
+];
 
 /// One answer from the server: the result, or the error it gave instead.
 struct Response {
@@ -188,6 +235,7 @@ impl Service {
             opened: HashMap::new(),
             alive: true,
             serves_sources: arrangement.inferred_mapper.is_some(),
+            semantic_legend: SemanticLegend::default(),
         };
 
         let root_uri = file_uri(root);
@@ -201,10 +249,28 @@ impl Service {
                     "hover": { "contentFormat": ["markdown", "plaintext"] },
                     "definition": {},
                     "references": {},
-                    "completion": { "completionItem": { "labelDetailsSupport": true } },
+                    "completion": { "completionItem": {
+                        "labelDetailsSupport": true,
+                        "tagSupport": { "valueSet": [1] },
+                    } },
                     "signatureHelp": {},
+                    "documentSymbol": { "hierarchicalDocumentSymbolSupport": true },
                     "rename": { "prepareSupport": true },
-                    "diagnostic": {},
+                    "semanticTokens": {
+                        "requests": { "full": true },
+                        "tokenTypes": SEMANTIC_TOKEN_TYPES,
+                        "tokenModifiers": SEMANTIC_TOKEN_MODIFIERS,
+                        "formats": ["relative"],
+                        "multilineTokenSupport": false,
+                        "overlappingTokenSupport": false,
+                    },
+                    // LSP 3.18 `DiagnosticsCapabilities`: without them the
+                    // server leaves out related places and the unused /
+                    // deprecated tags a suggestion is drawn with.
+                    "diagnostic": {
+                        "relatedInformation": true,
+                        "tagSupport": { "valueSet": [1, 2] },
+                    },
                 },
                 "workspace": { "configuration": true, "workspaceFolders": true },
             },
@@ -212,7 +278,19 @@ impl Service {
         if service.serves_sources {
             initialize["initializationOptions"] = serde_json::json!({ "runExternalCode": true });
         }
-        service.request("initialize", initialize)?;
+        let initialized = service.request("initialize", initialize)?;
+        let legend = &initialized["capabilities"]["semanticTokensProvider"]["legend"];
+        let names = |list: &serde_json::Value| -> Vec<String> {
+            list.as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|name| name.as_str().map(String::from))
+                .collect()
+        };
+        service.semantic_legend = SemanticLegend {
+            types: names(&legend["tokenTypes"]),
+            modifiers: names(&legend["tokenModifiers"]),
+        };
         service.notify("initialized", serde_json::json!({}));
         if let Some(contribution) = &arrangement.inferred_mapper {
             service.request(
@@ -234,6 +312,10 @@ impl Service {
         } else {
             file_uri(lowered)
         }
+    }
+
+    pub(crate) fn semantic_legend(&self) -> &SemanticLegend {
+        &self.semantic_legend
     }
 
     /// Whether the server is still there to answer.
@@ -294,6 +376,16 @@ impl Service {
         method: &str,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, String> {
+        self.answer(method, params)?.map_err(|error| {
+            format!("TypeScript language service request `{method}` failed: {error}")
+        })
+    }
+
+    pub(crate) fn answer(
+        &mut self,
+        method: &str,
+        params: serde_json::Value,
+    ) -> Result<Result<serde_json::Value, String>, String> {
         if !self.alive {
             return Err("the TypeScript server is not running".to_string());
         }
@@ -304,7 +396,7 @@ impl Service {
         }))?;
 
         match wait_for_response(&self.responses, id, method, REQUEST_TIMEOUT) {
-            Ok(result) => Ok(result),
+            Ok(result) => Ok(Ok(result)),
             Err(ResponseFailure::Disconnected) => {
                 self.alive = false;
                 Err("the TypeScript server exited".to_string())
@@ -317,7 +409,7 @@ impl Service {
                 self.alive = false;
                 Err(error)
             }
-            Err(ResponseFailure::Protocol(error)) => Err(error),
+            Err(ResponseFailure::Protocol(error)) => Ok(Err(error)),
         }
     }
 
@@ -356,9 +448,7 @@ fn wait_for_response(
         match responses.recv_timeout(remaining) {
             Ok(response) if response.id == id => {
                 return match response.error {
-                    Some(error) => Err(ResponseFailure::Protocol(format!(
-                        "TypeScript language service request `{method}` failed: {error}"
-                    ))),
+                    Some(error) => Err(ResponseFailure::Protocol(error)),
                     None => Ok(response.result),
                 };
             }
@@ -639,10 +729,7 @@ mod tests {
         let ResponseFailure::Protocol(error) = error else {
             panic!("the service is still connected");
         };
-        assert_eq!(
-            error,
-            "TypeScript language service request `textDocument/hover` failed: project graph could not be loaded"
-        );
+        assert_eq!(error, "project graph could not be loaded");
     }
 
     #[test]

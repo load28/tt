@@ -1,0 +1,5 @@
+forInitializer({"kind":"Circle","r":1}) => [1] | yield {"kind":"Circle","r":1}; guard big false; small 1
+forInitializer({"kind":"Circle","r":5}) => [5] | yield {"kind":"Circle","r":5}; guard big true; big 5
+forInitializer({"kind":"Rect","w":4,"h":2}) => [4] | yield {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4
+forInitializer({"kind":"Rect","w":1,"h":3}) => [3] | yield {"kind":"Rect","w":1,"h":3}; guard wide false; tall 3
+forInitializer({"kind":"Point"}) => [0] | yield {"kind":"Point"}; point 0

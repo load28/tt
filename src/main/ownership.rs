@@ -1,31 +1,12 @@
 //! Persistent output ownership, independent of banners and input selection.
 //!
 //! A record keeps the exact last published bytes. This permits rebuilds while
-//! refusing to replace an authored or subsequently edited file. Records are
-//! private siblings, so directory scans never treat them as project inputs.
+//! refusing to replace an authored or subsequently edited file, or the
+//! output of another input that still exists. Records are private siblings,
+//! so directory scans never treat them as project inputs.
 
 use super::*;
-
-fn record_path(output: &Path) -> PathBuf {
-    output.with_file_name(format!(
-        ".{}.ttc-output.json",
-        output.file_name().unwrap_or_default().to_string_lossy()
-    ))
-}
-
-fn record(output: &Path) -> Option<serde_json::Value> {
-    serde_json::from_slice(&fs::read(record_path(output)).ok()?).ok()
-}
-
-pub(super) fn owned_output(output: &Path) -> bool {
-    let Some(record) = record(output) else {
-        return false;
-    };
-    record["version"] == 1
-        && record["content"].as_str().is_some_and(|expected| {
-            fs::read_to_string(output).is_ok_and(|actual| actual == expected)
-        })
-}
+use ttc::ownership::{owned_output, record, record_path};
 
 #[derive(Clone, Copy)]
 pub(super) enum OutputOwner<'a> {
@@ -35,6 +16,18 @@ pub(super) enum OutputOwner<'a> {
 
 fn source_identity(path: &Path) -> PathBuf {
     fs::canonicalize(path).unwrap_or_else(|_| normalized_absolute(path))
+}
+
+fn recorded_source(source: &Path) -> Result<String, String> {
+    source_identity(source)
+        .into_os_string()
+        .into_string()
+        .map_err(|_| {
+            format!(
+                "ttc: {}: input path is not valid UTF-8, so its output cannot record its owner — rename the input",
+                source.display()
+            )
+        })
 }
 
 fn support_identity(module: StdModule) -> String {
@@ -54,7 +47,26 @@ fn owns(record: &serde_json::Value, owner: OutputOwner) -> bool {
     }
 }
 
+/// Whether the source input `record` names as the output's owner no longer
+/// exists: an unedited output it left behind belongs to no input, and the
+/// input that now maps to the same output (a renamed or migrated source)
+/// takes it over. A support module's output always has its owner.
+fn orphaned(record: &serde_json::Value) -> bool {
+    record["support"].is_null()
+        && record["source"].as_str().is_some_and(|recorded| {
+            let recorded = Path::new(recorded);
+            !StdModule::ALL
+                .iter()
+                .any(|module| recorded.ends_with(support_identity(*module)))
+                && fs::symlink_metadata(recorded)
+                    .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+        })
+}
+
 pub(super) fn check_output_owner(output: &Path, owner: OutputOwner) -> Result<(), String> {
+    if let OutputOwner::Source(source) = owner {
+        recorded_source(source)?;
+    }
     if let OutputOwner::Source(source) = owner
         && same_file(output, source)
     {
@@ -66,7 +78,9 @@ pub(super) fn check_output_owner(output: &Path, owner: OutputOwner) -> Result<()
     if !output.exists() {
         return Ok(());
     }
-    if owned_output(output) && record(output).is_some_and(|record| owns(&record, owner)) {
+    if owned_output(output)
+        && record(output).is_some_and(|record| owns(&record, owner) || orphaned(&record))
+    {
         return Ok(());
     }
     Err(format!(
@@ -81,14 +95,26 @@ pub(super) fn write_owned_output(
     code: &str,
 ) -> Result<(), String> {
     check_output_owner(output, owner)?;
-    write_output(output, code)?;
     let record = match owner {
         OutputOwner::Source(source) => {
-            serde_json::json!({ "version": 1, "source": source_identity(source), "content": code })
+            serde_json::json!({ "version": 1, "source": recorded_source(source)?, "content": code })
         }
         OutputOwner::Support(module) => {
             serde_json::json!({ "version": 1, "support": support_identity(module), "content": code })
         }
     };
-    write_output(&record_path(output), &record.to_string())
+    let replaced = owned_output(output)
+        .then(|| fs::read_to_string(output).ok())
+        .flatten()
+        .filter(|replaced| replaced != code);
+    let mut publishing = record.clone();
+    if let Some(replaced) = &replaced {
+        publishing["replaced"] = serde_json::Value::from(replaced.as_str());
+    }
+    write_output(&record_path(output), &publishing.to_string())?;
+    write_output(output, code)?;
+    if replaced.is_some() {
+        write_output(&record_path(output), &record.to_string())?;
+    }
+    Ok(())
 }

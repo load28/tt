@@ -1,0 +1,5 @@
+=== literalNumberMatchEmitsNumberCases.tt ===
+const message = match (status) {
+>message : const message: string
+>status : var status: string
+

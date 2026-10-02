@@ -1,0 +1,52 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+ --> ./main.tt:4:82
+  |
+4 |   const ran = callee(true)?.(result { const inner = result { const n = try read((yield input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; });
+  |                                                                                  ^^^^^
+  |
+  = help: yield outside this `result` block instead
+
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+ --> ./main.tt:4:82
+  |
+4 |   const ran = callee(true)?.(result { const inner = result { const n = try read((yield input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; });
+  |                                                                                  ^^^^^
+  |
+  = help: yield outside this `result` block instead
+
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+ --> ./main.tt:5:87
+  |
+5 |   const skipped = callee(false)?.(result { const inner = result { const n = try read((yield input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; });
+  |                                                                                       ^^^^^
+  |
+  = help: yield outside this `result` block instead
+
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+ --> ./main.tt:5:87
+  |
+5 |   const skipped = callee(false)?.(result { const inner = result { const n = try read((yield input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; });
+  |                                                                                       ^^^^^
+  |
+  = help: yield outside this `result` block instead
+
+
+==== ttc --check-types (exit 1) ====
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+ --> main.tt:4:82
+  |
+4 |   const ran = callee(true)?.(result { const inner = result { const n = try read((yield input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; });
+  |                                                                                  ^^^^^
+  |
+  = help: yield outside this `result` block instead
+error[result-yield-crossing]: `yield` cannot cross a `result` block
+ --> main.tt:5:87
+  |
+5 |   const skipped = callee(false)?.(result { const inner = result { const n = try read((yield input)); return n + 1; }; note("inner", inner); const m = try inner; return m * 2; });
+  |                                                                                       ^^^^^
+  |
+  = help: yield outside this `result` block instead
+
+==== tsc on the emitted TypeScript (exit 0) ====

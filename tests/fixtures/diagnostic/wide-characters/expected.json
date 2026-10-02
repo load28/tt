@@ -1,0 +1,32 @@
+[
+  {
+    "code": "match-not-exhaustive",
+    "col": 44,
+    "endCol": 53,
+    "endLine": 7,
+    "line": 7,
+    "message": "match on variant Shape is not exhaustive: missing \"Rect\"",
+    "suggestions": [
+      {
+        "edit": {
+          "col": 1,
+          "endCol": 1,
+          "endLine": 9,
+          "line": 9,
+          "replacement": "  Rect(w, h) => undefined,\n"
+        },
+        "message": "add the missing arms"
+      },
+      {
+        "edit": {
+          "col": 1,
+          "endCol": 1,
+          "endLine": 9,
+          "line": 9,
+          "replacement": "  _ => undefined,\n"
+        },
+        "message": "or add a final `_` arm"
+      }
+    ]
+  }
+]

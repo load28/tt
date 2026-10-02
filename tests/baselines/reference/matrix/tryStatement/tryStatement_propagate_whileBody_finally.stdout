@@ -1,0 +1,2 @@
+whileBody(2) => {"kind":"Ok","value":"checked"} | test true; operand 2; read 2; finally 0
+whileBody(-1) => {"kind":"Err","error":"negative -1"} | test true; operand -1; read -1; finally 0

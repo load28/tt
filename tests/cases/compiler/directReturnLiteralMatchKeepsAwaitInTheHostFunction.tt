@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::direct_return_literal_match_keeps_await_in_the_host_function
+async function f() { return match (s) { "a" => await g(), _ => null }; }

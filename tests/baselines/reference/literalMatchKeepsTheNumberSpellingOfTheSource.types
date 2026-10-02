@@ -1,0 +1,4 @@
+=== literalMatchKeepsTheNumberSpellingOfTheSource.tt ===
+const v = match (x) { 0xff => 1, 1_000 => 2, 1.5e2 => 3, -1 => 4, _ => 0 };
+>v : const v: number
+

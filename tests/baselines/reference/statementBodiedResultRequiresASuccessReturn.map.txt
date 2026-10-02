@@ -1,0 +1,7 @@
+//// [statementBodiedResultRequiresASuccessReturn.tt] 5 mapping(s)
+1:1 -> 10:1 len 14  "const value = "
+1:30 -> 8:9 len 4  "item"
+1:41 -> 3:18 len 6  "read()"
+1:48 -> 8:29 len 11  " use(item);"
+1:61 -> 10:27 len 2  ";\n"
+

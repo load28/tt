@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_06.rs::tuple_match_bare_wildcard_arm_skips_the_check_and_must_be_last
+const r = match (a, b) {
+  _ => 0,
+  (A, B) => 1,
+};

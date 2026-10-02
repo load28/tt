@@ -1,0 +1,3 @@
+switchClause({"kind":"Rect","w":2,"h":3}) => [2,3] | discriminant 1
+switchClause({"kind":"Circle","r":1}) => "diverged" | discriminant 1
+switchClause({"kind":"Point"}) => "diverged" | discriminant 1

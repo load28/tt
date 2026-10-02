@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_04.rs::verify_preflights_unbalanced_delimiters_before_swc
+// @baselines: ts, errors.txt, map.txt
+	K<-[(	K<	K<[({[( -[(	(	K<	K<[({[(	K<[({[(	K<[({[<[({[(	K<[({[(.....z.........	K<[K<[({[(	K<[({[<[({[(	K<[({[(.....z.........	K<[({[<0

@@ -1,0 +1,3 @@
+compoundAssignment(3) => "start:9" | initial "start:"; target {"total":"start:"}; flip true; maybe true; twice 9
+compoundAssignment(4) => "start:undefined" | initial "start:"; target {"total":"start:"}; flip false; maybe false
+compoundAssignment(5) => "start:15" | initial "start:"; target {"total":"start:"}; flip true; maybe true; twice 15

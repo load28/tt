@@ -1,0 +1,2 @@
+switchCaseTest(2) => "default" | open res; discriminant 0; operand 2; receiver {"factor":3}; twice 6; dispose res
+switchCaseTest(6) => "default" | open res; discriminant 0; operand 6; receiver {"factor":3}; twice 18; dispose res

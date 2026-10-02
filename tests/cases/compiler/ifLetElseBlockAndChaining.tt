@@ -1,0 +1,11 @@
+// @origin: tests/compile/cases_06.rs::if_let_else_block_and_chaining
+
+function f() {
+  if let Some(value) = a() {
+    use1(value);
+  } else if let Ok(value: v) = b() {
+    use2(v);
+  } else {
+    fallback();
+  }
+}

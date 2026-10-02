@@ -1,0 +1,5 @@
+differences from pipeline_memberStep_awaitOperand_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await ((t0 = note(\"operand\", input), note(\"receiver\", tools).twice(t0)))" hint TS80007: 'await' has no effect on the type of this expression.
+

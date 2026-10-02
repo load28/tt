@@ -1,0 +1,11 @@
+// @origin: tests/compile/cases_13.rs::an_explicit_semicolon_or_a_block_needs_no_separator
+declare const o: { m(x: unknown): unknown };
+declare const k: "m";
+declare const c: boolean;
+declare const u: unknown;
+declare function f(): void;
+declare const v: number;
+export function h() {
+  if (c) { f() }
+  v |> o.m
+}

@@ -1,0 +1,6 @@
+=== flowComposesInsideExpressions.tt ===
+const a = xs.map(flow |> parse |> double);
+>a : const a: any
+const b = `${flow |> f |> g}`;
+>b : const b: string
+

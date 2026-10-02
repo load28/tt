@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[variant-required-after-optional]: variant Bad: case "A" declares required field `b` after optional field `a`
+ --> ./main.tt:4:29
+  |
+4 | variant Bad { A(a?: number, b: number) }
+  |                             ^
+  |
+  = help: declare the required fields before the optional ones
+
+
+==== ttc --check-types (exit 1) ====
+error[variant-required-after-optional]: variant Bad: case "A" declares required field `b` after optional field `a`
+ --> main.tt:4:29
+  |
+4 | variant Bad { A(a?: number, b: number) }
+  |                             ^
+  |
+  = help: declare the required fields before the optional ones
+
+==== tsc on the emitted TypeScript (exit 0) ====

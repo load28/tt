@@ -1,0 +1,28 @@
+==== ttc --out-dir (exit 1) ====
+error[val-mutation]: cannot mutate through val binding `user` (the binding is declared with `val`, so every access path from it is read-only)
+ --> ./valParameterIsReadOnlyInsideTheFunction2.tt:1:34
+  |
+1 | const read = (val user: User) => user.name = "Lee";
+  |                                  ^^^^
+  |               --- the read-only binding is declared here
+  |
+  = help: remove `val` if this binding is intended to be mutable
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'User'.
+ --> valParameterIsReadOnlyInsideTheFunction2.tt:1:25
+  |
+1 | const read = (val user: User) => user.name = "Lee";
+  |                         ^^^^
+error[val-mutation]: cannot mutate through val binding `user` (the binding is declared with `val`, so every access path from it is read-only)
+ --> valParameterIsReadOnlyInsideTheFunction2.tt:1:34
+  |
+1 | const read = (val user: User) => user.name = "Lee";
+  |                                  ^^^^
+  |               --- the read-only binding is declared here
+  |
+  = help: remove `val` if this binding is intended to be mutable
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

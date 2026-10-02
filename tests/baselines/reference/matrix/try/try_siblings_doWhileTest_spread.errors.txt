@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> ./main.tt:8:27
+  |
+8 |   } while (rounds < 2 && (try read(first(...[input]))) + (try read(note("second", 5))));
+  |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> ./main.tt:8:59
+  |
+8 |   } while (rounds < 2 && (try read(first(...[input]))) + (try read(note("second", 5))));
+  |                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> main.tt:8:27
+  |
+8 |   } while (rounds < 2 && (try read(first(...[input]))) + (try read(note("second", 5))));
+  |                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+error[try-placement]: `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+ --> main.tt:8:59
+  |
+8 |   } while (rounds < 2 && (try read(first(...[input]))) + (try read(note("second", 5))));
+  |                                                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into the nearest function-body statement with `const value = try <expression>;`
+
+==== tsc on the emitted TypeScript (exit 0) ====

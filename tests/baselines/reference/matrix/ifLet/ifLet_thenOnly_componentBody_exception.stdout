@@ -1,0 +1,2 @@
+componentBody(2) => "<p>2</p>" | risky 2; read 2; then 2
+componentBody(-1) => "<p>\"none\"</p>" | risky -1; read -1

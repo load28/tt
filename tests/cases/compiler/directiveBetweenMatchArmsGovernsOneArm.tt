@@ -1,0 +1,22 @@
+// A `// @ts-ignore` between match arms governs the one arm on the line
+// after it, as TypeScript applies a directive to the next line that is
+// neither blank nor a `//` comment: the error in the arm after that one is
+// still reported, at its own position.
+export variant Shape { Circle(r: number), Square(s: number), Point }
+
+export function size(shape: Shape): number {
+  return match (shape) {
+    // @ts-ignore
+    Circle(r) => r.radius,
+    Square(s) => s.side,
+    Point => 0,
+  };
+}
+
+export const inline = (n: number) => [
+  match (n) {
+    // @ts-ignore
+    1 => n.one,
+    _ => n.other,
+  },
+];

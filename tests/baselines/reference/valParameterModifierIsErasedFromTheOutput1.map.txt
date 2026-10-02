@@ -1,0 +1,4 @@
+//// [valParameterModifierIsErasedFromTheOutput1.tt] 2 mapping(s)
+1:1 -> 1:1 len 14  "function read("
+1:19 -> 1:15 len 36  "user: User) {\n  return user.name;\n}\n"
+

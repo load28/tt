@@ -1,0 +1,4 @@
+=== parenthesizedConciseArrowKeepsTryInTheArrow.tt ===
+const f = () => (try next());
+>f : const f: () => any
+

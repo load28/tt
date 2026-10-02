@@ -1,0 +1,4 @@
+getter({}) => "range" | operand {}; range "range"; finally 0
+getter({}) => 1 | operand {}; type 1; finally 0
+getter({}) => "plain" | operand {}; error "plain"; finally 0
+getter("text") => null | operand "text"; other null; finally 0

@@ -1,0 +1,55 @@
+=== aMaterializedPipelineKeepsHeadBeforeCallee.tt ===
+variant E { A(value: number), B }
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (value: number) => E
+>value : (property) value: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const order: string[] = [];
+>order : const order: string[]
+const head = (): E => { order.push("head"); return E.A(2); };
+>head : const head: () => E
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>E : const E: {
+>       A: (value: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: number) => E
+const step = () => { order.push("step"); return (value: number) => {
+>step : const step: () => (value: number) => number
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>value : (parameter) value: number
+  order.push("call");
+>order : const order: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+  return value + 1;
+>value : (parameter) value: number
+const value = match (head()) { A(value) => value, B => 0 } |> step();
+>value : const value: number
+>head : const head: () => E
+>value : const value: number
+>value : const value: number
+>step : const step: () => (value: number) => number
+console.log(order.join(","), value);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>order : const order: string[]
+>join : (method) Array<string>.join(separator?: string): string
+>value : const value: number
+

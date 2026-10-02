@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[match-is-empty-bindings]: match: `is Error { }` has an empty property pattern
+ --> ./main.tt:4:7
+  |
+4 |       is Error {} => "error",
+  |       ^^^^^^^^^^^
+  |
+  = help: remove the braces
+
+
+==== ttc --check-types (exit 1) ====
+error[match-is-empty-bindings]: match: `is Error { }` has an empty property pattern
+ --> main.tt:4:7
+  |
+4 |       is Error {} => "error",
+  |       ^^^^^^^^^^^
+  |
+  = help: remove the braces
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

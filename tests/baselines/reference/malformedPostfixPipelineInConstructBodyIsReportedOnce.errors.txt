@@ -1,0 +1,51 @@
+==== ttc --out-dir (exit 1) ====
+error[malformed-pipeline-postfix]: pipeline: invalid optional postfix tail
+ --> ./malformedPostfixPipelineInConstructBodyIsReportedOnce.tt:9:57
+  |
+9 | if let Ok(value: m) = read(1) { const v = m |> ?.toFixed`1`; }
+  |                                                         ^^^
+  |
+  = help: an optional postfix step starts with `?.name`, `?.[key]`, or `?.(args)` and continues only with member, index, or call operations
+
+error[malformed-pipeline-postfix]: pipeline: invalid optional postfix tail
+  --> ./malformedPostfixPipelineInConstructBodyIsReportedOnce.tt:10:42
+   |
+10 | const w = match (n) { 1 => n |> ?.toFixed`2`, _ => 0 };
+   |                                          ^^^
+   |
+   = help: an optional postfix step starts with `?.name`, `?.[key]`, or `?.(args)` and continues only with member, index, or call operations
+
+error[malformed-pipeline-postfix]: pipeline: invalid optional postfix tail
+  --> ./malformedPostfixPipelineInConstructBodyIsReportedOnce.tt:11:25
+   |
+11 | const x = n |> ?.toFixed`3`;
+   |                         ^^^
+   |
+   = help: an optional postfix step starts with `?.name`, `?.[key]`, or `?.(args)` and continues only with member, index, or call operations
+
+
+==== ttc --check-types (exit 1) ====
+error[malformed-pipeline-postfix]: pipeline: invalid optional postfix tail
+ --> malformedPostfixPipelineInConstructBodyIsReportedOnce.tt:9:57
+  |
+9 | if let Ok(value: m) = read(1) { const v = m |> ?.toFixed`1`; }
+  |                                                         ^^^
+  |
+  = help: an optional postfix step starts with `?.name`, `?.[key]`, or `?.(args)` and continues only with member, index, or call operations
+error[malformed-pipeline-postfix]: pipeline: invalid optional postfix tail
+  --> malformedPostfixPipelineInConstructBodyIsReportedOnce.tt:10:42
+   |
+10 | const w = match (n) { 1 => n |> ?.toFixed`2`, _ => 0 };
+   |                                          ^^^
+   |
+   = help: an optional postfix step starts with `?.name`, `?.[key]`, or `?.(args)` and continues only with member, index, or call operations
+error[malformed-pipeline-postfix]: pipeline: invalid optional postfix tail
+  --> malformedPostfixPipelineInConstructBodyIsReportedOnce.tt:11:25
+   |
+11 | const x = n |> ?.toFixed`3`;
+   |                         ^^^
+   |
+   = help: an optional postfix step starts with `?.name`, `?.[key]`, or `?.(args)` and continues only with member, index, or call operations
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

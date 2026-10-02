@@ -1,0 +1,10 @@
+//// [controlFlowArmCompletionsUseALabeledRegion1.tt] 8 mapping(s)
+1:1 -> 2:19 len 7  "consume"
+1:16 -> 4:19 len 1  "x"
+1:23 -> 7:17 len 1  "v"
+1:31 -> 8:9 len 36  "for (const s of [1]) { if (s === v) "
+1:74 -> 8:54 len 1  "s"
+1:76 -> 8:75 len 3  " } "
+1:86 -> 8:85 len 1  "0"
+1:97 -> 11:16 len 1  "0"
+

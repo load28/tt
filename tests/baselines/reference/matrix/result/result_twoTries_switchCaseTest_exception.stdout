@@ -1,0 +1,3 @@
+switchCaseTest(5) => "default" | discriminant 0; risky 5; read 5; b 2; read 2
+switchCaseTest(1) => "default" | discriminant 0; risky 1; read 1; b -2; read -2
+switchCaseTest(-2) => "risky call 3" | discriminant 0; caught "risky call 3"

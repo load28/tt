@@ -1,0 +1,2 @@
+forTest(5) => 1 | open res; operand 5; map 15; dispose res
+forTest(0) => 1 | open res; operand 0; dispose res

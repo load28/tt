@@ -1,0 +1,161 @@
+=== runtimeAWrappedConciseArrowValueRunsInItsOwnAsyncBody.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const load = async (n: number): Promise<R<number>> => n > 0 ? { kind: "Ok", value: n } : { kind: "Err", error: "neg" };
+>load : const load: (n: number) => Promise<R<number>>
+>n : (parameter) n: number
+>Promise : interface Promise<T>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const g = async (p: Promise<V>) => match (await p) { A(n) => n, B => 0 } as number;
+>g : const g: (p: Promise<V>) => Promise<number>
+>p : (parameter) p: Promise<V>
+>Promise : interface Promise<T>
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>p : (parameter) p: Promise<V>
+>n : const n: number
+>n : const n: number
+const h = (v: V) => match (v) { A(n) => n, B => 0 } satisfies number;
+>h : const h: (v: V) => number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+const i = async (p: Promise<V>) => (match (await p) { A(n) => n * 2, B => 0 }) as number;
+>i : const i: (p: Promise<V>) => Promise<number>
+>p : (parameter) p: Promise<V>
+>Promise : interface Promise<T>
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>p : (parameter) p: Promise<V>
+>n : const n: number
+>n : const n: number
+const j = (v: V) => (match (v) { A(n) => n, B => -1 });
+>j : const j: (v: V) => number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+const r = async (n: number) => result { const v = try await load(n); return v + 1; } as R<number>;
+>r : const r: (n: number) => Promise<R<number>>
+>n : (parameter) n: number
+>v : const v: number
+>load : const load: (n: number) => Promise<R<number>>
+>n : (parameter) n: number
+>v : const v: number
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+console.log(await g(Promise.resolve(V.A(3))), h(V.B), await i(Promise.resolve(V.A(4))), j(V.B));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>g : const g: (p: Promise<V>) => Promise<number>
+>Promise : var Promise: PromiseConstructor
+>resolve : (method) PromiseConstructor.resolve<V>(value: V): Promise<V>
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>h : const h: (v: V) => number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>i : const i: (p: Promise<V>) => Promise<number>
+>Promise : var Promise: PromiseConstructor
+>resolve : (method) PromiseConstructor.resolve<V>(value: V): Promise<V>
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>j : const j: (v: V) => number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+console.log(JSON.stringify(await r(1)), JSON.stringify(await r(-1)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>r : const r: (n: number) => Promise<R<number>>
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>r : const r: (n: number) => Promise<R<number>>
+

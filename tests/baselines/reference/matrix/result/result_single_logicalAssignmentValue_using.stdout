@@ -1,0 +1,2 @@
+logicalAssignmentValue(2) => [{"kind":"Ok","value":20},{"kind":"Ok","value":20}] | open res; flip true; operand 2; read 2; dispose res
+logicalAssignmentValue(-1) => ["kept","kept"] | open res; flip false; dispose res

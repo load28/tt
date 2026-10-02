@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-is-wildcard-required]: match: an `is` match requires a final wildcard arm `_`
+ --> ./main.ttx:4:14
+  |
+4 |   return <p>{match (note("operand", input)) { is Error => note("error", 0), is Date => note("date", 1) }}</p>;
+  |              ^^^^^
+  |
+  = help: add `_ => <fallback>` as the last arm
+
+
+==== ttc --check-types (exit 1) ====
+error[match-is-wildcard-required]: match: an `is` match requires a final wildcard arm `_`
+ --> main.ttx:4:14
+  |
+4 |   return <p>{match (note("operand", input)) { is Error => note("error", 0), is Date => note("date", 1) }}</p>;
+  |              ^^^^^
+  |
+  = help: add `_ => <fallback>` as the last arm
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,2 @@
+unbracedIf(2) => {"kind":"Ok","value":"checked"} | enter true; await; read 2
+unbracedIf(-1) => {"kind":"Err","error":"negative -1"} | enter true; await; read -1

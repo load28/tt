@@ -1,0 +1,12 @@
+=== valJudgesOnlyPathsRootedAtTheBinding4.tt ===
+val const o = { p: 1 };
+>o : const o: {
+>       p: number;
+>   }
+>p : (property) p: number
+[...o.p] = [1] as any;
+>o : const o: {
+>       p: number;
+>   }
+>p : (property) p: number
+

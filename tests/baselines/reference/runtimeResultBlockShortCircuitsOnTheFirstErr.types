@@ -1,0 +1,103 @@
+=== runtimeResultBlockShortCircuitsOnTheFirstErr.tt ===
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+>T : (type parameter) T in type Res<T, E>
+>E : (type parameter) E in type Res<T, E>
+>Ok : (property) Ok: <T, E>(value: T) => Res<T, E>
+>value : (property) value: T
+>T : (type parameter) T in type Res<T, E>
+>Err : (property) Err: <T, E>(error: E) => Res<T, E>
+>error : (property) error: E
+>E : (type parameter) E in type Res<T, E>
+const steps: string[] = [];
+>steps : const steps: string[]
+const step = (name: string, ok: boolean): Res<string, string> => {
+>step : const step: (name: string, ok: boolean) => Res<string, string>
+>name : (parameter) name: string
+>ok : (parameter) ok: boolean
+>Res : type Res<T, E> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: E;
+>   }
+  steps.push(name);
+>steps : const steps: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (parameter) name: string
+  return ok ? Res.Ok(name) : Res.Err("failed:" + name);
+>ok : (parameter) ok: boolean
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Ok : (property) Ok: <string, string>(value: string) => Res<string, string>
+>name : (parameter) name: string
+>Res : const Res: {
+>       Ok: <T, E>(value: T) => Res<T, E>;
+>       Err: <T, E>(error: E) => Res<T, E>;
+>   }
+>Err : (property) Err: <string, string>(error: string) => Res<string, string>
+>name : (parameter) name: string
+const chain = (secondOk: boolean) => result {
+>chain : const chain: (secondOk: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>secondOk : (parameter) secondOk: boolean
+  const a = try step("a", true);
+>a : const a: string
+>step : const step: (name: string, ok: boolean) => Res<string, string>
+  const b = try step("b", secondOk);
+>b : const b: string
+>step : const step: (name: string, ok: boolean) => Res<string, string>
+>secondOk : (parameter) secondOk: boolean
+  const c = try step("c", true);
+>c : const c: string
+>step : const step: (name: string, ok: boolean) => Res<string, string>
+  return a + b + c;
+>a : const a: string
+>b : const b: string
+>c : const c: string
+console.log(JSON.stringify(chain(true)), steps.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>chain : const chain: (secondOk: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>steps : const steps: string[]
+>join : (method) Array<string>.join(separator?: string): string
+steps.length = 0;
+>steps : const steps: string[]
+>length : (property) Array<string>.length: number
+console.log(JSON.stringify(chain(false)), steps.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>chain : const chain: (secondOk: boolean) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>steps : const steps: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

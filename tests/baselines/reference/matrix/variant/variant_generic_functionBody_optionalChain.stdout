@@ -1,0 +1,2 @@
+functionBody(4) => {"kind":"Node","left":{"kind":"Leaf","value":4},"right":{"kind":"Node","left":{"kind":"Leaf","value":null},"right":{"kind":"Leaf","value":0}}} | 
+functionBody(9) => {"kind":"Node","left":{"kind":"Leaf","value":9},"right":{"kind":"Node","left":{"kind":"Leaf","value":null},"right":{"kind":"Leaf","value":0}}} | 

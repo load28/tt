@@ -1,0 +1,17 @@
+//// [isPatternsLowerToHostOwnedInstanceofControlFlow.tt] 15 mapping(s)
+1:1 -> 25:1 len 12  "const msg = "
+1:20 -> 3:17 len 3  "err"
+2:4 -> 5:26 len 11  "SyntaxError"
+2:18 -> 6:15 len 7  "message"
+2:31 -> 7:11 len 18  "message.length > 0"
+2:53 -> 8:22 len 20  "`syntax: ${message}`"
+3:4 -> 12:26 len 10  "RangeError"
+3:20 -> 12:57 len 9  "TypeError"
+3:33 -> 13:20 len 11  "\"bad value\""
+4:4 -> 16:26 len 5  "Error"
+4:12 -> 17:15 len 7  "message"
+4:21 -> 17:24 len 6  "detail"
+4:33 -> 18:20 len 6  "detail"
+5:6 -> 21:18 len 11  "String(err)"
+6:2 -> 25:23 len 2  ";\n"
+

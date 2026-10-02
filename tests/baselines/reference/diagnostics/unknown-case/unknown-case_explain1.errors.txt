@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[unknown-case]: variant Shape has no case `Circel`
+ --> ./main.tt:5:7
+  |
+5 |       Circel(r) => r,
+  |       ^^^^^^
+  |
+  = help: a case with a similar name exists: `Circle`
+
+
+==== ttc --check-types (exit 1) ====
+error[unknown-case]: variant Shape has no case `Circel`
+ --> main.tt:5:7
+  |
+5 |       Circel(r) => r,
+  |       ^^^^^^
+  |
+  = help: a case with a similar name exists: `Circle`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

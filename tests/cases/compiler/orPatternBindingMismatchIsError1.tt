@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::or_pattern_binding_mismatch_is_error
+const r = match (x) { A(v) | B(w) => v, _ => 0 };

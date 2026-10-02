@@ -1,0 +1,6 @@
+[{"kind":"Ok","value":5},{"kind":"Ok","value":0},{"kind":"Ok","value":5},{"kind":"Ok","value":1},{"kind":"Ok","value":1},{"kind":"Ok","value":5},{"kind":"Ok","value":2}]
+[{"kind":"Ok","value":3},{"kind":"Ok","value":4},{"kind":"Ok","value":5},{"kind":"Ok","value":5},{"kind":"Ok","value":5},{"kind":"Ok","value":5}]
+[{"kind":"Ok","value":5},{"kind":"Ok","value":3},{"kind":"Ok","value":5},{"kind":"Ok","value":12},{"kind":"Ok","value":-1},{"kind":"Ok","value":6}]
+[{"kind":"Err","error":"no"},{"kind":"Ok","value":0},{"kind":"Err","error":"no"},{"kind":"Err","error":"no"},{"kind":"Ok","value":1},{"kind":"Err","error":"no"},{"kind":"Ok","value":2}]
+[{"kind":"Ok","value":3},{"kind":"Err","error":"no"},{"kind":"Err","error":"no"},{"kind":"Err","error":"no"},{"kind":"Err","error":"no"},{"kind":"Ok","value":5}]
+[{"kind":"Err","error":"no"},{"kind":"Err","error":"no"},{"kind":"Err","error":"no"},{"kind":"Err","error":"no"},{"kind":"Err","error":"no"},{"kind":"Err","error":"no"}]

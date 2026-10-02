@@ -1,0 +1,2 @@
+labeledBlock(4) => [{"kind":"Circle","r":4},{"kind":"Rect","w":4,"h":2}] | open res; operand 4; operand 4; dispose res
+labeledBlock(9) => [{"kind":"Circle","r":9},{"kind":"Rect","w":9,"h":2}] | open res; operand 9; operand 9; dispose res

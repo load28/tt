@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::try_preserves_argument_and_conditional_evaluation_order
+function f(maybe: any): TResult<number, string> { return Result.Ok(maybe?.(first(), try second(), third())); }

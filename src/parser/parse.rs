@@ -1,6 +1,7 @@
 //! Whole-file parsing, recovery collection, and parser implementation.
 
-use std::collections::HashMap;
+use std::cell::RefCell;
+use std::collections::{HashMap, HashSet};
 
 use super::*;
 
@@ -34,6 +35,7 @@ pub(crate) fn lex_and_parse_with_kind(
             host_owned_matches,
             host_rejected_vals: host_rejected_vals.to_vec(),
             flow_queries: crate::flow::FlowBodyQueries::default(),
+            passed_results: RefCell::default(),
         }
         .parse_tokens(&tokens, 0, src.len())
     };
@@ -64,11 +66,46 @@ pub(crate) fn val_modifiers(program: &Program) -> HashMap<usize, ValModifier> {
     modifiers
 }
 
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct PipelineShape {
+    pub head: Option<Span>,
+    pub span: Span,
+    pub first_call: Option<Span>,
+}
+
+pub(crate) fn pipeline_shapes(program: &Program) -> Vec<PipelineShape> {
+    let mut shapes = Vec::new();
+    visit_programs(program, &mut |region| {
+        for segment in &region.segments {
+            if let Segment::Pipe(pipe) = segment {
+                let end = pipe.steps.last().map_or(pipe.head_span.end, |s| s.span.end);
+                shapes.push(PipelineShape {
+                    head: (pipe.head_kind != PipeHeadKind::Flow).then_some(pipe.head_span),
+                    span: Span {
+                        start: pipe.head_span.start,
+                        end,
+                    },
+                    first_call: pipe
+                        .steps
+                        .first()
+                        .filter(|step| step.kind == PipeStepKind::Call)
+                        .map(|step| step.span),
+                });
+            }
+        }
+    });
+    shapes
+}
+
 /// Visits every recursively nested parse region exactly once.
 ///
 /// Parser side tables use one structural traversal so adding a new nested
 /// [`Program`] shape cannot make recovery and rollback collection drift.
 pub(super) fn visit_programs(program: &Program, visit: &mut impl FnMut(&Program)) {
+    crate::stack::grow(|| visit_programs_grown(program, visit));
+}
+
+fn visit_programs_grown(program: &Program, visit: &mut impl FnMut(&Program)) {
     visit(program);
     for segment in &program.segments {
         match segment {
@@ -192,6 +229,7 @@ pub(crate) struct Parser<'a> {
     /// the host grammar does not read as a formal parameter, sorted.
     host_rejected_vals: Vec<usize>,
     flow_queries: crate::flow::FlowBodyQueries,
+    passed_results: RefCell<HashSet<usize>>,
 }
 
 impl<'a> Parser<'a> {
@@ -203,6 +241,7 @@ impl<'a> Parser<'a> {
             host_owned_matches: Vec::new(),
             host_rejected_vals: Vec::new(),
             flow_queries: crate::flow::FlowBodyQueries::default(),
+            passed_results: RefCell::default(),
         }
     }
 }
@@ -250,6 +289,7 @@ impl Parser<'_> {
 enum ExprFrame {
     Resume((usize, bool)),
     StatementHeader,
+    ForHeader(bool),
 }
 
 fn flush_verbatim(segments: &mut Vec<Segment>, start: usize, end: usize) {
@@ -319,8 +359,11 @@ fn rewind_segments(segments: &mut Vec<Segment>, boundary: usize, seg_start: usiz
 
 /// Bounds the expression containing an unclaimed operator and stops before
 /// the enclosing statement or delimiter. This parser-owned synchronization
-/// point prevents recovery from consuming the next independent construct.
+/// point prevents recovery from consuming the next independent construct:
+/// as in TypeScript, an expression ends at a statement boundary and before
+/// a statement keyword, which cannot continue it.
 fn recovery_expression_span(
+    src: &str,
     tokens: &[Token],
     start_idx: usize,
     operator_idx: usize,
@@ -330,7 +373,15 @@ fn recovery_expression_span(
     let mut recovery_end = tokens
         .get(operator_idx)
         .map_or(range_end, |token| token.span.end);
-    for token in tokens.iter().skip(operator_idx + 1) {
+    for (idx, token) in tokens.iter().enumerate().skip(operator_idx + 1) {
+        if depth == 0
+            && (token.facts.boundary_before()
+                || !cursor::dotted_at(tokens, operator_idx + 1, idx)
+                    && crate::lexer::statement_keyword_at(src, tokens, idx)
+                    && &src[token.span.start..token.span.end] != "try")
+        {
+            break;
+        }
         match token.kind {
             _ if token.opens_bracket() => depth += 1,
             TokenKind::Punct(b')' | b']' | b'}') if depth == 0 => break,
@@ -345,48 +396,6 @@ fn recovery_expression_span(
             .map_or(tokens[operator_idx].span.start, |token| token.span.start),
         end: recovery_end,
     }
-}
-
-fn recovery_statement_span(tokens: &[Token], start_idx: usize, range_end: usize) -> Span {
-    let recovery_end = (start_idx..tokens.len())
-        .find(|&idx| matches!(tokens[idx].kind, TokenKind::Punct(b'{')))
-        .and_then(|open| find_close_at(tokens, open))
-        .and_then(|close| tokens.get(close))
-        .map_or(range_end, |token| token.span.end);
-    Span {
-        start: tokens[start_idx].span.start,
-        end: recovery_end,
-    }
-}
-
-/// The clause of the enclosing C-style `for` head that token `idx` is in:
-/// its top-level `;` separators before `idx`, or `None` outside a `for`
-/// head. The test clause (1) keeps a `try` statement's grammar so Evaluation
-/// IR can report the repeated evaluation; the update clause (2) is an
-/// expression position.
-fn for_head_clause(src: &str, tokens: &[Token], idx: usize) -> Option<usize> {
-    let mut depth = 0usize;
-    let mut separators = 0usize;
-    for cursor in (0..idx).rev() {
-        match tokens[cursor].kind {
-            TokenKind::Punct(b')') => depth += 1,
-            TokenKind::Punct(b'(') => {
-                if depth == 0 {
-                    return cursor
-                        .checked_sub(1)
-                        .is_some_and(|before| {
-                            matches!(tokens[before].kind, TokenKind::Ident)
-                                && &src[tokens[before].span.start..tokens[before].span.end] == "for"
-                        })
-                        .then_some(separators);
-                }
-                depth -= 1;
-            }
-            TokenKind::Punct(b';') if depth == 0 => separators += 1,
-            _ => {}
-        }
-    }
-    None
 }
 
 /// A spread operand begins with three adjacent dot tokens. The last dot is
@@ -448,14 +457,23 @@ impl Parser<'_> {
         end: usize,
         expression_root: bool,
     ) -> Program {
+        crate::stack::grow(|| self.parse_token_range(tokens, start, end, expression_root))
+    }
+
+    fn parse_token_range(
+        &self,
+        tokens: &[Token],
+        start: usize,
+        end: usize,
+        expression_root: bool,
+    ) -> Program {
         let mut segments: Vec<Segment> = Vec::new();
         let mut unclaimed: Vec<UnclaimedTtCandidate> = Vec::new();
         let mut recoveries: Vec<RecoveryNode> = Vec::new();
         let mut malformed = Vec::new();
         let mut host_candidates = HostCandidates::default();
         let mut stray_pipes: Vec<usize> = Vec::new();
-        let mut stray_if_lets: Vec<usize> = Vec::new();
-        let stray_results: Vec<usize> = Vec::new();
+        let mut stray_if_lets: Vec<crate::ast::StrayIfLet> = Vec::new();
         let mut seg_start = start;
         let mut i = 0usize;
 
@@ -476,7 +494,7 @@ impl Parser<'_> {
             let word = match tok.kind {
                 TokenKind::Template(ref parts) => {
                     flush_verbatim(&mut segments, seg_start, tok.span.start);
-                    segments.push(Segment::Template(self.build_template(parts)));
+                    segments.push(Segment::Template(self.build_template(tok.span, parts)));
                     seg_start = tok.span.end;
                     i += 1;
                     continue;
@@ -484,7 +502,7 @@ impl Parser<'_> {
                 TokenKind::PipeOp => {
                     if !expr.1
                         && expr.0 < i
-                        && let Some(attempt) = pipes::parse_pipeline(self, tokens, expr.0, i)
+                        && let Some(attempt) = pipes::parse_pipeline(self, tokens, expr.0, i, end)
                     {
                         let (next_i, pipe) = match attempt {
                             pipes::Attempt::Parsed(next_i, pipe) => (next_i, pipe),
@@ -538,7 +556,7 @@ impl Parser<'_> {
                     }
                     stray_pipes.push(tok.span.start);
                     recoveries.push(RecoveryNode {
-                        span: recovery_expression_span(tokens, expr.0.min(i), i, end),
+                        span: recovery_expression_span(self.src, tokens, expr.0.min(i), i, end),
                         kind: RecoveryKind::Expression,
                     });
                     i += 1;
@@ -687,9 +705,7 @@ impl Parser<'_> {
             // position (`try { ... }` blocks and member names are
             // structurally excluded by the sub-parser).
             if (!dotted || follows_spread_operator(tokens, i)) && word == "try" {
-                let misplaced = !tok.facts.member()
-                    && !(tok.facts.statement_start()
-                        || for_head_clause(self.src, tokens, i) == Some(1));
+                let misplaced = !tok.facts.member() && !tok.facts.statement_start();
                 if misplaced
                     && let Some((next_i, parsed)) =
                         tries::parse_try_expr(Cursor::new(self, tokens, i + 1, end), tok.span)
@@ -753,7 +769,17 @@ impl Parser<'_> {
                         lets::parse_let_else(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
                     stmt.in_function = crate::flow::in_function_body(tokens, i);
-                    flush_verbatim(&mut segments, seg_start, tok.span.start);
+                    if !stmt.in_function
+                        && i > 0
+                        && tokens[i - 1].span.start >= seg_start
+                        && matches!(tokens[i - 1].kind, TokenKind::Ident)
+                        && &self.src[tokens[i - 1].span.start..tokens[i - 1].span.end] == "export"
+                        && !cursor::dotted_at(tokens, 0, i - 1)
+                    {
+                        stmt.exported = true;
+                        stmt.owner_span.start = tokens[i - 1].span.start;
+                    }
+                    flush_verbatim(&mut segments, seg_start, stmt.owner_span.start);
                     segments.push(Segment::LetElse(stmt));
                     seg_start = byte_end;
                     i = cur.idx;
@@ -766,9 +792,8 @@ impl Parser<'_> {
             // valid TypeScript, so a candidate that fails to parse cannot
             // be passed through either; it is recorded for sema.
             if iflets::if_let_pattern(self.src, tokens, i).is_some() {
-                if let Some((cur, byte_end, mut stmt)) =
-                    iflets::parse_if_let(Cursor::new(self, tokens, i + 1, end), tok.span)
-                {
+                let parsed = iflets::parse_if_let(Cursor::new(self, tokens, i + 1, end), tok.span);
+                if let Ok((cur, byte_end, mut stmt)) = parsed {
                     stmt.in_function = crate::flow::in_function_body(tokens, i);
                     stmt.expression_position = !tok.facts.statement_start();
                     if stmt.expression_position {
@@ -787,11 +812,12 @@ impl Parser<'_> {
                     }
                     continue;
                 }
-                stray_if_lets.push(tok.span.start);
-                recoveries.push(RecoveryNode {
-                    span: recovery_statement_span(tokens, i, end),
-                    kind: RecoveryKind::Statement,
-                });
+                if let Err(stray) = parsed
+                    && !stray_if_lets.contains(&stray)
+                {
+                    stray_if_lets.push(stray);
+                }
+                recoveries.extend(iflets::stray_if_let_recoveries(self.src, tokens, i, end));
             }
 
             // `result { ... }` is contextual: only a body with a nearest
@@ -800,11 +826,12 @@ impl Parser<'_> {
             if !dotted
                 && word == "result"
                 && matches!(tokens.get(i + 1), Some(t) if matches!(t.kind, TokenKind::Punct(b'{')))
+                && !self
+                    .passed_results
+                    .borrow()
+                    .contains(&tokens[i + 1].span.start)
             {
-                let (attempt, nested) =
-                    results::parse_result_block(Cursor::new(self, tokens, i + 1, end), tok.span);
-                let _ = nested;
-                match attempt {
+                match results::parse_result_block(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     results::Attempt::Claimed(cur, byte_end, block) => {
                         flush_verbatim(&mut segments, seg_start, tok.span.start);
                         segments.push(Segment::ResultBlock(*block));
@@ -812,7 +839,11 @@ impl Parser<'_> {
                         i = cur.idx;
                         continue;
                     }
-                    results::Attempt::Pass => {}
+                    results::Attempt::Pass => {
+                        self.passed_results
+                            .borrow_mut()
+                            .insert(tokens[i + 1].span.start);
+                    }
                 }
             }
 
@@ -838,7 +869,9 @@ impl Parser<'_> {
                 continue;
             }
 
-            if !dotted && is_pipe_boundary_word(word) {
+            let separates =
+                word != "in" || matches!(expr_stack.last(), Some(ExprFrame::ForHeader(false)));
+            if !dotted && separates && is_pipe_boundary_word(word) {
                 expr = (i + 1, false);
             }
             i += 1;
@@ -857,7 +890,6 @@ impl Parser<'_> {
             malformed,
             stray_pipes,
             stray_if_lets,
-            stray_results,
         }
     }
 
@@ -878,12 +910,16 @@ impl Parser<'_> {
         let fresh = (i + 1, false);
         let restore = |frame: Option<ExprFrame>| match frame {
             Some(ExprFrame::Resume(outer)) => outer,
-            Some(ExprFrame::StatementHeader) | None => fresh,
+            Some(ExprFrame::StatementHeader | ExprFrame::ForHeader(_)) | None => fresh,
         };
         match tok.kind {
             TokenKind::JsxRaw => *expr = fresh,
             TokenKind::Punct(b'(') if self.opens_statement_header(tokens, i) => {
-                stack.push(ExprFrame::StatementHeader);
+                stack.push(if self.opens_for_header(tokens, i) {
+                    ExprFrame::ForHeader(false)
+                } else {
+                    ExprFrame::StatementHeader
+                });
                 *expr = fresh;
             }
             _ if tok.opens_bracket() => {
@@ -901,7 +937,13 @@ impl Parser<'_> {
             _ if tok.closes_bracket() => {
                 *expr = restore(stack.pop());
             }
-            TokenKind::Punct(b';' | b',') => *expr = (i + 1, false),
+            TokenKind::Punct(b';') => {
+                if let Some(ExprFrame::ForHeader(initialized)) = stack.last_mut() {
+                    *initialized = true;
+                }
+                *expr = (i + 1, false);
+            }
+            TokenKind::Punct(b',') => *expr = (i + 1, false),
             TokenKind::Punct(b'=') if pipes::is_assignment_eq(self.bytes, tok.span) => {
                 *expr = (i + 1, false);
             }
@@ -921,6 +963,22 @@ impl Parser<'_> {
             TokenKind::Punct(b'?') => *expr = (i + 1, true),
             TokenKind::Arrow => *expr = (i + 1, false),
             _ => {}
+        }
+    }
+
+    fn opens_for_header(&self, tokens: &[Token], open_idx: usize) -> bool {
+        let word_at = |k: usize| {
+            tokens
+                .get(k)
+                .filter(|t| matches!(t.kind, TokenKind::Ident))
+                .map(|t| &self.src[t.span.start..t.span.end])
+        };
+        match open_idx.checked_sub(1).and_then(word_at) {
+            Some("for") => true,
+            Some("await") => open_idx
+                .checked_sub(2)
+                .is_some_and(|k| word_at(k) == Some("for")),
+            _ => false,
         }
     }
 
@@ -955,7 +1013,7 @@ impl Parser<'_> {
 
     /// Turns a lexed template token into the AST template, recursively
     /// parsing each interpolation's token stream.
-    fn build_template(&self, parts: &[TplPart]) -> Template {
+    fn build_template(&self, span: Span, parts: &[TplPart]) -> Template {
         let chunks = parts
             .iter()
             .map(|part| match part {
@@ -965,6 +1023,6 @@ impl Parser<'_> {
                 ),
             })
             .collect();
-        Template { chunks }
+        Template { span, chunks }
     }
 }

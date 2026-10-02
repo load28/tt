@@ -1,0 +1,3 @@
+awaitOperand({"kind":"Done","value":{"kind":"Some","value":7}}) => 7 | await; some 7
+awaitOperand({"kind":"Done","value":{"kind":"None"}}) => 0 | await; none 0
+awaitOperand({"kind":"Failed","error":"lost"}) => "lost" | await; failed "lost"

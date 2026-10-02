@@ -1,0 +1,19 @@
+//// [runtimeVariantConstructionAndMatch.tt] 17 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+3:18 -> 21:31 len 6  "number"
+3:18 -> 25:20 len 6  "number"
+4:15 -> 22:28 len 6  "number"
+4:15 -> 26:17 len 6  "number"
+4:31 -> 22:44 len 6  "number"
+4:31 -> 26:33 len 6  "number"
+6:2 -> 28:3 len 38  "\n\nfunction area(s: Shape): number {\n  "
+9:3 -> 54:3 len 7  "return "
+9:17 -> 33:19 len 1  "s"
+10:12 -> 36:17 len 6  "radius"
+10:23 -> 37:18 len 25  "Math.PI * radius * radius"
+11:10 -> 41:17 len 5  "width"
+11:17 -> 41:24 len 6  "height"
+11:28 -> 42:18 len 14  "width * height"
+12:14 -> 46:18 len 1  "0"
+13:4 -> 54:16 len 202  ";\n}\n\nconsole.log(JSON.stringify([area(Shape.Circ"...
+

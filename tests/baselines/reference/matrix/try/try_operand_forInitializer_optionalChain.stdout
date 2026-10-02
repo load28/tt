@@ -1,0 +1,2 @@
+forInitializer(2) => {"kind":"Ok","value":[2]} | read 2
+forInitializer(-1) => {"kind":"Err","error":"negative undefined"} | read undefined

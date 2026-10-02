@@ -24,13 +24,25 @@ the existing TypeScript config and declares the content mapper. A config with
 project `references` (such as Vite's solution-style `tsconfig.json`) gets a
 `*.tt.json` counterpart for every referenced config inside the project, the
 generated configs reference each other the way the originals do, and the
-generated scripts check them with `tsc -b`. The initializer sets `typescript` to
+generated scripts check them with `tsc -b`. TypeScript does not let a
+referenced project disable emit (TS6310), so a generated config that another
+compiled config references emits declarations only, into
+`node_modules/.cache/tt/`, instead of setting `noEmit`; every other generated
+config sets `noEmit`. Without a bundler, the generated `tt:build` runs
+`ttc -o .tt-build` over the source roots the configurations include (the
+directory part of each `include` pattern before its first wildcard, and each
+`files` entry); several roots each keep their own path under `.tt-build`, so
+relative imports between them still resolve. The initializer sets `typescript` to
 the TypeScript 7.1 build tt is verified with; when the project named another
 version, it replaces it and prints the change. Existing scripts and config files
 stay intact. Re-running init accepts unchanged generated configs;
 if a generated config has been customized, init stops before writing any project
 files.
 Use `--no-install` in CI or when dependencies will be installed later.
+The package name is the directory name made valid for a new npm package
+(lowercase, no leading `.` or `_`, at most 214 characters, and `my-tt-app` in
+place of a reserved or core-module name). After `--`, every argument is the
+directory, even one that starts with `-`.
 New projects use Bun for dependency installation and scripts. Existing projects
 keep the package manager declared in `package.json` or selected by their lockfile.
 

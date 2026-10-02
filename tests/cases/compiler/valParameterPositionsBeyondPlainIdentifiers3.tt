@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::val_parameter_positions_beyond_plain_identifiers
+try {
+  f();
+} catch (val error: any) {
+  error.code = 1;
+}

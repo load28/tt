@@ -1,0 +1,2 @@
+staticBlock(4) => [{"kind":"kind","value":4},{"kind":"other"}] | operand 4; finally 0
+staticBlock(9) => [{"kind":"kind","value":9},{"kind":"other"}] | operand 9; finally 0

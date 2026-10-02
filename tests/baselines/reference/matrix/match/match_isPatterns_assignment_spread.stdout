@@ -1,0 +1,4 @@
+assignment({}) => "range" | initial 0; target {"value":0}; range "range"
+assignment({}) => 1 | initial 0; target {"value":0}; type 1
+assignment({}) => "plain" | initial 0; target {"value":0}; error "plain"
+assignment("text") => null | initial 0; target {"value":0}; other null

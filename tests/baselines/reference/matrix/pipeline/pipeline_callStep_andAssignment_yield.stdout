@@ -1,0 +1,2 @@
+andAssignment(2) => 0 | flip true; target {"value":0}
+andAssignment(5) => 10 | flip false; target {"value":"kept"}; yield 5; double 10

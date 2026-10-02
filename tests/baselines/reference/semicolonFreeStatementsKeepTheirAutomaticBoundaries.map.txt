@@ -1,0 +1,23 @@
+//// [semicolonFreeStatementsKeepTheirAutomaticBoundaries.tt] 21 mapping(s)
+1:19 -> 25:3 len 154  "\nconst log: string[] = []\nconst inc = (n: number"...
+7:8 -> 33:17 len 1  "x"
+8:8 -> 36:7 len 14  "log.push(\"xa\")"
+9:8 -> 41:7 len 14  "log.push(\"xb\")"
+10:2 -> 50:1 len 1  "\n"
+11:8 -> 53:17 len 1  "y"
+12:8 -> 56:7 len 14  "log.push(\"ya\")"
+13:8 -> 61:7 len 14  "log.push(\"yb\")"
+14:2 -> 70:1 len 13  "\nconst n = 1\n"
+16:1 -> 72:101 len 1  "n"
+16:6 -> 72:104 len 3  "inc"
+16:13 -> 72:110 len 6  "String"
+16:23 -> 72:119 len 4  "note"
+16:27 -> 72:124 len 15  "\nconst piped = "
+17:15 -> 73:19 len 1  "1"
+17:20 -> 73:15 len 3  "inc"
+17:23 -> 73:21 len 40  "\nlog.push(String(piped))\nconst next = 2\n"
+20:1 -> 76:68 len 4  "next"
+20:9 -> 76:74 len 6  "String"
+20:19 -> 76:83 len 4  "note"
+20:23 -> 76:88 len 56  "\n}\nrun(O.A, O.B)\nconsole.log(log.join(\",\"))\n\nexp"...
+

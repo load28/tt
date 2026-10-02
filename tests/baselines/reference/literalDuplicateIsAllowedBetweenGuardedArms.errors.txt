@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalDuplicateIsAllowedBetweenGuardedArms.tt → $DIR/out/literalDuplicateIsAllowedBetweenGuardedArms.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> literalDuplicateIsAllowedBetweenGuardedArms.tt:1:18
+  |
+1 | const v = match (x) { 1 if a => 1, 1 if b => 2, 1 => 3, _ => 4 };
+  |                  ^
+error[ts2304]: Cannot find name 'a'.
+ --> literalDuplicateIsAllowedBetweenGuardedArms.tt:1:28
+  |
+1 | const v = match (x) { 1 if a => 1, 1 if b => 2, 1 => 3, _ => 4 };
+  |                            ^
+error[ts2304]: Cannot find name 'b'.
+ --> literalDuplicateIsAllowedBetweenGuardedArms.tt:1:41
+  |
+1 | const v = match (x) { 1 if a => 1, 1 if b => 2, 1 => 3, _ => 4 };
+  |                                         ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalDuplicateIsAllowedBetweenGuardedArms.ts(3,17): error TS2304: Cannot find name 'x'.
+literalDuplicateIsAllowedBetweenGuardedArms.ts(6,11): error TS2304: Cannot find name 'a'.
+literalDuplicateIsAllowedBetweenGuardedArms.ts(12,11): error TS2304: Cannot find name 'b'.

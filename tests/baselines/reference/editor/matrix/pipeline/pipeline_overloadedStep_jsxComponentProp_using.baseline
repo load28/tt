@@ -1,0 +1,7 @@
+differences from pipeline_overloadedStep_jsxComponentProp_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.ttx:5:49 ===
+  |   return <Show value={note("operand", input) |> shape |> .length} />;
+  |                                                 ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

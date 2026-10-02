@@ -1,0 +1,13 @@
+differences from pipeline_assertionThenStep_jsxFragment_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.ttx:4:55 ===
+  |   return <>{note("before", "[")}{first(...[input]) |> String as string |> .length}{note("after", "]")}</>;
+  |                                                       ^ /*call*/
+  tt only: var String: StringConstructor
+  ts only: var String: (value?: any) => string
+
+=== definition /*call*/ main.ttx:4:55 ===
+  |   return <>{note("before", "[")}{first(...[input]) |> String as string |> .length}{note("after", "]")}</>;
+  |                                                       ^ /*call*/
+  ts only: <external>/lib.es5.d.ts 534:5-534:27
+

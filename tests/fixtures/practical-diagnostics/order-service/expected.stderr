@@ -1,11 +1,11 @@
-error[unknown-field]: imported variant PaymentState: case `Paid` has no field `receipt`
+error[unknown-field]: variant PaymentState (imported from "./domain.tt"): case `Paid` has no field `receipt`
   --> src/checkout.tt:11:10
    |
 11 |     Paid(receipt: id) => id,
    |          ^^^^^^^
    |
    = help: a field with a similar name exists: `receiptId`
-error[match-not-exhaustive]: match is not exhaustive: missing "Failed"
+error[match-not-exhaustive]: match on variant PaymentState (imported from "./domain.tt") is not exhaustive: missing "Failed"
   --> src/checkout.tt:14:17
    |
 14 |   const label = match (state) {
@@ -13,8 +13,8 @@ error[match-not-exhaustive]: match is not exhaustive: missing "Failed"
    |
    = help: add the missing arms: `Failed(reason) => undefined,`
    = help: or add a final `_` arm: `_ => undefined,`
-error[ts2322]: type mismatch: expected `number`, found `"three"`
-  --> src/checkout.tt:18:28
+error[ts2322]: Type 'string' is not assignable to type 'number'.
+  --> src/checkout.tt:18:9
    |
 18 |   const attempts: number = "three";
-   |                            ^^^^^^^
+   |         ^^^^^^^^

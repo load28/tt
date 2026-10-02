@@ -1,0 +1,3 @@
+nestedBlock({"kind":"Rect","w":2,"h":3}) => [2,3] | risky {"kind":"Rect","w":2,"h":3}
+nestedBlock({"kind":"Circle","r":1}) => "diverged" | risky {"kind":"Circle","r":1}
+nestedBlock({"kind":"Point"}) => "risky call 3" | caught "risky call 3"

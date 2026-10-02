@@ -36,6 +36,11 @@ pub(crate) enum MarkKind {
     Scrutinee,
     /// End of an unannotated generated value declaration identifier.
     ContextualSlot,
+    /// The same, for storage holding the index of the arm a dispatch
+    /// selected rather than a value.
+    SelectorSlot,
+    OperandSlot,
+    AssertedAnnotationEnd,
     /// The receiver a nested pattern tests ([`crate::PayloadTemp`]).
     Payload,
     /// Start of a value explicitly returned from a `result` block.
@@ -44,12 +49,22 @@ pub(crate) enum MarkKind {
     ResultReturnEnd,
     DeclaredNameStart,
     DeclaredNameEnd,
+    DestructuredListStart,
+    DestructuredListEnd,
     SharedBindingStart,
     SharedBindingOccurrence {
         end: usize,
         shorthand: bool,
     },
     SharedBindingEnd,
+    /// The glue after it is written for the source at `src`, a construct
+    /// part that starts there (a match arm), so the printer lays it out as
+    /// that source's: on one line with it when a directive governs that line.
+    SourcePoint,
+    /// Start of glue written at source point `src` ([`crate::InsertedGlue`]).
+    InsertedStart,
+    /// End of the same glue.
+    InsertedEnd,
 }
 
 enum Piece<'a> {
@@ -593,7 +608,32 @@ impl<'a> TargetFile<'a> {
         Ok(())
     }
 
-    fn print(self, newline: &str) -> Flat {
+    fn print(self, newline: &str, governed: &[GovernedStatement]) -> Flat {
+        let governed_line = |at: usize| {
+            governed
+                .iter()
+                .any(|statement| statement.start <= at && at <= statement.line_end)
+        };
+        let mut following: Vec<(Option<usize>, Option<usize>)> = Vec::new();
+        if !governed.is_empty() {
+            following = vec![(None, None); self.pieces.len()];
+            let mut next = (None, None);
+            for (index, piece) in self.pieces.iter().enumerate().rev() {
+                following[index] = next;
+                if let TargetPiece::Source {
+                    origin: ExactOrigin { start, .. },
+                    ..
+                } = piece
+                {
+                    next.0 = Some(*start);
+                    if governed_line(*start) {
+                        next.1 = Some(*start);
+                    }
+                }
+            }
+        }
+        let mut previous_source_end: Option<usize> = None;
+        let mut single_line_breaks = Vec::new();
         let mut out = String::with_capacity(self.len + self.len / 8);
         let mut scopes: Vec<String> = Vec::new();
         let mut mappings: Vec<EmitMapping> = Vec::new();
@@ -601,12 +641,47 @@ impl<'a> TargetFile<'a> {
         let mut payloads: Vec<PayloadTemp> = Vec::new();
         let mut result_returns: Vec<ResultReturnTemp> = Vec::new();
         let mut contextual_slots = Vec::new();
+        let mut selector_slots = Vec::new();
+        let mut operand_slots = Vec::new();
+        let mut asserted_slots = Vec::new();
         let mut declared_names: Vec<DeclaredName> = Vec::new();
         let mut shared_bindings: Vec<SharedBinding> = Vec::new();
+        let mut destructured_lists: Vec<crate::DestructuredList> = Vec::new();
         let mut anchors: Vec<EmitAnchor> = Vec::new();
+        let mut inserted: Vec<crate::InsertedGlue> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
-        for piece in &self.pieces {
+        for (index, piece) in self.pieces.iter().enumerate() {
+            let (next_source, next_governed) = following.get(index).copied().unwrap_or_default();
+            let single_line = match (previous_source_end, next_source, next_governed) {
+                (Some(previous), Some(next), Some(line)) => governed.iter().any(|statement| {
+                    statement.start <= previous
+                        && previous <= statement.end
+                        && statement.start <= next
+                        && next <= statement.end
+                        && statement.start <= line
+                        && line <= statement.line_end
+                }),
+                _ => false,
+            };
             match piece {
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::InsertedStart,
+                } => inserted.push(crate::InsertedGlue {
+                    src: *src,
+                    out: out.len(),
+                    out_end: out.len(),
+                }),
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::InsertedEnd,
+                } => {
+                    inserted
+                        .last_mut()
+                        .filter(|glue| glue.src == *src && glue.out_end == glue.out)
+                        .unwrap_or_else(|| crate::ice::bug!("inserted glue end has no start"))
+                        .out_end = out.len();
+                }
                 TargetPiece::Open {
                     src,
                     src_end,
@@ -643,9 +718,36 @@ impl<'a> TargetFile<'a> {
                     }
                 }
                 TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::SourcePoint,
+                } => previous_source_end = Some(*src),
+                TargetPiece::Mark {
                     kind: MarkKind::ContextualSlot,
                     ..
                 } => contextual_slots.push(out.len()),
+                TargetPiece::Mark {
+                    kind: MarkKind::SelectorSlot,
+                    ..
+                } => {
+                    contextual_slots.push(out.len());
+                    selector_slots.push(out.len());
+                }
+                TargetPiece::Mark {
+                    kind: MarkKind::OperandSlot,
+                    ..
+                } => {
+                    contextual_slots.push(out.len());
+                    operand_slots.push(out.len());
+                }
+                TargetPiece::Mark {
+                    kind: MarkKind::AssertedAnnotationEnd,
+                    ..
+                } => {
+                    let slot = *contextual_slots.last().unwrap_or_else(|| {
+                        crate::ice::bug!("an asserted annotation follows no value slot")
+                    });
+                    asserted_slots.push((slot, out.len()));
+                }
                 TargetPiece::Mark {
                     src,
                     kind: MarkKind::Scrutinee,
@@ -705,6 +807,28 @@ impl<'a> TargetFile<'a> {
                     name.out_end = out.len();
                 }
                 TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::DestructuredListStart,
+                } => destructured_lists.push(crate::DestructuredList {
+                    src: *src,
+                    src_end: *src,
+                    out: out.len(),
+                    out_end: out.len(),
+                }),
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::DestructuredListEnd,
+                } => {
+                    let list = destructured_lists
+                        .last_mut()
+                        .filter(|list| list.out_end == list.out && list.src <= *src)
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("destructured list end has no matching start")
+                        });
+                    list.src_end = *src;
+                    list.out_end = out.len();
+                }
+                TargetPiece::Mark {
                     kind: MarkKind::SharedBindingStart,
                     ..
                 } => shared_bindings.push(SharedBinding {
@@ -743,6 +867,12 @@ impl<'a> TargetFile<'a> {
                 TargetPiece::ScopeClose => {
                     scopes.pop();
                 }
+                TargetPiece::Break { .. } if single_line => {
+                    single_line_breaks.push(out.len());
+                    if !out.ends_with(' ') {
+                        out.push(' ');
+                    }
+                }
                 TargetPiece::Break { depth } => {
                     out.push_str(newline);
                     if let Some(base) = scopes.last() {
@@ -752,11 +882,16 @@ impl<'a> TargetFile<'a> {
                         out.push_str(INDENT);
                     }
                 }
+                TargetPiece::Generated { text, .. } if single_line && text.contains('\n') => {
+                    single_line_breaks.push(out.len());
+                    out.push_str(&single_line_text(text));
+                }
                 TargetPiece::Generated { text, .. } => push_generated(&mut out, text, newline),
                 TargetPiece::Source {
                     text,
                     origin: ExactOrigin { start, .. },
                 } => {
+                    previous_source_end = Some(start + text.len());
                     let at = out.len();
                     if let Some(last) = mappings.last_mut()
                         && last.src + last.len == *start
@@ -788,9 +923,17 @@ impl<'a> TargetFile<'a> {
             anchors,
             result_return_temps: result_returns,
             contextual_slots,
+            selector_slots,
+            operand_slots,
+            asserted_slots,
             generated_names: std::collections::HashSet::new(),
             declared_names,
             shared_bindings,
+            destructured_lists,
+            inserted,
+            support_imports: Vec::new(),
+            commonjs: false,
+            single_line_breaks,
         }
     }
 }
@@ -808,6 +951,37 @@ struct OpenAnchor {
 
 /// One level of generated indentation.
 const INDENT: &str = "  ";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GovernedStatement {
+    pub(crate) start: usize,
+    pub(crate) end: usize,
+    pub(crate) line_end: usize,
+}
+
+pub(crate) fn single_line_text(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut lines = text.split('\n');
+    if let Some(first) = lines.next() {
+        out.push_str(
+            first
+                .strip_suffix('\r')
+                .unwrap_or(first)
+                .trim_end_matches([' ', '\t']),
+        );
+    }
+    for line in lines {
+        let line = line
+            .strip_suffix('\r')
+            .unwrap_or(line)
+            .trim_matches([' ', '\t']);
+        if !out.ends_with(' ') {
+            out.push(' ');
+        }
+        out.push_str(line);
+    }
+    out
+}
 
 fn push_generated(out: &mut String, text: &str, newline: &str) {
     if newline == "\n" {

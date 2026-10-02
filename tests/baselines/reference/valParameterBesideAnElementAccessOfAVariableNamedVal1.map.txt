@@ -1,0 +1,4 @@
+//// [valParameterBesideAnElementAccessOfAVariableNamedVal1.tt] 2 mapping(s)
+1:1 -> 1:1 len 48  "const g = c ? (val [0]) : w => w;\nfunction read("
+2:19 -> 2:15 len 39  "[user]: User[]) {\n  user.name = \"x\";\n}\n"
+

@@ -1,0 +1,5 @@
+//// [valCapabilityCheckOnlyCoversResolvableCallees2.tt] 3 mapping(s)
+1:1 -> 1:1 len 45  "function apply(user: User) {}\nfunction apply("
+2:20 -> 2:16 len 26  "user: User) {}\nfunction f("
+3:16 -> 3:12 len 31  "user: User) {\n  apply(user);\n}\n"
+

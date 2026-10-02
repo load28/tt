@@ -1,0 +1,11 @@
+//// [aTernaryWithOneTtBranchRelocatesTheOtherBranch.tt] 9 mapping(s)
+1:1 -> 1:1 len 29  "declare const flag: boolean;\n"
+2:1 -> 21:1 len 20  "export const pick = "
+2:21 -> 3:5 len 4  "flag"
+2:35 -> 5:19 len 1  "1"
+2:40 -> 7:12 len 1  "1"
+2:45 -> 8:18 len 1  "1"
+2:53 -> 12:18 len 1  "0"
+2:59 -> 18:12 len 1  "9"
+2:60 -> 21:27 len 2  ";\n"
+

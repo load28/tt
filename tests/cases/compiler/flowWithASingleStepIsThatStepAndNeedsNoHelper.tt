@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::flow_with_a_single_step_is_that_step_and_needs_no_helper
+const f = flow |> parse;

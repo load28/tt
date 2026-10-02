@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./fullMatchOnBuiltinVariantsCompiles.tt → $DIR/out/fullMatchOnBuiltinVariantsCompiles.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2749]: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'?
+ --> fullMatchOnBuiltinVariantsCompiles.tt:2:15
+  |
+2 | const f = (o: Option<number>) => match (o) { Some(value) => value, None => 0 };
+  |               ^^^^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> fullMatchOnBuiltinVariantsCompiles.tt:3:15
+  |
+3 | const g = (r: Result<number, string>) => match (r) { Ok(value) => value, Err(error) => error.length };
+  |               ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+fullMatchOnBuiltinVariantsCompiles.ts(20,15): error TS2749: 'Option' refers to a value, but is being used as a type here. Did you mean 'typeof Option'?
+fullMatchOnBuiltinVariantsCompiles.ts(41,15): error TS2304: Cannot find name 'Result'.

@@ -1,0 +1,2 @@
+returnOperand(2) => "#4" | await; add 4; shape "#4"
+returnOperand(5) => "#10" | await; add 10; shape "#10"

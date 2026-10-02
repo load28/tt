@@ -1,0 +1,23 @@
+//// [resultBlockUnionsTheErrorTypesOfItsBindings.tt] 21 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:12 -> 2:9 len 6  "<T, E>"
+2:12 -> 6:7 len 6  "<T, E>"
+2:12 -> 7:8 len 6  "<T, E>"
+2:31 -> 3:26 len 1  "T"
+2:31 -> 6:21 len 1  "T"
+2:46 -> 4:27 len 1  "E"
+2:46 -> 7:22 len 1  "E"
+2:50 -> 8:3 len 1  "\n"
+3:31 -> 13:3 len 1  "\n"
+4:38 -> 15:28 len 6  "number"
+4:38 -> 17:19 len 6  "number"
+4:47 -> 18:3 len 305  "\ntype User = { id: number; name: string; company"...
+11:9 -> 32:11 len 4  "user"
+11:20 -> 27:20 len 11  "getUser(id)"
+11:32 -> 32:31 len 3  "\n  "
+12:9 -> 38:9 len 7  "company"
+12:23 -> 33:18 len 26  "getCompany(user.companyId)"
+12:50 -> 38:32 len 3  "\n  "
+13:10 -> 40:44 len 30  "user.name + \"@\" + company.name"
+14:2 -> 45:2 len 14  ";\n\nexport {};\n"
+

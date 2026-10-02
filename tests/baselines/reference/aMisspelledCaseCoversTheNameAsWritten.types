@@ -1,0 +1,20 @@
+=== aMisspelledCaseCoversTheNameAsWritten.tt ===
+variant Shape { Circle(r: number), Square(s: number) }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>r : (property) r: number
+>Square : (property) Square: (s: number) => Shape
+>s : (property) s: number
+const v = match (s) { Circel(r) => r, Square(s) => s };
+>v : const v: any
+>r : const r: any
+>r : const r: any
+>s : const s: any
+>s : const s: any
+

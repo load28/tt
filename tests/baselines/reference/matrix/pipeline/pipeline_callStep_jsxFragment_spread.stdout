@@ -1,0 +1,2 @@
+jsxFragment(2) => "<>[4]</>" | before "["; double 4; after "]"
+jsxFragment(5) => "<>[10]</>" | before "["; double 10; after "]"

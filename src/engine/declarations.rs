@@ -11,6 +11,7 @@
 
 use std::path::Path;
 
+use super::documents::Texts;
 use crate::hir;
 use crate::resolve::{self, DeclOrigin, DefKind};
 
@@ -99,15 +100,21 @@ pub struct TtMatchSite {
 }
 
 /// The declarations visible in `source`, at `path` (which is what resolves
-/// its relative `.tt` imports — from disk; an editor passes the buffer's
-/// text for the file itself).
+/// its relative `.tt` imports; an editor passes the buffer's text for the
+/// file itself). This is the stand-alone question: an imported file is read
+/// as saved. A session asks [`super::Workspace::tt_declarations`], which
+/// reads its open documents.
 pub fn tt_declarations(path: &Path, source: &str) -> TtDeclarations {
+    declarations(path, source, Texts::Disk)
+}
+
+pub(super) fn declarations(path: &Path, source: &str, texts: Texts<'_>) -> TtDeclarations {
     let program = crate::parser::parse_with_kind(
         source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
     );
     let externs: Vec<resolve::ExternDecl> =
-        super::language::externs_of(path, source, &|target| std::fs::read_to_string(target).ok())
+        super::language::externs_of(path, source, &|target| texts.read(target))
             .iter()
             .map(Into::into)
             .collect();
@@ -177,26 +184,67 @@ pub fn tt_declarations(path: &Path, source: &str) -> TtDeclarations {
         });
     }
 
-    let mut matches = Vec::new();
-    collect_matches(&program, &mut matches);
+    let mut sites = Vec::new();
+    collect_matches(&program, &mut sites);
+    let mut matches: Vec<TtMatchSite> = sites.into_iter().map(|(site, _)| site).collect();
     matches.sort_by_key(|m| m.keyword);
 
     TtDeclarations { variants, matches }
 }
 
+pub(super) fn scrutinee_at(
+    source: &str,
+    source_kind: crate::SourceKind,
+    offset: usize,
+) -> Option<(usize, usize)> {
+    let program = crate::parser::parse_with_kind(source, source_kind);
+    let mut sites = Vec::new();
+    collect_matches(&program, &mut sites);
+    let (_, span) = sites
+        .into_iter()
+        .filter(|(site, _)| site.body_open < offset && offset <= site.body_close)
+        .max_by_key(|(site, _)| site.body_open)?;
+    let span = span?;
+    let text = &source[span.start..span.end];
+    let start = span.start
+        + (text.len()
+            - text
+                .trim_start_matches(|c: char| c.is_ascii_whitespace())
+                .len());
+    let end = span.end
+        - (text.len()
+            - text
+                .trim_end_matches(|c: char| c.is_ascii_whitespace())
+                .len());
+    (start < end).then_some((start, end))
+}
+
 /// Every `match` of a program, nested positions included.
-fn collect_matches(program: &crate::ast::Program, out: &mut Vec<TtMatchSite>) {
+fn collect_matches(
+    program: &crate::ast::Program,
+    out: &mut Vec<(TtMatchSite, Option<crate::ast::Span>)>,
+) {
+    crate::stack::grow(|| collect_matches_grown(program, out));
+}
+
+fn collect_matches_grown(
+    program: &crate::ast::Program,
+    out: &mut Vec<(TtMatchSite, Option<crate::ast::Span>)>,
+) {
     use crate::ast::{IfLetElse, ResultItem, Segment, TemplateChunk};
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_) | Segment::TtImport(_) | Segment::ValModifier(_) => {}
             Segment::Variant(_) => {}
             Segment::Match(expr) => {
-                out.push(TtMatchSite {
-                    keyword: expr.keyword_off,
-                    body_open: expr.body_open,
-                    body_close: expr.body_close,
-                });
+                out.push((
+                    TtMatchSite {
+                        keyword: expr.keyword_off,
+                        body_open: expr.body_open,
+                        body_close: expr.body_close,
+                    },
+                    Some(expr.scrutinee_span),
+                ));
                 collect_matches(&expr.scrutinee, out);
                 for arm in &expr.arms {
                     if let Some(guard) = &arm.guard {
@@ -206,11 +254,14 @@ fn collect_matches(program: &crate::ast::Program, out: &mut Vec<TtMatchSite>) {
                 }
             }
             Segment::TupleMatch(expr) => {
-                out.push(TtMatchSite {
-                    keyword: expr.keyword_off,
-                    body_open: expr.body_open,
-                    body_close: expr.body_close,
-                });
+                out.push((
+                    TtMatchSite {
+                        keyword: expr.keyword_off,
+                        body_open: expr.body_open,
+                        body_close: expr.body_close,
+                    },
+                    None,
+                ));
                 for (_, scrutinee) in &expr.scrutinees {
                     collect_matches(scrutinee, out);
                 }

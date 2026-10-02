@@ -90,7 +90,7 @@ HEAD `c6b013f5`(로컬 클론·빌드)와 TASK-086 완료 시점의 main이다.
 `parseEnums`/`parseMatches`/`visibleEnums`/`BUILTIN_ENUMS`는 삭제됐다.
 Node에 남은 것은 **텍스트 형태** 유틸뿐이다 — 마스킹, 커서의 단어, 멤버
 접근 판정.
-| semantic tokens (하이라이팅 정밀화) | **TT 자체** (`engine/tokens.rs`, 파스 전용·무상태) | TextMate 문법이 못 하는 판별(파서가 청구한/안 한 `match`·`result`·`flow`)의 단일 원천은 파서; 툴체인 없이도 답해야 하므로 text 기반 요청 (TASK-093) |
+| semantic tokens (highlighting refinement) | **tt itself** (`engine/tokens.rs`, parse-only and stateless) | The parser is the single source for what a line-based TextMate grammar cannot decide (a `match`, `result`, `flow`, or `variant` the parser did or did not claim); keywords are otherwise the grammar's, as TypeScript's are, and the extension's `semanticTokenScopes` styles each reported keyword with the grammar's scope for it (TASK-093, TASK-646). Text-based, because it must answer without a toolchain |
 
 핵심: 이 표는 전부 **엔진 내부**의 세부다. Node LSP는 어느 백엔드가
 답했는지 모른다 — 이중 LSP는 public architecture에서 제거됐고(§34),
@@ -148,6 +148,171 @@ parse-only라 미완성 버퍼에서도, TS 툴체인 없이도 답한다 — �
 Node에 남아 있던 이유(무오류 파서의 미완성 버퍼 내성)는 엔진 표면이
 같은 내성을 갖추면서 해소됐다.
 
+**Update (TASK-558)**: member-access detection left `analysis.ts` too, and
+with it the masking it needed. It read only an identifier receiver and the
+character before the cursor, so `s.trim().ma` got tt's keyword snippets in
+place of String's `match`. The engine now reads the cursor's member context
+from the lexer's tokens (`engine::member_access_at`): the name being typed
+after a `.` or `?.`, and the receiver when it is a path of names (the form
+a variant's constructors are offered through). `ttCompletions` answers it
+as `member`, and the adapter relays it into the completion request. What
+remains in `analysis.ts` is the word at the cursor.
+
+**Update (TASK-578)**: at a general position the adapter no longer adds
+every visible variant and every keyword snippet in front of TypeScript's
+list. `ttCompletions` answers `keywords`: the tt keywords whose construct
+can begin at the position (`engine::tt_keywords_at`), read from the
+lexer's facts for the word being typed there — a statement's where a
+statement begins, a declaration's also after `export`, an expression's
+where an operand may begin; none for a property name, a JSX attribute, an
+import specifier, a type or a class member. Each carries TypeScript's
+keyword rank (`15`, `SortText.GlobalsOrKeywords`), so the snippets sort
+among TypeScript's keywords, after the names in scope. A variant's name at
+a general position is TypeScript's entry: the emission declares it, so the
+service lists it wherever it is in scope and valid, and a built-in that is
+not imported is not in scope.
+
+**Update (TASK-606)**: semantic tokens are TypeScript's classification of
+the source under tt's own. `semanticTokens` is tt-owned, so the native
+TypeScript provider does not run for a `.tt` file, and the parse-only
+answer alone left every function, parameter, type and `readonly` or
+`defaultLibrary` name uncolored. The engine's `documentSemanticTokens`
+asks the service for `textDocument/semanticTokens/full` over the served
+projection, decodes it against the legend the service returned from
+`initialize` (LSP 3.17 `SemanticTokensLegend`), and keeps a token only
+when every byte of it was copied from the source; glue (a scrutinee
+temporary, a variant's generated declarations) has no token. The parser's
+tokens for tt constructs replace any service token they overlap, and keep
+the service's modifiers where both name the same range and type (a pattern
+binding is `variable.declaration.readonly.local`, as `const { x } = o` is).
+The adapter's legend is the LSP 3.17 standard types and modifiers plus
+TypeScript's `local`; an untitled buffer or a session without a toolchain
+still gets the parse-only tokens.
+
+**Update (TASK-607)**: an arm's pattern is completed from what the
+scrutinee's type admits, as TypeScript completes a `case` of the switch the
+match lowers to. The parse-only answer knows tt's declarations only: a
+literal match offered every visible variant's tags and no literal, and a
+hand-written `kind` union offered nothing but `_`. A literal arm now says
+the match is over literals (literal and tag arms never mix), so no variant
+tag is offered there. At an arm slot the engine (`patternCompletions`)
+lowers the buffer without the word being typed (with a wildcard arm in the
+slot when the match has no arm yet, so that it lowers), finds the output
+the scrutinee was copied to by the emit mapping, and asks the service to
+complete the right operand of `(scrutinee).kind === ` (a tag match, the
+variant ABI's discriminant) or `(scrutinee) === ` (a literal match; both
+when no arm says which). TypeScript answers a comparison's right operand
+with the literals of the left operand's type, narrowing included
+(`services/completions.ts`, `getContextualType` for an equality operator,
+and the `literals` of the completion data). An entry is kept only when its
+label parses with tt's arm pattern grammar as one literal (for a tag match,
+a string literal whose value is a tag); TypeScript's keywords are not
+literal entries. A candidate an unguarded arm already covers stays in the
+list and sorts after the rest, as a covered tag always has; `_` is always
+offered.
+
+**Update (TASK-608)**: a payload field list is completed through the
+completion probe, whose destructuring TypeScript completes with the
+selected case's properties; the discriminant `kind` and the fields already
+bound are left out. A completion entry TypeScript derives from a switch
+(`source: "SwitchCases/"`, its exhaustive-case snippet) is kept only when
+the innermost case block around the position belongs to a `switch` the
+emission copied from the source: the switch a match lowers to is not the
+user's to extend.
+
+**Update (TASK-609)**: a relative module specifier also completes the
+`.tt` and `.ttx` modules of the directory it names, under their file names
+(`./shapes.tt`, the form tt's imports write). The service lists a
+directory from the file system, where the `.tt.ts` documents the engine
+serves do not exist. A completion entry now carries the source range it
+replaces when the service names one (`textEdit`, mapped like an
+auto-import edit), which a path entry needs when the fragment after the
+last `/` is not a word.
+
+**Update (TASK-610)**: a tt name whose declaration `ttSymbol` cannot open
+(a built-in `Option`/`Result` tag or field) is the engine's definition
+question. A field is answered through the destructuring it lowers to; a
+built-in case through the standard library export that constructs it
+(`typeof import("@tt/std/result").Ok`, asked in a question served for the
+request only).
+
+**Update (TASK-611)**: the server answers `textDocument/prepareRename`
+(LSP 3.17 `renameProvider.prepareProvider`) by running the rename itself:
+the range of its edit at the position, or a refusal. A refusal TypeScript
+gives a reason for is an error with that reason; a tt name the adapter does
+not rename is an error naming it; any other refusal is null. The service
+client returns a server's error answer apart from a failed conversation
+(`Service::answer`), so TypeScript's refusal is not an engine failure.
+
+**Update (TASK-629)**: a completion entry is identified by its label and
+the service's `source` (TypeScript's `CompletionEntry.source`, tsgo's
+`data.source`), as TypeScript identifies an entry to resolve. The engine
+answers the source with each item, and the adapter keeps it in the item's
+`data` for `completionItem/resolve`, so two exports of one name from
+different modules each import from their own module.
+
+**Update (TASK-630)**: when the user's call names its callee with a name
+the emission wrote (a callee stored ahead of a lowered argument, `const
+$tt_v1 = (two); ... $tt_v1(...)`), signature help is asked in a question
+served for the request, with the source call's callee name in the stored
+name's place, so TypeScript labels the signature by the symbol the source
+names (`services/signatureHelp.ts` labels by the callee expression's
+symbol).
+
+**Update (TASK-631)**: the adapter advertises TypeScript's completion
+trigger characters (tsgo's `.`, `"`, `'`, backtick, `/`, `@`, `<`, `#`,
+space, and `*`) beside tt's pattern
+triggers (`( | { ,`), and signature help's `( , <`. A request a TypeScript
+trigger character sent is forwarded with its LSP 3.17 `CompletionContext`
+(`triggerKind: TriggerCharacter`, `triggerCharacter`) through the engine
+(`Project::triggered_completion`) to the service, which decides whether the
+character begins a completion there (`services/completions.ts`,
+`isValidTrigger`): nothing after a space outside an `import`, a JSDoc tag
+after `@`, a module path after `/`. Signature help forwards its
+`SignatureHelpContext` the same way (`Project::triggered_signature_help`).
+tt's own trigger characters keep their pattern-only behaviour. An entry
+carries the service's `detail` (a path entry's file name), and a `.tt`
+module entry its file name.
+
+**Update (TASK-632)**: a position whose preceding token is `=>` is never
+a pattern position: a body begins there, as TypeScript classifies a
+completion position by its preceding token (`getCompletionData`'s
+`contextToken`). An arm whose body is not written yet (TASK-605) is
+completed with expressions from the first keystroke.
+
+**Update (TASK-633)**: the emission records each object pattern it writes
+for a whole field list (`DestructuredList`: `{ x, y }` stands for the
+source's `(x, y)`), and a service diagnostic whose span is exactly such a
+pattern maps to the list as an exact origin. TypeScript's 6198 "All
+destructured elements are unused" then fades `(x, y)` with its
+`Unnecessary` tag. A destructuring of part of a list (a nested pattern) or
+of several lists (an or-pattern) records nothing, and a suggestion there is
+still dropped (TASK-515).
+
+**Update (TASK-667)**: the service names a served tt module by its
+lowered name, so an auto-import from `shapes.tt` was written
+`./shapes.tt.ts` (TypeScript's `.ts` ending) or `./shapes.tt.js` (its
+`.js` ending). The engine writes every specifier TypeScript produces for
+a served tt module in tt's form, `./shapes.tt` (`tt_module_specifier`):
+an entry's `labelDetails.description` and the string literals of its
+resolved `additionalTextEdits`. The entry's `source` stays TypeScript's,
+since it identifies the entry to resolve (TASK-629). The typed check
+reports TS2307 for a specifier that reaches a tt module only through its
+served name (`./shapes.tt.js`), as `tsc` does on the output.
+
+**Update (TASK-669)**: an arm whose pattern is still being written (no `=>`
+yet) stays unparsed (TASK-605 Decision 2), so its projection has no
+destructuring at the payload list, and the completion probe there answers
+with the globals of whatever expression the recovery leaves. The payload
+list's field names are then answered by tt's declarations alone; the
+probe is asked only where a parsed construct holds the payload. A string
+literal that starts an arm's pattern (`match (x) { "|" }`, `"north" => 1,
+"|"`) is a literal pattern being written: the engine answers the literals
+the scrutinee's type admits (TASK-607's question), each replacing the
+whole literal written so far (`TtCompletion::range`), as TypeScript
+answers a `case "|"` with the switch expression's literals. The adapter
+routes a `"` or `'` trigger at such a position to this answer.
+
 ### 의도된 개선 (§50 — 문서화된 behavior 변경)
 
 1. **TS 세션 복구**: tsgo LSP가 죽으면 다음 요청이 재시작한다 (구현 전:
@@ -165,6 +330,124 @@ Node에 남아 있던 이유(무오류 파서의 미완성 버퍼 내성)는 엔
    엔진 기동 실패 카운트를 **그 컴파일러에 대한** 판정으로 센다 — 전역
    카운트였을 때는 설정이 도착하기 전 잘못된 경로로 두 번 실패하면 이후
    올바른 경로에도 엔진이 깨어나지 않았다.
+
+### Diagnostics while the TypeScript does not parse (TASK-527)
+
+A buffer mid-edit is routinely not TypeScript. A `.ts` file then shows
+TypeScript's syntax errors *and* its type errors; a `.tt` file must too.
+
+- **What the service reads.** When the verified projection is withheld
+  only because the file's TypeScript does not parse (or its lowering plan
+  cannot be built over it), `compile_projection_report` still returns the
+  file lowered without an owner model, over the recovered source
+  (`ProjectionReport::withheld`). It is *faithful*: every byte is TypeScript
+  the user wrote, glue of a claimed construct, or a recovery placeholder,
+  so TypeScript's answer about it is its answer about the user's code. Two
+  properties make that hold by construction. Glue is delimiter-balanced and
+  stands in its construct's own syntactic slot, so a user's syntax error
+  can move within the construct but can neither be hidden nor created by
+  it. Helpers no source text owns (`$tt_show`, `$tt_raise`, `$tt_expr`) are
+  written with the prelude, before any source text, so a bracket left open
+  at the end of the file cannot take them in. Recovery placeholders are
+  TypeScript's error type (`undefined as any`), so no consequence of a
+  stand-in is reported.
+- **When it is not read.** Where tt text would stay as the user wrote it —
+  a diagnostic that leaves its construct unlowered
+  (`DiagnosticCode::leaves_tt_text`), or a tt candidate the parser rolled
+  back into passthrough — there is no withheld emission, the service falls
+  back to the raw emit map, and its diagnostics are reported only if that
+  text parses, as before.
+- **Who reports a syntax error.** A syntax error in the TypeScript the user
+  wrote is TypeScript's, as the error-layer contract assigns every error in
+  the user's TypeScript to TypeScript. `source-not-typescript` and
+  `verify-failed` restate that verdict as the reason the file has no
+  output (`DiagnosticCode::restates_typescript_syntax`). They own no
+  checker consequence, and when the faithful projection is served the
+  engine names them in `tsDiagnostics`' `restates`; the editor then drops
+  the compiler layers' copies, so the fact is shown once, in TypeScript's
+  words. The CLI and the batch typed path keep reporting them: they have no
+  other reporter, and `tsc` itself reports only syntactic diagnostics while
+  there are any.
+- **The typed pass.** A document held open whose TypeScript does not parse
+  is checked through the same faithful projection (TASK-561), so its type
+  errors keep the checker's rendering while the syntax error lasts. A
+  buffer that cannot be lowered at all is a blocked file of its snapshot,
+  and `typedCheck` says so (`blocked`). A blocked pass
+  checked none of the buffer's TypeScript, so its answer never replaces the
+  service layer. A pass that ran and found problems only in other files
+  answers this file with no diagnostics, which does replace it.
+
+### Unfinished tt values (TASK-528)
+
+- **The operand stays the user's.** Without an owner model a value `try`
+  has nowhere to put its early exit, but its operand is still the user's
+  expression. It is emitted where it stands, mapped, as the argument of
+  glue that reads its success payload under the Result ABI a statement
+  `try` tests: `(($tt_result) => { if (!("value" in $tt_result)) throw
+  $tt_result; return $tt_result.value; })(operand)`. The operand is evaluated
+  outside the arrow, so `this`, `await`, and `arguments` in it are the
+  enclosing function's, and its value keeps its type.
+- **An unterminated operand ends where TypeScript ends it.** The parser
+  reads an operand whose call or index is still open to where the
+  enclosing syntax resumes — a closer of another bracket, a statement
+  keyword directly in a parenthesis or index, or the end of the region —
+  as TypeScript reads an unterminated argument list, so the operand holds
+  the text being typed and the function's own `}` stays outside it.
+- **An unfinished `if let` is recovered as far as TypeScript reads its
+  statement (TASK-602).** Its head ends where an `if` condition or an open
+  list ends (a then-block, a `;`, a statement boundary, an enclosing
+  closer, a statement keyword in a parenthesis), a then-block and its
+  `else` continuation belong to it, and nothing after that is recovered.
+  When the head has an operand, only `if let <pattern> =` becomes `void`,
+  so the operand the user is typing stays served.
+- **An arm with no body stays the arm written (TASK-605).** In a match
+  whose body reads as arms, an arm whose guard or `=>` is written but not
+  its body is claimed with a missing body (`missing-arm-body`) that yields
+  TypeScript's error type, so its pattern's bindings and its guard are
+  served as they would be in a finished arm. A body reads as arms when a
+  `=>` appears at its level, or, with no `=>` yet, when it opens with
+  patterns one of which reaches an `if` that no statement list can hold
+  (TASK-628): after the pattern on the same line, where ECMA-262 §12.10.1
+  inserts no semicolon, or not followed by `(` (§14.6). So the only arm
+  `A(n) if n > 0` is claimed, while a method named `match` whose body is
+  `A(n)`, a line break, and `if (n > 0) g()` stays TypeScript.
+- **Signature help is asked outside generated argument lists
+  (TASK-603).** TypeScript answers for the innermost argument list around
+  the position, and the LSP answer does not say which. The engine moves the
+  position to the `(` of every innermost open argument list the emission
+  did not copy from the source, so the answer is for the user's call, or
+  nothing when there is none.
+- **A cursor with no place in the served text is asked through a probe.**
+  Completion and signature help splice `$tt_probe` at the cursor and ask
+  at its mapped position when the served projection did not copy the
+  cursor's text (the whitespace after a match arm body, for instance). The
+  probe is built from the projection the service would serve for the
+  spliced text, the faithful projection of TypeScript that does not parse
+  included, and its auto-import edits map back through it (TASK-526).
+- **A construct's place decides what the served syntax moved
+  (TASK-687).** TypeScript leaves the variable being declared out of its
+  own initializer's completions by walking up the syntax
+  (`getClosestSymbolDeclaration`). Lowering runs a construct before the
+  declaration it initializes, so the compiler's whole-program syntax
+  records, per construct, the declaration whose initializer holds it (a
+  value `match` and a `result` block are region functions there, their
+  scrutinees evaluated at the construct's place), and `MappedEmit` carries
+  it. Where TypeScript's walk from the served position stops in text the
+  user wrote, its answer stands; where it reaches compiler-written text,
+  the innermost construct around the cursor names the declaration left
+  out. **Update (TASK-688)**: the same fact says whether the construct's
+  place is in a function-like body (a match arm and a `result` block are,
+  as region functions), and where TypeScript's
+  `tryGetFunctionLikeBodyCompletionContainer` walk leaves the user's text
+  and TypeScript chose the module-level keyword filter
+  (`KeywordCompletionFiltersAll`), the keywords only that filter adds are
+  removed, which is the answer
+  `KeywordCompletionFiltersFunctionLikeBodyKeywords` gives. **Update
+  (TASK-699)**: whether TypeScript chose that filter is read from the
+  served syntax, not from the answer: the position is not in a comment or
+  literal, not an interface or type literal member position, and not a
+  type-only location as `isTypeOnlyLocation` defines it
+  (`src/engine/language/keyword_filter.rs`).
 
 ### 지운 것 (§51)
 

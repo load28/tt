@@ -1,0 +1,27 @@
+=== aSlotCarriesTheDeclaredTypeOnlyWhenItIsTheReturnedValueS2.tt ===
+variant Shape { Circle(radius: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+declare const s: Shape;
+>s : const s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+export async function asy(): Promise<number> { return match (s) { Circle(radius) => 1, Point => 0 }; }
+>asy : function asy(): Promise<number>
+>Promise : interface Promise<T>
+>s : const s: Shape
+>radius : const radius: number
+

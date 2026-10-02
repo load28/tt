@@ -1,0 +1,2 @@
+jsxConditional(2) => "<p>6</p>" | open res; flip true; operand 2; receiver {"factor":3}; twice 6; dispose res
+jsxConditional(6) => "<p></p>" | open res; flip false; dispose res

@@ -1,0 +1,55 @@
+=== anAssignmentCapturesItsTargetBeforeAHoistedRightOperand2.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+declare function read(): R;
+>read : function read(): R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+declare function target(): { v: number };
+>target : function target(): {
+>       v: number;
+>   }
+>v : (property) v: number
+declare function key(): "v";
+>key : function key(): "v"
+declare let state: { v: number };
+>state : let state: {
+>       v: number;
+>   }
+>v : (property) v: number
+export function g(): R {
+>g : function g(): R
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  state.v *= try read();
+>state : let state: {
+>       v: number;
+>   }
+>v : (property) v: number
+>read : function read(): R
+  this.v = try read();
+>read : function read(): R
+  return { kind: "Ok", value: 0 };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+

@@ -1,0 +1,20 @@
+=== oneOwnerSchedulesMultipleTtValuesWithoutExpressionBoundaries.tt ===
+variant E { A(value: number), B }
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (value: number) => E
+>value : (property) value: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const value = new (match (ctor) { A(value) => value, B => fallback })(match (arg) { A(value) => value, B => 0 });
+>value : const value: any
+>value : const value: any
+>value : const value: any
+>value : const value: any
+>value : const value: any
+

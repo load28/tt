@@ -1,0 +1,2 @@
+destructuringDefault(2) => 12 | source {}; receiver {"factor":3}; add 4; twice 12
+destructuringDefault(3) => null | source {}; receiver {"factor":3}; add null; twice null

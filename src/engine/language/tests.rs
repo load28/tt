@@ -35,7 +35,7 @@ fn diagnostic_projection_depends_on_parseability_not_diagnostic_numbers() {
 #[test]
 fn service_projection_recovers_parser_error_nodes() {
     let source = "function f(value: number) { const n = try value; return n; }\n\
-            const broken = 1 |> ;\n";
+            const broken = ready ? 1 : 2 |> f;\n";
     let doc = service_doc(Path::new("/p/src/a.tt"), source.to_string());
     assert!(
         projection_accepts_diagnostics(&doc.code, crate::SourceKind::TypeScript),
@@ -44,7 +44,11 @@ fn service_projection_recovers_parser_error_nodes() {
     );
     assert_eq!(doc.recovered.len(), 1);
     assert!(doc.code.contains("\"value\" in $tt_t0"), "{}", doc.code);
-    assert!(doc.code.contains("const broken = 0"), "{}", doc.code);
+    assert!(
+        doc.code.contains("const broken = ready ? 1 : 0     ;"),
+        "{}",
+        doc.code
+    );
 }
 
 #[test]
@@ -120,6 +124,63 @@ fn a_chunk_end_offset_belongs_to_the_chunk() {
 }
 
 #[test]
+fn an_edit_of_the_prelude_maps_only_between_its_declarations() {
+    let source = "variant V { A, B }\ndeclare const v: V;\n\
+export const n = match (v) { A => 1, B => 2 };\nexport const f = flow |> String |> .trim();\n";
+    let doc = service_doc(Path::new("/p/src/a.tt"), source.to_string());
+    let import = "import { $tt_fl } from \"@tt/runtime\";\n";
+    assert!(doc.code.starts_with(import), "{}", doc.code);
+    let edit_at = |byte: usize| {
+        let position = byte_position(&crate::lines::LineMap::lsp(&doc.code), byte);
+        let position =
+            serde_json::json!({ "line": position.line, "character": position.character });
+        let edit = serde_json::json!({
+            "range": { "start": position, "end": position },
+            "newText": "x",
+        });
+        source_edit(&doc.code, &doc.mappings, &doc.inserted, source, None, &edit)
+            .map(|edit| edit.range.start)
+    };
+    let start = Some(Position {
+        line: 0,
+        character: 0,
+    });
+    assert_eq!(edit_at(0), start);
+    assert_eq!(edit_at(import.len()), start);
+    assert_eq!(edit_at("import { ".len()), None);
+}
+
+#[test]
+fn a_cursor_between_chunks_split_in_the_output_keeps_its_side() {
+    // `s.ki` was hoisted to output 40; the `, ` after it stayed at 10.
+    let mappings = [
+        crate::EmitMapping {
+            src: 0,
+            out: 40,
+            len: 4,
+        },
+        crate::EmitMapping {
+            src: 4,
+            out: 10,
+            len: 2,
+        },
+    ];
+    let at = |affinity| mapper::cursor_to_output(&mappings, 4, affinity);
+    assert_eq!(at(mapper::Affinity::Preceding), Some(44));
+    assert_eq!(at(mapper::Affinity::Following), Some(10));
+    // Chunks that touch in the output agree, and a lone chunk answers for
+    // either side.
+    assert_eq!(
+        mapper::cursor_to_output(&mappings[..1], 4, mapper::Affinity::Following),
+        Some(44)
+    );
+    assert_eq!(
+        mapper::cursor_to_output(&mappings[1..], 4, mapper::Affinity::Preceding),
+        Some(10)
+    );
+}
+
+#[test]
 fn isolating_an_alternative_maps_its_binding_into_narrowed_output() {
     let src =
         "variant E { A(x: string), B(x: number) }\nconst v = match (e) { A(x) | B(x) => x };\n";
@@ -142,6 +203,34 @@ fn isolating_an_alternative_maps_its_binding_into_narrowed_output() {
     let (code, _) = isolate_alternative(Path::new("/p/a.tt"), src, &binding, a_x).unwrap();
     assert!(code.contains("case \"A\""), "{code}");
     assert!(!code.contains("case \"B\""), "{code}");
+}
+
+#[test]
+fn a_destructuring_stands_for_the_whole_list_it_destructures() {
+    let src = "variant E { A(x: number, y: number), B(v: E, w: number), C }\n\
+               const v = match (e) { A(x, y) => 1, B(v: A(x: p, y: q), w) => w, B(v, w) => 2, C => 0 };\n\
+               const u = match (e) { A(x) | B(w: x) => x, C => 0 };\n";
+    let doc = service_doc(Path::new("/p/a.tt"), src.to_string());
+    let lists: Vec<(&str, &str)> = doc
+        .destructured_lists
+        .iter()
+        .map(|list| {
+            (
+                &src[list.src..list.src_end],
+                &doc.code[list.out..list.out_end],
+            )
+        })
+        .collect();
+    assert_eq!(
+        lists,
+        [
+            ("(x, y)", "{ x, y }"),
+            ("(x: p, y: q)", "{ x: p, y: q }"),
+            ("(v, w)", "{ v, w }"),
+        ],
+        "{}",
+        doc.code
+    );
 }
 
 #[test]
@@ -378,7 +467,7 @@ fn completion_probe_preserves_source_kind_and_cursor() {
 #[test]
 fn ttx_pattern_analysis_does_not_parse_jsx_text() {
     let source = "variant Real { A }\nconst view = <div>variant Fake { A }</div>;\n";
-    let analyses = analyses_for(Path::new("/p/a.ttx"), source);
+    let analyses = analyses_for(Path::new("/p/a.ttx"), source, Texts::Disk);
     assert!(analyses.declarations.iter().any(|d| d.name == "Real"));
     assert!(!analyses.declarations.iter().any(|d| d.name == "Fake"));
 
@@ -414,7 +503,7 @@ fn ttx_pattern_analysis_does_not_parse_jsx_text() {
 fn isolated_pattern_hover_preserves_jsx_text() {
     let source = "variant E { A(x: string), B(x: number) }\nconst view = <div>let x = try value;</div>;\nconst v = match (e) { A(x) | B(x) => x };\n";
     let path = Path::new("/p/a.ttx");
-    let analyses = analyses_for(path, source);
+    let analyses = analyses_for(path, source, Texts::Disk);
     let byte = source.find("B(x)").unwrap() + 2;
     let binding = analyses.binding_at(byte).unwrap();
     let (code, offset) = isolate_alternative(path, source, binding, byte).unwrap();
@@ -513,4 +602,190 @@ fn hover_markdown_separates_signature_from_documentation_and_tags() {
         split_hover(&marked),
         ("let v: string".to_string(), String::new())
     );
+}
+
+#[test]
+fn signature_help_is_asked_outside_every_generated_argument_list() {
+    let code = "foo(bar(m, h), `${bar(k)}`)";
+    let mappings = vec![
+        EmitMapping {
+            src: 0,
+            out: 0,
+            len: 4,
+        },
+        EmitMapping {
+            src: 4,
+            out: 8,
+            len: 1,
+        },
+        EmitMapping {
+            src: 5,
+            out: 11,
+            len: 1,
+        },
+        EmitMapping {
+            src: 6,
+            out: 13,
+            len: 5,
+        },
+        EmitMapping {
+            src: 11,
+            out: 22,
+            len: 1,
+        },
+        EmitMapping {
+            src: 12,
+            out: 24,
+            len: 3,
+        },
+    ];
+    let kind = crate::SourceKind::TypeScript;
+    assert_eq!(signature_position(code, &mappings, kind, 12), 7);
+    assert_eq!(signature_position(code, &mappings, kind, 9), 7);
+    assert_eq!(signature_position(code, &mappings, kind, 23), 21);
+    assert_eq!(signature_position(code, &mappings, kind, 2), 2);
+    let copied = [EmitMapping {
+        src: 0,
+        out: 0,
+        len: 9,
+    }];
+    assert_eq!(signature_position("foo(a, b)", &copied, kind, 6), 6);
+}
+
+#[test]
+fn tt_tokens_replace_the_service_tokens_they_overlap() {
+    let range = |line: u32, start: u32, end: u32| Range {
+        start: Position {
+            line,
+            character: start,
+        },
+        end: Position {
+            line,
+            character: end,
+        },
+    };
+    let service = |range: Range, token_type: &str, modifiers: &[&str]| ClassifiedToken {
+        range,
+        token_type: token_type.to_string(),
+        modifiers: modifiers.iter().map(|m| m.to_string()).collect(),
+    };
+    let own = vec![
+        crate::engine::tokens::SemanticToken {
+            range: range(1, 4, 10),
+            kind: crate::engine::tokens::SemanticTokenKind::Variable,
+        },
+        crate::engine::tokens::SemanticToken {
+            range: range(0, 0, 5),
+            kind: crate::engine::tokens::SemanticTokenKind::Keyword,
+        },
+    ];
+    let merged = merge_tokens(
+        own,
+        vec![
+            service(range(0, 2, 4), "function", &[]),
+            service(range(0, 6, 7), "parameter", &["declaration"]),
+            service(range(1, 4, 10), "variable", &["declaration", "readonly"]),
+        ],
+    );
+    assert_eq!(
+        merged,
+        vec![
+            service(range(0, 0, 5), "keyword", &[]),
+            service(range(0, 6, 7), "parameter", &["declaration"]),
+            service(range(1, 4, 10), "variable", &["declaration", "readonly"]),
+        ]
+    );
+}
+
+fn keyword_item(label: &str) -> CompletionItem {
+    CompletionItem {
+        label: label.to_string(),
+        kind: Some(CompletionItemKind::Keyword),
+        tags: Vec::new(),
+        sort_text: "15".to_string(),
+        insert_text: None,
+        filter_text: None,
+        snippet: false,
+        range: None,
+        label_detail: None,
+        description: None,
+        detail: None,
+        source: None,
+    }
+}
+
+fn restated_keywords(source: &str, marker: &str, labels: &[&str]) -> Vec<String> {
+    let doc = service_doc(Path::new("/p/keywords.tt"), source.to_string());
+    let at = source.find(marker).unwrap() + marker.len();
+    let out = mapper::cursor_to_output(&doc.mappings, at, mapper::Affinity::Preceding).unwrap();
+    let served = mapper::to_utf16(&doc.code, out);
+    let mut answer = CompletionAnswer {
+        items: labels.iter().map(|label| keyword_item(label)).collect(),
+        ..CompletionAnswer::default()
+    };
+    scope::restate_completions(
+        &mut answer,
+        &doc,
+        doc.served(),
+        crate::SourceKind::TypeScript,
+        served,
+        at,
+    );
+    answer.items.into_iter().map(|item| item.label).collect()
+}
+
+#[test]
+fn a_module_level_arm_takes_a_function_body_keywords_whatever_the_answer_holds() {
+    let source = "declare function f(n: number): number;\ndeclare const input: number;\nexport const top = match (input) { 1 => f(input), _ => input as number };\n";
+    assert_eq!(
+        restated_keywords(source, "1 => f(", &["abstract", "declare", "if", "return"]),
+        ["if", "return"]
+    );
+    assert_eq!(
+        restated_keywords(source, "input as ", &["number", "declare", "unknown"]),
+        ["number", "declare", "unknown"]
+    );
+}
+
+fn offers_all_keywords_at(code: &str) -> bool {
+    let at = code.find('|').unwrap();
+    let code = code.replacen('|', "", 1);
+    let input = crate::host_input::HostInput::new(&code);
+    let program = input
+        .parser(crate::SourceKind::TypeScript)
+        .parse_program()
+        .unwrap();
+    keyword_filter::offers_all_keywords(
+        &code,
+        crate::SourceKind::TypeScript,
+        &program,
+        input.origin(),
+        at,
+    )
+}
+
+#[test]
+fn typescript_offers_every_keyword_only_outside_type_and_member_positions() {
+    let prelude = "declare const x: number; declare function g<T>(v: T): T;\n";
+    for (line, all) in [
+        ("g(|x);", true),
+        ("const a = |x;", true),
+        ("const p = typeof |x;", true),
+        ("let q: typeof |x;", true),
+        ("const t = `${|x}`;", true),
+        ("const z = /* c */|x;", true),
+        ("const a: |number = 1;", false),
+        ("const a: num|ber = 1;", false),
+        ("const b = x as |number;", false),
+        ("const c = x satisfies |number;", false),
+        ("type T = |number;", false),
+        ("let d: Array<|number>;", false),
+        ("const e = g<|number>(1);", false),
+        ("interface I { |a: number }", false),
+        ("const s = \"te|xt\";", false),
+        ("// com|ment", false),
+    ] {
+        let code = format!("{prelude}{line}\n");
+        assert_eq!(offers_all_keywords_at(&code), all, "{line}");
+    }
 }

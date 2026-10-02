@@ -1,0 +1,16 @@
+=== variantCommentsKeepCrlfLineEndingsValid.tt ===
+variant Flag {
+>Flag : type Flag = {
+>       kind: "On";
+>   } | {
+>       kind: "Off";
+>   }
+  On, // yes
+>On : (property) On: {
+>       readonly kind: "On";
+>   }
+  Off,
+>Off : (property) Off: {
+>       readonly kind: "Off";
+>   }
+

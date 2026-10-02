@@ -1,0 +1,2 @@
+spreadElement(3) => [0,"***6"] | first 0; risky 3; double 6
+spreadElement(12) => [0,"**24"] | first 0; risky 12; double 24

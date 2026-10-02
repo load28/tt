@@ -1,0 +1,85 @@
+=== onlyArmGuardWithoutBody.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+export function single(o: O) {
+>single : function single(o: O): any
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return match (o) { A(n) if n > 0 };
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+export function tuple(o: O, p: O) {
+>tuple : function tuple(o: O, p: O): any
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>p : (parameter) p: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return match (o, p) { (A(n), _) if n > 0 };
+>o : (parameter) o: O
+>p : (parameter) p: O
+>n : const n: number
+>n : const n: number
+export function literal(s: string) {
+>literal : function literal(s: string): any
+>s : (parameter) s: string
+  return match (s) { "a" | "b" if s.length > 0 };
+>s : (parameter) s: string
+>s : (parameter) s: string
+>length : (property) String.length: number
+export function twoArms(o: O) {
+>twoArms : function twoArms(o: O): any
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return match (o) { A(n) if n > 0, B if o.kind === "B" };
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+>o : (parameter) o: O
+>kind : (property) kind: "A" | "B"
+export function nextLine(o: O) {
+>nextLine : function nextLine(o: O): any
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return match (o) {
+>o : (parameter) o: O
+    A(n)
+>n : const n: number
+      if n > 0
+>n : const n: number
+

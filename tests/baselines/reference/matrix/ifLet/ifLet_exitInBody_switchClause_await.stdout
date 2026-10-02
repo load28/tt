@@ -1,0 +1,2 @@
+switchClause(2) => "passed" | discriminant 1; await; read 2
+switchClause(-2) => "diverged" | discriminant 1; await; read -2; error "negative -2"

@@ -35,7 +35,25 @@ impl CoreFile {
         self.body_requires_host(self.root)
     }
 
+    pub(crate) fn imports_std(&self) -> bool {
+        self.bodies.iter().any(|body| {
+            body.statements.iter().any(|statement| {
+                matches!(
+                    statement,
+                    Statement::Import(Import {
+                        kind: crate::hir::ImportKind::Std(_),
+                        ..
+                    })
+                )
+            })
+        })
+    }
+
     fn body_requires_host(&self, body: BodyId) -> bool {
+        crate::stack::grow(|| self.body_requires_host_grown(body))
+    }
+
+    fn body_requires_host_grown(&self, body: BodyId) -> bool {
         self.bodies[body.index()]
             .statements
             .iter()
@@ -55,6 +73,10 @@ impl CoreFile {
     /// lowering (structuring a nested value under its parent's
     /// continuation) read it from here instead of each deciding it again.
     pub(crate) fn has_statement_form(&self, expr: ExprId) -> bool {
+        crate::stack::grow(|| self.has_statement_form_grown(expr))
+    }
+
+    fn has_statement_form_grown(&self, expr: ExprId) -> bool {
         match &self.exprs[expr.index()] {
             // Every arm must be able to deliver a value to a continuation.
             Expr::Decision(decision) => decision
@@ -107,6 +129,10 @@ impl CoreFile {
     }
 
     fn expr_requires_host(&self, expr: ExprId) -> bool {
+        crate::stack::grow(|| self.expr_requires_host_grown(expr))
+    }
+
+    fn expr_requires_host_grown(&self, expr: ExprId) -> bool {
         match &self.exprs[expr.index()] {
             Expr::Opaque(_) => false,
             Expr::Sequence(body) => self.body_requires_host(*body),
@@ -165,6 +191,9 @@ pub(crate) enum TempId {
 pub(crate) struct Decision {
     pub subjects: Vec<Subject>,
     pub arms: Vec<DecisionArm>,
+    /// The source after the last arm, before the match's closing brace or
+    /// the `if let`'s else continuation body.
+    pub trailing: Option<hir::Span>,
     pub miss: MissAction,
     pub head: NodeId,
     pub extent: NodeId,
@@ -182,6 +211,7 @@ pub(crate) enum DecisionKind {
     IfLet,
     LetElse {
         binding_mode: BindingMode,
+        exported: bool,
         direct_variants: Option<Vec<Constructor>>,
     },
 }
@@ -204,6 +234,12 @@ pub(crate) struct DecisionArm {
     pub pattern: PatternPlan,
     pub guard: Option<ExprId>,
     pub action: ArmAction,
+    /// The source between the previous arm and this one, where the comments
+    /// written between them are ([`hir::SiteArm::gap`]).
+    pub gap: Option<hir::Span>,
+    /// The arm's own source outside its guard and body
+    /// ([`hir::SiteArm::head`]).
+    pub head: Vec<hir::Span>,
 }
 
 impl DecisionArm {
@@ -267,7 +303,7 @@ pub(crate) struct Adt {
     pub name: String,
     pub exported: bool,
     pub declared: bool,
-    pub generics: String,
+    pub generics: hir::Span,
     pub variants: Vec<AdtVariant>,
 }
 
@@ -285,7 +321,7 @@ pub(crate) struct AdtField {
     pub node: NodeId,
     pub name: String,
     pub optional: bool,
-    pub ty_text: String,
+    pub ty_span: hir::Span,
     pub comments: crate::ast::Comments,
 }
 
@@ -306,6 +342,7 @@ pub(crate) struct Bind {
     pub source: Place,
     pub source_field: Option<FieldId>,
     pub binding: NodeId,
+    pub list: Option<NodeId>,
 }
 
 #[derive(Debug)]
@@ -395,7 +432,11 @@ pub(crate) struct ApplyStep {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ApplyMode {
     Call,
-    Postfix { optional: bool },
+    Postfix {
+        optional: bool,
+    },
+    /// A step that was not written, applied as TypeScript's error type.
+    Missing,
 }
 
 #[derive(Debug)]

@@ -42,11 +42,23 @@ Write `None.` when there were no issues. For each issue:
 - **Cause**: How the root cause was identified
 - **Resolution**: How it was fixed, including any workaround or remaining debt
 
+## Regression test (fails before the fix)
+
+For a bug fix, name at least one test that fails without the non-test
+changes, and the failure it reported then; a case file under `tests/cases/`
+is the default. For a task that fixes no bug, replace both fields with a
+line that starts with `Not applicable:` and gives the reason.
+`scripts/check-task-index` requires this section from TASK-636 on.
+
+- **Path**: <test file and test or case name>
+- **Observed failure**: <what the test reported without the fix>
+
 ## Verification
 
 - [ ] `cargo fmt --check`
 - [ ] `cargo clippy --all-targets -- -D warnings`
 - [ ] `cargo test`
+- [ ] Baseline changes reviewed and committed with the change
 
 ## Result
 

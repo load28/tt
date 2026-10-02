@@ -1,0 +1,168 @@
+=== valBindingPipedIntoMutableParameter.tt ===
+function touch(o: { n: number }) {
+>touch : function touch(o: {
+>       n: number;
+>   }): {
+>       n: number;
+>   }
+>o : (parameter) o: {
+>       n: number;
+>   }
+>n : (property) n: number
+  o.n = 1;
+>o : (parameter) o: {
+>       n: number;
+>   }
+>n : (property) n: number
+  return o;
+>o : (parameter) o: {
+>       n: number;
+>   }
+const arrowTouch = (o: { n: number }) => {
+>arrowTouch : const arrowTouch: (o: {
+>       n: number;
+>   }) => void
+>o : (parameter) o: {
+>       n: number;
+>   }
+>n : (property) n: number
+  o.n = 2;
+>o : (parameter) o: {
+>       n: number;
+>   }
+>n : (property) n: number
+function look(val o: { n: number }) {
+>look : function look(o: {
+>       n: number;
+>   }): number
+>o : (parameter) o: {
+>       n: number;
+>   }
+>n : (property) n: number
+  return o.n;
+>o : (parameter) o: {
+>       n: number;
+>   }
+>n : (property) n: number
+export function f(val cfg: { n: number }) {
+>f : function f(cfg: {
+>       n: number;
+>   }): number
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+>n : (property) n: number
+  cfg |> touch;
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+>touch : function touch(o: {
+>       n: number;
+>   }): {
+>       n: number;
+>   }
+  cfg |> arrowTouch;
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+>arrowTouch : const arrowTouch: (o: {
+>       n: number;
+>   }) => void
+  cfg |> touch |> String;
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+>touch : function touch(o: {
+>       n: number;
+>   }): {
+>       n: number;
+>   }
+>String : var String: StringConstructor
+  return cfg.n;
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+>n : (property) n: number
+export function g(val cfg: { n: number }) {
+>g : function g(cfg: {
+>       n: number;
+>   }): string
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+>n : (property) n: number
+  cfg |> (flow |> touch |> String);
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+>touch : function touch(o: {
+>       n: number;
+>   }): {
+>       n: number;
+>   }
+>String : var String: StringConstructor
+  (flow |> touch)(cfg);
+>flow : function touch(o: {
+>       n: number;
+>   }): {
+>       n: number;
+>   }
+>touch : function touch(o: {
+>       n: number;
+>   }): {
+>       n: number;
+>   }
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+  (flow |> (flow |> touch) |> String)(cfg);
+>flow : function touch(o: {
+>       n: number;
+>   }): {
+>       n: number;
+>   }
+>touch : function touch(o: {
+>       n: number;
+>   }): {
+>       n: number;
+>   }
+>String : var String: StringConstructor
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+  const text = `${cfg |> touch}`;
+>text : const text: string
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+>touch : function touch(o: {
+>       n: number;
+>   }): {
+>       n: number;
+>   }
+  cfg.n |> String;
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+>n : (property) n: number
+>String : var String: StringConstructor
+  cfg |> look;
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+>look : function look(o: {
+>       n: number;
+>   }): number
+  (flow |> look)(cfg);
+>flow : function look(o: {
+>       n: number;
+>   }): number
+>look : function look(o: {
+>       n: number;
+>   }): number
+>cfg : (parameter) cfg: {
+>       n: number;
+>   }
+  return text;
+>text : const text: string
+

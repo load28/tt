@@ -1,0 +1,12 @@
+=== aCaptureNeverEscapesAGeneratedConditionalRegion.tt ===
+declare const flag: boolean;
+>flag : const flag: boolean
+declare function id(v: number): number;
+>id : function id(v: number): number
+>v : (parameter) v: number
+export const short = flag && id(match (flag) { true => 1, _ => 0 });
+>short : const short: number | false
+>flag : const flag: boolean
+>id : function id(v: number): number
+>flag : const flag: true
+

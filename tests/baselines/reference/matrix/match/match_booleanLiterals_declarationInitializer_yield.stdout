@@ -1,0 +1,2 @@
+declarationInitializer(true) => 1 | yield true; yes 1
+declarationInitializer(false) => 0 | yield false; no 0

@@ -1,0 +1,2 @@
+matchBlockArm(3) => 6 | open res; arm true; operand 3; dispose res
+matchBlockArm(8) => 16 | open res; arm true; operand 8; dispose res

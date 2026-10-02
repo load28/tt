@@ -1,0 +1,8 @@
+=== duplicateBindingWithinOnePatternIsAnError.tt ===
+const n = match (r) { Ok(value: Some(value), error: value) => value, _ => 0 };
+>n : const n: any
+>value : any
+>error : any
+>value : const value: any
+>value : const value: any
+

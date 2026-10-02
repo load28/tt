@@ -1,0 +1,11 @@
+// A value whose union type is only partly incompatible with its target:
+// TypeScript names the incompatible part in its elaboration.
+declare function toEither(n: number): number | boolean;
+declare function needsNumber(n: number): number;
+export const direct: number = toEither(1);
+export const piped = 1 |> toEither |> needsNumber;
+declare function needsTwo(n: number, m: number): number;
+export const argument = needsTwo(1, 1 |> toEither);
+variant K { A, B }
+declare const k: K;
+export const matched: number = match (k) { A => toEither(1), B => 2 };

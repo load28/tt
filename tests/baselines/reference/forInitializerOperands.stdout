@@ -1,0 +1,6 @@
+firstDeclarator ok: {"kind":"Ok","value":[10,11,12]} after r body 0 body 1 body 2
+firstDeclarator err: {"kind":"Err","error":"r failed"} after r
+operand A(2): [4,7] after g(2)
+operand B: [0,3,6,9] after g(0)
+assignment A(7): [7,8] after 
+assignment B: [5,6] after 

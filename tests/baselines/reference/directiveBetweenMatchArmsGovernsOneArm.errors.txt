@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./directiveBetweenMatchArmsGovernsOneArm.tt → $DIR/out/directiveBetweenMatchArmsGovernsOneArm.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2339]: Property 'side' does not exist on type 'number'.
+  --> directiveBetweenMatchArmsGovernsOneArm.tt:11:20
+   |
+11 |     Square(s) => s.side,
+   |                    ^^^^
+error[ts2339]: Property 'other' does not exist on type 'number'.
+  --> directiveBetweenMatchArmsGovernsOneArm.tt:20:12
+   |
+20 |     _ => n.other,
+   |            ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+directiveBetweenMatchArmsGovernsOneArm.ts(44,20): error TS2339: Property 'side' does not exist on type 'number'.
+directiveBetweenMatchArmsGovernsOneArm.ts(72,8): error TS2339: Property 'other' does not exist on type 'number'.

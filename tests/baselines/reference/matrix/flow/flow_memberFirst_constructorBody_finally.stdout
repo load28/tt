@@ -1,0 +1,2 @@
+constructorBody(2) => 8 | receiver {"factor":3}; operand 2; finally 0; twice 6; add 8
+constructorBody(7) => 28 | receiver {"factor":3}; operand 7; finally 0; twice 21; add 28

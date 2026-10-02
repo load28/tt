@@ -1,0 +1,10 @@
+//// [typecheckLiteralMatchBlockBodies.tt] 8 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:1 -> 35:1 len 22  "const label: string = "
+2:30 -> 22:17 len 16  "\"a\" as \"a\" | \"b\""
+3:3 -> 24:10 len 3  "\"a\""
+3:19 -> 25:16 len 7  "\"first\""
+4:3 -> 27:10 len 3  "\"b\""
+4:19 -> 28:16 len 8  "\"second\""
+5:2 -> 35:29 len 14  ";\n\nexport {};\n"
+

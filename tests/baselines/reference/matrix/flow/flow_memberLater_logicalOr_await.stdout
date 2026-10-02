@@ -1,0 +1,2 @@
+logicalOr(2) => true | flip true
+logicalOr(3) => 18 | flip false; await; receiver {"factor":3}; add 6; twice 18

@@ -1,0 +1,2 @@
+tryBlock(3) => 3 | open res; operand 3; show 3; dispose res
+tryBlock(8) => 8 | open res; operand 8; show 8; dispose res

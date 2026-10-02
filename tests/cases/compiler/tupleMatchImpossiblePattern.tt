@@ -1,0 +1,13 @@
+// TypeScript's error on a tuple match's test that cannot succeed is placed
+// at the pattern that wrote it, not under the whole `match (...)` head: the
+// generated `.kind === "Slow"` comparison carries the pattern's tag as its
+// source context, as a single match's `case "Slow":` label does.
+// @baselines: errors.txt
+variant Speed { Fast, Slow }
+export function pair(a: Speed, b: { kind: "Fast" }): number {
+  return match (a, b) {
+    (Fast, Fast) => 1,
+    (_, Slow) => 2,
+    _ => 3,
+  };
+}

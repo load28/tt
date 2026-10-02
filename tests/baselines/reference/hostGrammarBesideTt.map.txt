@@ -1,0 +1,8 @@
+//// [hostGrammarBesideTt.tt] 6 mapping(s)
+1:1 -> 19:1 len 23  "// Repro from TASK-641\n"
+2:32 -> 26:3 len 166  "\ndeclare const dec: any;\ndeclare const readonly:"...
+7:42 -> 34:19 len 1  "f"
+8:9 -> 37:18 len 12  "<string>\"on\""
+9:10 -> 41:18 len 5  "\"off\""
+10:2 -> 50:2 len 39  ";\nexport { type Flag as \"flag type\" };\n"
+

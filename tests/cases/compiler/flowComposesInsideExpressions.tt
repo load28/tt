@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_06.rs::flow_composes_inside_expressions
+const a = xs.map(flow |> parse |> double);
+const b = `${flow |> f |> g}`;

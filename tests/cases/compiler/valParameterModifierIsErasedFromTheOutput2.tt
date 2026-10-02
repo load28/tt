@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::val_parameter_modifier_is_erased_from_the_output
+const read = (val user: User) => user.name;

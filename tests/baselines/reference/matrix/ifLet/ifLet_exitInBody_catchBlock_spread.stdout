@@ -1,0 +1,2 @@
+catchBlock(2) => "passed" | throw "boom"; read 2
+catchBlock(-2) => "diverged" | throw "boom"; read -2; error "negative -2"

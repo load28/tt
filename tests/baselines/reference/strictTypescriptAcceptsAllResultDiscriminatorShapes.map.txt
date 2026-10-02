@@ -1,0 +1,26 @@
+//// [strictTypescriptAcceptsAllResultDiscriminatorShapes.tt] 24 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:12 -> 2:9 len 6  "<T, E>"
+2:12 -> 6:7 len 6  "<T, E>"
+2:12 -> 7:8 len 6  "<T, E>"
+2:31 -> 3:26 len 1  "T"
+2:31 -> 6:21 len 1  "T"
+2:46 -> 4:27 len 1  "E"
+2:46 -> 7:22 len 1  "E"
+2:50 -> 8:3 len 60  "\ntype Alias<T, E> = Res<T, E>;\n\nconst directErr "...
+6:9 -> 16:9 len 5  "value"
+6:21 -> 12:18 len 17  "Res.Err(\"direct\")"
+6:39 -> 16:30 len 55  "\n  return Res.Ok(value);\n};\nconst directOk = () "...
+10:9 -> 24:9 len 5  "value"
+10:21 -> 20:18 len 9  "Res.Ok(1)"
+10:31 -> 24:30 len 105  "\n  return Res.Ok(value + 1);\n};\nconst widened = "...
+14:9 -> 32:9 len 5  "value"
+14:21 -> 28:18 len 5  "input"
+14:27 -> 32:30 len 109  "\n  return Res.Ok(value + 1);\n};\nconst aliased = "...
+18:9 -> 40:9 len 5  "value"
+18:21 -> 36:18 len 5  "input"
+18:27 -> 40:30 len 88  "\n  return Res.Ok(value + 1);\n};\nfunction generic"...
+22:9 -> 48:9 len 5  "value"
+22:21 -> 44:18 len 5  "input"
+22:27 -> 48:30 len 284  "\n  return Res.Ok(value);\n}\n\nconsole.log(JSON.str"...
+

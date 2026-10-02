@@ -1,0 +1,7 @@
+//// [anExplicitSemicolonOrABlockNeedsNoSeparator3.tt] 5 mapping(s)
+1:1 -> 1:1 len 201  "declare const o: { m(x: unknown): unknown };\ndec"...
+9:3 -> 9:38 len 1  "v"
+9:8 -> 9:42 len 1  "o"
+9:9 -> 9:27 len 2  ".m"
+9:11 -> 9:45 len 3  "\n}\n"
+

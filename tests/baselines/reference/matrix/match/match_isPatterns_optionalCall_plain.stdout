@@ -1,0 +1,4 @@
+optionalCall({}) => [["range"],null] | callee true; operand {}; range "range"; callee false
+optionalCall({}) => [[1],null] | callee true; operand {}; type 1; callee false
+optionalCall({}) => [["plain"],null] | callee true; operand {}; error "plain"; callee false
+optionalCall("text") => [[null],null] | callee true; operand "text"; other null; callee false

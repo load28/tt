@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_06.rs::plain_alias_is_still_an_alias_not_a_nested_pattern
+const n = match (o) { Some(value: None) => None, _ => 0 };

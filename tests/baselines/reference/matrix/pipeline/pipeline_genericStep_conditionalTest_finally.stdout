@@ -1,0 +1,2 @@
+conditionalTest(6) => "truthy" | operand 6; keep 6; double 12; then "truthy"; finally 0
+conditionalTest(-2) => "truthy" | operand -2; keep -2; double -4; then "truthy"; finally 0

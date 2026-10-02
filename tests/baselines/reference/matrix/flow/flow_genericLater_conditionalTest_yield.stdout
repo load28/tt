@@ -1,0 +1,2 @@
+conditionalTest(3) => "truthy" | yield 3; then "truthy"
+conditionalTest(-4) => "truthy" | yield -4; then "truthy"

@@ -1,0 +1,6 @@
+// @origin: tests/integration/cases_03.rs::flow_composition_input_mismatch_is_a_type_error_on_user_text
+const parse = (s: string) => s.length;
+const f = flow |> parse |> ((n: number) => n + 1);
+const v = f(3);
+
+export {};

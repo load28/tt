@@ -74,6 +74,24 @@
         }
       }
     ],
+    "semanticTokenScopes": [
+      {
+        "language": "tt",
+        "scopes": {
+          "keyword.declaration": [
+            "storage.type.variant.tt"
+          ]
+        }
+      },
+      {
+        "language": "ttx",
+        "scopes": {
+          "keyword.declaration": [
+            "storage.type.variant.tt"
+          ]
+        }
+      }
+    ],
     "configurationDefaults": {
       "explorer.fileNesting.enabled": true,
       "explorer.fileNesting.patterns": {

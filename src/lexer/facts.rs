@@ -34,7 +34,7 @@ mod types;
 #[cfg(test)]
 mod tests;
 
-pub(super) use types::type_arguments_end;
+pub(super) use types::{Lookaheads, type_arguments_end};
 
 use crate::ast::Span;
 use crate::scanner::{at, ident_end, skip_trivia, starts_identifier};
@@ -55,6 +55,11 @@ impl TokenFacts {
     const CONSTRUCTOR_BODY: u16 = 1 << 8;
     const TYPE_ARGUMENTS_OPEN: u16 = 1 << 9;
     const TYPE_ARGUMENTS_CLOSE: u16 = 1 << 10;
+    const DECLARATION: u16 = 1 << 11;
+    const OPERAND_START: u16 = 1 << 12;
+    const MODIFIED: u16 = 1 << 13;
+    const CLASS_BODY: u16 = 1 << 14;
+    const STATIC_BLOCK: u16 = 1 << 15;
 
     /// A line terminator (ECMA-262 §12.3: LF, CR, U+2028, U+2029), possibly
     /// inside a comment, separates this token from the previous one.
@@ -87,6 +92,27 @@ impl TokenFacts {
         self.0 & Self::LABEL != 0
     }
 
+    /// This `function` or `class` keyword begins a declaration, which binds
+    /// its name in the enclosing scope (ECMA-262 §15.2, §15.7). The same
+    /// keyword in an operand position begins an expression, whose name
+    /// binds only inside the function or class itself.
+    pub(crate) fn declaration(self) -> bool {
+        self.0 & Self::DECLARATION != 0
+    }
+
+    /// This token begins an operand where an expression expects one: a
+    /// value may be written here, as opposed to a statement keyword, a
+    /// member name, a binding, or a type.
+    pub(crate) fn operand_start(self) -> bool {
+        self.0 & Self::OPERAND_START != 0
+    }
+
+    /// This token continues a statement that modifiers or decorators began
+    /// (`export`, `declare`, `@dec`): what follows them is a declaration.
+    pub(crate) fn modified(self) -> bool {
+        self.0 & Self::MODIFIED != 0
+    }
+
     /// This token names a member of a class, interface, type literal, or
     /// object literal, where it is declared.
     pub(crate) fn member(self) -> bool {
@@ -108,6 +134,22 @@ impl TokenFacts {
     /// This function body `{` belongs to a class constructor.
     pub(crate) fn constructor_body(self) -> bool {
         self.0 & Self::CONSTRUCTOR_BODY != 0
+    }
+
+    /// This `{` opens a class body (ECMA-262 §15.7, `ClassBody`). What it
+    /// holds outside a method's body, a field initializer or a computed
+    /// member name, is evaluated by the class definition or by its own
+    /// initializer function (§15.7.10, §15.7.14), never by the function the
+    /// class is written in, so a `return` there cannot leave that function.
+    pub(crate) fn class_body(self) -> bool {
+        self.0 & Self::CLASS_BODY != 0
+    }
+
+    /// This `{` opens a class static block (ECMA-262 §15.7,
+    /// `ClassStaticBlock`). Its statement list is parsed with `[~Return]`,
+    /// so it has no function to return from.
+    pub(crate) fn static_block(self) -> bool {
+        self.0 & Self::STATIC_BLOCK != 0
     }
 
     /// This `<` opens a list of type arguments or type parameters
@@ -153,6 +195,11 @@ impl std::fmt::Debug for TokenFacts {
             (Self::CONSTRUCTOR_BODY, "constructor"),
             (Self::TYPE_ARGUMENTS_OPEN, "type-arguments-open"),
             (Self::TYPE_ARGUMENTS_CLOSE, "type-arguments-close"),
+            (Self::DECLARATION, "declaration"),
+            (Self::OPERAND_START, "operand-start"),
+            (Self::MODIFIED, "modified"),
+            (Self::CLASS_BODY, "class-body"),
+            (Self::STATIC_BLOCK, "static-block"),
         ];
         let set: Vec<&str> = names
             .iter()
@@ -285,15 +332,64 @@ struct Peek {
 pub(super) struct Machine<'s> {
     src: &'s str,
     end: usize,
-    stack: Vec<Frame>,
+    stack: FrameStack,
     facts: TokenFacts,
     /// The second byte of a postfix `++`/`--`, which changes nothing.
     skip_next: bool,
     last_end: usize,
     statements: Option<Vec<Span>>,
-    /// The stack [`Machine::operand_expected`] offers a byte to, kept
-    /// between queries so a query copies frames without allocating.
+    /// The frames [`Machine::operand_expected`] puts back after offering a
+    /// byte, kept between queries so a query does not allocate.
     probe: Vec<Frame>,
+    lookaheads: Lookaheads,
+}
+
+/// Each frame remembers the nearest enclosing list's `[Yield]` parameter.
+/// Keeping it with the frame makes both ordinary pops and speculative
+/// operand probes restore the grammar context without a scan of the stack.
+struct FrameStack(Vec<(Frame, Yield)>);
+
+impl FrameStack {
+    fn with_capacity(capacity: usize) -> Self {
+        Self(Vec::with_capacity(capacity))
+    }
+
+    fn yields(&self) -> Yield {
+        self.0
+            .last()
+            .map_or(Yield::Identifier, |(_, yields)| *yields)
+    }
+
+    fn push(&mut self, frame: Frame) {
+        crate::work::tick("yield context updates");
+        let yields = match frame {
+            Frame::List { yields, .. } if yields != Yield::Inherited => yields,
+            _ => self.yields(),
+        };
+        self.0.push((frame, yields));
+    }
+
+    fn pop(&mut self) -> Option<Frame> {
+        self.0.pop().map(|(frame, _)| frame)
+    }
+
+    fn last(&self) -> Option<&Frame> {
+        self.0.last().map(|(frame, _)| frame)
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn truncate(&mut self, len: usize) {
+        self.0.truncate(len);
+    }
+
+    fn extend(&mut self, frames: impl IntoIterator<Item = Frame>) {
+        for frame in frames {
+            self.push(frame);
+        }
+    }
 }
 
 impl Frame {
@@ -310,7 +406,7 @@ impl Frame {
 
 impl<'s> Machine<'s> {
     pub(super) fn new(src: &'s str, end: usize, start: Start, trace: bool) -> Self {
-        let mut stack = Vec::with_capacity(32);
+        let mut stack = FrameStack::with_capacity(32);
         match start {
             Start::Statements => stack.push(Frame::top_level()),
             Start::Expression => stack.push(Frame::Expr(Expr::new(ExprCfg::default()))),
@@ -324,6 +420,7 @@ impl<'s> Machine<'s> {
             last_end: 0,
             statements: trace.then(Vec::new),
             probe: Vec::new(),
+            lookaheads: Lookaheads::default(),
         }
     }
 
@@ -341,25 +438,35 @@ impl<'s> Machine<'s> {
     /// before the byte (§12.10.1) — and an operand is expected when an
     /// expression waiting for one receives it.
     pub(super) fn operand_expected(&mut self, at: usize, line_break: bool) -> bool {
-        let mut stack = std::mem::take(&mut self.probe);
-        stack.clear();
-        stack.extend_from_slice(&self.stack);
-        let mut probe = Machine {
-            src: self.src,
-            end: self.end,
-            stack,
-            facts: TokenFacts::default(),
-            skip_next: false,
-            last_end: self.last_end,
-            statements: None,
-            probe: Vec::new(),
-        };
-        let expected = probe.offer_operand_byte(at, line_break);
-        self.probe = probe.stack;
+        let facts = std::mem::take(&mut self.facts);
+        let skip_next = std::mem::take(&mut self.skip_next);
+        let last_end = self.last_end;
+        let statements = self.statements.take();
+        let mut popped = std::mem::take(&mut self.probe);
+        popped.clear();
+        let mut floor = self.stack.len();
+        let expected = self.offer_operand_byte(at, line_break, &mut floor, &mut popped);
+        self.stack.truncate(floor);
+        self.stack.extend(popped.drain(..).rev());
+        self.probe = popped;
+        self.facts = facts;
+        self.skip_next = skip_next;
+        self.last_end = last_end;
+        self.statements = statements;
         expected
     }
 
-    fn offer_operand_byte(&mut self, at: usize, line_break: bool) -> bool {
+    /// Offers the byte to the stack as [`Machine::operand_expected`] asks.
+    /// The frames the offer pops from below `floor` are kept in `popped`,
+    /// top first, so the caller puts the stack back by touching only the
+    /// frames the offer reached rather than copying the whole stack.
+    fn offer_operand_byte(
+        &mut self,
+        at: usize,
+        line_break: bool,
+        floor: &mut usize,
+        popped: &mut Vec<Frame>,
+    ) -> bool {
         let tok = Tok {
             kind: Tk::Punct(self.src.as_bytes()[at]),
             text: "",
@@ -370,7 +477,17 @@ impl<'s> Machine<'s> {
             line_break,
         };
         for _ in 0..4096 {
-            let frame = self.stack.pop().unwrap_or_else(Frame::top_level);
+            crate::work::tick("operand probe frames");
+            let frame = match self.stack.pop() {
+                Some(frame) => {
+                    if self.stack.len() < *floor {
+                        *floor = self.stack.len();
+                        popped.push(frame);
+                    }
+                    frame
+                }
+                None => Frame::top_level(),
+            };
             if let Frame::Expr(expr) = frame
                 && expr.operand_expected()
             {
@@ -383,13 +500,18 @@ impl<'s> Machine<'s> {
         false
     }
 
+    /// The lookahead answers this machine's region has found, which a scan
+    /// of the same region outside the machine (a JSX tag's type arguments)
+    /// shares.
+    pub(super) fn lookaheads(&self) -> &Lookaheads {
+        &self.lookaheads
+    }
+
     /// Whether `yield` is an operator where the machine stands: the nearest
     /// enclosing statement list that decides it is a generator's body.
     pub(super) fn yield_operator(&self) -> bool {
-        self.stack.iter().rev().find_map(|frame| match frame {
-            Frame::List { yields, .. } if *yields != Yield::Inherited => Some(*yields),
-            _ => None,
-        }) == Some(Yield::Operator)
+        crate::work::tick("yield context probes");
+        self.stack.yields() == Yield::Operator
     }
 
     /// Offers one token; returns its facts.
@@ -404,6 +526,7 @@ impl<'s> Machine<'s> {
             return self.facts.with(TokenFacts::ENDS_EXPRESSION);
         }
         let mut guard = 0usize;
+        let mut lowest = self.stack.len();
         loop {
             let Some(frame) = self.stack.pop() else {
                 self.stack.push(Frame::top_level());
@@ -411,6 +534,10 @@ impl<'s> Machine<'s> {
             };
             match self.step(frame, &tok) {
                 Out::Consumed => break,
+                Out::Retry if self.stack.len() < lowest => {
+                    lowest = self.stack.len();
+                    guard = 0;
+                }
                 Out::Retry => {
                     guard += 1;
                     debug_assert!(guard < 4096, "the facts machine made no progress");

@@ -1,0 +1,13 @@
+=== aWildcardOnlyMatchReadsNothingFromItsSubject.tt ===
+const values: (number | null | undefined)[] = [1, null, undefined];
+>values : const values: (number | null | undefined)[]
+console.log(JSON.stringify(values.map(v => match (v) { _ => "any" })));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>values : const values: (number | null | undefined)[]
+>map : (method) Array<number | null | undefined>.map<string>(callbackfn: (value: number | null | undefined, index: number, array: (number | null | undefined)[]) => string, thisArg?: any): string[]
+>v : (parameter) v: number | null | undefined
+>v : (parameter) v: number | null | undefined
+

@@ -1,0 +1,2 @@
+labeledBlock(3) => 6 | flip true; add 6; keep 6
+labeledBlock(-4) => [null] | flip false

@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[if-let-placement]: `if let` cannot be used in expression position — it is a statement and produces no value
+ --> ./ifLetInExpressionPositionIsAnError.tt:1:14
+  |
+1 | const s = `${if let Some(value) = o { 1 }}`;
+  |              ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: `match` on the value instead, or write the `if let` as a statement (inside an expression region, in a function written there)
+
+
+==== ttc --check-types (exit 1) ====
+error[if-let-placement]: `if let` cannot be used in expression position — it is a statement and produces no value
+ --> ifLetInExpressionPositionIsAnError.tt:1:14
+  |
+1 | const s = `${if let Some(value) = o { 1 }}`;
+  |              ^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: `match` on the value instead, or write the `if let` as a statement (inside an expression region, in a function written there)
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

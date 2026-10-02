@@ -1,0 +1,16 @@
+=== matchGuardsKeepTheirTypeNarrowingScope.tt ===
+declare const input: unknown;
+>input : const input: unknown
+declare const flag: boolean;
+>flag : const flag: boolean
+declare function consume(value: number): void;
+>consume : function consume(value: number): void
+>value : (parameter) value: number
+consume(match (flag) {
+>consume : function consume(value: number): void
+>flag : const flag: boolean
+  true if typeof input === "string" => input.length,
+>input : const input: unknown
+>input : const input: string
+>length : (property) String.length: number
+

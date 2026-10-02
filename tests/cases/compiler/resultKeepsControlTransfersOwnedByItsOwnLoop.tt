@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::result_keeps_control_transfers_owned_by_its_own_loop
+const value = result { const item = try read(); while (item) { break; } return item; };

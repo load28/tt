@@ -1,0 +1,2 @@
+componentBody(4) => "<p>[{\"kind\":\"North\"},{\"kind\":\"South\"},4]</p>" | open res; operand 4; operand 4; dispose res
+componentBody(9) => "<p>[{\"kind\":\"North\"},{\"kind\":\"South\"},9]</p>" | open res; operand 9; operand 9; dispose res

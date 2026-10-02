@@ -1,0 +1,8 @@
+differences from pipeline_genericStep_objectProperty_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:5:54 ===
+  |     return { a: note("a", 1), value: risky(input) |> keep |> double, c: note("c", 3) };
+  |                                                      ^ /*call*/
+  tt only: (alias) function keep<T>(value: T): T
+  ts only: (alias) function keep<number>(value: number): number
+

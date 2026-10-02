@@ -1,0 +1,3 @@
+//// [wildcardWithGuardIsNotTtSyntax.tt] 1 mapping(s)
+1:1 -> 1:1 len 44  "const r = match (x) { A => 1, _ if c => 0 };"
+

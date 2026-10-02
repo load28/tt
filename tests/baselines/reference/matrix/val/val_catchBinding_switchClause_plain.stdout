@@ -1,0 +1,2 @@
+switchClause(3) => {"n":3} | discriminant 1; operand 3; caught {"n":3}
+switchClause(8) => {"n":8} | discriminant 1; operand 8; caught {"n":8}

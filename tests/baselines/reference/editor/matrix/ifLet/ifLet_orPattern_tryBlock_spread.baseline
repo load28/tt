@@ -1,0 +1,12 @@
+differences from ifLet_orPattern_tryBlock_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== rename /*bind*/ main.tt:7:16 ===
+  |     if let Num(value) | Neg(value) = first(...[input]) { seen = note("number", value); }
+  |                ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+
+=== definition /*use*/ main.tt:7:80 ===
+  |     if let Num(value) | Neg(value) = first(...[input]) { seen = note("number", value); }
+  |                                                                                ^ /*use*/
+  tt only: main "value"
+

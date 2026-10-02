@@ -1,0 +1,2 @@
+throwOperand(2) => threw function | open res; operand 2; dispose res
+throwOperand(5) => threw function | open res; operand 5; dispose res

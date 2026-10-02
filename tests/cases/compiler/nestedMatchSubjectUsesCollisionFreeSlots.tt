@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_01.rs::nested_match_subject_uses_collision_free_slots
+variant V { A, B }
+declare const v: V;
+const n = match (match (v) { A => V.B, B => V.A }) { A => 1, B => 2 };

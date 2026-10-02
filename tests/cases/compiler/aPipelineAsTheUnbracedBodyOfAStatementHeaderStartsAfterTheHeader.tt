@@ -1,0 +1,11 @@
+// @origin: tests/compile/cases_11.rs::a_pipeline_as_the_unbraced_body_of_a_statement_header_starts_after_the_header
+declare const c: boolean, x: number;
+declare function g(n: number): any;
+declare const xs: AsyncIterable<number>;
+if (c) x |> g;
+if (c) x |> g; else x |> g;
+while (c) x |> g;
+for (;;) x |> g;
+for (const a of [1]) a |> g;
+async function h() { for await (const v of xs) v |> g; }
+const y = (c) |> g;

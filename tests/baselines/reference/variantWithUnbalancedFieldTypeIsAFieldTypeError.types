@@ -1,0 +1,9 @@
+=== variantWithUnbalancedFieldTypeIsAFieldTypeError.tt ===
+variant E { A(value: number]) }
+>E : type E = {
+>       kind: "A";
+>       value: any;
+>   }
+>A : (property) A: (value: any) => E
+>value : (property) value: any
+

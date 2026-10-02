@@ -226,6 +226,7 @@ export async function runCheck(
         message: d.message,
         code: d.code,
         suggestions: d.suggestions,
+        labels: d.labels,
       })),
     };
   }
@@ -387,7 +388,13 @@ export function runSymbols(
  * about `val`, it relays what ttc said (CLAUDE.md, error layers).
  */
 export type ValCheckResult =
-  | { kind: "ok"; diagnostics: TtcDiagnostic[] }
+  | {
+      kind: "ok";
+      diagnostics: TtcDiagnostic[];
+      /** The pass checked none of the buffer's TypeScript: it could not be
+       * lowered, and the diagnostics are its tt-level ones alone. */
+      blocked?: boolean;
+    }
   /** The check could not run (no toolchain, crash, or nothing to check).
    * Distinct from "ran and found nothing": the caller keeps what it has. */
   | {
@@ -463,18 +470,20 @@ export async function runTypedCheck(
       // keep the raw path; the comparison below still has a chance
     }
     const mine = all.filter((d) => d.path === real || d.path === fsPath);
-    // The one-shot parses only this file's lines off stderr, so a failing
-    // run whose findings are all in *other* files reads as "could not
-    // run" there — and therefore here.
-    if (mine.length === 0 && (result.blocked || all.length > 0)) {
+    // A pass that ran checked this file even when only other files have
+    // findings: none of its own is the answer "no typed diagnostics". A
+    // blocked pass with nothing of this file's was stopped by something
+    // outside it, and has no answer about this file.
+    if (mine.length === 0 && result.blocked) {
       return {
         kind: "unavailable",
-        detail: "the check reported only outside this file",
+        detail: "the check was blocked outside this file",
         cause: "availability",
       };
     }
     return {
       kind: "ok",
+      blocked: result.blocked === true,
       diagnostics: mine.map((d) => ({
         line: d.line,
         col: d.col,

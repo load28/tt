@@ -1,5 +1,6 @@
 //! Pipeline, template, import, and continued-expression emission.
 
+use super::source::RECOVERED_VALUE;
 use super::*;
 
 impl<'a> Emitter<'a> {
@@ -45,7 +46,7 @@ impl<'a> Emitter<'a> {
                         }
                         ApplyMode::Call => {
                             if accumulator_is_inert {
-                                push_receiver(&mut next, body, self.source_kind);
+                                push_callee(&mut next, body, self.source_kind);
                                 next.push_lit("(");
                                 push_grouped(&mut input, acc, self.source_kind);
                                 next.anchored_with_context(
@@ -78,6 +79,33 @@ impl<'a> Emitter<'a> {
                                     context,
                                     self.emit_member_step(step.value, member, call),
                                 );
+                            } else if self.reference_apply_steps.contains(&step.value) {
+                                let value = self.generated_name("$tt_v");
+                                let function = self.generated_name("$tt_f");
+                                next.push_lit(format!("(({value}, {function}) => {function}("));
+                                let mut piped = Rope::new();
+                                piped.push_lit(value);
+                                next.anchored_with_context(
+                                    AnchorKind::Pipe,
+                                    step_span.start,
+                                    step_span.end,
+                                    end,
+                                    context,
+                                    piped,
+                                );
+                                next.push_lit("))(");
+                                push_grouped(&mut input, acc, self.source_kind);
+                                next.anchored_with_context(
+                                    AnchorKind::Pipe,
+                                    step_span.start,
+                                    step_span.end,
+                                    end,
+                                    context,
+                                    input,
+                                );
+                                next.push_lit(", ");
+                                push_grouped(&mut next, body, self.source_kind);
+                                next.push_lit(")");
                             } else {
                                 self.used_pipe.set(true);
                                 next.push_lit(format!("{}(", self.generated_name("$tt_ap")));
@@ -94,6 +122,19 @@ impl<'a> Emitter<'a> {
                                 push_grouped(&mut next, body, self.source_kind);
                                 next.push_lit(")");
                             }
+                        }
+                        ApplyMode::Missing => {
+                            next.push_lit(format!("{RECOVERED_VALUE}("));
+                            push_grouped(&mut input, acc, self.source_kind);
+                            next.anchored_with_context(
+                                AnchorKind::Pipe,
+                                step_span.start,
+                                step_span.end,
+                                end,
+                                context,
+                                input,
+                            );
+                            next.push_lit(")");
                         }
                     }
                     acc = next;
@@ -123,6 +164,21 @@ impl<'a> Emitter<'a> {
         let mut names = vec![input_name.clone()];
         names.extend(self.member_operand_names(member));
         out.push_lit(format!("(({}) => ", names.join(", ")));
+        out.append(self.member_call(value, member, &input_name));
+        out.push_lit(")(");
+        out.append(input);
+        self.push_member_operands(&mut out, member, true);
+        out.push_lit(")");
+        out
+    }
+
+    fn member_call(
+        &self,
+        value: ExprId,
+        member: crate::program_syntax::MemberCallee,
+        input: &str,
+    ) -> Rope<'a> {
+        let mut out = Rope::new();
         if member.grouped {
             out.push_lit("(");
             out.append(self.member_callee_body(value, member));
@@ -130,8 +186,29 @@ impl<'a> Emitter<'a> {
         } else {
             out.append(self.member_callee_body(value, member));
         }
-        out.push_lit(format!("({input_name}))("));
-        out.append(input);
+        out.push_lit(format!("({input})"));
+        out
+    }
+
+    fn emit_optional_flow_step(
+        &self,
+        value: ExprId,
+        member: crate::program_syntax::MemberCallee,
+        composed: Rope<'a>,
+    ) -> Rope<'a> {
+        let composed_name = self.generated_name("$tt_f");
+        let input_name = self.generated_name("$tt_v");
+        let mut names = vec![composed_name.clone()];
+        names.extend(self.member_operand_names(member));
+        let mut out = Rope::new();
+        out.push_lit(format!(
+            "(({}) => {}({composed_name}, ({input_name}) => ",
+            names.join(", "),
+            self.generated_name("$tt_fl"),
+        ));
+        out.append(self.member_call(value, member, &input_name));
+        out.push_lit("))(");
+        out.append(composed);
         self.push_member_operands(&mut out, member, true);
         out.push_lit(")");
         out
@@ -239,22 +316,23 @@ impl<'a> Emitter<'a> {
             .next()
             .unwrap_or_else(|| crate::ice::bug!("flow has no step"));
         let mut acc = Rope::new();
-        push_grouped(
-            &mut acc,
-            self.emit_flow_function(first.value),
-            self.source_kind,
-        );
+        match first.mode {
+            ApplyMode::Missing => acc.push_lit(RECOVERED_VALUE),
+            _ => push_grouped(
+                &mut acc,
+                self.emit_flow_function(first.value),
+                self.source_kind,
+            ),
+        }
         let mut produced = self.span(first.node);
         for step in steps {
             self.used_flow.set(true);
             let step_span = self.span(step.node);
-            let body = self.emit_flow_function(step.value);
-            let mut next = Rope::new();
-            next.push_lit(format!("{}(", self.generated_name("$tt_fl")));
             // The composition built so far is what this step composes onto;
             // a mismatch on it means this step rejected it (see
             // `emit_apply`).
-            next.anchored_with_context(
+            let mut composed = Rope::new();
+            composed.anchored_with_context(
                 AnchorKind::Pipe,
                 step_span.start,
                 step_span.end,
@@ -262,6 +340,49 @@ impl<'a> Emitter<'a> {
                 Some((produced.start, produced.end)),
                 acc,
             );
+            let optional_member = self
+                .member_apply_steps
+                .get(&step.value)
+                .copied()
+                .filter(|member| member.optional && matches!(step.mode, ApplyMode::Call));
+            if let Some(member) = optional_member {
+                acc = self.emit_optional_flow_step(step.value, member, composed);
+                produced = step_span;
+                continue;
+            }
+            let body = self.emit_flow_function(step.value);
+            let mut next = Rope::new();
+            if matches!(step.mode, ApplyMode::Call)
+                && self.reference_apply_steps.contains(&step.value)
+            {
+                let prior = self.generated_name("$tt_g");
+                let function = self.generated_name("$tt_f");
+                let input_name = self.generated_name("$tt_v");
+                next.push_lit(format!(
+                    "(({prior}, {function}) => {}({prior}, ({input_name}) => {function}(",
+                    self.generated_name("$tt_fl")
+                ));
+                let mut piped = Rope::new();
+                piped.push_lit(input_name);
+                next.anchored_with_context(
+                    AnchorKind::Pipe,
+                    step_span.start,
+                    step_span.end,
+                    owner_end,
+                    Some((produced.start, produced.end)),
+                    piped,
+                );
+                next.push_lit(")))(");
+                next.append(composed);
+                next.push_lit(", ");
+                push_grouped(&mut next, body, self.source_kind);
+                next.push_lit(")");
+                acc = next;
+                produced = step_span;
+                continue;
+            }
+            next.push_lit(format!("{}(", self.generated_name("$tt_fl")));
+            next.append(composed);
             match step.mode {
                 ApplyMode::Postfix { .. } => {
                     let input_name = self.generated_name("$tt_v");
@@ -274,6 +395,7 @@ impl<'a> Emitter<'a> {
                     push_grouped(&mut next, body, self.source_kind);
                     next.push_lit(")");
                 }
+                ApplyMode::Missing => next.push_lit(format!(", {RECOVERED_VALUE})")),
             }
             acc = next;
             produced = step_span;
@@ -297,6 +419,9 @@ impl<'a> Emitter<'a> {
     pub(super) fn emit_import(&self, import: &Import, out: &mut Rope<'a>) {
         let (specifier, at) = self.source_node(import.specifier);
         if let hir::ImportKind::Std(module) = import.kind {
+            if !self.imported_std.borrow().contains(&module) {
+                self.imported_std.borrow_mut().push(module);
+            }
             match self.std_imports.get(module) {
                 Some(path) => {
                     let quote = &specifier[..1];
@@ -306,27 +431,20 @@ impl<'a> Emitter<'a> {
             }
             return;
         }
-        match self.rewrite_imports {
-            ImportRewrite::Off => out.push_src(specifier, at),
-            ImportRewrite::Js => {
-                let hir::ImportKind::Relative(kind) = import.kind else {
-                    unreachable!("standard-library imports returned above")
-                };
-                let extension = if kind.is_tsx() { "jsx" } else { "js" };
-                let suffix_len = if kind.is_tsx() { 5 } else { 4 };
-                out.push_src(&specifier[..specifier.len() - suffix_len], at);
-                out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
-            }
-            ImportRewrite::Ts => {
-                let hir::ImportKind::Relative(kind) = import.kind else {
-                    unreachable!("standard-library imports returned above")
-                };
-                let extension = kind.output_extension();
-                let suffix_len = if kind.is_tsx() { 5 } else { 4 };
-                out.push_src(&specifier[..specifier.len() - suffix_len], at);
-                out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
-            }
-        }
+        let Some(extensions) = self.rewrite_imports else {
+            out.push_src(specifier, at);
+            return;
+        };
+        let hir::ImportKind::Relative(kind) = import.kind else {
+            unreachable!("standard-library imports returned above")
+        };
+        let (extension, suffix_len) = if kind.is_tsx() {
+            (extensions.ttx, 5)
+        } else {
+            (extensions.tt, 4)
+        };
+        out.push_src(&specifier[..specifier.len() - suffix_len], at);
+        out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
     }
 
     pub(super) fn emit_statement_decision(
@@ -335,10 +453,23 @@ impl<'a> Emitter<'a> {
         out: &mut Rope<'a>,
         body: &dyn Fn(hir::BodyId) -> Rope<'a>,
     ) {
+        crate::stack::grow(|| self.emit_statement_decision_grown(decision, out, body));
+    }
+
+    fn emit_statement_decision_grown(
+        &self,
+        decision: &Decision,
+        out: &mut Rope<'a>,
+        body: &dyn Fn(hir::BodyId) -> Rope<'a>,
+    ) {
         let span = self.span(decision.head);
         let (kind, inner) = match &decision.kind {
-            DecisionKind::LetElse { binding_mode, .. } => {
-                let mut inner = self.emit_let_else(decision, *binding_mode, body);
+            DecisionKind::LetElse {
+                binding_mode,
+                exported,
+                ..
+            } => {
+                let mut inner = self.emit_let_else(decision, *binding_mode, *exported, body);
                 if self.block_required_statements.contains(&decision.extent) {
                     inner = Rope::braced(inner);
                 }
@@ -388,6 +519,7 @@ impl<'a> Emitter<'a> {
         &self,
         decision: &Decision,
         mode: BindingMode,
+        exported: bool,
         emit_body: &dyn Fn(hir::BodyId) -> Rope<'a>,
     ) -> Rope<'a> {
         let subject = &decision.subjects[0];
@@ -427,14 +559,33 @@ impl<'a> Emitter<'a> {
         out.push_lit("}");
         let mut recovery = BindingRecovery::new(self, &arm.pattern);
         out.push_break(0);
+        if let Some(documentation) = self.relocated_documentation(self.span(decision.extent).start)
+        {
+            out.append(documentation);
+        }
         out.append(
-            self.emit_bindings(&arm.pattern, decision, Some(mode), &mut recovery, Some(0))
-                .trim(),
+            self.emit_bindings(
+                &arm.pattern,
+                decision,
+                Some(Declaration { mode, exported }),
+                &mut recovery,
+                Some(0),
+            )
+            .trim(),
         );
+        self.push_head_comments(arm, 0, &mut out);
         Rope::scoped(out)
     }
 
     pub(super) fn emit_if_let(
+        &self,
+        decision: &Decision,
+        emit_body: &dyn Fn(hir::BodyId) -> Rope<'a>,
+    ) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_if_let_grown(decision, emit_body))
+    }
+
+    fn emit_if_let_grown(
         &self,
         decision: &Decision,
         emit_body: &dyn Fn(hir::BodyId) -> Rope<'a>,
@@ -463,16 +614,28 @@ impl<'a> Emitter<'a> {
         out.append(Rope::indented(2, emit_body(body).trim()));
         out.push_break(1);
         out.push_lit("}");
+        let head_commented = self.push_head_comments(arm, 1, &mut out);
+        let gap_commented = self.push_gap_comments(decision.trailing, 1, &mut out);
+        let commented = head_commented || gap_commented;
+        let separate = |out: &mut Rope<'a>| {
+            if commented {
+                out.push_break(1);
+            } else {
+                out.push_lit(" ");
+            }
+        };
         match &decision.miss {
             MissAction::Execute(body) => {
-                out.push_lit(" else {");
+                separate(&mut out);
+                out.push_lit("else {");
                 out.push_break(2);
                 out.append(Rope::indented(2, emit_body(*body).trim()));
                 out.push_break(1);
                 out.push_lit("}");
             }
             MissAction::Decision(inner) => {
-                out.push_lit(" else ");
+                separate(&mut out);
+                out.push_lit("else ");
                 out.append(self.emit_if_let(inner, emit_body));
             }
             MissAction::Nothing => {}
@@ -486,6 +649,15 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_value_decision(
+        &self,
+        decision: &Decision,
+        continuation: &ValueContinuation<'_>,
+        exits: &[HostExit],
+    ) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_value_decision_grown(decision, continuation, exits))
+    }
+
+    fn emit_value_decision_grown(
         &self,
         decision: &Decision,
         continuation: &ValueContinuation<'_>,
@@ -543,6 +715,14 @@ impl<'a> Emitter<'a> {
         expr: ExprId,
         continuation: &ValueContinuation<'_>,
     ) -> Option<Rope<'a>> {
+        crate::stack::grow(|| self.emit_continued_expr_grown(expr, continuation))
+    }
+
+    fn emit_continued_expr_grown(
+        &self,
+        expr: ExprId,
+        continuation: &ValueContinuation<'_>,
+    ) -> Option<Rope<'a>> {
         if !self.core.has_statement_form(expr) {
             return None;
         }
@@ -581,14 +761,14 @@ impl<'a> Emitter<'a> {
             Expr::Apply(apply) => self.emit_apply_continued(expr, apply, continuation),
             Expr::Template(template) => {
                 let (mut out, value) = self.emit_template_operand(expr, template, continuation)?;
-                out.append(self.emit_value_delivery(value, None, continuation));
+                out.append(self.emit_value_delivery_without_region_exit(value, continuation));
                 Some(Rope::scoped(out))
             }
             Expr::Opaque(_) => None,
         }
     }
 
-    fn emit_nested_operand(&self, expr: ExprId) -> Option<(Rope<'a>, Rope<'a>)> {
+    pub(super) fn emit_nested_operand(&self, expr: ExprId) -> Option<(Rope<'a>, Rope<'a>)> {
         match &self.core.exprs[expr.index()] {
             Expr::Sequence(body) => {
                 self.emit_sequence_operand(*body, &ValueContinuation::expression())
@@ -699,6 +879,15 @@ impl<'a> Emitter<'a> {
             inner.push_lit(";");
         }
         for (index, step) in apply.steps.iter().enumerate() {
+            if step.mode == ApplyMode::Missing {
+                inner.push_break(1);
+                let input = self.pipe_input(apply, index, &piped[index]);
+                push_target(&mut inner, index);
+                inner.push_lit(format!("{RECOVERED_VALUE}("));
+                inner.append(input);
+                inner.push_lit(");");
+                continue;
+            }
             let conditionally_reached = matches!(step.mode, ApplyMode::Postfix { optional: true });
             let operand = match (step.mode, self.emit_nested_operand(step.value)) {
                 (ApplyMode::Postfix { .. }, Some((prelude, value))) => {
@@ -751,6 +940,7 @@ impl<'a> Emitter<'a> {
                     inner.append(input);
                     inner.push_lit(");");
                 }
+                ApplyMode::Missing => unreachable!("a missing step is emitted above"),
             }
         }
         inner.push_break(1);

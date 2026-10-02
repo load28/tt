@@ -1,0 +1,16 @@
+//// [armWithoutBody.tt] 14 mapping(s)
+1:1 -> 1:1 len 23  "// Repro from TASK-605\n"
+2:32 -> 3:31 len 6  "number"
+2:32 -> 6:20 len 6  "number"
+2:53 -> 4:28 len 6  "number"
+2:53 -> 7:17 len 6  "number"
+2:62 -> 8:3 len 25  "\ndeclare const s: Shape;\n"
+4:1 -> 30:1 len 17  "export const a = "
+4:25 -> 12:17 len 1  "s"
+4:37 -> 15:15 len 6  "radius"
+4:48 -> 16:16 len 6  "radius"
+4:61 -> 20:15 len 5  "width"
+4:71 -> 21:11 len 9  "width > 0"
+4:87 -> 26:14 len 1  "0"
+4:90 -> 30:24 len 2  ";\n"
+

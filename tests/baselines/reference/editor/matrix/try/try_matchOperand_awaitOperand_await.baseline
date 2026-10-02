@@ -1,0 +1,5 @@
+differences from try_matchOperand_awaitOperand_await at the questions listed in tests/editor-matrix-differences.txt
+
+=== diagnostics main.tt ===
+  ts only: main "await (unwrap(((t0: number) => (t0 === 1 ? read(note(\"one\", 10)) : read(note(\"other\", -10))))(await later(input))))" hint TS80007: 'await' has no effect on the type of this expression.
+

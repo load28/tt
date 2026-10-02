@@ -1,0 +1,2 @@
+forInitializer(2.5) => ["2.50"] | open res; operand 2.5; positive 2.5; dispose res
+forInitializer(-3) => [null] | open res; operand -3; positive undefined; dispose res

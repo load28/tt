@@ -1,0 +1,12 @@
+// @origin: tests/integration/contextual.rs::a_value_with_no_contextual_type_is_typed_as_at_its_source_position
+// @run: aValueWithNoContextualTypeIsTypedAsAtItsSourcePosition2.tt
+
+function pick(n: number) {
+  const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };
+  const f = match (n) { 1 => () => b.m().k, _ => function () { return 0; } };
+  const xs = match (n) { 1 => [n], _ => [] };
+  return [b.m().k, f(), xs.length].join(",");
+}
+console.log(pick(1), pick(2));
+
+export {};

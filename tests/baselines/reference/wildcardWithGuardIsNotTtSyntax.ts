@@ -1,0 +1,3 @@
+//// [wildcardWithGuardIsNotTtSyntax.tt] ////
+const r = match (x) { A => 1, _ if c => 0 };
+

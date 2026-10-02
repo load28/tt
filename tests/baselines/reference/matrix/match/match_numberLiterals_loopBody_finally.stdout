@@ -1,0 +1,5 @@
+loopBody(200) => [true,true] | operand 200; success true; operand 200; success true; finally 0
+loopBody(201) => [true,true] | operand 201; success true; operand 201; success true; finally 0
+loopBody(404) => [false,false] | operand 404; missing false; operand 404; missing false; finally 0
+loopBody(500) => [false,false] | operand 500; guard true; server false; operand 500; guard true; server false; finally 0
+loopBody(7) => [null,null] | operand 7; other null; operand 7; other null; finally 0

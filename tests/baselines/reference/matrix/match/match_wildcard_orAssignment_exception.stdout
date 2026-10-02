@@ -1,0 +1,4 @@
+orAssignment({"kind":"Num","value":4}) => -1 | flip true; target {"value":0}; risky {"kind":"Num","value":4}; other -1
+orAssignment({"kind":"Neg","value":-3}) => "kept" | flip false; target {"value":"kept"}
+orAssignment({"kind":"Word","text":"hi"}) => 2 | flip true; target {"value":0}; risky {"kind":"Word","text":"hi"}; word 2
+orAssignment({"kind":"End"}) => "kept" | flip false; target {"value":"kept"}

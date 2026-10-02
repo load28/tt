@@ -1,0 +1,12 @@
+differences from match_orPattern_jsxTernary_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== definition /*use*/ main.ttx:5:98 ===
+  |   return <p>{flip() ? match (note("operand", input)) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") } : <i>none</i>}</p>;
+  |                                                                                                  ^ /*use*/
+  tt only: main "value"
+
+=== rename /*bind*/ main.ttx:5:60 ===
+  |   return <p>{flip() ? match (note("operand", input)) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") } : <i>none</i>}</p>;
+  |                                                            ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+

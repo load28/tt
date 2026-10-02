@@ -1,0 +1,5 @@
+templateLiteral(200) => "<L|true|R>" | left "L"; risky 200; success true; right "R"
+templateLiteral(201) => "<L|true|R>" | left "L"; risky 201; success true; right "R"
+templateLiteral(404) => "risky call 3" | left "L"; caught "risky call 3"
+templateLiteral(500) => "<L|false|R>" | left "L"; risky 500; guard true; server false; right "R"
+templateLiteral(7) => "<L|null|R>" | left "L"; risky 7; other null; right "R"

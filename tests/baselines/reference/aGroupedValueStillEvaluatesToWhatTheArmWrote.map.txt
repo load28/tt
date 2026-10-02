@@ -1,0 +1,15 @@
+//// [aGroupedValueStillEvaluatesToWhatTheArmWrote.tt] 13 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 114  "\nconst e: E = E.A(1);\nconst seen: number[] = [];"...
+5:1 -> 47:1 len 12  "const seq = "
+5:20 -> 31:17 len 1  "e"
+6:3 -> 34:15 len 1  "v"
+7:8 -> 35:17 len 15  "note(v), v + 10"
+9:6 -> 39:16 len 1  "0"
+10:2 -> 47:19 len 36  ";\nconst width = 3;\nconst receiver = "
+12:18 -> 49:19 len 11  "width + 0.5"
+12:33 -> 49:31 len 38  ".toFixed(1);\nconst chained = \"  pad  \""
+13:30 -> 50:26 len 7  ".trim()"
+13:41 -> 50:33 len 74  ".length;\nconsole.log(seq, seen.join(\",\"), receiv"...
+

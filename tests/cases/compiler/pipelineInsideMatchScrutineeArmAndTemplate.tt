@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_05.rs::pipeline_inside_match_scrutinee_arm_and_template
+variant E { A(v: number), B }
+const r = match (x |> norm) {
+  A(v) => v |> double,
+  B => 0,
+};
+const t = `n=${x |> f}`;

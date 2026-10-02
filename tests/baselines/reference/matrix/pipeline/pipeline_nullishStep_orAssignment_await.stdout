@@ -1,0 +1,2 @@
+orAssignment(10) => 20 | flip true; target {"value":0}; await; flip false; lookup false; double 20
+orAssignment(20) => 40 | flip true; target {"value":0}; await; flip false; lookup false; double 40

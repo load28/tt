@@ -1,0 +1,18 @@
+//// [aLabeledLoopKeepsItsLabelOnTheLoopWhenItsHeaderHoistsAValue.tt] 16 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 78  "\ndeclare const s: S;\ndeclare const c: boolean;\nf"...
+5:3 -> 47:3 len 21  "lbl: for (const q of "
+5:31 -> 31:19 len 1  "s"
+5:38 -> 34:17 len 1  "n"
+5:44 -> 35:18 len 5  "xs[n]"
+5:56 -> 39:18 len 2  "[]"
+5:60 -> 47:30 len 36  ") { if (c) continue lbl; }\n  if (c) "
+6:10 -> 67:5 len 30  "outer: inner: for (const q of "
+6:47 -> 51:21 len 1  "s"
+6:54 -> 54:19 len 1  "n"
+6:60 -> 55:20 len 5  "xs[n]"
+6:72 -> 59:20 len 2  "[]"
+6:76 -> 67:41 len 21  ") { continue outer; }"
+6:97 -> 68:4 len 3  "\n}\n"
+

@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_01.rs::one_shot_for_headers_hoist_match_control_flow_once
+for (let value = match (source) { is Number => 1, _ => 0 }; value < 2; value++) { use(value); }

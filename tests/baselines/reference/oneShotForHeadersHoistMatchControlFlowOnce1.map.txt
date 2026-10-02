@@ -1,0 +1,9 @@
+//// [oneShotForHeadersHoistMatchControlFlowOnce1.tt] 7 mapping(s)
+1:1 -> 4:3 len 20  "for (const value of "
+1:28 -> 2:17 len 6  "source"
+1:41 -> 4:42 len 5  "Array"
+1:50 -> 4:51 len 6  "source"
+1:63 -> 4:60 len 2  "[]"
+1:67 -> 4:63 len 17  ") { use(value); }"
+1:84 -> 5:2 len 1  "\n"
+

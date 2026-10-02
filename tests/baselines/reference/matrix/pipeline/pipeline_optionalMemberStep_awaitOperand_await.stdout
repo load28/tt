@@ -1,0 +1,3 @@
+awaitOperand(3) => 9 | await; flip true; maybe true; twice 9
+awaitOperand(4) => undefined | await; flip false; maybe false
+awaitOperand(5) => 15 | await; flip true; maybe true; twice 15

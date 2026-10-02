@@ -1,0 +1,2 @@
+laterDeclarator(3) => [1,"***6"] | open res; before 1; operand 3; double 6; dispose res
+laterDeclarator(12) => [1,"**24"] | open res; before 1; operand 12; double 24; dispose res

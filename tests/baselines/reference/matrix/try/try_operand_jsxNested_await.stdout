@@ -1,0 +1,2 @@
+jsxNested(2) => {"kind":"Ok","value":"<ul><li>1</li><li>2</li></ul>"} | first 1; await; read 2
+jsxNested(-1) => {"kind":"Err","error":"negative -1"} | first 1; await; read -1

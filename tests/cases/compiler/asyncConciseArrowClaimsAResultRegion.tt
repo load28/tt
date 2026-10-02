@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_01.rs::async_concise_arrow_claims_a_result_region
+variant R { Ok(value: number), Err(error: string) }
+declare const g: () => R;
+const f = async (): Promise<R> => result { const x = try g(); return x + 1; };

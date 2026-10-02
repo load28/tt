@@ -62,6 +62,25 @@ impl From<&crate::ExternVariant> for ExternDecl {
     }
 }
 
+/// A variant declaration a file imports, as the engine collects it: the
+/// declaration under the name the import gives it, and the specifier the
+/// import is written with — the origin a message names, as the command
+/// line's collector records it in [`crate::ExternVariant::from`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ImportedVariant {
+    pub(crate) specifier: String,
+    pub(crate) symbol: crate::VariantSymbol,
+}
+
+impl From<&ImportedVariant> for ExternDecl {
+    fn from(imported: &ImportedVariant) -> ExternDecl {
+        ExternDecl {
+            from: Some(imported.specifier.clone()),
+            ..ExternDecl::from(&imported.symbol)
+        }
+    }
+}
+
 impl From<&crate::VariantSymbol> for ExternDecl {
     fn from(e: &crate::VariantSymbol) -> ExternDecl {
         ExternDecl {
@@ -584,6 +603,20 @@ impl Resolver {
         positions: usize,
         variant_def: DefId,
     ) {
+        crate::stack::grow(|| {
+            self.resolve_position_grown(hir, site, pattern, position, positions, variant_def)
+        });
+    }
+
+    fn resolve_position_grown(
+        &mut self,
+        hir: &HirFile,
+        site: PatternSiteId,
+        pattern: PatternId,
+        position: usize,
+        positions: usize,
+        variant_def: DefId,
+    ) {
         match &hir.patterns[pattern] {
             Pat::Wildcard | Pat::Literal(_) | Pat::Instance { .. } => {}
             Pat::Or(alts) => {
@@ -602,7 +635,7 @@ impl Resolver {
                     }
                 }
             }
-            Pat::Constructor { path, fields } => {
+            Pat::Constructor { path, fields, .. } => {
                 self.resolve_constructor(hir, site, path, fields.as_deref(), variant_def);
             }
         }
@@ -674,6 +707,16 @@ impl Resolver {
         fields: &[hir::FieldPat],
         variant: VariantRef,
     ) {
+        crate::stack::grow(|| self.resolve_fields_grown(hir, site, fields, variant));
+    }
+
+    fn resolve_fields_grown(
+        &mut self,
+        hir: &HirFile,
+        site: PatternSiteId,
+        fields: &[hir::FieldPat],
+        variant: VariantRef,
+    ) {
         let Some(declared) = self.resolution.variant(variant).and_then(|v| {
             v.fields.as_ref().map(|fields| {
                 fields
@@ -709,7 +752,7 @@ impl Resolver {
                     // its instantiation belongs to TypeScript and an exact tag
                     // elsewhere in scope is not proof of ownership.
                     if let FieldBinding::Nested(inner) = &field_pat.binding
-                        && let Pat::Constructor { path, fields } = &hir.patterns[*inner]
+                        && let Pat::Constructor { path, fields, .. } = &hir.patterns[*inner]
                         && let Some(nested_variant) = self.variant_of_type(&declared[index].1)
                     {
                         self.resolve_constructor(
@@ -769,6 +812,16 @@ impl Resolver {
 /// each tuple element speaks for its own position and a wildcard arm for
 /// none.
 fn collect_position_tags<'h>(
+    hir: &'h HirFile,
+    pattern: PatternId,
+    position: usize,
+    positions: usize,
+    out: &mut Vec<&'h str>,
+) {
+    crate::stack::grow(|| collect_position_tags_grown(hir, pattern, position, positions, out));
+}
+
+fn collect_position_tags_grown<'h>(
     hir: &'h HirFile,
     pattern: PatternId,
     position: usize,

@@ -1,0 +1,13 @@
+differences from pipeline_assertionThenStep_jsxTernary_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.ttx:4:52 ===
+  |   return <p>{flip() ? (box(input)?.inner.value! |> String as string |> .length) : <i>none</i>}</p>;
+  |                                                    ^ /*call*/
+  tt only: var String: StringConstructor
+  ts only: var String: (value?: any) => string
+
+=== definition /*call*/ main.ttx:4:52 ===
+  |   return <p>{flip() ? (box(input)?.inner.value! |> String as string |> .length) : <i>none</i>}</p>;
+  |                                                    ^ /*call*/
+  ts only: <external>/lib.es5.d.ts 534:5-534:27
+

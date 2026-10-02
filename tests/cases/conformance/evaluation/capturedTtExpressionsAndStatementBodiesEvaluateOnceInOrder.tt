@@ -1,0 +1,15 @@
+// @origin: tests/integration.rs::captured_tt_expressions_and_statement_bodies_evaluate_once_in_order
+// @run: capturedTtExpressionsAndStatementBodiesEvaluateOnceInOrder.tt
+
+variant E { A(value: number), B }
+const events: string[] = [];
+function note(n: number) { events.push(`n:${n}`); return n; }
+function callable() { events.push("callee"); return (n: number) => { events.push(`call:${n}`); return n; }; }
+const values = [(note(1) |> ((n: number) => note(n + 1))), match(note(3)) { 3 => 3, _ => 0 }];
+const calls = callable()(match(note(4)){4=>4,_=>0}) + callable()(match(note(5)){5=>5,_=>0});
+const statements = [(() => { if let A(value) = E.A(note(6)) { return value; } return 0; })(), match(note(7)){7=>7,_=>0}];
+const bindings = [(() => { const A(value) = E.A(note(8)) else { return 0; }; return value; })(), match(note(9)){9=>9,_=>0}];
+console.log(JSON.stringify([values, calls, statements, bindings]));
+console.log(events.join(","));
+
+export {};

@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::val_covers_every_or_pattern_alternatives_bindings
+variant E { A(x: Box), B(x: Box) }
+function f(e: E) {
+  val const A(x) | B(x) = e else { return; };
+  x.n = 1;
+}

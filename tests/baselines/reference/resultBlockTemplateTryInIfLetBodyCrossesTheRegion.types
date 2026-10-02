@@ -1,0 +1,77 @@
+=== resultBlockTemplateTryInIfLetBodyCrossesTheRegion.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+type O = { kind: "Some"; value: number } | { kind: "None" };
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>kind : (property) kind: "None"
+declare function rd(n: number): R;
+>rd : function rd(n: number): R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+declare function opt(n: number): O;
+>opt : function opt(n: number): O
+>n : (parameter) n: number
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+export function ifLetBody(n: number) {
+>ifLetBody : function ifLetBody(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>n : (parameter) n: number
+    if let Some(value: b) = opt(n) {
+>value : (property) value: number
+>b : const b: number
+>opt : function opt(n: number): O
+>n : (parameter) n: number
+      return `<${try rd(b)}>`;
+>rd : function rd(n: number): R
+>b : const b: number
+export function letElseBlock(n: number) {
+>letElseBlock : function letElseBlock(n: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: string;
+>   }
+>n : (parameter) n: number
+    const Some(value: b) = opt(n) else { return `<${try rd(-1)}>`; };
+>value : (property) value: number
+>b : const b: number
+>opt : function opt(n: number): O
+>n : (parameter) n: number
+>rd : function rd(n: number): R
+    return `${b}`;
+>b : const b: number
+

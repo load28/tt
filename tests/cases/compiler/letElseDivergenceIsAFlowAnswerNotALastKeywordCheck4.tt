@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_04.rs::let_else_divergence_is_a_flow_answer_not_a_last_keyword_check
+function f(): number {
+  const Some(v) = find() else { { return 1; } };
+  return v;
+}

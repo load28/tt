@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_08.rs::val_capability_flows_through_arrow_declarations
+const update = (user: User) => { user.name = "x"; };
+function process(val user: User) {
+  update(user);
+}

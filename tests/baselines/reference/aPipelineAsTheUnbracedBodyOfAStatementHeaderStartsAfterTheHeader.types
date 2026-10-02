@@ -1,0 +1,42 @@
+=== aPipelineAsTheUnbracedBodyOfAStatementHeaderStartsAfterTheHeader.tt ===
+declare const c: boolean, x: number;
+>c : const c: boolean
+>x : const x: number
+declare function g(n: number): any;
+>g : function g(n: number): any
+>n : (parameter) n: number
+declare const xs: AsyncIterable<number>;
+>xs : const xs: AsyncIterable<number>
+>AsyncIterable : interface AsyncIterable<T, TReturn = any, TNext = any>
+if (c) x |> g;
+>c : const c: boolean
+>x : const x: number
+>g : function g(n: number): any
+if (c) x |> g; else x |> g;
+>c : const c: boolean
+>x : const x: number
+>g : function g(n: number): any
+>x : const x: number
+>g : function g(n: number): any
+while (c) x |> g;
+>c : const c: boolean
+>x : const x: number
+>g : function g(n: number): any
+for (;;) x |> g;
+>x : const x: number
+>g : function g(n: number): any
+for (const a of [1]) a |> g;
+>a : const a: number
+>a : const a: number
+>g : function g(n: number): any
+async function h() { for await (const v of xs) v |> g; }
+>h : function h(): Promise<void>
+>v : const v: number
+>xs : const xs: AsyncIterable<number>
+>v : const v: number
+>g : function g(n: number): any
+const y = (c) |> g;
+>y : const y: any
+>c : const c: boolean
+>g : function g(n: number): any
+

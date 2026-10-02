@@ -1,0 +1,2 @@
+jsxChild(2) => "<p>{'kind':'Ok','value':6}</p>" | risky 2; read 2; inner {"kind":"Ok","value":3}
+jsxChild(-1) => "<p>{'kind':'Err','error':'negative -1'}</p>" | risky -1; read -1; inner {"kind":"Err","error":"negative -1"}

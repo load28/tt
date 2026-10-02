@@ -1,0 +1,13 @@
+// @origin: tests/integration/pr115.rs::template_captures_preserve_delimiters_and_evaluation_order
+// @run: templateCapturesPreserveDelimitersAndEvaluationOrder.tt
+
+variant Shape { Circle(radius: number), Point }
+const s = Shape.Circle(5);
+const trace: string[] = [];
+function before() { trace.push("before"); return 2; }
+function arm(n: number) { trace.push("arm"); return n; }
+const values = [1].map(x => `${before()}${x}` + match(s) { Circle(radius) => arm(radius), Point => 0 });
+console.log(values[0], trace.join(","));
+console.log(`${1}${match(s) { Circle(radius) => radius, Point => 0 }}${2}`);
+
+export {};

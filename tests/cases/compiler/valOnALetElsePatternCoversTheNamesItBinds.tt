@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::val_on_a_let_else_pattern_covers_the_names_it_binds
+variant Opt { Some(value: Box), None }
+function f(o: Opt) {
+  val const Some(value) = o else { return; };
+  value.n = 1;
+}

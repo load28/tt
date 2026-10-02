@@ -35,6 +35,34 @@ fn semicolon_free_concise_arrow_does_not_own_the_next_try_statement() {
 }
 
 #[test]
+fn class_code_outside_methods_is_its_own_function_target() {
+    let source =
+        "function outer() { class H { static { A; } f = B; [C] = 1; m() { D; } g = () => E; } }";
+    let tokens = crate::lexer::lex(source, 0, source.len());
+    let at = |name: &str| {
+        tokens
+            .iter()
+            .position(|token| &source[token.span.start..token.span.end] == name)
+            .expect("marker token")
+    };
+    let targets = FunctionTargets::new(&tokens, &|_| std::collections::HashSet::new());
+    for (name, target) in [
+        ("A", FunctionTarget::StaticBlock),
+        ("B", FunctionTarget::ClassElement),
+        ("C", FunctionTarget::ClassElement),
+        ("D", FunctionTarget::Ordinary),
+        ("E", FunctionTarget::Ordinary),
+    ] {
+        assert_eq!(
+            function_target_at(&tokens, at(name)),
+            Some(target),
+            "{name}"
+        );
+        assert_eq!(targets.at(at(name)), Some(target), "{name}");
+    }
+}
+
+#[test]
 fn match_body_braces_and_arm_arrows_open_no_function_target() {
     let source = "function* outer() { const r = match (s) { A => match (yield 1) { B => { const k = match (s) { C => 1 }; } } }; }";
     let tokens = crate::lexer::lex(source, 0, source.len());
@@ -448,11 +476,16 @@ fn module_and_non_function_braces_are_not() {
     assert!(!inside("try { HERE; } catch (e) {}", "HERE"));
     assert!(!inside("do { HERE; } while (c);", "HERE"));
     assert!(!inside("namespace N { HERE; }", "HERE"));
-    assert!(!inside("class A extends mixin(B) { HERE; }", "HERE"));
-    assert!(!inside("class A { static { HERE; } }", "HERE"));
-    assert!(!inside("class A<T> { x = HERE; }", "HERE"));
     // A function body *closed before* the position provides nothing.
     assert!(!inside("function f() {} HERE;", "HERE"));
+}
+
+#[test]
+fn class_code_is_a_boundary_of_its_own() {
+    assert!(inside("class A extends mixin(B) { HERE; }", "HERE"));
+    assert!(inside("class A { static { HERE; } }", "HERE"));
+    assert!(inside("class A<T> { x = HERE; }", "HERE"));
+    assert!(inside("const C = class { static { HERE; } };", "HERE"));
 }
 
 #[test]
@@ -532,7 +565,7 @@ fn the_function_target_index_answers_every_position_as_the_scan_does() {
                 .collect(),
         ];
         for owned in &owned_sets {
-            let index = FunctionTargets::new(&tokens, owned);
+            let index = FunctionTargets::new(&tokens, &|_| owned.clone());
             for at in 0..tokens.len() + 3 {
                 assert_eq!(
                     index.at(at),

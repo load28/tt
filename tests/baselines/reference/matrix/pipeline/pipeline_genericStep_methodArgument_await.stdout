@@ -1,0 +1,2 @@
+methodArgument(6) => ["receiver",1,12] | receiver {"tag":"receiver"}; a 1; await; keep 6; double 12
+methodArgument(-2) => ["receiver",1,-4] | receiver {"tag":"receiver"}; a 1; await; keep -2; double -4

@@ -33,7 +33,7 @@
       "code": "ts2345",
       "text": "42",
       "line": 16,
-      "message": "type mismatch: expected `string`, found `42`",
+      "message": "Argument of type 'number' is not assignable to parameter of type 'string'.",
       "help": [],
       "labels": []
     }

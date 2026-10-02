@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::match_wildcard_must_be_last_with_position
+const r = match (x) { _ => 0, A => 1 };

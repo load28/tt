@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_02.rs::control_flow_arm_completions_use_a_labeled_region
+consume(match (x) { A(v) => { try { return v; } finally { effect(); } }, _ => 0 });

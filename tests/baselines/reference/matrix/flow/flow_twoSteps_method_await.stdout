@@ -1,0 +1,2 @@
+method(2) => 6 | this "holder"; await; double 4; add 6
+method(5) => 15 | this "holder"; await; double 10; add 15

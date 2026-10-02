@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryDeclEmitsEarlyReturnAndBind.tt → $DIR/out/tryDeclEmitsEarlyReturnAndBind.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'X'.
+ --> tryDeclEmitsEarlyReturnAndBind.tt:1:15
+  |
+1 | function f(): X {
+  |               ^
+error[ts2304]: Cannot find name 'g'.
+ --> tryDeclEmitsEarlyReturnAndBind.tt:2:17
+  |
+2 |   const n = try g();
+  |                 ^
+error[ts2304]: Cannot find name 'h'.
+ --> tryDeclEmitsEarlyReturnAndBind.tt:3:10
+  |
+3 |   return h(n);
+  |          ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryDeclEmitsEarlyReturnAndBind.ts(1,15): error TS2304: Cannot find name 'X'.
+tryDeclEmitsEarlyReturnAndBind.ts(2,18): error TS2304: Cannot find name 'g'.
+tryDeclEmitsEarlyReturnAndBind.ts(7,10): error TS2304: Cannot find name 'h'.

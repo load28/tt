@@ -1,0 +1,2 @@
+jsxComponentProp(2) => "<Show 6>" | yield 2; receiver {"factor":3}; twice 6
+jsxComponentProp(6) => "<Show 18>" | yield 6; receiver {"factor":3}; twice 18

@@ -1,0 +1,8 @@
+// @origin: tests/compile/cases_14.rs::a_conditional_operand_owns_its_branch_in_a_pipeline_head
+declare function f(a: any, b?: any): any;
+declare function g(): any;
+declare class C { constructor(a: any); }
+declare const n: number;
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+declare function r(): R;
+export const v = g() && f(match (n) { 0 => 1, _ => 2 }) |> String;

@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_11.rs::an_if_let_that_starts_a_statement_stays_a_statement
+variant O { Some(value: number), None }
+declare const o: O;
+declare function g(x: unknown): number;
+if (o) if let Some(value) = o { g(value); }

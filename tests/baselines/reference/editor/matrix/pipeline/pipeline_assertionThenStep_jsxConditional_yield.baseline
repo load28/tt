@@ -1,0 +1,13 @@
+differences from pipeline_assertionThenStep_jsxConditional_yield at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.ttx:4:42 ===
+  |   return <p>{flip() && ((yield input) |> String as string |> .length)}</p>;
+  |                                          ^ /*call*/
+  tt only: var String: StringConstructor
+  ts only: var String: (value?: any) => string
+
+=== definition /*call*/ main.ttx:4:42 ===
+  |   return <p>{flip() && ((yield input) |> String as string |> .length)}</p>;
+  |                                          ^ /*call*/
+  ts only: <external>/lib.es5.d.ts 534:5-534:27
+

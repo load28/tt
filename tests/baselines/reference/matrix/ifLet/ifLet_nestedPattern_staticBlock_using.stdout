@@ -1,0 +1,3 @@
+staticBlock({"kind":"Done","value":{"kind":"Some","value":5}}) => 5 | open res; operand {"kind":"Done","value":{"kind":"Some","value":5}}; some 5; dispose res
+staticBlock({"kind":"Done","value":{"kind":"None"}}) => "other" | open res; operand {"kind":"Done","value":{"kind":"None"}}; dispose res
+staticBlock({"kind":"Failed","error":"gone"}) => "other" | open res; operand {"kind":"Failed","error":"gone"}; dispose res

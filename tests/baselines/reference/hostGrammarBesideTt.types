@@ -1,0 +1,47 @@
+=== hostGrammarBesideTt.tt ===
+export variant Flag { On, Off }
+>Flag : type Flag = {
+>       kind: "On";
+>   } | {
+>       kind: "Off";
+>   }
+>On : (property) On: {
+>       readonly kind: "On";
+>   }
+>Off : (property) Off: {
+>       readonly kind: "Off";
+>   }
+declare const dec: any;
+>dec : const dec: any
+declare const readonly: unknown;
+>readonly : const readonly: unknown
+export @dec abstract class Base {}
+>dec : const dec: any
+>Base : abstract class Base
+export const n = (readonly as number);
+>n : const n: number
+>readonly : const readonly: unknown
+export const label = (f: Flag) => match (f) {
+>label : const label: (f: Flag) => string
+>f : (parameter) f: Flag
+>Flag : type Flag = {
+>       kind: "On";
+>   } | {
+>       kind: "Off";
+>   }
+>f : (parameter) f: Flag
+export { type Flag as "flag type" };
+>Flag : const Flag: {
+>       On: {
+>           readonly kind: "On";
+>       };
+>       Off: {
+>           readonly kind: "Off";
+>       };
+>   }
+>   type Flag = {
+>       kind: "On";
+>   } | {
+>       kind: "Off";
+>   }
+

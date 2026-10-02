@@ -1,0 +1,2 @@
+tryBlock(2) => "passed" | read 2
+tryBlock(-2) => "diverged" | read undefined; error "negative undefined"

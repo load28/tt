@@ -1,0 +1,37 @@
+=== expressionArmsComposeNestedTtValueRegions1.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const v: V; declare const w: V;
+>v : const v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>w : const w: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+const text = match (v) { A(n) => `${match (w) { A(m) => m, B => n }}`, B => "" };
+>text : const text: string
+>v : const v: V
+>n : const n: number
+>w : const w: V
+>m : const m: any
+>m : const m: any
+>n : const n: number
+

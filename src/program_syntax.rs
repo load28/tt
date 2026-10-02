@@ -18,8 +18,10 @@
 //! of the toolchain does not transfer syntax ownership away from this SWC AST.
 
 mod collector;
+mod completion;
 mod projection;
 mod protocol;
+mod scopes;
 mod visit;
 
 #[cfg(test)]
@@ -29,11 +31,11 @@ use std::collections::{HashMap, HashSet};
 
 use swc_common::Spanned;
 use swc_ecma_ast::{
-    ArrayLit, ArrowExpr, AssignExpr, AwaitExpr, BinExpr, BinaryOp, BlockStmt, CallExpr, CondExpr,
-    Constructor, Function, Ident, JSXAttrOrSpread, JSXAttrValue, JSXElement, JSXElementChild,
-    JSXExpr, JSXFragment, MemberExpr, MemberProp, Module, ModuleItem, NewExpr, ObjectLit, OptCall,
-    Pat, Prop, PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl, Tpl, TsType,
-    TsTypeAnn, UnaryExpr, VarDeclarator, YieldExpr,
+    ArrayLit, ArrowExpr, AssignExpr, AssignOp, AwaitExpr, BinExpr, BinaryOp, BlockStmt, CallExpr,
+    CondExpr, Constructor, Function, Ident, JSXAttrOrSpread, JSXAttrValue, JSXElement,
+    JSXElementChild, JSXExpr, JSXFragment, MemberExpr, MemberProp, Module, ModuleItem, NewExpr,
+    ObjectLit, OptCall, Pat, Prop, PropName, PropOrSpread, ReturnStmt, SeqExpr, Stmt, TaggedTpl,
+    Tpl, TsType, TsTypeAnn, UnaryExpr, VarDeclarator, YieldExpr,
 };
 use swc_ecma_visit::{AstNodePath, AstParentKind, VisitAstPath, VisitWithAstPath, fields};
 
@@ -47,6 +49,7 @@ use crate::hir::{self, BodyId, ExprId, NodeId};
 use crate::host_input::{HostInput, HostOrigin};
 
 use collector::*;
+pub(crate) use completion::CompletionScope;
 #[cfg(test)]
 use projection::ProjectionBuilder;
 pub(crate) use projection::{HostOwnerSyntax, ProgramSyntax, ProgramSyntaxError};
@@ -236,6 +239,31 @@ pub(crate) struct ConditionalFacts {
     pub(crate) operands: Vec<ConditionalOperand>,
     /// An optional call's explicit type arguments, verbatim.
     pub(crate) type_args: Option<SourceSpan>,
+    /// What an optional call's arguments are conditional on. `None` for
+    /// other operations.
+    pub(crate) optional_test: Option<OptionalCallTest>,
+}
+
+/// The link of its optional chain an optional call is skipped at. A chain
+/// short-circuits at the first `?.` whose base is `undefined` or `null`
+/// (ECMA-262 §13.3.9.1), and everything after that link, the call and its
+/// arguments included, is skipped.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OptionalCallTest {
+    /// `callee?.(...)`: the call's own link. The call is skipped when the
+    /// callee is nullish, which is also the case when a `?.` inside the
+    /// callee short-circuits it (`o?.m?.(...)`).
+    Callee,
+    /// `receiver?.name(...)` or `receiver?.[key](...)`: the link of the
+    /// callee's member access. The call is skipped when the receiver is
+    /// nullish; otherwise the callee is called, and a callee that is not
+    /// callable throws.
+    Receiver,
+    /// A `?.` further inside the callee's receiver (`a?.b.m(...)`,
+    /// `a?.b.m?.(...)`), or a call the callee chains from (`f?.()(...)`).
+    /// Whether the chain short-circuits is known only by evaluating that
+    /// link's base, which no captured input of the call holds.
+    Inner,
 }
 
 /// One argument of an optional call: the argument expression, and whether
@@ -250,10 +278,27 @@ pub(crate) struct ConditionalOperand {
 pub(crate) struct HostEvaluationInput {
     pub(crate) source: SourceSpan,
     pub(crate) mode: EvaluationInputMode,
-    /// A member reference's receiver and its independent effect proof.
-    pub(crate) receiver: Option<(SourceSpan, Effects)>,
+    /// A member reference's receiver (the member's object).
+    pub(crate) receiver: Option<HostReferencePart>,
+    /// A member reference's computed key.
+    pub(crate) key: Option<HostReferencePart>,
     /// What evaluating this input may do — an optimization fact only.
     pub(crate) effects: Effects,
+}
+
+/// One part of a member reference that is evaluated before a call's
+/// arguments: the member's object or its computed key. The member itself is
+/// read where the call is made, so the call stays a member call.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct HostReferencePart {
+    pub(crate) source: SourceSpan,
+    /// An optimization fact only, as [`HostEvaluationInput::effects`].
+    pub(crate) effects: Effects,
+    /// An authored identifier or `this`, read again where the call is made
+    /// instead of captured, as TypeScript's own down-level transforms read a
+    /// simple-copiable operand (`isSimpleCopiableExpression`). The call then
+    /// keeps the reference TypeScript narrows.
+    pub(crate) read_at_call: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -262,6 +307,21 @@ pub(crate) enum EvaluationInputMode {
     JsxChildValue,
     DirectReference,
     MemberReference,
+    /// The value a compound assignment's target holds before its right
+    /// operand runs (ECMA-262 §13.15.2: `GetValue(lref)` precedes the right
+    /// operand). The source is the whole target; the capture is an
+    /// accumulator the assignment then applies its operator to, so
+    /// `t += v` becomes `t = accumulator += v`.
+    CompoundAssignmentTarget {
+        operator: &'static str,
+    },
+    /// An operand of a comma expression before the value's operand. The
+    /// comma operator evaluates it and discards its value (ECMA-262
+    /// §13.16.1: `GetValue` of the left operand, whose result is not used),
+    /// so the lowering evaluates it as an expression statement in order and
+    /// removes it, with its comma, where it was written.
+    Discarded,
+    LogicalAssignmentTarget,
 }
 
 /// What evaluating one host expression may observably do
@@ -422,19 +482,34 @@ pub(crate) fn source_expression_effects(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct MemberCallee {
     pub(crate) receiver: Option<SourceSpan>,
+    /// A computed key the step evaluates before the member is read. A
+    /// simple-copiable key is none: it stays where it was written.
     pub(crate) key: Option<SourceSpan>,
     pub(crate) grouped: bool,
     pub(crate) optional: bool,
 }
 
-pub(crate) fn source_member_callee(
-    source: &str,
-    span: crate::hir::Span,
-    source_kind: crate::SourceKind,
-) -> Option<MemberCallee> {
-    use swc_ecma_ast::{Expr as SwcExpr, MemberProp, OptChainBase, SuperProp};
+/// A key TypeScript's own down-level transforms copy instead of capturing
+/// (`isSimpleCopiableExpression`): a string, template, or numeric literal,
+/// a keyword such as `this`, or an identifier. Reading it where the member
+/// is read, right after the receiver, is the order `receiver[key]` reads it
+/// in, and it keeps the type TypeScript gives it there: a literal key
+/// captured as a parameter would widen (`"m"` to `string`, `0` to
+/// `number`) and no longer name its member.
+fn simple_copiable(key: &swc_ecma_ast::Expr) -> bool {
+    use swc_ecma_ast::{Expr as SwcExpr, Lit};
+    match key {
+        SwcExpr::Lit(Lit::Str(_) | Lit::Num(_) | Lit::Bool(_) | Lit::Null(_)) => true,
+        SwcExpr::Tpl(template) => template.exprs.is_empty(),
+        SwcExpr::Ident(_) | SwcExpr::This(_) => true,
+        _ => false,
+    }
+}
 
-    let text = source.get(span.start..span.end)?;
+fn step_expression(
+    text: &str,
+    source_kind: crate::SourceKind,
+) -> Option<(HostInput, Box<swc_ecma_ast::Expr>)> {
     if crate::lexer::host_syntax_error(text, source_kind).is_some() {
         return None;
     }
@@ -455,6 +530,46 @@ pub(crate) fn source_member_callee(
                 | swc_ecma_parser::Context::InGenerator,
         )
     })?;
+    Some((input, expression))
+}
+
+pub(crate) fn source_reference_callee(
+    source: &str,
+    span: crate::hir::Span,
+    source_kind: crate::SourceKind,
+) -> bool {
+    use swc_ecma_ast::Expr as SwcExpr;
+
+    let Some(text) = source.get(span.start..span.end) else {
+        return false;
+    };
+    let Some((_, expression)) = step_expression(text, source_kind) else {
+        return false;
+    };
+    let mut callee = &*expression;
+    loop {
+        callee = match callee {
+            SwcExpr::Paren(inner) => &inner.expr,
+            SwcExpr::TsNonNull(inner) => &inner.expr,
+            SwcExpr::TsAs(inner) => &inner.expr,
+            SwcExpr::TsSatisfies(inner) => &inner.expr,
+            SwcExpr::TsTypeAssertion(inner) => &inner.expr,
+            SwcExpr::TsInstantiation(inner) => &inner.expr,
+            _ => break,
+        };
+    }
+    matches!(callee, SwcExpr::Ident(_))
+}
+
+pub(crate) fn source_member_callee(
+    source: &str,
+    span: crate::hir::Span,
+    source_kind: crate::SourceKind,
+) -> Option<MemberCallee> {
+    use swc_ecma_ast::{Expr as SwcExpr, MemberProp, OptChainBase, SuperProp};
+
+    let text = source.get(span.start..span.end)?;
+    let (input, expression) = step_expression(text, source_kind)?;
     let at = |node: swc_common::Span| SourceSpan {
         start: span.start + input.byte(node.lo),
         end: span.start + input.byte(node.hi),
@@ -478,8 +593,10 @@ pub(crate) fn source_member_callee(
         SwcExpr::Member(member) => Some(MemberCallee {
             receiver: Some(at(member.obj.span())),
             key: match &member.prop {
-                MemberProp::Computed(computed) => Some(at(computed.expr.span())),
-                MemberProp::Ident(_) | MemberProp::PrivateName(_) => None,
+                MemberProp::Computed(computed) if !simple_copiable(&computed.expr) => {
+                    Some(at(computed.expr.span()))
+                }
+                MemberProp::Computed(_) | MemberProp::Ident(_) | MemberProp::PrivateName(_) => None,
             },
             grouped,
             optional: false,
@@ -487,8 +604,10 @@ pub(crate) fn source_member_callee(
         SwcExpr::SuperProp(member) => Some(MemberCallee {
             receiver: None,
             key: match &member.prop {
-                SuperProp::Computed(computed) => Some(at(computed.expr.span())),
-                SuperProp::Ident(_) => None,
+                SuperProp::Computed(computed) if !simple_copiable(&computed.expr) => {
+                    Some(at(computed.expr.span()))
+                }
+                SuperProp::Computed(_) | SuperProp::Ident(_) => None,
             },
             grouped,
             optional: false,
@@ -559,6 +678,17 @@ pub(crate) enum ConditionalBranch {
     Consequent,
     Alternate,
     OptionalCallArgument(u32),
+    LogicalAssignmentRight {
+        operator: LogicalAssignment,
+        consumed: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LogicalAssignment {
+    And,
+    Or,
+    Nullish,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -589,6 +719,42 @@ pub(crate) struct HostOwner {
     /// Where the statement a prelude hoisted to this owner is written
     /// before begins; it ends where the owner does. See [`HostOwner::anchor`].
     anchor_start: usize,
+    statement: SourceSpan,
+    pub(crate) split: Option<DeclaratorSplit>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) struct DeclaratorSplit {
+    pub(crate) previous_end: usize,
+    pub(crate) kind: DeclarationKind,
+    pub(crate) exported: bool,
+    pub(crate) declared: bool,
+}
+
+impl DeclaratorSplit {
+    pub(crate) fn head(&self) -> String {
+        let keyword = match self.kind {
+            DeclarationKind::Var => "var",
+            DeclarationKind::Let => "let",
+            DeclarationKind::Const => "const",
+            DeclarationKind::Using => "using",
+            DeclarationKind::AwaitUsing => "await using",
+        };
+        format!(
+            "{}{}{keyword} ",
+            if self.exported { "export " } else { "" },
+            if self.declared { "declare " } else { "" },
+        )
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum DeclarationKind {
+    Var,
+    Let,
+    Const,
+    Using,
+    AwaitUsing,
 }
 
 impl HostOwner {
@@ -605,12 +771,27 @@ impl HostOwner {
             end: self.span.end,
         }
     }
+
+    pub(crate) fn statement(&self) -> SourceSpan {
+        self.statement
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum GlobalStatement {
     Enclose,
     Binding(String),
+}
+
+fn uses_commonjs_syntax(module: &Module) -> bool {
+    use swc_ecma_ast::{ModuleDecl, TsModuleRef};
+    module.body.iter().any(|item| match item {
+        ModuleItem::ModuleDecl(ModuleDecl::TsExportAssignment(_)) => true,
+        ModuleItem::ModuleDecl(ModuleDecl::TsImportEquals(import)) => {
+            !import.is_type_only && matches!(import.module_ref, TsModuleRef::TsExternalModuleRef(_))
+        }
+        _ => false,
+    })
 }
 
 fn is_script(module: &Module) -> bool {
@@ -783,6 +964,7 @@ pub(crate) enum HostOwnerKind {
     /// The expression body of a concise arrow function. Lowering rewrites
     /// this expression to a block when a nested tt value needs statements.
     ArrowExpression,
+    Declarator,
 }
 
 /// The Core IR node that owns one TypeScript host placeholder.
@@ -839,6 +1021,7 @@ pub(crate) enum EvaluationOwner {
     ClassInitializer,
     ClassDefinition,
     StaticBlock,
+    EnumInitializer,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -878,12 +1061,15 @@ pub(crate) struct EvaluationContext {
     /// Async functions contextually type their returned expression with the
     /// awaited form of the authored Promise return type.
     pub(crate) contextual_type_awaited: bool,
+    pub(crate) contextual_type_asserted: bool,
     /// The owning statement is the unbraced body of an `if`, loop, label, or
     /// `with`, so a statement lowering has to open its own block there.
     pub(crate) requires_block: bool,
     /// The construct sits inside an ambient (`declare`) module, where only
     /// declarations without initializers are TypeScript.
     pub(crate) ambient: bool,
+    pub(crate) loop_head_declarator: bool,
+    pub(crate) loop_head_binding: bool,
 }
 
 pub(crate) struct OverlayFacts {
@@ -891,8 +1077,13 @@ pub(crate) struct OverlayFacts {
     pub(crate) contextual_type: Option<SourceSpan>,
     pub(crate) function_return_type: Option<SourceSpan>,
     pub(crate) function_return_awaited: bool,
+    pub(crate) assertion: Option<Option<SourceSpan>>,
+    pub(crate) loop_head_reads: bool,
     pub(crate) ambient: bool,
     pub(crate) decorated_classes: Vec<usize>,
+    /// Indices in the path of the body edges of decision stand-in
+    /// functions, which [`evaluation_owner`] looks through.
+    pub(crate) decision_functions: Vec<usize>,
     pub(crate) value_is_owner: bool,
 }
 
@@ -912,11 +1103,15 @@ impl EvaluationContext {
             contextual_type,
             function_return_type,
             function_return_awaited,
+            assertion,
+            loop_head_reads,
             ambient,
             decorated_classes,
+            decision_functions,
             value_is_owner,
         } = facts;
-        let (mut owner, owner_edge) = evaluation_owner(parents, &decorated_classes);
+        let (mut owner, owner_edge) =
+            evaluation_owner(parents, &decorated_classes, &decision_functions);
         // The AST path owns local positions such as parameters and class
         // initializers. Function-target metadata only refines a function
         // body into the return contracts that differ from an ordinary
@@ -940,8 +1135,11 @@ impl EvaluationContext {
                 continuation: HostContinuation::Discard,
                 contextual_type,
                 contextual_type_awaited: false,
+                contextual_type_asserted: false,
                 requires_block,
                 ambient,
+                loop_head_declarator: false,
+                loop_head_binding: false,
             };
         }
 
@@ -956,10 +1154,18 @@ impl EvaluationContext {
             continuation,
             HostContinuation::Return | HostContinuation::ArrowReturn
         );
-        let contextual_type = if uses_function_return {
-            function_return_type
-        } else {
-            contextual_type
+        let asserted = local_path
+            .iter()
+            .rev()
+            .take_while(|parent| is_transparent_expression_edge(parent))
+            .any(is_assertion_edge);
+        let (contextual_type, contextual_type_awaited) = match assertion {
+            Some(assertion) if asserted => (assertion, false),
+            _ if uses_function_return => (
+                function_return_type,
+                function_return_type.is_some() && function_return_awaited,
+            ),
+            _ => (contextual_type, false),
         };
         Self {
             frequency,
@@ -968,13 +1174,31 @@ impl EvaluationContext {
             value_role,
             continuation,
             contextual_type,
-            contextual_type_awaited: uses_function_return
-                && function_return_type.is_some()
-                && function_return_awaited,
+            contextual_type_awaited,
+            contextual_type_asserted: asserted,
             requires_block,
             ambient,
+            loop_head_declarator: loop_head_declarator(local_path),
+            loop_head_binding: loop_head_reads
+                && local_path.iter().any(|parent| {
+                    matches!(parent, AstParentKind::ForStmt(fields::ForStmtField::Init))
+                }),
         }
     }
+}
+
+fn loop_head_declarator(parents: &[AstParentKind]) -> bool {
+    parents
+        .iter()
+        .position(|parent| matches!(parent, AstParentKind::ForStmt(fields::ForStmtField::Init)))
+        .and_then(|head| {
+            parents[head..].iter().find_map(|parent| match parent {
+                AstParentKind::VarDecl(fields::VarDeclField::Decls(index))
+                | AstParentKind::UsingDecl(fields::UsingDeclField::Decls(index)) => Some(*index),
+                _ => None,
+            })
+        })
+        .is_some_and(|index| index > 0)
 }
 
 /// Whether the statement the path `above` leads into is the unbraced body
@@ -1101,8 +1325,12 @@ fn owner_reach(local_path: &[AstParentKind]) -> OwnerReach {
 fn evaluation_owner(
     parents: &[AstParentKind],
     decorated_classes: &[usize],
+    decision_functions: &[usize],
 ) -> (EvaluationOwner, usize) {
     for (index, parent) in parents.iter().enumerate().rev() {
+        if decision_functions.contains(&index) {
+            continue;
+        }
         match parent {
             AstParentKind::Class(
                 fields::ClassField::Decorators(_) | fields::ClassField::Body(_),
@@ -1131,6 +1359,9 @@ fn evaluation_owner(
             }
             AstParentKind::StaticBlock(fields::StaticBlockField::Body) => {
                 return (EvaluationOwner::StaticBlock, index + 1);
+            }
+            AstParentKind::TsEnumMember(fields::TsEnumMemberField::Init) => {
+                return (EvaluationOwner::EnumInitializer, index + 1);
             }
             _ => {}
         }
@@ -1221,6 +1452,15 @@ fn host_continuation(parents: &[AstParentKind]) -> HostContinuation {
         Some(AstParentKind::ExprStmt(fields::ExprStmtField::Expr)) => HostContinuation::Discard,
         _ => HostContinuation::Compose,
     }
+}
+
+fn is_assertion_edge(parent: &AstParentKind) -> bool {
+    matches!(
+        parent,
+        AstParentKind::TsAsExpr(fields::TsAsExprField::Expr)
+            | AstParentKind::TsSatisfiesExpr(fields::TsSatisfiesExprField::Expr)
+            | AstParentKind::TsTypeAssertion(fields::TsTypeAssertionField::Expr)
+    )
 }
 
 fn is_transparent_expression_edge(parent: &AstParentKind) -> bool {

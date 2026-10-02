@@ -84,6 +84,31 @@ pub(super) fn direct_apply_inputs(
         .collect()
 }
 
+pub(super) fn reference_apply_steps(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    source: &str,
+    source_kind: SourceKind,
+) -> HashSet<ExprId> {
+    core.exprs
+        .iter()
+        .filter_map(|expr| match expr {
+            Expr::Apply(apply) => Some(apply),
+            _ => None,
+        })
+        .flat_map(|apply| apply.steps.iter().skip(usize::from(apply.head.is_none())))
+        .filter(|step| matches!(step.mode, ApplyMode::Call))
+        .filter_map(|step| {
+            let Expr::Opaque(node) = &core.exprs[step.value.index()] else {
+                return None;
+            };
+            let span = semantic.hir.source_map.node_span(*node)?;
+            crate::program_syntax::source_reference_callee(source, span, source_kind)
+                .then_some(step.value)
+        })
+        .collect()
+}
+
 pub(super) fn member_apply_steps(
     semantic: &SemanticFile,
     core: &CoreFile,
@@ -130,6 +155,15 @@ pub(super) fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Ve
         body: hir::BodyId,
         out: &mut Vec<SourceSpan>,
     ) {
+        crate::stack::grow(|| walk_body_grown(semantic, core, body, out));
+    }
+
+    fn walk_body_grown(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        body: hir::BodyId,
+        out: &mut Vec<SourceSpan>,
+    ) {
         for statement in &core.bodies[body.index()].statements {
             match statement {
                 Statement::Opaque(node) => span(semantic, *node, out),
@@ -144,6 +178,15 @@ pub(super) fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Ve
     }
 
     pub(super) fn walk_decision(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        decision: &Decision,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        crate::stack::grow(|| walk_decision_grown(semantic, core, decision, out));
+    }
+
+    fn walk_decision_grown(
         semantic: &SemanticFile,
         core: &CoreFile,
         decision: &Decision,
@@ -171,6 +214,15 @@ pub(super) fn pass_through_spans(semantic: &SemanticFile, core: &CoreFile) -> Ve
     }
 
     pub(super) fn walk_expr(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        expr: ExprId,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        crate::stack::grow(|| walk_expr_grown(semantic, core, expr, out));
+    }
+
+    fn walk_expr_grown(
         semantic: &SemanticFile,
         core: &CoreFile,
         expr: ExprId,
@@ -221,6 +273,14 @@ pub(super) fn structured_expr_span(
     core: &CoreFile,
     expr: ExprId,
 ) -> Option<SourceSpan> {
+    crate::stack::grow(|| structured_expr_span_grown(semantic, core, expr))
+}
+
+fn structured_expr_span_grown(
+    semantic: &SemanticFile,
+    core: &CoreFile,
+    expr: ExprId,
+) -> Option<SourceSpan> {
     let node_span = |node| {
         semantic
             .hir
@@ -266,6 +326,16 @@ pub(super) fn structured_grouping_frames(
     expr: ExprId,
 ) -> Vec<SourceSpan> {
     pub(super) fn walk(
+        semantic: &SemanticFile,
+        core: &CoreFile,
+        source: &str,
+        expr: ExprId,
+        out: &mut Vec<SourceSpan>,
+    ) {
+        crate::stack::grow(|| walk_grown(semantic, core, source, expr, out));
+    }
+
+    fn walk_grown(
         semantic: &SemanticFile,
         core: &CoreFile,
         source: &str,
@@ -322,6 +392,7 @@ pub(super) struct TargetRewritePlan {
     pub(super) owner_slots: Vec<OwnerSlotRewrite>,
     pub(super) for_initializer_propagations: Vec<ForInitializerPropagationRewrite>,
     pub(super) composes: Vec<ComposeRewrite>,
+    pub(super) declarator_splits: Vec<DeclaratorSplitRewrite>,
     pub(super) loop_tests: Vec<LoopTestRewrite>,
     pub(super) source_replacements: Vec<SourceReplacement>,
     /// The source spans of values whose lowering moves them into a prelude
@@ -363,6 +434,7 @@ pub(super) struct TargetRewritePlan {
     pub(super) block_required_owners: HashSet<SourceSpan>,
     pub(super) ambient_items: HashSet<NodeId>,
     pub(super) script: bool,
+    pub(super) commonjs: bool,
     pub(super) global_temps: HashMap<crate::core_ir::TempId, String>,
 }
 
@@ -375,6 +447,7 @@ pub(super) struct OwnerSlotRewrite {
     pub(super) continuation: HostContinuation,
     pub(super) contextual_type: Option<SourceSpan>,
     pub(super) contextual_type_awaited: bool,
+    pub(super) contextual_type_asserted: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -391,6 +464,29 @@ pub(super) struct ArrowReturnRewrite {
     pub(super) slot: String,
     pub(super) contextual_type: Option<SourceSpan>,
     pub(super) contextual_type_awaited: bool,
+    pub(super) contextual_type_asserted: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct DeclaratorSplitRewrite {
+    pub(super) separator: SourceSpan,
+    pub(super) at: usize,
+    pub(super) head: String,
+    pub(super) block: Option<SourceSpan>,
+    pub(super) statement: SourceSpan,
+    pub(super) last: bool,
+}
+
+pub(super) fn declarator_separator(source: &str, previous_end: usize) -> SourceSpan {
+    let bytes = source.as_bytes();
+    let (comma, _) = crate::scanner::skip_trivia(bytes, previous_end, bytes.len());
+    if bytes.get(comma) != Some(&b',') {
+        crate::ice::bug!("a declarator is not preceded by its comma");
+    }
+    SourceSpan {
+        start: comma,
+        end: comma + 1,
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -564,13 +660,13 @@ fn all_arms_are_expressions(core: &CoreFile, expr: ExprId) -> bool {
 
 fn scoped_call_completion(
     core: &CoreFile,
-    expr: ExprId,
-    exits: &[HostExit],
-    schedule: &EvaluationSchedule,
+    value: &crate::evaluation_ir::PlannedValue,
     value_slot: &str,
-    value_source: SourceSpan,
     lowering: &LoweringPlan,
+    source: &str,
 ) -> Option<CallCompletionPlan> {
+    let (expr, exits, schedule, value_source) =
+        (value.expr, &value.exits[..], &value.schedule, value.source);
     let completion = schedule.call_completion?;
     if !completable_decision_arms(core, expr, exits) {
         return None;
@@ -623,25 +719,42 @@ fn scoped_call_completion(
     if step.inputs.len() != usize::try_from(index).ok()?.checked_add(1)? {
         return None;
     }
-    let PlannedEvaluationInput::Source { target, .. } = step.inputs.first()? else {
+    let PlannedEvaluationInput::Source {
+        source: callee_span,
+        target,
+        mode,
+        receiver,
+        key,
+    } = step.inputs.first()?
+    else {
         return None;
     };
     let callee = lowering.slot_name(*target).to_owned();
-    let instantiation = match (completion.facts.type_args, completion.instantiated) {
-        (Some(type_args), Some(slot)) => Some((
-            lowering.slot_name(slot).to_owned(),
-            type_args,
-            callee.clone(),
-        )),
-        (None, None) => None,
-        _ => return None,
-    };
-    let mut invoke = format!(
-        "{}(",
-        instantiation
+    let (mut invoke, instantiation) = if *mode == EvaluationInputMode::MemberReference {
+        receiver.as_ref()?;
+        let mut invoke = member_callee(source, *callee_span, [*receiver, *key], |slot| {
+            lowering.slot_name(slot)
+        });
+        if let Some(type_args) = completion.facts.type_args {
+            invoke.push_str(&source[type_args.start..type_args.end]);
+        }
+        (invoke, None)
+    } else {
+        let instantiation = match (completion.facts.type_args, completion.instantiated) {
+            (Some(type_args), Some(slot)) => Some((
+                lowering.slot_name(slot).to_owned(),
+                type_args,
+                callee.clone(),
+            )),
+            (None, None) => None,
+            _ => return None,
+        };
+        let function = instantiation
             .as_ref()
-            .map_or(callee.as_str(), |(name, ..)| name.as_str())
-    );
+            .map_or(callee.clone(), |(name, ..)| name.clone());
+        (function, instantiation)
+    };
+    invoke.push('(');
     let mut captures = Vec::new();
     for input in &step.inputs[1..] {
         match input {
@@ -684,6 +797,10 @@ fn can_defer_arm_values(
         return false;
     };
     fn has_bindings(pattern: &PatternPlan) -> bool {
+        crate::stack::grow(|| has_bindings_grown(pattern))
+    }
+
+    fn has_bindings_grown(pattern: &PatternPlan) -> bool {
         match pattern {
             PatternPlan::Bind(_) => true,
             PatternPlan::AllOf(parts) | PatternPlan::AnyOf(parts) => parts.iter().any(has_bindings),
@@ -743,6 +860,10 @@ fn can_defer_arm_values(
 pub(super) struct SourceReplacement {
     pub(super) source: SourceSpan,
     pub(super) slot: String,
+    /// What the source walk writes in place of `source` when it is not the
+    /// slot's name — a compound assignment's operator, rewritten to apply
+    /// to the accumulator that read the target ([`compound_assignment_operator`]).
+    pub(super) rewrite: Option<String>,
     pub(super) jsx_child: bool,
     /// The tt value whose construct anchor the replacement's generated
     /// name carries — a conditional operation's result stands for the whole
@@ -751,6 +872,145 @@ pub(super) struct SourceReplacement {
     /// A completed call's claimed frame. Its own active value retains the
     /// authored source; unrelated enclosing values do not inhibit the claim.
     pub(super) claim: bool,
+}
+
+impl SourceReplacement {
+    /// The text the source walk writes in place of the replaced source.
+    pub(super) fn written(&self) -> &str {
+        self.rewrite.as_deref().unwrap_or(&self.slot)
+    }
+}
+
+/// Whether a step is the argument of an optional call, whose callee the
+/// optional-call lowering binds or calls through its receiver itself.
+pub(super) fn optional_call_step(step: &PlannedEvaluationStep) -> bool {
+    matches!(
+        step.operation,
+        HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(_))
+    )
+}
+
+/// Whether a call reads its member callee before the arguments: an
+/// optional call tested at its callee (`o.m?.(x)`), whose test is on the
+/// member's value, so that value is captured and called through its
+/// receiver. Every other member callee is read where the call is made
+/// ([`member_callee`]).
+pub(super) fn callee_tested_step(step: &PlannedEvaluationStep) -> bool {
+    optional_call_step(step)
+        && step
+            .conditional
+            .as_ref()
+            .and_then(|facts| facts.optional_test)
+            == Some(OptionalCallTest::Callee)
+}
+
+/// How a call reads its member callee: the callee as written, with each
+/// captured part of its reference (the receiver, then a computed key)
+/// replaced by its slot. The member is read at the call, so the call is
+/// the member call TypeScript types — `this`, a generic method's
+/// inference, and a `this` parameter survive, as `bind` (which erases a
+/// generic signature with a `this` parameter) and `call` (which
+/// instantiates type parameters with `unknown`) do not. The parts are
+/// evaluated before the arguments, as ECMA-262 `EvaluateCall` evaluates the
+/// reference; the member's `GetValue` moves after the arguments, next to
+/// the `IsCallable` check that already follows them.
+pub(super) fn member_callee<'n>(
+    source: &str,
+    callee: SourceSpan,
+    parts: [Option<PlannedReceiver>; 2],
+    slot_name: impl Fn(crate::evaluation_ir::ValueSlotId) -> &'n str,
+) -> String {
+    let mut text = String::new();
+    let mut cursor = callee.start;
+    for part in parts.into_iter().flatten() {
+        let PlannedReceiver::Captured { source: at, slot } = part else {
+            continue;
+        };
+        text.push_str(&source[cursor..at.start]);
+        text.push_str(slot_name(slot));
+        cursor = at.end;
+    }
+    text.push_str(&source[cursor..callee.end]);
+    text
+}
+
+/// The operator token of the compound assignment whose target is `target`.
+///
+/// Only trivia separates an assignment's target from its operator, and the
+/// target's span includes any parentheses around it.
+pub(super) fn compound_assignment_operator(
+    source: &str,
+    target: SourceSpan,
+    operator: &str,
+) -> SourceSpan {
+    let bytes = source.as_bytes();
+    let (start, _) = crate::scanner::skip_trivia(bytes, target.end, bytes.len());
+    let end = start + operator.len();
+    if source.get(start..end) != Some(operator) {
+        crate::ice::bug!("a compound assignment's operator does not follow its target");
+    }
+    SourceSpan { start, end }
+}
+
+/// The comma after a discarded comma operand. Once the operand ran as a
+/// statement, the lowering removes it and this comma where they were
+/// written, keeping the trivia between them. Only trivia separates an
+/// operand from its comma.
+pub(super) fn discarded_operand_comma(source: &str, operand: SourceSpan) -> SourceSpan {
+    let bytes = source.as_bytes();
+    let (comma, _) = crate::scanner::skip_trivia(bytes, operand.end, bytes.len());
+    if bytes.get(comma) != Some(&b',') {
+        crate::ice::bug!("a discarded comma operand is not followed by its comma");
+    }
+    SourceSpan {
+        start: comma,
+        end: comma + 1,
+    }
+}
+
+/// The comma of every discarded comma operand a schedule evaluates as a
+/// statement. The operand is relocated and the comma is removed with it,
+/// so the plan claims the comma.
+fn discarded_operand_commas<'s>(
+    source: &str,
+    steps: impl Iterator<Item = &'s PlannedEvaluationStep>,
+) -> Vec<SourceSpan> {
+    steps
+        .flat_map(|step| &step.inputs)
+        .filter_map(|input| match input {
+            PlannedEvaluationInput::Source {
+                source: operand,
+                mode: EvaluationInputMode::Discarded,
+                ..
+            } => Some(discarded_operand_comma(source, *operand)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The target and operator span of every compound assignment whose target a
+/// schedule reads before the right operand. The target is printed twice —
+/// read into its accumulator, then assigned — and the operator is rewritten,
+/// so the plan claims both.
+fn compound_assignment_frames<'s>(
+    source: &str,
+    steps: impl Iterator<Item = &'s PlannedEvaluationStep>,
+) -> Vec<SourceSpan> {
+    steps
+        .flat_map(|step| &step.inputs)
+        .filter_map(|input| match input {
+            PlannedEvaluationInput::Source {
+                source: target,
+                mode: EvaluationInputMode::CompoundAssignmentTarget { operator },
+                ..
+            } => Some([
+                *target,
+                compound_assignment_operator(source, *target, operator),
+            ]),
+            _ => None,
+        })
+        .flatten()
+        .collect()
 }
 
 #[derive(Debug, Clone)]
@@ -824,6 +1084,7 @@ impl TargetRewritePlan {
                         continuation: value.context.continuation,
                         contextual_type: value.context.contextual_type,
                         contextual_type_awaited: value.context.contextual_type_awaited,
+                        contextual_type_asserted: value.context.contextual_type_asserted,
                     })
             })
             .collect();
@@ -843,6 +1104,7 @@ impl TargetRewritePlan {
                         slot: lowering.slot_name(slot).to_owned(),
                         contextual_type: value.context.contextual_type,
                         contextual_type_awaited: value.context.contextual_type_awaited,
+                        contextual_type_asserted: value.context.contextual_type_asserted,
                     })
             })
             .collect();
@@ -941,7 +1203,9 @@ impl TargetRewritePlan {
                     .values
                     .iter()
                     .filter(|value| {
-                        value.context.continuation == HostContinuation::Compose
+                        (value.context.continuation == HostContinuation::Compose
+                            || (value.context.continuation == HostContinuation::ForInitialize
+                                && !value.schedule.steps().is_empty()))
                             && !value
                                 .schedule
                                 .steps()
@@ -992,13 +1256,7 @@ impl TargetRewritePlan {
                                             &value.exits,
                                         )) {
                                     scoped_call_completion(
-                                        core,
-                                        value.expr,
-                                        &value.exits,
-                                        &value.schedule,
-                                        &slot_name,
-                                        value.source,
-                                        lowering,
+                                        core, value, &slot_name, lowering, source,
                                     )
                                 } else {
                                     None
@@ -1033,6 +1291,38 @@ impl TargetRewritePlan {
                 })
             })
             .collect();
+        let mut declarator_splits: Vec<_> = lowering
+            .owners()
+            .filter_map(|rewrite| {
+                let split = rewrite.owner.split?;
+                let anchor = rewrite.owner.anchor();
+                let hoisted = owner_slots.iter().any(|slot| slot.owner == anchor)
+                    || composes.iter().any(|compose| compose.owner == anchor);
+                let statement = rewrite.owner.statement();
+                hoisted.then(|| DeclaratorSplitRewrite {
+                    separator: declarator_separator(source, split.previous_end),
+                    at: anchor.start,
+                    head: split.head(),
+                    block: lowering
+                        .block_required_owners()
+                        .contains(&statement)
+                        .then_some(statement),
+                    statement,
+                    last: false,
+                })
+            })
+            .collect();
+        let last_splits: HashMap<SourceSpan, usize> = declarator_splits.iter().fold(
+            HashMap::new(),
+            |mut last, split: &DeclaratorSplitRewrite| {
+                let at = last.entry(split.statement).or_insert(split.at);
+                *at = (*at).max(split.at);
+                last
+            },
+        );
+        for split in &mut declarator_splits {
+            split.last = last_splits.get(&split.statement) == Some(&split.at);
+        }
         let compose_values = || {
             composes.iter().flat_map(|rewrite| {
                 rewrite.actions.iter().filter_map(|action| match action {
@@ -1116,7 +1406,7 @@ impl TargetRewritePlan {
                     .into_iter()
                     .filter_map(|branch| match branch {
                         PlannedBranch::Source(span) => Some(*span),
-                        PlannedBranch::Value(_) => None,
+                        PlannedBranch::Values(_) => None,
                     })
                     .collect(),
                 _ => Vec::new(),
@@ -1259,8 +1549,37 @@ impl TargetRewritePlan {
                     })
             })
         };
+        let planned_steps = || {
+            all_values()
+                .flat_map(|value| &value.steps)
+                .chain(all_operations().flat_map(|operation| {
+                    operation
+                        .active
+                        .iter()
+                        .flat_map(|active| &active.steps)
+                        .chain(&operation.outer)
+                }))
+                .chain(lowering.nested_operations().iter().flat_map(|operation| {
+                    operation
+                        .active
+                        .iter()
+                        .flat_map(|active| &active.steps)
+                        .chain(&operation.outer)
+                }))
+                .chain(
+                    lowering
+                        .nested_value_schedules()
+                        .flat_map(|(_, schedule)| schedule.steps()),
+                )
+        };
+        let compound_assignments = compound_assignment_frames(source, planned_steps());
+        let discarded_commas = discarded_operand_commas(source, planned_steps());
+        relocated_values.extend(compound_assignments.iter().copied());
+        relocated_values.extend(discarded_commas.iter().copied());
         let rewritten_operations: Vec<SourceSpan> = all_operations()
             .map(|operation| operation.parent)
+            .chain(compound_assignments)
+            .chain(discarded_commas)
             .chain(
                 lowering
                     .nested_operations()
@@ -1268,6 +1587,7 @@ impl TargetRewritePlan {
                     .map(|operation| operation.parent),
             )
             .chain(call_frames().map(|(span, _)| span))
+            .chain(declarator_splits.iter().map(|split| split.separator))
             .chain(loop_tests.iter().flat_map(|rewrite| {
                 let prefix = (rewrite.kind == LoopTestKind::While).then_some(SourceSpan {
                     start: rewrite.owner.start,
@@ -1298,6 +1618,11 @@ impl TargetRewritePlan {
                     jsx_child: false,
                     anchor: Some(primary),
                     claim: false,
+                    rewrite: matches!(
+                        operation.kind,
+                        PlannedConditionalKind::LogicalAssignment { .. }
+                    )
+                    .then(String::new),
                 }
             })
             .collect();
@@ -1310,21 +1635,76 @@ impl TargetRewritePlan {
                     .flat_map(|active| &active.steps)
                     .chain(&operation.outer)
             }))
-            .flat_map(|step| &step.inputs)
-            .filter_map(|input| match input {
+            .flat_map(|step| step.inputs.iter().map(move |input| (step, input)))
+            .flat_map(|(step, input)| match input {
+                PlannedEvaluationInput::Source {
+                    source: target_span,
+                    target,
+                    mode: EvaluationInputMode::CompoundAssignmentTarget { operator },
+                    ..
+                } => {
+                    let slot = lowering.slot_name(*target);
+                    vec![SourceReplacement {
+                        source: compound_assignment_operator(source, *target_span, operator),
+                        slot: slot.to_owned(),
+                        jsx_child: false,
+                        anchor: None,
+                        claim: false,
+                        rewrite: Some(format!("= {slot} {operator}")),
+                    }]
+                }
+                PlannedEvaluationInput::Source {
+                    source: operand,
+                    target,
+                    mode: EvaluationInputMode::Discarded,
+                    ..
+                } => [*operand, discarded_operand_comma(source, *operand)]
+                    .into_iter()
+                    .map(|span| SourceReplacement {
+                        source: span,
+                        slot: lowering.slot_name(*target).to_owned(),
+                        jsx_child: false,
+                        anchor: None,
+                        claim: false,
+                        rewrite: Some(String::new()),
+                    })
+                    .collect(),
+                PlannedEvaluationInput::Source {
+                    mode: EvaluationInputMode::MemberReference,
+                    receiver,
+                    key,
+                    ..
+                } if !callee_tested_step(step) => [*receiver, *key]
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|part| match part {
+                        PlannedReceiver::Captured { source, slot } => Some(SourceReplacement {
+                            source,
+                            slot: lowering.slot_name(slot).to_owned(),
+                            jsx_child: false,
+                            anchor: None,
+                            claim: false,
+                            rewrite: None,
+                        }),
+                        PlannedReceiver::Stable { .. } => None,
+                    })
+                    .collect(),
                 PlannedEvaluationInput::Source {
                     source,
                     target,
                     mode,
                     ..
-                } => Some(SourceReplacement {
+                } => vec![SourceReplacement {
                     source: *source,
                     slot: lowering.slot_name(*target).to_owned(),
                     jsx_child: *mode == EvaluationInputMode::JsxChildValue,
                     anchor: None,
                     claim: false,
-                }),
-                PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => None,
+                    rewrite: None,
+                }],
+                PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => {
+                    Vec::new()
+                }
             })
             .chain(owner_slots.iter().map(|rewrite| SourceReplacement {
                 source: rewrite.source,
@@ -1332,8 +1712,34 @@ impl TargetRewritePlan {
                 jsx_child: false,
                 anchor: Some(rewrite.expr),
                 claim: false,
+                rewrite: None,
             }))
             .chain(operation_replacements)
+            .chain(all_operations().flat_map(|operation| {
+                match &operation.condition {
+                    PlannedEvaluationInput::Source {
+                        mode: EvaluationInputMode::LogicalAssignmentTarget,
+                        receiver,
+                        key,
+                        ..
+                    } => [*receiver, *key]
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|part| match part {
+                            PlannedReceiver::Captured { source, slot } => Some(SourceReplacement {
+                                source,
+                                slot: lowering.slot_name(slot).to_owned(),
+                                jsx_child: false,
+                                anchor: None,
+                                claim: false,
+                                rewrite: None,
+                            }),
+                            PlannedReceiver::Stable { .. } => None,
+                        })
+                        .collect(),
+                    _ => Vec::new(),
+                }
+            }))
             .collect();
         // A consumed call frame owns its original occurrence; captures
         // within that frame are still emitted while the value is active.
@@ -1345,6 +1751,7 @@ impl TargetRewritePlan {
                 jsx_child: false,
                 anchor: Some(expr),
                 claim: true,
+                rewrite: None,
             }),
         );
         source_replacements.sort_by_key(|replacement| {
@@ -1360,13 +1767,25 @@ impl TargetRewritePlan {
             // evaluated before its conditional branch (for example its left
             // operand). Their actions still run, but their authored inline
             // occurrences must not be appended after the operation's join slot.
-            .chain(compose_values().filter_map(|value| {
-                compose_operations()
-                    .any(|operation| {
-                        operation.parent.start <= value.source.start
-                            && value.source.end <= operation.parent.end
+            .chain(composes.iter().flat_map(|rewrite| {
+                let operations = || {
+                    rewrite.actions.iter().filter_map(|action| match action {
+                        ComposeAction::Operation(operation) => Some(operation),
+                        ComposeAction::Value(_) => None,
                     })
-                    .then_some(value.expr)
+                };
+                rewrite
+                    .actions
+                    .iter()
+                    .filter_map(move |action| match action {
+                        ComposeAction::Value(value) => operations()
+                            .any(|operation| {
+                                operation.parent.start <= value.source.start
+                                    && value.source.end <= operation.parent.end
+                            })
+                            .then_some(value.expr),
+                        ComposeAction::Operation(_) => None,
+                    })
             }))
             .chain(
                 compose_values()
@@ -1496,6 +1915,7 @@ impl TargetRewritePlan {
             block_required_owners: lowering.block_required_owners().clone(),
             ambient_items: lowering.ambient_items().clone(),
             script: lowering.is_script(),
+            commonjs: lowering.uses_commonjs_syntax(),
             global_temps: lowering.global_temps().clone(),
             match_raise_name: lowering.match_raise_name().to_owned(),
             match_show_name: lowering.match_show_name().to_owned(),
@@ -1505,6 +1925,7 @@ impl TargetRewritePlan {
             owner_slots,
             for_initializer_propagations,
             composes,
+            declarator_splits,
             loop_tests,
             source_replacements,
             relocated_values,

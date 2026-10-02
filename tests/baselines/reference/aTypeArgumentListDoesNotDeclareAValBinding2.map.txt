@@ -1,0 +1,3 @@
+//// [aTypeArgumentListDoesNotDeclareAValBinding2.tt] 1 mapping(s)
+1:5 -> 1:1 len 22  "let a, b, c;\nb.x = 1;\n"
+

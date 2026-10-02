@@ -1,0 +1,2 @@
+jsxComponentProp(2.5) => "<Show '2.50'>" | operand 2.5; positive 2.5
+jsxComponentProp(-3) => "<Show undefined>" | operand -3; positive undefined

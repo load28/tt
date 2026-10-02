@@ -1,0 +1,31 @@
+=== inlineBodiesInheritTheEnclosingFunctionsPlace2.tt ===
+variant E { A(x: number), B }
+>E : type E = {
+>       kind: "A";
+>       x: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (x: number) => E
+>x : (property) x: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function f(e: E): number {
+>f : function f(e: E): number
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>       x: number;
+>   } | {
+>       kind: "B";
+>   }
+  const Some(v) = find(e) else {
+>v : const v: any
+>e : (parameter) e: E
+    const B() = e else { throw new Error("a"); };
+>e : (parameter) e: E
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+  return v;
+>v : const v: any
+

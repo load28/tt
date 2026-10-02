@@ -1,0 +1,2 @@
+conditionalTest({"kind":"Click","x":3}) => "truthy" | operand {"kind":"Click","x":3}; click 3; then "truthy"; finally 0
+conditionalTest({"kind":"Key","key":"k"}) => "truthy" | operand {"kind":"Key","key":"k"}; key "k"; then "truthy"; finally 0

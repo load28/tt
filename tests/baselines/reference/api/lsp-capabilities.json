@@ -1,0 +1,102 @@
+{
+  "capabilities": {
+    "codeActionProvider": {
+      "codeActionKinds": [
+        "quickfix"
+      ]
+    },
+    "completionProvider": {
+      "resolveProvider": true,
+      "triggerCharacters": [
+        ".",
+        "\"",
+        "'",
+        "`",
+        "/",
+        "@",
+        "<",
+        "#",
+        " ",
+        "*",
+        "(",
+        "|",
+        "{",
+        ","
+      ]
+    },
+    "definitionProvider": true,
+    "documentSymbolProvider": true,
+    "hoverProvider": true,
+    "referencesProvider": true,
+    "renameProvider": {
+      "prepareProvider": true
+    },
+    "semanticTokensProvider": {
+      "full": true,
+      "legend": {
+        "tokenModifiers": [
+          "declaration",
+          "definition",
+          "readonly",
+          "static",
+          "deprecated",
+          "abstract",
+          "async",
+          "modification",
+          "documentation",
+          "defaultLibrary",
+          "local"
+        ],
+        "tokenTypes": [
+          "namespace",
+          "type",
+          "class",
+          "enum",
+          "interface",
+          "struct",
+          "typeParameter",
+          "parameter",
+          "variable",
+          "property",
+          "enumMember",
+          "event",
+          "function",
+          "method",
+          "macro",
+          "keyword",
+          "modifier",
+          "comment",
+          "string",
+          "number",
+          "regexp",
+          "operator",
+          "decorator"
+        ]
+      },
+      "range": false
+    },
+    "signatureHelpProvider": {
+      "retriggerCharacters": [
+        ")"
+      ],
+      "triggerCharacters": [
+        "(",
+        ",",
+        "<"
+      ]
+    },
+    "textDocumentSync": {
+      "change": 2,
+      "openClose": true,
+      "save": {
+        "includeText": false
+      }
+    },
+    "workspace": {
+      "workspaceFolders": {
+        "changeNotifications": true,
+        "supported": true
+      }
+    }
+  }
+}

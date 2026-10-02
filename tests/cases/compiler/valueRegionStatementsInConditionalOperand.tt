@@ -1,0 +1,136 @@
+// A `result` block or a match block arm in an operand of `&&`, `||`, `??`,
+// `? :`, or an optional call's argument has statements of its own, and a tt
+// value inside an expression there (`try read(n) * 2`, `String(try
+// read(n))`, a match in a call's argument) belongs to that statement, not
+// to the conditional operation around the block. Each is written where it
+// stands, and the operand still runs only when the operation reaches it
+// (ECMA-262 §13.13, §13.14, §13.3.9). The twin is the same program in
+// TypeScript, with a `result` block written as a function run on the spot.
+// @run: main.tt
+// @twin: twin.ts
+// @filename: main.tt
+import type { TResult } from "@tt/std";
+const log: string[] = [];
+function read(n: number): TResult<number, string> {
+  log.push(`read ${n}`);
+  return n >= 0 ? { kind: "Ok", value: n } : { kind: "Err", error: `bad ${n}` };
+}
+function test(label: string, on: boolean): boolean {
+  log.push(label);
+  return on;
+}
+function sink(on: boolean): ((value: unknown) => string) | undefined {
+  log.push("callee");
+  return on ? (value: unknown) => `got ${JSON.stringify(value)}` : undefined;
+}
+function and(on: boolean, n: number) {
+  return test("and", on) && result { const v = try read(n) * 2; return v; };
+}
+function or(on: boolean, n: number) {
+  return test("or", on) || result { const v = 1 + try read(n); return v; };
+}
+function nullish(on: boolean, n: number) {
+  return (test("nullish", on) ? null : "set") ?? result { const v = String(try read(n)); return v; };
+}
+function ternary(on: boolean, n: number) {
+  return test("ternary", on) ? result { const v = [try read(n), try read(n + 1)]; return v; } : "no";
+}
+function optional(on: boolean, n: number) {
+  return sink(on)?.(result { const v = 2 * try read(n); return v; });
+}
+function arm(on: boolean, n: number): TResult<unknown, string> {
+  const v = test("arm", on) && match (n) { 0 => 0, _ => { const d = 2 * try read(n); return d; } };
+  return { kind: "Ok", value: v };
+}
+function later(on: boolean, n: number) {
+  const f = test("later", on) && match (n) { 0 => () => 0, _ => () => 2 * Number(match (n) { 1 => 3, _ => 4 }) };
+  return f ? f() : f;
+}
+const runs: [string, (on: boolean, n: number) => unknown][] = [
+  ["and", and],
+  ["or", or],
+  ["nullish", nullish],
+  ["ternary", ternary],
+  ["optional", optional],
+  ["arm", arm],
+  ["later", later],
+];
+for (const [name, run] of runs) {
+  for (const [on, n] of [[true, 1], [false, 1], [true, -1], [false, -1], [true, 0]] as const) {
+    log.length = 0;
+    console.log(name, on, n, JSON.stringify(run(on, n)), log.join(","));
+  }
+}
+// @filename: twin.ts
+type TResult<T, E> = { kind: "Ok"; value: T } | { kind: "Err"; error: E };
+class Failure {
+  constructor(readonly result: unknown) {}
+}
+function unwrap<T>(result: TResult<T, string>): T {
+  if ("value" in result) return result.value;
+  throw new Failure(result);
+}
+function block<T>(body: () => T): unknown {
+  try {
+    return { kind: "Ok", value: body() };
+  } catch (error) {
+    if (error instanceof Failure) return error.result;
+    throw error;
+  }
+}
+const log: string[] = [];
+function read(n: number): TResult<number, string> {
+  log.push(`read ${n}`);
+  return n >= 0 ? { kind: "Ok", value: n } : { kind: "Err", error: `bad ${n}` };
+}
+function test(label: string, on: boolean): boolean {
+  log.push(label);
+  return on;
+}
+function sink(on: boolean): ((value: unknown) => string) | undefined {
+  log.push("callee");
+  return on ? (value: unknown) => `got ${JSON.stringify(value)}` : undefined;
+}
+function and(on: boolean, n: number) {
+  return test("and", on) && block(() => unwrap(read(n)) * 2);
+}
+function or(on: boolean, n: number) {
+  return test("or", on) || block(() => 1 + unwrap(read(n)));
+}
+function nullish(on: boolean, n: number) {
+  return (test("nullish", on) ? null : "set") ?? block(() => String(unwrap(read(n))));
+}
+function ternary(on: boolean, n: number) {
+  return test("ternary", on) ? block(() => [unwrap(read(n)), unwrap(read(n + 1))]) : "no";
+}
+function optional(on: boolean, n: number) {
+  return sink(on)?.(block(() => 2 * unwrap(read(n))));
+}
+function arm(on: boolean, n: number): unknown {
+  try {
+    const v = test("arm", on) && (n === 0 ? 0 : 2 * unwrap(read(n)));
+    return { kind: "Ok", value: v };
+  } catch (error) {
+    if (error instanceof Failure) return error.result;
+    throw error;
+  }
+}
+function later(on: boolean, n: number) {
+  const f = test("later", on) && (n === 0 ? () => 0 : () => 2 * Number(n === 1 ? 3 : 4));
+  return f ? f() : f;
+}
+const runs: [string, (on: boolean, n: number) => unknown][] = [
+  ["and", and],
+  ["or", or],
+  ["nullish", nullish],
+  ["ternary", ternary],
+  ["optional", optional],
+  ["arm", arm],
+  ["later", later],
+];
+for (const [name, run] of runs) {
+  for (const [on, n] of [[true, 1], [false, 1], [true, -1], [false, -1], [true, 0]] as const) {
+    log.length = 0;
+    console.log(name, on, n, JSON.stringify(run(on, n)), log.join(","));
+  }
+}

@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./pipelineHeadIsTheWholeCallNotTheInnerArgument.tt → $DIR/out/pipelineHeadIsTheWholeCallNotTheInnerArgument.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'f'.
+ --> pipelineHeadIsTheWholeCallNotTheInnerArgument.tt:1:11
+  |
+1 | const y = f(a(b) |> g);
+  |           ^
+error[ts2304]: Cannot find name 'a'.
+ --> pipelineHeadIsTheWholeCallNotTheInnerArgument.tt:1:13
+  |
+1 | const y = f(a(b) |> g);
+  |             ^
+error[ts2304]: Cannot find name 'b'.
+ --> pipelineHeadIsTheWholeCallNotTheInnerArgument.tt:1:15
+  |
+1 | const y = f(a(b) |> g);
+  |               ^
+error[ts2304]: Cannot find name 'g'.
+ --> pipelineHeadIsTheWholeCallNotTheInnerArgument.tt:1:21
+  |
+1 | const y = f(a(b) |> g);
+  |                     ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+pipelineHeadIsTheWholeCallNotTheInnerArgument.ts(1,11): error TS2304: Cannot find name 'f'.
+pipelineHeadIsTheWholeCallNotTheInnerArgument.ts(1,46): error TS2304: Cannot find name 'a'.
+pipelineHeadIsTheWholeCallNotTheInnerArgument.ts(1,48): error TS2304: Cannot find name 'b'.
+pipelineHeadIsTheWholeCallNotTheInnerArgument.ts(1,52): error TS2304: Cannot find name 'g'.

@@ -1,0 +1,6 @@
+//// [optionalPostfixStepEmitsTheCompleteChain.tt] 4 mapping(s)
+1:1 -> 1:1 len 11  "const a = x"
+1:16 -> 1:12 len 22  "?.trim();\nconst b = xs"
+2:17 -> 2:13 len 28  "?.[key]?.value;\nconst c = fn"
+3:17 -> 3:13 len 19  "?.(arg).value?.();\n"
+

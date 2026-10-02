@@ -1,0 +1,2 @@
+logicalOr(4) => true | flip true
+logicalOr(-1) => {"kind":"Err","error":"negative -7"} | flip false; read -1; fallback -7; read -7

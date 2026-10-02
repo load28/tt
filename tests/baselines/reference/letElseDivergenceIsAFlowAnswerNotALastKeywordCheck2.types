@@ -1,0 +1,8 @@
+=== letElseDivergenceIsAFlowAnswerNotALastKeywordCheck2.tt ===
+function f(): number {
+>f : function f(): number
+  const Some(v) = find() else { if (c) { return 1; } else if (d) { throw e; } else { return 2; } };
+>v : const v: any
+  return v;
+>v : const v: any
+

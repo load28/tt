@@ -1,0 +1,2 @@
+templateLiteral(2) => "<L|4|R>" | left "L"; yield 2; double 4; right "R"
+templateLiteral(5) => "<L|10|R>" | left "L"; yield 5; double 10; right "R"

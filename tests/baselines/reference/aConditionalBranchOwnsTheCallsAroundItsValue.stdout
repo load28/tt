@@ -1,0 +1,2 @@
+[10,5,20,0,6,8,["f1","g4","f2","g7"]]
+[{"kind":"Ok","value":4},{"kind":"Err","error":"e"},{"kind":"Ok","value":0},{"kind":"Ok","value":5},{"kind":"Err","error":"e"},{"kind":"Ok","value":0}]

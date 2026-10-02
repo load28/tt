@@ -1,0 +1,2 @@
+awaitOperand(10) => 9 | flip true; lookup true; found 9
+awaitOperand(20) => null | flip false; lookup false; double null

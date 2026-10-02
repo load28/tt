@@ -1,0 +1,58 @@
+=== tupleMatchBindingsTypecheckPerPosition.tt ===
+variant Left { A(n: number), B }
+>Left : type Left = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => Left
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+variant Right { C(s: string), D }
+>Right : type Right = {
+>       kind: "C";
+>       s: string;
+>   } | {
+>       kind: "D";
+>   }
+>C : (property) C: (s: string) => Right
+>s : (property) s: string
+>D : (property) D: {
+>       readonly kind: "D";
+>   }
+function f(l: Left, r: Right): string {
+>f : function f(l: Left, r: Right): string
+>l : (parameter) l: Left
+>Left : type Left = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>r : (parameter) r: Right
+>Right : type Right = {
+>       kind: "C";
+>       s: string;
+>   } | {
+>       kind: "D";
+>   }
+  return match (l, r) {
+>l : (parameter) l: Left
+>r : (parameter) r: Right
+    (A(n), C(s)) => s.repeat(n),
+>n : const n: number
+>s : const s: string
+>s : const s: string
+>repeat : (method) String.repeat(count: number): string
+>n : const n: number
+    (A(n), D) => n.toFixed(0),
+>n : const n: number
+>n : const n: number
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+    (B, C(s)) => s,
+>s : const s: string
+>s : const s: string
+

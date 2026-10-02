@@ -1,0 +1,2 @@
+staticBlock(3) => 4 | read 3; reassigned 4
+staticBlock(-3) => threw diverged | read undefined

@@ -1,0 +1,13 @@
+//// [script.tt] 1 mapping(s)
+1:1 -> 1:1 len 97  "function named(await: number) { return await; }\n"...
+
+//// [shapes.tt] 8 mapping(s)
+1:39 -> 20:31 len 6  "number"
+1:39 -> 23:20 len 6  "number"
+1:55 -> 25:3 len 89  "\nexport class Box {\n  resize(public size: number"...
+5:42 -> 32:19 len 1  "s"
+6:10 -> 35:17 len 6  "radius"
+6:21 -> 36:18 len 6  "radius"
+7:12 -> 40:18 len 1  "0"
+8:2 -> 49:2 len 2  ";\n"
+

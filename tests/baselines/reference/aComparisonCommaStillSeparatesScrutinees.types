@@ -1,0 +1,12 @@
+=== aComparisonCommaStillSeparatesScrutinees.tt ===
+declare const a: number, b: number, c: number;
+>a : const a: number
+>b : const b: number
+>c : const c: number
+export const r = match (a < b, c > a) { (_, _) => 1 };
+>r : const r: number
+>a : const a: number
+>b : const b: number
+>c : const c: number
+>a : const a: number
+

@@ -1,0 +1,60 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./rewriteCoversAllStaticImportForms.tt → $DIR/out/rewriteCoversAllStaticImportForms.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2307]: Cannot find module './a.tt' or its corresponding type declarations.
+ --> rewriteCoversAllStaticImportForms.tt:2:17
+  |
+2 | import def from "./a.tt";
+  |                 ^^^^^^^^
+error[ts2307]: Cannot find module './b.tt' or its corresponding type declarations.
+ --> rewriteCoversAllStaticImportForms.tt:3:38
+  |
+3 | import def2, { named as alias } from "./b.tt";
+  |                                      ^^^^^^^^
+error[ts2307]: Cannot find module './c.tt' or its corresponding type declarations.
+ --> rewriteCoversAllStaticImportForms.tt:4:21
+  |
+4 | import * as ns from "./c.tt";
+  |                     ^^^^^^^^
+error[ts2307]: Cannot find module './d.tt' or its corresponding type declarations.
+ --> rewriteCoversAllStaticImportForms.tt:5:24
+  |
+5 | import type { T } from "./d.tt";
+  |                        ^^^^^^^^
+error[ts2882]: Cannot find module or type declarations for side-effect import of './side.tt'.
+ --> rewriteCoversAllStaticImportForms.tt:6:8
+  |
+6 | import "./side.tt";
+  |        ^^^^^^^^^^^
+error[ts2307]: Cannot find module './e.tt' or its corresponding type declarations.
+ --> rewriteCoversAllStaticImportForms.tt:7:27
+  |
+7 | export { x, y as z } from "./e.tt";
+  |                           ^^^^^^^^
+error[ts2307]: Cannot find module './f.tt' or its corresponding type declarations.
+ --> rewriteCoversAllStaticImportForms.tt:8:15
+  |
+8 | export * from "./f.tt";
+  |               ^^^^^^^^
+error[ts2307]: Cannot find module './g.tt' or its corresponding type declarations.
+ --> rewriteCoversAllStaticImportForms.tt:9:20
+  |
+9 | export * as g from "./g.tt";
+  |                    ^^^^^^^^
+error[ts2307]: Cannot find module './h.tt' or its corresponding type declarations.
+  --> rewriteCoversAllStaticImportForms.tt:10:24
+   |
+10 | export type { U } from "./h.tt";
+   |                        ^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+rewriteCoversAllStaticImportForms.ts(2,17): error TS2307: Cannot find module './a.js' or its corresponding type declarations.
+rewriteCoversAllStaticImportForms.ts(3,38): error TS2307: Cannot find module './b.js' or its corresponding type declarations.
+rewriteCoversAllStaticImportForms.ts(4,21): error TS2307: Cannot find module './c.js' or its corresponding type declarations.
+rewriteCoversAllStaticImportForms.ts(5,24): error TS2307: Cannot find module './d.js' or its corresponding type declarations.
+rewriteCoversAllStaticImportForms.ts(6,8): error TS2882: Cannot find module or type declarations for side-effect import of './side.js'.
+rewriteCoversAllStaticImportForms.ts(7,27): error TS2307: Cannot find module './e.js' or its corresponding type declarations.
+rewriteCoversAllStaticImportForms.ts(8,15): error TS2307: Cannot find module './f.js' or its corresponding type declarations.
+rewriteCoversAllStaticImportForms.ts(9,20): error TS2307: Cannot find module './g.js' or its corresponding type declarations.
+rewriteCoversAllStaticImportForms.ts(10,24): error TS2307: Cannot find module './h.js' or its corresponding type declarations.

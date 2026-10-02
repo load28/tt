@@ -1,0 +1,2 @@
+assignment(2) => 4 | initial 0; target {"value":0}; yield 2; double 4
+assignment(5) => 10 | initial 0; target {"value":0}; yield 5; double 10

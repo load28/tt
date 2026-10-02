@@ -1,0 +1,2 @@
+templateLiteral(2) => {"kind":"Ok","value":"<L|2|R>"} | left "L"; operand 2; read 2; right "R"
+templateLiteral(-1) => {"kind":"Err","error":"negative -1"} | left "L"; operand -1; read -1

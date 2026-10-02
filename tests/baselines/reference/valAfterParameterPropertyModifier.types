@@ -1,0 +1,43 @@
+=== valAfterParameterPropertyModifier.tt ===
+class Point {
+>Point : class Point
+  constructor(public val x: number, private val y: number, readonly val tags: string[]) {}
+>x : (property) Point.x: number
+>y : (property) Point.y: number
+>tags : (property) Point.tags: string[]
+  sum() { return this.x + this.y; }
+>sum : (method) Point.sum(): number
+>x : (property) Point.x: number
+>y : (property) Point.y: number
+class Bag {
+>Bag : class Bag
+  constructor(protected val items: number[]) {
+>items : (property) Bag.items: number[]
+    items.push(1);
+>items : (parameter) items: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+class Slots {
+>Slots : class Slots
+  constructor(public readonly val slots: number[], val spare: number[]) {
+>slots : (property) Slots.slots: number[]
+>spare : (parameter) spare: number[]
+    slots[0] = 1;
+>slots : (parameter) slots: number[]
+    spare.push(2);
+>spare : (parameter) spare: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+class Held {
+>Held : class Held
+  constructor(private val held: number[]) {}
+>held : (property) Held.held: number[]
+  add(n: number) {
+>add : (method) Held.add(n: number): number
+>n : (parameter) n: number
+    this.held.push(n);
+>held : (property) Held.held: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>n : (parameter) n: number
+    return this.held.length;
+>held : (property) Held.held: number[]
+>length : (property) Array<number>.length: number
+

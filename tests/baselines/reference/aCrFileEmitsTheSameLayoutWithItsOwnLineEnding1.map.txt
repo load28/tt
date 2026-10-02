@@ -1,0 +1,14 @@
+//// [aCrFileEmitsTheSameLayoutWithItsOwnLineEnding1.tt] 12 mapping(s)
+1:27 -> 1:501 len 6  "number"
+1:27 -> 1:563 len 6  "number"
+1:43 -> 1:645 len 42  "\rdeclare const s: Shape;\rfunction f() {\r  "
+1:85 -> 1:1020 len 10  "const a = "
+1:102 -> 1:721 len 1  "s"
+1:118 -> 1:789 len 1  "r"
+1:124 -> 1:819 len 1  "r"
+1:140 -> 1:884 len 1  "0"
+1:146 -> 1:1036 len 11  ";\r  return "
+1:157 -> 1:1080 len 1  "a"
+1:162 -> 1:1083 len 6  "String"
+1:168 -> 1:1090 len 4  ";\r}\r"
+

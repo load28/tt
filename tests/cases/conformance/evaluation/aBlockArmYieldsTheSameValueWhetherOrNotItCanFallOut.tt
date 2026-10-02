@@ -1,0 +1,36 @@
+// @origin: tests/integration.rs::a_block_arm_yields_the_same_value_whether_or_not_it_can_fall_out
+// @run: aBlockArmYieldsTheSameValueWhetherOrNotItCanFallOut.tt
+variant E { A(v: number), B }
+const run = (e: E): unknown => match (e) {
+A(v) => {
+if (v > 0) { return "positive"; }
+throw new Error("not positive");
+},
+B => "b",
+};
+const maybe = (e: E): unknown => match (e) {
+A(v) => {
+if (v > 0) { return "positive"; }
+},
+B => "b",
+};
+const never = (e: E): unknown => match (e) {
+A(v) => {
+void v;
+},
+B => "b",
+};
+let threw = "no";
+try { run(E.A(-1)); } catch { threw = "yes"; }
+console.log([
+run(E.A(1)),
+threw,
+run(E.B),
+maybe(E.A(1)),
+String(maybe(E.A(-1))),
+maybe(E.B),
+String(never(E.A(1))),
+never(E.B),
+].join("|"));
+
+export {};

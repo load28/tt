@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[malformed-match]: tt `match` could not be parsed
+ --> ./main.tt:4:17
+  |
+4 |   const value = match () { 1 => note("one", 1), _ => note("other", 0) };
+  |                 ^^^^^
+  |
+  = help: write `match (<scrutinee>) { <pattern> => <body> }`
+
+
+==== ttc --check-types (exit 1) ====
+error[malformed-match]: tt `match` could not be parsed
+ --> main.tt:4:17
+  |
+4 |   const value = match () { 1 => note("one", 1), _ => note("other", 0) };
+  |                 ^^^^^
+  |
+  = help: write `match (<scrutinee>) { <pattern> => <body> }`
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,126 @@
+=== runtimeAPrototypeSetterNameIsAnOwnProperty.tt ===
+variant V { __proto__(x: number), Other }
+>V : type V = {
+>       kind: "__proto__";
+>       x: number;
+>   } | {
+>       kind: "Other";
+>   }
+>x : (property) x: number
+>Other : (property) Other: {
+>       readonly kind: "Other";
+>   }
+variant U { __proto__, Other }
+>U : type U = {
+>       kind: "__proto__";
+>   } | {
+>       kind: "Other";
+>   }
+>Other : (property) Other: {
+>       readonly kind: "Other";
+>   }
+variant W { A(__proto__: number, other?: number), B }
+>W : type W = {
+>       kind: "A";
+>       __proto__: number;
+>       other?: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (__proto__: number, other?: number) => W
+>__proto__ : (property) __proto__: number
+>other : (property) other?: number | undefined
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const v = V.__proto__(1);
+>v : const v: V
+>V : const V: {
+>       __proto__: (x: number) => V;
+>       Other: {
+>           readonly kind: "Other";
+>       };
+>   }
+>__proto__ : (property) ["__proto__"]: (x: number) => V
+console.log(JSON.stringify(v), Object.keys(V).join(","), Object.getPrototypeOf(V) === Object.prototype);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>v : const v: V
+>Object : var Object: ObjectConstructor
+>keys : (method) ObjectConstructor.keys(o: {}): string[]
+>V : const V: {
+>       __proto__: (x: number) => V;
+>       Other: {
+>           readonly kind: "Other";
+>       };
+>   }
+>join : (method) Array<string>.join(separator?: string): string
+>Object : var Object: ObjectConstructor
+>getPrototypeOf : (method) ObjectConstructor.getPrototypeOf(o: any): any
+>V : const V: {
+>       __proto__: (x: number) => V;
+>       Other: {
+>           readonly kind: "Other";
+>       };
+>   }
+>Object : var Object: ObjectConstructor
+>prototype : (property) ObjectConstructor.prototype: Object
+console.log(JSON.stringify(U.__proto__), Object.getPrototypeOf(U) === Object.prototype);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>U : const U: {
+>       __proto__: {
+>           readonly kind: "__proto__";
+>       };
+>       Other: {
+>           readonly kind: "Other";
+>       };
+>   }
+>__proto__ : (property) __proto__: {
+>       readonly kind: "__proto__";
+>   }
+>Object : var Object: ObjectConstructor
+>getPrototypeOf : (method) ObjectConstructor.getPrototypeOf(o: any): any
+>U : const U: {
+>       __proto__: {
+>           readonly kind: "__proto__";
+>       };
+>       Other: {
+>           readonly kind: "Other";
+>       };
+>   }
+>Object : var Object: ObjectConstructor
+>prototype : (property) ObjectConstructor.prototype: Object
+const w = W.A(5);
+>w : const w: W
+>W : const W: {
+>       A: (__proto__: number, other?: number) => W;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (__proto__: number, other?: number) => W
+console.log(Object.keys(w).join(","), Object.getPrototypeOf(w) === Object.prototype);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>Object : var Object: ObjectConstructor
+>keys : (method) ObjectConstructor.keys(o: {}): string[]
+>w : const w: W
+>join : (method) Array<string>.join(separator?: string): string
+>Object : var Object: ObjectConstructor
+>getPrototypeOf : (method) ObjectConstructor.getPrototypeOf(o: any): any
+>w : const w: W
+>Object : var Object: ObjectConstructor
+>prototype : (property) ObjectConstructor.prototype: Object
+console.log(match (v) { __proto__(x) => x, Other => 0 }, match (w) { A(__proto__) => __proto__, B => 0 });
+>v : const v: V
+>x : const x: number
+>x : const x: number
+>w : const w: W
+>__proto__ : const __proto__: number
+>__proto__ : const __proto__: number
+

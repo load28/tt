@@ -1,0 +1,2 @@
+spreadElement(2) => [0,6] | first 0; receiver {"factor":3}; twice 6
+spreadElement(6) => [0,18] | first 0; receiver {"factor":3}; twice 18

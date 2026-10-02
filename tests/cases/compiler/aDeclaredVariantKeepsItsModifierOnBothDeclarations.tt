@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_11.rs::a_declared_variant_keeps_its_modifier_on_both_declarations
+export declare variant P2 { Q }
+declare variant P4<T> { W(value: T) }

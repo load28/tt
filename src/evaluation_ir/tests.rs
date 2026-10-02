@@ -188,15 +188,21 @@ fn a_result_binding_is_nested_under_the_result_region() {
         .iter()
         .find(|region| matches!(region.operation, OperationId::Propagate(_)))
         .expect("propagation region");
-    assert_eq!(
-        propagation.placement,
-        RegionPlacement::Nested {
-            parent: result.id,
-            source: Some(SourceSpan { start: 21, end: 42 }),
-            exits: Vec::new(),
-            protocol: HostEvaluationProtocol::default(),
-        }
-    );
+    let RegionPlacement::Nested {
+        parent,
+        source,
+        exits,
+        protocol,
+        context,
+    } = &propagation.placement
+    else {
+        panic!("the propagation is not nested: {:?}", propagation.placement);
+    };
+    assert_eq!(*parent, result.id);
+    assert_eq!(*source, Some(SourceSpan { start: 21, end: 42 }));
+    assert_eq!(*exits, Vec::new());
+    assert_eq!(*protocol, HostEvaluationProtocol::default());
+    assert!(context.is_some_and(|context| !context.requires_block));
 }
 
 #[test]
@@ -382,11 +388,29 @@ fn both_ternary_branches_join_one_operation() {
     assert!(matches!(
         operations[0].kind,
         PlannedConditionalKind::Ternary {
-            consequent: PlannedBranch::Value(_),
-            alternate: PlannedBranch::Value(_),
+            consequent: PlannedBranch::Values(_),
+            alternate: PlannedBranch::Values(_),
         }
     ));
     assert_eq!(operations[0].values.len(), 2);
+}
+
+#[test]
+fn several_values_in_one_branch_join_one_operation() {
+    let (file, core) = evaluation(
+        "import type { TResult } from \"@tt/std\";\ndeclare const flag: boolean;\ndeclare function read(n: number): TResult<number, string>;\nexport function f(): TResult<number, string> {\n  const v = flag ? (try read(1)) + (try read(2)) : 0;\n  return { kind: \"Ok\", value: v };\n}\n",
+    );
+    let plan = plan(&file, &core);
+    let operations: Vec<_> = plan.owners().flat_map(|owner| &owner.operations).collect();
+    assert_eq!(operations.len(), 1, "{operations:#?}");
+    let PlannedConditionalKind::Ternary { consequent, .. } = &operations[0].kind else {
+        panic!("{operations:#?}");
+    };
+    assert!(
+        matches!(consequent, PlannedBranch::Values(values) if values.len() == 2),
+        "{operations:#?}"
+    );
+    assert_eq!(operations[0].active.len(), 2, "{operations:#?}");
 }
 
 #[test]
@@ -573,6 +597,7 @@ fn validate_order_rejects_a_capture_overlapping_a_tt_value() {
                     mode,
                     target: slot,
                     receiver: None,
+                    key: None,
                 };
             }
         }

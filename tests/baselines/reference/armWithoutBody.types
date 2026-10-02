@@ -1,0 +1,30 @@
+=== armWithoutBody.tt ===
+variant Shape { Circle(radius: number), Rect(width: number) }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       width: number;
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Rect : (property) Rect: (width: number) => Shape
+>width : (property) width: number
+declare const s: Shape;
+>s : const s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       width: number;
+>   }
+export const a = match (s) { Circle(radius) => radius, Rect(width) if width > 0, _ => 0 };
+>a : const a: any
+>s : const s: Shape
+>radius : const radius: number
+>radius : const radius: number
+>width : const width: number
+>width : const width: number
+

@@ -1,0 +1,20 @@
+=== signatureHelp /*operand*/ signatureHelpInTry.tt:4:25 ===
+  |   const q = try getUser(id);
+  |                         ^ /*operand*/
+signatureHelp: active signature 0, active parameter 0
+  getUser(id: string): TResult<{ name: string; }, string>
+    parameters: id: string
+
+=== signatureHelp /*afterCall*/ signatureHelpInTry.tt:8:44 ===
+  |   return result { const v = try getUser(id); v.name.length };
+  |                                            ^ /*afterCall*/
+signatureHelp: null
+
+=== diagnostics signatureHelpInTry.tt ===
+diagnostics: 1 diagnostic(s)
+  10:13-10:14 ";" error TS1109: Expression expected.
+  restates: source-not-typescript
+published: 2 diagnostic(s)
+  8:10-8:61 "result { const v = try getUser(id); v.name.length }" error result-no-success-value (ttc): `result` can reach the end of its body without a success value
+  10:13-10:14 ";" error ts1109 (ttc): Expression expected.
+

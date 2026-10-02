@@ -1,0 +1,4 @@
+//// [valCapabilityCheckOnlyCoversResolvableCallees1.tt] 2 mapping(s)
+1:1 -> 1:1 len 43  "import { save } from \"./io.js\";\nfunction f("
+2:16 -> 2:12 len 45  "user: User) {\n  save(user);\n  user.save();\n}\n"
+

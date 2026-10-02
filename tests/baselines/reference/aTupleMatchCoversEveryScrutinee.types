@@ -1,0 +1,28 @@
+=== aTupleMatchCoversEveryScrutinee.tt ===
+variant S { A(x: number), B }
+>S : type S = {
+>       kind: "A";
+>       x: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (x: number) => S
+>x : (property) x: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+variant T { C(), D }
+>T : type T = {
+>       kind: "C";
+>   } | {
+>       kind: "D";
+>   }
+>C : (property) C: () => T
+>D : (property) D: {
+>       readonly kind: "D";
+>   }
+const v = match (s, t) { (A(x), C) => x };
+>v : const v: any
+>x : const x: any
+>x : const x: any
+

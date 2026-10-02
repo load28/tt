@@ -1,0 +1,2 @@
+ifLetBody(2) => [1,null] | head 1; read 1; yield 2; receiver {"factor":3}
+ifLetBody(3) => [1,null] | head 1; read 1; yield 3; receiver {"factor":3}

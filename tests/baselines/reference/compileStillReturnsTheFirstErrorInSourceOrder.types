@@ -1,0 +1,42 @@
+=== compileStillReturnsTheFirstErrorInSourceOrder.tt ===
+variant Shape { Circle(r: number), Square(s: number) }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>r : (property) r: number
+>Square : (property) Square: (s: number) => Shape
+>s : (property) s: number
+export function f(x: Shape): number {
+>f : function f(x: Shape): number
+>x : (parameter) x: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   }
+  return match (x) { Circle(r) => r };
+>x : (parameter) x: Shape
+>r : const r: number
+>r : const r: number
+export function g(x: Shape): number {
+>g : function g(x: Shape): number
+>x : (parameter) x: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   }
+  return match (x) { Square(s) => s };
+>x : (parameter) x: Shape
+>s : const s: number
+>s : const s: number
+

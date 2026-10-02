@@ -1,0 +1,6 @@
+//// [theRuntimeImportNeverDisplacesADirectiveOrAShebang1.tt] 4 mapping(s)
+1:1 -> 1:1 len 109  "\"use client\";\ndeclare function f(n: number): num"...
+4:18 -> 4:51 len 4  "f(4)"
+4:26 -> 4:57 len 1  "g"
+4:31 -> 4:59 len 13  ".toFixed(1);\n"
+

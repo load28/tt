@@ -1,0 +1,14 @@
+// @origin: tests/integration/cases_04.rs::runtime_literal_match_with_guard
+// @run: runtimeLiteralMatchWithGuard.tt
+
+function classify(code: number, retry: boolean) {
+  return match (code) {
+    500 if retry => "retrying",
+    500 => "failed",
+    _ => "ok",
+  };
+}
+
+console.log(classify(500, true), classify(500, false), classify(200, true));
+
+export {};

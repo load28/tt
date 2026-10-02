@@ -1,3 +1,29 @@
+/// The support modules an emission imports are what codegen wrote, so a
+/// build writes exactly the modules its outputs need.
+#[test]
+fn an_emission_reports_the_support_modules_it_imports() {
+    use ttc::StdModule;
+    let imports = |source: &str| {
+        ttc::compile_mapped(source, &Options::default())
+            .unwrap()
+            .support_imports
+    };
+    let pipeline = "declare function input(): number;\n\
+                    declare const step: () => (value: number) => number;\n";
+    assert_eq!(
+        imports(&format!("{pipeline}export const v = input() |> step();\n")),
+        [StdModule::Runtime]
+    );
+    // A literal head lowers to a direct call; a script inlines its helper.
+    assert!(imports("export const a = 1 |> String;\n").is_empty());
+    assert!(imports(&format!("{pipeline}const v = input() |> step();\n")).is_empty());
+    assert_eq!(
+        imports("import * as Option from \"@tt/std/option\";\nexport const o = Option;\n"),
+        [StdModule::Option]
+    );
+    assert!(imports("export const plain = 1;\n").is_empty());
+}
+
 #[test]
 fn local_variant_shadows_extern_of_same_name() {
     // The local Token has only two cases; the extern one must not resurrect
@@ -204,39 +230,12 @@ fn variant_symbols_carries_positions_and_field_shapes() {
 
 #[test]
 fn pipeline_emits_nested_apply_helper_calls() {
-    let out = ok("const y = half(4) |> double |> label;\nexport {};\n");
+    let out = ok("const y = half(4) |> times(2) |> label();\nexport {};\n");
     assert!(
-        out.contains("const y = $tt_ap($tt_ap(half(4), double), label);"),
+        out.contains("const y = $tt_ap($tt_ap(half(4), times(2)), label());"),
         "{out}"
     );
     assert!(out.contains("import { $tt_ap } from \"@tt/runtime\";"));
-}
-
-#[test]
-fn pipeline_method_step_chains_postfix() {
-    let out = ok("const t = s |> .trim() |> .split(\",\") |> f;\n");
-    assert!(
-        out.contains("const t = $tt_ap(s.trim().split(\",\"), f);"),
-        "{out}"
-    );
-}
-
-#[test]
-fn a_lowering_is_laid_out_from_the_line_it_replaces() {
-    // Generated block structure indents from the statement the construct
-    // sits on, at every nesting depth, so the output reads as TypeScript
-    // written where the tt source was.
-    let out = ok(
-        "variant E { A(v: number), B }\ndeclare const e: E;\nfunction f(): number {\n  if (true) {\n    const r = match (e) { A(v) => v, B => 0 };\n    return r;\n  }\n  return 0;\n}\n",
-    );
-    assert!(out.contains("\n    let $tt_v0: number;\n    {\n"), "{out}");
-    assert!(out.contains("\n      const $tt_m = e;"), "{out}");
-    assert!(out.contains("\n      switch ($tt_m.kind) {\n"), "{out}");
-    assert!(
-        compact(&out).contains("case \"A\": { const { v } = $tt_m; $tt_v0 = v; break; }"),
-        "{out}"
-    );
-    assert!(out.contains("\n    }\n    const r = $tt_v0;"), "{out}");
 }
 
 /// The output offset the source byte at `src` was copied to.
@@ -349,300 +348,177 @@ fn every_construct_lays_its_glue_out_from_the_line_it_replaces() {
 }
 
 #[test]
-fn a_nested_variant_declaration_is_laid_out_from_its_own_line() {
-    let out = ok("function make() {\n  variant Inner { A(x: number), B }\n  return Inner.B;\n}\n");
-    assert!(
-        out.contains("\n  type Inner =\n    | { kind: \"A\"; x: number }"),
-        "{out}"
-    );
-    assert!(
-        out.contains("\n  const Inner = {\n    A: (x: number): Inner => ({ kind: \"A\", x }),"),
-        "{out}"
-    );
-    assert!(out.contains("\n  };\n  return Inner.B;"), "{out}");
-}
-
-#[test]
-fn a_delivered_value_keeps_only_the_parentheses_that_group_it() {
-    // Everything but the comma operator binds tighter than the position a
-    // lowered value lands in, so the parentheses go where they mean
-    // something and nowhere else.
-    let out = ok(
-        "variant E { A(v: number), B }\ndeclare const e: E;\nconst plain = match (e) { A(v) => v + 1, B => 0 };\nconst seq = match (e) { A(v) => (v, v + 1), B => 0 };\n",
-    );
-    let compact = compact(&out);
-    assert!(compact.contains("$tt_v0$plain = v + 1; break;"), "{out}");
-    assert!(compact.contains("$tt_v0$plain = 0; break;"), "{out}");
-    assert!(compact.contains("$tt_v1$seq = (v, v + 1); break;"), "{out}");
-}
-
-#[test]
-fn generated_control_flow_uses_statement_lines_and_expanded_blocks() {
-    let out = ok(
-        "variant E { A(v: number), B }\nfunction f(e: E): Result<number, string> {\n  const value = try read();\n  const matched = match (e) { A(v) => v, B => 0 };\n  return Result.Ok(value + matched);\n}\nfunction block(e: E): number {\n  return match (e) {\n    A(v) if v > 0 => {\n      const doubled = v * 2;\n      return doubled;\n    },\n    _ => 0,\n  };\n}\nfunction bind(e: E): number {\n  const A(v) = e else {\n    return 0;\n  };\n  return v;\n}\nconst computed = result {\n  return try read();\n};\n",
-    );
-    for compressed in ["; if (", "; const ", "; break"] {
-        assert!(
-            !out.lines().any(|line| line.contains(compressed)),
-            "generated statements share a line through {compressed:?}:\n{out}"
-        );
-    }
-    assert!(
-        out.contains(
-            "case \"A\": {\n        const { v } = $tt_m;\n        $tt_v0 = v;\n        break;\n      }"
-        ),
-        "{out}"
-    );
-    assert!(
-        out.contains("if (!(\"value\" in $tt_t0)) {\n    return $tt_t0;\n  }"),
-        "{out}"
-    );
-    // Source-backed block contents keep their authored column. Rewritten
-    // exits follow that column instead of the generated wrapper brace.
-    assert!(
-        out.contains(
-            "          {\n      const doubled = v * 2;\n      $tt_v1 = doubled;\n      break;\n          }"
-        ),
-        "{out}"
-    );
-    assert!(
-        out.contains("if ($tt_t1.kind !== \"A\") {\n    return 0;\n  }"),
-        "{out}"
-    );
-    assert!(
-        out.contains(
-            "if (!(\"value\" in $tt_t2)) {\n    $tt_v2$computed = $tt_t2;\n    break $tt_v2$computed;\n  }\n  $tt_v2$computed = { kind: \"Ok\" as const, value: $tt_t2.value };\n  break $tt_v2$computed;"
-        ),
-        "{out}"
-    );
-}
-
-#[test]
-fn a_postfix_step_parenthesizes_only_a_receiver_that_needs_it() {
-    // Member access binds tighter than every operator: a primary receiver
-    // can lose the parentheses, `await p` and `a + b` cannot.
-    let out = ok(
-        "const a = s |> .trim();\nconst b = (x + y) |> .toFixed(2);\nconst c = await p |> .then(g);\n",
-    );
-    assert!(out.contains("const a = s.trim();"), "{out}");
-    assert!(out.contains("const b = (x + y).toFixed(2);"), "{out}");
-    assert!(out.contains("const c = (await p).then(g);"), "{out}");
-}
-
-#[test]
 fn pipeline_runtime_is_imported_once_per_file() {
-    let out = ok("const a = x |> f;\nconst b = y |> g;\nexport {};\n");
+    let out = ok("const a = x |> f();\nconst b = y |> g();\nexport {};\n");
     assert_eq!(out.matches("$tt_ap(").count(), 2, "{out}");
     assert_eq!(out.matches("from \"@tt/runtime\"").count(), 1, "{out}");
 }
 
 #[test]
-fn an_inert_pipeline_input_uses_a_direct_call() {
-    let out = ok("const value = 1 |> String;\n");
-    assert!(out.contains("const value = String(1);"), "{out}");
-    assert!(!out.contains("$tt_ap"), "{out}");
-}
-
-#[test]
-fn a_materialized_pipeline_accumulator_uses_a_direct_call() {
-    let out = ok("variant E { A(value: number), B }\n\
-         const value = match (E.A(1)) { A(value) => value, B => 0 } |> String;\n");
-    assert!(out.contains("$tt_v0$value = String($tt_v2);"), "{out}");
-    assert!(!out.contains("$tt_ap"), "{out}");
-}
-
-#[test]
-fn file_without_pipeline_gets_no_helper() {
-    let out = ok("const a = f(x);\n");
-    assert!(!out.contains("$tt_ap"), "{out}");
-}
-
-#[test]
-fn pipeline_head_reclaims_a_lifted_template() {
-    // The template token is lifted as a segment before the `|>` is seen —
-    // the claim must rewind it into the head sub-program.
-    let out = ok("const a = `v=${n}` |> f;\n");
-    assert!(out.contains("const a = $tt_ap(`v=${n}`, f);"), "{out}");
-}
-
-#[test]
-fn an_inert_member_receiver_needs_no_receiver_slot() {
-    let out = ok("variant E { A(value: string), B }\n\
-         const value = \"abc\".replace(\
-           match (E.A(\"a\")) { A(value) => value, B => \"b\" },\
-           \"x\",\
-         );\n");
-    assert!(out.contains("(\"abc\".replace).bind(\"abc\")"), "{out}");
-    assert_eq!(out.matches("const $tt_v").count(), 1, "{out}");
-}
-
-#[test]
-fn pipeline_head_reclaims_a_lifted_match() {
-    let out = ok(
-        "variant E { A(v: number), B }\nconst a = match (e) { A(v) => v, B => 0, } |> double;\n",
-    );
-    assert!(!out.contains("(() =>"), "{out}");
-    assert!(out.contains("switch ($tt_m.kind)"), "{out}");
-    assert!(out.contains("$tt_v0$a = double($tt_v2);"), "{out}");
-    assert!(out.contains("const a = $tt_v0$a;"), "{out}");
-}
-
-#[test]
-fn pipeline_head_is_the_whole_call_not_the_inner_argument() {
-    // Bracket tracking must restore the enclosing expression's start:
-    // the head of `a(b) |> g` is `a(b)`, not `b`.
-    let out = ok("const y = f(a(b) |> g);\n");
-    assert!(out.contains("const y = f($tt_ap(a(b), g));"), "{out}");
-}
-
-#[test]
-fn pipeline_inside_match_scrutinee_arm_and_template() {
-    let out = ok(
-        "variant E { A(v: number), B }\nconst r = match (x |> norm) {\n  A(v) => v |> double,\n  B => 0,\n};\nconst t = `n=${x |> f}`;\n",
-    );
-    assert!(out.contains("const $tt_m = $tt_ap(x, norm);"), "{out}");
-    assert!(
-        compact(&out).contains("$tt_v0$r = $tt_ap(v, double); break;"),
-        "{out}"
-    );
-    assert!(out.contains("`n=${$tt_ap(x, f)}`"), "{out}");
-}
-
-#[test]
-fn pipeline_composes_with_try() {
-    let out = ok(
-        "function f(): Result<number, string> {\n  const a = try readCfg() |> norm;\n  return Result.Ok(a);\n}\n",
-    );
-    assert!(
-        out.contains("const $tt_t0 = $tt_ap(readCfg(), norm);"),
-        "{out}"
-    );
-}
-
-#[test]
-fn pipeline_await_in_head_needs_no_async_wrapper() {
-    let out = ok("async function f(p: Promise<string>) {\n  return await p |> norm;\n}\n");
-    assert!(out.contains("return $tt_ap(await p, norm);"), "{out}");
-    assert!(!out.contains("async () =>"), "{out}");
-}
-
-#[test]
-fn the_runtime_import_is_written_where_an_import_belongs() {
-    // Which helpers a file needs is only known once it is emitted; where
-    // an import goes is not a question about that (TASK-219).
-    let out = ok(
-        "declare function f(n: number): number;\ndeclare function g(n: number): number;\nexport const a = f(4) |> g |> .toFixed(1);\n",
-    );
-    assert!(out.starts_with("import { $tt_ap } from "), "{out}");
-}
-
-#[test]
-fn the_runtime_import_never_displaces_a_directive_or_a_shebang() {
-    // A directive is only a directive while nothing precedes it, so an
-    // import above one would turn it into a string expression and a
-    // bundler would stop seeing the boundary the author declared.
-    let out = ok(
-        "\"use client\";\ndeclare function f(n: number): number;\ndeclare function g(n: number): number;\nexport const a = f(4) |> g |> .toFixed(1);\n",
-    );
-    assert!(
-        out.starts_with("\"use client\";\nimport { $tt_ap } from "),
-        "{out}"
-    );
-
-    let out = ok(
-        "#!/usr/bin/env node\ndeclare function f(n: number): number;\ndeclare function g(n: number): number;\nexport const a = f(4) |> g |> .toFixed(1);\n",
-    );
-    assert!(
-        out.starts_with("#!/usr/bin/env node\nimport { $tt_ap } from "),
-        "{out}"
-    );
-
-    // A leading string that is *not* a directive is an expression, and an
-    // import may precede it.
-    let out = ok(
-        "declare const b: string;\n\"a\" + b;\ndeclare function f(n: number): number;\nexport const a = f(4) |> f |> .toFixed(1);\n",
-    );
-    assert!(out.starts_with("import { $tt_ap } from "), "{out}");
-}
-
-#[test]
-fn a_block_arm_keeps_the_layout_its_author_wrote() {
-    // The lowering writes the braces around a block arm's body, so the
-    // line break and indentation after the author's own `{` is what the
-    // rest of their block lines up against — dropping it put the first
-    // statement in one column and the rest in another (TASK-219).
-    let out = ok(
-        "variant E { A(n: number), B }\ndeclare const e: E;\nconst v = match (e) {\n  A(n) => {\n    const m = n + 1;\n    return m;\n  },\n  B => 0,\n};\n",
-    );
-    let block: Vec<&str> = out
-        .lines()
-        .skip_while(|line| !line.contains("const m = n + 1;"))
-        .take(2)
-        .collect();
-    assert_eq!(block.len(), 2, "{out}");
-    let indent = |line: &str| line.len() - line.trim_start().len();
-    assert_eq!(indent(block[0]), indent(block[1]), "{out}");
-}
-
-#[test]
-fn unparenthesized_ternary_next_to_pipeline_is_an_error() {
-    let src = "const a = c ? x : y |> f;\n";
-    let e = err(src);
-    // The message says what is wrong; how to fix it rides in the
-    // suggestion channel, where every rule's advice lives (TASK-218).
-    assert!(e.message.contains("could not be parsed"), "{}", e.message);
-    assert_eq!((e.line, e.col), (1, 21));
-    assert!(
-        advice(src).iter().any(|a| a.contains("parenthesize")),
-        "{:?}",
-        advice(src)
-    );
-}
-
-#[test]
-fn parenthesized_ternary_head_compiles() {
-    let out = ok("const a = (c ? x : y) |> f;\n");
-    assert!(out.contains("$tt_ap((c ? x : y), f"), "{out}");
-}
-
-#[test]
-fn unparenthesized_arrow_step_is_an_error() {
-    let src = "const a = x |> n => n + 1;\n";
-    let e = err(src);
-    assert!(e.message.contains("could not be parsed"), "{}", e.message);
-    assert!(
-        advice(src).iter().any(|a| a.contains("parenthesize")),
-        "{:?}",
-        advice(src)
-    );
-}
-
-#[test]
 fn empty_or_dangling_step_is_an_error() {
-    let e = err("const a = x |>;\n");
-    assert!(e.message.contains("could not be parsed"), "{}", e.message);
-    let e = err("const a = x |> |> f;\n");
-    assert!(e.message.contains("could not be parsed"), "{}", e.message);
+    for (src, col) in [
+        ("const a = x |>;\n", 13),
+        ("const a = x |> |> f;\n", 13),
+        ("const a = x |> .length |>\nconst b = a;\n", 24),
+    ] {
+        let codes: Vec<_> = ttc::analyze(src, &Options::default())
+            .iter()
+            .map(|d| d.code)
+            .collect();
+        assert_eq!(codes, [ttc::DiagnosticCode::MissingPipelineStep], "{src}");
+        let e = err(src);
+        assert!(e.message.contains("`|>` has no step"), "{}", e.message);
+        assert_eq!((e.line, e.col), (1, col), "{src}");
+    }
 }
 
 #[test]
-fn optional_postfix_step_emits_the_complete_chain() {
-    let out = ok("const a = x |> ?.trim();\n\
-         const b = xs |> ?.[key]?.value;\n\
-         const c = fn |> ?.(arg).value?.();\n");
-    assert!(out.contains("const a = x?.trim();"), "{out}");
-    assert!(out.contains("const b = xs?.[key]?.value;"), "{out}");
-    assert!(out.contains("const c = fn?.(arg).value?.();"), "{out}");
+fn a_missing_step_keeps_the_pipeline_written_before_it() {
+    // The steps written stay the pipeline, and the missing one applies
+    // TypeScript's error type, so the projection still reads the head and
+    // the statement after it.
+    let src = "export function run(xs: number[]): number {\n  const n = xs |> .length |> \n  return n;\n}\n";
+    let report = ttc::compile_projection_report(src, &Options::default());
+    let emit = report.emit.expect("the projection emits");
+    assert!(
+        emit.code
+            .contains("const n = (undefined as any)(xs.length) \n  return n;"),
+        "{}",
+        emit.code
+    );
+    assert!(report.recovered.is_empty(), "{:?}", report.recovered);
 }
 
 #[test]
-fn optional_postfix_uses_the_common_receiver_grouping_rule() {
-    let out = ok("const a = value |> ?.member;\n\
-         const b = left + right |> ?.member;\n\
-         const c = make() |> ?.member;\n");
-    assert!(out.contains("const a = value?.member;"), "{out}");
-    assert!(out.contains("const b = (left + right)?.member;"), "{out}");
-    assert!(out.contains("const c = make()?.member;"), "{out}");
+fn an_arm_with_no_body_keeps_its_pattern_and_guard() {
+    let decl = "variant Shape { Circle(radius: number), Rect(width: number) }\ndeclare const s: Shape;\n";
+    let cases = [
+        (
+            "const a = match (s) { Circle(radius) => radius, Rect(width) if width > 0 };",
+            "if (width > 0)",
+        ),
+        (
+            "const a = match (s) { Circle(radius) => radius, Rect(width) if width > 0, _ => 0 };",
+            "if (width > 0)",
+        ),
+        (
+            "const a = match (s) { Circle(radius) => radius, Rect(width) => };",
+            "const { width } = ",
+        ),
+        (
+            "const a = match (s, s) { (Circle(r), _) => r, (Rect(w), _) if w > 0, _ => 0 };",
+            "if (w > 0)",
+        ),
+        (
+            "console.log(match (s) { Circle(radius) => radius, Rect(width) if width > 0 });",
+            "width > 0",
+        ),
+    ];
+    for (statement, kept) in cases {
+        let src = format!("{decl}{statement}\n");
+        let report = ttc::compile_projection_report(&src, &Options::default());
+        let codes: Vec<_> = report.diagnostics.iter().map(|d| d.code).collect();
+        assert!(
+            codes.contains(&DiagnosticCode::MissingArmBody)
+                && !codes.contains(&DiagnosticCode::MalformedMatch),
+            "{src}: {codes:?}"
+        );
+        let emit = report.emit.expect("the projection emits");
+        assert!(report.recovered.is_empty(), "{:?}", report.recovered);
+        assert!(emit.code.contains(kept), "{}", emit.code);
+        assert!(emit.code.contains("(undefined as any)"), "{}", emit.code);
+    }
+}
+
+#[test]
+fn an_arm_whose_guard_is_not_written_yet_is_a_malformed_arm() {
+    let decl = "variant Shape { Circle(radius: number), Rect(width: number) }\ndeclare const s: Shape;\ndeclare const t: string;\n";
+    for statement in [
+        "const a = match (s) { Circle(radius) => radius, Rect(width) if };",
+        "const a = match (s) { Circle(radius) => radius, Rect(width) if  };",
+        "const a = match (s) { Circle(radius) => radius, Rect(width) if, _ => 0 };",
+        "const a = match (s, s) { (Circle(r), _) => r, (Rect(w), _) if };",
+        "const a = match (t) { \"a\" => 1, \"b\" if };",
+    ] {
+        let src = format!("{decl}{statement}\n");
+        let codes: Vec<_> = ttc::analyze(&src, &Options::default())
+            .iter()
+            .map(|d| d.code)
+            .collect();
+        assert_eq!(codes, [DiagnosticCode::MalformedMatch], "{src}");
+        err(&src);
+    }
+}
+
+#[test]
+fn a_step_with_an_open_list_ends_where_typescript_ends_the_list() {
+    // The list runs to the next statement, as TypeScript reads `add(2, `
+    // with `const` after it; the statement stays outside the step.
+    let src = "const v = 1 |> add(2, \nconst w = 1;\n";
+    let report = ttc::compile_projection_report(src, &Options::default());
+    let emit = report.withheld.expect("the faithful projection");
+    assert!(emit.code.ends_with("(1)const w = 1;\n"), "{}", emit.code);
+    let src = "function f() {\n  const v = 1 |> add(2, \n}\n";
+    let report = ttc::compile_projection_report(src, &Options::default());
+    let emit = report.withheld.expect("the faithful projection");
+    assert!(emit.code.ends_with("(1)}\n"), "{}", emit.code);
+}
+
+#[test]
+fn a_stray_pipe_recovers_only_to_the_end_of_its_statement() {
+    let src = "export function run(a: boolean, f: (n: number) => number): number {\n  const n = a ? 1 : 2 |> f\n  const m = n + 1\n  return m;\n}\n";
+    let report = ttc::compile_projection_report(src, &Options::default());
+    let next = src.find("const m").unwrap();
+    assert!(
+        report
+            .recovered
+            .iter()
+            .all(|&(start, end)| end <= next || start >= next),
+        "{:?}",
+        report.recovered
+    );
+    let emit = report.emit.expect("the projection emits");
+    assert!(
+        emit.code.contains("const m = n + 1\n  return m;"),
+        "{}",
+        emit.code
+    );
+}
+
+#[test]
+fn a_stray_if_let_recovers_only_the_statement_typescript_reads() {
+    let after = "  const b = 1;\n  return b;\n}\nfunction g() { return 2; }\n";
+    for (head, projected) in [
+        (
+            "if let Some(v) = find(id)",
+            "void             find(id)",
+        ),
+        (
+            "if let Some(v) = find(id.)",
+            "void             find(id.)",
+        ),
+        ("if let Some(", ";           "),
+        ("if let Some(v) =", ";               "),
+        (
+            "if let 1(x) = y { x } else if let B(z) = w { z } else { q }",
+            "void          y ;",
+        ),
+    ] {
+        let src = format!("function f(id: string) {{\n  {head}\n{after}");
+        let report = ttc::compile_projection_report(&src, &Options::default());
+        let emit = report
+            .emit
+            .or(report.withheld)
+            .expect("the projection emits");
+        assert_eq!(
+            emit.code,
+            format!(
+                "function f(id: string) {{\n  {projected:<width$}\n{after}",
+                width = head.len()
+            ),
+            "{src}"
+        );
+    }
 }
 
 #[test]
@@ -685,16 +561,3 @@ fn bare_super_is_not_an_optional_receiver() {
     let out = ok("class C extends B { m() { return super |> .value |> ?.name; } }\n");
     assert!(out.contains("return super.value?.name;"), "{out}");
 }
-
-#[test]
-fn try_inside_a_function_inside_a_pipeline_step_is_allowed() {
-    let out = ok("const a = x |> (n => { const b = try f(n); return b; });\n");
-    assert!(
-        compact(&out).contains("if (!(\"value\" in $tt_t0)) { return $tt_t0; }"),
-        "{out}"
-    );
-}
-
-/* ------------------------------------------------------------------ */
-/* flow (function composition)                                         */
-/* ------------------------------------------------------------------ */

@@ -1,0 +1,11 @@
+=== diagnostics main.ttx ===
+diagnostics: 3 diagnostic(s)
+  1:10-1:14 "note" hint TS6133: 'note' is declared but its value is never read. [unnecessary]
+  1:32-1:40 "Fragment" hint TS6133: 'Fragment' is declared but its value is never read. [unnecessary]
+  3:16-3:21 "input" hint TS6133: 'input' is declared but its value is never read. [unnecessary]
+published: 4 diagnostic(s)
+  1:10-1:14 "note" hint TS6133 (ts): 'note' is declared but its value is never read. [unnecessary]
+  1:32-1:40 "Fragment" hint TS6133 (ts): 'Fragment' is declared but its value is never read. [unnecessary]
+  3:16-3:21 "input" hint TS6133 (ts): 'input' is declared but its value is never read. [unnecessary]
+  4:27-4:32 "match" error malformed-match (ttc): tt `match` could not be parsed
+

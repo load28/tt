@@ -1,0 +1,2 @@
+laterDeclarator(7) => [1,null] | before 1; operand 7; finally 0
+laterDeclarator(1) => [1,null] | before 1; operand 1; finally 0

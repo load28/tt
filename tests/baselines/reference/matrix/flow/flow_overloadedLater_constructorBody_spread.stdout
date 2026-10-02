@@ -1,0 +1,2 @@
+constructorBody(2) => "#4" | add 4; shape "#4"
+constructorBody(5) => "#10" | add 10; shape "#10"

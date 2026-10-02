@@ -1,0 +1,4 @@
+compoundAssignment({"kind":"Num","value":4}) => "start:4" | initial "start:"; target {"total":"start:"}; yield {"kind":"Num","value":4}; number 4
+compoundAssignment({"kind":"Neg","value":-3}) => "start:-3" | initial "start:"; target {"total":"start:"}; yield {"kind":"Neg","value":-3}; number -3
+compoundAssignment({"kind":"Word","text":"hi"}) => "start:hi" | initial "start:"; target {"total":"start:"}; yield {"kind":"Word","text":"hi"}; word "hi"
+compoundAssignment({"kind":"End"}) => "start:" | initial "start:"; target {"total":"start:"}; yield {"kind":"End"}; end ""

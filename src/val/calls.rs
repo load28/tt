@@ -11,6 +11,7 @@ use crate::typescript::mapper;
 use crate::{MappedEmit, SourceKind};
 
 use super::Mutation;
+use super::reference::{access_path, unwrapped};
 
 /// Every call in `emit` whose callee is a member access rooted at an
 /// identifier and keyed by a name: `x.m(..)`, `x?.m(..)`, `x["m"](..)`,
@@ -50,7 +51,7 @@ impl Calls<'_> {
         let Some((method, key)) = method_key(member) else {
             return;
         };
-        let Some(root) = root_of(&member.obj) else {
+        let Some((root, _)) = access_path(&member.obj) else {
             return;
         };
         let (Some(root_at), Some(key_at)) = (self.source(root.span.lo), self.source(key)) else {
@@ -80,20 +81,6 @@ impl Visit for Calls<'_> {
     }
 }
 
-fn unwrapped(mut expr: &Expr) -> &Expr {
-    loop {
-        expr = match expr {
-            Expr::Paren(inner) => &inner.expr,
-            Expr::TsNonNull(inner) => &inner.expr,
-            Expr::TsAs(inner) => &inner.expr,
-            Expr::TsSatisfies(inner) => &inner.expr,
-            Expr::TsTypeAssertion(inner) => &inner.expr,
-            Expr::TsConstAssertion(inner) => &inner.expr,
-            _ => return expr,
-        };
-    }
-}
-
 fn member_of(callee: &Expr) -> Option<&MemberExpr> {
     match unwrapped(callee) {
         Expr::Member(member) => Some(member),
@@ -120,17 +107,5 @@ fn method_key(member: &MemberExpr) -> Option<(String, swc_common::BytePos)> {
             _ => None,
         },
         MemberProp::PrivateName(_) => None,
-    }
-}
-
-fn root_of(object: &Expr) -> Option<&swc_ecma_ast::Ident> {
-    match unwrapped(object) {
-        Expr::Ident(ident) => Some(ident),
-        Expr::Member(member) => root_of(&member.obj),
-        Expr::OptChain(chain) => match &*chain.base {
-            OptChainBase::Member(member) => root_of(&member.obj),
-            OptChainBase::Call(_) => None,
-        },
-        _ => None,
     }
 }

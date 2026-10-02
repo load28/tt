@@ -1,0 +1,8 @@
+//// [aDeclaredVariantKeepsItsModifierOnBothDeclarations.tt] 6 mapping(s)
+1:32 -> 5:3 len 1  "\n"
+2:19 -> 6:16 len 3  "<T>"
+2:19 -> 9:15 len 3  "<T>"
+2:34 -> 7:23 len 1  "T"
+2:34 -> 9:26 len 1  "T"
+2:38 -> 10:3 len 1  "\n"
+

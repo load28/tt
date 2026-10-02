@@ -1,0 +1,12 @@
+//// [runtimeUnexpectedCaseThrows.tt] 10 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:19 -> 21:21 len 6  "number"
+2:19 -> 24:10 len 6  "number"
+2:31 -> 26:3 len 31  "\nfunction f(x: AB): number {\n  "
+4:3 -> 46:3 len 7  "return "
+4:17 -> 30:19 len 1  "x"
+5:7 -> 33:17 len 1  "n"
+5:13 -> 34:18 len 1  "n"
+6:10 -> 38:18 len 1  "2"
+7:4 -> 46:16 len 166  ";\n}\nconst g = f as unknown as (x: { kind: string"...
+

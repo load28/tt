@@ -1,0 +1,7 @@
+differences from pipeline_overloadedStep_loopBody_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:7:38 ===
+  |       collected.push(risky(input) |> shape |> .length);
+  |                                      ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

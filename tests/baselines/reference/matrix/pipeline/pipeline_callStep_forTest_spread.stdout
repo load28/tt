@@ -1,0 +1,2 @@
+forTest(2) => 1 | double 4
+forTest(5) => 1 | double 10

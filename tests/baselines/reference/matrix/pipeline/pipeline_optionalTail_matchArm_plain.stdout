@@ -1,0 +1,2 @@
+matchArm(2.5) => "2.50" | flip true; operand 2.5; positive 2.5
+matchArm(-3) => 0 | flip false; other arm 0

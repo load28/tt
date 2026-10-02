@@ -1,0 +1,26 @@
+==== ttc --out-dir (exit 1) ====
+error[stray-if-let]: the `else` of an `if let` must be a block or another `if let`
+ --> ./malformedIfLetIsAnErrorWithPosition2.tt:2:31
+  |
+2 |   if let Some(v) = o { g(); } else if (x) { h(); }
+  |                               ^^^^^^^
+  |
+  = help: put a plain `if (...)` inside an `else { ... }` block
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'o'.
+ --> malformedIfLetIsAnErrorWithPosition2.tt:2:20
+  |
+2 |   if let Some(v) = o { g(); } else if (x) { h(); }
+  |                    ^
+error[stray-if-let]: the `else` of an `if let` must be a block or another `if let`
+ --> malformedIfLetIsAnErrorWithPosition2.tt:2:31
+  |
+2 |   if let Some(v) = o { g(); } else if (x) { h(); }
+  |                               ^^^^^^^
+  |
+  = help: put a plain `if (...)` inside an `else { ... }` block
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

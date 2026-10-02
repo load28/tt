@@ -1,0 +1,2 @@
+constructorBody(3) => 4 | risky 3; read 4
+constructorBody(8) => 9 | risky 8; read 9

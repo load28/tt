@@ -172,7 +172,28 @@ statement list (`GlobalStatement`), and the lowering plan follows it:
   `@ts-check`/`@ts-nocheck`, and the `@jsx` pragmas.
 
 A function body, block, or namespace body is already a private scope, and a
-module's top level is private to the module, so none of them changes.
+module's top level is private to the module, so none of them changes. A
+module declares its helpers as function declarations with the rest of its
+prelude — after the directive prologue and the file-level pragmas, beside
+the runtime import — so no source text precedes them: a bracket the user
+left open at the end of the file cannot take them into its own syntax
+(TASK-527). A function declaration is hoisted, so its place in the module
+does not change what it means.
+
+A module written with CommonJS module syntax is the exception to the
+runtime import (TASK-598). `export =` and a non-type `import x =
+require("...")` are TypeScript's CommonJS module forms: under
+`verbatimModuleSyntax` a CommonJS-format file has to use them, and an
+ECMAScript `import` there is TS1295 (TypeScript handbook, "Modules -
+Reference", `verbatimModuleSyntax`; the file's format follows Node's
+module-format detection, the nearest `package.json` `"type"` for a `.ts`
+file under `node16`/`nodenext`). `ProgramSyntax` records that a module uses
+these forms (`uses_commonjs_syntax`), as it records that a file is a
+script, and such a module declares `$tt_ap`/`$tt_fl` as the typed `var`s a
+script uses, module-scoped here, instead of importing `@tt/runtime`, so
+its output imports no support module in either format. A module that
+declares nothing but type-only imports and exports gives no such evidence
+and still imports the runtime.
 
 ## 5. Evaluation IR
 
@@ -321,12 +342,25 @@ boundary는 분석 실패 fallback이 아니라 `EvaluationOwner`가 선택하�
 capability다. 이름은 전체 SWC identifier 집합과 충돌하지 않으며 실제 사용 파일에 한 번만
 방출한다.
 
+An enum member initializer is an expression-only owner as well
+(`EvaluationOwner::EnumInitializer`, TASK-594). TypeScript evaluates an
+enum's members in declaration order, and inside an initializer a member's
+unqualified name denotes that member (TypeScript emits it as `E.member`),
+so statements hoisted before the enum would run before the earlier members
+and read an outer binding of the same name. A `match` or `try` there is
+`match-placement`/`try-placement`; a `result` block runs in place through
+`$tt_expr`, where TypeScript still resolves member names.
+
 ### 7.5 Values inside an operand of an enclosing tt value (TASK-501)
 
 A tt value can sit inside an operand that another tt value lowers
 structurally: a pipeline head or step (`f(match ...) |> g`), a match subject,
-or an expression arm body. Such a value is planned exactly like a value of a
-TypeScript owner, bounded by the enclosing value instead of the owner:
+or an expression arm body. The subject of a let-else or `if let` statement
+is such an operand too (TASK-544): the projection writes it after the
+statement's placeholder, a chained `else if let` included, and the
+statement's head bounds the values in it as an enclosing value's extent
+does. Such a value is planned exactly like a value of a TypeScript owner,
+bounded by the enclosing value instead of the owner:
 
 - Its schedule is the prefix of its protocol whose parents lie inside the
   enclosing value, and its target capability is decided from that schedule
@@ -379,7 +413,263 @@ do {
 } while (false);
 ```
 
-## 8. 전체 tt 표면의 공통 배치
+### 7.6 Assignment targets (TASK-522)
+
+An assignment evaluates its target's reference before its right operand
+(ECMA-262 §13.15.2), so a tt value on the right of an assignment is
+scheduled after that reference. The protocol step of an assignment frame
+(`ProjectedProtocolFrame::Assignment`) carries the reference as inputs, in
+evaluation order:
+
+- a member target's object, then its computed key, captured as values. A
+  Reference Record holds the key's value, not its property key:
+  `ToPropertyKey` runs in `PutValue`, after the right operand, and so does
+  the target's `$object[$key] = ...`. An identifier target resolves a
+  binding and evaluates nothing; a destructuring pattern is evaluated after
+  the right operand. An object or key that is an identifier or `this` is
+  read again at the assignment, as TypeScript's own down-level transforms
+  read a simple-copiable operand (`isSimpleCopiableExpression`). The target
+  then keeps the reference TypeScript narrows (`state.value = ...` narrows
+  `state.value`) and the `this.value = ...` a constructor infers a class
+  property from; rebinding that identifier inside the right operand is the
+  one case where the write does not reach the object the reference named
+  first.
+- for a compound operator (`+=` and the other arithmetic, shift, and bitwise
+  operators), the target's current value (`GetValue(lref)`), read into an
+  accumulator (`EvaluationInputMode::CompoundAssignmentTarget`). The capture
+  reads the target through the slots of the object and key captured before
+  it (an earlier capture inside a later one is its dependency), and the
+  target rewrites the operator: `t += v` becomes `t = $acc += v`. The
+  accumulator applies the operator to the value read before the right
+  operand, and the assignment writes the result through the authored
+  target, so the right operand needs no parentheses. For a computed key
+  whose value is an object, `ToPropertyKey` then runs once for the read and
+  once for the write, where a native compound assignment converts it once.
+
+A logical assignment (`&&=`, `||=`, `??=`) evaluates its right operand only
+when the target's current value does not decide the result (§13.15.2:
+`GetValue(lref)`, the test, then the right operand and `PutValue`), so a tt
+value there is a conditional operation (TASK-719,
+`PlannedConditionalKind::LogicalAssignment`). Its condition is the target,
+with its object and computed key as the parts of the reference (captured
+unless they are an identifier or `this`); the operation tests the target
+where it is written and assigns it in the branch:
+`o.a ??= v` becomes `if (o.a == null) { ...; o.a = v'; }`, `||=` tests
+`!target` and `&&=` tests `target`. The target is read once, by the test,
+and TypeScript narrows it after the statement as it does after the
+operator (the test narrows the reference on one path and the assignment on
+the other). This needs the assignment to be an expression statement of its
+own: when its value is used, the value is the target's value on the
+skipped path, which only a second read or a stored copy can supply, and a
+stored copy (`($l = o.a) == null`) does not narrow `o.a` for `??=`
+(TASK-522 Issue 2; §7.10). Such an operand is
+`ExpressionBoundaryReason::LogicalAssignmentValue`: `try-placement` or
+`match-placement`.
+
+### 7.7 Comma operands (TASK-572)
+
+The comma operator evaluates its left operand and discards the value
+(ECMA-262 §13.16.1). An operand of a comma expression written before a tt
+value is therefore an input of the value's step in the mode
+`EvaluationInputMode::Discarded`: the prelude evaluates it as an
+expression statement, `(tick());`, in its order, and the delivered
+expression drops the operand and the comma after it, keeping the trivia
+between them, so `(tick(), match ...)` delivers `( $slot)`. Capturing the
+operand into a `const` and reading it again would evaluate nothing new and
+leave a side-effect-free left operand, which TypeScript rejects (TS2695).
+An inert operand needs no statement and stays where it was written. A tt
+value that is itself a comma's left operand is still delivered where it
+was written.
+
+### 7.8 Method calls (TASK-573)
+
+A member callee (`r.m(...)`, `o?.m(...)`, `o[k](...)`, a tagged template's
+member tag) is a `MemberReference` input whose parts are its receiver and
+computed key (`HostReferencePart`). The parts are evaluated before the
+arguments, as ECMA-262 `EvaluateCall` evaluates the reference; an authored
+identifier or `this` part is read again at the call instead of captured, as
+TypeScript's down-level transforms read a simple-copiable operand. The
+member itself is read by the call, which stays a member call written on the
+receiver (`member_callee`): `$r.m($v)`, `obj?.id($v)`. TypeScript types that
+call as the author's call — a generic method keeps its inference, a `this`
+parameter is checked against the receiver, and an optional call's test on
+an identifier receiver (`if (obj != null)`) narrows the receiver in the
+arguments. Capturing the method instead cannot be typed: `f.call(r, ...)`
+instantiates type parameters with `unknown`, and `f.bind(r)` erases a
+generic signature that declares `this` (`OmitThisParameter`).
+
+This is the one place the lowering deliberately moves an observation: the
+member's `GetValue` (a getter on the method, or a Proxy `get`) runs after
+the arguments the prelude evaluates instead of before them, next to the
+`IsCallable` check that already follows the arguments. An optional call
+tested at its callee (`o.m?.(x)`) is the exception in the other direction:
+its test is on the member's value, so the member is captured, tested, and
+called through `.call(receiver, ...)`, and that form still loses a generic
+method's inference and the receiver's narrowing.
+
+### 7.9 Declaration lists (TASK-593)
+
+A declaration list evaluates its declarators in order, each in the scope
+the declaration binds into (ECMA-262 §14.3.1.2 and §14.3.2.1: a
+`LexicalDeclaration` evaluates its `BindingList` and a `VariableStatement`
+its `VariableDeclarationList` element by element; an earlier `let`/`const`
+binding is initialized before a later initializer runs, and a later one is
+still in its TDZ). A prelude written before the whole statement would run
+before the earlier declarators and, for a lexical declaration, read their
+bindings in the TDZ. So every declarator after the first is its own host
+owner (`HostOwnerKind::Declarator`, `DeclaratorSplit`): a value in it
+writes its prelude at the declarator, and the target splits the
+declaration there. The comma before the declarator becomes `;`, the
+prelude follows on its own line, and the rest of the list continues under
+a repeated head (`export`, `declare`, and `var`/`let`/`const`/`using`/
+`await using`). Splitting changes nothing observable: separate
+declarations in one statement list bind in the same scope and run in the
+same order, and `using` declarations still dispose in reverse order at the
+end of the block. The owner keeps the statement it splits
+(`HostOwner::statement`) for everything that belongs to the statement
+rather than the declarator: the block an unbraced body or a script's
+enclosed `var` needs, opened at the statement's start, and the global
+binding a script's generated names derive from.
+
+A C-style `for` head is the exception. Its declarators run in the loop's
+own scope (ECMA-262 §14.7.4.2 `ForLoopEvaluation`), which also holds the
+per-iteration copies of `let` bindings (`CreatePerIterationEnvironment`),
+and the head has no statement position between declarators. A value in a
+later declarator there needs statements that would run before the earlier
+declarators and outside the bindings the head declares, and no lowering
+keeps both without renaming authored bindings, so the Evaluation IR gives
+it `ExpressionBoundaryReason::LoopHeadDeclarator`: a `match` or `try`
+reports `match-placement` or `try-placement`, and a `result` block uses the
+expression boundary, which runs in place. A value in the first declarator
+still lowers before the loop.
+
+Before the loop, the first declarator's initializer is evaluated outside
+the scope `ForLoopEvaluation` creates for a `let`/`const` head (TASK-600).
+Its evaluation reads no head binding directly (that is a TDZ error in the
+source too), but a closure it creates captures that scope and reads the
+binding later. So the syntax layer resolves the identifiers the first
+declarator's initializer reads (`program_syntax/scopes.rs`): TypeScript's
+lexical scoping over the projection — parameters, hoisted `var`s,
+block-scoped declarations, `catch` parameters, named function and class
+expressions, and nested loop heads — plus the bindings tt constructs
+declare, which the projection records (`TtBindings`: `match` arm and `if
+let` pattern bindings over their guard and body, let-else and a
+declaration `try` into their block). A reference that resolves to a name
+the head declares gives every value in that initializer
+`EvaluationContext::loop_head_binding`, and the Evaluation IR answers
+`ExpressionBoundary(LoopHeadBinding)`: `match-placement` or
+`try-placement`, and a `result` block runs in place. An assignment in a
+nested destructuring target counts as a reference; a type annotation's
+name is counted as well, which can only reject, never accept wrongly. A
+`var` head binds in the function, so nothing moves out of its scope.
+
+A value that is an operand of a `for` initializer rather than the whole
+initializer (`for (let x = g(match ...); ...)`, `for (x = try r(); ...)`,
+`for (x = try r(), i = 0; ...)`) composes before the loop like an operand
+anywhere else (TASK-601): the initializer runs once, before the first test,
+and an expression initializer declares nothing, so the prelude and the
+rest of the initializer evaluate in the original order. A value-form `try`
+that is a whole first declarator (`for (let x = try r(), i = 0; ...)`)
+lowers like a match there.
+
+### 7.10 The condition of a conditional operation (TASK-595)
+
+A conditional operation that holds a value (`c ? v : w`, `l && v`,
+`l || v`, `l ?? v`) is lowered as one region (TASK-160 Decision 17). Its
+condition is evaluated once (ECMA-262 §13.13.1 and §13.14.1: `GetValue` of
+the left operand or the condition, then `ToBoolean`), and TypeScript
+narrows the references in it for the branch that runs ("Narrowing:
+Truthiness narrowing" and "Control flow analysis" in the TypeScript
+handbook). A capture `const $c = (l); if ($c)` evaluates it once but
+narrows only `$c`: TypeScript narrows a reference through a `const` alias
+only when the alias is unannotated and the reference itself is a constant
+(a `const`, a parameter never assigned, or a `readonly` property of one),
+so `cfg.name`, a reassigned `let`, and an annotated capture all lose their
+narrowing.
+
+The condition is therefore tested where it is evaluated:
+
+- `c ? v : w` becomes `if (c) { … } else { … }`; its value is not needed
+  after the test.
+- `l && v`, `l || v`, and `l ?? v` keep the left operand's value, which is
+  the result when the right operand does not run. It is stored in operand
+  storage inside the test: `let $l; if ($l = l) { …; $r = $l && v' } else { $r = $l; }`
+  for `&&`, `if ($l = l) { $r = $l; } else { …; $r = $l || v' }` for `||`,
+  and `if (($l = l) == null) { …; $r = $l ?? v' } else { $r = $l; }` for
+  `??` (TASK-692: the branch that runs the right operand writes the
+  operation itself over the stored, narrowed operand; see below). TypeScript
+  narrows an assignment used as a condition by its right operand as well
+  as its target (`narrowTypeByBinaryExpression` for `=`), so `l` narrows
+  its references in the branch, and `$l` is narrowed as the original
+  operation narrows its result (falsy, truthy, or non-nullish) where it is
+  written to the result slot. Writing the left operand to the result slot
+  itself would require its whole type to be assignable to the result's
+  contextual type, which the operation does not require
+  (`const c: number = maybe ?? …`).
+- `$l` is operand storage (`MarkKind::OperandSlot`): it stands for the
+  operand's value, so the backend annotates it with the operand's own type
+  (the widened type of the one value written to it, as a `const` would be
+  typed), never with a contextual type found where it is read. An
+  unannotated `$l` is typed from its assignment.
+- Under `??`, TypeScript narrows `l` to its nullish part in `v`, but no
+  expression that evaluates `l` once and tests it for `null` or
+  `undefined` carries that narrowing to `l` (checked with the pinned
+  `tsc`: `($l = l) == null`, `($l = l) === null || $l === undefined`,
+  `(($l = l) ?? null) === null`, and `!(($l = l) != null)` narrow only
+  `$l`), so a value under `??` does not see it. Narrowing `l` by falsiness
+  instead (`!($l = l) && $l == null`) would be a different, weaker fact, so
+  it is not used.
+
+- The branch that runs the right operand writes the operation over `$l`
+  rather than `v'` alone (TASK-692). `$l` is a local the test already
+  evaluated, and `ToBoolean` and the nullish test have no observable
+  effects (ECMA-262 §7.1.2, §13.13.1), so the operation yields `v'`
+  exactly as before. Its type is the one TypeScript gives the operation
+  (`checkBinaryLikeExpressionWorker`) for `$l` narrowed by the test: when
+  the left operand is never falsy (`||`), never truthy (`&&`), or never
+  nullish (`??`), that narrowing is `never`, the branch's value is
+  `never`, and the result has the left operand's type alone
+  (`true || try r()` is `true`, `o ?? try r()` is `o`'s type), where a
+  bare `v'` joined its type into the result although the branch never
+  runs (TypeScript does not take a branch whose test narrows a reference
+  to `never` for unreachable).
+- Two facts of the source operation are still not carried. `&&` gives a
+  left operand of type `number` (`string`, `bigint`) the falsy part `0`
+  (`""`, `0n`) through `extractDefinitelyFalsyTypes`, which maps the
+  type rather than narrowing a reference: `$l` narrowed by falsiness
+  stays `number` (`NaN` is falsy too), so `n && try r()` joins `number`
+  where TypeScript gives `0`; only an assertion could say `0`, which
+  contract 2 rules out. TypeScript's syntactic checks of the left operand
+  (TS2869, TS2871, TS2872, TS2873: `getSyntacticTruthySemantics` and
+  `getSyntacticNullishnessSemantics` judge the operand's syntax kind) see
+  the identifier `$l`, which is "sometimes". Writing a literal operand
+  again as the operation's left operand does reproduce them (checked with
+  the pinned `tsc`: TS2873 at `""`, TS2871 at `null`), but then the
+  literal's fresh type reaches the result slot, whose join widens a fresh
+  literal at mutable storage as TypeScript widens `let`, so
+  `const b = true || try r()` would be `boolean` where TypeScript gives
+  `true`; the operand storage carries the regular literal type.
+
+A condition that was already captured by an earlier step (its slot is in
+the captured set), or that is itself a tt value, is tested through its
+slot. A provably inert ternary condition is written in place,
+parenthesized (`if ((false))`) as before, so TypeScript does not take a
+literal `false` for an unreachable branch. An inert left operand of `&&`,
+`||`, or `??` (a literal such as `false`, `0`, or `null`) is stored in
+operand storage like any other (TASK-626): it is the result when the
+right operand does not run, and TypeScript types the operation from the
+operand's type narrowed by the test (`removeDefinitelyFalsyTypes` for
+`||`, `extractDefinitelyFalsyTypes` for `&&`, `getNonNullableType` for
+`??` in the checker's `checkBinaryLikeExpressionWorker`), so
+`false || v` has the type of `v`. A literal written again in the branch
+(`if ((false)) { $r = (false); }`) is not a reference, so nothing narrows
+it and its type joined the result; `let $l: false; if ($l = false)`
+narrows `$l` to `never` in that branch. Storage writes are then either statements of a
+block or the test of an `if`; a detached slot's value TypeScript types
+from its context is carried as `({ value: l }).value` in a test, where no
+`const` can be declared (`docs/design/contextual-type-materialization.md`).
+
+
 
 | Core primitive | tt 표면 | Evaluation IR 동작 |
 |---|---|---|
@@ -479,6 +769,9 @@ projection span, SWC span, generated TypeScript span을 사용자 좌표로 직�
 - `validate_origin`: 모든 generated node가 source origin 또는 parent origin을 가짐
 - `validate_source_preservation`: non-TT source span이 한 번씩 원래 순서로 출력됨
 - `verify_output`: 최종 TypeScript가 SWC parser를 통과함
+- `emit_file` (TASK-549): every planned host prelude (a compose rewrite) was
+  written by the owner that consumes it; an unwritten one would leave its
+  slots and captures unassigned in output that still parses
 
 validator 실패는 사용자 오류가 아니라 internal compiler error다. release 경로에서
 침묵하는 잘못된 최적화나 legacy backend 우회를 내보내지 않도록 모든 build에서 즉시

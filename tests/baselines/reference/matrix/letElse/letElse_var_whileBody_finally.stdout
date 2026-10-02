@@ -1,0 +1,2 @@
+whileBody(4) => 4 | test true; operand 4; read 4; finally 0
+whileBody(-4) => "none" | test true; operand -4; read -4; finally 0

@@ -1,0 +1,30 @@
+=== signatureHelp /*stored*/ signatureHelpStoredCallee.tt:6:52 ===
+  |   const p = two(match (s) { A => 1, B(x) => x }, "q");
+  |                                                    ^ /*stored*/
+signatureHelp: active signature 0, active parameter 1
+  two(a: number, b: string): number
+    parameters: a: number | b: string
+
+=== signatureHelp /*constructed*/ signatureHelpStoredCallee.tt:7:54 ===
+  |   const q = new Cls(match (s) { A => 1, B(x) => x }, );
+  |                                                      ^ /*constructed*/
+signatureHelp: active signature 0, active parameter 1
+  Cls(a: number, b: string): Cls
+    parameters: a: number | b: string
+
+=== signatureHelp /*piped*/ signatureHelpStoredCallee.tt:8:22 ===
+  |   console.log(m |> half, m);
+  |                      ^ /*piped*/
+signatureHelp: active signature 0, active parameter 0
+  log(...data: any[]): void
+    parameters: ...data: any[]
+    documentation:
+        The **`console.log()`** static method outputs a message to the console.
+        
+        [MDN Reference](https://developer.mozilla.org/docs/Web/API/console/log_static)
+
+=== parity with the TypeScript twin ===
+signatureHelp stored: same
+signatureHelp constructed: same
+signatureHelp piped: same
+

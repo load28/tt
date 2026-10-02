@@ -1,0 +1,27 @@
+=== ordinaryResultSuccessReturnsFromExpressionBoundaries.tt ===
+class Box { field = result { const value = try read(); return value; }; }
+>Box : class Box
+>field : (property) Box.field: any
+>value : const value: any
+>value : const value: any
+class SwitchBox { field = result { const value = try read(); switch (value) { case 0: return 0; default: return value; } }; }
+>SwitchBox : class SwitchBox
+>field : (property) SwitchBox.field: any
+>value : const value: any
+>value : const value: any
+>value : const value: any
+function withDefault(value = result { const item = try read(); return item; }) { return value; }
+>withDefault : function withDefault(value?: any): any
+>value : (parameter) value: any
+>item : const item: any
+>item : const item: any
+>value : (parameter) value: any
+function* values() { yield result { const item = try read(); return item; }; }
+>values : function values(): Generator<any, void, unknown>
+>item : const item: any
+>item : const item: any
+const text = `value=${result { const item = try read(); return item; }}`;
+>text : const text: string
+>item : const item: any
+>item : const item: any
+

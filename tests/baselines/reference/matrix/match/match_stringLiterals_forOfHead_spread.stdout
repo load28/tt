@@ -1,0 +1,4 @@
+forOfHead("north") => [1] | n 1
+forOfHead("south") => [2] | se 2
+forOfHead("east") => [2] | se 2
+forOfHead("up") => [0] | other 0

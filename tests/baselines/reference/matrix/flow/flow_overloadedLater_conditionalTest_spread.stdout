@@ -1,0 +1,2 @@
+conditionalTest(2) => "truthy" | then "truthy"
+conditionalTest(5) => "truthy" | then "truthy"

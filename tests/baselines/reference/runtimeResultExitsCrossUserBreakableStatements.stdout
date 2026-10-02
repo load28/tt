@@ -1,0 +1,5 @@
+{"kind":"Ok","value":3} {"kind":"Err","error":"for"}
+{"kind":"Ok","value":5} {"kind":"Err","error":"while"}
+{"kind":"Ok","value":2} {"kind":"Err","error":"do"}
+{"kind":"Ok","value":6} {"kind":"Err","error":"switch"}
+

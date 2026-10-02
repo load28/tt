@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[stray-if-let]: the `else` of an `if let` must be a block or another `if let`
+ --> ./main.tt:8:84
+  |
+8 |     if let Ok(value: v) = read(note("operand", input)) { seen = note("then", v); } else if (flip()) { seen = "flip"; }
+  |                                                                                    ^^^^^^^
+  |
+  = help: put a plain `if (...)` inside an `else { ... }` block
+
+
+==== ttc --check-types (exit 1) ====
+error[stray-if-let]: the `else` of an `if let` must be a block or another `if let`
+ --> main.tt:8:84
+  |
+8 |     if let Ok(value: v) = read(note("operand", input)) { seen = note("then", v); } else if (flip()) { seen = "flip"; }
+  |                                                                                    ^^^^^^^
+  |
+  = help: put a plain `if (...)` inside an `else { ... }` block
+
+==== tsc on the emitted TypeScript (exit 0) ====

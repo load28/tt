@@ -1,0 +1,2 @@
+declarationInitializer(2) => "#4" | yield 2; add 4; shape "#4"
+declarationInitializer(5) => "#10" | yield 5; add 10; shape "#10"

@@ -1,0 +1,2 @@
+matchBlockArm(6) => 6 | arm true; operand 6; some 6
+matchBlockArm(9) => 9 | arm true; operand 9; some 9

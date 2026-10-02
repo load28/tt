@@ -1,0 +1,2 @@
+jsxChild(5) => "<p>15</p>" | await; map 15
+jsxChild(0) => "<p>-1</p>" | await

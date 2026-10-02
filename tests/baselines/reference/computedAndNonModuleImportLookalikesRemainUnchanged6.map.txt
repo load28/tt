@@ -1,0 +1,3 @@
+//// [computedAndNonModuleImportLookalikesRemainUnchanged6.tt] 1 mapping(s)
+1:1 -> 1:1 len 38  "const text = \"import('./feature.tt')\";"
+

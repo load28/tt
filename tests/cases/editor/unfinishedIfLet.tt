@@ -1,0 +1,11 @@
+// @hover: kind
+// @completions: later
+// @diagnostics: *
+import type { TOption } from "@tt/std";
+declare function find(id: string): TOption<{ name: string }>;
+export function f(id: string) {
+  if let Some(
+  const b = find(id);
+  return b./*kind*/kind;
+}
+export function g(n: number) { return n.to/*later*/Fixed(); }

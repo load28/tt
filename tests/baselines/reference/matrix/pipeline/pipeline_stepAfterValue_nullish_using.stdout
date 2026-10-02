@@ -1,0 +1,2 @@
+nullish(4) => 7 | open res; flip true; operand 4; step 3; add 7; dispose res
+nullish(-1) => "set" | open res; flip false; left "set"; dispose res

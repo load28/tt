@@ -1,0 +1,29 @@
+// @origin: tests/integration/cases_05.rs::runtime_an_optional_member_call_is_skipped_only_when_its_receiver_is_nullish
+// @run: runtimeAnOptionalMemberCallIsSkippedOnlyWhenItsReceiverIsNullish.tt
+
+type M = { base?: number; m(v: number): number };
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+const trace: string[] = [];
+function arg(tag: string): number { trace.push(tag); return 1; }
+function read(tag: string): R { trace.push(tag); return { kind: "Ok", value: 2 }; }
+const live: M = { base: 7, m(v: number): number { trace.push("this:" + (this === live)); return (this.base ?? 0) + v; } };
+const missing = {} as M;
+function attempt(f: () => unknown): string {
+  try { return String(f()); } catch (e) { return (e as Error).constructor.name; }
+}
+function viaTry(o: M | null, tag: string): R {
+  const called = o?.m(try read(tag));
+  return { kind: "Ok", value: called ?? -1 };
+}
+function each(o: M | null, tag: string): string[] {
+  return [
+    attempt(() => o?.m(match (arg(tag + ":call")) { 1 => 1, _ => 0 })),
+    attempt(() => o?.m?.(match (arg(tag + ":both")) { 1 => 1, _ => 0 })),
+    attempt(() => JSON.stringify(viaTry(o, tag + ":try"))),
+    attempt(() => o |> ?.m(match (arg(tag + ":pipe")) { 1 => 1, _ => 0 })),
+  ];
+}
+console.log(JSON.stringify([each(live, "live"), each(null, "null"), each(missing, "missing")]));
+console.log(JSON.stringify(trace));
+
+export {};

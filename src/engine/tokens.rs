@@ -4,9 +4,10 @@
 //! The TextMate grammar (a regex approximation) colors tt constructs
 //! structurally, but two families of decisions are the parser's alone:
 //!
-//! - **Claimed**: a `match`/`result`/`flow` the parser lifted really is tt,
-//!   even where the grammar's same-line lookaheads miss it (a `flow` head
-//!   with its first `|>` on the next line, a binding split across lines).
+//! - **Claimed**: a `match`/`result`/`flow`/`variant` the parser lifted
+//!   really is tt, even where the grammar's same-line lookaheads miss it (a
+//!   `flow` head with its first `|>` on the next line, a variant whose `{`
+//!   starts the next line).
 //! - **Not claimed**: an identifier that merely looks like tt — a function
 //!   named `match` being called, a variable named `result` before a block —
 //!   stays plain TypeScript, and the editor should color it that way.
@@ -28,17 +29,29 @@ use crate::lines::LineMap;
 
 /// What one token *is*, in the parser's judgement. Names follow the LSP
 /// standard token types so an adapter maps them one to one.
+///
+/// A keyword is reported only where a line-based grammar cannot tell it
+/// from an identifier: `match`, `result`, `flow`, `variant` and a pattern's
+/// `is` are identifiers in TypeScript, and each of their constructs may
+/// continue on a later line. A reserved word such as `try`, and `val`, which
+/// the parser lifts only when its binding follows on the same line, are the
+/// grammar's alone, as TypeScript's own keywords are.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SemanticTokenKind {
-    /// A tt keyword the parser claimed: `match`, `result`, `flow`, `try`.
+    /// A control keyword the parser claimed: `match`, `result`, `flow`.
     Keyword,
+    /// The `variant` keyword of a declaration the parser claimed.
+    DeclarationKeyword,
+    /// The `is` of an instance pattern.
+    Operator,
     /// A tt variant's name, at its declaration.
     Variant,
     /// A case tag — in a variant declaration or in a pattern.
     VariantCase,
     /// A binding a tt pattern introduces (alias included).
     Variable,
-    /// A field name in a pattern's `field: alias` binding.
+    /// A field name in a pattern's `field: alias` binding, or in a variant
+    /// case's declaration.
     Property,
     /// An identifier that looks like a tt keyword but is a call —
     /// `match(...)` naming a plain function. Reported so the editor
@@ -50,12 +63,21 @@ impl SemanticTokenKind {
     /// The LSP standard token-type string.
     pub fn as_str(self) -> &'static str {
         match self {
-            SemanticTokenKind::Keyword => "keyword",
+            SemanticTokenKind::Keyword | SemanticTokenKind::DeclarationKeyword => "keyword",
+            SemanticTokenKind::Operator => "operator",
             SemanticTokenKind::Variant => "enum",
             SemanticTokenKind::VariantCase => "enumMember",
             SemanticTokenKind::Variable => "variable",
             SemanticTokenKind::Property => "property",
             SemanticTokenKind::Function => "function",
+        }
+    }
+
+    /// The LSP standard token-modifier strings the parser adds to the type.
+    pub fn modifiers(self) -> &'static [&'static str] {
+        match self {
+            SemanticTokenKind::DeclarationKeyword => &["declaration"],
+            _ => &[],
         }
     }
 }
@@ -119,13 +141,34 @@ fn walk(
     program: &Program,
     out: &mut Vec<(usize, usize, SemanticTokenKind)>,
 ) {
+    crate::stack::grow(|| walk_grown(src, tokens, program, out));
+}
+
+fn walk_grown(
+    src: &str,
+    tokens: &[Token],
+    program: &Program,
+    out: &mut Vec<(usize, usize, SemanticTokenKind)>,
+) {
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(span) => deny_in(src, tokens, (span.start, span.end), out),
             Segment::Variant(decl) => {
+                out.push((
+                    decl.keyword_off,
+                    "variant".len(),
+                    SemanticTokenKind::DeclarationKeyword,
+                ));
                 out.push((decl.name_off, decl.name.len(), SemanticTokenKind::Variant));
                 for case in &decl.cases {
                     out.push((case.tag_off, case.tag.len(), SemanticTokenKind::VariantCase));
+                    for field in case.fields.iter().flatten() {
+                        out.push((
+                            field.name_off,
+                            field.name.len(),
+                            SemanticTokenKind::Property,
+                        ));
+                    }
                 }
             }
             Segment::Match(m) => {
@@ -156,19 +199,8 @@ fn walk(
                     walk(src, tokens, &arm.body, out);
                 }
             }
-            Segment::Try(t) => {
-                // The bare form starts at `try`; in the declaration form the
-                // statement starts at the declaration keyword and `try` sits
-                // after `=`, where the grammar already colors it.
-                if t.decl.is_none() {
-                    out.push((t.keyword_off, 3, SemanticTokenKind::Keyword));
-                }
-                walk(src, tokens, &t.expr, out);
-            }
-            Segment::TryExpr(expr) => {
-                out.push((expr.span.start, 3, SemanticTokenKind::Keyword));
-                walk(src, tokens, &expr.expr, out);
-            }
+            Segment::Try(t) => walk(src, tokens, &t.expr, out),
+            Segment::TryExpr(expr) => walk(src, tokens, &expr.expr, out),
             Segment::LetElse(stmt) => {
                 for alt in &stmt.alternatives {
                     tag_pattern(alt, out);
@@ -223,6 +255,15 @@ fn if_let(
     stmt: &crate::ast::IfLetStmt,
     out: &mut Vec<(usize, usize, SemanticTokenKind)>,
 ) {
+    crate::stack::grow(|| if_let_grown(src, tokens, stmt, out));
+}
+
+fn if_let_grown(
+    src: &str,
+    tokens: &[Token],
+    stmt: &crate::ast::IfLetStmt,
+    out: &mut Vec<(usize, usize, SemanticTokenKind)>,
+) {
     for alt in &stmt.alternatives {
         tag_pattern(alt, out);
     }
@@ -253,13 +294,17 @@ fn pattern(src: &str, p: &Pattern, out: &mut Vec<(usize, usize, SemanticTokenKin
 }
 
 fn instance_pattern(instance: &InstancePattern, out: &mut Vec<(usize, usize, SemanticTokenKind)>) {
-    out.push((instance.is_off, 2, SemanticTokenKind::Keyword));
+    out.push((instance.is_off, 2, SemanticTokenKind::Operator));
     if let Some(list) = &instance.bindings {
         bindings(list, out);
     }
 }
 
 fn tag_pattern(tag: &TagPattern, out: &mut Vec<(usize, usize, SemanticTokenKind)>) {
+    crate::stack::grow(|| tag_pattern_grown(tag, out));
+}
+
+fn tag_pattern_grown(tag: &TagPattern, out: &mut Vec<(usize, usize, SemanticTokenKind)>) {
     out.push((tag.tag_off, tag.tag.len(), SemanticTokenKind::VariantCase));
     if let Some(list) = &tag.bindings {
         bindings(list, out);
@@ -310,6 +355,15 @@ fn bindings(list: &[Binding], out: &mut Vec<(usize, usize, SemanticTokenKind)>) 
 /// under its surface kind — occurrences inside strings, comments, templates,
 /// regexes and JSX text never reach it as identifiers.
 fn deny_in(
+    src: &str,
+    tokens: &[Token],
+    (start, end): (usize, usize),
+    out: &mut Vec<(usize, usize, SemanticTokenKind)>,
+) {
+    crate::stack::grow(|| deny_in_grown(src, tokens, (start, end), out));
+}
+
+fn deny_in_grown(
     src: &str,
     tokens: &[Token],
     (start, end): (usize, usize),
@@ -394,6 +448,7 @@ mod tests {
         assert!(tokens.contains(&("Shape".into(), SemanticTokenKind::Variant)));
         assert!(tokens.contains(&("Circle".into(), SemanticTokenKind::VariantCase)));
         assert!(tokens.contains(&("Dot".into(), SemanticTokenKind::VariantCase)));
+        assert!(tokens.contains(&("r".into(), SemanticTokenKind::Property)));
         assert!(tokens.contains(&("match".into(), SemanticTokenKind::Keyword)));
         assert!(tokens.contains(&("r".into(), SemanticTokenKind::Variable)));
         assert!(tokens.contains(&("value".into(), SemanticTokenKind::Property)));
@@ -448,6 +503,26 @@ mod tests {
         let tokens = kinds_at(src);
         assert!(tokens.contains(&("flow".into(), SemanticTokenKind::Keyword)));
         assert!(tokens.contains(&("result".into(), SemanticTokenKind::Keyword)));
+    }
+
+    #[test]
+    fn contextual_keywords_are_reported_and_reserved_words_are_left_to_the_grammar() {
+        let src = "export variant Shape\n{ Circle(r: number), Point }\nfunction f(s: Shape, g: () => TResult<number, string>) {\n  val const k = 1;\n  try g();\n  const n = try g();\n  const e = match (s) { is Error => 0, _ => k + n };\n  return match (s) { Circle(r) => r + e, Point => 0 };\n}\n";
+        let tokens = kinds_at(src);
+        assert!(tokens.contains(&("variant".into(), SemanticTokenKind::DeclarationKeyword)));
+        assert!(tokens.contains(&("match".into(), SemanticTokenKind::Keyword)));
+        assert!(tokens.contains(&("is".into(), SemanticTokenKind::Operator)));
+        assert!(
+            !tokens
+                .iter()
+                .any(|(text, _)| text == "try" || text == "val"),
+            "{tokens:?}"
+        );
+        assert_eq!(SemanticTokenKind::DeclarationKeyword.as_str(), "keyword");
+        assert_eq!(
+            SemanticTokenKind::DeclarationKeyword.modifiers(),
+            ["declaration"]
+        );
     }
 
     #[test]

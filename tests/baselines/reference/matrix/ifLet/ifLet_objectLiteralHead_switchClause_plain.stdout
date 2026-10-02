@@ -1,0 +1,2 @@
+switchClause(6) => 6 | discriminant 1; operand 6; some 6
+switchClause(9) => 9 | discriminant 1; operand 9; some 9

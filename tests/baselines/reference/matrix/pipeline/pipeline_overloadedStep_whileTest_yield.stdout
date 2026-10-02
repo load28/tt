@@ -1,0 +1,2 @@
+whileTest(4) => 1 | yield 4; shape "#4"
+whileTest(12) => 1 | yield 12; shape "#12"

@@ -1,0 +1,126 @@
+=== main.tt ===
+function conv(x: string): number;
+>conv : function conv(x: string): number
+>x : (parameter) x: string
+function conv(x: number): string;
+>conv : function conv(x: number): string
+>x : (parameter) x: number
+function conv(x: string | number): number | string {
+>conv : function conv(x: string | number): number | string
+>x : (parameter) x: string | number
+  return typeof x === "string" ? x.length : String(x);
+>x : (parameter) x: string | number
+>x : (parameter) x: string
+>length : (property) String.length: number
+>String : var String: (value?: any) => string
+>x : (parameter) x: number
+function keep<T>(value: T): T {
+>keep : function keep<T>(value: T): T
+>T : (type parameter) T in keep<T>(value: T): T
+>value : (parameter) value: T
+>T : (type parameter) T in keep<T>(value: T): T
+>T : (type parameter) T in keep<T>(value: T): T
+  return value;
+>value : (parameter) value: T
+const log: string[] = [];
+>log : const log: string[]
+function noted<T>(label: string, value: T): T {
+>noted : function noted<T>(label: string, value: T): T
+>T : (type parameter) T in noted<T>(label: string, value: T): T
+>label : (parameter) label: string
+>value : (parameter) value: T
+>T : (type parameter) T in noted<T>(label: string, value: T): T
+>T : (type parameter) T in noted<T>(label: string, value: T): T
+  log.push(label);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+  return value;
+>value : (parameter) value: T
+function param(s: string): number {
+>param : function param(s: string): number
+>s : (parameter) s: string
+  return s |> conv;
+>s : (parameter) s: string
+>conv : function conv(x: string): number
+>   function conv(x: number): string
+function local(): number {
+>local : function local(): number
+  const q = "abc";
+>q : const q: "abc"
+  return q |> conv;
+>q : const q: "abc"
+>conv : function conv(x: string): number
+>   function conv(x: number): string
+function member(o: { s: string }): number {
+>member : function member(o: {
+>       s: string;
+>   }): number
+>o : (parameter) o: {
+>       s: string;
+>   }
+>s : (property) s: string
+  return o.s |> conv;
+>o : (parameter) o: {
+>       s: string;
+>   }
+>s : (property) s: string
+>conv : function conv(x: string): number
+>   function conv(x: number): string
+const arrow = (s: string): number => s |> conv;
+>arrow : const arrow: (s: string) => number
+>s : (parameter) s: string
+>s : (parameter) s: string
+>conv : function conv(x: string): number
+>   function conv(x: number): string
+const mapped: number[] = ["a", "bb"].map((s) => s |> conv);
+>mapped : const mapped: number[]
+>map : (method) Array<string>.map<number>(callbackfn: (value: string, index: number, array: string[]) => number, thisArg?: any): number[]
+>s : (parameter) s: string
+>s : (parameter) s: string
+>conv : function conv(x: string): number
+>   function conv(x: number): string
+const chained: string = "four" |> conv |> conv;
+>chained : const chained: string
+>conv : function conv(x: string): number
+>conv : function conv(x: string): number
+>   function conv(x: number): string
+const wrapped: number = noted("head", "five") |> (conv);
+>wrapped : const wrapped: number
+>noted : function noted<"five">(label: string, value: "five"): "five"
+>conv : function conv(x: string): number
+>   function conv(x: number): string
+const generic: number = noted("head", 5) |> keep<number> |> conv |> conv;
+>generic : const generic: number
+>noted : function noted<5>(label: string, value: 5): 5
+>keep : function keep<T>(value: T): T
+>conv : function conv(x: string): number
+>   function conv(x: number): string
+>conv : function conv(x: string): number
+>   function conv(x: number): string
+const composed = flow |> String |> conv;
+>composed : const composed: (value?: any) => number
+>String : var String: StringConstructor
+>conv : function conv(x: string): number
+>   function conv(x: number): string
+const composedNumber: number = composed(123);
+>composedNumber : const composedNumber: number
+>composed : const composed: (value?: any) => number
+console.log(param("xy"), local(), member({ s: "z" }), arrow("abcd"), mapped, chained, wrapped, generic, composedNumber, log.join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>param : function param(s: string): number
+>local : function local(): number
+>member : function member(o: {
+>       s: string;
+>   }): number
+>s : (property) s: string
+>arrow : const arrow: (s: string) => number
+>mapped : const mapped: number[]
+>chained : const chained: string
+>wrapped : const wrapped: number
+>generic : const generic: number
+>composedNumber : const composedNumber: number
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aMutableArgumentMayReachAnyParameter.tt → $DIR/out/aMutableArgumentMayReachAnyParameter.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'User'.
+ --> aMutableArgumentMayReachAnyParameter.tt:1:25
+  |
+1 | function read(val user: User) { log(user.name); }
+  |                         ^^^^
+error[ts2304]: Cannot find name 'log'.
+ --> aMutableArgumentMayReachAnyParameter.tt:1:33
+  |
+1 | function read(val user: User) { log(user.name); }
+  |                                 ^^^
+error[ts2304]: Cannot find name 'User'.
+ --> aMutableArgumentMayReachAnyParameter.tt:2:23
+  |
+2 | function update(user: User) { user.name = "Lee"; }
+  |                       ^^^^
+error[ts2304]: Cannot find name 'User'.
+ --> aMutableArgumentMayReachAnyParameter.tt:3:24
+  |
+3 | function process(user: User) {
+  |                        ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aMutableArgumentMayReachAnyParameter.ts(1,21): error TS2304: Cannot find name 'User'.
+aMutableArgumentMayReachAnyParameter.ts(1,29): error TS2304: Cannot find name 'log'.
+aMutableArgumentMayReachAnyParameter.ts(2,23): error TS2304: Cannot find name 'User'.
+aMutableArgumentMayReachAnyParameter.ts(3,24): error TS2304: Cannot find name 'User'.

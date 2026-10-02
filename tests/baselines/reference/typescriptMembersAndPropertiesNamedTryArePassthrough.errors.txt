@@ -1,0 +1,14 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./typescriptMembersAndPropertiesNamedTryArePassthrough.tt → $DIR/out/typescriptMembersAndPropertiesNamedTryArePassthrough.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2349]: This expression is not callable.
+  Type 'Number' has no call signatures.
+ --> typescriptMembersAndPropertiesNamedTryArePassthrough.tt:2:8
+  |
+2 | object.try();
+  |        ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+typescriptMembersAndPropertiesNamedTryArePassthrough.ts(2,8): error TS2349: This expression is not callable.
+  Type 'Number' has no call signatures.

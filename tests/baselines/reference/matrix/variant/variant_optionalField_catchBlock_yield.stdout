@@ -1,0 +1,2 @@
+catchBlock(4) => [{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":4},{"kind":"Get","url":"c"},{"kind":"Head"}] | throw "boom"; yield 4
+catchBlock(9) => [{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":9},{"kind":"Get","url":"c"},{"kind":"Head"}] | throw "boom"; yield 9

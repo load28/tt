@@ -1,7 +1,8 @@
-import { existsSync } from 'node:fs'
+import { existsSync, statSync } from 'node:fs'
 import { lstat, mkdir, readFile, readdir, readlink, realpath, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { spawnSync } from 'node:child_process'
+import { builtinModules } from 'node:module'
 
 const ownManifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 const ttChannel = dependencyChannel(ownManifest.version)
@@ -158,9 +159,9 @@ export async function initializeExisting(options) {
   const typeConfig = 'tsconfig.tt.json'
   const generated = []
   const realRoot = await realpath(root)
-  const references = existsSync(join(root, 'tsconfig.json'))
+  const { references, roots } = existsSync(join(root, 'tsconfig.json'))
     ? await typeConfigGraph(realRoot, await projectConfig(realRoot, join(root, 'tsconfig.json')), generated)
-    : (generated.push([typeConfig, `${JSON.stringify(tsconfig(), null, '  ')}\n`]), false)
+    : defaultTypeConfig(realRoot, typeConfig, generated)
   const typeCheck = `tsc ${references ? '-b' : '-p'} ${typeConfig} --runExternalCode`
   manifest.scripts['tt:check'] ??= typeCheck
 
@@ -180,7 +181,7 @@ export async function initializeExisting(options) {
       manifest.scripts['tt:build'] ??= `${typeCheck} && ${adapter.commands.build} --config ${adapter.wrapper}`
     }
   } else {
-    manifest.scripts['tt:build'] ??= 'ttc -o .tt-build src'
+    manifest.scripts['tt:build'] ??= buildScript(roots)
   }
 
   // Validate the complete output set before changing any project files.
@@ -199,36 +200,142 @@ export async function initializeExisting(options) {
   return { root, packageManager, mode: 'init', bundler: bundler ?? 'none', files, manualModule, updated }
 }
 
-async function typeConfigGraph(root, configPath, generated, visited = new Set()) {
-  visited.add(configPath)
+async function typeConfigGraph(root, configPath, generated) {
+  const projects = new Map()
+  await readConfigGraph(root, configPath, projects)
+  const emitting = new Set(
+    [...projects.values()]
+      .filter((project) => !solutionStyle(project.config))
+      .flatMap((project) => project.references.map((reference) => reference.target).filter(Boolean)),
+  )
+  for (const [path, { config, references }] of projects) {
+    const directory = dirname(path)
+    const counterpart = typeConfigPath(path)
+    const content = tsconfig(
+      `./${basename(path)}`,
+      emitting.has(path) ? declarationOutput(root, counterpart, config) : undefined,
+    )
+    if (Array.isArray(config.references)) {
+      content.references = references.map(({ reference, target }) =>
+        target ? { ...reference, path: relativePath(directory, typeConfigPath(target)) } : reference)
+    }
+    generated.push([relative(root, counterpart), `${JSON.stringify(content, null, '  ')}\n`])
+  }
+  const inputs = []
+  for (const [path, { config }] of projects) {
+    if (!solutionStyle(config)) inputs.push(...await configInputs(path, config))
+  }
+  return {
+    references: Array.isArray(projects.get(configPath).config.references),
+    roots: sourceRoots(root, inputs),
+  }
+}
+
+function defaultTypeConfig(root, typeConfig, generated) {
+  const config = tsconfig()
+  generated.push([typeConfig, `${JSON.stringify(config, null, '  ')}\n`])
+  return {
+    references: false,
+    roots: sourceRoots(root, config.include.map((entry) => inputBase(root, entry))),
+  }
+}
+
+async function configInputs(path, config) {
+  const { files, include } = await declaredInputs(path, config, new Set())
+  if (!files && !include) return [dirname(path)]
+  return [...(files ?? []), ...(include ?? [])]
+}
+
+async function declaredInputs(path, config, seen) {
+  seen.add(path)
+  const directory = dirname(path)
+  const own = (key) => Array.isArray(config[key])
+    ? config[key].filter((entry) => typeof entry === 'string').map((entry) => inputBase(directory, entry))
+    : undefined
+  let files = own('files')
+  let include = own('include')
+  const bases = (Array.isArray(config.extends) ? config.extends : [config.extends])
+    .filter((base) => typeof base === 'string' && (base.startsWith('./') || base.startsWith('../') || isAbsolute(base)))
+    .map((base) => resolve(directory, base))
+    .map((base) => (existsSync(base) || base.endsWith('.json') ? base : `${base}.json`))
+    .reverse()
+  for (const base of bases) {
+    if ((files && include) || seen.has(base) || !existsSync(base)) continue
+    let inherited
+    try {
+      inherited = parseJsonc(await readFile(base, 'utf8'))
+    } catch (error) {
+      throw new Error(`cannot read ${base}: ${error.message}`)
+    }
+    const from = await declaredInputs(base, inherited, seen)
+    files ??= from.files
+    include ??= from.include
+  }
+  return { files, include }
+}
+
+function inputBase(directory, entry) {
+  const segments = entry.split(/[\\/]/)
+  const wildcard = segments.findIndex((segment) => /[*?]/.test(segment))
+  return resolve(directory, ...(wildcard === -1 ? segments : segments.slice(0, wildcard)))
+}
+
+function sourceRoots(root, inputs) {
+  const unique = [...new Set(inputs)].filter((input) => input === root || insideRoot(root, input))
+  const existing = unique.filter((input) => existsSync(input))
+  const chosen = existing.length > 0 ? existing : unique
+  const posix = (path) => relative(root, path).split('\\').join('/') || '.'
+  return chosen
+    .filter((input) => !chosen.some((other) => other !== input && (other === root || insideRoot(other, input))))
+    .map((input) => ({
+      input: posix(input),
+      mirror: posix(existsSync(input) && !statSync(input).isDirectory() ? dirname(input) : input),
+    }))
+    .sort((left, right) => (left.input < right.input ? -1 : left.input > right.input ? 1 : 0))
+}
+
+function buildScript(roots) {
+  if (roots.length === 1) return `ttc -o .tt-build ${shellQuote(roots[0].input)}`
+  return roots
+    .map(({ input, mirror }) => `ttc -o ${shellQuote(mirror === '.' ? '.tt-build' : `.tt-build/${mirror}`)} ${shellQuote(input)}`)
+    .join(' && ')
+}
+
+async function readConfigGraph(root, configPath, projects) {
   let config
   try {
     config = parseJsonc(await readFile(configPath, 'utf8'))
   } catch (error) {
     throw new Error(`cannot read ${configPath}: ${error.message}`)
   }
+  const project = { config, references: [] }
+  projects.set(configPath, project)
   const directory = dirname(configPath)
-  const counterpart = configPath.replace(/\.json$/, '') + '.tt.json'
-  const slot = generated.push(undefined) - 1
-  const content = tsconfig(`./${basename(configPath)}`)
-  const hasReferences = Array.isArray(config.references)
-  if (hasReferences) {
-    const references = []
-    for (const reference of config.references) {
-      const lexical = typeof reference?.path === 'string' && referencedConfig(directory, reference.path)
-      const target = lexical && existsSync(lexical) && await realpath(lexical)
-      if (!target || !insideRoot(root, target)) {
-        references.push(reference)
-        continue
-      }
-      if (!visited.has(target)) await typeConfigGraph(root, target, generated, visited)
-      const referenced = target.replace(/\.json$/, '') + '.tt.json'
-      references.push({ ...reference, path: relativePath(directory, referenced) })
-    }
-    content.references = references
+  for (const reference of Array.isArray(config.references) ? config.references : []) {
+    const lexical = typeof reference?.path === 'string' && referencedConfig(directory, reference.path)
+    const resolved = lexical && existsSync(lexical) && await realpath(lexical)
+    const target = resolved && insideRoot(root, resolved) ? resolved : undefined
+    project.references.push({ reference, target })
+    if (target && !projects.has(target)) await readConfigGraph(root, target, projects)
   }
-  generated[slot] = [relative(root, counterpart), `${JSON.stringify(content, null, '  ')}\n`]
-  return hasReferences
+}
+
+function typeConfigPath(configPath) {
+  return configPath.replace(/\.json$/, '') + '.tt.json'
+}
+
+function solutionStyle(config) {
+  return Array.isArray(config.files) && config.files.length === 0 && config.include === undefined
+}
+
+function declarationOutput(root, counterpart, config) {
+  const directory = dirname(counterpart)
+  const cache = relativePath(directory, join(root, 'node_modules', '.cache', 'tt', relative(root, directory)))
+  const options = { noEmit: false, emitDeclarationOnly: true, outDir: cache, declarationDir: cache }
+  if (config.compilerOptions?.tsBuildInfoFile !== undefined) {
+    options.tsBuildInfoFile = `${cache}/${basename(counterpart, '.json')}.tsbuildinfo`
+  }
+  return options
 }
 
 async function projectConfig(root, path) {
@@ -316,14 +423,18 @@ function parseArguments(argv) {
     install: true,
     bundler: 'auto',
   }
+  let positional = false
   while (args.length) {
     const arg = args.shift()
-    if (arg === '--help' || arg === '-h') options.help = true
+    if (positional || !arg.startsWith('-')) {
+      if (options.directory) throw new Error(`unknown argument: ${arg}`)
+      options.directory = arg
+    } else if (arg === '--') positional = true
+    else if (arg === '--help' || arg === '-h') options.help = true
     else if (arg === '--no-install') options.install = false
     else if (arg === '--bundler') options.bundler = requiredValue(arg, args)
     else if (arg === '--package-manager') options.packageManager = requiredValue(arg, args)
     else if (arg === '--registry') options.registry = registryUrl(requiredValue(arg, args))
-    else if (!arg.startsWith('-') && !options.directory) options.directory = arg
     else throw new Error(`unknown argument: ${arg}`)
   }
   if (!['auto', 'none', ...Object.keys(bundlers)].includes(options.bundler)) {
@@ -410,10 +521,10 @@ export default typeof base === 'function'
 `
 }
 
-function tsconfig(extendsConfig) {
+function tsconfig(extendsConfig, compilerOptions = { noEmit: true }) {
   const config = {
     ...(extendsConfig
-      ? { extends: extendsConfig, compilerOptions: { noEmit: true } }
+      ? { extends: extendsConfig, compilerOptions }
       : {
           compilerOptions: {
             target: 'ES2022',
@@ -432,9 +543,16 @@ function tsconfig(extendsConfig) {
   return config
 }
 
-function packageName(value) {
-  const normalized = value.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '')
-  return normalized || 'my-tt-app'
+const RESERVED_NAMES = new Set(['node_modules', 'favicon.ico', ...builtinModules])
+
+export function packageName(value) {
+  const normalized = value
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^[._-]+/, '')
+    .slice(0, 214)
+    .replace(/-+$/, '')
+  return normalized === '' || RESERVED_NAMES.has(normalized) ? 'my-tt-app' : normalized
 }
 
 function indentation(source) {
@@ -487,4 +605,5 @@ Options:
   --package-manager <npm|pnpm|yarn|bun>
   --registry <url>     install from an npm-compatible private/local registry
   --no-install
-  -h, --help`
+  -h, --help
+  --                   every argument after it is the directory, even one starting with -`

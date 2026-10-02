@@ -1,0 +1,5 @@
+jsxConditional({"kind":"Circle","r":1}) => "<p>1</p>" | flip true; operand {"kind":"Circle","r":1}; guard big false; small 1
+jsxConditional({"kind":"Circle","r":5}) => "<p></p>" | flip false
+jsxConditional({"kind":"Rect","w":4,"h":2}) => "<p>4</p>" | flip true; operand {"kind":"Rect","w":4,"h":2}; guard wide true; wide 4
+jsxConditional({"kind":"Rect","w":1,"h":3}) => "<p></p>" | flip false
+jsxConditional({"kind":"Point"}) => "<p>0</p>" | flip true; operand {"kind":"Point"}; point 0

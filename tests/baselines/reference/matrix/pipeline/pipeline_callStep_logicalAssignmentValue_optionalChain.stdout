@@ -1,0 +1,2 @@
+logicalAssignmentValue(2) => [4,4] | flip true; double 4
+logicalAssignmentValue(5) => ["kept","kept"] | flip false

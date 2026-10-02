@@ -41,11 +41,8 @@ fn host_overlays_are_snapshot_values_and_live_language_inputs() {
 }
 
 #[test]
-fn typed_exhaustiveness_still_answers_from_the_narrowed_type() {
+fn typed_exhaustiveness_answers_from_the_declared_cases() {
     require_tsgo!();
-    // The point of asking the checker at all: a case an earlier test
-    // removed is not demanded back. `--check`, which knows only the
-    // declaration, does report it.
     let dir = project(&[(
         "src/narrow.tt",
         "variant Shape { Circle(radius: number), Point }\n\
@@ -56,18 +53,14 @@ fn typed_exhaustiveness_still_answers_from_the_narrowed_type() {
     )]);
     let out = check(&dir);
     assert!(
-        !out.contains("not exhaustive"),
-        "Point is already excluded here: {out}"
+        out.contains("match on variant Shape is not exhaustive: missing \"Point\""),
+        "an earlier test does not remove a declared case: {out}"
     );
 }
 
 #[test]
-fn a_hand_written_payload_union_is_named_by_the_checker() {
+fn a_hand_written_payload_union_is_judged_as_the_build_judges_it() {
     require_tsgo!();
-    // The payload's declared type is a hand-written union, so no tt
-    // declaration describes it — the one thing the declaration table can
-    // never answer. The emitted condition tests that payload at exactly
-    // its type, and asking there names the column's alphabet (TASK-109).
     let dir = project(&[(
         "src/opaque.tt",
         "type Inner = { kind: \"Yes\"; n: number } | { kind: \"No\" };\n\
@@ -77,18 +70,14 @@ fn a_hand_written_payload_union_is_named_by_the_checker() {
     )]);
     let out = check(&dir);
     assert!(
-        out.contains("match is not exhaustive: missing \"Wrap(inner: No())\""),
-        "the checker names the payload's constituents: {out}"
+        out.contains("match on variant Outer is not exhaustive: missing \"Wrap\""),
+        "the declared cases cannot see into the payload: {out}"
     );
 }
 
 #[test]
-fn a_hand_written_payload_union_fully_covered_is_exhaustive() {
+fn a_hand_written_payload_union_covered_by_cases_still_needs_a_declared_arm() {
     require_tsgo!();
-    // The other half of the same answer: covering the payload's cases
-    // makes the match exhaustive, and nothing is reported. Before the
-    // payload question existed this stayed quiet too — but only because tt
-    // refused to guess, which is a different thing from knowing.
     let dir = project(&[(
         "src/opaque_full.tt",
         "type Inner = { kind: \"Yes\"; n: number } | { kind: \"No\" };\n\
@@ -101,7 +90,10 @@ fn a_hand_written_payload_union_fully_covered_is_exhaustive() {
          };\n",
     )]);
     let out = check(&dir);
-    assert!(!out.contains("not exhaustive"), "covered: {out}");
+    assert!(
+        out.contains("match on variant Outer is not exhaustive: missing \"Wrap\""),
+        "a build rejects it, so the check does: {out}"
+    );
 }
 
 #[test]
@@ -125,7 +117,7 @@ fn typed_exhaustiveness_resolves_a_payload_declared_in_another_module() {
     ]);
     let out = check(&dir);
     assert!(
-        out.contains("match is not exhaustive: missing \"Head(t: Eof())\""),
+        out.contains("match on variant Line is not exhaustive: missing \"Head(t: Eof())\""),
         "the imported payload variant is resolved: {out}"
     );
 }
@@ -148,7 +140,7 @@ fn typed_exhaustiveness_resolves_a_payload_exported_through_a_specifier() {
     ]);
     let out = check(&dir);
     assert!(
-        out.contains("match is not exhaustive: missing \"Head(t: Eof())\""),
+        out.contains("match on variant Line is not exhaustive: missing \"Head(t: Eof())\""),
         "the aliased payload variant is resolved: {out}"
     );
 }
@@ -169,17 +161,14 @@ fn typed_exhaustiveness_covers_tuple_matches_too() {
     )]);
     let out = check(&dir);
     assert!(
-        out.contains("match is not exhaustive: missing (North, Slow)"),
+        out.contains("match on (Dir, Speed) is not exhaustive: missing (North, Slow)"),
         "the missing combination is named: {out}"
     );
 }
 
 #[test]
-fn a_tuple_position_the_checker_narrowed_is_not_demanded_back() {
+fn a_tuple_position_the_checker_narrowed_is_still_demanded() {
     require_tsgo!();
-    // The reason to ask at all: `South` is impossible at the match, so the
-    // combinations that need it are not missing. The default path, which
-    // knows only the declaration, does report them.
     let dir = project(&[(
         "src/narrowed_tuple.tt",
         "variant Dir { North(dx: number), South }\n\
@@ -191,8 +180,8 @@ fn a_tuple_position_the_checker_narrowed_is_not_demanded_back() {
     )]);
     let out = check(&dir);
     assert!(
-        !out.contains("not exhaustive"),
-        "South is impossible: {out}"
+        out.contains("match on (Dir, Speed) is not exhaustive: missing (South, Fast), (South, Slow)"),
+        "an earlier test does not remove a declared combination: {out}"
     );
 }
 
@@ -637,10 +626,10 @@ fn a_byte_order_mark_moves_no_reported_position() {
         })
         .collect();
     let plain = &reports[0];
-    assert!(plain.contains("src/b.tt:1:19"), "{plain}");
-    assert!(plain.contains("src/b.tt:2:19"), "{plain}");
-    assert!(plain.contains("src/h.ts:1:26"), "{plain}");
-    assert!(plain.contains("\n  |                   ^^^\n"), "{plain}");
+    assert!(plain.contains("src/b.tt:1:7"), "{plain}");
+    assert!(plain.contains("src/b.tt:2:7"), "{plain}");
+    assert!(plain.contains("src/h.ts:1:14"), "{plain}");
+    assert!(plain.contains("\n  |       ^\n"), "{plain}");
     assert_eq!(reports[1], *plain);
 }
 
@@ -658,7 +647,7 @@ fn a_requested_file_outside_the_configuration_is_checked_in_its_inferred_project
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(out.status.code(), Some(1), "{stderr}");
     assert!(stderr.contains("error[ts2322]"), "{stderr}");
-    assert!(stderr.contains("--> other/x.tt:1:19"), "{stderr}");
+    assert!(stderr.contains("--> other/x.tt:1:7"), "{stderr}");
     assert!(stderr.contains("error[val-mutation]"), "{stderr}");
 
     let out = run(&dir, &["--check-types", "src"]);
@@ -722,7 +711,7 @@ fn a_requested_file_outside_the_configuration_is_checked_in_its_inferred_project
     assert!(
         typed
             .iter()
-            .any(|d| d["code"] == "ts2322" && d["line"] == 1 && d["col"] == 19),
+            .any(|d| d["code"] == "ts2322" && d["line"] == 1 && d["col"] == 7),
         "{answers:?}"
     );
     assert!(typed.iter().any(|d| d["code"] == "val-mutation"), "{answers:?}");
@@ -920,7 +909,7 @@ fn the_standard_library_resolves_from_either_module_format_in_every_resolution_m
         let out = check(&dir);
         let label = format!("{package_type}/{module}/{resolution}/{verbatim}");
         assert!(
-            block(&out, "type mismatch: expected `string`").contains("--> src/s.tt"),
+            block(&out, "is not assignable to type 'string'").contains("--> src/s.tt"),
             "{label}: {out}"
         );
         assert_eq!(error_count(&out), 1, "{label}: {out}");
@@ -955,7 +944,7 @@ fn a_commonjs_file_requiring_the_standard_library_under_verbatim_module_syntax_i
         );
         let out = check(&dir);
         assert!(
-            block(&out, "type mismatch: expected `string`").contains("--> src/s.tt"),
+            block(&out, "is not assignable to type 'string'").contains("--> src/s.tt"),
             "{resolution}: {out}"
         );
         assert_eq!(error_count(&out), 1, "{resolution}: {out}");
@@ -1005,7 +994,7 @@ fn tt_specifiers_resolve_under_node_esm_as_tsc_resolves_them() {
         with_tt_content_mapper(&dir);
         let out = check(&dir);
         assert!(
-            block(&out, "type mismatch: expected `string`").contains("--> src/c.ts"),
+            block(&out, "is not assignable to type 'string'").contains("--> src/c.ts"),
             "{module}: {out}"
         );
         assert_eq!(error_count(&out), 1, "{module}: {out}");
@@ -1026,7 +1015,7 @@ fn tt_specifiers_keep_resolving_in_commonjs_and_bundler_projects() {
         let out = check(&dir);
         let label = format!("{package_type}/{module}/{resolution}");
         assert!(
-            block(&out, "type mismatch: expected `string`").contains("--> src/c.ts"),
+            block(&out, "is not assignable to type 'string'").contains("--> src/c.ts"),
             "{label}: {out}"
         );
         assert_eq!(error_count(&out), 1, "{label}: {out}");
@@ -1051,7 +1040,7 @@ fn tt_specifiers_keep_resolving_in_commonjs_and_bundler_projects() {
     );
     let out = check(&dir);
     assert!(
-        block(&out, "type mismatch: expected `string`").contains("--> src/use.ts"),
+        block(&out, "is not assignable to type 'string'").contains("--> src/use.ts"),
         "{out}"
     );
     assert_eq!(error_count(&out), 1, "{out}");
@@ -1070,7 +1059,7 @@ fn a_project_with_another_content_mapper_runs_no_external_code() {
     fs::write(config, text).unwrap();
     let out = check(&dir);
     assert!(
-        block(&out, "type mismatch: expected `string`").contains("--> src/c.ts"),
+        block(&out, "is not assignable to type 'string'").contains("--> src/c.ts"),
         "{out}"
     );
     assert!(out.contains("ts100024"), "{out}");
@@ -1105,8 +1094,30 @@ fn scripts_of_one_program_check_without_colliding_generated_globals() {
     ]);
     let out = check(&dir);
     assert!(
-        block(&out, "type mismatch: expected `string`").contains("--> src/use.ts"),
+        block(&out, "is not assignable to type 'string'").contains("--> src/use.ts"),
         "{out}"
     );
     assert_eq!(error_count(&out), 1, "{out}");
+}
+
+#[test]
+fn a_case_named_like_the_prototype_setter_navigates_to_its_declaration() {
+    require_tsgo!();
+    let local = "variant V { __proto__(x: number), B }\n\
+                 const v: V = V.__proto__(1);\n\
+                 const w = V.B;\n";
+    let dir = project(&[("src/a.tt", local)]);
+    let a = dir.join("src/a.tt").canonicalize().unwrap();
+    let engine = ttc::engine::Engine::new(None);
+    let mut project = engine
+        .open_project(
+            &[dir.join("src").to_string_lossy().into_owned()],
+            &ttc::engine::ProjectOptions::default(),
+        )
+        .expect("the project opens");
+    let case = source_location(&a, local, "__proto__(x", 0, "__proto__".len());
+    let found = project
+        .definition(&a, source_position(local, "V.__proto__(1)", 2))
+        .expect("definition answers");
+    assert_eq!(found, vec![case]);
 }

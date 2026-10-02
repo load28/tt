@@ -1,0 +1,14 @@
+// @diagnostics: *
+// An opening tag left unclosed while typing, before a `{match ...}` child.
+// TypeScript reads the `{` as a spread attribute and reports TS1005 ('...'
+// expected); ttc instead reports lowering-plan-failed ("the generated
+// TypeScript for it does not parse") over the whole match.
+export variant Status { Idle, Busy }
+export function App(s: Status) {
+  return (
+    <div>
+      <span
+      {match (s) { Idle => "i", Busy => "b" }}
+    </div>
+  );
+}

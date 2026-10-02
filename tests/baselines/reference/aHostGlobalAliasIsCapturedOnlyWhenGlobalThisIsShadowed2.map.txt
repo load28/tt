@@ -1,0 +1,11 @@
+//// [aHostGlobalAliasIsCapturedOnlyWhenGlobalThisIsShadowed2.tt] 9 mapping(s)
+1:25 -> 21:28 len 6  "number"
+1:25 -> 24:17 len 6  "number"
+1:40 -> 26:3 len 66  "\nconst globalThis = 1;\nexport function f(o: O) {"...
+3:44 -> 46:1 len 7  "return "
+3:58 -> 30:17 len 1  "o"
+3:68 -> 33:15 len 5  "value"
+3:78 -> 34:16 len 5  "value"
+3:93 -> 38:16 len 1  "0"
+3:96 -> 46:14 len 4  "; }\n"
+

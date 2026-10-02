@@ -1,0 +1,2 @@
+jsxChild(6) => "<p>12</p>" | await; keep 6; double 12
+jsxChild(-2) => "<p>-4</p>" | await; keep -2; double -4

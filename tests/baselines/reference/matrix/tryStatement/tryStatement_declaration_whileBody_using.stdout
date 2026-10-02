@@ -1,0 +1,2 @@
+whileBody(5) => {"kind":"Ok","value":5} | open res; test true; operand 5; read 5; dispose res
+whileBody(-5) => {"kind":"Err","error":"negative -5"} | open res; test true; operand -5; read -5; dispose res

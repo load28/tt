@@ -1,0 +1,11 @@
+//// [typecheckExhaustiveMatchPasses.tt] 9 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:32 -> 21:31 len 6  "number"
+2:32 -> 24:20 len 6  "number"
+2:48 -> 26:3 len 25  "\nconst f = (s: Shape) => "
+3:32 -> 30:19 len 1  "s"
+4:10 -> 33:17 len 6  "radius"
+4:21 -> 34:18 len 6  "radius"
+5:12 -> 38:18 len 1  "0"
+6:2 -> 47:2 len 14  ";\n\nexport {};\n"
+

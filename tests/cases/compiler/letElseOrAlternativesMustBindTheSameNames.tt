@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_03.rs::let_else_or_alternatives_must_bind_the_same_names
+variant E { A(x: number), B(y: number), C }
+function f(e: E): number {
+  const A(x) | B(y) = e else { return 0; };
+  return x;
+}

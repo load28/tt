@@ -1,0 +1,11 @@
+=== ifLetTakesNestedPatterns.tt ===
+function f(r: Res) {
+>f : function f(r: Res): void
+>r : (parameter) r: Res
+>Res : type Res = /*unresolved*/ any
+  if let Ok(value: Some(value: v)) = r { use(v); }
+>value : any
+>v : const v: any
+>r : (parameter) r: Res
+>v : const v: any
+

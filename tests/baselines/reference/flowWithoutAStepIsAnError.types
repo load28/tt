@@ -1,0 +1,4 @@
+=== flowWithoutAStepIsAnError.tt ===
+const f = flow |>;
+>f : const f: any
+

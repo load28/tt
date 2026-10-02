@@ -1,0 +1,22 @@
+=== unclosedJsxTagBeforeMatch.ttx ===
+export variant Status { Idle, Busy }
+>Status : type Status = {
+>       kind: "Idle";
+>   } | {
+>       kind: "Busy";
+>   }
+>Idle : (property) Idle: {
+>       readonly kind: "Idle";
+>   }
+>Busy : (property) Busy: {
+>       readonly kind: "Busy";
+>   }
+export function App(s: Status) {
+>App : function App(s: Status): any
+>s : (parameter) s: Status
+>Status : type Status = {
+>       kind: "Idle";
+>   } | {
+>       kind: "Busy";
+>   }
+

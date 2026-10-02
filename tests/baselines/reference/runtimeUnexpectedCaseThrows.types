@@ -1,0 +1,50 @@
+=== runtimeUnexpectedCaseThrows.tt ===
+variant AB { A(n: number), B }
+>AB : type AB = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => AB
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function f(x: AB): number {
+>f : function f(x: AB): number
+>x : (parameter) x: AB
+>AB : type AB = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return match (x) {
+>x : (parameter) x: AB
+    A(n) => n,
+>n : const n: number
+>n : const n: number
+const g = f as unknown as (x: { kind: string }) => number;
+>g : const g: (x: {
+>       kind: string;
+>   }) => number
+>f : function f(x: AB): number
+>x : (parameter) x: {
+>       kind: string;
+>   }
+>kind : (property) kind: string
+  g({ kind: "C" });
+>g : const g: (x: {
+>       kind: string;
+>   }) => number
+>kind : (property) kind: string
+} catch (e) {
+>e : var e: unknown
+  console.log("threw: " + (e as Error).message);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>e : var e: unknown
+>Error : interface Error
+>message : (property) Error.message: string
+

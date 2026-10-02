@@ -49,23 +49,12 @@ macro_rules! require_emit {
     };
 }
 
-/// Whether the installed API client has the declaration-emit entry point
+/// Whether the pinned API client has the declaration-emit entry point
 /// (`host.mjs` checks for the same method before asking for one).
 fn emits_declarations() -> bool {
-    let mut dir = Some(PathBuf::from(env!("CARGO_MANIFEST_DIR")));
-    while let Some(current) = dir {
-        for client in ["typescript", "@typescript/native-preview"] {
-            let api = current
-                .join("node_modules")
-                .join(client)
-                .join("dist/api/sync/api.js");
-            if let Ok(text) = fs::read_to_string(&api) {
-                return text.contains("getDeclarationEmit");
-            }
-        }
-        dir = current.parent().map(Path::to_path_buf);
-    }
-    false
+    common::typescript()
+        .and_then(|dir| fs::read_to_string(dir.join("dist/api/sync/api.js")).ok())
+        .is_some_and(|text| text.contains("getDeclarationEmit"))
 }
 
 mod common;
@@ -454,12 +443,50 @@ fn a_hand_written_ts_file_imports_an_tt_file_by_the_specifier_it_writes() {
     // Positionless: the checker's answer is about the hand-written file as
     // a whole, so the block names the file and quotes nothing.
     assert!(
-        block(&out, "type mismatch: expected `number`").contains("--> src/use.ts"),
+        block(&out, "is not assignable to type 'number'").contains("--> src/use.ts"),
         "the .ts file's own error, in one project with the .tt: {out}"
     );
     assert!(
         !out.contains("2307") && !out.contains("Cannot find module"),
         "and nothing failed to resolve: {out}"
+    );
+}
+
+#[test]
+fn a_sidecar_of_a_source_with_a_shebang_is_a_declaration_file_typescript_reads() {
+    require_emit!();
+    let dir = project(&[(
+        "src/cli.tt",
+        "#!/usr/bin/env node\nexport const q = match (1) { 1 => 2, _ => 3 };\n",
+    )]);
+    let out = run(&dir, &["--types", "src"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let sidecar = dir.join(".tt-types/cli.tt.d.ts");
+    let written = fs::read_to_string(&sidecar).unwrap();
+    assert!(
+        written.starts_with(
+            "#!/usr/bin/env node\n// @generated from cli.tt by ttc --sidecar — do not edit.\n"
+        ),
+        "{written}"
+    );
+    // TypeScript itself reads it: a shebang below the banner is TS18026.
+    let typescript = common::typescript().expect("toolchain");
+    let checked = Command::new("node")
+        .arg(typescript.join("bin/tsc"))
+        .args(["--noEmit", "--pretty", "false", "--ignoreConfig"])
+        .arg(&sidecar)
+        .current_dir(&dir)
+        .output()
+        .expect("tsc runs");
+    assert!(
+        checked.status.success(),
+        "{}{}",
+        String::from_utf8_lossy(&checked.stdout),
+        written
     );
 }
 
@@ -730,6 +757,10 @@ include!("native/cases_04.rs");
 include!("native/cases_05.rs");
 include!("native/cases_06.rs");
 include!("native/cases_07.rs");
+include!("native/cases_08.rs");
+include!("native/cases_09.rs");
+include!("native/cases_10.rs");
+include!("native/editor_service.rs");
 
 #[test]
 fn scoped_contextual_values_cross_all_mixed_source_edges() {
@@ -843,7 +874,7 @@ fn typed_missing_arms_list_every_hole_under_a_written_constructor() {
              export function f(c: A, m: B) {\n\
              \treturn match (c, m) { (Y, Q) => 1, };\n\
              }\n",
-            "missing (X, P), (X, Q), (Y, P)",
+            "match on (A, B) is not exhaustive: missing (X, P), (X, Q), (Y, P)",
         ),
         (
             "variant O { Some(value: number), None }\n\
@@ -851,7 +882,7 @@ fn typed_missing_arms_list_every_hole_under_a_written_constructor() {
              export function f(r: R) {\n\
              \treturn match (r) { Ok(value: Some(value: v)) => v };\n\
              }\n",
-            "missing \"Ok(value: None())\", \"Err\"",
+            "match on variant R is not exhaustive: missing \"Ok(value: None())\", \"Err\"",
         ),
     ] {
         let dir = project(&[("src/main.tt", source)]);
@@ -864,14 +895,7 @@ fn typed_missing_arms_list_every_hole_under_a_written_constructor() {
             .collect();
         assert_eq!(holes.len(), 1, "{answer}");
         let hole = holes[0];
-        assert!(
-            hole["message"]
-                .as_str()
-                .unwrap()
-                .starts_with("match is not exhaustive: missing")
-                && hole["message"].as_str().unwrap().ends_with(said),
-            "{hole}"
-        );
+        assert_eq!(hole["message"], said, "{hole}");
         let edit = &hole["suggestions"][0]["edit"];
         let replaced = source_slice(source, edit);
         let start = replaced.as_ptr() as usize - source.as_ptr() as usize;

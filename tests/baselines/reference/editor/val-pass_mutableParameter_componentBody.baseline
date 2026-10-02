@@ -1,0 +1,7 @@
+=== diagnostics main.ttx ===
+diagnostics: 1 diagnostic(s)
+  1:38-1:46 "Fragment" hint TS6133: 'Fragment' is declared but its value is never read. [unnecessary]
+published: 2 diagnostic(s)
+  1:38-1:46 "Fragment" hint TS6133 (ts): 'Fragment' is declared but its value is never read. [unnecessary]
+  10:23-10:26 "cfg" error val-pass (ttc): cannot pass val binding `cfg` to mutable parameter `p` of `take` (the parameter is not declared with `val`, so the function may mutate through it)
+

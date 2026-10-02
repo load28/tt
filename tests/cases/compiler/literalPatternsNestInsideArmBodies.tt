@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_07.rs::literal_patterns_nest_inside_arm_bodies
+
+const v = match (a) {
+  "x" => match (b) { 1 => "one", _ => "other" },
+  _ => "none",
+};

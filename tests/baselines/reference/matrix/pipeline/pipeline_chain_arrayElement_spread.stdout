@@ -1,0 +1,2 @@
+arrayElement(3) => [0,"***6",2] | first 0; double 6; last 2
+arrayElement(12) => [0,"**24",2] | first 0; double 24; last 2

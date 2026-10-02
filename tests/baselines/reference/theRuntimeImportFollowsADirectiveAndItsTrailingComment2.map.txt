@@ -1,0 +1,6 @@
+//// [theRuntimeImportFollowsADirectiveAndItsTrailingComment2.tt] 4 mapping(s)
+1:1 -> 1:1 len 71  "\"use client\" /* c */;\ndeclare const o: { p: numb"...
+3:18 -> 3:51 len 3  "o.p"
+3:25 -> 3:56 len 6  "String"
+3:31 -> 3:63 len 2  ";\n"
+

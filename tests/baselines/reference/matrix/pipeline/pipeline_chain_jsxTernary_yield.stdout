@@ -1,0 +1,2 @@
+jsxTernary(3) => "<p>***6</p>" | flip true; yield 3; double 6
+jsxTernary(12) => "<p><i>none</i></p>" | flip false

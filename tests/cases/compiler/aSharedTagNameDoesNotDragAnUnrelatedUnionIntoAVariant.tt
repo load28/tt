@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_08.rs::a_shared_tag_name_does_not_drag_an_unrelated_union_into_a_variant
+variant Shape { Circle(radius: number), Empty }
+type Msg = { kind: "Empty" } | { kind: "Full"; n: number };
+const a = match (m) { Empty => 0, Full(n) => n };

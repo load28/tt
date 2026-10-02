@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_03.rs::let_else_or_pattern_shares_one_destructuring
+variant E { A(x: number), B(x: number), C }
+function f(e: E): number {
+  const A(x) | B(x) = e else { return 0; };
+  return x;
+}

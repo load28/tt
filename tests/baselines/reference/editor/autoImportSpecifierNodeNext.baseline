@@ -1,0 +1,20 @@
+=== completions /*jsEnding*/ main.tt:1:24 ===
+  | export const y = shapeK;
+  |                        ^ /*jsEnding*/
+completion: 1060 item(s), member false, probe no
+  y (Variable, 11)
+  shapeK (Variable, 16) from "./shapes.tt" source "./shapes.tt.js"
+  ... 1058 global or keyword item(s) (sortText 15, no source)
+  resolve shapeK from "./shapes.tt.js": 1 edit(s)
+    1:1-1:1 "" -> "import { shapeK } from \"./shapes.tt\";\n\n"
+ttCompletions: pattern false, member null
+  keywords: match (15), flow (15), result (15)
+patternCompletions: null
+editor completion: 1063 item(s)
+  y (Variable, 211)
+  shapeK (Variable, 216)
+  ... 1061 global or keyword item(s) (sortText 215, no source)
+
+=== parity with the TypeScript twin ===
+completions jsEnding: same
+

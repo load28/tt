@@ -1,0 +1,2 @@
+arrowBlock(5) => {"kind":"Ok","value":5} | read 5
+arrowBlock(-5) => {"kind":"Err","error":"negative -5"} | read -5

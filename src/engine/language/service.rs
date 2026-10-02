@@ -20,9 +20,13 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
             anchors: Vec::new(),
             declared_names: Vec::new(),
             shared_bindings: Vec::new(),
+            destructured_lists: Vec::new(),
+            completion_scopes: Vec::new(),
             recovered: Vec::new(),
             tt_diagnostics: Vec::new(),
             generated_names: HashSet::new(),
+            inserted: Vec::new(),
+            faithful: true,
         };
     }
     let options = crate::Options {
@@ -33,26 +37,31 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         ..crate::Options::default()
     };
     let report = crate::compile_projection_report(&text, &options);
-    let (emit, recovered) = match report.emit {
-        Some(emit) => (emit, report.recovered),
-        None => (
+    let (emit, recovered, faithful) = match (report.emit, report.withheld) {
+        (Some(emit), _) | (None, Some(emit)) => (emit, report.recovered, true),
+        (None, None) => (
             crate::emit_mapped_with_kind(
                 &text,
                 crate::SourceKind::from_path(path).unwrap_or_default(),
             ),
             Vec::new(),
+            false,
         ),
     };
     ServiceDoc {
+        faithful,
         source: text,
         code: emit.code,
         mappings: emit.mappings,
         anchors: emit.anchors,
         declared_names: emit.declared_names,
         shared_bindings: emit.shared_bindings,
+        destructured_lists: emit.destructured_lists,
+        completion_scopes: emit.completion_scopes,
         recovered,
         tt_diagnostics: report.diagnostics,
         generated_names: emit.generated_names,
+        inserted: emit.inserted,
     }
 }
 
@@ -149,14 +158,21 @@ pub(super) fn ts_completions(
     session: &mut ServiceSession,
     path: &Path,
     at: usize,
-    code: &str,
+    text: ServedText<'_>,
     generated_names: &HashSet<String>,
+    trigger: Option<&str>,
 ) -> Result<CompletionAnswer, String> {
+    let code = text.code;
+    let context = match trigger {
+        Some(character) => serde_json::json!({ "triggerKind": 2, "triggerCharacter": character }),
+        None => serde_json::json!({ "triggerKind": 1 }),
+    };
     let answer = session.client.request(
         "textDocument/completion",
         serde_json::json!({
             "textDocument": { "uri": served_uri(session, path) },
             "position": lsp_position(u16_position(code, at)),
+            "context": context,
         }),
     )?;
     let items: Vec<serde_json::Value> = match answer {
@@ -165,20 +181,68 @@ pub(super) fn ts_completions(
     };
     session.last_completion.clear();
     let mut entries = Vec::with_capacity(items.len());
+    let kind = crate::SourceKind::from_path(path).unwrap_or_default();
+    let generated_switch = || {
+        enclosing_switch(code, kind, mapper::from_utf16(code, at))
+            .is_some_and(|keyword| mapper::to_source(text.mappings, keyword).is_none())
+    };
     for item in items {
         let label = item["label"].as_str().unwrap_or_default().to_string();
-        if generated_names.contains(&label) {
+        if generated_names.contains(&label)
+            || imports_from_runtime(&item)
+            || (item["data"]["source"].as_str() == Some(SWITCH_CASES_SOURCE) && generated_switch())
+        {
             continue;
         }
-        session
-            .last_completion
-            .insert((path.to_path_buf(), at, label.clone()), item.clone());
+        let source = item["data"]["source"].as_str().map(str::to_owned);
+        session.last_completion.insert(
+            (path.to_path_buf(), at, label.clone(), source.clone()),
+            item.clone(),
+        );
+        let replaced = ["replace", "range"]
+            .iter()
+            .map(|key| &item["textEdit"][*key])
+            .find(|range| range.is_object())
+            .and_then(|range| {
+                source_edit(
+                    code,
+                    text.mappings,
+                    text.inserted,
+                    text.source,
+                    text.splice,
+                    &serde_json::json!({ "range": range, "newText": "" }),
+                )
+            });
         entries.push(CompletionItem {
-            kind: completion_kind(item["kind"].as_u64()),
+            kind: item["kind"]
+                .as_u64()
+                .and_then(crate::engine::CompletionItemKind::from_lsp),
+            tags: item["tags"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|tag| {
+                    tag.as_u64()
+                        .and_then(crate::engine::CompletionItemTag::from_lsp)
+                })
+                .collect(),
             sort_text: item["sortText"].as_str().unwrap_or(&label).to_string(),
-            insert_text: item["insertText"].as_str().map(str::to_owned),
+            insert_text: item["insertText"]
+                .as_str()
+                .or_else(|| item["textEdit"]["newText"].as_str())
+                .map(str::to_owned),
             filter_text: item["filterText"].as_str().map(str::to_owned),
             snippet: item["insertTextFormat"].as_u64() == Some(2),
+            range: replaced.map(|edit| edit.range),
+            label_detail: item["labelDetails"]["detail"].as_str().map(str::to_owned),
+            description: item["labelDetails"]["description"]
+                .as_str()
+                .map(|description| {
+                    tt_module_specifier(session, path, description)
+                        .unwrap_or_else(|| description.to_owned())
+                }),
+            detail: item["detail"].as_str().map(str::to_owned),
+            source,
             label,
         });
     }
@@ -191,20 +255,168 @@ pub(super) fn ts_completions(
     })
 }
 
+const SWITCH_CASES_SOURCE: &str = "SwitchCases/";
+
+fn module_specifier_at(source: &str, kind: crate::SourceKind, at: usize) -> Option<(usize, usize)> {
+    use crate::lexer::TokenKind;
+    let tokens = crate::lexer::lex_with_kind(source, 0, source.len(), kind);
+    let index = tokens.iter().position(|token| {
+        matches!(token.kind, TokenKind::Str) && token.span.start < at && at <= token.span.end
+    })?;
+    let token = &tokens[index];
+    let quote = source.as_bytes()[token.span.start];
+    let closed =
+        token.span.end - token.span.start >= 2 && source.as_bytes()[token.span.end - 1] == quote;
+    let end = if closed {
+        token.span.end - 1
+    } else {
+        token.span.end
+    };
+    if at > end {
+        return None;
+    }
+    let word = |index: usize, text: &str| {
+        tokens.get(index).is_some_and(|token| {
+            matches!(token.kind, TokenKind::Ident)
+                && &source[token.span.start..token.span.end] == text
+        })
+    };
+    let previous = index.checked_sub(1)?;
+    let specifier = word(previous, "from")
+        || (word(previous, "import")
+            && !previous
+                .checked_sub(1)
+                .is_some_and(|dot| matches!(tokens[dot].kind, TokenKind::Punct(b'.'))))
+        || (matches!(tokens[previous].kind, TokenKind::Punct(b'('))
+            && previous
+                .checked_sub(1)
+                .is_some_and(|callee| word(callee, "import") || word(callee, "require")));
+    specifier.then_some((token.span.start + 1, end))
+}
+
+pub(super) fn tt_module_entries(
+    path: &Path,
+    source: &str,
+    position: Position,
+    overlays: &HashMap<PathBuf, String>,
+) -> Vec<CompletionItem> {
+    let at = source_byte(source, position);
+    let kind = crate::SourceKind::from_path(path).unwrap_or_default();
+    let Some((start, end)) = module_specifier_at(source, kind, at) else {
+        return Vec::new();
+    };
+    let typed = &source[start..at];
+    if !typed.starts_with("./") && !typed.starts_with("../") {
+        return Vec::new();
+    }
+    let slash = typed.rfind('/').map_or(0, |slash| slash + 1);
+    let Some(directory) = path
+        .parent()
+        .and_then(|parent| crate::engine::paths::canonical(&parent.join(&typed[..slash])).ok())
+    else {
+        return Vec::new();
+    };
+    let mut files: Vec<PathBuf> = std::fs::read_dir(&directory)
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().is_ok_and(|kind| kind.is_file()))
+        .map(|entry| entry.path())
+        .chain(
+            overlays
+                .keys()
+                .filter(|open| open.parent() == Some(directory.as_path()))
+                .cloned(),
+        )
+        .filter(|file| crate::SourceKind::from_tt_path(file).is_some())
+        .filter(|file| file.file_name() != path.file_name() || file.parent() != path.parent())
+        .collect();
+    files.sort();
+    files.dedup();
+    let range = span_range(source, start + slash, end);
+    files
+        .into_iter()
+        .filter_map(|file| {
+            let name = file.file_name()?.to_str()?.to_string();
+            Some(CompletionItem {
+                detail: Some(name.clone()),
+                label: name,
+                kind: Some(crate::engine::CompletionItemKind::File),
+                tags: Vec::new(),
+                sort_text: "11".to_string(),
+                insert_text: None,
+                filter_text: None,
+                snippet: false,
+                range: Some(range),
+                label_detail: None,
+                description: None,
+                source: None,
+            })
+        })
+        .collect()
+}
+
+fn enclosing_switch(code: &str, kind: crate::SourceKind, at: usize) -> Option<usize> {
+    use crate::lexer::TokenKind;
+    let tokens = crate::lexer::lex_with_kind(code, 0, code.len(), kind);
+    let mut open: Vec<(usize, Option<usize>)> = Vec::new();
+    let mut openers: HashMap<usize, usize> = HashMap::new();
+    for (index, token) in tokens.iter().enumerate() {
+        if token.span.start >= at {
+            break;
+        }
+        if token.opens_bracket() {
+            let keyword = (matches!(token.kind, TokenKind::Punct(b'{')) && index > 0)
+                .then(|| openers.get(&(index - 1)))
+                .flatten()
+                .and_then(|&paren| paren.checked_sub(1))
+                .map(|keyword| &tokens[keyword])
+                .filter(|keyword| {
+                    matches!(keyword.kind, TokenKind::Ident)
+                        && &code[keyword.span.start..keyword.span.end] == "switch"
+                })
+                .map(|keyword| keyword.span.start);
+            open.push((index, keyword));
+        } else if token.closes_bracket()
+            && let Some((opener, _)) = open.pop()
+        {
+            openers.insert(index, opener);
+        }
+    }
+    open.into_iter().rev().find_map(|(_, keyword)| keyword)
+}
+
+/// Whether a completion entry imports an export of the pipeline runtime.
+/// The runtime is compiler-owned: every export of it is a helper the
+/// emitter calls under a generated name, never a name the user writes.
+fn imports_from_runtime(item: &serde_json::Value) -> bool {
+    item["data"]["autoImport"]["moduleSpecifier"].as_str()
+        == Some(crate::StdPackage::Runtime.name())
+}
+
 /// The source byte a position names — the analysis speaks bytes, the
 /// protocol UTF-16.
 pub(in super::super) fn source_byte(source: &str, position: Position) -> usize {
     byte_at(&LineMap::lsp(source), position)
 }
 
-/// The match analysis of one file as a stand-alone question: imported
-/// declarations are the CLI's 1-hop collection, read from disk, since no
-/// project session is involved. This is what the parse-only surfaces
-/// ([`super::names`], [`super::hints`], [`super::completions`]) ask; a
-/// surface with a [`Project`] asks [`Project::semantic_analyses`] instead
-/// and shares the typed pass's cross-snapshot cache.
-pub(in super::super) fn analyses_for(path: &Path, source: &str) -> crate::PatternAnalyses {
-    let externs = externs_of(path, source, &|target| std::fs::read_to_string(target).ok());
+/// The match analysis of one file as a parse-only question: imported
+/// declarations are the CLI's 1-hop collection, read through `texts` — the
+/// session's open documents, or the disk when there is no session. This is
+/// what the parse-only surfaces ([`super::names`], [`super::hints`],
+/// [`super::completions`]) ask; a surface with a [`Project`] asks
+/// [`Project::semantic_analyses`] instead and shares the typed pass's
+/// cross-snapshot cache.
+pub(in super::super) fn analyses_for(
+    path: &Path,
+    source: &str,
+    texts: Texts<'_>,
+) -> crate::PatternAnalyses {
+    let externs: Vec<crate::resolve::ExternDecl> =
+        externs_of(path, source, &|target| texts.read(target))
+            .iter()
+            .map(Into::into)
+            .collect();
     crate::analysis::pattern_analyses_with_kind(
         source,
         &externs,
@@ -233,7 +445,7 @@ pub(in super::super) fn externs_of(
     path: &Path,
     source: &str,
     read: &dyn Fn(&Path) -> Option<String>,
-) -> Vec<crate::VariantSymbol> {
+) -> Vec<crate::resolve::ImportedVariant> {
     externs_from(
         path,
         &crate::tt_imports_with_kind(
@@ -258,10 +470,10 @@ pub(in super::super) fn externs_from(
     path: &Path,
     imports: &[crate::TtImport],
     exports_of: &dyn Fn(&Path) -> Option<Vec<crate::VariantSymbol>>,
-) -> Vec<crate::VariantSymbol> {
+) -> Vec<crate::resolve::ImportedVariant> {
     imported_variants(path, imports, exports_of)
         .into_iter()
-        .map(|(_, symbol)| symbol)
+        .map(|(_, imported)| imported)
         .collect()
 }
 
@@ -269,9 +481,14 @@ pub(in super::super) fn imported_variants(
     path: &Path,
     imports: &[crate::TtImport],
     exports_of: &dyn Fn(&Path) -> Option<Vec<crate::VariantSymbol>>,
-) -> Vec<(PathBuf, crate::VariantSymbol)> {
+) -> Vec<(PathBuf, crate::resolve::ImportedVariant)> {
     let dir = path.parent().unwrap_or(Path::new("."));
-    let mut externs: Vec<(PathBuf, crate::VariantSymbol)> = Vec::new();
+    let mut externs: Vec<(PathBuf, crate::resolve::ImportedVariant)> = Vec::new();
+    let imported =
+        |symbol: crate::VariantSymbol, specifier: &str| crate::resolve::ImportedVariant {
+            specifier: specifier.to_string(),
+            symbol,
+        };
     for import in imports {
         if matches!(import.names, crate::TtImportNames::None) {
             continue; // a re-export brings nothing into scope
@@ -287,7 +504,7 @@ pub(in super::super) fn imported_variants(
             crate::TtImportNames::Namespace(ns) => {
                 externs.extend(decls.into_iter().map(|mut d| {
                     d.name = format!("{ns}.{}", d.name);
-                    (target.clone(), d)
+                    (target.clone(), imported(d, &import.specifier))
                 }));
             }
             crate::TtImportNames::Named(entries) => {
@@ -295,7 +512,7 @@ pub(in super::super) fn imported_variants(
                     if let Some(d) = decls.iter().find(|d| &d.name == name) {
                         let mut d = d.clone();
                         d.name = alias.clone().unwrap_or_else(|| name.clone());
-                        externs.push((target.clone(), d));
+                        externs.push((target.clone(), imported(d, &import.specifier)));
                     }
                 }
             }
@@ -362,8 +579,10 @@ pub(super) fn declared_binding_hover(
 }
 
 /// Builds a completion probe: the source with the placeholder spliced in at
-/// `at` (a byte offset), emitted, and the placeholder's mapped position.
-/// `None` when the buffer is broken somewhere a placeholder does not reach.
+/// `at` (a byte offset), emitted, and the placeholder's mapped position. The
+/// emission is the one the service would serve for that text, the faithful
+/// projection of TypeScript that does not parse included. `None` when the
+/// buffer is broken somewhere a placeholder does not reach.
 pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) -> Option<ProbeDoc> {
     if !source.is_char_boundary(at) {
         return None;
@@ -379,14 +598,193 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
             ..crate::Options::default()
         },
     );
-    let emit = report.emit?;
+    let emit = report.emit.or(report.withheld)?;
     let out = mapper::to_output_inclusive(&emit.mappings, at)?;
     Some(ProbeDoc {
         path: path.to_path_buf(),
         offset: mapper::to_utf16(&emit.code, out),
+        mappings: emit.mappings,
+        source: source.to_string(),
+        splice: at,
         code: emit.code,
         version,
         generated_names: emit.generated_names,
+        inserted: emit.inserted,
+    })
+}
+
+pub(super) fn signature_position(
+    code: &str,
+    mappings: &[EmitMapping],
+    source_kind: crate::SourceKind,
+    at: usize,
+) -> usize {
+    let tokens = crate::lexer::lex_with_kind(code, 0, code.len(), source_kind);
+    let mut at = at;
+    while let Some(opener) = innermost_invocation(&tokens, at) {
+        if mapper::to_source(mappings, opener).is_some() {
+            break;
+        }
+        at = opener;
+    }
+    at
+}
+
+pub(super) fn signature_question(
+    code: &str,
+    mappings: &[EmitMapping],
+    source: &str,
+    source_kind: crate::SourceKind,
+    at: usize,
+) -> Option<(String, usize)> {
+    let tokens = crate::lexer::lex_with_kind(code, 0, code.len(), source_kind);
+    let opener = innermost_invocation(&tokens, at)?;
+    let written = callee_name(tokens_holding(&tokens, opener), opener)?;
+    if mapper::to_source(mappings, written.start).is_some() {
+        return None;
+    }
+    let source_opener = mapper::to_source(mappings, opener)?;
+    let source_tokens = crate::lexer::lex_with_kind(source, 0, source.len(), source_kind);
+    let name = callee_name(tokens_holding(&source_tokens, source_opener), source_opener)?;
+    let name = &source[name.start..name.end];
+    let question = format!("{}{name}{}", &code[..written.start], &code[written.end..]);
+    let at = if at >= written.end {
+        at + name.len() - (written.end - written.start)
+    } else {
+        at
+    };
+    Some((question, at))
+}
+
+fn tokens_holding(tokens: &[crate::lexer::Token], at: usize) -> &[crate::lexer::Token] {
+    crate::stack::grow(|| tokens_holding_grown(tokens, at))
+}
+
+fn tokens_holding_grown(tokens: &[crate::lexer::Token], at: usize) -> &[crate::lexer::Token] {
+    use crate::lexer::{TokenKind, TplPart};
+    for token in tokens {
+        if let TokenKind::Template(parts) = &token.kind
+            && token.span.start < at
+            && at < token.span.end
+        {
+            for part in parts.iter() {
+                if let TplPart::Interp { span, tokens } = part
+                    && span.start <= at
+                    && at <= span.end
+                {
+                    return tokens_holding(tokens, at);
+                }
+            }
+        }
+    }
+    tokens
+}
+
+fn callee_name(tokens: &[crate::lexer::Token], opener: usize) -> Option<crate::ast::Span> {
+    use crate::lexer::TokenKind;
+    let mut index = tokens
+        .iter()
+        .position(|token| token.span.start >= opener)
+        .unwrap_or(tokens.len())
+        .checked_sub(1)?;
+    if matches!(tokens[index].kind, TokenKind::Punct(b'>')) && tokens[index].closes_bracket() {
+        let mut depth = 0usize;
+        loop {
+            let token = &tokens[index];
+            if token.closes_bracket() {
+                depth += 1;
+            } else if token.opens_bracket() {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            index = index.checked_sub(1)?;
+        }
+        index = index.checked_sub(1)?;
+    }
+    let token = &tokens[index];
+    matches!(token.kind, TokenKind::Ident).then_some(token.span)
+}
+
+fn innermost_invocation(tokens: &[crate::lexer::Token], at: usize) -> Option<usize> {
+    let mut open = Vec::new();
+    open_brackets_before(tokens, at, &mut open);
+    open.into_iter()
+        .rev()
+        .find_map(|(start, invocation)| invocation.then_some(start))
+}
+
+fn open_brackets_before(tokens: &[crate::lexer::Token], at: usize, open: &mut Vec<(usize, bool)>) {
+    crate::stack::grow(|| open_brackets_before_grown(tokens, at, open));
+}
+
+fn open_brackets_before_grown(
+    tokens: &[crate::lexer::Token],
+    at: usize,
+    open: &mut Vec<(usize, bool)>,
+) {
+    use crate::lexer::{TokenKind, TplPart};
+    for (index, token) in tokens.iter().enumerate() {
+        if token.span.start >= at {
+            return;
+        }
+        if let TokenKind::Template(parts) = &token.kind {
+            let interpolation = parts.iter().find_map(|part| match part {
+                TplPart::Interp { span, tokens } if span.start <= at && at <= span.end => {
+                    Some(tokens)
+                }
+                _ => None,
+            });
+            if let Some(tokens) = interpolation {
+                open_brackets_before(tokens, at, open);
+                return;
+            }
+            continue;
+        }
+        if token.opens_bracket() {
+            let invocation = matches!(token.kind, TokenKind::Punct(b'(' | b'<'))
+                && index.checked_sub(1).is_some_and(|previous| {
+                    let previous = &tokens[previous];
+                    previous.facts.ends_expression() || matches!(previous.kind, TokenKind::OptChain)
+                });
+            open.push((token.span.start, invocation));
+        } else if token.closes_bracket() {
+            open.pop();
+        }
+    }
+}
+
+/// An edit the service computed over served text, as an edit of `source`:
+/// `mappings` maps `source` onto `code`, with a completion probe's
+/// placeholder spliced in at `splice` when there is one. An insertion
+/// before or after a declaration of glue written at a source point
+/// (`inserted`) is an insertion at that point. `None` when either end of
+/// the range was not copied from the source, when the edit changes glue,
+/// or when it falls inside the placeholder.
+pub(super) fn source_edit(
+    code: &str,
+    mappings: &[EmitMapping],
+    inserted: &[crate::InsertedGlue],
+    source: &str,
+    splice: Option<usize>,
+    edit: &serde_json::Value,
+) -> Option<TextEdit> {
+    let start = mapper::from_utf16(code, u16_offset(code, position_of(&edit["range"]["start"])));
+    let end = mapper::from_utf16(code, u16_offset(code, position_of(&edit["range"]["end"])));
+    let (start, end) = mapper::to_source_span(mappings, start, end).or_else(|| {
+        let glue = inserted
+            .iter()
+            .find(|glue| start == end && (start == glue.out || start == glue.out_end))?;
+        Some((glue.src, glue.src))
+    })?;
+    let unsplice = |byte: usize| match splice {
+        Some(at) if byte > at => byte.checked_sub(PROBE_NAME.len()).filter(|&b| b >= at),
+        _ => Some(byte),
+    };
+    Some(TextEdit {
+        range: span_range(source, unsplice(start)?, unsplice(end)?),
+        new_text: edit["newText"].as_str()?.to_string(),
     })
 }
 
@@ -455,12 +853,27 @@ pub(super) fn serve_doc_only(
     }
 }
 
-/// A tt position translated into the served text, or `None` when it sits
-/// in compiler-written glue.
+/// A tt position translated into the served text for a question about the
+/// name the cursor touches (hover, navigation), or `None` when it sits in
+/// compiler-written glue. As TypeScript resolves a touching name, the name
+/// starting at the cursor wins over the one ending there.
 pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> {
-    let u16 = u16_offset(&doc.source, position);
-    let byte = mapper::from_utf16(&doc.source, u16);
-    let out = mapper::to_output_inclusive(&doc.mappings, byte)?;
+    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let affinity = match doc.source.as_bytes().get(byte) {
+        Some(&b) if crate::scanner::is_ident_start(b) || b == b'#' || !b.is_ascii() => {
+            mapper::Affinity::Following
+        }
+        _ => mapper::Affinity::Preceding,
+    };
+    let out = mapper::cursor_to_output(&doc.mappings, byte, affinity)?;
+    Some(mapper::to_utf16(&doc.code, out))
+}
+
+/// A tt position translated into the served text for a question about what
+/// is being typed before the cursor (completion, signature help).
+pub(super) fn to_service_typed(doc: &ServiceDoc, position: Position) -> Option<usize> {
+    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let out = mapper::cursor_to_output(&doc.mappings, byte, mapper::Affinity::Preceding)?;
     Some(mapper::to_utf16(&doc.code, out))
 }
 
@@ -477,6 +890,41 @@ pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<us
         let within = (byte - occurrence.src).min(binding.out_end - binding.out);
         Some(mapper::to_utf16(&doc.code, binding.out + within))
     })
+}
+
+/// Where to ask the service about the name at `position`: the served text
+/// the name was copied to, or — for a name ttc declares in glue, a variant's
+/// type and constructor, a case's constructor, a payload field's properties
+/// — every place the emission declares it. Empty when neither holds.
+pub(super) fn to_service_names(doc: &ServiceDoc, position: Position) -> Vec<usize> {
+    if let Some(at) = to_service_name(doc, position) {
+        return vec![at];
+    }
+    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    doc.declared_names
+        .iter()
+        .filter(|name| name.src <= byte && byte <= name.src_end)
+        .map(|name| {
+            mapper::to_utf16(
+                &doc.code,
+                name.out + (byte - name.src).min(name.out_end - name.out),
+            )
+        })
+        .collect()
+}
+
+/// The source span (UTF-16) of the glue-declared name covering `position`.
+pub(super) fn declared_name_at(doc: &ServiceDoc, position: Position) -> Option<(usize, usize)> {
+    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    doc.declared_names
+        .iter()
+        .find(|name| name.src <= byte && byte <= name.src_end)
+        .map(|name| {
+            (
+                mapper::to_utf16(&doc.source, name.src),
+                mapper::to_utf16(&doc.source, name.src_end),
+            )
+        })
 }
 
 pub(super) struct SharedTarget {
@@ -515,6 +963,185 @@ pub(super) fn map_shared_target(
         })
         .collect();
     Some((doc.code[start..end].to_string(), targets))
+}
+
+/// The service's outline of served text, on the source: an entry whose name
+/// ttc wrote (a generated binding, the type and constructor a `variant`
+/// becomes) is not the user's, and its mapped children take its place.
+pub(super) fn source_symbols(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<DocumentSymbol> {
+    crate::stack::grow(|| source_symbols_grown(doc, items))
+}
+
+fn source_symbols_grown(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<DocumentSymbol> {
+    let mut out = Vec::new();
+    for item in items {
+        let children = source_symbols(
+            doc,
+            item["children"]
+                .as_array()
+                .map(Vec::as_slice)
+                .unwrap_or_default(),
+        );
+        let offset = |value: &serde_json::Value| u16_offset(&doc.code, position_of(value));
+        let selection = &item["selectionRange"];
+        let Some((name_start, name_end)) =
+            from_service_span(doc, offset(&selection["start"]), offset(&selection["end"]))
+        else {
+            out.extend(children);
+            continue;
+        };
+        // The declaration's ends are the user's even when glue sits inside
+        // it (a `match` in a function body); an end that is not keeps the
+        // range to the name.
+        let point = |value: &serde_json::Value| {
+            let byte = mapper::from_utf16(&doc.code, offset(value));
+            mapper::to_source_inclusive(&doc.mappings, byte)
+                .map(|source| mapper::to_utf16(&doc.source, source))
+        };
+        let start = point(&item["range"]["start"]).map_or(name_start, |at| at.min(name_start));
+        let end = point(&item["range"]["end"]).map_or(name_end, |at| at.max(name_end));
+        out.push(DocumentSymbol {
+            name: item["name"].as_str().unwrap_or_default().to_string(),
+            detail: item["detail"].as_str().unwrap_or_default().to_string(),
+            kind: item["kind"].as_u64().unwrap_or(13) as u32,
+            range: source_range(&doc.source, start, end),
+            selection_range: source_range(&doc.source, name_start, name_end),
+            children,
+        });
+    }
+    // Lowering can move a declaration ahead of the text around it (a
+    // pattern binding hoisted above its `match`); the outline follows the
+    // source.
+    out.sort_by_key(|symbol| (symbol.range.start.line, symbol.range.start.character));
+    out
+}
+
+pub(super) fn source_tokens(
+    doc: &ServiceDoc,
+    legend: &crate::typescript::service::SemanticLegend,
+    data: &[u64],
+) -> Vec<ClassifiedToken> {
+    let code_lines = LineMap::lsp(&doc.code);
+    let source_lines = LineMap::lsp(&doc.source);
+    let mut out: Vec<ClassifiedToken> = Vec::new();
+    let (mut line, mut character) = (0u64, 0u64);
+    for &[delta_line, delta_start, length, kind, bits] in data.as_chunks::<5>().0 {
+        if delta_line > 0 {
+            line += delta_line;
+            character = delta_start;
+        } else {
+            character += delta_start;
+        }
+        let Some(token_type) = legend.types.get(kind as usize) else {
+            continue;
+        };
+        let start = byte_at(
+            &code_lines,
+            Position {
+                line: line as u32,
+                character: character as u32,
+            },
+        );
+        let end = byte_at(
+            &code_lines,
+            Position {
+                line: line as u32,
+                character: (character + length) as u32,
+            },
+        );
+        let modifiers: Vec<String> = legend
+            .modifiers
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| *index < 64 && bits & (1 << index) != 0)
+            .map(|(_, name)| name.clone())
+            .collect();
+        for (from, to) in token_sources(doc, start, end) {
+            let classified = ClassifiedToken {
+                range: Range {
+                    start: byte_position(&source_lines, from),
+                    end: byte_position(&source_lines, to),
+                },
+                token_type: token_type.clone(),
+                modifiers: modifiers.clone(),
+            };
+            if !out.contains(&classified) {
+                out.push(classified);
+            }
+        }
+    }
+    out
+}
+
+/// The source spans a service token over `start..end` of the served text
+/// classifies. A binding an or-pattern's alternatives share is declared
+/// once in the served text and written in every alternative, so its token
+/// is each alternative's; any other token is the source it was copied from.
+fn token_sources(doc: &ServiceDoc, start: usize, end: usize) -> Vec<(usize, usize)> {
+    if let Some(binding) = doc
+        .shared_bindings
+        .iter()
+        .find(|binding| binding.out == start && binding.out_end == end)
+    {
+        return binding
+            .occurrences
+            .iter()
+            .map(|occurrence| (occurrence.src, occurrence.src_end))
+            .collect();
+    }
+    mapper::to_source_span(&doc.mappings, start, end)
+        .filter(|(from, to)| from < to)
+        .into_iter()
+        .collect()
+}
+
+pub(super) fn merge_tokens(
+    own: Vec<crate::engine::tokens::SemanticToken>,
+    service: Vec<ClassifiedToken>,
+) -> Vec<ClassifiedToken> {
+    let overlaps = |a: &Range, b: &Range| {
+        a.start.line == b.start.line
+            && a.start.character < b.end.character
+            && b.start.character < a.end.character
+    };
+    let mut out: Vec<ClassifiedToken> = own
+        .into_iter()
+        .map(|token| {
+            let token_type = token.kind.as_str().to_string();
+            let mut modifiers: Vec<String> = token
+                .kind
+                .modifiers()
+                .iter()
+                .map(|m| m.to_string())
+                .collect();
+            if let Some(other) = service
+                .iter()
+                .find(|other| other.range == token.range && other.token_type == token_type)
+            {
+                for modifier in &other.modifiers {
+                    if !modifiers.contains(modifier) {
+                        modifiers.push(modifier.clone());
+                    }
+                }
+            }
+            ClassifiedToken {
+                range: token.range,
+                token_type,
+                modifiers,
+            }
+        })
+        .collect();
+    let owned = out.len();
+    for token in service {
+        if !out[..owned]
+            .iter()
+            .any(|own| overlaps(&own.range, &token.range))
+        {
+            out.push(token);
+        }
+    }
+    out.sort_by_key(|token| (token.range.start.line, token.range.start.character));
+    out
 }
 
 /// A service span translated back to source UTF-16 offsets, or `None` when
@@ -571,7 +1198,17 @@ pub(super) fn diagnostic_source_span(
 ) -> Option<(usize, usize, mapper::DiagnosticOrigin)> {
     let sb = mapper::from_utf16(&doc.code, start);
     let eb = mapper::from_utf16(&doc.code, end);
-    let origin = mapper::diagnostic_origin(&doc.mappings, &doc.anchors, sb, eb)?;
+    let origin = match doc
+        .destructured_lists
+        .iter()
+        .find(|list| list.out == sb && list.out_end == eb)
+    {
+        Some(list) => mapper::DiagnosticOrigin::Exact {
+            start: list.src,
+            end: list.src_end,
+        },
+        None => mapper::diagnostic_origin(&doc.mappings, &doc.anchors, sb, eb)?,
+    };
     let (start, end) = match origin {
         mapper::DiagnosticOrigin::Exact { start, end } => (start, end),
         mapper::DiagnosticOrigin::Anchor(anchor) => (anchor.src, anchor.src_end),
@@ -683,6 +1320,125 @@ fn split_markdown_hover(markdown: &str) -> (String, String) {
     (String::new(), trimmed.to_string())
 }
 
+/// `markdown` with the target of each link TypeScript writes for a
+/// `{@link}` tag moved from a served tt document to its `.tt` source.
+///
+/// TypeScript renders a link to a declaration as a markdown link whose
+/// target is the declaring file's URI with the declaration's range as a
+/// fragment, one-based (`[name](file:///m.tt.ts#32,17-32,22)`). A served
+/// document is the emission, so the file and the range are generated ones:
+/// the range is mapped back through the emit mapping as a navigation target
+/// is ([`map_target`]), and the link names the `.tt` file at the source
+/// range. A target that is not a served tt document, or has no source
+/// counterpart, is left as TypeScript wrote it.
+pub(super) fn source_links(
+    session: &mut ServiceSession,
+    overlays: &HashMap<PathBuf, String>,
+    markdown: &str,
+) -> String {
+    const OPEN: &str = "](file://";
+    let mut out = String::with_capacity(markdown.len());
+    let mut rest = markdown;
+    while let Some(at) = rest.find(OPEN) {
+        let target_start = at + 2;
+        out.push_str(&rest[..target_start]);
+        rest = &rest[target_start..];
+        let Some(close) = rest.find(')') else {
+            break;
+        };
+        let target = &rest[..close];
+        out.push_str(&source_link(session, overlays, target).unwrap_or_else(|| target.to_string()));
+        rest = &rest[close..];
+    }
+    out.push_str(rest);
+    out
+}
+
+fn source_link(
+    session: &mut ServiceSession,
+    overlays: &HashMap<PathBuf, String>,
+    target: &str,
+) -> Option<String> {
+    let (uri, fragment) = target.split_once('#')?;
+    tt_document(&uri_path(uri)?)?;
+    let (from, to) = fragment.split_once('-')?;
+    let position = |text: &str| -> Option<serde_json::Value> {
+        let (line, character) = text.split_once(',')?;
+        let line = line.trim().parse::<u64>().ok()?.checked_sub(1)?;
+        let character = character.trim().parse::<u64>().ok()?.checked_sub(1)?;
+        Some(serde_json::json!({ "line": line, "character": character }))
+    };
+    let range = serde_json::json!({ "start": position(from)?, "end": position(to)? });
+    let location = map_target(session, overlays, uri, &range, TargetUse::Navigation)?;
+    Some(format!(
+        "{}#{},{}-{},{}",
+        file_uri(&location.path),
+        location.range.start.line + 1,
+        location.range.start.character + 1,
+        location.range.end.line + 1,
+        location.range.end.character + 1
+    ))
+}
+
+/// The specifier tt writes for the module TypeScript names `specifier`
+/// from `importer`, when that module is a tt source the session serves
+/// under its lowered name ([`crate::engine::projection::module_path_of`]):
+/// TypeScript writes the lowered `shapes.tt.ts` as `./shapes.tt`,
+/// `./shapes.tt.ts` (with `allowImportingTsExtensions`), or `./shapes.tt.js`
+/// (a `.js` ending, as `nodenext` requires), and tt imports the source as
+/// `./shapes.tt` in every case, as import-path completion offers it
+/// (TASK-609). `None` for any other specifier, already tt's included.
+pub(super) fn tt_module_specifier(
+    session: &ServiceSession,
+    importer: &Path,
+    specifier: &str,
+) -> Option<String> {
+    if !(specifier.starts_with("./") || specifier.starts_with("../")) {
+        return None;
+    }
+    let directory = importer.parent()?;
+    [".ts", ".tsx", ".js", ".jsx"]
+        .into_iter()
+        .find_map(|ending| {
+            let written = specifier.strip_suffix(ending)?;
+            let source = crate::engine::normalize_document_path(&directory.join(written)).ok()?;
+            let kind = crate::SourceKind::from_tt_path(&source)?;
+            let lowered = format!(".{}", kind.output_extension());
+            let javascript: &[&str] = if lowered == ".tsx" {
+                &[".js", ".jsx"]
+            } else {
+                &[".js"]
+            };
+            let served = session.served.contains_key(&source) || source.is_file();
+            (served && (ending == lowered || javascript.contains(&ending)))
+                .then(|| written.to_string())
+        })
+}
+
+/// `text` (TypeScript an edit inserts) with each string literal naming a
+/// served tt module in TypeScript's form written in tt's
+/// ([`tt_module_specifier`]).
+pub(super) fn tt_specifiers_in(session: &ServiceSession, importer: &Path, text: &str) -> String {
+    let tokens = crate::lexer::lex(text, 0, text.len());
+    let mut out = String::with_capacity(text.len());
+    let mut copied = 0;
+    for token in &tokens {
+        if !matches!(token.kind, crate::lexer::TokenKind::Str)
+            || token.span.end - token.span.start < 2
+        {
+            continue;
+        }
+        let (start, end) = (token.span.start + 1, token.span.end - 1);
+        if let Some(specifier) = tt_module_specifier(session, importer, &text[start..end]) {
+            out.push_str(&text[copied..start]);
+            out.push_str(&specifier);
+            copied = end;
+        }
+    }
+    out.push_str(&text[copied..]);
+    out
+}
+
 /// Documentation as plain text, whichever shape the server used.
 pub(super) fn docs_text(documentation: &serde_json::Value) -> String {
     match documentation {
@@ -718,26 +1474,6 @@ pub(super) fn parameter_span(signature: &str, label: &serde_json::Value) -> (u32
         }
         None => (0, 0),
     }
-}
-
-/// The LSP completion kinds the server answers with, as the element-kind
-/// strings the editor has always mapped. Anything else is a plain property.
-pub(super) fn completion_kind(kind: Option<u64>) -> String {
-    match kind {
-        Some(3) => "function",
-        Some(2) | Some(4) => "method",
-        Some(5) => "property",
-        Some(6) => "var",
-        Some(7) | Some(22) => "class",
-        Some(8) => "interface",
-        Some(9) => "module",
-        Some(13) => "enum",
-        Some(14) => "keyword",
-        Some(21) => "const",
-        Some(25) => "type",
-        _ => "property",
-    }
-    .to_string()
 }
 
 /// A [`Position`] as the JSON the protocol speaks.
@@ -776,4 +1512,127 @@ pub(super) fn ensure_std_module(root: &Path) {
 /// answer comes back empty (TASK-217).
 pub(super) fn ensure_runtime_module(root: &Path) {
     let _ = crate::StdPackage::Runtime.materialize(root);
+}
+
+pub(super) struct Discriminant {
+    label: String,
+    written: String,
+    value: crate::ast::LiteralValue,
+}
+
+pub(super) fn discriminant(
+    label: &str,
+    family: crate::engine::completions::PatternFamily,
+) -> Option<Discriminant> {
+    use crate::ast::{LiteralValue, Pattern};
+    use crate::engine::completions::PatternFamily;
+    let Some(Pattern::Literals(mut literals)) = crate::parser::pattern_of(label) else {
+        return None;
+    };
+    if literals.len() != 1 {
+        return None;
+    }
+    let value = literals.remove(0).value;
+    match family {
+        PatternFamily::Literals => Some(Discriminant {
+            label: label.to_string(),
+            written: label.to_string(),
+            value,
+        }),
+        PatternFamily::Tags => {
+            let LiteralValue::Str(tag) = value.clone() else {
+                return None;
+            };
+            let Some(Pattern::Tags(tags)) = crate::parser::pattern_of(&tag) else {
+                return None;
+            };
+            (tags.len() == 1 && tags[0].bindings.is_none() && tags[0].tag == tag).then(|| {
+                Discriminant {
+                    label: tag,
+                    written: label.to_string(),
+                    value,
+                }
+            })
+        }
+        PatternFamily::Instances => None,
+    }
+}
+
+pub(super) fn arm_candidates(
+    parsed: Vec<crate::engine::TtCompletion>,
+    family: crate::engine::completions::PatternFamily,
+    typed: Vec<Discriminant>,
+    covered: &[String],
+    literals: &[crate::ast::LiteralValue],
+) -> Vec<crate::engine::TtCompletion> {
+    use crate::engine::TtCompletionKind;
+    use crate::engine::completions::PatternFamily;
+    let mut out: Vec<crate::engine::TtCompletion> = Vec::new();
+    for candidate in typed {
+        if out.iter().any(|item| item.label == candidate.label) {
+            continue;
+        }
+        let item = match family {
+            PatternFamily::Tags => parsed
+                .iter()
+                .find(|item| item.kind == TtCompletionKind::Case && item.label == candidate.label)
+                .cloned()
+                .unwrap_or_else(|| crate::engine::TtCompletion {
+                    detail: format!(
+                        "{}: {}",
+                        crate::core_ir::VARIANT_TAG_FIELD,
+                        candidate.written
+                    ),
+                    covered: covered.contains(&candidate.label),
+                    label: candidate.label,
+                    kind: TtCompletionKind::Case,
+                    range: None,
+                }),
+            _ => crate::engine::TtCompletion {
+                detail: format!("literal {}", candidate.written),
+                covered: literals.contains(&candidate.value),
+                label: candidate.label,
+                kind: TtCompletionKind::Literal,
+                range: None,
+            },
+        };
+        out.push(item);
+    }
+    out.push(crate::engine::completions::wildcard());
+    out
+}
+
+/// Whether a property TypeScript offers for the case a payload pattern
+/// selects is a field name that payload can still bind: a name tt's pattern
+/// grammar reads as a bare field, not the discriminant the tag already tests
+/// (`VARIANT_TAG_FIELD`), and not one the payload already binds.
+pub(super) fn is_payload_field(label: &str, written: &[String]) -> bool {
+    label != crate::core_ir::VARIANT_TAG_FIELD
+        && !written.iter().any(|name| name == label)
+        && matches!(
+            crate::parser::pattern_of(label),
+            Some(crate::ast::Pattern::Tags(tags))
+                if tags.len() == 1 && tags[0].bindings.is_none() && tags[0].tag == label
+        )
+}
+
+pub(super) fn field_candidates(
+    parsed: Vec<crate::engine::TtCompletion>,
+    typed: Vec<String>,
+    written: &[String],
+) -> Vec<crate::engine::TtCompletion> {
+    let mut out = parsed;
+    for name in typed {
+        if !is_payload_field(&name, written) || out.iter().any(|item| item.label == name) {
+            continue;
+        }
+        out.push(crate::engine::TtCompletion {
+            detail: name.clone(),
+            label: name,
+            kind: crate::engine::TtCompletionKind::Field,
+            covered: false,
+            range: None,
+        });
+    }
+    out
 }

@@ -1,0 +1,2 @@
+ifBranch(3) => {"n":3} | enter true; risky 3; caught {"n":3}
+ifBranch(8) => {"n":8} | enter true; risky 8; caught {"n":8}

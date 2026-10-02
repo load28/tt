@@ -9,9 +9,9 @@ declare global {
 variant LoadState { Loading, Ready(items: string[]), Failed(message: string) }
 declare const state: LoadState;
 
-const label = match (state) { //~ ERROR[match-not-exhaustive] match is not exhaustive
+const label = match (state) { //~ ERROR[match-not-exhaustive] is not exhaustive
   Loading => "Loading…",
   Ready(items) => `${items.length} items`,
 };
 
-export const Dashboard = () => <badge count="many">{label}</badge>; //~ ERROR[ts2322] type mismatch
+export const Dashboard = () => <badge count="many">{label}</badge>; //~ ERROR[ts2322] is not assignable

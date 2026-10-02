@@ -1,0 +1,2 @@
+doWhileTest(7) => 2 | operand 7; finally 0
+doWhileTest(1) => 2 | operand 1; finally 0

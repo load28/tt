@@ -1,0 +1,145 @@
+=== runtimeAnOptionalMemberCallIsSkippedOnlyWhenItsReceiverIsNullish.tt ===
+type M = { base?: number; m(v: number): number };
+>M : type M = {
+>       base?: number;
+>       m(v: number): number;
+>   }
+>base : (property) base?: number | undefined
+>m : (method) m(v: number): number
+>v : (parameter) v: number
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const trace: string[] = [];
+>trace : const trace: string[]
+function arg(tag: string): number { trace.push(tag); return 1; }
+>arg : function arg(tag: string): number
+>tag : (parameter) tag: string
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>tag : (parameter) tag: string
+function read(tag: string): R { trace.push(tag); return { kind: "Ok", value: 2 }; }
+>read : function read(tag: string): R
+>tag : (parameter) tag: string
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>tag : (parameter) tag: string
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+const live: M = { base: 7, m(v: number): number { trace.push("this:" + (this === live)); return (this.base ?? 0) + v; } };
+>live : const live: M
+>M : type M = {
+>       base?: number;
+>       m(v: number): number;
+>   }
+>base : (property) base?: number | undefined
+>m : (method) m(v: number): number
+>v : (parameter) v: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>live : const live: M
+>base : (property) base?: number | undefined
+>v : (parameter) v: number
+const missing = {} as M;
+>missing : const missing: M
+>M : type M = {
+>       base?: number;
+>       m(v: number): number;
+>   }
+function attempt(f: () => unknown): string {
+>attempt : function attempt(f: () => unknown): string
+>f : (parameter) f: () => unknown
+  try { return String(f()); } catch (e) { return (e as Error).constructor.name; }
+>String : var String: (value?: any) => string
+>f : (parameter) f: () => unknown
+>e : var e: unknown
+>e : var e: unknown
+>Error : interface Error
+>constructor : (property) Object.constructor: Function
+>name : (property) Function.name: string
+function viaTry(o: M | null, tag: string): R {
+>viaTry : function viaTry(o: M | null, tag: string): R
+>o : (parameter) o: M | null
+>M : type M = {
+>       base?: number;
+>       m(v: number): number;
+>   }
+>tag : (parameter) tag: string
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const called = o?.m(try read(tag));
+>called : const called: number | undefined
+>read : function read(tag: string): R
+>tag : (parameter) tag: string
+  return { kind: "Ok", value: called ?? -1 };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>called : const called: number | undefined
+function each(o: M | null, tag: string): string[] {
+>each : function each(o: M | null, tag: string): string[]
+>o : (parameter) o: M | null
+>M : type M = {
+>       base?: number;
+>       m(v: number): number;
+>   }
+>tag : (parameter) tag: string
+    attempt(() => o?.m(match (arg(tag + ":call")) { 1 => 1, _ => 0 })),
+>attempt : function attempt(f: () => unknown): string
+>arg : function arg(tag: string): number
+>tag : (parameter) tag: string
+    attempt(() => o?.m?.(match (arg(tag + ":both")) { 1 => 1, _ => 0 })),
+>attempt : function attempt(f: () => unknown): string
+>o : (parameter) o: M | null
+>m : (method) m(v: number): number
+>arg : function arg(tag: string): number
+>tag : (parameter) tag: string
+    attempt(() => JSON.stringify(viaTry(o, tag + ":try"))),
+>attempt : function attempt(f: () => unknown): string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>viaTry : function viaTry(o: M | null, tag: string): R
+>o : (parameter) o: M | null
+>tag : (parameter) tag: string
+    attempt(() => o |> ?.m(match (arg(tag + ":pipe")) { 1 => 1, _ => 0 })),
+>attempt : function attempt(f: () => unknown): string
+>o : (parameter) o: M | null
+>arg : function arg(tag: string): number
+>tag : (parameter) tag: string
+console.log(JSON.stringify([each(live, "live"), each(null, "null"), each(missing, "missing")]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>each : function each(o: M | null, tag: string): string[]
+>live : const live: M
+>each : function each(o: M | null, tag: string): string[]
+>each : function each(o: M | null, tag: string): string[]
+>missing : const missing: M
+console.log(JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+

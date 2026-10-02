@@ -1,0 +1,15 @@
+// @completions: body, afterComma
+export variant Shape { Circle(radius: number), Rect(width: number), Point }
+const limit = 1;
+export function g(s: Shape) {
+  const a = match (s) {
+    Circle(radius) => radius,
+    Rect(width) => /*body*/
+  };
+  const b = match (s) {
+    Circle(radius) => radius,
+    Rect(width) => /*afterComma*/,
+    _ => 0,
+  };
+  return [a, b];
+}

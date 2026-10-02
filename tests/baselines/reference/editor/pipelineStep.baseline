@@ -1,0 +1,21 @@
+=== hover /*mid*/ pipelineStep.tt:3:28 ===
+  | export const a = 4 |> obj.tw
+  |                            ^ /*mid*/
+hover: 3:27-3:29 "tw"
+    any
+ttSymbol: null
+
+=== completions /*end*/ pipelineStep.tt:3:29 ===
+  | export const a = 4 |> obj.tw
+  |                             ^ /*end*/
+completion: 1 item(s), member true, probe no
+  twice (Method, 11)
+ttCompletions: pattern false, member {"receiver":"obj"}
+patternCompletions: null
+editor completion: 1 item(s)
+  twice (Method, 211)
+
+=== parity with the TypeScript twin ===
+hover mid: same
+completions end: same
+

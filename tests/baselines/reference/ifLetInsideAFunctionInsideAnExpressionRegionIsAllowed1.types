@@ -1,0 +1,9 @@
+=== ifLetInsideAFunctionInsideAnExpressionRegionIsAllowed1.tt ===
+const v = match (run(() => { if let A(x) = e { return x; } return 0; })) {
+>v : const v: any
+>x : const x: any
+>x : const x: any
+  Ok(value) => value,
+>value : const value: any
+>value : const value: any
+

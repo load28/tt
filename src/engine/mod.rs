@@ -10,9 +10,11 @@
 //! The shape follows typescript-go's project service, sized to tt:
 //!
 //! - an [`Engine`] discovers the toolchain and opens projects;
-//! - a [`Project`] is the long-lived, mutable state of one workspace —
-//!   documents (disk and unsaved overlays), cached projections, and the
-//!   running TypeScript session;
+//! - a [`Project`] is the long-lived, mutable state of one `tsconfig.json`
+//!   project — documents (disk and unsaved overlays), cached projections,
+//!   and the running TypeScript session;
+//! - a [`Workspace`] is every project a consumer holds open, and answers
+//!   the questions whose answers span them (references, rename);
 //! - a [`Snapshot`] is the project at one moment, immutable; every semantic
 //!   request runs against a snapshot, so a request started before an edit
 //!   still answers about a consistent state;
@@ -40,7 +42,9 @@
 //! ```
 
 mod completions;
+mod config;
 mod declarations;
+mod documents;
 mod hints;
 mod language;
 mod names;
@@ -50,20 +54,27 @@ mod projection;
 mod semantics;
 mod snapshot;
 mod tokens;
+mod workspace;
 
-pub use completions::{TtCompletion, TtCompletionKind, tt_completions_at};
+pub use completions::{
+    MemberAccess, TtCompletion, TtCompletionKind, TtKeyword, member_access_at, tt_completions_at,
+    tt_keywords_at,
+};
+pub use config::jsx_preserve;
 pub use declarations::{
     TtCaseDecl, TtDeclarations, TtFieldDecl, TtMatchSite, TtVariantDecl, TtVariantOrigin,
     tt_declarations,
 };
 pub use hints::{TtHint, TtHintKind, tt_hints};
 pub use language::{
-    CompletionAnswer, CompletionDetail, CompletionItem, HoverInfo, Location, Position,
-    RENAME_PLACEHOLDER, Range, Reference, RenameEdit, ServiceDiagnostic, ServiceRelated, Signature,
-    SignatureHelp, SignatureParameter,
+    ClassifiedToken, CompletionAnswer, CompletionDetail, CompletionItem, CompletionItemKind,
+    CompletionItemTag, DocumentSymbol, HoverInfo, Location, Position, PrepareRename,
+    RENAME_PLACEHOLDER, Range, Reference, RenameEdit, ServiceDiagnostic, ServiceRelated,
+    ServiceSeverity, ServiceTag, Signature, SignatureHelp, SignatureParameter, SignatureTrigger,
+    TextEdit,
 };
 pub use names::{TtSymbol, TtSymbolKind, tt_symbol_at};
-pub use project::{Blocked, CheckRequest, Project, collect_sources};
+pub use project::{Blocked, CheckRequest, Dependencies, Project, collect_sources};
 pub use projection::ProjectedDocument;
 pub use semantics::{
     BackendError, BackendErrorKind, Checked, Declarations, Diagnostic, DiagnosticLabel,
@@ -71,10 +82,57 @@ pub use semantics::{
 };
 pub use snapshot::Snapshot;
 pub use tokens::{SemanticToken, SemanticTokenKind, semantic_tokens, semantic_tokens_with_kind};
+pub use workspace::{ProjectIdentity, Workspace};
 
 use std::path::PathBuf;
 
 use crate::typescript::native::NativeBackend;
+
+/// What a command's inputs name: every tt source they reach, the files
+/// they name directly — roots by request — and the directories they name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Inputs {
+    collected: Vec<PathBuf>,
+    named: Vec<PathBuf>,
+    directories: Vec<PathBuf>,
+}
+
+impl Inputs {
+    /// Collects `inputs` (files or directories) the way every command
+    /// does. The error is a ready-to-print sentence naming the input:
+    /// nothing collected, an input that does not exist or cannot be read,
+    /// or a file that is not a tt source.
+    pub fn collect(inputs: &[String]) -> Result<Inputs, String> {
+        let collected = match project::collect_tt(inputs) {
+            Ok(files) if files.is_empty() => return Err("no .tt or .ttx sources found".to_string()),
+            Ok(files) => files,
+            Err(e) => return Err(e.to_string()),
+        };
+        let existing = |keep: fn(&std::path::Path) -> bool| -> Vec<PathBuf> {
+            inputs
+                .iter()
+                .map(PathBuf::from)
+                .filter(|path| keep(path))
+                .filter_map(|path| path.canonicalize().ok())
+                .collect()
+        };
+        Ok(Inputs {
+            collected,
+            named: existing(std::path::Path::is_file),
+            directories: existing(std::path::Path::is_dir),
+        })
+    }
+
+    /// Every tt source the inputs reach, canonical.
+    pub fn files(&self) -> &[PathBuf] {
+        &self.collected
+    }
+
+    /// The files the inputs name directly, canonical: roots by request.
+    pub fn named(&self) -> &[PathBuf] {
+        &self.named
+    }
+}
 
 /// Process-wide entry point: toolchain discovery and project creation.
 #[derive(Debug, Default)]
@@ -82,6 +140,8 @@ pub struct Engine {
     /// The `node` binary that runs the TypeScript host, or `None` for the
     /// `node` on PATH.
     node: Option<PathBuf>,
+    /// The open documents every project this engine opens reads through.
+    documents: documents::Documents,
 }
 
 /// How a project is opened, beside its inputs.
@@ -101,7 +161,10 @@ impl Engine {
     /// `node` when `None`). Nothing is started until a project's first
     /// question.
     pub fn new(node: Option<PathBuf>) -> Engine {
-        Engine { node }
+        Engine {
+            node,
+            documents: documents::Documents::default(),
+        }
     }
 
     /// Opens the project `inputs` belong to.
@@ -120,25 +183,20 @@ impl Engine {
         inputs: &[String],
         options: &ProjectOptions,
     ) -> Result<Project, String> {
-        let collected = match project::collect_tt(inputs) {
-            Ok(files) if files.is_empty() => return Err("no .tt or .ttx sources found".to_string()),
-            Ok(files) => files,
-            Err(e) => return Err(e.to_string()),
-        };
-        let (tsconfig, root) = identity_of(&collected, options);
-        let mut project = self.open_collected(collected, tsconfig, root, options)?;
-        project.input_roots = inputs
-            .iter()
-            .map(PathBuf::from)
-            .filter(|path| path.is_dir())
-            .filter_map(|path| path.canonicalize().ok())
-            .collect();
-        project.named = inputs
-            .iter()
-            .map(PathBuf::from)
-            .filter(|path| path.is_file())
-            .filter_map(|path| path.canonicalize().ok())
-            .collect();
+        self.open_inputs(&Inputs::collect(inputs)?, options)
+    }
+
+    /// Opens the project collected `inputs` belong to, as
+    /// [`Engine::open_project`] does.
+    pub fn open_inputs(
+        &self,
+        inputs: &Inputs,
+        options: &ProjectOptions,
+    ) -> Result<Project, String> {
+        let (tsconfig, root) = identity_of(&inputs.collected, options);
+        let mut project = self.open_collected(inputs.collected.clone(), tsconfig, root, options)?;
+        project.input_roots = inputs.directories.clone();
+        project.named = inputs.named.clone();
         Ok(project)
     }
 
@@ -199,7 +257,11 @@ impl Engine {
         // No toolchain is not "no project": the tt layer answers without
         // one, and the missing backend is carried as the typed layer's
         // failure instead ([`Checked::backend_error`]).
-        let backend = NativeBackend::new(self.node.clone(), &root);
+        let backend =
+            NativeBackend::new(self.node.clone(), &root).map(|backend| match &options.out_dir {
+                Some(dir) => backend.excluding_output(paths::prospective(dir)),
+                None => backend,
+            });
         // With a configuration the project's own `include` decides which
         // hand-written files are in the program; without one, they have to
         // be listed or a `.ts` nothing imports is never checked.
@@ -210,7 +272,7 @@ impl Engine {
                     .unwrap_or_default()
             }
         };
-        Ok(Project::new(
+        let mut project = Project::new(
             root,
             tsconfig,
             options.out_dir.clone(),
@@ -218,7 +280,10 @@ impl Engine {
             initial,
             sources,
             backend,
-        ))
+        );
+        project.overlays = self.documents.clone();
+        project.discovers_config = options.tsconfig.is_none();
+        Ok(project)
     }
 
     /// The identity `inputs` resolve to — the `(tsconfig, root)` pair a

@@ -1,0 +1,2 @@
+forTest(2) => 1 | receiver {"factor":3}; risky 2
+forTest(7) => 1 | receiver {"factor":3}; risky 7

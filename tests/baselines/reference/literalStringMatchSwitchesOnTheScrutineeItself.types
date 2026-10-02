@@ -1,0 +1,4 @@
+=== literalStringMatchSwitchesOnTheScrutineeItself.tt ===
+const label = match (dir) {
+>label : const label: string
+

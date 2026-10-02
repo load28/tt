@@ -1,0 +1,3 @@
+constructorBody({"kind":"Num","value":1}) => 1 | 
+constructorBody({"kind":"Neg","value":-2}) => threw Cannot read properties of undefined (reading 'kind') | 
+constructorBody({"kind":"Word","text":"w"}) => threw diverged | 

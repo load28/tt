@@ -1,0 +1,14 @@
+//// [plainTypescriptBindingsStayMutable1.tt] ////
+const x = { a: 1 };
+x.a = 2;
+let y = { a: 1 };
+y.a = 2;
+y = { a: 3 };
+
+
+//// [plainTypescriptBindingsStayMutable1.ts]
+const x = { a: 1 };
+x.a = 2;
+let y = { a: 1 };
+y.a = 2;
+y = { a: 3 };

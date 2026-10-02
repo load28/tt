@@ -1,0 +1,39 @@
+=== aMatchCoversItsDeclaredCasesWhateverNarrowingRemoved.tt ===
+variant Shape { Circle(r: number), Rect(w: number) }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>r : (property) r: number
+>Rect : (property) Rect: (w: number) => Shape
+>w : (property) w: number
+export function area(s: Shape): number {
+>area : function area(s: Shape): number
+>s : (parameter) s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>   }
+  if (s.kind === "Rect") return 0;
+>s : (parameter) s: Shape
+>kind : (property) kind: "Circle" | "Rect"
+  return match (s) { Circle(r) => r };
+>s : (parameter) s: {
+>       kind: "Circle";
+>       r: number;
+>   }
+>r : const r: number
+>r : const r: number
+export function literal(n: 1 | 2): string {
+>literal : function literal(n: 1 | 2): string
+>n : (parameter) n: 1 | 2
+  return match (n) { 1 => "one" };
+>n : (parameter) n: 1 | 2
+

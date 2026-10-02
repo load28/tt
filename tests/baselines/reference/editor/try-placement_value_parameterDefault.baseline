@@ -1,0 +1,11 @@
+=== diagnostics main.tt ===
+diagnostics: 3 diagnostic(s)
+  1:10-1:14 "note" hint TS6133: 'note' is declared but its value is never read. [unnecessary]
+  1:16-1:20 "read" hint TS6133: 'read' is declared but its value is never read. [unnecessary]
+  4:16-4:21 "input" hint TS6133: 'input' is declared but its value is never read. [unnecessary]
+published: 4 diagnostic(s)
+  1:10-1:14 "note" hint TS6133 (ts): 'note' is declared but its value is never read. [unnecessary]
+  1:16-1:20 "read" hint TS6133 (ts): 'read' is declared but its value is never read. [unnecessary]
+  4:16-4:21 "input" hint TS6133 (ts): 'input' is declared but its value is never read. [unnecessary]
+  5:35-5:67 "try read(note(\"operand\", input))" error try-placement (ttc): `try` cannot be used in a parameter initializer — this TypeScript control-flow boundary has no statement position for its `Err` propagation
+

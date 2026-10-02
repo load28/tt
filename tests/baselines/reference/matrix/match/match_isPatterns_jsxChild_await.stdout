@@ -1,0 +1,4 @@
+jsxChild({}) => "<p>range</p>" | await; range "range"
+jsxChild({}) => "<p>1</p>" | await; type 1
+jsxChild({}) => "<p>plain</p>" | await; error "plain"
+jsxChild("text") => "<p></p>" | await; other null

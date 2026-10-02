@@ -1,0 +1,2 @@
+forOfBody(4) => [[{"kind":"kind","value":4},{"kind":"other"}],[{"kind":"kind","value":4},{"kind":"other"}]] | round 0; await; round 1; await
+forOfBody(9) => [[{"kind":"kind","value":9},{"kind":"other"}],[{"kind":"kind","value":9},{"kind":"other"}]] | round 0; await; round 1; await

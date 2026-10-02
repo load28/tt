@@ -1,0 +1,2 @@
+jsxComponentProp(3) => "<Show '***6'>" | operand 3; double 6; finally 0
+jsxComponentProp(12) => "<Show '**24'>" | operand 12; double 24; finally 0

@@ -1,0 +1,32 @@
+=== hover /*kind*/ unfinishedIfLet.tt:6:12 ===
+  |   return b.kind;
+  |            ^ /*kind*/
+hover: 6:12-6:16 "kind"
+    (property) kind: "None" | "Some"
+ttSymbol: null
+
+=== completions /*later*/ unfinishedIfLet.tt:8:43 ===
+  | export function g(n: number) { return n.toFixed(); }
+  |                                           ^ /*later*/
+completion: 6 item(s), member true, probe no
+  toExponential (Method, 11)
+  toFixed (Method, 11)
+  toLocaleString (Method, 11)
+  toPrecision (Method, 11)
+  toString (Method, 11)
+  valueOf (Method, 11)
+ttCompletions: pattern false, member {"receiver":"n"}
+patternCompletions: null
+editor completion: 6 item(s)
+  toExponential (Method, 211)
+  toFixed (Method, 211)
+  toLocaleString (Method, 211)
+  toPrecision (Method, 211)
+  toString (Method, 211)
+  valueOf (Method, 211)
+
+=== diagnostics unfinishedIfLet.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  4:3-4:5 "if" error stray-if-let (ttc): `if let` could not be parsed here
+

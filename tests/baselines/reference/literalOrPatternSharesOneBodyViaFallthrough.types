@@ -1,0 +1,4 @@
+=== literalOrPatternSharesOneBodyViaFallthrough.tt ===
+const kind = match (code) {
+>kind : const kind: string
+

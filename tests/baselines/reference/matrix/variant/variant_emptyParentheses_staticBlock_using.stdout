@@ -1,0 +1,2 @@
+staticBlock(4) => [{"kind":"Now"},{"kind":"Later","at":4}] | open res; operand 4; dispose res
+staticBlock(9) => [{"kind":"Now"},{"kind":"Later","at":9}] | open res; operand 9; dispose res

@@ -1,0 +1,19 @@
+//// [runtimeResultBlockWithAwaitResolvesToAResult.tt] 17 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:12 -> 2:9 len 6  "<T, E>"
+2:12 -> 6:7 len 6  "<T, E>"
+2:12 -> 7:8 len 6  "<T, E>"
+2:31 -> 3:26 len 1  "T"
+2:31 -> 6:21 len 1  "T"
+2:46 -> 4:27 len 1  "E"
+2:46 -> 7:22 len 1  "E"
+2:50 -> 8:3 len 164  "\n\nconst fetchNum = async (n: number): Promise<Re"...
+8:9 -> 21:11 len 1  "x"
+8:17 -> 16:20 len 17  "await fetchNum(a)"
+8:35 -> 21:28 len 3  "\n  "
+9:9 -> 27:9 len 1  "y"
+9:17 -> 22:18 len 17  "await fetchNum(b)"
+9:35 -> 27:26 len 3  "\n  "
+10:10 -> 29:44 len 5  "x + y"
+11:2 -> 34:2 len 130  ";\n\ntotal(2, 3).then((r) => console.log(JSON.stri"...
+

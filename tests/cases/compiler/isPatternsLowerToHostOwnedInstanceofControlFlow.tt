@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_01.rs::is_patterns_lower_to_host_owned_instanceof_control_flow
+const msg = match (err) {
+is SyntaxError { message } if message.length > 0 => `syntax: ${message}`,
+is RangeError | is TypeError => "bad value",
+is Error { message: detail } => detail,
+_ => String(err),
+};

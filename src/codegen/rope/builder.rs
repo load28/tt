@@ -99,6 +99,15 @@ impl<'a> Rope<'a> {
         });
     }
 
+    /// Notes that the glue pushed next is written for the source construct
+    /// part at `src` ([`MarkKind::SourcePoint`]).
+    pub(crate) fn push_source_point(&mut self, src: usize) {
+        self.pieces.push(Piece::Mark {
+            src,
+            kind: MarkKind::SourcePoint,
+        });
+    }
+
     /// Notes that the next thing pushed is the receiver expression of the
     /// nested pattern whose tag starts at `src` — the one place a checker
     /// can be asked what that payload's type admits.
@@ -115,6 +124,39 @@ impl<'a> Rope<'a> {
         self.pieces.push(Piece::Mark {
             src: 0,
             kind: MarkKind::ContextualSlot,
+        });
+        self.push_lit(";");
+    }
+
+    /// Declares storage for the index of the arm a dispatch selects.
+    pub(crate) fn push_selector_declaration(&mut self, name: &str) {
+        self.push_lit(format!("let {name}"));
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::SelectorSlot,
+        });
+        self.push_lit(";");
+    }
+
+    pub(crate) fn push_asserted_declaration(&mut self, name: &str, annotation: String) {
+        self.push_lit(format!("let {name}"));
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::ContextualSlot,
+        });
+        self.push_lit(annotation);
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::AssertedAnnotationEnd,
+        });
+        self.push_lit(";");
+    }
+
+    pub(crate) fn push_operand_declaration(&mut self, name: &str) {
+        self.push_lit(format!("let {name}"));
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::OperandSlot,
         });
         self.push_lit(";");
     }
@@ -169,6 +211,20 @@ impl<'a> Rope<'a> {
         self.pieces.push(Piece::Mark {
             src: src_end,
             kind: MarkKind::DeclaredNameEnd,
+        });
+    }
+
+    pub(crate) fn push_destructured_list_start(&mut self, src: usize) {
+        self.pieces.push(Piece::Mark {
+            src,
+            kind: MarkKind::DestructuredListStart,
+        });
+    }
+
+    pub(crate) fn push_destructured_list_end(&mut self, src_end: usize) {
+        self.pieces.push(Piece::Mark {
+            src: src_end,
+            kind: MarkKind::DestructuredListEnd,
         });
     }
 
@@ -242,10 +298,12 @@ impl<'a> Rope<'a> {
         }
     }
 
-    /// Inserts `text` after the leading top-level source pieces that print
-    /// only bytes before `at`, splitting the piece that straddles `at`, so
-    /// `text` precedes every piece written for source at or after `at`,
-    /// generated glue included.
+    /// Inserts `declarations` after the leading top-level source pieces that
+    /// print only bytes before `at`, splitting the piece that straddles
+    /// `at`, so they precede every piece written for source at or after
+    /// `at`, generated glue included. Each declaration is its own
+    /// [`crate::InsertedGlue`]: text inserted between two of them stands
+    /// at `at`, text inserted inside one changes it.
     ///
     /// The one thing codegen cannot know while emitting is what the
     /// emission will *need* — a pipeline helper's import is decided by the
@@ -256,9 +314,17 @@ impl<'a> Rope<'a> {
     /// Splitting a pass-through piece in two keeps both halves pointing at
     /// the bytes they always did, so the emission still covers the source
     /// exactly once and still in order.
-    pub(crate) fn insert_lit_at_source(&mut self, at: usize, text: impl Into<Cow<'a, str>>) {
-        let text = text.into();
-        if text.is_empty() {
+    pub(crate) fn insert_declarations_at_source<T: Into<Cow<'a, str>>>(
+        &mut self,
+        at: usize,
+        declarations: impl IntoIterator<Item = T>,
+    ) {
+        let declarations: Vec<Cow<'a, str>> = declarations
+            .into_iter()
+            .map(Into::into)
+            .filter(|text| !text.is_empty())
+            .collect();
+        if declarations.is_empty() {
             return;
         }
         let mut index = 0;
@@ -273,9 +339,27 @@ impl<'a> Rope<'a> {
             }
             break;
         }
-        self.len += text.len();
+        self.len += declarations.iter().map(|text| text.len()).sum::<usize>();
+        let inserted: Vec<Piece<'a>> = declarations
+            .into_iter()
+            .flat_map(|text| {
+                [
+                    Piece::Mark {
+                        src: at,
+                        kind: MarkKind::InsertedStart,
+                    },
+                    Piece::Lit(text),
+                    Piece::Mark {
+                        src: at,
+                        kind: MarkKind::InsertedEnd,
+                    },
+                ]
+            })
+            .collect();
         match split {
-            None => self.pieces.insert(index, Piece::Lit(text)),
+            None => {
+                self.pieces.splice(index..index, inserted);
+            }
             Some(cut) => {
                 let Piece::Src { text: whole, src } = self.pieces[index] else {
                     unreachable!("the piece was matched as a source piece")
@@ -291,7 +375,7 @@ impl<'a> Rope<'a> {
                         src: src + cut,
                     },
                 );
-                self.pieces.insert(index + 1, Piece::Lit(text));
+                self.pieces.splice(index + 1..index + 1, inserted);
             }
         }
     }
@@ -306,7 +390,7 @@ impl<'a> Rope<'a> {
     /// is printed, and a caller inspecting text is deciding something the
     /// layout must not change.
     pub(crate) fn resolved_text(&self) -> Option<Cow<'_, str>> {
-        if self.pieces.iter().any(|piece| piece.is_break()) {
+        if !self.is_resolved() {
             return None;
         }
         let mut texts = self
@@ -325,6 +409,10 @@ impl<'a> Rope<'a> {
                 Some(Cow::Owned(out))
             }
         }
+    }
+
+    pub(crate) fn is_resolved(&self) -> bool {
+        !self.pieces.iter().any(|piece| piece.is_break())
     }
 
     pub(crate) fn ends_with_newline(&self) -> bool {
@@ -476,6 +564,7 @@ impl<'a> Rope<'a> {
         source_kind: SourceKind,
         boundaries: &[usize],
         preservation: &SourcePreservation,
+        governed: &[super::GovernedStatement],
     ) -> Flat {
         let mut target = TargetFile::from_rope(self, source.len());
         target.source = Some(source);
@@ -486,7 +575,7 @@ impl<'a> Rope<'a> {
         if let Err(error) = target.validate_source_preservation(preservation) {
             error.raise();
         }
-        target.print(crate::line_ending(source))
+        target.print(crate::line_ending(source), governed)
     }
 }
 
@@ -502,7 +591,15 @@ pub(crate) struct Flat {
     /// Explicit Result return values in source and emitted coordinates.
     pub result_return_temps: Vec<ResultReturnTemp>,
     pub contextual_slots: Vec<usize>,
+    pub selector_slots: Vec<usize>,
+    pub operand_slots: Vec<usize>,
+    pub asserted_slots: Vec<(usize, usize)>,
     pub generated_names: std::collections::HashSet<String>,
     pub declared_names: Vec<DeclaredName>,
     pub shared_bindings: Vec<SharedBinding>,
+    pub destructured_lists: Vec<crate::DestructuredList>,
+    pub inserted: Vec<crate::InsertedGlue>,
+    pub support_imports: Vec<crate::StdModule>,
+    pub commonjs: bool,
+    pub single_line_breaks: Vec<usize>,
 }

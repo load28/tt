@@ -1,5 +1,14 @@
 # TASK-483: Keep generated declarations of script files from colliding in the shared global scope
 
+> TASK-518 resolves the runtime residual named under Scope: `ttc` now writes
+> `tt/runtime.ts` only when an emitted output imports it, so a project of
+> scripts no longer gets an unused runtime file.
+>
+> TASK-527 reverses Decision 3's "modules keep ... the trailing function
+> declarations": a module now writes `$tt_show`, `$tt_raise`, and `$tt_expr`
+> with its prelude, and a module's prelude goes after the file-level pragmas
+> as a script's does.
+
 - **Status**: Complete
 - **Started**: 2026-09-28
 - **Completed**: 2026-09-28

@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryPreservesArgumentAndConditionalEvaluationOrder2.tt → $DIR/out/tryPreservesArgumentAndConditionalEvaluationOrder2.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'TResult'.
+ --> tryPreservesArgumentAndConditionalEvaluationOrder2.tt:1:25
+  |
+1 | function f(maybe: any): TResult<number, string> { return Result.Ok(maybe?.(first(), try second(), third())); }
+  |                         ^^^^^^^
+error[ts2304]: Cannot find name 'Result'.
+ --> tryPreservesArgumentAndConditionalEvaluationOrder2.tt:1:58
+  |
+1 | function f(maybe: any): TResult<number, string> { return Result.Ok(maybe?.(first(), try second(), third())); }
+  |                                                          ^^^^^^
+error[ts2304]: Cannot find name 'first'.
+ --> tryPreservesArgumentAndConditionalEvaluationOrder2.tt:1:76
+  |
+1 | function f(maybe: any): TResult<number, string> { return Result.Ok(maybe?.(first(), try second(), third())); }
+  |                                                                            ^^^^^
+error[ts2304]: Cannot find name 'second'.
+ --> tryPreservesArgumentAndConditionalEvaluationOrder2.tt:1:89
+  |
+1 | function f(maybe: any): TResult<number, string> { return Result.Ok(maybe?.(first(), try second(), third())); }
+  |                                                                                         ^^^^^^
+error[ts2304]: Cannot find name 'third'.
+ --> tryPreservesArgumentAndConditionalEvaluationOrder2.tt:1:99
+  |
+1 | function f(maybe: any): TResult<number, string> { return Result.Ok(maybe?.(first(), try second(), third())); }
+  |                                                                                                   ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryPreservesArgumentAndConditionalEvaluationOrder2.ts(1,25): error TS2304: Cannot find name 'TResult'.
+tryPreservesArgumentAndConditionalEvaluationOrder2.ts(4,19): error TS2304: Cannot find name 'first'.
+tryPreservesArgumentAndConditionalEvaluationOrder2.ts(6,18): error TS2304: Cannot find name 'second'.
+tryPreservesArgumentAndConditionalEvaluationOrder2.ts(11,35): error TS2304: Cannot find name 'third'.
+tryPreservesArgumentAndConditionalEvaluationOrder2.ts(16,8): error TS2304: Cannot find name 'Result'.

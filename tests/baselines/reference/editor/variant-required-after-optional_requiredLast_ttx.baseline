@@ -1,0 +1,5 @@
+=== diagnostics main.ttx ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  1:48-1:51 "url" error variant-required-after-optional (ttc): variant Request: case "Get" declares required field `url` after optional field `timeout`
+

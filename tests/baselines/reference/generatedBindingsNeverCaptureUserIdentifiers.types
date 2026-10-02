@@ -1,0 +1,152 @@
+=== generatedBindingsNeverCaptureUserIdentifiers.tt ===
+variant O { S(v: number), N }
+>O : type O = {
+>       kind: "S";
+>       v: number;
+>   } | {
+>       kind: "N";
+>   }
+>S : (property) S: (v: number) => O
+>v : (property) v: number
+>N : (property) N: {
+>       readonly kind: "N";
+>   }
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const Ok = <T,>(value: T): R<T> => ({ kind: "Ok", value });
+>Ok : const Ok: <T>(value: T) => R<T>
+>T : (type parameter) T in <T>(value: T): R<T>
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(value: T): R<T>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in <T>(value: T): R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+const $tt_m = "m";
+>$tt_m : const $tt_m: "m"
+const $tt_m_1 = "m1";
+>$tt_m_1 : const $tt_m_1: "m1"
+const $tt_t0 = "t0";
+>$tt_t0 : const $tt_t0: "t0"
+const $tt_ap = "ap";
+>$tt_ap : const $tt_ap: "ap"
+const $tt_fl = "fl";
+>$tt_fl : const $tt_fl: "fl"
+const $tt_v = "v";
+>$tt_v : const $tt_v: "v"
+const $tt_r = "r";
+>$tt_r : const $tt_r: "r"
+const $tt_k = "k";
+>$tt_k : const $tt_k: "k"
+const obj = { tag: "o", add(n: number) { return n + this.tag + $tt_r + $tt_k + $tt_v; } };
+>obj : const obj: {
+>       tag: string;
+>       add(n: number): string;
+>   }
+>tag : (property) tag: string
+>add : (method) add(n: number): string
+>n : (parameter) n: number
+>n : (parameter) n: number
+>tag : (property) tag: string
+>$tt_r : const $tt_r: "r"
+>$tt_k : const $tt_k: "k"
+>$tt_v : const $tt_v: "v"
+const key = "add" as const;
+>key : const key: "add"
+>const : type const = "add"
+const r = match (O.S(1)) { S(v) => v + $tt_m + $tt_m_1, N => "" };
+>r : const r: string
+>O : const O: {
+>       S: (v: number) => O;
+>       N: {
+>           readonly kind: "N";
+>       };
+>   }
+>S : (property) S: (v: number) => O
+>v : const v: number
+>v : const v: number
+>$tt_m : const $tt_m: "m"
+>$tt_m_1 : const $tt_m_1: "m1"
+function f(): R<string> { const a = try Ok(2); return Ok(a + $tt_t0); }
+>f : function f(): R<string>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>a : const a: number
+>Ok : const Ok: <number>(value: number) => R<number>
+>Ok : const Ok: <string>(value: string) => R<string>
+>a : const a: number
+>$tt_t0 : const $tt_t0: "t0"
+const xs = [1].map(x => x |> String);
+>xs : const xs: string[]
+>map : (method) Array<number>.map<string>(callbackfn: (value: number, index: number, array: number[]) => string, thisArg?: any): string[]
+>x : (parameter) x: number
+>x : (parameter) x: number
+>String : var String: StringConstructor
+const ys = [1].map(x => x |> obj.add);
+>ys : const ys: string[]
+>map : (method) Array<number>.map<string>(callbackfn: (value: number, index: number, array: number[]) => string, thisArg?: any): string[]
+>x : (parameter) x: number
+>x : (parameter) x: number
+>obj : const obj: {
+>       tag: string;
+>       add(n: number): string;
+>   }
+>add : (method) add(n: number): string
+const zs = [1].map(x => x |> obj[key]);
+>zs : const zs: string[]
+>map : (method) Array<number>.map<string>(callbackfn: (value: number, index: number, array: number[]) => string, thisArg?: any): string[]
+>x : (parameter) x: number
+>x : (parameter) x: number
+>obj : const obj: {
+>       tag: string;
+>       add(n: number): string;
+>   }
+>key : const key: "add"
+const g = flow |> ((n: number) => n + 1) |> .toFixed(1) |> Number |> obj.add;
+>g : const g: (n: number) => string
+>n : (parameter) n: number
+>n : (parameter) n: number
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+>Number : var Number: NumberConstructor
+>obj : const obj: {
+>       tag: string;
+>       add(n: number): string;
+>   }
+>add : (method) add(n: number): string
+console.log(r, JSON.stringify(f()), xs[0], ys[0], zs[0], g(1), $tt_ap, $tt_fl);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>r : const r: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>f : function f(): R<string>
+>xs : const xs: string[]
+>ys : const ys: string[]
+>zs : const zs: string[]
+>g : const g: (n: number) => string
+>$tt_ap : const $tt_ap: "ap"
+>$tt_fl : const $tt_fl: "fl"
+

@@ -1,0 +1,2 @@
+ifBranch(4) => [{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":4},{"kind":"Get","url":"c"},{"kind":"Head"}] | enter true; operand 4
+ifBranch(9) => [{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":9},{"kind":"Get","url":"c"},{"kind":"Head"}] | enter true; operand 9

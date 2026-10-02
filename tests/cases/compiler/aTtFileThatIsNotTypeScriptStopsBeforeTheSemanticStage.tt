@@ -1,0 +1,4 @@
+// @filename: b.tt
+export const y = (1;
+// @filename: a.tt
+export const x: number = "s";

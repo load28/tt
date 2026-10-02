@@ -1,0 +1,8 @@
+=== tryPlacementReportsTheOwningReason3.tt ===
+class C { static { const value = { item: try read() }; } }
+>C : class C
+>value : const value: {
+>       item: any;
+>   }
+>item : (property) item: any
+

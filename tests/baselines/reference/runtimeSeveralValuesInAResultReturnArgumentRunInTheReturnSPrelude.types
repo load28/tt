@@ -1,0 +1,322 @@
+=== runtimeSeveralValuesInAResultReturnArgumentRunInTheReturnSPrelude.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const trace: string[] = [];
+>trace : const trace: string[]
+function r(n: number): R {
+>r : function r(n: number): R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  trace.push("r" + n);
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+  return n > 0 ? { kind: "Ok", value: n } : { kind: "Err", error: "bad" + n };
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+>n : (parameter) n: number
+function pair(x: number, y: number): number { trace.push("pair"); return x * 10 + y; }
+>pair : function pair(x: number, y: number): number
+>x : (parameter) x: number
+>y : (parameter) y: number
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>x : (parameter) x: number
+>y : (parameter) y: number
+function id(n: number): number { return n; }
+>id : function id(n: number): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+variant K { A, B }
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function sum(x: number, y: number) { return result { return (try r(x)) + (try r(y)); }; }
+>sum : function sum(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>x : (parameter) x: number
+>y : (parameter) y: number
+>r : function r(n: number): R
+>x : (parameter) x: number
+>r : function r(n: number): R
+>y : (parameter) y: number
+function listed(x: number, y: number) { return result { return [try r(x), try r(y)]; }; }
+>listed : function listed(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number[];
+>   }
+>x : (parameter) x: number
+>y : (parameter) y: number
+>r : function r(n: number): R
+>x : (parameter) x: number
+>r : function r(n: number): R
+>y : (parameter) y: number
+function keyed(x: number, y: number) { return result { return { x: try r(x), y: try r(y) }; }; }
+>keyed : function keyed(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: {
+>           x: number;
+>           y: number;
+>       };
+>   }
+>x : (parameter) x: number
+>y : (parameter) y: number
+>x : (property) x: number
+>r : function r(n: number): R
+>x : (parameter) x: number
+>y : (property) y: number
+>r : function r(n: number): R
+>y : (parameter) y: number
+function called(x: number, y: number) { return result { return pair(try r(x), try r(y)); }; }
+>called : function called(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>x : (parameter) x: number
+>y : (parameter) y: number
+>pair : function pair(x: number, y: number): number
+>r : function r(n: number): R
+>x : (parameter) x: number
+>r : function r(n: number): R
+>y : (parameter) y: number
+function matched(k: K, y: number) { return result { return match (k) { A => 1, B => 2 } + (try r(y)); }; }
+>matched : function matched(k: K, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>k : (parameter) k: K
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>y : (parameter) y: number
+>k : (parameter) k: K
+>r : function r(n: number): R
+>y : (parameter) y: number
+function piped(x: number, y: number) { return result { return (x |> id) + (try r(y)); }; }
+>piped : function piped(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>x : (parameter) x: number
+>y : (parameter) y: number
+>x : (parameter) x: number
+>id : function id(n: number): number
+>r : function r(n: number): R
+>y : (parameter) y: number
+function chosen(x: number, y: number) { return result { return (try r(x)) > 1 ? (try r(y)) : 0; }; }
+>chosen : function chosen(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>x : (parameter) x: number
+>y : (parameter) y: number
+>r : function r(n: number): R
+>x : (parameter) x: number
+>r : function r(n: number): R
+>y : (parameter) y: number
+function guarded(c: boolean, x: number, y: number) {
+>guarded : function guarded(c: boolean, x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>c : (parameter) c: boolean
+>x : (parameter) x: number
+>y : (parameter) y: number
+  return result { if (c) return (try r(x)) + (try r(y)); return 0; };
+>c : (parameter) c: boolean
+>r : function r(n: number): R
+>x : (parameter) x: number
+>r : function r(n: number): R
+>y : (parameter) y: number
+console.log(JSON.stringify([sum(1, 2), sum(0, 2), sum(1, -1)]), JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>sum : function sum(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>sum : function sum(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>sum : function sum(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+console.log(JSON.stringify([listed(1, 2), keyed(3, 4), called(1, 2), called(-2, 1)]), JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>listed : function listed(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number[];
+>   }
+>keyed : function keyed(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: {
+>           x: number;
+>           y: number;
+>       };
+>   }
+>called : function called(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>called : function called(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+trace.length = 0;
+>trace : const trace: string[]
+>length : (property) Array<string>.length: number
+console.log(JSON.stringify([matched(K.B, 3), piped(4, 5), chosen(2, 7), chosen(1, 7), guarded(true, 1, 2), guarded(false, 1, 2)]), JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>matched : function matched(k: K, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>K : const K: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>piped : function piped(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>chosen : function chosen(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>chosen : function chosen(x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>guarded : function guarded(c: boolean, x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>guarded : function guarded(c: boolean, x: number, y: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+

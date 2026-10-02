@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aContextualThisTypeStillReachesTheArmValues1.tt → $DIR/out/aContextualThisTypeStillReachesTheArmValues1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2339]: Property 'k' does not exist on type '{ q: string; }'.
+ --> aContextualThisTypeStillReachesTheArmValues1.tt:5:64
+  |
+5 | const e: Methods = match (n) { 1 => ({ k: 1, m() { return this.k; } }), _ => ({ k: 2, m() { return 0; } }) };
+  |                                                                ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aContextualThisTypeStillReachesTheArmValues1.ts(24,43): error TS2339: Property 'k' does not exist on type '{ q: string; }'.

@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_09.rs::a_loop_body_value_still_lowers_to_owner_statements
+let n = 0;
+while (n < 3) { const v = match (n) { 0 => 1, _ => 0 }; n = n + v; }

@@ -1,0 +1,2 @@
+componentBody(3) => "<p>4</p>" | read 3; reassigned 4
+componentBody(-3) => "<p>diverged</p>" | read undefined

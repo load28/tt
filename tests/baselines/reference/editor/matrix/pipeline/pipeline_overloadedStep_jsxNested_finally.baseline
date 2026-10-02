@@ -1,0 +1,7 @@
+differences from pipeline_overloadedStep_jsxNested_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.ttx:5:74 ===
+  |     return <ul><li>{note("first", 1)}</li><li>{note("operand", input) |> shape |> .length}</li></ul>;
+  |                                                                          ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

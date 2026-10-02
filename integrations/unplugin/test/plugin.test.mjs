@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
-import { chmod, realpath, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, realpath, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join } from 'node:path'
 import test from 'node:test'
 
@@ -18,6 +18,39 @@ import {
 } from '../index.js'
 
 const compiler = process.env.TTC_BINARY
+
+/**
+ * esbuild's plugin API as a build drives the published esbuild adapter,
+ * through unplugin's own esbuild bridge: callbacks run in the order they
+ * were registered, a callback runs for its namespace (every namespace when
+ * it names none), and the first one that answers decides.
+ */
+async function esbuildHost(options = { compiler }) {
+  const callbacks = { resolve: [], load: [] }
+  const build = {
+    initialOptions: {},
+    onStart() {},
+    onEnd() {},
+    onDispose() {},
+    onResolve(filter, callback) { callbacks.resolve.push({ filter, callback }) },
+    onLoad(filter, callback) { callbacks.load.push({ filter, callback }) },
+    async resolve() { return { errors: [] } },
+  }
+  await esbuildPlugin(options).setup(build)
+  const ask = async (kind, args) => {
+    for (const { filter, callback } of callbacks[kind]) {
+      if (filter.namespace !== undefined && filter.namespace !== args.namespace) continue
+      if (!filter.filter.test(args.path)) continue
+      const result = await callback(args)
+      if (result !== undefined && result !== null) return result
+    }
+    return undefined
+  }
+  return {
+    resolve: (path, importer) => ask('resolve', { path, importer, namespace: 'file', kind: 'import-statement', resolveDir: dirname(importer) }),
+    load: (path, namespace) => ask('load', { path, namespace, suffix: '' }),
+  }
+}
 
 function context() {
   const watched = []
@@ -112,9 +145,14 @@ test('source map sources are anchored to the compiled file, honouring sourceRoot
   const fake = join(root, 'ttc.mjs')
   const map = { version: 3, sourceRoot: '../shared', sources: ['lib.tt', null], names: [], mappings: 'AAAA' }
   await writeFile(fake, `#!/usr/bin/env node
-const args = process.argv.slice(2);
-if (args[0] === "--dependencies") process.stdout.write(JSON.stringify([args[1]]));
-else process.stdout.write("export const a = 1;\\n//# sourceMappingURL=data:application/json;charset=utf-8;base64," + ${JSON.stringify(Buffer.from(JSON.stringify(map)).toString('base64'))} + "\\n");
+import { createInterface } from "node:readline";
+createInterface({ input: process.stdin }).on("line", (line) => {
+  const { id, method, params } = JSON.parse(line);
+  const result = method === "dependencies"
+    ? { files: [params.path], directories: [] }
+    : { code: "export const a = 1;\\n//# sourceMappingURL=data:application/json;charset=utf-8;base64," + ${JSON.stringify(Buffer.from(JSON.stringify(map)).toString('base64'))} + "\\n", messages: [] };
+  process.stdout.write(JSON.stringify({ id, result }) + "\\n");
+});
 `)
   await chmod(fake, 0o755)
   const plugin = unpluginFactory({ compiler: fake })
@@ -174,7 +212,10 @@ test('query-suffixed tt imports keep their query and the real file before it', a
   const compiled = await plugin.load.call(context(), workerFile)
   assert.match(compiled.code, /const reply/)
   assert.equal(plugin.esbuild.loader('', workerFile), 'ts')
-  assert.ok(plugin.esbuild.onLoadFilter.test(workerFile))
+  const esbuild = await esbuildHost()
+  const loaded = await esbuild.load(workerFile, '@openload28/unplugin-tt')
+  assert.match(loaded.contents, /const reply/)
+  assert.equal(loaded.loader, 'ts')
 
   for (const query of ['?worker', '?sharedworker', '?worker&inline', '?worker&url', '?raw', '?url', '?import&raw']) {
     assert.equal(plugin.resolveId(`./worker.tt${query}`, importer), null, query)
@@ -239,9 +280,147 @@ test('type-only dependencies invalidate cached modules even with HMR disabled', 
   const module = { id }
   const invalidated = []
   const graph = { getModuleById: key => key === id ? module : undefined, invalidateModule: module => invalidated.push(module) }
-  plugin.vite.configureServer({ config: { server: { hmr: false } }, environments: { client: { moduleGraph: graph } } })
+  plugin.vite.configureServer({ config: { root, server: { hmr: false } }, watcher: { add() {} }, environments: { client: { moduleGraph: graph } } })
   await writeFile(model, 'export variant State { Ready(value: number), Empty, Loading }')
   plugin.watchChange(dependency)
   assert.deepEqual(invalidated, [module])
   await assert.rejects(() => plugin.load.call(context(), id), /missing.*Loading/)
+})
+
+/**
+ * A compiler whose `dependencies` answer names `files` beside the module's
+ * own file and `directories`, and which compiles every module to one line.
+ */
+async function dependencyCompiler(root, files, directories) {
+  const fake = join(root, 'ttc.mjs')
+  await writeFile(fake, `#!/usr/bin/env node
+import { createInterface } from "node:readline";
+createInterface({ input: process.stdin }).on("line", (line) => {
+  const { id, method, params } = JSON.parse(line);
+  const result = method === "dependencies"
+    ? { files: [params.path, ...${JSON.stringify(files)}], directories: ${JSON.stringify(directories)} }
+    : { code: "export const a = 1;\\n", messages: [] };
+  process.stdout.write(JSON.stringify({ id, result }) + "\\n");
+});
+`)
+  await chmod(fake, 0o755)
+  return fake
+}
+
+test('dependency files and directories are registered as each host defines them', async () => {
+  const root = testDir('unplugin-tt-dependency-kinds-')
+  const file = join(root, 'src', 'main.tt')
+  const model = join(root, 'src', 'model.ts')
+  const outside = join(dirname(root), 'shared', 'types.ts')
+  const listed = join(root, 'src')
+  const fake = await dependencyCompiler(root, [model, outside], [root, listed])
+  const id = `${file}?lang.ts`
+
+  // Rollup, Rolldown, Vite's build and Farm: `addWatchFile` takes both.
+  const rollup = context()
+  await unpluginFactory({ compiler: fake }, { framework: 'rollup' }).load.call(rollup, id)
+  assert.deepEqual(rollup.watched, [file, model, outside, root, listed])
+
+  // webpack and Rspack: a directory is a context dependency.
+  for (const framework of ['webpack', 'rspack']) {
+    const contextDependencies = []
+    const webpack = {
+      ...context(),
+      getNativeBuildContext: () => ({ framework, loaderContext: { addContextDependency: (directory) => contextDependencies.push(directory) } }),
+    }
+    await unpluginFactory({ compiler: fake }, { framework }).load.call(webpack, id)
+    assert.deepEqual(webpack.watched, [file, model, outside], framework)
+    assert.deepEqual(contextDependencies, [root, listed], framework)
+  }
+
+  // Vite's dev server resolves what `addWatchFile` names as an import of
+  // the module, so a dependency goes to its watcher, and only when the
+  // watcher does not already cover it.
+  const added = []
+  const plugin = unpluginFactory({ compiler: fake }, { framework: 'vite' })
+  plugin.vite.configureServer({ config: { root }, watcher: { add: (paths) => added.push(...paths) } })
+  const dev = context()
+  await plugin.load.call(dev, id)
+  assert.deepEqual(dev.watched, [file])
+  assert.deepEqual(added, [outside])
+})
+
+test('an entry added to or removed from a listed directory invalidates the module', async () => {
+  const root = testDir('unplugin-tt-dependency-directories-')
+  const file = join(root, 'src', 'main.tt')
+  const listed = join(root, 'src')
+  const fake = await dependencyCompiler(root, [], [listed])
+  const plugin = unpluginFactory({ compiler: fake }, { framework: 'vite' })
+  const invalidated = []
+  const module = { id: `${file}?lang.ts` }
+  const graph = { getModuleById: (key) => (key === module.id ? module : undefined), invalidateModule: (found) => invalidated.push(found) }
+  plugin.vite.configureServer({ config: { root }, watcher: { add() {} }, environments: { client: { moduleGraph: graph } } })
+  await plugin.load.call(context(), module.id)
+
+  plugin.watchChange(join(listed, 'other.ts'), { event: 'update' })
+  plugin.watchChange(join(listed, 'nested', 'added.ts'), { event: 'create' })
+  assert.deepEqual(invalidated, [])
+  plugin.watchChange(join(listed, 'added.ts'), { event: 'create' })
+  plugin.watchChange(join(listed, 'removed.ts'), { event: 'delete' })
+  assert.deepEqual(invalidated, [module, module])
+})
+
+test('esbuild reports the compiler diagnostic and watches the source until it compiles', async () => {
+  assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
+  const root = testDir('unplugin-tt-esbuild-errors-')
+  const entry = join(root, 'entry.ts')
+  const file = join(root, 'bad.tt')
+  await writeFile(file, 'variant T { A, B }\ndeclare const t: T;\nexport const x = match (t) { A => 1 };\n')
+
+  const esbuild = await esbuildHost()
+  const resolved = await esbuild.resolve('./bad.tt', entry)
+  assert.equal(resolved.path, `${file}?lang.ts`)
+  const failed = await esbuild.load(resolved.path, resolved.namespace)
+  assert.ok(failed, 'no callback answered the load')
+  assert.equal(failed.contents, undefined)
+  assert.match(failed.errors[0].text, /error\[match-not-exhaustive\][\s\S]*missing "B"/)
+  assert.ok(failed.watchFiles.includes(file), 'a failed load must still watch its source')
+
+  await writeFile(file, 'variant T { A, B }\ndeclare const t: T;\nexport const x = match (t) { A => 1, B => 2 };\n')
+  const compiled = await esbuild.load(resolved.path, resolved.namespace)
+  assert.equal(compiled.errors, undefined)
+  assert.equal(compiled.loader, 'ts')
+  assert.equal(compiled.resolveDir, root)
+  assert.ok(compiled.watchFiles.includes(file))
+  assert.ok(Array.isArray(compiled.watchDirs))
+  const map = JSON.parse(Buffer.from(/sourceMappingURL=data:application\/json;charset=utf-8;base64,(\S+)/.exec(compiled.contents)[1], 'base64').toString('utf8'))
+  assert.deepEqual(map.sources, [file])
+
+  const std = await esbuild.load('virtual:unplugin-tt/std/result.ts', '@openload28/unplugin-tt')
+  assert.match(std.contents, /export const Ok/)
+})
+
+test('esbuild watches the directories a module listed as directories', async () => {
+  const root = testDir('unplugin-tt-esbuild-directories-')
+  const file = join(root, 'src', 'main.tt')
+  const model = join(root, 'src', 'model.ts')
+  const listed = join(root, 'src')
+  const fake = await dependencyCompiler(root, [model], [listed])
+  const esbuild = await esbuildHost({ compiler: fake })
+  const loaded = await esbuild.load(`${file}?lang.ts`, '@openload28/unplugin-tt')
+  assert.deepEqual(loaded.watchFiles, [file, model])
+  assert.deepEqual(loaded.watchDirs, [listed])
+})
+
+test('a tt file under a directory whose name holds # or ? resolves and compiles', async () => {
+  assert.ok(compiler, 'TTC_BINARY must name the compiler under test')
+  const root = testDir('unplugin-tt-hash-path-')
+  const plugin = unpluginFactory({ compiler })
+  for (const directory of ['C#', 'what?', 'a#b?c']) {
+    const file = join(root, directory, 'm.tt')
+    const importer = join(root, directory, 'main.tt')
+    await mkdir(join(root, directory), { recursive: true })
+    await writeFile(file, 'export variant V { A, B }\n')
+    const host = { async resolve(source) { return { id: source, external: false } } }
+    assert.equal((await plugin.resolveId.call(host, file, undefined)).id, `${file}?lang.ts`)
+    assert.equal(plugin.resolveId('./m.tt?raw', importer), null)
+    assert.equal(plugin.resolveId('./m.tt', importer), `${file}?lang.ts`)
+    const output = await plugin.load.call(context(), `${file}?lang.ts`)
+    assert.match(output.code, /export type V =/)
+  }
 })

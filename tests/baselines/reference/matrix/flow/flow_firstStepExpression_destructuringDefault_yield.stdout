@@ -1,0 +1,2 @@
+destructuringDefault(3) => "6" | source {}; yield 3; add 6
+destructuringDefault(-4) => "-8" | source {}; yield -4; add -8

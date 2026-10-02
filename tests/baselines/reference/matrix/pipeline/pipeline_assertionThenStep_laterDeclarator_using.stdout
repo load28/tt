@@ -1,0 +1,2 @@
+laterDeclarator(123) => [1,3] | open res; before 1; operand 123; dispose res
+laterDeclarator(4) => [1,1] | open res; before 1; operand 4; dispose res

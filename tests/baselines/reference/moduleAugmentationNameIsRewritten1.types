@@ -1,0 +1,5 @@
+=== moduleAugmentationNameIsRewritten1.tt ===
+  interface Token { extra: number }
+>Token : interface Token
+>extra : (property) Token.extra: number
+

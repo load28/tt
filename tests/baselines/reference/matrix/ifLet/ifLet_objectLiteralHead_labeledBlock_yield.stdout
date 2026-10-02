@@ -1,0 +1,2 @@
+labeledBlock(6) => 6 | yield 6; some 6
+labeledBlock(9) => 9 | yield 9; some 9

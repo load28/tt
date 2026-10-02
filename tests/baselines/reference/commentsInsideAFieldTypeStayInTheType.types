@@ -1,0 +1,9 @@
+=== commentsInsideAFieldTypeStayInTheType.tt ===
+variant Size { Px(value: /* css */ number | /* auto */ "auto") }
+>Size : type Size = {
+>       kind: "Px";
+>       value: number | "auto";
+>   }
+>Px : (property) Px: (value: number | "auto") => Size
+>value : (property) value: number | "auto"
+

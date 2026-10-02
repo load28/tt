@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valCapabilityCheckOnlyCoversResolvableCallees1.tt → $DIR/out/valCapabilityCheckOnlyCoversResolvableCallees1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2307]: Cannot find module './io.js' or its corresponding type declarations.
+ --> valCapabilityCheckOnlyCoversResolvableCallees1.tt:1:22
+  |
+1 | import { save } from "./io.js";
+  |                      ^^^^^^^^^
+error[ts2304]: Cannot find name 'User'.
+ --> valCapabilityCheckOnlyCoversResolvableCallees1.tt:2:22
+  |
+2 | function f(val user: User) {
+  |                      ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valCapabilityCheckOnlyCoversResolvableCallees1.ts(1,22): error TS2307: Cannot find module './io.js' or its corresponding type declarations.
+valCapabilityCheckOnlyCoversResolvableCallees1.ts(2,18): error TS2304: Cannot find name 'User'.

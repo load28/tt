@@ -1,0 +1,4 @@
+whileTest({}) => 1 | yield {}; range "range"
+whileTest({}) => 1 | yield {}; type 1
+whileTest({}) => 1 | yield {}; error "plain"
+whileTest("text") => 0 | yield "text"; other null

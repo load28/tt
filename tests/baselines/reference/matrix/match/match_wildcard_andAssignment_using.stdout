@@ -1,0 +1,4 @@
+andAssignment({"kind":"Num","value":4}) => 0 | open res; flip true; target {"value":0}; dispose res
+andAssignment({"kind":"Neg","value":-3}) => -1 | open res; flip false; target {"value":"kept"}; operand {"kind":"Neg","value":-3}; other -1; dispose res
+andAssignment({"kind":"Word","text":"hi"}) => 0 | open res; flip true; target {"value":0}; dispose res
+andAssignment({"kind":"End"}) => -1 | open res; flip false; target {"value":"kept"}; operand {"kind":"End"}; other -1; dispose res

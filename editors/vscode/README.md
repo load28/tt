@@ -64,8 +64,10 @@ for the content-mapper setup.
 
 ## Language features
 
-- TypeScript/TSX-derived grammars, tt semantic tokens, Markdown/MDX tt fences,
-  and file icons supported by the active icon theme.
+- TypeScript/TSX-derived grammars, semantic highlighting (TypeScript's
+  classification of the source with tt's own over tt constructs; tt keywords
+  are colored like TypeScript's keywords), Markdown/MDX
+  tt fences, and file icons supported by the active icon theme.
 - Source-located tt and TypeScript diagnostics, including typed exhaustiveness
   and `val` checks. Quick fixes carry compiler-authored suggestions.
 - Completion for tt patterns, constructors, snippets, and TypeScript members;
@@ -78,6 +80,13 @@ Pattern completion is available while typing the first arm, later arms,
 tuple slots, and payload fields. `{`, `(`, `,`, and `|` can trigger pattern
 suggestions before a word is complete. Completed arm headers narrow visible
 variant candidates; wildcard arms and unfinished siblings do not remove them.
+An arm is completed with what the scrutinee's type admits: the literals of a
+literal union and the tags of a `kind` union, hand-written or declared with
+`variant`, as TypeScript completes a `case` label.
+TypeScript's own trigger characters (`.`, quotes, `/`, `@`, `<`, `#`, space,
+`*`) open completion as they do in a `.ts` file: a module path after `/`, a
+JSDoc tag after `@`, a JSX element after `<` in `.ttx`. Typing `<` also opens
+signature help for type arguments.
 When no header identifies a variant, all compatible visible cases remain
 available rather than selecting an arbitrary declaration. Ambiguous field/tag
 names share one insertion candidate with their declaration details retained.

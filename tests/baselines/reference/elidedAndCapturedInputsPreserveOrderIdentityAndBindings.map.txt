@@ -1,0 +1,27 @@
+//// [elidedAndCapturedInputsPreserveOrderIdentityAndBindings.tt] 25 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:30 -> 21:29 len 6  "number"
+2:30 -> 24:18 len 6  "number"
+2:46 -> 26:3 len 261  "\ntype Item = {kind: \"item\"; run: () => number};\n"...
+10:3 -> 52:3 len 58  "const items: Item[] = [{kind: \"item\", run: () =>"...
+10:68 -> 36:19 len 22  "mark(\"subject\", state)"
+11:11 -> 39:17 len 5  "value"
+11:21 -> 40:18 len 83  "(trace.push(\"arm\"), shared = value, {kind: \"item"...
+12:14 -> 44:18 len 39  "({kind: \"item\" as const, run: () => 0})"
+13:4 -> 52:67 len 245  "];\n  console.log(`${items[0].run()}:${items[1].r"...
+19:1 -> 78:1 len 18  "const completed = "
+19:19 -> 59:17 len 4  "pair"
+19:24 -> 60:17 len 42  "{kind: \"item\" as const, run: () => shared}"
+19:75 -> 62:17 len 31  "mark(\"subject\", State.Ready(4))"
+20:9 -> 65:15 len 5  "value"
+20:19 -> 66:31 len 74  "(trace.push(\"arm\"), shared = value, {kind: \"item"...
+21:12 -> 70:31 len 30  "({kind: \"item\", run: () => 0})"
+22:3 -> 78:25 len 154  ";\nconsole.log(completed, trace.join(\",\"));\ntrace"...
+26:1 -> 82:17 len 4  "pair"
+26:6 -> 83:17 len 11  "effectful()"
+26:26 -> 85:17 len 35  "mark<State>(\"subject\", State.Empty)"
+27:9 -> 88:15 len 5  "value"
+27:19 -> 89:22 len 34  "({kind: \"item\", run: () => value})"
+28:12 -> 93:22 len 30  "({kind: \"item\", run: () => 0})"
+29:4 -> 101:1 len 43  "\nconsole.log(trace.join(\",\"));\n\nexport {};\n"
+

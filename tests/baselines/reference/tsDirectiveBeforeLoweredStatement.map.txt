@@ -1,0 +1,59 @@
+//// [tsDirectiveBeforeLoweredStatement.tt] 57 mapping(s)
+1:1 -> 19:1 len 590  "// A `// @ts-expect-error` or `// @ts-ignore` co"...
+10:18 -> 29:21 len 6  "number"
+10:18 -> 32:10 len 6  "number"
+10:30 -> 34:3 len 92  "\nfunction matchValue(s: S) {\n  // @ts-expect-err"...
+13:3 -> 37:241 len 18  "const x: number = "
+13:28 -> 37:39 len 1  "s"
+13:35 -> 37:84 len 1  "n"
+13:41 -> 37:106 len 7  "\"a\" + n"
+13:55 -> 37:145 len 3  "\"b\""
+13:60 -> 37:265 len 64  ";\n  return x;\n}\nfunction matchOperand(s: S) {\n  "...
+18:3 -> 42:225 len 18  "const y: string = "
+18:28 -> 42:31 len 1  "s"
+18:35 -> 42:76 len 1  "n"
+18:41 -> 42:98 len 1  "n"
+18:49 -> 42:131 len 1  "0"
+18:52 -> 42:249 len 156  " + 1;\n  return y;\n}\nfunction tryValue(r: TResult"...
+23:9 -> 47:72 len 9  "z: number"
+23:25 -> 47:18 len 1  "r"
+23:27 -> 47:97 len 179  "\n  return Result.Ok(z);\n}\nfunction tryOperand(r:"...
+28:9 -> 52:77 len 1  "z"
+28:17 -> 52:18 len 6  "r(\"1\")"
+28:24 -> 52:94 len 137  "\n  return Result.Ok(z);\n}\nconst block = (r: TRes"...
+33:3 -> 57:192 len 18  "const w: number = "
+33:36 -> 57:110 len 1  "v"
+33:44 -> 57:40 len 1  "r"
+33:46 -> 57:127 len 1  " "
+33:54 -> 57:169 len 1  "v"
+33:58 -> 57:216 len 130  ".kind === \"Ok\" ? \"ok\" : 0;\n  return w;\n};\nfuncti"...
+38:11 -> 62:73 len 1  "n"
+38:14 -> 62:76 len 1  "m"
+38:19 -> 62:18 len 1  "s"
+38:28 -> 62:48 len 14  "return \"none\";"
+38:45 -> 62:89 len 138  " const t: string = m;\n  return t;\n}\nfunction lat"...
+43:3 -> 67:225 len 18  "const u: number = "
+43:28 -> 67:31 len 1  "s"
+44:7 -> 67:76 len 1  "n"
+44:13 -> 67:98 len 1  "n"
+45:10 -> 67:131 len 1  "0"
+46:4 -> 67:249 len 21  " + \"\";\n  return u;\n}\n"
+49:1 -> 88:1 len 55  "/** The documented value. */\nexport const docume"...
+50:34 -> 72:17 len 11  "S.A(2) as S"
+50:51 -> 75:15 len 1  "n"
+50:57 -> 76:16 len 1  "n"
+50:65 -> 80:16 len 1  "0"
+50:68 -> 89:33 len 2  ";\n"
+51:1 -> 94:1 len 69  "/**\n * The documented binding.\n */\n// a note aft"...
+55:9 -> 98:9 len 1  "n"
+55:12 -> 98:12 len 17  "documentedBinding"
+55:33 -> 90:16 len 11  "S.A(3) as S"
+55:52 -> 92:3 len 21  "throw new Error(\"B\");"
+55:76 -> 98:41 len 57  "\n// a plain comment stays above the generated st"...
+57:1 -> 118:1 len 21  "export const plain = "
+57:29 -> 102:17 len 8  "S.B as S"
+57:43 -> 105:15 len 1  "n"
+57:49 -> 106:16 len 1  "n"
+57:57 -> 110:16 len 2  "-1"
+57:61 -> 118:28 len 274  ";\nconsole.log(documented, documentedBinding, pla"...
+

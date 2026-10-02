@@ -1,0 +1,2 @@
+logicalAssignmentValue(4) => [7,7] | flip true; await; step 3; add 7
+logicalAssignmentValue(-1) => ["kept","kept"] | flip false

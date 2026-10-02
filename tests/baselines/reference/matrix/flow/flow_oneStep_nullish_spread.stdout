@@ -1,0 +1,2 @@
+nullish(7) => 14 | flip true; add 14
+nullish(1) => "set" | flip false; left "set"

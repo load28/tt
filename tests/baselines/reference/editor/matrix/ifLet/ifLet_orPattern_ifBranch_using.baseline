@@ -1,0 +1,12 @@
+differences from ifLet_orPattern_ifBranch_using at the questions listed in tests/editor-matrix-differences.txt
+
+=== rename /*bind*/ main.tt:8:16 ===
+  |     if let Num(value) | Neg(value) = note("operand", input) { seen = note("number", value); }
+  |                ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+
+=== definition /*use*/ main.tt:8:85 ===
+  |     if let Num(value) | Neg(value) = note("operand", input) { seen = note("number", value); }
+  |                                                                                     ^ /*use*/
+  tt only: main "value"
+

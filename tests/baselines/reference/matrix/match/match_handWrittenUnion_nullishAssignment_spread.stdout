@@ -1,0 +1,2 @@
+nullishAssignment({"kind":"Click","x":3}) => 3 | flip true; target {"value":null}; click 3
+nullishAssignment({"kind":"Key","key":"k"}) => "kept" | flip false; target {"value":"kept"}

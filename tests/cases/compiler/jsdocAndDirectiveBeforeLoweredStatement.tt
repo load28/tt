@@ -1,0 +1,27 @@
+// A directive above a JSDoc comment governs the JSDoc's line, where nothing
+// fails, so the statement below keeps its error. When the statement's
+// lowering writes generated statements and the JSDoc moves down to the
+// declaration it documents, the directive moves with it and still governs
+// the JSDoc's line rather than the first generated statement.
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+variant S { A(n: number), B }
+declare const s: S;
+// @ts-ignore -- governs the documentation line below, not the declaration
+/** The documented value. */
+export const ungoverned: number = match (s) { A(n) => "a" + n, B => 0 };
+export function ignored(r: (n: number) => TResult<number, string>): TResult<number, string> {
+  // @ts-ignore -- governs the documentation line below, not the declaration
+  /** The documented binding. */
+  const v = try r("x");
+  return Result.Ok(v);
+}
+export function expected(r: (n: number) => TResult<number, string>): TResult<number, string> {
+    // @ts-expect-error -- governs the indented documentation line, so it is unused
+    /** The indented documented binding. */
+  const w = try r("y");
+  return Result.Ok(w);
+}
+/** A directive below the JSDoc governs the statement's line. */
+// @ts-expect-error -- a string where a number is declared
+export const governed: number = match (s) { A(n) => "a" + n, B => "b" };

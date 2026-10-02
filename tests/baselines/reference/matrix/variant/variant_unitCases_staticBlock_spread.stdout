@@ -1,0 +1,2 @@
+staticBlock(4) => [{"kind":"North"},{"kind":"South"},4] | operand 4
+staticBlock(9) => [{"kind":"North"},{"kind":"South"},9] | operand 9

@@ -24,6 +24,11 @@ import { COMPILER, compilerAvailable, findTsgo } from "./toolchain";
 import { repoTestDir } from "../../../../../scripts/test-dirs.cjs";
 
 const SERVER = path.join(__dirname, "..", "server.js");
+/** The errors and warnings of a publish — what "the file is clean" means.
+ * Suggestions (an unused name, a deprecated call) are published beside
+ * them and are not problems. */
+const problems = (diagnostics: any[]) =>
+  diagnostics.filter((d) => d.severity === undefined || d.severity <= 2);
 const skip = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
 /** Answers that need the TypeScript language service. A skip must mean a
  * tool is missing, never that a feature quietly answered nothing — so the
@@ -46,7 +51,7 @@ for (const consumerKind of ["tt", "ttx"]) {
       const source = `import { value } from "./provider.${providerKind}";\nconst result: string = value;\nexport function identity(input) { return input; }\n`;
       const uri = pathToFileURL(consumer).toString();
       const client = connect();
-      const expect = (code?: string) => client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && (code ? p.diagnostics.some((d: any) => String(d.code) === code) : p.diagnostics.length === 0));
+      const expect = (code?: string) => client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && (code ? p.diagnostics.some((d: any) => String(d.code) === code) : problems(p.diagnostics).length === 0));
       const changed = (file: string, type: number) => client.notify("workspace/didChangeWatchedFiles", { changes: [{ uri: pathToFileURL(file).toString(), type }] });
       try {
         await client.request("initialize", { processId: process.pid, rootUri: pathToFileURL(dir).toString(), workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }], capabilities: {} });
@@ -110,7 +115,7 @@ for (const consumerKind of ["tt", "ttx"]) {
           uri: providerUri, languageId: providerKind === "ts" ? "typescript" : providerKind === "tsx" ? "typescriptreact" : providerKind,
           version: 1, text: original,
         } });
-        const clean = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.length === 0);
+        const clean = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && problems(p.diagnostics).length === 0);
         client.notify("textDocument/didOpen", { textDocument: { uri, languageId: consumerKind, version: 1, text: source } });
         await clean;
         const failed = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.some((d: any) => String(d.code) === "ts2322"));
@@ -118,7 +123,7 @@ for (const consumerKind of ["tt", "ttx"]) {
           textDocument: { uri: providerUri, version: 2 }, contentChanges: [{ text: "export const value: number = 42;\n" }],
         });
         assert.equal((await failed).version, 1, "consumer was never edited");
-        const cleared = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.length === 0);
+        const cleared = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && problems(p.diagnostics).length === 0);
         client.notify("textDocument/didClose", { textDocument: { uri: providerUri } });
         assert.equal((await cleared).version, 1, "closing reveals the disk dependency");
       } finally { client.stop(); }
@@ -409,12 +414,14 @@ interface Client {
 
 /** The framing an LSP client speaks: `Content-Length` headers over stdio. */
 interface ConnectOptions {
+  command?: [string, string[]];
   env?: NodeJS.ProcessEnv;
   configuration?: (item: { scopeUri?: string; section?: string }) => unknown;
 }
 
 function connect(server = SERVER, options: ConnectOptions = {}): Client {
-  const child: ChildProcess = spawn(process.execPath, [server, "--stdio"], {
+  const [command, args] = options.command ?? [process.execPath, [server, "--stdio"]];
+  const child: ChildProcess = spawn(command, args, {
     stdio: ["pipe", "pipe", "pipe"],
     // The LSP case lives in a temporary project, while the test contract is
     // against the compiler built from this checkout. Cover both supported
@@ -525,10 +532,17 @@ function connect(server = SERVER, options: ConnectOptions = {}): Client {
 const TRIGGER_CHARACTERS = [".", "(", "|", "{", ","];
 
 /** A server with `source` open as a tt-family document, ready to be asked. */
-async function open(source: string, languageId: "tt" | "ttx" = "tt") {
+async function open(
+  source: string,
+  languageId: "tt" | "ttx" = "tt",
+  siblings: Record<string, string> = {},
+) {
   const dir = repoTestDir("tt-server-test-");
   const file = path.join(dir, `main.${languageId}`);
   fs.writeFileSync(file, source);
+  for (const [name, text] of Object.entries(siblings)) {
+    fs.writeFileSync(path.join(dir, name), text);
+  }
   const uri = pathToFileURL(file).toString();
   const client = connect();
   await client.request("initialize", {
@@ -626,7 +640,7 @@ test(
       const mismatch = published.diagnostics.find(
         (diagnostic: any) => diagnostic.code === "ts2322",
       );
-      assert.equal(covered(TTX_EDITOR_SOURCE, mismatch.range), "label");
+      assert.equal(covered(TTX_EDITOR_SOURCE, mismatch.range), "bad");
 
       const semantic = await client.request("textDocument/semanticTokens/full", {
         textDocument: { uri },
@@ -634,6 +648,304 @@ test(
       assert.ok(semantic.result?.data?.length > 0, JSON.stringify(semantic.result));
     } finally {
       stop();
+    }
+  },
+);
+
+test(
+  "pattern completion offers what the scrutinee's type admits",
+  { skip: skipTyped, timeout },
+  async () => {
+    const source = [
+      "variant Shape { Circle(radius: number), Point }",
+      'type Dir = "north" | "south";',
+      'type K = { kind: "Alpha"; x: number } | { kind: "Beta" };',
+      "export function f(d: Dir, k: K) {",
+      '  const a = match (d) { "north" => 1, };',
+      "  const b = match (k) { Alpha => 1, };",
+      "  const c = match (k) { Alpha() => 1, _ => 0 };",
+      "  return [a, b, c];",
+      "}",
+      "",
+    ].join("\n");
+    const { completion, stop } = await open(source);
+    try {
+      const literal = await completion('"north" => 1, ');
+      assert.deepEqual(literal.labels.sort(), ['"north"', '"south"', "_"]);
+      const tags = await completion("Alpha => 1, ");
+      assert.deepEqual(tags.labels.sort(), ["Alpha", "Beta", "_"]);
+      const fields = await completion("Alpha(");
+      assert.deepEqual(fields.labels, ["x"]);
+    } finally {
+      stop();
+    }
+  },
+);
+
+const SUGGESTION_SOURCE = [
+  "/** @deprecated */",
+  "declare function old(): void;",
+  "export function run(): number {",
+  "  const unused = 1;",
+  "  old();",
+  "  return 0;",
+  "}",
+  'export const wrong: number = "x";',
+  "",
+].join("\n");
+
+test(
+  "unused and deprecated suggestions are published beside the type errors",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, uri, stop } = await open(SUGGESTION_SOURCE);
+    try {
+      const published = await client.waitFor(
+        "textDocument/publishDiagnostics",
+        (params) =>
+          params.uri === uri &&
+          params.diagnostics.some((diagnostic: any) => String(diagnostic.code).endsWith("2322")),
+      );
+      const seen = published.diagnostics.map((d: any) => [
+        covered(SUGGESTION_SOURCE, d.range),
+        d.severity,
+        d.tags ?? [],
+      ]);
+      assert.deepEqual(seen, [
+        ["unused", 4, [1]],
+        ["old", 4, [2]],
+        ["wrong", 1, []],
+      ]);
+    } finally {
+      stop();
+    }
+  },
+);
+
+const UNUSED_LIST_SOURCE = [
+  "variant S { A, B(x: number, y: string) }",
+  "export function run(s: S): number {",
+  "  return match (s) {",
+  "    A => 0,",
+  "    B(x, y) => 1,",
+  "  };",
+  "}",
+  'export const wrong: number = "x";',
+  "",
+].join("\n");
+
+test(
+  "a payload list whose bindings are all unused is faded whole",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, uri, stop } = await open(UNUSED_LIST_SOURCE);
+    try {
+      const published = await client.waitFor(
+        "textDocument/publishDiagnostics",
+        (params) =>
+          params.uri === uri &&
+          params.diagnostics.some((diagnostic: any) => String(diagnostic.code).endsWith("2322")),
+      );
+      const seen = published.diagnostics.map((d: any) => [
+        covered(UNUSED_LIST_SOURCE, d.range),
+        d.severity,
+        d.tags ?? [],
+      ]);
+      assert.deepEqual(seen, [
+        ["(x, y)", 4, [1]],
+        ["wrong", 1, []],
+      ]);
+    } finally {
+      stop();
+    }
+  },
+);
+
+const AUTO_IMPORT_SOURCE = [
+  "export const piped = 1 |> String;",
+  "export const value = help",
+].join("\n");
+
+test(
+  "accepting an auto-import completion adds the import to the tt source",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { completion, stop } = await open(AUTO_IMPORT_SOURCE, "tt", {
+      "util.ts": "export function helperFn(n: number): number { return n; }\n",
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", noEmit: true },
+        include: ["*"],
+      }),
+    });
+    try {
+      const { resolve } = await completion("value = help");
+      const resolved = await resolve("helperFn");
+      assert.deepEqual(resolved.additionalTextEdits, [
+        {
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+          newText: 'import { helperFn } from "./util";\n\n',
+        },
+      ]);
+    } finally {
+      stop();
+    }
+  },
+);
+
+test(
+  "each auto-import entry of a name exported by two modules imports from its own module",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, completion, stop } = await open("export const value = kkVal", "tt", {
+      "lib.ts": "export const kkValue = 1;\n",
+      "shapes.tt": "export const kkValue = 2;\n",
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", noEmit: true },
+        include: ["*"],
+      }),
+    });
+    try {
+      const { items } = await completion("value = kkVal");
+      const entries = items.filter((item) => item.label === "kkValue");
+      assert.equal(entries.length, 2, `entries: ${JSON.stringify(entries)}`);
+      const imports: string[] = [];
+      for (const entry of [...entries, ...entries.reverse()]) {
+        const resolved = (await client.request("completionItem/resolve", entry)).result;
+        imports.push(resolved.additionalTextEdits[0].newText);
+      }
+      assert.deepEqual(imports.slice(0, 2).sort(), [
+        'import { kkValue } from "./lib";\n\n',
+        'import { kkValue } from "./shapes.tt";\n\n',
+      ]);
+      assert.deepEqual(imports.slice(2), imports.slice(0, 2).reverse());
+    } finally {
+      stop();
+    }
+  },
+);
+
+test(
+  "the server advertises every trigger character TypeScript's server advertises",
+  { skip: skipTyped, timeout },
+  async () => {
+    const dir = repoTestDir("tt-trigger-characters-");
+    const initialize = {
+      processId: process.pid,
+      rootUri: pathToFileURL(dir).toString(),
+      workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }],
+      capabilities: {},
+    };
+    const typescript = connect(SERVER, { command: [findTsgo()!, ["--lsp", "--stdio"]] });
+    const tt = connect();
+    try {
+      const native = (await typescript.request("initialize", initialize)).result.capabilities;
+      const own = (await tt.request("initialize", initialize)).result.capabilities;
+      const missing = (theirs: string[] | undefined, ours: string[] | undefined) =>
+        (theirs ?? []).filter((character) => !(ours ?? []).includes(character));
+      assert.deepEqual(
+        missing(native.completionProvider.triggerCharacters, own.completionProvider.triggerCharacters),
+        [],
+      );
+      for (const character of ["(", "|", "{", ","]) {
+        assert.ok(own.completionProvider.triggerCharacters.includes(character), character);
+      }
+      assert.deepEqual(
+        missing(native.signatureHelpProvider.triggerCharacters, own.signatureHelpProvider.triggerCharacters),
+        [],
+      );
+      assert.deepEqual(
+        missing(
+          native.signatureHelpProvider.retriggerCharacters,
+          own.signatureHelpProvider.retriggerCharacters,
+        ),
+        [],
+      );
+    } finally {
+      typescript.stop();
+      tt.stop();
+    }
+  },
+);
+
+const TRIGGERED_SOURCE = [
+  'import { kkTt } from "./";',
+  'import { kkLib } from ".";',
+  "const q = 1;",
+  "",
+].join("\n");
+
+test(
+  "a TypeScript trigger character is answered as TypeScript answers it",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { client, uri, stop } = await open(TRIGGERED_SOURCE, "tt", {
+      "lib.ts": "export const kkLib = 1;\n",
+      "shapes.tt": "export const kkTt = 2;\n",
+      "tsconfig.json": JSON.stringify({
+        compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", noEmit: true },
+        include: ["*"],
+      }),
+    });
+    const triggered = async (line: number, character: number, trigger: string) => {
+      const response = await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: { line, character },
+        context: { triggerKind: 2, triggerCharacter: trigger },
+      });
+      const items = (Array.isArray(response.result) ? response.result : (response.result?.items ?? [])) as any[];
+      return items;
+    };
+    try {
+      const slash = await triggered(0, 'import { kkTt } from "./'.length, "/");
+      const labels = slash.map((item) => item.label);
+      assert.ok(labels.includes("lib"), `labels: ${labels}`);
+      assert.ok(labels.includes("shapes.tt"), `labels: ${labels}`);
+      assert.equal(slash.find((item) => item.label === "lib").detail, "lib.ts");
+      assert.equal(slash.find((item) => item.label === "shapes.tt").detail, "shapes.tt");
+      const dot = await triggered(1, 'import { kkLib } from ".'.length, ".");
+      assert.ok(dot.length > 0, "a `.` in a module specifier is answered");
+      const space = await triggered(2, "const q = ".length, " ");
+      assert.deepEqual(space.map((item) => item.label), []);
+      const help = await client.request("textDocument/signatureHelp", {
+        textDocument: { uri },
+        position: { line: 2, character: "const q = ".length },
+        context: { triggerKind: 2, triggerCharacter: "<", isRetrigger: false },
+      });
+      assert.equal(help.result, null);
+    } finally {
+      stop();
+    }
+  },
+);
+
+const ARM_BODY_SOURCE = [
+  "variant Shape { Circle(radius: number), Rect(width: number), Point }",
+  "export function g(s: Shape, extra: number) {",
+  "  return match (s) {",
+  "    Circle(radius) => radius,",
+  "    Rect(width) => ",
+  "  };",
+  "}",
+  "",
+].join("\n");
+
+test(
+  "the body of an arm written up to its arrow completes expressions",
+  { skip: skipTyped, timeout },
+  async () => {
+    const { labels } = await (async () => {
+      const { completion, stop } = await open(ARM_BODY_SOURCE);
+      try {
+        return await completion("Rect(width) => ");
+      } finally {
+        stop();
+      }
+    })();
+    for (const name of ["width", "extra", "s", "match"]) {
+      assert.ok(labels.includes(name), `${name} in: ${labels}`);
+    }
+    for (const pattern of ["Circle", "Point", "_"]) {
+      assert.ok(!labels.includes(pattern), `${pattern} in: ${labels}`);
     }
   },
 );
@@ -799,19 +1111,49 @@ test(
 
 /** The legend the server declares — mirrored here to decode the response. */
 const TOKEN_TYPES = [
-  "keyword",
+  "namespace",
+  "type",
+  "class",
   "enum",
-  "enumMember",
+  "interface",
+  "struct",
+  "typeParameter",
+  "parameter",
   "variable",
   "property",
+  "enumMember",
+  "event",
   "function",
+  "method",
+  "macro",
+  "keyword",
+  "modifier",
+  "comment",
+  "string",
+  "number",
+  "regexp",
   "operator",
+  "decorator",
+];
+
+const TOKEN_MODIFIERS = [
+  "declaration",
+  "definition",
+  "readonly",
+  "static",
+  "deprecated",
+  "abstract",
+  "async",
+  "modification",
+  "documentation",
+  "defaultLibrary",
+  "local",
 ];
 
 /** Decodes the LSP delta-encoded quintuples into absolute tokens. */
 function decodeTokens(
   data: number[],
-): { line: number; character: number; length: number; type: string }[] {
+): { line: number; character: number; length: number; type: string; modifiers: string[] }[] {
   const out = [];
   let line = 0;
   let character = 0;
@@ -823,10 +1165,63 @@ function decodeTokens(
       character,
       length: data[i + 2],
       type: TOKEN_TYPES[data[i + 3]],
+      modifiers: TOKEN_MODIFIERS.filter((_, bit) => data[i + 4] & (1 << bit)),
     });
   }
   return out;
 }
+
+test(
+  "semantic tokens carry TypeScript's classification of the source under tt's",
+  { skip: skipTyped, timeout },
+  async () => {
+    const source = [
+      "variant Shape { Circle(radius: number), Point }",
+      "export function area(s: Shape): number {",
+      "  const scale = 2;",
+      "  return match (s) {",
+      "    Circle(radius) => radius * scale,",
+      "    Point => Math.PI,",
+      "  };",
+      "}",
+      "",
+    ].join("\n");
+    const { client, uri, stop } = await open(source);
+    try {
+      const response = await client.request("textDocument/semanticTokens/full", {
+        textDocument: { uri },
+      });
+      const tokens = decodeTokens(response.result?.data ?? []);
+      const lines = source.split("\n");
+      const named = tokens.map(
+        (t) =>
+          `${lines[t.line].slice(t.character, t.character + t.length)}:${[t.type, ...t.modifiers].join(".")}`,
+      );
+      assert.deepEqual(named, [
+        "variant:keyword.declaration",
+        "Shape:enum",
+        "Circle:enumMember",
+        "radius:property",
+        "Point:enumMember",
+        "area:function.declaration",
+        "s:parameter.declaration",
+        "Shape:type.readonly",
+        "scale:variable.declaration.readonly.local",
+        "match:keyword",
+        "s:parameter",
+        "Circle:enumMember",
+        "radius:variable.declaration.readonly.local",
+        "radius:variable.readonly.local",
+        "scale:variable.readonly.local",
+        "Point:enumMember",
+        "Math:variable.defaultLibrary",
+        "PI:property.readonly.defaultLibrary",
+      ]);
+    } finally {
+      stop();
+    }
+  },
+);
 
 test(
   "semantic tokens carry the parser's own classification",
@@ -868,6 +1263,8 @@ test(
       assert.equal(at(7, 11)?.type, "variable");
       // tt's Variant concept stays on the standard LSP `enum` wire token.
       assert.equal(at(11, 8)?.type, "enum");
+      assert.equal(at(11, 0)?.type, "keyword");
+      assert.deepEqual(at(11, 0)?.modifiers, ["declaration"]);
     } finally {
       stop();
     }
@@ -902,6 +1299,62 @@ function positionOf(source: string, marker: string) {
     character: before.length - (before.lastIndexOf("\n") + 1),
   };
 }
+
+test("a case tag's references reach its declaration and every pattern", { skip: skipTyped, timeout }, async () => {
+  const { client, uri, stop } = await open(SHAPE_SOURCE);
+  try {
+    const references = await client.request("textDocument/references", {
+      textDocument: { uri },
+      position: positionOf(SHAPE_SOURCE, "if let Circ"),
+      context: { includeDeclaration: true },
+    });
+    const lines = references.result
+      .filter((location: any) => location.uri === uri && covered(SHAPE_SOURCE, location.range) === "Circle")
+      .map((location: any) => location.range.start.line)
+      .sort();
+    assert.deepEqual(lines, [0, 3, 7], JSON.stringify(references.result));
+    const withoutDeclaration = await client.request("textDocument/references", {
+      textDocument: { uri },
+      position: positionOf(SHAPE_SOURCE, "if let Circ"),
+      context: { includeDeclaration: false },
+    });
+    assert.ok(
+      withoutDeclaration.result.every((location: any) => location.range.start.line !== 0),
+      JSON.stringify(withoutDeclaration.result),
+    );
+  } finally {
+    stop();
+  }
+});
+
+test("a pattern binding hovers with its instantiated type, a documented case with its JSDoc", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    'import type { TOption } from "@tt/std";',
+    "/** A shape. */",
+    "variant Shape {",
+    "  /** A round one. */",
+    "  Circle(radius: number),",
+    "  Point,",
+    "}",
+    "declare const o: TOption<number>;",
+    "declare const s: Shape;",
+    "export const n = match (o) { Some(value) => value, None => 0 };",
+    "export const r = match (s) { Circle(radius: r) => r, Point => 0 };",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  try {
+    const hover = async (marker: string) =>
+      (await client.request("textDocument/hover", { textDocument: { uri }, position: positionOf(source, marker) }))
+        .result?.contents?.value ?? "";
+    assert.match(await hover("Some(val"), /const value: number/);
+    const tag = await hover("{ Circ");
+    assert.match(tag, /Shape\.Circle\(radius: number\)/);
+    assert.match(tag, /A round one\./);
+  } finally {
+    stop();
+  }
+});
 
 test("a case tag hovers as its declaration — in a match and in an if let", { skip, timeout }, async () => {
   const { client, uri, stop } = await open(SHAPE_SOURCE);
@@ -953,6 +1406,54 @@ test("a pattern tag goes to its declaration", { skip, timeout }, async () => {
   }
 });
 
+test("a built-in tag and field go to the standard library", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    'import type { TResult } from "@tt/std";',
+    "declare const r: TResult<number, string>;",
+    "export const n = match (r) { Ok(value) => value, Err(error) => error.length };",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  try {
+    for (const [marker, file] of [
+      ["Er", "result.ts"],
+      ["Err(err", "result.ts"],
+    ]) {
+      const answer = await client.request("textDocument/definition", {
+        textDocument: { uri },
+        position: positionOf(source, marker),
+      });
+      const locations = Array.isArray(answer.result) ? answer.result : [answer.result];
+      assert.equal(locations.length, 1, JSON.stringify(answer.result));
+      assert.ok(
+        decodeURIComponent(String(locations[0]?.uri)).endsWith(`/node_modules/@tt/std/${file}`),
+        JSON.stringify(answer.result),
+      );
+    }
+  } finally {
+    stop();
+  }
+});
+
+test("prepare rename answers the name, refuses a tt name with a reason", { skip: skipTyped, timeout }, async () => {
+  const { client, uri, stop } = await open(SHAPE_SOURCE);
+  try {
+    const binding = await client.request("textDocument/prepareRename", {
+      textDocument: { uri },
+      position: positionOf(SHAPE_SOURCE, "  Rect(w, h) => w"),
+    });
+    assert.equal(binding.result?.placeholder, "w", JSON.stringify(binding));
+    const tag = await client.request("textDocument/prepareRename", {
+      textDocument: { uri },
+      position: positionOf(SHAPE_SOURCE, "  Poi"),
+    });
+    assert.equal(tag.result ?? null, null, JSON.stringify(tag));
+    assert.match(String(tag.error?.message), /cannot be renamed/);
+  } finally {
+    stop();
+  }
+});
+
 test("pattern positions complete cases and fields", { skip, timeout }, async () => {
   const { completion, stop } = await open(SHAPE_SOURCE);
   try {
@@ -962,14 +1463,93 @@ test("pattern positions complete cases and fields", { skip, timeout }, async () 
       assert.ok(arm.labels.includes(label), `missing ${label} in: ${arm.labels}`);
     }
     // A payload position: that case's fields, and nothing else.
+    // `w` is the name under the cursor; `h` is already bound.
     const payload = await completion("  Rect(");
-    assert.deepEqual(payload.labels, ["w", "h"]);
+    assert.deepEqual(payload.labels, ["w"]);
     // An `if let` — a position this server could not complete at all before.
     const conditional = await completion("if let ");
     assert.ok(
       conditional.labels.includes("Circle"),
       `missing Circle in: ${conditional.labels}`,
     );
+  } finally {
+    stop();
+  }
+});
+
+test("a document opened through a symlink receives its own locations and edits", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    'const label = "tt";',
+    "export const output = label.length;",
+    "",
+  ].join("\n");
+  const real = repoTestDir("tt-symlink-real-");
+  fs.writeFileSync(path.join(real, "main.tt"), source);
+  fs.writeFileSync(path.join(real, "tsconfig.json"), JSON.stringify({
+    compilerOptions: { strict: true, module: "preserve", moduleResolution: "bundler", noEmit: true },
+    include: ["*"],
+  }));
+  const link = `${real}-link`;
+  fs.symlinkSync(real, link, "dir");
+  const uri = pathToFileURL(path.join(link, "main.tt")).toString();
+  const client = connect();
+  try {
+    await client.request("initialize", {
+      processId: process.pid,
+      rootUri: pathToFileURL(link).toString(),
+      workspaceFolders: [{ uri: pathToFileURL(link).toString(), name: "test" }],
+      capabilities: {},
+    });
+    client.notify("initialized", {});
+    client.notify("textDocument/didOpen", {
+      textDocument: { uri, languageId: "tt", version: 1, text: source },
+    });
+    const at = positionOf(source, "output = lab");
+    const definition = await client.request("textDocument/definition", { textDocument: { uri }, position: at });
+    assert.deepEqual(
+      (Array.isArray(definition.result) ? definition.result : [definition.result]).map((l: any) => l.uri),
+      [uri],
+    );
+    const references = await client.request("textDocument/references", {
+      textDocument: { uri },
+      position: at,
+      context: { includeDeclaration: true },
+    });
+    assert.deepEqual(references.result.map((l: any) => l.uri), [uri, uri]);
+    const rename = await client.request("textDocument/rename", { textDocument: { uri }, position: at, newName: "title" });
+    assert.deepEqual(Object.keys(rename.result.changes), [uri]);
+  } finally {
+    client.stop();
+    fs.unlinkSync(link);
+  }
+});
+
+test("the outline lists TypeScript's declarations with the variants in source order", { skip: skipTyped, timeout }, async () => {
+  const source = [
+    "export interface Box { width: number }",
+    "export variant Shape { Circle(radius: number), Point }",
+    "export class Area {",
+    "  add(s: Shape): number {",
+    "    const a = match (s) { Circle(radius) => radius, Point => 0 };",
+    "    return a;",
+    "  }",
+    "}",
+    "export function f(n: number) { return n; }",
+    "",
+  ].join("\n");
+  const { client, uri, stop } = await open(source);
+  try {
+    const answer = await client.request("textDocument/documentSymbol", { textDocument: { uri } });
+    const tree = (symbol: any): any => [symbol.name, (symbol.children ?? []).map(tree)];
+    assert.deepEqual(answer.result.map(tree), [
+      ["Box", [["width", []]]],
+      ["Shape", [["Circle", []], ["Point", []]]],
+      ["Area", [["add", [["a", []], ["radius", []]]]]],
+      ["f", []],
+    ]);
+    const area = answer.result.find((symbol: any) => symbol.name === "Area");
+    assert.equal(covered(source, area.selectionRange), "Area");
+    assert.ok(covered(source, area.range).startsWith("export class Area {"));
   } finally {
     stop();
   }
@@ -1247,6 +1827,72 @@ test(
     assert.equal(related.length, 1, JSON.stringify(mismatch));
     assert.equal(related[0].message, "the piped value is produced here");
     assert.equal(covered(source, related[0].location.range), "inc");
+  },
+);
+
+test(
+  "a syntax error keeps the file's type errors and is stated once, by TypeScript",
+  { skip: skipTyped, timeout },
+  async () => {
+    // The typed pass checks a buffer whose TypeScript does not parse
+    // through its faithful projection, as the service reads it: the type
+    // error keeps the compiler's rendering, and the syntax error is
+    // TypeScript's own, stated once.
+    for (const source of [
+      'const a: number = "x";\nconst o = { k: 1 };\no.\nexport {};\n',
+      'variant V { A, B }\ndeclare const v: V;\nconst n = match (v) { A => 1, B => 2 };\nconst a: string = n;\nMath.max(1,\n',
+    ]) {
+      const listed = (await published(source)).map(
+        (d: any) => `${d.range.start.line}:${d.range.start.character} ${d.source} ${d.code}`,
+      );
+      assert.ok(listed.some((d) => / ttc ts2322$/.test(d)), `${source}\n${listed}`);
+      assert.equal(listed.filter((d) => / (ttc ts|ts )1005$/.test(d)).length, 1, `${source}\n${listed}`);
+      assert.ok(
+        !listed.some((d) => / (verify-failed|source-not-typescript)$/.test(d)),
+        `${source}\n${listed}`,
+      );
+    }
+  },
+);
+
+test(
+  "an untouched type error reads the same while another line does not parse",
+  { skip: skipTyped, timeout },
+  async () => {
+    const clean = 'export const bad: number = "x";\nexport const y = 1 + 2;\n';
+    const edited = 'export const bad: number = "x";\nexport const y = 1 + ;\n';
+    const { client, uri, stop } = await open(clean);
+    try {
+      const lineOne = (p: any) =>
+        p.diagnostics
+          .filter((d: any) => d.range.start.line === 0)
+          .map((d: any) => JSON.stringify([d.range, d.code, d.message]));
+      const first = await client.waitFor(
+        "textDocument/publishDiagnostics",
+        (p) => p.uri === uri && lineOne(p).length > 0,
+      );
+      let version = 1;
+      for (const text of [edited, clean, edited]) {
+        version += 1;
+        const expected = version;
+        const next = client.waitFor(
+          "textDocument/publishDiagnostics",
+          (p) => p.uri === uri && p.version === expected,
+        );
+        client.notify("textDocument/didChange", {
+          textDocument: { uri, version },
+          contentChanges: [{ text }],
+        });
+        const published = await next;
+        assert.deepEqual(lineOne(published), lineOne(first), text);
+      }
+      assert.match(
+        lineOne(first)[0],
+        /Type 'string' is not assignable to type 'number'/,
+      );
+    } finally {
+      stop();
+    }
   },
 );
 
@@ -1813,7 +2459,7 @@ test("pattern completion handles delimiter triggers and incomplete prefixes", { 
         ['const r = match (user) { Ad# };', undefined, ['Admin', 'Guest']],
         ['const r = match (user) { Admin(name) => name,# };', ',', ['Admin', 'Guest']],
         ['const r = match (user) { Admin(name) => name, Gu#, _ => 0 };', undefined, ['Admin', 'Guest']],
-        ['const r = match (user) { Admin(name,#) => name };', ',', ['name', 'level']],
+        ['const r = match (user) { Admin(name,#) => name };', ',', ['level']],
         ['const r = match (user) { Admin(na#) => name };', undefined, ['name', 'level']],
         ['const r = match (a, b) { (Admin(name), G#) => name };', undefined, ['Admin', 'Guest']],
         ['const object = {# };', '{', []],
@@ -1834,6 +2480,43 @@ test("pattern completion handles delimiter triggers and incomplete prefixes", { 
       }
     } finally { stop(); }
   }
+});
+
+test("a literal pattern written in quotes completes the scrutinee's literals, replacing the literal", { skip: skipTyped, timeout }, async () => {
+  const prefix = 'type Dir = "north" | "south" | "east";\ndeclare const x: Dir;\n';
+  const { client, uri, stop } = await open(prefix);
+  try {
+    let version = 1;
+    for (const [pattern, trigger, expected] of [
+      ['const r = match (x) { "#" };', '"', ['"east"', '"north"', '"south"']],
+      ['const r = match (x) { "north" => 1, "#" };', undefined, ['"east"', '"north"', '"south"']],
+      ['const r = match (x) { "no#" => 1, _ => 0 };', undefined, ['"east"', '"north"', '"south"']],
+    ] as const) {
+      const source = prefix + pattern.replace('#', '');
+      const offset = prefix.length + pattern.indexOf('#');
+      const before = source.slice(0, offset);
+      const line = before.split('\n').length - 1;
+      client.notify("textDocument/didChange", { textDocument: { uri, version: ++version }, contentChanges: [{ text: source }] });
+      const response = await client.request("textDocument/completion", {
+        textDocument: { uri },
+        position: { line, character: offset - before.lastIndexOf('\n') - 1 },
+        context: trigger ? { triggerKind: 2, triggerCharacter: trigger } : { triggerKind: 1 },
+      });
+      const items = response.result?.items ?? response.result ?? [];
+      assert.deepEqual(items.map((item: any) => item.label).sort(), [...expected], pattern);
+      const quote = before.lastIndexOf('"');
+      const close = source.indexOf('"', offset);
+      for (const item of items) {
+        assert.deepEqual(item.textEdit, {
+          range: {
+            start: { line, character: quote - before.lastIndexOf('\n') - 1 },
+            end: { line, character: close + 1 - before.lastIndexOf('\n') - 1 },
+          },
+          newText: item.label,
+        }, pattern);
+      }
+    }
+  } finally { stop(); }
 });
 
 test("a trigger character completes only the context it is registered for", { skip, timeout }, async () => {
@@ -1869,6 +2552,78 @@ test("a trigger character completes only the context it is registered for", { sk
         assert.ok(!labels.includes('match'), `${language} ${line}: no keyword snippets after a trigger character`);
       }
     } finally { stop(); }
+  }
+});
+
+test("a member name after any receiver completes members only", { skip: skipTyped, timeout }, async () => {
+  const prefix = [
+    "declare const nm: string;",
+    "declare function foo(): string;",
+    "declare const xs: string[];",
+    "declare const k: string;",
+    "",
+  ].join("\n");
+  for (const [line, member] of [
+    ["const m = nm.trim().ma", "match"],
+    ["const t = foo().t", "trim"],
+    ["const t = xs[0].t", "trim"],
+    ['const t = "abc".len', "length"],
+    ["const t = k |> .t", "trim"],
+    ["const t = `said ${k.t", "trim"],
+  ] as const) {
+    const source = prefix + line;
+    const { completion, stop } = await open(source);
+    try {
+      const { items, labels } = await completion(line);
+      assert.ok(labels.includes(member), `${line}: ${JSON.stringify(labels)}`);
+      for (const tt of ["Option", "Result", "flow", "let-else"]) {
+        assert.ok(!labels.includes(tt), `${line}: ${tt} offered`);
+      }
+      const matches = items.filter((item) => item.label === "match");
+      assert.ok(matches.every((item) => item.kind === 2), `${line}: ${JSON.stringify(matches)}`);
+    } finally {
+      stop();
+    }
+  }
+});
+
+test("tt items are offered only where they are valid, ranked as TypeScript ranks keywords", { skip: skipTyped, timeout }, async () => {
+  const tt = ["Option", "Result", "Order", "variant", "match", "try", "flow", "result", "let-else"];
+  const orders = "export variant Order { Open(id: number), Closed }\nexport const count = 1;\n";
+  for (const [language, source, marker, allowed] of [
+    ["ttx", "function Row(p: { a: number }) { return null; }\nconst e = <Row  />;\n", "<Row ", ["a"]],
+    ["tt", "interface Cfg { a: number; b: string }\nconst cfg: Cfg = {  };\n", "= { ", ["a", "b"]],
+    ["tt", 'import {  } from "./orders.tt";\n', "import { ", ["Order", "count", "type"]],
+  ] as [ "tt" | "ttx", string, string, string[] ][]) {
+    const { completion, stop } = await open(source, language, { "orders.tt": orders });
+    try {
+      const { labels } = await completion(marker);
+      for (const label of labels) {
+        assert.ok(allowed.includes(label) || !tt.includes(label), `${marker}: ${label} in ${JSON.stringify(labels)}`);
+      }
+      for (const label of allowed) {
+        if (label !== "type") assert.ok(labels.includes(label), `${marker}: ${JSON.stringify(labels)}`);
+      }
+    } finally {
+      stop();
+    }
+  }
+
+  // A value position in a file that imports no built-in: the snippets rank
+  // with TypeScript's keywords, after the names in scope, and `Option` is
+  // whatever TypeScript has in scope (the DOM's), not the built-in variant.
+  const source = "const local = 1;\nconst v = ;\n";
+  const { completion, stop } = await open(source);
+  try {
+    const { items } = await completion("const v = ");
+    const sort = (label: string) => items.find((item) => item.label === label)?.sortText;
+    assert.equal(sort("match"), sort("typeof"), JSON.stringify(items.slice(0, 5)));
+    assert.ok(sort("local")! < sort("match")!, `${sort("local")} ${sort("match")}`);
+    assert.equal(sort("variant"), undefined, "a declaration is not an expression");
+    const option = items.find((item) => item.label === "Option");
+    assert.ok(!option || option.data?.name === "Option", JSON.stringify(option));
+  } finally {
+    stop();
   }
 });
 
@@ -1920,9 +2675,12 @@ test("the server's own sidecar writes do not re-arm the project, a hand-written 
   const uri = pathToFileURL(file).toString();
   const client = connect();
   const changed = (target: string) => client.notify("workspace/didChangeWatchedFiles", { changes: [{ uri: pathToFileURL(target).toString(), type: 2 }] });
-  const republished = () => Promise.race([
-    client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri).then(() => true),
-    new Promise<boolean>(resolve => setTimeout(() => resolve(false), 2000)),
+  const publish = () => client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri);
+  // Silence can only be observed for a while; an expected publish is
+  // awaited for as long as it takes, so a slow machine cannot fail it.
+  const silent = () => Promise.race([
+    publish().then(() => false),
+    new Promise<boolean>(resolve => setTimeout(() => resolve(true), 2000)),
   ]);
   try {
     await client.request("initialize", {
@@ -1937,11 +2695,12 @@ test("the server's own sidecar writes do not re-arm the project, a hand-written 
     client.notify("textDocument/didSave", { textDocument: { uri } });
     changed(`${file}.d.ts`);
     changed(`${file}.d.ts.map`);
-    assert.equal(await republished(), false, "the server's own sidecar write is not an external change");
+    assert.equal(await silent(), true, "the server's own sidecar write is not an external change");
 
     const byHand = path.join(dir, "extra.d.ts");
     fs.writeFileSync(byHand, "export declare const byHand: number;\n");
+    const republished = publish();
     changed(byHand);
-    assert.equal(await republished(), true, "a declaration written by somebody else still is");
+    await republished;
   } finally { client.stop(); }
 });

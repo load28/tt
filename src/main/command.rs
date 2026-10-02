@@ -469,6 +469,7 @@ pub(super) fn run() -> ExitCode {
             CliOption::Jobs,
             CliOption::SourceMap,
             CliOption::RewriteImports,
+            CliOption::Project,
         ][..]
     } else {
         &[
@@ -479,6 +480,7 @@ pub(super) fn run() -> ExitCode {
             CliOption::OutDir,
             CliOption::SourceMap,
             CliOption::RewriteImports,
+            CliOption::Project,
         ][..]
     };
     let mode = if types {
@@ -632,12 +634,21 @@ pub(super) fn run() -> ExitCode {
         return sidecar_mode(&jobs, dir, &inputs);
     }
 
+    let files: Vec<PathBuf> = jobs.iter().map(|job| job.file.clone()).collect();
+    let jsx_preserve = match project_jsx_preserve(rewrite_imports, &files, project.as_deref()) {
+        Ok(preserve) => preserve,
+        Err(error) => {
+            eprintln!("ttc: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
     let build = BuildOptions {
         banner,
         print,
         check,
         verify,
         rewrite_imports,
+        jsx_preserve,
         source_map,
         out_dir: out_dir.clone(),
         jobs: jobs_limit,

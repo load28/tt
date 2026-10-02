@@ -1,0 +1,9 @@
+//// [tryPreservesArgumentAndConditionalEvaluationOrder2.tt] 7 mapping(s)
+1:1 -> 1:1 len 50  "function f(maybe: any): TResult<number, string> "...
+1:51 -> 16:1 len 17  "return Result.Ok("
+1:68 -> 2:17 len 5  "maybe"
+1:76 -> 4:19 len 7  "first()"
+1:89 -> 6:18 len 8  "second()"
+1:99 -> 11:35 len 7  "third()"
+1:107 -> 16:24 len 5  "); }\n"
+

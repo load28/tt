@@ -1,0 +1,216 @@
+=== runtimeAMethodCallAroundAValueStaysAMemberCall.tt ===
+const trace: string[] = [];
+>trace : const trace: string[]
+variant K { A, B }
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function pick(k: K): K { trace.push("pick"); return k; }
+>pick : function pick(k: K): K
+>k : (parameter) k: K
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>k : (parameter) k: K
+class Repo {
+>Repo : class Repo
+  items = ["x"];
+>items : (property) Repo.items: string[]
+  first<T>(this: Repo, fallback: T): string | T { trace.push("first"); return this.items[0] ?? fallback; }
+>first : (method) Repo.first<T>(this: Repo, fallback: T): string | T
+>T : (type parameter) T in Repo.first<T>(this: Repo, fallback: T): string | T
+>this : (parameter) this: Repo
+>Repo : class Repo
+>fallback : (parameter) fallback: T
+>T : (type parameter) T in Repo.first<T>(this: Repo, fallback: T): string | T
+>T : (type parameter) T in Repo.first<T>(this: Repo, fallback: T): string | T
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>items : (property) Repo.items: string[]
+>fallback : (parameter) fallback: T
+type O = { name: string; id<T>(x: T): T; add(x: number): number };
+>O : type O = {
+>       name: string;
+>       id<T>(x: T): T;
+>       add(x: number): number;
+>   }
+>name : (property) name: string
+>id : (method) id<T>(x: T): T
+>T : (type parameter) T in id<T>(x: T): T
+>x : (parameter) x: T
+>T : (type parameter) T in id<T>(x: T): T
+>T : (type parameter) T in id<T>(x: T): T
+>add : (method) add(x: number): number
+>x : (parameter) x: number
+const obj: O = { name: "o", id: (x) => x, add(x: number) { return x + 1; } };
+>obj : const obj: O
+>O : type O = {
+>       name: string;
+>       id<T>(x: T): T;
+>       add(x: number): number;
+>   }
+>name : (property) name: string
+>id : (method) id<T>(x: T): T
+>x : (parameter) x: T
+>x : (parameter) x: T
+>add : (method) add(x: number): number
+>x : (parameter) x: number
+>x : (parameter) x: number
+function getO(): O { trace.push("getO"); return obj; }
+>getO : function getO(): O
+>O : type O = {
+>       name: string;
+>       id<T>(x: T): T;
+>       add(x: number): number;
+>   }
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>obj : const obj: O
+function key(): "add" { trace.push("key"); return "add"; }
+>key : function key(): "add"
+>trace : const trace: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+function repo(k: K, r: Repo) {
+>repo : function repo(k: K, r: Repo): string | number
+>k : (parameter) k: K
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>r : (parameter) r: Repo
+>Repo : class Repo
+  const v: string | number = r.first(match (pick(k)) { A => 1, B => 2 });
+>v : const v: string | number
+>r : (parameter) r: Repo
+>first : (method) Repo.first<1 | 2>(this: Repo, fallback: 1 | 2): string | 1 | 2
+>pick : function pick(k: K): K
+>k : (parameter) k: K
+  return v;
+>v : const v: string | number
+function optional(o: O | undefined, k: K) {
+>optional : function optional(o: O | undefined, k: K): string | undefined
+>o : (parameter) o: O | undefined
+>O : type O = {
+>       name: string;
+>       id<T>(x: T): T;
+>       add(x: number): number;
+>   }
+>k : (parameter) k: K
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  const s: string | undefined = o?.id(match (pick(k)) { A => o.name, B => "b" });
+>s : const s: string | undefined
+>pick : function pick(k: K): K
+>k : (parameter) k: K
+>o : (parameter) o: O
+>name : (property) name: string
+  return s;
+>s : const s: string | undefined
+function keyed(k: K) {
+>keyed : function keyed(k: K): number
+>k : (parameter) k: K
+>K : type K = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  return getO()[key()](match (pick(k)) { A => 1, B => 2 });
+>getO : function getO(): O
+>key : function key(): "add"
+>pick : function pick(k: K): K
+>k : (parameter) k: K
+const n: number = obj.id(match (pick(K.B)) { A => 1, B => 2 });
+>n : const n: number
+>obj : const obj: O
+>id : (method) id<1 | 2>(x: 1 | 2): 1 | 2
+>pick : function pick(k: K): K
+>K : const K: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+console.log(repo(K.A, new Repo()), optional(obj, K.A), optional(undefined, K.A), keyed(K.B), n, JSON.stringify(trace));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>repo : function repo(k: K, r: Repo): string | number
+>K : const K: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>Repo : constructor Repo(): Repo
+>optional : function optional(o: O | undefined, k: K): string | undefined
+>obj : const obj: O
+>K : const K: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>optional : function optional(o: O | undefined, k: K): string | undefined
+>K : const K: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>keyed : function keyed(k: K): number
+>K : const K: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>n : const n: number
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>trace : const trace: string[]
+

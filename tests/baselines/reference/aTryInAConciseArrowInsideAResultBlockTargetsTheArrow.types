@@ -1,0 +1,67 @@
+=== aTryInAConciseArrowInsideAResultBlockTargetsTheArrow.tt ===
+declare function get(n: number): { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>get : function get(n: number): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+export const r = result {
+>r : const r: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: {
+>           kind: "Err";
+>           error: string;
+>       } | {
+>           kind: "Ok";
+>           value: number;
+>       };
+>   }
+const f = (n: number) => ({ kind: "Ok" as const, value: try get(n) + 1 });
+>f : const f: (n: number) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>const : type const = "Ok"
+>value : (property) value: number
+>get : function get(n: number): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>n : (parameter) n: number
+const x = try get(1);
+>x : const x: number
+>get : function get(n: number): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+return f(x);
+>f : const f: (n: number) => {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>x : const x: number
+

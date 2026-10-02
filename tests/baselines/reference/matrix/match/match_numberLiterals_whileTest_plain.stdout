@@ -1,0 +1,5 @@
+whileTest(200) => 1 | operand 200; success true
+whileTest(201) => 1 | operand 201; success true
+whileTest(404) => 0 | operand 404; missing false
+whileTest(500) => 0 | operand 500; guard true; server false
+whileTest(7) => 0 | operand 7; other null

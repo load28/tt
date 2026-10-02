@@ -1,0 +1,4 @@
+{"kind":"Ok","value":5} before,read,after,outside
+{"kind":"Err","error":"bad"} before,read,outside
+{"kind":"Ok","value":[3,"Err"]}
+{"kind":"Ok","value":4}

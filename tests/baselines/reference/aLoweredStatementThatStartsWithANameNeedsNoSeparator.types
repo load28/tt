@@ -1,0 +1,25 @@
+=== aLoweredStatementThatStartsWithANameNeedsNoSeparator.tt ===
+declare const o: { m(x: unknown): unknown };
+>o : const o: {
+>       m(x: unknown): unknown;
+>   }
+>m : (method) m(x: unknown): unknown
+>x : (parameter) x: unknown
+declare const k: "m";
+>k : const k: "m"
+declare const c: boolean;
+>c : const c: boolean
+declare const u: unknown;
+>u : const u: unknown
+declare function f(): void;
+>f : function f(): void
+declare const v: number;
+>v : const v: number
+export function h() {
+>h : function h(): void
+  const a = 1
+>a : const a: 1
+  v |> String
+>v : const v: number
+>String : var String: StringConstructor
+

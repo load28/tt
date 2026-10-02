@@ -1,3 +1,21 @@
+function $tt_show(value: unknown): string {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "bigint") {
+    return String(value) + "n";
+  }
+  if (typeof value === "object" || typeof value === "function") {
+    try {
+      const text = JSON.stringify(value);
+      if (typeof text === "string") {
+        return text;
+      }
+    } catch {}
+    return typeof value;
+  }
+  return String(value);
+}
 type Item = { kind: "item"; run: (x: number) => number };
 declare function pair(first: Item, second: Item): number;
 declare function trio(first: Item, between: number, third: Item): number;
@@ -97,21 +115,3 @@ const $tt_v9 = (pair);
 const leading = $tt_v9($tt_v8, make());
 
 export { paired, inert, leading };
-function $tt_show(value: unknown): string {
-  if (typeof value === "string") {
-    return JSON.stringify(value);
-  }
-  if (typeof value === "bigint") {
-    return String(value) + "n";
-  }
-  if (typeof value === "object" || typeof value === "function") {
-    try {
-      const text = JSON.stringify(value);
-      if (typeof text === "string") {
-        return text;
-      }
-    } catch {}
-    return typeof value;
-  }
-  return String(value);
-}

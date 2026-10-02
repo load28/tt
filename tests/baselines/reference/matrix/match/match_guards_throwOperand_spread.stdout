@@ -1,0 +1,5 @@
+throwOperand({"kind":"Circle","r":1}) => threw 1 | guard big false; small 1
+throwOperand({"kind":"Circle","r":5}) => threw 5 | guard big true; big 5
+throwOperand({"kind":"Rect","w":4,"h":2}) => threw 4 | guard wide true; wide 4
+throwOperand({"kind":"Rect","w":1,"h":3}) => threw 3 | guard wide false; tall 3
+throwOperand({"kind":"Point"}) => threw 0 | point 0

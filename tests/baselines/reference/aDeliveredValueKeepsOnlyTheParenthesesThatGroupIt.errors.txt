@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aDeliveredValueKeepsOnlyTheParenthesesThatGroupIt.tt → $DIR/out/aDeliveredValueKeepsOnlyTheParenthesesThatGroupIt.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2695]: Left side of comma operator is unused and has no side effects.
+ --> aDeliveredValueKeepsOnlyTheParenthesesThatGroupIt.tt:4:34
+  |
+4 | const seq = match (e) { A(v) => (v, v + 1), B => 0 };
+  |                                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aDeliveredValueKeepsOnlyTheParenthesesThatGroupIt.ts(52,21): error TS2695: Left side of comma operator is unused and has no side effects.

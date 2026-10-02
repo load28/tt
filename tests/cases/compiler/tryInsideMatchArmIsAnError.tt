@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_03.rs::try_inside_match_arm_is_an_error
+const x = match (r) {
+  Ok(value) => { const y = try f(value); return y; },
+  Err(error) => fallback(error),
+};

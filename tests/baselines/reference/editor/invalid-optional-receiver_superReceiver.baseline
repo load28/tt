@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  8:12-8:17 "super" error invalid-optional-receiver (ttc): pipeline: `super` cannot be an optional-chain receiver
+

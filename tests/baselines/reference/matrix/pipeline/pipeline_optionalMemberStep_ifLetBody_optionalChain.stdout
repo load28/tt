@@ -1,0 +1,3 @@
+ifLetBody(3) => [1,9] | head 1; read 1; flip true; maybe true; twice 9
+ifLetBody(4) => [1,null] | head 1; read 1; flip false; maybe false
+ifLetBody(5) => [1,15] | head 1; read 1; flip true; maybe true; twice 15

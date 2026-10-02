@@ -1,0 +1,13 @@
+// @origin: tests/integration/cases_04.rs::runtime_literal_boolean_match
+// @run: runtimeLiteralBooleanMatch.tt
+
+function label(flag: boolean) {
+  return match (flag) {
+    true => "yes",
+    false => "no",
+  };
+}
+
+console.log(label(true), label(false));
+
+export {};

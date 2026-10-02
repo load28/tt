@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./ifLetElseBlockAndChaining.tt → $DIR/out/ifLetElseBlockAndChaining.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'a'.
+ --> ifLetElseBlockAndChaining.tt:3:24
+  |
+3 |   if let Some(value) = a() {
+  |                        ^
+error[ts2304]: Cannot find name 'use1'.
+ --> ifLetElseBlockAndChaining.tt:4:5
+  |
+4 |     use1(value);
+  |     ^^^^
+error[ts2304]: Cannot find name 'b'.
+ --> ifLetElseBlockAndChaining.tt:5:32
+  |
+5 |   } else if let Ok(value: v) = b() {
+  |                                ^
+error[ts2304]: Cannot find name 'use2'.
+ --> ifLetElseBlockAndChaining.tt:6:5
+  |
+6 |     use2(v);
+  |     ^^^^
+error[ts2304]: Cannot find name 'fallback'.
+ --> ifLetElseBlockAndChaining.tt:8:5
+  |
+8 |     fallback();
+  |     ^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+ifLetElseBlockAndChaining.ts(4,20): error TS2304: Cannot find name 'a'.
+ifLetElseBlockAndChaining.ts(7,7): error TS2304: Cannot find name 'use1'.
+ifLetElseBlockAndChaining.ts(9,22): error TS2304: Cannot find name 'b'.
+ifLetElseBlockAndChaining.ts(12,9): error TS2304: Cannot find name 'use2'.
+ifLetElseBlockAndChaining.ts(14,9): error TS2304: Cannot find name 'fallback'.

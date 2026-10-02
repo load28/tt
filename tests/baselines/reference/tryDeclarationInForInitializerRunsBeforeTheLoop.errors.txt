@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryDeclarationInForInitializerRunsBeforeTheLoop.tt → $DIR/out/tryDeclarationInForInitializerRunsBeforeTheLoop.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'next'.
+ --> tryDeclarationInForInitializerRunsBeforeTheLoop.tt:1:33
+  |
+1 | function f() { for (let i = try next();;) {} }
+  |                                 ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryDeclarationInForInitializerRunsBeforeTheLoop.ts(1,31): error TS2304: Cannot find name 'next'.

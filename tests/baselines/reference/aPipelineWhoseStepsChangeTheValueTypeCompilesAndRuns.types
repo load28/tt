@@ -1,0 +1,72 @@
+=== aPipelineWhoseStepsChangeTheValueTypeCompilesAndRuns.tt ===
+const flag = Math.random() >= 0;
+>flag : const flag: boolean
+>Math : var Math: Math
+>random : (method) Math.random(): number
+const pick = (value: { kind: "a" } | { kind: "b" }): string => value.kind;
+>pick : const pick: (value: {
+>       kind: "a";
+>   } | {
+>       kind: "b";
+>   }) => string
+>value : (parameter) value: {
+>       kind: "a";
+>   } | {
+>       kind: "b";
+>   }
+>kind : (property) kind: "a"
+>kind : (property) kind: "b"
+>value : (parameter) value: {
+>       kind: "a";
+>   } | {
+>       kind: "b";
+>   }
+>kind : (property) kind: "a" | "b"
+const lengths = match (1) { _ => [1] } |> (p => p.length);
+>lengths : const lengths: number
+>p : (parameter) p: number[]
+>p : (parameter) p: number[]
+>length : (property) Array<number>.length: number
+const text: string = match (flag) { true => [1, 2], false => [3] } |> (p => p.length) |> String;
+>text : const text: string
+>flag : const flag: boolean
+>p : (parameter) p: number[]
+>p : (parameter) p: number[]
+>length : (property) Array<number>.length: number
+>String : var String: (value?: any) => string
+const count: number = match (flag) { true => "xy", false => "z" } |> .length |> (n => [n, n]) |> .length;
+>count : const count: number
+>flag : const flag: boolean
+>length : (property) String.length: number
+>n : (parameter) n: number
+>n : (parameter) n: number
+>n : (parameter) n: number
+>length : (property) Array<number>.length: number
+const kind = match (flag) { true => ({ kind: "a" }), false => ({ kind: "b" }) } |> pick;
+>kind : const kind: string
+>flag : const flag: boolean
+>kind : (property) kind: "a"
+>kind : (property) kind: "b"
+>pick : const pick: (value: {
+>       kind: "a";
+>   } | {
+>       kind: "b";
+>   }) => string
+const mapped: string[] = [match (flag) { true => 1, false => 2 }] |> .map(n => n + 1) |> .map(String);
+>mapped : const mapped: string[]
+>flag : const flag: boolean
+>map : (method) Array<number>.map<number>(callbackfn: (value: number, index: number, array: number[]) => number, thisArg?: any): number[]
+>n : (parameter) n: number
+>n : (parameter) n: number
+>map : (method) Array<number>.map<string>(callbackfn: (value: number, index: number, array: number[]) => string, thisArg?: any): string[]
+>String : var String: StringConstructor
+console.log(lengths, text, count, kind, mapped.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>lengths : const lengths: number
+>text : const text: string
+>count : const count: number
+>kind : const kind: string
+>mapped : const mapped: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

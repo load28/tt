@@ -1,0 +1,42 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./plainIfStatementsPassThrough.tt → $DIR/out/plainIfStatementsPassThrough.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> plainIfStatementsPassThrough.tt:1:5
+  |
+1 | if (x) { a(); } else if (y) { b(); } else { c(); }
+  |     ^
+error[ts2304]: Cannot find name 'a'.
+ --> plainIfStatementsPassThrough.tt:1:10
+  |
+1 | if (x) { a(); } else if (y) { b(); } else { c(); }
+  |          ^
+error[ts2304]: Cannot find name 'y'.
+ --> plainIfStatementsPassThrough.tt:1:26
+  |
+1 | if (x) { a(); } else if (y) { b(); } else { c(); }
+  |                          ^
+error[ts2304]: Cannot find name 'b'.
+ --> plainIfStatementsPassThrough.tt:1:31
+  |
+1 | if (x) { a(); } else if (y) { b(); } else { c(); }
+  |                               ^
+error[ts2304]: Cannot find name 'c'.
+ --> plainIfStatementsPassThrough.tt:1:45
+  |
+1 | if (x) { a(); } else if (y) { b(); } else { c(); }
+  |                                             ^
+error[ts2304]: Cannot find name 'cond'.
+ --> plainIfStatementsPassThrough.tt:2:11
+  |
+2 | const z = cond ? 1 : 2;
+  |           ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+plainIfStatementsPassThrough.ts(1,5): error TS2304: Cannot find name 'x'.
+plainIfStatementsPassThrough.ts(1,10): error TS2304: Cannot find name 'a'.
+plainIfStatementsPassThrough.ts(1,26): error TS2304: Cannot find name 'y'.
+plainIfStatementsPassThrough.ts(1,31): error TS2304: Cannot find name 'b'.
+plainIfStatementsPassThrough.ts(1,45): error TS2304: Cannot find name 'c'.
+plainIfStatementsPassThrough.ts(2,11): error TS2304: Cannot find name 'cond'.

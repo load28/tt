@@ -1,0 +1,2 @@
+ifLetBody(3) => [1,"***6"] | head 1; read 1; double 6
+ifLetBody(12) => [1,"**24"] | head 1; read 1; double 24

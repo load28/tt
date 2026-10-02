@@ -1,0 +1,40 @@
+=== aValueInALaterDeclaratorSplitsTheDeclarationBeforeItsPrelude3.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const o: O;
+>o : const o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+declare function t(s: string): number;
+>t : function t(s: string): number
+>s : (parameter) s: string
+declare function r(n: number): TResult<number, string>;
+>r : function r(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+export function f(): TResult<number, string> {
+>f : function f(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  let a = t("a"), b = 1 + try r(a);
+>a : let a: number
+>t : function t(s: string): number
+>b : let b: number
+>r : function r(n: number): TResult<number, string>
+>a : let a: number
+  return Result.Ok(0);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+

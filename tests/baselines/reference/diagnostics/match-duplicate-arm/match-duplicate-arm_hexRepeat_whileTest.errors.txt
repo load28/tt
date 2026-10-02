@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-duplicate-arm]: match: duplicate arm 1
+ --> ./main.tt:5:78
+  |
+5 |   while (rounds < 1 && match (note("operand", input)) { 1 => note("one", 1), 0x1 => note("hex", 2), _ => note("other", 0) }) {
+  |                                                                              ^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[match-duplicate-arm]: match: duplicate arm 1
+ --> main.tt:5:78
+  |
+5 |   while (rounds < 1 && match (note("operand", input)) { 1 => note("one", 1), 0x1 => note("hex", 2), _ => note("other", 0) }) {
+  |                                                                              ^^^
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,2 @@
+forInitializer(10) => [9] | flip true; lookup true; found 9
+forInitializer(20) => [null] | flip false; lookup false; double null

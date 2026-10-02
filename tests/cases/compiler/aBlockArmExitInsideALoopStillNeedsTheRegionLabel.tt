@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::a_block_arm_exit_inside_a_loop_still_needs_the_region_label
+const v = match (s) { "a" => { for (const x of xs) { return x; } return 0; }, _ => 0 };

@@ -1,0 +1,2 @@
+functionBody(4) => [{"kind":"Circle","r":4},{"kind":"Rect","w":4,"h":2}] | operand 4; operand 4; finally 0
+functionBody(9) => [{"kind":"Circle","r":9},{"kind":"Rect","w":9,"h":2}] | operand 9; operand 9; finally 0

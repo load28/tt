@@ -1,0 +1,12 @@
+//// [ifLetInsideAFunctionInsideAnExpressionRegionIsAllowed1.tt] 10 mapping(s)
+1:1 -> 22:1 len 10  "const v = "
+1:18 -> 3:18 len 12  "run(() => { "
+1:39 -> 6:15 len 1  "x"
+1:44 -> 4:20 len 1  "e"
+1:48 -> 7:7 len 9  "return x;"
+1:59 -> 9:4 len 13  " return 0; })"
+2:6 -> 12:15 len 5  "value"
+2:16 -> 13:18 len 5  "value"
+3:8 -> 17:18 len 1  "0"
+4:2 -> 22:19 len 2  ";\n"
+

@@ -1,0 +1,2 @@
+forInitializer(2) => [null] | open res; receiver {"factor":3}; operand 2; dispose res
+forInitializer(7) => [null] | open res; receiver {"factor":3}; operand 7; dispose res

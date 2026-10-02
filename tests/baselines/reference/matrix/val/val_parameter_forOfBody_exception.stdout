@@ -1,0 +1,2 @@
+forOfBody(3) => [3,3] | round 0; risky 3; param 3; round 1; risky 3; param 3
+forOfBody(8) => "risky call 3" | round 0; caught "risky call 3"

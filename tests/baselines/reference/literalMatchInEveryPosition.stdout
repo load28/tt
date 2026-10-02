@@ -1,0 +1,3 @@
+read true | consume 1 | held 1 | consume 5
+read false | consume 2 | held 2 | consume 5
+success success not found other

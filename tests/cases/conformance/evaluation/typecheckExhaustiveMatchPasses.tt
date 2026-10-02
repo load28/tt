@@ -1,0 +1,9 @@
+// @origin: tests/integration/cases_02.rs::typecheck_exhaustive_match_passes
+
+variant Shape { Circle(radius: number), Point }
+const f = (s: Shape) => match (s) {
+  Circle(radius) => radius,
+  Point => 0,
+};
+
+export {};

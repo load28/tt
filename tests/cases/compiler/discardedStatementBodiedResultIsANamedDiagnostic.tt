@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::discarded_statement_bodied_result_is_a_named_diagnostic
+result { const item = try read(); return item; };

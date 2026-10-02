@@ -37,20 +37,54 @@ fn tt_only_keeps_the_tt_layer_and_drops_the_type_layer() {
 
     let full = types_stderr_overlay(source, source, false);
     assert!(
-        full.contains("type mismatch: expected `number`, found `\"not a number\"`"),
+        full.contains("Type 'string' is not assignable to type 'number'."),
         "{full}"
     );
     assert!(full.contains("cannot call mutating method `set`"), "{full}");
 
     let tt_only = types_stderr_overlay(source, source, true);
     assert!(
-        !tt_only.contains("type mismatch:"),
+        !tt_only.contains("is not assignable"),
         "no type error should survive --tt-only:\n{tt_only}"
     );
     assert!(
         tt_only.contains("cannot call mutating method `set`"),
         "{tt_only}"
     );
+}
+
+/// The tt layer is every diagnostic of a tt rule, the ones the checker's
+/// answers decide included: `--tt-only` reports exactly what the full check
+/// reports, less TypeScript's own diagnostics.
+#[test]
+fn tt_only_reports_the_full_check_without_typescripts_diagnostics() {
+    require_types_toolchain!();
+    let source = "type R = { kind: \"Ok\"; value: number } | { kind: \"Err\"; error: string };\n\
+                  function read(n: number): R { return n > 0 ? { kind: \"Ok\", value: n } : { kind: \"Err\", error: \"no\" }; }\n\
+                  val const scores = new Map<string, number>();\n\
+                  scores.set(\"a\", 1);\n\
+                  const wrong: number = \"not a number\";\n\
+                  export const nested = result { const n = try read(1); return read(n - 1); };\n\
+                  export const n = scores.size + wrong;\n";
+    let blocks = |report: &str| -> Vec<String> {
+        report
+            .split("\nerror")
+            .map(|block| block.trim_start_matches("error").trim().to_string())
+            .filter(|block| block.starts_with('['))
+            .collect()
+    };
+    let full = blocks(&types_stderr_overlay(source, source, false));
+    assert!(full.iter().any(|block| block.starts_with("[ts")), "{full:#?}");
+    assert!(
+        full.iter()
+            .any(|block| block.starts_with("[result-return-nested]")),
+        "{full:#?}"
+    );
+    let tt_layer: Vec<String> = full
+        .into_iter()
+        .filter(|block| !block.starts_with("[ts"))
+        .collect();
+    assert_eq!(blocks(&types_stderr_overlay(source, source, true)), tt_layer);
 }
 
 /// A `val` mutation is judged by what the receiver *is*, and the overlay
@@ -367,23 +401,30 @@ fn a_banner_shifts_the_map_so_positions_still_line_up() {
         "variant E { A(v: number), B }\nexport const n = match (E.B) { A(v) => v, B => 0 };\n",
     )
     .unwrap();
-    let with_banner = ttc(&[
-        "-o",
-        out_dir.to_str().unwrap(),
-        "--source-map",
-        "file",
-        source.to_str().unwrap(),
-    ]);
-    assert!(with_banner.status.success(), "{with_banner:?}");
-    let map = fs::read_to_string(out_dir.join("a.ts.map")).unwrap();
-    let mappings = map
-        .split("\"mappings\":\"")
-        .nth(1)
-        .and_then(|rest| rest.split('"').next())
-        .expect("mappings");
+    let mappings = |banner: bool| {
+        let mut args = vec![
+            "-o",
+            out_dir.to_str().unwrap(),
+            "--source-map",
+            "file",
+            source.to_str().unwrap(),
+        ];
+        if !banner {
+            args.push("--no-banner");
+        }
+        let out = ttc(&args);
+        assert!(out.status.success(), "{out:?}");
+        let map = fs::read_to_string(out_dir.join("a.ts.map")).unwrap();
+        map.split("\"mappings\":\"")
+            .nth(1)
+            .and_then(|rest| rest.split('"').next())
+            .expect("mappings")
+            .to_string()
+    };
+    let without = mappings(false);
+    assert!(without.contains(|c: char| c != ';'), "{without}");
     // The banner is one generated line with nothing behind it.
-    assert!(mappings.starts_with(';'), "{mappings}");
-    assert!(!mappings.starts_with(";;"), "{mappings}");
+    assert_eq!(mappings(true), format!(";{without}"));
 }
 
 /* ------------------------------------------------------------------ */

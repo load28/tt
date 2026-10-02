@@ -1,0 +1,2 @@
+yieldOperand(2) => 4 | double 4; yield 4
+yieldOperand(5) => 10 | double 10; yield 10

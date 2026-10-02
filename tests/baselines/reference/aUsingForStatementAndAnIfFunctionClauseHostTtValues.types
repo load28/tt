@@ -1,0 +1,100 @@
+=== aUsingForStatementAndAnIfFunctionClauseHostTtValues.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const o: O;
+>o : const o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+declare function res(): { n: number; [Symbol.dispose](): void };
+>res : function res(): {
+>       n: number;
+>   }
+>n : (property) n: number
+>Symbol : var Symbol: SymbolConstructor
+declare function rr(): TResult<{ n: number; [Symbol.dispose](): void }, string>;
+>rr : function rr(): TResult<{
+>       n: number;
+>   }, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+>n : (property) n: number
+>Symbol : var Symbol: SymbolConstructor
+export function f(): TResult<number, string> {
+>f : function f(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  let t = 0;
+>t : let t: number
+  for (using q = res(), p = res(); t < 2; t++) {
+>q : using q: {
+>       [Symbol.dispose]: () => void;
+>       n: number;
+>   }
+>res : function res(): {
+>       n: number;
+>   }
+>p : using p: {
+>       [Symbol.dispose]: () => void;
+>       n: number;
+>   }
+>res : function res(): {
+>       n: number;
+>   }
+>t : let t: number
+>t : let t: number
+    t += match (o) { A(n) => n + q.n + p.n, B => 0 };
+>t : let t: number
+>o : const o: O
+>n : const n: number
+>n : const n: number
+>q : using q: {
+>       [Symbol.dispose]: () => void;
+>       n: number;
+>   }
+>n : (property) n: number
+>p : using p: {
+>       [Symbol.dispose]: () => void;
+>       n: number;
+>   }
+>n : (property) n: number
+  for (using q = try rr(); t < 3; t++) {
+>q : using q: {
+>       [Symbol.dispose]: () => void;
+>       n: number;
+>   }
+>rr : function rr(): TResult<{
+>       n: number;
+>   }, string>
+>t : let t: number
+>t : let t: number
+    t += q.n;
+>t : let t: number
+>q : using q: {
+>       [Symbol.dispose]: () => void;
+>       n: number;
+>   }
+>n : (property) n: number
+  return { kind: "Ok", value: t };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>t : let t: number
+if (Math.random()) function g() { return match (o) { A(n) => n, B => 0 }; }
+>Math : var Math: Math
+>random : (method) Math.random(): number
+>g : function g(): number
+>o : const o: O
+>n : const n: number
+>n : const n: number
+

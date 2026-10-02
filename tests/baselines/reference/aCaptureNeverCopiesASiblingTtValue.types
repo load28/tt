@@ -1,0 +1,13 @@
+=== aCaptureNeverCopiesASiblingTtValue.tt ===
+declare function g(x: unknown, y: unknown): void;
+>g : function g(x: unknown, y: unknown): void
+>x : (parameter) x: unknown
+>y : (parameter) y: unknown
+declare const a: boolean;
+>a : const a: boolean
+g(a && match (a) { true => 1, _ => 0 }, match (a) { true => 2, _ => 3 });
+>g : function g(x: unknown, y: unknown): void
+>a : const a: boolean
+>a : const a: true
+>a : const a: boolean
+

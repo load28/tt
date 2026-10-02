@@ -1,0 +1,11 @@
+//// [anAssignmentCapturesItsTargetBeforeAHoistedRightOperand2.tt] 9 mapping(s)
+1:1 -> 1:1 len 233  "type R = { kind: \"Ok\"; value: number } | { kind:"...
+7:3 -> 8:17 len 7  "state.v"
+7:3 -> 14:3 len 8  "state.v "
+7:13 -> 14:22 len 1  " "
+7:18 -> 9:18 len 6  "read()"
+7:24 -> 14:29 len 4  ";\n  "
+8:3 -> 21:3 len 9  "this.v = "
+8:16 -> 16:18 len 6  "read()"
+8:22 -> 21:18 len 39  ";\n  return { kind: \"Ok\", value: 0 };\n}\n"
+

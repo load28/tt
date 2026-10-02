@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::try_placement_reports_the_owning_reason
+const value = match (source) { Ok(value) => { const item = try read(); return item; }, Err(error) => error };

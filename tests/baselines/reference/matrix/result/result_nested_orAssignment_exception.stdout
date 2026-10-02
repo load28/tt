@@ -1,0 +1,2 @@
+orAssignment(2) => {"kind":"Ok","value":6} | flip true; target {"value":0}; risky 2; read 2; inner {"kind":"Ok","value":3}
+orAssignment(-1) => "kept" | flip false; target {"value":"kept"}

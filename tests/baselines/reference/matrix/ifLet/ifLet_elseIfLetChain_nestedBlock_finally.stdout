@@ -1,0 +1,2 @@
+nestedBlock(4) => 4 | operand 4; read 4; first 4; finally 0
+nestedBlock(-4) => "negative -2" | operand -4; read -4; second -2; read -2; second "negative -2"; finally 0

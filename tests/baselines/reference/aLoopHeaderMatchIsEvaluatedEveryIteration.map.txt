@@ -1,0 +1,14 @@
+//// [aLoopHeaderMatchIsEvaluatedEveryIteration.tt] 12 mapping(s)
+1:1 -> 1:1 len 133  "\nlet n = 0;\nfunction next(): number { n = n + 1;"...
+6:8 -> 8:19 len 2  "id"
+6:10 -> 26:15 len 1  "("
+6:18 -> 10:19 len 6  "next()"
+6:28 -> 12:12 len 1  "1"
+6:33 -> 13:18 len 1  "1"
+6:36 -> 16:12 len 1  "2"
+6:41 -> 17:18 len 1  "1"
+6:49 -> 21:18 len 1  "0"
+6:52 -> 26:22 len 1  ")"
+6:55 -> 26:33 len 19  "{\n  seen.push(n);\n}"
+8:2 -> 28:3 len 51  "\nconsole.log(JSON.stringify(seen), n);\n\nexport {"...
+

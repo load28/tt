@@ -1,0 +1,2 @@
+constructorBody(true) => 1 | operand true; yes 1; finally 0
+constructorBody(false) => 0 | operand false; no 0; finally 0

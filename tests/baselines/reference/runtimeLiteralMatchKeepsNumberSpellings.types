@@ -1,0 +1,15 @@
+=== runtimeLiteralMatchKeepsNumberSpellings.tt ===
+function pick(n: number) {
+>pick : function pick(n: number): string
+>n : (parameter) n: number
+  return match (n) {
+>n : (parameter) n: number
+console.log(pick(255), pick(1000), pick(150), pick(-1), pick(0));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pick : function pick(n: number): string
+>pick : function pick(n: number): string
+>pick : function pick(n: number): string
+>pick : function pick(n: number): string
+>pick : function pick(n: number): string
+

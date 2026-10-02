@@ -8,10 +8,23 @@ pub(super) struct EvaluationBuilder<'a> {
     pub(super) regions: Vec<EvalRegion>,
     pub(super) seen: HashSet<OperationId>,
     pub(super) next_value: u32,
+    /// The TypeScript owner of a region nested for its control flow
+    /// (a `try` statement whose failure exits a `result` block) while its
+    /// source still has a host of its own.
+    pub(super) nested_owners: HashMap<RegionId, HostOwner>,
+    pub(super) enclosing: HashMap<RegionId, RegionId>,
 }
 
 impl EvaluationBuilder<'_> {
     pub(super) fn walk_body(
+        &mut self,
+        body: BodyId,
+        parent: Option<RegionId>,
+    ) -> Result<(), EvaluationError> {
+        crate::stack::grow(|| self.walk_body_grown(body, parent))
+    }
+
+    fn walk_body_grown(
         &mut self,
         body: BodyId,
         parent: Option<RegionId>,
@@ -51,6 +64,14 @@ impl EvaluationBuilder<'_> {
     }
 
     fn walk_expr(&mut self, expr: ExprId, parent: Option<RegionId>) -> Result<(), EvaluationError> {
+        crate::stack::grow(|| self.walk_expr_grown(expr, parent))
+    }
+
+    fn walk_expr_grown(
+        &mut self,
+        expr: ExprId,
+        parent: Option<RegionId>,
+    ) -> Result<(), EvaluationError> {
         self.walk_expr_with_placement(expr, parent, false)
     }
 
@@ -136,6 +157,14 @@ impl EvaluationBuilder<'_> {
     }
 
     fn walk_decision(
+        &mut self,
+        decision: &Decision,
+        parent: RegionId,
+    ) -> Result<(), EvaluationError> {
+        crate::stack::grow(|| self.walk_decision_grown(decision, parent))
+    }
+
+    fn walk_decision_grown(
         &mut self,
         decision: &Decision,
         parent: RegionId,
@@ -226,13 +255,16 @@ impl EvaluationBuilder<'_> {
         produces_value: bool,
         force_nested: bool,
     ) -> Result<RegionId, EvaluationError> {
+        let mut nested_owner = None;
         let placement = if force_nested {
             let parent = parent.ok_or(EvaluationError::MissingHost { root })?;
             let binding = self.hosts.remove(&root);
+            nested_owner = binding.as_ref().map(|binding| binding.owner);
             let source = binding.as_ref().map(|binding| binding.source);
             let exits = binding
                 .as_ref()
                 .map_or_else(Vec::new, |binding| binding.exits.clone());
+            let context = binding.as_ref().map(|binding| binding.context);
             let protocol =
                 binding.map_or_else(HostEvaluationProtocol::default, |binding| binding.protocol);
             RegionPlacement::Nested {
@@ -240,13 +272,21 @@ impl EvaluationBuilder<'_> {
                 source,
                 exits,
                 protocol,
+                context,
             }
         } else {
             self.placement(root, parent)?
         };
         let result = self.result(produces_value)?;
         let blocks = blocks_for(operation, shape, result)?;
-        self.push_region(operation, Some(root), placement, blocks, result)
+        let region = self.push_region(operation, Some(root), placement, blocks, result)?;
+        if let Some(owner) = nested_owner {
+            self.nested_owners.insert(region, owner);
+        }
+        if let Some(parent) = parent {
+            self.enclosing.insert(region, parent);
+        }
+        Ok(region)
     }
 
     fn add_source_edit(&mut self, operation: OperationId) -> Result<RegionId, EvaluationError> {
@@ -268,22 +308,31 @@ impl EvaluationBuilder<'_> {
             let Some(binding) = self.hosts.get(&root) else {
                 return false;
             };
-            match &self.regions[parent.0 as usize].placement {
-                RegionPlacement::Host { exits, .. } | RegionPlacement::Nested { exits, .. } => {
-                    exits.iter().any(|exit| {
-                        exit.argument.is_some_and(|argument| {
-                            // Lexical containment alone crosses callbacks inside a
-                            // returned value. Only the host owning the whole return
-                            // argument can transfer evaluation to this exit.
-                            binding.owner.span.start <= argument.start
-                                && argument.end <= binding.owner.span.end
-                                && argument.start <= binding.source.start
-                                && binding.source.end <= argument.end
-                        })
+            let mut ancestor = Some(parent);
+            while let Some(region) = ancestor {
+                let exits = match &self.regions[region.0 as usize].placement {
+                    RegionPlacement::Host { exits, .. } | RegionPlacement::Nested { exits, .. } => {
+                        exits.as_slice()
+                    }
+                    RegionPlacement::SourceEdit => &[][..],
+                };
+                if exits.iter().any(|exit| {
+                    exit.argument.is_some_and(|argument| {
+                        // Lexical containment alone crosses callbacks inside a
+                        // returned value. Only the host owning the whole return
+                        // argument can transfer evaluation to this exit.
+                        binding.owner.span.start <= argument.start
+                            && argument.end <= binding.owner.span.end
+                            && argument.start <= binding.source.start
+                            && binding.source.end <= argument.end
+                            && delivered_by_exit(binding, exit, argument)
                     })
+                }) {
+                    return true;
                 }
-                RegionPlacement::SourceEdit => false,
+                ancestor = self.enclosing.get(&region).copied();
             }
+            false
         });
         if let Some(parent) = parent
             && let Some(binding) = self.hosts.get(&root)
@@ -305,6 +354,7 @@ impl EvaluationBuilder<'_> {
             let exits = binding
                 .as_ref()
                 .map_or_else(Vec::new, |binding| binding.exits.clone());
+            let context = binding.as_ref().map(|binding| binding.context);
             let protocol =
                 binding.map_or_else(HostEvaluationProtocol::default, |binding| binding.protocol);
             return Ok(RegionPlacement::Nested {
@@ -312,6 +362,7 @@ impl EvaluationBuilder<'_> {
                 source,
                 exits,
                 protocol,
+                context,
             });
         }
         if let Some(binding) = self.hosts.remove(&root) {
@@ -329,6 +380,7 @@ impl EvaluationBuilder<'_> {
                 source: None,
                 exits: Vec::new(),
                 protocol: HostEvaluationProtocol::default(),
+                context: None,
             })
         } else {
             Err(EvaluationError::MissingHost { root })
@@ -337,6 +389,9 @@ impl EvaluationBuilder<'_> {
 
     fn region_host_owner(&self, mut region: RegionId) -> Option<HostOwner> {
         loop {
+            if let Some(owner) = self.nested_owners.get(&region) {
+                return Some(*owner);
+            }
             match &self.regions[region.0 as usize].placement {
                 RegionPlacement::Host { host_owner, .. } => return Some(*host_owner),
                 RegionPlacement::Nested { parent, .. } => region = *parent,
@@ -381,6 +436,32 @@ impl EvaluationBuilder<'_> {
         });
         Ok(id)
     }
+}
+
+/// Whether a return's argument delivers the value as it is: the argument
+/// is the value under authored wrappers, or the value is an interpolation
+/// of a returned template, which lowers its interpolations itself. A value
+/// that anything else inside the argument consumes (an operand, a call
+/// argument, a conditional's test or branch, an element) is an ordinary
+/// value of the return statement's owner, evaluated in that owner's
+/// prelude.
+fn delivered_by_exit(binding: &HostBinding, exit: &HostExit, argument: SourceSpan) -> bool {
+    if exit.value_argument == Some(binding.source) {
+        return true;
+    }
+    let mut steps = binding
+        .protocol
+        .steps()
+        .iter()
+        .filter(|step| argument.start <= step.parent.start && step.parent.end <= argument.end)
+        .peekable();
+    steps.peek().is_some()
+        && steps.all(|step| {
+            matches!(
+                step.operation,
+                HostEvaluationOperation::Eager(EagerPosition::TemplateInterpolation(_))
+            )
+        })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

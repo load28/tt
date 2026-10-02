@@ -1,0 +1,2 @@
+nestedBlock(2) => {"kind":"Ok","value":"checked"} | open res; operand 2; read 2; dispose res
+nestedBlock(-1) => {"kind":"Err","error":"negative -1"} | open res; operand -1; read -1; dispose res

@@ -1,0 +1,13 @@
+=== valNeverCallsAMethodAMutationFromItsName6.tt ===
+val const items: number[] = [];
+>items : const items: number[]
+const n = items.map((v) => v).filter(Boolean).length;
+>n : const n: number
+>items : const items: number[]
+>map : (method) Array<number>.map<number>(callbackfn: (value: number, index: number, array: number[]) => number, thisArg?: any): number[]
+>v : (parameter) v: number
+>v : (parameter) v: number
+>filter : (method) Array<number>.filter(predicate: (value: number, index: number, array: number[]) => unknown, thisArg?: any): number[]
+>Boolean : var Boolean: BooleanConstructor
+>length : (property) Array<number>.length: number
+

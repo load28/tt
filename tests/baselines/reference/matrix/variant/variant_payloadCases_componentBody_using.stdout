@@ -1,0 +1,2 @@
+componentBody(4) => "<p>[{\"kind\":\"Circle\",\"r\":4},{\"kind\":\"Rect\",\"w\":4,\"h\":2}]</p>" | open res; operand 4; operand 4; dispose res
+componentBody(9) => "<p>[{\"kind\":\"Circle\",\"r\":9},{\"kind\":\"Rect\",\"w\":9,\"h\":2}]</p>" | open res; operand 9; operand 9; dispose res

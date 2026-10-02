@@ -1,0 +1,2 @@
+methodArgument({"kind":"Click","x":3}) => ["receiver",1,3] | receiver {"tag":"receiver"}; a 1; await; click 3
+methodArgument({"kind":"Key","key":"k"}) => ["receiver",1,"k"] | receiver {"tag":"receiver"}; a 1; await; key "k"

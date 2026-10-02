@@ -1,0 +1,6 @@
+=== propagationUsesATypeCleanStructuralResultDiscriminator.tt ===
+function run() { const value = try Result.Err("boom"); return Result.Ok(value); }
+>run : function run(): any
+>value : const value: any
+>value : const value: any
+

@@ -32,7 +32,12 @@ bun run tt:check
   with the TypeScript content mapper for `.tt` and `.ttx` imports, and
   points the generated scripts at it; a `tsconfig.json` with project
   `references` (such as Vite's solution-style config) gets a `*.tt.json`
-  counterpart for each referenced config, checked with `tsc -b`
+  counterpart for each referenced config, checked with `tsc -b`; a
+  counterpart that another compiled config references emits declarations
+  only, into `node_modules/.cache/tt/`, because TypeScript does not let a
+  referenced project disable emit
+- Without a bundler, adds a `tt:build` script that runs `ttc -o .tt-build`
+  over the source roots the configuration includes
 - Creates `tt.*.config.mjs` for declarative bundlers
 - Prints the plugin code to add for esbuild
 

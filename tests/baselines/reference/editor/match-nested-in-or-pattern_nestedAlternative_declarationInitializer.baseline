@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  6:50-6:54 "Done" error match-nested-in-or-pattern (ttc): match: nested patterns cannot be combined with or-patterns
+

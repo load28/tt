@@ -1,0 +1,5 @@
+jsxSpreadAttribute(200) => "<div value=true></div>" | yield 200; success true
+jsxSpreadAttribute(201) => "<div value=true></div>" | yield 201; success true
+jsxSpreadAttribute(404) => "<div value=false></div>" | yield 404; missing false
+jsxSpreadAttribute(500) => "<div value=false></div>" | yield 500; guard true; server false
+jsxSpreadAttribute(7) => "<div value=null></div>" | yield 7; other null

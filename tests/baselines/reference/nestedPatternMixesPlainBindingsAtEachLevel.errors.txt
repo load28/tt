@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./nestedPatternMixesPlainBindingsAtEachLevel.tt → $DIR/out/nestedPatternMixesPlainBindingsAtEachLevel.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'r'.
+ --> nestedPatternMixesPlainBindingsAtEachLevel.tt:2:18
+  |
+2 | const n = match (r) {
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+nestedPatternMixesPlainBindingsAtEachLevel.ts(4,17): error TS2304: Cannot find name 'r'.

@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[val-pass]: cannot pass val binding `counter` to mutable parameter `counter` of `bump` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./main.tt:6:8
+  |
+6 |   bump(counter);
+  |        ^^^^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[val-pass]: cannot pass val binding `counter` to mutable parameter `counter` of `bump` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> main.tt:6:8
+  |
+6 |   bump(counter);
+  |        ^^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

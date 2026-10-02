@@ -1,0 +1,3 @@
+jsxSpreadAttribute({"kind":"Done","value":{"kind":"Some","value":7}}) => "<div value=7></div>" | operand {"kind":"Done","value":{"kind":"Some","value":7}}; some 7
+jsxSpreadAttribute({"kind":"Done","value":{"kind":"None"}}) => "<div value=0></div>" | operand {"kind":"Done","value":{"kind":"None"}}; none 0
+jsxSpreadAttribute({"kind":"Failed","error":"lost"}) => "<div value='lost'></div>" | operand {"kind":"Failed","error":"lost"}; failed "lost"

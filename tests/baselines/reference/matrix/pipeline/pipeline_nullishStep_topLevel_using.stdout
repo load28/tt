@@ -1,0 +1,2 @@
+topLevel(10) => 9 | open res; operand 10; flip true; lookup true; found 9
+topLevel(20) => 40 | operand 20; flip false; lookup false; double 40

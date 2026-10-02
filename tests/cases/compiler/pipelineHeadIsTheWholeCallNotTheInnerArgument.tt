@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_05.rs::pipeline_head_is_the_whole_call_not_the_inner_argument
+const y = f(a(b) |> g);

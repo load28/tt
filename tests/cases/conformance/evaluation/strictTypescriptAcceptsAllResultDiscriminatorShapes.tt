@@ -1,0 +1,34 @@
+// @origin: tests/integration/cases_04.rs::strict_typescript_accepts_all_result_discriminator_shapes
+// @run: strictTypescriptAcceptsAllResultDiscriminatorShapes.tt
+
+variant Res<T, E> { Ok(value: T), Err(error: E) }
+type Alias<T, E> = Res<T, E>;
+
+const directErr = () => {
+  const value = try Res.Err("direct");
+  return Res.Ok(value);
+};
+const directOk = () => {
+  const value = try Res.Ok(1);
+  return Res.Ok(value + 1);
+};
+const widened = (input: Res<number, string>): Res<number, string> => {
+  const value = try input;
+  return Res.Ok(value + 1);
+};
+const aliased = (input: Alias<number, string>): Alias<number, string> => {
+  const value = try input;
+  return Res.Ok(value + 1);
+};
+function generic<T, E>(input: Res<T, E>): Res<T, E> {
+  const value = try input;
+  return Res.Ok(value);
+}
+
+console.log(JSON.stringify(directErr()));
+console.log(JSON.stringify(directOk()));
+console.log(JSON.stringify(widened(Res.Err("wide"))));
+console.log(JSON.stringify(aliased(Res.Ok(2))));
+console.log(JSON.stringify(generic(Res.Ok("generic"))));
+
+export {};

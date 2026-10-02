@@ -1,0 +1,4 @@
+ifLetBody({"kind":"Num","value":4}) => [1,-1] | head 1; read 1; yield {"kind":"Num","value":4}; other -1
+ifLetBody({"kind":"Neg","value":-3}) => [1,-1] | head 1; read 1; yield {"kind":"Neg","value":-3}; other -1
+ifLetBody({"kind":"Word","text":"hi"}) => [1,2] | head 1; read 1; yield {"kind":"Word","text":"hi"}; word 2
+ifLetBody({"kind":"End"}) => [1,-1] | head 1; read 1; yield {"kind":"End"}; other -1

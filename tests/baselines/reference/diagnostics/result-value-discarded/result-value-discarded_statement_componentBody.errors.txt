@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[result-value-discarded]: `result` is used as a statement, so its `Err` would be discarded
+ --> ./main.ttx:7:5
+  |
+7 |     result { const n = try read(note("operand", input)); return note("n", n); };
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: assign, return, or otherwise consume this Result value
+
+
+==== ttc --check-types (exit 1) ====
+error[result-value-discarded]: `result` is used as a statement, so its `Err` would be discarded
+ --> main.ttx:7:5
+  |
+7 |     result { const n = try read(note("operand", input)); return note("n", n); };
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: assign, return, or otherwise consume this Result value
+
+==== tsc on the emitted TypeScript (exit 0) ====

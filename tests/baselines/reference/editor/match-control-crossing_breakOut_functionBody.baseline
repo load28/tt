@@ -1,0 +1,5 @@
+=== diagnostics main.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  5:98-5:103 "break" error match-control-crossing (ttc): `break` cannot leave a match arm
+

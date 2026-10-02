@@ -1,0 +1,2 @@
+declarationInitializer(1.25) => "1.3" | yield 1.25
+declarationInitializer(7) => "7.0" | yield 7

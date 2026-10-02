@@ -1,0 +1,2 @@
+spreadElement(7) => [0,null] | open res; first 0; operand 7; dispose res
+spreadElement(1) => [0,null] | open res; first 0; operand 1; dispose res

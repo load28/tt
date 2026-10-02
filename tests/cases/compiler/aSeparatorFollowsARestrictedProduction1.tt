@@ -1,0 +1,11 @@
+// @origin: tests/compile/cases_13.rs::a_separator_follows_a_restricted_production
+declare const o: { m(x: unknown): unknown };
+declare const k: "m";
+declare const c: boolean;
+declare const u: unknown;
+declare function f(): void;
+declare const v: number;
+export function* h() {
+  return
+  v |> o.m
+}

@@ -1,0 +1,3 @@
+//// [valConstForbidsPropertyAssignment.tt] 1 mapping(s)
+1:5 -> 1:1 len 29  "const x = { a: 1 };\nx.a = 2;\n"
+

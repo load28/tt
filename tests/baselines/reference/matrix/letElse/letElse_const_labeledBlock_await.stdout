@@ -1,0 +1,2 @@
+labeledBlock(2) => 2 | await; read 2
+labeledBlock(-1) => "none" | await; read -1

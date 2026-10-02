@@ -1,0 +1,4 @@
+laterDeclarator({"kind":"Num","value":4}) => [1,-1] | before 1; risky {"kind":"Num","value":4}; other -1
+laterDeclarator({"kind":"Neg","value":-3}) => [1,-1] | before 1; risky {"kind":"Neg","value":-3}; other -1
+laterDeclarator({"kind":"Word","text":"hi"}) => "risky call 3" | before 1; caught "risky call 3"
+laterDeclarator({"kind":"End"}) => [1,-1] | before 1; risky {"kind":"End"}; other -1

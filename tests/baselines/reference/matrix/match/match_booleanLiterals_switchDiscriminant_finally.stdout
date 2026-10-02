@@ -1,0 +1,2 @@
+switchDiscriminant(true) => "default" | operand true; yes 1; case 0; finally 0
+switchDiscriminant(false) => "zero" | operand false; no 0; case 0; finally 0

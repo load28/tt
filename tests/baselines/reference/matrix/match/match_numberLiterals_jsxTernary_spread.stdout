@@ -1,0 +1,5 @@
+jsxTernary(200) => "<p></p>" | flip true; success true
+jsxTernary(201) => "<p><i>none</i></p>" | flip false
+jsxTernary(404) => "<p></p>" | flip true; missing false
+jsxTernary(500) => "<p><i>none</i></p>" | flip false
+jsxTernary(7) => "<p></p>" | flip true; other null

@@ -1,0 +1,31 @@
+// @origin: tests/integration/pr115.rs::result_expression_propagation_uses_its_lexical_failure_edge
+// @run: resultExpressionPropagationUsesItsLexicalFailureEdge.tt
+
+type R<T> = {kind: "Ok"; value: T} | {kind: "Err"; error: string};
+const trace: string[] = [];
+function read(ok: boolean): R<number> { trace.push("read"); return ok ? {kind: "Ok", value: 3} : {kind: "Err", error: "bad"}; }
+function before() { trace.push("before"); return 2; }
+function compute(ok: boolean) {
+  const r = result {
+    let company;
+    company = before() + try read(ok);
+    trace.push("after");
+    return company;
+  };
+  trace.push("outside");
+  return r;
+}
+for (const ok of [true, false]) {
+  trace.length = 0;
+  console.log(JSON.stringify(compute(ok)), trace.join(","));
+}
+const nested = result {
+  const a = try read(true);
+  const inner = result { let b; b = try read(false); return b; };
+  return [a, inner.kind];
+};
+console.log(JSON.stringify(nested));
+const skipped = result { let n = 0; n = false ? try read(false) : 4; return n; };
+console.log(JSON.stringify(skipped));
+
+export {};

@@ -1,0 +1,2 @@
+templateLiteral(3) => "<L|***6|R>" | left "L"; operand 3; double 6; right "R"; finally 0
+templateLiteral(12) => "<L|**24|R>" | left "L"; operand 12; double 24; right "R"; finally 0

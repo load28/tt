@@ -1,0 +1,50 @@
+=== semanticTokens orPatternSemanticTokens.tt ===
+semanticTokens: 47 token(s)
+  1:8-1:15 "variant" keyword [declaration]
+  1:16-1:21 "Token" enum
+  1:24-1:27 "Num" enumMember
+  1:28-1:33 "value" property
+  1:44-1:47 "Neg" enumMember
+  1:48-1:53 "value" property
+  1:64-1:68 "Word" enumMember
+  1:69-1:73 "text" property
+  1:84-1:87 "End" enumMember
+  2:15-2:16 "t" variable [declaration, readonly]
+  2:18-2:23 "Token" type [readonly]
+  3:14-3:17 "top" variable [declaration, readonly]
+  3:20-3:25 "match" keyword
+  3:27-3:28 "t" variable [readonly]
+  3:32-3:35 "Num" enumMember
+  3:36-3:41 "value" variable [declaration, readonly, local]
+  3:45-3:48 "Neg" enumMember
+  3:49-3:54 "value" variable [declaration, readonly, local]
+  3:59-3:64 "value" variable [readonly, local]
+  4:17-4:22 "inner" function [declaration]
+  4:23-4:24 "u" parameter [declaration]
+  4:26-4:31 "Token" type [readonly]
+  5:9-5:16 "aliased" variable [declaration, readonly, local]
+  5:19-5:24 "match" keyword
+  5:26-5:27 "u" parameter
+  5:31-5:34 "Num" enumMember
+  5:35-5:40 "value" property
+  5:42-5:43 "n" variable [declaration, readonly, local]
+  5:47-5:50 "Neg" enumMember
+  5:51-5:56 "value" property
+  5:58-5:59 "n" variable [declaration, readonly, local]
+  5:64-5:65 "n" variable [readonly, local]
+  6:10-6:13 "Num" enumMember
+  6:14-6:19 "value" variable [declaration, readonly, local]
+  6:23-6:26 "Neg" enumMember
+  6:27-6:32 "value" variable [declaration, readonly, local]
+  6:36-6:37 "u" parameter
+  7:12-7:17 "value" variable [readonly, local]
+  7:20-7:27 "aliased" variable [readonly, local]
+  9:7-9:10 "Num" enumMember
+  9:11-9:16 "value" property
+  9:18-9:19 "v" variable [declaration, local]
+  9:23-9:26 "Neg" enumMember
+  9:27-9:32 "value" property
+  9:34-9:35 "v" variable [declaration, local]
+  9:39-9:40 "u" parameter
+  10:10-10:11 "v" variable [local]
+

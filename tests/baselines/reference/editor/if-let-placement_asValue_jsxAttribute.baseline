@@ -1,0 +1,13 @@
+=== diagnostics main.ttx ===
+diagnostics: 4 diagnostic(s)
+  1:10-1:14 "note" hint TS6133: 'note' is declared but its value is never read. [unnecessary]
+  1:16-1:20 "read" hint TS6133: 'read' is declared but its value is never read. [unnecessary]
+  1:38-1:46 "Fragment" hint TS6133: 'Fragment' is declared but its value is never read. [unnecessary]
+  3:16-3:21 "input" hint TS6133: 'input' is declared but its value is never read. [unnecessary]
+published: 5 diagnostic(s)
+  1:10-1:14 "note" hint TS6133 (ts): 'note' is declared but its value is never read. [unnecessary]
+  1:16-1:20 "read" hint TS6133 (ts): 'read' is declared but its value is never read. [unnecessary]
+  1:38-1:46 "Fragment" hint TS6133 (ts): 'Fragment' is declared but its value is never read. [unnecessary]
+  3:16-3:21 "input" hint TS6133 (ts): 'input' is declared but its value is never read. [unnecessary]
+  4:27-4:77 "if let Ok(value: n) = read(note(\"operand\", input))" error if-let-placement (ttc): `if let` cannot be used in expression position — it is a statement and produces no value
+

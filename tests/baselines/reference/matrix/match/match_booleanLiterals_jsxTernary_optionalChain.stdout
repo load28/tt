@@ -1,0 +1,2 @@
+jsxTernary(true) => "<p>1</p>" | flip true; yes 1
+jsxTernary(false) => "<p><i>none</i></p>" | flip false

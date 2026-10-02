@@ -1,0 +1,3 @@
+loopBody(2) => [{"kind":"Ok","value":"two"},{"kind":"Ok","value":"two"}] | await; read 2; await; read 2
+loopBody(7) => [{"kind":"Ok","value":"other"},{"kind":"Ok","value":"other"}] | await; read 7; await; read 7
+loopBody(-1) => [{"kind":"Err","error":"negative -1"},{"kind":"Err","error":"negative -1"}] | await; read -1; await; read -1

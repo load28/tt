@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_08.rs::val_capability_check_only_covers_resolvable_callees
+function apply(user: User) {}
+function apply(val user: User) {}
+function f(val user: User) {
+  apply(user);
+}

@@ -1,0 +1,12 @@
+differences from match_orPattern_jsxNested_spread at the questions listed in tests/editor-matrix-differences.txt
+
+=== definition /*use*/ main.ttx:5:116 ===
+  |   return <ul><li>{note("first", 1)}</li><li>{match (first(...[input])) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") }}</li></ul>;
+  |                                                                                                                    ^ /*use*/
+  tt only: main "value"
+
+=== rename /*bind*/ main.ttx:5:78 ===
+  |   return <ul><li>{note("first", 1)}</li><li>{match (first(...[input])) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") }}</li></ul>;
+  |                                                                              ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+

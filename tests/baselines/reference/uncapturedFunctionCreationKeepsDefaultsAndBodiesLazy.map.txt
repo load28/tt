@@ -1,0 +1,21 @@
+//// [uncapturedFunctionCreationKeepsDefaultsAndBodiesLazy.tt] 19 mapping(s)
+1:1 -> 19:1 len 266  "\nconst trace: string[] = [];\nconst mark = <T,>(n"...
+8:1 -> 36:1 len 14  "const first = "
+8:15 -> 27:17 len 7  "consume"
+8:22 -> 36:21 len 72  "((value = mark(\"default\", 5)) => { trace.push(\"b"...
+8:101 -> 29:17 len 30  "mark<boolean>(\"subject\", true)"
+9:3 -> 31:10 len 4  "true"
+9:11 -> 36:109 len 38  "(trace.push(\"arm\"), {run: x => x + 1})"
+10:3 -> 32:10 len 5  "false"
+10:12 -> 36:150 len 19  "({run: x => x - 1})"
+11:2 -> 36:170 len 58  ");\nconsole.log(first, trace.join(\",\"));\ntrace.le"...
+14:1 -> 49:1 len 15  "const second = "
+14:16 -> 40:17 len 7  "consume"
+14:23 -> 49:22 len 77  "(function(value = mark(\"default\", 5)) { trace.pu"...
+14:107 -> 42:17 len 31  "mark<boolean>(\"subject\", false)"
+15:3 -> 44:10 len 4  "true"
+15:11 -> 49:115 len 19  "({run: x => x + 1})"
+16:3 -> 45:10 len 5  "false"
+16:12 -> 49:137 len 38  "(trace.push(\"arm\"), {run: x => x - 1})"
+17:2 -> 49:176 len 53  ");\nconsole.log(second, trace.join(\",\"));\n\nexport"...
+

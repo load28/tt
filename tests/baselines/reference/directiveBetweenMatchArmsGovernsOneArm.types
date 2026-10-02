@@ -1,0 +1,48 @@
+=== directiveBetweenMatchArmsGovernsOneArm.tt ===
+export variant Shape { Circle(r: number), Square(s: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (r: number) => Shape
+>r : (property) r: number
+>Square : (property) Square: (s: number) => Shape
+>s : (property) s: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+export function size(shape: Shape): number {
+>size : function size(shape: Shape): number
+>shape : (parameter) shape: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       r: number;
+>   } | {
+>       kind: "Square";
+>       s: number;
+>   } | {
+>       kind: "Point";
+>   }
+  return match (shape) {
+>shape : (parameter) shape: Shape
+    Circle(r) => r.radius,
+>r : const r: number
+>r : const r: number
+    Square(s) => s.side,
+>s : const s: number
+>s : const s: number
+export const inline = (n: number) => [
+>inline : const inline: (n: number) => any[]
+>n : (parameter) n: number
+  match (n) {
+>n : (parameter) n: number
+    1 => n.one,
+>n : (parameter) n: number
+    _ => n.other,
+>n : (parameter) n: number
+

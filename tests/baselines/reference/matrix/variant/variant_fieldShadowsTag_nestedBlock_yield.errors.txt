@@ -1,0 +1,43 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[variant-field-shadows-tag]: variant Bad: case "A" cannot have a field named `kind` — that is where the case tag lives
+ --> ./main.tt:5:21
+  |
+5 |     variant Bad { A(kind: string) }
+  |                     ^^^^
+  |
+  = help: rename the field
+
+
+==== ttc --check-types (exit 1) ====
+error[ts1117]: An object literal cannot have multiple properties with the same name. (in code ttc generated for this construct)
+ --> main.tt:5:13
+  |
+5 |     variant Bad { A(kind: string) }
+  |             ^^^
+error[ts2300]: Duplicate identifier 'kind'. (in code ttc generated for this construct)
+ --> main.tt:5:13
+  |
+5 |     variant Bad { A(kind: string) }
+  |             ^^^
+error[ts2717]: Subsequent property declarations must have the same type.  Property 'kind' must be of type '"A"', but here has type 'string'. (in code ttc generated for this construct)
+ --> main.tt:5:13
+  |
+5 |     variant Bad { A(kind: string) }
+  |             ^^^
+  |             --- 'kind' was also declared here.
+error[ts2322]: Type 'string' is not assignable to type '"A"'. (in code ttc generated for this construct)
+ --> main.tt:5:13
+  |
+5 |     variant Bad { A(kind: string) }
+  |             ^^^
+  |             --- The expected type comes from property 'kind' which is declared here on type 'Bad'
+error[variant-field-shadows-tag]: variant Bad: case "A" cannot have a field named `kind` — that is where the case tag lives
+ --> main.tt:5:21
+  |
+5 |     variant Bad { A(kind: string) }
+  |                     ^^^^
+  |
+  = help: rename the field
+
+==== tsc on the emitted TypeScript (exit 0) ====

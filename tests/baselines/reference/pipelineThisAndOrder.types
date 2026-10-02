@@ -1,0 +1,133 @@
+=== pipelineThisAndOrder.tt ===
+const log: string[] = [];
+>log : const log: string[]
+function note<T>(label: string, value: T): T {
+>note : function note<T>(label: string, value: T): T
+>T : (type parameter) T in note<T>(label: string, value: T): T
+>label : (parameter) label: string
+>value : (parameter) value: T
+>T : (type parameter) T in note<T>(label: string, value: T): T
+>T : (type parameter) T in note<T>(label: string, value: T): T
+  log.push(label);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+  return value;
+>value : (parameter) value: T
+function flush(title: string, value: unknown) {
+>flush : function flush(title: string, value: unknown): void
+>title : (parameter) title: string
+>value : (parameter) value: unknown
+  console.log(`${title}: ${JSON.stringify(value)} after ${log.join(" ")}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>title : (parameter) title: string
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>value : (parameter) value: unknown
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+  log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+class Counter {
+>Counter : class Counter
+  count = 0;
+>count : (property) Counter.count: number
+  constructor(readonly name: string) {}
+>name : (property) Counter.name: string
+  add(n: number) {
+>add : (method) Counter.add(n: number): number
+>n : (parameter) n: number
+    log.push(`add on ${this.name}`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>name : (property) Counter.name: string
+    this.count += n;
+>count : (property) Counter.count: number
+>n : (parameter) n: number
+    return this.count;
+>count : (property) Counter.count: number
+  twice(n: number) {
+>twice : (method) Counter.twice(n: number): number
+>n : (parameter) n: number
+    return this.add(n) + this.add(n);
+>add : (method) Counter.add(n: number): number
+>n : (parameter) n: number
+>add : (method) Counter.add(n: number): number
+>n : (parameter) n: number
+const counter = new Counter("counter");
+>counter : const counter: Counter
+>Counter : constructor Counter(name: string): Counter
+flush("member step", note("head", 2) |> note("receiver", counter).add);
+>flush : function flush(title: string, value: unknown): void
+>note : function note<2>(label: string, value: 2): 2
+>note : function note<Counter>(label: string, value: Counter): Counter
+>counter : const counter: Counter
+>add : (method) Counter.add(n: number): number
+flush("this in method", 3 |> counter.twice);
+>flush : function flush(title: string, value: unknown): void
+>counter : const counter: Counter
+>twice : (method) Counter.twice(n: number): number
+flush("computed member", 1 |> counter[note("key", "add" as const)]);
+>flush : function flush(title: string, value: unknown): void
+>counter : const counter: Counter
+>note : function note<"add">(label: string, value: "add"): "add"
+>const : type const = "add"
+function find(present: boolean): Counter | undefined {
+>find : function find(present: boolean): Counter | undefined
+>present : (parameter) present: boolean
+>Counter : class Counter
+  log.push(`find ${present}`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>present : (parameter) present: boolean
+  return present ? counter : undefined;
+>present : (parameter) present: boolean
+>counter : const counter: Counter
+flush("optional absent", note("head", 4) |> find(false)?.add);
+>flush : function flush(title: string, value: unknown): void
+>note : function note<4>(label: string, value: 4): 4
+>find : function find(present: boolean): Counter | undefined
+>add : (method) Counter.add(n: number): number
+flush("optional present", note("head", 5) |> find(true)?.add);
+>flush : function flush(title: string, value: unknown): void
+>note : function note<5>(label: string, value: 5): 5
+>find : function find(present: boolean): Counter | undefined
+>add : (method) Counter.add(n: number): number
+flush("optional tail then step", (undefined as string | undefined) |> ?.trim() |> String);
+>flush : function flush(title: string, value: unknown): void
+>trim : (method) String.trim(): string
+>String : var String: StringConstructor
+const composed = flow |> ((n: number) => note("double", n * 2)) |> String |> .padStart(3, "0");
+>composed : const composed: (n: number) => string
+>n : (parameter) n: number
+>note : function note<number>(label: string, value: number): number
+>n : (parameter) n: number
+>String : var String: StringConstructor
+>padStart : (method) String.padStart(targetLength: number, padString?: string): string
+flush("flow built", "nothing yet");
+>flush : function flush(title: string, value: unknown): void
+flush("flow called", composed(4));
+>flush : function flush(title: string, value: unknown): void
+>composed : const composed: (n: number) => string
+flush("postfix chain", " a,b " |> .trim().split(","));
+>flush : function flush(title: string, value: unknown): void
+>trim : (method) String.trim(): string
+>split : (method) String.split(separator: string | RegExp, limit?: number): string[]
+flush("nested pipelines", [3, 1, 2] |> ((xs: number[]) => xs.map((x) => x |> counter.add)) |> JSON.stringify);
+>flush : function flush(title: string, value: unknown): void
+>xs : (parameter) xs: number[]
+>xs : (parameter) xs: number[]
+>map : (method) Array<number>.map<number>(callbackfn: (value: number, index: number, array: number[]) => number, thisArg?: any): number[]
+>x : (parameter) x: number
+>x : (parameter) x: number
+>counter : const counter: Counter
+>add : (method) Counter.add(n: number): number
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+flush("final count", counter.count);
+>flush : function flush(title: string, value: unknown): void
+>counter : const counter: Counter
+>count : (property) Counter.count: number
+

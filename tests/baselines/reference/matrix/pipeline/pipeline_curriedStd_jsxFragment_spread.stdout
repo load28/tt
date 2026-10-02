@@ -1,0 +1,2 @@
+jsxFragment(5) => "<>[15]</>" | before "["; map 15; after "]"
+jsxFragment(0) => "<>[-1]</>" | before "["; after "]"

@@ -1,0 +1,2 @@
+tryBlock(3) => 3 | operand 3; read 3; then 3
+tryBlock(-3) => "missing" | operand -3; read -3; else "missing"

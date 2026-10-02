@@ -1,0 +1,9 @@
+//// [literalDuplicateComparesValuesNotSpellings2.tt] 7 mapping(s)
+1:1 -> 36:1 len 10  "const v = "
+1:18 -> 21:17 len 1  "x"
+1:23 -> 23:10 len 3  "\"a\""
+1:30 -> 24:18 len 1  "1"
+1:33 -> 27:10 len 6  "'\\x61'"
+1:43 -> 28:18 len 1  "2"
+1:46 -> 36:19 len 1  ";"
+

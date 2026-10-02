@@ -1,0 +1,72 @@
+==== ttc --out-dir (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./armThenComma.tt:1:59
+  |
+1 | export function f(n: number) { return match (n) { 1 => n +, _ => 0 }; }
+  |                                                           ^
+
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./blockArm.tt:1:69
+  |
+1 | export function f(n: number) { return match (n) { 1 => { return n + }, _ => 0 }; }
+  |                                                                     ^
+
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./commentBeforeComma.tt:4:5
+  |
+4 |     ,
+  |     ^
+
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./guard.tt:1:60
+  |
+1 | export function f(n: number) { return match (n) { 1 if n > => 0, _ => 1 }; }
+  |                                                            ^
+
+error[source-not-typescript]: the TypeScript here does not parse: Expected ident. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./lastArm.tt:1:66
+  |
+1 | export function f(n: number) { return match (n) { 1 => 1, _ => n.} ; }
+  |                                                                  ^
+
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./scrutinee.tt:1:49
+  |
+1 | export function f(n: number) { return match (n -) { 1 => 0, _ => 1 }; }
+  |                                                 ^
+
+
+==== ttc --check-types (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> armThenComma.tt:1:59
+  |
+1 | export function f(n: number) { return match (n) { 1 => n +, _ => 0 }; }
+  |                                                           ^
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> blockArm.tt:1:69
+  |
+1 | export function f(n: number) { return match (n) { 1 => { return n + }, _ => 0 }; }
+  |                                                                     ^
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> commentBeforeComma.tt:4:5
+  |
+4 |     ,
+  |     ^
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> guard.tt:1:60
+  |
+1 | export function f(n: number) { return match (n) { 1 if n > => 0, _ => 1 }; }
+  |                                                            ^
+error[source-not-typescript]: the TypeScript here does not parse: Expected ident. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> lastArm.tt:1:66
+  |
+1 | export function f(n: number) { return match (n) { 1 => 1, _ => n.} ; }
+  |                                                                  ^
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> scrutinee.tt:1:49
+  |
+1 | export function f(n: number) { return match (n -) { 1 => 0, _ => 1 }; }
+  |                                                 ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

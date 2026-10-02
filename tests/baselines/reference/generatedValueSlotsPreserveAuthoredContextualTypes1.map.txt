@@ -1,0 +1,10 @@
+//// [generatedValueSlotsPreserveAuthoredContextualTypes1.tt] 8 mapping(s)
+1:1 -> 1:1 len 175  "type TResult<T, E> = { kind: \"Ok\"; value: T } | "...
+4:7 -> 11:11 len 1  "n"
+4:15 -> 6:20 len 3  "g()"
+4:19 -> 11:28 len 14  " if (n === 0) "
+4:40 -> 11:83 len 2  "[]"
+4:43 -> 11:104 len 1  " "
+4:51 -> 11:146 len 3  "[n]"
+5:2 -> 14:2 len 2  ";\n"
+

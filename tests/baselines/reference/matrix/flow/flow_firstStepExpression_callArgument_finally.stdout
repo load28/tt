@@ -1,0 +1,2 @@
+callArgument(3) => [1,null,3] | a 1; operand 3; c 3; finally 0
+callArgument(-4) => [1,null,3] | a 1; operand -4; c 3; finally 0

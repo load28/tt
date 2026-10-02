@@ -1,0 +1,85 @@
+=== aRecursiveAnonymousTypeIsNeverAnnotatedWithItsElidedCycle2.tt ===
+function mk(k: number) { return { k, m() { return this; } }; }
+>mk : function mk(k: number): {
+>       k: number;
+>       m(): ...;
+>   }
+>k : (parameter) k: number
+>k : (property) k: number
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+function pick(n: number) {
+>pick : function pick(n: number): string
+>n : (parameter) n: number
+  const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) };
+>b : const b: {
+>       k: number;
+>       m(): {
+>           k: number;
+>           m(): ...;
+>       };
+>   }
+>n : (parameter) n: number
+>k : (property) k: number
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+>k : (property) k: number
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+  const c = match (n) { 1 => mk(3), _ => mk(4) };
+>c : const c: {
+>       k: number;
+>       m(): ...;
+>   }
+>n : (parameter) n: number
+>mk : function mk(k: number): {
+>       k: number;
+>       m(): ...;
+>   }
+>mk : function mk(k: number): {
+>       k: number;
+>       m(): ...;
+>   }
+  return [b.m().m().k, c.m().m().k].join(",");
+>b : const b: {
+>       k: number;
+>       m(): {
+>           k: number;
+>           m(): ...;
+>       };
+>   }
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+>k : (property) k: number
+>c : const c: {
+>       k: number;
+>       m(): ...;
+>   }
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+>m : (method) m(): {
+>       k: number;
+>       m(): ...;
+>   }
+>k : (property) k: number
+>join : (method) Array<number>.join(separator?: string): string
+console.log(pick(1), pick(2));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pick : function pick(n: number): string
+>pick : function pick(n: number): string
+

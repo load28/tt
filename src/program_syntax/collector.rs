@@ -24,19 +24,44 @@ pub(super) fn parse_module(
     let input = HostInput::new(code);
     let start = input.origin();
     let mut parser = input.parser(source_kind);
-    let result = parser.parse_module();
-    let mut errors = parser.take_errors();
+    let result = parser.parse_program().map(|program| match program {
+        swc_ecma_ast::Program::Module(module) => module,
+        swc_ecma_ast::Program::Script(script) => Module {
+            span: script.span,
+            body: script.body.into_iter().map(ModuleItem::Stmt).collect(),
+            shebang: script.shebang,
+        },
+    });
+    let recovered = parser.take_errors();
+    let left_to_typescript = |error: &swc_ecma_parser::error::Error| {
+        if !crate::verify::checked_after_parsing(error.kind()) {
+            return false;
+        }
+        let span = error.span();
+        let (lo, hi) = (start.byte(span.lo()), start.byte(span.hi()));
+        segments.iter().any(|segment| {
+            segment.kind == ProjectionSegmentKind::Copied
+                && segment.projected.start.0 <= lo
+                && hi <= segment.projected.end.0
+                && lo < segment.projected.end.0
+        })
+    };
+    let reported = recovered.iter().find(|error| !left_to_typescript(error));
     let module = match result {
         Ok(module) => module,
         Err(error) => {
-            errors.push(error);
-            return Err(parse_failure(code, segments, start, &errors[0]));
+            return Err(parse_failure(
+                code,
+                segments,
+                start,
+                reported.unwrap_or(&error),
+            ));
         }
     };
-    if let Some(error) = errors.into_iter().next()
+    if let Some(error) = reported
         && !tolerant
     {
-        return Err(parse_failure(code, segments, start, &error));
+        return Err(parse_failure(code, segments, start, error));
     }
     Ok(ParsedModule { module, start })
 }
@@ -108,7 +133,9 @@ fn parse_failure_at(
     message: String,
 ) -> ProgramSyntaxError {
     let at = ProjectedByte(at.min(code.len().saturating_sub(1)));
-    match source_byte_for_projection(segments, at) {
+    match source_byte_for_projection(segments, at)
+        .or_else(|| outermost_placeholder_at(segments, at))
+    {
         Some(source) => ProgramSyntaxError::SourceNotTypeScript { message, source },
         None => ProgramSyntaxError::Parse {
             message,
@@ -126,9 +153,40 @@ fn parse_failure_at(
     }
 }
 
+/// The source start of the tt construct whose placeholder begins at `at`,
+/// when no other placeholder encloses it.
+///
+/// A placeholder stands for its construct in the syntactic category the
+/// parser claimed it in, in the smallest form of that category (a
+/// parenthesized name for a value, a block for a statement, a `const` for a
+/// declaration). When the parse stops at its first byte, and only copied
+/// source precedes it, the source admits no form of that category where
+/// the construct is written: the program as written does not parse there,
+/// whatever ttc generates. It is reported at the construct, where
+/// TypeScript's parser stops on the same text.
+fn outermost_placeholder_at(
+    segments: &[ProjectionSourceSegment],
+    at: ProjectedByte,
+) -> Option<usize> {
+    let placeholders = || {
+        segments
+            .iter()
+            .filter(|segment| segment.kind == ProjectionSegmentKind::Placeholder)
+    };
+    let starting = placeholders()
+        .filter(|segment| segment.projected.start == at)
+        .max_by_key(|segment| segment.projected.end.0)?;
+    let enclosed = placeholders().any(|other| {
+        other.projected.start < starting.projected.start
+            && starting.projected.end <= other.projected.end
+    });
+    (!enclosed).then_some(starting.source.start)
+}
+
 pub(super) struct ParentCollector {
     pub(super) placeholders: HashSet<ProjectedSpan>,
     pub(super) arm_blocks: HashMap<ProjectedSpan, BodyId>,
+    pub(super) tt_bindings: projection::TtBindings,
     pub(super) single_return_bodies: HashMap<ProjectedSpan, BodyId>,
     pub(super) source_start: HostOrigin,
     pub(super) expected_identifiers: HashMap<ProjectedSpan, TtNodeId>,
@@ -144,7 +202,14 @@ pub(super) struct ParentCollector {
     pub(super) occupied_names: HashSet<String>,
     pub(super) function_depth: usize,
     pub(super) function_targets: Vec<EvaluationOwner>,
+    /// The projected spans of the `DecisionCallExpression` placeholders.
+    pub(super) decision_calls: HashSet<ProjectedSpan>,
+    /// The function each decision placeholder calls: the projection's
+    /// stand-in for a match's arms, which the lowering writes as statements
+    /// in the match's own owner, so it is no evaluation owner of its own.
+    pub(super) decision_functions: HashSet<ProjectedSpan>,
     pub(super) contextual_types: Vec<Option<ProjectedSpan>>,
+    pub(super) assertions: Vec<Option<ProjectedSpan>>,
     pub(super) function_return_types: Vec<Option<ProjectedSpan>>,
     pub(super) function_return_async: Vec<bool>,
     /// How many enclosing statements consume an unlabeled `break`
@@ -170,12 +235,15 @@ pub(super) struct CollectedProgramSyntax {
 pub(super) struct FoundOverlay {
     pub(super) ambient: bool,
     pub(super) decorated_classes: Vec<usize>,
+    pub(super) decision_functions: Vec<usize>,
     pub(super) parents: Vec<AstParentKind>,
     pub(super) host_owners: Vec<ProjectedHostOwner>,
     pub(super) protocol_frames: Vec<ProjectedProtocolFrame>,
     pub(super) exits: Vec<ProjectedHostExit>,
     pub(super) function_target: Option<EvaluationOwner>,
     pub(super) contextual_type: Option<ProjectedSpan>,
+    pub(super) assertion: Option<Option<ProjectedSpan>>,
+    pub(super) loop_head_reads: bool,
     pub(super) function_return_type: Option<ProjectedSpan>,
     pub(super) function_return_awaited: bool,
 }
@@ -205,6 +273,18 @@ pub(super) enum ProjectedProtocolFrame {
         /// ask this separately. Always true where the kind cannot spread.
         spread_free: bool,
     },
+    /// An assignment. Its target's reference is evaluated before the right
+    /// operand (ECMA-262 §13.15.2): a member target's object and computed
+    /// key, and — for any operator but `=` — the target's current value.
+    Assignment {
+        parent: ProjectedSpan,
+        operator: AssignOp,
+        target: ProjectedSpan,
+        reference: Vec<(ProjectedSpan, Effects)>,
+        parts: ProjectedMemberReference,
+        discarded: bool,
+        right: ProjectedSpan,
+    },
     Binary {
         parent: ProjectedSpan,
         operator: BinaryOp,
@@ -224,10 +304,12 @@ pub(super) enum ProjectedProtocolFrame {
         parent: ProjectedSpan,
         callee: Option<ProjectedSpan>,
         callee_mode: EvaluationInputMode,
-        callee_receiver: Option<(ProjectedSpan, Effects)>,
+        callee_reference: Option<ProjectedMemberReference>,
         arguments: Vec<(ProjectedSpan, bool, Effects)>,
         type_args: Option<ProjectedSpan>,
-        optional: bool,
+        /// For a call in an optional chain, the link that decides whether
+        /// it is evaluated.
+        optional: Option<OptionalCallTest>,
     },
     Member {
         parent: ProjectedSpan,
@@ -243,7 +325,7 @@ pub(super) enum ProjectedProtocolFrame {
         parent: ProjectedSpan,
         tag: ProjectedSpan,
         tag_mode: EvaluationInputMode,
-        tag_receiver: Option<(ProjectedSpan, Effects)>,
+        tag_reference: Option<ProjectedMemberReference>,
         expressions: Vec<(ProjectedSpan, Effects)>,
     },
     Template {
@@ -273,6 +355,7 @@ impl ProjectedProtocolFrame {
     pub(super) fn parent(&self) -> ProjectedSpan {
         match self {
             ProjectedProtocolFrame::Ordered { parent, .. }
+            | ProjectedProtocolFrame::Assignment { parent, .. }
             | ProjectedProtocolFrame::Binary { parent, .. }
             | ProjectedProtocolFrame::Conditional { parent, .. }
             | ProjectedProtocolFrame::Call { parent, .. }
@@ -287,11 +370,25 @@ impl ProjectedProtocolFrame {
     }
 }
 
+/// The parts of a member callee's reference: its object and its computed
+/// key ([`HostReferencePart`]).
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct ProjectedMemberReference {
+    pub(super) receiver: Option<ProjectedReferencePart>,
+    pub(super) key: Option<ProjectedReferencePart>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ProjectedReferencePart {
+    pub(super) span: ProjectedSpan,
+    pub(super) effects: Effects,
+    pub(super) read_at_call: bool,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(super) enum OrderedEvaluationKind {
     Array,
     Object,
-    Assignment,
     Sequence,
     Unary,
 }
@@ -304,6 +401,15 @@ pub(super) struct ProjectedHostOwner {
     /// a value's parent path here leaves exactly the edges between the owner
     /// and the value ([`owner_reach`]).
     pub(super) edge: usize,
+    pub(super) split: Option<ProjectedDeclaratorSplit>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub(super) struct ProjectedDeclaratorSplit {
+    pub(super) previous: ProjectedSpan,
+    pub(super) kind: DeclarationKind,
+    pub(super) exported: bool,
+    pub(super) declared: bool,
 }
 
 pub(super) fn object_evaluation_positions(

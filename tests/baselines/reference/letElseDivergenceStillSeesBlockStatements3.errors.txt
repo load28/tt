@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./letElseDivergenceStillSeesBlockStatements3.tt → $DIR/out/letElseDivergenceStillSeesBlockStatements3.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseDivergenceStillSeesBlockStatements3.tt:2:19
+  |
+2 |   const Some(v) = find() else { for (const x of xs) { log(x); } return 0; };
+  |                   ^^^^
+error[ts2304]: Cannot find name 'xs'.
+ --> letElseDivergenceStillSeesBlockStatements3.tt:2:49
+  |
+2 |   const Some(v) = find() else { for (const x of xs) { log(x); } return 0; };
+  |                                                 ^^
+error[ts2304]: Cannot find name 'log'.
+ --> letElseDivergenceStillSeesBlockStatements3.tt:2:55
+  |
+2 |   const Some(v) = find() else { for (const x of xs) { log(x); } return 0; };
+  |                                                       ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+letElseDivergenceStillSeesBlockStatements3.ts(2,18): error TS2304: Cannot find name 'find'.
+letElseDivergenceStillSeesBlockStatements3.ts(4,21): error TS2304: Cannot find name 'xs'.
+letElseDivergenceStillSeesBlockStatements3.ts(4,27): error TS2304: Cannot find name 'log'.

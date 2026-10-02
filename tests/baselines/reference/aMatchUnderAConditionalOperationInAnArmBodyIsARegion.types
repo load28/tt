@@ -1,0 +1,40 @@
+=== aMatchUnderAConditionalOperationInAnArmBodyIsARegion.tt ===
+variant S { A(v: number), B(w: number), C }
+>S : type S = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>       w: number;
+>   } | {
+>       kind: "C";
+>   }
+>A : (property) A: (v: number) => S
+>v : (property) v: number
+>B : (property) B: (w: number) => S
+>w : (property) w: number
+>C : (property) C: {
+>       readonly kind: "C";
+>   }
+declare const s: S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>       w: number;
+>   } | {
+>       kind: "C";
+>   }
+declare function eff(): number;
+>eff : function eff(): number
+const y = match (s) { A(v) => eff() > 0 && match (s) { B(w) => w > 0, _ => false }, _ => false };
+>y : const y: boolean
+>s : const s: S
+>v : const v: number
+>eff : function eff(): number
+>s : const s: S
+>w : const w: number
+>w : const w: number
+

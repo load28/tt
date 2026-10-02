@@ -1,0 +1,7 @@
+error[missing-pipeline-step]: pipeline: `|>` has no step
+ --> input.tt:2:27
+  |
+2 |   const n = xs |> .length |>
+  |                           ^^
+  |
+  = help: write the step after `|>`, or remove the `|>`

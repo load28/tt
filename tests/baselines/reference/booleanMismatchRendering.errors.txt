@@ -1,0 +1,48 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./booleanMismatchRendering.tt → $DIR/out/booleanMismatchRendering.ts
+ttc: ./flags.tt → $DIR/out/flags.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2322]: Type 'boolean' is not assignable to type 'number'.
+ --> booleanMismatchRendering.tt:3:14
+  |
+3 | export const x: number = flag();
+  |              ^
+error[ts2322]: Type 'boolean' is not assignable to type 'number'.
+ --> booleanMismatchRendering.tt:4:31
+  |
+4 | export function f(): number { return flag(); }
+  |                               ^^^^^^
+error[ts2322]: Type 'boolean' is not assignable to type 'number'.
+ --> booleanMismatchRendering.tt:5:35
+  |
+5 | export const o: { n: number } = { n: flag() };
+  |                                   ^
+  |                   - The expected type comes from property 'n' which is declared here on type '{ n: number; }'
+error[ts2322]: Type 'boolean' is not assignable to type 'number'.
+ --> booleanMismatchRendering.tt:6:14
+  |
+6 | export const imported: number = ready;
+  |              ^^^^^^^^
+error[ts2322]: Type 'string' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+ --> booleanMismatchRendering.tt:7:14
+  |
+7 | export const named: number = heading();
+  |              ^^^^^
+error[ts2322]: Type 'number | boolean' is not assignable to type 'number'.
+  Type 'boolean' is not assignable to type 'number'.
+ --> booleanMismatchRendering.tt:9:14
+  |
+9 | export const partly: number = either();
+  |              ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+booleanMismatchRendering.ts(3,14): error TS2322: Type 'boolean' is not assignable to type 'number'.
+booleanMismatchRendering.ts(4,31): error TS2322: Type 'boolean' is not assignable to type 'number'.
+booleanMismatchRendering.ts(5,35): error TS2322: Type 'boolean' is not assignable to type 'number'.
+booleanMismatchRendering.ts(6,14): error TS2322: Type 'boolean' is not assignable to type 'number'.
+booleanMismatchRendering.ts(7,14): error TS2322: Type 'string' is not assignable to type 'number'.
+  Type 'string' is not assignable to type 'number'.
+booleanMismatchRendering.ts(9,14): error TS2322: Type 'number | boolean' is not assignable to type 'number'.
+  Type 'boolean' is not assignable to type 'number'.

@@ -1,0 +1,2 @@
+forTest(2) => 1 | read 2; inner {"kind":"Ok","value":3}
+forTest(-1) => 1 | read undefined; inner {"kind":"Err","error":"negative undefined"}

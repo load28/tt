@@ -1,0 +1,19 @@
+//// [anAnnotationNamesTheDeclarationsItsTypeRefersTo.tt] 17 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:19 -> 26:3 len 94  "\ninterface Item { a: number }\nfunction outer<T>("...
+6:5 -> 47:5 len 10  "const z = "
+6:22 -> 32:21 len 1  "k"
+6:32 -> 35:20 len 1  "a"
+6:40 -> 39:20 len 1  "a"
+6:43 -> 47:21 len 157  ";\n    return [z, b] as const;\n  }\n  return inner"...
+14:3 -> 72:3 len 10  "const z = "
+14:20 -> 57:19 len 1  "k"
+14:30 -> 60:18 len 1  "i"
+14:38 -> 64:18 len 1  "i"
+14:41 -> 72:19 len 4  ";\n  "
+15:3 -> 90:3 len 10  "const y = "
+15:20 -> 75:19 len 1  "k"
+15:30 -> 78:18 len 1  "x"
+15:38 -> 82:18 len 1  "x"
+15:41 -> 90:19 len 100  ";\n  return [z.a, y.b];\n}\nconsole.log(JSON.string"...
+

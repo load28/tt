@@ -1,0 +1,10 @@
+//// [deeplyNestedExhaustivenessTerminatesAndAnswers.tt] ////
+variant A { A1(b: B), A2 }
+variant B { B1(c: C), B2 }
+variant C { C1(n: number), C2 }
+const v = match (a) {
+  A1(b: B1(c: C1(n))) => n,
+  A1(b: B2()) => 2,
+  A2 => 3,
+};
+

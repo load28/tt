@@ -1,0 +1,2 @@
+loopBody(1.5) => [null,null] | yield 1.5; yield 1.5
+loopBody(2) => [null,null] | yield 2; yield 2

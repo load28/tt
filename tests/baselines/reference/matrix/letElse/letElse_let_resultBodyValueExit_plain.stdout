@@ -1,0 +1,2 @@
+resultBodyValueExit(3) => {"kind":"Ok","value":[1,4]} | base 1; read 1; operand 3; read 3; reassigned 4
+resultBodyValueExit(-3) => {"kind":"Err","error":"negative -7"} | base 1; read 1; operand -3; read -3; exit -7; read -7

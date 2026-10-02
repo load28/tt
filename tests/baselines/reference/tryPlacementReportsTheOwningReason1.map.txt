@@ -1,0 +1,4 @@
+//// [tryPlacementReportsTheOwningReason1.tt] 2 mapping(s)
+1:1 -> 1:1 len 38  "function f() { for (let i = 0; i < 1; "
+1:52 -> 1:57 len 7  ") {} }\n"
+

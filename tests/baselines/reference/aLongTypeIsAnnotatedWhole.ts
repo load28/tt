@@ -1,0 +1,157 @@
+//// [aLongTypeIsAnnotatedWhole.tt] ////
+
+function make(tag: string) { return { p39_long_property_name: { nested_39: tag } } as { p0_long_property_name: { nested_0: string }; p1_long_property_name: { nested_1: string }; p2_long_property_name: { nested_2: string }; p3_long_property_name: { nested_3: string }; p4_long_property_name: { nested_4: string }; p5_long_property_name: { nested_5: string }; p6_long_property_name: { nested_6: string }; p7_long_property_name: { nested_7: string }; p8_long_property_name: { nested_8: string }; p9_long_property_name: { nested_9: string }; p10_long_property_name: { nested_10: string }; p11_long_property_name: { nested_11: string }; p12_long_property_name: { nested_12: string }; p13_long_property_name: { nested_13: string }; p14_long_property_name: { nested_14: string }; p15_long_property_name: { nested_15: string }; p16_long_property_name: { nested_16: string }; p17_long_property_name: { nested_17: string }; p18_long_property_name: { nested_18: string }; p19_long_property_name: { nested_19: string }; p20_long_property_name: { nested_20: string }; p21_long_property_name: { nested_21: string }; p22_long_property_name: { nested_22: string }; p23_long_property_name: { nested_23: string }; p24_long_property_name: { nested_24: string }; p25_long_property_name: { nested_25: string }; p26_long_property_name: { nested_26: string }; p27_long_property_name: { nested_27: string }; p28_long_property_name: { nested_28: string }; p29_long_property_name: { nested_29: string }; p30_long_property_name: { nested_30: string }; p31_long_property_name: { nested_31: string }; p32_long_property_name: { nested_32: string }; p33_long_property_name: { nested_33: string }; p34_long_property_name: { nested_34: string }; p35_long_property_name: { nested_35: string }; p36_long_property_name: { nested_36: string }; p37_long_property_name: { nested_37: string }; p38_long_property_name: { nested_38: string }; p39_long_property_name: { nested_39: string }; }; }
+function pick(n: number) {
+  const x = match (n) { 1 => make("a"), _ => make("b") };
+  return x.p39_long_property_name.nested_39;
+}
+console.log(pick(1), pick(2));
+
+export {};
+
+
+//// [aLongTypeIsAnnotatedWhole.ts]
+
+function make(tag: string) { return { p39_long_property_name: { nested_39: tag } } as { p0_long_property_name: { nested_0: string }; p1_long_property_name: { nested_1: string }; p2_long_property_name: { nested_2: string }; p3_long_property_name: { nested_3: string }; p4_long_property_name: { nested_4: string }; p5_long_property_name: { nested_5: string }; p6_long_property_name: { nested_6: string }; p7_long_property_name: { nested_7: string }; p8_long_property_name: { nested_8: string }; p9_long_property_name: { nested_9: string }; p10_long_property_name: { nested_10: string }; p11_long_property_name: { nested_11: string }; p12_long_property_name: { nested_12: string }; p13_long_property_name: { nested_13: string }; p14_long_property_name: { nested_14: string }; p15_long_property_name: { nested_15: string }; p16_long_property_name: { nested_16: string }; p17_long_property_name: { nested_17: string }; p18_long_property_name: { nested_18: string }; p19_long_property_name: { nested_19: string }; p20_long_property_name: { nested_20: string }; p21_long_property_name: { nested_21: string }; p22_long_property_name: { nested_22: string }; p23_long_property_name: { nested_23: string }; p24_long_property_name: { nested_24: string }; p25_long_property_name: { nested_25: string }; p26_long_property_name: { nested_26: string }; p27_long_property_name: { nested_27: string }; p28_long_property_name: { nested_28: string }; p29_long_property_name: { nested_29: string }; p30_long_property_name: { nested_30: string }; p31_long_property_name: { nested_31: string }; p32_long_property_name: { nested_32: string }; p33_long_property_name: { nested_33: string }; p34_long_property_name: { nested_34: string }; p35_long_property_name: { nested_35: string }; p36_long_property_name: { nested_36: string }; p37_long_property_name: { nested_37: string }; p38_long_property_name: { nested_38: string }; p39_long_property_name: { nested_39: string }; }; }
+function pick(n: number) {
+  let $tt_v0: {
+    p0_long_property_name: {
+        nested_0: string;
+    };
+    p1_long_property_name: {
+        nested_1: string;
+    };
+    p2_long_property_name: {
+        nested_2: string;
+    };
+    p3_long_property_name: {
+        nested_3: string;
+    };
+    p4_long_property_name: {
+        nested_4: string;
+    };
+    p5_long_property_name: {
+        nested_5: string;
+    };
+    p6_long_property_name: {
+        nested_6: string;
+    };
+    p7_long_property_name: {
+        nested_7: string;
+    };
+    p8_long_property_name: {
+        nested_8: string;
+    };
+    p9_long_property_name: {
+        nested_9: string;
+    };
+    p10_long_property_name: {
+        nested_10: string;
+    };
+    p11_long_property_name: {
+        nested_11: string;
+    };
+    p12_long_property_name: {
+        nested_12: string;
+    };
+    p13_long_property_name: {
+        nested_13: string;
+    };
+    p14_long_property_name: {
+        nested_14: string;
+    };
+    p15_long_property_name: {
+        nested_15: string;
+    };
+    p16_long_property_name: {
+        nested_16: string;
+    };
+    p17_long_property_name: {
+        nested_17: string;
+    };
+    p18_long_property_name: {
+        nested_18: string;
+    };
+    p19_long_property_name: {
+        nested_19: string;
+    };
+    p20_long_property_name: {
+        nested_20: string;
+    };
+    p21_long_property_name: {
+        nested_21: string;
+    };
+    p22_long_property_name: {
+        nested_22: string;
+    };
+    p23_long_property_name: {
+        nested_23: string;
+    };
+    p24_long_property_name: {
+        nested_24: string;
+    };
+    p25_long_property_name: {
+        nested_25: string;
+    };
+    p26_long_property_name: {
+        nested_26: string;
+    };
+    p27_long_property_name: {
+        nested_27: string;
+    };
+    p28_long_property_name: {
+        nested_28: string;
+    };
+    p29_long_property_name: {
+        nested_29: string;
+    };
+    p30_long_property_name: {
+        nested_30: string;
+    };
+    p31_long_property_name: {
+        nested_31: string;
+    };
+    p32_long_property_name: {
+        nested_32: string;
+    };
+    p33_long_property_name: {
+        nested_33: string;
+    };
+    p34_long_property_name: {
+        nested_34: string;
+    };
+    p35_long_property_name: {
+        nested_35: string;
+    };
+    p36_long_property_name: {
+        nested_36: string;
+    };
+    p37_long_property_name: {
+        nested_37: string;
+    };
+    p38_long_property_name: {
+        nested_38: string;
+    };
+    p39_long_property_name: {
+        nested_39: string;
+    };
+};
+  {
+    const $tt_m = n;
+    switch ($tt_m) {
+      case 1: {
+        $tt_v0 = make("a");
+        break;
+      }
+      default: {
+        $tt_v0 = make("b");
+        break;
+      }
+    }
+  }
+  const x = $tt_v0;
+  return x.p39_long_property_name.nested_39;
+}
+console.log(pick(1), pick(2));
+
+export {};

@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_08.rs::val_binding_replacement_is_not_a_val_error
+val let a = 1;
+a = 2;
+val const b = 1;
+b = 2;

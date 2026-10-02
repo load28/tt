@@ -1,0 +1,5 @@
+whileTest({"kind":"Circle","r":1}) => 1 | guard big false; small 1
+whileTest({"kind":"Circle","r":5}) => threw Cannot read properties of undefined (reading 'kind') | 
+whileTest({"kind":"Rect","w":4,"h":2}) => 1 | guard wide true; wide 4
+whileTest({"kind":"Rect","w":1,"h":3}) => threw Cannot read properties of undefined (reading 'kind') | 
+whileTest({"kind":"Point"}) => 0 | point 0

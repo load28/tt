@@ -50,8 +50,8 @@ mod tests;
 use crate::ast::*;
 use crate::{ExternVariant, VariantSymbol};
 
-pub(crate) use coverage::checked_coverage;
 use coverage::*;
+pub(crate) use coverage::{CoverageQuestion, checked_coverage, coverage_question};
 pub(crate) use patterns::has_nested;
 use patterns::*;
 use usefulness::{Alphabets, Cell, ColTy};
@@ -579,17 +579,17 @@ impl PatternAnalyses {
 /// assert_eq!(analyses.sites[0].pattern_bindings[0].ty.as_deref(), Some("string"));
 /// ```
 pub fn pattern_analyses(source: &str, externs: &[VariantSymbol]) -> PatternAnalyses {
-    pattern_analyses_with_kind(source, externs, crate::SourceKind::TypeScript)
+    let decls: Vec<crate::resolve::ExternDecl> = externs.iter().map(Into::into).collect();
+    pattern_analyses_with_kind(source, &decls, crate::SourceKind::TypeScript)
 }
 
 pub(crate) fn pattern_analyses_with_kind(
     source: &str,
-    externs: &[VariantSymbol],
+    decls: &[crate::resolve::ExternDecl],
     source_kind: crate::SourceKind,
 ) -> PatternAnalyses {
     let program = crate::parser::parse_with_kind(source, source_kind);
-    let decls: Vec<crate::resolve::ExternDecl> = externs.iter().map(Into::into).collect();
-    semantics_over(source, &program, &decls, Depth::Full).patterns
+    semantics_over(source, &program, decls, Depth::Full).patterns
 }
 
 /// The coverage-only analysis of an already-parsed program — sema's input,

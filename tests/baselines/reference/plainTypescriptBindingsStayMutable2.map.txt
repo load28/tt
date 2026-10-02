@@ -1,0 +1,3 @@
+//// [plainTypescriptBindingsStayMutable2.tt] 1 mapping(s)
+1:1 -> 1:1 len 36  "function f(x: X) {\n  x.value = 1;\n}\n"
+

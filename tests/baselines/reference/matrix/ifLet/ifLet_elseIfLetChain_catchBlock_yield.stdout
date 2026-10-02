@@ -1,0 +1,2 @@
+catchBlock(4) => 4 | throw "boom"; yield 4; read 4; first 4
+catchBlock(-4) => "negative -2" | throw "boom"; yield -4; read -4; second -2; read -2; second "negative -2"

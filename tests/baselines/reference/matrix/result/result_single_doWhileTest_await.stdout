@@ -1,0 +1,2 @@
+doWhileTest(2) => 2 | await; read 2
+doWhileTest(-1) => 2 | await; read -1

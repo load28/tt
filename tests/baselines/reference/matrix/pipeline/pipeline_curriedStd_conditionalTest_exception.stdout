@@ -1,0 +1,2 @@
+conditionalTest(5) => "truthy" | risky 5; map 15; then "truthy"
+conditionalTest(0) => "truthy" | risky 0; then "truthy"

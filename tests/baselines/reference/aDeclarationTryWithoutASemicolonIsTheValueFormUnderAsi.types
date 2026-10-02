@@ -1,0 +1,30 @@
+=== aDeclarationTryWithoutASemicolonIsTheValueFormUnderAsi.tt ===
+declare function g(): { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>g : function g(): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function f() {
+>f : function f(): number | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const n = try g()
+>n : const n: number
+>g : function g(): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  return n;
+>n : const n: number
+

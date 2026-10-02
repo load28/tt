@@ -1,0 +1,2 @@
+arrayElement(2.5) => [0,"2.50",2] | first 0; yield 2.5; positive 2.5; last 2
+arrayElement(-3) => [0,null,2] | first 0; yield -3; positive undefined; last 2

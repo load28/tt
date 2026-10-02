@@ -18,13 +18,13 @@ use crate::core_ir::{
     ResultRegionItem, Statement,
 };
 use crate::hir::ids::Idx;
-use crate::hir::{ArmBodyKind, BindingMode, BodyId, ExprId, NodeId};
+use crate::hir::{BindingMode, BodyId, ExprId, NodeId};
 use crate::ice::LoweringSubject;
 use crate::program_syntax::{
     ConditionalBranch, ConditionalFacts, CoreRoot, EagerPosition, EvaluationContext,
     EvaluationInputMode, EvaluationOwner, GlobalStatement, HostContinuation,
-    HostEvaluationOperation, HostEvaluationProtocol, HostExit, HostOwner, OwnerReach,
-    ProgramSyntax, SourceSpan, TtNodeId,
+    HostEvaluationOperation, HostEvaluationProtocol, HostExit, HostOwner, OptionalCallTest,
+    OwnerReach, ProgramSyntax, SourceSpan, TtNodeId,
 };
 
 use builder::*;
@@ -68,6 +68,7 @@ enum RegionPlacement {
         source: Option<SourceSpan>,
         exits: Vec<HostExit>,
         protocol: HostEvaluationProtocol,
+        context: Option<EvaluationContext>,
     },
     SourceEdit,
 }
@@ -122,6 +123,7 @@ pub(crate) struct EvaluationFile {
     /// and a tt node inside them is lowered elsewhere.
     tt_spans: Vec<SourceSpan>,
     script: bool,
+    commonjs: bool,
     globals: HashMap<SourceSpan, GlobalStatement>,
 }
 
@@ -155,8 +157,12 @@ pub(crate) struct LoweringPlan {
     lexical_declaration_bodies: Vec<LexicalDeclarationBody>,
     ambient_items: HashSet<NodeId>,
     script: bool,
+    commonjs: bool,
     global_temps: HashMap<crate::core_ir::TempId, String>,
     owner_model_unavailable: bool,
+    /// What TypeScript's completion rules say at each construct's place,
+    /// for the editor ([`crate::program_syntax::CompletionScope`]).
+    pub(crate) completion_scopes: Vec<crate::program_syntax::CompletionScope>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -238,10 +244,12 @@ pub(crate) struct PlannedConditionalOperation {
     pub(crate) condition: PlannedEvaluationInput,
     /// The tt values the operation consumes, in source order.
     pub(crate) values: Vec<ExprId>,
-    /// For a logical operation, the complete active branch and the
-    /// evaluation steps between each consumed value and that branch. This
-    /// lets the target rebuild `condition && wrapper(match ...)` as one
-    /// region instead of requiring the match to be the entire branch.
+    /// For each consumed value that is not a whole branch or argument by
+    /// itself, the branch or argument holding it and the evaluation steps
+    /// between the value and that branch. This lets the target rebuild
+    /// `condition && wrapper(match ...)`, `c ? (try a) + (try b) : d`, and
+    /// `f?.(try r * 2)` as one region instead of requiring each value to be
+    /// the entire branch or argument.
     pub(crate) active: Vec<PlannedActiveBranch>,
     /// The evaluation steps outside this operation (its own host context),
     /// shared by every consumed value.
@@ -268,26 +276,41 @@ pub(crate) enum PlannedConditionalKind {
         consequent: PlannedBranch,
         alternate: PlannedBranch,
     },
-    /// `callee?.(args)` — the arguments evaluate only past the nullish
-    /// check, and a member callee calls through its receiver.
+    /// `callee?.(args)` or `receiver?.name(args)` — the arguments evaluate
+    /// only past the nullish check of the input `test` names, and a member
+    /// callee calls through its receiver.
     OptionalCall {
         arguments: Vec<PlannedOperand>,
         type_args: Option<SourceSpan>,
+        test: OptionalCallTest,
+    },
+    LogicalAssignment {
+        operator: crate::program_syntax::LogicalAssignment,
     },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PlannedBranch {
-    /// A tt value delivering straight into the result slot.
-    Value(ExprId),
+    /// The tt values of the branch, in source order: one delivering straight
+    /// into the result slot, or several (or one inside a larger branch)
+    /// evaluated in order before the branch is rebuilt from their slots.
+    Values(Vec<ExprId>),
     /// Original source, relocated into the branch.
     Source(SourceSpan),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum PlannedOperand {
     /// A tt value delivering into its own slot before the call.
     Value(ExprId),
+    /// An argument holding tt values inside a larger expression: the values
+    /// evaluate, in source order, into their slots before the call, and the
+    /// argument is rebuilt from its source around them.
+    Composed {
+        span: SourceSpan,
+        spread: bool,
+        values: Vec<ExprId>,
+    },
     /// Original argument source. Arguments before the last tt value are
     /// captured (in order) before the values run; arguments after it are
     /// inlined into the rebuilt call, where they evaluate in place.
@@ -343,12 +366,14 @@ pub(crate) enum TargetCapability {
 /// Why a value cannot be lowered to statements in its host owner.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ExpressionBoundaryReason {
-    /// A parameter default, class field initializer, or class definition
+    /// A parameter default, class field initializer, class definition
     /// position (a decorator, a computed member name, or a decorated class's
-    /// heritage): standard TypeScript has no statement position in the
-    /// owner, and moving the value out of it would change the parameter
-    /// scope, `this`, `arguments`, the function's `length`, or the field or
-    /// class definition evaluation order.
+    /// heritage), or enum member initializer: standard TypeScript has no
+    /// statement position in the owner, and moving the value out of it would
+    /// change the parameter scope, `this`, `arguments`, the function's
+    /// `length`, the field or class definition evaluation order, or which
+    /// binding an enum member's name denotes and when the member is
+    /// evaluated.
     OwnerTakesNoStatements,
     /// The value runs once per iteration but its owner runs once per loop —
     /// it sits in a loop header, so hoisting to the owner would change how
@@ -374,6 +399,9 @@ pub(crate) enum ExpressionBoundaryReason {
     ReferenceNotPreservable,
     /// The Core value has no statement form ([`CoreFile::has_statement_form`]).
     ValueHasNoStatementForm,
+    LoopHeadDeclarator,
+    LoopHeadBinding,
+    LogicalAssignmentValue,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
@@ -419,6 +447,8 @@ pub(crate) enum PlannedEvaluationInput {
         mode: EvaluationInputMode,
         target: ValueSlotId,
         receiver: Option<PlannedReceiver>,
+        /// A member reference's computed key, evaluated after its receiver.
+        key: Option<PlannedReceiver>,
     },
     Slot {
         slot: ValueSlotId,
@@ -443,9 +473,13 @@ pub(crate) enum PlannedEvaluationInput {
     },
 }
 
-/// How a member reference preserves its `this` receiver. A provably inert
-/// receiver can be re-read when the captured callee is invoked; every other
-/// receiver is evaluated once into its own slot.
+/// How a part of a member reference — its receiver or its computed key — is
+/// evaluated before the call's arguments. The member itself is read where
+/// the call is made, through the receiver, so the call keeps `this`, a
+/// generic method's inference, and the receiver's narrowing. A provably
+/// inert part, or an authored identifier or `this`
+/// ([`crate::program_syntax::HostReferencePart::read_at_call`]), is read
+/// again at the call; every other part is evaluated once into its own slot.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum PlannedReceiver {
     Captured {
@@ -479,12 +513,32 @@ struct HostBinding {
 struct PlannedSourceSlot {
     target: ValueSlotId,
     receiver: Option<PlannedReceiver>,
+    key: Option<PlannedReceiver>,
 }
 
 impl LoweringPlan {
-    pub(crate) fn without_owner_model() -> Self {
+    /// The plan of a file whose TypeScript gives no owner model. The helpers
+    /// a lowering without owners still calls are named against the names
+    /// the source already uses, as a built plan names them.
+    pub(crate) fn without_owner_model(source: &str, source_kind: crate::SourceKind) -> Self {
+        let written = crate::generated_names::source_names(source, source_kind);
+        let mut occupied = written.clone();
+        let mut name = |base: &str| {
+            crate::generated_names::allocate(base, &mut occupied)
+                .unwrap_or_else(|| crate::ice::bug!("no free generated name remains for {base}"))
+        };
+        let expression_boundary_name = name("$tt_expr");
+        let match_raise_name = name("$tt_raise");
+        let match_show_name = name("$tt_show");
+        let allocated = occupied.difference(&written).cloned().collect();
         Self {
             owner_model_unavailable: true,
+            expression_boundary_name,
+            match_raise_name,
+            match_show_name,
+            generated_names: Some(crate::generated_names::GeneratedNames::from_occupied(
+                occupied, allocated,
+            )),
             ..Self::default()
         }
     }
@@ -638,6 +692,10 @@ impl LoweringPlan {
         self.script
     }
 
+    pub(crate) fn uses_commonjs_syntax(&self) -> bool {
+        self.commonjs
+    }
+
     pub(crate) fn global_temps(&self) -> &HashMap<crate::core_ir::TempId, String> {
         &self.global_temps
     }
@@ -668,9 +726,6 @@ impl std::fmt::Display for EvaluationError {
             EvaluationError::DiscardedResult { .. } => "a Result value is discarded",
             EvaluationError::RepeatedPropagation { .. } => {
                 "a propagation would repeat in its loop header"
-            }
-            EvaluationError::UnsupportedForInitializer { .. } => {
-                "a `for` initializer assignment has no statement-safe rewrite"
             }
         };
         f.write_str(reason)
@@ -731,9 +786,15 @@ pub(crate) enum EvaluationError {
     RepeatedPropagation {
         source: SourceSpan,
     },
-    /// Only a declaration initializer can retain its successful payload in a
-    /// C-style `for` header. An assignment has no statement-safe rewrite.
-    UnsupportedForInitializer {
-        source: SourceSpan,
-    },
+}
+
+impl EvaluationError {
+    pub(crate) fn source(&self) -> Option<SourceSpan> {
+        match self {
+            EvaluationError::DiscardedResult { source }
+            | EvaluationError::RepeatedPropagation { source } => Some(*source),
+            EvaluationError::InvalidHostOwner { value, .. } => Some(*value),
+            _ => None,
+        }
+    }
 }

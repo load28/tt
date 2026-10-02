@@ -1,0 +1,10 @@
+//// [typecheckMatchOnHandwrittenDiscriminatedUnion.tt] 8 mapping(s)
+1:1 -> 19:1 len 123  "\ntype AppEvent =\n  | { kind: \"click\"; x: number;"...
+5:35 -> 26:19 len 1  "e"
+6:9 -> 29:17 len 1  "x"
+6:12 -> 29:20 len 1  "y"
+6:18 -> 30:18 len 5  "x + y"
+7:7 -> 34:17 len 4  "code"
+7:16 -> 35:18 len 11  "code.length"
+8:2 -> 44:2 len 14  ";\n\nexport {};\n"
+

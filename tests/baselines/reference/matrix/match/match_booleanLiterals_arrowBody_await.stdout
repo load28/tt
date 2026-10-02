@@ -1,0 +1,2 @@
+arrowBody(true) => 1 | await; yes 1
+arrowBody(false) => 0 | await; no 0

@@ -1,0 +1,18 @@
+=== variantGenericsFlowIntoConstructors.tt ===
+variant Option<T> {
+>Option : type Option<T> = {
+>       kind: "Some";
+>       value: T;
+>   } | {
+>       kind: "None";
+>   }
+>T : (type parameter) T in type Option<T>
+  Some(value: T),
+>Some : (property) Some: <T>(value: T) => Option<T>
+>value : (property) value: T
+>T : (type parameter) T in type Option<T>
+  None,
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+

@@ -1,0 +1,69 @@
+=== generatedControlFlowUsesStatementLinesAndExpandedBlocks.tt ===
+variant E { A(v: number), B }
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (v: number) => E
+>v : (property) v: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function f(e: E): Result<number, string> {
+>f : function f(e: E): Result<number, string>
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+>Result : type Result = /*unresolved*/ any
+  const value = try read();
+>value : const value: any
+  const matched = match (e) { A(v) => v, B => 0 };
+>matched : const matched: number
+>e : (parameter) e: E
+>v : const v: number
+>v : const v: number
+  return Result.Ok(value + matched);
+>value : const value: any
+>matched : const matched: number
+function block(e: E): number {
+>block : function block(e: E): number
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+  return match (e) {
+>e : (parameter) e: E
+    A(v) if v > 0 => {
+>v : const v: number
+>v : const v: number
+      const doubled = v * 2;
+>doubled : const doubled: number
+>v : const v: number
+      return doubled;
+>doubled : const doubled: number
+function bind(e: E): number {
+>bind : function bind(e: E): number
+>e : (parameter) e: E
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+  const A(v) = e else {
+>v : const v: number
+>e : (parameter) e: E
+  return v;
+>v : const v: number
+const computed = result {
+>computed : const computed: any
+

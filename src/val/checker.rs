@@ -7,9 +7,14 @@ use super::*;
 /// The `val` checker's walk state.
 pub(super) struct Checker<'a> {
     pub(super) src: &'a str,
+    /// The surface the source is written in, which decides how a
+    /// parenthesized target reads (`<T>x` is a type assertion only
+    /// outside TSX).
+    pub(super) source_kind: SourceKind,
     /// The parser's `val` modifiers.
     pub(super) modifiers: &'a Modifiers,
     pub(super) signatures: &'a HashMap<&'a str, Option<Vec<ParamSig>>>,
+    pub(super) applications: &'a Applications,
     /// Probe mode: collect method calls instead of reporting violations.
     /// The violations are the same either way — the file has already been
     /// checked by the time its probes are collected.
@@ -49,7 +54,11 @@ impl<'a> Checker<'a> {
     /// dropped on the way out, so an interpolation cannot leak scopes into
     /// the stream that contains it.
     pub(super) fn walk(&self, tokens: &'a [Token], frames: &mut Vec<Frame<'a>>) {
-        let writes = targets::writes(self.src, tokens);
+        crate::stack::grow(|| self.walk_grown(tokens, frames));
+    }
+
+    fn walk_grown(&self, tokens: &'a [Token], frames: &mut Vec<Frame<'a>>) {
+        let writes = targets::writes(self.src, self.source_kind, tokens);
         let arms = self.arm_arrows(tokens);
         let base = frames.len();
         // Parameter scopes, activated when the walk reaches the function
@@ -102,7 +111,7 @@ impl<'a> Checker<'a> {
                     }
                 }
                 TokenKind::Ident => {
-                    i = self.visit_ident(tokens, i, frames, &writes);
+                    i = self.visit_ident(tokens, i, frames, &writes, &arms);
                     continue;
                 }
                 _ => {}
@@ -121,6 +130,7 @@ impl<'a> Checker<'a> {
         i: usize,
         frames: &mut Vec<Frame<'a>>,
         writes: &std::collections::HashSet<usize>,
+        arms: &HashSet<usize>,
     ) -> usize {
         let word = self.text(&tokens[i]);
         if dotted_at(tokens, 0, i) && !writes.contains(&tokens[i].span.start) {
@@ -149,10 +159,30 @@ impl<'a> Checker<'a> {
                 return i + 1;
             }
             "function" | "class" => {
-                if let Some(t) = tokens.get(i + 1)
+                let name = if punct_at(tokens, i + 1, b'*') {
+                    i + 2
+                } else {
+                    i + 1
+                };
+                if let Some(t) = tokens.get(name)
                     && matches!(t.kind, TokenKind::Ident)
+                    && !matches!(self.text(t), "extends" | "implements")
                 {
-                    self.declare(frames, vec![self.text(t)], None);
+                    if tokens[i].facts.declaration() {
+                        self.declare(frames, vec![self.text(t)], None);
+                    } else if let Some(end) = self.own_scope_end(tokens, word, name + 1, arms) {
+                        // A function or class expression's name binds only
+                        // inside the function or class itself (ECMA-262
+                        // §15.2.5, §15.7.15), below its parameters.
+                        frames.push(Frame {
+                            end,
+                            vars: vec![Var {
+                                name: self.text(t),
+                                val_at: None,
+                                ident: t.span.start,
+                            }],
+                        });
+                    }
                 }
                 return i + 1;
             }
@@ -174,24 +204,53 @@ impl<'a> Checker<'a> {
 
         self.check_mutation(tokens, i, frames, writes.contains(&tokens[i].span.start));
         if punct_at(tokens, i + 1, b'(') {
-            match self.sink {
-                // Which declaration a call names is the checker's question:
-                // every call to a name the file declares is collected, and
-                // the pairing is by symbol identity, so a name the untyped
-                // path has to call ambiguous is settled per call site. The
-                // name gate only skips calls no same-file declaration
-                // could possibly match.
-                Sink::Probes(_) if self.signatures.contains_key(word) => {
-                    self.probe_call(tokens, i, word);
-                }
-                _ => {
-                    if let Some(Some(params)) = self.signatures.get(word) {
-                        self.check_call(tokens, i + 1, word, params, frames);
-                    }
+            self.call(tokens, tokens[i].span, list_entries(tokens, i + 1), frames);
+        }
+        let piped: Vec<(usize, usize)> = self
+            .applications
+            .piped_into(tokens[i].span.start)
+            .iter()
+            .filter_map(|head| token_range(tokens, *head))
+            .collect();
+        if !piped.is_empty() {
+            self.call(tokens, tokens[i].span, piped, frames);
+        }
+        if let Some((end, callee)) = self.applications.flow_at(tokens[i].span.start)
+            && i > 0
+            && punct_at(tokens, i - 1, b'(')
+            && let Some(close) = find_close_at(tokens, i - 1)
+            && tokens[close - 1].span.end == end
+            && punct_at(tokens, close + 1, b'(')
+        {
+            self.call(tokens, callee, list_entries(tokens, close + 1), frames);
+        }
+        i + 1
+    }
+
+    fn call(
+        &self,
+        tokens: &[Token],
+        callee: Span,
+        entries: Vec<(usize, usize)>,
+        frames: &[Frame<'a>],
+    ) {
+        let word = &self.src[callee.start..callee.end];
+        match self.sink {
+            // Which declaration a call names is the checker's question:
+            // every call to a name the file declares is collected, and
+            // the pairing is by symbol identity, so a name the untyped
+            // path has to call ambiguous is settled per call site. The
+            // name gate only skips calls no same-file declaration
+            // could possibly match.
+            Sink::Probes(_) if self.signatures.contains_key(word) => {
+                self.probe_call(tokens, entries, callee.start, word);
+            }
+            _ => {
+                if let Some(Some(params)) = self.signatures.get(word) {
+                    self.check_call(tokens, entries, word, params, frames);
                 }
             }
         }
-        i + 1
     }
 
     /// Declaration instantiation on entry to the scope whose contents are
@@ -218,9 +277,7 @@ impl<'a> Checker<'a> {
                     continue;
                 }
                 TokenKind::Ident
-                    if self.text(&tokens[k]) == "function"
-                        && !dotted_at(tokens, 0, k)
-                        && self.statement_start(tokens, from, k) =>
+                    if self.text(&tokens[k]) == "function" && tokens[k].facts.declaration() =>
                 {
                     let name = if punct_at(tokens, k + 1, b'*') {
                         k + 2
@@ -262,26 +319,6 @@ impl<'a> Checker<'a> {
             }
             k += 1;
         }
-    }
-
-    /// Whether the token at `k` begins a statement of the statement list
-    /// that starts at `from`, looking back over the words that may prefix
-    /// a declaration.
-    fn statement_start(&self, tokens: &[Token], from: usize, k: usize) -> bool {
-        let mut p = k;
-        while p > from {
-            let prev = &tokens[p - 1];
-            match prev.kind {
-                TokenKind::Ident
-                    if matches!(self.text(prev), "async" | "export" | "default" | "declare") =>
-                {
-                    p -= 1;
-                }
-                TokenKind::Punct(b';' | b'}') => return true,
-                _ => return false,
-            }
-        }
-        true
     }
 
     /// The token index at which a nested `var` scope that starts at `k`
@@ -390,6 +427,31 @@ impl<'a> Checker<'a> {
         arms
     }
 
+    /// The token index at which the scope a function or class expression
+    /// opens for its own name ends: its body's closing brace. `after` is the
+    /// token after the name, where type parameters, a parameter list, or a
+    /// class heritage may follow.
+    fn own_scope_end(
+        &self,
+        tokens: &'a [Token],
+        keyword: &str,
+        after: usize,
+        arms: &HashSet<usize>,
+    ) -> Option<usize> {
+        let mut k = after;
+        while k < tokens.len() {
+            match tokens[k].kind {
+                TokenKind::Punct(b'(') if keyword == "function" => {
+                    return self.function_body(tokens, k, arms).map(|(_, end, _)| end);
+                }
+                TokenKind::Punct(b'{') if keyword == "class" => return find_close_at(tokens, k),
+                _ if tokens[k].opens_bracket() => k = find_close_at(tokens, k)? + 1,
+                _ => k += 1,
+            }
+        }
+        None
+    }
+
     /// Registers bindings in the innermost scope.
     fn declare(&self, frames: &mut [Frame<'a>], names: Vec<&'a str>, val_at: Option<usize>) {
         let src = self.src;
@@ -434,7 +496,7 @@ impl<'a> Checker<'a> {
             .into_iter()
             .zip(list_entries(tokens, open))
             .flat_map(|(param, (start, end))| {
-                let val_at = param.is_val.then(|| tokens[start].span.start);
+                let val_at = param.val_at;
                 let mut names = Vec::new();
                 let mut k = start;
                 while k < end
@@ -547,7 +609,8 @@ impl<'a> Checker<'a> {
         let name = self.text(&tokens[root]);
         // In probe mode the root is *not* resolved here: which binding it
         // names is the checker's answer, from the symbol at this identifier.
-        if !matches!(self.sink, Sink::Probes(_)) && self.lookup(frames, name).is_none() {
+        let declared = self.lookup(frames, name);
+        if !matches!(self.sink, Sink::Probes(_)) && declared.is_none() {
             return;
         }
         let offset = tokens[root].span.start;
@@ -557,17 +620,16 @@ impl<'a> Checker<'a> {
                 name: name.to_string(),
                 method: None,
             }),
-            Sink::Report(sink) => sink.borrow_mut().push(
-                TtError::span(
-                    offset,
-                    offset + name.len(),
-                    format!(
-                        "cannot mutate through val binding `{name}` \
-                         (the binding is declared with `val`, so every access path from it is read-only)"
-                    ),
-                )
-                .code(crate::DiagnosticCode::ValMutation),
-            ),
+            Sink::Report(sink) => sink.borrow_mut().push(mutation_error(
+                offset,
+                offset + name.len(),
+                name,
+                None,
+                declared.map(|val_at| ValSite {
+                    val_at,
+                    modifier_end: self.modifiers[&val_at].span.end,
+                }),
+            )),
         }
     }
 
@@ -578,7 +640,7 @@ impl<'a> Checker<'a> {
     fn check_call(
         &self,
         tokens: &[Token],
-        open: usize,
+        entries: Vec<(usize, usize)>,
         callee: &str,
         params: &[ParamSig],
         frames: &[Frame<'a>],
@@ -586,7 +648,7 @@ impl<'a> Checker<'a> {
         let Sink::Report(report) = self.sink else {
             return; // probes go through `probe_call`; Calls asks nothing
         };
-        for (idx, (start, end)) in list_entries(tokens, open).into_iter().enumerate() {
+        for (idx, (start, end)) in entries.into_iter().enumerate() {
             if !matches!(tokens[start].kind, TokenKind::Ident) || dotted_at(tokens, 0, start) {
                 continue;
             }
@@ -602,7 +664,7 @@ impl<'a> Checker<'a> {
             let Some(param) = params.get(idx) else {
                 continue;
             };
-            if param.is_val {
+            if param.is_val() {
                 continue;
             }
             let described = match &param.name {
@@ -630,11 +692,17 @@ impl<'a> Checker<'a> {
     /// declaration's ([`ValPass`]). Nothing is decided here: which
     /// declaration is called, whether the argument is a `val` binding, and
     /// which parameter it lands on are all the verdict's half.
-    fn probe_call(&self, tokens: &[Token], callee: usize, word: &str) {
+    fn probe_call(
+        &self,
+        tokens: &[Token],
+        entries: Vec<(usize, usize)>,
+        callee_at: usize,
+        word: &str,
+    ) {
         let Sink::Probes(sink) = self.sink else {
             return;
         };
-        for (idx, (start, end)) in list_entries(tokens, callee + 1).into_iter().enumerate() {
+        for (idx, (start, end)) in entries.into_iter().enumerate() {
             if !matches!(tokens[start].kind, TokenKind::Ident) || dotted_at(tokens, 0, start) {
                 continue;
             }
@@ -647,7 +715,7 @@ impl<'a> Checker<'a> {
                 offset: tokens[start].span.start,
                 name: self.text(&tokens[start]).to_string(),
                 callee: word.to_string(),
-                callee_at: tokens[callee].span.start,
+                callee_at,
                 arg_index: idx,
             });
         }

@@ -1,0 +1,23 @@
+==== ttc --out-dir (exit 1) ====
+error[match-not-exhaustive]: match on variant Dir is not exhaustive: missing "South", "East", "West"
+ --> ./missingCasesAreAllListed.tt:2:23
+  |
+2 | const f = (d: Dir) => match (d) { North => 1 };
+  |                       ^^^^^^^^^
+  |
+  = help: add the missing arms: `, South => undefined, East => undefined, West(deg) => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on variant Dir is not exhaustive: missing "South", "East", "West"
+ --> missingCasesAreAllListed.tt:2:23
+  |
+2 | const f = (d: Dir) => match (d) { North => 1 };
+  |                       ^^^^^^^^^
+  |
+  = help: add the missing arms: `, South => undefined, East => undefined, West(deg) => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

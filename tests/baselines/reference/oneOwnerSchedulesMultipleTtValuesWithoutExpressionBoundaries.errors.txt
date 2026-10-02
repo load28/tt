@@ -1,0 +1,24 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./oneOwnerSchedulesMultipleTtValuesWithoutExpressionBoundaries.tt → $DIR/out/oneOwnerSchedulesMultipleTtValuesWithoutExpressionBoundaries.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'ctor'.
+ --> oneOwnerSchedulesMultipleTtValuesWithoutExpressionBoundaries.tt:2:27
+  |
+2 | const value = new (match (ctor) { A(value) => value, B => fallback })(match (arg) { A(value) => value, B => 0 });
+  |                           ^^^^
+error[ts2304]: Cannot find name 'fallback'.
+ --> oneOwnerSchedulesMultipleTtValuesWithoutExpressionBoundaries.tt:2:59
+  |
+2 | const value = new (match (ctor) { A(value) => value, B => fallback })(match (arg) { A(value) => value, B => 0 });
+  |                                                           ^^^^^^^^
+error[ts2304]: Cannot find name 'arg'.
+ --> oneOwnerSchedulesMultipleTtValuesWithoutExpressionBoundaries.tt:2:78
+  |
+2 | const value = new (match (ctor) { A(value) => value, B => fallback })(match (arg) { A(value) => value, B => 0 });
+  |                                                                              ^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+oneOwnerSchedulesMultipleTtValuesWithoutExpressionBoundaries.ts(29,17): error TS2304: Cannot find name 'ctor'.
+oneOwnerSchedulesMultipleTtValuesWithoutExpressionBoundaries.ts(37,22): error TS2304: Cannot find name 'fallback'.
+oneOwnerSchedulesMultipleTtValuesWithoutExpressionBoundaries.ts(46,17): error TS2304: Cannot find name 'arg'.

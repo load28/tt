@@ -1,0 +1,51 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[unknown-case]: variant Shape has no case `Circel`
+ --> ./main.tt:5:47
+  |
+5 | const top0 = match (note("operand", input)) { Circel(r) => note("circle", r), Rect(w, h) => note("rect", w * h), Point => note("point", 0) };
+  |                                               ^^^^^^
+  |
+  = help: a case with a similar name exists: `Circle`
+
+error[unknown-case]: variant Shape has no case `Circel`
+ --> ./main.tt:8:47
+  |
+8 | const top1 = match (note("operand", input)) { Circel(r) => note("circle", r), Rect(w, h) => note("rect", w * h), Point => note("point", 0) };
+  |                                               ^^^^^^
+  |
+  = help: a case with a similar name exists: `Circle`
+
+error[unknown-case]: variant Shape has no case `Circel`
+  --> ./main.tt:11:47
+   |
+11 | const top2 = match (note("operand", input)) { Circel(r) => note("circle", r), Rect(w, h) => note("rect", w * h), Point => note("point", 0) };
+   |                                               ^^^^^^
+   |
+   = help: a case with a similar name exists: `Circle`
+
+
+==== ttc --check-types (exit 1) ====
+error[unknown-case]: variant Shape has no case `Circel`
+ --> main.tt:5:47
+  |
+5 | const top0 = match (note("operand", input)) { Circel(r) => note("circle", r), Rect(w, h) => note("rect", w * h), Point => note("point", 0) };
+  |                                               ^^^^^^
+  |
+  = help: a case with a similar name exists: `Circle`
+error[unknown-case]: variant Shape has no case `Circel`
+ --> main.tt:8:47
+  |
+8 | const top1 = match (note("operand", input)) { Circel(r) => note("circle", r), Rect(w, h) => note("rect", w * h), Point => note("point", 0) };
+  |                                               ^^^^^^
+  |
+  = help: a case with a similar name exists: `Circle`
+error[unknown-case]: variant Shape has no case `Circel`
+  --> main.tt:11:47
+   |
+11 | const top2 = match (note("operand", input)) { Circel(r) => note("circle", r), Rect(w, h) => note("rect", w * h), Point => note("point", 0) };
+   |                                               ^^^^^^
+   |
+   = help: a case with a similar name exists: `Circle`
+
+==== tsc on the emitted TypeScript (exit 0) ====

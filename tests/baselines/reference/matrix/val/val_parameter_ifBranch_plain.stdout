@@ -1,0 +1,2 @@
+ifBranch(3) => 3 | enter true; operand 3; param 3
+ifBranch(8) => 8 | enter true; operand 8; param 8

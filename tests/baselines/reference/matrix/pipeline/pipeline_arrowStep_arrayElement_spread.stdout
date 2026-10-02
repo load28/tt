@@ -1,0 +1,2 @@
+arrayElement(8) => [0,9,2] | first 0; arrow 9; last 2
+arrayElement(9) => [0,10,2] | first 0; arrow 10; last 2

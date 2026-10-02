@@ -1,0 +1,7 @@
+=== diagnostics main.tt ===
+diagnostics: 1 diagnostic(s)
+  4:71-4:72 "," error TS1109: Expression expected.
+  restates: source-not-typescript
+published: 1 diagnostic(s)
+  4:71-4:72 "," error ts1109 (ttc): Expression expected.
+

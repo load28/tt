@@ -1,0 +1,2 @@
+method(2) => 4 | this "holder"; operand 2; double 4; finally 0
+method(5) => 10 | this "holder"; operand 5; double 10; finally 0

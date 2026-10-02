@@ -1,0 +1,2 @@
+componentBody(3) => "<p>4</p>" | open res; operand 3; read 3; reassigned 4; dispose res
+componentBody(-3) => "<p>diverged</p>" | open res; operand -3; read -3; dispose res

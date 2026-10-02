@@ -1,0 +1,9 @@
+//// [aLineBreakInsideAnExpressionStillContinuesIt1.tt] 7 mapping(s)
+1:25 -> 2:28 len 6  "number"
+1:25 -> 5:17 len 6  "number"
+1:40 -> 7:3 len 116  "\ndeclare let q: number;\ndeclare const o: O;\ndecl"...
+6:17 -> 15:15 len 5  "value"
+6:26 -> 13:20 len 1  "o"
+6:30 -> 16:7 len 5  "value"
+6:37 -> 18:4 len 2  ";\n"
+

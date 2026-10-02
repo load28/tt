@@ -1,0 +1,4 @@
+compoundAssignment({}) => "start:range" | open res; initial "start:"; target {"total":"start:"}; operand {}; range "range"; dispose res
+compoundAssignment({}) => "start:1" | open res; initial "start:"; target {"total":"start:"}; operand {}; type 1; dispose res
+compoundAssignment({}) => "start:plain" | open res; initial "start:"; target {"total":"start:"}; operand {}; error "plain"; dispose res
+compoundAssignment("text") => "start:null" | open res; initial "start:"; target {"total":"start:"}; operand "text"; other null; dispose res

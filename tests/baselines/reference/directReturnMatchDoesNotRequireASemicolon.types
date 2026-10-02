@@ -1,0 +1,10 @@
+=== directReturnMatchDoesNotRequireASemicolon.tt ===
+function f(x: T) {
+>f : function f(x: T): any
+>x : (parameter) x: T
+>T : type T = /*unresolved*/ any
+  return match (x) { A(value) => value, _ => 0 }
+>x : (parameter) x: T
+>value : const value: T
+>value : const value: T
+

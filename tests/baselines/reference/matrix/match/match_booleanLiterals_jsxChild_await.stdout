@@ -1,0 +1,2 @@
+jsxChild(true) => "<p>1</p>" | await; yes 1
+jsxChild(false) => "<p>0</p>" | await; no 0

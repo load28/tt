@@ -1,0 +1,2 @@
+yieldOperand(5) => 15 | open res; operand 5; map 15; yield 15; dispose res
+yieldOperand(0) => -1 | open res; operand 0; yield -1; dispose res

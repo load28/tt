@@ -70,6 +70,7 @@ use crate::verify;
 use std::collections::HashMap;
 
 use coverage::*;
+pub(crate) use coverage::{Witnesses, non_exhaustive};
 
 /// Checks a whole program and returns **every** tt-level violation, in
 /// source order. `verify` enables swc validation of field types; `externs`
@@ -81,6 +82,7 @@ use coverage::*;
 /// checked either way.
 pub(crate) fn check_all(
     source: &str,
+    source_kind: crate::SourceKind,
     program: &Program,
     verify: bool,
     defer_to_checker: bool,
@@ -104,11 +106,13 @@ pub(crate) fn check_all(
         .collect();
     let mut checker = Checker {
         source,
-        tokens,
+        source_kind,
         verify,
         errors: Vec::new(),
-        coverage_suppressed: Vec::new(),
         result_completions,
+        semantic,
+        tokens,
+        function_targets: std::cell::OnceCell::new(),
     };
     checker.visit_program(program, Ctx::Top, Place::Module);
     // One analysis, two reports. Resolution comes first — a pattern whose
@@ -119,12 +123,7 @@ pub(crate) fn check_all(
     // B's coverage is not match A's typo's business.
     checker.errors.extend(resolution_errors(&semantic.patterns));
     if !defer_to_checker {
-        report_coverage(
-            source,
-            &semantic.patterns,
-            &checker.coverage_suppressed,
-            &mut checker.errors,
-        );
+        report_coverage(source, &semantic.patterns, &mut checker.errors);
     }
     // Source order, whatever order the categories ran in — the reader fixes
     // a file top to bottom. Stable, so equal positions keep report order.
@@ -142,18 +141,14 @@ pub(crate) fn check_all(
 /// keeps one rule in one place), and it only produces entries it can name
 /// a replacement for. This function is the wording.
 /// The coverage holes of `analyses`, answered from the declarations the file
-/// can see — what `compile` reports when no checker is available.
-///
-/// The typed pass prefers the checker's alphabet, which is narrower: it
-/// knows what an earlier guard already removed. This is what it falls back
-/// to for a file the checker holds no answer about, so that file is still
-/// told about its holes rather than passing silently.
+/// can see — what `compile` reports, and what the typed pass reports for
+/// every file before it adds the holes only the checker's alphabet shows.
 pub(crate) fn coverage_errors(
     source: &str,
     analyses: &crate::analysis::PatternAnalyses,
 ) -> Vec<TtError> {
     let mut errors = Vec::new();
-    coverage::report_coverage(source, analyses, &[], &mut errors);
+    coverage::report_coverage(source, analyses, &mut errors);
     errors
 }
 
@@ -201,33 +196,45 @@ pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> 
 
 struct Checker<'a> {
     source: &'a str,
-    tokens: &'a [crate::lexer::Token],
+    source_kind: crate::SourceKind,
     verify: bool,
     /// Every violation found so far — the walk keeps going after each one.
     errors: Vec<TtError>,
-    /// Keyword offsets of matches whose *structure* is broken (mixed tag
-    /// and literal patterns). Their coverage answer would be an effect
-    /// stacked on a cause, so [`report_coverage`] skips them — the same
-    /// per-match recovery boundary resolution failures use.
-    coverage_suppressed: Vec<usize>,
     /// Result completion is a HIR flow fact. Index it by the AST node's
     /// stable source start so this AST diagnostic walk consumes the same
     /// answer codegen will lower instead of running a second CFG query.
     result_completions: HashMap<usize, bool>,
+    semantic: &'a crate::analysis::SemanticFile,
+    tokens: &'a [crate::lexer::Token],
+    /// The innermost function-like boundary of every token, with match
+    /// bodies and arm arrows skipped: the target a statement `try` reaches.
+    function_targets: std::cell::OnceCell<crate::flow::FunctionTargets>,
 }
 
-/// The (field, bound name) pairs a tag alternative destructures, sorted so
-/// alternatives compare as sets. No parens and empty parens both bind nothing.
-/// Nested patterns never reach this (they are rejected inside or-patterns).
-fn binding_set(bindings: &Option<Vec<Binding>>) -> Vec<(&str, &str)> {
-    let mut set: Vec<(&str, &str)> = bindings
-        .as_deref()
-        .unwrap_or_default()
-        .iter()
-        .filter(|b| b.nested.is_none())
-        .map(|b| (b.name.as_str(), b.alias.as_deref().unwrap_or(&b.name)))
-        .collect();
+/// The bindings or-pattern alternatives are compared by, sorted so they
+/// compare as sets. When the alternatives share one emitted destructuring
+/// (`shared`: none carries a nested pattern) a binding is its (field, bound
+/// name) pair; otherwise the shared destructuring is already rejected
+/// (`match-nested-in-or-pattern`) and a binding is the name the body reads,
+/// nested leaves included, under an empty field. No parens and empty parens
+/// both bind nothing.
+fn binding_set(alt: &TagPattern, shared: bool) -> Vec<(&str, &str)> {
+    let mut set: Vec<(&str, &str)> = if shared {
+        alt.bindings
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|b| (b.name.as_str(), b.alias.as_deref().unwrap_or(&b.name)))
+            .collect()
+    } else {
+        let mut leaves = Vec::new();
+        leaf_bindings(alt, &mut leaves);
+        leaves.into_iter().map(|name| ("", name)).collect()
+    };
     set.sort_unstable();
+    if !shared {
+        set.dedup();
+    }
     set
 }
 
@@ -235,9 +242,9 @@ fn binding_set(bindings: &Option<Vec<Binding>>) -> Vec<(&str, &str)> {
 /// difference, named, so the message points at the binding to fix instead
 /// of restating the rule: a name only one side binds, or a name the two
 /// sides bind from different fields.
-fn binding_mismatch(first: &TagPattern, other: &TagPattern) -> String {
-    let a = binding_set(&first.bindings);
-    let b = binding_set(&other.bindings);
+fn binding_mismatch(first: &TagPattern, other: &TagPattern, shared: bool) -> String {
+    let a = binding_set(first, shared);
+    let b = binding_set(other, shared);
     let bound = |set: &[(&str, &str)], name: &str| set.iter().any(|&(_, n)| n == name);
     for &(_, name) in &a {
         if !bound(&b, name) {
@@ -274,6 +281,10 @@ fn binding_mismatch(first: &TagPattern, other: &TagPattern) -> String {
 /// Collects every variable name the alternative binds, nested patterns
 /// included, in source order.
 fn leaf_bindings<'a>(alt: &'a TagPattern, out: &mut Vec<&'a str>) {
+    crate::stack::grow(|| leaf_bindings_grown(alt, out));
+}
+
+fn leaf_bindings_grown<'a>(alt: &'a TagPattern, out: &mut Vec<&'a str>) {
     for b in alt.bindings.as_deref().unwrap_or_default() {
         match &b.nested {
             Some(inner) => leaf_bindings(inner, out),

@@ -8,6 +8,10 @@ impl Checker<'_> {
     }
 
     pub(super) fn visit_program(&mut self, program: &Program, ctx: Ctx, place: Place) {
+        crate::stack::grow(|| self.visit_program_segments(program, ctx, place));
+    }
+
+    fn visit_program_segments(&mut self, program: &Program, ctx: Ctx, place: Place) {
         for error in &program.malformed {
             self.error(error.clone());
         }
@@ -26,32 +30,22 @@ impl Checker<'_> {
                 .help("a step is an expression — parenthesize a ternary or an arrow function"),
             );
         }
-        for &off in &program.stray_if_lets {
-            self.error(
-                TtError::span(
-                    off,
-                    off + "if".len(),
-                    "`if let` could not be parsed here".to_string(),
-                )
-                .code(DiagnosticCode::StrayIfLet)
-                .help(
+        for stray in &program.stray_if_lets {
+            let (message, help) = match stray.kind {
+                crate::ast::StrayIfLetKind::Head => (
+                    "`if let` could not be parsed here",
                     "the pattern parens are mandatory, and the `else` must be a block or \
                      another `if let`",
                 ),
-            );
-        }
-        for &off in &program.stray_results {
-            self.error(
-                TtError::span(
-                    off,
-                    off + "result".len(),
-                    "`result` block could not be parsed here".to_string(),
-                )
-                .code(DiagnosticCode::StrayResult)
-                .help(
-                    "use `const binding = try expression;` and finish every reachable success \
-                     path with `return`",
+                crate::ast::StrayIfLetKind::ElseContinuation => (
+                    "the `else` of an `if let` must be a block or another `if let`",
+                    "put a plain `if (...)` inside an `else { ... }` block",
                 ),
+            };
+            self.error(
+                TtError::span(stray.span.start, stray.span.end, message.to_string())
+                    .code(DiagnosticCode::StrayIfLet)
+                    .help(help),
             );
         }
         for segment in &program.segments {
@@ -66,6 +60,19 @@ impl Checker<'_> {
                 Segment::IfLet(stmt) => self.check_if_let(stmt, ctx, place),
                 Segment::ResultBlock(block) => self.check_result_block(block),
                 Segment::Pipe(pipe) => {
+                    for step in &pipe.steps {
+                        if step.kind == PipeStepKind::Missing {
+                            self.error(
+                                TtError::span(
+                                    step.span.start - "|>".len(),
+                                    step.span.start,
+                                    "pipeline: `|>` has no step".to_string(),
+                                )
+                                .code(DiagnosticCode::MissingPipelineStep)
+                                .help("write the step after `|>`, or remove the `|>`"),
+                            );
+                        }
+                    }
                     // A `flow` composition has no value to chain a method
                     // onto until its first function has produced one, so
                     // its first step must be an ordinary function step.
@@ -85,6 +92,34 @@ impl Checker<'_> {
                             .help(
                                 "write the step as a function — \
                                  `flow |> ((s: string) => s.trim()) |> ...`",
+                            ),
+                        );
+                    }
+                    if pipe.head.is_none()
+                        && let Some(first) = pipe.steps.first()
+                        && matches!(first.kind, PipeStepKind::Call)
+                        && crate::program_syntax::source_member_callee(
+                            self.source,
+                            crate::hir::Span {
+                                start: first.span.start,
+                                end: first.span.end,
+                            },
+                            self.source_kind,
+                        )
+                        .is_some_and(|member| member.optional)
+                    {
+                        self.error(
+                            TtError::span(
+                                first.span.start,
+                                first.span.end,
+                                "`flow`: the first step cannot be an optional-chain step — it is \
+                                 the composed function's input, so it must be a function"
+                                    .to_string(),
+                            )
+                            .code(DiagnosticCode::FlowFirstStepMethod)
+                            .help(
+                                "write the step as a function — \
+                                 `flow |> ((n: number) => o?.m(n)) |> ...`",
                             ),
                         );
                     }
@@ -130,66 +165,88 @@ impl Checker<'_> {
         }
     }
 
-    /// `try` placement is a **flow** fact, not a nesting rule: the lowering
-    /// emits a `return`, so the statement must run inside a user-written
-    /// function — one written in its own region (a `try` inside an arrow
-    /// in a match arm, a scrutinee, a pipeline step is fine, exactly like
-    /// `?` inside a closure in Rust), or one an inline chain (an `if let`
-    /// body, a let-else `else` block) bottoms out in. Without one, the
-    /// `return` would exit the construct's own value region, or fall at the
-    /// module's top level, where there is nothing to return from.
+    /// `try` placement is a **flow** fact, not a nesting rule. A statement
+    /// `try` leaves its nearest Result scope (`docs/design/try-result-scopes.md`
+    /// §4.2): a `result` block whose body holds it with no function written
+    /// in between, otherwise the innermost function-like boundary around it.
+    /// An isolated value region (a match arm, a pipeline step, an
+    /// interpolation) is not a boundary: its `try` keeps the function
+    /// target, and only a `try` whose nearest scope is a `result` block
+    /// outside the region crosses it (§4.6). The target must then be able
+    /// to return the `Err`: an ordinary function can; a constructor, a
+    /// generator, class code outside a method, and a module's top level
+    /// cannot. Inside a template literal, which the file's token stream
+    /// holds as one token, the interpolation's own token stream is asked
+    /// ([`crate::flow::FunctionTargets::at_offset`]), so a generator written
+    /// there is the target as it is anywhere else.
     fn check_try(&mut self, stmt: &TryStmt, place: Place) {
-        let at = self
-            .tokens
-            .iter()
-            .position(|token| token.span.start >= stmt.span.start)
-            .unwrap_or(self.tokens.len());
-        let function_target = crate::flow::function_target_at(self.tokens, at);
-        if place != Place::ResultRegion
-            && matches!(
-                function_target,
-                Some(
-                    crate::flow::FunctionTarget::Constructor
-                        | crate::flow::FunctionTarget::Generator
+        let function_target = match place {
+            Place::ResultRegion if !stmt.in_function => {
+                self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
+                return;
+            }
+            Place::ResultValueRegion if !stmt.in_function => {
+                self.error(
+                    TtError::span(
+                        stmt.span.start,
+                        stmt.span.end,
+                        "`try` crosses an isolated value region whose exits cannot target the enclosing `result` block".to_string(),
+                    )
+                    .code(DiagnosticCode::TryCrossesValueRegion)
+                    .help("extract the affected expression into a nested function when doing so preserves its captures and evaluation order"),
+                );
+                self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
+                return;
+            }
+            _ => self
+                .function_targets
+                .get_or_init(|| {
+                    crate::flow::FunctionTargets::new(self.tokens, &|tokens| {
+                        self.semantic.hir.match_owned_tokens(tokens)
+                    })
+                })
+                .at_offset(stmt.span.start),
+        };
+        let (message, help) = match function_target {
+            Some(crate::flow::FunctionTarget::Ordinary) => {
+                self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
+                return;
+            }
+            Some(
+                crate::flow::FunctionTarget::Constructor | crate::flow::FunctionTarget::Generator,
+            ) => (
+                "`try` cannot be used in a constructor or generator — its `Err` propagation \
+                 requires an ordinary function return"
+                    .to_string(),
+                "move the propagation into an ordinary function, or handle the Result explicitly",
+            ),
+            Some(
+                boundary @ (crate::flow::FunctionTarget::StaticBlock
+                | crate::flow::FunctionTarget::ClassElement),
+            ) => {
+                let owner = if boundary == crate::flow::FunctionTarget::StaticBlock {
+                    "a class static block"
+                } else {
+                    "a class field initializer or computed member name"
+                };
+                (
+                    format!(
+                        "`try` cannot be used in {owner} — it has no enclosing function failure \
+                         edge for its `Err` propagation"
+                    ),
+                    "move the propagation into an ordinary function, or handle the Result explicitly",
                 )
-            )
-        {
-            self.error(
-                TtError::span(
-                    stmt.span.start,
-                    stmt.span.end,
-                    "`try` cannot be used in a constructor or generator — its `Err` propagation requires an ordinary function return".to_string(),
-                )
+            }
+            None => {
+                let (message, help) = crate::diagnostics::TRY_OUTSIDE_FUNCTION;
+                (message.to_string(), help)
+            }
+        };
+        self.error(
+            TtError::span(stmt.span.start, stmt.span.end, message)
                 .code(DiagnosticCode::TryPlacement)
-                .help("move the propagation into an ordinary function, or handle the Result explicitly"),
-            );
-        }
-        if place == Place::ResultValueRegion {
-            self.error(
-                TtError::span(
-                    stmt.span.start,
-                    stmt.span.end,
-                    "`try` crosses an isolated value region whose exits cannot target the enclosing `result` block".to_string(),
-                )
-                .code(DiagnosticCode::TryCrossesValueRegion)
-                .help("extract the affected expression into a nested function when doing so preserves its captures and evaluation order"),
-            );
-        } else if place != Place::ResultRegion
-            && function_target.is_none()
-            && crate::flow::in_static_block(self.source, self.tokens, at)
-        {
-            self.error(
-                TtError::span(
-                    stmt.span.start,
-                    stmt.span.end,
-                    "`try` cannot be used in a class static block — it has no enclosing function failure edge for its `Err` propagation".to_string(),
-                )
-                .code(DiagnosticCode::TryPlacement)
-                .help("move the propagation into an ordinary function, or handle the Result explicitly"),
-            );
-        } else {
-            self.check_try_placement(stmt.span, stmt.in_function, place);
-        }
+                .help(help),
+        );
         self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
     }
 
@@ -209,36 +266,6 @@ impl Checker<'_> {
             );
         }
         self.visit_program(&expr.expr, Ctx::Expr, Place::ValueRegion);
-    }
-
-    fn check_try_placement(&mut self, span: Span, in_function: bool, place: Place) {
-        if place == Place::ResultRegion {
-            return;
-        }
-        if !in_function && place != Place::Function {
-            let (message, help) = if place == Place::Module {
-                (
-                    "`try` must be inside a function — it compiles to a `return` that \
-                     propagates the `Err`, and at the top level of a module there is no \
-                     function to return from",
-                    "move the code into a function whose `Err` this can return, or `match` \
-                     on the `Result` instead",
-                )
-            } else {
-                (
-                    "`try` cannot be used here, in an isolated value region — it compiles to \
-                     a `return`, which would complete this construct's value instead of \
-                     returning from the enclosing function",
-                    "extract the logic into a function (a `try` inside a function written \
-                     here is fine), or move the propagation into a statement-bodied `result` block",
-                )
-            };
-            self.error(
-                TtError::span(span.start, span.end, message.to_string())
-                    .code(DiagnosticCode::TryPlacement)
-                    .help(help),
-            );
-        }
     }
 
     /// let-else placement is the same flow fact as `try`'s, except the
@@ -293,6 +320,10 @@ impl Checker<'_> {
     /// places `try`, judged from the other side: no value boundary to escape, just
     /// a statement stream to stand in).
     fn check_if_let(&mut self, stmt: &IfLetStmt, ctx: Ctx, place: Place) {
+        crate::stack::grow(|| self.check_if_let_grown(stmt, ctx, place));
+    }
+
+    fn check_if_let_grown(&mut self, stmt: &IfLetStmt, ctx: Ctx, place: Place) {
         if stmt.expression_position || (ctx == Ctx::Expr && !stmt.in_function) {
             self.error(
                 TtError::span(
@@ -344,16 +375,17 @@ impl Checker<'_> {
                 .code(DiagnosticCode::MatchNestedInOrPattern),
             );
         }
-        let first_set = binding_set(&alts[0].bindings);
+        let shared = !alts.iter().any(has_nested);
+        let first_set = binding_set(&alts[0], shared);
         for alt in &alts[1..] {
-            if binding_set(&alt.bindings) != first_set {
+            if binding_set(alt, shared) != first_set {
                 self.error(
                     TtError::span(
                         alt.tag_off,
                         alt.tag_off + alt.tag.len(),
                         format!(
                             "{construct}: or-pattern alternatives must bind the same names — {}",
-                            binding_mismatch(&alts[0], alt)
+                            binding_mismatch(&alts[0], alt, shared)
                         ),
                     )
                     .code(DiagnosticCode::MatchOrBindingMismatch),
@@ -560,7 +592,24 @@ impl Checker<'_> {
         }
     }
 
+    fn check_arm_body(&mut self, pattern: Span, missing: bool) {
+        if missing {
+            self.error(
+                TtError::span(
+                    pattern.start,
+                    pattern.end,
+                    "match: this arm has no body".to_string(),
+                )
+                .code(DiagnosticCode::MissingArmBody)
+                .help("write `=> <body>` after the guard, or the body after `=>`"),
+            );
+        }
+    }
+
     fn check_match(&mut self, expr: &MatchExpr, place: Place) {
+        for arm in &expr.arms {
+            self.check_arm_body(arm.pattern_span, arm.missing);
+        }
         // Class tests and literals both compare the subject value and may
         // share one ordered conditional chain. Variant tags discriminate on
         // `.kind` and therefore cannot mix with either family.
@@ -594,9 +643,6 @@ impl Checker<'_> {
                 .help("split them into two matches")
                 .owner(expr.keyword_off, expr.body_close + 1),
             );
-            // A mixed match has no one discriminant, so its coverage answer
-            // is not worth asking — report the cause, not its effects.
-            self.coverage_suppressed.push(expr.keyword_off);
         }
 
         let has_instances = expr
@@ -605,9 +651,8 @@ impl Checker<'_> {
             .any(|arm| matches!(arm.pattern, Pattern::Instances(_)));
         if has_instances {
             // Class hierarchies are open; wildcard presence is the complete
-            // exhaustiveness rule and the variant/literal coverage engines
-            // must not infer anything else for this site.
-            self.coverage_suppressed.push(expr.keyword_off);
+            // exhaustiveness rule, and the coverage question a match with an
+            // `is` arm asks is none (`analysis::coverage_question`).
             if !expr
                 .arms
                 .iter()
@@ -707,7 +752,8 @@ impl Checker<'_> {
                         );
                     }
                     self.check_leaf_bindings(&alts[0]);
-                    let first_set = binding_set(&alts[0].bindings);
+                    let shared = !alts.iter().any(has_nested);
+                    let first_set = binding_set(&alts[0], shared);
                     let mut arm_tags: Vec<&str> = Vec::new();
                     for alt in alts {
                         if covered_tags.contains(&alt.tag.as_str())
@@ -724,14 +770,14 @@ impl Checker<'_> {
                             continue;
                         }
                         arm_tags.push(&alt.tag);
-                        if binding_set(&alt.bindings) != first_set {
+                        if binding_set(alt, shared) != first_set {
                             self.error(
                                 TtError::span(
                                     alt.tag_off,
                                     alt.tag_off + alt.tag.len(),
                                     format!(
                                         "match: or-pattern alternatives must bind the same names — {}",
-                                        binding_mismatch(&alts[0], alt)
+                                        binding_mismatch(&alts[0], alt, shared)
                                     ),
                                 )
                                 .code(DiagnosticCode::MatchOrBindingMismatch),
@@ -868,6 +914,9 @@ impl Checker<'_> {
     }
 
     fn check_tuple_match(&mut self, expr: &TupleMatchExpr, place: Place) {
+        for arm in &expr.arms {
+            self.check_arm_body(arm.pattern_span, arm.missing);
+        }
         let arity = expr.scrutinees.len();
         for (idx, arm) in expr.arms.iter().enumerate() {
             match &arm.pattern {
@@ -929,16 +978,17 @@ impl Checker<'_> {
                                 .code(DiagnosticCode::MatchNestedInOrPattern),
                             );
                         }
-                        let first_set = binding_set(&alts[0].bindings);
+                        let shared = !alts.iter().any(has_nested);
+                        let first_set = binding_set(&alts[0], shared);
                         for alt in alts {
-                            if binding_set(&alt.bindings) != first_set {
+                            if binding_set(alt, shared) != first_set {
                                 self.error(
                                     TtError::span(
                                         alt.tag_off,
                                         alt.tag_off + alt.tag.len(),
                                         format!(
                                             "match: or-pattern alternatives must bind the same names — {}",
-                                            binding_mismatch(&alts[0], alt)
+                                            binding_mismatch(&alts[0], alt, shared)
                                         ),
                                     )
                                     .code(DiagnosticCode::MatchOrBindingMismatch),

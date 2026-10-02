@@ -1,0 +1,6 @@
+//// [jsxExpressionPipelineRewritesOnlyTheContainerExpression1.ttx] 4 mapping(s)
+1:1 -> 1:1 len 86  "declare const raw: string; declare const up: (x:"...
+2:19 -> 2:52 len 3  "raw"
+2:26 -> 2:57 len 2  "up"
+2:28 -> 2:60 len 7  "}</p>;\n"
+

@@ -1,0 +1,116 @@
+=== runtimeOwnerLoweringPreservesReferenceOrderAndBlockExits.tt ===
+variant E { A(value: number), B }
+>E : type E = {
+>       kind: "A";
+>       value: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (value: number) => E
+>value : (property) value: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const events: string[] = [];
+>events : const events: string[]
+const receiver = {
+>receiver : const receiver: {
+>       readonly method: (this: unknown, before: number, value: number, after: number) => number;
+>   }
+  get method() {
+>method : (accessor) method: (this: unknown, before: number, value: number, after: number) => number
+    events.push("callee");
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+    return function (this: unknown, before: number, value: number, after: number) {
+>this : (parameter) this: unknown
+>before : (parameter) before: number
+>value : (parameter) value: number
+>after : (parameter) after: number
+      events.push(`call:${this === receiver}:${before}:${value}:${after}`);
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>receiver : const receiver: {
+>       readonly method: (this: unknown, before: number, value: number, after: number) => number;
+>   }
+>before : (parameter) before: number
+>value : (parameter) value: number
+>after : (parameter) after: number
+      return value;
+>value : (parameter) value: number
+function effect<T>(label: string, value: T): T {
+>effect : function effect<T>(label: string, value: T): T
+>T : (type parameter) T in effect<T>(label: string, value: T): T
+>label : (parameter) label: string
+>value : (parameter) value: T
+>T : (type parameter) T in effect<T>(label: string, value: T): T
+>T : (type parameter) T in effect<T>(label: string, value: T): T
+  events.push(label);
+>events : const events: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+  return value;
+>value : (parameter) value: T
+const value = receiver.method(
+>value : const value: number
+>receiver : const receiver: {
+>       readonly method: (this: unknown, before: number, value: number, after: number) => number;
+>   }
+>method : (accessor) method: (this: unknown, before: number, value: number, after: number) => number
+  effect("before", 1),
+>effect : function effect<1>(label: string, value: 1): 1
+  match (effect("subject", E.A(2))) { A(value) => value, B => 0 },
+>effect : function effect<E>(label: string, value: E): E
+>E : const E: {
+>       A: (value: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: number) => E
+>value : const value: number
+>value : const value: number
+  effect("after", 3),
+>effect : function effect<3>(label: string, value: 3): 3
+const block = match (E.A(4)) {
+>block : const block: number
+>E : const E: {
+>       A: (value: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: number) => E
+  A(value) => {
+>value : const value: number
+    if (value > 0) return value * 2;
+>value : const value: number
+>value : const value: number
+const nested = match (E.A(5)) {
+>nested : const nested: number
+>E : const E: {
+>       A: (value: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (value: number) => E
+  A(value) => {
+>value : const value: number
+    const add = () => { return value + 1; };
+>add : const add: () => number
+>value : const value: number
+    return add();
+>add : const add: () => number
+console.log(events.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>events : const events: string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(value, block, nested);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>value : const value: number
+>block : const block: number
+>nested : const nested: number
+

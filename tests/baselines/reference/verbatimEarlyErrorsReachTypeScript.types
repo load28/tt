@@ -1,0 +1,41 @@
+=== script.tt ===
+function named(await: number) { return await; }
+>named : function named(await: number): number
+>await : (parameter) await: number
+>await : (parameter) await: number
+declare namespace Ambient { var static: number; }
+>Ambient : namespace Ambient
+>static : var static: number
+
+=== shapes.tt ===
+export variant Shape { Circle(radius: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+export class Box {
+>Box : class Box
+  resize(public size: number) {}
+>resize : (method) Box.resize(size: number): void
+>size : (parameter) size: number
+export const area = (s: Shape) => match (s) {
+>area : const area: (s: Shape) => number
+>s : (parameter) s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+>s : (parameter) s: Shape
+  Circle(radius) => radius,
+>radius : const radius: number
+>radius : const radius: number
+

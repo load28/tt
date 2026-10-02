@@ -1,0 +1,4 @@
+=== a.tt ===
+export const x: number = "s";
+>x : const x: number
+

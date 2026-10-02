@@ -1,0 +1,8 @@
+=== letElseEmitsGuardAndBind.tt ===
+function f(): number {
+>f : function f(): number
+  const Some(value) = find() else { return 0; };
+>value : const value: any
+  return value;
+>value : const value: any
+

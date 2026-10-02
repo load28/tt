@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./isPatternsMayShareAnOrderedChainWithLiterals.tt → $DIR/out/isPatternsMayShareAnOrderedChainWithLiterals.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> isPatternsMayShareAnOrderedChainWithLiterals.tt:1:22
+  |
+1 | const value = match (x) { is Error => "error", "ok" => "ok", _ => "other" };
+  |                      ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+isPatternsMayShareAnOrderedChainWithLiterals.ts(3,17): error TS2304: Cannot find name 'x'.

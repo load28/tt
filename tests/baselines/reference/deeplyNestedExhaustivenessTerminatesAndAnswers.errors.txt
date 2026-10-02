@@ -1,0 +1,31 @@
+==== ttc --out-dir (exit 1) ====
+error[match-not-exhaustive]: match on variant A is not exhaustive: missing "A1(b: B1(c: C2()))"
+ --> ./deeplyNestedExhaustivenessTerminatesAndAnswers.tt:4:11
+  |
+4 | const v = match (a) {
+  |           ^^^^^^^^^
+  |
+  = help: add the missing arms: `A1(b: B1(c: C2())) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
+
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on variant A is not exhaustive: missing "A1(b: B1(c: C2()))"
+ --> deeplyNestedExhaustivenessTerminatesAndAnswers.tt:4:11
+  |
+4 | const v = match (a) {
+  |           ^^^^^^^^^
+  |
+  = help: add the missing arms: `A1(b: B1(c: C2())) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
+error[ts2552]: Cannot find name 'a'. Did you mean 'A'?
+ --> deeplyNestedExhaustivenessTerminatesAndAnswers.tt:4:18
+  |
+1 | variant A { A1(b: B), A2 }
+  |         - 'A' is declared here.
+... |
+4 | const v = match (a) {
+  |                  ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

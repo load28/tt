@@ -1,0 +1,3 @@
+jsxAttribute({"kind":"Done","value":{"kind":"Some","value":7}}) => "<div data-value=7></div>" | risky {"kind":"Done","value":{"kind":"Some","value":7}}; some 7
+jsxAttribute({"kind":"Done","value":{"kind":"None"}}) => "<div data-value=0></div>" | risky {"kind":"Done","value":{"kind":"None"}}; none 0
+jsxAttribute({"kind":"Failed","error":"lost"}) => "risky call 3" | caught "risky call 3"

@@ -1,0 +1,8 @@
+// @origin: tests/compile.rs::result_region_composes_with_nested_match_once
+variant R { Ok(value: number), Err(error: string) }
+declare const g: () => R;
+const f = (): R => result {
+const n = try g();
+const doubled = match (n) { 0 => 0, _ => n * 2 };
+return doubled;
+};

@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_09.rs::a_ternary_with_one_tt_branch_relocates_the_other_branch
+declare const flag: boolean;
+export const pick = flag ? match (1) { 1 => 1, _ => 0 } : 9;

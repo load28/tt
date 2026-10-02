@@ -27,6 +27,7 @@ pub(super) struct BuildOptions {
     pub(super) check: bool,
     pub(super) verify: bool,
     pub(super) rewrite_imports: ImportRewrite,
+    pub(super) jsx_preserve: bool,
     pub(super) source_map: SourceMapMode,
     /// Output root, when `-o` was given — also where the standard library
     /// module is written if an input imports it.
@@ -34,6 +35,31 @@ pub(super) struct BuildOptions {
     /// Worker threads for the parallel phases (`--jobs`); `None` means one
     /// per available core.
     pub(super) jobs: Option<usize>,
+}
+
+pub(super) fn project_jsx_preserve(
+    rewrite: ImportRewrite,
+    files: &[PathBuf],
+    project: Option<&Path>,
+) -> Result<bool, String> {
+    if rewrite != ImportRewrite::Js {
+        return Ok(false);
+    }
+    match ttc::engine::jsx_preserve(files, project) {
+        Ok(preserve) => Ok(preserve),
+        Err(_)
+            if !files
+                .iter()
+                .any(|file| file.extension().is_some_and(|extension| extension == "ttx")) =>
+        {
+            Ok(false)
+        }
+        Err(error) => Err(format!(
+            "cannot read the project's `jsx` option, which names a .ttx import's output: \
+             {error} (name the configuration with --project, or choose --rewrite-imports \
+             ts or off)"
+        )),
+    }
 }
 
 /// The directory that holds the generated `tt/` package: the output root
@@ -48,12 +74,26 @@ pub(super) fn support_root(jobs: &[Job], out_dir: Option<&Path>) -> Option<PathB
     }
 }
 
-/// Where the generated `tt/` standard-library package goes.
-pub(super) fn std_placement(root: Option<&Path>, needed: bool) -> Option<PathBuf> {
-    if !needed {
-        return None;
-    }
+/// Where the generated `tt/` standard-library package goes. Outputs name
+/// it before anyone knows whether they import it; a build writes the
+/// modules its outputs turned out to import.
+pub(super) fn std_placement(root: Option<&Path>) -> Option<PathBuf> {
     Some(root?.join("tt"))
+}
+
+fn std_imports_of(specifiers: &[Option<String>; 4]) -> StdImports<'_> {
+    let [types, option, result, runtime] = specifiers;
+    StdImports {
+        types: types.as_deref(),
+        option: option.as_deref(),
+        result: result.as_deref(),
+        runtime: runtime.as_deref(),
+        commonjs: None,
+    }
+}
+
+pub(super) fn support_commonjs_dir(std_dir: &Path) -> PathBuf {
+    std_dir.join(ttc::STD_PACKAGE_COMMONJS_DIR)
 }
 
 /// The deepest directory every output shares.
@@ -146,11 +186,14 @@ pub(super) fn build_jobs(
         let is_dir = input_path.is_dir();
         let mut files = Vec::new();
         collect_sources(input_path, include_ts, &mut files).map_err(|e| format!("ttc: {e}"))?;
-        if is_dir && let Some(dir) = out_dir {
+        if is_dir
+            && let Some(dir) = out_dir
+            && output_tree_inside(input_path, dir)
+        {
             files.retain(|file| !path_is_within(file, dir));
         }
         for file in files {
-            if is_dir && owned_output(&file) {
+            if is_dir && ttc::ownership::owned_output(&file) {
                 continue;
             }
             let out_name = if let Some(kind) = ttc::SourceKind::from_tt_path(&file) {
@@ -188,6 +231,17 @@ pub(super) fn build_jobs(
             }
         }
     }
+    let compiled_outputs: Vec<PathBuf> = jobs
+        .iter()
+        .filter(|job| !same_file(&job.file, &job.out_path))
+        .map(|job| job.out_path.clone())
+        .collect();
+    jobs.retain(|job| {
+        !(same_file(&job.file, &job.out_path)
+            && compiled_outputs
+                .iter()
+                .any(|output| same_file(output, &job.file)))
+    });
     Ok(jobs)
 }
 
@@ -200,6 +254,20 @@ fn path_is_within(path: &Path, dir: &Path) -> bool {
             (path.canonicalize(), dir.canonicalize()),
             (Ok(path), Ok(dir)) if path.starts_with(&dir)
         )
+}
+
+/// Whether the output root is a subtree of a directory input, so the
+/// input's walk would read back what a previous build wrote there. Only a
+/// root strictly inside the input is: the input directory itself, or one
+/// enclosing it, holds every source, and its earlier outputs are already
+/// skipped by their ownership records.
+fn output_tree_inside(input: &Path, out_dir: &Path) -> bool {
+    let lexically_same = normalized_absolute(input) == normalized_absolute(out_dir);
+    let canonically_same = matches!(
+        (input.canonicalize(), out_dir.canonicalize()),
+        (Ok(input), Ok(out_dir)) if input == out_dir
+    );
+    !lexically_same && !canonically_same && path_is_within(out_dir, input)
 }
 
 /// Whether two paths name the same file. The output side may not exist
@@ -217,13 +285,23 @@ pub(super) fn same_file(a: &Path, b: &Path) -> bool {
 }
 
 /// What compiling one job produced: the diagnostics it wants printed (in
-/// job order), whether it failed, and any text the parent still has to hand
-/// out on stdout under `-p`.
+/// job order), whether it failed, and the output it emitted, which the
+/// parent writes or hands out on stdout under `-p`.
 #[derive(Default)]
 pub(super) struct Outcome {
     messages: Vec<String>,
     failed: bool,
-    pending: Option<String>,
+    output: Option<Emitted>,
+}
+
+/// One job's emitted output, not yet written.
+struct Emitted {
+    code: String,
+    /// The `--source-map file` document that goes beside the output.
+    map: Option<String>,
+    /// The compiler support modules `code` imports.
+    support_imports: Vec<StdModule>,
+    commonjs: bool,
 }
 
 /// Compiles every job. Returns true if any of them failed.
@@ -233,8 +311,10 @@ pub(super) struct Outcome {
 ///
 /// The run is staged so each input is touched once: read and scanned in
 /// parallel, then compiled in parallel against a shared table of imported
-/// declarations. Diagnostics are collected per job and printed in job
-/// order, so the output of a parallel run is identical to a sequential one.
+/// declarations, then — once the support modules the emitted outputs import
+/// are in place — written in parallel. Diagnostics are collected per job and
+/// printed in job order, so the output of a parallel run is identical to a
+/// sequential one.
 pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &BuildOptions) -> bool {
     if !opts.check && !opts.print {
         let mut claims: HashMap<&Path, &Path> = HashMap::with_capacity(jobs.len());
@@ -294,81 +374,76 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
         }
     }
 
-    let mut failed = false;
-    let loaded = load_jobs(jobs, opts.jobs);
+    let outcomes = compile_outcomes(jobs, support_root, opts);
 
-    // Compiler-owned support modules are written once for the project, not
-    // once per source file. Standard-library imports materialize its three
-    // public modules; a pipeline materializes only the private runtime.
-    let needs_std = loaded
-        .iter()
-        .any(|loaded| loaded.as_ref().is_ok_and(|loaded| loaded.scan.imports_std));
-    let needs_runtime = loaded.iter().any(|loaded| {
-        loaded
-            .as_ref()
-            .is_ok_and(|loaded| loaded.scan.uses_pipeline)
-    });
-    let modules: Vec<_> = StdModule::ALL
-        .into_iter()
-        .filter(|module| match module {
-            StdModule::Runtime => needs_runtime,
-            _ => needs_std,
-        })
-        .collect();
-    let std_dir = std_placement(support_root, !modules.is_empty());
-    if let Some(dir) = &std_dir
-        && !opts.check
-        && !opts.print
-    {
-        for module in &modules {
-            let support = dir.join(module.file_name());
-            if let Err(error) = check_output_owner(&support, OutputOwner::Support(*module)) {
-                eprintln!("{error}");
-                return true;
+    if opts.print || opts.check {
+        let mut failed = false;
+        for outcome in outcomes {
+            for message in &outcome.messages {
+                eprintln!("{message}");
             }
-            for job in jobs {
-                if same_file(&job.file, &support) {
-                    eprintln!(
-                        "ttc: {}: the compiler support module would overwrite input {} — pass -o <dir>",
-                        support.display(),
-                        job.file.display()
-                    );
-                    return true;
-                }
-                if same_file(&job.out_path, &support) {
-                    eprintln!(
-                        "ttc: {}: compiler support module and input {} claim this output",
-                        support.display(),
-                        job.file.display()
-                    );
-                    return true;
-                }
+            failed |= outcome.failed;
+            if let Some(output) = outcome.output {
+                crate::out::text(&output.code);
             }
         }
+        return failed;
+    }
 
-        let wrote = fs::create_dir_all(dir).and_then(|()| {
-            for module in &modules {
-                let mut code = module.source().to_string();
-                if opts.banner {
-                    code = format!("// @generated by ttc — do not edit directly.\n{code}");
-                }
-                write_owned_output(
-                    &dir.join(module.file_name()),
-                    OutputOwner::Support(*module),
-                    &code,
-                )
-                .map_err(std::io::Error::other)?;
-            }
-            Ok(())
-        });
-        match wrote {
-            Ok(()) => eprintln!("ttc: std → {}", dir.display()),
-            Err(e) => {
-                eprintln!("ttc: {}: {e}", dir.display());
-                failed = true;
-            }
+    write_outcomes(jobs, &outcomes, support_root, opts)
+}
+
+/// What `ttc -p <input>` answers: the text it prints on stdout, present
+/// exactly when it exits successfully, and each message it writes to
+/// stderr.
+pub(super) struct Printed {
+    pub(super) code: Option<String>,
+    pub(super) messages: Vec<String>,
+}
+
+/// `ttc -p <input>` answered instead of printed: the same job, support
+/// root and compile the command line runs, so a long-lived caller gets the
+/// bytes the one-shot prints.
+pub(super) fn print_input(input: &str, opts: &BuildOptions) -> Printed {
+    let failure = |message: String| Printed {
+        code: None,
+        messages: vec![message],
+    };
+    let jobs = match build_jobs(&[input.to_string()], None, true) {
+        Ok(jobs) => jobs,
+        Err(error) => return failure(error),
+    };
+    if jobs.is_empty() {
+        return failure("ttc: no sources found".to_string());
+    }
+    if jobs.len() != 1 {
+        return failure("ttc: --print requires exactly one source file".to_string());
+    }
+    let root = support_root(&jobs, None);
+    let mut printed = Printed {
+        code: None,
+        messages: Vec::new(),
+    };
+    for outcome in compile_outcomes(&jobs, root.as_deref(), opts) {
+        printed.messages.extend(outcome.messages);
+        if !outcome.failed {
+            printed.code = outcome.output.map(|output| output.code);
         }
     }
+    printed
+}
+
+/// Compiles every job without writing or printing anything: each job's
+/// diagnostics, whether it failed, and its output, in job order. The
+/// command line prints or writes these; `ttc --server` answers with them.
+fn compile_outcomes(
+    jobs: &[Job],
+    support_root: Option<&Path>,
+    opts: &BuildOptions,
+) -> Vec<Outcome> {
+    let loaded = load_jobs(jobs, opts.jobs);
+
+    let std_dir = std_placement(support_root);
 
     let cache = ExternCache::new(
         jobs.iter()
@@ -377,7 +452,7 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
             .collect(),
     );
 
-    let outcomes = par_map(
+    par_map(
         &jobs.iter().zip(&loaded).collect::<Vec<_>>(),
         opts.jobs,
         |(job, loaded)| {
@@ -405,16 +480,20 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
                 };
                 let extern_variants =
                     collect_extern_variants(&job.file, &loaded.scan.imports, &cache);
-                let std_imports_owned = std_dir.as_ref().map(|dir| {
+                let specifiers = |dir: &Path| {
                     StdModule::ALL
                         .map(|module| std_specifier(job, dir, opts.rewrite_imports, module))
-                });
+                };
+                let std_imports_owned = std_dir
+                    .as_ref()
+                    .map(|dir| (specifiers(dir), specifiers(&support_commonjs_dir(dir))));
+                let commonjs_imports = std_imports_owned
+                    .as_ref()
+                    .map(|(_, commonjs)| std_imports_of(commonjs));
                 let std_imports = match &std_imports_owned {
-                    Some([types, option, result, runtime]) => StdImports {
-                        types: types.as_deref(),
-                        option: option.as_deref(),
-                        result: result.as_deref(),
-                        runtime: runtime.as_deref(),
+                    Some((module, _)) => StdImports {
+                        commonjs: commonjs_imports.as_ref(),
+                        ..std_imports_of(module)
                     },
                     None => StdImports::default(),
                 };
@@ -423,6 +502,7 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
                     source_kind: ttc::SourceKind::from_path(&job.file).unwrap_or_default(),
                     verify: opts.verify,
                     rewrite_imports: opts.rewrite_imports,
+                    jsx_preserve: opts.jsx_preserve,
                     extern_variants: &extern_variants,
                     defer_to_checker: false,
                     std_imports,
@@ -430,7 +510,11 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
                 // Every tt-level diagnostic of the file, not the first one —
                 // the reader fixes a file in one pass (TASK-120). Output is
                 // only produced (and only written) when the file is clean.
-                let report = compile_report(&loaded.source, &options);
+                let report = if opts.check {
+                    ttc::check_report(&loaded.source, &options)
+                } else {
+                    compile_report(&loaded.source, &options)
+                };
                 let errors: Vec<_> = report
                     .diagnostics
                     .iter()
@@ -507,106 +591,155 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
                     }
                     code.push_str(&rendered.comment);
                 }
-                if opts.print {
-                    out.pending = Some(code);
-                    return out;
-                }
                 if !opts.check {
-                    if let Err(e) =
-                        write_owned_output(&job.out_path, OutputOwner::Source(&job.file), &code)
-                    {
-                        out.messages.push(e);
-                        out.failed = true;
-                        return out;
-                    }
-                    if let Some(rendered) = &map
-                        && let Some(document) = &rendered.document
-                        && let Err(e) = write_owned_output(
-                            &map_path(&job.out_path),
-                            OutputOwner::Source(&job.file),
-                            document,
-                        )
-                    {
-                        out.messages.push(e);
-                        out.failed = true;
-                        return out;
-                    }
-                    out.messages.push(format!(
-                        "ttc: {} → {}",
-                        job.file.display(),
-                        job.out_path.display()
-                    ));
+                    out.output = Some(Emitted {
+                        code,
+                        map: map.and_then(|rendered| rendered.document),
+                        support_imports: emit.support_imports,
+                        commonjs: emit.commonjs,
+                    });
                 }
                 out
             })
         },
-    );
+    )
+}
 
-    for (job, outcome) in jobs.iter().zip(outcomes) {
-        for message in &outcome.messages {
-            eprintln!("{message}");
+/// Writes the compiled outputs and the support modules they import.
+/// Returns true if any job failed or any write did.
+fn write_outcomes(
+    jobs: &[Job],
+    outcomes: &[Outcome],
+    support_root: Option<&Path>,
+    opts: &BuildOptions,
+) -> bool {
+    let mut failed = false;
+    let std_dir = std_placement(support_root);
+    // Compiler-owned support modules are written once for the project, not
+    // once per source file, and only when an output being written imports
+    // one. What an output imports is what codegen emitted, not what the
+    // source looks like: a pipeline may lower to a direct call, and a script
+    // inlines its helpers. Standard-library imports materialize its three
+    // public modules; the pipeline runtime is written on its own.
+    let forms: Vec<(PathBuf, bool, Vec<StdModule>)> = std_dir
+        .iter()
+        .flat_map(|dir| [(dir.clone(), false), (support_commonjs_dir(dir), true)])
+        .map(|(dir, commonjs)| {
+            let imports = |module: StdModule| {
+                outcomes
+                    .iter()
+                    .filter_map(|outcome| outcome.output.as_ref())
+                    .filter(|output| output.commonjs == commonjs)
+                    .any(|output| output.support_imports.contains(&module))
+            };
+            let needs_std = StdModule::STANDARD.into_iter().any(imports);
+            let needs_runtime = imports(StdModule::Runtime);
+            let modules = StdModule::ALL
+                .into_iter()
+                .filter(|module| match module {
+                    StdModule::Runtime => needs_runtime,
+                    _ => needs_std,
+                })
+                .collect();
+            (dir, commonjs, modules)
+        })
+        .filter(|(_, _, modules): &(PathBuf, bool, Vec<StdModule>)| !modules.is_empty())
+        .collect();
+    for (dir, _, modules) in &forms {
+        for module in modules {
+            let support = dir.join(module.file_name());
+            if let Err(error) = check_output_owner(&support, OutputOwner::Support(*module)) {
+                eprintln!("{error}");
+                return true;
+            }
+            for job in jobs {
+                if same_file(&job.file, &support) {
+                    eprintln!(
+                        "ttc: {}: the compiler support module would overwrite input {} — pass -o <dir>",
+                        support.display(),
+                        job.file.display()
+                    );
+                    return true;
+                }
+                if same_file(&job.out_path, &support) {
+                    eprintln!(
+                        "ttc: {}: compiler support module and input {} claim this output",
+                        support.display(),
+                        job.file.display()
+                    );
+                    return true;
+                }
+            }
         }
-        failed |= outcome.failed;
-        let Some(code) = outcome.pending else {
-            continue;
-        };
-        if opts.print {
-            crate::out::text(&code);
-            continue;
-        }
-        match write_owned_output(&job.out_path, OutputOwner::Source(&job.file), &code) {
-            Ok(()) => eprintln!("ttc: {} → {}", job.file.display(), job.out_path.display()),
+    }
+    for (dir, commonjs, modules) in &forms {
+        let wrote = fs::create_dir_all(dir).and_then(|()| {
+            for module in modules {
+                let mut code = if *commonjs {
+                    module.commonjs_source().into_owned()
+                } else {
+                    module.source().to_string()
+                };
+                if opts.banner {
+                    code = format!("// @generated by ttc — do not edit directly.\n{code}");
+                }
+                write_owned_output(
+                    &dir.join(module.file_name()),
+                    OutputOwner::Support(*module),
+                    &code,
+                )
+                .map_err(std::io::Error::other)?;
+            }
+            Ok(())
+        });
+        match wrote {
+            Ok(()) => eprintln!("ttc: std → {}", dir.display()),
             Err(e) => {
-                eprintln!("{e}");
+                eprintln!("ttc: {}: {e}", dir.display());
                 failed = true;
             }
         }
     }
+
+    let writes = par_map(
+        &jobs.iter().zip(outcomes).collect::<Vec<_>>(),
+        opts.jobs,
+        |(job, outcome)| write_emitted(job, outcome.output.as_ref()),
+    );
+    for (outcome, (messages, write_failed)) in outcomes.iter().zip(writes) {
+        for message in outcome.messages.iter().chain(&messages) {
+            eprintln!("{message}");
+        }
+        failed |= outcome.failed || write_failed;
+    }
     failed
 }
 
-/// Where a generated banner went, so a source map can shift only the lines
-/// that actually moved.
-#[derive(Debug, Clone, Copy, Default)]
-pub(super) struct BannerPlacement {
-    /// Lines the banner added.
-    pub(super) lines: usize,
-    /// The generated line it was written at. Lines before it did not move.
-    pub(super) at_line: usize,
-}
-
-/// Writes a banner into `code` at the first position the file allows.
-///
-/// A `#!` line and a byte-order mark are only themselves when they come
-/// first: a comment above either one turns a runnable script into a parse
-/// error and leaves a stray U+FEFF mid-file. Everything else about the top
-/// of a file — a license comment, a blank line, a directive prologue such as
-/// `"use client"` — a comment may precede, because a comment is not a
-/// statement and does not end a prologue.
-pub(super) fn write_banner(code: &mut String, banner: &str) -> BannerPlacement {
-    let line_map = ttc::lines::LineMap::ecma(code);
-    let mut at = line_map.line_start(0).unwrap_or(0);
-    let mut at_line = 0;
-    let mut lines = 1;
-    let mut prefix_newline = false;
-    if code[at..].starts_with("#!") {
-        at = line_map.line_end(0).unwrap_or(code.len());
-        if line_map.len() > 1 {
-            at_line = 1;
-        } else {
-            // A shebang that runs to the end of the file: the banner
-            // needs a line of its own to sit on.
-            prefix_newline = true;
-            lines += 1;
-        }
+/// Writes one job's emitted output and its source map, returning the
+/// messages to print and whether the write failed.
+fn write_emitted(job: &Job, output: Option<&Emitted>) -> (Vec<String>, bool) {
+    let Some(output) = output else {
+        return (Vec::new(), false);
+    };
+    if let Err(e) = write_owned_output(&job.out_path, OutputOwner::Source(&job.file), &output.code)
+    {
+        return (vec![e], true);
     }
-    let mut written = String::with_capacity(code.len() + banner.len() + 1);
-    written.push_str(&code[..at]);
-    if prefix_newline {
-        written.push_str(ttc::line_ending(code));
+    if let Some(document) = &output.map
+        && let Err(e) = write_owned_output(
+            &map_path(&job.out_path),
+            OutputOwner::Source(&job.file),
+            document,
+        )
+    {
+        return (vec![e], true);
     }
-    written.push_str(banner);
-    written.push_str(&code[at..]);
-    *code = written;
-    BannerPlacement { lines, at_line }
+    (
+        vec![format!(
+            "ttc: {} → {}",
+            job.file.display(),
+            job.out_path.display()
+        )],
+        false,
+    )
 }

@@ -1,0 +1,9 @@
+// @origin: tests/compile/cases_06.rs::tuple_match_wildcard_element_and_or_pattern_cover_the_product
+
+variant Dir { North(), South, East, West }
+variant Speed { Fast(), Slow }
+const step = match (d, s) {
+  (North | South, _) => 1,
+  (East, Fast | Slow) => 2,
+  (West, _) => 3,
+};

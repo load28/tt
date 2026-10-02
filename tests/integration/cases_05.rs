@@ -1,219 +1,4 @@
 #[test]
-fn run_val_program_behaves_exactly_like_the_typescript_it_erases_to() {
-    require_toolchain!();
-    let lines = run(r#"
-val const config = { name: "tt", tags: ["dev"] };
-val let state = { count: 0 };
-
-function describe(val c: { name: string; tags: string[] }): string {
-  return `${c.name}:${c.tags.length}`;
-}
-
-function bump(s: { count: number }) {
-  s.count += 1;
-  return s;
-}
-
-state = { count: state.count + 1 };
-const mutable = { count: 0 };
-bump(mutable);
-
-console.log(describe(config));
-console.log(String(state.count));
-console.log(String(mutable.count));
-"#);
-    assert_eq!(lines, ["tt:1", "1", "1"]);
-}
-
-#[test]
-fn a_loop_header_match_is_evaluated_every_iteration() {
-    if !have("tsc") || !have("node") {
-        return;
-    }
-    // TASK-160 issue 14: this used to hoist the match out of the loop and
-    // never re-evaluate it.
-    let lines = run(r#"
-let n = 0;
-function next(): number { n = n + 1; return n; }
-function id(v: number): number { return v; }
-const seen: number[] = [];
-while (id(match (next()) { 1 => 1, 2 => 1, _ => 0 })) {
-  seen.push(n);
-}
-console.log(JSON.stringify(seen), n);
-"#);
-    assert_eq!(lines, ["[1,2] 3"]);
-}
-
-#[test]
-fn a_short_circuited_argument_match_does_not_evaluate() {
-    if !have("tsc") || !have("node") {
-        return;
-    }
-    // TASK-160 issue 15: the match argument (and its subject's effects)
-    // must not run when `&&` short-circuits, and the output must still
-    // typecheck without the capture escaping its region.
-    let lines = run(r#"
-const trace: string[] = [];
-function subject(tag: string): number { trace.push(tag); return 1; }
-function id(v: number): number { return v; }
-declare const globalThis: { flagOn: boolean };
-const on = true as boolean;
-const off = false as boolean;
-const a = on && id(match (subject("on")) { 1 => 10, _ => 0 });
-const b = off && id(match (subject("off")) { 1 => 20, _ => 0 });
-console.log(JSON.stringify(trace), a, b);
-"#);
-    assert_eq!(lines, ["[\"on\"] 10 false"]);
-}
-
-#[test]
-fn sibling_values_beside_a_short_circuit_keep_left_to_right_order() {
-    if !have("tsc") || !have("node") {
-        return;
-    }
-    // TASK-160 issue 16: this shape used to duplicate and drop source
-    // bytes; now both values evaluate in place, in argument order.
-    let lines = run(r#"
-const trace: number[] = [];
-function mark(n: number): number { trace.push(n); return n; }
-function g(x: unknown, y: unknown): void { console.log(x, y); }
-const a = true as boolean;
-g(a && match (mark(1)) { 1 => 11, _ => 0 }, match (mark(2)) { 2 => 22, _ => 0 });
-console.log(JSON.stringify(trace));
-"#);
-    assert_eq!(lines, ["11 22", "[1,2]"]);
-}
-
-#[test]
-fn conditional_operations_keep_their_types_without_undefined() {
-    if !have("tsc") {
-        return;
-    }
-    // TASK-160 결정 17: promoting only the value used to widen every
-    // conditional operation's type with `undefined`.
-    let (ok, out) = typecheck(
-        r#"
-declare const flag: boolean;
-declare const maybe: number | undefined;
-export const a: number | boolean = flag && match (1) { 1 => 1, _ => 0 };
-export const b: number | boolean = flag || match (1) { 1 => 2, _ => 0 };
-export const c: number = maybe ?? match (1) { 1 => 3, _ => 0 };
-export const d: number = flag ? match (1) { 1 => 4, _ => 0 } : 9;
-declare const f: ((v: number) => number) | undefined;
-export const e: number | undefined = f?.(match (1) { 1 => 5, _ => 0 });
-declare const host: { g?: (v: number) => number };
-export const g: number | undefined = host.g?.(match (1) { 1 => 6, _ => 0 });
-"#,
-    );
-    assert!(ok, "{out}");
-}
-
-#[test]
-fn an_optional_call_operation_preserves_this_check_order_and_short_circuit() {
-    if !have("tsc") || !have("node") {
-        return;
-    }
-    let lines = run(r#"
-const trace: string[] = [];
-const live = {
-  base: 7,
-  m(v: number): number { trace.push("call:" + (this === live)); return this.base + v; },
-};
-const dead: { m?: (v: number) => number } = {};
-function arg(tag: string): number { trace.push(tag); return 1; }
-const hit = live.m?.(match (arg("live")) { 1 => 1, _ => 0 });
-const miss = dead.m?.(match (arg("dead")) { 1 => 1, _ => 0 });
-console.log(JSON.stringify(trace), hit, miss);
-"#);
-    assert_eq!(lines, ["[\"live\",\"call:true\"] 8 undefined"]);
-}
-
-#[test]
-fn a_logical_operation_returns_the_condition_value_when_it_short_circuits() {
-    if !have("tsc") || !have("node") {
-        return;
-    }
-    let lines = run(r#"
-const zero = 0 as number;
-const empty = "" as string;
-const a = zero && match (1) { 1 => 1, _ => 0 };
-const b = empty || match (1) { 1 => 2, _ => 0 };
-const c = (zero as number | null) ?? match (1) { 1 => 3, _ => 0 };
-console.log(a, JSON.stringify(b), c);
-"#);
-    assert_eq!(lines, ["0 2 0"]);
-}
-
-#[test]
-fn eager_arguments_keep_left_to_right_order_at_runtime() {
-    if !have("tsc") || !have("node") {
-        return;
-    }
-    // The schedule captures every effectful earlier argument; only a
-    // provably inert one may stay in place (TASK-160 §9). If the effect
-    // judgement overreached, `mark(1)` would run after the match region.
-    let lines = run(r#"
-const trace: number[] = [];
-function mark(n: number): number { trace.push(n); return n; }
-function g(a: number, b: number, c: number): void { console.log(a, b, c); }
-g(mark(1), match (mark(2)) { 2 => 20, _ => 0 }, mark(3));
-console.log(JSON.stringify(trace));
-"#);
-    assert_eq!(lines, ["1 20 3", "[1,2,3]"]);
-}
-
-#[test]
-fn a_block_arm_exit_leaves_the_region_from_inside_a_loop() {
-    if !have("tsc") || !have("node") {
-        return;
-    }
-    // TASK-160 §6: the region keeps a label exactly when the rewritten
-    // `return` sits inside a statement that would swallow an unlabeled
-    // `break`. If the label were dropped here the `break` would leave the
-    // loop and fall through to the next statement instead.
-    let lines = run(r#"
-variant Pick { Scan(from: number), Zero }
-declare const nothing: number;
-function choose(p: Pick): number {
-  return match (p) {
-    Scan(from) => {
-      for (const x of [from, from + 1, from + 2]) {
-        if (x % 3 === 0) { return x; }
-      }
-      return -1;
-    },
-    Zero => 0,
-  };
-}
-console.log(choose(Pick.Scan(2)), choose(Pick.Scan(4)), choose(Pick.Zero));
-"#);
-    assert_eq!(lines, ["3 6 0"]);
-}
-
-#[test]
-fn a_block_arm_exit_without_a_loop_still_yields_its_value() {
-    if !have("tsc") || !have("node") {
-        return;
-    }
-    let lines = run(r#"
-variant Pick { Some(v: number), None }
-function choose(p: Pick): number {
-  return match (p) {
-    Some(v) => { const doubled = v * 2; return doubled; },
-    None => 0,
-  };
-}
-const guarded = (n: number): number => match (n) {
-  0 if true => 1,
-  _ => { return n + 100; },
-};
-console.log(choose(Pick.Some(21)), choose(Pick.None), guarded(0), guarded(5));
-"#);
-    assert_eq!(lines, ["42 0 1 105"]);
-}
-
-#[test]
 fn a_node_stack_trace_points_at_the_tt_source() {
     if !have("node") {
         return;
@@ -350,89 +135,6 @@ fn a_frame_inside_generated_glue_names_the_construct_that_wrote_it() {
 }
 
 #[test]
-fn run_guard_regions_preserve_all_values_and_short_circuit_effects() {
-    if !have("tsc") || !have("node") { return; }
-    let out = run(r#"
-const events: number[] = [];
-function mark(n: number) { events.push(n); return n; }
-function both(a: boolean, b: boolean) {
-  return match (1) {
-    1 if (match (mark(1)) { 1 => { const value = a; return value; }, _ => false }) &&
-         (match (mark(2)) { 2 => { const value = b; return value; }, _ => false }) => true,
-    _ => false
-  };
-}
-function either(a: boolean, b: boolean) {
-  return match (1) {
-    1 if (match (mark(3)) { 3 => { const value = a; return value; }, _ => false }) ||
-         (match (mark(4)) { 4 => { const value = b; return value; }, _ => false }) => true,
-    _ => false
-  };
-}
-function choose(a: boolean) {
-  return match (1) {
-    1 if a ? (match (mark(5)) { 5 => { const value = true; return value; }, _ => false }) :
-             (match (mark(6)) { 6 => { const value = false; return value; }, _ => false }) => true,
-    _ => false
-  };
-}
-console.log(both(false, true), events.splice(0).join(","));
-console.log(both(true, false), events.splice(0).join(","));
-console.log(both(true, true), events.splice(0).join(","));
-console.log(either(true, false), events.splice(0).join(","));
-console.log(either(false, true), events.splice(0).join(","));
-console.log(choose(true), events.splice(0).join(","));
-console.log(choose(false), events.splice(0).join(","));
-"#);
-    assert_eq!(out, ["false 1", "false 1,2", "true 1,2", "true 3", "true 3,4", "true 5", "false 6"]);
-}
-
-#[test]
-fn generated_bindings_never_capture_user_identifiers() {
-    if !have("tsc") || !have("node") { return; }
-    let out = run(r#"
-variant O { S(v: number), N }
-type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
-const Ok = <T,>(value: T): R<T> => ({ kind: "Ok", value });
-const $tt_m = "m";
-const $tt_m_1 = "m1";
-const $tt_t0 = "t0";
-const $tt_ap = "ap";
-const $tt_fl = "fl";
-const $tt_v = "v";
-const $tt_r = "r";
-const $tt_k = "k";
-const obj = { tag: "o", add(n: number) { return n + this.tag + $tt_r + $tt_k + $tt_v; } };
-const key = "add" as const;
-const r = match (O.S(1)) { S(v) => v + $tt_m + $tt_m_1, N => "" };
-function f(): R<string> { const a = try Ok(2); return Ok(a + $tt_t0); }
-const xs = [1].map(x => x |> String);
-const ys = [1].map(x => x |> obj.add);
-const zs = [1].map(x => x |> obj[key]);
-const g = flow |> ((n: number) => n + 1) |> .toFixed(1) |> Number |> obj.add;
-console.log(r, JSON.stringify(f()), xs[0], ys[0], zs[0], g(1), $tt_ap, $tt_fl);
-"#);
-    assert_eq!(
-        out,
-        [r#"1mm1 {"kind":"Ok","value":"2t0"} 1 1orkv 1orkv 2orkv ap fl"#]
-    );
-}
-
-#[test]
-fn an_unexpected_case_reports_its_own_match_subject() {
-    if !have("tsc") || !have("node") { return; }
-    let out = run(r#"
-const pick = (s: string) => s as "a" | "b";
-function outer(s: string) {
-  return match (match (pick(s)) { "a" => pick("z"), "b" => pick("b") }) { "a" => 1, "b" => 2 };
-}
-try { outer("a"); } catch (error) { console.log((error as Error).message); }
-console.log(outer("b"));
-"#);
-    assert_eq!(out, [r#"tt match: unexpected literal "z""#, "2"]);
-}
-
-#[test]
 fn optional_variant_fields_are_absent_when_their_argument_is() {
     require_toolchain!();
     let src = r#"
@@ -454,187 +156,6 @@ console.log(JSON.stringify(generic), "value" in generic, opt === undefined);
         run_with_tsc_flags(src, &["--exactOptionalPropertyTypes"]),
         expected
     );
-}
-
-#[test]
-fn runtime_let_else_binds_from_an_object_literal_initializer() {
-    require_toolchain!();
-    let out = run(r#"
-function f(n: number) {
-  const Some(value: v) = { kind: "Some" as const, value: n } else { return -1; };
-  return v;
-}
-function g(on: boolean) {
-  const Some(value) = on ? { kind: "Some" as const, value: "on" } : { kind: "None" as const } else { return "off"; };
-  return value;
-}
-console.log(f(3), g(true), g(false));
-"#);
-    assert_eq!(out, ["3 on off"]);
-}
-
-#[test]
-fn runtime_match_suspends_its_generator_from_the_subject_and_guard() {
-    require_toolchain!();
-    let out = run(r#"
-variant S { A(n: number), B }
-
-function* subject(): Generator<string, number, S> {
-  const r = match (yield "subject") { A(n) => n, B => 0 };
-  return r;
-}
-
-function* guard(s: S): Generator<number, string, number> {
-  const r = match (s) { A(n) if (yield n) === 1 => `one ${n}`, _ => "other" };
-  return r;
-}
-
-function* cast(): Generator<number, number, unknown> {
-  const r = match ((yield 1) as S) {
-    A(n) => match ((yield n) as S) { A(n: m) => n + m, B => n },
-    B => 0,
-  };
-  return r;
-}
-
-class Base { start() { return 7; } }
-class Derived extends Base {
-  scale = 10;
-  *run(): Generator<number, number, S> {
-    return match (yield super.start()) { A(n) => n * this.scale, B => -1 };
-  }
-}
-
-async function* later(): AsyncGenerator<number, number, Promise<S>> {
-  const r = match (await (yield 1)) { A(n) => n, B => 0 };
-  return r;
-}
-
-const drive = <Y, R, N>(g: Generator<Y, R, N>, sent: N[]) => {
-  const seen: unknown[] = [JSON.stringify(g.next().value)];
-  for (const value of sent) seen.push(JSON.stringify(g.next(value).value));
-  return seen.join(" ");
-};
-
-console.log(drive(subject(), [S.A(4)]), drive(subject(), [S.B]));
-console.log(drive(guard(S.A(3)), [1]), drive(guard(S.A(3)), [2]), drive(guard(S.B), []));
-console.log(drive(cast(), [S.A(2), S.A(5)]), drive(cast(), [S.A(2), S.B]), drive(cast(), [S.B]));
-console.log(drive(new Derived().run(), [S.A(3)]));
-const iterator = later();
-iterator.next().then((first) =>
-  iterator.next(Promise.resolve(S.A(9))).then((last) => console.log(first.value, last.value)),
-);
-"#);
-    assert_eq!(
-        out,
-        [
-            r#""subject" 4 "subject" 0"#,
-            r#"3 "one 3" 3 "other" "other""#,
-            "1 2 7 1 2 2 1 0",
-            "7 30",
-            "1 9",
-        ]
-    );
-}
-
-#[test]
-fn runtime_values_hoisted_out_of_unbraced_bodies_stay_under_their_parent() {
-    require_toolchain!();
-    let out = run(r#"
-variant S { A(n: number), B }
-type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
-const log: string[] = [];
-function note(x: unknown) { log.push(String(x)); }
-function f(s: S, c: boolean) {
-  if (c) return match (s) { A(n) => n, B => 0 };
-  return -1;
-}
-function loops(s: S, xs: number[]) {
-  for (const q of xs) note(match (s) { A(n) => n + q, B => q });
-  let i = 0;
-  while (i++ < 2) note(match (s) { A(n) => n, B => -1 });
-  outer: for (const q of match (s) { A(n) => [n, n + 1], B => [] }) { if (q > 5) continue outer; note(q); }
-  do note(match (s) { A(n) => -n, B => 0 }); while (false);
-  lbl: note(match (s) { A(n) => n * 10, B => 0 });
-}
-function tries(c: boolean, r: R): R {
-  if (c) note(try r); else note("else");
-  if (c) note(result { const v = try r; return v + 1; }.kind);
-  if (c) for (let k = try r; k < 6; k++) note(k);
-  return { kind: "Ok", value: 0 };
-}
-console.log(f(S.A(3), true), f(S.A(3), false), f(S.B, true));
-loops(S.A(5), [1, 2]);
-console.log(log.join(","));
-log.length = 0;
-console.log(tries(true, { kind: "Err", error: "e" }).kind, tries(false, { kind: "Ok", value: 1 }).kind, tries(true, { kind: "Ok", value: 4 }).kind);
-console.log(log.join(","));
-"#);
-    assert_eq!(out, ["3 -1 0", "6,7,5,5,5,-5,50", "Err Ok Ok", "else,4,Ok,4,5"]);
-}
-
-#[test]
-fn runtime_an_if_let_as_an_unbraced_body_keeps_its_parent_and_its_else() {
-    require_toolchain!();
-    let out = run(r#"
-variant O { Some(value: number), None }
-function f(xs: O[]): number {
-  let t = 0;
-  for (const x of xs) if let Some(value) = x { t += value; } else { break; }
-  return t;
-}
-function g(c: boolean, x: O): number {
-  if (c) if let Some(value) = x { return value; } else { return 2; }
-  else { return 3; }
-}
-function h(c: boolean, x: O): number {
-  if (c) if let Some(value) = x { return value; }
-  else { return 3; }
-  return 4;
-}
-function k(xs: O[]): number {
-  let t = 0;
-  outer: for (const x of xs) if let Some(value) = x { if (value > 5) continue outer; t += value; }
-  return t;
-}
-console.log(f([O.Some(1), O.Some(2), O.None, O.Some(9)]));
-console.log(g(true, O.Some(1)), g(true, O.None), g(false, O.None));
-console.log(h(true, O.Some(1)), h(true, O.None), h(false, O.None));
-console.log(k([O.Some(1), O.Some(7), O.Some(2)]));
-"#);
-    assert_eq!(out, ["3", "1 2 3", "1 3 4", "3"]);
-}
-
-#[test]
-fn runtime_a_var_let_else_as_an_unbraced_body_stays_under_its_parent() {
-    require_toolchain!();
-    let out = run(r#"
-variant O { Some(value: number), None }
-function h(c: boolean, o: O): number | undefined {
-  const read = () => hv;
-  if (c) var Some(value: hv) = o else { return 0; };
-  return read();
-}
-function w(xs: O[]): number {
-  const read = () => wv;
-  let i = 0;
-  while (i < xs.length) var Some(value: wv) = xs[i++] else { break; };
-  return read() ?? -1;
-}
-function e(c: boolean, o: O): number | undefined {
-  if (c) return -3; else var Some(value: ev) = o else { return 0; };
-  return ev;
-}
-function l(o: O): number {
-  lbl: var Some(value: lv) = o else { return -2; };
-  return lv + 1;
-}
-console.log(h(true, O.Some(5)), h(true, O.None), h(false, O.Some(5)));
-console.log(w([O.Some(1), O.Some(2), O.None, O.Some(9)]), w([]));
-console.log(e(true, O.None), e(false, O.Some(4)), e(false, O.None));
-console.log(l(O.Some(1)), l(O.None));
-"#);
-    assert_eq!(out, ["5 0 undefined", "2 -1", "-3 4 0", "2 -2"]);
 }
 
 #[test]
@@ -686,335 +207,109 @@ console.log(show(k4(true, "7", "8")), show(k4(false, "7", "8")));
 }
 
 #[test]
-fn an_unexpected_value_guard_reports_every_scrutinee_type() {
+fn runtime_a_later_declarator_value_runs_after_earlier_declarators_in_their_scope() {
     require_toolchain!();
-    let out = run(r#"
-variant V { A, B }
-const cyclic: { kind: string; self?: unknown } = { kind: "Z" };
-cyclic.self = cyclic;
-const values: unknown[] = [
-  2n, -5n, Symbol("s"), "zz", 3, NaN, undefined, null, true,
-  { toJSON() { throw new Error("toJSON"); } }, cyclic, () => 1, { kind: "Q" },
-];
-function statement(n: unknown): string {
-  return match (n) { 1n => "one", "a" => "a" };
+    let out = run_with_std(
+        r#"
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
+variant O { A(n: number), B }
+const o = O.A(1) as O;
+const log: string[] = [];
+function t<T>(s: string, v: T): T { log.push(s); return v; }
+function r(n: number): TResult<number, string> { log.push("r" + n); return Result.Ok(n); }
+function take(): string { const line = log.join(" "); log.length = 0; return line; }
+const a = 100;
+function f() {
+  const a = t("a", 10), b = match (t("m", o)) { A(n) => a + n, B => 0 };
+  return b;
 }
-function chain(n: unknown, ok: boolean): string {
-  return match (n) { 1n if ok => "one", "a" => "a" };
+function g() { var a = 10, b = match (o) { A(n) => a + n, B => 0 }; return b; }
+function h(): TResult<number, string> {
+  let a = t("a", 1), b = 1 + try r(a), c = t("c", b);
+  const d = t("d", 2), e = result { const x = try r(d); return x + c; };
+  return Result.Ok(e.kind === "Ok" ? e.value : 0);
 }
-type Item = { run: (x: number) => number };
-const pair2 = (a: Item, b: Item) => a.run(1) + b.run(1);
-function inline(n: unknown): number {
-  return pair2(
-    match (n) { 1n => ({ run: x => x }), "a" => ({ run: x => x + 1 }) },
-    match (n) { 1n => ({ run: x => x }), "a" => ({ run: x => x + 1 }) },
-  );
+export const x = t("x", 3), y = match (o) { A(n) => x + n, B => 0 };
+console.log(f(), take(), g(), take());
+console.log(JSON.stringify(h()), take());
+console.log(y, a);
+"#,
+    );
+    assert_eq!(
+        out,
+        [
+            "11 x a m 11 ",
+            r#"{"kind":"Ok","value":4} a r1 c d r2"#,
+            "4 100",
+        ]
+    );
 }
-function kind(v: V): string {
-  return match (v) { A => "a", B => "b" };
+
+#[test]
+fn runtime_a_result_block_in_an_enum_member_reads_the_members_in_order() {
+    require_toolchain!();
+    let out = run_with_std(
+        r#"
+import type { TResult } from "./tt/index.js";
+import * as Result from "./tt/result.js";
+variant O { A(n: number), B }
+const o = O.A(1) as O;
+const log: string[] = [];
+function r(n: number): TResult<number, string> { log.push("r" + n); return Result.Ok(n); }
+const P = 100;
+enum F {
+  P = 7,
+  Q = (result { const x = try r(P); return x + 1; }).kind === "Ok" ? P + 1 : 0,
+  R = [P].map((p) => match (o) { A(n) => p + n, B => 0 })[0]!,
+  S = (log.push("S"), 3),
 }
-function pair(a: V, b: V): string {
-  return match (a, b) { (A, A) => "aa", (B, _) => "b", (A, B) => "ab" };
+console.log(F.Q, F.R, F.S, log.join(" "));
+"#,
+    );
+    assert_eq!(out, ["8 8 3 r7 S"]);
 }
-const report = (run: () => unknown) => {
-  try { run(); console.log("returned"); }
-  catch (error) { console.log(error instanceof Error ? error.message : "not an Error: " + String(error)); }
-};
-for (const value of values) {
-  report(() => statement(value));
-  report(() => chain(value, true));
-  report(() => inline(value));
-  if (value !== null && value !== undefined) report(() => kind(value as V));
-}
-report(() => pair(V.A, 7n as unknown as V));
-report(() => pair(V.A, { kind: "Nope" } as unknown as V));
-"#);
-    let unexpected: Vec<&str> = out
-        .iter()
-        .map(String::as_str)
-        .filter(|line| !line.starts_with("tt match: unexpected "))
-        .collect();
-    assert!(unexpected.is_empty(), "{out:#?}");
-    for shown in [
-        "2n",
-        "-5n",
-        "Symbol(s)",
-        "\"zz\"",
-        "3",
-        "NaN",
-        "undefined",
-        "null",
-        "true",
-        "object",
-        "function",
-        "{\"kind\":\"Q\"}",
-    ] {
-        assert!(
-            out.contains(&format!("tt match: unexpected literal {shown}")),
-            "{shown}: {out:#?}"
-        );
+
+#[test]
+fn an_asserted_value_type_checks_without_a_checker_at_compile_time() {
+    if !common::tsc_available() {
+        return;
     }
-    assert!(out.contains(&"tt match: unexpected case 2n".to_string()), "{out:#?}");
+    // TASK-596: without the checker, the storage of a `satisfies T`
+    // operand is annotated with `T`, so its object-literal arms keep their
+    // literal tags, and the operand of `as T` is annotated with nothing
+    // from outside the assertion.
+    let source = as_module(
+        r#"
+variant O { A, B }
+type Ev = { kind: "click"; x: number } | { kind: "key"; code: string };
+declare const o: O;
+declare const x: unknown;
+export const e = match (o) { A => ({ kind: "click", x: 1 }), B => ({ kind: "key", code: "z" }) } satisfies Ev;
+export const q: string = match (o) { A => 1, B => 2 } as unknown as string;
+export function h(): number { return match (o) { A => x, B => 0 } as number; }
+"#,
+    );
+    let code = compile(
+        &source,
+        &Options {
+            defer_to_checker: true,
+            ..options_with_runtime("./runtime.js")
+        },
+    )
+    .expect("tt compile failed");
+    let dir = tmpdir();
+    let ts = dir.join("main.ts");
+    fs::write(&ts, &code).unwrap();
+    let out = common::tsc()
+        .arg(&ts)
+        .arg("--noEmit")
+        .args(TSC_FLAGS)
+        .output()
+        .expect("failed to run tsc");
     assert!(
-        out.contains(&"tt match: unexpected case {\"kind\":\"Q\"}".to_string()),
-        "{out:#?}"
-    );
-    assert!(
-        out.contains(&"tt match: unexpected case [{\"kind\":\"A\"},7n]".to_string()),
-        "{out:#?}"
-    );
-    assert!(
-        out.contains(&"tt match: unexpected case [{\"kind\":\"A\"},{\"kind\":\"Nope\"}]".to_string()),
-        "{out:#?}"
-    );
-}
-
-#[test]
-fn an_unexpected_value_guard_survives_shadowed_globals() {
-    require_toolchain!();
-    let out = run(r#"
-const String = "shadow";
-const JSON = 1;
-function pick(n: unknown): number {
-  return match (n) { 1n => 1 };
-}
-for (const value of [2n, Symbol("s"), 3, "a", { a: 1 }]) {
-  try { pick(value); } catch (error) { console.log((error as Error).message); }
-}
-console.log(String, JSON);
-"#);
-    assert_eq!(
-        out,
-        [
-            "tt match: unexpected literal 2n",
-            "tt match: unexpected literal Symbol(s)",
-            "tt match: unexpected literal 3",
-            "tt match: unexpected literal \"a\"",
-            "tt match: unexpected literal {\"a\":1}",
-            "shadow 1",
-        ]
-    );
-}
-
-#[test]
-fn runtime_guarded_all_wildcard_arm_is_decided_by_its_guard() {
-    require_toolchain!();
-    let out = run(r#"
-variant T { A, B }
-type Item = { run: (x: number) => number };
-function pair(a: Item, b: Item): number { return a.run(0) * 10 + b.run(0); }
-function stmt(a: T, b: T, cond: boolean): number {
-  return match (a, b) {
-    (A, _) => 1,
-    (_, _) if cond => 2,
-    _ => 3,
-  };
-}
-function last(a: T, b: T, cond: boolean): number {
-  return match (a, b) {
-    (A, _) => 1,
-    (_, _) if cond => 2,
-    (_, _) => 3,
-  };
-}
-function selected(a: T, b: T, cond: boolean): number {
-  let seen = 0;
-  const consume = (item: Item) => { seen = item.run(0); };
-  consume(match (a, b) {
-    (A, _) => ({ run: x => x + 1 }),
-    (_, _) if cond => ({ run: x => x + 2 }),
-    (_, _) => ({ run: x => x + 3 }),
-  });
-  return seen;
-}
-function inline(a: T, b: T, cond: boolean): number {
-  return pair(
-    match (a, b) { (A, _) => ({ run: x => x + 1 }), (_, _) if cond => ({ run: x => x + 2 }), (_, _) => ({ run: x => x + 3 }) },
-    match (b, a) { (A, _) => ({ run: x => x + 4 }), (_, _) if !cond => ({ run: x => x + 5 }), _ => ({ run: x => x + 6 }) },
-  );
-}
-function literal(n: number, cond: boolean): string {
-  return match (n) {
-    1 if cond => "one",
-    1 | 2 => "small",
-    _ => "other",
-  };
-}
-console.log(stmt(T.A, T.B, false), stmt(T.B, T.A, true), stmt(T.B, T.A, false));
-console.log(last(T.A, T.B, false), last(T.B, T.A, true), last(T.B, T.A, false));
-console.log(selected(T.A, T.B, false), selected(T.B, T.A, true), selected(T.B, T.A, false));
-console.log(inline(T.A, T.B, true), inline(T.B, T.B, true), inline(T.B, T.A, false));
-console.log(literal(1, true), literal(1, false), literal(3, true));
-"#);
-    assert_eq!(out, ["1 2 3", "1 2 3", "1 2 3", "16 26 34", "one small other"]);
-}
-
-#[test]
-fn a_hoisted_value_inside_a_pipeline_operand_runs_once_in_source_order() {
-    require_toolchain!();
-    let out = run(r#"
-variant E { A(value: number), B }
-type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
-const order: string[] = [];
-const mark = <T,>(name: string, value: T): T => { order.push(name); return value; };
-const subject = (name: string): E => { order.push(name); return E.A(1); };
-const add = (value: number) => { order.push("call"); return value + 1; };
-const callee = () => { order.push("callee"); return add; };
-const make = (n: number) => { order.push("make"); return (value: number) => { order.push("apply"); return value + n; }; };
-const step = () => { order.push("step"); return (value: number) => { order.push("apply"); return value * 10; }; };
-const okay = (name: string, value: number): R => { order.push(name); return { kind: "Ok", value }; };
-const fail = (name: string): R => { order.push(name); return { kind: "Err", error: name }; };
-const report = (value: unknown) => { console.log(order.join(","), String(value)); order.length = 0; };
-report(callee()(match (subject("head")) { A(value) => value, B => 0 }) |> step());
-report(mark("left", 1) + match (subject("right")) { A(value) => value, B => 0 } |> step());
-report(match (subject("head")) { A(value) => value, B => 0 } + mark("right", 1) |> step());
-report([mark("first", 1), match (subject("second")) { A(value) => value, B => 0 }] |> (pair => pair.map(n => n + 1)));
-report(-match (subject("head")) { A(value) => value, B => 0 } |> step());
-report((match (subject("head")) { A(value) => value, B => 0 }).toFixed(1) |> Number);
-report(`${callee()(match (subject("head")) { A(value) => value, B => 0 })}` |> Number);
-report(mark("head", 3) |> make(match (subject("arg")) { A(value) => value, B => 0 }));
-report(callee()(match (subject("one")) { A(value) => value, B => 0 }) + callee()(match (subject("two")) { A(value) => value, B => 0 }) |> step());
-report(mark("cond", true) && callee()(match (subject("branch")) { A(value) => value, B => 0 }) |> String);
-report(mark("cond", false) && callee()(match (subject("skipped")) { A(value) => value, B => 0 }) |> String);
-function lifted(ok: boolean): R {
-  const value = callee()(try (ok ? okay("try", 4) : fail("err"))) |> step();
-  return { kind: "Ok", value };
-}
-const first = lifted(true);
-report(first.kind === "Ok" ? first.value : first.error);
-const second = lifted(false);
-report(second.kind === "Ok" ? second.value : second.error);
-"#);
-    assert_eq!(
-        out,
-        [
-            "callee,head,call,step,apply 20",
-            "left,right,step,apply 20",
-            "head,right,step,apply 20",
-            "first,second 2,2",
-            "head,step,apply -10",
-            "head 1",
-            "callee,head,call 2",
-            "head,arg,make,apply 4",
-            "callee,one,call,callee,two,call,step,apply 40",
-            "cond,callee,branch,call 2",
-            "cond false",
-            "callee,try,call,step,apply 50",
-            "callee,err err",
-        ]
-    );
-}
-
-#[test]
-fn a_hoisted_value_in_a_member_step_runs_after_the_piped_value_and_its_method() {
-    require_toolchain!();
-    let out = run(r#"
-variant E { A(value: number), B }
-type N = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
-type R = { kind: "Ok"; value: Box } | { kind: "Err"; error: string };
-const order: string[] = [];
-const mark = <T,>(name: string, value: T): T => { order.push(name); return value; };
-const subject = (name: string): E => { order.push(name); return E.A(1); };
-class Box {
-  constructor(readonly n: number) {}
-  get add() { order.push("get"); return Box.prototype.addTo; }
-  addTo(amount: number): Box { order.push("call"); return new Box(this.n + amount); }
-}
-const factory = {
-  get make() { order.push("get"); return (amount: number) => { order.push("make"); return (value: number) => { order.push("apply"); return value + amount; }; }; },
-};
-const okay = (name: string, value: number): N => { order.push(name); return { kind: "Ok", value }; };
-const fail = (name: string): N => { order.push(name); return { kind: "Err", error: name }; };
-const report = (value: unknown) => { console.log(order.join(","), String(value)); order.length = 0; };
-report(mark("head", new Box(1)) |> .add(match (subject("arg")) { A(value) => value, B => 0 }) |> .n);
-report(mark("head", new Box(1)) |> .add(match (subject("one")) { A(value) => value, B => 0 }) |> .add(match (subject("two")) { A(value) => value, B => 0 }) |> .n);
-report(mark("head", new Box(1)) |> .add(1).add(match (subject("arg")) { A(value) => value, B => 0 }).n);
-report(mark("head", { list: [10, 20] }) |> .list[match (subject("index")) { A(value) => value, B => 0 }]);
-report(mark("head", new Box(1) as Box | undefined) |> ?.add(match (subject("arg")) { A(value) => value, B => 0 }) |> String);
-report(mark("head", undefined as Box | undefined) |> ?.add(match (subject("skipped")) { A(value) => value, B => 0 }) |> String);
-report(mark("head", 2) |> factory.make(match (subject("arg")) { A(value) => value, B => 0 }));
-function lifted(ok: boolean): R {
-  const value = mark("head", new Box(1)) |> .add(try (ok ? okay("try", 4) : fail("err")));
-  return { kind: "Ok", value };
-}
-const first = lifted(true);
-report(first.kind === "Ok" ? first.value.n : first.error);
-const second = lifted(false);
-report(second.kind === "Ok" ? second.value.n : second.error);
-"#);
-    assert_eq!(
-        out,
-        [
-            "head,get,arg,call 2",
-            "head,get,one,call,get,two,call 3",
-            "head,get,call,get,arg,call 3",
-            "head,index 20",
-            "head,get,arg,call [object Object]",
-            "head undefined",
-            "head,get,arg,make,apply 3",
-            "head,get,try,call 5",
-            "head,get,err err",
-        ]
-    );
-}
-
-#[test]
-fn a_pipeline_whose_steps_change_the_value_type_compiles_and_runs() {
-    require_toolchain!();
-    let out = run(r#"
-const flag = Math.random() >= 0;
-const pick = (value: { kind: "a" } | { kind: "b" }): string => value.kind;
-const lengths = match (1) { _ => [1] } |> (p => p.length);
-const text: string = match (flag) { true => [1, 2], false => [3] } |> (p => p.length) |> String;
-const count: number = match (flag) { true => "xy", false => "z" } |> .length |> (n => [n, n]) |> .length;
-const kind = match (flag) { true => ({ kind: "a" }), false => ({ kind: "b" }) } |> pick;
-const mapped: string[] = [match (flag) { true => 1, false => 2 }] |> .map(n => n + 1) |> .map(String);
-console.log(lengths, text, count, kind, mapped.join(","));
-"#);
-    assert_eq!(out, ["1 2 2 a 2"]);
-}
-
-#[test]
-fn a_try_in_a_template_in_a_pipeline_runs_after_the_callee_it_is_an_argument_of() {
-    require_toolchain!();
-    let out = run(r#"
-type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
-type S = { kind: "Ok"; value: string } | { kind: "Err"; error: string };
-const order: string[] = [];
-const wrap = (value: number) => { order.push("call"); return `<${value}>`; };
-const callee = () => { order.push("callee"); return wrap; };
-const suffix = (tail: string) => { order.push("step"); return (value: string) => { order.push("apply"); return value + tail; }; };
-const okay = (name: string, value: number): R => { order.push(name); return { kind: "Ok", value }; };
-const fail = (name: string): R => { order.push(name); return { kind: "Err", error: name }; };
-const report = (value: S) => { console.log(order.join(","), value.kind === "Ok" ? value.value : value.error); order.length = 0; };
-function head(ok: boolean): S {
-  const value = `${callee()(try (ok ? okay("try", 1) : fail("err")))}!` |> String;
-  return { kind: "Ok", value };
-}
-function step(ok: boolean): S {
-  const value = "v" |> suffix(`${callee()(try (ok ? okay("try", 2) : fail("err")))}`);
-  return { kind: "Ok", value };
-}
-function nested(ok: boolean): S {
-  const value = callee()(`${callee()(try (ok ? okay("try", 3) : fail("err")))}`.length) |> String;
-  return { kind: "Ok", value };
-}
-report(head(true));
-report(head(false));
-report(step(true));
-report(step(false));
-report(nested(true));
-report(nested(false));
-"#);
-    assert_eq!(
-        out,
-        [
-            "callee,try,call <1>!",
-            "callee,err err",
-            "callee,try,call,step,apply v<2>",
-            "callee,err err",
-            "callee,callee,try,call,call <3>",
-            "callee,callee,err err",
-        ]
+        out.status.success(),
+        "{}\n---compiled---\n{code}",
+        tsc_report(&out)
     );
 }

@@ -1,0 +1,28 @@
+=== aNestedVariantDeclarationIsLaidOutFromItsOwnLine.tt ===
+function make() {
+>make : function make(): {
+>       readonly kind: "B";
+>   }
+  variant Inner { A(x: number), B }
+>Inner : type Inner = {
+>       kind: "A";
+>       x: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (x: number) => Inner
+>x : (property) x: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+  return Inner.B;
+>Inner : const Inner: {
+>       A: (x: number) => Inner;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+

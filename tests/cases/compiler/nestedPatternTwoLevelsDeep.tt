@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_06.rs::nested_pattern_two_levels_deep
+
+const n = match (r) {
+  Ok(value: Some(value: Pair(a, b))) => a + b,
+  _ => 0,
+};

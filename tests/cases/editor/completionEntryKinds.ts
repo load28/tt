@@ -1,0 +1,6 @@
+enum Color { Red, Green }
+type Opt = { verbose: boolean };
+export function g(): Opt {
+  const c = Color./*enumMember*/Red;
+  return { /*field*/ };
+}

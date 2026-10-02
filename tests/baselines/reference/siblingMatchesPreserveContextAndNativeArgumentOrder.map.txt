@@ -1,0 +1,16 @@
+//// [siblingMatchesPreserveContextAndNativeArgumentOrder.tt] 14 mapping(s)
+1:1 -> 20:1 len 429  "\nconst trace: string[] = [];\ntype Item = {kind: "...
+15:1 -> 37:1 len 50  "const result = mark(\"receiver\", receiver).pair(\n"...
+16:10 -> 38:18 len 22  "mark(\"subject1\", flag)"
+17:5 -> 38:59 len 4  "true"
+17:13 -> 38:67 len 67  "(trace.push(\"arm1\"), flag = false, {kind: \"item\""...
+18:5 -> 38:154 len 5  "false"
+18:14 -> 38:163 len 29  "({kind: \"item\", run: x => x})"
+19:4 -> 38:273 len 26  ",\n  mark(\"between\", 3),\n  "
+21:10 -> 40:20 len 22  "mark(\"subject2\", flag)"
+22:5 -> 40:63 len 4  "true"
+22:13 -> 40:71 len 29  "({kind: \"item\", run: x => x})"
+23:5 -> 40:122 len 5  "false"
+23:23 -> 40:131 len 53  "(trace.push(\"arm2\"), {kind: \"item\", run: x => x "...
+24:4 -> 40:267 len 55  ",\n);\nconsole.log(result, trace.join(\",\"));\n\nexpo"...
+

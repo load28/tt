@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_09.rs::an_inert_argument_is_not_captured_but_an_effectful_one_is
+declare function g(a: number, b: number, c: number): void;
+declare function eff(): number;
+g(1, match (1) { 1 => 1, _ => 0 }, 2);
+g(eff(), match (1) { 1 => 1, _ => 0 }, 2);

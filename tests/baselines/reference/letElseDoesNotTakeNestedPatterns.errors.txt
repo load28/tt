@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[verify-failed]: generated TypeScript failed to parse: Expected a semicolon. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.
+ --> ./letElseDoesNotTakeNestedPatterns.tt:2:13
+  |
+2 |   const Some(value: Ok(v)) = g() else { return; };
+  |             ^
+
+
+==== ttc --check-types (exit 1) ====
+error[verify-failed]: generated TypeScript failed to parse: Expected a semicolon. This is either invalid TypeScript passed through from the source or a ttc bug; use --no-verify to bypass.
+ --> letElseDoesNotTakeNestedPatterns.tt:2:13
+  |
+2 |   const Some(value: Ok(v)) = g() else { return; };
+  |             ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

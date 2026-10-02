@@ -1,0 +1,2 @@
+arrowBlock(2) => "passed" | open res; operand 2; read 2; dispose res
+arrowBlock(-2) => "diverged" | open res; operand -2; read -2; error "negative -2"; dispose res

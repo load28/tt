@@ -1,0 +1,32 @@
+//// [generatedBindingsNeverCaptureUserIdentifiers.tt] 30 mapping(s)
+1:1 -> 20:1 len 1  "\n"
+2:18 -> 22:21 len 6  "number"
+2:18 -> 25:10 len 6  "number"
+2:30 -> 27:3 len 412  "\ntype R<T> = { kind: \"Ok\"; value: T } | { kind: "...
+15:1 -> 58:1 len 10  "const r = "
+15:18 -> 42:19 len 6  "O.S(1)"
+15:30 -> 45:15 len 1  "v"
+15:36 -> 46:16 len 19  "v + $tt_m + $tt_m_1"
+15:62 -> 50:16 len 2  "\"\""
+15:66 -> 58:17 len 28  ";\nfunction f(): R<string> { "
+16:33 -> 63:7 len 1  "a"
+16:41 -> 59:44 len 5  "Ok(2)"
+16:47 -> 63:26 len 50  " return Ok(a + $tt_t0); }\nconst xs = [1].map(x ="...
+17:25 -> 64:62 len 1  "x"
+17:30 -> 64:65 len 6  "String"
+17:36 -> 64:72 len 27  ");\nconst ys = [1].map(x => "
+18:25 -> 65:70 len 1  "x"
+18:30 -> 65:74 len 3  "obj"
+18:33 -> 65:55 len 4  ".add"
+18:37 -> 65:79 len 27  ");\nconst zs = [1].map(x => "
+19:25 -> 66:71 len 1  "x"
+19:30 -> 66:75 len 3  "obj"
+19:33 -> 66:55 len 5  "[key]"
+19:38 -> 66:80 len 13  ");\nconst g = "
+20:19 -> 67:94 len 22  "((n: number) => n + 1)"
+20:45 -> 67:141 len 11  ".toFixed(1)"
+20:60 -> 67:156 len 6  "Number"
+20:70 -> 67:209 len 3  "obj"
+20:73 -> 67:187 len 4  ".add"
+20:77 -> 67:215 len 94  ";\nconsole.log(r, JSON.stringify(f()), xs[0], ys["...
+

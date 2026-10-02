@@ -1,0 +1,28 @@
+=== token.tt ===
+export variant Token { Num(value: number), Eof }
+>Token : type Token = {
+>       kind: "Num";
+>       value: number;
+>   } | {
+>       kind: "Eof";
+>   }
+>Num : (property) Num: (value: number) => Token
+>value : (property) value: number
+>Eof : (property) Eof: {
+>       readonly kind: "Eof";
+>   }
+
+=== main.tt ===
+export const value = (t: Token): number => match (t) { Num(value) => value, Eof => 0 };
+>value : const value: (t: Token) => number
+>t : (parameter) t: Token
+>Token : (alias) type Token = {
+>       kind: "Num";
+>       value: number;
+>   } | {
+>       kind: "Eof";
+>   }
+>t : (parameter) t: Token
+>value : const value: number
+>value : const value: number
+

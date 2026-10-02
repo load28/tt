@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_09.rs::a_misspelled_case_covers_the_name_as_written
+variant Shape { Circle(r: number), Square(s: number) }
+const v = match (s) { Circel(r) => r, Square(s) => s };

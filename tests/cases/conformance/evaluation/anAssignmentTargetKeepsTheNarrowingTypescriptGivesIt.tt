@@ -1,0 +1,23 @@
+// @origin: tests/integration/cases_05.rs::an_assignment_target_keeps_the_narrowing_typescript_gives_it
+
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+declare function read(): R<number>;
+export function assigned(): R<number> {
+  const state: { value?: number } = {};
+  state.value = try read();
+  return { kind: "Ok", value: state.value.toFixed().length };
+}
+export function compound(): R<number> {
+  const state: { value: number | string } = { value: 1 };
+  state.value = 0;
+  state.value += try read();
+  return { kind: "Ok", value: state.value };
+}
+export class Holder {
+  value;
+  constructor(r: R<number>) {
+    this.value = result { return try r; };
+  }
+}
+
+export {};

@@ -1,0 +1,23 @@
+==== ttc --out-dir (exit 1) ====
+error[match-not-exhaustive]: match on variant Outer is not exhaustive: missing "Wrap(inner: No())"
+ --> ./aWitnessCanBePastedBackAsAnArm1.tt:4:11
+  |
+4 | const a = match (o) {
+  |           ^^^^^^^^^
+  |
+  = help: add the missing arms: `Wrap(inner: No()) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
+
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on variant Outer is not exhaustive: missing "Wrap(inner: No())"
+ --> aWitnessCanBePastedBackAsAnArm1.tt:4:11
+  |
+4 | const a = match (o) {
+  |           ^^^^^^^^^
+  |
+  = help: add the missing arms: `Wrap(inner: No()) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

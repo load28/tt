@@ -1,0 +1,2 @@
+optionalCall(2) => {"kind":"Ok","value":[[2],null]} | open res; callee true; operand 2; read 2; callee false; dispose res
+optionalCall(-1) => {"kind":"Err","error":"negative -1"} | open res; callee true; operand -1; read -1; dispose res

@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_06.rs::a_slot_carries_the_declared_type_only_when_it_is_the_returned_value_s
+variant Shape { Circle(radius: number), Point }
+declare const s: Shape;
+export async function asy(): Promise<number> { return match (s) { Circle(radius) => 1, Point => 0 }; }

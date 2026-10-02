@@ -1,0 +1,30 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryExpressionMayContainAMatch3.tt → $DIR/out/tryExpressionMayContainAMatch3.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'X'.
+ --> tryExpressionMayContainAMatch3.tt:1:15
+  |
+1 | function f(): X {
+  |               ^
+error[ts2304]: Cannot find name 'm'.
+ --> tryExpressionMayContainAMatch3.tt:2:15
+  |
+2 |   try (match (m) { Ok(value) => wrap(value), Err(error) => rewrap(error) });
+  |               ^
+error[ts2304]: Cannot find name 'wrap'.
+ --> tryExpressionMayContainAMatch3.tt:2:33
+  |
+2 |   try (match (m) { Ok(value) => wrap(value), Err(error) => rewrap(error) });
+  |                                 ^^^^
+error[ts2304]: Cannot find name 'rewrap'.
+ --> tryExpressionMayContainAMatch3.tt:2:60
+  |
+2 |   try (match (m) { Ok(value) => wrap(value), Err(error) => rewrap(error) });
+  |                                                            ^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryExpressionMayContainAMatch3.ts(19,15): error TS2304: Cannot find name 'X'.
+tryExpressionMayContainAMatch3.ts(22,19): error TS2304: Cannot find name 'm'.
+tryExpressionMayContainAMatch3.ts(26,18): error TS2304: Cannot find name 'wrap'.
+tryExpressionMayContainAMatch3.ts(31,18): error TS2304: Cannot find name 'rewrap'.

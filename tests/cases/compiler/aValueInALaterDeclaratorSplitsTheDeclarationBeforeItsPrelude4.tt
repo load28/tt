@@ -1,0 +1,11 @@
+// @origin: tests/compile/cases_14.rs::a_value_in_a_later_declarator_splits_the_declaration_before_its_prelude
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+variant O { A(n: number), B }
+declare const o: O;
+declare function t(s: string): number;
+declare function r(n: number): TResult<number, string>;
+export function f(): TResult<number, string> {
+  const a = t("a"), b = result { const x = try r(a); return x; };
+  return Result.Ok(0);
+}

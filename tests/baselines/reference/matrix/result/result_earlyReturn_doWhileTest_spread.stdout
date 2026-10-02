@@ -1,0 +1,3 @@
+doWhileTest(3) => 2 | read 3; big 3
+doWhileTest(1) => 2 | read 1; small 1
+doWhileTest(-1) => 2 | read -1

@@ -1,0 +1,2 @@
+jsxAttribute(2) => "<div data-value=6></div>" | receiver {"factor":3}; twice 6
+jsxAttribute(6) => "<div data-value=18></div>" | receiver {"factor":3}; twice 18

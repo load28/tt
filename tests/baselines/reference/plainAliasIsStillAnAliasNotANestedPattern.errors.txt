@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./plainAliasIsStillAnAliasNotANestedPattern.tt → $DIR/out/plainAliasIsStillAnAliasNotANestedPattern.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'o'.
+ --> plainAliasIsStillAnAliasNotANestedPattern.tt:1:18
+  |
+1 | const n = match (o) { Some(value: None) => None, _ => 0 };
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+plainAliasIsStillAnAliasNotANestedPattern.ts(3,17): error TS2304: Cannot find name 'o'.

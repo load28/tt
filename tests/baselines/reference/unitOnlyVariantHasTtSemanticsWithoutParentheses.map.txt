@@ -1,0 +1,3 @@
+//// [unitOnlyVariantHasTtSemanticsWithoutParentheses.tt] 1 mapping(s)
+1:36 -> 7:3 len 1  "\n"
+

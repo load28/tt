@@ -1,0 +1,18 @@
+// @completions: jsEnding
+// @filename: tsconfig.json
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  }
+}
+// @filename: package.json
+{ "name": "case", "private": true, "type": "module" }
+// @filename: shapes.tt
+export const shapeK = 1;
+// @filename: main.tt
+export const y = shapeK/*jsEnding*/;

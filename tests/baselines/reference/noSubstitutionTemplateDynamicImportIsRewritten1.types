@@ -1,0 +1,4 @@
+=== noSubstitutionTemplateDynamicImportIsRewritten1.tt ===
+const m = import(`./x.tt`);
+>m : const m: Promise<any>
+

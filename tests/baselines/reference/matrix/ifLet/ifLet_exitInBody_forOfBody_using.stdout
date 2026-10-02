@@ -1,0 +1,2 @@
+forOfBody(2) => ["passed","passed"] | open res; round 0; operand 2; read 2; round 1; operand 2; read 2; dispose res
+forOfBody(-2) => [] | open res; round 0; operand -2; read -2; error "negative -2"; round 1; operand -2; read -2; error "negative -2"; dispose res

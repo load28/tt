@@ -1,0 +1,2 @@
+logicalOr(2) => true | flip true
+logicalOr(5) => 15 | flip false; risky 5; double 10; add 15

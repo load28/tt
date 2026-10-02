@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::val_parameter_modifier_is_erased_from_the_output
+function pick(a: A, val b: B, val { c }: C) {}

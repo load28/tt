@@ -1,0 +1,12 @@
+=== tryTemporariesAreUniqueAndKeepDeclarationKeyword.tt ===
+function f(): X {
+>f : function f(): X
+>X : type X = /*unresolved*/ any
+  let a: number = try g();
+>a : let a: number
+  var b = try h(a);
+>b : var b: any
+>a : let a: number
+  return k(b);
+>b : var b: any
+

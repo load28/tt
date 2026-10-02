@@ -1,0 +1,11 @@
+//// [tupleMatchOverBuiltinVariants.tt] 9 mapping(s)
+1:1 -> 37:1 len 10  "const r = "
+1:18 -> 21:18 len 1  "o"
+1:21 -> 22:18 len 2  "r2"
+2:9 -> 25:15 len 5  "value"
+2:20 -> 26:15 len 5  "value"
+2:27 -> 26:22 len 1  "v"
+2:34 -> 27:18 len 9  "value + v"
+3:16 -> 31:18 len 1  "0"
+4:2 -> 37:19 len 2  ";\n"
+

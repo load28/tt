@@ -1,0 +1,12 @@
+// @signatureHelp: operand, afterCall
+// @diagnostics: *
+import type { TResult } from "@tt/std";
+declare function getUser(id: string): TResult<{ name: string }, string>;
+export function f(id: string): TResult<number, string> {
+  const q = try getUser(/*operand*/id);
+  return { kind: "Ok", value: q.name.length };
+}
+export function g(id: string) {
+  return result { const v = try getUser(id)/*afterCall*/; v.name.length };
+}
+const r3 = (;

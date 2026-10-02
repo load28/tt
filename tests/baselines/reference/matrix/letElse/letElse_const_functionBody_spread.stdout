@@ -1,0 +1,2 @@
+functionBody(2) => 2 | read 2
+functionBody(-1) => "diverged" | read -1

@@ -1,0 +1,18 @@
+=== aJumpCrossingAResultBlockLeavesTheRestOfTheFilePlanned.tt ===
+declare const x: TResult<number, string>;
+>x : const x: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+function f() { for (;;) { const r = result { const v = try x; if (v) break; return v; }; } }
+>f : function f(): void
+>r : const r: TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>v : const v: number
+>x : const x: TResult<number, string>
+>v : const v: number
+>v : const v: number
+class C { y = try x; }
+>C : class C
+>y : (property) C.y: number
+

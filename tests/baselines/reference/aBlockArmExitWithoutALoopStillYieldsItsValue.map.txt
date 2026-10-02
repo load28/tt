@@ -1,0 +1,20 @@
+//// [aBlockArmExitWithoutALoopStillYieldsItsValue.tt] 18 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:24 -> 21:24 len 6  "number"
+2:24 -> 24:13 len 6  "number"
+2:39 -> 26:3 len 38  "\nfunction choose(p: Pick): number {\n  "
+4:3 -> 45:3 len 7  "return "
+4:17 -> 30:19 len 1  "p"
+5:10 -> 33:17 len 1  "v"
+5:18 -> 34:9 len 23  "const doubled = v * 2; "
+5:48 -> 34:41 len 7  "doubled"
+6:13 -> 37:18 len 1  "0"
+7:4 -> 45:16 len 43  ";\n}\nconst guarded = (n: number): number => "
+9:47 -> 50:19 len 1  "n"
+10:3 -> 52:21 len 1  "0"
+10:8 -> 53:13 len 4  "true"
+10:16 -> 54:20 len 1  "1"
+11:9 -> 58:8 len 1  " "
+11:17 -> 58:18 len 7  "n + 100"
+12:2 -> 63:2 len 93  ";\nconsole.log(choose(Pick.Some(21)), choose(Pick"...
+

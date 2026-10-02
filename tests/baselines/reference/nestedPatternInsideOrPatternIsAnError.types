@@ -1,0 +1,6 @@
+=== nestedPatternInsideOrPatternIsAnError.tt ===
+const n = match (r) { Ok(value: Some(v)) | Err(error) => 1, _ => 0 };
+>n : const n: number
+>v : const v: any
+>error : const error: any
+

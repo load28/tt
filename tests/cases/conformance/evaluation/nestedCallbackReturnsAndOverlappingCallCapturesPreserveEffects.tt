@@ -1,0 +1,19 @@
+// @origin: tests/integration.rs::nested_callback_returns_and_overlapping_call_captures_preserve_effects
+// @run: nestedCallbackReturnsAndOverlappingCallCapturesPreserveEffects.tt
+
+variant State { Ready(values: number[]), Empty }
+const events: string[] = [];
+const convert = (n: number) => { events.push(`convert:${n}`); return n + 10; };
+const answer = match(State.Ready([2, 5])) {
+    Ready(values) => { return values.map(n => convert(match(n){0=>0,_=>n}) + convert(match(n){0=>0,_=>n})); },
+    Empty => [],
+};
+const keyed = { [String(match(1){1=>1,_=>0})]: match(2){2=>2,_=>0} };
+const truthy = (1 |> ((n: number) => n + 1)) && match(3){3=>3,_=>0};
+const fromBody = (() => { if let Ready(values) = State.Ready([4]) { return values[0]; } return 0; })() && match(4){4=>4,_=>0};
+const take = (...values: number[]) => values;
+const callArgs = take((1 |> ((n: number) => n + 1)), match(3){3=>3,_=>0});
+console.log(JSON.stringify([answer, keyed, truthy, fromBody, callArgs]));
+console.log(events.join(","));
+
+export {};

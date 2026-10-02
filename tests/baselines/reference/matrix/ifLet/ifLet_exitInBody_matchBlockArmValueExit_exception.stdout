@@ -1,0 +1,2 @@
+matchBlockArmValueExit(2) => "passed" | arm true; risky 2; read 2
+matchBlockArmValueExit(-2) => "three" | arm true; risky -2; read -2; error "negative -2"; exit 3

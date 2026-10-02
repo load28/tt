@@ -1,0 +1,22 @@
+=== valConstForbidsMutationAtAnyDepth1.tt ===
+val const x = { nested: { a: 1 } };
+>x : const x: {
+>       nested: {
+>           a: number;
+>       };
+>   }
+>nested : (property) nested: {
+>       a: number;
+>   }
+>a : (property) a: number
+x.nested.a = 2;
+>x : const x: {
+>       nested: {
+>           a: number;
+>       };
+>   }
+>nested : (property) nested: {
+>       a: number;
+>   }
+>a : (property) a: number
+

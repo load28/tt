@@ -1,0 +1,3 @@
+constructorBody({"kind":"Done","value":{"kind":"Some","value":5}}) => 5 | operand {"kind":"Done","value":{"kind":"Some","value":5}}; some 5; finally 0
+constructorBody({"kind":"Done","value":{"kind":"None"}}) => "other" | operand {"kind":"Done","value":{"kind":"None"}}; finally 0
+constructorBody({"kind":"Failed","error":"gone"}) => "other" | operand {"kind":"Failed","error":"gone"}; finally 0

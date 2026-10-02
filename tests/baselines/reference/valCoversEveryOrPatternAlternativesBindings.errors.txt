@@ -1,0 +1,26 @@
+==== ttc --out-dir (exit 1) ====
+error[val-mutation]: cannot mutate through val binding `x` (the binding is declared with `val`, so every access path from it is read-only)
+ --> ./valCoversEveryOrPatternAlternativesBindings.tt:4:3
+  |
+3 |   val const A(x) | B(x) = e else { return; };
+  |   --- the read-only binding is declared here
+4 |   x.n = 1;
+  |   ^
+  |
+  = help: remove `val` if this binding is intended to be mutable
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'Box'.
+ --> valCoversEveryOrPatternAlternativesBindings.tt:1:18
+  |
+1 | variant E { A(x: Box), B(x: Box) }
+  |                  ^^^
+error[ts2304]: Cannot find name 'Box'.
+ --> valCoversEveryOrPatternAlternativesBindings.tt:1:29
+  |
+1 | variant E { A(x: Box), B(x: Box) }
+  |                             ^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

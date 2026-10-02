@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-wildcard-not-last]: match: the wildcard arm `_` must be the last arm
+ --> ./main.ttx:4:56
+  |
+4 |   return <Show value={match (note("operand", input)) { _ => note("other", 0), 1 => note("one", 1) }} />;
+  |                                                        ^
+
+
+==== ttc --check-types (exit 1) ====
+error[match-wildcard-not-last]: match: the wildcard arm `_` must be the last arm
+ --> main.ttx:4:56
+  |
+4 |   return <Show value={match (note("operand", input)) { _ => note("other", 0), 1 => note("one", 1) }} />;
+  |                                                        ^
+
+==== tsc on the emitted TypeScript (exit 0) ====

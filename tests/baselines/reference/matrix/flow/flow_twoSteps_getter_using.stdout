@@ -1,0 +1,2 @@
+getter(2) => 6 | open res; operand 2; dispose res; double 4; add 6
+getter(5) => 15 | open res; operand 5; dispose res; double 10; add 15

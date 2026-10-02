@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./valParameterIsReadOnlyInsideTheFunction3.tt → $DIR/out/valParameterIsReadOnlyInsideTheFunction3.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'User'.
+ --> valParameterIsReadOnlyInsideTheFunction3.tt:1:23
+  |
+1 | function update(user: User) {
+  |                       ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+valParameterIsReadOnlyInsideTheFunction3.ts(1,23): error TS2304: Cannot find name 'User'.

@@ -1,0 +1,2 @@
+forOfBody(2) => [2,2] | round 0; yield 2; read 2; round 1; yield 2; read 2
+forOfBody(-1) => [] | round 0; yield -1; read -1; round 1; yield -1; read -1

@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_05.rs::the_runtime_import_is_written_where_an_import_belongs
+declare function f(n: number): number;
+declare function g(n: number): number;
+export const a = f(4) |> g |> .toFixed(1);

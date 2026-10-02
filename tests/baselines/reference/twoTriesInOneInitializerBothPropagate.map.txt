@@ -1,0 +1,8 @@
+//// [twoTriesInOneInitializerBothPropagate.tt] 6 mapping(s)
+1:1 -> 1:1 len 101  "declare function a(): { kind: \"Ok\"; value: numbe"...
+2:16 -> 14:1 len 10  "const x = "
+2:30 -> 4:16 len 3  "a()"
+2:33 -> 14:17 len 3  " + "
+2:40 -> 9:16 len 3  "a()"
+2:43 -> 14:26 len 14  "; return x; }\n"
+

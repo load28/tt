@@ -1,0 +1,2 @@
+jsxConditional(8) => "<p>9</p>" | flip true; risky 8; arrow 9
+jsxConditional(9) => "<p></p>" | flip false

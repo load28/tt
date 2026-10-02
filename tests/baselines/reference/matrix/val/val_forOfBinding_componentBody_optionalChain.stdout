@@ -1,0 +1,2 @@
+componentBody(3) => "<p>4</p>" | item 3; item 1
+componentBody(8) => "<p>null</p>" | item undefined; item 1

@@ -1,0 +1,4 @@
+nullish({"kind":"Num","value":4}) => 4 | open res; flip true; operand {"kind":"Num","value":4}; number 4; dispose res
+nullish({"kind":"Neg","value":-3}) => "set" | open res; flip false; left "set"; dispose res
+nullish({"kind":"Word","text":"hi"}) => "hi" | open res; flip true; operand {"kind":"Word","text":"hi"}; word "hi"; dispose res
+nullish({"kind":"End"}) => "set" | open res; flip false; left "set"; dispose res

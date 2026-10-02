@@ -1,0 +1,43 @@
+=== completions /*deprecated*/ main.tt:5:19 ===
+  |     Ok(v) => oldAd + api.,
+  |                   ^ /*deprecated*/
+completion: 1047 item(s), member false, probe no
+  R (Variable, 11)
+  api (Variable, 11)
+  arguments (Variable, 11)
+  r (Variable, 11)
+  run (Function, 11)
+  v (Variable, 11)
+  oldAdd (Function, 16) [deprecated] from "./util" source "./util"
+  ... 1040 global or keyword item(s) (sortText 15, no source)
+  resolve oldAdd from "./util": 1 edit(s)
+    1:13-1:13 "" -> ", oldAdd"
+ttCompletions: pattern false, member null
+  keywords: match (15), flow (15), result (15)
+patternCompletions: null
+editor completion: 1050 item(s)
+  R (Variable, 211)
+  api (Variable, 211)
+  arguments (Variable, 211)
+  r (Variable, 211)
+  run (Function, 211)
+  v (Variable, 211)
+  oldAdd (Function, 216) [deprecated]
+  ... 1043 global or keyword item(s) (sortText 215, no source)
+
+=== completions /*member*/ main.tt:5:26 ===
+  |     Ok(v) => oldAd + api.,
+  |                          ^ /*member*/
+completion: 2 item(s), member true, probe no
+  next (Field, 11)
+  prev (Field, z11) [deprecated]
+ttCompletions: pattern false, member {"receiver":"api"}
+patternCompletions: null
+editor completion: 2 item(s)
+  next (Field, 211)
+  prev (Field, 2z11) [deprecated]
+
+=== parity with the TypeScript twin ===
+completions deprecated: same
+completions member: same
+

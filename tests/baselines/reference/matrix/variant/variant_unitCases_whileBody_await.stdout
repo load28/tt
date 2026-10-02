@@ -1,0 +1,2 @@
+whileBody(4) => [{"kind":"North"},{"kind":"South"},4] | test true; await; operand 4
+whileBody(9) => [{"kind":"North"},{"kind":"South"},9] | test true; await; operand 9

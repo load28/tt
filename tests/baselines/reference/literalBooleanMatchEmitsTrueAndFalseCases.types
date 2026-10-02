@@ -1,0 +1,4 @@
+=== literalBooleanMatchEmitsTrueAndFalseCases.tt ===
+const v = match (flag) { true => 1, false => 0 };
+>v : const v: number
+

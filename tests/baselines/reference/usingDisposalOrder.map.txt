@@ -1,0 +1,24 @@
+//// [main.tt] 22 mapping(s)
+1:1 -> 19:1 len 82  "import type { TResult } from \"@tt/std\";\nimport *"...
+3:28 -> 22:28 len 6  "string"
+3:28 -> 26:17 len 6  "string"
+3:50 -> 29:3 len 304  "\nclass Resource implements Disposable {\n  constr"...
+14:40 -> 62:9 len 9  "second = "
+14:56 -> 43:19 len 4  "kind"
+15:11 -> 46:17 len 4  "name"
+15:20 -> 47:18 len 18  "new Resource(name)"
+16:14 -> 51:18 len 21  "new Resource(\"plain\")"
+17:15 -> 55:9 len 29  "throw new Error(\"no second\");"
+18:4 -> 62:24 len 173  ";\n  console.log(`body ${first.name} ${second.nam"...
+24:3 -> 91:3 len 14  "const label = "
+24:24 -> 70:19 len 4  "kind"
+25:11 -> 73:17 len 4  "name"
+26:7 -> 74:9 len 80  "using inner = new Resource(name);\n      console."...
+28:14 -> 76:18 len 24  "inner.name.toUpperCase()"
+30:14 -> 80:18 len 7  "\"plain\""
+31:15 -> 84:9 len 29  "throw new Error(\"arm threw\");"
+32:4 -> 91:23 len 191  ";\n  console.log(`label ${label} with ${outer.nam"...
+38:9 -> 101:9 len 5  "value"
+38:21 -> 97:18 len 44  "(ok ? Result.Ok(\"fine\") : Result.Err(\"bad\"))"
+38:66 -> 101:30 len 404  "\n  console.log(`after try ${value} with ${held.n"...
+

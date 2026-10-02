@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryDestructuringBindingIsKeptVerbatim.tt → $DIR/out/tryDestructuringBindingIsKeptVerbatim.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'X'.
+ --> tryDestructuringBindingIsKeptVerbatim.tt:1:15
+  |
+1 | function f(): X {
+  |               ^
+error[ts2304]: Cannot find name 'g'.
+ --> tryDestructuringBindingIsKeptVerbatim.tt:2:24
+  |
+2 |   const { a, b } = try g();
+  |                        ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryDestructuringBindingIsKeptVerbatim.ts(1,15): error TS2304: Cannot find name 'X'.
+tryDestructuringBindingIsKeptVerbatim.ts(2,18): error TS2304: Cannot find name 'g'.

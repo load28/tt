@@ -1,0 +1,2 @@
+arrayElement({"kind":"Click","x":3}) => [0,3,2] | first 0; click 3; last 2
+arrayElement({"kind":"Key","key":"k"}) => threw Cannot read properties of undefined (reading 'kind') | first 0

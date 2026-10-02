@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_03.rs::try_preserves_argument_and_conditional_evaluation_order
+function f(flag: boolean): TResult<number, string> {
+  return Result.Ok(call(first(), flag && try second(), third()));
+}

@@ -1,0 +1,2 @@
+nullish(6) => 12 | flip true; keep 6; double 12
+nullish(-2) => "set" | flip false; left "set"

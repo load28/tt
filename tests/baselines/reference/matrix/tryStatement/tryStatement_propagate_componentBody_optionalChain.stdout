@@ -1,0 +1,2 @@
+componentBody(2) => {"kind":"Ok","value":"<p>\"checked\"</p>"} | read 2
+componentBody(-1) => {"kind":"Err","error":"negative undefined"} | read undefined

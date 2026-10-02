@@ -1,0 +1,9 @@
+//// [view.ttx] 1 mapping(s)
+1:1 -> 1:1 len 84  "export const label: string = \"view\";\nexport cons"...
+
+//// [lazy.ttx] 1 mapping(s)
+1:1 -> 1:1 len 36  "export const later: string = \"lazy\";"
+
+//// [main.tt] 1 mapping(s)
+1:1 -> 1:1 len 84  "import { label, lazy } from \"./view.ttx\";\nconsol"...
+

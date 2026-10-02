@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalOrPatternIfChainTestsEachAlternative.tt → $DIR/out/literalOrPatternIfChainTestsEachAlternative.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 's'.
+ --> literalOrPatternIfChainTestsEachAlternative.tt:1:18
+  |
+1 | const v = match (s) { "a" | "b" if ok => 1, _ => 2 };
+  |                  ^
+error[ts2304]: Cannot find name 'ok'.
+ --> literalOrPatternIfChainTestsEachAlternative.tt:1:36
+  |
+1 | const v = match (s) { "a" | "b" if ok => 1, _ => 2 };
+  |                                    ^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalOrPatternIfChainTestsEachAlternative.ts(3,17): error TS2304: Cannot find name 's'.
+literalOrPatternIfChainTestsEachAlternative.ts(6,11): error TS2304: Cannot find name 'ok'.

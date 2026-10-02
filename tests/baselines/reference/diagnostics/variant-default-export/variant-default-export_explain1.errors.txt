@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[variant-default-export]: variant `Dir` cannot be a default export
+ --> ./main.tt:1:8
+  |
+1 | export default variant Dir { Up, Down }
+  |        ^^^^^^^
+  |
+  = help: export it by name and import it as `{ Dir }`
+
+
+==== ttc --check-types (exit 1) ====
+error[variant-default-export]: variant `Dir` cannot be a default export
+ --> main.tt:1:8
+  |
+1 | export default variant Dir { Up, Down }
+  |        ^^^^^^^
+  |
+  = help: export it by name and import it as `{ Dir }`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

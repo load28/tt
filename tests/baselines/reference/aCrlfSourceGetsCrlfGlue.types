@@ -1,0 +1,27 @@
+=== aCrlfSourceGetsCrlfGlue.tt ===
+variant O { Some(value: number), None }
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => O
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+export const f = (o: O) => match (o) {
+>f : const f: (o: O) => number
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>o : (parameter) o: O
+  Some(value) => value,
+>value : const value: number
+>value : const value: number
+

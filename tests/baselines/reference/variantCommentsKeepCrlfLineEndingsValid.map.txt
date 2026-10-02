@@ -1,0 +1,3 @@
+//// [variantCommentsKeepCrlfLineEndingsValid.tt] 1 mapping(s)
+5:2 -> 9:3 len 2  "\r\n"
+

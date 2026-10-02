@@ -1,0 +1,3 @@
+labeledBlock({"kind":"Num","value":1}) => 1 | 
+labeledBlock({"kind":"Neg","value":-2}) => -2 | 
+labeledBlock({"kind":"Word","text":"w"}) => "none" | 

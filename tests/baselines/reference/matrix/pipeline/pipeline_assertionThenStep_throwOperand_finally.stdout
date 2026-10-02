@@ -1,0 +1,2 @@
+throwOperand(123) => threw 3 | operand 123; finally 0
+throwOperand(4) => threw 1 | operand 4; finally 0

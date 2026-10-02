@@ -1,0 +1,4 @@
+=== literalMatchBlockBodiesBreakOutOfTheSwitch.tt ===
+const v = match (s) { "a" => { return 1; }, _ => 0 };
+>v : const v: number
+

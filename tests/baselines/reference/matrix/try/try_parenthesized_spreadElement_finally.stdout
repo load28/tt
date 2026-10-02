@@ -1,0 +1,2 @@
+spreadElement(6) => {"kind":"Ok","value":[0,6]} | first 0; flip true; operand 6; read 6; finally 0
+spreadElement(-6) => {"kind":"Err","error":"negative -9"} | first 0; flip false; fallback -9; read -9; finally 0

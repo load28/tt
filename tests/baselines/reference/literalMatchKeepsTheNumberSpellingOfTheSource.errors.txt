@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalMatchKeepsTheNumberSpellingOfTheSource.tt → $DIR/out/literalMatchKeepsTheNumberSpellingOfTheSource.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> literalMatchKeepsTheNumberSpellingOfTheSource.tt:1:18
+  |
+1 | const v = match (x) { 0xff => 1, 1_000 => 2, 1.5e2 => 3, -1 => 4, _ => 0 };
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalMatchKeepsTheNumberSpellingOfTheSource.ts(3,17): error TS2304: Cannot find name 'x'.

@@ -1,0 +1,2 @@
+orAssignment(7) => 14 | open res; flip true; target {"value":0}; operand 7; dispose res; add 14
+orAssignment(1) => "kept" | open res; flip false; target {"value":"kept"}; dispose res

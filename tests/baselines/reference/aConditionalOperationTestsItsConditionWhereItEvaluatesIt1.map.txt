@@ -1,0 +1,13 @@
+//// [aConditionalOperationTestsItsConditionWhereItEvaluatesIt1.tt] 11 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 59  "\ndeclare const o: O;\ndeclare const cfg: { name?:"...
+4:1 -> 51:1 len 17  "export const v = "
+4:18 -> 29:5 len 8  "cfg.name"
+4:36 -> 31:19 len 1  "o"
+4:43 -> 34:17 len 1  "n"
+4:49 -> 35:18 len 1  "n"
+4:57 -> 39:18 len 1  "0"
+4:63 -> 48:12 len 1  "1"
+4:64 -> 51:24 len 2  ";\n"
+

@@ -1,0 +1,2 @@
+assignment(7) => 14 | initial 0; target {"value":0}; operand 7; add 14
+assignment(1) => 2 | initial 0; target {"value":0}; operand 1; add 2

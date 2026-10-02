@@ -1,0 +1,12 @@
+// @origin: tests/integration/pr115.rs::join_storage_preserves_array_inference_under_strict_checking
+
+variant Shape { Circle(radius: number), Point }
+declare const s: Shape;
+export const spread = match(s) { Circle(radius) => [radius], Point => [] };
+spread.push(1);
+export const n: number = spread.length;
+export const block = match(s) { Circle(radius) => { return [radius]; }, Point => { return []; } };
+block.push(2);
+const invalid: string[] = spread;
+
+export {};

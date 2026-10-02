@@ -1,0 +1,5 @@
+staticBlock(200) => true | success true
+staticBlock(201) => null | other null
+staticBlock(404) => false | missing false
+staticBlock(500) => null | other null
+staticBlock(7) => null | other null

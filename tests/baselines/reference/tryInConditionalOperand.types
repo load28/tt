@@ -1,0 +1,183 @@
+=== tryInConditionalOperand.tt ===
+const log: string[] = [];
+>log : const log: string[]
+function read(n: number): TResult<number, string> {
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  log.push(`read ${n}`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+  return n >= 0 ? { kind: "Ok", value: n } : { kind: "Err", error: `bad ${n}` };
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+>n : (parameter) n: number
+function note<T>(label: string, value: T): T {
+>note : function note<T>(label: string, value: T): T
+>T : (type parameter) T in note<T>(label: string, value: T): T
+>label : (parameter) label: string
+>value : (parameter) value: T
+>T : (type parameter) T in note<T>(label: string, value: T): T
+>T : (type parameter) T in note<T>(label: string, value: T): T
+  log.push(label);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+  return value;
+>value : (parameter) value: T
+function sink(label: string): ((...values: unknown[]) => string) | undefined {
+>sink : function sink(label: string): ((...values: unknown[]) => string) | undefined
+>label : (parameter) label: string
+>values : (parameter) values: unknown[]
+  log.push(`callee ${label}`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+  return label === "none" ? undefined : (...values: unknown[]) => values.join("|");
+>label : (parameter) label: string
+>values : (parameter) values: unknown[]
+>values : (parameter) values: unknown[]
+>join : (method) Array<unknown>.join(separator?: string): string
+function logical(flag: boolean, n: number): TResult<unknown, string> {
+>logical : function logical(flag: boolean, n: number): TResult<unknown, string>
+>flag : (parameter) flag: boolean
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const and = flag && (try read(n)) + note("middle", 10) + (try read(n + 1));
+>and : const and: number | false
+>flag : (parameter) flag: boolean
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>note : function note<10>(label: string, value: 10): 10
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+  const or = !flag || (try read(n)) * (try read(n + 2));
+>or : const or: number | true
+>flag : (parameter) flag: boolean
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+  const nullish = (flag ? null : "set") ?? (try read(n)) - (try read(n + 3));
+>nullish : const nullish: number | "set"
+>flag : (parameter) flag: boolean
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+  return { kind: "Ok", value: [and, or, nullish] };
+>kind : (property) kind: "Ok"
+>value : (property) value: unknown
+>and : const and: number | false
+>or : const or: number | true
+>nullish : const nullish: number | "set"
+function ternary(flag: boolean, n: number): TResult<unknown, string> {
+>ternary : function ternary(flag: boolean, n: number): TResult<unknown, string>
+>flag : (parameter) flag: boolean
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const both = flag ? (try read(n)) + (try read(n + 1)) : (try read(n + 2)) * 2;
+>both : const both: number
+>flag : (parameter) flag: boolean
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+  const one = flag ? note("plain", 0) : [try read(n), note("after", 1), try read(n + 1)];
+>one : const one: number | number[]
+>flag : (parameter) flag: boolean
+>note : function note<0>(label: string, value: 0): 0
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>note : function note<1>(label: string, value: 1): 1
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+  return { kind: "Ok", value: [both, one] };
+>kind : (property) kind: "Ok"
+>value : (property) value: unknown
+>both : const both: number
+>one : const one: number | number[]
+function optional(label: string, n: number): TResult<unknown, string> {
+>optional : function optional(label: string, n: number): TResult<unknown, string>
+>label : (parameter) label: string
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const scaled = sink(label)?.(note("first", 1), try read(n) * 2, note("last", 3));
+>scaled : const scaled: string | undefined
+>sink : function sink(label: string): ((...values: unknown[]) => string) | undefined
+>label : (parameter) label: string
+>note : function note<1>(label: string, value: 1): 1
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>note : function note<3>(label: string, value: 3): 3
+  const member = sink(label)?.((try read(n)).toFixed(1), (try read(n)) + (try read(n + 1)));
+>member : const member: string | undefined
+>sink : function sink(label: string): ((...values: unknown[]) => string) | undefined
+>label : (parameter) label: string
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+>read : function read(n: number): TResult<number, string>
+>n : (parameter) n: number
+  return { kind: "Ok", value: [scaled, member] };
+>kind : (property) kind: "Ok"
+>value : (property) value: unknown
+>scaled : const scaled: string | undefined
+>member : const member: string | undefined
+for (const [flag, n] of [[true, 1], [false, 1], [true, -2], [false, -2]] as const) {
+>flag : const flag: boolean
+>n : const n: -2 | 1
+>const : type const = readonly [readonly [true, 1], readonly [false, 1], readonly [true, -2], readonly [false, -2]]
+  log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+  console.log(JSON.stringify(logical(flag, n)), log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>logical : function logical(flag: boolean, n: number): TResult<unknown, string>
+>flag : const flag: boolean
+>n : const n: -2 | 1
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+  log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+  console.log(JSON.stringify(ternary(flag, n)), log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>ternary : function ternary(flag: boolean, n: number): TResult<unknown, string>
+>flag : const flag: boolean
+>n : const n: -2 | 1
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+for (const [label, n] of [["some", 2], ["none", 2], ["some", -1], ["none", -1]] as const) {
+>label : const label: "none" | "some"
+>n : const n: -1 | 2
+>const : type const = readonly [readonly ["some", 2], readonly ["none", 2], readonly ["some", -1], readonly ["none", -1]]
+  log.length = 0;
+>log : const log: string[]
+>length : (property) Array<string>.length: number
+  console.log(JSON.stringify(optional(label, n)), log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>optional : function optional(label: string, n: number): TResult<unknown, string>
+>label : const label: "none" | "some"
+>n : const n: -1 | 2
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

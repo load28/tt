@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tupleMatchBareWildcardArmSkipsTheCheckAndMustBeLast1.tt → $DIR/out/tupleMatchBareWildcardArmSkipsTheCheckAndMustBeLast1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'a'.
+ --> tupleMatchBareWildcardArmSkipsTheCheckAndMustBeLast1.tt:3:18
+  |
+3 | const r = match (a, b) {
+  |                  ^
+error[ts2304]: Cannot find name 'b'.
+ --> tupleMatchBareWildcardArmSkipsTheCheckAndMustBeLast1.tt:3:21
+  |
+3 | const r = match (a, b) {
+  |                     ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tupleMatchBareWildcardArmSkipsTheCheckAndMustBeLast1.ts(11,18): error TS2304: Cannot find name 'a'.
+tupleMatchBareWildcardArmSkipsTheCheckAndMustBeLast1.ts(12,18): error TS2304: Cannot find name 'b'.

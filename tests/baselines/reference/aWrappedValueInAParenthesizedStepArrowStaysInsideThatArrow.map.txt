@@ -1,0 +1,23 @@
+//// [aWrappedValueInAParenthesizedStepArrowStaysInsideThatArrow.tt] 21 mapping(s)
+1:1 -> 22:1 len 71  "type R<T> = { kind: \"Ok\"; value: T } | { kind: \""...
+2:18 -> 24:21 len 6  "number"
+2:18 -> 27:10 len 6  "number"
+2:30 -> 29:3 len 76  "\ndeclare function next(): R<number>;\ndeclare con"...
+5:11 -> 32:18 len 5  "value"
+5:20 -> 32:26 len 6  "(x => "
+5:26 -> 39:10 len 1  "("
+5:31 -> 34:18 len 6  "next()"
+5:37 -> 39:17 len 1  ")"
+5:38 -> 40:2 len 1  ")"
+5:39 -> 40:5 len 12  ";\nconst h = "
+6:11 -> 41:18 len 5  "value"
+6:20 -> 41:26 len 16  "((v: number) => "
+6:36 -> 60:10 len 1  "("
+6:44 -> 44:19 len 6  "V.A(v)"
+6:56 -> 47:17 len 1  "n"
+6:62 -> 48:18 len 1  "n"
+6:70 -> 52:18 len 1  "0"
+6:73 -> 60:17 len 11  ") as number"
+6:84 -> 61:2 len 1  ")"
+6:85 -> 61:5 len 2  ";\n"
+

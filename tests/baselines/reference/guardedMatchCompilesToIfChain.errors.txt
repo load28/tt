@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./guardedMatchCompilesToIfChain.tt → $DIR/out/guardedMatchCompilesToIfChain.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 's'.
+ --> guardedMatchCompilesToIfChain.tt:3:22
+  |
+3 | const grade = match (s) {
+  |                      ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+guardedMatchCompilesToIfChain.ts(29,17): error TS2304: Cannot find name 's'.

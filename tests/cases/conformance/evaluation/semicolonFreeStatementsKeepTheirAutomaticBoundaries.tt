@@ -1,0 +1,27 @@
+// @origin: tests/integration.rs::semicolon_free_statements_keep_their_automatic_boundaries
+// @run: semicolonFreeStatementsKeepTheirAutomaticBoundaries.tt
+variant O { A, B }
+const log: string[] = []
+const inc = (n: number) => n + 1
+const note = (text: string) => { log.push(text) }
+function run(x: O, y: O) {
+log.push("start")
+match (x) {
+A => { log.push("xa") },
+B => { log.push("xb") },
+}
+match (y) {
+A => { log.push("ya") },
+B => { log.push("yb") },
+}
+const n = 1
+n |> inc |> String |> note
+const piped = 1 |> inc
+log.push(String(piped))
+const next = 2
+next |> String |> note
+}
+run(O.A, O.B)
+console.log(log.join(","))
+
+export {};

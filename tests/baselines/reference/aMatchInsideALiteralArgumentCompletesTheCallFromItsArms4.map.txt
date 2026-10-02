@@ -1,0 +1,13 @@
+//// [aMatchInsideALiteralArgumentCompletesTheCallFromItsArms4.tt] 11 mapping(s)
+1:1 -> 17:1 len 13  "const kept = "
+1:14 -> 2:22 len 7  "consume"
+1:22 -> 8:33 len 7  "{item: "
+1:22 -> 12:33 len 7  "{item: "
+1:36 -> 4:17 len 1  "x"
+1:43 -> 7:15 len 1  "v"
+1:49 -> 8:40 len 1  "v"
+1:57 -> 12:40 len 1  "0"
+1:60 -> 8:41 len 1  "}"
+1:60 -> 12:41 len 1  "}"
+1:62 -> 17:25 len 1  ";"
+

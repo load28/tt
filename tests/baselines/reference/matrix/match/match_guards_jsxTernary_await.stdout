@@ -1,0 +1,5 @@
+jsxTernary({"kind":"Circle","r":1}) => "<p>1</p>" | flip true; await; guard big false; small 1
+jsxTernary({"kind":"Circle","r":5}) => "<p><i>none</i></p>" | flip false
+jsxTernary({"kind":"Rect","w":4,"h":2}) => "<p>4</p>" | flip true; await; guard wide true; wide 4
+jsxTernary({"kind":"Rect","w":1,"h":3}) => "<p><i>none</i></p>" | flip false
+jsxTernary({"kind":"Point"}) => "<p>0</p>" | flip true; await; point 0

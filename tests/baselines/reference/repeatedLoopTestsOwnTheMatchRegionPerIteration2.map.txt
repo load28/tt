@@ -1,0 +1,10 @@
+//// [repeatedLoopTestsOwnTheMatchRegionPerIteration2.tt] 8 mapping(s)
+1:1 -> 1:1 len 7  "for (; "
+1:15 -> 4:19 len 6  "next()"
+1:28 -> 6:28 len 5  "Error"
+1:37 -> 7:18 len 5  "false"
+1:49 -> 10:16 len 4  "true"
+1:57 -> 1:10 len 6  "tick()"
+1:65 -> 14:25 len 11  "{ work(); }"
+1:76 -> 14:37 len 1  "\n"
+

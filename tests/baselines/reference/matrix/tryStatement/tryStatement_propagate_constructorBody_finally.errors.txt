@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[try-placement]: `try` cannot be used in a constructor or generator — its `Err` propagation requires an ordinary function return
+ --> ./main.tt:9:9
+  |
+9 |         try read(note("operand", input));
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into an ordinary function, or handle the Result explicitly
+
+
+==== ttc --check-types (exit 1) ====
+error[try-placement]: `try` cannot be used in a constructor or generator — its `Err` propagation requires an ordinary function return
+ --> main.tt:9:9
+  |
+9 |         try read(note("operand", input));
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: move the propagation into an ordinary function, or handle the Result explicitly
+
+==== tsc on the emitted TypeScript (exit 0) ====

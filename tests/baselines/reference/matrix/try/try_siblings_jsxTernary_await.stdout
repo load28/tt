@@ -1,0 +1,2 @@
+jsxTernary(4) => {"kind":"Ok","value":"<p>9</p>"} | flip true; await; read 4; second 5; read 5
+jsxTernary(-4) => {"kind":"Ok","value":"<p><i>none</i></p>"} | flip false

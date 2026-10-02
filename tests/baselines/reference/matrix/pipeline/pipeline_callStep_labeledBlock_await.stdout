@@ -1,0 +1,2 @@
+labeledBlock(2) => 4 | await; double 4; flip true
+labeledBlock(5) => [10] | await; double 10; flip false

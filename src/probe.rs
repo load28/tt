@@ -13,6 +13,7 @@
 //! unguarded arms cover and the two byte offsets the pipeline needs (the
 //! `match` keyword to report at, the scrutinee to ask the checker about).
 
+use crate::analysis::CoverageQuestion;
 use crate::ast::*;
 
 /// A wildcard-free literal `match` — one typed exhaustiveness question.
@@ -140,6 +141,10 @@ pub(crate) fn payload_probes_of(program: &Program) -> Vec<PayloadProbe> {
 /// let-else bindings are alias-only — but the walk visits every construct
 /// so a nested match inside an arm body is reached too.
 fn payload_walk(program: &Program, out: &mut Vec<PayloadProbe>) {
+    crate::stack::grow(|| payload_walk_grown(program, out));
+}
+
+fn payload_walk_grown(program: &Program, out: &mut Vec<PayloadProbe>) {
     for segment in &program.segments {
         match segment {
             Segment::Match(expr) => {
@@ -216,6 +221,10 @@ fn payload_walk(program: &Program, out: &mut Vec<PayloadProbe>) {
 }
 
 fn payload_if_let(stmt: &IfLetStmt, out: &mut Vec<PayloadProbe>) {
+    crate::stack::grow(|| payload_if_let_grown(stmt, out));
+}
+
+fn payload_if_let_grown(stmt: &IfLetStmt, out: &mut Vec<PayloadProbe>) {
     for alt in &stmt.alternatives {
         payload_of(alt, out);
     }
@@ -230,6 +239,10 @@ fn payload_if_let(stmt: &IfLetStmt, out: &mut Vec<PayloadProbe>) {
 
 /// One alternative's nested patterns, recursively.
 fn payload_of(alt: &TagPattern, out: &mut Vec<PayloadProbe>) {
+    crate::stack::grow(|| payload_of_grown(alt, out));
+}
+
+fn payload_of_grown(alt: &TagPattern, out: &mut Vec<PayloadProbe>) {
     for binding in alt.bindings.as_deref().unwrap_or_default() {
         let Some(inner) = &binding.nested else {
             continue;
@@ -314,16 +327,11 @@ struct Probes {
     tags: Vec<TagMatch>,
 }
 
-/// What one match's arms turned out to be.
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum Kind {
-    /// No arm carried a pattern worth a question.
-    None,
-    Literal,
-    Tag,
+fn walk(program: &Program, src: &str, out: &mut Probes) {
+    crate::stack::grow(|| walk_grown(program, src, out));
 }
 
-fn walk(program: &Program, src: &str, out: &mut Probes) {
+fn walk_grown(program: &Program, src: &str, out: &mut Probes) {
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_)
@@ -388,6 +396,10 @@ fn walk(program: &Program, src: &str, out: &mut Probes) {
 }
 
 fn walk_if_let(stmt: &IfLetStmt, src: &str, out: &mut Probes) {
+    crate::stack::grow(|| walk_if_let_grown(stmt, src, out));
+}
+
+fn walk_if_let_grown(stmt: &IfLetStmt, src: &str, out: &mut Probes) {
     walk(&stmt.expr, src, out);
     walk(&stmt.body, src, out);
     match &stmt.else_part {
@@ -397,71 +409,59 @@ fn walk_if_let(stmt: &IfLetStmt, src: &str, out: &mut Probes) {
     }
 }
 
-/// Records one match if it is a wildcard-free literal match.
+/// Records the typed exhaustiveness question one match asks, if any
+/// ([`crate::analysis::coverage_question`]).
 fn collect(expr: &MatchExpr, src: &str, out: &mut Probes) {
-    if expr
-        .arms
-        .iter()
-        .any(|a| matches!(a.pattern, Pattern::Wildcard))
-    {
+    let question = crate::analysis::coverage_question(expr);
+    if question == CoverageQuestion::None {
         return;
     }
     let Some((scrutinee, scrutinee_end)) = trimmed_scrutinee(expr, src) else {
         return;
     };
 
-    // Tag patterns never mix with the value-pattern family. An `is` arm
-    // suppresses typed coverage for the whole open hierarchy before this
-    // point, so exactly one of the literal or tag probes can fire here.
-    let mut literals = Vec::new();
-    let mut tags = Vec::new();
-    let mut kind = Kind::None;
-    for arm in &expr.arms {
-        // A guarded arm may fall through, so it covers nothing — but it
-        // still tells us which kind of match this is.
-        match &arm.pattern {
-            Pattern::Literals(alts) => {
-                if arm.guard.is_none() {
-                    literals.extend(alts.iter().map(|alt| match &alt.value {
-                        LiteralValue::Str(s) => Literal::String(s.clone()),
-                        LiteralValue::Num(n) => Literal::Number(*n),
-                        LiteralValue::BigInt(d) => Literal::BigInt(d.clone()),
-                        LiteralValue::Bool(b) => Literal::Boolean(*b),
-                    }));
-                }
-                kind = Kind::Literal;
-            }
-            Pattern::Tags(alts) => {
-                if arm.guard.is_none() {
-                    tags.extend(alts.iter().map(|alt| alt.tag.clone()));
-                }
-                kind = Kind::Tag;
-            }
-            Pattern::Instances(_) => return,
-            Pattern::Wildcard => {}
-        }
-    }
-    match kind {
-        Kind::Literal => out.literals.push(LiteralMatch {
+    // A guarded arm may fall through, so it covers nothing.
+    let unguarded = || expr.arms.iter().filter(|arm| arm.guard.is_none());
+    match question {
+        CoverageQuestion::Literals => out.literals.push(LiteralMatch {
             offset: expr.keyword_off,
             scrutinee,
             scrutinee_end,
-            covered: literals,
+            covered: unguarded()
+                .filter_map(|arm| match &arm.pattern {
+                    Pattern::Literals(alts) => Some(alts),
+                    _ => None,
+                })
+                .flatten()
+                .map(|alt| match &alt.value {
+                    LiteralValue::Str(s) => Literal::String(s.clone()),
+                    LiteralValue::Num(n) => Literal::Number(*n),
+                    LiteralValue::BigInt(d) => Literal::BigInt(d.clone()),
+                    LiteralValue::Bool(b) => Literal::Boolean(*b),
+                })
+                .collect(),
             body_open: expr.body_open,
             body_close: expr.body_close,
             tail: expr.tail,
         }),
-        Kind::Tag => out.tags.push(TagMatch {
+        CoverageQuestion::Tags => out.tags.push(TagMatch {
             offset: expr.keyword_off,
             arity: 1,
             scrutinee,
             scrutinee_end,
-            covered: tags,
+            covered: unguarded()
+                .filter_map(|arm| match &arm.pattern {
+                    Pattern::Tags(alts) => Some(alts),
+                    _ => None,
+                })
+                .flatten()
+                .map(|alt| alt.tag.clone())
+                .collect(),
             body_open: expr.body_open,
             body_close: expr.body_close,
             tail: expr.tail,
         }),
-        Kind::None => {}
+        CoverageQuestion::None => {}
     }
 }
 

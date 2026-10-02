@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_01.rs::typescript_enum_is_passthrough
+enum Color { Red, Green, Blue }

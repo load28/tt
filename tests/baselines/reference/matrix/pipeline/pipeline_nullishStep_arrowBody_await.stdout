@@ -1,0 +1,2 @@
+arrowBody(10) => 9 | await; flip true; lookup true; found 9
+arrowBody(20) => 40 | await; flip false; lookup false; double 40

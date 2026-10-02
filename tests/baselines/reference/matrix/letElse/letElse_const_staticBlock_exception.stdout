@@ -1,0 +1,2 @@
+staticBlock(2) => 2 | risky 2; read 2
+staticBlock(-1) => "diverged" | risky -1; read -1; caught "diverged"

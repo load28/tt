@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_03.rs::try_is_a_value_in_deep_expression_positions
+function f(): TResult<number, string> {
+  return Result.Ok(Math.round(try total() * 1.1));
+}

@@ -197,6 +197,51 @@ TT 고유의 차이: **Projection 계층**. tsgo는 `TS source → Program`이�
 | 부모 프로세스 워치독 | **채택** | `ttc --server`는 stdin EOF에서 종료 — LSP 서버가 죽으면 자연 종료. (tsgo의 pid 폴링 워치독까지는 불필요: 전송이 stdio뿐이다.) |
 | FENNEL checker 파티셔닝, 워크스페이스 다중 프로젝트 서비스, ATA, auto-import 레지스트리 | **기각** | TT의 현재 표면에 대응물이 없다. multi-tsconfig는 `Engine`이 프로젝트를 여럿 소유할 수 있는 형태(키: tsconfig 경로)로 자리만 만든다. |
 
+> **Update (TASK-535).** The multi-project half of the row above is no longer
+> rejected. `engine::Workspace` owns every project a consumer holds open,
+> keyed by `(tsconfig, root)`. References and rename search every open
+> project the way TypeScript's `getPerProjectReferences` does: the requesting
+> file's project answers at the requested position, each other project that
+> contains the definition that answer names (`Project::sees`, tt's
+> `containsFile`) answers there, and the results are merged without
+> duplicates. A rename is refused whole when any project refuses it
+> or two projects disagree about one place. Loading projects that no open
+> document belongs to (`loadAncestorProjectTree`) is still not done.
+
+> **Update (TASK-536).** Open documents are one store per `Engine`
+> (`engine::documents::Documents`), the counterpart of tsgo's session-level
+> overlay filesystem (§B.2), and every project the engine opens reads its
+> text through that store. A project still keeps its own set of the
+> documents opened through it. Those are its roots by request, so a buffer
+> of another project never becomes a root here. Nothing is invalidated
+> eagerly: projections, semantic caches and served modules are keyed by the
+> text they were built from, and each project rebuilds what changed at its
+> next question.
+
+> **Update (TASK-576).** The parse-only tt surfaces (`ttSymbol`,
+> `ttCompletions`, `ttHints`, `declarations`) need no project, but they do
+> read the `.tt` files a buffer imports. A server answers them through its
+> `Workspace`, which reads those files through the engine's store
+> (`documents::Texts::Open`), so an unsaved variant reaches pattern
+> completion, hover and definition when it reaches the diagnostics. The
+> free functions (`engine::tt_symbol_at` and the others) are the
+> stand-alone question with no session, and read the disk.
+
+> **Update (TASK-653).** A project keeps its last contextual
+> materialization (`Project::materialized`) with the question it answered:
+> the projected modules as lowered, the modules served beside them (host
+> overlays, std support, blocked files), the listed hand-written sources,
+> and the roots by request, each in path order. The next snapshot reuses
+> the refined emits when it asks the same question and the host reports
+> the same session and disk generation (the probe TASK-436 added for the
+> standalone path); otherwise it materializes again. Every editor request
+> takes a snapshot, so an unchanged project now answers a hover without
+> asking the checker, as TypeScript's language service reuses its program
+> while the project version is unchanged (`synchronizeHostDataWorker`,
+> `src/services/services.ts`) and typescript-go reuses its snapshot while
+> no file change is pending (`Session.getSnapshot`,
+> `internal/project/session.go`).
+
 ---
 
 ## E. 최종 아키텍처

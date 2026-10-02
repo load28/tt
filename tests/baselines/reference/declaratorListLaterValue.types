@@ -1,0 +1,83 @@
+=== declaratorListLaterValue.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function pick(n: number): O {
+>pick : function pick(n: number): O
+>n : (parameter) n: number
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return n > 0 ? O.A(n) : O.B;
+>n : (parameter) n: number
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+>n : (parameter) n: number
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const o = pick(1);
+>o : const o: O
+>pick : function pick(n: number): O
+function t(s: string): number {
+>t : function t(s: string): number
+>s : (parameter) s: string
+  console.log(`t ${s}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>s : (parameter) s: string
+export function f() {
+>f : function f(): number
+  const a = t("a"), b = match (o) { A(n) => a + n, B => 0 };
+>a : const a: number
+>t : function t(s: string): number
+>b : const b: number
+>o : const o: O
+>n : const n: number
+>a : const a: number
+>n : const n: number
+  return b;
+>b : const b: number
+export function g() {
+>g : function g(): number
+  var a = 10, b = match (o) { A(n) => a + n, B => 0 };
+>a : var a: number
+>b : var b: number
+>o : const o: O
+>n : const n: number
+>a : var a: number
+>n : const n: number
+  return b;
+>b : var b: number
+console.log(`f ${f()}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : function f(): number
+console.log(`g ${g()}`);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>g : function g(): number
+

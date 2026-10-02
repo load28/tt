@@ -1,0 +1,10 @@
+=== jsxExpressionPipelineRewritesOnlyTheContainerExpression1.ttx ===
+declare const raw: string; declare const up: (x: string) => string;
+>raw : const raw: string
+>up : const up: (x: string) => string
+>x : (parameter) x: string
+const child = <p>{raw |> up}</p>;
+>child : const child: any
+>raw : const raw: string
+>up : const up: (x: string) => string
+

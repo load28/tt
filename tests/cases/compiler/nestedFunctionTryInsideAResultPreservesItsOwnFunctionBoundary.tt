@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::nested_function_try_inside_a_result_preserves_its_own_function_boundary
+const value = result { const inner = () => { return try step(); }; return try inner(); };

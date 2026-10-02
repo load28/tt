@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_04.rs::let_else_divergence_sees_an_inline_if_let
+variant Res { Ok(value: number), Err(error: string) }
+function f(r: Res): number {
+  const Some(v) = find() else { if let Ok(value) = r { return value; } else { return 1; } };
+  return v;
+}

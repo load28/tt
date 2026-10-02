@@ -1,0 +1,2 @@
+jsxComponentProp(2) => "<Show {'kind':'Ok','value':20}>" | open res; operand 2; read 2; dispose res
+jsxComponentProp(-1) => "<Show {'kind':'Err','error':'negative -1'}>" | open res; operand -1; read -1; dispose res

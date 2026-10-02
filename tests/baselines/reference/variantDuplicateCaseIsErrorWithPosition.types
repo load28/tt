@@ -1,0 +1,13 @@
+=== variantDuplicateCaseIsErrorWithPosition.tt ===
+const a = 1;
+>a : const a: 1
+variant X { A(v: number), A }
+>X : type X = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "A";
+>   }
+>A : (property) A: (v: number) => X
+>v : (property) v: number
+

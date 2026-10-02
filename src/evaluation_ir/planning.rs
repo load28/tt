@@ -68,7 +68,9 @@ pub(super) fn resolve_schedule_steps(
                                 // unobservable.
                                 if matches!(
                                     input.mode,
-                                    EvaluationInputMode::Value | EvaluationInputMode::JsxChildValue
+                                    EvaluationInputMode::Value
+                                        | EvaluationInputMode::JsxChildValue
+                                        | EvaluationInputMode::Discarded
                                 ) && input.effects.is_inert()
                                 {
                                     return Ok(PlannedEvaluationInput::Stable {
@@ -90,34 +92,47 @@ pub(super) fn resolve_schedule_steps(
                                         mode: input.mode,
                                         target: slot.target,
                                         receiver: slot.receiver,
+                                        key: slot.key,
                                     });
                                 }
                                 let target =
                                     allocate_value_slot(next_slot, slot_names, occupied_names)?;
-                                let receiver = input
-                                    .receiver
-                                    .map(|(source, effects)| {
-                                        if effects.is_inert() {
-                                            Ok(PlannedReceiver::Stable { source })
-                                        } else {
-                                            Ok(PlannedReceiver::Captured {
-                                                source,
-                                                slot: allocate_value_slot(
-                                                    next_slot,
-                                                    slot_names,
-                                                    occupied_names,
-                                                )?,
-                                            })
-                                        }
-                                    })
-                                    .transpose()?;
-                                source_slots
-                                    .insert(input.source, PlannedSourceSlot { target, receiver });
+                                let mut part =
+                                    |part: Option<crate::program_syntax::HostReferencePart>| {
+                                        part.map(|part| {
+                                            if part.read_at_call || part.effects.is_inert() {
+                                                Ok(PlannedReceiver::Stable {
+                                                    source: part.source,
+                                                })
+                                            } else {
+                                                Ok(PlannedReceiver::Captured {
+                                                    source: part.source,
+                                                    slot: allocate_value_slot(
+                                                        next_slot,
+                                                        slot_names,
+                                                        occupied_names,
+                                                    )?,
+                                                })
+                                            }
+                                        })
+                                        .transpose()
+                                    };
+                                let receiver = part(input.receiver)?;
+                                let key = part(input.key)?;
+                                source_slots.insert(
+                                    input.source,
+                                    PlannedSourceSlot {
+                                        target,
+                                        receiver,
+                                        key,
+                                    },
+                                );
                                 Ok(PlannedEvaluationInput::Source {
                                     source: input.source,
                                     mode: input.mode,
                                     target,
                                     receiver,
+                                    key,
                                 })
                             },
                             |slot| {
@@ -249,9 +264,6 @@ pub(super) fn plan_one_operation(
         HostEvaluationOperation::Conditional(ConditionalBranch::LogicalAndRight)
         | HostEvaluationOperation::Conditional(ConditionalBranch::LogicalOrRight)
         | HostEvaluationOperation::Conditional(ConditionalBranch::NullishRight) => {
-            if members.len() != 1 {
-                return Ok(None);
-            }
             match step.operation {
                 HostEvaluationOperation::Conditional(ConditionalBranch::LogicalAndRight) => {
                     PlannedConditionalKind::LogicalAnd
@@ -265,8 +277,8 @@ pub(super) fn plan_one_operation(
         HostEvaluationOperation::Conditional(
             ConditionalBranch::Consequent | ConditionalBranch::Alternate,
         ) => {
-            let mut consequent = None;
-            let mut alternate = None;
+            let mut consequent: Option<(Vec<ExprId>, Option<SourceSpan>)> = None;
+            let mut alternate: Option<(Vec<ExprId>, Option<SourceSpan>)> = None;
             for member in members {
                 let value = &values[*member];
                 let Some((member_index, member_step)) = whole_operation_step(&value.schedule)
@@ -276,13 +288,11 @@ pub(super) fn plan_one_operation(
                 let Some(member_facts) = &member_step.conditional else {
                     return Ok(None);
                 };
-                if member_index > 0 {
-                    active.push(PlannedActiveBranch {
-                        value: value.expr,
-                        branch: member_facts.branch,
-                        steps: value.schedule.steps()[..member_index].to_vec(),
-                    });
-                }
+                active.push(PlannedActiveBranch {
+                    value: value.expr,
+                    branch: member_facts.branch,
+                    steps: value.schedule.steps()[..member_index].to_vec(),
+                });
                 let side = match member_step.operation {
                     HostEvaluationOperation::Conditional(ConditionalBranch::Consequent) => {
                         &mut consequent
@@ -292,30 +302,40 @@ pub(super) fn plan_one_operation(
                     }
                     _ => return Ok(None),
                 };
-                if side.is_some() {
-                    return Ok(None);
+                match side {
+                    Some((values, _)) => values.push(value.expr),
+                    None => *side = Some((vec![value.expr], member_facts.skipped)),
                 }
-                *side = Some((PlannedBranch::Value(value.expr), member_facts.skipped));
             }
-            let fill = |taken: Option<(PlannedBranch, Option<SourceSpan>)>,
-                        other: &Option<(PlannedBranch, Option<SourceSpan>)>|
+            // A branch that is exactly one value delivers it straight into
+            // the result slot; any other branch is rebuilt around its values.
+            active.retain(|entry| {
+                !entry.steps.is_empty()
+                    || [&consequent, &alternate]
+                        .into_iter()
+                        .flatten()
+                        .any(|(values, _)| values.len() > 1 && values.contains(&entry.value))
+            });
+            let fill = |taken: Option<(Vec<ExprId>, Option<SourceSpan>)>,
+                        other: Option<Option<SourceSpan>>|
              -> Option<PlannedBranch> {
                 match taken {
-                    Some((branch, _)) => Some(branch),
+                    Some((values, _)) => Some(PlannedBranch::Values(values)),
                     // The side with no tt value is the other member's
                     // skipped span — original source relocated into the
                     // branch, which must not contain tt of its own.
                     None => {
-                        let (_, skipped) = other.as_ref()?;
-                        let span = (*skipped)?;
+                        let span = other.flatten()?;
                         (!overlaps_tt(span)).then_some(PlannedBranch::Source(span))
                     }
                 }
             };
-            let Some(consequent_branch) = fill(consequent, &alternate) else {
+            let consequent_skipped = consequent.as_ref().map(|(_, skipped)| *skipped);
+            let alternate_skipped = alternate.as_ref().map(|(_, skipped)| *skipped);
+            let Some(consequent_branch) = fill(consequent, alternate_skipped) else {
                 return Ok(None);
             };
-            let Some(alternate_branch) = fill(alternate, &consequent) else {
+            let Some(alternate_branch) = fill(alternate, consequent_skipped) else {
                 return Ok(None);
             };
             PlannedConditionalKind::Ternary {
@@ -323,13 +343,14 @@ pub(super) fn plan_one_operation(
                 alternate: alternate_branch,
             }
         }
+        HostEvaluationOperation::Conditional(ConditionalBranch::LogicalAssignmentRight {
+            operator,
+            ..
+        }) => PlannedConditionalKind::LogicalAssignment { operator },
         HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(_)) => {
-            if conditional_index != 0 {
-                return Ok(None);
-            }
-            // A member callee calls through its captured receiver
-            // (`callee.call(receiver, ...)`), which cannot carry explicit
-            // type arguments.
+            // A member callee the chain tests is called through its
+            // captured receiver (`callee.call(receiver, ...)`), which cannot
+            // carry explicit type arguments.
             let member_callee = matches!(
                 condition,
                 PlannedEvaluationInput::Source {
@@ -337,21 +358,37 @@ pub(super) fn plan_one_operation(
                     ..
                 }
             );
-            if member_callee && facts.type_args.is_some() {
+            if member_callee
+                && facts.type_args.is_some()
+                && facts.optional_test == Some(OptionalCallTest::Callee)
+            {
                 return Ok(None);
             }
-            let mut value_indices: HashMap<u32, ExprId> = HashMap::new();
+            // The receiver test needs the receiver as its own input.
+            let test = match facts.optional_test {
+                Some(OptionalCallTest::Callee) => OptionalCallTest::Callee,
+                Some(OptionalCallTest::Receiver) if member_callee => OptionalCallTest::Receiver,
+                Some(OptionalCallTest::Receiver | OptionalCallTest::Inner) | None => {
+                    return Ok(None);
+                }
+            };
+            let mut value_indices: HashMap<u32, Vec<(ExprId, usize)>> = HashMap::new();
             for member in members {
                 let value = &values[*member];
-                let HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(
-                    index,
-                )) = value.schedule.steps()[0].operation
+                let Some((member_index, member_step)) = whole_operation_step(&value.schedule)
                 else {
                     return Ok(None);
                 };
-                if value_indices.insert(index, value.expr).is_some() {
+                let HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(
+                    index,
+                )) = member_step.operation
+                else {
                     return Ok(None);
-                }
+                };
+                value_indices
+                    .entry(index)
+                    .or_default()
+                    .push((value.expr, member_index));
             }
             let last_value = *value_indices.keys().max().unwrap_or(&0);
             // Argument capture slots come from the members' planned inputs:
@@ -361,8 +398,11 @@ pub(super) fn plan_one_operation(
             // `None` — the rebuilt call inlines it, which is unobservable.
             let capture_of = |span: SourceSpan| {
                 members.iter().find_map(|member| {
-                    values[*member].schedule.steps()[0].inputs.iter().find_map(
-                        |input| match input {
+                    let (member_index, _) = whole_operation_step(&values[*member].schedule)?;
+                    values[*member].schedule.steps()[member_index]
+                        .inputs
+                        .iter()
+                        .find_map(|input| match input {
                             PlannedEvaluationInput::Source { source, target, .. }
                                 if *source == span =>
                             {
@@ -372,15 +412,35 @@ pub(super) fn plan_one_operation(
                                 Some(None)
                             }
                             _ => None,
-                        },
-                    )
+                        })
                 })
             };
             let mut arguments = Vec::with_capacity(facts.operands.len());
             for (index, operand) in facts.operands.iter().enumerate() {
                 let index = u32::try_from(index).map_err(|_| EvaluationError::IdOverflow)?;
-                match value_indices.get(&index) {
-                    Some(expr) => arguments.push(PlannedOperand::Value(*expr)),
+                match value_indices.get(&index).map(Vec::as_slice) {
+                    Some(&[(expr, 0)]) => arguments.push(PlannedOperand::Value(expr)),
+                    Some(argument_values) => {
+                        for &(expr, member_index) in argument_values {
+                            let Some(value) = members
+                                .iter()
+                                .map(|member| &values[*member])
+                                .find(|value| value.expr == expr)
+                            else {
+                                return Ok(None);
+                            };
+                            active.push(PlannedActiveBranch {
+                                value: expr,
+                                branch: operand.span,
+                                steps: value.schedule.steps()[..member_index].to_vec(),
+                            });
+                        }
+                        arguments.push(PlannedOperand::Composed {
+                            span: operand.span,
+                            spread: operand.spread,
+                            values: argument_values.iter().map(|(expr, _)| *expr).collect(),
+                        });
+                    }
                     None => {
                         if overlaps_tt(operand.span) {
                             return Ok(None);
@@ -404,22 +464,46 @@ pub(super) fn plan_one_operation(
             PlannedConditionalKind::OptionalCall {
                 arguments,
                 type_args: facts.type_args,
+                test,
             }
         }
         _ => return Ok(None),
     };
     let result = allocate_value_slot(next_slot, slot_names, occupied_names)?;
-    if matches!(
+    let logical = matches!(
         &kind,
         PlannedConditionalKind::LogicalAnd
             | PlannedConditionalKind::LogicalOr
             | PlannedConditionalKind::Nullish
-    ) {
-        active.push(PlannedActiveBranch {
-            value: first.expr,
-            branch: facts.branch,
-            steps: first_steps[..conditional_index].to_vec(),
-        });
+    );
+    let assignment = matches!(&kind, PlannedConditionalKind::LogicalAssignment { .. });
+    let condition = match condition {
+        PlannedEvaluationInput::Stable { source, reserved } if logical => {
+            PlannedEvaluationInput::Source {
+                source,
+                mode: EvaluationInputMode::Value,
+                target: match reserved {
+                    Some(slot) => slot,
+                    None => allocate_value_slot(next_slot, slot_names, occupied_names)?,
+                },
+                receiver: None,
+                key: None,
+            }
+        }
+        condition => condition,
+    };
+    if logical || assignment {
+        for member in members {
+            let value = &values[*member];
+            let Some((member_index, _)) = whole_operation_step(&value.schedule) else {
+                return Ok(None);
+            };
+            active.push(PlannedActiveBranch {
+                value: value.expr,
+                branch: facts.branch,
+                steps: value.schedule.steps()[..member_index].to_vec(),
+            });
+        }
     }
     Ok(Some(PlannedConditionalOperation {
         parent,
@@ -455,11 +539,18 @@ pub(super) fn target_capability(
         EvaluationOwner::ParameterInitializer
             | EvaluationOwner::ClassInitializer
             | EvaluationOwner::ClassDefinition
+            | EvaluationOwner::EnumInitializer
     ) {
         return TargetCapability::ExpressionBoundary(Reason::OwnerTakesNoStatements);
     }
     if !core.has_statement_form(expr) {
         return TargetCapability::ExpressionBoundary(Reason::ValueHasNoStatementForm);
+    }
+    if context.loop_head_declarator {
+        return TargetCapability::ExpressionBoundary(Reason::LoopHeadDeclarator);
+    }
+    if context.loop_head_binding {
+        return TargetCapability::ExpressionBoundary(Reason::LoopHeadBinding);
     }
     match context.owner_reach {
         OwnerReach::Same => {}
@@ -515,13 +606,25 @@ pub(super) fn target_capability(
         .filter(|step| matches!(step.operation, HostEvaluationOperation::Conditional(_)))
         .count();
     if conditional_steps > 0 {
-        let Some((_, step)) = whole_operation_step(schedule) else {
+        let Some((index, step)) = whole_operation_step(schedule) else {
             return TargetCapability::ExpressionBoundary(
                 Reason::ConditionalOperationNotStructurable,
             );
         };
+        if let HostEvaluationOperation::Conditional(ConditionalBranch::LogicalAssignmentRight {
+            consumed,
+            ..
+        }) = step.operation
+            && (consumed || index + 1 < steps.len())
+        {
+            return TargetCapability::ExpressionBoundary(Reason::LogicalAssignmentValue);
+        }
+        // An optional call skipped at a link inside its callee's receiver
+        // cannot be tested before that link is evaluated.
         let structurable = step.conditional.as_ref().is_some_and(|facts| {
-            facts.branch.start <= source.start && source.end <= facts.branch.end
+            facts.branch.start <= source.start
+                && source.end <= facts.branch.end
+                && facts.optional_test != Some(OptionalCallTest::Inner)
         });
         if !structurable {
             return TargetCapability::ExpressionBoundary(
@@ -541,8 +644,8 @@ pub(super) fn target_capability(
             if captured.contains(capture) {
                 continue;
             }
-            // The capture copies raw source bytes; a sibling tt node or
-            // another capture inside them is lowered or relocated elsewhere.
+            // The capture copies raw source bytes; a sibling tt node inside
+            // them is lowered or relocated elsewhere.
             // An enclosing tt root is different: its structured lowering
             // owns this schedule and composes the captured source into it.
             if tt_spans.iter().any(|span| {
@@ -551,8 +654,12 @@ pub(super) fn target_capability(
                     && !(span.end <= source.start
                         && capture.start <= span.start
                         && span.end <= capture.end)
-            }) || captured.iter().any(|span| overlaps(*capture, *span))
-            {
+            }) || captured.iter().any(|span| {
+                // An earlier capture inside this one is its dependency: the
+                // capture reads that slot instead of the source again.
+                overlaps(*capture, *span)
+                    && !(capture.start <= span.start && span.end <= capture.end)
+            }) {
                 return TargetCapability::ExpressionBoundary(Reason::CaptureOverlapsValue);
             }
             captured.push(*capture);

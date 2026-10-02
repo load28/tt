@@ -1,0 +1,77 @@
+=== logicalOperationRightNeverRuns.tt ===
+declare function read(): TResult<number, string>;
+>read : function read(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+declare function text(): TResult<string, string>;
+>text : function text(): TResult<string, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+declare const o: { a: number };
+>o : const o: {
+>       a: number;
+>   }
+>a : (property) a: number
+declare const n: number;
+>n : const n: number
+declare const s: string | null;
+>s : const s: string | null
+export function operations(): TResult<unknown, string> {
+>operations : function operations(): TResult<unknown, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const orTrue = true || try read();
+>orTrue : const orTrue: true
+>read : function read(): TResult<number, string>
+  const orObject = o || try read();
+>orObject : const orObject: {
+>       a: number;
+>   }
+>o : const o: {
+>       a: number;
+>   }
+>read : function read(): TResult<number, string>
+  const nullishObject = o ?? try read();
+>nullishObject : const nullishObject: {
+>       a: number;
+>   }
+>o : const o: {
+>       a: number;
+>   }
+>read : function read(): TResult<number, string>
+  const andNull = null && try read();
+>andNull : const andNull: null
+>read : function read(): TResult<number, string>
+  const andFalse = false && try read();
+>andFalse : const andFalse: false
+>read : function read(): TResult<number, string>
+  const andNumber = n && try text();
+>andNumber : const andNumber: string | number
+>n : const n: number
+>text : function text(): TResult<string, string>
+  const orString = s || try read();
+>orString : const orString: string | number
+>s : const s: string | null
+>read : function read(): TResult<number, string>
+  const nullishString = s ?? try read();
+>nullishString : const nullishString: string | number
+>s : const s: string | null
+>read : function read(): TResult<number, string>
+  return Result.Ok([orTrue, orObject, nullishObject, andNull, andFalse, andNumber, orString, nullishString]);
+>Ok : const Ok: <(string | number | boolean | {
+>       a: number;
+>   } | null)[]>(value: (string | number | boolean | {
+>       a: number;
+>   } | null)[]) => Result.TOk<(string | number | boolean | {
+>       a: number;
+>   } | null)[]>
+>orTrue : const orTrue: true
+>orObject : const orObject: {
+>       a: number;
+>   }
+>nullishObject : const nullishObject: {
+>       a: number;
+>   }
+>andNull : const andNull: null
+>andFalse : const andFalse: false
+>andNumber : const andNumber: string | number
+>orString : const orString: string | number
+>nullishString : const nullishString: string | number
+

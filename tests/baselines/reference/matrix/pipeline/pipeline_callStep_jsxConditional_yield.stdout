@@ -1,0 +1,2 @@
+jsxConditional(2) => "<p>4</p>" | flip true; yield 2; double 4
+jsxConditional(5) => "<p></p>" | flip false

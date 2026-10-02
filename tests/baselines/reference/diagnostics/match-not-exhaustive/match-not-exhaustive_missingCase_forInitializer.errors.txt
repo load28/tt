@@ -1,0 +1,23 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Point"
+ --> ./main.tt:6:19
+  |
+6 |   for (let item = match (note("operand", input)) { Circle(r) => note("circle", r), Rect(w, h) => note("rect", w * h) }, round = 0; round < 1; round++) {
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: add the missing arms: `, Point => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Point"
+ --> main.tt:6:19
+  |
+6 |   for (let item = match (note("operand", input)) { Circle(r) => note("circle", r), Rect(w, h) => note("rect", w * h) }, round = 0; round < 1; round++) {
+  |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: add the missing arms: `, Point => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+==== tsc on the emitted TypeScript (exit 0) ====

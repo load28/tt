@@ -1,0 +1,2 @@
+laterDeclarator(2) => [1,null] | open res; before 1; receiver {"factor":3}; operand 2; dispose res
+laterDeclarator(7) => [1,null] | open res; before 1; receiver {"factor":3}; operand 7; dispose res

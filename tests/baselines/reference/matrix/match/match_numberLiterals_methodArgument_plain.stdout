@@ -1,0 +1,5 @@
+methodArgument(200) => ["receiver",1,true] | receiver {"tag":"receiver"}; a 1; operand 200; success true
+methodArgument(201) => ["receiver",1,true] | receiver {"tag":"receiver"}; a 1; operand 201; success true
+methodArgument(404) => ["receiver",1,false] | receiver {"tag":"receiver"}; a 1; operand 404; missing false
+methodArgument(500) => ["receiver",1,false] | receiver {"tag":"receiver"}; a 1; operand 500; guard true; server false
+methodArgument(7) => ["receiver",1,null] | receiver {"tag":"receiver"}; a 1; operand 7; other null

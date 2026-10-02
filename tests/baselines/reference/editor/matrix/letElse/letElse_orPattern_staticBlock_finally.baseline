@@ -1,0 +1,7 @@
+differences from letElse_orPattern_staticBlock_finally at the questions listed in tests/editor-matrix-differences.txt
+
+=== rename /*bind*/ main.tt:9:19 ===
+  |         const Num(value) | Neg(value) = note("operand", input) else { throw new Error("diverged"); };
+  |                   ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+

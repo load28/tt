@@ -1,0 +1,14 @@
+//// [aValueInALaterDeclaratorSplitsTheDeclarationBeforeItsPrelude6.tt] 12 mapping(s)
+1:1 -> 19:1 len 82  "import * as Result from \"@tt/std/result\";\nimport"...
+3:18 -> 22:21 len 6  "number"
+3:18 -> 25:10 len 6  "number"
+3:30 -> 27:3 len 157  "\ndeclare const o: O;\ndeclare function t(s: strin"...
+8:10 -> 33:5 len 14  "var a = t(\"a\")"
+8:26 -> 52:9 len 4  "b = "
+8:37 -> 36:21 len 1  "o"
+8:44 -> 39:19 len 1  "n"
+8:50 -> 40:20 len 5  "a + n"
+8:62 -> 44:20 len 1  "0"
+8:65 -> 52:19 len 1  ";"
+8:66 -> 53:4 len 15  "\n  return b;\n}\n"
+

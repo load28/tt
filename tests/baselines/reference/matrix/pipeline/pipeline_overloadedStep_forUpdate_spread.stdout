@@ -1,0 +1,2 @@
+forUpdate(4) => 2 | body 0; shape "#4"
+forUpdate(12) => 3 | body 0; shape "#12"

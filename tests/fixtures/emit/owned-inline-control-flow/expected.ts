@@ -1,3 +1,21 @@
+function $tt_show(value: unknown): string {
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "bigint") {
+    return String(value) + "n";
+  }
+  if (typeof value === "object" || typeof value === "function") {
+    try {
+      const text = JSON.stringify(value);
+      if (typeof text === "string") {
+        return text;
+      }
+    } catch {}
+    return typeof value;
+  }
+  return String(value);
+}
 type Opt =
   | { kind: "Some"; value: number }
   | { kind: "None" };
@@ -48,7 +66,8 @@ export function read(o: Opt) {
     $tt_v2 = $tt_t1.value;
     n = $tt_v2;
     {
-      $tt_v1 = { kind: "Ok" as const, value: n };
+      const $tt_a0 = { value: { kind: "Ok" as const, value: n } };
+      $tt_v1 = $tt_a0.value;
       break $tt_v1;
     }
   }
@@ -82,11 +101,13 @@ let $tt_v5: number[];
   switch ($tt_m.kind) {
     case "Some": {
       const { value } = $tt_m;
-      $tt_v5 = [value];
+      const $tt_a1 = { value: [value] };
+      $tt_v5 = $tt_a1.value;
       break;
     }
     case "None": {
-      $tt_v5 = [];
+      const $tt_a2 = { value: [] };
+      $tt_v5 = $tt_a2.value;
       break;
     }
     default: {
@@ -95,21 +116,3 @@ let $tt_v5: number[];
   }
 }
 export const values = $tt_v5;
-function $tt_show(value: unknown): string {
-  if (typeof value === "string") {
-    return JSON.stringify(value);
-  }
-  if (typeof value === "bigint") {
-    return String(value) + "n";
-  }
-  if (typeof value === "object" || typeof value === "function") {
-    try {
-      const text = JSON.stringify(value);
-      if (typeof text === "string") {
-        return text;
-      }
-    } catch {}
-    return typeof value;
-  }
-  return String(value);
-}

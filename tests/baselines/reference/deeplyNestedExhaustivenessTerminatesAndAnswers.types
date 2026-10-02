@@ -1,0 +1,55 @@
+=== deeplyNestedExhaustivenessTerminatesAndAnswers.tt ===
+variant A { A1(b: B), A2 }
+>A : type A = {
+>       kind: "A1";
+>       b: B;
+>   } | {
+>       kind: "A2";
+>   }
+>A1 : (property) A1: (b: B) => A
+>b : (property) b: B
+>B : type B = {
+>       kind: "B1";
+>       c: C;
+>   } | {
+>       kind: "B2";
+>   }
+>A2 : (property) A2: {
+>       readonly kind: "A2";
+>   }
+variant B { B1(c: C), B2 }
+>B : type B = {
+>       kind: "B1";
+>       c: C;
+>   } | {
+>       kind: "B2";
+>   }
+>B1 : (property) B1: (c: C) => B
+>c : (property) c: C
+>C : type C = {
+>       kind: "C1";
+>       n: number;
+>   } | {
+>       kind: "C2";
+>   }
+>B2 : (property) B2: {
+>       readonly kind: "B2";
+>   }
+variant C { C1(n: number), C2 }
+>C : type C = {
+>       kind: "C1";
+>       n: number;
+>   } | {
+>       kind: "C2";
+>   }
+>C1 : (property) C1: (n: number) => C
+>n : (property) n: number
+>C2 : (property) C2: {
+>       readonly kind: "C2";
+>   }
+const v = match (a) {
+>v : const v: any
+  A1(b: B1(c: C1(n))) => n,
+>n : const n: any
+>n : const n: any
+

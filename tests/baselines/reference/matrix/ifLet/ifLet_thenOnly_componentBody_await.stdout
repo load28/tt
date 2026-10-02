@@ -1,0 +1,2 @@
+componentBody(2) => "<p>2</p>" | await; read 2; then 2
+componentBody(-1) => "<p>\"none\"</p>" | await; read -1

@@ -1,0 +1,31 @@
+==== ttc --out-dir (exit 1) ====
+error[unknown-case]: variant Dir has no case `Nrth`
+ --> ./aMisspelledCaseInATupleMatchPositionIsReported.tt:5:4
+  |
+5 |   (Nrth(dx), Slow) => dx,
+  |    ^^^^
+  |
+  = help: a case with a similar name exists: `North`
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'd'.
+ --> aMisspelledCaseInATupleMatchPositionIsReported.tt:3:18
+  |
+3 | const n = match (d, s) {
+  |                  ^
+error[ts2304]: Cannot find name 's'.
+ --> aMisspelledCaseInATupleMatchPositionIsReported.tt:3:21
+  |
+3 | const n = match (d, s) {
+  |                     ^
+error[unknown-case]: variant Dir has no case `Nrth`
+ --> aMisspelledCaseInATupleMatchPositionIsReported.tt:5:4
+  |
+5 |   (Nrth(dx), Slow) => dx,
+  |    ^^^^
+  |
+  = help: a case with a similar name exists: `North`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

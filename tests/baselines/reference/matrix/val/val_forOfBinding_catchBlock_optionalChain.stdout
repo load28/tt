@@ -1,0 +1,2 @@
+catchBlock(3) => 4 | throw "boom"; item 3; item 1
+catchBlock(8) => null | throw "boom"; item undefined; item 1

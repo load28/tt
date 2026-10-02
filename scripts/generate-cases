@@ -1,0 +1,812 @@
+#!/usr/bin/env node
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const SPEC = join(ROOT, "tests/matrix");
+const OUT = join(ROOT, "tests/cases/conformance/matrix");
+const EDITOR_OUT = join(ROOT, "tests/cases/editor/matrix");
+const DIAGNOSTICS_OUT = join(ROOT, "tests/cases/conformance/diagnostics");
+const EDITOR_DIAGNOSTICS_OUT = join(ROOT, "tests/cases/editor/diagnostics");
+
+const plain = () => `note("operand", /*@operand*/input)`;
+
+const COMPANIONS = [
+  { id: "plain", title: "nothing around it", operand: plain },
+  { id: "await", title: "an await in its operand", operand: () => "await later(/*@operand*/input)" },
+  { id: "yield", title: "a yield in its operand", operand: () => "(yield /*@operand*/input)", uncalled: true },
+  { id: "optionalChain", title: "an optional chain in its operand that continues on one call and short-circuits on the next", operand: () => "box(/*@operand*/input)?.inner.value!" },
+  { id: "spread", title: "a spread argument in its operand", operand: () => "first(...[/*@operand*/input])" },
+  { id: "exception", title: "an operand that throws, caught around it", operand: () => "risky(/*@operand*/input)", wrap: "catch" },
+  { id: "using", title: "a using declaration around it", operand: plain, pre: 'using res = resource("res");' },
+  { id: "finally", title: "a finally block around it", operand: plain, wrap: "finally" },
+];
+
+const TOP_LEVEL = new Set(["plain", "await", "optionalChain", "spread", "using"]);
+
+const MARKER = /\/\*@(\w+)\*\//g;
+
+function unmark(code) {
+  return code.replace(MARKER, "");
+}
+
+function mark(code) {
+  const names = [];
+  const text = code.replace(MARKER, (_, name) => {
+    if (names.includes(name)) return "";
+    names.push(name);
+    return `/*${name}*/`;
+  });
+  return { text, names };
+}
+
+function chunks(harness) {
+  const out = [];
+  for (const line of harness.trimEnd().split("\n")) {
+    if (out.length === 0 || (/^\S/.test(line) && !/^[}\])]/.test(line))) out.push({ lines: [] });
+    out[out.length - 1].lines.push(line);
+  }
+  return out.map(({ lines }) => {
+    const text = lines.join("\n");
+    const head = lines[0];
+    const name = /^(?:export\s+)?(?:declare\s+)?(?:async\s+)?(?:function|const|class|type|let|namespace)\s+(\w+)/.exec(head)?.[1];
+    return { text, name, exported: head.startsWith("export ") };
+  });
+}
+
+function identifiers(code) {
+  return new Set(code.replace(/"(?:[^"\\]|\\.)*"/g, '""').match(/[A-Za-z_$][\w$]*/g) ?? []);
+}
+
+function used(parts, code) {
+  const seen = identifiers(code);
+  return [...new Set(parts.filter((part) => part.exported && seen.has(part.name)).map((part) => part.name))];
+}
+
+function closure(parts, names) {
+  const needed = new Set(names);
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const part of parts) {
+      if (!needed.has(part.name)) continue;
+      for (const id of identifiers(part.text)) {
+        if (id !== part.name && parts.some((other) => other.name === id) && !needed.has(id)) {
+          needed.add(id);
+          grew = true;
+        }
+      }
+    }
+  }
+  return parts.filter((part) => needed.has(part.name)).map((part) => part.text).join("\n");
+}
+
+function tsconfig(surface) {
+  const jsx =
+    surface === "ttx"
+      ? '\n    "jsx": "react",\n    "jsxFactory": "element",\n    "jsxFragmentFactory": "Fragment",\n    "verbatimModuleSyntax": true,'
+      : "";
+  return `{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["es2022", "esnext.disposable", "dom"],
+    "module": "preserve",
+    "moduleResolution": "bundler",${jsx}
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  }
+}`;
+}
+
+const SURFACES = {
+  tt: { main: "main.tt", twin: "twin.ts" },
+  ttx: { main: "main.ttx", twin: "twin.tsx" },
+};
+
+function splitTop(list) {
+  const body = list.replace(/\s+as\s+[\w[\]]+$/, "").trim();
+  const inner = body.slice(1, -1);
+  const items = [];
+  let depth = 0;
+  let quote = null;
+  let start = 0;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === "`") quote = ch;
+    else if ("([{".includes(ch)) depth++;
+    else if (")]}".includes(ch)) depth--;
+    else if (ch === "," && depth === 0) {
+      items.push(inner.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  if (inner.slice(start).trim()) items.push(inner.slice(start).trim());
+  return items;
+}
+
+function indent(code) {
+  let depth = 0;
+  const out = [];
+  for (const raw of code.split("\n")) {
+    const line = raw.trim();
+    if (line === "") {
+      out.push("");
+      continue;
+    }
+    let opens = 0;
+    let closes = 0;
+    let quote = null;
+    let leading = true;
+    let lead = 0;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (quote) {
+        if (ch === "\\") i++;
+        else if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'") {
+        quote = ch;
+        leading = false;
+      } else if ("{([".includes(ch)) {
+        opens++;
+        leading = false;
+      } else if ("})]".includes(ch)) {
+        if (leading) lead++;
+        else closes++;
+      } else if (ch !== " ") leading = false;
+    }
+    depth = Math.max(0, depth - lead);
+    out.push(`${"  ".repeat(depth)}${line}`);
+    depth = Math.max(0, depth + opens - closes);
+  }
+  return out.join("\n");
+}
+
+function family(construct) {
+  return construct.family ?? (construct.construct === "tryStatement" ? "try" : construct.construct);
+}
+
+function surfacesFor(construct, all) {
+  const only = (list) => (construct.only ? list.filter((p) => construct.only.includes(p.id)) : list);
+  const out = [{ surface: "tt", positions: only(construct.kind === "value" ? all.valuePositions : all.statementPositions) }];
+  if (construct.jsx) {
+    out.push({ surface: "ttx", positions: construct.kind === "value" ? all.jsxPositions : all.jsxStatementPositions });
+  }
+  return out
+    .map(({ surface, positions }) => ({
+      surface,
+      positions,
+      forms: construct.forms.filter((form) => (form.surfaces ?? ["tt", "ttx"]).includes(surface)),
+    }))
+    .filter(({ positions, forms }) => positions.length > 0 && forms.length > 0);
+}
+
+function feasible(construct, form, position, companion) {
+  if (form.only && !form.only.includes(position.id)) return false;
+  if (construct.skip?.includes(position.id)) return false;
+  if (position.inner?.includes(companion.id)) return false;
+  if (position.topLevel && !TOP_LEVEL.has(companion.id)) return false;
+  if (position.unbraced && form.hoisted === undefined) return false;
+  if (position.exitAxis && form.tt.length < 3) return false;
+  if (position.forces === "await" && companion.id === "yield") return false;
+  if (position.forces === "yield" && companion.id === "await") return false;
+  return true;
+}
+
+function expectation(construct, form, position, companion) {
+  const codes = [];
+  const add = (code) => code && !codes.includes(code) && codes.push(code);
+  add(construct.rejects?.all);
+  add(form.rejects?.all);
+  add(position.rejects?.[family(construct)]);
+  add(position.rejects?.[companion.id]);
+  if (!position.retargets) add(construct.rejects?.[companion.id]);
+  if (position.unbraced) add(form.unbraced);
+  return codes;
+}
+
+function rows(construct, forms, positions) {
+  const key = (...parts) => parts.join("\u0000");
+  const ok = (f, p, c) => feasible(construct, forms[f], positions[p], COMPANIONS[c]);
+  const needed = new Set();
+  for (let f = 0; f < forms.length; f++) {
+    for (let p = 0; p < positions.length; p++) {
+      for (let c = 0; c < COMPANIONS.length; c++) {
+        if (!ok(f, p, c)) continue;
+        needed.add(key("fp", f, p));
+        needed.add(key("fc", f, c));
+        needed.add(key("pc", p, c));
+      }
+    }
+  }
+  const covered = new Set();
+  const uses = new Array(COMPANIONS.length).fill(0);
+  const out = [];
+  const take = (f, p, c) => {
+    out.push([f, p, c]);
+    uses[c]++;
+    for (const k of [key("fp", f, p), key("fc", f, c), key("pc", p, c)]) covered.add(k);
+  };
+  const gain = (f, p, c) =>
+    [key("fp", f, p), key("fc", f, c), key("pc", p, c)].filter((k) => needed.has(k) && !covered.has(k)).length;
+  for (let f = 0; f < forms.length; f++) {
+    for (let p = 0; p < positions.length; p++) {
+      let best = -1;
+      for (let c = 0; c < COMPANIONS.length; c++) {
+        if (!ok(f, p, c)) continue;
+        if (best < 0 || gain(f, p, c) > gain(f, p, best) || (gain(f, p, c) === gain(f, p, best) && uses[c] < uses[best])) {
+          best = c;
+        }
+      }
+      if (best >= 0) take(f, p, best);
+    }
+  }
+  for (const k of needed) {
+    if (covered.has(k)) continue;
+    const [kind, a, b] = k.split("\u0000");
+    let best = null;
+    for (let f = 0; f < forms.length; f++) {
+      for (let p = 0; p < positions.length; p++) {
+        for (let c = 0; c < COMPANIONS.length; c++) {
+          const fits = kind === "fc" ? f === +a && c === +b : kind === "pc" ? p === +a && c === +b : false;
+          if (!fits || !ok(f, p, c)) continue;
+          if (!best || gain(f, p, c) > gain(...best)) best = [f, p, c];
+        }
+      }
+    }
+    if (best) take(...best);
+  }
+  return out;
+}
+
+function build(parts, construct, form, position, companion, side, surface, editor = false, lift = false) {
+  let count = 0;
+  const alloc = (n) => Array.from({ length: n }, () => `t${count++}`);
+  const isAsync = companion.id === "await" || position.forces === "await";
+  const isGenerator = companion.id === "yield" || position.forces === "yield";
+  const target = Boolean(construct.target);
+  const twin = side === "ts";
+  const template = twin && editor && form.edit ? form.edit : form[side];
+  const operand = companion.operand();
+  const c = {
+    side,
+    In: form.In,
+    head: isAsync ? "async " : "",
+    unbraced: Boolean(position.unbraced),
+    ret: (e) => (target ? (twin ? `ok(${e})` : `Result.Ok(${e})`) : e),
+    fn: (body) => (target && twin ? `try {\n${body}\n} catch (error) {\nreturn caught(error);\n}` : body),
+    guard: (name) => (target && twin ? `if (${name} instanceof Propagate) throw ${name};\n` : ""),
+    iife: (body) => (companion.id === "await" ? `(await (async () => {\n${body}\n})())` : `(() => {\n${body}\n})()`),
+    arrow: (params, expr) =>
+      target && twin
+        ? `${c.head}(${params}) => {\n${c.fn(`return ${c.ret(expr)};`)}\n}`
+        : `${c.head}(${params}) => ${c.ret(expr)}`,
+    probe: (body, { target: owns = true, head = true } = {}) => {
+      let inner = body;
+      if (companion.wrap === "finally") inner = `try {\n${inner}\n} finally {\nnote("finally", 0);\n}`;
+      if (companion.wrap === "catch") {
+        inner = `try {\n${inner}\n} catch (error) {\n${c.guard("error")}return ${c.ret('note("caught", (error as Error).message)')};\n}`;
+      }
+      if (companion.pre) inner = `${companion.pre}\n${inner}`;
+      if (owns) inner = c.fn(inner);
+      const modifier = head && isAsync ? "async " : "";
+      const star = isGenerator ? "*" : "";
+      const signature = isGenerator ? `: Generator<unknown, unknown, ${form.In}>` : "";
+      return `${modifier}function${star} probe(input: ${form.In})${signature} {\n${inner}\n}`;
+    },
+  };
+  const temps = () => alloc(form.temps ?? 1);
+  const grouped = (text) => (construct.lowPrecedence && position.operand ? `(${text})` : text);
+  const instance = () => (twin ? template(operand, temps(), c) : grouped(template(operand, temps(), c)));
+  if (construct.kind === "value") {
+    c.v = instance();
+    c.again = instance;
+  } else {
+    c.s = (exit) => template(operand, temps(), exit, c);
+    c.result = form.result;
+    c.hoisted = form.hoisted;
+  }
+  const lifted = (name) => {
+    if (construct.kind === "value") {
+      const value = c.v;
+      return form.lift ? form.lift[side](operand, temps(), name, c) : `const ${name} = ${value};`;
+    }
+    return template(operand, temps(), `return ${c.ret('"diverged"')};`, c);
+  };
+  if (lift && !position.topLevel) {
+    const statements = lifted("lifted");
+    const probe = c.probe;
+    c.probe = (body, options) => probe(`${statements}\n${body}`, options);
+    if (construct.kind === "value") {
+      c.v = "lifted";
+      c.again = () => "lifted";
+    } else {
+      c.s = () => "";
+    }
+  }
+  const inputs = splitTop(form.inputs);
+  let host;
+  if (position.topLevel) {
+    const lines = [`let input: ${form.In} = inputs[0]!;`];
+    if (companion.pre) lines.push(companion.pre);
+    if (construct.kind === "value") {
+      inputs.forEach((_, i) => {
+        if (i > 0) lines.push(`input = inputs[${i}]!;`);
+        if (lift) {
+          c.v = instance();
+          lines.push(lifted(`lifted${i}`));
+          lines.push(`const top${i} = lifted${i};`);
+        } else {
+          lines.push(`const top${i} = ${i === 0 ? c.v : c.again()};`);
+        }
+        lines.push(`report("${position.id}", input, text(top${i}));`);
+      });
+    } else {
+      lines.push(c.s('throw new Error("diverged");'));
+      lines.push(`report("${position.id}", input, text(${form.result}));`);
+    }
+    host = lines.join("\n");
+  } else {
+    host = editor ? position.host(c) : `${position.host(c)}\nawait drive("${position.id}", probe, inputs);`;
+  }
+  const decls = (form.decls ?? []).map((d) => (twin && editor ? (d.edit ?? d.ts) : d[side])).join("\n");
+  const lines = [];
+  if (target && !twin) lines.push('import * as Result from "@tt/std/result";');
+  if (decls) lines.push(decls);
+  const declaredTemps = Array.from({ length: count }, (_, i) => `t${i}`).filter((t) => !editor || new RegExp(`\\b${t} = `).test(host));
+  if (twin && construct.kind === "value" && declaredTemps.length > 0 && (editor || template === form.ts)) {
+    lines.push(`let ${declaredTemps.map((t) => `${t}: any`).join(", ")};`);
+  }
+  lines.push(`const inputs: ${form.In}[] = ${form.inputs.replace(/\s+as\s+[\w[\]]+$/, "")};`);
+  lines.push(host);
+  const code = lines.join("\n");
+  const names = used(parts, unmark(code));
+  if (surface === "ttx") names.push("element", "Fragment");
+  const temporaries = Array.from({ length: count }, (_, i) => `t${i}`);
+  const imports = editor && names.length === 0 ? "" : `import { ${names.join(", ")} } from "./harness.js";\n`;
+  return { code: `${imports}${code}`, names, temporaries };
+}
+
+function caseText(spec, construct, form, position, companion, codes, parts, surface) {
+  const { main, twin } = SURFACES[surface];
+  const name = `${construct.construct}_${form.id}_${position.id}_${companion.id}`;
+  const header = [
+    `// Generated by scripts/generate-cases from tests/matrix/${spec}; edit the spec, not this file.`,
+    `// ${construct.construct}: ${form.title}, in ${position.title}, with ${companion.title}.`,
+  ];
+  const programs = [[main, build(parts, construct, form, position, companion, "tt", surface)]];
+  if (codes.length > 0) {
+    header.push(`// @expectErrors: ${codes.join(", ")}`, "// @baselines: errors.txt");
+  } else {
+    header.push(`// @run: ${main}`, `// @twin: ${twin}`, "// @baselines: errors.txt, stdout");
+    programs.push([twin, build(parts, construct, form, position, companion, "ts", surface)]);
+  }
+  const harness = closure(
+    parts,
+    programs.flatMap(([, program]) => program.names),
+  );
+  const units = [["tsconfig.json", tsconfig(surface)], ["harness.ts", harness], ...programs.map(([file, program]) => [file, indent(unmark(program.code))])];
+  const body = units.map(([file, text]) => `// @filename: ${file}\n${text}\n`).join("");
+  return { name, text: `${header.join("\n")}\n${body}` };
+}
+
+function declared(code) {
+  const out = new Set();
+  for (const match of code.matchAll(/\b(?:const|let|var|function\*?|class|type|interface|variant)\s+(\w+)/g)) out.add(match[1]);
+  for (const match of code.matchAll(/^import \* as (\w+)/gm)) out.add(match[1]);
+  for (const match of code.matchAll(/^import \{ ([^}]*) \}/gm)) {
+    for (const name of match[1].split(",")) out.add(name.trim());
+  }
+  return out;
+}
+
+function editorCaseText(spec, construct, form, position, companion, parts, surface, editor) {
+  const { main } = SURFACES[surface];
+  const name = `${construct.construct}_${form.id}_${position.id}_${companion.id}`;
+  const twin = main.replace(/\.tt(x?)$/, ".ts$1");
+  const source = build(parts, construct, form, position, companion, "tt", surface, true);
+  const lowered = build(parts, construct, form, position, companion, "ts", surface, true);
+  const tt = mark(source.code);
+  const ts = mark(lowered.code);
+  const missing = [...tt.names.filter((m) => !ts.names.includes(m)), ...ts.names.filter((m) => !tt.names.includes(m))];
+  if (missing.length > 0) throw new Error(`${name}: the markers ${missing.join(", ")} are not on both sides of the twin`);
+  const questions = new Map();
+  for (const marker of tt.names) {
+    const kind = /^[a-z]+/.exec(marker)[0];
+    if (!editor.verbs[kind]) throw new Error(`${name}: /*@${marker}*/ is of no kind tests/matrix/editor.mjs names`);
+    const withheld = construct.editorWithholds?.[marker] ?? [];
+    const asked = editor.verbs[kind].filter(
+      (verb) => !withheld.includes(verb) && !(kind === "operand" && companion.uncalled && verb === "signatureHelp"),
+    );
+    for (const verb of asked) questions.set(verb, [...(questions.get(verb) ?? []), marker]);
+  }
+  const sides = [declared(unmark(source.code)), declared(unmark(lowered.code))];
+  const ignored = new Set(lowered.temporaries);
+  for (const [one, other] of [sides, [...sides].reverse()]) {
+    for (const label of one) if (!other.has(label)) ignored.add(label);
+  }
+  const header = [
+    `// Generated by scripts/generate-cases from tests/matrix/${spec} and tests/matrix/editor.mjs; edit the spec, not this file.`,
+    `// ${construct.construct}: ${form.title}, in ${position.title}, with ${companion.title}; asked at its markers against ${twin}.`,
+    ...[...questions].map(([verb, markers]) => `// @${verb}: ${markers.join(", ")}`),
+    ...editor.fileVerbs.filter((verb) => !(position.editorWithholds ?? []).includes(verb)).map((verb) => `// @${verb}: *`),
+  ];
+  if (ignored.size > 0) header.push(`// @parityIgnores: ${[...ignored].sort().join(", ")}`);
+  const harness = closure(parts, [...source.names, ...lowered.names]);
+  const units = (list) => list.map(([unit, body]) => `// @filename: ${unit}\n${body}\n`).join("");
+  const twinHeader = [
+    `// Generated by scripts/generate-cases from tests/matrix/${spec} and tests/matrix/editor.mjs; edit the spec, not this file.`,
+    `// The TypeScript twin of ${name}.${surface}; it shares the case's other units.`,
+  ];
+  return {
+    name,
+    text: `${header.join("\n")}\n${units([["tsconfig.json", tsconfig(surface)], ["harness.ts", harness], [main, indent(tt.text)]])}`,
+    twin: `${twinHeader.join("\n")}\n${units([[twin, indent(ts.text)]])}`,
+  };
+}
+
+function editorPositions(editor, surface, construct) {
+  const chosen = editor.positions[surface][construct.kind];
+  return (position) => chosen === "all" || chosen.includes(position.id);
+}
+
+const RANGE = /\[\||\|\]/g;
+
+function unrange(code) {
+  return code.replace(RANGE, "");
+}
+
+function where(example, position) {
+  const rule = example.where ?? "accepts";
+  if (example.only && !example.only.includes(position.id)) return false;
+  if (example.skip?.includes(position.id)) return false;
+  if (position.unbraced && example.hoisted === undefined) return false;
+  if (position.exitAxis && (example.tt ?? example.bad).length < 3) return false;
+  if (rule === "rejects") {
+    return position.rejects?.[example.family] === example.code || (Boolean(position.unbraced) && example.unbraced === example.code);
+  }
+  if (rule === "all") return true;
+  if (position.extra) return false;
+  return !position.rejects?.[example.family] && !(position.unbraced && example.unbraced);
+}
+
+function diagnosticPositions(example, positions, extra, surface) {
+  const value = example.kind === "value";
+  const list =
+    surface === "tt"
+      ? value
+        ? [...positions.valuePositions, ...extra.map((position) => ({ ...position, extra: true }))]
+        : positions.statementPositions
+      : value
+        ? positions.jsxPositions
+        : positions.jsxStatementPositions;
+  return list.filter((position) => where(example, position));
+}
+
+function exampleForms(example, position) {
+  const construct = { kind: example.kind, target: example.target, lowPrecedence: example.lowPrecedence };
+  const bad = { ...example, tt: example.bads?.[position.id] ?? example.bad };
+  const placement = (example.where ?? "accepts") !== "accepts";
+  const override = example.fixes?.[position.id];
+  const fixed = { ...example, tt: example.tt ?? ((...args) => unrange(example.bad(...args))), ...(override ?? {}) };
+  return { construct: { ...construct, target: override?.target ?? example.target }, bad, fixed, lift: placement && !override };
+}
+
+function diagnosticUnits(parts, programs, surface) {
+  const harness = closure(
+    parts,
+    programs.flatMap(([, program]) => program.names),
+  );
+  return [["tsconfig.json", tsconfig(surface)], ["harness.ts", harness], ...programs.map(([file, program]) => [file, indent(unmark(program.code))])];
+}
+
+function written(header, units) {
+  return `${header.join("\n")}\n${units.map(([file, text]) => `// @filename: ${file}\n${text}\n`).join("")}`;
+}
+
+function moduleUnits(units, surface) {
+  return Object.entries(units).map(([file, text]) => [
+    file.replace(/\.EXT$/, `.${surface}`).replace(/\.TS$/, surface === "ttx" ? ".tsx" : ".ts"),
+    text.replaceAll('.EXT"', `.${surface}"`).trimEnd(),
+  ]);
+}
+
+function diagnosticCases(spec, entry, positions, extra, parts) {
+  const out = [];
+  const { code } = entry;
+  const lead = `// Generated by scripts/generate-cases from tests/matrix/${spec}; edit the spec, not this file.`;
+  const examples = (entry.examples ?? []).map((example) => ({ ...example, code }));
+  const sampled = examples[0];
+  for (const example of examples) {
+    const surfaces = example.surfaces ?? (example.jsx ? ["tt", "ttx"] : ["tt"]);
+    for (const surface of surfaces) {
+      const { main, twin } = SURFACES[surface];
+      if (example.kind === "module") {
+        const name = `${code}_${example.id}${surface === "ttx" ? "_ttx" : ""}`;
+        const units = (list) => [["tsconfig.json", tsconfig(surface)], ...moduleUnits(list, surface)];
+        if (example === sampled) {
+          out.push({
+            code,
+            kind: "editor",
+            surface,
+            position: "module",
+            name,
+            text: written(
+              [
+                lead,
+                `// ${code}: ${example.title}; what the editor publishes and the command line reports.`,
+                `// @diagnostics: *`,
+                `// @expectDiagnostic: ${code}`,
+                ...(example.typedOnly ? ["// @typedOnly: true"] : []),
+              ],
+              units(example.bad),
+            ),
+          });
+        }
+        out.push({
+          code,
+          kind: "invalid",
+          surface,
+          position: "module",
+          name,
+          text: written(
+            [lead, `// ${code}: ${example.title}.`, `// @expectDiagnostic: ${code}`, ...(example.typedOnly ? ["// @typedOnly: true"] : []), "// @baselines: errors.txt"],
+            units(example.bad),
+          ),
+        });
+        const header = [lead, `// ${code}, fixed: ${example.fixTitle}.`];
+        if (example.run) header.push(`// @run: ${main}`, `// @twin: ${twin}`, "// @baselines: errors.txt");
+        else header.push("// @expectClean: true", "// @baselines: errors.txt");
+        out.push({ code, kind: "fixed", surface, position: "module", name: `${name}_fixed`, text: written(header, units(example.good)) });
+        continue;
+      }
+      for (const [index, position] of diagnosticPositions(example, positions, extra, surface).entries()) {
+        const { construct, bad, fixed, lift } = exampleForms(example, position);
+        const name = `${code}_${example.id}_${position.id}`;
+        const invalid = build(parts, construct, bad, position, COMPANIONS[0], "tt", surface);
+        if (index === 0 && example === sampled) {
+          out.push({
+            code,
+            kind: "editor",
+            surface,
+            position: position.id,
+            name,
+            text: written(
+              [
+                lead,
+                `// ${code}: ${example.title}, in ${position.title}; what the editor publishes and the command line reports.`,
+                `// @diagnostics: ${main}`,
+                `// @expectDiagnostic: ${code}`,
+                ...(example.typedOnly ? ["// @typedOnly: true"] : []),
+              ],
+              diagnosticUnits(parts, [[main, invalid]], surface),
+            ),
+          });
+        }
+        out.push({
+          code,
+          kind: "invalid",
+          surface,
+          position: position.id,
+          name,
+          text: written(
+            [
+              lead,
+              `// ${code}: ${example.title}, in ${position.title}.`,
+              `// @expectDiagnostic: ${code}`,
+              ...(example.typedOnly ? ["// @typedOnly: true"] : []),
+              "// @baselines: errors.txt",
+            ],
+            diagnosticUnits(parts, [[main, invalid]], surface),
+          ),
+        });
+        const programs = [
+          [main, build(parts, construct, fixed, position, COMPANIONS[0], "tt", surface, false, lift)],
+          [twin, build(parts, construct, fixed, position, COMPANIONS[0], "ts", surface, false, lift)],
+        ];
+        out.push({
+          code,
+          kind: "fixed",
+          surface,
+          position: position.id,
+          name: `${name}_fixed`,
+          text: written(
+            [
+              lead,
+              `// ${code}, fixed: ${fixed.fixTitle}, in ${position.title}.`,
+              `// @run: ${main}`,
+              `// @twin: ${twin}`,
+              "// @baselines: errors.txt",
+            ],
+            diagnosticUnits(parts, programs, surface),
+          ),
+        });
+      }
+    }
+  }
+  (entry.explain ?? []).forEach((example, index) => {
+    const number = index + 1;
+    const surface = example.surface ?? "tt";
+    const units = typeof example.units === "string" ? { "main.EXT": example.units } : example.units;
+    const header = [lead, `// Example ${number} of \`ttc explain ${code}\`, which ${example.role === "error" ? "reproduces it" : "compiles cleanly"}.`, `// @explains: ${code} ${number}`];
+    if (example.role === "error") header.push(`// @expectDiagnostic: ${code}`, ...(example.typedOnly ? ["// @typedOnly: true"] : []));
+    else header.push("// @expectClean: true");
+    header.push("// @baselines: errors.txt");
+    out.push({
+      code,
+      kind: "explain",
+      surface,
+      position: "explain",
+      name: `${code}_explain${number}`,
+      text: written(header, [["tsconfig.json", tsconfig(surface)], ...moduleUnits(units, surface)]),
+    });
+  });
+  return out;
+}
+
+async function generate() {
+  const positions = await import(pathToFileURL(join(SPEC, "positions.mjs")).href);
+  const editor = await import(pathToFileURL(join(SPEC, "editor.mjs")).href);
+  const parts = chunks(readFileSync(join(SPEC, "harness.ts"), "utf8"));
+  const overrides = chunks(readFileSync(join(SPEC, "editor-harness.ts"), "utf8"));
+  const editorParts = parts.map((part) => overrides.find((other) => other.name === part.name) ?? part);
+  const files = new Map();
+  const editorFiles = new Map();
+  const stats = [];
+  const specs = readdirSync(SPEC)
+    .filter((name) => name.endsWith(".mjs"))
+    .sort();
+  for (const spec of specs) {
+    const loaded = (await import(pathToFileURL(join(SPEC, spec)).href)).default;
+    if (loaded === undefined) continue;
+    for (const construct of Array.isArray(loaded) ? loaded : [loaded]) {
+      for (const { surface, positions: hosts, forms } of surfacesFor(construct, positions)) {
+        const edited = editorPositions(editor, surface, construct);
+        for (const [f, p, c] of rows(construct, forms, hosts)) {
+          const form = forms[f];
+          const position = hosts[p];
+          const companion = COMPANIONS[c];
+          const codes = expectation(construct, form, position, companion);
+          const { name, text } = caseText(spec, construct, form, position, companion, codes, parts, surface);
+          const path = join(OUT, construct.construct, `${name}.${surface}`);
+          if (files.has(path)) throw new Error(`two rows generate ${name}`);
+          files.set(path, text);
+          const asked = codes.length === 0 && edited(position) && editor.constructs.includes(construct.construct);
+          if (asked) {
+            const made = editorCaseText(spec, construct, form, position, companion, editorParts, surface, editor);
+            const base = join(EDITOR_OUT, construct.construct, made.name);
+            editorFiles.set(`${base}.${surface}`, made.text);
+            editorFiles.set(`${base}.${SURFACES[surface].twin.split(".").pop()}`, made.twin);
+          }
+          stats.push({ construct: construct.construct, surface, position: position.id, companion: companion.id, rejected: codes.length > 0, asked });
+        }
+      }
+    }
+  }
+  const diagnostics = await import(pathToFileURL(join(SPEC, "diagnostics.mjs")).href);
+  const diagnosticFiles = new Map();
+  const editorDiagnosticFiles = new Map();
+  const diagnosticStats = [];
+  for (const entry of diagnostics.diagnostics) {
+    for (const made of diagnosticCases("diagnostics.mjs", entry, positions, diagnostics.extraPositions, parts)) {
+      if (made.kind === "editor") {
+        editorDiagnosticFiles.set(join(EDITOR_DIAGNOSTICS_OUT, `${made.name}.${made.surface}`), made.text);
+        diagnosticStats.push(made);
+        continue;
+      }
+      const path = join(DIAGNOSTICS_OUT, made.code, `${made.name}.${made.surface}`);
+      if (diagnosticFiles.has(path)) throw new Error(`two examples generate ${made.name}`);
+      diagnosticFiles.set(path, made.text);
+      diagnosticStats.push(made);
+    }
+  }
+  return { files, editorFiles, stats, diagnosticFiles, editorDiagnosticFiles, diagnosticStats, codes: diagnostics.diagnostics.map((entry) => entry.code) };
+}
+
+function existing(dir, out = []) {
+  if (!existsSync(dir)) return out;
+  for (const name of readdirSync(dir)) {
+    const path = join(dir, name);
+    if (statSync(path).isDirectory()) existing(path, out);
+    else out.push(path);
+  }
+  return out;
+}
+
+function show(path) {
+  return relative(ROOT, path).split(sep).join("/");
+}
+
+const { files, editorFiles, stats, diagnosticFiles, editorDiagnosticFiles, diagnosticStats, codes } = await generate();
+const trees = [
+  { dir: OUT, files, what: "cases" },
+  { dir: EDITOR_OUT, files: editorFiles, what: "editor case files" },
+  { dir: DIAGNOSTICS_OUT, files: diagnosticFiles, what: "diagnostic cases" },
+  { dir: EDITOR_DIAGNOSTICS_OUT, files: editorDiagnosticFiles, what: "editor diagnostic cases" },
+];
+const mode = process.argv[2];
+if (mode === "--stats") {
+  const table = new Map();
+  for (const row of stats) {
+    const key = `${row.construct} (.${row.surface})`;
+    const entry = table.get(key) ?? { run: 0, rejected: 0, asked: 0, positions: new Set(), companions: new Set() };
+    entry[row.rejected ? "rejected" : "run"]++;
+    if (row.asked) entry.asked++;
+    entry.positions.add(row.position);
+    entry.companions.add(row.companion);
+    table.set(key, entry);
+  }
+  let total = 0;
+  let asked = 0;
+  for (const [construct, entry] of table) {
+    total += entry.run + entry.rejected;
+    asked += entry.asked;
+    console.log(
+      `${construct}: ${entry.run + entry.rejected} cases (${entry.run} run against a twin, ${entry.rejected} expect a diagnostic), ${entry.positions.size} positions, ${entry.companions.size} companions; ${entry.asked} editor cases`,
+    );
+  }
+  console.log(`total: ${total}; editor cases: ${asked}`);
+  const perCode = new Map(codes.map((code) => [code, { invalid: 0, fixed: 0, explain: 0, editor: 0, ttx: 0, positions: new Set() }]));
+  for (const made of diagnosticStats) {
+    const entry = perCode.get(made.code);
+    entry[made.kind]++;
+    if (made.surface === "ttx" && made.kind !== "editor") entry.ttx++;
+    if (made.kind === "invalid") entry.positions.add(`${made.surface}:${made.position}`);
+  }
+  for (const [code, entry] of perCode) {
+    console.log(
+      `${code}: ${entry.invalid} invalid, ${entry.fixed} fixed, ${entry.explain} explain example(s), ${entry.editor} editor; ${entry.positions.size} positions, ${entry.ttx} .ttx`,
+    );
+  }
+  const count = (kind) => diagnosticStats.filter((made) => made.kind === kind).length;
+  console.log(
+    `diagnostics: ${count("invalid")} invalid, ${count("fixed")} fixed, ${count("explain")} explain example(s); ${count("editor")} editor cases`,
+  );
+} else if (mode === "--check") {
+  const problems = [];
+  for (const tree of trees) {
+    for (const [path, text] of tree.files) {
+      if (!existsSync(path)) problems.push(`missing ${show(path)}`);
+      else if (readFileSync(path, "utf8") !== text) problems.push(`modified ${show(path)}`);
+    }
+    for (const path of existing(tree.dir)) {
+      if (!tree.files.has(path)) problems.push(`stale ${show(path)}`);
+    }
+  }
+  if (problems.length > 0) {
+    console.error(`${problems.length} generated file(s) differ from tests/matrix:`);
+    for (const problem of problems.slice(0, 50)) console.error(`  ${problem}`);
+    if (problems.length > 50) console.error(`  ... and ${problems.length - 50} more`);
+    process.exit(1);
+  }
+  console.log(trees.map((tree) => `${tree.files.size} generated ${tree.what}`).join(" and ") + " match tests/matrix");
+} else if (mode === undefined) {
+  for (const tree of trees) {
+    let written = 0;
+    let removed = 0;
+    for (const path of existing(tree.dir)) {
+      if (!tree.files.has(path)) {
+        rmSync(path);
+        removed++;
+      }
+    }
+    for (const [path, text] of tree.files) {
+      if (existsSync(path) && readFileSync(path, "utf8") === text) continue;
+      mkdirSync(dirname(path), { recursive: true });
+      writeFileSync(path, text);
+      written++;
+    }
+    console.log(`${tree.files.size} ${tree.what}: ${written} written, ${removed} removed`);
+  }
+} else {
+  console.error("usage: node scripts/generate-cases [--check | --stats]");
+  process.exit(2);
+}

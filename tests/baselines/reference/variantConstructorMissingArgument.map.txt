@@ -1,0 +1,10 @@
+//// [variantConstructorMissingArgument.tt] 8 mapping(s)
+1:1 -> 1:1 len 148  "// A missing argument of a variant constructor: "...
+3:39 -> 4:31 len 6  "number"
+3:39 -> 7:20 len 6  "number"
+3:60 -> 5:28 len 6  "number"
+3:60 -> 8:17 len 6  "number"
+3:77 -> 5:45 len 6  "string"
+3:77 -> 8:34 len 6  "string"
+3:86 -> 9:3 len 65  "\nexport const c = Shape.Circle();\nexport const r"...
+

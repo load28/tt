@@ -1,0 +1,2 @@
+jsxAttribute(10) => "<div data-value=9></div>" | operand 10; flip true; lookup true; found 9
+jsxAttribute(20) => "<div data-value=40></div>" | operand 20; flip false; lookup false; double 40

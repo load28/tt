@@ -1,0 +1,2 @@
+yieldOperand(3) => "***6" | yield 3; double 6; yield "***6"
+yieldOperand(12) => "**24" | yield 12; double 24; yield "**24"

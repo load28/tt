@@ -1,0 +1,2 @@
+throwOperand(2) => threw {"kind":"Ok"} | await; read 2
+throwOperand(-1) => threw {"kind":"Err","error":"negative -1"} | await; read -1

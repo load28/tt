@@ -1,0 +1,119 @@
+=== runtimeAPropagatedCallAroundAMatchDoesNotShareTheMatchSSlot.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function r(n: number): R { return n > 1 ? { kind: "Ok", value: n } : { kind: "Err", error: "small" + n }; }
+>r : function r(n: number): R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+>n : (parameter) n: number
+function sum(v: number): R {
+>sum : function sum(v: number): R
+>v : (parameter) v: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const y = 1 + try r(match (v) { 1 => 1, _ => 2 });
+>y : const y: number
+>r : function r(n: number): R
+>v : (parameter) v: number
+  return r(y - 1 + 10);
+>r : function r(n: number): R
+>y : const y: number
+function listed(v: number): R {
+>listed : function listed(v: number): R
+>v : (parameter) v: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const a = [try r(match (v) { 1 => 1, _ => 2 })];
+>a : const a: number[]
+>r : function r(n: number): R
+>v : (parameter) v: number
+  console.log(try r(match (v) { 1 => 3, _ => 4 }));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>r : function r(n: number): R
+>v : (parameter) v: number
+  return { kind: "Ok", value: a[0] };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>a : const a: number[]
+function inResult(v: number) {
+>inResult : function inResult(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>v : (parameter) v: number
+    const y = 1 + try r(match (v) { 1 => 1, _ => 2 });
+>y : const y: number
+>r : function r(n: number): R
+>v : (parameter) v: number
+    const a = [try r(match (v) { 1 => 1, _ => 2 })];
+>a : const a: number[]
+>r : function r(n: number): R
+>v : (parameter) v: number
+    console.log(try r(match (v) { 1 => 3, _ => 4 }));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>r : function r(n: number): R
+>v : (parameter) v: number
+    return y + a[0];
+>y : const y: number
+>a : const a: number[]
+console.log(JSON.stringify([sum(1), sum(2), listed(1), listed(2), inResult(1), inResult(2)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>sum : function sum(v: number): R
+>sum : function sum(v: number): R
+>listed : function listed(v: number): R
+>listed : function listed(v: number): R
+>inResult : function inResult(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>inResult : function inResult(v: number): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+

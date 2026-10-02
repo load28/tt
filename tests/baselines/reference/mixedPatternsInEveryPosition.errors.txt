@@ -1,0 +1,56 @@
+==== ttc --out-dir (exit 1) ====
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> ./mixedPatternsInEveryPosition.tt:4:32
+  |
+4 | consume(match (flag) { e => 1, false => 2 });
+  |                                ^^^^^
+  |
+  = help: split them into two matches
+
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> ./mixedPatternsInEveryPosition.tt:5:30
+  |
+5 | const held = [match (flag) { true => 1, e => 2 }];
+  |                              ^^^^
+  |
+  = help: split them into two matches
+
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> ./mixedPatternsInEveryPosition.tt:6:85
+  |
+6 | export const later = () => consume(match (flag) { e => 1, _ => 2 } + match (flag) { false => 3, e => 4 });
+  |                                                                                     ^^^^^
+  |
+  = help: split them into two matches
+
+
+==== ttc --check-types (exit 1) ====
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> mixedPatternsInEveryPosition.tt:4:32
+  |
+4 | consume(match (flag) { e => 1, false => 2 });
+  |                                ^^^^^
+  |
+  = help: split them into two matches
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> mixedPatternsInEveryPosition.tt:5:30
+  |
+5 | const held = [match (flag) { true => 1, e => 2 }];
+  |                              ^^^^
+  |
+  = help: split them into two matches
+error[ts2339]: match on a tag pattern needs a value with a `kind` discriminant — this scrutinee has none (a plain TypeScript `enum` is not one) (ts2339: Property 'kind' does not exist on type 'boolean'.)
+ --> mixedPatternsInEveryPosition.tt:6:36
+  |
+6 | export const later = () => consume(match (flag) { e => 1, _ => 2 } + match (flag) { false => 3, e => 4 });
+  |                                    ^^^^^^^^^^^^
+error[match-mixed-patterns]: match: cannot mix tag patterns and literal patterns in the same match — the two compare different things (`$tt_m.kind` vs `$tt_m`)
+ --> mixedPatternsInEveryPosition.tt:6:85
+  |
+6 | export const later = () => consume(match (flag) { e => 1, _ => 2 } + match (flag) { false => 3, e => 4 });
+  |                                                                                     ^^^^^
+  |
+  = help: split them into two matches
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

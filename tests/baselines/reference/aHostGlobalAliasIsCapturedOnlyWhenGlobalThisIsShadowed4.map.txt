@@ -1,0 +1,11 @@
+//// [aHostGlobalAliasIsCapturedOnlyWhenGlobalThisIsShadowed4.tt] 9 mapping(s)
+1:25 -> 20:28 len 6  "number"
+1:25 -> 23:17 len 6  "number"
+1:40 -> 25:3 len 44  "\nexport function f(o: O) { const Error = 5; "
+2:44 -> 44:1 len 7  "return "
+2:58 -> 28:17 len 1  "o"
+2:68 -> 31:15 len 5  "value"
+2:78 -> 32:16 len 5  "value"
+2:93 -> 36:16 len 1  "0"
+2:96 -> 44:14 len 4  "; }\n"
+

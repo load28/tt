@@ -1,0 +1,13 @@
+=== ifLetElseBlockAndChaining.tt ===
+function f() {
+>f : function f(): void
+  if let Some(value) = a() {
+>value : const value: any
+    use1(value);
+>value : const value: any
+  } else if let Ok(value: v) = b() {
+>value : any
+>v : const v: any
+    use2(v);
+>v : const v: any
+

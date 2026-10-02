@@ -1,0 +1,31 @@
+==== ttc --out-dir (exit 1) ====
+error[val-mutation]: cannot mutate through val binding `item` (the binding is declared with `val`, so every access path from it is read-only)
+ --> ./valParameterPositionsBeyondPlainIdentifiers2.tt:2:3
+  |
+1 | for (val const item of items) {
+  |      --- the read-only binding is declared here
+2 |   item.a = 1;
+  |   ^^^^
+  |
+  = help: remove `val` if this binding is intended to be mutable
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2552]: Cannot find name 'items'. Did you mean 'item'?
+ --> valParameterPositionsBeyondPlainIdentifiers2.tt:1:24
+  |
+1 | for (val const item of items) {
+  |                        ^^^^^
+  |                ---- 'item' is declared here.
+error[val-mutation]: cannot mutate through val binding `item` (the binding is declared with `val`, so every access path from it is read-only)
+ --> valParameterPositionsBeyondPlainIdentifiers2.tt:2:3
+  |
+1 | for (val const item of items) {
+  |      --- the read-only binding is declared here
+2 |   item.a = 1;
+  |   ^^^^
+  |
+  = help: remove `val` if this binding is intended to be mutable
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

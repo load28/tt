@@ -1,0 +1,4 @@
+returnOperand({}) => "range" | risky {}; range "range"
+returnOperand({}) => 1 | risky {}; type 1
+returnOperand({}) => "risky call 3" | caught "risky call 3"
+returnOperand("text") => null | risky "text"; other null

@@ -1,0 +1,34 @@
+=== tupleMatchWildcardElementAndOrPatternCoverTheProduct.tt ===
+variant Dir { North(), South, East, West }
+>Dir : type Dir = {
+>       kind: "North";
+>   } | {
+>       kind: "South";
+>   } | {
+>       kind: "East";
+>   } | {
+>       kind: "West";
+>   }
+>North : (property) North: () => Dir
+>South : (property) South: {
+>       readonly kind: "South";
+>   }
+>East : (property) East: {
+>       readonly kind: "East";
+>   }
+>West : (property) West: {
+>       readonly kind: "West";
+>   }
+variant Speed { Fast(), Slow }
+>Speed : type Speed = {
+>       kind: "Fast";
+>   } | {
+>       kind: "Slow";
+>   }
+>Fast : (property) Fast: () => Speed
+>Slow : (property) Slow: {
+>       readonly kind: "Slow";
+>   }
+const step = match (d, s) {
+>step : const step: number
+

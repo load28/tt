@@ -1,0 +1,2 @@
+jsxSpreadAttribute(8) => "<div value=9></div>" | yield 8; arrow 9
+jsxSpreadAttribute(9) => "<div value=10></div>" | yield 9; arrow 10

@@ -1,0 +1,89 @@
+=== logicalAssignmentValueHoldingTtValueIsAPlacementError.tt ===
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+declare function read(n: number): R;
+>read : function read(n: number): R
+>n : (parameter) n: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+declare function use(value: unknown): void;
+>use : function use(value: unknown): void
+>value : (parameter) value: unknown
+export function consumedTry(u: number | undefined, k: number): R {
+>consumedTry : function consumedTry(u: number | undefined, k: number): R
+>u : (parameter) u: number | undefined
+>k : (parameter) k: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  const x = (u ??= try read(k));
+>x : const x: any
+>u : (parameter) u: number | undefined
+  return { kind: "Ok", value: x };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>x : const x: any
+export function consumedMatch(o: { b: boolean }, k: number): boolean {
+>consumedMatch : function consumedMatch(o: {
+>       b: boolean;
+>   }, k: number): boolean
+>o : (parameter) o: {
+>       b: boolean;
+>   }
+>b : (property) b: boolean
+>k : (parameter) k: number
+  use(o.b ||= match (k) { 1 => true, _ => false });
+>use : function use(value: unknown): void
+>o : (parameter) o: {
+>       b: boolean;
+>   }
+>b : (property) b: boolean
+>match : (property) undefined: undefined
+  return o.b;
+>o : (parameter) o: {
+>       b: boolean;
+>   }
+>b : (property) b: boolean
+export function returnedTry(o: { c: number }, k: number): R {
+>returnedTry : function returnedTry(o: {
+>       c: number;
+>   }, k: number): R
+>o : (parameter) o: {
+>       c: number;
+>   }
+>c : (property) c: number
+>k : (parameter) k: number
+>R : type R = {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+  return { kind: "Ok", value: (o.c &&= try read(k)) };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>o : (parameter) o: {
+>       c: number;
+>   }
+>c : (property) c: number
+

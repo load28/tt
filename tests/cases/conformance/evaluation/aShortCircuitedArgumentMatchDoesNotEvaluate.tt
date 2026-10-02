@@ -1,0 +1,14 @@
+// @origin: tests/integration/cases_05.rs::a_short_circuited_argument_match_does_not_evaluate
+// @run: aShortCircuitedArgumentMatchDoesNotEvaluate.tt
+
+const trace: string[] = [];
+function subject(tag: string): number { trace.push(tag); return 1; }
+function id(v: number): number { return v; }
+declare const globalThis: { flagOn: boolean };
+const on = true as boolean;
+const off = false as boolean;
+const a = on && id(match (subject("on")) { 1 => 10, _ => 0 });
+const b = off && id(match (subject("off")) { 1 => 20, _ => 0 });
+console.log(JSON.stringify(trace), a, b);
+
+export {};

@@ -1,0 +1,6 @@
+//// [localVariantShadowsBuiltin.tt] 4 mapping(s)
+1:33 -> 25:3 len 26  "\nconst f = (o: Option) => "
+2:33 -> 29:19 len 1  "o"
+2:46 -> 32:18 len 1  "1"
+2:49 -> 41:2 len 2  ";\n"
+

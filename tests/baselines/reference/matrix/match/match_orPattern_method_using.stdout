@@ -1,0 +1,4 @@
+method({"kind":"Num","value":4}) => 4 | open res; this "holder"; operand {"kind":"Num","value":4}; number 4; dispose res
+method({"kind":"Neg","value":-3}) => -3 | open res; this "holder"; operand {"kind":"Neg","value":-3}; number -3; dispose res
+method({"kind":"Word","text":"hi"}) => "hi" | open res; this "holder"; operand {"kind":"Word","text":"hi"}; word "hi"; dispose res
+method({"kind":"End"}) => "" | open res; this "holder"; operand {"kind":"End"}; end ""; dispose res

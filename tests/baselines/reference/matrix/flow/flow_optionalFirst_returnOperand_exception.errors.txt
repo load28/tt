@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[flow-first-step-method]: `flow`: the first step cannot be an optional-chain step — it is the composed function's input, so it must be a function
+ --> ./main.tt:5:20
+  |
+5 |     return flow |> maybe(true)?.twice |> adder(risky(input));
+  |                    ^^^^^^^^^^^^^^^^^^
+  |
+  = help: write the step as a function — `flow |> ((n: number) => o?.m(n)) |> ...`
+
+
+==== ttc --check-types (exit 1) ====
+error[flow-first-step-method]: `flow`: the first step cannot be an optional-chain step — it is the composed function's input, so it must be a function
+ --> main.tt:5:20
+  |
+5 |     return flow |> maybe(true)?.twice |> adder(risky(input));
+  |                    ^^^^^^^^^^^^^^^^^^
+  |
+  = help: write the step as a function — `flow |> ((n: number) => o?.m(n)) |> ...`
+
+==== tsc on the emitted TypeScript (exit 0) ====

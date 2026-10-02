@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[result-continue-crossing]: `continue` cannot leave a `result` block
+ --> ./main.ttx:7:113
+  |
+7 |     for (const round of [1, 2]) { const r = result { const n = try read(note("operand", input)); if (n > round) continue; return n; }; seen.push(note("r", r)); }
+  |                                                                                                                 ^^^^^^^^
+  |
+  = help: continue only a loop written inside this `result` block
+
+
+==== ttc --check-types (exit 1) ====
+error[result-continue-crossing]: `continue` cannot leave a `result` block
+ --> main.ttx:7:113
+  |
+7 |     for (const round of [1, 2]) { const r = result { const n = try read(note("operand", input)); if (n > round) continue; return n; }; seen.push(note("r", r)); }
+  |                                                                                                                 ^^^^^^^^
+  |
+  = help: continue only a loop written inside this `result` block
+
+==== tsc on the emitted TypeScript (exit 0) ====

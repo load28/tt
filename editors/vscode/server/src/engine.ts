@@ -19,6 +19,7 @@
  * one-shot commands.
  * ----------------------------------------------------------------------- */
 import { ChildProcess, spawn } from "child_process";
+import type { CompletionItemKind, CompletionItemTag } from "vscode-languageserver/node";
 
 
 /** The name a rename asks the engine for, standing in for the new name in
@@ -48,9 +49,16 @@ export interface EngineHover {
 }
 
 export interface EngineCompletionItem {
+  range?: EngineRange | null;
+  labelDetails?: { detail?: string | null; description?: string | null } | null;
   label: string;
-  /** The element-kind string the editor has always mapped. */
-  kind: string;
+  source?: string | null;
+  detail?: string | null;
+  /** LSP 3.17 `CompletionItemKind`, as the service classified the entry;
+   * null when it did not say. */
+  kind?: CompletionItemKind | null;
+  /** LSP 3.17 `CompletionItemTag`s: `1` (deprecated). */
+  tags?: CompletionItemTag[];
   sortText: string;
   insertText?: string | null;
   filterText?: string | null;
@@ -68,6 +76,9 @@ export interface EngineCompletionList {
 export interface EngineCompletionDetail {
   signature: string;
   documentation: string;
+  /** Edits accepting the entry also makes — an auto-import's import
+   * declaration. Absent when there are none. */
+  additionalEdits?: { range: EngineRange; newText: string }[];
 }
 
 export interface EngineRenameEdit extends EngineLocation {
@@ -90,7 +101,10 @@ export interface EngineDiagnostic {
   range: EngineRange;
   message: string;
   code: number;
-  warning: boolean;
+  severity: "error" | "warning" | "information" | "hint";
+  /** TypeScript's unused and deprecated suggestions carry these; absent
+   * when there are none. */
+  tags?: ("unnecessary" | "deprecated")[];
   /** Secondary labeled spans ("the piped value is produced here"), absent
    * when the diagnostic has only its primary range. `path` names another
    * file; without it the span is in the diagnostic's own file. */
@@ -120,16 +134,42 @@ export interface EngineTtHint {
 
 export interface EngineTtCompletion {
   label: string;
-  kind: "case" | "field" | "wildcard";
+  kind: "case" | "field" | "literal" | "wildcard";
   detail: string;
   /** True when an arm of this match already covers the case. */
   covered: boolean;
+  /** The source range the item replaces when it is not the word at the
+   * position: the string literal a literal pattern is written in. */
+  range?: EngineRange | null;
+}
+
+/** What completion at a position is, read from the buffer's tokens. */
+export interface EngineTtCompletions {
+  /** The pattern completions tt owns there; empty elsewhere. */
+  items: EngineTtCompletion[];
+  /** Set when the cursor completes a member name: `receiver` is the path
+   * of names before the `.` (`Result`, `ns.Shape`), or null for any other
+   * expression (`f().`, `x |> .`). */
+  member: { receiver: string | null } | null;
+  /** The tt keywords whose construct can be written there, with
+   * TypeScript's rank for a keyword. */
+  keywords: EngineTtKeyword[];
+  pattern: boolean;
+}
+
+/** A tt keyword the engine found valid at a position. */
+export interface EngineTtKeyword {
+  label: string;
+  sortText: string;
 }
 
 export interface EngineSemanticToken {
   range: EngineRange;
   /** An LSP standard token-type string ("keyword", "enumMember", ...). */
   kind: string;
+  /** LSP standard token-modifier strings ("declaration", ...); absent from
+   * a compiler that predates them. */
+  modifiers?: string[];
 }
 
 /** How a request ended: an engine result, an engine error (the session is
@@ -458,9 +498,15 @@ export function completion(
   path: string,
   position: EnginePosition,
   member: boolean,
+  triggerCharacter?: string,
   onError?: (message: string) => void,
 ): Promise<EngineCompletionList | null> {
-  return semantic(compiler, "completion", { path, position, member }, onError);
+  return semantic(
+    compiler,
+    "completion",
+    { path, position, member, triggerCharacter: triggerCharacter ?? null },
+    onError,
+  );
 }
 
 export function completionResolve(
@@ -468,13 +514,14 @@ export function completionResolve(
   path: string,
   position: EnginePosition,
   label: string,
+  source: string | undefined,
   probe: number | undefined,
   onError?: (message: string) => void,
 ): Promise<EngineCompletionDetail | null> {
   return semantic(
     compiler,
     "completionResolve",
-    { path, position, label, probe: probe ?? null },
+    { path, position, label, source: source ?? null, probe: probe ?? null },
     onError,
   );
 }
@@ -494,13 +541,61 @@ export async function rename(
   return result?.edits ?? null;
 }
 
-export function signatureHelp(
+export async function prepareRename(
   compiler: string,
   path: string,
   position: EnginePosition,
   onError?: (message: string) => void,
+): Promise<{ range: EngineRange | null; refusal?: string | null } | null> {
+  return semantic(compiler, "prepareRename", { path, position }, onError);
+}
+
+export interface EngineDocumentSymbol {
+  name: string;
+  detail: string;
+  /** The LSP `SymbolKind` number. */
+  kind: number;
+  range: EngineRange;
+  selectionRange: EngineRange;
+  children: EngineDocumentSymbol[];
+}
+
+/** TypeScript's outline of a file, on the `.tt` source; a `variant` is not
+ * in it (the declarations answer carries those). Empty when the engine
+ * cannot answer. */
+export async function documentSymbols(
+  compiler: string,
+  path: string,
+  onError?: (message: string) => void,
+): Promise<EngineDocumentSymbol[]> {
+  const result = await semantic<{ symbols: EngineDocumentSymbol[] }>(
+    compiler,
+    "documentSymbols",
+    { path },
+    onError,
+  );
+  return result?.symbols ?? [];
+}
+
+export function signatureHelp(
+  compiler: string,
+  path: string,
+  position: EnginePosition,
+  context?: { triggerKind: number; triggerCharacter?: string; isRetrigger: boolean },
+  onError?: (message: string) => void,
 ): Promise<EngineSignatureHelp | null> {
-  return semantic(compiler, "signatureHelp", { path, position }, onError);
+  return semantic(
+    compiler,
+    "signatureHelp",
+    {
+      path,
+      position,
+      triggerKind: context?.triggerKind ?? null,
+      triggerCharacter: context?.triggerCharacter ?? null,
+      isRetrigger: context?.isRetrigger ?? false,
+    },
+    onError,
+  );
 }
 
 /** The parser's classification of the ambiguous surface — a `flow` head the
@@ -518,6 +613,26 @@ export async function semanticTokens(
     compiler,
     "semanticTokens",
     { text, filename },
+    onError,
+  );
+  return result?.tokens ?? null;
+}
+
+export interface EngineClassifiedToken {
+  range: EngineRange;
+  type: string;
+  modifiers: string[];
+}
+
+export async function documentSemanticTokens(
+  compiler: string,
+  path: string,
+  onError?: (message: string) => void,
+): Promise<EngineClassifiedToken[] | null> {
+  const result = await semantic<{ tokens: EngineClassifiedToken[] }>(
+    compiler,
+    "documentSemanticTokens",
+    { path },
     onError,
   );
   return result?.tokens ?? null;
@@ -551,14 +666,34 @@ export async function ttCompletions(
   text: string,
   position: EnginePosition,
   onError?: (message: string) => void,
-): Promise<EngineTtCompletion[]> {
-  const result = await semantic<{ items: EngineTtCompletion[] }>(
+): Promise<EngineTtCompletions> {
+  const result = await semantic<EngineTtCompletions>(
     compiler,
     "ttCompletions",
     { path, text, position },
     onError,
   );
-  return result?.items ?? [];
+  return {
+    items: result?.items ?? [],
+    member: result?.member ?? null,
+    keywords: result?.keywords ?? [],
+    pattern: result?.pattern ?? false,
+  };
+}
+
+export async function patternCompletions(
+  compiler: string,
+  path: string,
+  position: EnginePosition,
+  onError?: (message: string) => void,
+): Promise<EngineTtCompletion[] | null> {
+  const result = await semantic<{ items: EngineTtCompletion[] }>(
+    compiler,
+    "patternCompletions",
+    { path, position },
+    onError,
+  );
+  return result?.items ?? null;
 }
 
 /** What tt has to say about a buffer that is not an error — today, the
@@ -657,6 +792,20 @@ export async function tsDiagnostics(
   path: string,
   onError?: (message: string) => void,
 ): Promise<EngineDiagnostic[] | null> {
+  const answer = await tsDiagnosticsAnswer(compiler, path, onError);
+  return answer && answer.diagnostics;
+}
+
+/** [`tsDiagnostics`] with the codes of the compiler's own diagnostics
+ * that the answer states in TypeScript's words — TypeScript's verdict on
+ * the buffer's syntax, when the engine served the buffer as the user wrote
+ * it. A consumer showing both layers shows that fact once, as TypeScript's
+ * diagnostics of a `.ts` file show it. */
+export async function tsDiagnosticsAnswer(
+  compiler: string,
+  path: string,
+  onError?: (message: string) => void,
+): Promise<{ diagnostics: EngineDiagnostic[]; restates: string[] } | null> {
   const answer = await engineRequest(
     compiler,
     "tsDiagnostics",
@@ -666,8 +815,14 @@ export async function tsDiagnostics(
   if (!answer) return null;
   if ("error" in answer) {
     onError?.(`tt: tsDiagnostics: ${answer.error}`);
-    return [];
+    return { diagnostics: [], restates: [] };
   }
-  const result = answer.result as { diagnostics?: EngineDiagnostic[] } | null;
-  return result?.diagnostics ?? [];
+  const result = answer.result as {
+    diagnostics?: EngineDiagnostic[];
+    restates?: string[];
+  } | null;
+  return {
+    diagnostics: result?.diagnostics ?? [],
+    restates: result?.restates ?? [],
+  };
 }

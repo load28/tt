@@ -1,0 +1,14 @@
+//// [resultWrapsInlineIfLetReturnsAsSuccess.tt] 12 mapping(s)
+1:28 -> 2:28 len 6  "number"
+1:28 -> 5:17 len 6  "number"
+1:43 -> 7:3 len 1  "\n"
+2:1 -> 25:1 len 14  "const value = "
+2:30 -> 15:9 len 4  "item"
+2:41 -> 10:18 len 6  "read()"
+2:48 -> 15:29 len 1  " "
+2:61 -> 18:15 len 5  "found"
+2:70 -> 16:20 len 4  "item"
+2:84 -> 19:54 len 5  "found"
+2:107 -> 21:54 len 1  "0"
+2:113 -> 25:27 len 2  ";\n"
+

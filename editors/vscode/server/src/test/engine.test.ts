@@ -14,7 +14,7 @@ import * as path from "node:path";
 
 import * as engine from "../engine";
 import { positionAt, sliceOf, spanOf } from "./positions";
-import { COMPILER, answered, compilerAvailable, findTsgo } from "./toolchain";
+import { COMPILER, answered, compilerAvailable, findTsgo, problems } from "./toolchain";
 import { repoTestDir } from "../../../../../scripts/test-dirs.cjs";
 
 const skip = !compilerAvailable()
@@ -193,7 +193,8 @@ test("ttx receives the complete TypeScript and tt semantic surface", { skip }, a
     TTX_SOURCE,
     positionAt(TTX_SOURCE, TTX_SOURCE.indexOf("Ready(value) =>")),
   );
-  assert.ok(ttCompletions.some((item) => item.label === "Ready"));
+  assert.ok(ttCompletions.items.some((item) => item.label === "Ready"));
+  assert.equal(ttCompletions.member, null);
 
   const tokens = await engine.semanticTokens(COMPILER, TTX_SOURCE, ttx);
   assert.ok(tokens?.some((token) => token.kind === "keyword"));
@@ -238,7 +239,7 @@ for (const extension of ["tt", "ttx"]) {
       for (const statement of cases) {
         const source = `${header}\n${statement}\nexport {};\n`;
         engine.openDocument(COMPILER, file, source);
-        assert.deepEqual(answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics"), [], statement);
+        assert.deepEqual(problems(answered(await engine.tsDiagnostics(COMPILER, file), "tsDiagnostics")), [], statement);
         const offset = source.indexOf("x.toFixed");
         const hover = await engine.hover(COMPILER, file, positionAt(source, offset));
         assert.ok(hover, statement);
@@ -369,7 +370,7 @@ test(
       "  const n = try value;",
       "  return n;",
       "}",
-      "const broken = 1 |> ;",
+      "const broken = ready ? 1 : 2 |> f;",
       "",
     ].join("\n");
     engine.openDocument(COMPILER, tt, source);
@@ -484,6 +485,26 @@ test("signature help describes the call being written", { skip }, async () => {
   assert.ok(help, "the call site has help");
   assert.match(help!.signatures[0].label, /describe/);
   assert.equal(help!.signatures[0].parameters.length, 1);
+});
+
+test("the operand of an unfinished try gets signature help and completion", { skip }, async () => {
+  const { dir } = workspace();
+  const file = path.join(dir, "src/unfinished.tt");
+  const text =
+    'import { describe } from "./user";\n' +
+    "declare function load(): { kind: \"Ok\"; value: \"idle\" } | { kind: \"Err\"; error: string };\n" +
+    "export function run() {\n" +
+    "  const text = try load(describe(\n" +
+    "}\n";
+  fs.writeFileSync(file, text);
+  engine.openDocument(COMPILER, file, text);
+  const at = positionAt(text, text.indexOf("describe(\n") + "describe(".length);
+  const help = await engine.signatureHelp(COMPILER, file, at);
+  assert.ok(help, "the call being written has help");
+  assert.match(help!.signatures[0].label, /^describe\(s: State\)/);
+  const list = await engine.completion(COMPILER, file, at, false);
+  assert.ok(list?.items.some((item) => item.label === "run"), JSON.stringify(list?.items.length));
+  engine.closeDocument(COMPILER, file);
 });
 
 test("an edit is answered against the new text", { skip }, async () => {

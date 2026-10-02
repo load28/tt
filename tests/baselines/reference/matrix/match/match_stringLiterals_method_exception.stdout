@@ -1,0 +1,4 @@
+method("north") => 1 | this "holder"; risky "north"; n 1
+method("south") => 2 | this "holder"; risky "south"; se 2
+method("east") => "risky call 3" | this "holder"; caught "risky call 3"
+method("up") => 0 | this "holder"; risky "up"; other 0

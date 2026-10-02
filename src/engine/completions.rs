@@ -40,6 +40,7 @@ use crate::ast::{
 use crate::lexer::{Token, TokenKind};
 use crate::parser::PatternSite;
 
+use super::documents::Texts;
 use super::language::Position;
 
 /// What a completion item is.
@@ -49,6 +50,8 @@ pub enum TtCompletionKind {
     Case,
     /// A payload field name.
     Field,
+    /// A literal the scrutinee's type admits.
+    Literal,
     /// The wildcard arm `_`. Offered where an arm may be written, and
     /// nowhere else — `if let _ = x` is not tt syntax.
     Wildcard,
@@ -66,6 +69,10 @@ pub struct TtCompletion {
     /// Whether an arm already covers this case (an editor sorts these
     /// last, or dims them). Always false for fields.
     pub covered: bool,
+    /// The source range the item replaces, when it is not the word at the
+    /// position: the whole string literal a literal pattern is being
+    /// written in.
+    pub range: Option<super::language::Range>,
 }
 
 /// What can be written at `position`, or an empty list when the position is
@@ -73,39 +80,147 @@ pub struct TtCompletion {
 ///
 /// The answer never includes ordinary TypeScript completions: those are the
 /// service's, and a consumer merges the two lists.
+///
+/// This is the stand-alone question: the files `source` imports are read
+/// as saved. A session asks [`super::Workspace::tt_completions_at`], which
+/// reads its open documents.
 pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<TtCompletion> {
+    completions_at(path, source, position, Texts::Disk)
+}
+
+pub(super) fn completions_at(
+    path: &Path,
+    source: &str,
+    position: Position,
+    texts: Texts<'_>,
+) -> Vec<TtCompletion> {
+    pattern_question(path, source, position, texts)
+        .map(|question| question.finisher().finish(question.items))
+        .unwrap_or_default()
+}
+
+pub(super) struct PatternQuestion {
+    pub(super) items: Vec<TtCompletion>,
+    pub(super) typed: Option<TypedSite>,
+    literal: Option<super::language::Range>,
+}
+
+impl PatternQuestion {
+    pub(super) fn finisher(&self) -> Finisher {
+        Finisher {
+            literal: self.literal,
+        }
+    }
+}
+
+/// What the position asks of the items once they are gathered.
+pub(super) struct Finisher {
+    literal: Option<super::language::Range>,
+}
+
+impl Finisher {
+    /// The items as offered: inside a string literal, only the literals,
+    /// each replacing the whole literal written so far.
+    pub(super) fn finish(&self, items: Vec<TtCompletion>) -> Vec<TtCompletion> {
+        match self.literal {
+            None => items,
+            Some(range) => items
+                .into_iter()
+                .filter(|item| item.kind == TtCompletionKind::Literal)
+                .map(|item| TtCompletion {
+                    range: Some(range),
+                    ..item
+                })
+                .collect(),
+        }
+    }
+}
+
+pub(super) enum TypedSite {
+    Arm {
+        prefix: Option<(usize, usize)>,
+        family: Option<PatternFamily>,
+        covered: Vec<String>,
+        literals: Vec<crate::ast::LiteralValue>,
+    },
+    Field {
+        written: Vec<String>,
+        claimed: bool,
+    },
+}
+
+pub(super) fn pattern_question(
+    path: &Path,
+    source: &str,
+    position: Position,
+    texts: Texts<'_>,
+) -> Option<PatternQuestion> {
     let offset = super::language::source_byte(source, position);
     let (program, tokens) = crate::parser::lex_and_parse_with_kind(
         source,
         crate::SourceKind::from_path(path).unwrap_or_default(),
     );
-    let declarations = super::language::analyses_for(path, source).declarations;
-    let items = match context(source, &program, &tokens, offset) {
-        Some(Context::Case { of: Some(arms) }) => {
-            let mut items = resolve_all(&declarations, &arms.tags)
-                .flat_map(|declared| cases(declared, &arms.covered))
-                .collect::<Vec<_>>();
-            // An arm position always admits the wildcard, whether or not
-            // the subject resolved.
-            items.push(TtCompletion {
-                label: "_".to_string(),
-                kind: TtCompletionKind::Wildcard,
-                detail: "wildcard arm — every remaining case (must be last)".to_string(),
-                covered: false,
-            });
-            items
+    let context = context(source, &program, &tokens, offset)?;
+    let declarations = super::language::analyses_for(path, source, texts).declarations;
+    let prefix = {
+        let next = token_at(&tokens, offset);
+        [Some(next), next.checked_sub(1)]
+            .into_iter()
+            .flatten()
+            .find(|&index| index < tokens.len() && is_prefix(&tokens, index, offset))
+            .map(|index| (tokens[index].span.start, tokens[index].span.end))
+    };
+    let mut literal = None;
+    let (items, typed) = match context {
+        Context::Literal { arms, span } => {
+            literal = Some(super::language::span_range(source, span.0, span.1));
+            (
+                Vec::new(),
+                Some(TypedSite::Arm {
+                    prefix: Some(span),
+                    family: Some(PatternFamily::Literals),
+                    covered: arms.covered,
+                    literals: arms.literals,
+                }),
+            )
         }
-        // A pattern position with nothing to say which variant it is over —
-        // an `if let` names its variant only by the tag being typed. Every
-        // visible case is a candidate, and the editor filters by prefix.
-        Some(Context::Case { of: None }) => declarations
-            .iter()
-            .flat_map(|declared| cases(declared, &[]))
-            .collect(),
-        Some(Context::Field { tag }) => resolve_all(&declarations, std::slice::from_ref(&tag))
-            .flat_map(|declared| fields(declared, &tag))
-            .collect(),
-        Some(Context::Nested { tag, field }) => {
+        Context::Case { of: Some(arms) } => {
+            let mut items = match arms.family {
+                Some(PatternFamily::Literals) => Vec::new(),
+                Some(PatternFamily::Tags | PatternFamily::Instances) | None => {
+                    resolve_all(&declarations, &arms.tags)
+                        .flat_map(|declared| cases(declared, &arms.covered))
+                        .collect::<Vec<_>>()
+                }
+            };
+            items.push(wildcard());
+            let typed = arms.single.then_some(TypedSite::Arm {
+                prefix,
+                family: arms.family,
+                covered: arms.covered,
+                literals: arms.literals,
+            });
+            (items, typed)
+        }
+        Context::Case { of: None } => (
+            declarations
+                .iter()
+                .flat_map(|declared| cases(declared, &[]))
+                .collect(),
+            None,
+        ),
+        Context::Field {
+            tag,
+            written,
+            claimed,
+        } => (
+            resolve_all(&declarations, std::slice::from_ref(&tag))
+                .flat_map(|declared| fields(declared, &tag))
+                .filter(|field| !written.contains(&field.label))
+                .collect(),
+            Some(TypedSite::Field { written, claimed }),
+        ),
+        Context::Nested { tag, field } => (
             resolve_all(&declarations, std::slice::from_ref(&tag))
                 .filter_map(|declared| {
                     declared
@@ -117,11 +232,238 @@ pub fn tt_completions_at(path: &Path, source: &str, position: Position) -> Vec<T
                         .and_then(|f| type_variant(&declarations, &f.ty))
                 })
                 .flat_map(|inner| cases(inner, &[]))
-                .collect()
-        }
-        None => Vec::new(),
+                .collect(),
+            None,
+        ),
     };
-    merge_candidates(items)
+    Some(PatternQuestion {
+        items: merge_candidates(items),
+        typed,
+        literal,
+    })
+}
+
+pub(super) fn wildcard() -> TtCompletion {
+    TtCompletion {
+        label: "_".to_string(),
+        kind: TtCompletionKind::Wildcard,
+        detail: "wildcard arm — every remaining case (must be last)".to_string(),
+        covered: false,
+        range: None,
+    }
+}
+
+/// A member access whose name the cursor completes: the cursor ends the
+/// name being typed (or stands where it will be) right after a `.` or `?.`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemberAccess {
+    /// The receiver when it is a name or a path of names (`Result`,
+    /// `ns.Shape`), the form a namespace's members are asked through.
+    /// `None` for any other expression (`f().`, `xs[0].`, `"abc".`,
+    /// `x |> .`).
+    pub receiver: Option<String>,
+}
+
+/// The member access the cursor at `position` completes, read from the
+/// token stream: `None` outside one, in a comment, and in a literal.
+pub fn member_access_at(path: &Path, source: &str, position: Position) -> Option<MemberAccess> {
+    let offset = super::language::source_byte(source, position);
+    let tokens = crate::lexer::lex_with_kind(
+        source,
+        0,
+        source.len(),
+        crate::SourceKind::from_path(path).unwrap_or_default(),
+    );
+    let tokens = innermost_tokens(&tokens, offset);
+    if inside_text(source, tokens, offset) {
+        return None;
+    }
+    let mut next = token_at(tokens, offset);
+    if next > 0 && is_prefix(tokens, next - 1, offset) {
+        next -= 1;
+    }
+    let dot = next
+        .checked_sub(1)
+        .filter(|&dot| is_member_dot(tokens, dot))?;
+    // The receiver is a path of names when names and `.`s alone run back
+    // from the dot to where the expression starts.
+    let mut names = Vec::new();
+    let mut after = dot;
+    let path = loop {
+        let Some(name) = after
+            .checked_sub(1)
+            .filter(|&name| matches!(tokens[name].kind, TokenKind::Ident))
+        else {
+            break false;
+        };
+        names.push(text(source, &tokens[name]));
+        match name
+            .checked_sub(1)
+            .map(|previous| (previous, &tokens[previous].kind))
+        {
+            Some((_, TokenKind::OptChain)) => break false,
+            Some((previous, _)) if is_member_dot(tokens, previous) => after = previous,
+            _ => break true,
+        }
+    };
+    names.reverse();
+    Some(MemberAccess {
+        receiver: path.then(|| names.join(".")),
+    })
+}
+
+/// A tt keyword whose construct can be written at a position.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TtKeyword {
+    /// `variant Name { … }`, a declaration.
+    Variant,
+    /// `match (…) { … }`, an expression.
+    Match,
+    /// `try expression;`, the statement form.
+    Try,
+    /// `flow |> …`, an expression.
+    Flow,
+    /// `result { … }`, an expression.
+    Result,
+    /// `const Tag(…) = expression else { … };`, a declaration.
+    LetElse,
+}
+
+impl TtKeyword {
+    /// The label a completion item shows.
+    pub fn label(self) -> &'static str {
+        match self {
+            TtKeyword::Variant => "variant",
+            TtKeyword::Match => "match",
+            TtKeyword::Try => "try",
+            TtKeyword::Flow => "flow",
+            TtKeyword::Result => "result",
+            TtKeyword::LetElse => "let-else",
+        }
+    }
+
+    /// Where TypeScript ranks a keyword in a completion list
+    /// (`SortText.GlobalsOrKeywords`): after the names in scope, among its
+    /// own keywords.
+    pub fn sort_text(self) -> &'static str {
+        "15"
+    }
+
+    /// Whether the construct can begin where a word with `facts` stands: a
+    /// declaration where a statement begins or after `export`, another
+    /// statement where a statement begins, an expression where a statement
+    /// or an operand begins.
+    fn fits(self, facts: crate::lexer::TokenFacts) -> bool {
+        match self {
+            TtKeyword::Variant => facts.statement_start() || facts.modified(),
+            TtKeyword::Try | TtKeyword::LetElse => facts.statement_start(),
+            TtKeyword::Match | TtKeyword::Flow | TtKeyword::Result => {
+                facts.statement_start() || (facts.operand_start() && !facts.modified())
+            }
+        }
+    }
+
+    const ALL: [TtKeyword; 6] = [
+        TtKeyword::Variant,
+        TtKeyword::Match,
+        TtKeyword::Try,
+        TtKeyword::Flow,
+        TtKeyword::Result,
+        TtKeyword::LetElse,
+    ];
+}
+
+/// The tt keywords whose construct can be written at `position`: a
+/// statement's where a statement begins, an expression's where an operand
+/// may begin — the grammar position the lexer's facts record for the word
+/// being typed there. Nothing in a comment or a literal, at a member
+/// access, in a pattern, or where TypeScript expects a name of its own (a
+/// property, a JSX attribute, an import specifier, a type).
+pub fn tt_keywords_at(path: &Path, source: &str, position: Position) -> Vec<TtKeyword> {
+    let kind = crate::SourceKind::from_path(path).unwrap_or_default();
+    let offset = super::language::source_byte(source, position);
+    let (program, tokens) = crate::parser::lex_and_parse_with_kind(source, kind);
+    if member_access_at(path, source, position).is_some()
+        || context(source, &program, &tokens, offset).is_some()
+    {
+        return Vec::new();
+    }
+    let Some(facts) = word_facts(source, kind, offset) else {
+        return Vec::new();
+    };
+    TtKeyword::ALL
+        .into_iter()
+        .filter(|keyword| keyword.fits(facts))
+        .collect()
+}
+
+/// The facts of the word the cursor at `offset` is typing, or of a word
+/// written there when none is: the grammar position a name at the cursor
+/// stands in. `None` in a comment or a literal.
+fn word_facts(
+    source: &str,
+    kind: crate::SourceKind,
+    offset: usize,
+) -> Option<crate::lexer::TokenFacts> {
+    let tokens = crate::lexer::lex_with_kind(source, 0, source.len(), kind);
+    let tokens = innermost_tokens(&tokens, offset);
+    if inside_text(source, tokens, offset) {
+        return None;
+    }
+    let next = token_at(tokens, offset);
+    if next > 0 && is_prefix(tokens, next - 1, offset) {
+        return Some(tokens[next - 1].facts);
+    }
+    let probe = super::language::PROBE_NAME;
+    let spliced = format!("{}{probe}{}", &source[..offset], &source[offset..]);
+    let tokens = crate::lexer::lex_with_kind(&spliced, 0, spliced.len(), kind);
+    let tokens = innermost_tokens(&tokens, offset);
+    tokens
+        .get(token_at(tokens, offset))
+        .filter(|token| token.span.start == offset && matches!(token.kind, TokenKind::Ident))
+        .map(|token| token.facts)
+}
+
+/// The tokens of the innermost template interpolation around `offset`, or
+/// `tokens` when it is in none.
+fn innermost_tokens(tokens: &[Token], offset: usize) -> &[Token] {
+    crate::stack::grow(|| innermost_tokens_grown(tokens, offset))
+}
+
+fn innermost_tokens_grown(tokens: &[Token], offset: usize) -> &[Token] {
+    for token in tokens {
+        if let TokenKind::Template(parts) = &token.kind {
+            for part in parts.iter() {
+                if let crate::lexer::TplPart::Interp { span, tokens } = part
+                    && span.start <= offset
+                    && offset <= span.end
+                {
+                    return innermost_tokens(tokens, offset);
+                }
+            }
+        }
+    }
+    tokens
+}
+
+/// Whether the token at `index` is a member-access `.` or `?.`, not one of
+/// the dots of a spread's `...`.
+fn is_member_dot(tokens: &[Token], index: usize) -> bool {
+    match tokens[index].kind {
+        TokenKind::OptChain => true,
+        TokenKind::Punct(b'.') => {
+            let touching_dot = |token: &Token| {
+                matches!(token.kind, TokenKind::Punct(b'.'))
+                    && (token.span.end == tokens[index].span.start
+                        || token.span.start == tokens[index].span.end)
+            };
+            !(index
+                .checked_sub(1)
+                .is_some_and(|previous| touching_dot(&tokens[previous]))
+                || tokens.get(index + 1).is_some_and(touching_dot))
+        }
+        _ => false,
+    }
 }
 
 /// Ambiguous declarations can share a tag or field. Present one insertion
@@ -145,19 +487,34 @@ fn merge_candidates(items: Vec<TtCompletion>) -> Vec<TtCompletion> {
 }
 
 /// The pattern position the cursor is in.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq)]
 enum Context {
     /// A tag is expected. `of` carries the tags already written in the same
     /// match, which is what says *which* variant — `None` when the position
     /// has no such evidence (an `if let`).
     Case { of: Option<ArmTags> },
-    /// A payload field name of `tag` is expected.
-    Field { tag: String },
+    /// A payload field name of `tag` is expected; `written` are the fields
+    /// the same payload already binds, which a pattern may not repeat.
+    /// `claimed` says a parsed construct holds the payload, so its
+    /// projection destructures the case and TypeScript can be asked for
+    /// the case's properties there.
+    Field {
+        tag: String,
+        written: Vec<String>,
+        claimed: bool,
+    },
+    /// A literal pattern is being written in the string literal at bytes
+    /// `span`, at the top level of an arm of the match whose finished arms
+    /// are `arms`.
+    Literal { arms: ArmTags, span: (usize, usize) },
     /// A nested pattern's tag is expected, in `tag`'s field `field`.
     Nested { tag: String, field: String },
 }
 
 fn context(source: &str, program: &Program, tokens: &[Token], offset: usize) -> Option<Context> {
+    if let Some(literal) = string_at(source, tokens, offset) {
+        return literal_context(source, program, tokens, literal);
+    }
     if inside_text(source, tokens, offset) {
         return None;
     }
@@ -176,10 +533,11 @@ fn context(source: &str, program: &Program, tokens: &[Token], offset: usize) -> 
         None
     };
     let before = prefix.unwrap_or(cursor);
-    if before == 0 {
+    if before == 0 || matches!(tokens[before - 1].kind, TokenKind::Arrow) {
         return None;
     }
-    let site = match parsed_at(program, offset) {
+    let parsed = parsed_at(program, offset);
+    let site = match parsed {
         Some(Parsed::Arm { open, from }) => PatternSite::Arm {
             open: token_at(tokens, open),
             start: from.map_or(before, |from| token_at(tokens, from)),
@@ -190,7 +548,53 @@ fn context(source: &str, program: &Program, tokens: &[Token], offset: usize) -> 
         Some(Parsed::Expression) => return None,
         None => crate::parser::pattern_site_at(source, tokens, before)?,
     };
-    site_context(source, tokens, site, before, prefix)
+    site_context(source, tokens, site, before, prefix, parsed.is_some())
+}
+
+/// The string literal token the cursor is inside: after its opening quote
+/// and before its closing one, or at the end of one not closed yet.
+fn string_at(source: &str, tokens: &[Token], offset: usize) -> Option<usize> {
+    let index = token_at(tokens, offset).checked_sub(1)?;
+    let token = &tokens[index];
+    if !matches!(token.kind, TokenKind::Str) || offset <= token.span.start {
+        return None;
+    }
+    let bytes = &source.as_bytes()[token.span.start..token.span.end];
+    let closed = bytes.len() >= 2 && bytes[bytes.len() - 1] == bytes[0];
+    (offset < token.span.end || (offset == token.span.end && !closed)).then_some(index)
+}
+
+/// A string literal the cursor is in is a literal pattern being written
+/// when it starts an alternative at the top level of a match arm's
+/// pattern, the place a finished literal arm's pattern would be.
+fn literal_context(
+    source: &str,
+    program: &Program,
+    tokens: &[Token],
+    index: usize,
+) -> Option<Context> {
+    let token = &tokens[index];
+    let (open, start) = match parsed_at(program, token.span.start) {
+        Some(Parsed::Arm { open, from }) => (
+            token_at(tokens, open),
+            from.map_or(index, |from| token_at(tokens, from)),
+        ),
+        Some(_) => return None,
+        None => match crate::parser::pattern_site_at(source, tokens, index)? {
+            PatternSite::Arm { open, start } => (open, start),
+            PatternSite::Single { .. } => return None,
+        },
+    };
+    if index < start
+        || innermost_paren(tokens, start, index)?.is_some()
+        || (index != start && !matches!(tokens[index - 1].kind, TokenKind::Punct(b'|')))
+    {
+        return None;
+    }
+    Some(Context::Literal {
+        arms: arm_tags(source, tokens, open, None),
+        span: (token.span.start, token.span.end),
+    })
 }
 
 /// What the pattern grammar expects at `before`, inside `site`'s pattern.
@@ -200,6 +604,7 @@ fn site_context(
     site: PatternSite,
     before: usize,
     prefix: Option<usize>,
+    claimed: bool,
 ) -> Option<Context> {
     let (PatternSite::Arm { start, .. } | PatternSite::Single { start }) = site;
     if before < start {
@@ -231,7 +636,11 @@ fn site_context(
         }
         // Otherwise a field name: at the start of the list or after a comma.
         if matches!(tokens[before - 1].kind, TokenKind::Punct(b'(' | b',')) {
-            return Some(Context::Field { tag });
+            return Some(Context::Field {
+                tag,
+                written: written_fields(source, tokens, open, prefix),
+                claimed,
+            });
         }
         return None;
     }
@@ -247,10 +656,47 @@ fn site_context(
             of: Some(ArmTags {
                 tags: Vec::new(),
                 covered: Vec::new(),
+                family: None,
+                literals: Vec::new(),
+                single: false,
             }),
         });
     }
     None
+}
+
+/// The field names the payload list opened at `open` already writes: each
+/// name at the list's own level that starts an entry, except the one being
+/// typed. The list ends at its `)`, or — mid-edit, unclosed — at the arm's
+/// `=>`.
+fn written_fields(
+    source: &str,
+    tokens: &[Token],
+    open: usize,
+    prefix: Option<usize>,
+) -> Vec<String> {
+    let mut written = Vec::new();
+    let mut depth = 0usize;
+    for index in open + 1..tokens.len() {
+        let token = &tokens[index];
+        if token.opens_bracket() {
+            depth += 1;
+        } else if token.closes_bracket() {
+            if depth == 0 {
+                break;
+            }
+            depth -= 1;
+        } else if depth == 0 && matches!(token.kind, TokenKind::Arrow) {
+            break;
+        } else if depth == 0
+            && matches!(token.kind, TokenKind::Ident)
+            && Some(index) != prefix
+            && (index == open + 1 || matches!(tokens[index - 1].kind, TokenKind::Punct(b',')))
+        {
+            written.push(text(source, token).to_string());
+        }
+    }
+    written
 }
 
 /// Whether `offset` is inside a comment or inside a literal token — a
@@ -326,6 +772,10 @@ enum Parsed {
 /// The answer of the innermost parsed tt construct containing `offset`, or
 /// `None` when no construct claims it.
 fn parsed_at(program: &Program, offset: usize) -> Option<Parsed> {
+    crate::stack::grow(|| parsed_at_grown(program, offset))
+}
+
+fn parsed_at_grown(program: &Program, offset: usize) -> Option<Parsed> {
     program
         .segments
         .iter()
@@ -333,6 +783,10 @@ fn parsed_at(program: &Program, offset: usize) -> Option<Parsed> {
 }
 
 fn segment_at(segment: &Segment, offset: usize) -> Option<Parsed> {
+    crate::stack::grow(|| segment_at_grown(segment, offset))
+}
+
+fn segment_at_grown(segment: &Segment, offset: usize) -> Option<Parsed> {
     match segment {
         Segment::Match(expr) => {
             if offset < expr.keyword_off || offset > expr.body_close {
@@ -453,6 +907,10 @@ fn arms_at<'a>(
 }
 
 fn if_let_at(stmt: &IfLetStmt, offset: usize) -> Option<Parsed> {
+    crate::stack::grow(|| if_let_at_grown(stmt, offset))
+}
+
+fn if_let_at_grown(stmt: &IfLetStmt, offset: usize) -> Option<Parsed> {
     if offset < stmt.owner_span.start || offset >= stmt.owner_span.end {
         return None;
     }
@@ -479,10 +937,20 @@ fn single_at(alternatives: &[TagPattern], offset: usize) -> Option<Parsed> {
 /// Completed arm headers provide variant evidence. An unfinished sibling and
 /// a wildcard do not identify a variant; expression-body identifiers and pipes
 /// are outside the pattern grammar and must never constrain its candidates.
-#[derive(Debug, PartialEq, Eq)]
-struct ArmTags {
+#[derive(Debug, PartialEq)]
+pub(super) struct ArmTags {
     tags: Vec<String>,
     covered: Vec<String>,
+    family: Option<PatternFamily>,
+    literals: Vec<crate::ast::LiteralValue>,
+    single: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum PatternFamily {
+    Tags,
+    Literals,
+    Instances,
 }
 
 /// The tags the finished arms of the match body at `open` name, as the
@@ -493,10 +961,27 @@ fn arm_tags(source: &str, tokens: &[Token], open: usize, prefix: Option<usize>) 
     let prefix = prefix.map(|index| tokens[index].span.start);
     let mut tags = Vec::new();
     let mut covered: Vec<String> = Vec::new();
+    let mut family = None;
+    let mut literals = Vec::new();
     for header in crate::parser::arm_headers(source, tokens, open) {
-        let Some(Pattern::Tags(alternatives)) = header.pattern else {
-            continue;
+        let alternatives = match header.pattern {
+            Some(Pattern::Tags(alternatives)) => alternatives,
+            Some(Pattern::Literals(alternatives)) => {
+                family = Some(PatternFamily::Literals);
+                if !header.guarded {
+                    literals.extend(alternatives.into_iter().map(|literal| literal.value));
+                }
+                continue;
+            }
+            Some(Pattern::Instances(_)) => {
+                family.get_or_insert(PatternFamily::Instances);
+                continue;
+            }
+            Some(Pattern::Wildcard) | None => continue,
         };
+        if family != Some(PatternFamily::Literals) {
+            family = Some(PatternFamily::Tags);
+        }
         let nested = alternatives
             .iter()
             .flat_map(|alternative| alternative.bindings.iter().flatten())
@@ -513,7 +998,13 @@ fn arm_tags(source: &str, tokens: &[Token], open: usize, prefix: Option<usize>) 
             }
         }
     }
-    ArmTags { tags, covered }
+    ArmTags {
+        tags,
+        covered,
+        family,
+        literals,
+        single: true,
+    }
 }
 
 /// Keep every declaration consistent with the known tags. With no evidence,
@@ -547,6 +1038,7 @@ fn cases(declared: &DeclaredVariant, covered: &[String]) -> Vec<TtCompletion> {
             kind: TtCompletionKind::Case,
             detail: super::names::case_signature(&declared.name, constructor),
             covered: covered.contains(&constructor.tag),
+            range: None,
         })
         .collect()
 }
@@ -564,6 +1056,7 @@ fn fields(declared: &DeclaredVariant, tag: &str) -> Vec<TtCompletion> {
             kind: TtCompletionKind::Field,
             detail: super::names::field_signature(field),
             covered: false,
+            range: None,
         })
         .collect()
 }
@@ -590,6 +1083,196 @@ mod tests {
             .into_iter()
             .map(|item| item.label)
             .collect()
+    }
+
+    #[test]
+    fn a_match_over_literals_offers_no_variant_tags() {
+        let source = "variant Shape { Circle(r: number), Point }\n\
+type Dir = \"north\" | \"south\";\n\
+declare const d: Dir;\n\
+const a = match (d) { \"north\" => 1, ‸ };\n\
+const b = match (d) { 200 | 404 => 1, ‸ };\n\
+const c = match (d) { is Error => 1, \"x\" => 2, ‸ };\n";
+        for nth in 0..3 {
+            let offset = source.match_indices('‸').nth(nth).unwrap().0;
+            let text = source.replace('‸', "");
+            let offset = offset - nth * '‸'.len_utf8();
+            let (line, character) = crate::lines::LineMap::lsp(&text).utf16_position(offset);
+            let position = Position {
+                line: line as u32,
+                character: character as u32,
+            };
+            let labels: Vec<String> = tt_completions_at(Path::new("/p/a.tt"), &text, position)
+                .into_iter()
+                .map(|item| item.label)
+                .collect();
+            assert_eq!(labels, vec!["_"], "arm {nth}");
+        }
+        assert_eq!(
+            labels(
+                "variant Shape { Circle(r: number), Point }\nconst e = match (s) { Circle(r) => r, ",
+                "Circle(r) => r, "
+            ),
+            vec!["Circle", "Point", "_"]
+        );
+    }
+
+    /// The member access at the end of `source`.
+    fn member_at_end(path: &str, source: &str) -> Option<Option<String>> {
+        member_access_at(Path::new(path), source, at(source, source)).map(|access| access.receiver)
+    }
+
+    #[test]
+    fn a_tt_keyword_is_offered_where_its_construct_can_begin() {
+        let keywords = |path: &str, source: &str| {
+            let offset = source.find('‸').expect("cursor");
+            let text = source.replace('‸', "");
+            let (line, character) = crate::lines::LineMap::lsp(&text).utf16_position(offset);
+            let position = Position {
+                line: line as u32,
+                character: character as u32,
+            };
+            tt_keywords_at(Path::new(path), &text, position)
+                .into_iter()
+                .map(TtKeyword::label)
+                .collect::<Vec<_>>()
+        };
+        let statement = ["variant", "match", "try", "flow", "result", "let-else"];
+        let expression = ["match", "flow", "result"];
+        for (path, source, expected) in [
+            ("/p/a.tt", "const x = 1;\n‸\n", &statement[..]),
+            ("/p/a.tt", "const x = 1;\nma‸\n", &statement[..]),
+            ("/p/a.tt", "function f() {\n  ‸\n}\n", &statement[..]),
+            ("/p/a.tt", "const x = ‸;\n", &expression[..]),
+            ("/p/a.tt", "const x = f(1, ma‸);\n", &expression[..]),
+            ("/p/a.tt", "const o = { a: ‸ };\n", &expression[..]),
+            ("/p/a.tt", "const f = (a: number) => ‸;\n", &expression[..]),
+            ("/p/a.tt", "const s = `a ${‸}`;\n", &expression[..]),
+            ("/p/a.ttx", "const e = <div>{‸}</div>;\n", &expression[..]),
+            ("/p/a.tt", "export default ‸\n", &expression[..]),
+            ("/p/a.tt", "export ‸\n", &["variant"][..]),
+            ("/p/a.tt", "const cfg: Cfg = { ‸ };\n", &[][..]),
+            ("/p/a.tt", "const cfg: Cfg = { a: 1, b‸ };\n", &[][..]),
+            ("/p/a.tt", "import { ‸ } from \"./orders.tt\";\n", &[][..]),
+            ("/p/a.ttx", "const e = <Row ‸ />;\n", &[][..]),
+            ("/p/a.tt", "let y: ‸;\n", &[][..]),
+            ("/p/a.tt", "class C {\n  ‸\n}\n", &[][..]),
+            ("/p/a.tt", "const n = user.‸\n", &[][..]),
+            ("/p/a.tt", "// ‸\n", &[][..]),
+            ("/p/a.tt", "const s = \"‸\";\n", &[][..]),
+            (
+                "/p/a.tt",
+                "variant V { A, B }\nconst v = match (x) { A => 1, ‸ };\n",
+                &[][..],
+            ),
+        ] {
+            assert_eq!(keywords(path, source), expected, "{source}");
+        }
+    }
+
+    #[test]
+    fn a_member_access_is_read_from_the_tokens_before_the_name() {
+        for source in [
+            "declare const nm: string;\nconst m = nm.trim().ma",
+            "const t = foo().t",
+            "const t = xs[0].t",
+            "const t = \"abc\".len",
+            "const t = k |> .t",
+            "const t = k |> .",
+            "const t = a?.b.",
+            "const t = (a + b).",
+        ] {
+            assert_eq!(member_at_end("/p/a.tt", source), Some(None), "{source}");
+        }
+        for (source, receiver) in [
+            ("const r = Result.", "Result"),
+            ("const r = Result.O", "Result"),
+            ("const r = Result?.O", "Result"),
+            ("const r = ns.Shape.Ci", "ns.Shape"),
+        ] {
+            assert_eq!(
+                member_at_end("/p/a.tt", source),
+                Some(Some(receiver.to_string())),
+                "{source}"
+            );
+        }
+        // JSX text, attributes and generic arrows are not code; the
+        // expression containers are.
+        for (path, source, cursor, receiver) in [
+            ("/p/a.tt", "const r = `${obj.na}`;", "obj.na", "obj"),
+            ("/p/a.tt", "const s = `returned ${at.", "at.", "at"),
+            ("/p/a.tt", "const s = `returned ${at.ge", "at.ge", "at"),
+            ("/p/a.tt", "const s = `a ${x} b ${y.", "y.", "y"),
+            (
+                "/p/a.ttx",
+                "const r = <div>{obj.na}</div>;",
+                "obj.na",
+                "obj",
+            ),
+            (
+                "/p/a.ttx",
+                "const el = <><p>{t.a}</p><p>{t.</p></>;",
+                "{t.",
+                "t",
+            ),
+            (
+                "/p/a.ttx",
+                "const el = <p>Don't {user.}</p>;",
+                "user.",
+                "user",
+            ),
+            (
+                "/p/a.ttx",
+                "const el = <a title=\"it's\" href='say \"hi\"' onClick={() => go(x.)}>{y.}</a>;",
+                "x.",
+                "x",
+            ),
+            (
+                "/p/a.ttx",
+                "const el = <a title=\"it's\" onClick={() => go(x.)}>{y.}</a>;",
+                "y.",
+                "y",
+            ),
+            (
+                "/p/a.ttx",
+                "const list = (\n  <ul>\n    {items.map(item => <li key={item.id}>{item.name} isn't {other.}</li>)}\n  </ul>\n);\n",
+                "other.",
+                "other",
+            ),
+            (
+                "/p/a.ttx",
+                "const id = <T,>(x: T) => x;\nconst pick = <T extends object>(x: T) => x;\nconst v = q.",
+                "q.",
+                "q",
+            ),
+            (
+                "/p/a.ttx",
+                "const el = <><img src='a.png' />{'literal'}{v.}</>;",
+                "v.",
+                "v",
+            ),
+        ] {
+            let access = member_access_at(Path::new(path), source, at(source, cursor));
+            assert_eq!(
+                access.map(|access| access.receiver),
+                Some(Some(receiver.to_string())),
+                "{source}"
+            );
+        }
+        let jsx_text = "const el = <p>see a.b</p>;";
+        assert_eq!(
+            member_access_at(Path::new("/p/a.ttx"), jsx_text, at(jsx_text, "a.b")),
+            None
+        );
+        for source in [
+            "const t = ma",
+            "const t = [...xs",
+            "const t = 1; // a.b",
+            "const t = \"a.b",
+            "const t = `a.b",
+        ] {
+            assert_eq!(member_at_end("/p/a.tt", source), None, "{source}");
+        }
     }
 
     #[test]
@@ -682,9 +1365,22 @@ mod tests {
     fn a_payload_position_offers_the_cases_fields() {
         let src = format!("{DECL}const a = match (s) {{ Rect(w) => w, Point => 0 }};\n");
         assert_eq!(labels(&src, "{ Rect("), ["w", "h"]);
-        // ...and after a comma inside the list.
+        // ...and after a comma inside the list, less the fields it binds.
         let src = format!("{DECL}const a = match (s) {{ Rect(w, ) => w }};\n");
-        assert_eq!(labels(&src, "Rect(w, "), ["w", "h"]);
+        assert_eq!(labels(&src, "Rect(w, "), ["h"]);
+    }
+
+    #[test]
+    fn a_payload_position_leaves_out_the_fields_already_bound() {
+        for (source, needle, expected) in [
+            ("Rect(w: width, ) => 0", "Rect(w: width, ", vec!["h"]),
+            ("Rect(w: Some(v), ) => 0", "Rect(w: Some(v), ", vec!["h"]),
+            // The name being typed is not yet bound.
+            ("Rect(w, h) => 0", "Rect(w, h", vec!["h"]),
+        ] {
+            let source = format!("{DECL}const a = match (s) {{ {source} }};\n");
+            assert_eq!(labels(&source, needle), expected, "{source}");
+        }
     }
 
     #[test]
@@ -780,11 +1476,17 @@ mod tests {
             assert!(found.contains(&"Circle".into()), "{pattern}: {found:?}");
             assert!(found.contains(&"Point".into()), "{pattern}: {found:?}");
         }
-        for pattern in ["Rect(", "Rect(w", "Rect(w, ", "Rect(w, h"] {
+        for (pattern, expected) in [
+            ("Rect(", vec!["w", "h"]),
+            ("Rect(w", vec!["w", "h"]),
+            ("Rect(w, ", vec!["h"]),
+            ("Rect(w, h", vec!["h"]),
+        ] {
             let source = format!("{DECL}const r = match (s) {{ {pattern}");
             assert_eq!(
                 labels(&source, &format!("match (s) {{ {pattern}")),
-                ["w", "h"]
+                expected,
+                "{pattern}"
             );
         }
     }
@@ -877,7 +1579,13 @@ mod tests {
             (format!("{DECL}if let Circle(radius) | Rect("), "| Rect("),
             (format!("{DECL}let Rect(w, "), "let Rect(w, "),
         ] {
-            assert_eq!(labels(&source, needle), ["w", "h"], "{needle}");
+            // A field the payload already binds is not offered again.
+            let expected: &[&str] = if needle.ends_with("(w, ") {
+                &["h"]
+            } else {
+                &["w", "h"]
+            };
+            assert_eq!(labels(&source, needle), expected, "{needle}");
         }
     }
 
@@ -898,6 +1606,11 @@ mod tests {
             ("=> { if (radius) { } }, _ => 2 };\n", "if (radius) { "),
             ("if radius | ", "radius | "),
             ("if radius > 0 => 1, Rect(w, h) if w > h ", "w > h "),
+            ("=> , _ => 2 };\n", "radius) => "),
+            ("=>  };\n", "radius) => "),
+            ("=>\n  };\n", "radius) =>\n  "),
+            ("=> ", "radius) => "),
+            ("if radius > 0 =>  };\n", "radius > 0 => "),
         ] {
             let source = format!("{head}{arm}");
             assert!(
@@ -943,7 +1656,7 @@ mod tests {
             );
         }
         let source = format!("{DECL}const a = match s {{ Rect(w, ");
-        assert_eq!(labels(&source, "Rect(w, "), ["w", "h"]);
+        assert_eq!(labels(&source, "Rect(w, "), ["h"]);
         for (source, needle) in [
             (
                 format!("{DECL}const a = match s {{ Circle(r) => Rect(r, "),
@@ -975,7 +1688,7 @@ mod tests {
         let items = tt_completions_at(Path::new("/p/a.tt"), &src, at(&src, "=> 1, "));
         assert!(items.iter().all(|i| !i.covered), "{items:?}");
         let src = format!("{DECL}const a = match (s) {{ Circle(r) => {{ return r; }}, Rect(w, ");
-        assert_eq!(labels(&src, "Rect(w, "), ["w", "h"]);
+        assert_eq!(labels(&src, "Rect(w, "), ["h"]);
         let src = "variant Inner { Yes(n: number), No }\n\
                    variant Outer { Wrap(inner: Inner), Bare }\n\
                    const a = match (o) { Wrap(inner) => match (inner) { Yes(n) => n, ";
@@ -988,8 +1701,8 @@ mod tests {
 
     #[test]
     fn only_tag_patterns_are_arm_evidence() {
-        let src = format!("{DECL}const a = match (s) {{ is Circle => 1, 1 | 2 => 2, Po");
-        let found = labels(&src, "2 => 2, ");
+        let src = format!("{DECL}const a = match (s) {{ is Circle => 1, Po");
+        let found = labels(&src, "1, ");
         assert!(found.contains(&"Circle".to_string()), "{found:?}");
         assert!(found.contains(&"Point".to_string()), "{found:?}");
     }

@@ -1,0 +1,2 @@
+jsxTernary(8) => "<p>9</p>" | flip true; arrow 9
+jsxTernary(9) => "<p><i>none</i></p>" | flip false

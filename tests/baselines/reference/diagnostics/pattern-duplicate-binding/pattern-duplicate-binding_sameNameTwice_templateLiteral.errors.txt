@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[pattern-duplicate-binding]: match: binding `w` is used more than once in this pattern
+ --> ./main.tt:5:68
+  |
+5 |   return `<${note("left", "L")}|${match (note("operand", input)) { Rect(w, h: w) => note("rect", w), Circle(r) => note("circle", r), Point => note("point", 0) }}|${note("right", "R")}>`;
+  |                                                                    ^^^^
+  |
+  = help: rename one of them with `field: alias`
+
+
+==== ttc --check-types (exit 1) ====
+error[pattern-duplicate-binding]: match: binding `w` is used more than once in this pattern
+ --> main.tt:5:68
+  |
+5 |   return `<${note("left", "L")}|${match (note("operand", input)) { Rect(w, h: w) => note("rect", w), Circle(r) => note("circle", r), Point => note("point", 0) }}|${note("right", "R")}>`;
+  |                                                                    ^^^^
+  |
+  = help: rename one of them with `field: alias`
+
+==== tsc on the emitted TypeScript (exit 0) ====

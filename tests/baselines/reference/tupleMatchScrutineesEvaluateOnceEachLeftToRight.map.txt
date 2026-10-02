@@ -1,0 +1,10 @@
+//// [tupleMatchScrutineesEvaluateOnceEachLeftToRight.tt] 8 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:32 -> 8:3 len 107  "\nconst order: string[] = [];\nfunction heads(name"...
+5:1 -> 24:1 len 10  "const r = "
+5:18 -> 13:18 len 10  "heads(\"a\")"
+5:30 -> 14:18 len 10  "heads(\"b\")"
+6:21 -> 17:16 len 1  "1"
+7:8 -> 20:14 len 1  "0"
+8:2 -> 24:17 len 47  ";\nconsole.log(order.join(\",\"), r);\n\nexport {};\n"
+

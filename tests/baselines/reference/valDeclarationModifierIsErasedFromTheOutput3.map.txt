@@ -1,0 +1,4 @@
+//// [valDeclarationModifierIsErasedFromTheOutput3.tt] 2 mapping(s)
+1:1 -> 1:1 len 7  "export "
+1:12 -> 1:8 len 20  "const cfg = load();\n"
+

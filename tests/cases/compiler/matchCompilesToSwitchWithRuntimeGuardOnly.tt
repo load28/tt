@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_01.rs::match_compiles_to_switch_with_runtime_guard_only
+
+variant Shape { Circle(radius: number), Point }
+const area = match (shape) {
+  Circle(radius) => 3.14 * radius * radius,
+  Point => 0,
+};

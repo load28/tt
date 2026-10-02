@@ -1,0 +1,2 @@
+staticBlock(4) => [{"kind":"Get","url":"a"},{"kind":"Get","url":"b","timeout":4},{"kind":"Get","url":"c"},{"kind":"Head"}] | 
+staticBlock(9) => [{"kind":"Get","url":"a"},{"kind":"Get","url":"b"},{"kind":"Get","url":"c"},{"kind":"Head"}] | 

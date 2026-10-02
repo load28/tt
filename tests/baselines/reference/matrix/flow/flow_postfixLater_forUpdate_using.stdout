@@ -1,0 +1,2 @@
+forUpdate(1.5) => "3.0" | open res; body 0; operand 1.5; dispose res; add 3
+forUpdate(2) => "4.0" | open res; body 0; operand 2; dispose res; add 4

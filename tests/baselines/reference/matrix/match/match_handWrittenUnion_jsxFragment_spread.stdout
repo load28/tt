@@ -1,0 +1,2 @@
+jsxFragment({"kind":"Click","x":3}) => "<>[3]</>" | before "["; click 3; after "]"
+jsxFragment({"kind":"Key","key":"k"}) => "<>[k]</>" | before "["; key "k"; after "]"

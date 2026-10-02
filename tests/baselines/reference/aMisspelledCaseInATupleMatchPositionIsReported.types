@@ -1,0 +1,36 @@
+=== aMisspelledCaseInATupleMatchPositionIsReported.tt ===
+variant Dir { North(dx: number), South }
+>Dir : type Dir = {
+>       kind: "North";
+>       dx: number;
+>   } | {
+>       kind: "South";
+>   }
+>North : (property) North: (dx: number) => Dir
+>dx : (property) dx: number
+>South : (property) South: {
+>       readonly kind: "South";
+>   }
+variant Speed { Fast(v: number), Slow }
+>Speed : type Speed = {
+>       kind: "Fast";
+>       v: number;
+>   } | {
+>       kind: "Slow";
+>   }
+>Fast : (property) Fast: (v: number) => Speed
+>v : (property) v: number
+>Slow : (property) Slow: {
+>       readonly kind: "Slow";
+>   }
+const n = match (d, s) {
+>n : const n: any
+  (North(dx), Fast(v)) => dx + v,
+>dx : const dx: any
+>v : const v: any
+>dx : const dx: any
+>v : const v: any
+  (Nrth(dx), Slow) => dx,
+>dx : const dx: any
+>dx : const dx: any
+

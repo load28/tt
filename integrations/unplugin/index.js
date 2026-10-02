@@ -5,6 +5,11 @@
  * `ttc` on the way in, so a project needs no intermediate `.ts` tree: the
  * bundler reads the sources directly.
  *
+ * Modules are compiled by one `ttc --server` session per build — the
+ * answer to each request is exactly what `ttc -p` prints — so the
+ * TypeScript project the compiler refines its output with opens once, not
+ * once per module (`compiler-server.js`).
+ *
  * Two deliberate details:
  *
  * - `ttc` runs with `--rewrite-imports off`. Rewriting exists for the
@@ -14,8 +19,8 @@
  * - Module ids are the real file plus a query ending in `lang.ts` (or
  *   `lang.tsx`). ttc emits TypeScript, and the host's own TypeScript pass
  *   keys off that ending — this keeps the plugin out of that job entirely,
- *   while hosts that strip the query still find the file on disk. esbuild is told the loader explicitly instead, since
- *   its `load` hook may only return JavaScript.
+ *   while hosts that strip the query still find the file on disk. esbuild
+ *   loads these modules through its own `onLoad`, which names the loader.
  *
  * Editor support is separate: `ttc --types` writes the declarations that let
  * a `.ts` file import `.tt` without the type checker complaining.
@@ -27,6 +32,8 @@ import * as path from "node:path";
 import { promisify } from "node:util";
 
 import { createUnplugin } from "unplugin";
+
+import { CompilerServer } from "./compiler-server.js";
 
 const run = promisify(execFile);
 
@@ -48,12 +55,31 @@ const TS_SUFFIX = ".ts";
 const TSX_SUFFIX = ".tsx";
 
 const TT_FILE = /\.ttx?$/;
-const cleanUrl = (id) => id.replace(/[?#][\s\S]*$/, "");
+const isFile = (file) => {
+  try {
+    return fs.statSync(file, { throwIfNoEntry: false })?.isFile() === true;
+  } catch {
+    return false;
+  }
+};
+
+const fileOf = (id, base) => {
+  for (let cut = id.length; cut > 0; cut = Math.max(id.lastIndexOf("?", cut - 1), id.lastIndexOf("#", cut - 1))) {
+    const file = id.slice(0, cut);
+    if (isFile(base === undefined ? file : path.resolve(base, file))) return file;
+  }
+  const name = Math.max(id.lastIndexOf("/"), id.lastIndexOf("\\")) + 1;
+  const postfix = id.slice(name).search(/[?#]/);
+  return postfix === -1 ? id : id.slice(0, name + postfix);
+};
 const SPECIAL_QUERY = /[?&](?:worker|sharedworker|raw|url)\b/;
 const MODULE_MARKERS = new Set([`lang${TS_SUFFIX}`, `lang${TSX_SUFFIX}`]);
 const moduleMarker = (file) => (file.endsWith(".ttx") ? `lang${TSX_SUFFIX}` : `lang${TS_SUFFIX}`);
 
 const SCANNED_FILE = /\.ttx?(?:\?[^/]*)?$/;
+
+/** A tt module id: the file, then a query ending in its marker. */
+const TT_MODULE_ID = /(\.tt\?(?:[^#]*&)?lang\.ts|\.ttx\?(?:[^#]*&)?lang\.tsx)$/;
 
 const queryOf = (id, file) => id.slice(file.length).replace(/#[\s\S]*$/, "");
 
@@ -63,7 +89,7 @@ const moduleId = (file, query) => {
 };
 
 const sourceFileOfId = (id) => {
-  const file = cleanUrl(id);
+  const file = fileOf(id);
   if (!TT_FILE.test(file)) return null;
   const params = queryOf(id, file).slice(1).split("&");
   return params[params.length - 1] === moduleMarker(file) ? file : null;
@@ -90,6 +116,20 @@ const stdModuleOfId = (id) => {
 };
 
 const nativePath = (file) => path.resolve(file);
+
+const isWithin = (directory, file) => {
+  const relative = path.relative(directory, file);
+  return relative === "" || (relative.split(/[\\/]/)[0] !== ".." && !path.isAbsolute(relative));
+};
+
+/**
+ * Whether a module whose compile read `dependencies` is stale after the
+ * watcher reported `event` for `changed`: a file it read changed, or an
+ * entry appeared in or left a directory it listed.
+ */
+const dependsOn = (dependencies, changed, event) =>
+  dependencies.files.has(changed) ||
+  ((event === "create" || event === "delete") && dependencies.directories.has(path.dirname(changed)));
 
 const INLINE_MAP =
   /(\r?\n)\/\/# sourceMappingURL=data:application\/json;charset=utf-8;base64,([A-Za-z0-9+/=]+)(?:\r?\n)?$/;
@@ -119,6 +159,14 @@ function detachInlineSourceMap(code, file) {
   }
 }
 
+/** `code` with `map` written into it as a `data:` URL, the form esbuild reads. */
+const inlineSourceMap = (code, map) =>
+  map === null
+    ? code
+    : `${code}//# sourceMappingURL=data:application/json;charset=utf-8;base64,${Buffer.from(JSON.stringify(map)).toString("base64")}\n`;
+
+const PLUGIN_NAME = "@openload28/unplugin-tt";
+
 /**
  * @typedef {object} Options
  * @property {string} [compiler] Path to the ttc binary (default: the
@@ -129,28 +177,94 @@ function detachInlineSourceMap(code, file) {
  */
 
 /** @type {import("unplugin").UnpluginFactory<Options | undefined>} */
-export const unpluginFactory = (options = {}) => {
+export const unpluginFactory = (options = {}, meta = {}) => {
   const compiler = options.compiler ?? defaultCompiler();
   const verify = options.verify ?? true;
   const sourcemap = options.sourcemap ?? true;
   const dependenciesByModule = new Map();
+  const server = new CompilerServer(compiler);
   let devServer;
 
-  const printArgs = (file, withMap) => {
-    const args = ["-p", "--rewrite-imports", "off"];
-    if (!verify) args.push("--no-verify");
-    // ttc prints the map into the output as a data: URL — the one form
-    // that survives a pipe. It is split back out here so the host gets a
-    // real map object and composes it with its own transforms.
-    if (withMap) args.push("--source-map", "inline");
-    args.push(file);
-    return args;
+  /**
+   * `ttc -p --rewrite-imports off <file>`, asked of the server. ttc writes
+   * the map into the output as a data: URL, the form `-p` prints; it is
+   * split back out so the host gets a real map object and composes it
+   * with its own transforms. A failed compile throws what `-p` would have
+   * written on stderr.
+   */
+  const print = async (file, withMap) => {
+    const { code, messages } = await server.request("print", {
+      path: file,
+      rewriteImports: "off",
+      sourceMap: withMap ? "inline" : "off",
+      verify,
+    });
+    if (code === null) throw new Error(messages.map((message) => `${message}\n`).join(""));
+    return code;
+  };
+
+  /**
+   * What `ttc --dependencies` prints for the module's file, asked of the
+   * server and kept for invalidation: the files its compile reads and the
+   * directories it lists.
+   */
+  const dependenciesOf = async (id, file) => {
+    const dependencies = await server.request("dependencies", { path: file });
+    dependenciesByModule.set(id, {
+      files: new Set(dependencies.files.map(nativePath)),
+      directories: new Set(dependencies.directories.map(nativePath)),
+    });
+    return dependencies;
+  };
+
+  /**
+   * Registers a module's dependencies with the host's watcher, each kind
+   * through the API the host defines for it.
+   *
+   * - Vite's dev server treats a file given to `addWatchFile` as an import
+   *   of the module and resolves it, so the paths go to the server's own
+   *   watcher instead (it already watches everything under the root), and
+   *   `watchChange` invalidates the modules that read them.
+   * - webpack and Rspack take a directory as a context dependency.
+   * - Rollup's `addWatchFile` accepts a file or a directory; Rolldown,
+   *   Vite's build and Farm take the same call.
+   * - esbuild loads these modules through its own `onLoad`, whose result
+   *   names both kinds.
+   */
+  function watchDependencies(file, { files, directories }) {
+    if (devServer) {
+      const outside = [...files, ...directories].filter((dependency) => !isWithin(devServer.config.root, dependency));
+      if (outside.length > 0) devServer.watcher.add(outside);
+      return;
+    }
+    for (const dependency of files) if (dependency !== file) this.addWatchFile(dependency);
+    const native = meta.framework === "webpack" || meta.framework === "rspack" ? this.getNativeBuildContext?.() : undefined;
+    for (const directory of directories) {
+      if (native?.loaderContext) native.loaderContext.addContextDependency(directory);
+      else this.addWatchFile(directory);
+    }
+  }
+
+  /**
+   * One module's compile: its dependencies, then what `ttc -p` prints for
+   * it. A failed compile still answers the dependencies it could learn, so
+   * the host keeps watching them and builds again once the source is fixed.
+   */
+  const compileModule = async (id, file) => {
+    let dependencies = { files: [], directories: [] };
+    try {
+      dependencies = await dependenciesOf(id, file);
+      return { dependencies, output: detachInlineSourceMap(await print(file, sourcemap), file) };
+    } catch (error) {
+      // ttc reports `file:line:col: message`; that is the build error, so
+      // the host shows the compiler's diagnostic.
+      return { dependencies, error: error.message.trim().replace(/^ttc:\s*/, "") };
+    }
   };
 
   const scanSource = async (id) => {
-    const file = cleanUrl(id);
-    const { stdout } = await run(compiler, printArgs(file, false), { maxBuffer: 16 * 1024 * 1024 });
-    return { code: stdout, lang: file.endsWith(".ttx") ? "tsx" : "ts" };
+    const file = fileOf(id);
+    return { code: await print(file, false), lang: file.endsWith(".ttx") ? "tsx" : "ts" };
   };
 
   const esbuildScanPlugin = {
@@ -158,7 +272,7 @@ export const unpluginFactory = (options = {}) => {
     setup(build) {
       build.onLoad({ filter: SCANNED_FILE }, async (args) => {
         const { code, lang } = await scanSource(args.path);
-        return { contents: code, loader: lang, resolveDir: path.dirname(cleanUrl(args.path)) };
+        return { contents: code, loader: lang, resolveDir: path.dirname(fileOf(args.path)) };
       });
     },
   };
@@ -173,7 +287,7 @@ export const unpluginFactory = (options = {}) => {
   };
 
   return {
-    name: "@openload28/unplugin-tt",
+    name: PLUGIN_NAME,
     // Ahead of the host's own resolution: `.tt` is not an extension it
     // knows. Rollup and esbuild ignore `enforce`, where plugin order is the
     // author's responsibility instead.
@@ -192,7 +306,11 @@ export const unpluginFactory = (options = {}) => {
           if (source === "./result.js") return stdId("result");
         }
       }
-      const file = cleanUrl(source);
+      const importerFile = importer === undefined || importer === null ? undefined : fileOf(importer);
+      const file = fileOf(
+        source,
+        importerFile !== undefined && source.startsWith(".") ? path.dirname(importerFile) : undefined,
+      );
       if (!TT_FILE.test(file)) return null;
       const query = queryOf(source, file);
       if (SPECIAL_QUERY.test(query)) return null;
@@ -200,16 +318,18 @@ export const unpluginFactory = (options = {}) => {
       if (typeof this?.resolve === "function") {
         // Package exports, aliases, and dev-server urls belong to the host resolver.
         return this.resolve(file, importer, { skipSelf: true }).then(resolved => {
-          if (!resolved || resolved.external || !TT_FILE.test(cleanUrl(resolved.id))) return resolved;
-          return { ...resolved, id: moduleId(cleanUrl(resolved.id), query) };
+          if (!resolved || resolved.external) return resolved;
+          const resolvedFile = fileOf(resolved.id);
+          if (!TT_FILE.test(resolvedFile)) return resolved;
+          return { ...resolved, id: moduleId(resolvedFile, query) };
         });
       }
       if (!path.isAbsolute(file) && !file.startsWith(".")) return null;
       const resolved = path.isAbsolute(file)
         ? file
-        : importer === undefined || importer === null
+        : importerFile === undefined
           ? path.resolve(file)
-          : path.resolve(path.dirname(cleanUrl(importer)), file);
+          : path.resolve(path.dirname(importerFile), file);
       return moduleId(resolved, query);
     },
 
@@ -224,33 +344,32 @@ export const unpluginFactory = (options = {}) => {
       const file = sourceFileOfId(id);
       if (file === null) return null;
 
-      const args = printArgs(file, sourcemap);
-
       this.addWatchFile(file);
       // Compiler metadata includes erased type imports and configuration reads.
-      // Register dependencies before loading so a failed build can recover too.
-      try {
-        const metadata = await run(compiler, ["--dependencies", file], { maxBuffer: 16 * 1024 * 1024 });
-        const dependencies = JSON.parse(metadata.stdout);
-        dependenciesByModule.set(id, new Set(dependencies.map(nativePath)));
-        for (const dependency of dependencies) if (dependency !== file) this.addWatchFile(dependency);
-        const { stdout } = await run(compiler, args, { maxBuffer: 16 * 1024 * 1024 });
-        return detachInlineSourceMap(stdout, file);
-      } catch (error) {
-        // ttc reports `file:line:col: message` on stderr; surface that as
-        // the build error so the host shows the compiler's diagnostic.
-        const detail = String(error.stderr ?? error.message).trim();
-        this.error(detail.replace(/^ttc:\s*/, ""));
-        return null;
-      }
+      // They are registered before the error so a failed build can recover too.
+      const { dependencies, output, error } = await compileModule(id, file);
+      watchDependencies.call(this, file, dependencies);
+      // Rollup-compatible hosts throw from `this.error`; webpack and Rspack
+      // record the error on the module.
+      if (error !== undefined) this.error(error);
+      return output ?? null;
     },
 
-    watchChange(file) {
+    closeBundle() {
+      // A watching build bundles again after this; its watcher's close ends
+      // the session instead. A dev server closes its bundle once, on close.
+      if (!this?.meta?.watchMode || devServer) server.close();
+    },
+    closeWatcher() {
+      server.close();
+    },
+
+    watchChange(file, change) {
       if (!devServer) return;
       const changed = nativePath(file);
       for (const environment of Object.values(devServer.environments ?? { client: devServer })) {
         for (const [id, dependencies] of dependenciesByModule) {
-          if (!dependencies.has(changed)) continue;
+          if (!dependsOn(dependencies, changed, change?.event)) continue;
           const module = environment.moduleGraph.getModuleById(id);
           if (module) environment.moduleGraph.invalidateModule(module);
         }
@@ -268,7 +387,7 @@ export const unpluginFactory = (options = {}) => {
         const modules = new Set(context.modules);
         const changed = nativePath(context.file);
         for (const [id, dependencies] of dependenciesByModule) {
-          if (!dependencies.has(changed)) continue;
+          if (!dependsOn(dependencies, changed, "update")) continue;
           const module = context.server.moduleGraph.getModuleById(id);
           if (module) {
             context.server.moduleGraph.invalidateModule(module);
@@ -278,20 +397,50 @@ export const unpluginFactory = (options = {}) => {
         return [...modules];
       },
     },
+    webpack(bundler) {
+      bundler.hooks.shutdown.tap("@openload28/unplugin-tt", () => server.close());
+    },
+    rspack(bundler) {
+      bundler.hooks.shutdown.tap("@openload28/unplugin-tt", () => server.close());
+    },
     esbuild: {
       setup(build) {
+        build.onDispose(() => server.close());
         build.onResolve({ filter: /\.ttx?$/ }, async args => {
           if (args.pluginData?.ttResolving || path.isAbsolute(args.path) || args.path.startsWith(".")) return;
           const resolved = await build.resolve(args.path, { importer: args.importer, resolveDir: args.resolveDir, kind: args.kind, pluginData: { ttResolving: true } });
           if (resolved.errors.length || resolved.external || !/\.ttx?$/.test(resolved.path)) return resolved;
-          return { path: moduleId(resolved.path, ""), namespace: "@openload28/unplugin-tt" };
+          return { path: moduleId(resolved.path, ""), namespace: PLUGIN_NAME };
+        });
+        // unplugin's esbuild bridge answers a `load` without code with
+        // nothing at all, which drops its errors and watch files: esbuild
+        // then reports that it cannot load the path, and a watch never
+        // looks at the source again. esbuild's own `onLoad` result carries
+        // the diagnostic together with `watchFiles` and `watchDirs`.
+        build.onLoad({ filter: TT_MODULE_ID, namespace: PLUGIN_NAME }, async (args) => {
+          const id = args.path + (args.suffix ?? "");
+          const file = sourceFileOfId(id);
+          if (file === null) return undefined;
+          const { dependencies, output, error } = await compileModule(id, file);
+          const watched = {
+            watchFiles: [...new Set([file, ...dependencies.files])],
+            watchDirs: dependencies.directories,
+          };
+          if (error !== undefined) return { errors: [{ text: error }], ...watched };
+          return {
+            contents: inlineSourceMap(output.code, output.map),
+            loader: file.endsWith(".ttx") ? "tsx" : "ts",
+            resolveDir: path.dirname(file),
+            ...watched,
+          };
         });
       },
       // esbuild resolves and loads through its own filters, and its `load`
       // may only return JavaScript — so narrow the filters to our ids and
-      // name the loader for the TypeScript ttc emits.
+      // name the loader for the TypeScript ttc emits. The standard library
+      // loads through the shared `load`; tt modules through `setup` above.
       onResolveFilter: /(\.ttx?|^@tt\/(?:std(?:\/(?:option|result))?|runtime)$|\.\/(?:option|result)\.js$)/,
-      onLoadFilter: /(\.tt\?(?:[^#]*&)?lang\.ts|\.ttx\?(?:[^#]*&)?lang\.tsx|^virtual:unplugin-tt\/std\/(?:types|option|result|runtime)\.ts)$/,
+      onLoadFilter: /^virtual:unplugin-tt\/std\/(?:types|option|result|runtime)\.ts$/,
       loader: (_code, id) => (id.endsWith(TSX_SUFFIX) ? "tsx" : "ts"),
     },
   };

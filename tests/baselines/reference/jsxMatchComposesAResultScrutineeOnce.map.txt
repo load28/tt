@@ -1,0 +1,14 @@
+//// [jsxMatchComposesAResultScrutineeOnce.ttx] 12 mapping(s)
+1:1 -> 19:1 len 88  "import type { TResult } from \"@tt/std\";\ndeclare "...
+3:1 -> 51:1 len 21  "const view = <aside>{"
+4:9 -> 29:11 len 5  "value"
+4:21 -> 24:20 len 7  "outcome"
+4:29 -> 29:32 len 3  "\n  "
+5:10 -> 31:43 len 5  "value"
+5:19 -> 31:48 len 14  ".toUpperCase()"
+7:6 -> 37:15 len 5  "value"
+7:16 -> 38:16 len 14  "<b>{value}</b>"
+8:7 -> 42:15 len 5  "error"
+8:17 -> 43:16 len 20  "<code>{error}</code>"
+9:2 -> 51:28 len 11  "}</aside>;\n"
+

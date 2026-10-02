@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[invalid-optional-receiver]: pipeline: `super` cannot be an optional-chain receiver
+ --> ./main.ttx:8:12
+  |
+8 |     return super |> ?.label();
+  |            ^^^^^
+  |
+  = help: access a concrete `super.member` before the optional step
+
+
+==== ttc --check-types (exit 1) ====
+error[invalid-optional-receiver]: pipeline: `super` cannot be an optional-chain receiver
+ --> main.ttx:8:12
+  |
+8 |     return super |> ?.label();
+  |            ^^^^^
+  |
+  = help: access a concrete `super.member` before the optional step
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

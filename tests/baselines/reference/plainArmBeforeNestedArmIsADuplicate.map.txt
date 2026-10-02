@@ -1,0 +1,11 @@
+//// [plainArmBeforeNestedArmIsADuplicate.tt] 9 mapping(s)
+1:1 -> 19:1 len 10  "const n = "
+1:18 -> 3:17 len 1  "r"
+1:26 -> 6:15 len 5  "value"
+1:36 -> 7:18 len 1  "1"
+1:54 -> 11:15 len 5  "value"
+1:61 -> 11:22 len 1  "v"
+1:68 -> 12:18 len 1  "v"
+1:76 -> 15:16 len 1  "0"
+1:79 -> 19:19 len 1  ";"
+

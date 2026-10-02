@@ -8,7 +8,10 @@
 use ttc::{EmitMapping, ImportRewrite, Options, compile, emit_mapped};
 
 /// Every mapping's chunk must read the same in source and output, chunks
-/// must be in-bounds, and must not overlap in either coordinate space.
+/// must be in-bounds, and must not overlap in the output. Two chunks copy
+/// the same source bytes only as copies of one text, which a tt construct's
+/// lowering may write more than once (a variant field's type, in the union
+/// and the constructor).
 fn assert_mapping_invariants(src: &str, m: &ttc::MappedEmit) {
     let mut by_src = m.mappings.clone();
     by_src.sort_by_key(|e| e.src);
@@ -24,13 +27,16 @@ fn assert_mapping_invariants(src: &str, m: &ttc::MappedEmit) {
             "mapped chunk differs between source and output: {e:?}"
         );
     }
-    for w in by_src.windows(2) {
-        assert!(
-            w[0].src + w[0].len <= w[1].src,
-            "overlapping source mappings: {:?} / {:?}",
-            w[0],
-            w[1]
-        );
+    for (index, a) in by_src.iter().enumerate() {
+        for b in by_src[index + 1..]
+            .iter()
+            .take_while(|b| b.src < a.src + a.len)
+        {
+            assert_eq!(
+                a.src, b.src,
+                "overlapping source mappings that are not copies of one text: {a:?} / {b:?}"
+            );
+        }
     }
     for w in by_out.windows(2) {
         assert!(
@@ -441,7 +447,7 @@ fn anchors_nest_innermost_first() {
 
 #[test]
 fn a_pipeline_anchors_each_piped_value_to_the_step_consuming_it() {
-    let src = "const a = one() |> f |> g |> h;\n";
+    let src = "const a = one() |> f() |> g() |> h();\n";
     let m = emit_mapped(src);
     let pipes: Vec<&ttc::EmitAnchor> = m
         .anchors
@@ -452,11 +458,11 @@ fn a_pipeline_anchors_each_piped_value_to_the_step_consuming_it() {
     // flowing into step N belongs to step N, and anything wider still
     // belongs to the pipeline.
     let spans: Vec<&str> = pipes.iter().map(|a| &src[a.src..a.src_end]).collect();
-    for step in ["f", "g", "h"] {
+    for step in ["f()", "g()", "h()"] {
         assert!(spans.contains(&step), "step {step} is anchored: {spans:?}");
     }
     assert!(
-        spans.contains(&"one() |> f |> g |> h"),
+        spans.contains(&"one() |> f() |> g() |> h()"),
         "the whole pipeline stays anchored: {spans:?}"
     );
 
@@ -465,11 +471,11 @@ fn a_pipeline_anchors_each_piped_value_to_the_step_consuming_it() {
     // that consumes it — the innermost anchor covering that byte.
     let outer_arg = m.code.find("$tt_ap($tt_ap(").expect("nested helpers") + "$tt_ap(".len();
     let owner = m.anchor_at(outer_arg).expect("anchored glue");
-    assert_eq!(&src[owner.src..owner.src_end], "h");
+    assert_eq!(&src[owner.src..owner.src_end], "h()");
 
     let inner_arg = outer_arg + "$tt_ap(".len();
     let owner = m.anchor_at(inner_arg).expect("anchored glue");
-    assert_eq!(&src[owner.src..owner.src_end], "g");
+    assert_eq!(&src[owner.src..owner.src_end], "g()");
 
     // Each step anchor also names where the value it consumes was
     // produced — the previous step, or the head — so a diagnostic there
@@ -481,14 +487,15 @@ fn a_pipeline_anchors_each_piped_value_to_the_step_consuming_it() {
                 .map(|(from, to)| (&src[a.src..a.src_end], &src[from..to]))
         })
         .collect();
-    for pair in [("f", "one()"), ("g", "f"), ("h", "g")] {
+    for pair in [("f()", "one()"), ("g()", "f()"), ("h()", "g()")] {
         assert!(produced.contains(&pair), "{pair:?} in {produced:?}");
     }
 }
 
 #[test]
 fn anchors_do_not_change_the_emitted_bytes() {
-    // Anchors are zero-length notes; the output must be what it always was.
+    // Anchors are zero-length notes; the output must be what it always was,
+    // before the project checker refines the storage.
     let src = r#"variant E { A(x: number), B }
 function f() {
   const a = try readNum();
@@ -505,6 +512,7 @@ function f() {
         &Options {
             rewrite_imports: ImportRewrite::Off,
             verify: false,
+            defer_to_checker: true,
             ..Options::default()
         },
     )
@@ -528,11 +536,6 @@ fn a_buffer_whose_typescript_does_not_parse_still_emits() {
 #[test]
 fn values_the_plan_cannot_own_emit_as_anchored_placeholders() {
     let cases = [
-        ("function f() {\n  const value = try g", "try g"),
-        (
-            "function f() {\n  const v = 1 + (try g());\n  x.\n}\n",
-            "try g()",
-        ),
         (
             "function read(value = match (1) { 1 => \"one\", _ => \"other\" }) {}\n",
             "match (1) { 1 => \"one\", _ => \"other\" }",
@@ -552,7 +555,11 @@ fn values_the_plan_cannot_own_emit_as_anchored_placeholders() {
             .iter()
             .find(|anchor| anchor.src == start)
             .unwrap_or_else(|| panic!("{src:?}: {:?}", m.anchors));
-        assert_eq!(&m.code[anchor.out..anchor.end], "undefined", "{src:?}");
+        assert_eq!(
+            &m.code[anchor.out..anchor.end],
+            "(undefined as any)",
+            "{src:?}"
+        );
         assert!(
             m.mappings
                 .iter()
@@ -560,5 +567,115 @@ fn values_the_plan_cannot_own_emit_as_anchored_placeholders() {
             "{src:?}: {:?}",
             m.mappings
         );
+    }
+}
+
+#[test]
+fn a_value_try_without_an_owner_keeps_its_operand_mapped() {
+    // The TypeScript around each `try` does not parse, so there is no owner
+    // to hold its early exit; the operand is still the user's text.
+    let cases = [
+        ("function f() {\n  const value = try g", "g"),
+        (
+            "function f() {\n  const v = 1 + (try g());\n  x.\n}\n",
+            "g()",
+        ),
+        (
+            "function f() {\n  const v = try parse(\"1\", \n}\n",
+            "parse(\"1\", \n",
+        ),
+        (
+            "const r = result { const q = try parse(\"1\", \n};\n",
+            "parse(\"1\", \n",
+        ),
+        (
+            "function f() {\n  const v = try parse(\"1\", \n  const z = 1;\n}\n",
+            "parse(\"1\", \n  ",
+        ),
+    ];
+    for (src, operand) in cases {
+        let m = emit_mapped(src);
+        assert_mapping_invariants(src, &m);
+        let start = src.find(operand).unwrap();
+        let keyword = src[..start].rfind("try").unwrap();
+        let anchor = m
+            .anchors
+            .iter()
+            .find(|anchor| anchor.src == keyword)
+            .unwrap_or_else(|| panic!("{src:?}: {:?}", m.anchors));
+        assert_eq!(anchor.src_end, start + operand.len(), "{src:?}");
+        let glue = &m.code[anchor.out..anchor.end];
+        assert!(
+            glue.ends_with(&format!("}})({operand})")),
+            "{src:?}: {glue:?}"
+        );
+        assert!(
+            m.mappings
+                .iter()
+                .any(|e| e.src <= start && start + operand.len() <= e.src + e.len),
+            "{src:?}: {:?}",
+            m.mappings
+        );
+        assert!(
+            m.mappings
+                .iter()
+                .all(|e| e.src + e.len <= keyword || start <= e.src),
+            "the keyword is not copied: {src:?}"
+        );
+    }
+}
+
+/// A variant's field types and type parameters are the user's TypeScript:
+/// each place the lowering writes them (the union, the constructor) copies
+/// them from the source, in `.tt` and `.ttx` alike.
+#[test]
+fn variant_field_types_and_type_parameters_are_mapped_where_they_are_written() {
+    for kind in [ttc::SourceKind::TypeScript, ttc::SourceKind::Tsx] {
+        let src = "export variant Box<T extends Money> { Full(item: T, at?: Date), Empty }\n";
+        let m = ttc::emit_mapped_with_kind(src, kind);
+        assert_mapping_invariants(src, &m);
+        for (text, copies) in [("<T extends Money", 2), ("T, at", 2), ("Date", 2)] {
+            let start = src.find(text).unwrap();
+            let len = text.find(',').unwrap_or(text.len());
+            let outs: Vec<_> = m
+                .mappings
+                .iter()
+                .filter(|e| e.src <= start && start + len <= e.src + e.len)
+                .map(|e| e.out + (start - e.src))
+                .collect();
+            assert_eq!(outs.len(), copies, "{kind:?} {text}: {:#?}", m.mappings);
+            for out in outs {
+                assert_eq!(&m.code[out..out + len], &src[start..start + len]);
+            }
+        }
+    }
+}
+
+#[test]
+fn every_prefix_of_an_arm_being_typed_is_served() {
+    let tag = "variant O { A(n: number), B, C(x: number) }\ndeclare const o: O;\n";
+    let text = "declare const s: string;\n";
+    let single = "export const r = match (o) { A(n) => n, ";
+    let tuple = "export const r = match (o, o) { (A(n), _) => n, ";
+    let literal = "export const r = match (s) { \"a\" => 1, ";
+    for (prelude, head, arm) in [
+        (tag, single, "B if o.kind === \"B\" => 1"),
+        (tag, single, "C(x) if x > 0 => { return x; }"),
+        (tag, single, "B | C(x) => 2"),
+        (tag, tuple, "(B, _) if o.kind === \"B\" => 2"),
+        (tag, tuple, "(C(x), A(n)) if x > n => x"),
+        (text, literal, "\"b\" | \"c\" if s.length > 0 => 2"),
+        (text, literal, "_ => 3"),
+    ] {
+        for tail in [" };\n", ", _ => 0 };\n", ""] {
+            for end in (0..=arm.len()).filter(|&end| arm.is_char_boundary(end)) {
+                let src = format!("{prelude}{head}{}{tail}", &arm[..end]);
+                let mapped = std::panic::catch_unwind(|| emit_mapped(&src));
+                let m = mapped.unwrap_or_else(|_| panic!("the editor feed failed on {src:?}"));
+                assert_mapping_invariants(&src, &m);
+                let compiled = std::panic::catch_unwind(|| compile(&src, &Options::default()));
+                assert!(compiled.is_ok(), "compile failed on {src:?}");
+            }
+        }
     }
 }

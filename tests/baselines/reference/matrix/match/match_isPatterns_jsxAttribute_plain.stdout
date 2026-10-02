@@ -1,0 +1,4 @@
+jsxAttribute({}) => "<div data-value='range'></div>" | operand {}; range "range"
+jsxAttribute({}) => "<div data-value=1></div>" | operand {}; type 1
+jsxAttribute({}) => "<div data-value='plain'></div>" | operand {}; error "plain"
+jsxAttribute("text") => "<div data-value=null></div>" | operand "text"; other null

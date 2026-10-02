@@ -1,0 +1,7 @@
+//// [flowCompositionRunsLeftToRightWhenCalled.tt] 5 mapping(s)
+1:1 -> 2:1 len 119  "\nconst order: string[] = [];\nconst tap = <T,>(na"...
+4:19 -> 5:25 len 17  "tap<number>(\"s1\")"
+4:40 -> 5:63 len 11  ".toFixed(0)"
+4:55 -> 5:78 len 9  "tap(\"s2\")"
+4:64 -> 5:88 len 78  ";\nconsole.log(order.join(\",\"), \"|\", f(10), \"|\", "...
+

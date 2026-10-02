@@ -41,7 +41,11 @@ pub(crate) fn report(
                 message: diagnostic.message.clone(),
                 code: Some(diagnostic.code.as_str().to_string()),
                 suggestions: diagnostic.suggestions.clone(),
-                labels: Vec::new(),
+                labels: labels_in(
+                    (&file.source_path, &file.source),
+                    &file.source_path,
+                    &diagnostic.labels,
+                ),
             });
         }
     }
@@ -60,43 +64,45 @@ pub(crate) fn report(
                 message: d.message.clone(),
                 code: Some(d.code.as_str().to_string()),
                 suggestions: d.suggestions.clone(),
-                labels: Vec::new(),
+                labels: labels_in(
+                    (&file.source_path, &file.source),
+                    &file.source_path,
+                    &d.labels,
+                ),
             });
         }
     }
 
-    if !tt_only {
-        for shape in &answers.result_shapes {
-            let Some(anchor) = probes.result_returns.get(shape.index) else {
-                continue;
-            };
-            let Some(file) = files
-                .iter()
-                .find(|file| file.source_path == anchor.source_path)
-            else {
-                continue;
-            };
-            out.push(Diagnostic {
-                path: anchor.source_path.clone(),
-                position: Some(crate::line_col(&file.source, anchor.offset)),
-                end: Some(crate::line_col(&file.source, anchor.end)),
-                message: "`return` here would wrap an already-Result value".to_string(),
-                code: Some(
-                    crate::DiagnosticCode::ResultReturnNested
-                        .as_str()
-                        .to_string(),
-                ),
-                suggestions: vec![crate::Suggestion {
-                    message: "propagate this Result instead".to_string(),
-                    edit: Some(crate::Edit {
-                        start: anchor.offset,
-                        end: anchor.offset,
-                        replacement: "try ".to_string(),
-                    }),
-                }],
-                labels: Vec::new(),
-            });
-        }
+    for shape in &answers.result_shapes {
+        let Some(anchor) = probes.result_returns.get(shape.index) else {
+            continue;
+        };
+        let Some(file) = files
+            .iter()
+            .find(|file| file.source_path == anchor.source_path)
+        else {
+            continue;
+        };
+        out.push(Diagnostic {
+            path: anchor.source_path.clone(),
+            position: Some(crate::line_col(&file.source, anchor.offset)),
+            end: Some(crate::line_col(&file.source, anchor.end)),
+            message: "`return` here would wrap an already-Result value".to_string(),
+            code: Some(
+                crate::DiagnosticCode::ResultReturnNested
+                    .as_str()
+                    .to_string(),
+            ),
+            suggestions: vec![crate::Suggestion {
+                message: "propagate this Result instead".to_string(),
+                edit: Some(crate::Edit {
+                    start: anchor.offset,
+                    end: anchor.offset,
+                    replacement: "try ".to_string(),
+                }),
+            }],
+            labels: Vec::new(),
+        });
     }
 
     // A projection is deliberately file-local, so it cannot resolve names
@@ -121,9 +127,13 @@ pub(crate) fn report(
                 position: error.offset.map(|at| crate::line_col(&file.source, at)),
                 end: error.end.map(|at| crate::line_col(&file.source, at)),
                 message: error.message,
+                labels: labels_in(
+                    (&file.source_path, &file.source),
+                    &file.source_path,
+                    &error.labels,
+                ),
                 code: Some(error.code.as_str().to_string()),
                 suggestions: error.suggestions,
-                labels: Vec::new(),
             };
             if !out.contains(&diagnostic) {
                 out.push(diagnostic);
@@ -131,37 +141,27 @@ pub(crate) fn report(
         }
     }
 
-    // A file no checked project contains gets no answers from the checker
-    // (a requested or open file outside the configured program is answered
-    // by its default project): no question about its scrutinees is ever
-    // asked, so the tag path below has nothing to report about it. That is
-    // the same situation as a backend that could not run, and the same rule
-    // applies — the typed facts go, the tt layer does not. Its coverage is
-    // answered from the declarations the file can see, exactly as
-    // `ttc --check` answers it.
-    let checker_members: Option<HashSet<&std::path::Path>> = answers
-        .project_modules
-        .as_ref()
-        .map(|modules| modules.iter().map(PathBuf::as_path).collect());
+    let mut declared_holes: HashSet<(PathBuf, usize)> = HashSet::new();
     for file in files {
-        if checker_members
-            .as_ref()
-            .is_some_and(|members| members.contains(file.module_path.as_path()))
-        {
-            continue;
-        }
         let Some(semantics) = semantics.get(&file.source_path) else {
             continue;
         };
         for error in crate::sema::coverage_errors(&file.source, &semantics.analyses) {
+            if let Some(offset) = error.offset {
+                declared_holes.insert((file.source_path.clone(), offset));
+            }
             let diagnostic = Diagnostic {
                 path: file.source_path.clone(),
                 position: error.offset.map(|at| crate::line_col(&file.source, at)),
                 end: error.end.map(|at| crate::line_col(&file.source, at)),
                 message: error.message,
+                labels: labels_in(
+                    (&file.source_path, &file.source),
+                    &file.source_path,
+                    &error.labels,
+                ),
                 code: Some(error.code.as_str().to_string()),
                 suggestions: error.suggestions,
-                labels: Vec::new(),
             };
             if !out.contains(&diagnostic) {
                 out.push(diagnostic);
@@ -171,19 +171,17 @@ pub(crate) fn report(
 
     // TypeScript's own diagnostics, at the position in the `.tt` file the
     // offending code was written at.
-    let type_diagnostics: &[TsDiagnostic] = if tt_only { &[] } else { &answers.diagnostics };
-    if !tt_only {
-        for diagnostic in &answers.project_diagnostics {
-            out.push(Diagnostic {
-                path: diagnostic.file.clone(),
-                position: None,
-                end: None,
-                message: diagnostic.message.clone(),
-                code: Some(format!("ts{}", diagnostic.code)),
-                suggestions: Vec::new(),
-                labels: Vec::new(),
-            });
-        }
+    let type_diagnostics: &[TsDiagnostic] = &answers.diagnostics;
+    for diagnostic in &answers.project_diagnostics {
+        out.push(Diagnostic {
+            path: diagnostic.file.clone(),
+            position: None,
+            end: None,
+            message: diagnostic.message.clone(),
+            code: Some(format!("ts{}", diagnostic.code)),
+            suggestions: Vec::new(),
+            labels: Vec::new(),
+        });
     }
     let structured_glue: HashSet<(PathBuf, usize, AnchorKind)> = type_diagnostics
         .iter()
@@ -192,6 +190,9 @@ pub(crate) fn report(
             let file = files
                 .iter()
                 .find(|file| file.module_path == diagnostic.file)?;
+            if typescript_owned(file, diagnostic) {
+                return None;
+            }
             let (start, end) = diagnostic_span(diagnostic);
             let DiagnosticOrigin::Anchor(anchor) = projection::diagnostic_origin(file, start, end)?
             else {
@@ -202,7 +203,6 @@ pub(crate) fn report(
         .collect();
     let mut translated_seen: HashSet<(PathBuf, usize, AnchorKind, &'static str)> = HashSet::new();
     for diagnostic in type_diagnostics {
-        let (diagnostic_start, diagnostic_end) = diagnostic_span(diagnostic);
         let Some(file) = files.iter().find(|f| f.module_path == diagnostic.file) else {
             // A hand-written file: nothing was lowered, so TypeScript's own
             // coordinates already name the place. They arrive as UTF-16
@@ -222,9 +222,9 @@ pub(crate) fn report(
             };
             out.push(Diagnostic {
                 path: diagnostic.file.clone(),
-                position: at(diagnostic_start),
-                end: at(diagnostic_end),
-                message: diagnostic_message(diagnostic, &[]),
+                position: at(diagnostic.start),
+                end: at(diagnostic.end),
+                message: diagnostic.message.clone(),
                 code: Some(format!("ts{}", diagnostic.code)),
                 suggestions: Vec::new(),
                 labels: Vec::new(),
@@ -237,6 +237,12 @@ pub(crate) fn report(
         if projection::diagnostic_intersects_tt_error(file, diagnostic) {
             continue;
         }
+        let owned_by_typescript = typescript_owned(file, diagnostic);
+        let (diagnostic_start, diagnostic_end) = if owned_by_typescript {
+            (diagnostic.start, diagnostic.end)
+        } else {
+            diagnostic_span(diagnostic)
+        };
         let Some(origin) = projection::diagnostic_origin(file, diagnostic_start, diagnostic_end)
         else {
             out.push(Diagnostic {
@@ -324,8 +330,8 @@ pub(crate) fn report(
                     .unwrap_or_default();
                 out.push(Diagnostic {
                     path: file.source_path.clone(),
-                    position: Some(crate::line_col(&file.source, anchor.src)),
-                    end: Some(crate::line_col(&file.source, anchor.src_end)),
+                    position: Some(crate::line_col(&file.source, anchor.display().0)),
+                    end: Some(crate::line_col(&file.source, anchor.display().1)),
                     message: anchored_diagnostic_message(&anchor, diagnostic, declared),
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
@@ -341,7 +347,7 @@ pub(crate) fn report(
                 && let Some(class) = translation_class(anchor.kind, diagnostic.code)
                 && !translated_seen.insert((
                     file.source_path.clone(),
-                    anchor.src,
+                    anchor.display().0,
                     anchor.kind,
                     class,
                 ))
@@ -358,8 +364,8 @@ pub(crate) fn report(
             {
                 let entry = Diagnostic {
                     path: file.source_path.clone(),
-                    position: Some(crate::line_col(&file.source, anchor.src)),
-                    end: Some(crate::line_col(&file.source, anchor.src_end)),
+                    position: Some(crate::line_col(&file.source, anchor.display().0)),
+                    end: Some(crate::line_col(&file.source, anchor.display().1)),
                     message: said,
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
@@ -384,7 +390,11 @@ pub(crate) fn report(
                     path: file.source_path.clone(),
                     position: Some(crate::line_col(&file.source, start)),
                     end: (end > start).then(|| crate::line_col(&file.source, end)),
-                    message: diagnostic_message(diagnostic, declared),
+                    message: if owned_by_typescript {
+                        ts_message(&diagnostic.message, declared)
+                    } else {
+                        diagnostic_message(diagnostic, declared)
+                    },
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
                     labels: checker_labels(files, file, None, diagnostic),
@@ -392,8 +402,8 @@ pub(crate) fn report(
             }
             DiagnosticOrigin::Anchor(anchor) => out.push(Diagnostic {
                 path: file.source_path.clone(),
-                position: Some(crate::line_col(&file.source, anchor.src)),
-                end: Some(crate::line_col(&file.source, anchor.src_end)),
+                position: Some(crate::line_col(&file.source, anchor.display().0)),
+                end: Some(crate::line_col(&file.source, anchor.display().1)),
                 message: format!(
                     "{} (in code ttc generated for this construct)",
                     diagnostic_message(diagnostic, declared)
@@ -526,9 +536,9 @@ pub(crate) fn report(
         // imported ones have to be collected — otherwise a payload whose
         // type is an imported variant reads as an unknown alphabet and its
         // holes go unreported. The cached semantics carry them.
-        let externs: &[crate::VariantSymbol] = semantics
+        let externs: Vec<crate::resolve::ExternDecl> = semantics
             .get(&file.source_path)
-            .map(|s| s.externs.as_slice())
+            .map(|s| s.externs.iter().map(Into::into).collect())
             .unwrap_or_default();
         let asked_payloads = payloads
             .get(&file.source_path)
@@ -536,76 +546,40 @@ pub(crate) fn report(
         for (offset, coverage) in crate::analysis::checked_coverage(
             &file.source,
             crate::SourceKind::from_path(&file.source_path).unwrap_or_default(),
-            externs,
+            &externs,
             asked,
             asked_payloads,
         ) {
             if semantics
                 .get(&file.source_path)
                 .is_some_and(|semantics| semantics.analyses.match_has_resolution_error(offset))
+                || declared_holes.contains(&(file.source_path.clone(), offset))
             {
                 continue;
             }
-            // A single match's witness is one pattern, quoted the way the
-            // default path quotes one; a tuple match's is a combination of
-            // positions, written as one `(a, b)` and left unquoted — the
-            // quotes would read as part of the pattern.
-            let uncovered: Vec<String> = coverage
-                .missing
-                .iter()
-                .filter(|m| m.certain)
-                .map(|m| {
-                    if m.pattern.len() > 1 {
-                        format!("({})", m.pattern.join(", "))
-                    } else {
-                        format!("{:?}", m.pattern.first().cloned().unwrap_or_default())
-                    }
-                })
-                .collect();
-            if uncovered.is_empty() {
+            let Some(hole) =
+                crate::sema::non_exhaustive(&coverage, crate::sema::Witnesses::Certain)
+            else {
                 continue;
-            }
-            // The arms that close the hole, from the same witnesses in
-            // their binding form — one authoring, both pipelines.
-            let whole = coverage.exact && uncovered.len() == coverage.certain_total;
-            let arms: Vec<String> = coverage
-                .missing
-                .iter()
-                .filter(|m| whole && m.certain)
-                .map(|m| {
-                    if m.arm.len() > 1 {
-                        format!("({})", m.arm.join(", "))
-                    } else {
-                        m.arm.first().cloned().unwrap_or_else(|| "_".to_string())
-                    }
-                })
-                .collect();
-            // The typed pass knows the alphabet but not the declaration,
-            // so the shared renderer gets no subject — one renderer, one
-            // wording, on both pipelines (TASK-120).
-            let tuple = coverage.positions.len() > 1;
+            };
             out.push(Diagnostic {
                 path: file.source_path.clone(),
                 position: Some(crate::line_col(&file.source, offset)),
                 end: match_ends
                     .get(&(file.source_path.clone(), offset))
                     .map(|at| crate::line_col(&file.source, *at)),
-                message: crate::diagnostics::non_exhaustive_message(
-                    None,
-                    &uncovered,
-                    coverage.certain_total,
-                    coverage.exact,
-                    tuple,
-                ),
+                message: hole.message,
                 code: Some(
                     crate::DiagnosticCode::MatchNotExhaustive
                         .as_str()
                         .to_string(),
                 ),
                 suggestions: match sites.get(&(file.source_path.clone(), offset)) {
-                    Some(site) => {
-                        crate::diagnostics::non_exhaustive_suggestions(&file.source, *site, &arms)
-                    }
+                    Some(site) => crate::diagnostics::non_exhaustive_suggestions(
+                        &file.source,
+                        *site,
+                        &hole.arms,
+                    ),
                     None => vec![non_exhaustive_help()],
                 },
                 labels: Vec::new(),
@@ -660,56 +634,36 @@ pub(crate) fn report(
         else {
             continue;
         };
-        let message = match &mutation.method_name {
-            // The built-in itself is not named: the compiler answered
-            // "this method is one of TypeScript's own", which is the
-            // verdict — not which interface declares it.
-            Some(method) => format!(
-                "cannot call mutating method `{}` through val binding `{}` \
-                 (the binding is declared with `val`, so every access path from it is \
-                 read-only)",
-                method, mutation.name,
-            ),
-            None => format!(
-                "cannot mutate through val binding `{}` \
-                 (the binding is declared with `val`, so every access path \
-                 from it is read-only)",
-                mutation.name,
-            ),
-        };
-        let (suggestions, labels) = binding.map_or_else(
-            || (Vec::new(), Vec::new()),
-            |binding| {
-                let declaration = files
-                    .iter()
-                    .find(|candidate| candidate.source_path == binding.anchor.source_path);
-                let suggestions = vec![crate::Suggestion {
-                    message: "remove `val` if this binding is intended to be mutable".to_string(),
-                    edit: Some(crate::Edit {
-                        start: binding.anchor.offset,
-                        end: binding.modifier_end,
-                        replacement: String::new(),
-                    }),
-                }];
-                let labels = declaration.map_or_else(Vec::new, |declaration| {
-                    vec![DiagnosticLabel {
-                        path: (declaration.source_path != file.source_path)
-                            .then(|| declaration.source_path.clone()),
-                        position: crate::line_col(&declaration.source, binding.anchor.offset),
-                        end: crate::line_col(&declaration.source, binding.anchor.end),
-                        message: "the read-only binding is declared here".to_string(),
-                    }]
-                });
-                (suggestions, labels)
-            },
+        let error = crate::val::mutation_error(
+            mutation.anchor.offset,
+            mutation.anchor.end,
+            &mutation.name,
+            mutation.method_name.as_deref(),
+            binding.map(|binding| crate::val::ValSite {
+                val_at: binding.anchor.offset,
+                modifier_end: binding.modifier_end,
+            }),
         );
+        let labels = binding
+            .and_then(|binding| {
+                files
+                    .iter()
+                    .find(|candidate| candidate.source_path == binding.anchor.source_path)
+            })
+            .map_or_else(Vec::new, |declaration| {
+                labels_in(
+                    (&declaration.source_path, &declaration.source),
+                    &file.source_path,
+                    &error.labels,
+                )
+            });
         out.push(Diagnostic {
             path: file.source_path.clone(),
             position: Some(crate::line_col(&file.source, mutation.anchor.offset)),
             end: Some(crate::line_col(&file.source, mutation.anchor.end)),
-            message,
-            code: Some(crate::DiagnosticCode::ValMutation.as_str().to_string()),
-            suggestions,
+            message: error.message,
+            code: Some(error.code.as_str().to_string()),
+            suggestions: error.suggestions,
             labels,
         });
     }
@@ -788,5 +742,27 @@ pub(crate) fn report(
         });
     }
 
+    if tt_only {
+        out.retain(Diagnostic::states_tt_rule);
+    }
     finish_diagnostics(out)
+}
+
+/// A tt diagnostic's labels, found in the source of the file at `path`,
+/// as the labels of a diagnostic reported in `reported`: a label names its
+/// file only when that is not the diagnostic's own.
+fn labels_in(
+    (path, source): (&std::path::Path, &str),
+    reported: &std::path::Path,
+    labels: &[crate::DiagnosticLabel],
+) -> Vec<DiagnosticLabel> {
+    labels
+        .iter()
+        .map(|label| DiagnosticLabel {
+            path: (path != reported).then(|| path.to_path_buf()),
+            position: crate::line_col(source, label.start),
+            end: crate::line_col(source, label.end),
+            message: label.message.clone(),
+        })
+        .collect()
 }

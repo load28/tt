@@ -1,0 +1,2 @@
+labeledBlock(4) => [{"kind":"Now"},{"kind":"Later","at":4}] | 
+labeledBlock(9) => [{"kind":"Now"},{"kind":"Later","at":9}] | 

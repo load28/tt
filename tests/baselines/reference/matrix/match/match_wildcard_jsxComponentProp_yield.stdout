@@ -1,0 +1,4 @@
+jsxComponentProp({"kind":"Num","value":4}) => "<Show -1>" | yield {"kind":"Num","value":4}; other -1
+jsxComponentProp({"kind":"Neg","value":-3}) => "<Show -1>" | yield {"kind":"Neg","value":-3}; other -1
+jsxComponentProp({"kind":"Word","text":"hi"}) => "<Show 2>" | yield {"kind":"Word","text":"hi"}; word 2
+jsxComponentProp({"kind":"End"}) => "<Show -1>" | yield {"kind":"End"}; other -1

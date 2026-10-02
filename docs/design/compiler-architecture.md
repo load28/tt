@@ -68,7 +68,8 @@ operators the parser must consume as units are fused (`=>`, `||`, `?.`,
 primitives — string, regular-expression, and trivia scanning, and the
 ECMA-262 `LineTerminator` set (LF, CR, U+2028, U+2029) — live in
 `scanner.rs`. The questions codegen asks of text it emits
-(`contains_await`, `is_primary_expression`, `has_top_level_comma`) are
+(`contains_await`, `is_primary_expression`, `is_member_receiver`,
+`has_top_level_comma`) are
 answered over tokens in `lexer/queries.rs`.
 
 **Token facts (TASK-491).** Statement boundaries are modeled once, in the
@@ -251,9 +252,13 @@ lowering 안쪽 depth만큼에서 다시 시작"이라는 뜻이고, 실제 들�
 값을 감싸는 괄호도 규칙으로 정해진다. 초기화식·대입 우변·`return`
 피연산자·인자 하나 — lower된 값이 놓이는 이 위치들에서 값보다 느슨하게
 묶이는 연산자는 콤마뿐이므로, `scanner::has_top_level_comma`가 참일 때만
-괄호를 남긴다. postfix 스텝의 수신자(`x |> .trim()`)는 다른 질문이라
-`scanner::is_primary_expression`으로 답한다(`(await p).then(g)`는 괄호가
-필요하고 `s.trim()`은 아니다). 두 술어 모두 판정이 애매하면 괄호를 남기는
+괄호를 남긴다. A postfix step's receiver (`x |> .trim()`) is a different
+question, answered by `lexer::is_member_receiver`: the receiver must be one
+primary expression (`(await p).then(g)` needs the parentheses, `s.trim()`
+does not) that does not end in an optional chain, because a member access
+written after `a?.b` joins the chain (ECMA-262 §13.3.9), so `a?.b |> .c`
+is `(a?.b).c` (TASK-691). A call step's callee keeps a trailing chain
+(`lexer::is_primary_expression`): `x |> o?.m` is `o?.m(x)`. 두 술어 모두 판정이 애매하면 괄호를 남기는
 쪽으로 답한다 — 틀려도 잉여 괄호일 뿐 의미는 잃지 않는다.
 
 방출은 내부적으로 Lit(컴파일러 글루)/Src(원본, 오프셋 유지)/Break·Scope

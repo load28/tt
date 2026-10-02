@@ -1,0 +1,76 @@
+=== ifLetHeadEndingInObjectType.tt ===
+type Maybe = { kind: "Some"; value: number } | { kind: "None" };
+>Maybe : type Maybe = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>kind : (property) kind: "None"
+const values: unknown[] = [{ kind: "Some", value: 1 }, { kind: "None" }];
+>values : const values: unknown[]
+>kind : (property) kind: string
+>value : (property) value: number
+>kind : (property) kind: string
+function read(x: unknown, y: unknown): string {
+>read : function read(x: unknown, y: unknown): string
+>x : (parameter) x: unknown
+>y : (parameter) y: unknown
+  if let Some(value: v) = x as { kind: "Some"; value: number } | { kind: "None" } {
+>value : (property) value: number
+>v : const v: number
+>x : (parameter) x: unknown
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>kind : (property) kind: "None"
+    return `as ${v}`;
+>v : const v: number
+  } else if let Some(value: w) = y as Maybe & { kind: string } {
+>value : (property) value: number
+>w : const w: number
+>y : (parameter) y: unknown
+>Maybe : type Maybe = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>kind : (property) kind: string
+    return `intersection ${w}`;
+>w : const w: number
+  if let Some(value: s) = { kind: "Some" as const, value: 3 } satisfies { kind: "Some"; value: number } {
+>value : (property) value: number
+>s : const s: number
+>kind : (property) kind: "Some"
+>const : type const = "Some"
+>value : (property) value: number
+>kind : (property) kind: "Some"
+>value : (property) value: number
+    return `satisfies ${s}`;
+>s : const s: number
+function literal(): number {
+>literal : function literal(): number
+  if let Some(value: n) = { kind: "Some" as const, value: 4 } {
+>value : (property) value: number
+>n : const n: number
+>kind : (property) kind: "Some"
+>const : type const = "Some"
+>value : (property) value: number
+    return n;
+>n : const n: number
+console.log(read(values[0], values[1]), read(values[1], values[0]), read(values[1], values[1]), literal());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>read : function read(x: unknown, y: unknown): string
+>values : const values: unknown[]
+>values : const values: unknown[]
+>read : function read(x: unknown, y: unknown): string
+>values : const values: unknown[]
+>values : const values: unknown[]
+>read : function read(x: unknown, y: unknown): string
+>values : const values: unknown[]
+>values : const values: unknown[]
+>literal : function literal(): number
+

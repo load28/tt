@@ -1,0 +1,5 @@
+labeledBlock(200) => true | operand 200; success true; flip true; finally 0
+labeledBlock(201) => [true] | operand 201; success true; flip false; finally 0
+labeledBlock(404) => false | operand 404; missing false; flip true; finally 0
+labeledBlock(500) => [false] | operand 500; guard true; server false; flip false; finally 0
+labeledBlock(7) => null | operand 7; other null; flip true; finally 0

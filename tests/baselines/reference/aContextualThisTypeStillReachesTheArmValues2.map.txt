@@ -1,0 +1,9 @@
+//// [aContextualThisTypeStillReachesTheArmValues2.tt] 7 mapping(s)
+1:1 -> 1:1 len 99  "\ntype Methods = { k: number; m(): number } & Thi"...
+4:3 -> 18:3 len 19  "const d: Methods = "
+4:29 -> 6:19 len 1  "n"
+4:34 -> 8:12 len 1  "1"
+4:39 -> 9:18 len 41  "({ k: 1, m() { return this.q.length; } })"
+4:87 -> 13:18 len 29  "({ k: 2, m() { return 0; } })"
+4:118 -> 18:28 len 80  ";\n  return d.m.call({ q: \"abc\" });\n}\nconsole.log"...
+

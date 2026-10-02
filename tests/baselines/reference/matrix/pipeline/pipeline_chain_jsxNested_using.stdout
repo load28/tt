@@ -1,0 +1,2 @@
+jsxNested(3) => "<ul><li>1</li><li>***6</li></ul>" | open res; first 1; operand 3; double 6; dispose res
+jsxNested(12) => "<ul><li>1</li><li>**24</li></ul>" | open res; first 1; operand 12; double 24; dispose res

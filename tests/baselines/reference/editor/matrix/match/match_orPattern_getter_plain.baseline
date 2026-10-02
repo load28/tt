@@ -1,0 +1,12 @@
+differences from match_orPattern_getter_plain at the questions listed in tests/editor-matrix-differences.txt
+
+=== definition /*use*/ main.tt:7:89 ===
+  |       return match (note("operand", input)) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") };
+  |                                                                                         ^ /*use*/
+  tt only: main "value"
+
+=== rename /*bind*/ main.tt:7:51 ===
+  |       return match (note("operand", input)) { Num(value) | Neg(value) => note("number", value), Word(text) => note("word", text), End => note("end", "") };
+  |                                                   ^ /*bind*/
+  tt only: main "value" -> value: ttRenamePlaceholder
+

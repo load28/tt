@@ -1,0 +1,5 @@
+optionalCall(200) => [[true],null] | callee true; await; success true; callee false
+optionalCall(201) => [[true],null] | callee true; await; success true; callee false
+optionalCall(404) => [[false],null] | callee true; await; missing false; callee false
+optionalCall(500) => [[false],null] | callee true; await; guard true; server false; callee false
+optionalCall(7) => [[null],null] | callee true; await; other null; callee false

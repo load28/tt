@@ -1,0 +1,2 @@
+jsxSpreadAttribute(true) => "<div value=1></div>" | risky true; yes 1
+jsxSpreadAttribute(false) => "<div value=0></div>" | risky false; no 0

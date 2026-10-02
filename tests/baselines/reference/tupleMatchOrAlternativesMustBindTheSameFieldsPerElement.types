@@ -1,0 +1,6 @@
+=== tupleMatchOrAlternativesMustBindTheSameFieldsPerElement.tt ===
+const r = match (a, b) {
+>r : const r: number
+  (Some(value) | None, _) => 1,
+>value : const value: any
+

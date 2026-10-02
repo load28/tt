@@ -1,0 +1,2 @@
+componentBody(4) => "<p>4</p>" | read 4
+componentBody(-4) => "<p>diverged</p>" | read -4

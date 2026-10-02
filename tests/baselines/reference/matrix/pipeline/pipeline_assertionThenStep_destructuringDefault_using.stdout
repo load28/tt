@@ -1,0 +1,2 @@
+destructuringDefault(123) => 3 | open res; source {}; operand 123; dispose res
+destructuringDefault(4) => 1 | open res; source {}; operand 4; dispose res

@@ -1,0 +1,26 @@
+==== ttc --out-dir (exit 1) ====
+error[let-else-placement]: let-else cannot be used here — its `else` block's exit (`return`, `break`, `continue`) would complete this construct's value instead of leaving the enclosing function
+ --> ./letElseInsideMatchArmIsError.tt:2:18
+  |
+2 |   Ok(value) => { const Some(v) = h(value) else { return 0; }; return v; },
+  |                  ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: extract the logic into a function (a let-else inside a function written here is fine), or `match` on the value instead
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'r'.
+ --> letElseInsideMatchArmIsError.tt:1:18
+  |
+1 | const x = match (r) {
+  |                  ^
+error[let-else-placement]: let-else cannot be used here — its `else` block's exit (`return`, `break`, `continue`) would complete this construct's value instead of leaving the enclosing function
+ --> letElseInsideMatchArmIsError.tt:2:18
+  |
+2 |   Ok(value) => { const Some(v) = h(value) else { return 0; }; return v; },
+  |                  ^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = help: extract the logic into a function (a let-else inside a function written here is fine), or `match` on the value instead
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

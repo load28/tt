@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_08.rs::misspelled_field_names_the_field_meant
+variant Shape { Circle(radius: number), Empty }
+const a = match (s) { Circle(radiuz) => radiuz, Empty => 0 };

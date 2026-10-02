@@ -1,0 +1,17 @@
+=== runtimeLiteralStringMatch.tt ===
+type Direction = "north" | "south" | "east" | "west";
+>Direction : type Direction = "east" | "north" | "south" | "west"
+function short(dir: Direction) {
+>short : function short(dir: Direction): string
+>dir : (parameter) dir: Direction
+>Direction : type Direction = "east" | "north" | "south" | "west"
+  return match (dir) {
+>dir : (parameter) dir: Direction
+console.log(short("north"), short("south"), short("east"), short("west"));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>short : function short(dir: Direction): string
+>short : function short(dir: Direction): string
+>short : function short(dir: Direction): string
+>short : function short(dir: Direction): string
+

@@ -1,0 +1,13 @@
+// @origin: tests/integration/contextual.rs::composed_match_still_throws_for_an_unexpected_runtime_value
+// @run: composedMatchStillThrowsForAnUnexpectedRuntimeValue.tt
+
+function choose(flag: boolean) {
+  return [match (flag) { true => 1, false => 2 }];
+}
+try {
+  choose("invalid" as unknown as boolean);
+} catch (error) {
+  console.log(error instanceof Error ? error.message : String(error));
+}
+
+export {};

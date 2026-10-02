@@ -1,0 +1,60 @@
+=== aScriptDeclarationNamesItsGlobalStorageAfterItsBinding.tt ===
+declare const o: { kind: "A" } | { kind: "B" };
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>kind : (property) kind: "A"
+>kind : (property) kind: "B"
+const total = match (o) { A => 1, B => 2 };
+>total : const total: number
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+let { kind } = match (o) { A => o, B => o };
+>kind : let kind: "A" | "B"
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+class Base extends (match (o) { A => Object, B => Object }) {}
+>Base : class Base
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>Object : var Object: ObjectConstructor
+>Object : var Object: ObjectConstructor
+function f(x: typeof o) { return match (x) { A => 1, B => 2 }; }
+>f : function f(x: typeof o): number
+>x : (parameter) x: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>o : const o: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>x : (parameter) x: {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+

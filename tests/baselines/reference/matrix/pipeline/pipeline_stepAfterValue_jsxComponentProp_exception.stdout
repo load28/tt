@@ -1,0 +1,2 @@
+jsxComponentProp(4) => "<Show 7>" | risky 4; step 3; add 7
+jsxComponentProp(-1) => "<Show 2>" | risky -1; step 3; add 2

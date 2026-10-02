@@ -1,0 +1,17 @@
+//// [guardedContextualValuesPreserveShortCircuitingAndAbruptCompletion.tt] 15 mapping(s)
+1:1 -> 1:1 len 525  "\nconst trace: string[] = [];\nconst mark = <T,>(n"...
+19:5 -> 23:5 len 15  "const result = "
+19:20 -> 19:21 len 26  "mark(\"receiver\", receiver)"
+19:46 -> 23:26 len 9  ".consume("
+19:55 -> 20:21 len 16  "mark(\"first\", 2)"
+19:71 -> 23:41 len 2  ", "
+19:80 -> 21:19 len 26  "mark(\"subject\", value < 3)"
+20:7 -> 23:55 len 4  "true"
+20:15 -> 23:63 len 12  "guard(value)"
+20:31 -> 23:79 len 52  "(trace.push(\"yes\"), {kind: \"item\", run: x => x +"...
+21:7 -> 23:145 len 4  "true"
+21:15 -> 23:153 len 26  "mark(\"second guard\", true)"
+21:45 -> 23:183 len 51  "(trace.push(\"second\"), {kind: \"item\", run: x => "...
+22:12 -> 23:237 len 51  "(trace.push(\"no\"), {kind: \"item\", run: x => x - "...
+23:6 -> 23:289 len 136  ", mark(\"last\", 3));\n    console.log(result, trac"...
+

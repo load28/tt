@@ -59,6 +59,11 @@ impl<'a> Emitter<'a> {
         out.push_lit("}");
         if let Some(binding) = propagate.binding {
             out.push_break(0);
+            if let Some(documentation) =
+                self.relocated_documentation(self.span(propagate.owner).start)
+            {
+                out.append(documentation);
+            }
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
             out.append(self.source_rope(binding.node));
             out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));
@@ -83,6 +88,15 @@ impl<'a> Emitter<'a> {
             out.append(continued);
             out.push_break(0);
             out.push_lit(format!("const {temp} = {slot};"));
+        } else if let Some((prelude, operand)) = self.emit_nested_operand(value) {
+            // The operand computes its own value from the values inside it
+            // (`r(match ...)`): they run into their slots, and the operand
+            // is read once into the temporary.
+            out.append(prelude.trim_end());
+            out.push_break(0);
+            out.push_lit(format!("const {temp} = "));
+            push_grouped(&mut out, operand.trim(), self.source_kind);
+            out.push_lit(";");
         } else {
             out.push_lit(format!("const {temp} = "));
             push_grouped(&mut out, self.emit_expr(value).trim(), self.source_kind);
@@ -92,6 +106,10 @@ impl<'a> Emitter<'a> {
     }
 
     pub(super) fn emit_result_region(&self, expr: ExprId, region: &ResultRegion) -> Rope<'a> {
+        crate::stack::grow(|| self.emit_result_region_grown(expr, region))
+    }
+
+    fn emit_result_region_grown(&self, expr: ExprId, region: &ResultRegion) -> Rope<'a> {
         let failure = ValueContinuation::returning();
         let _failure_scope = self.enter_result_failure(region.id, &failure, None);
         let mut out = Rope::new();
@@ -147,6 +165,19 @@ impl<'a> Emitter<'a> {
         success: &ValueContinuation<'_>,
         exit_label: Option<&str>,
     ) -> Rope<'a> {
+        crate::stack::grow(|| {
+            self.emit_result_body_with_exits_grown(body, exits, failure, success, exit_label)
+        })
+    }
+
+    fn emit_result_body_with_exits_grown(
+        &self,
+        body: hir::BodyId,
+        exits: &[HostExit],
+        failure: &ValueContinuation<'_>,
+        success: &ValueContinuation<'_>,
+        exit_label: Option<&str>,
+    ) -> Rope<'a> {
         let leave =
             exit_label.map_or_else(|| "break;".to_owned(), |label| format!("break {label};"));
         let mut edits = Vec::new();
@@ -161,12 +192,13 @@ impl<'a> Emitter<'a> {
                 .argument
                 .and_then(|argument| self.result_return_propagate(body, argument))
             {
-                propagating_returns.push((
-                    exit.statement,
-                    exit.argument.expect("checked above"),
+                propagating_returns.push(ResultReturn {
+                    statement: exit.statement,
+                    argument: exit.argument.expect("checked above"),
                     expr,
-                    propagate,
-                ));
+                    requires_block: exit.requires_block,
+                    propagate: Some(propagate),
+                });
                 continue;
             }
             if let Some((argument, expr)) = exit.argument.and_then(|argument| {
@@ -177,7 +209,13 @@ impl<'a> Emitter<'a> {
                 )
                 .map(|expr| (argument, expr))
             }) {
-                structured_returns.push((exit.statement, argument, expr));
+                structured_returns.push(ResultReturn {
+                    statement: exit.statement,
+                    argument,
+                    expr,
+                    requires_block: exit.requires_block,
+                    propagate: None,
+                });
                 continue;
             }
             match exit.argument {
@@ -310,12 +348,22 @@ impl<'a> Emitter<'a> {
             expr: ExprId,
             argument: SourceSpan,
         ) -> Option<(ExprId, &'a Propagate)> {
+            crate::stack::grow(|| find_grown(emitter, expr, argument))
+        }
+
+        fn find_grown<'a>(
+            emitter: &'a Emitter<'a>,
+            expr: ExprId,
+            argument: SourceSpan,
+        ) -> Option<(ExprId, &'a Propagate)> {
             match &emitter.core.exprs[expr.index()] {
                 Expr::Propagate(propagate)
-                    if matches!(propagate.exit, ExitTarget::ResultRegion(_)) && {
-                        let span = SourceSpan::from(emitter.span(propagate.node));
-                        argument.start <= span.start && span.end <= argument.end
-                    } =>
+                    if matches!(propagate.exit, ExitTarget::ResultRegion(_))
+                        && emitter.structurally_nested_values.contains(&expr)
+                        && {
+                            let span = SourceSpan::from(emitter.span(propagate.node));
+                            argument.start <= span.start && span.end <= argument.end
+                        } =>
                 {
                     Some((expr, propagate))
                 }
@@ -345,12 +393,12 @@ impl<'a> Emitter<'a> {
         statements: &[Statement],
         exits: &[HostExit],
         edits: &[LocalSourceEdit],
-        propagating_returns: &[(SourceSpan, SourceSpan, ExprId, &Propagate)],
-        structured_returns: &[(SourceSpan, SourceSpan, ExprId)],
+        propagating_returns: &[ResultReturn<'_>],
+        structured_returns: &[ResultReturn<'_>],
         context: &ResultEmissionContext<'_, '_>,
     ) -> Rope<'a> {
         let mut out = Rope::new();
-        for statement in statements {
+        for (index, statement) in statements.iter().enumerate() {
             match statement {
                 Statement::Opaque(node) => {
                     // An opaque segment may contain both a nested function
@@ -363,12 +411,8 @@ impl<'a> Emitter<'a> {
                     let node_span = self.span(*node);
                     let erased = propagating_returns
                         .iter()
-                        .map(|(return_span, _, _, _)| *return_span)
-                        .chain(
-                            structured_returns
-                                .iter()
-                                .map(|(return_span, _, _)| *return_span),
-                        )
+                        .chain(structured_returns)
+                        .map(|rewritten| rewritten.statement)
                         .map(|return_span| SourceSpan {
                             start: return_span.start.max(node_span.start),
                             end: return_span.end.min(node_span.end),
@@ -384,14 +428,21 @@ impl<'a> Emitter<'a> {
                     out.append(self.source_rope_with_edits(*node, &opaque_edits));
                 }
                 Statement::Expr(expr) => {
-                    if let Some((return_span, argument, _)) = structured_returns
+                    if let Some(rewritten) = structured_returns
                         .iter()
-                        .find(|(_, _, candidate)| candidate == expr)
+                        .find(|rewritten| rewritten.expr == *expr)
                     {
-                        let mut replacement =
-                            self.emit_returned_structured_value(*expr, *argument, context.success);
+                        let return_span = rewritten.statement;
+                        let mut replacement = self.emit_returned_structured_value(
+                            *expr,
+                            rewritten.argument,
+                            context.success,
+                        );
                         if context.success.assigns() {
                             push_control_break(&mut replacement, 0, context.exit_label);
+                        }
+                        if rewritten.requires_block {
+                            replacement = Rope::braced(replacement);
                         }
                         let (kind, start, head_end, extent) = self.value_anchor(*expr);
                         out.anchored(
@@ -401,10 +452,15 @@ impl<'a> Emitter<'a> {
                             return_span.end.max(extent),
                             replacement,
                         );
-                    } else if let Some((return_span, argument, _, propagate)) = propagating_returns
-                        .iter()
-                        .find(|(_, _, candidate, _)| candidate == expr)
+                    } else if let Some((rewritten, propagate)) =
+                        propagating_returns.iter().find_map(|rewritten| {
+                            (rewritten.expr == *expr)
+                                .then_some(rewritten)
+                                .zip(rewritten.propagate)
+                        })
                     {
+                        let return_span = &rewritten.statement;
+                        let argument = &rewritten.argument;
                         let mut replacement = self.emit_region_propagate(
                             propagate,
                             context.failure,
@@ -432,6 +488,9 @@ impl<'a> Emitter<'a> {
                             context.exit_label,
                             Some(0),
                         ));
+                        if rewritten.requires_block {
+                            replacement = Rope::braced(replacement);
+                        }
                         out.anchored(
                             AnchorKind::Try,
                             return_span.start,
@@ -456,6 +515,7 @@ impl<'a> Emitter<'a> {
                         span.end,
                         emit_adt(
                             adt,
+                            self.source,
                             |node| self.span(node),
                             self.ambient_items.contains(&adt.node),
                             self.source_kind,
@@ -464,12 +524,16 @@ impl<'a> Emitter<'a> {
                 }
                 Statement::Import(import) => self.emit_import(import, &mut out),
                 Statement::Propagate(propagate) => {
+                    out.append(self.emit_propagate_owner_prelude(propagate));
                     let span = self.span(propagate.node);
-                    let emitted = if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
+                    let mut emitted = if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
                         self.emit_region_propagate(propagate, context.failure, context.exit_label)
                     } else {
                         self.emit_propagate(propagate)
                     };
+                    if self.block_required_statements.contains(&propagate.node) {
+                        emitted = Rope::braced(emitted);
+                    }
                     out.anchored(AnchorKind::Try, span.start, span.end, span.end, emitted);
                 }
                 Statement::Decision(decision) => self.emit_result_statement_decision(
@@ -481,6 +545,7 @@ impl<'a> Emitter<'a> {
                     &mut out,
                 ),
             }
+            out.append(self.edits_after_statement(statements, index, edits));
         }
         out
     }
@@ -589,10 +654,23 @@ impl<'a> Emitter<'a> {
         out.push_lit("}");
         if let Some(binding) = propagate.binding {
             out.push_break(0);
+            if let Some(documentation) =
+                self.relocated_documentation(self.span(propagate.owner).start)
+            {
+                out.append(documentation);
+            }
             out.push_lit(format!("{} ", binding_keyword(binding.mode)));
             out.append(self.source_rope(binding.node));
             out.push_lit(format!(" = {temp}.{};", propagate.layout.payload_field));
         }
         Rope::scoped(out)
     }
+}
+
+pub(super) struct ResultReturn<'p> {
+    statement: SourceSpan,
+    argument: SourceSpan,
+    expr: ExprId,
+    requires_block: bool,
+    propagate: Option<&'p Propagate>,
 }

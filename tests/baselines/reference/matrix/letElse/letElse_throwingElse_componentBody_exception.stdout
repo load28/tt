@@ -1,0 +1,2 @@
+componentBody(5) => "<p>5</p>" | risky 5; read 5
+componentBody(-5) => "thrown" | risky -5; read -5; else "thrown"; caught "thrown"

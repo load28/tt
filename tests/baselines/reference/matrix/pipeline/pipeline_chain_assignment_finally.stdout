@@ -1,0 +1,2 @@
+assignment(3) => "***6" | initial 0; target {"value":0}; operand 3; double 6; finally 0
+assignment(12) => "**24" | initial 0; target {"value":0}; operand 12; double 24; finally 0

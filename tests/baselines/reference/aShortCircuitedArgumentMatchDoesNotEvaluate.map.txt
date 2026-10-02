@@ -1,0 +1,23 @@
+//// [aShortCircuitedArgumentMatchDoesNotEvaluate.tt] 21 mapping(s)
+1:1 -> 1:1 len 248  "\nconst trace: string[] = [];\nfunction subject(ta"...
+8:1 -> 31:1 len 10  "const a = "
+8:11 -> 10:14 len 2  "on"
+8:17 -> 12:19 len 2  "id"
+8:19 -> 26:28 len 1  "("
+8:27 -> 14:19 len 13  "subject(\"on\")"
+8:44 -> 16:12 len 1  "1"
+8:49 -> 17:18 len 2  "10"
+8:58 -> 21:18 len 1  "0"
+8:61 -> 26:35 len 1  ")"
+8:62 -> 31:17 len 2  ";\n"
+9:1 -> 55:1 len 10  "const b = "
+9:11 -> 34:14 len 3  "off"
+9:18 -> 36:19 len 2  "id"
+9:20 -> 50:28 len 1  "("
+9:28 -> 38:19 len 14  "subject(\"off\")"
+9:46 -> 40:12 len 1  "1"
+9:51 -> 41:18 len 2  "20"
+9:60 -> 45:18 len 1  "0"
+9:63 -> 50:35 len 1  ")"
+9:64 -> 55:17 len 56  ";\nconsole.log(JSON.stringify(trace), a, b);\n\nexp"...
+

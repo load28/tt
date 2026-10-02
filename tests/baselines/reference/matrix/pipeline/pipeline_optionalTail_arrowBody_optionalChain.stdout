@@ -1,0 +1,2 @@
+arrowBody(2.5) => "2.50" | positive 2.5
+arrowBody(-3) => undefined | positive undefined

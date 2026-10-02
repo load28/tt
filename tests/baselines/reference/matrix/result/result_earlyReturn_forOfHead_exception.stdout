@@ -1,0 +1,3 @@
+forOfHead(3) => [{"kind":"Ok","value":3}] | risky 3; read 3; big 3
+forOfHead(1) => [{"kind":"Ok","value":1}] | risky 1; read 1; small 1
+forOfHead(-1) => "risky call 3" | caught "risky call 3"

@@ -131,7 +131,8 @@ impl Table {
     /// analyzes; a tag no declaration knows becomes a constructor with no
     /// field list, which specializes to nothing and so covers only itself.
     /// The entry has no name — the checker answers with a *type*, not a
-    /// declaration, which is why the typed path's message names no variant.
+    /// declaration; the variant a message names is the one the arms are
+    /// read against (`coverage::subject_of`).
     pub(super) fn entry_of_members(&self, tags: &[String]) -> Entry {
         Entry {
             name: String::new(),
@@ -191,6 +192,10 @@ impl Entry {
 }
 
 pub(super) fn walk(program: &Program, table: &Table, depth: Depth, out: &mut PatternAnalyses) {
+    crate::stack::grow(|| walk_grown(program, table, depth, out));
+}
+
+fn walk_grown(program: &Program, table: &Table, depth: Depth, out: &mut PatternAnalyses) {
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_)
@@ -264,6 +269,10 @@ pub(super) fn walk_if_let(
     depth: Depth,
     out: &mut PatternAnalyses,
 ) {
+    crate::stack::grow(|| walk_if_let_grown(stmt, table, depth, out));
+}
+
+fn walk_if_let_grown(stmt: &IfLetStmt, table: &Table, depth: Depth, out: &mut PatternAnalyses) {
     let site = analyze_if_let(stmt, table, depth);
     out.sites.push(site);
     walk(&stmt.expr, table, depth, out);
@@ -527,6 +536,16 @@ pub(super) fn analyze_group(
 /// [`PatternBinding`] per leaf. `constructor` is `(variant name, constructor)`
 /// when the expected type is known; group fields are filled by the caller.
 pub(super) fn collect_bindings(
+    bindings: &[Binding],
+    constructor: Option<(&str, &MatchConstructor)>,
+    tag: &str,
+    table: &Table,
+    out: &mut Vec<PatternBinding>,
+) {
+    crate::stack::grow(|| collect_bindings_grown(bindings, constructor, tag, table, out));
+}
+
+fn collect_bindings_grown(
     bindings: &[Binding],
     constructor: Option<(&str, &MatchConstructor)>,
     tag: &str,

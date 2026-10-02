@@ -1,0 +1,66 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./siblingJsxTtValuesShareOneOwnerRewrite.ttx → $DIR/out/siblingJsxTtValuesShareOneOwnerRewrite.tsx
+
+==== ttc --check-types (exit 1) ====
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> siblingJsxTtValuesShareOneOwnerRewrite.ttx:2:21
+  |
+2 | const view = () => (<aside>
+  |                     ^^^^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> siblingJsxTtValuesShareOneOwnerRewrite.ttx:3:21
+  |
+3 |   {match (n) { 0 => <b>zero</b>, _ => <b>other</b> }}
+  |                     ^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> siblingJsxTtValuesShareOneOwnerRewrite.ttx:3:28
+  |
+3 |   {match (n) { 0 => <b>zero</b>, _ => <b>other</b> }}
+  |                            ^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> siblingJsxTtValuesShareOneOwnerRewrite.ttx:3:39
+  |
+3 |   {match (n) { 0 => <b>zero</b>, _ => <b>other</b> }}
+  |                                       ^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> siblingJsxTtValuesShareOneOwnerRewrite.ttx:3:47
+  |
+3 |   {match (n) { 0 => <b>zero</b>, _ => <b>other</b> }}
+  |                                               ^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> siblingJsxTtValuesShareOneOwnerRewrite.ttx:4:21
+  |
+4 |   {match (n) { 0 => <i>zero</i>, _ => <i>other</i> }}
+  |                     ^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> siblingJsxTtValuesShareOneOwnerRewrite.ttx:4:28
+  |
+4 |   {match (n) { 0 => <i>zero</i>, _ => <i>other</i> }}
+  |                            ^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> siblingJsxTtValuesShareOneOwnerRewrite.ttx:4:39
+  |
+4 |   {match (n) { 0 => <i>zero</i>, _ => <i>other</i> }}
+  |                                       ^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> siblingJsxTtValuesShareOneOwnerRewrite.ttx:4:47
+  |
+4 |   {match (n) { 0 => <i>zero</i>, _ => <i>other</i> }}
+  |                                               ^^^^
+error[ts7026]: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+ --> siblingJsxTtValuesShareOneOwnerRewrite.ttx:5:1
+  |
+5 | </aside>);
+  | ^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+siblingJsxTtValuesShareOneOwnerRewrite.tsx(6,11): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+siblingJsxTtValuesShareOneOwnerRewrite.tsx(7,44): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+siblingJsxTtValuesShareOneOwnerRewrite.tsx(7,51): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+siblingJsxTtValuesShareOneOwnerRewrite.tsx(7,58): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+siblingJsxTtValuesShareOneOwnerRewrite.tsx(7,66): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+siblingJsxTtValuesShareOneOwnerRewrite.tsx(8,48): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+siblingJsxTtValuesShareOneOwnerRewrite.tsx(8,55): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+siblingJsxTtValuesShareOneOwnerRewrite.tsx(8,62): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+siblingJsxTtValuesShareOneOwnerRewrite.tsx(8,70): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
+siblingJsxTtValuesShareOneOwnerRewrite.tsx(9,1): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.

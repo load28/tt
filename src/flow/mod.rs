@@ -47,12 +47,11 @@ use crate::lexer::{Token, TokenKind};
 
 use scanner::*;
 
-#[cfg(test)]
-use syntax::user_function_target_at;
 pub(crate) use syntax::{
-    FunctionTarget, FunctionTargets, function_depth_at, function_target_at, in_function_body,
-    in_static_block, user_function_depth_at,
+    FunctionTarget, FunctionTargets, function_depth_at, in_function_body, user_function_depth_at,
 };
+#[cfg(test)]
+use syntax::{function_target_at, user_function_target_at};
 
 /// One body's control-flow graph.
 #[derive(Debug)]
@@ -332,6 +331,10 @@ fn collect_if_let_heads(program: &Program, out: &mut IfLetHeads) {
 }
 
 fn collect_if_let(stmt: &IfLetStmt, out: &mut IfLetHeads) {
+    crate::stack::grow(|| collect_if_let_grown(stmt, out));
+}
+
+fn collect_if_let_grown(stmt: &IfLetStmt, out: &mut IfLetHeads) {
     out.insert(stmt.keyword_off, stmt.head_span.end);
     collect_if_let_heads(&stmt.body, out);
     match &stmt.else_part {

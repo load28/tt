@@ -1,0 +1,2 @@
+nestedBlock(2) => "passed" | read 2
+nestedBlock(-2) => "diverged" | read -2; error "negative -2"

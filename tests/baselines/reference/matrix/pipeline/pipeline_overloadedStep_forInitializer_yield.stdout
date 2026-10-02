@@ -1,0 +1,2 @@
+forInitializer(4) => [2] | yield 4; shape "#4"
+forInitializer(12) => [3] | yield 12; shape "#12"

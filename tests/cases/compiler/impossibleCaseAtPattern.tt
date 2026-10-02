@@ -1,0 +1,5 @@
+// Repro from TASK-620
+variant S { A, B }
+declare const s: S;
+export const r = match (s) { A => 1, Zzz => 2 };
+match (s) { A => {}, B => {}, Yyy | Www => {} }

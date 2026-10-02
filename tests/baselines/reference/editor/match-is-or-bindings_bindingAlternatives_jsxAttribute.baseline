@@ -1,0 +1,7 @@
+=== diagnostics main.ttx ===
+diagnostics: 1 diagnostic(s)
+  1:32-1:40 "Fragment" hint TS6133: 'Fragment' is declared but its value is never read. [unnecessary]
+published: 2 diagnostic(s)
+  1:32-1:40 "Fragment" hint TS6133 (ts): 'Fragment' is declared but its value is never read. [unnecessary]
+  4:60-4:84 "is TypeError { message }" error match-is-or-bindings (ttc): match: an `is` or-pattern cannot bind properties
+

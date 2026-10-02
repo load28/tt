@@ -1,0 +1,15 @@
+// A `try` in a generator cannot propagate (its `Err` would only complete
+// the iterator), so it is `try-placement` wherever the generator is
+// written, a template literal's interpolation included, whose tokens are a
+// stream of their own. An ordinary function written there is still the
+// `try`'s target.
+// @expectDiagnostic: try-placement
+// @baselines: errors.txt
+import type { TResult } from "@tt/std";
+declare function read(n: number): TResult<number, string>;
+export function generator(input: number) {
+  return `${[...(function* () { const n = [|try read(input)|]; yield n; })()]}`;
+}
+export function ordinary(input: number) {
+  return `${(function (): TResult<number, string> { const n = try read(input); return { kind: "Ok", value: n }; })()}`;
+}

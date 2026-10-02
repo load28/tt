@@ -1,0 +1,6 @@
+//// [aDirectPipelineCallKeepsContextualTyping.tt] 4 mapping(s)
+1:1 -> 1:1 len 22  "const value: number = "
+1:23 -> 1:36 len 1  "1"
+1:28 -> 1:23 len 12  "(x => x + 1)"
+1:40 -> 1:38 len 14  ";\n\nexport {};\n"
+

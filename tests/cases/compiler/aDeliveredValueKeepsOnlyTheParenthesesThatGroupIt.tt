@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_05.rs::a_delivered_value_keeps_only_the_parentheses_that_group_it
+variant E { A(v: number), B }
+declare const e: E;
+const plain = match (e) { A(v) => v + 1, B => 0 };
+const seq = match (e) { A(v) => (v, v + 1), B => 0 };

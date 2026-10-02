@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_01.rs::generated_value_slots_preserve_authored_contextual_types
+type Toggle = "on" | "off";
+const flip = (value: Toggle): Toggle => match (value) {
+"on" => "off", "off" => "on",
+};

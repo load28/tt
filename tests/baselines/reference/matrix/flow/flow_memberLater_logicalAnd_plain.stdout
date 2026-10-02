@@ -1,0 +1,2 @@
+logicalAnd(2) => 12 | flip true; operand 2; receiver {"factor":3}; add 4; twice 12
+logicalAnd(3) => false | flip false

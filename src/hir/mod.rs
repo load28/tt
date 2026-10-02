@@ -96,6 +96,68 @@ pub struct HirSourceMap {
     pattern_spans: HashMap<PatternId, Span>,
 }
 
+impl HirFile {
+    /// The token indices of every match body's `{` and every arm's `=>` in
+    /// `tokens`. The lexer's function-body facts mark an arm block's `{`
+    /// like a function body, and an arm's `=>` like an arrow, but neither
+    /// opens a function: a boundary query skips them
+    /// ([`crate::flow::FunctionTargets`]).
+    pub(crate) fn match_owned_tokens(
+        &self,
+        tokens: &[crate::lexer::Token],
+    ) -> std::collections::HashSet<usize> {
+        let hir = self;
+        let first_from = |offset: usize, wanted: fn(&crate::lexer::TokenKind) -> bool| {
+            let from = tokens.partition_point(|token| token.span.start < offset);
+            let outside = tokens.first().is_none_or(|first| offset < first.span.start)
+                || from
+                    .checked_sub(1)
+                    .is_some_and(|previous| tokens[previous].span.end > offset);
+            if outside {
+                return None;
+            }
+            tokens[from..]
+                .iter()
+                .position(|token| wanted(&token.kind))
+                .map(|index| from + index)
+        };
+        let span = |node: NodeId| {
+            hir.source_map
+                .node_span(node)
+                .unwrap_or_else(|| crate::ice::bug!("match syntax has no source span"))
+        };
+        let mut owned = std::collections::HashSet::new();
+        for (_, expr) in hir.exprs.iter() {
+            let Expr::Match { node, site, .. } = expr else {
+                continue;
+            };
+            owned.extend(first_from(span(*node).end, |kind| {
+                matches!(kind, crate::lexer::TokenKind::Punct(b'{'))
+            }));
+            for arm in &hir.sites[*site].arms {
+                if arm.body.is_none() {
+                    continue;
+                }
+                let pattern_end = hir
+                    .source_map
+                    .pattern_span(arm.pattern)
+                    .unwrap_or_else(|| crate::ice::bug!("match arm pattern has no source span"))
+                    .end;
+                let guard_end = arm
+                    .guard
+                    .map_or(pattern_end, |guard| match &hir.exprs[guard] {
+                        Expr::OpaqueTs(node) | Expr::Seq { node, .. } => span(*node).end,
+                        _ => crate::ice::bug!("match guard is not an expression program"),
+                    });
+                owned.extend(first_from(pattern_end.max(guard_end), |kind| {
+                    matches!(kind, crate::lexer::TokenKind::Arrow)
+                }));
+            }
+        }
+        owned
+    }
+}
+
 impl HirSourceMap {
     /// The earliest tt node span in source order, for a diagnostic emitted
     /// before a later lowering phase can identify a narrower construct.
@@ -240,6 +302,8 @@ pub struct VariantItem {
     pub declared: bool,
     /// The verbatim `<...>` generic parameter list, or `""`.
     pub generics: String,
+    /// Where [`VariantItem::generics`] is written in the source.
+    pub generics_span: Span,
     /// The declaration's variants, in order.
     pub variants: Vec<VariantId>,
 }
@@ -273,6 +337,8 @@ pub struct FieldData {
     /// The verbatim type annotation text — a *text*, not a type; the typed
     /// pass asks the checker (Phase 4).
     pub ty_text: String,
+    /// Where [`FieldData::ty_text`] is written in the source.
+    pub ty_span: Span,
     pub(crate) comments: crate::ast::Comments,
 }
 
@@ -385,6 +451,8 @@ pub struct LetElseStmt {
     pub site: PatternSiteId,
     /// Declaration mode of the binding introduced after the decision.
     pub binding_mode: BindingMode,
+    /// Whether the bindings are exported (`export const Tag(...) = ...`).
+    pub exported: bool,
     /// The `else { ... }` block's statements.
     pub else_body: BodyId,
     /// Whether every path through the `else` block leaves it, answered on
@@ -503,6 +571,8 @@ pub enum PipeStepKind {
         /// Whether the first operation is optional (`?.`) rather than `.`.
         optional: bool,
     },
+    /// No step was written: its value is TypeScript's error type.
+    Missing,
 }
 
 /// One template component. Keeping raw chunks in HIR lets backend lowering
@@ -540,6 +610,10 @@ pub struct PatternSite {
     pub subjects: Vec<ExprId>,
     /// The arms, in source order. `if let` and let-else are one-arm sites.
     pub arms: Vec<SiteArm>,
+    /// The source after the last arm: before a match body's `}`, or
+    /// between an `if let`'s then-block and its else continuation's body.
+    /// `None` for a let-else or an `if let` without an else continuation.
+    pub trailing: Option<Span>,
 }
 
 /// Which construct a site lowered from — analysis rules that differ by
@@ -573,6 +647,16 @@ pub struct SiteArm {
     pub body: Option<BodyId>,
     /// Whether the arm body yields an expression or executes a block.
     pub body_kind: Option<ArmBodyKind>,
+    /// The source between the previous arm (for the first arm, the
+    /// scrutinee's `)`, the body's `{` included) and this arm's pattern: the
+    /// separator and the comments written between the two arms. `None` for
+    /// an `if let` or a let-else arm.
+    pub gap: Option<Span>,
+    /// The arm's own source outside its guard and body: from its pattern to
+    /// its body (for an `if let` or a let-else, from its keyword to its
+    /// block, the scrutinee excluded), where the comments written in and
+    /// around the pattern are.
+    pub head: Vec<Span>,
 }
 
 /// The two source forms of a pattern arm body.
@@ -590,6 +674,9 @@ pub enum ArmBodyKind {
         /// that it never claims a divergence that is not there.
         completes: bool,
     },
+    /// `pattern if guard` or `pattern =>` with no body: the arm yields
+    /// TypeScript's error type.
+    Missing,
 }
 
 /// One pattern node. Or-patterns are a node with alternatives; nested
@@ -610,6 +697,8 @@ pub enum Pat {
         path: UnresolvedPath,
         /// The destructured fields; `None` when no parens were written.
         fields: Option<Vec<FieldPat>>,
+        /// The parenthesized field list as written.
+        list: Option<NodeId>,
     },
     /// `is Type` / `is Type { field }` — a JavaScript `instanceof`
     /// constructor path plus optional property materialization. The path is
@@ -621,6 +710,8 @@ pub enum Pat {
         path: String,
         /// Property bindings; `None` when no braces were written.
         fields: Option<Vec<FieldPat>>,
+        /// The braced property list as written.
+        list: Option<NodeId>,
     },
     /// `"north"`, `200`, `true`, `1n`.
     Literal(LitValue),

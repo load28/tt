@@ -1,0 +1,464 @@
+=== runtimeGuardedAllWildcardArmIsDecidedByItsGuard.tt ===
+variant T { A, B }
+>T : type T = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+type Item = { run: (x: number) => number };
+>Item : type Item = {
+>       run: (x: number) => number;
+>   }
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+function pair(a: Item, b: Item): number { return a.run(0) * 10 + b.run(0); }
+>pair : function pair(a: Item, b: Item): number
+>a : (parameter) a: Item
+>Item : type Item = {
+>       run: (x: number) => number;
+>   }
+>b : (parameter) b: Item
+>Item : type Item = {
+>       run: (x: number) => number;
+>   }
+>a : (parameter) a: Item
+>run : (property) run: (x: number) => number
+>b : (parameter) b: Item
+>run : (property) run: (x: number) => number
+function stmt(a: T, b: T, cond: boolean): number {
+>stmt : function stmt(a: T, b: T, cond: boolean): number
+>a : (parameter) a: T
+>T : type T = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>b : (parameter) b: T
+>T : type T = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>cond : (parameter) cond: boolean
+  return match (a, b) {
+>a : (parameter) a: T
+>b : (parameter) b: T
+    (_, _) if cond => 2,
+>cond : (parameter) cond: boolean
+function last(a: T, b: T, cond: boolean): number {
+>last : function last(a: T, b: T, cond: boolean): number
+>a : (parameter) a: T
+>T : type T = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>b : (parameter) b: T
+>T : type T = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>cond : (parameter) cond: boolean
+  return match (a, b) {
+>a : (parameter) a: T
+>b : (parameter) b: T
+    (_, _) if cond => 2,
+>cond : (parameter) cond: boolean
+function selected(a: T, b: T, cond: boolean): number {
+>selected : function selected(a: T, b: T, cond: boolean): number
+>a : (parameter) a: T
+>T : type T = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>b : (parameter) b: T
+>T : type T = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>cond : (parameter) cond: boolean
+  let seen = 0;
+>seen : let seen: number
+  const consume = (item: Item) => { seen = item.run(0); };
+>consume : const consume: (item: Item) => void
+>item : (parameter) item: Item
+>Item : type Item = {
+>       run: (x: number) => number;
+>   }
+>seen : let seen: number
+>item : (parameter) item: Item
+>run : (property) run: (x: number) => number
+  consume(match (a, b) {
+>consume : const consume: (item: Item) => void
+>a : (parameter) a: T
+>b : (parameter) b: T
+    (A, _) => ({ run: x => x + 1 }),
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+    (_, _) if cond => ({ run: x => x + 2 }),
+>cond : (parameter) cond: boolean
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+    (_, _) => ({ run: x => x + 3 }),
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+  return seen;
+>seen : let seen: number
+function inline(a: T, b: T, cond: boolean): number {
+>inline : function inline(a: T, b: T, cond: boolean): number
+>a : (parameter) a: T
+>T : type T = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>b : (parameter) b: T
+>T : type T = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>cond : (parameter) cond: boolean
+  return pair(
+>pair : function pair(a: Item, b: Item): number
+    match (a, b) { (A, _) => ({ run: x => x + 1 }), (_, _) if cond => ({ run: x => x + 2 }), (_, _) => ({ run: x => x + 3 }) },
+>a : (parameter) a: T
+>b : (parameter) b: T
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>cond : (parameter) cond: boolean
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+    match (b, a) { (A, _) => ({ run: x => x + 4 }), (_, _) if !cond => ({ run: x => x + 5 }), _ => ({ run: x => x + 6 }) },
+>b : (parameter) b: T
+>a : (parameter) a: T
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>cond : (parameter) cond: boolean
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>run : (property) run: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+function literal(n: number, cond: boolean): string {
+>literal : function literal(n: number, cond: boolean): string
+>n : (parameter) n: number
+>cond : (parameter) cond: boolean
+  return match (n) {
+>n : (parameter) n: number
+    1 if cond => "one",
+>cond : (parameter) cond: boolean
+console.log(stmt(T.A, T.B, false), stmt(T.B, T.A, true), stmt(T.B, T.A, false));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>stmt : function stmt(a: T, b: T, cond: boolean): number
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>stmt : function stmt(a: T, b: T, cond: boolean): number
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>stmt : function stmt(a: T, b: T, cond: boolean): number
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+console.log(last(T.A, T.B, false), last(T.B, T.A, true), last(T.B, T.A, false));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>last : function last(a: T, b: T, cond: boolean): number
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>last : function last(a: T, b: T, cond: boolean): number
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>last : function last(a: T, b: T, cond: boolean): number
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+console.log(selected(T.A, T.B, false), selected(T.B, T.A, true), selected(T.B, T.A, false));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>selected : function selected(a: T, b: T, cond: boolean): number
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>selected : function selected(a: T, b: T, cond: boolean): number
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>selected : function selected(a: T, b: T, cond: boolean): number
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+console.log(inline(T.A, T.B, true), inline(T.B, T.B, true), inline(T.B, T.A, false));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>inline : function inline(a: T, b: T, cond: boolean): number
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>inline : function inline(a: T, b: T, cond: boolean): number
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>inline : function inline(a: T, b: T, cond: boolean): number
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>T : const T: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+console.log(literal(1, true), literal(1, false), literal(3, true));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>literal : function literal(n: number, cond: boolean): string
+>literal : function literal(n: number, cond: boolean): string
+>literal : function literal(n: number, cond: boolean): string
+

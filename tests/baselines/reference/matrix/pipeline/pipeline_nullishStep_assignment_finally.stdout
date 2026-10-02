@@ -1,0 +1,2 @@
+assignment(10) => 9 | initial 0; target {"value":0}; operand 10; flip true; lookup true; found 9; finally 0
+assignment(20) => 40 | initial 0; target {"value":0}; operand 20; flip false; lookup false; double 40; finally 0

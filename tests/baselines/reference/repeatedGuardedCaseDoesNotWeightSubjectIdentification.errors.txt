@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./repeatedGuardedCaseDoesNotWeightSubjectIdentification.tt → $DIR/out/repeatedGuardedCaseDoesNotWeightSubjectIdentification.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'u'.
+ --> repeatedGuardedCaseDoesNotWeightSubjectIdentification.tt:3:18
+  |
+3 | const v = match (u) {
+  |                  ^
+error[ts2304]: Cannot find name 'first'.
+ --> repeatedGuardedCaseDoesNotWeightSubjectIdentification.tt:4:12
+  |
+4 |   Alpha if first => 1,
+  |            ^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+repeatedGuardedCaseDoesNotWeightSubjectIdentification.ts(13,17): error TS2304: Cannot find name 'u'.
+repeatedGuardedCaseDoesNotWeightSubjectIdentification.ts(16,11): error TS2304: Cannot find name 'first'.

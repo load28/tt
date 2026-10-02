@@ -1,0 +1,16 @@
+//// [anAnnotationNeverNamesTheStorageTheLoweringDeclared.tt] 14 mapping(s)
+1:1 -> 1:1 len 30  "\nfunction pick(n: number) {\n  "
+3:3 -> 17:3 len 10  "const C = "
+3:20 -> 5:19 len 1  "n"
+3:25 -> 7:12 len 1  "1"
+3:30 -> 8:18 len 15  "class { q = 1 }"
+3:52 -> 12:18 len 15  "class { q = 2 }"
+3:69 -> 17:19 len 4  ";\n  "
+4:3 -> 31:3 len 10  "const K = "
+4:20 -> 20:19 len 1  "n"
+4:25 -> 22:12 len 1  "1"
+4:32 -> 23:9 len 31  "const Local = class { r = 3 }; "
+4:70 -> 23:49 len 5  "Local"
+4:85 -> 26:18 len 15  "class { r = 4 }"
+4:102 -> 31:19 len 98  ";\n  return [new C().q, new K().r];\n}\nconsole.log"...
+

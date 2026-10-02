@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_06.rs::nested_pattern_emits_path_conditions_and_binds
+
+const n = match (r) {
+  Ok(value: Some(value: v)) => v,
+  Ok(value: None()) => 0,
+  _ => -1,
+};

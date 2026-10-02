@@ -1,0 +1,15 @@
+//// [nestedPatternsThatCoverThePayloadAreExhaustive.tt] 13 mapping(s)
+1:24 -> 20:23 len 6  "number"
+1:24 -> 23:12 len 6  "number"
+1:37 -> 25:3 len 1  "\n"
+2:29 -> 27:28 len 5  "Inner"
+2:29 -> 30:17 len 5  "Inner"
+2:43 -> 32:3 len 1  "\n"
+3:1 -> 53:1 len 10  "const a = "
+3:18 -> 35:17 len 1  "o"
+4:19 -> 38:15 len 1  "n"
+4:26 -> 39:18 len 1  "n"
+5:24 -> 43:18 len 1  "0"
+6:11 -> 47:18 len 2  "-1"
+7:2 -> 53:19 len 2  ";\n"
+

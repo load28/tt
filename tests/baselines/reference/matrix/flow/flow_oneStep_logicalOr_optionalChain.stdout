@@ -1,0 +1,2 @@
+logicalOr(7) => true | flip true
+logicalOr(1) => 2 | flip false; add 2

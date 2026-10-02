@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[result-label-crossing]: a labeled control transfer cannot leave a `result` block
+ --> ./main.tt:7:88
+  |
+7 |     outer: { const r = result { const n = try read(note("operand", input)); if (n > 1) break outer; return n; }; seen = note("r", r); }
+  |                                                                                        ^^^^^
+  |
+  = help: keep the label target inside this `result` block
+
+
+==== ttc --check-types (exit 1) ====
+error[result-label-crossing]: a labeled control transfer cannot leave a `result` block
+ --> main.tt:7:88
+  |
+7 |     outer: { const r = result { const n = try read(note("operand", input)); if (n > 1) break outer; return n; }; seen = note("r", r); }
+  |                                                                                        ^^^^^
+  |
+  = help: keep the label target inside this `result` block
+
+==== tsc on the emitted TypeScript (exit 0) ====

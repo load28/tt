@@ -1,0 +1,22 @@
+// An or-pattern alternative with a nested pattern is rejected once, as
+// `match-nested-in-or-pattern`. The names it binds inside the nested pattern
+// are still names it binds, so an alternative that binds the same names is
+// not also reported as `match-or-binding-mismatch`: in a match arm, in an
+// element of a tuple pattern, and in an `if let`.
+// @expectDiagnostic: match-nested-in-or-pattern
+// @baselines: errors.txt
+variant Opt { Some(value: number), None }
+variant Outcome { Done(value: Opt), Failed(error: number) }
+export function arm(o: Outcome) {
+  return match (o) { [|Done|](value: Some(value: v)) | Failed(error: v) => v, _ => 0 };
+}
+export function later(o: Outcome) {
+  return match (o) { Failed(error: v) | [|Done|](value: Some(value: v)) => v, _ => 0 };
+}
+export function tuple(o: Outcome, p: Outcome) {
+  return match (o, p) { ([|Done|](value: Some(value: v)) | Failed(error: v), _) => v, _ => 0 };
+}
+export function ifLet(o: Outcome) {
+  if let [|Done|](value: Some(value: v)) | Failed(error: v) = o { return v; }
+  return 0;
+}

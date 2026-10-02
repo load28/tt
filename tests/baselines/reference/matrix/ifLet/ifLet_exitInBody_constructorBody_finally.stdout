@@ -1,0 +1,2 @@
+constructorBody(2) => "passed" | operand 2; read 2; finally 0
+constructorBody(-2) => threw diverged | operand -2; read -2; error "negative -2"; finally 0

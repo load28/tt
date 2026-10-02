@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_01.rs::jsx_expression_pipeline_rewrites_only_the_container_expression
+declare const raw: string; declare const up: (x: string) => string;
+const child = <p>{raw |> up}</p>;

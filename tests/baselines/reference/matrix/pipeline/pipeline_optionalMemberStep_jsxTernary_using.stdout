@@ -1,0 +1,3 @@
+jsxTernary(3) => "<p></p>" | open res; flip true; operand 3; flip false; maybe false; dispose res
+jsxTernary(4) => "<p></p>" | open res; flip true; operand 4; flip false; maybe false; dispose res
+jsxTernary(5) => "<p></p>" | open res; flip true; operand 5; flip false; maybe false; dispose res

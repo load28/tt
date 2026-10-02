@@ -1,0 +1,4 @@
+yieldOperand("north") => 1 | risky "north"; n 1; yield 1
+yieldOperand("south") => 2 | risky "south"; se 2; yield 2
+yieldOperand("east") => "risky call 3" | caught "risky call 3"
+yieldOperand("up") => 0 | risky "up"; other 0; yield 0

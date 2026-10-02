@@ -1,0 +1,5 @@
+compoundAssignment(200) => "start:true" | initial "start:"; target {"total":"start:"}; risky 200; success true
+compoundAssignment(201) => "start:true" | initial "start:"; target {"total":"start:"}; risky 201; success true
+compoundAssignment(404) => "risky call 3" | initial "start:"; target {"total":"start:"}; caught "risky call 3"
+compoundAssignment(500) => "start:false" | initial "start:"; target {"total":"start:"}; risky 500; guard true; server false
+compoundAssignment(7) => "start:null" | initial "start:"; target {"total":"start:"}; risky 7; other null

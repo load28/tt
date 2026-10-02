@@ -1,0 +1,49 @@
+=== aResultReturnWithoutASemicolonCompletesTheBlock.tt ===
+declare function read(): { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+>read : function read(): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>kind : (property) kind: "Err"
+>error : (property) error: string
+export function f() {
+>f : function f(): {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+  const r = result {
+>r : const r: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+    const a = try read();
+>a : const a: number
+>read : function read(): {
+>       kind: "Ok";
+>       value: number;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    return a
+>a : const a: number
+  return r;
+>r : const r: {
+>       kind: "Err";
+>       error: string;
+>   } | {
+>       kind: "Ok";
+>       value: number;
+>   }
+

@@ -1,0 +1,2 @@
+whileBody(3) => 6 | test true
+whileBody(8) => null | test true

@@ -1,0 +1,2 @@
+jsxChild(4) => "<p>7</p>" | yield 4; step 3; add 7
+jsxChild(-1) => "<p>2</p>" | yield -1; step 3; add 2

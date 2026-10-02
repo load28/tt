@@ -1,0 +1,6 @@
+=== diagnostics main.tt ===
+diagnostics: 1 diagnostic(s)
+  5:50-5:56 "Circel" error TS2678: this pattern's case is not one the value can be (ts2678: Type '"Circel"' is not comparable to type '"Circle" | "Point" | "Rect"'.)
+published: 1 diagnostic(s)
+  5:50-5:56 "Circel" error unknown-case (ttc): variant Shape has no case `Circel`
+

@@ -1,0 +1,2 @@
+conditionalBranch(5) => 15 | open res; flip true; operand 5; map 15; dispose res
+conditionalBranch(0) => "skipped" | open res; flip false; else "skipped"; dispose res

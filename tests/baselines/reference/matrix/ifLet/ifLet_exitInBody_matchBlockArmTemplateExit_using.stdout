@@ -1,0 +1,2 @@
+matchBlockArmTemplateExit(2) => "passed" | open res; arm true; operand 2; read 2; dispose res
+matchBlockArmTemplateExit(-2) => "<three>" | open res; arm true; operand -2; read -2; error "negative -2"; exit 3; dispose res

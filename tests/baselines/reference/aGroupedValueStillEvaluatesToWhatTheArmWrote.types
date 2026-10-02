@@ -1,0 +1,65 @@
+=== aGroupedValueStillEvaluatesToWhatTheArmWrote.tt ===
+variant E { A(v: number), B }
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (v: number) => E
+>v : (property) v: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const e: E = E.A(1);
+>e : const e: E
+>E : type E = {
+>       kind: "A";
+>       v: number;
+>   } | {
+>       kind: "B";
+>   }
+>E : const E: {
+>       A: (v: number) => E;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (v: number) => E
+const seen: number[] = [];
+>seen : const seen: number[]
+const note = (n: number): number => { seen.push(n); return n; };
+>note : const note: (n: number) => number
+>n : (parameter) n: number
+>seen : const seen: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+const seq = match (e) {
+>seq : const seq: number
+>e : const e: E
+A(v) => {
+>v : const v: number
+return note(v), v + 10;
+>note : const note: (n: number) => number
+>v : const v: number
+>v : const v: number
+const width = 3;
+>width : const width: 3
+const receiver = width + 0.5 |> .toFixed(1);
+>receiver : const receiver: string
+>width : const width: 3
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+const chained = "  pad  " |> .trim() |> .length;
+>chained : const chained: number
+>trim : (method) String.trim(): string
+>length : (property) String.length: number
+console.log(seq, seen.join(","), receiver, chained);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>seq : const seq: number
+>seen : const seen: number[]
+>join : (method) Array<number>.join(separator?: string): string
+>receiver : const receiver: string
+>chained : const chained: number
+

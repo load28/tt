@@ -1,0 +1,42 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.tt → $DIR/out/aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 's'.
+ --> aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.tt:1:11
+  |
+1 | const a = s |> .trim();
+  |           ^
+error[ts2304]: Cannot find name 'x'.
+ --> aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.tt:2:12
+  |
+2 | const b = (x + y) |> .toFixed(2);
+  |            ^
+error[ts2304]: Cannot find name 'y'.
+ --> aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.tt:2:16
+  |
+2 | const b = (x + y) |> .toFixed(2);
+  |                ^
+error[ts1375]: 'await' expressions are only allowed at the top level of a file when that file is a module, but this file has no imports or exports. Consider adding an empty 'export {}' to make this file a module.
+ --> aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.tt:3:11
+  |
+3 | const c = await p |> .then(g);
+  |           ^^^^^
+error[ts2304]: Cannot find name 'p'.
+ --> aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.tt:3:17
+  |
+3 | const c = await p |> .then(g);
+  |                 ^
+error[ts2304]: Cannot find name 'g'.
+ --> aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.tt:3:28
+  |
+3 | const c = await p |> .then(g);
+  |                            ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.ts(1,11): error TS2304: Cannot find name 's'.
+aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.ts(2,12): error TS2304: Cannot find name 'x'.
+aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.ts(2,16): error TS2304: Cannot find name 'y'.
+aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.ts(3,12): error TS1375: 'await' expressions are only allowed at the top level of a file when that file is a module, but this file has no imports or exports. Consider adding an empty 'export {}' to make this file a module.
+aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.ts(3,18): error TS2304: Cannot find name 'p'.
+aPostfixStepParenthesizesOnlyAReceiverThatNeedsIt.ts(3,26): error TS2304: Cannot find name 'g'.

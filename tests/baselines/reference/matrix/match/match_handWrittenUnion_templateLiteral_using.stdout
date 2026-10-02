@@ -1,0 +1,2 @@
+templateLiteral({"kind":"Click","x":3}) => "<L|3|R>" | open res; left "L"; operand {"kind":"Click","x":3}; click 3; right "R"; dispose res
+templateLiteral({"kind":"Key","key":"k"}) => "<L|k|R>" | open res; left "L"; operand {"kind":"Key","key":"k"}; key "k"; right "R"; dispose res

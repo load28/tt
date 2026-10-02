@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+error[malformed-match]: tt `match` could not be parsed
+ --> ./main.tt:2:10
+  |
+2 |   return match () { 200 => "ok", _ => "other" };
+  |          ^^^^^
+  |
+  = help: write `match (<scrutinee>) { <pattern> => <body> }`
+
+
+==== ttc --check-types (exit 1) ====
+error[malformed-match]: tt `match` could not be parsed
+ --> main.tt:2:10
+  |
+2 |   return match () { 200 => "ok", _ => "other" };
+  |          ^^^^^
+  |
+  = help: write `match (<scrutinee>) { <pattern> => <body> }`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

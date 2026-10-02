@@ -72,13 +72,12 @@ pub(super) fn collect_extern_variants(
     imports: &[TtImport],
     cache: &ExternCache,
 ) -> Vec<ExternVariant> {
-    let dir = file.parent().unwrap_or(Path::new("."));
     let mut externs: Vec<ExternVariant> = Vec::new();
     for import in imports {
-        if matches!(import.names, TtImportNames::None) {
+        let Some(module) = extern_module(file, import) else {
             continue;
-        }
-        let decls = cache.exported_variants(&dir.join(&import.specifier));
+        };
+        let decls = cache.exported_variants(&module);
         let from = Some(import.specifier.clone());
         match &import.names {
             TtImportNames::Namespace(ns) => {
@@ -99,12 +98,36 @@ pub(super) fn collect_extern_variants(
                     }
                 }
             }
-            // Skipped by the guard at the top of the loop: an import
-            // that brings no names in has no declarations to collect.
             TtImportNames::None => unreachable!("a nameless import was skipped above"),
         }
     }
     externs
+}
+
+pub(super) fn extern_module(file: &Path, import: &TtImport) -> Option<PathBuf> {
+    if matches!(import.names, TtImportNames::None) {
+        return None;
+    }
+    Some(
+        file.parent()
+            .unwrap_or(Path::new("."))
+            .join(&import.specifier),
+    )
+}
+
+pub(super) fn compile_reads(file: &Path) -> Vec<PathBuf> {
+    let mut reads = vec![file.to_path_buf()];
+    let Some(kind) = ttc::SourceKind::from_tt_path(file) else {
+        return reads;
+    };
+    if let Ok(source) = fs::read_to_string(file) {
+        reads.extend(
+            ttc::tt_imports_with_kind(&source, kind)
+                .iter()
+                .filter_map(|import| extern_module(file, import)),
+        );
+    }
+    reads
 }
 
 /// One input, read and scanned once for the whole run — or the diagnostic

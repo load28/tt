@@ -1,0 +1,7 @@
+//// [parenthesizedConciseArrowKeepsTryInTheArrow.tt] 5 mapping(s)
+1:1 -> 1:1 len 16  "const f = () => "
+1:17 -> 8:10 len 1  "("
+1:22 -> 3:18 len 6  "next()"
+1:28 -> 8:17 len 1  ")"
+1:29 -> 9:2 len 2  ";\n"
+

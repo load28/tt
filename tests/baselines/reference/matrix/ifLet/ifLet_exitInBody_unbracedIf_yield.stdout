@@ -1,0 +1,2 @@
+unbracedIf(2) => "passed" | enter true; yield 2; read 2
+unbracedIf(-2) => "diverged" | enter true; yield -2; read -2; error "negative -2"

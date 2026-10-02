@@ -1,0 +1,2 @@
+whileTest(123) => 1 | yield 123
+whileTest(4) => 1 | yield 4

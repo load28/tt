@@ -1,0 +1,6 @@
+//// [flowCompositionKeepsTheFirstStepArity.tt] 4 mapping(s)
+1:1 -> 2:1 len 55  "const add = (a: number, b: number) => a + b;\ncon"...
+2:19 -> 3:18 len 3  "add"
+2:26 -> 3:23 len 22  "((n: number) => n * 2)"
+2:48 -> 3:46 len 41  ";\nconst v: number = f(1, 2);\n\nexport {};\n"
+

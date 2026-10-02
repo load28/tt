@@ -1,0 +1,5 @@
+// @origin: tests/compile/cases_08.rs::an_inner_declaration_shadows_an_outer_val
+val const cfg = { a: 1 };
+function f(cfg: C) {
+  cfg.a = 2;
+}

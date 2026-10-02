@@ -1,0 +1,6 @@
+//// [parenthesizedTernaryHeadCompiles.tt] 4 mapping(s)
+1:1 -> 1:1 len 10  "const a = "
+1:11 -> 1:44 len 11  "(c ? x : y)"
+1:26 -> 1:57 len 1  "f"
+1:27 -> 1:59 len 2  ";\n"
+

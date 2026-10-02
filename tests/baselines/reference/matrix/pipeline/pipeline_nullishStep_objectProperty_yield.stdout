@@ -1,0 +1,2 @@
+objectProperty(10) => {"a":1,"value":9,"c":3} | a 1; yield 10; flip true; lookup true; found 9; c 3
+objectProperty(20) => {"a":1,"value":40,"c":3} | a 1; yield 20; flip false; lookup false; double 40; c 3

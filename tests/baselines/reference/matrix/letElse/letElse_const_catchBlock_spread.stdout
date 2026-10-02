@@ -1,0 +1,2 @@
+catchBlock(2) => 2 | throw "boom"; read 2
+catchBlock(-1) => "diverged" | throw "boom"; read -1

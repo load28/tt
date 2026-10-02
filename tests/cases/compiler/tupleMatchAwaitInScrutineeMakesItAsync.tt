@@ -1,0 +1,7 @@
+// @origin: tests/compile/cases_06.rs::tuple_match_await_in_scrutinee_makes_it_async
+async function f() {
+  return match (await a, b) {
+    (X, Y) => 1,
+    _ => 0,
+  };
+}

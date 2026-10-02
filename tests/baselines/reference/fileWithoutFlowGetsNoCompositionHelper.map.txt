@@ -1,0 +1,6 @@
+//// [fileWithoutFlowGetsNoCompositionHelper.tt] 4 mapping(s)
+1:1 -> 1:1 len 10  "const a = "
+1:11 -> 1:44 len 1  "x"
+1:16 -> 1:47 len 1  "f"
+1:17 -> 1:49 len 2  ";\n"
+

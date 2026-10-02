@@ -1,0 +1,34 @@
+=== anIfLetThatStartsAStatementStaysAStatement6.tt ===
+variant O { Some(value: number), None }
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => O
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+declare const o: O;
+>o : const o: O
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+declare function g(x: unknown): number;
+>g : function g(x: unknown): number
+>x : (parameter) x: unknown
+const x = match (o) { Some(value) => { if let Some(value: v) = o { g(v); } return 1; }, None => 0 };
+>x : const x: number
+>o : const o: O
+>value : const value: number
+>value : (property) value: number
+>v : const v: number
+>o : const o: O
+>g : function g(x: unknown): number
+>v : const v: number
+

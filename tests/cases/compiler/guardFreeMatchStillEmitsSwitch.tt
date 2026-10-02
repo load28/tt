@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_02.rs::guard_free_match_still_emits_switch
+// @origin: tests/compile/cases_01.rs::match_wildcard_becomes_default
+const r = match (x) { A => 1, _ => 0 };

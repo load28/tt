@@ -1,0 +1,8 @@
+//// [letElseInitializerMayBeAnObjectLiteral1.tt] 6 mapping(s)
+1:1 -> 1:1 len 26  "function f(n: number) {\n  "
+2:14 -> 6:11 len 5  "value"
+2:21 -> 6:18 len 1  "v"
+2:26 -> 2:18 len 35  "{ kind: \"Some\" as const, value: n }"
+2:69 -> 4:5 len 7  "return;"
+2:79 -> 6:31 len 15  "\n  return v;\n}\n"
+

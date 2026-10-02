@@ -1,0 +1,2 @@
+resultBody(4) => {"kind":"Ok","value":[1,[{"kind":"North"},{"kind":"South"},4]]} | open res; base 1; read 1; operand 4; operand 4; dispose res
+resultBody(9) => {"kind":"Ok","value":[1,[{"kind":"North"},{"kind":"South"},9]]} | open res; base 1; read 1; operand 9; operand 9; dispose res

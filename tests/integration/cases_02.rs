@@ -1,34 +1,4 @@
 #[test]
-fn typecheck_exhaustive_match_passes() {
-    require_toolchain!();
-    let (ok, out) = typecheck(
-        r#"
-variant Shape { Circle(radius: number), Point }
-const f = (s: Shape) => match (s) {
-  Circle(radius) => radius,
-  Point => 0,
-};
-"#,
-    );
-    assert!(ok, "{out}");
-}
-
-#[test]
-fn typecheck_wildcard_makes_partial_match_exhaustive() {
-    require_toolchain!();
-    let (ok, out) = typecheck(
-        r#"
-variant Shape { Circle(radius: number), Rect(w: number, h: number), Point }
-const f = (s: Shape) => match (s) {
-  Circle(radius) => radius,
-  _ => 0,
-};
-"#,
-    );
-    assert!(ok, "{out}");
-}
-
-#[test]
 fn std_result_constructors_type_only_their_own_variant() {
     require_toolchain!();
     // `Ok` carries no error type and `Err` carries no success type, so each
@@ -94,30 +64,6 @@ console.log(loaded);
 "#,
     );
     assert!(ok, "tsc lost the try error union:\n{out}");
-}
-
-#[test]
-fn try_error_union_stays_checked_against_the_declared_return_type() {
-    require_toolchain!();
-    // The inference above is not a hole: an annotated function whose `Err`
-    // type does not cover a propagated error is still a type error, reported
-    // by tsc on the emitted early return.
-    let (ok, out) = typecheck_with_std(
-        r#"
-import type { TResult } from "./tt/index.js";
-import * as Result from "./tt/result.js";
-
-declare function getUser(): TResult<number, { tag: "user" }>;
-
-function load(): TResult<number, string> {
-  const user = try getUser();
-  return Result.Ok(user);
-}
-
-console.log(load());
-"#,
-    );
-    assert!(!ok, "tsc accepted an uncovered error type:\n{out}");
 }
 
 /// Declarations shared by the `andThen` error-union tests: four steps, each
@@ -309,28 +255,6 @@ console.log(profile, exact);
 }
 
 #[test]
-fn std_result_and_then_error_union_stays_checked_against_an_annotation() {
-    require_toolchain!();
-    // Accumulating errors is not a hole either: a declared return type that
-    // covers only one of the two chained error types is still a tsc error.
-    let (ok, out) = typecheck_with_std(&format!(
-        r#"{ERROR_UNION_PRELUDE}
-declare const first: TResult<User, TokenError>;
-
-function chain(): TResult<Profile, TokenError> {{
-  return Result.andThen(first, (user) => fetchProfile(user));
-}}
-
-console.log(chain());
-"#
-    ));
-    assert!(
-        !ok,
-        "tsc accepted a return type missing an error case:\n{out}"
-    );
-}
-
-#[test]
 fn std_result_combinators_keep_the_side_a_callback_never_returns() {
     require_toolchain!();
     let (ok, out) = typecheck_with_std(&format!(
@@ -387,20 +311,6 @@ console.log(annotated, checks);
 }
 
 #[test]
-fn std_result_or_else_still_requires_the_recovered_value_type() {
-    require_toolchain!();
-    let (ok, out) = typecheck_with_std(&format!(
-        r#"{ERROR_UNION_PRELUDE}
-declare const r: TResult<number, string>;
-
-const recovered = Result.orElse(r, (s) => Result.Ok(s));
-console.log(recovered);
-"#
-    ));
-    assert!(!ok, "orElse accepted a recovery of the wrong type:\n{out}");
-}
-
-#[test]
 fn runtime_result_and_then_chain_short_circuits_on_the_first_err() {
     require_toolchain!();
     // The types changed; the emitted values did not. Both spellings still
@@ -443,23 +353,6 @@ console.log(JSON.stringify(Result.andThen(parse("x"), inRange)));
     );
 }
 
-#[test]
-fn typecheck_match_on_handwritten_discriminated_union() {
-    require_toolchain!();
-    let (ok, out) = typecheck(
-        r#"
-type AppEvent =
-  | { kind: "click"; x: number; y: number }
-  | { kind: "key"; code: string };
-const f = (e: AppEvent) => match (e) {
-  click(x, y) => x + y,
-  key(code) => code.length,
-};
-"#,
-    );
-    assert!(ok, "{out}");
-}
-
 /* ------------------------------------------------------------------ */
 /* import specifier rewriting                                          */
 /* ------------------------------------------------------------------ */
@@ -485,7 +378,7 @@ fn cross_file_tt_import_typechecks_and_runs() {
     fs::write(dir.join("error.ts"), &error_ts).unwrap();
     fs::write(dir.join("main.ts"), &main_ts).unwrap();
     fs::write(dir.join("package.json"), "{ \"type\": \"module\" }\n").unwrap();
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .arg(dir.join("main.ts"))
         .arg("--outDir")
         .arg(&dir)
@@ -691,7 +584,7 @@ fn cli_cross_file_match_runs_end_to_end() {
     let (ok, err) = run_ttc(&dir, &["token.tt", "main.tt"]);
     assert!(ok, "ttc failed:\n{err}");
     fs::write(dir.join("package.json"), "{ \"type\": \"module\" }\n").unwrap();
-    let out = Command::new("tsc")
+    let out = common::tsc()
         .arg(dir.join("main.ts"))
         .arg("--outDir")
         .arg(&dir)

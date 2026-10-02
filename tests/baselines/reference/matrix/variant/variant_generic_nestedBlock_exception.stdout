@@ -1,0 +1,2 @@
+nestedBlock(4) => {"kind":"Node","left":{"kind":"Leaf","value":4},"right":{"kind":"Node","left":{"kind":"Leaf","value":5},"right":{"kind":"Leaf","value":0}}} | risky 4; risky 4
+nestedBlock(9) => "risky call 3" | caught "risky call 3"

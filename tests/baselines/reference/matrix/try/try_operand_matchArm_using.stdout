@@ -1,0 +1,2 @@
+matchArm(2) => {"kind":"Ok","value":2} | open res; flip true; operand 2; read 2; dispose res
+matchArm(-1) => {"kind":"Ok","value":0} | open res; flip false; other arm 0; dispose res

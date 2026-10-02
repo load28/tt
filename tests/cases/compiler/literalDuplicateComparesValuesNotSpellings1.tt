@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_07.rs::literal_duplicate_compares_values_not_spellings
+const v = match (x) { 200 => 1, 0xc8 => 2 };

@@ -1,0 +1,12 @@
+# Units of TypeScript's test cases (tests/typescript-cases.json) that are
+# valid TypeScript ttc does not pass through byte for byte: known bugs.
+#
+# One line per unit: the case path under tests/cases (with #<unit> for a
+# case of several // @filename units), a tab, what the run observes, a tab,
+# and the TASK-NNN that tracks the fix. tests/corpus.rs fails when a listed
+# unit comes back unchanged, is observed differently, or is also in
+# tests/passthrough-accepted.txt.
+compiler/declarationEmitPrivateNameInTypeQuery.ts	rejected verify-failed	TASK-641: the self-check rejects `typeof this.#a`; TypeScript's parseTypeQuery reads a private name after a dot (parseEntityName with allowPrivateName), but swc's TsQualifiedName holds only an IdentName, so the fix is an AST change in vendor/swc_ecma_ast and swc_ecma_visit, not a parser patch
+conformance/externalModules/topLevelAwait.1.ts#index.ts	rejected verify-failed	TASK-641: the self-check reads `throw await` followed by a line break in a module as the identifier `await` (swc's parse_await_expr treats a line break as the end of the operand outside an async function); TypeScript reparses a module's top-level statements in an await context (reparseTopLevelAwait) and reads `throw await 1`, which swc's one-pass parse_program cannot know before it has seen the module syntax
+conformance/externalModules/topLevelAwait.2.ts	rejected verify-failed	TASK-641: the self-check rejects `import await = foo.await`; swc counts an import-equals declaration of an entity name as module syntax, so `await` is reserved there, while TypeScript counts only `import x = require(...)` as an external module indicator and reads the file as a script; changing swc's module detection is not a local patch
+conformance/parser/ecmascript5/ArrowFunctionExpressions/parserArrowFunctionExpression11.ts#fileTs.ts	rejected verify-failed	TASK-641: the self-check rejects `a ? b ? c : (d) : e => f`; TypeScript parses the true branch of a conditional, and a conditional nested there, with allowReturnTypeInArrowFunction false (parseConditionalExpressionRest), so `(d) : e => f` is not an arrow function with return type `e`; swc's InCondExpr and WillExpectColonForCond context does not carry into the nested conditional's false branch, and changing that propagation is not a local patch

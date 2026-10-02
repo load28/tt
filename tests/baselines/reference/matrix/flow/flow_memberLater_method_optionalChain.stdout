@@ -1,0 +1,2 @@
+method(2) => 12 | this "holder"; receiver {"factor":3}; add 4; twice 12
+method(3) => null | this "holder"; receiver {"factor":3}; add null; twice null

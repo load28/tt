@@ -1,0 +1,24 @@
+// @origin: tests/integration.rs::runtime_is_patterns_and_loop_test_regions_preserve_order_and_count
+// @run: runtimeIsPatternsAndLoopTestRegionsPreserveOrderAndCount.tt
+
+class Keep extends Error {}
+class Stop extends Error {}
+let probes = 0;
+let updates = 0;
+let bodies = 0;
+function probe(): Error {
+  probes += 1;
+  return probes <= 3 ? new Keep() : new Stop();
+}
+for (; match (probe()) { is Keep => true, _ => false }; updates += 1) {
+  bodies += 1;
+  if (bodies < 3) continue;
+}
+const message = match (new SyntaxError("bad")) {
+  is SyntaxError { message } if message.length > 0 => message,
+  is Error { message: detail } => detail,
+  _ => "unknown",
+};
+console.log(probes, updates, bodies, message);
+
+export {};

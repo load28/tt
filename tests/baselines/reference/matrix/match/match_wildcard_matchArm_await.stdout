@@ -1,0 +1,4 @@
+matchArm({"kind":"Num","value":4}) => -1 | flip true; await; other -1
+matchArm({"kind":"Neg","value":-3}) => 0 | flip false; other arm 0
+matchArm({"kind":"Word","text":"hi"}) => 2 | flip true; await; word 2
+matchArm({"kind":"End"}) => 0 | flip false; other arm 0

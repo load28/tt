@@ -1,0 +1,4 @@
+=== pipelineHeadIsTheWholeCallNotTheInnerArgument.tt ===
+const y = f(a(b) |> g);
+>y : const y: any
+

@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_07.rs::plain_typescript_bindings_stay_mutable
+function f(x: X) {
+  x.value = 1;
+}

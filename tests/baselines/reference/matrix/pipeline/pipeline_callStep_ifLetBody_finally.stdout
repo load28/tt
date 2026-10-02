@@ -1,0 +1,2 @@
+ifLetBody(2) => [1,4] | head 1; read 1; operand 2; double 4; finally 0
+ifLetBody(5) => [1,10] | head 1; read 1; operand 5; double 10; finally 0

@@ -1,0 +1,2 @@
+jsxFragment(2) => "<>[6]</>" | before "["; operand 2; receiver {"factor":3}; twice 6; after "]"
+jsxFragment(6) => "<>[18]</>" | before "["; operand 6; receiver {"factor":3}; twice 18; after "]"

@@ -1,0 +1,20 @@
+// @origin: tests/integration/contextual.rs::scoped_contextual_call_variants
+
+variant State { Ready(value: number), Empty }
+declare const state: State;
+declare const flag: boolean;
+declare function consume(item: {kind: "item"; run: (x: number) => number}): void;
+consume(match (state) {
+  Ready(value) if value > 0 => ({kind: "item", run: x => x + value}),
+  _ => ({kind: "item", run: x => x}),
+});
+consume(match (state) {
+  Ready(value: amount) => ({kind: "item", run: x => x + amount}),
+  Empty => ({kind: "item", run: x => x}),
+});
+consume(match (flag) {
+  true => { const amount = 1; return {kind: "item", run: x => x + amount}; },
+  false => { function amount() { return 2; } return {kind: "item", run: x => x + amount()}; },
+});
+
+export {};

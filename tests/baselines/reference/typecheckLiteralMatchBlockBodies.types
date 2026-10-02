@@ -1,0 +1,4 @@
+=== typecheckLiteralMatchBlockBodies.tt ===
+const label: string = match ("a" as "a" | "b") {
+>label : const label: string
+

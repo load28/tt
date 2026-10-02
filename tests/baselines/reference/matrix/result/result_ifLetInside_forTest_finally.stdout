@@ -1,0 +1,2 @@
+forTest(4) => 1 | operand 4; read 4; direct 4; finally 0
+forTest(-1) => 1 | operand -1; read -1; fallback -7; read -7; finally 0

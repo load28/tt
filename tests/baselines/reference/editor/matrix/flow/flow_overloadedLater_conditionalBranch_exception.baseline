@@ -1,0 +1,7 @@
+differences from flow_overloadedLater_conditionalBranch_exception at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:5:53 ===
+  |     return flip() ? (flow |> adder(risky(input)) |> shape) : note("else", "skipped");
+  |                                                     ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+

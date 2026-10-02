@@ -1,0 +1,5 @@
+laterDeclarator({"kind":"Circle","r":1}) => [1,1] | before 1; guard big false; small 1
+laterDeclarator({"kind":"Circle","r":5}) => threw Cannot read properties of undefined (reading 'kind') | before 1
+laterDeclarator({"kind":"Rect","w":4,"h":2}) => [1,4] | before 1; guard wide true; wide 4
+laterDeclarator({"kind":"Rect","w":1,"h":3}) => threw Cannot read properties of undefined (reading 'kind') | before 1
+laterDeclarator({"kind":"Point"}) => [1,0] | before 1; point 0

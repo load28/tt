@@ -1,0 +1,26 @@
+==== ttc --out-dir (exit 1) ====
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+ --> ./tryPlacementReportsTheOwningReason5.tt:1:60
+  |
+1 | const value = match (source) { Ok(value) => { const item = try read(); return item; }, Err(error) => error };
+  |                                                            ^^^^^^^^^^
+  |
+  = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'source'.
+ --> tryPlacementReportsTheOwningReason5.tt:1:22
+  |
+1 | const value = match (source) { Ok(value) => { const item = try read(); return item; }, Err(error) => error };
+  |                      ^^^^^^
+error[try-placement]: `try` must be inside a function — it compiles to a `return` that propagates the `Err`, and at the top level of a module there is no function to return from
+ --> tryPlacementReportsTheOwningReason5.tt:1:60
+  |
+1 | const value = match (source) { Ok(value) => { const item = try read(); return item; }, Err(error) => error };
+  |                                                            ^^^^^^^^^^
+  |
+  = help: move the code into a function whose `Err` this can return, or `match` on the `Result` instead
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

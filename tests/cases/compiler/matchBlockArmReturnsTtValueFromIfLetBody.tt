@@ -1,0 +1,81 @@
+// In a match block arm, a `return` delivers the arm's value wherever it
+// stands, including the body of an `if let` (or an `if` inside one). When
+// the returned operand is itself a tt value (`return match (...) {...};`)
+// or a template literal holding one, the arm's value must still be that
+// value. The compiler stopped with an internal error instead
+// ("validate_source_preservation broke the contract ... (SourceOmitted)"
+// for the match, "returned structured value was not emitted" for the
+// template). The same `return`s in a plain function body compile. The
+// twin is the same program written as TypeScript.
+// @run: main.tt
+// @twin: twin.ts
+// @filename: main.tt
+export {};
+type O = { kind: "Some"; value: number } | { kind: "None" };
+function opt(n: number): O {
+  return n !== 0 ? { kind: "Some", value: n } : { kind: "None" };
+}
+function whole(k: number, n: number): string {
+  const v = match (k) {
+    1 => {
+      if let Some(value: b) = opt(n) {
+        return match (b) { 1 => "one", _ => "many" };
+      }
+      return "none";
+    },
+    _ => "other",
+  };
+  return v;
+}
+function nested(k: number, n: number): string {
+  const v = match (k) {
+    1 => {
+      if let Some(value: b) = opt(n) {
+        if (b > 0) return match (b) { 1 => "one", _ => "many" };
+      }
+      return "none";
+    },
+    _ => "other",
+  };
+  return v;
+}
+function template(k: number, n: number): string {
+  const v = match (k) {
+    1 => {
+      if let Some(value: b) = opt(n) {
+        return `<${match (b) { 1 => "one", _ => "many" }}>`;
+      }
+      return "none";
+    },
+    _ => "other",
+  };
+  return v;
+}
+for (const [k, n] of [[1, 1], [1, 2], [1, -2], [1, 0], [2, 1]]) {
+  console.log(k, n, whole(k, n), nested(k, n), template(k, n));
+}
+// @filename: twin.ts
+export {};
+type O = { kind: "Some"; value: number } | { kind: "None" };
+function opt(n: number): O {
+  return n !== 0 ? { kind: "Some", value: n } : { kind: "None" };
+}
+function arm(n: number, wrap: (s: string) => string, positiveOnly: boolean): string {
+  const o = opt(n);
+  if (o.kind === "Some") {
+    if (!positiveOnly || o.value > 0) return wrap(o.value === 1 ? "one" : "many");
+  }
+  return "none";
+}
+function whole(k: number, n: number): string {
+  return k === 1 ? arm(n, (s) => s, false) : "other";
+}
+function nested(k: number, n: number): string {
+  return k === 1 ? arm(n, (s) => s, true) : "other";
+}
+function template(k: number, n: number): string {
+  return k === 1 ? arm(n, (s) => `<${s}>`, false) : "other";
+}
+for (const [k, n] of [[1, 1], [1, 2], [1, -2], [1, 0], [2, 1]]) {
+  console.log(k, n, whole(k, n), nested(k, n), template(k, n));
+}

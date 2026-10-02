@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./tryBindsToAPrivateMemberOperand.tt → $DIR/out/tryBindsToAPrivateMemberOperand.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts18030]: An optional chain cannot contain private identifiers.
+  --> tryBindsToAPrivateMemberOperand.tt:10:24
+   |
+10 | const b = try this.#c?.#v;
+   |                        ^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+tryBindsToAPrivateMemberOperand.ts(23,25): error TS18030: An optional chain cannot contain private identifiers.

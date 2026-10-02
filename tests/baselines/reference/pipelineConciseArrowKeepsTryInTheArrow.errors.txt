@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./pipelineConciseArrowKeepsTryInTheArrow.tt → $DIR/out/pipelineConciseArrowKeepsTryInTheArrow.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'value'.
+ --> pipelineConciseArrowKeepsTryInTheArrow.tt:1:11
+  |
+1 | const f = value |> (x => try next());
+  |           ^^^^^
+error[ts2304]: Cannot find name 'next'.
+ --> pipelineConciseArrowKeepsTryInTheArrow.tt:1:30
+  |
+1 | const f = value |> (x => try next());
+  |                              ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+pipelineConciseArrowKeepsTryInTheArrow.ts(4,18): error TS2304: Cannot find name 'value'.
+pipelineConciseArrowKeepsTryInTheArrow.ts(6,18): error TS2304: Cannot find name 'next'.

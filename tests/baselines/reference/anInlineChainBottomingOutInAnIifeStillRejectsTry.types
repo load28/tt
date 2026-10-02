@@ -1,0 +1,22 @@
+=== anInlineChainBottomingOutInAnIifeStillRejectsTry.tt ===
+variant E { A(x: number), B }
+>E : type E = {
+>       kind: "A";
+>       x: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (x: number) => E
+>x : (property) x: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const r = match (e) {
+>r : const r: any
+  A(x) => { if let A(y) = f(x) { const n = try g(y); return n; } return 0; },
+>x : const x: any
+>y : const y: any
+>x : const x: any
+>n : const n: any
+>n : const n: any
+

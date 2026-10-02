@@ -1,0 +1,2 @@
+jsxSpreadAttribute(4) => "<div value=7></div>" | open res; operand 4; step 3; add 7; dispose res
+jsxSpreadAttribute(-1) => "<div value=2></div>" | open res; operand -1; step 3; add 2; dispose res

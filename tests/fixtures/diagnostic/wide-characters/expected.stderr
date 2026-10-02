@@ -1,0 +1,8 @@
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Rect"
+ --> input.tt:7:43
+  |
+7 | export const label = { name: "원 🎉", area: match (s) {
+  |                                             ^^^^^^^^^
+  |
+  = help: add the missing arms: `Rect(w, h) => undefined,`
+  = help: or add a final `_` arm: `_ => undefined,`

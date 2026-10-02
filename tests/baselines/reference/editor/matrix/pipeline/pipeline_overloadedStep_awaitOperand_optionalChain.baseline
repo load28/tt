@@ -1,0 +1,10 @@
+differences from pipeline_overloadedStep_awaitOperand_optionalChain at the questions listed in tests/editor-matrix-differences.txt
+
+=== hover /*call*/ main.tt:4:45 ===
+  |   return await (box(input)?.inner.value! |> shape |> .length);
+  |                                             ^ /*call*/
+  tt only: (alias) function shape(s: string): number
+
+=== diagnostics main.tt ===
+  ts only: main "await (shape(box(input)?.inner.value!).length)" hint TS80007: 'await' has no effect on the type of this expression.
+

@@ -1,0 +1,2 @@
+doWhileTest(2) => 2 | read 2
+doWhileTest(-1) => 2 | read undefined

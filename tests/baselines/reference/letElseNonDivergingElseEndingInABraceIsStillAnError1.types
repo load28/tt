@@ -1,0 +1,12 @@
+=== letElseNonDivergingElseEndingInABraceIsStillAnError1.tt ===
+function f(): number {
+>f : function f(): number
+  const Some(v) = find() else { const o = { n: 1 }; };
+>v : const v: any
+>o : const o: {
+>       n: number;
+>   }
+>n : (property) n: number
+  return v;
+>v : const v: any
+

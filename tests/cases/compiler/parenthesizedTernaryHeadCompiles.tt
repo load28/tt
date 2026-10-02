@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_05.rs::parenthesized_ternary_head_compiles
+const a = (c ? x : y) |> f;

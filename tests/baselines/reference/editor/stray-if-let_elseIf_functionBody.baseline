@@ -1,0 +1,7 @@
+=== diagnostics main.tt ===
+diagnostics: 1 diagnostic(s)
+  1:16-1:20 "flip" hint TS6133: 'flip' is declared but its value is never read. [unnecessary]
+published: 2 diagnostic(s)
+  1:16-1:20 "flip" hint TS6133 (ts): 'flip' is declared but its value is never read. [unnecessary]
+  5:82-5:89 "else if" error stray-if-let (ttc): the `else` of an `if let` must be a block or another `if let`
+

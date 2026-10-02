@@ -1,0 +1,39 @@
+=== aScriptLetElseKeepsItsBindingsGlobal.tt ===
+declare const o: { kind: "Some"; value: number } | { kind: "None" };
+>o : const o: {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>kind : (property) kind: "Some"
+>value : (property) value: number
+>kind : (property) kind: "None"
+const Some(value) = o else { throw new Error(); };
+>value : const value: number
+>o : const o: {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+var Some(value: other) = o else { throw new Error(); };
+>value : (property) value: number
+>other : var other: number
+>o : const o: {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+let None() = o else { throw new Error(); };
+>o : const o: {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Error : var Error: new (message?: string, options?: ErrorOptions) => Error
+

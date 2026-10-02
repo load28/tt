@@ -1,0 +1,2 @@
+labeledBlock(2) => 8 | receiver {"factor":3}; operand 2; flip true; finally 0; twice 6; add 8
+labeledBlock(7) => [null] | receiver {"factor":3}; operand 7; flip false; finally 0

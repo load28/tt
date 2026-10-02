@@ -1,0 +1,13 @@
+=== ifLetSharesTheTempCounterWithTry.tt ===
+function f(): Result<number, string> {
+>f : function f(): Result<number, string>
+>Result : type Result = /*unresolved*/ any
+  const a = try g();
+>a : const a: any
+  if let Some(value) = h(a) { use(value); }
+>value : const value: any
+>a : const a: any
+>value : const value: any
+  return Result.Ok(a);
+>a : const a: any
+

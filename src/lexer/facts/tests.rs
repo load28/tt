@@ -367,6 +367,17 @@ fn the_machine_reads_jsx_containers_as_swc_does() {
 }
 
 #[test]
+fn a_comment_inside_a_jsx_tag_is_trivia() {
+    for case in [
+        "export const view = <Button /*c*/label=\"ok\" />;\nfoo()\n",
+        "const a = <div // line\n  id=/*v*/\"x\" /*end*/>{y}</div /*close*/>\nbar()\n",
+        "const b = <i a={1}/**/b /* \u{2028} */ />\nbaz()\n",
+    ] {
+        assert_agrees(case, SourceKind::Tsx);
+    }
+}
+
+#[test]
 fn line_breaks_are_every_ecma_line_terminator() {
     let src = "a\rb\u{2028}c\u{2029}d\r\ne /* \u{2028} */ f // x\rg";
     let tokens = lex_with_kind(src, 0, src.len(), SourceKind::TypeScript);
@@ -408,6 +419,8 @@ fn braces(src: &str) -> Vec<&'static str> {
             facts if facts.constructor_body() => "constructor",
             facts if facts.generator_body() => "generator",
             facts if facts.function_body() => "function",
+            facts if facts.static_block() => "static",
+            facts if facts.class_body() => "class",
             _ => "-",
         })
         .collect()
@@ -425,19 +438,23 @@ fn a_brace_records_the_function_body_it_opens() {
         ),
         [
             "function",
-            "-",
+            "class",
             "constructor",
             "generator",
             "generator",
             "-",
             "function",
             "-",
-            "-",
+            "static",
         ]
     );
     assert_eq!(
         braces("const o = { m() {}, *g() {}, k: {} }\nfor (;;) {}\nswitch (x) {}\n"),
         ["-", "function", "generator", "-", "-", "-"]
+    );
+    assert_eq!(
+        braces("const K = class { x = { a: 1 }; static { if (x) {} } [k()] = 1 }\n"),
+        ["class", "-", "static", "-"]
     );
 }
 

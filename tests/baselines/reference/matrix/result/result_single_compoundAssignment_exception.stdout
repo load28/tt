@@ -1,0 +1,2 @@
+compoundAssignment(2) => "start:[object Object]" | initial "start:"; target {"total":"start:"}; risky 2; read 2
+compoundAssignment(-1) => "start:[object Object]" | initial "start:"; target {"total":"start:"}; risky -1; read -1

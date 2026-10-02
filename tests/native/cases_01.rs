@@ -325,7 +325,7 @@ fn a_restated_diagnostic_calls_a_case_by_its_declared_name() {
 }
 
 #[test]
-fn assignability_diagnostics_report_the_minimal_type_difference() {
+fn a_mismatch_in_user_code_keeps_typescripts_words() {
     require_tsgo!();
     let dir = project(&[(
         "src/mismatch.tt",
@@ -341,21 +341,18 @@ fn assignability_diagnostics_report_the_minimal_type_difference() {
     )]);
     let out = check(&dir);
     assert!(
-        out.contains("type mismatch: expected `InputError`, found `RangeError`"),
-        "minimal incompatible leaf: {out}"
+        block(
+            &out,
+            "Type 'TErr<RangeError>' is not assignable to type 'TResult<number, InputError>'."
+        )
+        .contains("--> src/mismatch.tt:7:7"),
+        "TypeScript's own diagnostic at TypeScript's own position: {out}"
     );
-    assert!(
-        out.contains("required type: `TResult<number, InputError>`"),
-        "the surrounding obligation remains visible: {out}"
-    );
-    assert!(
-        !out.contains("Property 'raw' is missing") && !out.contains("in tt's names"),
-        "the nested checker prose is not duplicated: {out}"
-    );
+    assert!(!out.contains("type mismatch:"), "{out}");
 }
 
 #[test]
-fn structured_type_mismatches_are_not_tied_to_an_tt_construct() {
+fn plain_typescript_in_a_tt_file_is_reported_in_typescripts_words() {
     require_tsgo!();
     let dir = project(&[(
         "src/plain.tt",
@@ -365,10 +362,19 @@ fn structured_type_mismatches_are_not_tied_to_an_tt_construct() {
     )]);
     let out = check(&dir);
     assert!(
-        out.contains("type mismatch: expected `string`, found `1`")
-            && out.contains("type mismatch: expected `string`, found `2`"),
-        "annotation and call argument use the same relation: {out}"
+        block(&out, "Type 'number' is not assignable to type 'string'.")
+            .contains("--> src/plain.tt:1:7"),
+        "{out}"
     );
+    assert!(
+        block(
+            &out,
+            "Argument of type 'number' is not assignable to parameter of type 'string'."
+        )
+        .contains("--> src/plain.tt:3:13"),
+        "{out}"
+    );
+    assert!(!out.contains("type mismatch:"), "{out}");
 }
 
 #[test]
@@ -446,7 +452,7 @@ fn proven_statement_and_tuple_errors_own_only_their_checker_cascades() {
         "checker consequences owned by the invalid constructs remain: {out}"
     );
     assert!(
-        out.contains("type mismatch: expected `string`, found `1`"),
+        out.contains("Type 'number' is not assignable to type 'string'."),
         "the independent source error must remain: {out}"
     );
 
@@ -641,21 +647,28 @@ fn a_flow_mismatch_names_the_composed_step_and_the_boundary_types() {
         "src/flow.tt",
         "const inc = (n: number): number => n + 1;\n\
          const shout = (s: string): string => s.toUpperCase();\n\
-         const label = flow |> inc |> inc |> shout;\n",
+         const loud = () => shout;\n\
+         const label = flow |> inc |> inc |> loud();\n\
+         const named = flow |> inc |> inc |> shout;\n",
     )]);
     let out = check(&dir);
-    let step = block(&out, "ts2345");
+    let computed = block(&out, "src/flow.tt:4:37");
     assert!(
-        step.contains("this pipeline step expects `string`, but receives `number`"),
+        computed.contains("this pipeline step expects `string`, but receives `number`"),
         "the boundary's value types, not the whole function types: {out}"
     );
     assert!(
-        step.contains("required type: `(n: number) => string`"),
+        computed.contains("required type: `(n: number) => string`"),
         "the complete obligation remains visible: {out}"
     );
+    let named = block(&out, "src/flow.tt:5:37");
     assert!(
-        step.contains("--> src/flow.tt:3:37"),
-        "reported at the composed step that rejects the chain: {out}"
+        named.contains("this pipeline step expects `string`, but receives `number`"),
+        "a step naming its function is called with the boundary value: {out}"
+    );
+    assert!(
+        !named.contains("required type"),
+        "the call states the value obligation itself: {out}"
     );
 }
 

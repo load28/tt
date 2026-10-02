@@ -1,0 +1,2 @@
+yieldOperand(true) => 1 | yes 1; yield 1
+yieldOperand(false) => 0 | no 0; yield 0

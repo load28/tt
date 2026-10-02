@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./ifLetInsideAFunctionInsideAnExpressionRegionIsAllowed1.tt → $DIR/out/ifLetInsideAFunctionInsideAnExpressionRegionIsAllowed1.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'run'.
+ --> ifLetInsideAFunctionInsideAnExpressionRegionIsAllowed1.tt:1:18
+  |
+1 | const v = match (run(() => { if let A(x) = e { return x; } return 0; })) {
+  |                  ^^^
+error[ts2304]: Cannot find name 'e'.
+ --> ifLetInsideAFunctionInsideAnExpressionRegionIsAllowed1.tt:1:44
+  |
+1 | const v = match (run(() => { if let A(x) = e { return x; } return 0; })) {
+  |                                            ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+ifLetInsideAFunctionInsideAnExpressionRegionIsAllowed1.ts(3,18): error TS2304: Cannot find name 'run'.
+ifLetInsideAFunctionInsideAnExpressionRegionIsAllowed1.ts(4,20): error TS2304: Cannot find name 'e'.

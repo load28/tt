@@ -37,14 +37,21 @@ import { Notice, render } from "./notice.tt";
 | 단계 | 하는 일 |
 |------|---------|
 | `resolveId` | Resolves a `.tt`/`.ttx` specifier to its file and returns that path with a query ending in `lang.ts` or `lang.tsx`, keeping any query the import already had. `@tt/std`, `@tt/std/option`, and `@tt/std/result` become virtual module ids |
-| `load` | `ttc -p --rewrite-imports off`의 출력을 돌려줍니다. 표준 라이브러리와 파이프 런타임은 모듈별 `ttc --emit-std types|option|result|runtime` 출력을 사용합니다 |
+| `load` | Returns what `ttc -p --rewrite-imports off` prints for the file, answered by the build's one `ttc --server` session (see [One compiler session per build](#one-compiler-session-per-build)). The standard library and the pipeline runtime use `ttc --emit-std types\|option\|result\|runtime` output per module |
 
 The `lang.ts`/`lang.tsx` query ending **routes the module through the host's own
 TypeScript handling**, so the plugin does not transpile anything itself. The part
 before the query stays the real `.tt` file, so tools that strip the query (Vite's
 `cleanUrl`, its worker and asset handling, and its dependency scanner) find a file
-on disk. esbuild's `load` can return only JavaScript, so that path names the `ts`
-or `tsx` loader that matches the source.
+on disk. esbuild's `load` can return only JavaScript, so on esbuild the plugin
+loads `.tt`/`.ttx` modules through esbuild's own `onLoad` and names the `ts` or
+`tsx` loader that matches the source.
+
+A `?` or `#` in a directory or file name is part of the path, not a query:
+the plugin takes the longest prefix of a module id that names a file on disk
+as the file, so Rollup, Rolldown, esbuild, webpack, and Rspack build a
+project under `C#/` or `issue#12/`. Vite itself cuts a path at its first `?`
+or `#` outside `node_modules`, so such a directory still does not work there.
 
 `--rewrite-imports off`인 것도 의도입니다. 지정자 재작성은 미리 컴파일하는
 파이프라인을 위한 기능이고, 여기서는 `.tt`이 그대로 남아야 이 플러그인이
@@ -56,6 +63,13 @@ or `tsx` loader that matches the source.
 [@openload28/unplugin-tt] src/notice.tt:22:16: match on variant Notice is not exhaustive:
               missing "Warn" (add the missing arms or a final `_` arm)
 ```
+
+A module that fails to compile still registers the files and directories it
+depends on, so a watching build compiles it again once the source is fixed.
+Rollup-compatible hosts receive the diagnostic from `this.error`, webpack and
+Rspack record it on the module, and esbuild receives it in the `errors` of the
+`onLoad` result together with `watchFiles` and `watchDirs` (unplugin's esbuild
+bridge drops both when a `load` returns no code).
 
 ## 옵션
 
@@ -142,7 +156,50 @@ Bare package imports ending in `.tt` or `.ttx` use the bundler's resolver, inclu
 package exports and external decisions. Vite/Rollup-compatible hooks use
 `this.resolve`; esbuild uses `build.resolve`.
 
-The plugin asks `ttc --dependencies` for the project's dependency graph and registers
-those paths with the bundler. Vite invalidates consuming modules when a type-only
-import or compiler configuration changes, including when HMR is disabled. Use a
-compiler version that supports `--dependencies` when overriding `compiler`.
+The plugin asks the compiler session for each module's dependencies (the answer
+`ttc --dependencies` prints): the files the compile reads and the directories
+TypeScript listed, where a file added or removed can change the program. Each
+kind is registered through the bundler's own API:
+
+| Host | Files | Directories |
+|------|-------|-------------|
+| Rollup, Rolldown, `vite build`, Farm | `this.addWatchFile` | `this.addWatchFile`, which Rollup documents for directories too |
+| webpack, Rspack | `this.addWatchFile` (file dependencies) | the loader's `addContextDependency` |
+| esbuild | `watchFiles` of the `onLoad` result | `watchDirs` of the `onLoad` result |
+| Vite dev server | the dev server's watcher | the dev server's watcher |
+
+The Vite dev server resolves every path given to `addWatchFile` as an import of
+the module, so a dependency (a directory, a declaration file, `tsconfig.json`)
+is added to the server's watcher instead, unless it is under the root, which the
+watcher already covers. When the watcher reports a change to a file a module
+read, or a file created in or deleted from a directory it listed, the plugin
+invalidates that module, including when HMR is disabled; a changed file also
+joins the HMR update.
+
+## One compiler session per build
+
+With TypeScript installed, ttc refines the storage annotations it generates with
+the project's types, which opens the whole TypeScript project. A `ttc -p` per
+module would open it again for every module, so a build of N modules would open
+it N times. Instead, the plugin starts one `ttc --server` session on the first
+module it loads and asks it for every module: `print` answers exactly what
+`ttc -p` prints for the same file and flags, and `dependencies` exactly what
+`ttc --dependencies` prints. The project opens once per build.
+
+On a generated 400-module project, loading 20 modules took 209 s with a process per
+module and 10 s through the session; loading all 400 through the session took 39 s.
+
+- **One session per compiler and working directory.** Requests from concurrent
+  loads carry ids; the session answers them in order.
+- **Restart once.** If the session process ends while a request is waiting, the
+  request is asked once more of a fresh session. If that one ends too, the load
+  fails with the exit status and what the compiler wrote on stderr. The plugin
+  never falls back to another way of compiling.
+- **Shutdown.** The session ends on Rollup's, Rolldown's and Vite's
+  `closeBundle` (after the last rebuild in watch mode, on `closeWatcher`), on
+  webpack's and Rspack's `shutdown`, and on esbuild's `onDispose`. An idle
+  session never keeps the bundler's process alive, and it exits when that process
+  does.
+
+When overriding `compiler`, use a compiler version whose `--server` answers
+`print` and `dependencies`.

@@ -46,6 +46,15 @@ pub(super) fn parse_variant<'t>(
             .get(cur.idx)
             .map(|token| cur.text(token).to_string())
             .unwrap_or_else(|| "$tt_invalid_variant".to_string());
+        let generics = cur
+            .tokens
+            .get(cur.idx + 1)
+            .filter(|token| matches!(token.kind, TokenKind::Punct(b'<')))
+            .and_then(|open| {
+                let close = super::cursor::find_close_at(cur.tokens, cur.idx + 1)?;
+                Some(cur.parser.src[open.span.start..cur.tokens[close].span.end].to_string())
+            })
+            .unwrap_or_default();
         let end = (cur.idx + 1..cur.tokens.len())
             .find(|&idx| matches!(cur.tokens[idx].kind, TokenKind::Punct(b'{')))
             .and_then(|open| super::cursor::find_close_at(cur.tokens, open))
@@ -61,7 +70,11 @@ pub(super) fn parse_variant<'t>(
             .help("a case is `Case` or `Case(field: Type)`"),
             recovery: RecoveryNode {
                 span: Span { start, end },
-                kind: RecoveryKind::VariantDecl { name, exported },
+                kind: RecoveryKind::VariantDecl {
+                    name,
+                    generics,
+                    exported,
+                },
             },
         };
     }
@@ -108,6 +121,7 @@ pub(super) fn parse_default_variant(
                 },
                 kind: RecoveryKind::VariantDecl {
                     name: decl.name,
+                    generics: decl.generics,
                     exported: true,
                 },
             },
@@ -120,8 +134,9 @@ pub(super) fn parse_default_variant(
                     end: recovery.span.end,
                 },
                 kind: match recovery.kind {
-                    RecoveryKind::VariantDecl { name, .. } => RecoveryKind::VariantDecl {
+                    RecoveryKind::VariantDecl { name, generics, .. } => RecoveryKind::VariantDecl {
                         name,
+                        generics,
                         exported: true,
                     },
                     kind => kind,
@@ -160,9 +175,11 @@ fn parse_variant_complete<'t>(
     }
 
     let mut generics = "";
+    let mut generics_off = name_span.end;
     if cur.at_punct(b'<') {
         let close = cur.find_close()?;
-        generics = &cur.parser.src[cur.tokens[cur.idx].span.start..cur.tokens[close].span.end];
+        generics_off = cur.tokens[cur.idx].span.start;
+        generics = &cur.parser.src[generics_off..cur.tokens[close].span.end];
         cur.idx = close + 1;
     }
 
@@ -188,11 +205,13 @@ fn parse_variant_complete<'t>(
                 start: owner_start,
                 end: byte_end,
             },
+            keyword_off: cur.tokens[keyword_index].span.start,
             name: name.to_string(),
             name_off: name_span.start,
             exported,
             declared,
             generics: generics.to_string(),
+            generics_off,
             cases,
         },
     ))

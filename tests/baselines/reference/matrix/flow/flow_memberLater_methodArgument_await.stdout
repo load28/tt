@@ -1,0 +1,2 @@
+methodArgument(2) => ["receiver",1,null] | receiver {"tag":"receiver"}; a 1; await; receiver {"factor":3}
+methodArgument(3) => ["receiver",1,null] | receiver {"tag":"receiver"}; a 1; await; receiver {"factor":3}

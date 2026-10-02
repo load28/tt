@@ -1,0 +1,11 @@
+// @signatureHelp: stored, constructed, piped
+variant S { A, B(x: number) }
+class Cls { constructor(a: number, b: string) {} }
+declare function two(a: number, b: string): number;
+const half = (n: number) => n / 2;
+export function f(s: S, m: number) {
+  const p = two(match (s) { A => 1, B(x) => x }, "q/*stored*/");
+  const q = new Cls(match (s) { A => 1, B(x) => x }, /*constructed*/);
+  console.log(m |> ha/*piped*/lf, m);
+  return [p, q];
+}

@@ -1,0 +1,12 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./literalBooleanMatchEmitsTrueAndFalseCases.tt → $DIR/out/literalBooleanMatchEmitsTrueAndFalseCases.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'flag'.
+ --> literalBooleanMatchEmitsTrueAndFalseCases.tt:1:18
+  |
+1 | const v = match (flag) { true => 1, false => 0 };
+  |                  ^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+literalBooleanMatchEmitsTrueAndFalseCases.ts(21,17): error TS2304: Cannot find name 'flag'.

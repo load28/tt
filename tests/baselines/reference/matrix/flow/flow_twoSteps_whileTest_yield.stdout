@@ -1,0 +1,2 @@
+whileTest(2) => 1 | yield 2
+whileTest(5) => 1 | yield 5

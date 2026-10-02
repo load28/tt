@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_03.rs::try_is_a_value_in_deep_expression_positions
+function f(r: R): TResult<number, string> { return match (r) { A => try total(), B => Result.Ok(0) }; }

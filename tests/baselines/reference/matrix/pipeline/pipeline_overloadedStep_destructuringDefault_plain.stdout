@@ -1,0 +1,2 @@
+destructuringDefault(4) => 2 | source {}; operand 4; shape "#4"
+destructuringDefault(12) => 3 | source {}; operand 12; shape "#12"

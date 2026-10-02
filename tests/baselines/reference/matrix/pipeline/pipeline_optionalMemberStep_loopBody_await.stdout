@@ -1,0 +1,3 @@
+loopBody(3) => [9,null] | await; flip true; maybe true; twice 9; await; flip false; maybe false
+loopBody(4) => [12,null] | await; flip true; maybe true; twice 12; await; flip false; maybe false
+loopBody(5) => [15,null] | await; flip true; maybe true; twice 15; await; flip false; maybe false

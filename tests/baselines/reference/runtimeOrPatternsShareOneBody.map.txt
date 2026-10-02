@@ -1,0 +1,13 @@
+//// [runtimeOrPatternsShareOneBody.tt] 11 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+6:12 -> 24:25 len 6  "string"
+6:12 -> 29:14 len 6  "string"
+7:2 -> 30:3 len 38  "\n\nfunction action(k: Key): string {\n  "
+10:3 -> 55:3 len 7  "return "
+10:17 -> 35:19 len 1  "k"
+11:14 -> 38:18 len 8  "\"submit\""
+12:21 -> 42:18 len 8  "\"cancel\""
+13:10 -> 46:17 len 2  "ch"
+13:17 -> 47:18 len 12  "\"type:\" + ch"
+14:4 -> 55:16 len 150  ";\n}\n\nconsole.log(action(Key.Enter()));\nconsole.l"...
+

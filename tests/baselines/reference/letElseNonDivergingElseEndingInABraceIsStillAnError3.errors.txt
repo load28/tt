@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+error[let-else-not-diverging]: let-else: every path through the `else` block must diverge
+ --> ./letElseNonDivergingElseEndingInABraceIsStillAnError3.tt:2:26
+  |
+2 |   const Some(v) = find() else { for (const x of xs) { log(x); } };
+  |                          ^^^^
+  |
+  = help: end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` counts when both branches do)
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'find'.
+ --> letElseNonDivergingElseEndingInABraceIsStillAnError3.tt:2:19
+  |
+2 |   const Some(v) = find() else { for (const x of xs) { log(x); } };
+  |                   ^^^^
+error[let-else-not-diverging]: let-else: every path through the `else` block must diverge
+ --> letElseNonDivergingElseEndingInABraceIsStillAnError3.tt:2:26
+  |
+2 |   const Some(v) = find() else { for (const x of xs) { log(x); } };
+  |                          ^^^^
+  |
+  = help: end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` counts when both branches do)
+error[ts2304]: Cannot find name 'xs'.
+ --> letElseNonDivergingElseEndingInABraceIsStillAnError3.tt:2:49
+  |
+2 |   const Some(v) = find() else { for (const x of xs) { log(x); } };
+  |                                                 ^^
+error[ts2304]: Cannot find name 'log'.
+ --> letElseNonDivergingElseEndingInABraceIsStillAnError3.tt:2:55
+  |
+2 |   const Some(v) = find() else { for (const x of xs) { log(x); } };
+  |                                                       ^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

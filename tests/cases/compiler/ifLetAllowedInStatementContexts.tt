@@ -1,0 +1,12 @@
+// @origin: tests/compile/cases_06.rs::if_let_allowed_in_statement_contexts
+
+function f(x: X, o: O) {
+  const r = match (x) {
+    A => {
+      if let Some(value) = o { return value; }
+      return 0;
+    },
+    _ => 1,
+  };
+  return r;
+}

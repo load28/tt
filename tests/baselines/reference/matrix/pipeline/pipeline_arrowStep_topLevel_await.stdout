@@ -1,0 +1,2 @@
+topLevel(8) => 9 | await; arrow 9
+topLevel(9) => 10 | await; arrow 10

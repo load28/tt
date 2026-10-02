@@ -1,0 +1,67 @@
+//// [commentsBetweenMatchArms.tt] 65 mapping(s)
+1:1 -> 19:1 len 212  "// A comment written between two match arms reac"...
+4:34 -> 23:26 len 6  "number"
+4:34 -> 27:15 len 6  "number"
+4:53 -> 24:26 len 6  "number"
+4:53 -> 28:15 len 6  "number"
+4:69 -> 30:3 len 49  "\n\nexport function area(shape: Shape): number {\n "...
+7:3 -> 58:3 len 7  "return "
+7:17 -> 35:19 len 5  "shape"
+8:5 -> 37:7 len 24  "// the radius is doubled"
+9:12 -> 39:17 len 1  "r"
+9:18 -> 40:18 len 5  "r * 2"
+10:5 -> 43:7 len 59  "// @ts-expect-error a square reads a field it do"...
+11:12 -> 44:32 len 1  "s"
+11:18 -> 44:54 len 11  "s.side ?? s"
+12:5 -> 47:7 len 25  "/* a point has no area */"
+13:14 -> 49:18 len 1  "0"
+14:5 -> 52:7 len 21  "// after the last arm"
+15:4 -> 58:16 len 55  ";\n}\n\nexport function guarded(shape: Shape): stri"...
+19:3 -> 91:3 len 14  "const label = "
+19:24 -> 64:19 len 5  "shape"
+20:12 -> 67:17 len 1  "r"
+20:18 -> 68:13 len 5  "r > 1"
+20:27 -> 69:20 len 12  "\"big circle\""
+21:5 -> 73:7 len 55  "// @ts-ignore the guard compares a number with a"...
+22:12 -> 74:46 len 1  "r"
+22:18 -> 74:63 len 13  "r === \"small\""
+22:35 -> 74:89 len 7  "\"never\""
+23:12 -> 79:17 len 1  "r"
+23:18 -> 80:18 len 13  "`circle ${r}`"
+23:33 -> 83:7 len 40  "// @ts-expect-error governs the next arm"
+24:12 -> 84:46 len 1  "s"
+24:18 -> 84:68 len 32  "s.toFixed(1).missing ?? \"square\""
+25:10 -> 87:16 len 7  "\"point\""
+26:4 -> 91:23 len 65  ";\n  return label;\n}\n\nexport function code(n: num"...
+31:3 -> 106:3 len 7  "return "
+31:10 -> 97:19 len 6  "String"
+31:16 -> 106:16 len 6  "(\n    "
+32:12 -> 99:19 len 1  "n"
+33:7 -> 101:12 len 1  "1"
+33:12 -> 107:21 len 5  "\"one\""
+34:7 -> 108:5 len 32  "// two arms share a comment line"
+35:7 -> 102:12 len 1  "2"
+35:11 -> 102:20 len 1  "3"
+35:16 -> 109:20 len 5  "\"few\""
+36:7 -> 111:5 len 41  "/* a block comment before the wildcard */"
+36:54 -> 112:5 len 6  "\"many\""
+37:6 -> 113:6 len 61  ",\n  );\n}\n\nexport function blockArm(shape: Shape)"...
+42:3 -> 139:3 len 14  "const value = "
+42:24 -> 120:19 len 5  "shape"
+43:12 -> 123:17 len 1  "r"
+44:14 -> 124:18 len 1  "r"
+46:5 -> 127:7 len 68  "// @ts-expect-error the block arm's first line r"...
+47:12 -> 128:32 len 1  "s"
+47:20 -> 128:45 len 29  "const side: number = s.edge; "
+47:56 -> 128:83 len 9  "side ?? s"
+48:14 -> 131:18 len 2  "-1"
+49:4 -> 139:23 len 74  ";\n  return value;\n}\n\nexport function pair(a: Sha"...
+54:3 -> 162:3 len 7  "return "
+54:17 -> 146:20 len 1  "a"
+54:20 -> 147:20 len 1  "b"
+55:25 -> 150:18 len 13  "\"two circles\""
+56:5 -> 153:7 len 30  "// a tuple arm after a comment"
+57:19 -> 155:18 len 13  "\"point first\""
+58:10 -> 158:16 len 7  "\"other\""
+59:4 -> 162:16 len 451  ";\n}\n\nconsole.log(area(Shape.Circle(2)), area(Sha"...
+

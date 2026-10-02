@@ -1,0 +1,2 @@
+forOfHead(2) => [{"kind":"Ok"}] | await; read 2
+forOfHead(-1) => [{"kind":"Err","error":"negative -1"}] | await; read -1

@@ -1,0 +1,40 @@
+// @origin: tests/integration/cases_05.rs::runtime_a_for_head_initializer_value_runs_before_the_loop_when_faithful
+// @run: runtimeAForHeadInitializerValueRunsBeforeTheLoopWhenFaithful.tt
+
+variant O { A(n: number), B }
+const o = O.A(1) as O;
+type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+function r(n: number): R { return n > 0 ? { kind: "Ok", value: n } : { kind: "Err", error: "e" + n }; }
+const out: string[] = [];
+function a() {
+  for (let f = match (o) { A(n) => () => n + 1, B => null }, i = 0; i < 1; i++) out.push("a" + f!() + i);
+}
+function c(n: number): R {
+  for (let x = try r(n), i = 0; i < 2; i++) out.push("c" + x + i);
+  return { kind: "Ok", value: 1 };
+}
+function d() {
+  for (let n = match (o) { A(n) => n, B => 0 }; n < 3; n++) out.push("d" + n);
+}
+function f() {
+  for (let k: ((k: number) => number) | null = match (o) { A(n) => (k: number) => k + n, B => null }; k; k = null) out.push("f" + k(1));
+}
+function g() {
+  for (var v: (() => unknown) | null = match (o) { A(n) => () => v, B => null }; v; v = null) out.push("g" + (v() === v));
+}
+function e() {
+  let x = 0;
+  for (x = match (o) { A(n) => n + 10, B => 0 }; x < 12; x++) out.push("e" + x);
+}
+function p(n: number): R {
+  let y = 0;
+  for (y = try r(n); y < 2; y++) out.push("p" + y);
+  return { kind: "Ok", value: y };
+}
+a();
+console.log(JSON.stringify(c(1)), JSON.stringify(c(0)));
+d(); f(); g(); e();
+console.log(JSON.stringify(p(1)), JSON.stringify(p(-1)));
+console.log(out.join(" "));
+
+export {};

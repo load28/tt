@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[match-nested-in-or-pattern]: match: nested patterns cannot be combined with or-patterns
+ --> ./main.tt:6:78
+  |
+6 |   const before = note("before", 1), value = match (note("operand", input)) { Done(value: None()) | Failed => note("hit", 0), _ => note("other", 1) };
+  |                                                                              ^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[match-nested-in-or-pattern]: match: nested patterns cannot be combined with or-patterns
+ --> main.tt:6:78
+  |
+6 |   const before = note("before", 1), value = match (note("operand", input)) { Done(value: None()) | Failed => note("hit", 0), _ => note("other", 1) };
+  |                                                                              ^^^^
+
+==== tsc on the emitted TypeScript (exit 0) ====

@@ -1,0 +1,9 @@
+=== pipelineComposesWithTry.tt ===
+function f(): Result<number, string> {
+>f : function f(): Result<number, string>
+>Result : type Result = /*unresolved*/ any
+  const a = try readCfg() |> norm;
+>a : const a: any
+  return Result.Ok(a);
+>a : const a: any
+

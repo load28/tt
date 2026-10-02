@@ -204,8 +204,8 @@ pub(super) fn anchored_diagnostic_message(
 
 /// The expected/found pair a structured mismatch renders: the minimal
 /// incompatible leaves when the checker reduced to a single expected type,
-/// else the complete pair — plus the complete contextual type when the pair
-/// shown was reduced from it.
+/// else the complete pair — plus the complete contextual type when the
+/// expected type shown was reduced from it.
 pub(super) fn mismatch_pair(
     mismatch: &TypeMismatch,
     declarations: &[DeclaredVariant],
@@ -237,7 +237,7 @@ pub(super) fn mismatch_pair(
             }
         }
         let found_leaf = found_leaves.join(" | ");
-        let required = (expected_leaf != expected || found_leaf != found).then(|| expected.clone());
+        let required = (expected_leaf != expected).then(|| expected.clone());
         return (expected_leaf.to_string(), found_leaf, required);
     }
     (expected, found, None)
@@ -303,18 +303,27 @@ pub(super) fn diagnostic_span(diagnostic: &TsDiagnostic) -> (usize, usize) {
 
 pub(super) fn finish_diagnostics(mut diagnostics: Vec<Diagnostic>) -> Vec<Diagnostic> {
     diagnostics.sort_by(|left, right| {
-        (&left.path, left.position, left.end, &left.message).cmp(&(
-            &right.path,
-            right.position,
-            right.end,
-            &right.message,
-        ))
+        (
+            &left.path,
+            left.position,
+            left.end,
+            &left.message,
+            &left.code,
+        )
+            .cmp(&(
+                &right.path,
+                right.position,
+                right.end,
+                &right.message,
+                &right.code,
+            ))
     });
     diagnostics.dedup_by(|right, left| {
         left.path == right.path
             && left.position == right.position
             && left.end == right.end
             && left.message == right.message
+            && left.code == right.code
     });
     diagnostics
 }
@@ -654,4 +663,11 @@ pub(super) fn typed_member_sources(
     }
 
     Some(members)
+}
+
+pub(super) fn typescript_owned(file: &ProjectedDocument, diagnostic: &TsDiagnostic) -> bool {
+    matches!(
+        projection::diagnostic_origin(file, diagnostic.start, diagnostic.end),
+        Some(DiagnosticOrigin::Exact { .. })
+    )
 }

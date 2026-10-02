@@ -1,0 +1,11 @@
+=== generatorStatementOwnerAcceptsMatchInitializers.tt ===
+function* f(code: number): Generator<string> {
+>f : function f(code: number): Generator<string>
+>code : (parameter) code: number
+>Generator : interface Generator<T = unknown, TReturn = any, TNext = any>
+const line = match (code) { 200 => "ok", _ => "err" };
+>line : const line: string
+>code : (parameter) code: number
+yield line;
+>line : const line: string
+

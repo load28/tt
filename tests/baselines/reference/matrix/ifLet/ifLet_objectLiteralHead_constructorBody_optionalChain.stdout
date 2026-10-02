@@ -1,0 +1,2 @@
+constructorBody(6) => 6 | some 6
+constructorBody(9) => undefined | some undefined

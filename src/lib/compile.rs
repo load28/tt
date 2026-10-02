@@ -29,6 +29,14 @@ pub struct Options<'a> {
     pub verify: bool,
     /// How relative `.tt`/`.ttx` import specifiers are rewritten in the output.
     pub rewrite_imports: ImportRewrite,
+    /// Whether the project's TypeScript compiles JSX with `"jsx":
+    /// "preserve"`. TypeScript names the JavaScript it emits for a `.tsx`
+    /// file `.jsx` under `preserve` and `.js` under every other `jsx` value
+    /// or none (`GetOutputExtension` in typescript-go's
+    /// `internal/outputpaths`), so [`ImportRewrite::Js`] rewrites `./x.ttx`
+    /// to `./x.jsx` only when this is set. The CLI reads it from the
+    /// project's `tsconfig.json`. `false` by default, TypeScript's default.
+    pub jsx_preserve: bool,
     /// Variant declarations imported from other modules, included in
     /// exhaustiveness checking (shadowed by local declarations; shadowing
     /// built-ins of the same name). The `ttc` CLI fills this from the
@@ -40,15 +48,16 @@ pub struct Options<'a> {
     ///
     /// ttc answers both on its own, from its variant declarations and a lexical
     /// scope model of its own, and those answers are what [`compile`]
-    /// reports by default. Both are approximations of TypeScript's:
-    /// exhaustiveness is the *declared* type's answer, so a case an earlier
-    /// guard already removed is still demanded and a variant from another
-    /// module has to be collected ([`Options::extern_variants`]); `val`'s
+    /// reports by default. Exhaustiveness is the *declared* type's answer,
+    /// which is the language's rule on every surface: a case an earlier
+    /// guard already removed is still demanded, and a variant from another
+    /// module has to be collected ([`Options::extern_variants`]). A caller
+    /// with a checker reports that answer too, and adds what the type at
+    /// each `match` shows where the declarations cannot answer; `val`'s
     /// pairing is a scope model, so shadowing and redeclaration are ttc's
-    /// reading rather than TypeScript's. A caller with a checker asks it
-    /// instead — the narrowed type at each `match`, and symbol identity for
-    /// each binding — and reports what it says. `ttc --check-types` does
-    /// exactly that ([`tag_matches`], [`literal_matches`], [`val_probes`]).
+    /// reading rather than TypeScript's, and a caller with a checker pairs
+    /// by symbol identity instead. `ttc --check-types` does exactly that
+    /// ([`tag_matches`], [`literal_matches`], [`val_probes`]).
     ///
     /// Every other tt-level check runs either way: duplicate cases,
     /// misplaced wildcards, bad field types, `val`'s call-capability rule.
@@ -66,6 +75,7 @@ impl Default for Options<'_> {
             source_kind: SourceKind::TypeScript,
             verify: true,
             rewrite_imports: ImportRewrite::default(),
+            jsx_preserve: false,
             extern_variants: &[],
             defer_to_checker: false,
             std_imports: StdImports::default(),
@@ -140,17 +150,9 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
     // the first error in source order — and skips emission when the checks
     // already failed.
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
-    let typescript_tokens = lexer::TypeScriptTokens::of(source, options.source_kind, &tokens);
     let semantics = analysis::coverage_semantics(source, &program, options.extern_variants);
-    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
-    let mut errors = tt_errors(
-        source,
-        &program,
-        &tokens,
-        typescript_tokens.tokens(),
-        options,
-        &semantics,
-    );
+    let core = core_ir::lower_semantic(&semantics, source, &tokens);
+    let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
     if errors
         .iter()
         .any(|error| error.code == DiagnosticCode::ResultNoSuccessValue)
@@ -168,25 +170,26 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             diagnostics::Diagnostic::from_tt(first).to_compile_error(source, options.filename)
         );
     }
-    let plan = match codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens)
-    {
-        Ok(plan) => plan,
-        // The file's own TypeScript does not parse, so no owner model
-        // exists to lower against. Reported where the source says it, not
-        // as a panic out of emission.
-        Err(failure) => {
-            return Err(
-                diagnostics::Diagnostic::from_tt(verify::in_source(source, &failure))
-                    .to_compile_error(source, options.filename),
-            );
-        }
-    };
+    let mut plan =
+        match codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens) {
+            Ok(plan) => plan,
+            // The file's own TypeScript does not parse, so no owner model
+            // exists to lower against. Reported where the source says it, not
+            // as a panic out of emission.
+            Err(failure) => {
+                return Err(
+                    diagnostics::Diagnostic::from_tt(verify::in_source(source, &failure))
+                        .to_compile_error(source, options.filename),
+                );
+            }
+        };
     if let Some(first) = target_errors(&plan).into_iter().next() {
         return Err(
             diagnostics::Diagnostic::from_tt(first).to_compile_error(source, options.filename)
         );
     }
     let automatic_semicolons = crate::lexer::automatic_semicolons(&tokens);
+    let comments = crate::lexer::comments(source, &tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
@@ -194,9 +197,10 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             text: source,
             kind: options.source_kind,
             automatic_semicolons: &automatic_semicolons,
+            comments: &comments,
         },
         &plan,
-        options.rewrite_imports,
+        options.rewrite_imports.extensions(options.jsx_preserve),
         options.std_imports,
     );
     if options.verify
@@ -232,9 +236,18 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
         contextual_slots: flat.contextual_slots,
+        selector_slots: flat.selector_slots,
+        operand_slots: flat.operand_slots,
+        asserted_slots: flat.asserted_slots,
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
+        destructured_lists: flat.destructured_lists,
+        inserted: flat.inserted,
+        single_line_breaks: flat.single_line_breaks,
+        completion_scopes: std::mem::take(&mut plan.completion_scopes),
+        support_imports: flat.support_imports,
+        commonjs: flat.commonjs,
     };
     if options.defer_to_checker {
         return Ok(emit);
@@ -261,23 +274,25 @@ fn tt_errors(
     source: &str,
     program: &ast::Program,
     tokens: &[lexer::Token],
-    typescript_tokens: &[lexer::Token],
     options: &Options,
     semantics: &analysis::SemanticFile,
 ) -> Vec<TtError> {
     let mut errors = sema::check_all(
         source,
+        options.source_kind,
         program,
         options.verify,
         options.defer_to_checker,
         semantics,
-        typescript_tokens,
+        tokens,
     );
     if !options.defer_to_checker {
         errors.extend(val::check_all(
             source,
+            options.source_kind,
             tokens,
             &parser::val_modifiers(program),
+            &parser::pipeline_shapes(program),
         ));
     }
     // One order for every producer: where the reader's eye goes, top to
@@ -344,6 +359,9 @@ fn lexical_declaration_body_errors(plan: &evaluation_ir::LoweringPlan) -> Vec<Tt
         .collect()
 }
 
+const LOGICAL_ASSIGNMENT_HELP: &str = "write the logical assignment as a statement of its own \
+     (`target ??= value;`), then read the target where its value was used";
+
 fn match_placement_message(
     owner: program_syntax::EvaluationOwner,
     reason: evaluation_ir::ExpressionBoundaryReason,
@@ -365,13 +383,29 @@ fn match_placement_message(
             "`match` cannot be used in a decorator, a computed member name, or a decorated class's heritage — the class definition evaluates it with no statement position",
             help,
         ),
+        (EvaluationOwner::EnumInitializer, Reason::OwnerTakesNoStatements) => (
+            "`match` cannot be used in an enum member initializer — the enum evaluates its members in order, in a scope where member names denote members, with no statement position",
+            help,
+        ),
         (_, Reason::RepeatedInOwner) => (
             "`match` cannot be lowered from this repeated loop position without changing how often it evaluates",
             help,
         ),
+        (_, Reason::LoopHeadDeclarator) => (
+            "`match` cannot be lowered from a later declarator of a `for` loop head — its statements would run before the earlier declarators and outside the bindings the head declares",
+            "move the declaration before the loop, or make this declarator the first one",
+        ),
+        (_, Reason::LoopHeadBinding) => (
+            "`match` cannot be lowered from a `for` loop head whose initializer refers to a binding the head declares — its statements would run before the loop, where that name does not denote the head's binding",
+            "declare the binding before the loop, or compute the value in the loop body",
+        ),
         (_, Reason::ConditionalInOwner | Reason::ConditionalOperationNotStructurable) => (
             "`match` cannot be lowered from this conditional expression position without evaluating a skipped branch",
             help,
+        ),
+        (_, Reason::LogicalAssignmentValue) => (
+            "`match` cannot be lowered in the right operand of a logical assignment whose value is used — the operand runs only when the target's value does not decide the result, and no statement form reads the target once, skips the operand, and keeps TypeScript's narrowing of the target",
+            LOGICAL_ASSIGNMENT_HELP,
         ),
         (_, Reason::ReferenceNotPreservable) => (
             "`match` cannot be lowered from this reference position while preserving its receiver and `this`",
@@ -445,6 +479,7 @@ fn try_placement_message(
     let help = "move the propagation into the nearest function-body statement with \
                 `const value = try <expression>;`";
     match (owner, reason) {
+        (EvaluationOwner::Module, _) => crate::diagnostics::TRY_OUTSIDE_FUNCTION,
         (EvaluationOwner::StaticBlock, _) => (
             "`try` cannot be used in a class static block — it has no enclosing function \
              failure edge for its `Err` propagation",
@@ -454,6 +489,18 @@ fn try_placement_message(
             "`try` cannot be used in a repeated loop position — propagating its `Err` \
              across this TypeScript control-flow boundary would run once per iteration",
             help,
+        ),
+        (_, Reason::LoopHeadDeclarator) => (
+            "`try` cannot be used in a later declarator of a `for` loop head — its \
+             propagation would run before the earlier declarators and outside the bindings \
+             the head declares",
+            "move the declaration before the loop, or make this declarator the first one",
+        ),
+        (_, Reason::LoopHeadBinding) => (
+            "`try` cannot be used in a `for` loop head whose initializer refers to a binding \
+             the head declares — its propagation would run before the loop, where that name \
+             does not denote the head's binding",
+            "declare the binding before the loop, or compute the value in the loop body",
         ),
         (EvaluationOwner::ParameterInitializer, Reason::OwnerTakesNoStatements) => (
             "`try` cannot be used in a parameter initializer — this TypeScript control-flow \
@@ -469,6 +516,11 @@ fn try_placement_message(
             "`try` cannot be used in a decorator, a computed member name, or a decorated \
              class's heritage — the class definition evaluates it with no statement position \
              for its `Err` propagation",
+            help,
+        ),
+        (EvaluationOwner::EnumInitializer, Reason::OwnerTakesNoStatements) => (
+            "`try` cannot be used in an enum member initializer — the enum evaluates its \
+             members with no statement position for its `Err` propagation",
             help,
         ),
         (EvaluationOwner::Constructor, _) => (
@@ -491,6 +543,13 @@ fn try_placement_message(
             "`try` cannot be used in this conditional operation — its TypeScript control-flow \
              boundary cannot be rebuilt without changing evaluation order",
             help,
+        ),
+        (_, Reason::LogicalAssignmentValue) => (
+            "`try` cannot be used in the right operand of a logical assignment whose value is \
+             used — the operand runs only when the target's value does not decide the result, \
+             and no statement form reads the target once, skips the operand, and keeps \
+             TypeScript's narrowing of the target",
+            LOGICAL_ASSIGNMENT_HELP,
         ),
         (_, Reason::CaptureOverlapsValue) => (
             "`try` cannot be used in this expression context — its TypeScript control-flow \
@@ -530,17 +589,9 @@ fn try_placement_message(
 /// ```
 pub fn analyze(source: &str, options: &Options) -> Vec<Diagnostic> {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
-    let typescript_tokens = lexer::TypeScriptTokens::of(source, options.source_kind, &tokens);
     let semantics = analysis::coverage_semantics(source, &program, options.extern_variants);
-    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
-    let mut errors = tt_errors(
-        source,
-        &program,
-        &tokens,
-        typescript_tokens.tokens(),
-        options,
-        &semantics,
-    );
+    let core = core_ir::lower_semantic(&semantics, source, &tokens);
+    let mut errors = tt_errors(source, &program, &tokens, options, &semantics);
     if !errors.iter().any(|error| error.code.blocks_projection()) {
         match codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens) {
             Ok(plan) => errors.extend(nonredundant_target_errors(&plan, &errors)),
@@ -609,6 +660,38 @@ pub struct ProjectionReport {
     pub diagnostics: Vec<Diagnostic>,
     /// Source byte ranges occupied by parser recovery nodes.
     pub recovered: Vec<(usize, usize)>,
+    /// Those of `recovered` that stood for a declaration (a malformed
+    /// variant), whose name the projection declares with the error type.
+    pub recovered_declarations: Vec<(usize, usize)>,
+    /// The emission `emit` withholds from the typed program when the only
+    /// thing wrong with the (recovered) file is its TypeScript: it does not
+    /// parse, or its lowering plan could not be built over it. It is
+    /// lowered without that plan, and every byte of it is TypeScript the
+    /// user wrote, glue a claimed construct lowered to, or a recovery
+    /// placeholder in `recovered` — no tt text is left as written — so
+    /// what a TypeScript reader says about it is what it says about the
+    /// user's code. `None` when `emit` is present, or when a construct
+    /// would stay the tt text the user wrote.
+    pub withheld: Option<MappedEmit>,
+}
+
+/// The emission of a file that has no verified one, when no tt text in it
+/// is left as written: no diagnostic leaves its construct unlowered
+/// ([`DiagnosticCode::leaves_tt_text`]) and the parser rolled back no tt
+/// candidate into passthrough text.
+fn withheld_emit(
+    source: &str,
+    options: &Options,
+    program: &ast::Program,
+    tokens: &[lexer::Token],
+    diagnostics: &[Diagnostic],
+) -> Option<MappedEmit> {
+    if diagnostics.iter().any(|d| d.code.leaves_tt_text())
+        || !parser::unclaimed_candidates(program).is_empty()
+    {
+        return None;
+    }
+    Some(emit_mapped_parsed(source, options, program, tokens))
 }
 
 fn overwrite_recovery(source: &mut [u8], start: usize, end: usize, replacement: &str) {
@@ -641,33 +724,114 @@ pub(crate) fn compile_projection_report_parsed(
             emit: ordinary.emit,
             diagnostics: ordinary.diagnostics,
             recovered: Vec::new(),
+            recovered_declarations: Vec::new(),
+            withheld: None,
         };
     }
 
     let mut nodes = parser::projection_recoveries(program);
-    for diagnostic in &ordinary.diagnostics {
-        let (Some(start), Some(end)) = (diagnostic.start, diagnostic.end) else {
-            continue;
-        };
-        match diagnostic.code {
-            DiagnosticCode::TryPlacement
-            | DiagnosticCode::TryCrossesValueRegion
-            | DiagnosticCode::MatchPlacement => nodes.push(ast::RecoveryNode {
-                span: ast::Span { start, end },
-                kind: ast::RecoveryKind::Expression,
-            }),
-            DiagnosticCode::VariantInvalidFieldType => nodes.push(ast::RecoveryNode {
-                span: ast::Span { start, end },
-                kind: ast::RecoveryKind::Type,
-            }),
-            _ => {}
+    nodes.extend(recoverable_constructs(&ordinary.diagnostics));
+    // A construct the plan rejects is reported when planning reaches it, so
+    // a file with several can show the next one only once the first is
+    // recovered. Each round recovers at least one construct more, until the
+    // projection emits or no recoverable construct is left.
+    loop {
+        nodes.sort_by_key(|node| (node.span.start, std::cmp::Reverse(node.span.end)));
+        let selected = outermost_recoveries(nodes);
+        if selected.is_empty() {
+            return ProjectionReport {
+                emit: None,
+                withheld: withheld_emit(source, options, program, tokens, &ordinary.diagnostics),
+                diagnostics: ordinary.diagnostics,
+                recovered: Vec::new(),
+                recovered_declarations: Vec::new(),
+            };
         }
+        let recovered_source = recover_source(source, &selected);
+        let (recovered_program, recovered_tokens) =
+            parser::lex_and_parse_with_kind(&recovered_source, options.source_kind);
+        let recovered_report = compile_report_parsed(
+            &recovered_source,
+            options,
+            &recovered_program,
+            &recovered_tokens,
+        );
+        let further: Vec<_> = if recovered_report.emit.is_some() {
+            Vec::new()
+        } else {
+            recoverable_constructs(&recovered_report.diagnostics)
+                .into_iter()
+                .filter(|node| {
+                    !selected.iter().any(|outer| {
+                        outer.span.start <= node.span.start && node.span.end <= outer.span.end
+                    })
+                })
+                .collect()
+        };
+        if further.is_empty() {
+            let withheld = match recovered_report.emit {
+                Some(_) => None,
+                None => withheld_emit(
+                    &recovered_source,
+                    options,
+                    &recovered_program,
+                    &recovered_tokens,
+                    &recovered_report.diagnostics,
+                ),
+            };
+            return ProjectionReport {
+                emit: recovered_report
+                    .emit
+                    .map(|emit| declare_recovered_variants(emit, &selected)),
+                withheld: withheld.map(|emit| declare_recovered_variants(emit, &selected)),
+                diagnostics: ordinary.diagnostics,
+                recovered_declarations: selected
+                    .iter()
+                    .filter(|node| matches!(node.kind, ast::RecoveryKind::VariantDecl { .. }))
+                    .map(|node| (node.span.start, node.span.end))
+                    .collect(),
+                recovered: selected
+                    .into_iter()
+                    .map(|node| (node.span.start, node.span.end))
+                    .collect(),
+            };
+        }
+        nodes = selected;
+        nodes.extend(further);
     }
-    nodes.sort_by_key(|node| (node.span.start, std::cmp::Reverse(node.span.end)));
+}
 
-    // Keep the outer error node when parser recovery found nested symptoms
-    // inside it. This is the same synchronization rule as an error AST node:
-    // one placeholder owns one malformed construct.
+/// The constructs a reported diagnostic lets the typed projection
+/// substitute: a tt value whose placement the plan rejects, a discarded
+/// `result` block, and an invalid variant field type. Each is an
+/// expression (or a type) whose replacement keeps the file's other code
+/// checkable.
+fn recoverable_constructs(diagnostics: &[Diagnostic]) -> Vec<ast::RecoveryNode> {
+    diagnostics
+        .iter()
+        .filter_map(|diagnostic| {
+            let span = ast::Span {
+                start: diagnostic.start?,
+                end: diagnostic.end?,
+            };
+            let kind = match diagnostic.code {
+                DiagnosticCode::TryPlacement
+                | DiagnosticCode::TryCrossesValueRegion
+                | DiagnosticCode::MatchPlacement
+                | DiagnosticCode::ResultValueDiscarded => ast::RecoveryKind::Expression,
+                DiagnosticCode::VariantInvalidFieldType => ast::RecoveryKind::Type,
+                _ => return None,
+            };
+            Some(ast::RecoveryNode { span, kind })
+        })
+        .collect()
+}
+
+/// Keeps the outer error node when parser recovery found nested symptoms
+/// inside it. This is the same synchronization rule as an error AST node:
+/// one placeholder owns one malformed construct. `nodes` is sorted by start,
+/// outermost first.
+fn outermost_recoveries(nodes: Vec<ast::RecoveryNode>) -> Vec<ast::RecoveryNode> {
     let mut selected: Vec<ast::RecoveryNode> = Vec::new();
     for node in nodes {
         if selected
@@ -678,24 +842,24 @@ pub(crate) fn compile_projection_report_parsed(
         }
         selected.push(node);
     }
-    if selected.is_empty() {
-        return ProjectionReport {
-            emit: None,
-            diagnostics: ordinary.diagnostics,
-            recovered: Vec::new(),
-        };
-    }
+    selected
+}
 
+fn recover_source(source: &str, selected: &[ast::RecoveryNode]) -> String {
     let mut recovered = source.as_bytes().to_vec();
-    for node in &selected {
+    for node in selected {
         let replacement = match &node.kind {
             ast::RecoveryKind::Expression => {
-                let replacement =
-                    if node.span.end.saturating_sub(node.span.start) >= "undefined as any".len() {
-                        "undefined as any"
-                    } else {
-                        "0"
-                    };
+                // The placeholder is `any` wherever it fits, so the code that
+                // uses the recovered value has no checker consequence of it.
+                let width = node.span.end.saturating_sub(node.span.start);
+                let replacement = if width >= "undefined as any".len() {
+                    "undefined as any"
+                } else if width >= "0 as any".len() {
+                    "0 as any"
+                } else {
+                    "0"
+                };
                 overwrite_recovery(&mut recovered, node.span.start, node.span.end, replacement);
                 continue;
             }
@@ -703,40 +867,56 @@ pub(crate) fn compile_projection_report_parsed(
             ast::RecoveryKind::MatchArms(_) => {
                 unreachable!("match recovery is flattened by the parser")
             }
-            ast::RecoveryKind::Statement => ";",
+            ast::RecoveryKind::Statement | ast::RecoveryKind::VariantDecl { .. } => ";",
             ast::RecoveryKind::Type => "any",
-            ast::RecoveryKind::VariantDecl { name, exported } => {
-                let declaration = if *exported {
-                    format!("export class {name} {{}}")
-                } else {
-                    format!("class {name} {{}}")
-                };
-                let replacement =
-                    if declaration.len() <= node.span.end.saturating_sub(node.span.start) {
-                        declaration.as_str()
-                    } else {
-                        ";"
-                    };
-                overwrite_recovery(&mut recovered, node.span.start, node.span.end, replacement);
-                continue;
-            }
+            ast::RecoveryKind::OperandHead => "void",
         };
         overwrite_recovery(&mut recovered, node.span.start, node.span.end, replacement);
     }
     // Every overwrite replaces a whole node's byte range with ASCII, and
     // a node's range is a char boundary on both ends, so what is left is
     // still the UTF-8 it started as.
-    let recovered_source =
-        String::from_utf8(recovered).expect("recovery replaces whole nodes with ASCII");
-    let recovered_report = compile_report(&recovered_source, options);
-    ProjectionReport {
-        emit: recovered_report.emit,
-        diagnostics: ordinary.diagnostics,
-        recovered: selected
-            .into_iter()
-            .map(|node| (node.span.start, node.span.end))
-            .collect(),
+    String::from_utf8(recovered).expect("recovery replaces whole nodes with ASCII")
+}
+
+/// Declares each recovered variant's name with the error type, `any`, as
+/// both the type and the value a variant declares: its cases could not be
+/// read, so nothing that uses it has a checker consequence of it, as for a
+/// recovered expression. The declarations are glue after the module, owned
+/// by the variant's source range, so the placeholder's width does not bound
+/// them.
+fn declare_recovered_variants(mut emit: MappedEmit, selected: &[ast::RecoveryNode]) -> MappedEmit {
+    for node in selected {
+        let ast::RecoveryKind::VariantDecl {
+            name,
+            generics,
+            exported,
+        } = &node.kind
+        else {
+            continue;
+        };
+        if parser::is_reserved(name) {
+            continue;
+        }
+        let export = if *exported { "export " } else { "" };
+        if !emit.code.is_empty() && !emit.code.ends_with('\n') {
+            emit.code.push('\n');
+        }
+        let out = emit.code.len();
+        emit.code.push_str(&format!(
+            "{export}declare const {name}: any;\n{export}type {name}{generics} = any;\n"
+        ));
+        emit.anchors.push(EmitAnchor {
+            out,
+            end: emit.code.len(),
+            src: node.span.start,
+            src_end: node.span.end,
+            owner_end: node.span.end,
+            context: None,
+            kind: AnchorKind::Variant,
+        });
     }
+    emit
 }
 
 fn verified_emit(
@@ -782,23 +962,35 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
     compile_report_parsed(source, options, &program, &tokens)
 }
 
+/// [`compile_report`] for a caller that discards the emission, such as
+/// `ttc --check`: the same diagnostics and output self-check, over the
+/// emission before contextual refinement. That refinement only annotates
+/// generated storage in the output a TypeScript project reads, so this
+/// never reaches TypeScript.
+pub fn check_report(source: &str, options: &Options) -> CompileReport {
+    let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
+    report_parsed(source, options, &program, &tokens, false)
+}
+
 pub(crate) fn compile_report_parsed(
     source: &str,
     options: &Options,
     program: &ast::Program,
     tokens: &[lexer::Token],
 ) -> CompileReport {
-    let typescript_tokens = lexer::TypeScriptTokens::of(source, options.source_kind, tokens);
+    report_parsed(source, options, program, tokens, true)
+}
+
+fn report_parsed(
+    source: &str,
+    options: &Options,
+    program: &ast::Program,
+    tokens: &[lexer::Token],
+    refine: bool,
+) -> CompileReport {
     let semantics = analysis::coverage_semantics(source, program, options.extern_variants);
-    let core = core_ir::lower_semantic(&semantics, source, typescript_tokens.tokens());
-    let mut errors = tt_errors(
-        source,
-        program,
-        tokens,
-        typescript_tokens.tokens(),
-        options,
-        &semantics,
-    );
+    let core = core_ir::lower_semantic(&semantics, source, tokens);
+    let mut errors = tt_errors(source, program, tokens, options, &semantics);
     if errors.iter().any(|e| e.code.blocks_projection()) {
         return CompileReport {
             emit: None,
@@ -808,27 +1000,27 @@ pub(crate) fn compile_report_parsed(
                 .collect(),
         };
     }
-    let plan = match codegen::lowering_plan(&semantics, &core, source, options.source_kind, tokens)
-    {
-        Ok(plan) => plan,
-        // Same class as a projection-blocking tt diagnostic: the file has
-        // no emittable form, and the cause is reported with everything
-        // else already found.
-        Err(failure) => {
-            errors.push(verify::in_source(source, &failure));
-            errors.extend(recovered_target_errors(
-                &failure, &semantics, &core, source, tokens, options, &errors,
-            ));
-            errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
-            return CompileReport {
-                emit: None,
-                diagnostics: errors
-                    .into_iter()
-                    .map(diagnostics::Diagnostic::from_tt)
-                    .collect(),
-            };
-        }
-    };
+    let mut plan =
+        match codegen::lowering_plan(&semantics, &core, source, options.source_kind, tokens) {
+            Ok(plan) => plan,
+            // Same class as a projection-blocking tt diagnostic: the file has
+            // no emittable form, and the cause is reported with everything
+            // else already found.
+            Err(failure) => {
+                errors.push(verify::in_source(source, &failure));
+                errors.extend(recovered_target_errors(
+                    &failure, &semantics, &core, source, tokens, options, &errors,
+                ));
+                errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
+                return CompileReport {
+                    emit: None,
+                    diagnostics: errors
+                        .into_iter()
+                        .map(diagnostics::Diagnostic::from_tt)
+                        .collect(),
+                };
+            }
+        };
     let target_errors = nonredundant_target_errors(&plan, &errors);
     if !target_errors.is_empty() {
         errors.extend(target_errors);
@@ -842,6 +1034,7 @@ pub(crate) fn compile_report_parsed(
         };
     }
     let automatic_semicolons = crate::lexer::automatic_semicolons(tokens);
+    let comments = crate::lexer::comments(source, tokens);
     let flat = codegen::emit_with_map(
         &semantics,
         &core,
@@ -849,9 +1042,10 @@ pub(crate) fn compile_report_parsed(
             text: source,
             kind: options.source_kind,
             automatic_semicolons: &automatic_semicolons,
+            comments: &comments,
         },
         &plan,
-        options.rewrite_imports,
+        options.rewrite_imports.extensions(options.jsx_preserve),
         options.std_imports,
     );
     let lowered = MappedEmit {
@@ -862,9 +1056,18 @@ pub(crate) fn compile_report_parsed(
         anchors: flat.anchors,
         result_return_temps: flat.result_return_temps,
         contextual_slots: flat.contextual_slots,
+        selector_slots: flat.selector_slots,
+        operand_slots: flat.operand_slots,
+        asserted_slots: flat.asserted_slots,
         generated_names: flat.generated_names,
         declared_names: flat.declared_names,
         shared_bindings: flat.shared_bindings,
+        destructured_lists: flat.destructured_lists,
+        inserted: flat.inserted,
+        single_line_breaks: flat.single_line_breaks,
+        completion_scopes: std::mem::take(&mut plan.completion_scopes),
+        support_imports: flat.support_imports,
+        commonjs: flat.commonjs,
     };
     let mut emit = verified_emit(
         lowered,
@@ -873,7 +1076,8 @@ pub(crate) fn compile_report_parsed(
         options,
         &mut errors,
     );
-    if !options.defer_to_checker
+    if refine
+        && !options.defer_to_checker
         && let Some(lowered) = emit.take()
     {
         let annotated = !lowered.contextual_slots.is_empty();

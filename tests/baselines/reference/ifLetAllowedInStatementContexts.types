@@ -1,0 +1,17 @@
+=== ifLetAllowedInStatementContexts.tt ===
+function f(x: X, o: O) {
+>f : function f(x: X, o: O): any
+>x : (parameter) x: X
+>X : type X = /*unresolved*/ any
+>o : (parameter) o: O
+>O : type O = /*unresolved*/ any
+  const r = match (x) {
+>r : const r: any
+>x : (parameter) x: X
+      if let Some(value) = o { return value; }
+>value : const value: O
+>o : (parameter) o: O
+>value : const value: O
+  return r;
+>r : const r: any
+

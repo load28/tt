@@ -1,0 +1,4 @@
+# Diagnostic codes no case can report: the code, a tab, why no program reports it, a tab, the task that records it.
+# tests/case_baselines.rs fails on a code with no case that is not listed here, and on a listed code that has one.
+lowering-plan-failed	No known program reports it: every report is a lowering invariant the compiler broke (the projection of a construct does not parse at a byte it generated, or an evaluation plan cannot be built), which its explanation calls a gap; the one path the matrix reached, an expression a `result` block's `}` cuts off, is `source-not-typescript` since TASK-707.	TASK-707: kept for internal invariants
+other	No reporting site produces it: every site names its own code, and `other` exists so an unclassified error still has one.	TASK-700: recorded in Decision 6

@@ -1,0 +1,13 @@
+//// [orPatternEmitsFallthroughCases.tt] 11 mapping(s)
+1:1 -> 19:1 len 1  "\n"
+2:46 -> 24:25 len 6  "string"
+2:46 -> 29:14 len 6  "string"
+2:55 -> 30:3 len 1  "\n"
+3:1 -> 53:1 len 15  "const action = "
+3:23 -> 33:17 len 3  "key"
+4:12 -> 36:23 len 8  "\"submit\""
+5:19 -> 40:23 len 8  "\"cancel\""
+6:8 -> 44:15 len 2  "ch"
+6:15 -> 45:23 len 12  "\"type:\" + ch"
+7:2 -> 53:29 len 2  ";\n"
+

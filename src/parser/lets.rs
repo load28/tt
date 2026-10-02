@@ -64,6 +64,10 @@ pub(super) fn parse_let_else<'t>(
         tag_off: tag_span.start,
         end: cur.tokens[close].span.end,
         bindings: Some(bindings),
+        list: Some(crate::ast::Span {
+            start: cur.tokens[open].span.start,
+            end: cur.tokens[close].span.end,
+        }),
     }];
     while cur.at_punct(b'|') {
         cur.bump();
@@ -130,6 +134,7 @@ pub(super) fn parse_let_else<'t>(
                 end: expr_end,
             },
             kw: cur.parser.src[kw_span.start..kw_span.end].to_string(),
+            exported: false,
             alternatives,
             expr: cur.parser.parse_expression_tokens(
                 &cur.tokens[expr_from..else_idx],
@@ -170,7 +175,7 @@ fn expr_until_else(cur: &Cursor) -> Option<(usize, usize)> {
                         None
                     };
                 }
-                if crate::lexer::statement_only_keyword(word) {
+                if crate::lexer::statement_keyword_at(cur.parser.src, cur.tokens, k) {
                     return None;
                 }
                 // Skip a whole `match ( ... ) { ... }` or `result { ... }`

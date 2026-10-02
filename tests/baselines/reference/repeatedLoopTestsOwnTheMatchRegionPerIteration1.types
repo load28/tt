@@ -1,0 +1,4 @@
+=== repeatedLoopTestsOwnTheMatchRegionPerIteration1.tt ===
+while (match (next()) { is Error => false, _ => true }) { work(); }
+>Error : var Error: ErrorConstructor
+

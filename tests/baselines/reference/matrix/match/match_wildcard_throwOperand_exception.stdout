@@ -1,0 +1,4 @@
+throwOperand({"kind":"Num","value":4}) => undefined | risky {"kind":"Num","value":4}; other -1; caught undefined
+throwOperand({"kind":"Neg","value":-3}) => undefined | risky {"kind":"Neg","value":-3}; other -1; caught undefined
+throwOperand({"kind":"Word","text":"hi"}) => "risky call 3" | caught "risky call 3"
+throwOperand({"kind":"End"}) => undefined | risky {"kind":"End"}; other -1; caught undefined

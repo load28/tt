@@ -1,0 +1,2 @@
+// @origin: tests/compile/cases_01.rs::loop_test_rewrites_compose_with_conditionals_nesting_and_initializers
+for (let a = match (1) { 1 => 1, _ => 0 }; match (a) { 1 => true, _ => false }; a++) { use(a); }

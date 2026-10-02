@@ -1,0 +1,3 @@
+// @origin: tests/compile/cases_10.rs::two_tries_in_one_initializer_both_propagate
+declare function a(): { kind: "Ok"; value: number } | { kind: "Err"; error: string };
+function g() { const x = try a() + try a(); return x; }

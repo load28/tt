@@ -1,0 +1,7 @@
+=== diagnostics main.tt ===
+diagnostics: 1 diagnostic(s)
+  3:16-3:21 "input" hint TS6133: 'input' is declared but its value is never read. [unnecessary]
+published: 2 diagnostic(s)
+  3:16-3:21 "input" hint TS6133 (ts): 'input' is declared but its value is never read. [unnecessary]
+  4:25-4:36 ".toFixed(1)" error flow-first-step-method (ttc): `flow`: the first step cannot be a method step — it is the composed function's input, so it must be a function
+

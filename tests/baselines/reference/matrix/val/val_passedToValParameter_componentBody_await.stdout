@@ -1,0 +1,2 @@
+componentBody(3) => "<p>3</p>" | await; show 3
+componentBody(8) => "<p>8</p>" | await; show 8

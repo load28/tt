@@ -1,0 +1,12 @@
+//// [tupleMatchBlockBodiesAndGuardsLeaveThroughTheRegion.tt] 10 mapping(s)
+1:1 -> 1:1 len 1  "\n"
+2:32 -> 8:3 len 1  "\n"
+3:1 -> 24:1 len 10  "const r = "
+3:18 -> 11:18 len 1  "a"
+3:21 -> 12:18 len 1  "b"
+4:21 -> 15:11 len 4  "go()"
+4:30 -> 16:10 len 8  " log(); "
+4:45 -> 16:29 len 1  "1"
+5:8 -> 20:16 len 1  "0"
+6:2 -> 24:19 len 2  ";\n"
+

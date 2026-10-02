@@ -1,0 +1,2 @@
+labeledBlock(5) => 15 | map 15; flip true
+labeledBlock(0) => [-1] | flip false

@@ -1,0 +1,2 @@
+destructuringDefault(2) => 6 | source {}; risky 2; receiver {"factor":3}; twice 6
+destructuringDefault(6) => 18 | source {}; risky 6; receiver {"factor":3}; twice 18

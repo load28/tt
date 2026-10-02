@@ -1,0 +1,4 @@
+// @origin: tests/compile/cases_09.rs::an_optional_call_evaluates_arguments_only_past_its_check
+declare const f: ((v: number, w: number) => number) | undefined;
+declare function pre(): number;
+export const r = f?.(pre(), match (1) { 1 => 1, _ => 0 });

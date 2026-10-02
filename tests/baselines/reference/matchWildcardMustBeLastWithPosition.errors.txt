@@ -1,0 +1,22 @@
+==== ttc --out-dir (exit 1) ====
+error[match-wildcard-not-last]: match: the wildcard arm `_` must be the last arm
+ --> ./matchWildcardMustBeLastWithPosition.tt:1:23
+  |
+1 | const r = match (x) { _ => 0, A => 1 };
+  |                       ^
+
+
+==== ttc --check-types (exit 1) ====
+error[ts2304]: Cannot find name 'x'.
+ --> matchWildcardMustBeLastWithPosition.tt:1:18
+  |
+1 | const r = match (x) { _ => 0, A => 1 };
+  |                  ^
+error[match-wildcard-not-last]: match: the wildcard arm `_` must be the last arm
+ --> matchWildcardMustBeLastWithPosition.tt:1:23
+  |
+1 | const r = match (x) { _ => 0, A => 1 };
+  |                       ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

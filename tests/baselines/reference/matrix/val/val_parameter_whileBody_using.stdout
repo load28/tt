@@ -1,0 +1,2 @@
+whileBody(3) => 3 | open res; test true; operand 3; param 3; dispose res
+whileBody(8) => 8 | open res; test true; operand 8; param 8; dispose res

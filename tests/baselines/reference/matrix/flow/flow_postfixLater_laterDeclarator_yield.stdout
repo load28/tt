@@ -1,0 +1,2 @@
+laterDeclarator(1.5) => [1,null] | before 1; yield 1.5
+laterDeclarator(2) => [1,null] | before 1; yield 2

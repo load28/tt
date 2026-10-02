@@ -1,0 +1,8 @@
+=== valParameterPositionsBeyondPlainIdentifiers1.tt ===
+function foo(val { user }: Ctx) {
+>foo : function foo({ user }: Ctx): void
+>user : (parameter) user: Ctx
+>Ctx : type Ctx = /*unresolved*/ any
+  user.name = "x";
+>user : (parameter) user: Ctx
+

@@ -1,0 +1,21 @@
+==== ttc --out-dir (exit 1) ====
+ttc: ./harness.ts → $DIR/out/harness.ts
+error[let-else-not-diverging]: let-else: every path through the `else` block must diverge
+ --> ./main.tt:5:55
+  |
+5 |     const Ok(value: v) = read(note("operand", input)) else { note("else", "fell"); };
+  |                                                       ^^^^
+  |
+  = help: end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` counts when both branches do)
+
+
+==== ttc --check-types (exit 1) ====
+error[let-else-not-diverging]: let-else: every path through the `else` block must diverge
+ --> main.tt:5:55
+  |
+5 |     const Ok(value: v) = read(note("operand", input)) else { note("else", "fell"); };
+  |                                                       ^^^^
+  |
+  = help: end it with `return`, `throw`, `break`, or `continue` (an `if`/`else` counts when both branches do)
+
+==== tsc on the emitted TypeScript (exit 0) ====

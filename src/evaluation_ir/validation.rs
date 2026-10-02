@@ -57,6 +57,15 @@ impl EvaluationFile {
         expr: ExprId,
         owner: HostOwner,
     ) -> bool {
+        crate::stack::grow(|| self.expr_has_differently_hosted_descendant_grown(core, expr, owner))
+    }
+
+    fn expr_has_differently_hosted_descendant_grown(
+        &self,
+        core: &CoreFile,
+        expr: ExprId,
+        owner: HostOwner,
+    ) -> bool {
         let nested = |child| {
             self.regions.iter().any(|region| {
                 region.root == Some(CoreRoot::Expr(child))
@@ -101,6 +110,15 @@ impl EvaluationFile {
     }
 
     pub(super) fn body_has_differently_hosted_descendant(
+        &self,
+        core: &CoreFile,
+        body: BodyId,
+        owner: HostOwner,
+    ) -> bool {
+        crate::stack::grow(|| self.body_has_differently_hosted_descendant_grown(core, body, owner))
+    }
+
+    fn body_has_differently_hosted_descendant_grown(
         &self,
         core: &CoreFile,
         body: BodyId,
@@ -324,6 +342,7 @@ impl EvaluationFile {
                                 receiver,
                                 source,
                                 target,
+                                ..
                             } => {
                                 if receiver.is_none() {
                                     return Err(InternalCompilerError::new(
@@ -335,8 +354,7 @@ impl EvaluationFile {
                                 }
                                 // A member callee of an optional call keeps
                                 // its receiver only when the whole operation
-                                // is a planned region calling through
-                                // `.call(receiver, ...)`.
+                                // is a planned region making the call.
                                 if optional_argument && !operation_values.contains(&value.expr) {
                                     return Err(InternalCompilerError::new(
                                         stage,

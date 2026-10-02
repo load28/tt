@@ -1,0 +1,2 @@
+objectProperty(2) => {"a":1,"value":6,"c":3} | a 1; risky 2; receiver {"factor":3}; twice 6; c 3
+objectProperty(6) => {"a":1,"value":18,"c":3} | a 1; risky 6; receiver {"factor":3}; twice 18; c 3

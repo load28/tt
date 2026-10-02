@@ -1,0 +1,2 @@
+componentBody(5) => "<p>5</p>" | read 5
+componentBody(-5) => threw thrown | read undefined; else "thrown"

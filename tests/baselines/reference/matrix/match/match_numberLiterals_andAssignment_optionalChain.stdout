@@ -1,0 +1,5 @@
+andAssignment(200) => 0 | flip true; target {"value":0}
+andAssignment(201) => true | flip false; target {"value":"kept"}; success true
+andAssignment(404) => 0 | flip true; target {"value":0}
+andAssignment(500) => null | flip false; target {"value":"kept"}; other null
+andAssignment(7) => 0 | flip true; target {"value":0}

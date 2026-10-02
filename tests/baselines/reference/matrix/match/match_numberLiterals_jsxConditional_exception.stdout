@@ -1,0 +1,5 @@
+jsxConditional(200) => "<p></p>" | flip true; risky 200; success true
+jsxConditional(201) => "<p></p>" | flip false
+jsxConditional(404) => "<p></p>" | flip true; risky 404; missing false
+jsxConditional(500) => "<p></p>" | flip false
+jsxConditional(7) => "risky call 3" | flip true; caught "risky call 3"

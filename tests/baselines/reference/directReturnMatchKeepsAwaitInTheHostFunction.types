@@ -1,0 +1,10 @@
+=== directReturnMatchKeepsAwaitInTheHostFunction.tt ===
+async function f(x: T) { return match (x) { A(url) => await fetch(url), _ => null }; }
+>f : function f(x: T): Promise<Response | null>
+>x : (parameter) x: T
+>T : type T = /*unresolved*/ any
+>x : (parameter) x: T
+>url : const url: T
+>fetch : function fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
+>url : const url: T
+

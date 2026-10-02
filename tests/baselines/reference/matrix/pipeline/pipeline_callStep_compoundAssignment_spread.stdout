@@ -1,0 +1,2 @@
+compoundAssignment(2) => "start:4" | initial "start:"; target {"total":"start:"}; double 4
+compoundAssignment(5) => "start:10" | initial "start:"; target {"total":"start:"}; double 10

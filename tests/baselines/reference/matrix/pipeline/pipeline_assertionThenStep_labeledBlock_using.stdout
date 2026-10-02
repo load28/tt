@@ -1,0 +1,2 @@
+labeledBlock(123) => 3 | open res; operand 123; flip true; dispose res
+labeledBlock(4) => [1] | open res; operand 4; flip false; dispose res

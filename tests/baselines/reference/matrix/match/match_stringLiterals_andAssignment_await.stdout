@@ -1,0 +1,4 @@
+andAssignment("north") => 0 | flip true; target {"value":0}
+andAssignment("south") => 2 | flip false; target {"value":"kept"}; await; se 2
+andAssignment("east") => 0 | flip true; target {"value":0}
+andAssignment("up") => 0 | flip false; target {"value":"kept"}; await; other 0

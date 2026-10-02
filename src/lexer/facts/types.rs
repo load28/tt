@@ -8,6 +8,9 @@
 //! qualified name's `.` continue it across a line terminator.
 
 use super::{Frame, Machine, Out, Peek, Tk, Tok, TokenFacts};
+use std::cell::RefCell;
+use std::collections::HashMap;
+
 use crate::scanner::{at, ident_end, scan_string, skip_trivia, starts_identifier};
 
 #[derive(Clone, Copy, Debug)]
@@ -374,7 +377,7 @@ impl Machine<'_> {
             at = next.at;
         }
         match self.byte(at)? {
-            b'[' | b'{' => binding_pattern_end(bytes, at, self.end),
+            b'[' | b'{' => binding_pattern_end(bytes, at, self.end, &self.lookaheads),
             _ if self.src[at..].starts_with("this") && ident_end(bytes, at, self.end) == at + 4 => {
                 Some(at + 4)
             }
@@ -388,7 +391,7 @@ impl Machine<'_> {
     /// over type-shaped text, and the token after it is one TypeScript's
     /// `canFollowTypeArgumentsInExpression` accepts.
     pub(super) fn type_arguments_follow(&self, open: usize) -> bool {
-        type_arguments_end(self.src.as_bytes(), open, self.end)
+        type_arguments_end(self.src.as_bytes(), open, self.end, &self.lookaheads)
             .is_some_and(|close| self.can_follow_type_arguments(close))
     }
 
@@ -413,14 +416,54 @@ impl Machine<'_> {
     }
 }
 
+/// The answers of the lookaheads below, by the byte each one starts at.
+///
+/// A lookahead from an opener reads the same bytes, in the same way, as a
+/// lookahead from any opener nested inside it, so one scan answers every
+/// nested start it passes and records those answers here. A later question
+/// about a start a scan has passed is then answered without reading again,
+/// and the scans that do run read disjoint stretches of the region: the
+/// lookaheads of a region read each byte a bounded number of times however
+/// deeply its brackets nest or however many of them are left unclosed.
+#[derive(Debug, Default)]
+pub(in crate::lexer) struct Lookaheads {
+    type_arguments: RefCell<HashMap<usize, Option<usize>>>,
+    expressions: RefCell<HashMap<usize, Option<usize>>>,
+}
+
 /// The small type-grammar skipper: the byte just past the `>` closing the
 /// type arguments or parameters opened by the `<` at `open`, when
 /// everything up to it is type-shaped text — names, literals, brackets,
 /// `,`, `.`, `|`, `&`, `?`, `:`, `=>`, and `;` inside a type literal.
-pub(in crate::lexer) fn type_arguments_end(bytes: &[u8], open: usize, end: usize) -> Option<usize> {
-    let mut stack: Vec<u8> = vec![b'>'];
-    let mut i = open + 1;
+pub(in crate::lexer) fn type_arguments_end(
+    bytes: &[u8],
+    open: usize,
+    end: usize,
+    lookaheads: &Lookaheads,
+) -> Option<usize> {
+    if let Some(&known) = lookaheads.type_arguments.borrow().get(&open) {
+        return known;
+    }
+    let mut stack: Vec<(u8, Option<usize>)> = vec![(b'>', Some(open))];
+    let mut answers = lookaheads.type_arguments.borrow_mut();
+    let answer = scan_type_arguments(bytes, open + 1, end, &mut stack, &mut answers);
+    for (_, start) in stack {
+        if let Some(start) = start {
+            answers.insert(start, None);
+        }
+    }
+    answer
+}
+
+fn scan_type_arguments(
+    bytes: &[u8],
+    mut i: usize,
+    end: usize,
+    stack: &mut Vec<(u8, Option<usize>)>,
+    answers: &mut HashMap<usize, Option<usize>>,
+) -> Option<usize> {
     loop {
+        crate::work::tick("type argument lookahead steps");
         i = skip_trivia(bytes, i, end).0;
         let c = at(bytes, i, end)?;
         if starts_identifier(bytes, i, end) {
@@ -430,23 +473,27 @@ pub(in crate::lexer) fn type_arguments_end(bytes: &[u8], open: usize, end: usize
         match c {
             b'"' | b'\'' => i = scan_string(bytes, i, end),
             b'`' => i = skip_type_template(bytes, i, end),
-            b';' if stack.last() == Some(&b'}') => i += 1,
+            b';' if stack.last().map(|&(closer, _)| closer) == Some(b'}') => i += 1,
             b'0'..=b'9' | b'.' | b',' | b'|' | b'&' | b'?' | b':' | b'-' => i += 1,
             b'=' if at(bytes, i + 1, end) == Some(b'>') => i += 2,
             b'<' | b'(' | b'[' | b'{' => {
                 stack.push(match c {
-                    b'<' => b'>',
-                    b'(' => b')',
-                    b'[' => b']',
-                    _ => b'}',
+                    b'<' => (b'>', Some(i)),
+                    b'(' => (b')', None),
+                    b'[' => (b']', None),
+                    _ => (b'}', None),
                 });
                 i += 1;
             }
             b'>' | b')' | b']' | b'}' => {
-                if stack.pop() != Some(c) {
+                if stack.last().map(|&(closer, _)| closer) != Some(c) {
                     return None;
                 }
+                let (_, start) = stack.pop()?;
                 i += 1;
+                if let Some(start) = start {
+                    answers.insert(start, Some(i));
+                }
                 if stack.is_empty() {
                     return Some(i);
                 }
@@ -480,9 +527,14 @@ fn binding_identifier_end(bytes: &[u8], i: usize, end: usize) -> Option<usize> {
 
 /// The end of a binding element at byte `i`: a binding identifier or a
 /// nested pattern (TypeScript's `parseIdentifierOrPattern`).
-fn binding_element_end(bytes: &[u8], i: usize, end: usize) -> Option<usize> {
+fn binding_element_end(
+    bytes: &[u8],
+    i: usize,
+    end: usize,
+    lookaheads: &Lookaheads,
+) -> Option<usize> {
     match at(bytes, i, end)? {
-        b'[' | b'{' => binding_pattern_end(bytes, i, end),
+        b'[' | b'{' => binding_pattern_end(bytes, i, end, lookaheads),
         _ => binding_identifier_end(bytes, i, end),
     }
 }
@@ -494,7 +546,12 @@ fn binding_element_end(bytes: &[u8], i: usize, end: usize) -> Option<usize> {
 /// initializer; an object pattern's element is a shorthand identifier or a
 /// property name, string, number, or computed name followed by `:` and an
 /// element.
-fn binding_pattern_end(bytes: &[u8], open: usize, end: usize) -> Option<usize> {
+fn binding_pattern_end(
+    bytes: &[u8],
+    open: usize,
+    end: usize,
+    lookaheads: &Lookaheads,
+) -> Option<usize> {
     let close = if bytes[open] == b'[' { b']' } else { b'}' };
     let mut i = open + 1;
     loop {
@@ -509,15 +566,15 @@ fn binding_pattern_end(bytes: &[u8], open: usize, end: usize) -> Option<usize> {
         }
         if bytes[i..end].starts_with(b"...") {
             i = skip_trivia(bytes, i + 3, end).0;
-            i = binding_element_end(bytes, i, end)?;
+            i = binding_element_end(bytes, i, end, lookaheads)?;
         } else if close == b']' {
-            i = binding_element_end(bytes, i, end)?;
+            i = binding_element_end(bytes, i, end, lookaheads)?;
         } else {
             let shorthand = binding_identifier_end(bytes, i, end);
             i = match c {
                 b'"' | b'\'' => scan_string(bytes, i, end),
                 b'[' => {
-                    expression_end(bytes, i + 1, end)
+                    expression_end(bytes, i + 1, end, lookaheads)
                         .filter(|&close| at(bytes, close, end) == Some(b']'))?
                         + 1
                 }
@@ -535,14 +592,14 @@ fn binding_pattern_end(bytes: &[u8], open: usize, end: usize) -> Option<usize> {
             let colon = skip_trivia(bytes, i, end).0;
             if at(bytes, colon, end) == Some(b':') {
                 i = skip_trivia(bytes, colon + 1, end).0;
-                i = binding_element_end(bytes, i, end)?;
+                i = binding_element_end(bytes, i, end, lookaheads)?;
             } else if shorthand != Some(i) {
                 return None;
             }
         }
         i = skip_trivia(bytes, i, end).0;
         if at(bytes, i, end) == Some(b'=') && at(bytes, i + 1, end) != Some(b'=') {
-            i = expression_end(bytes, i + 1, end)?;
+            i = expression_end(bytes, i + 1, end, lookaheads)?;
         }
         match at(bytes, i, end)? {
             b',' => i += 1,
@@ -555,21 +612,60 @@ fn binding_pattern_end(bytes: &[u8], open: usize, end: usize) -> Option<usize> {
 /// The position of the `,`, `)`, `]`, or `}` that ends the expression
 /// starting at byte `i`, balancing brackets and skipping strings and
 /// templates: an initializer or a computed name inside a binding pattern.
-fn expression_end(bytes: &[u8], mut i: usize, end: usize) -> Option<usize> {
+///
+/// The starts a binding pattern asks from, the byte after a `[` or an `=`,
+/// that the scan passes are answered by the same scan ([`Lookaheads`]).
+fn expression_end(bytes: &[u8], i: usize, end: usize, lookaheads: &Lookaheads) -> Option<usize> {
+    if let Some(&known) = lookaheads.expressions.borrow().get(&i) {
+        return known;
+    }
+    let mut pending: Vec<(usize, usize)> = vec![(0, i)];
+    let mut answers = lookaheads.expressions.borrow_mut();
+    let answer = scan_expression(bytes, i, end, &mut pending, &mut answers);
+    for (_, start) in pending {
+        answers.insert(start, None);
+    }
+    answer
+}
+
+fn scan_expression(
+    bytes: &[u8],
+    mut i: usize,
+    end: usize,
+    pending: &mut Vec<(usize, usize)>,
+    answers: &mut HashMap<usize, Option<usize>>,
+) -> Option<usize> {
     let mut depth = 0usize;
     loop {
+        crate::work::tick("expression lookahead steps");
         i = skip_trivia(bytes, i, end).0;
-        match at(bytes, i, end)? {
+        let c = at(bytes, i, end)?;
+        if matches!(c, b',' | b')' | b']' | b'}') {
+            while let Some(&(at_depth, start)) = pending.last()
+                && at_depth == depth
+            {
+                pending.pop();
+                answers.insert(start, Some(i));
+            }
+        }
+        match c {
             b'"' | b'\'' => i = scan_string(bytes, i, end),
             b'`' => i = skip_type_template(bytes, i, end),
             b'(' | b'[' | b'{' => {
                 depth += 1;
                 i += 1;
+                if c == b'[' {
+                    pending.push((depth, i));
+                }
             }
             b',' | b')' | b']' | b'}' if depth == 0 => return Some(i),
             b')' | b']' | b'}' => {
                 depth -= 1;
                 i += 1;
+            }
+            b'=' => {
+                i += 1;
+                pending.push((depth, i));
             }
             _ => i += 1,
         }

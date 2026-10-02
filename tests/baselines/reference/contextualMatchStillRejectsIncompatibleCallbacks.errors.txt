@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./contextualMatchStillRejectsIncompatibleCallbacks.tt → $DIR/out/contextualMatchStillRejectsIncompatibleCallbacks.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2345]: type mismatch: expected `{ run: (x: number) => number; }`, found `{ run: (x: string) => number; }`
+ --> contextualMatchStillRejectsIncompatibleCallbacks.tt:4:9
+  |
+4 | consume(match (flag) {
+  |         ^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+contextualMatchStillRejectsIncompatibleCallbacks.ts(32,9): error TS2345: Argument of type '{ run: (x: string) => number; } | { run: (x: number) => number; }' is not assignable to parameter of type '{ run: (x: number) => number; }'.
+  Type '{ run: (x: string) => number; }' is not assignable to type '{ run: (x: number) => number; }'.
+    Types of property 'run' are incompatible.
+      Type '(x: string) => number' is not assignable to type '(x: number) => number'.
+        Types of parameters 'x' and 'x' are incompatible.
+          Type 'number' is not assignable to type 'string'.

@@ -1,0 +1,2 @@
+destructuringDefault(8) => 9 | source {}; arrow 9
+destructuringDefault(9) => 10 | source {}; arrow 10

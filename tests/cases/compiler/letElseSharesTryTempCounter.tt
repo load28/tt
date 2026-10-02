@@ -1,0 +1,6 @@
+// @origin: tests/compile/cases_03.rs::let_else_shares_try_temp_counter
+function f(): X {
+  const n = try g();
+  const Some(v) = h(n) else { return fallback(); };
+  return wrap(v);
+}

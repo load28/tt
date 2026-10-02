@@ -1,0 +1,52 @@
+=== generatedGuardsReachTheHostGlobalsPastAShadowedGlobalThis2.tt ===
+variant O { Some(value: number), None }
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Some : (property) Some: (value: number) => O
+>value : (property) value: number
+>None : (property) None: {
+>       readonly kind: "None";
+>   }
+const globalThis = { Error: 1 };
+>globalThis : const globalThis: {
+>       Error: number;
+>   }
+>Error : (property) Error: number
+function f(o: O) { const Error = 5; return match (o) { Some(value) => value, None => Error + globalThis.Error }; }
+>f : function f(o: O): number
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>Error : const Error: 5
+>o : (parameter) o: O
+>value : const value: number
+>value : const value: number
+>Error : const Error: 5
+>globalThis : const globalThis: {
+>       Error: number;
+>   }
+>Error : (property) Error: number
+try { f({ kind: "Nope" } as unknown as O); } catch (e) { console.log((e as { message: string }).message); }
+>f : function f(o: O): number
+>kind : (property) kind: string
+>O : type O = {
+>       kind: "Some";
+>       value: number;
+>   } | {
+>       kind: "None";
+>   }
+>e : var e: unknown
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>e : var e: unknown
+>message : (property) message: string
+>message : (property) message: string
+

@@ -1,0 +1,2 @@
+whileTest(2) => 1 | receiver {"factor":3}
+whileTest(7) => 1 | receiver {"factor":3}
