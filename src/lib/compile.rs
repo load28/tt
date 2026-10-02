@@ -170,19 +170,19 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
             diagnostics::Diagnostic::from_tt(first).to_compile_error(source, options.filename)
         );
     }
-    let plan = match codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens)
-    {
-        Ok(plan) => plan,
-        // The file's own TypeScript does not parse, so no owner model
-        // exists to lower against. Reported where the source says it, not
-        // as a panic out of emission.
-        Err(failure) => {
-            return Err(
-                diagnostics::Diagnostic::from_tt(verify::in_source(source, &failure))
-                    .to_compile_error(source, options.filename),
-            );
-        }
-    };
+    let mut plan =
+        match codegen::lowering_plan(&semantics, &core, source, options.source_kind, &tokens) {
+            Ok(plan) => plan,
+            // The file's own TypeScript does not parse, so no owner model
+            // exists to lower against. Reported where the source says it, not
+            // as a panic out of emission.
+            Err(failure) => {
+                return Err(
+                    diagnostics::Diagnostic::from_tt(verify::in_source(source, &failure))
+                        .to_compile_error(source, options.filename),
+                );
+            }
+        };
     if let Some(first) = target_errors(&plan).into_iter().next() {
         return Err(
             diagnostics::Diagnostic::from_tt(first).to_compile_error(source, options.filename)
@@ -245,7 +245,7 @@ pub fn compile_mapped(source: &str, options: &Options) -> Result<MappedEmit, Com
         destructured_lists: flat.destructured_lists,
         inserted: flat.inserted,
         single_line_breaks: flat.single_line_breaks,
-        completion_scopes: plan.completion_scopes.clone(),
+        completion_scopes: std::mem::take(&mut plan.completion_scopes),
         support_imports: flat.support_imports,
         commonjs: flat.commonjs,
     };
@@ -1000,27 +1000,27 @@ fn report_parsed(
                 .collect(),
         };
     }
-    let plan = match codegen::lowering_plan(&semantics, &core, source, options.source_kind, tokens)
-    {
-        Ok(plan) => plan,
-        // Same class as a projection-blocking tt diagnostic: the file has
-        // no emittable form, and the cause is reported with everything
-        // else already found.
-        Err(failure) => {
-            errors.push(verify::in_source(source, &failure));
-            errors.extend(recovered_target_errors(
-                &failure, &semantics, &core, source, tokens, options, &errors,
-            ));
-            errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
-            return CompileReport {
-                emit: None,
-                diagnostics: errors
-                    .into_iter()
-                    .map(diagnostics::Diagnostic::from_tt)
-                    .collect(),
-            };
-        }
-    };
+    let mut plan =
+        match codegen::lowering_plan(&semantics, &core, source, options.source_kind, tokens) {
+            Ok(plan) => plan,
+            // Same class as a projection-blocking tt diagnostic: the file has
+            // no emittable form, and the cause is reported with everything
+            // else already found.
+            Err(failure) => {
+                errors.push(verify::in_source(source, &failure));
+                errors.extend(recovered_target_errors(
+                    &failure, &semantics, &core, source, tokens, options, &errors,
+                ));
+                errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
+                return CompileReport {
+                    emit: None,
+                    diagnostics: errors
+                        .into_iter()
+                        .map(diagnostics::Diagnostic::from_tt)
+                        .collect(),
+                };
+            }
+        };
     let target_errors = nonredundant_target_errors(&plan, &errors);
     if !target_errors.is_empty() {
         errors.extend(target_errors);
@@ -1065,7 +1065,7 @@ fn report_parsed(
         destructured_lists: flat.destructured_lists,
         inserted: flat.inserted,
         single_line_breaks: flat.single_line_breaks,
-        completion_scopes: plan.completion_scopes.clone(),
+        completion_scopes: std::mem::take(&mut plan.completion_scopes),
         support_imports: flat.support_imports,
         commonjs: flat.commonjs,
     };

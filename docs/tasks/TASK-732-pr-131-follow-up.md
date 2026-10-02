@@ -60,6 +60,27 @@ Whole-run instructions of one bench pass, first-parent commits, relative to
 No single commit explains the budget overrun. Each listed cause still has to
 be profiled and fixed in its owning layer with byte-identical output.
 
+### Decision 4: Remove costs no compile needs, without changing any output
+
+- **Context**: The attribution named causes in several layers; each fix had
+  to keep emitted text, mappings, and diagnostics identical.
+- **Alternatives considered**: Caching results across compiles; skipping
+  work by benchmark shape; reverting the features.
+- **Decision and rationale**: Three fixes in the owning layers:
+  1. `TargetFile::print` (codegen) built two per-piece lookahead arrays for
+     single-line directive printing even when no directive governs a
+     statement; the arrays are now built only when one does, because a
+     piece can print on one line only then.
+  2. `sema::check_all` built `FunctionTargets` for every file, although only
+     a statement `try` reads it; it is now built on first use, as Core
+     lowering already does (`OnceCell`).
+  3. The completion scopes were copied twice per compile (`to_vec` from
+     `ProgramSyntax`, `clone` from the plan); they are now moved, because
+     neither owner reads them afterwards.
+  A `FrameStack` that recorded only deciding lists was also tried for the
+  TASK-732 yield context; it cost 17 M more instructions than the cached
+  context (a check on every pop and truncation) and was reverted.
+
 ## Work log
 
 - 2026-10-01: Read PR metadata and its final comment; there are no inline
@@ -101,6 +122,19 @@ be profiled and fixed in its owning layer with byte-identical output.
   planning, emission, `ProgramSyntax::build_with`, lexing, and the host syntax
   check rather than one function. Sampled every seventh first-parent commit,
   then every first-parent commit in the five largest intervals (Decision 3).
+- 2026-10-02: Profiled adjacent commits with callgrind and compared phase
+  costs of `b9b85bd` and the head. Applied the three fixes in Decision 4:
+  one pass of the benchmark fell from 3.687 G to 3.607 G instructions
+  (+13.5% → +11.1% against `b9b85bd`). The rest is spread over the token
+  facts machine and lexing (`lex_region` 486 M → 568 M), rope printing,
+  the `ProgramSyntax` collector, and stack-growth checks, each a part of a
+  feature rather than a duplicated computation found so far.
+- 2026-10-02: With the fixes, `cargo fmt --check`, all-target Clippy, and the
+  full `cargo test` (`RUST_TEST_THREADS=2`, exit 0; 415 library tests)
+  passed. `scripts/bench-compare` still reported `single_file` +16.0% /
+  +26.0%, `project_first_snapshot` +14.1% / +20.1%, and
+  `project_recheck_one_file` +13.3% / +14.6% (median / fastest), over the
+  10% budget.
 
 ### Verification recovery
 

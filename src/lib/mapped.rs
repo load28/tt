@@ -335,7 +335,7 @@ pub(crate) fn emit_mapped_parsed(
     // host rewrites to plan, so every tt value the plan cannot own emits as
     // a recovery placeholder anchored to its construct — the same values
     // the plan refuses by placement. Reporting stays [`compile`]'s job.
-    let plan = codegen::lowering_plan(&semantics, &core, source, source_kind, tokens)
+    let mut plan = codegen::lowering_plan(&semantics, &core, source, source_kind, tokens)
         .unwrap_or_else(|_| {
             crate::evaluation_ir::LoweringPlan::without_owner_model(source, source_kind)
         });
@@ -371,7 +371,7 @@ pub(crate) fn emit_mapped_parsed(
         destructured_lists: flat.destructured_lists,
         inserted: flat.inserted,
         single_line_breaks: flat.single_line_breaks,
-        completion_scopes: plan.completion_scopes.clone(),
+        completion_scopes: std::mem::take(&mut plan.completion_scopes),
         support_imports: flat.support_imports,
         commonjs: flat.commonjs,
     }

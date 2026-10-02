@@ -241,8 +241,8 @@ impl ProgramSyntax {
     }
 
     /// What TypeScript's completion rules say at each construct's place.
-    pub(crate) fn completion_scopes(&self) -> &[super::completion::CompletionScope] {
-        &self.completion_scopes
+    pub(crate) fn take_completion_scopes(&mut self) -> Vec<super::completion::CompletionScope> {
+        std::mem::take(&mut self.completion_scopes)
     }
 
     pub(crate) fn directive_prologue_end(&self) -> Option<usize> {

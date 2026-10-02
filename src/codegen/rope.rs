@@ -614,21 +614,21 @@ impl<'a> TargetFile<'a> {
                 .iter()
                 .any(|statement| statement.start <= at && at <= statement.line_end)
         };
-        let mut next_source = vec![None; self.pieces.len()];
-        let mut next_governed = vec![None; self.pieces.len()];
-        let mut following = None;
-        let mut following_governed = None;
-        for (index, piece) in self.pieces.iter().enumerate().rev() {
-            next_source[index] = following;
-            next_governed[index] = following_governed;
-            if let TargetPiece::Source {
-                origin: ExactOrigin { start, .. },
-                ..
-            } = piece
-            {
-                following = Some(*start);
-                if governed_line(*start) {
-                    following_governed = Some(*start);
+        let mut following: Vec<(Option<usize>, Option<usize>)> = Vec::new();
+        if !governed.is_empty() {
+            following = vec![(None, None); self.pieces.len()];
+            let mut next = (None, None);
+            for (index, piece) in self.pieces.iter().enumerate().rev() {
+                following[index] = next;
+                if let TargetPiece::Source {
+                    origin: ExactOrigin { start, .. },
+                    ..
+                } = piece
+                {
+                    next.0 = Some(*start);
+                    if governed_line(*start) {
+                        next.1 = Some(*start);
+                    }
                 }
             }
         }
@@ -651,11 +651,8 @@ impl<'a> TargetFile<'a> {
         let mut inserted: Vec<crate::InsertedGlue> = Vec::new();
         let mut open: Vec<OpenAnchor> = Vec::new();
         for (index, piece) in self.pieces.iter().enumerate() {
-            let single_line = match (
-                previous_source_end,
-                next_source[index],
-                next_governed[index],
-            ) {
+            let (next_source, next_governed) = following.get(index).copied().unwrap_or_default();
+            let single_line = match (previous_source_end, next_source, next_governed) {
                 (Some(previous), Some(next), Some(line)) => governed.iter().any(|statement| {
                     statement.start <= previous
                         && previous <= statement.end

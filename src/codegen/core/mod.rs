@@ -91,7 +91,7 @@ pub(crate) fn lowering_plan_with(
                 end: source.len(),
             })
     };
-    let syntax = match crate::program_syntax::ProgramSyntax::build_with(
+    let mut syntax = match crate::program_syntax::ProgramSyntax::build_with(
         semantic,
         core,
         source,
@@ -138,7 +138,7 @@ pub(crate) fn lowering_plan_with(
     if let Err(error) = evaluation.validate_reference(&plan) {
         error.raise();
     }
-    plan.completion_scopes = syntax.completion_scopes().to_vec();
+    plan.completion_scopes = syntax.take_completion_scopes();
     Ok(plan)
 }
 

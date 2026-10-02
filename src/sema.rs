@@ -110,9 +110,9 @@ pub(crate) fn check_all(
         verify,
         errors: Vec::new(),
         result_completions,
-        function_targets: crate::flow::FunctionTargets::new(tokens, &|tokens| {
-            semantic.hir.match_owned_tokens(tokens)
-        }),
+        semantic,
+        tokens,
+        function_targets: std::cell::OnceCell::new(),
     };
     checker.visit_program(program, Ctx::Top, Place::Module);
     // One analysis, two reports. Resolution comes first — a pattern whose
@@ -204,9 +204,11 @@ struct Checker<'a> {
     /// stable source start so this AST diagnostic walk consumes the same
     /// answer codegen will lower instead of running a second CFG query.
     result_completions: HashMap<usize, bool>,
+    semantic: &'a crate::analysis::SemanticFile,
+    tokens: &'a [crate::lexer::Token],
     /// The innermost function-like boundary of every token, with match
     /// bodies and arm arrows skipped: the target a statement `try` reaches.
-    function_targets: crate::flow::FunctionTargets,
+    function_targets: std::cell::OnceCell<crate::flow::FunctionTargets>,
 }
 
 /// The bindings or-pattern alternatives are compared by, sorted so they

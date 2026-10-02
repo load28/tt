@@ -198,7 +198,14 @@ impl Checker<'_> {
                 self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
                 return;
             }
-            _ => self.function_targets.at_offset(stmt.span.start),
+            _ => self
+                .function_targets
+                .get_or_init(|| {
+                    crate::flow::FunctionTargets::new(self.tokens, &|tokens| {
+                        self.semantic.hir.match_owned_tokens(tokens)
+                    })
+                })
+                .at_offset(stmt.span.start),
         };
         let (message, help) = match function_target {
             Some(crate::flow::FunctionTarget::Ordinary) => {
