@@ -51,6 +51,15 @@ comment's list of unverified changes and remaining findings.
   to restore command execution. The user requested committing and pushing the
   fixes before restarting the environment and continuing verification. Keep
   this task in progress; these partial results do not establish full-gate success.
+- 2026-10-02: Resumed in a fresh environment; `scripts/doctor` reported only
+  the missing TypeScript install, resolved with `npm ci`. Reproduced the CI
+  fuzz failure: `cargo check --manifest-path fuzz/Cargo.toml --all-targets
+  --locked` refused to update `fuzz/Cargo.lock`. Ran `cargo update --workspace`
+  for the fuzz package, which added only `stacker` to `swc_ecma_parser`'s
+  dependency list (no version changes); the locked check then passed.
+- 2026-10-02: Reproduced the performance failure locally with
+  `scripts/bench-compare` (single file +16.7%, first snapshot +25.0%) and
+  started bisecting the PR range on the single-file benchmark.
 
 ### Verification recovery
 
@@ -61,6 +70,15 @@ Rerun the interrupted final gate, full compiler/editor matrices, and full typed
 parity; do not treat the interrupted logs as completed runs.
 
 ## Issues and resolutions
+
+### Issue 4: The fuzz lock file is out of date
+
+- **Symptom**: CI's `cargo check --manifest-path fuzz/Cargo.toml --all-targets
+  --locked` failed because the lock file needed updating.
+- **Cause**: The PR made `swc_ecma_parser` depend on `stacker`, but the
+  standalone fuzz package's lock file was not regenerated.
+- **Resolution**: Regenerated `fuzz/Cargo.lock` with `cargo update --workspace`;
+  the only change is the added `stacker` dependency edge.
 
 ### Issue 1: Yield context queries multiply with nesting depth
 
