@@ -1,5 +1,10 @@
 # TASK-716: Read unclosed type-shaped brackets in linear time
 
+Follow-up: [TASK-732](./TASK-732-pr-131-follow-up.md) removes the remaining
+stack-depth scan in `Machine::yield_operator`. The original task made the
+lookaheads linear; querying the enclosing `[Yield]` context is now constant
+time as well.
+
 - **Status**: Complete
 - **Started**: 2026-10-01
 - **Completed**: 2026-10-01

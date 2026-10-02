@@ -191,7 +191,8 @@ pub(crate) enum TempId {
 pub(crate) struct Decision {
     pub subjects: Vec<Subject>,
     pub arms: Vec<DecisionArm>,
-    /// The source after a match's last arm, before its `}`.
+    /// The source after the last arm, before the match's closing brace or
+    /// the `if let`'s else continuation body.
     pub trailing: Option<hir::Span>,
     pub miss: MissAction,
     pub head: NodeId,

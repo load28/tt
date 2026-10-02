@@ -34,6 +34,26 @@ fn assert_linear(small: &HashMap<&'static str, usize>, large: &HashMap<&'static 
 }
 
 #[test]
+fn yield_context_queries_do_linear_work_in_nested_expressions() {
+    let source = |n| {
+        format!(
+            "function* g() {{ const values = {}{}0{}; }}",
+            "[".repeat(n),
+            "yield 1, ".repeat(n),
+            "]".repeat(n),
+        )
+    };
+    let lex = |n| {
+        let text = source(n);
+        crate::lexer::lex(&text, 0, text.len());
+    };
+    let small = measure(|| lex(100));
+    let large = measure(|| lex(200));
+    assert!(small["yield context probes"] > 0);
+    assert_linear(&small, &large);
+}
+
+#[test]
 fn every_request_does_linear_work_in_the_number_of_statement_matches() {
     let small = measure(|| every_request(&statement_matches(150)));
     let large = measure(|| every_request(&statement_matches(300)));

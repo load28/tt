@@ -1,0 +1,21 @@
+//// [ifLetElseContinuationComments.tt] 19 mapping(s)
+1:1 -> 1:1 len 75  "// Continuation trivia belongs to the if-let sit"...
+2:29 -> 3:25 len 6  "number"
+2:29 -> 7:14 len 6  "number"
+2:47 -> 4:25 len 6  "number"
+2:47 -> 8:14 len 6  "number"
+2:59 -> 10:3 len 40  "\nexport function read(v: V): number {\n  "
+4:12 -> 15:15 len 5  "value"
+4:21 -> 13:20 len 1  "v"
+5:5 -> 16:7 len 13  "return value;"
+6:5 -> 18:5 len 17  "/* before else */"
+6:28 -> 19:5 len 16  "/* after else */"
+6:48 -> 26:7 len 17  "/* nested head */"
+6:72 -> 23:17 len 5  "value"
+6:81 -> 21:22 len 1  "v"
+7:5 -> 24:9 len 17  "return value * 2;"
+8:5 -> 27:7 len 20  "// before final else"
+9:8 -> 28:7 len 19  "// after final else"
+11:5 -> 30:9 len 9  "return 0;"
+12:4 -> 33:4 len 59  "\n}\nconsole.log([V.A(2), V.B(3), V.C].map(read).j"...
+

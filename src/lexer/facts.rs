@@ -332,7 +332,7 @@ struct Peek {
 pub(super) struct Machine<'s> {
     src: &'s str,
     end: usize,
-    stack: Vec<Frame>,
+    stack: FrameStack,
     facts: TokenFacts,
     /// The second byte of a postfix `++`/`--`, which changes nothing.
     skip_next: bool,
@@ -342,6 +342,54 @@ pub(super) struct Machine<'s> {
     /// byte, kept between queries so a query does not allocate.
     probe: Vec<Frame>,
     lookaheads: Lookaheads,
+}
+
+/// Each frame remembers the nearest enclosing list's `[Yield]` parameter.
+/// Keeping it with the frame makes both ordinary pops and speculative
+/// operand probes restore the grammar context without a scan of the stack.
+struct FrameStack(Vec<(Frame, Yield)>);
+
+impl FrameStack {
+    fn with_capacity(capacity: usize) -> Self {
+        Self(Vec::with_capacity(capacity))
+    }
+
+    fn yields(&self) -> Yield {
+        self.0
+            .last()
+            .map_or(Yield::Identifier, |(_, yields)| *yields)
+    }
+
+    fn push(&mut self, frame: Frame) {
+        crate::work::tick("yield context updates");
+        let yields = match frame {
+            Frame::List { yields, .. } if yields != Yield::Inherited => yields,
+            _ => self.yields(),
+        };
+        self.0.push((frame, yields));
+    }
+
+    fn pop(&mut self) -> Option<Frame> {
+        self.0.pop().map(|(frame, _)| frame)
+    }
+
+    fn last(&self) -> Option<&Frame> {
+        self.0.last().map(|(frame, _)| frame)
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn truncate(&mut self, len: usize) {
+        self.0.truncate(len);
+    }
+
+    fn extend(&mut self, frames: impl IntoIterator<Item = Frame>) {
+        for frame in frames {
+            self.push(frame);
+        }
+    }
 }
 
 impl Frame {
@@ -358,7 +406,7 @@ impl Frame {
 
 impl<'s> Machine<'s> {
     pub(super) fn new(src: &'s str, end: usize, start: Start, trace: bool) -> Self {
-        let mut stack = Vec::with_capacity(32);
+        let mut stack = FrameStack::with_capacity(32);
         match start {
             Start::Statements => stack.push(Frame::top_level()),
             Start::Expression => stack.push(Frame::Expr(Expr::new(ExprCfg::default()))),
@@ -462,10 +510,8 @@ impl<'s> Machine<'s> {
     /// Whether `yield` is an operator where the machine stands: the nearest
     /// enclosing statement list that decides it is a generator's body.
     pub(super) fn yield_operator(&self) -> bool {
-        self.stack.iter().rev().find_map(|frame| match frame {
-            Frame::List { yields, .. } if *yields != Yield::Inherited => Some(*yields),
-            _ => None,
-        }) == Some(Yield::Operator)
+        crate::work::tick("yield context probes");
+        self.stack.yields() == Yield::Operator
     }
 
     /// Offers one token; returns its facts.

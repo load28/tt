@@ -1,0 +1,15 @@
+// @run: ifLetElseContinuationComments.tt
+// Continuation trivia belongs to the if-let site and survives every link.
+export variant V { A(value: number), B(value: number), C }
+export function read(v: V): number {
+  if let A(value) = v {
+    return value;
+  } /* before else */ else /* after else */ if /* nested head */ let B(value) = v {
+    return value * 2;
+  } // before final else
+  else // after final else
+  {
+    return 0;
+  }
+}
+console.log([V.A(2), V.B(3), V.C].map(read).join(","));

@@ -737,7 +737,8 @@
 | TASK-729 | Name a `.tt` module as TypeScript names it | Complete | 2026-10-01 | 2026-10-01 | [TASK-729](./TASK-729-module-names.md) |
 | TASK-730 | Keep a declaration map's source in the fourslash comparison | Complete | 2026-10-01 | 2026-10-01 | [TASK-730](./TASK-730-declaration-map-sources.md) |
 | TASK-731 | Hold the same documents open on both sides of the editor comparison | Complete | 2026-10-01 | 2026-10-01 | [TASK-731](./TASK-731-symmetric-open-documents.md) |
+| TASK-732 | Verify PR 131 and fix yield scaling and else-continuation comments | In progress | 2026-10-01 | — | [TASK-732](./TASK-732-pr-131-follow-up.md) |
 
 ## Next task number
 
-**TASK-732**
+**TASK-733**

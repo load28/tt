@@ -614,7 +614,9 @@ impl<'a> Emitter<'a> {
         out.append(Rope::indented(2, emit_body(body).trim()));
         out.push_break(1);
         out.push_lit("}");
-        let commented = self.push_head_comments(arm, 1, &mut out);
+        let head_commented = self.push_head_comments(arm, 1, &mut out);
+        let gap_commented = self.push_gap_comments(decision.trailing, 1, &mut out);
+        let commented = head_commented || gap_commented;
         let separate = |out: &mut Rope<'a>| {
             if commented {
                 out.push_break(1);

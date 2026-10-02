@@ -610,9 +610,9 @@ pub struct PatternSite {
     pub subjects: Vec<ExprId>,
     /// The arms, in source order. `if let` and let-else are one-arm sites.
     pub arms: Vec<SiteArm>,
-    /// The source between a match's last arm and its body's `}`, where a
-    /// comment after the last arm is written. `None` for an `if let` or a
-    /// let-else, which have no arm list.
+    /// The source after the last arm: before a match body's `}`, or
+    /// between an `if let`'s then-block and its else continuation's body.
+    /// `None` for a let-else or an `if let` without an else continuation.
     pub trailing: Option<Span>,
 }
 

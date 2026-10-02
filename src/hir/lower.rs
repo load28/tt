@@ -640,7 +640,13 @@ impl Lower<'_> {
                     Span::new(stmt.expr.span.end, stmt.body.span.start),
                 ],
             }],
-            trailing: None,
+            trailing: stmt.else_part.as_ref().map(|continuation| {
+                let end = match continuation {
+                    ast::IfLetElse::Block(block) => block.span.start - 1,
+                    ast::IfLetElse::IfLet(inner) => inner.head_span.start,
+                };
+                Span::new(stmt.body.span.end + 1, end)
+            }),
         });
         let else_part = stmt.else_part.as_ref().map(|else_part| match else_part {
             ast::IfLetElse::Block(block) => IfLetElse::Block(self.lower_body(block)),

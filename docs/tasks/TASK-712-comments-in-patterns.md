@@ -1,5 +1,8 @@
 # TASK-712: Keep the comments written in patterns and in a construct's head
 
+Follow-up: [TASK-732](./TASK-732-pr-131-follow-up.md) resolves Issue 2 by
+carrying the else-continuation trivia on the pattern site's trailing span.
+
 - **Status**: Complete
 - **Started**: 2026-10-01
 - **Completed**: 2026-10-01
