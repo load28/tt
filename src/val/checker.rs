@@ -576,6 +576,9 @@ impl<'a> Checker<'a> {
                         k = find_close_at(tokens, k)? + 1;
                     }
                     TokenKind::Punct(b'(' | b'[') => k = find_close_at(tokens, k)? + 1,
+                    TokenKind::Punct(b'<') if tokens[k].opens_bracket() => {
+                        k = find_close_at(tokens, k)? + 1;
+                    }
                     TokenKind::Punct(b')' | b']' | b'}' | b';' | b',') => return None,
                     _ => k += 1,
                 }
