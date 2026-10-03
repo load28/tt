@@ -61,6 +61,7 @@ fn code_number(name: &str) -> u32 {
 
 fn session() -> Session {
     Session {
+        exchange: None,
         open_projects: HashSet::new(),
         ensured_roots: HashSet::new(),
     }

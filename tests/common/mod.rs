@@ -2,6 +2,7 @@
 
 pub mod baseline;
 pub mod cases;
+pub mod installed_mapper;
 pub mod matrix;
 pub mod typescript_cases;
 

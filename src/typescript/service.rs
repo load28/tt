@@ -123,8 +123,13 @@ pub(crate) struct Service {
     next_id: i64,
     /// Versions of the documents we serve, by URI.
     opened: HashMap<String, i64>,
+    documents: HashMap<String, String>,
+    launch: (PathBuf, PathBuf, Arrangement),
     alive: bool,
     serves_sources: bool,
+    exchange: Option<super::content_projection::ProjectionExchange>,
+    projections: HashMap<PathBuf, (String, serde_json::Value)>,
+    projection_revision: u64,
     semantic_legend: SemanticLegend,
 }
 
@@ -204,7 +209,16 @@ impl Service {
         root: &Path,
         arrangement: &Arrangement,
     ) -> Result<Service, String> {
-        let mut child = Command::new(binary)
+        let exchange = if arrangement.inferred_mapper.is_some() {
+            Some(super::content_projection::ProjectionExchange::new()?)
+        } else {
+            None
+        };
+        let mut command = Command::new(binary);
+        if let Some(exchange) = &exchange {
+            command.env(super::content_projection::ENVIRONMENT, exchange.directory());
+        }
+        let mut child = command
             .args(["--lsp", "-stdio"])
             .current_dir(root)
             .stdin(Stdio::piped())
@@ -233,8 +247,17 @@ impl Service {
             responses: rx,
             next_id: 1,
             opened: HashMap::new(),
+            documents: HashMap::new(),
+            launch: (
+                binary.to_path_buf(),
+                root.to_path_buf(),
+                arrangement.clone(),
+            ),
             alive: true,
             serves_sources: arrangement.inferred_mapper.is_some(),
+            exchange,
+            projections: HashMap::new(),
+            projection_revision: 0,
             semantic_legend: SemanticLegend::default(),
         };
 
@@ -301,17 +324,94 @@ impl Service {
         Ok(service)
     }
 
-    pub(crate) fn document_uri(
-        &self,
-        source: &Path,
-        lowered: &Path,
-        verbatim: impl FnOnce() -> bool,
-    ) -> String {
-        if self.serves_sources && verbatim() {
-            file_uri(source)
-        } else {
-            file_uri(lowered)
+    pub(crate) fn serves_authored_sources(&self) -> bool {
+        self.serves_sources
+    }
+
+    /// Publish the complete graph before any document notification can cause
+    /// TypeScript to resolve a dependency. Its mapper cache is keyed by source
+    /// content; a new projection for equal source needs a fresh host instance.
+    pub(crate) fn sync_projection_graph(
+        &mut self,
+        graph: HashMap<PathBuf, (String, serde_json::Value)>,
+    ) -> Result<bool, String> {
+        if self.projections == graph {
+            return Ok(false);
         }
+        let restart = graph.iter().any(|(path, (source, response))| {
+            self.projections
+                .get(path)
+                .is_some_and(|(previous_source, previous_response)| {
+                    previous_source == source && previous_response != response
+                })
+        });
+        let mut replacement = if restart {
+            Some(Self::start(&self.launch.0, &self.launch.1, &self.launch.2)?)
+        } else {
+            None
+        };
+        let documents = self.documents.clone();
+        let client = replacement.as_mut().unwrap_or(self);
+        client.projection_revision += 1;
+        let records: Vec<_> = graph
+            .iter()
+            .map(
+                |(path, (source, response))| super::content_projection::ProjectionRecord {
+                    protocol: super::content_projection::PROTOCOL,
+                    revision: client.projection_revision,
+                    path: path.clone(),
+                    source: source.clone(),
+                    response: response.clone(),
+                },
+            )
+            .collect();
+        client
+            .exchange
+            .as_mut()
+            .ok_or("authored projection requires a mapper exchange")?
+            .replace(&records)?;
+        client.projections = graph;
+        if restart {
+            for (uri, previous_text) in documents {
+                let text = uri_path(&uri)
+                    .and_then(|path| {
+                        client
+                            .projections
+                            .get(&path)
+                            .map(|(source, _)| source.clone())
+                    })
+                    .unwrap_or(previous_text);
+                client.open(&uri, &text);
+            }
+        }
+        if let Some(replacement) = replacement {
+            *self = replacement;
+        }
+        Ok(restart)
+    }
+
+    pub(crate) fn open_source_projection(
+        &mut self,
+        path: &Path,
+        source: &str,
+        response: serde_json::Value,
+    ) -> Result<bool, String> {
+        let changed = self
+            .projections
+            .get(path)
+            .is_none_or(|(text, previous)| text != source || previous != &response);
+        let restarted = if changed {
+            let mut graph = self.projections.clone();
+            graph.insert(path.to_path_buf(), (source.into(), response));
+            self.sync_projection_graph(graph)?
+        } else {
+            false
+        };
+        let uri = file_uri(path);
+        if self.documents.get(&uri).is_none_or(|text| text != source) {
+            self.open(&uri, source);
+        }
+        Ok(restarted)
     }
 
     pub(crate) fn semantic_legend(&self) -> &SemanticLegend {
@@ -328,6 +428,7 @@ impl Service {
     /// there is no incremental edit to describe.
     pub(crate) fn open(&mut self, uri: &str, text: &str) {
         let text = crate::error::decoded(text);
+        self.documents.insert(uri.to_string(), text.to_string());
         let version = self.opened.get(uri).copied().unwrap_or(0) + 1;
         self.opened.insert(uri.to_string(), version);
         if version == 1 {
@@ -353,6 +454,7 @@ impl Service {
 
     /// Releases an overlay so subsequent requests observe the disk again.
     pub(crate) fn close(&mut self, uri: &str) {
+        self.documents.remove(uri);
         if self.opened.remove(uri).is_some() {
             self.notify(
                 "textDocument/didClose",
@@ -396,7 +498,15 @@ impl Service {
         }))?;
 
         match wait_for_response(&self.responses, id, method, REQUEST_TIMEOUT) {
-            Ok(result) => Ok(Ok(result)),
+            Ok(result) => {
+                if method.starts_with("textDocument/")
+                    && !self.projections.is_empty()
+                    && let Some(exchange) = &self.exchange
+                {
+                    exchange.verify_acknowledged()?;
+                }
+                Ok(Ok(result))
+            }
             Err(ResponseFailure::Disconnected) => {
                 self.alive = false;
                 Err("the TypeScript server exited".to_string())

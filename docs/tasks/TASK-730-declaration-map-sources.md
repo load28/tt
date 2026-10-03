@@ -1,5 +1,9 @@
 # TASK-730: Keep a declaration map's source in the fourslash comparison
 
+Follow-up: TASK-733 and TASK-737 resolve the authored `.tt` declaration-map
+target coordinates and installed-mapper serving contract left open by this task;
+its harness decision remains unchanged.
+
 - **Status**: Complete
 - **Started**: 2026-10-01
 - **Completed**: 2026-10-01

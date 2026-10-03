@@ -533,6 +533,7 @@ async function main() {
     const module = (entry) => ({ ...entry, module: name(entry.module) });
     return {
       ...job,
+      editorDiagnostics: job.editorDiagnostics ? name(job.editorDiagnostics) : null,
       literalChecks: (job.literalChecks ?? []).map(module),
       tagChecks: (job.tagChecks ?? []).map(module),
       symbolChecks: (job.symbolChecks ?? []).map(module),
@@ -542,7 +543,7 @@ async function main() {
   }
 
   function engineAnswer(out) {
-    for (const diagnostic of out.diagnostics) {
+    for (const diagnostic of [...out.diagnostics, ...out.editorDiagnostics]) {
       diagnostic.file = moduleName(diagnostic.file);
       for (const related of diagnostic.related ?? []) related.file = moduleName(related.file);
       if (diagnostic.mismatch?.declaration) {
@@ -591,6 +592,7 @@ async function main() {
     const out = {
       projectModules: [],
       diagnostics: [],
+      editorDiagnostics: [],
       projectDiagnostics: [],
       literalMissing: [],
       tagMissing: [],
@@ -760,8 +762,41 @@ async function main() {
     }
     job = addressed(job, (module) => names.get(module) ?? served(module));
 
+    // The native API retains virtual offsets, category, tags and related
+    // places. LSP content-map conversion irreversibly merges generated spans;
+    // the engine must apply its own lowering provenance before that boundary.
+    if (job.editorDiagnostics) {
+      const target = job.editorDiagnostics;
+      const identity = api.getCanonicalFileName(target);
+      const owner = groups.find(({ members }) => [...members].some((member) => api.getCanonicalFileName(member) === identity));
+      if (!owner) throw new Error("no diagnostic project for " + target);
+      const program = owner.project.program;
+      const diagnostics = [
+        ...program.getSyntacticDiagnostics(target),
+        ...program.getSemanticDiagnostics(target),
+        ...program.getSuggestionDiagnostics(target),
+        ...(program.getCompilerOptions().declaration || program.getCompilerOptions().composite
+          ? program.getDeclarationDiagnostics(target) : []),
+      ];
+      out.editorDiagnostics = diagnostics.map((d) => ({
+        file: d.fileName, start: d.pos, end: d.end, code: d.code,
+        message: messageText(d), category: d.category,
+        unnecessary: d.reportsUnnecessary === true,
+        deprecated: d.reportsDeprecated === true,
+        related: relatedPlaces(d),
+      }));
+      out.dependencies = [...dependencies.keys()];
+      out.directories = [...listings.keys()];
+      return engineAnswer(out);
+    }
+
     const contextual = ({ project, members }) => {
       const checker = project.checker;
+      // Declaration handles use the API's canonical spelling, while input
+      // modules retain their authored spelling. Membership is file identity,
+      // including when a dependency is followed through another declaration.
+      const memberIdentities = new Set([...members].map((member) => api.getCanonicalFileName(member)));
+      const ownsModule = (module) => memberIdentities.has(api.getCanonicalFileName(module));
       // The storage the lowering declared in each module, annotated or not,
       // and the consts that carry values to detached storage. TypeScript
       // can name a type after it (a class expression assigned to it is
@@ -796,7 +831,7 @@ async function main() {
         pending = new Set();
         const ends = new Map();
         for (const slot of job.contextualSlots ?? []) {
-          if (slot.settled || !members.has(slot.module)) continue;
+          if (slot.settled || !ownsModule(slot.module)) continue;
           if (!ends.has(slot.module)) ends.set(slot.module, new Set());
           ends.get(slot.module).add(slot.declarationEnd);
         }
@@ -827,7 +862,7 @@ async function main() {
             followed.add(symbol.id);
             if (pendingStorage().has(symbol.id)) return true;
             for (const handle of symbol.declarations ?? []) {
-              if (!members.has(String(handle.path))) continue;
+              if (!ownsModule(String(handle.path))) continue;
               let declaration = handle.resolve(project);
               if (declaration?.kind === SyntaxKind.Parameter && !declaration.type) {
                 while (declaration.parent && !isStatement(declaration)) declaration = declaration.parent;
@@ -863,7 +898,7 @@ async function main() {
       const entries = [...(job.contextualSlots ?? []).entries()];
       let operandsSettling = false;
       for (const [index, slot] of [...entries.filter(([, slot]) => slot.operand), ...entries.filter(([, slot]) => !slot.operand)]) {
-        if (slot.settled || !members.has(slot.module)) continue;
+        if (slot.settled || !ownsModule(slot.module)) continue;
         const source = project.program.getSourceFile(slot.module);
         if (!source) continue;
         const syntax = syntaxOf(slot.module, source);

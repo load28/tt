@@ -738,7 +738,15 @@
 | TASK-730 | Keep a declaration map's source in the fourslash comparison | Complete | 2026-10-01 | 2026-10-01 | [TASK-730](./TASK-730-declaration-map-sources.md) |
 | TASK-731 | Hold the same documents open on both sides of the editor comparison | Complete | 2026-10-01 | 2026-10-01 | [TASK-731](./TASK-731-symmetric-open-documents.md) |
 | TASK-732 | Verify PR 131 and fix yield scaling and else-continuation comments | In progress | 2026-10-01 | — | [TASK-732](./TASK-732-pr-131-follow-up.md) |
+| TASK-733 | Preserve authored declaration-map target coordinates | Complete | 2026-10-02 | 2026-10-03 | [TASK-733](./TASK-733-declaration-map-coordinates.md) |
+| TASK-734 | Use TypeScript file identities in reachability and contextual dependencies | Complete | 2026-10-02 | 2026-10-03 | [TASK-734](./TASK-734-oracle-file-identities.md) |
+
+| TASK-735 | Design an authored-source service contract | Complete | 2026-10-03 | 2026-10-03 | [TASK-735](./TASK-735-source-serving-contract.md) |
+
+| TASK-736 | Make path verification portable on macOS | Complete | 2026-10-03 | 2026-10-03 | [TASK-736](./TASK-736-portable-path-tests.md) |
+
+| TASK-737 | Serve authored buffers with their contextual projections | Complete | 2026-10-03 | 2026-10-03 | [TASK-737](./TASK-737-authored-source-service.md) |
 
 ## Next task number
 
-**TASK-733**
+**TASK-738**

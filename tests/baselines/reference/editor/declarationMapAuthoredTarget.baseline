@@ -1,0 +1,23 @@
+=== definition /*mapped*/ main.tt:4:1 ===
+  | work(1);
+  | ^ /*mapped*/
+definition: 1 location(s)
+  api.tt 2:17-2:21 "work"
+
+=== definition /*direct*/ main.tt:5:1 ===
+  | original(2);
+  | ^ /*direct*/
+definition: 1 location(s)
+  api.tt 2:17-2:21 "work"
+
+=== definition /*jsx*/ main.tt:6:1 ===
+  | render(3);
+  | ^ /*jsx*/
+definition: 1 location(s)
+  source files/ui.ttx 2:17-2:23 "render"
+
+=== parity with the TypeScript twin ===
+definition mapped: same
+definition direct: same
+definition jsx: same
+

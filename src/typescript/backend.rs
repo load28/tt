@@ -177,6 +177,8 @@ pub(crate) struct Query {
     pub contextual_slots: Vec<ContextualSlotQuery>,
     /// Skip diagnostics while iterating contextual facts.
     pub contextual_only: bool,
+    /// Read editor diagnostics for one module, retaining generated coordinates.
+    pub editor_diagnostics: Option<PathBuf>,
     /// Infer incoming join types only after contextual facts reach a fixed point.
     pub infer_join_types: bool,
     /// Ask the compiler to emit the lowered modules' `.d.ts` as well. ttc
@@ -188,6 +190,20 @@ pub(crate) struct Query {
     pub unparsed_documents: Vec<PathBuf>,
     /// Modules whose source TypeScript does not parse, served as placeholders.
     pub syntax_blocked: Vec<PathBuf>,
+}
+
+/// One editor diagnostic before any content-map location conversion.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct EditorDiagnostic {
+    pub file: PathBuf,
+    pub start: usize,
+    pub end: usize,
+    pub code: u32,
+    pub message: String,
+    pub category: u32,
+    pub unnecessary: bool,
+    pub deprecated: bool,
+    pub related: Vec<RelatedInformation>,
 }
 
 /// One TypeScript diagnostic, in TypeScript's coordinates. Mapping it back
@@ -336,6 +352,7 @@ pub(crate) struct Answers {
     /// from one can change the program.
     pub directories: Vec<PathBuf>,
     pub diagnostics: Vec<Diagnostic>,
+    pub editor_diagnostics: Vec<EditorDiagnostic>,
     pub project_diagnostics: Vec<ProjectDiagnostic>,
     pub literal_missing: Vec<LiteralMissing>,
     pub tag_missing: Vec<TagMissing>,

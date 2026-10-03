@@ -845,3 +845,80 @@ fn a_type_error_in_a_variant_field_reports_at_the_field_type() {
     );
     assert!(!text.contains("price.tt(2,16)"), "{text}");
 }
+
+#[test]
+fn mapper_serves_only_the_exact_published_projection() {
+    use std::io::{Read, Write};
+    use ttc::content_projection::{ProjectionExchange, ProjectionRecord};
+
+    let workspace = Workspace::new("mapper-published-projection");
+    let path = workspace.join("api.tt");
+    let source = "export const n = 1;";
+    let mut exchange = ProjectionExchange::new().unwrap();
+    let response = serde_json::json!({
+        "text": "export const n: number = 1;", "extension": ".ts",
+        "mappings": [], "diagnostics": []
+    });
+    exchange
+        .publish(&ProjectionRecord {
+            protocol: 1,
+            revision: 1,
+            path: path.clone(),
+            source: source.into(),
+            response: response.clone(),
+        })
+        .unwrap();
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .arg("--content-mapper")
+        .env(ttc::content_projection::ENVIRONMENT, exchange.directory())
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut input = child.stdin.take().unwrap();
+    for (id, method, params) in [
+        (
+            1,
+            "initialize",
+            serde_json::json!({"positionEncodings": ["utf-8"]}),
+        ),
+        (
+            2,
+            "transform",
+            serde_json::json!({"fileName": path, "content": source}),
+        ),
+        (
+            3,
+            "transform",
+            serde_json::json!({"fileName": path, "content": "export const n = 2;"}),
+        ),
+    ] {
+        let body =
+            serde_json::json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params})
+                .to_string();
+        write!(input, "Content-Length: {}\r\n\r\n{body}", body.len()).unwrap();
+    }
+    drop(input);
+    let mut wire = String::new();
+    child
+        .stdout
+        .take()
+        .unwrap()
+        .read_to_string(&mut wire)
+        .unwrap();
+    assert!(child.wait().unwrap().success());
+    let mut answers: Vec<serde_json::Value> = Vec::new();
+    let mut rest = wire.as_str();
+    while let Some(header) = rest.find("\r\n\r\n") {
+        let length: usize = rest[..header]
+            .trim_start_matches("Content-Length:")
+            .trim()
+            .parse()
+            .unwrap();
+        answers.push(serde_json::from_str(&rest[header + 4..header + 4 + length]).unwrap());
+        rest = &rest[header + 4 + length..];
+    }
+    assert_eq!(answers[1]["result"], response);
+    assert_eq!(answers[2]["result"]["text"], "export const n = 2;");
+    exchange.verify_acknowledged().unwrap();
+}

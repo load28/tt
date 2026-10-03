@@ -10,6 +10,12 @@ pub(super) fn projection_accepts_diagnostics(code: &str, source_kind: crate::Sou
 pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
     if crate::engine::project::is_host_source(path) {
         return ServiceDoc {
+            coordinates: CoordinateSpace::Projected,
+            identity_mapping: EmitMapping {
+                src: 0,
+                out: 0,
+                len: text.len(),
+            },
             mappings: vec![EmitMapping {
                 src: 0,
                 out: 0,
@@ -49,6 +55,12 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         ),
     };
     ServiceDoc {
+        coordinates: CoordinateSpace::Projected,
+        identity_mapping: EmitMapping {
+            src: 0,
+            out: 0,
+            len: text.len(),
+        },
         faithful,
         source: text,
         code: emit.code,
@@ -71,35 +83,121 @@ pub(super) fn serve_one(
     session: &mut ServiceSession,
     overlays: &HashMap<PathBuf, String>,
     path: &Path,
-) -> Option<Arc<ServiceDoc>> {
+) -> Result<Option<Arc<ServiceDoc>>, String> {
     let text = match overlays.get(path) {
         Some(text) => text.clone(),
-        None => std::fs::read_to_string(path).ok()?,
+        None => match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(_) => return Ok(None),
+        },
     };
     let doc = match session.docs.get(path) {
         Some(doc) if doc.source == text => doc.clone(),
         _ => {
-            let doc = Arc::new(service_doc(path, text));
+            let mut doc = service_doc(path, text);
+            if session.client.serves_authored_sources() {
+                doc.coordinates = CoordinateSpace::Authored;
+            }
+            let doc = Arc::new(doc);
             session.docs.insert(path.to_path_buf(), doc.clone());
             doc
         }
     };
-    if !crate::engine::project::is_host_source(path) && session.served.get(path) != Some(&doc.code)
+    Ok(Some(doc))
+}
+
+/// Publish a normal document with its source identity and full projection.
+pub(super) fn open_document(
+    session: &mut ServiceSession,
+    path: &Path,
+    doc: &ServiceDoc,
+) -> Result<(), String> {
+    if session.client.serves_authored_sources() && !crate::engine::project::is_host_source(path) {
+        let uri = file_uri(path);
+        if let Some(previous) = session.uris.insert(path.to_path_buf(), uri.clone())
+            && previous != uri
+        {
+            session.client.close(&previous);
+        }
+        if session
+            .client
+            .open_source_projection(path, &doc.source, document_response(path, doc))?
+        {
+            session.last_completion.clear();
+            session.last_probe = None;
+        }
+        session.served.insert(path.to_path_buf(), doc.code.clone());
+    } else if session.served.get(path) != Some(&doc.code)
+        || session.uris.get(path) != Some(&file_uri(&module_path_of(path)))
     {
         open_served(session, path, &doc.code);
     }
-    Some(doc)
+    Ok(())
 }
 
+pub(super) fn document_response(path: &Path, doc: &ServiceDoc) -> serde_json::Value {
+    let kind = crate::SourceKind::from_path(path).unwrap_or_default();
+    serde_json::json!({
+        "text": doc.code,
+        "extension": format!(".{}", kind.output_extension()),
+        "mappings": document_span_mappings(doc),
+        "diagnostics": doc.tt_diagnostics.iter().filter(|d| d.severity == crate::Severity::Error)
+            .map(crate::content_projection::mapper_diagnostic).collect::<Vec<_>>(),
+    })
+}
+
+/// The emitter's named declarations and shared bindings are semantic mapping
+/// edges too. Include exact copied names without exposing surrounding glue.
+fn document_span_mappings(doc: &ServiceDoc) -> Vec<serde_json::Value> {
+    let mut mappings = doc.mappings.clone();
+    let mut add_name = |src: usize, src_end: usize, out: usize, out_end: usize| {
+        if doc.source.get(src..src_end) != doc.code.get(out..out_end)
+            || out_end == out
+            || mappings
+                .iter()
+                .any(|m| m.out < out_end && out < m.out + m.len)
+        {
+            return;
+        }
+        mappings.push(EmitMapping {
+            src,
+            out,
+            len: out_end - out,
+        });
+    };
+    for name in &doc.declared_names {
+        add_name(name.src, name.src_end, name.out, name.out_end);
+    }
+    for binding in &doc.shared_bindings {
+        if let Some(first) = binding.occurrences.first() {
+            add_name(first.src, first.src_end, binding.out, binding.out_end);
+        }
+    }
+    crate::content_projection::span_mappings(&mappings, &doc.anchors, &doc.recovered)
+}
+
+/// Restore the authored revision even when the temporary question failed.
+pub(super) fn restore_document<T>(
+    session: &mut ServiceSession,
+    path: &Path,
+    doc: &ServiceDoc,
+    answer: Result<T, String>,
+) -> Result<T, String> {
+    let restored = open_document(session, path, doc);
+    match (answer, restored) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(error), Ok(())) | (Ok(_), Err(error)) => Err(error),
+        (Err(error), Err(restore)) => Err(format!("{error}; restoring document failed: {restore}")),
+    }
+}
+
+/// Temporary projections have a virtual identity even in an authored session.
+/// Their request/response coordinates remain projected until restoration.
 pub(super) fn open_served(session: &mut ServiceSession, path: &Path, code: &str) {
     let uri = if crate::engine::project::is_host_source(path) {
         file_uri(path)
     } else {
-        session
-            .client
-            .document_uri(path, &module_path_of(path), || {
-                lowering_reproduces(path, code)
-            })
+        file_uri(&module_path_of(path))
     };
     if let Some(previous) = session.uris.insert(path.to_path_buf(), uri.clone())
         && previous != uri
@@ -108,23 +206,6 @@ pub(super) fn open_served(session: &mut ServiceSession, path: &Path, code: &str)
     }
     session.client.open(&uri, code);
     session.served.insert(path.to_path_buf(), code.to_string());
-}
-
-fn lowering_reproduces(path: &Path, code: &str) -> bool {
-    let report = crate::compile_projection_report(
-        code,
-        &crate::Options {
-            filename: path.to_str(),
-            source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
-            rewrite_imports: crate::ImportRewrite::Off,
-            ..crate::Options::default()
-        },
-    );
-    report.emit.is_some_and(|emit| emit.code == code)
-        && report
-            .diagnostics
-            .iter()
-            .all(|diagnostic| diagnostic.severity != crate::Severity::Error)
 }
 
 /// The URI a file is served under. An `.tt` file is served under the name
@@ -137,9 +218,8 @@ pub(super) fn served_uri(session: &ServiceSession, path: &Path) -> String {
     }
     match session.uris.get(path) {
         Some(uri) => uri.clone(),
-        None => session
-            .client
-            .document_uri(path, &module_path_of(path), || true),
+        None if session.client.serves_authored_sources() => file_uri(path),
+        None => file_uri(&module_path_of(path)),
     }
 }
 
@@ -794,6 +874,28 @@ pub(super) enum TargetUse {
     Edit,
 }
 
+enum TargetCoordinates {
+    Authored(PathBuf),
+    Projected(PathBuf),
+}
+
+/// A service document carries the coordinates of the text we opened. A
+/// virtual `.tt.ts`/`.ttx.tsx` document also names that projection. Other
+/// source URIs carry authored coordinates, including targets TypeScript
+/// has already followed through a declaration map. Merely having a cached
+/// projection of a source does not make that source URI a projection.
+fn target_coordinates(_session: &ServiceSession, uri: &str) -> Option<TargetCoordinates> {
+    let path = uri_path(uri)?;
+    let Some(source) = tt_document(&path) else {
+        return Some(TargetCoordinates::Authored(path));
+    };
+    if source != path {
+        Some(TargetCoordinates::Projected(source))
+    } else {
+        Some(TargetCoordinates::Authored(path))
+    }
+}
+
 /// Maps one service answer target back to a user-visible file. `None` when
 /// the target is not a file, cannot be read, or the span has no source
 /// counterpart for `purpose` — the caller decides whether that skips one
@@ -805,27 +907,41 @@ pub(super) fn map_target(
     range: &serde_json::Value,
     purpose: TargetUse,
 ) -> Option<Location> {
-    let path = uri_path(uri)?;
+    let target = target_coordinates(session, uri)?;
     let lsp_range = Range {
         start: position_of(&range["start"]),
         end: position_of(&range["end"]),
     };
-    if let Some(tt_path) = tt_document(&path) {
-        let doc = serve_doc_only(session, overlays, &tt_path)?;
-        let start = u16_offset(&doc.code, lsp_range.start);
-        let end = u16_offset(&doc.code, lsp_range.end);
-        let (s, e) = match from_service_span(&doc, start, end) {
-            Some(span) => span,
-            None if purpose == TargetUse::Navigation => declared_name_span(&doc, start, end)?,
-            None => return None,
-        };
-        return Some(Location {
-            path: tt_path,
-            range: source_range(&doc.source, s, e),
-        });
-    }
-    // A hand-written TypeScript file: the answer's coordinates are already
-    // the file's own.
+    let path = match target {
+        TargetCoordinates::Authored(path) => {
+            if crate::SourceKind::from_tt_path(&path).is_some()
+                && let Some(doc) = serve_doc_only(session, overlays, &path)
+            {
+                let start =
+                    mapper::from_utf16(&doc.source, u16_offset(&doc.source, lsp_range.start));
+                let end = mapper::from_utf16(&doc.source, u16_offset(&doc.source, lsp_range.end));
+                if authored_shared_binding(&doc, start, end).is_some() {
+                    return None;
+                }
+            }
+            path
+        }
+        TargetCoordinates::Projected(tt_path) => {
+            let doc = serve_doc_only(session, overlays, &tt_path)?;
+            let start = u16_offset(&doc.code, lsp_range.start);
+            let end = u16_offset(&doc.code, lsp_range.end);
+            let (s, e) = match from_projected_span(&doc, start, end) {
+                Some(span) => span,
+                None if purpose == TargetUse::Navigation => declared_name_span(&doc, start, end)?,
+                None => return None,
+            };
+            return Some(Location {
+                path: tt_path,
+                range: source_range(&doc.source, s, e),
+            });
+        }
+    };
+    // An authored target already uses the file's own coordinates.
     Some(Location {
         path,
         range: lsp_range,
@@ -858,6 +974,9 @@ pub(super) fn serve_doc_only(
 /// compiler-written glue. As TypeScript resolves a touching name, the name
 /// starting at the cursor wins over the one ending there.
 pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> {
+    if doc.coordinates == CoordinateSpace::Authored {
+        return Some(u16_offset(&doc.source, position));
+    }
     let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
     let affinity = match doc.source.as_bytes().get(byte) {
         Some(&b) if crate::scanner::is_ident_start(b) || b == b'#' || !b.is_ascii() => {
@@ -874,10 +993,30 @@ pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> 
 pub(super) fn to_service_typed(doc: &ServiceDoc, position: Position) -> Option<usize> {
     let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
     let out = mapper::cursor_to_output(&doc.mappings, byte, mapper::Affinity::Preceding)?;
+    if doc.coordinates == CoordinateSpace::Authored {
+        return Some(u16_offset(&doc.source, position));
+    }
     Some(mapper::to_utf16(&doc.code, out))
 }
 
 pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<usize> {
+    if doc.coordinates == CoordinateSpace::Authored {
+        let byte = source_byte(&doc.source, position);
+        for binding in &doc.shared_bindings {
+            if let Some(occurrence) = binding
+                .occurrences
+                .iter()
+                .find(|o| o.src <= byte && byte <= o.src_end)
+            {
+                let first = binding.occurrences.first()?;
+                return Some(mapper::to_utf16(
+                    &doc.source,
+                    first.src + (byte - occurrence.src).min(first.src_end - first.src),
+                ));
+            }
+        }
+    }
+
     if let Some(at) = to_service(doc, position) {
         return Some(at);
     }
@@ -933,23 +1072,40 @@ pub(super) struct SharedTarget {
     pub shorthand: bool,
 }
 
+fn authored_shared_binding(
+    doc: &ServiceDoc,
+    start: usize,
+    end: usize,
+) -> Option<&crate::SharedBinding> {
+    doc.shared_bindings.iter().find(|binding| {
+        binding
+            .occurrences
+            .iter()
+            .any(|occurrence| occurrence.src == start && occurrence.src_end == end)
+    })
+}
+
 pub(super) fn map_shared_target(
     session: &mut ServiceSession,
     overlays: &HashMap<PathBuf, String>,
     uri: &str,
     range: &serde_json::Value,
 ) -> Option<(String, Vec<SharedTarget>)> {
-    let tt_path = tt_document(&uri_path(uri)?)?;
+    let (tt_path, authored) = match target_coordinates(session, uri)? {
+        TargetCoordinates::Authored(path) => (path, true),
+        TargetCoordinates::Projected(path) => (path, false),
+    };
     let doc = serve_doc_only(session, overlays, &tt_path)?;
-    let start = mapper::from_utf16(
-        &doc.code,
-        u16_offset(&doc.code, position_of(&range["start"])),
-    );
-    let end = mapper::from_utf16(&doc.code, u16_offset(&doc.code, position_of(&range["end"])));
-    let binding = doc
-        .shared_bindings
-        .iter()
-        .find(|binding| binding.out == start && binding.out_end == end)?;
+    let code = if authored { &doc.source } else { &doc.code };
+    let start = mapper::from_utf16(code, u16_offset(code, position_of(&range["start"])));
+    let end = mapper::from_utf16(code, u16_offset(code, position_of(&range["end"])));
+    let binding = if authored {
+        authored_shared_binding(&doc, start, end)
+    } else {
+        doc.shared_bindings
+            .iter()
+            .find(|binding| binding.out == start && binding.out_end == end)
+    }?;
     let targets = binding
         .occurrences
         .iter()
@@ -962,7 +1118,7 @@ pub(super) fn map_shared_target(
             shorthand: occurrence.shorthand,
         })
         .collect();
-    Some((doc.code[start..end].to_string(), targets))
+    Some((doc.code[binding.out..binding.out_end].to_string(), targets))
 }
 
 /// The service's outline of served text, on the source: an entry whose name
@@ -982,7 +1138,7 @@ fn source_symbols_grown(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<Do
                 .map(Vec::as_slice)
                 .unwrap_or_default(),
         );
-        let offset = |value: &serde_json::Value| u16_offset(&doc.code, position_of(value));
+        let offset = |value: &serde_json::Value| u16_offset(doc.service_code(), position_of(value));
         let selection = &item["selectionRange"];
         let Some((name_start, name_end)) =
             from_service_span(doc, offset(&selection["start"]), offset(&selection["end"]))
@@ -994,6 +1150,9 @@ fn source_symbols_grown(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<Do
         // it (a `match` in a function body); an end that is not keeps the
         // range to the name.
         let point = |value: &serde_json::Value| {
+            if doc.coordinates == CoordinateSpace::Authored {
+                return Some(offset(value));
+            }
             let byte = mapper::from_utf16(&doc.code, offset(value));
             mapper::to_source_inclusive(&doc.mappings, byte)
                 .map(|source| mapper::to_utf16(&doc.source, source))
@@ -1021,7 +1180,7 @@ pub(super) fn source_tokens(
     legend: &crate::typescript::service::SemanticLegend,
     data: &[u64],
 ) -> Vec<ClassifiedToken> {
-    let code_lines = LineMap::lsp(&doc.code);
+    let code_lines = LineMap::lsp(doc.service_code());
     let source_lines = LineMap::lsp(&doc.source);
     let mut out: Vec<ClassifiedToken> = Vec::new();
     let (mut line, mut character) = (0u64, 0u64);
@@ -1078,6 +1237,9 @@ pub(super) fn source_tokens(
 /// once in the served text and written in every alternative, so its token
 /// is each alternative's; any other token is the source it was copied from.
 fn token_sources(doc: &ServiceDoc, start: usize, end: usize) -> Vec<(usize, usize)> {
+    if doc.coordinates == CoordinateSpace::Authored {
+        return vec![(start, end)];
+    }
     if let Some(binding) = doc
         .shared_bindings
         .iter()
@@ -1151,6 +1313,13 @@ pub(super) fn from_service_span(
     start: usize,
     end: usize,
 ) -> Option<(usize, usize)> {
+    if doc.coordinates == CoordinateSpace::Authored {
+        return Some((start, end));
+    }
+    from_projected_span(doc, start, end)
+}
+
+fn from_projected_span(doc: &ServiceDoc, start: usize, end: usize) -> Option<(usize, usize)> {
     let sb = mapper::from_utf16(&doc.code, start);
     let eb = mapper::from_utf16(&doc.code, end);
     let (ss, se) = mapper::to_source_span(&doc.mappings, sb, eb)?;
@@ -1189,6 +1358,66 @@ pub(super) fn glue_anchor(doc: &ServiceDoc, utf16_start: usize) -> Option<crate:
         .iter()
         .find(|a| a.out <= out && out < a.end)
         .copied()
+}
+
+/// The unconfigured/foreign-mapper service keeps its existing virtual-file
+/// project arrangement. Normalize its LSP reply to the same generated-span
+/// contract as native diagnostics without changing module resolution.
+pub(super) fn projected_service_diagnostics(
+    session: &mut ServiceSession,
+    path: &Path,
+    doc: &ServiceDoc,
+) -> Result<Vec<crate::typescript::backend::EditorDiagnostic>, String> {
+    use crate::typescript::backend::{EditorDiagnostic, RelatedInformation};
+    let served = served_uri(session, path);
+    let answer = session.client.request(
+        "textDocument/diagnostic",
+        serde_json::json!({ "textDocument": { "uri": served } }),
+    )?;
+    let module = if crate::engine::project::is_host_source(path) {
+        path.to_path_buf()
+    } else {
+        module_path_of(path)
+    };
+    Ok(answer["items"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|item| {
+            let tags = item["tags"].as_array();
+            EditorDiagnostic {
+                file: module.clone(),
+                start: u16_offset(&doc.code, position_of(&item["range"]["start"])),
+                end: u16_offset(&doc.code, position_of(&item["range"]["end"])),
+                code: item["code"].as_u64().unwrap_or(0) as u32,
+                message: item["message"].as_str().unwrap_or_default().to_string(),
+                category: match item["severity"].as_u64() {
+                    Some(2) => 0,
+                    Some(3) => 3,
+                    Some(4) => 2,
+                    _ => 1,
+                },
+                unnecessary: tags
+                    .is_some_and(|tags| tags.iter().any(|tag| tag.as_u64() == Some(1))),
+                deprecated: tags.is_some_and(|tags| tags.iter().any(|tag| tag.as_u64() == Some(2))),
+                related: item["relatedInformation"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|entry| entry["location"]["uri"].as_str() == Some(served.as_str()))
+                    .map(|entry| RelatedInformation {
+                        file: module.clone(),
+                        start: u16_offset(
+                            &doc.code,
+                            position_of(&entry["location"]["range"]["start"]),
+                        ),
+                        end: u16_offset(&doc.code, position_of(&entry["location"]["range"]["end"])),
+                        message: entry["message"].as_str().unwrap_or_default().to_string(),
+                    })
+                    .collect(),
+            }
+        })
+        .collect())
 }
 
 pub(super) fn diagnostic_source_span(

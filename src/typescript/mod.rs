@@ -35,6 +35,8 @@
 //! a pass, and the backend here answers about that snapshot.
 
 pub(crate) mod backend;
+#[doc(hidden)]
+pub mod content_projection;
 pub(crate) mod contextual;
 pub(crate) mod mapper;
 pub(crate) mod native;

@@ -1,5 +1,8 @@
 # TASK-584: Infer a join only from values typed by settled storage
 
+Follow-up: TASK-734 applies TypeScript's file identities when following these
+dependencies on case-insensitive hosts; the inference rule is unchanged.
+
 - **Status**: Complete
 - **Started**: 2026-09-29
 - **Completed**: 2026-09-29

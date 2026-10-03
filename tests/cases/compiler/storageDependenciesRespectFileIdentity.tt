@@ -1,0 +1,16 @@
+// @baselines: ts, errors.txt, types
+// @filename: tsconfig.json
+{"compilerOptions":{"strict":false,"target":"es2022","module":"esnext","moduleResolution":"bundler","noEmit":true},"include":["MixedCase"]}
+// @filename: MixedCase/Source.tt
+declare const flag: boolean;
+export const numbers = () => match(flag) { true => [1], false => [2] };
+export const nested = match(flag) { true => [numbers()], false => [] };
+export const bad = nested[0]![0]!.toUpperCase();
+export const unknowns = () => match(flag) { true => [JSON.parse("1")], false => [JSON.parse("2")] };
+// @filename: MixedCase/Consumer.tt
+import { numbers, unknowns } from "./Source.tt";
+declare const flag: boolean;
+export const nested = match(flag) { true => [numbers()], false => [] };
+export const bad = nested[0]![0]!.toUpperCase();
+export const unknownNested = match(flag) { true => [unknowns()], false => [] };
+export const worse = unknownNested[0]!.foo;

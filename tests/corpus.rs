@@ -65,6 +65,34 @@ use common::typescript_cases::{
 /// something different on every run cannot be bisected.
 const SAMPLE: usize = 250;
 
+#[test]
+fn oracle_reachability_preserves_the_members_file_spelling() {
+    use std::fs;
+
+    if !common::toolchain() {
+        return;
+    }
+    let workspace = common::Workspace::in_repo("oracle-file-identity");
+    let dir = workspace.path().join("MixedCase");
+    fs::create_dir_all(&dir).unwrap();
+    let imported = dir.join("Imported.ts");
+    let importer = dir.join("main.ts");
+    let config = dir.join("tsconfig.json");
+    fs::write(&imported, "export function f() {}\n").unwrap();
+    fs::write(&importer, "import { f } from \"./Imported\";\n").unwrap();
+    fs::write(
+        &config,
+        r#"{"compilerOptions":{"module":"preserve","noEmit":true}}"#,
+    )
+    .unwrap();
+    let answer = Oracle::start().ask(&serde_json::json!({
+        "check": config,
+        "units": [imported, importer],
+    }));
+    assert_eq!(answer["diagnostics"], serde_json::json!([]));
+    assert_eq!(answer["reached"], serde_json::json!([imported]));
+}
+
 /// This repository's own TypeScript — hand-written, always present, and
 /// under review like everything else here. A corpus that needs no download
 /// and no pin, so the differential runs on every machine and every job.

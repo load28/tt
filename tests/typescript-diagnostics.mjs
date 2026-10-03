@@ -143,15 +143,22 @@ function check(tsconfig, units) {
       seen.add(key);
       diagnostics.push(entry);
     }
-    const members = new Set(units);
+    // Declaration handles carry TypeScript's canonical paths. Keep the
+    // caller's spelling as the value: Rust uses it to identify the unit
+    // that must retain its name in the comparison project.
+    const members = new Map(units.map((unit) => [api.getCanonicalFileName(unit), unit]));
     const reached = new Set();
+    const reach = (candidate) => {
+      const member = members.get(api.getCanonicalFileName(candidate));
+      if (member !== undefined) reached.add(member);
+    };
     for (const unit of units) {
       const file = program.getSourceFile(unit);
       if (!file) continue;
       for (const reference of file.referencedFiles ?? []) {
         const target = path.resolve(path.dirname(unit), reference.fileName);
         for (const candidate of [target, target + ".ts", target + ".tsx", target + ".d.ts"]) {
-          if (members.has(candidate)) reached.add(candidate);
+          reach(candidate);
         }
       }
       const specifiers = [...(file.imports ?? []), ...(file.moduleAugmentations ?? [])];
@@ -161,20 +168,20 @@ function check(tsconfig, units) {
         const declarations = symbol?.declarations ?? [];
         for (const declaration of declarations) {
           const target = declaration.path ? String(declaration.path) : null;
-          if (target && members.has(target)) reached.add(target);
+          if (target) reach(target);
         }
         const text = specifiers[index]?.text;
         if (declarations.length > 0 || typeof text !== "string" || !text.startsWith(".")) return;
         const target = path.resolve(path.dirname(unit), text);
         const base = target.replace(/\.(js|jsx|mjs|cjs)$/, "");
         for (const candidate of [target, ...RELATIVE_SUFFIXES.map((suffix) => base + suffix)]) {
-          if (members.has(candidate)) reached.add(candidate);
+          reach(candidate);
         }
       });
     }
     for (const unit of units) {
       for (const source of declarationMapSources(unit)) {
-        if (members.has(source)) reached.add(source);
+        reach(source);
       }
     }
     return { diagnostics, reached: [...reached] };
