@@ -748,7 +748,8 @@
 | TASK-737 | Serve authored buffers with their contextual projections | Complete | 2026-10-03 | 2026-10-03 | [TASK-737](./TASK-737-authored-source-service.md) |
 
 | TASK-738 | Exercise an expanding mixed-source React application in VS Code | Complete | 2026-10-03 | 2026-10-03 | [TASK-738](./TASK-738-react-vscode-dogfood.md) |
+| TASK-739 | Check val parameters of functions whose return type has type arguments | Complete | 2026-10-03 | 2026-10-03 | [TASK-739](./TASK-739-val-generic-return-type.md) |
 
 ## Next task number
 
-**TASK-739**
+**TASK-740**

@@ -1,0 +1,132 @@
+=== valParameterIsReadOnlyBehindAGenericReturnType.tt ===
+type Order = { customer: string; lines: string[]; note?: string };
+>Order : type Order = {
+>       customer: string;
+>       lines: string[];
+>       note?: string;
+>   }
+>customer : (property) customer: string
+>lines : (property) lines: string[]
+>note : (property) note?: string | undefined
+type Pair<A, B> = { first: A; second: B };
+>Pair : type Pair<A, B> = {
+>       first: A;
+>       second: B;
+>   }
+>A : (type parameter) A in type Pair<A, B>
+>B : (type parameter) B in type Pair<A, B>
+>first : (property) first: A
+>A : (type parameter) A in type Pair<A, B>
+>second : (property) second: B
+>B : (type parameter) B in type Pair<A, B>
+export function submit(val order: Order): Pair<Order, string> {
+>submit : function submit(order: Order): Pair<Order, string>
+>order : (parameter) order: Order
+>Order : type Order = {
+>       customer: string;
+>       lines: string[];
+>       note?: string;
+>   }
+>Pair : type Pair<A, B> = {
+>       first: A;
+>       second: B;
+>   }
+>Order : type Order = {
+>       customer: string;
+>       lines: string[];
+>       note?: string;
+>   }
+  order.customer = "";
+>order : (parameter) order: Order
+>customer : (property) customer: string
+  return { first: order, second: "" };
+>first : (property) first: Order
+>order : (parameter) order: Order
+>second : (property) second: string
+export function nested(val order: Order): Map<string, Array<Pair<Order, number>>> {
+>nested : function nested(order: Order): Map<string, Array<Pair<Order, number>>>
+>order : (parameter) order: Order
+>Order : type Order = {
+>       customer: string;
+>       lines: string[];
+>       note?: string;
+>   }
+>Map : interface Map<K, V>
+>Array : interface Array<T>
+>Pair : type Pair<A, B> = {
+>       first: A;
+>       second: B;
+>   }
+>Order : type Order = {
+>       customer: string;
+>       lines: string[];
+>       note?: string;
+>   }
+  order.lines[0] = "";
+>order : (parameter) order: Order
+>lines : (property) lines: string[]
+  return new Map();
+>Map : var Map: new () => Map<any, any>
+export const arrow = (val order: Order): Pair<() => void, string> => {
+>arrow : const arrow: (order: Order) => Pair<() => void, string>
+>order : (parameter) order: Order
+>Order : type Order = {
+>       customer: string;
+>       lines: string[];
+>       note?: string;
+>   }
+>Pair : type Pair<A, B> = {
+>       first: A;
+>       second: B;
+>   }
+  delete order.note;
+>order : (parameter) order: Order
+>note : (property) note?: string | undefined
+  return { first: () => {}, second: "" };
+>first : (property) first: () => void
+>second : (property) second: string
+export class Orders {
+>Orders : class Orders
+  submit(val order: Order): Promise<Pair<{ a: number }, string>> {
+>submit : (method) Orders.submit(order: Order): Promise<Pair<{
+>       a: number;
+>   }, string>>
+>order : (parameter) order: Order
+>Order : type Order = {
+>       customer: string;
+>       lines: string[];
+>       note?: string;
+>   }
+>Promise : interface Promise<T>
+>Pair : type Pair<A, B> = {
+>       first: A;
+>       second: B;
+>   }
+>a : (property) a: number
+    order.customer += "";
+>order : (parameter) order: Order
+>customer : (property) customer: string
+    return Promise.resolve({ first: { a: 1 }, second: "" });
+>Promise : var Promise: PromiseConstructor
+>resolve : (method) PromiseConstructor.resolve<{
+>       first: {
+>           a: number;
+>       };
+>       second: string;
+>   }>(value: {
+>       first: {
+>           a: number;
+>       };
+>       second: string;
+>   }): Promise<{
+>       first: {
+>           a: number;
+>       };
+>       second: string;
+>   }>
+>first : (property) first: {
+>       a: number;
+>   }
+>a : (property) a: number
+>second : (property) second: string
+

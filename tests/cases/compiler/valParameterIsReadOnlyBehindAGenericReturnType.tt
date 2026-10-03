@@ -1,0 +1,21 @@
+// @expectErrors: val-mutation
+type Order = { customer: string; lines: string[]; note?: string };
+type Pair<A, B> = { first: A; second: B };
+export function submit(val order: Order): Pair<Order, string> {
+  order.customer = "";
+  return { first: order, second: "" };
+}
+export function nested(val order: Order): Map<string, Array<Pair<Order, number>>> {
+  order.lines[0] = "";
+  return new Map();
+}
+export const arrow = (val order: Order): Pair<() => void, string> => {
+  delete order.note;
+  return { first: () => {}, second: "" };
+};
+export class Orders {
+  submit(val order: Order): Promise<Pair<{ a: number }, string>> {
+    order.customer += "";
+    return Promise.resolve({ first: { a: 1 }, second: "" });
+  }
+}

@@ -1,0 +1,6 @@
+=== diagnostics valMutationBehindAGenericReturnType.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  5:3-5:8 "order" error val-mutation (ttc): cannot mutate through val binding `order` (the binding is declared with `val`, so every access path from it is read-only)
+    related valMutationBehindAGenericReturnType.tt 4:24-4:27 "val": the read-only binding is declared here
+
