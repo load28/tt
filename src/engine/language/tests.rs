@@ -429,10 +429,51 @@ fn the_editor_and_the_typed_pass_share_one_semantic_cache() {
 
 #[test]
 fn member_context_walks_back_over_the_identifier() {
-    assert!(is_member_context("value.le", 8));
-    assert!(is_member_context("value.", 6));
-    assert!(!is_member_context("value", 5));
-    assert!(!is_member_context("a . b", 1));
+    assert!(is_member_context(
+        "value.le",
+        8,
+        crate::SourceKind::TypeScript
+    ));
+    assert!(is_member_context(
+        "value.",
+        6,
+        crate::SourceKind::TypeScript
+    ));
+    assert!(!is_member_context(
+        "value",
+        5,
+        crate::SourceKind::TypeScript
+    ));
+    assert!(!is_member_context(
+        "a . b",
+        1,
+        crate::SourceKind::TypeScript
+    ));
+    for source in ["value /* receiver */ .", "value?.", "값.", "`text ${value."] {
+        assert!(
+            is_member_context(
+                source,
+                source.encode_utf16().count(),
+                crate::SourceKind::TypeScript
+            ),
+            "{source}"
+        );
+    }
+    for source in ["value |> .", "value + .", "...", "// value.", "\"value."] {
+        assert!(
+            !is_member_context(
+                source,
+                source.encode_utf16().count(),
+                crate::SourceKind::TypeScript
+            ),
+            "{source}"
+        );
+    }
+    assert!(!is_member_context(
+        "<div>value.</div>",
+        11,
+        crate::SourceKind::Tsx
+    ));
 }
 
 #[test]
@@ -459,7 +500,7 @@ fn completion_probe_preserves_source_kind_and_cursor() {
         );
         let byte = mapper::from_utf16(&probe.code, probe.offset);
         assert!(probe.code[byte..].starts_with(PROBE_NAME), "{}", probe.code);
-        assert!(is_member_context(&probe.code, probe.offset));
+        assert!(is_member_context(&probe.code, probe.offset, kind));
         assert!(probe.code.starts_with(prefix), "{}", probe.code);
     }
 }

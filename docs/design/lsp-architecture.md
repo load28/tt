@@ -486,6 +486,12 @@ maps. Only virtual `.tt.ts` and `.ttx.tsx` targets require inverse mapping.
 Temporary generated probes use those virtual identities and restore the authored
 document on success and error. Completion scope analysis always reads emitted
 TypeScript and its projected cursor, independently of the request coordinates.
+A member-completion answer requires the token grammar to identify a complete
+receiver before the dot. A raw dot alone is insufficient: an unfinished tt
+shorthand such as `value |> .` has no TypeScript receiver until a completion
+probe lowers it. This distinction applies to scripts and modules, comments,
+optional chains, template interpolations, and JSX text through the shared lexer
+facts (TASK-738).
 Emitter-owned declaration names and shared bindings supply mappings that raw
 copied spans cannot express; shared edits expand to their authored occurrences.
 

@@ -1027,3 +1027,19 @@ fn installed_mapper_preserves_diagnostic_provenance() {
         assert_eq!(service.hover(&file, at).unwrap().unwrap().range.start, at);
     }
 }
+
+#[test]
+fn installed_mapper_completes_pipeline_members_in_scripts_and_modules() {
+    require_tsgo!();
+    for module in [false, true] {
+        let prefix = if module { "export {};\n" } else { "" };
+        let (source, at) = at_cursor(&format!("{prefix}const title = \"문자\";\nconst result = \"hello\" |> .@@;\n"));
+        let dir = project(&[("src/main.tt", &source)]);
+        common::installed_mapper::install(&dir);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        let mut service = open_service(&file);
+        let answer = service.completion(&file, at, true).unwrap();
+        assert!(answer.member, "module={module}: not a member completion");
+        assert!(answer.items.iter().any(|item| item.label == "toUpperCase"), "module={module}: missing String members");
+    }
+}
