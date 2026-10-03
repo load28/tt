@@ -1,0 +1,54 @@
+{
+  "baseline": "01d7dd29",
+  "completedBeforeStopping": 26,
+  "failures": [
+    {
+      "name": "tt -> tt: introduce and clear unsaved error",
+      "error": "Error: type error: Expected values to be strictly equal:\n\n'result' !== 'value'\n"
+    },
+    {
+      "name": "tt -> tt: dependency edits refresh untouched consumer",
+      "error": "Error: dependent error clears: [{\"severity\":\"Error\",\"message\":\"Type 'string' is not assignable to type 'number'.\",\"range\":[{\"line\":4,\"character\":6},{\"line\":4,\"character\":12}],\"source\":\"ttc\",\"code\":\"ts2322\"}]\n\n1 !== 0\n"
+    },
+    {
+      "name": "ttx -> tt: introduce and clear unsaved error",
+      "error": "Error: type error: Expected values to be strictly equal:\n\n'result' !== 'value'\n"
+    },
+    {
+      "name": "ttx -> tt: dependency edits refresh untouched consumer",
+      "error": "Error: dependent error clears: [{\"severity\":\"Error\",\"message\":\"Type 'string' is not assignable to type 'number'.\",\"range\":[{\"line\":4,\"character\":6},{\"line\":4,\"character\":12}],\"source\":\"ttc\",\"code\":\"ts2322\"}]\n\n1 !== 0\n"
+    },
+    {
+      "name": "ts -> tt: introduce and clear unsaved error",
+      "error": "Error: type error: Expected values to be strictly equal:\n\n'result' !== 'value'\n"
+    },
+    {
+      "name": "ts -> tt: dependency edits refresh untouched consumer",
+      "error": "Error: dependent error clears: [{\"severity\":\"Error\",\"message\":\"Type 'string' is not assignable to type 'number'.\",\"range\":[{\"line\":4,\"character\":6},{\"line\":4,\"character\":12}],\"source\":\"ttc\",\"code\":\"ts2322\"}]\n\n1 !== 0\n"
+    },
+    {
+      "name": "tsx -> tt: introduce and clear unsaved error",
+      "error": "Error: type error: Expected values to be strictly equal:\n\n'result' !== 'value'\n"
+    },
+    {
+      "name": "tsx -> tt: dependency edits refresh untouched consumer",
+      "error": "Error: dependent error clears: [{\"severity\":\"Error\",\"message\":\"Type 'string' is not assignable to type 'number'.\",\"range\":[{\"line\":4,\"character\":6},{\"line\":4,\"character\":12}],\"source\":\"ttc\",\"code\":\"ts2322\"}]\n\n1 !== 0\n"
+    },
+    {
+      "name": "tt -> ttx: introduce and clear unsaved error",
+      "error": "Error: type error: Expected values to be strictly equal:\n\n'result' !== 'value'\n"
+    },
+    {
+      "name": "tt -> ttx: dependency edits refresh untouched consumer",
+      "error": "Error: dependent error clears: [{\"severity\":\"Error\",\"message\":\"Type 'string' is not assignable to type 'number'.\",\"range\":[{\"line\":6,\"character\":6},{\"line\":6,\"character\":12}],\"source\":\"ttc\",\"code\":\"ts2322\"}]\n\n1 !== 0\n"
+    },
+    {
+      "name": "ttx -> ttx: introduce and clear unsaved error",
+      "error": "Error: type error: Expected values to be strictly equal:\n\n'result' !== 'value'\n"
+    },
+    {
+      "name": "ttx -> ttx: dependency edits refresh untouched consumer",
+      "error": "Error: dependent error clears: [{\"severity\":\"Error\",\"message\":\"Type 'string' is not assignable to type 'number'.\",\"range\":[{\"line\":6,\"character\":6},{\"line\":6,\"character\":12}],\"source\":\"ttc\",\"code\":\"ts2322\"}]\n\n1 !== 0\n"
+    }
+  ]
+}

@@ -275,16 +275,7 @@ pub fn member_access_at(path: &Path, source: &str, position: Position) -> Option
         crate::SourceKind::from_path(path).unwrap_or_default(),
     );
     let tokens = innermost_tokens(&tokens, offset);
-    if inside_text(source, tokens, offset) {
-        return None;
-    }
-    let mut next = token_at(tokens, offset);
-    if next > 0 && is_prefix(tokens, next - 1, offset) {
-        next -= 1;
-    }
-    let dot = next
-        .checked_sub(1)
-        .filter(|&dot| is_member_dot(tokens, dot))?;
+    let dot = member_dot_at(source, tokens, offset)?;
     // The receiver is a path of names when names and `.`s alone run back
     // from the dot to where the expression starts.
     let mut names = Vec::new();
@@ -310,6 +301,33 @@ pub fn member_access_at(path: &Path, source: &str, position: Position) -> Option
     Some(MemberAccess {
         receiver: path.then(|| names.join(".")),
     })
+}
+
+/// A member access in served TypeScript needs a complete receiver before its
+/// dot. The tt shorthand `|> .` has none until it has been lowered; TypeScript
+/// can return globals there, which must not be mistaken for a member answer.
+pub(crate) fn typescript_member_access_at(
+    source: &str,
+    kind: crate::SourceKind,
+    offset: usize,
+) -> bool {
+    let tokens = crate::lexer::lex_with_kind(source, 0, source.len(), kind);
+    let tokens = innermost_tokens(&tokens, offset);
+    member_dot_at(source, tokens, offset)
+        .and_then(|dot| dot.checked_sub(1))
+        .is_some_and(|receiver| tokens[receiver].facts.ends_expression())
+}
+
+fn member_dot_at(source: &str, tokens: &[Token], offset: usize) -> Option<usize> {
+    if inside_text(source, tokens, offset) {
+        return None;
+    }
+    let mut next = token_at(tokens, offset);
+    if next > 0 && is_prefix(tokens, next - 1, offset) {
+        next -= 1;
+    }
+    next.checked_sub(1)
+        .filter(|&dot| is_member_dot(tokens, dot))
 }
 
 /// A tt keyword whose construct can be written at a position.

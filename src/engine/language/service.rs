@@ -328,9 +328,9 @@ pub(super) fn ts_completions(
     }
     Ok(CompletionAnswer {
         items: entries,
-        // A member completion is one the server answered for a `.` — what
-        // tells a real member list from the global scope.
-        member: is_member_context(code, at),
+        // The served grammar must have a receiver, not merely a dot in
+        // unfinished tt syntax where TypeScript answers with global names.
+        member: is_member_context(code, at, kind),
         probe: None,
     })
 }
@@ -1494,20 +1494,13 @@ pub(in super::super) fn byte_position(lines: &LineMap<'_>, byte: usize) -> Posit
     }
 }
 
-/// Whether the offset follows a `.` (walking back over identifier
-/// characters), which is what makes an answer a member list.
-pub(super) fn is_member_context(text: &str, offset: usize) -> bool {
-    let mut i = mapper::from_utf16(text, offset);
-    let bytes = text.as_bytes();
-    while i > 0 {
-        let b = bytes[i - 1];
-        if b.is_ascii_alphanumeric() || b == b'_' || b == b'$' {
-            i -= 1;
-        } else {
-            break;
-        }
-    }
-    i > 0 && bytes[i - 1] == b'.'
+/// Whether the served TypeScript has a member receiver at this cursor.
+pub(super) fn is_member_context(text: &str, offset: usize, kind: crate::SourceKind) -> bool {
+    crate::engine::completions::typescript_member_access_at(
+        text,
+        kind,
+        mapper::from_utf16(text, offset),
+    )
 }
 
 pub(super) fn split_hover(contents: &serde_json::Value) -> (String, String) {

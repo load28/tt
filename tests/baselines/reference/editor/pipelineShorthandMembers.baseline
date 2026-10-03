@@ -1,0 +1,61 @@
+=== completions /*member*/ pipelineShorthandMembers.tt:2:28 ===
+  | const result = "hello" |> .;
+  |                            ^ /*member*/
+completion: 1060 item(s), member false, probe no
+  result (Variable, 11)
+  title (Variable, 11)
+  ... 1058 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member {"receiver":null}
+patternCompletions: null
+editor completion: 50 item(s)
+  at (Method, 211)
+  charAt (Method, 211)
+  charCodeAt (Method, 211)
+  codePointAt (Method, 211)
+  concat (Method, 211)
+  endsWith (Method, 211)
+  includes (Method, 211)
+  indexOf (Method, 211)
+  lastIndexOf (Method, 211)
+  length (Field, 211)
+  localeCompare (Method, 211)
+  match (Method, 211)
+  matchAll (Method, 211)
+  normalize (Method, 211)
+  padEnd (Method, 211)
+  padStart (Method, 211)
+  repeat (Method, 211)
+  replace (Method, 211)
+  replaceAll (Method, 211)
+  search (Method, 211)
+  slice (Method, 211)
+  split (Method, 211)
+  startsWith (Method, 211)
+  substring (Method, 211)
+  toLocaleLowerCase (Method, 211)
+  toLocaleUpperCase (Method, 211)
+  toLowerCase (Method, 211)
+  toString (Method, 211)
+  toUpperCase (Method, 211)
+  trim (Method, 211)
+  trimEnd (Method, 211)
+  trimStart (Method, 211)
+  valueOf (Method, 211)
+  anchor (Method, 2z11) [deprecated]
+  big (Method, 2z11) [deprecated]
+  blink (Method, 2z11) [deprecated]
+  bold (Method, 2z11) [deprecated]
+  fixed (Method, 2z11) [deprecated]
+  fontcolor (Method, 2z11) [deprecated]
+  fontsize (Method, 2z11) [deprecated]
+  italics (Method, 2z11) [deprecated]
+  link (Method, 2z11) [deprecated]
+  small (Method, 2z11) [deprecated]
+  strike (Method, 2z11) [deprecated]
+  sub (Method, 2z11) [deprecated]
+  substr (Method, 2z11) [deprecated]
+  sup (Method, 2z11) [deprecated]
+  trimLeft (Method, 2z11) [deprecated]
+  trimRight (Method, 2z11) [deprecated]
+  ... 1 global or keyword item(s) (sortText 215, no source)
+

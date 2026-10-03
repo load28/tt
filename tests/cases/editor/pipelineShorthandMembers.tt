@@ -1,0 +1,3 @@
+// @completions: member
+const title = "문자";
+const result = "hello" |> ./*member*/;

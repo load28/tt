@@ -1,0 +1,286 @@
+[
+  {
+    "name": "tt -> tt: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "tt -> tt: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "tt -> tt: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "tt -> tt: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "ttx -> tt: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "ttx -> tt: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "ttx -> tt: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "ttx -> tt: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "ts -> tt: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "ts -> tt: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "ts -> tt: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "ts -> tt: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "tsx -> tt: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "tsx -> tt: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "tsx -> tt: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "tsx -> tt: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "tt -> ttx: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "tt -> ttx: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "tt -> ttx: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "tt -> ttx: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "ttx -> ttx: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "ttx -> ttx: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "ttx -> ttx: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "ttx -> ttx: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "ts -> ttx: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "ts -> ttx: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "ts -> ttx: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "ts -> ttx: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "tsx -> ttx: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "tsx -> ttx: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "tsx -> ttx: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "tsx -> ttx: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "tt -> ts: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "tt -> ts: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "tt -> ts: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "tt -> ts: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "ttx -> ts: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "ttx -> ts: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "ttx -> ts: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "ttx -> ts: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "ts -> ts: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "ts -> ts: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "ts -> ts: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "ts -> ts: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "tsx -> ts: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "tsx -> ts: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "tsx -> ts: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "tsx -> ts: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "tt -> tsx: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "tt -> tsx: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "tt -> tsx: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "tt -> tsx: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "ttx -> tsx: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "ttx -> tsx: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "ttx -> tsx: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "ttx -> tsx: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "ts -> tsx: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "ts -> tsx: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "ts -> tsx: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "ts -> tsx: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "tsx -> tsx: activation and completion",
+    "passed": true
+  },
+  {
+    "name": "tsx -> tsx: cross-file definition and rename",
+    "passed": true
+  },
+  {
+    "name": "tsx -> tsx: introduce and clear unsaved error",
+    "passed": true
+  },
+  {
+    "name": "tsx -> tsx: dependency edits refresh untouched consumer",
+    "passed": true
+  },
+  {
+    "name": "tt: match payload completion and inferred result hover",
+    "passed": true
+  },
+  {
+    "name": "tt: match payload errors map and clear",
+    "passed": true
+  },
+  {
+    "name": "tt: pipeline completion in source-kind context",
+    "passed": true
+  },
+  {
+    "name": "ttx: match payload completion and inferred result hover",
+    "passed": true
+  },
+  {
+    "name": "ttx: match payload errors map and clear",
+    "passed": true
+  },
+  {
+    "name": "ttx: JSX text does not offer pattern cases",
+    "passed": true
+  },
+  {
+    "name": "ttx: pipeline completion in source-kind context",
+    "passed": true
+  }
+]

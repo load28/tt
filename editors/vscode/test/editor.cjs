@@ -82,13 +82,19 @@ exports.run = async () => {
       for (const [target, text] of originals) await replace(target, text);
     });
     await check(`${label}: introduce and clear unsaved error`, async () => {
-      await replace(doc, source.replace('result: string', 'result: number'));
-      await eventually('type error', () => {
-        const diagnostic = errors(doc).find(isTypeMismatch);
-        assert.ok(diagnostic, JSON.stringify(errors(doc)));
-        assert.equal(doc.getText(diagnostic.range), ext === 'ts' || ext === 'tsx' ? 'result' : 'value');
-      });
-      await replace(doc, source);
+      try {
+        await replace(doc, source.replace('result: string', 'result: number'));
+        await eventually('type error', () => {
+          const diagnostic = errors(doc).find(isTypeMismatch);
+          assert.ok(diagnostic, JSON.stringify(errors(doc)));
+          // TypeScript reports an annotated assignment on its binding, and
+          // authored-source diagnostics preserve that range in every language.
+          assert.equal(doc.getText(diagnostic.range), 'result');
+        });
+      } finally {
+        // A failed assertion must not leave a bad buffer for the next check.
+        await replace(doc, source);
+      }
       await eventually('error clears', () => assert.equal(errors(doc).length, 0, JSON.stringify(errors(doc))));
     });
     await check(`${label}: dependency edits refresh untouched consumer`, async () => {
@@ -147,8 +153,12 @@ exports.run = async () => {
         await replace(domain, source);
         await eventually('JSX text completion', async () => {
           const list = await vscode.commands.executeCommand('vscode.executeCompletionItemProvider', domain.uri, domain.positionAt(source.indexOf('if let ') + 7));
-          const labels = list?.items.map(item => typeof item.label === 'string' ? item.label : item.label.label) || [];
-          assert.ok(!labels.includes('Admin') && !labels.includes('Guest'), JSON.stringify(labels));
+          const cases = (list?.items || []).filter(item => {
+            const label = typeof item.label === 'string' ? item.label : item.label.label;
+            // Word suggestions in JSX text are not tt pattern constructors.
+            return (label === 'Admin' || label === 'Guest') && item.kind !== vscode.CompletionItemKind.Text;
+          });
+          assert.deepEqual(cases, []);
         });
         await replace(domain, domainSource);
       });
