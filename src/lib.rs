@@ -88,6 +88,8 @@ mod span_index;
 pub mod stack;
 mod stdlib;
 pub(crate) mod typescript;
+#[doc(hidden)]
+pub use typescript::content_projection;
 mod val;
 mod verify;
 mod work;

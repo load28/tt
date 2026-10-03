@@ -687,7 +687,10 @@ fn build_watch_recovers_from_a_renamed_input() {
 /// TASK-615: a source whose path is not Unicode cannot be named by an
 /// ownership record, nor by TypeScript; the build refuses it before it
 /// writes anything, and the typed check reports it rather than failing.
-#[cfg(unix)]
+// This traversal fixture requires invalid-byte directory entries, which the
+// macOS filesystem rejects. Unix path validation without such entries is
+// covered by the ownership unit test and engine_cache's unsaved-overlay test.
+#[cfg(target_os = "linux")]
 #[test]
 fn an_input_path_that_is_not_unicode_is_refused_before_anything_is_written() {
     use std::os::unix::ffi::OsStrExt;

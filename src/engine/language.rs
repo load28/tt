@@ -484,6 +484,8 @@ pub(crate) struct ServiceSession {
     host_served: HashMap<PathBuf, String>,
     /// Service projections by source path, reused while the text matches.
     docs: HashMap<PathBuf, Arc<ServiceDoc>>,
+    /// The exact current projection graph, also consumed by native diagnostics.
+    diagnostic_modules: Vec<crate::typescript::backend::Module>,
     /// The raw items of the last completion answer, so one can be resolved
     /// later: the server resolves the item it produced, not a name. Keyed
     /// by (file, asked offset, label, source), the entry's identity.
@@ -500,8 +502,16 @@ type CompletionKey = (PathBuf, usize, String, Option<String>);
 /// buffer or disk), the TypeScript it emits, and the byte mappings between
 /// them. Unlike the typed pipeline's projection this never fails — a buffer
 /// mid-edit still projects, by the emit-map contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum CoordinateSpace {
+    Authored,
+    Projected,
+}
+
 #[derive(Debug)]
 pub(crate) struct ServiceDoc {
+    coordinates: CoordinateSpace,
+    identity_mapping: EmitMapping,
     source: String,
     code: String,
     mappings: Vec<EmitMapping>,
@@ -561,11 +571,36 @@ pub(super) struct ServedText<'a> {
 }
 
 impl ServiceDoc {
-    fn served(&self) -> ServedText<'_> {
+    fn service_code(&self) -> &str {
+        match self.coordinates {
+            CoordinateSpace::Authored => &self.source,
+            CoordinateSpace::Projected => &self.code,
+        }
+    }
+
+    fn projected(&self) -> ServedText<'_> {
         ServedText {
             code: &self.code,
             mappings: &self.mappings,
             inserted: &self.inserted,
+            source: &self.source,
+            splice: None,
+        }
+    }
+
+    fn served(&self) -> ServedText<'_> {
+        ServedText {
+            code: self.service_code(),
+            mappings: if self.coordinates == CoordinateSpace::Authored {
+                std::slice::from_ref(&self.identity_mapping)
+            } else {
+                &self.mappings
+            },
+            inserted: if self.coordinates == CoordinateSpace::Authored {
+                &[]
+            } else {
+                &self.inserted
+            },
             source: &self.source,
             splice: None,
         }

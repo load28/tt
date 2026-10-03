@@ -118,3 +118,18 @@ pub(super) fn write_owned_output(
     }
     Ok(())
 }
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use std::os::unix::ffi::OsStrExt;
+
+    #[test]
+    fn non_unicode_owner_is_rejected_without_a_file() {
+        let dir = crate::test_workspace::Workspace::new("non-unicode-owner");
+        let path = dir.join(std::ffi::OsStr::from_bytes(b"bad\xff.tt"));
+        let error = recorded_source(&path).unwrap_err();
+        assert!(error.contains("input path is not valid UTF-8"));
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 0);
+    }
+}

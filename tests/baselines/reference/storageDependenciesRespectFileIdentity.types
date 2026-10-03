@@ -1,0 +1,39 @@
+=== MixedCase/Source.tt ===
+declare const flag: boolean;
+>flag : const flag: boolean
+export const numbers = () => match(flag) { true => [1], false => [2] };
+>numbers : const numbers: () => number[]
+>flag : const flag: boolean
+export const nested = match(flag) { true => [numbers()], false => [] };
+>nested : const nested: number[][]
+>flag : const flag: boolean
+>numbers : const numbers: () => number[]
+export const bad = nested[0]![0]!.toUpperCase();
+>bad : const bad: any
+>nested : const nested: number[][]
+export const unknowns = () => match(flag) { true => [JSON.parse("1")], false => [JSON.parse("2")] };
+>unknowns : const unknowns: () => any[]
+>flag : const flag: boolean
+>JSON : var JSON: JSON
+>parse : (method) JSON.parse(text: string, reviver?: (this: any, key: string, value: any) => any): any
+>JSON : var JSON: JSON
+>parse : (method) JSON.parse(text: string, reviver?: (this: any, key: string, value: any) => any): any
+
+=== MixedCase/Consumer.tt ===
+declare const flag: boolean;
+>flag : const flag: boolean
+export const nested = match(flag) { true => [numbers()], false => [] };
+>nested : const nested: number[][]
+>flag : const flag: boolean
+>numbers : (alias) const numbers: () => number[]
+export const bad = nested[0]![0]!.toUpperCase();
+>bad : const bad: any
+>nested : const nested: number[][]
+export const unknownNested = match(flag) { true => [unknowns()], false => [] };
+>unknownNested : const unknownNested: any[][]
+>flag : const flag: boolean
+>unknowns : (alias) const unknowns: () => any[]
+export const worse = unknownNested[0]!.foo;
+>worse : const worse: any
+>unknownNested : const unknownNested: any[][]
+

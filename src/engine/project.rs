@@ -718,6 +718,28 @@ impl Project {
         self.check_requested(snapshot, request, &[])
     }
 
+    /// Ask for editor diagnostics on the exact graph already served by the
+    /// language surface. The backend retains projected spans and suggestions.
+    pub(super) fn editor_diagnostics(
+        &self,
+        modules: Vec<crate::typescript::backend::Module>,
+        target: PathBuf,
+    ) -> Result<Vec<crate::typescript::backend::EditorDiagnostic>, String> {
+        let query = crate::typescript::backend::Query {
+            modules,
+            sources: self.sources.clone(),
+            roots: vec![target.clone()],
+            editor_diagnostics: Some(target),
+            ..Default::default()
+        };
+        self.backend
+            .as_ref()
+            .map_err(Clone::clone)?
+            .ask(self.tsconfig.as_deref(), &self.root, &query)
+            .map(|answer| answer.editor_diagnostics)
+            .map_err(|failure| failure.message)
+    }
+
     /// [`Project::check`] with `requested` roots by request besides the
     /// named and open files, for this check only.
     fn check_requested(

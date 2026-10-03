@@ -228,7 +228,10 @@ fn std_package_dir(package: crate::StdPackage) -> PathBuf {
     Path::new("node_modules").join(package.name())
 }
 
-fn std_package_modules(root: &Path, package: crate::StdPackage) -> impl Iterator<Item = Module> {
+pub(crate) fn std_package_modules(
+    root: &Path,
+    package: crate::StdPackage,
+) -> impl Iterator<Item = Module> {
     let directory = root.join(std_package_dir(package));
     package
         .files_with_banner("")

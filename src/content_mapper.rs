@@ -61,20 +61,14 @@ use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use ttc::{Diagnostic, EmitAnchor, EmitMapping, ImportRewrite, Options, Severity, SourceKind};
-
-/// `SpanMapKind.Verbatim` — same length and content in both texts; the
-/// only kind edits may be written back through.
-const SPAN_VERBATIM: u64 = 0;
-/// `SpanMapKind.Atom` — a correspondence with different text, used here
-/// for compiler-written glue.
-const SPAN_ATOM: u64 = 1;
-/// `SpanMapFeature.None` — the span maps diagnostics (which are not
-/// feature-gated) and nothing else.
-const FEATURES_NONE: u64 = 0;
+#[cfg(test)]
+use ttc::content_projection::{FEATURES_NONE, SPAN_ATOM, SPAN_VERBATIM, free_intervals};
+use ttc::content_projection::{MapperExchange, mapper_diagnostic, span_mappings};
+use ttc::{ImportRewrite, Options, Severity, SourceKind};
 
 /// Everything the mapper keeps between requests.
 struct Session {
+    exchange: Option<MapperExchange>,
     /// Handles TypeScript has opened and not yet closed. The tt transform
     /// needs no per-project state — no options, no compiler options — so
     /// the set exists only to answer `closeProject` honestly.
@@ -86,7 +80,15 @@ struct Session {
 
 /// Runs the mapper until stdin closes.
 pub(crate) fn run() -> ExitCode {
+    let exchange = match MapperExchange::from_environment() {
+        Ok(exchange) => exchange,
+        Err(error) => {
+            eprintln!("ttc --content-mapper: {error}");
+            return ExitCode::FAILURE;
+        }
+    };
     let mut session = Session {
+        exchange,
         open_projects: HashSet::new(),
         ensured_roots: HashSet::new(),
     };
@@ -240,6 +242,24 @@ fn transform(
 
     let path = Path::new(&file_name);
     let source_kind = SourceKind::from_path(path).unwrap_or_default();
+    if let Some(exchange) = &session.exchange
+        && let Some(record) = exchange
+            .lookup(path, &content)
+            .map_err(|message| RpcError {
+                code: INTERNAL_ERROR,
+                message,
+            })?
+    {
+        if (record.response["text"]
+            .as_str()
+            .is_some_and(|text| text.contains("@tt/"))
+            || content.contains("@tt/"))
+            && let Some(root) = package_root(path)
+        {
+            ensure_std_packages(session, &root);
+        }
+        return Ok(record.response);
+    }
 
     // One-hop exhaustiveness, exactly as the CLI collects it: the file's
     // direct relative `.tt`/`.ttx` imports are read from disk and their
@@ -308,147 +328,6 @@ fn string_param(params: &serde_json::Value, name: &str) -> Result<String, RpcErr
         .as_str()
         .map(str::to_string)
         .ok_or_else(|| RpcError::invalid_params(format!("`{name}` must be a string")))
-}
-
-/// One tt diagnostic in the mapper's wire form.
-///
-/// Suggestions ride along in the text: the wire has one string, and "what
-/// is wrong" without "what to do about it" would strand the half of the
-/// diagnostic ttc keeps separate for editors.
-fn mapper_diagnostic(diagnostic: &Diagnostic) -> serde_json::Value {
-    let start = diagnostic.start.unwrap_or(0);
-    let length = diagnostic.end.unwrap_or(start).saturating_sub(start);
-    let mut message = diagnostic.message.clone();
-    for suggestion in &diagnostic.suggestions {
-        message.push_str("\nhelp: ");
-        message.push_str(&suggestion.message);
-    }
-    serde_json::json!({
-        "messageText": message,
-        "start": start,
-        "length": length,
-        "code": diagnostic.code.number(),
-    })
-}
-
-/// The span map of one emission: verbatim chunks as `Verbatim`, glue as
-/// `Atom` spans owned by the construct that wrote it.
-///
-/// A projection that recovered from malformed syntax compiled a copy of the
-/// source whose `recovered` byte ranges hold placeholders, so a chunk copied
-/// from inside one of them is not the original text there. TypeScript
-/// rejects a `Verbatim` span whose two sides differ (TS100029), so those
-/// stretches are `Atom` spans owned by the whole recovered range, with no
-/// features, like glue.
-///
-/// Virtual spans must not overlap, and anchors both nest and contain the
-/// verbatim chunks of their construct's copied text (a match's arm
-/// bodies), so each anchor contributes only the stretches nothing else
-/// claimed — innermost first, the same priority [`ttc::MappedEmit::anchor_at`]
-/// gives a consumer. `Atom` glue spans carry `SpanMapFeature.None`:
-/// diagnostics are not feature-gated and land on the construct's own
-/// source range, while navigation and rename — which must never resolve
-/// into glue — stay off.
-fn span_mappings(
-    mappings: &[EmitMapping],
-    anchors: &[EmitAnchor],
-    recovered: &[(usize, usize)],
-) -> Vec<serde_json::Value> {
-    // Occupied intervals of the virtual text, kept sorted by start.
-    let mut occupied: Vec<(usize, usize)> =
-        mappings.iter().map(|m| (m.out, m.out + m.len)).collect();
-    occupied.sort_unstable();
-
-    let mut recovered = recovered.to_vec();
-    recovered.sort_unstable();
-    let mut spans: Vec<(usize, serde_json::Value)> = Vec::new();
-    for mapping in mappings {
-        let src_end = mapping.src + mapping.len;
-        let mut cursor = mapping.src;
-        for &(recovery_start, recovery_end) in &recovered {
-            if recovery_end <= cursor || recovery_start >= src_end {
-                continue;
-            }
-            let overlap_start = recovery_start.max(cursor);
-            let overlap_end = recovery_end.min(src_end);
-            if overlap_start > cursor {
-                spans.push(verbatim_span(mapping, cursor, overlap_start));
-            }
-            let out = mapping.out + (overlap_start - mapping.src);
-            spans.push((
-                out,
-                serde_json::json!([
-                    out,
-                    overlap_end - overlap_start,
-                    recovery_start,
-                    recovery_end - recovery_start,
-                    SPAN_ATOM,
-                    FEATURES_NONE,
-                ]),
-            ));
-            cursor = overlap_end;
-        }
-        if cursor < src_end || mapping.len == 0 {
-            spans.push(verbatim_span(mapping, cursor, src_end));
-        }
-    }
-
-    for anchor in anchors {
-        let original_start = anchor.src;
-        let original_length = anchor.src_end.saturating_sub(anchor.src);
-        for (start, end) in free_intervals(anchor.out, anchor.end, &occupied) {
-            spans.push((
-                start,
-                serde_json::json!([
-                    start,
-                    end - start,
-                    original_start,
-                    original_length,
-                    SPAN_ATOM,
-                    FEATURES_NONE,
-                ]),
-            ));
-            let position = occupied.partition_point(|&(s, _)| s < start);
-            occupied.insert(position, (start, end));
-        }
-    }
-
-    spans.sort_by_key(|(start, _)| *start);
-    spans.into_iter().map(|(_, span)| span).collect()
-}
-
-fn verbatim_span(mapping: &EmitMapping, start: usize, end: usize) -> (usize, serde_json::Value) {
-    let out = mapping.out + (start - mapping.src);
-    let len = end - start;
-    (
-        out,
-        serde_json::json!([out, len, start, len, SPAN_VERBATIM]),
-    )
-}
-
-/// The stretches of `[start, end)` not covered by any `occupied` interval.
-fn free_intervals(start: usize, end: usize, occupied: &[(usize, usize)]) -> Vec<(usize, usize)> {
-    let mut free = Vec::new();
-    let mut cursor = start;
-    for &(taken_start, taken_end) in occupied {
-        if taken_end <= cursor {
-            continue;
-        }
-        if taken_start >= end {
-            break;
-        }
-        if taken_start > cursor {
-            free.push((cursor, taken_start.min(end)));
-        }
-        cursor = cursor.max(taken_end);
-        if cursor >= end {
-            return free;
-        }
-    }
-    if cursor < end {
-        free.push((cursor, end));
-    }
-    free
 }
 
 /// Variant declarations from the file's direct relative `.tt`/`.ttx`

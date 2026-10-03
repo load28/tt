@@ -58,6 +58,15 @@ impl Project {
         path: &Path,
         position: Position,
     ) -> Result<Option<HoverInfo>, String> {
+        let byte = source_byte(&doc.source, position);
+        if doc.shared_bindings.iter().any(|binding| {
+            binding
+                .occurrences
+                .iter()
+                .any(|o| o.src <= byte && byte <= o.src_end)
+        }) {
+            return Ok(None);
+        }
         let doc = doc.clone();
         let path = path.to_path_buf();
         let session = self.session();
@@ -71,7 +80,7 @@ impl Project {
                 "textDocument/hover",
                 serde_json::json!({
                     "textDocument": { "uri": uri },
-                    "position": lsp_position(u16_position(&doc.code, at)),
+                    "position": lsp_position(u16_position(doc.service_code(), at)),
                 }),
             )?;
             let (signature, documentation) = split_hover(&hover["contents"]);
@@ -83,8 +92,8 @@ impl Project {
             } else {
                 let (start, end) = match hover.get("range").filter(|r| !r.is_null()) {
                     Some(range) => (
-                        u16_offset(&doc.code, position_of(&range["start"])),
-                        u16_offset(&doc.code, position_of(&range["end"])),
+                        u16_offset(doc.service_code(), position_of(&range["start"])),
+                        u16_offset(doc.service_code(), position_of(&range["end"])),
                     ),
                     None => (at, at),
                 };
@@ -176,9 +185,7 @@ impl Project {
         );
         // The stand-in answered one question; the real projection is served
         // back before the answer is even read.
-        open_served(session, path, &doc.code);
-
-        let hover = answer.ok()?;
+        let hover = restore_document(session, path, doc, answer).ok()?;
         let (signature, documentation) = split_hover(&hover["contents"]);
         if signature.is_empty() {
             return None;
@@ -272,8 +279,7 @@ impl Project {
                 "position": lsp_position(u16_position(&question, mapper::to_utf16(&question, head.len()))),
             }),
         );
-        open_served(session, &path, &doc.code);
-        let targets = match answer? {
+        let targets = match restore_document(session, &path, &doc, answer)? {
             serde_json::Value::Array(items) => items,
             serde_json::Value::Null => Vec::new(),
             one => vec![one],
@@ -488,7 +494,7 @@ impl Project {
         for at in to_service_names(&doc, position) {
             let mut params = serde_json::json!({
                 "textDocument": { "uri": served_uri(session, &path) },
-                "position": lsp_position(u16_position(&doc.code, at)),
+                "position": lsp_position(u16_position(doc.service_code(), at)),
             });
             if let (Some(into), Some(from)) = (params.as_object_mut(), extra.as_object()) {
                 for (key, value) in from {
@@ -605,12 +611,17 @@ impl Project {
                     &doc.generated_names,
                     trigger,
                 )?;
+                // Scope walks inspect the emitted TypeScript even when
+                // the service request and reply use authored coordinates.
+                let projected_at =
+                    mapper::cursor_to_output(&doc.mappings, source_at, mapper::Affinity::Preceding)
+                        .expect("to_service_typed requires a projected cursor");
                 super::scope::restate_completions(
                     &mut plain,
                     &doc,
-                    doc.served(),
+                    doc.projected(),
                     kind,
-                    at,
+                    mapper::to_utf16(&doc.code, projected_at),
                     source_at,
                 );
                 if !member || (plain.member && !plain.items.is_empty()) {
@@ -635,14 +646,15 @@ impl Project {
         };
         session.probe_count += 1;
         open_served(session, &path, &probe.code);
-        let mut probed = ts_completions(
+        let answer = ts_completions(
             session,
             &path,
             probe.offset,
             probe.served(),
             &probe.generated_names,
             trigger,
-        )?;
+        );
+        let mut probed = restore_document(session, &path, &doc, answer)?;
         super::scope::restate_completions(
             &mut probed,
             &doc,
@@ -774,8 +786,7 @@ impl Project {
                 &emit.generated_names,
                 None,
             );
-            open_served(session, path, &doc.code);
-            let candidates: Vec<Discriminant> = answer?
+            let candidates: Vec<Discriminant> = restore_document(session, path, doc, answer)?
                 .items
                 .iter()
                 .filter(|item| item.kind != Some(crate::engine::CompletionItemKind::Keyword))
@@ -809,8 +820,11 @@ impl Project {
             &probe.generated_names,
             None,
         );
-        open_served(session, path, &doc.code);
-        Ok(answer?.items.into_iter().map(|item| item.label).collect())
+        Ok(restore_document(session, path, doc, answer)?
+            .items
+            .into_iter()
+            .map(|item| item.label)
+            .collect())
     }
 
     /// The signature and documentation behind one completion entry, fetched
@@ -849,61 +863,60 @@ impl Project {
                 None => return Ok(None),
             },
         };
-        let code = session
-            .served
-            .get(&path)
-            .cloned()
-            .unwrap_or_else(|| doc.code.clone());
-
-        let key = (
-            path.clone(),
-            at,
-            label.to_string(),
-            source.map(str::to_owned),
-        );
-        if !session.last_completion.contains_key(&key) {
-            // The server resolves the item *it* produced, not a name, so the
-            // list has to have been asked for first.
-            let text = match &installed {
-                Some(installed) => installed.served(),
-                None => doc.served(),
+        let answer = (|| -> Result<Option<CompletionDetail>, String> {
+            let text = installed
+                .as_ref()
+                .map_or_else(|| doc.served(), |probe| probe.served());
+            let key = (
+                path.clone(),
+                at,
+                label.to_string(),
+                source.map(str::to_owned),
+            );
+            if !session.last_completion.contains_key(&key) {
+                let _ = ts_completions(session, &path, at, text, &generated_names, None)?;
+            }
+            let Some(item) = session.last_completion.get(&key).cloned() else {
+                return Ok(None);
             };
-            let _ = ts_completions(session, &path, at, text, &generated_names, None)?;
-        }
-        let Some(item) = session.last_completion.get(&key).cloned() else {
-            return Ok(None);
-        };
-        let resolved = session.client.request("completionItem/resolve", item)?;
-        if resolved.is_null() {
-            return Ok(None);
-        }
-        let (mappings, inserted, splice) = match &installed {
-            Some(installed) => (
-                &installed.mappings,
-                &installed.inserted,
-                Some(installed.splice),
-            ),
-            None => (&doc.mappings, &doc.inserted, None),
-        };
-        let additional_edits = resolved["additionalTextEdits"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .map(|edit| {
-                source_edit(&code, mappings, inserted, &doc.source, splice, edit).map(|edit| {
-                    TextEdit {
+            let resolved = session.client.request("completionItem/resolve", item)?;
+            if resolved.is_null() {
+                return Ok(None);
+            }
+            let additional_edits = resolved["additionalTextEdits"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|edit| {
+                    source_edit(
+                        text.code,
+                        text.mappings,
+                        text.inserted,
+                        &doc.source,
+                        text.splice,
+                        edit,
+                    )
+                    .map(|edit| TextEdit {
                         new_text: tt_specifiers_in(session, &path, &edit.new_text),
                         ..edit
-                    }
+                    })
                 })
-            })
-            .collect::<Option<Vec<_>>>()
-            .unwrap_or_default();
-        let documentation = docs_text(&resolved["documentation"]);
-        Ok(Some(CompletionDetail {
-            signature: resolved["detail"].as_str().unwrap_or_default().to_string(),
-            documentation: self.source_links(&documentation),
-            additional_edits,
+                .collect::<Option<Vec<_>>>()
+                .unwrap_or_default();
+            Ok(Some(CompletionDetail {
+                signature: resolved["detail"].as_str().unwrap_or_default().to_string(),
+                documentation: docs_text(&resolved["documentation"]),
+                additional_edits,
+            }))
+        })();
+        let answer = if installed.is_some() {
+            restore_document(session, &path, &doc, answer)
+        } else {
+            answer
+        }?;
+        Ok(answer.map(|detail| CompletionDetail {
+            documentation: self.source_links(&detail.documentation),
+            ..detail
         }))
     }
 
@@ -935,7 +948,7 @@ impl Project {
             return Ok(Err(None));
         };
         let uri = served_uri(session, &path);
-        let lsp_at = lsp_position(u16_position(&doc.code, at));
+        let lsp_at = lsp_position(u16_position(doc.service_code(), at));
 
         // The server's own "can this be renamed?" — a keyword or a literal
         // answers null, and forcing it would rename nothing while looking
@@ -1085,7 +1098,11 @@ impl Project {
         let session = self.session();
         // A cursor the served text has no place for is asked through a
         // probe, as completion asks there.
-        let (code, mappings, at) = match to_service_typed(&doc, position) {
+        let source_at = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+        let projected_at =
+            mapper::cursor_to_output(&doc.mappings, source_at, mapper::Affinity::Preceding)
+                .map(|at| mapper::to_utf16(&doc.code, at));
+        let (code, mappings, at) = match projected_at {
             Some(at) => (doc.code.clone(), doc.mappings.clone(), at),
             None => {
                 let source_at = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
@@ -1099,6 +1116,7 @@ impl Project {
                 (probe.code, probe.mappings, probe.offset)
             }
         };
+        open_served(session, &path, &code);
         let kind = crate::SourceKind::from_path(&path).unwrap_or_default();
         let at = signature_position(&code, &mappings, kind, mapper::from_utf16(&code, at));
         let question = signature_question(&code, &mappings, &doc.source, kind, at);
@@ -1131,10 +1149,7 @@ impl Project {
                 },
             }),
         );
-        if question.is_some() {
-            open_served(session, &path, &code);
-        }
-        let help = help?;
+        let help = restore_document(session, &path, &doc, help)?;
         let Some(signatures) = help["signatures"].as_array().filter(|s| !s.is_empty()) else {
             return Ok(None);
         };
@@ -1188,13 +1203,23 @@ impl Project {
         {
             return Ok(Vec::new());
         }
-        let session = self.session();
-        let answer = session.client.request(
-            "textDocument/diagnostic",
-            serde_json::json!({ "textDocument": { "uri": served_uri(session, &path) } }),
-        )?;
-        let items = answer["items"].as_array().cloned().unwrap_or_default();
-        let served = served_uri(session, &path);
+        let module = if crate::engine::project::is_host_source(&path) {
+            path.clone()
+        } else {
+            module_path_of(&path)
+        };
+        let items = if self.session().client.serves_authored_sources() {
+            let mut modules = self.session().diagnostic_modules.clone();
+            if !modules.iter().any(|candidate| candidate.path == module) {
+                modules.push(crate::typescript::backend::Module {
+                    path: module.clone(),
+                    text: doc.code.clone(),
+                });
+            }
+            self.editor_diagnostics(modules, module.clone())?
+        } else {
+            projected_service_diagnostics(self.session(), &path, &doc)?
+        };
         let mut out = Vec::new();
         // The declaration table a translated message names its types from,
         // built on the first translation of this pass: most passes
@@ -1203,15 +1228,20 @@ impl Project {
         let mut declarations: Option<Vec<crate::analysis::DeclaredVariant>> = None;
         let mut translated_seen: HashSet<(usize, crate::AnchorKind, &'static str)> = HashSet::new();
         for item in items {
-            let severity = ServiceSeverity::from_lsp(item["severity"].as_u64());
-            let tags: Vec<ServiceTag> = item["tags"]
-                .as_array()
-                .into_iter()
-                .flatten()
-                .filter_map(|tag| tag.as_u64().and_then(ServiceTag::from_lsp))
-                .collect();
-            let start = u16_offset(&doc.code, position_of(&item["range"]["start"]));
-            let end = u16_offset(&doc.code, position_of(&item["range"]["end"]));
+            let severity = match item.category {
+                0 => ServiceSeverity::Warning,
+                2 => ServiceSeverity::Hint,
+                3 => ServiceSeverity::Information,
+                _ => ServiceSeverity::Error,
+            };
+            let mut tags = Vec::new();
+            if item.unnecessary {
+                tags.push(ServiceTag::Unnecessary);
+            }
+            if item.deprecated {
+                tags.push(ServiceTag::Deprecated);
+            }
+            let (start, end) = (item.start, item.end);
             let Some((s, e, origin)) = diagnostic_source_span(&doc, start, end) else {
                 continue;
             };
@@ -1241,8 +1271,8 @@ impl Project {
             // render as an invisible squiggle; give it the character it
             // points at.
             let e = if e > s { e } else { s + 1 };
-            let raw = item["message"].as_str().unwrap_or_default().to_string();
-            let code = item["code"].as_u64().unwrap_or(0) as u32;
+            let raw = item.message;
+            let code = item.code;
             let glue = projected_anchor.or_else(|| glue_anchor(&doc, start));
             // The diagnostic's secondary places: the pipeline anchor's
             // producing step, then the checker's own related information —
@@ -1262,15 +1292,15 @@ impl Project {
                     message: "the piped value is produced here".to_string(),
                 });
             }
-            // The checker's `relatedInformation`, which the service sends
-            // because the session declares the capability
-            // (`typescript::service`).
-            for entry in item["relatedInformation"].as_array().into_iter().flatten() {
-                if entry["location"]["uri"].as_str() != Some(served.as_str()) {
+            // Related places retain their generated coordinates in the
+            // native API, just like the primary diagnostic.
+            for entry in item.related {
+                if crate::engine::normalize_document_path(&entry.file).ok()
+                    != crate::engine::normalize_document_path(&module).ok()
+                {
                     continue;
                 }
-                let from = u16_offset(&doc.code, position_of(&entry["location"]["range"]["start"]));
-                let to = u16_offset(&doc.code, position_of(&entry["location"]["range"]["end"]));
+                let (from, to) = (entry.start, entry.end);
                 let Some((from, to, _)) = diagnostic_source_span(&doc, from, to) else {
                     continue;
                 };
@@ -1278,7 +1308,7 @@ impl Project {
                 related.push(ServiceRelated {
                     path: None,
                     range: source_range(&doc.source, from, to),
-                    message: entry["message"].as_str().unwrap_or_default().to_string(),
+                    message: entry.message,
                 });
                 if related.len() >= 3 {
                     break;
@@ -1425,6 +1455,7 @@ impl Project {
                 uris: HashMap::new(),
                 host_served: HashMap::new(),
                 docs: HashMap::new(),
+                diagnostic_modules: Vec::new(),
                 last_completion: HashMap::new(),
                 last_probe: None,
                 probe_count: 0,
@@ -1457,7 +1488,7 @@ impl Project {
                 }
             }
 
-            let doc = serve_one(session, overlays, &canonical)
+            let doc = serve_one(session, overlays, &canonical)?
                 .ok_or_else(|| format!("cannot read {}", canonical.display()))?;
 
             // The `.tt` modules it imports are served too, transitively. That is
@@ -1479,7 +1510,7 @@ impl Project {
                     if !seen.insert(target.clone()) {
                         continue;
                     }
-                    if let Some(imported) = serve_one(session, overlays, &target) {
+                    if let Some(imported) = serve_one(session, overlays, &target)? {
                         stack.push((target, imported));
                     }
                 }
@@ -1497,30 +1528,78 @@ impl Project {
         let snapshot = self
             .update(&files)
             .map_err(|blocked| blocked.error.to_string())?;
+        let std_modules: Vec<_> = projection::served_std_packages(snapshot.files())
+            .into_iter()
+            .flat_map(|package| projection::std_package_modules(&self.root, package))
+            .collect();
         let session = self.session();
+        let mut revisions = Vec::new();
         for projected in snapshot.files {
             let path = &projected.source_path;
-            if session.served.get(path) != Some(&projected.emit.code) {
-                open_served(session, path, &projected.emit.code);
+            let doc = Arc::new(ServiceDoc {
+                coordinates: if session.client.serves_authored_sources() {
+                    CoordinateSpace::Authored
+                } else {
+                    CoordinateSpace::Projected
+                },
+                identity_mapping: EmitMapping {
+                    src: 0,
+                    out: 0,
+                    len: projected.source.len(),
+                },
+                source: projected.source.clone(),
+                code: projected.emit.code.clone(),
+                mappings: projected.emit.mappings.clone(),
+                anchors: projected.emit.anchors.clone(),
+                declared_names: projected.emit.declared_names.clone(),
+                shared_bindings: projected.emit.shared_bindings.clone(),
+                destructured_lists: projected.emit.destructured_lists.clone(),
+                completion_scopes: projected.emit.completion_scopes.clone(),
+                recovered: projected.recovered.clone(),
+                tt_diagnostics: projected.tt_diagnostics.clone(),
+                generated_names: projected.emit.generated_names.clone(),
+                inserted: projected.emit.inserted.clone(),
+                faithful: true,
+            });
+            revisions.push((path.clone(), doc));
+        }
+        if !crate::engine::project::is_host_source(&canonical)
+            && !revisions.iter().any(|(path, _)| path == &canonical)
+        {
+            revisions.push((canonical.clone(), doc.clone()));
+        }
+        if session.client.serves_authored_sources() {
+            let graph = revisions
+                .iter()
+                .map(|(path, doc)| {
+                    (
+                        path.clone(),
+                        (doc.source.clone(), document_response(path, doc)),
+                    )
+                })
+                .collect();
+            if session.client.sync_projection_graph(graph)? {
+                session.last_completion.clear();
+                session.last_probe = None;
             }
-            session.docs.insert(
-                path.clone(),
-                Arc::new(ServiceDoc {
-                    source: projected.source.clone(),
-                    code: projected.emit.code.clone(),
-                    mappings: projected.emit.mappings.clone(),
-                    anchors: projected.emit.anchors.clone(),
-                    declared_names: projected.emit.declared_names.clone(),
-                    shared_bindings: projected.emit.shared_bindings.clone(),
-                    destructured_lists: projected.emit.destructured_lists.clone(),
-                    completion_scopes: projected.emit.completion_scopes.clone(),
-                    recovered: projected.recovered.clone(),
-                    tt_diagnostics: projected.tt_diagnostics.clone(),
-                    generated_names: projected.emit.generated_names.clone(),
-                    inserted: projected.emit.inserted.clone(),
-                    faithful: true,
-                }),
-            );
+        }
+        session.diagnostic_modules = revisions
+            .iter()
+            .map(|(path, doc)| crate::typescript::backend::Module {
+                path: module_path_of(path),
+                text: doc.code.clone(),
+            })
+            .chain(session.host_served.iter().map(|(path, text)| {
+                crate::typescript::backend::Module {
+                    path: path.clone(),
+                    text: text.clone(),
+                }
+            }))
+            .collect();
+        session.diagnostic_modules.extend(std_modules);
+        for (path, doc) in revisions {
+            open_document(session, &path, &doc)?;
+            session.docs.insert(path, doc);
         }
         let doc = session.docs.get(&canonical).cloned().unwrap_or(doc);
         Ok((doc, canonical))

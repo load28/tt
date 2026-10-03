@@ -387,6 +387,7 @@ fn job_json(query: &Query) -> serde_json::Value {
             }))
             .collect::<Vec<_>>(),
         "contextualOnly": query.contextual_only,
+        "editorDiagnostics": query.editor_diagnostics,
         "inferJoinTypes": query.infer_join_types,
         "emitDeclarations": query.emit_declarations,
         "unparsedDocuments": query.unparsed_documents,
@@ -466,6 +467,29 @@ fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
             annotation,
             inferred,
             provisional,
+        });
+    }
+    for d in array(&value, "editorDiagnostics") {
+        answers.editor_diagnostics.push(EditorDiagnostic {
+            file: PathBuf::from(d["file"].as_str().unwrap_or_default()),
+            start: d["start"].as_u64().unwrap_or_default() as usize,
+            end: d["end"].as_u64().unwrap_or_default() as usize,
+            code: d["code"].as_u64().unwrap_or_default() as u32,
+            message: d["message"].as_str().unwrap_or_default().to_string(),
+            category: d["category"].as_u64().unwrap_or(1) as u32,
+            unnecessary: d["unnecessary"].as_bool().unwrap_or(false),
+            deprecated: d["deprecated"].as_bool().unwrap_or(false),
+            related: array(d, "related")
+                .iter()
+                .filter_map(|r| {
+                    Some(RelatedInformation {
+                        file: PathBuf::from(r["file"].as_str()?),
+                        start: r["start"].as_u64()? as usize,
+                        end: r["end"].as_u64()? as usize,
+                        message: r["message"].as_str()?.to_string(),
+                    })
+                })
+                .collect(),
         });
     }
     for d in array(&value, "diagnostics") {

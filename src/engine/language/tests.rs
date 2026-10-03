@@ -789,3 +789,46 @@ fn typescript_offers_every_keyword_only_outside_type_and_member_positions() {
         assert_eq!(offers_all_keywords_at(&code), all, "{line}");
     }
 }
+
+#[test]
+fn a_failed_probe_restores_the_previous_document() {
+    let dir = crate::test_workspace::Workspace::in_repo("failed-probe-restoration");
+    if service_binary(&dir).is_err() {
+        assert!(
+            std::env::var_os("TTC_REQUIRE_TSGO").is_none(),
+            "TypeScript is required"
+        );
+        return;
+    }
+    let path = dir.join("main.tt");
+    let source = "export const value = 1;\nvalue;\n";
+    std::fs::write(&path, source).unwrap();
+    let path = path.canonicalize().unwrap();
+    let mut project = crate::engine::Engine::new(None)
+        .open_project(
+            &[path.to_string_lossy().into_owned()],
+            &crate::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let position = Position {
+        line: 1,
+        character: 0,
+    };
+    let before = project.hover(&path, position).unwrap().unwrap();
+    let session = project.service.as_mut().unwrap();
+    let doc = session.docs.get(&path).unwrap().clone();
+    open_served(
+        session,
+        &path,
+        "export const value = 'temporary';\nvalue;\n",
+    );
+    let failed: Result<(), String> = Err("injected probe request failure".into());
+    assert_eq!(
+        restore_document(session, &path, &doc, failed).unwrap_err(),
+        "injected probe request failure"
+    );
+    assert_eq!(session.served.get(&path), Some(&doc.code));
+    let after = project.hover(&path, position).unwrap().unwrap();
+    assert_eq!(after.signature, before.signature);
+    assert_eq!(after.range, before.range);
+}

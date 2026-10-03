@@ -823,3 +823,207 @@ const obj = { twice(n: number) { return n * 2; } };\n";
         );
     }
 }
+
+#[test]
+fn installed_mapper_keeps_direct_and_declaration_map_targets_in_source_coordinates() {
+    require_tsgo!();
+    let api = "export variant Shape { Point, Circle(radius: number) }\nexport function work(n: number): number { return n; }\n";
+    let main = "import { work } from \"./contract.js\";\nimport { work as original } from \"./api.tt\";\nwork(1);\noriginal(2);\n";
+    let dir = project(&[
+        ("src/api.tt", api),
+        ("src/main.tt", main),
+        ("src/contract.d.ts", "export declare function work(n: number): number;\n//# sourceMappingURL=contract.d.ts.map\n"),
+        ("src/contract.d.ts.map", r#"{"version":3,"file":"contract.d.ts","sourceRoot":"","sources":["api.tt"],"names":[],"mappings":"wBACgB,IAAI"}"#),
+    ]);
+    common::installed_mapper::install(&dir);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let target = dir.join("src/api.tt").canonicalize().unwrap();
+    let mut service = open_service(&file);
+    for call in ["original(2)", "work(1)"] {
+        let found = service.definition(&file, utf16_position(main, call)).unwrap();
+        assert_eq!(found.len(), 1, "{call}: {found:?}");
+        assert_eq!(found[0].path, target);
+        assert_eq!(found[0].range.start, utf16_position(api, "work(n"));
+        assert_eq!(found[0].range.end.character - found[0].range.start.character, 4);
+    }
+}
+
+#[test]
+fn installed_mapper_preserves_editor_ranges_after_lowering() {
+    require_tsgo!();
+    let source = "export variant Shape { Point, Circle(radius: number) }\nexport const value = 1;\nvalue.toUpperCase();\nexport function sum(n: number) { return n + value; }\nsum(1);\n";
+    let dir = project(&[("src/main.tt", source)]);
+    common::installed_mapper::install(&dir);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut service = open_service(&file);
+    let called = utf16_position(source, "value.toUpperCase");
+    let hover = service.hover(&file, called).unwrap().expect("number hover");
+    assert_eq!(hover.range.start, called);
+    assert!(hover.signature.contains("value"), "{hover:?}");
+    let errors = service.service_diagnostics(&file).unwrap();
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert_eq!(errors[0].range.start, utf16_position(source, "toUpperCase"));
+    let edits = service.rename(&file, called).unwrap().expect("rename number");
+    assert_eq!(edits.len(), 3, "{edits:?}");
+    for edit in edits { assert_eq!(edit.location.range.end.character - edit.location.range.start.character, 5); }
+    let mut call = utf16_position(source, "sum(1)");
+    call.character += 4;
+    assert!(service.signature_help(&file, call).unwrap().is_some());
+    assert_eq!(service.hover(&file, called).unwrap().unwrap().range.start, called);
+    let symbols = service.document_symbols(&file).unwrap();
+    assert!(symbols.iter().any(|symbol| symbol.name == "sum" && symbol.selection_range.start.line == 3), "{symbols:?}");
+    let tokens = service.semantic_tokens(&file).unwrap();
+    assert!(tokens.iter().any(|token| token.range.start == called), "{tokens:?}");
+}
+
+#[test]
+fn installed_mapper_keeps_shared_bindings_as_one_editable_symbol() {
+    require_tsgo!();
+    let source = "export variant Token { A(value: number), B(value: number), End }\ndeclare const t: Token;\nexport const result = match (t) { A(value: n) | B(value: n) => n, _ => 0 };\n";
+    let dir = project(&[("src/main.tt", source)]);
+    common::installed_mapper::install(&dir);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut service = open_service(&file);
+    let first = utf16_position(source, "n) |");
+    let second = utf16_position(source, "n) =>");
+    let body = utf16_position(source, "n, _");
+    for query in [first, second, body] {
+        let definitions = service.definition(&file, query).unwrap();
+        let starts: Vec<_> = definitions.iter().map(|place| place.range.start).collect();
+        assert!(starts.contains(&first) && starts.contains(&second), "{query:?}: {definitions:?}");
+        let references = service.references(&file, query).unwrap();
+        for expected in [first, second, body] {
+            assert!(references.iter().any(|reference| reference.location.range.start == expected), "{query:?}: {references:?}");
+        }
+        let edits = service.rename(&file, query).unwrap().expect("shared binding can be renamed");
+        assert_eq!(edits.len(), 3, "{edits:?}");
+        for expected in [first, second, body] {
+            assert!(edits.iter().any(|edit| edit.location.range.start == expected), "{edits:?}");
+        }
+    }
+}
+
+#[test]
+fn installed_mapper_refreshes_context_without_changing_the_tt_source() {
+    require_tsgo!();
+    let source = "import type { Input } from './host';\nexport const read = (x: Input) => match (true) { true => x.value, false => x.value };\n";
+    let dir = project(&[("src/main.tt", source), ("src/host.ts", "export type Input = { value: string };\n")]);
+    common::installed_mapper::install(&dir);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let host = dir.join("src/host.ts").canonicalize().unwrap();
+    let mut service = open_service(&file);
+    let at = utf16_position(source, "read =");
+    let before_code = service.update(std::slice::from_ref(&file)).unwrap().files()[0].code().to_string();
+    let before = service.hover(&file, at).unwrap().expect("contextual string");
+    assert!(before.signature.contains("string"), "{before:?}");
+    service.open_document(host, "export type Input = { value: number };\n".into());
+    let after_code = service.update(std::slice::from_ref(&file)).unwrap().files()[0].code().to_string();
+    assert_ne!(after_code, before_code, "the contextual projection must change");
+    let after = service.hover(&file, at).unwrap().expect("contextual number");
+    assert!(after.signature.contains("number"), "{after:?}");
+    assert_eq!(after.range, before.range);
+}
+
+#[test]
+fn installed_mapper_keeps_ttx_source_roots_and_unsaved_sessions_separate() {
+    require_tsgo!();
+    let source = "export variant View { Empty, Count(value: number) }\nexport function render(n: number) { return <span>{n}</span>; }\n";
+    let main = "import { render } from './contract.js';\nimport { render as direct } from './source files/ui.ttx';\nrender(1);\ndirect(2);\n";
+    let dir = project(&[
+        ("src/main.tt", main),
+        ("src/contract.d.ts", "export declare function render(n: number): unknown;\n//# sourceMappingURL=contract.d.ts.map\n"),
+        ("src/contract.d.ts.map", r#"{"version":3,"file":"contract.d.ts","sourceRoot":"source files/","sources":["ui.ttx"],"names":[],"mappings":"wBACgB,MAAM"}"#),
+    ]);
+    fs::create_dir_all(dir.join("src/source files")).unwrap();
+    write(&dir, "src/source files/ui.ttx", source);
+    common::installed_mapper::install(&dir);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let target = dir.join("src/source files/ui.ttx").canonicalize().unwrap();
+    let mut first = open_service(&file);
+    for call in ["render(1)", "direct(2)"] {
+        let found = first.definition(&file, utf16_position(main, call)).unwrap();
+        assert_eq!(found.len(), 1, "{call}: {found:?}");
+        assert_eq!(found[0].path, target);
+        assert_eq!(found[0].range.start, utf16_position(source, "render(n"));
+    }
+    let mut second = open_service(&file);
+    let first_source = format!("\n{source}");
+    let second_source = format!("\n\n{source}");
+    first.open_document(target.clone(), first_source.clone());
+    second.open_document(target, second_source.clone());
+    for select_first in [true, false, true] {
+        let (service, text) = if select_first { (&mut first, &first_source) } else { (&mut second, &second_source) };
+        let found = service.definition(&file, utf16_position(main, "direct(2)")).unwrap();
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].range.start, utf16_position(text, "render(n"));
+    }
+}
+
+#[test]
+fn installed_mapper_preserves_the_configured_auto_import_name() {
+    require_tsgo!();
+    let dir = project(&[("src/fooBar.tt", "export default function () {}\n"), ("src/main.tt", "fooB\n")]);
+    common::installed_mapper::install(&dir);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut service = open_service(&file);
+    let answer = service.completion(&file, ttc::engine::Position { line: 0, character: 4 }, false).unwrap();
+    assert!(answer.items.iter().any(|item| item.label == "fooBar"), "{:?}", answer.items);
+    assert!(!answer.items.iter().any(|item| item.label == "fooBarTt"));
+}
+
+#[test]
+fn installed_mapper_without_exchange_support_reports_an_explicit_error() {
+    require_tsgo!();
+    let dir = project(&[("src/main.tt", "export const value = 1;\nvalue;\n")]);
+    common::installed_mapper::install(&dir);
+    let package = dir.join("node_modules/@openload28/tt-lang");
+    // Simulate an older mapper that transforms normally but cannot acknowledge
+    // contextual projections. Its otherwise valid reply must not be accepted.
+    fs::write(package.join("old.cjs"), format!(
+        "delete process.env.TTC_SERVICE_PROJECTIONS;\nconst child = require('node:child_process').spawn({}, ['--content-mapper'], {{stdio: 'inherit'}});\nchild.on('exit', code => process.exit(code ?? 1));\n",
+        serde_json::to_string(env!("CARGO_BIN_EXE_ttc")).unwrap()
+    )).unwrap();
+    let manifest = package.join("package.json");
+    let mut value: serde_json::Value = serde_json::from_str(&fs::read_to_string(&manifest).unwrap()).unwrap();
+    value["typescript"]["contentMapper"]["exec"] = serde_json::json!(["node", package.join("old.cjs")]);
+    fs::write(manifest, value.to_string()).unwrap();
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut service = open_service(&file);
+    let error = service.definition(&file, ttc::engine::Position { line: 1, character: 0 }).unwrap_err();
+    assert!(error.contains("did not acknowledge"), "{error}");
+}
+
+#[test]
+fn installed_mapper_preserves_completion_scope_after_lowering() {
+    require_tsgo!();
+    let (source, at) = at_cursor("declare const x: number;\nfunction f() { const answer = match (@@x) { _ => Math }; }\n");
+    let dir = project(&[("src/main.tt", &source)]);
+    common::installed_mapper::install(&dir);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut service = open_service(&file);
+    let answer = service.completion(&file, at, false).unwrap();
+    for excluded in ["answer", "declare", "namespace"] {
+        assert!(!answer.items.iter().any(|item| item.label == excluded), "unexpected {excluded}");
+    }
+    assert!(answer.items.iter().any(|item| item.label == "x"));
+}
+
+#[test]
+fn installed_mapper_preserves_diagnostic_provenance() {
+    require_tsgo!();
+    let pipeline = "const inc = (n: number): number => n + 1;\nconst shout = (s: string): string => s.toUpperCase();\nconst answer = 1 |> inc |> shout |> inc;\n";
+    let payloads = include_str!("../cases/editor/unusedPayloadList.tt");
+    for (source, expected) in [(pipeline, 2), (payloads, 5)] {
+        let dir = project(&[("src/main.tt", source)]);
+        let file = dir.join("src/main.tt").canonicalize().unwrap();
+        let before = open_service(&file).service_diagnostics(&file).unwrap();
+        assert_eq!(before.len(), expected, "{before:?}");
+        common::installed_mapper::install(&dir);
+        let mut service = open_service(&file);
+        let actual = service.service_diagnostics(&file).unwrap();
+        assert_eq!(actual, before);
+        // Diagnostics must not replace the authored document with a projection.
+        let at = utf16_position(source, if expected == 2 { "inc =" } else { "Failure extends" });
+        assert_eq!(service.hover(&file, at).unwrap().unwrap().range.start, at);
+    }
+}

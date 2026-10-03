@@ -39,7 +39,12 @@ fn source_walk_skips_excluded_names_before_following_links() {
             &ProjectOptions::default(),
         )
         .unwrap();
-    assert_eq!(project.scan().unwrap(), vec![hidden_source, source]);
+    let mut expected = vec![
+        hidden_source.canonicalize().unwrap(),
+        source.canonicalize().unwrap(),
+    ];
+    expected.sort();
+    assert_eq!(project.scan().unwrap(), expected);
 }
 
 #[test]
@@ -368,4 +373,24 @@ fn project_scan_deduplicates_file_symlinks() {
         )
         .unwrap();
     assert_eq!(project.scan().unwrap(), vec![entry]);
+}
+
+#[cfg(unix)]
+#[test]
+fn non_unicode_overlay_is_rejected_before_loading() {
+    use std::os::unix::ffi::OsStrExt;
+
+    let dir = Workspace::new("non-unicode-overlay");
+    let engine = Engine::new(None);
+    let mut project = engine
+        .open_document_project(&dir.join("main.tt"), &ProjectOptions::default())
+        .unwrap();
+    let path = dir.join(std::ffi::OsStr::from_bytes(b"bad\xff.tt"));
+    project.open_document(path.clone(), "export const value = 1;".into());
+    let error = match project.update(&[path]) {
+        Err(error) => error,
+        Ok(_) => panic!("invalid path accepted"),
+    };
+    assert!(error.error.message.contains("path is not valid UTF-8"));
+    assert_eq!(fs::read_dir(&dir).unwrap().count(), 0);
 }

@@ -59,7 +59,7 @@ HEAD `c6b013f5`(로컬 클론·빌드)와 TASK-086 완료 시점의 main이다.
 | Server ↛ semantic, Session 소유 | **채택** | Node LSP는 `engine.ts`(EngineSession 클라이언트) 하나를 소유. semantic은 전부 `ttc --server` 뒤의 엔진 |
 | Project Session / 문서 lifecycle | **채택** | didOpen/didChange/didClose → 엔진의 `openDocument`/`updateDocument`/`closeDocument`. LSP는 문서 상태의 소유자가 아니다 |
 | "요청은 앞선 편집을 본다" 보장 | **변형** | 큐 대신 **파이프 순서**: 문서 sync는 동기 write, 서버는 순차 처리 — 같은 보장을 더 작은 기계로 |
-| pull diagnostics | **변형(현상 유지)** | 엔진↔tsgo 사이는 pull(`textDocument/diagnostic`), 에디터↔TT LSP는 기존 push 유지 — VSCode UX 불변이 우선 |
+| Editor diagnostics | **Adapted (TASK-737)** | Engine uses native per-file diagnostics; editor-facing push behavior is unchanged. |
 | request cancellation / 요청별 병렬 | **기각(현재)** | 서버는 순차 + 클라이언트 타임아웃 + 버전 기반 stale-drop(기존 것)으로 동등한 UX. 취소·병렬은 측정된 필요가 생기면 (스냅샷이 이미 불변이라 자리는 있다) |
 | recover 격리 | **채택** | 요청 실패는 그 요청의 error 응답; 세션은 산다. tsgo LSP 사망 → 다음 질문이 **재시작**(구 구현에 없던 복구, §38) |
 | position encoding 협상 | **변형** | VSCode 기본(UTF-16)을 프로토콜 좌표로 고정, 엔진 내부에서 tt 바이트↔UTF-16 변환을 독점. 협상은 다중 클라이언트가 생기면 |
@@ -73,7 +73,7 @@ HEAD `c6b013f5`(로컬 클론·빌드)와 TASK-086 완료 시점의 main이다.
 |---|---|---|
 | hover / definition / rename / signature help / completion resolve | **tsgo LSP** (`typescript/service.rs`) | API 서버에 해당 표면 없음 (B절) |
 | completion | tsgo LSP | API에 `getCompletionsAtPosition`이 있으나 resolve가 item-echo 방식(LSP형) — 한 백엔드로 통일 |
-| TS 진단 (에디터) | tsgo LSP pull | parse-error 가드(코드<2000) 등 기존 계약이 이 표면 위에 정의됨 |
+| Editor TypeScript diagnostics | Native API, per file | Generated spans and lowering provenance are retained; see TASK-737 below. |
 | typed tt 진단·소진성·val | tsgo **API server** (기존 Query/Answers) | TASK-073~085의 규범 경로 그대로 |
 | tt 구조 기능 (완성의 variant 목록, 문서 심볼, quick fix의 삽입 지점) | **엔진** (`engine/declarations.rs`, `declarations`) | 규칙의 단일 원천은 resolve — 정규식 재구현(구 analysis.ts)은 컴파일러와 다른 답을 했다 (TASK-127·128) |
 | tt 이름 hover/definition (variant·케이스·필드) | **엔진** (`engine/names.rs`, `ttSymbol`) | 위와 같은 이유지만 구현이 엔진에 있어야 규칙이 하나다 — 정규식 재구현은 컴파일러와 다른 답을 했다 (TASK-105) |
@@ -469,3 +469,38 @@ toServiceOffset/fromServiceOffset/fromServiceSpan · probe 설치/직렬화 ·
   명시 종료.
 - **실패 격리**: 요청 실패 = 그 요청의 빈 답 + 로그. 엔진 서버 부재 =
   기능 침묵(기존 "tsgo 없음"과 동일 UX) + tt 구조 기능 유지.
+
+
+## Authored documents and projected operations (TASK-733, TASK-737)
+
+Normal installed-mapper documents contain authored text at their source URI.
+A private, versioned projection exchange supplies the exact contextual emission
+for that source revision. The service publishes the entire graph atomically
+before document notifications; unchanged source with a changed projection
+replaces the TypeScript host to invalidate its content-keyed mapper cache.
+Other sessions never share an exchange. Missing protocol acknowledgment is an
+explicit error, and user configuration and installed packages remain unchanged.
+
+Cross-file source targets already use authored coordinates, including declaration
+maps. Only virtual `.tt.ts` and `.ttx.tsx` targets require inverse mapping.
+Temporary generated probes use those virtual identities and restore the authored
+document on success and error. Completion scope analysis always reads emitted
+TypeScript and its projected cursor, independently of the request coordinates.
+Emitter-owned declaration names and shared bindings supply mappings that raw
+copied spans cannot express; shared edits expand to their authored occurrences.
+
+Installed-mapper editor diagnostics use the native API on the same contextual projection graph,
+including standard packages and host overlays. Per-file syntactic, semantic,
+suggestion and enabled declaration diagnostics retain generated UTF-16 spans,
+category, tags and related places. The engine applies its existing lowering
+anchors and payload-list mappings before producing source ranges. This replaces
+the historical LSP diagnostic route above, whose content-map conversion can
+aggregate generated spans and lose provenance. CLI diagnostic collection is
+unchanged. Unconfigured and foreign-mapper editor sessions retain their existing
+virtual-file LSP arrangement and normalize its replies to the same projected
+diagnostic contract.
+
+The editor case `declarationMapAuthoredTarget` compares declaration-map and direct
+navigation against a TypeScript twin. Genuine installed-mapper native tests cover
+`.ttx`, spaced source roots, isolated unsaved sessions, contextual refresh,
+completion scope, shared symbols, diagnostic provenance and protocol rejection.

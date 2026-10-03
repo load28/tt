@@ -1,0 +1,25 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./MixedCase/Consumer.tt → $DIR/out/MixedCase/Consumer.ts
+ttc: ./MixedCase/Source.tt → $DIR/out/MixedCase/Source.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2339]: Property 'toUpperCase' does not exist on type 'number'.
+ --> MixedCase/Consumer.tt:4:35
+  |
+4 | export const bad = nested[0]![0]!.toUpperCase();
+  |                                   ^^^^^^^^^^^
+error[ts2339]: Property 'foo' does not exist on type 'any[]'.
+ --> MixedCase/Consumer.tt:6:40
+  |
+6 | export const worse = unknownNested[0]!.foo;
+  |                                        ^^^
+error[ts2339]: Property 'toUpperCase' does not exist on type 'number'.
+ --> MixedCase/Source.tt:4:35
+  |
+4 | export const bad = nested[0]![0]!.toUpperCase();
+  |                                   ^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+MixedCase/Consumer.ts(41,35): error TS2339: Property 'toUpperCase' does not exist on type 'number'.
+MixedCase/Consumer.ts(62,40): error TS2339: Property 'foo' does not exist on type 'any[]'.
+MixedCase/Source.ts(62,35): error TS2339: Property 'toUpperCase' does not exist on type 'number'.

@@ -100,6 +100,14 @@ be profiled and fixed in its owning layer with byte-identical output.
   failing on this PR until that cost is reduced; this record is the answer
   to its message.
 
+## Current follow-up
+
+TASK-733 fixes declaration-map targets when authored and served document
+identities are distinct; the installed-mapper case with a shared URI remains
+open in that task. TASK-734 fixes a macOS reachability-oracle path identity
+error found during the new verification run. These follow-ups do not establish
+completion of this task's full verification until their final logs are recorded.
+
 ## Work log
 
 - 2026-10-01: Read PR metadata and its final comment; there are no inline
@@ -255,6 +263,30 @@ parity; do not treat the interrupted logs as completed runs.
   TypeScript behaviour. Real VS Code UI, large-project latency, and macOS/Windows
   editor behaviour cannot be established by these Linux test runs.
 
+### Follow-up resolutions (2026-10-03)
+
+- TASK-733 and TASK-737 resolve TASK-730's definition failure with explicit coordinate ownership and the authored-source serving contract.
+- TASK-734 fixes canonical file identity in both the comparison harness and contextual dependency traversal.
+- TASK-736 corrects both macOS verification assumptions listed below without changing production behavior.
+- Full nightly matrices, full upstream parity, and the other remaining findings stay open under this task.
+
+### Historical macOS verification failures (2026-10-02)
+
+- `tests/engine_cache.rs::source_walk_skips_excluded_names_before_following_links`
+  passes its source collection assertion but fails its project scan assertion
+  under the default macOS temporary root: actual paths begin `/private/var/`,
+  while expected paths begin `/var/`. The same test passes with
+  `TMPDIR=/private/tmp`. The test expectation is still alias-sensitive; this is
+  not a declaration-map or TypeScript canonical-name regression. See
+  `/private/tmp/tt-733-734-final-standard-gate.log` for the original failure.
+
+- `tests/workflow_repairs.rs::an_input_path_that_is_not_unicode_is_refused_before_anything_is_written`
+  fails before invoking ttc: creating `bad\xff.tt` returns OS error 92,
+  `Illegal byte sequence`, on this macOS filesystem. The test is gated on
+  Unix, but requires a filesystem accepting non-UTF-8 filenames. No production
+  behavior was exercised by this failure and no skip was added. See
+  `/private/tmp/tt-733-734-rust-final.log`.
+
 ## Regression test (fails before the fix)
 
 - **Path**: `src/lib/scaling_tests.rs`,
@@ -271,10 +303,10 @@ parity; do not treat the interrupted logs as completed runs.
 
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
-- [ ] Full `cargo test` with baseline tracking and `node scripts/check-baselines`
+- [x] Full `cargo test` with baseline tracking and `node scripts/check-baselines` (TASK-737 final gate)
 - [ ] Full compiler and editor matrices
 - [ ] Full TypeScript typed parity
-- [ ] `scripts/ci agents` and extension tests
+- [x] `scripts/ci agents` and extension tests (TASK-737 final gate)
 - [x] `scripts/ci agents`
 - [x] New baseline changes reviewed
 
