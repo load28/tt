@@ -750,6 +750,10 @@
 | TASK-738 | Exercise an expanding mixed-source React application in VS Code | Complete | 2026-10-03 | 2026-10-03 | [TASK-738](./TASK-738-react-vscode-dogfood.md) |
 | TASK-739 | Check val parameters of functions whose return type has type arguments | Complete | 2026-10-03 | 2026-10-03 | [TASK-739](./TASK-739-val-generic-return-type.md) |
 
+| TASK-740 | Design a behavior-preserving refactoring program | Complete | 2026-10-03 | 2026-10-03 | [TASK-740](./TASK-740-behavior-preserving-refactoring-design.md) |
+
+| TASK-741 | Isolate server response projection | Complete | 2026-10-03 | 2026-10-03 | [TASK-741](./TASK-741-server-response-projection.md) |
+
 ## Next task number
 
-**TASK-740**
+**TASK-742**
