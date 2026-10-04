@@ -782,6 +782,8 @@
 
 | TASK-755 | Separate deliberation formatting from execution | In progress | 2026-10-04 | — | [TASK-755](./TASK-755-deliberation-formatting.md) |
 
+| TASK-756 | Isolate baseline run selection | In progress | 2026-10-04 | — | [TASK-756](./TASK-756-baseline-selection.md) |
+
 ## Next task number
 
-**TASK-756**
+**TASK-757**
