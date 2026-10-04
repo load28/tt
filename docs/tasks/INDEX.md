@@ -758,6 +758,36 @@
 
 | TASK-743 | Isolate target placement diagnostics | Complete | 2026-10-04 | 2026-10-04 | [TASK-743](./TASK-743-target-placement-diagnostics.md) |
 
+| TASK-744 | Isolate recovery source projection | Complete | 2026-10-04 | 2026-10-04 | [TASK-744](./TASK-744-recovery-projection.md) |
+
+| TASK-745 | Isolate language service text presentation | Complete | 2026-10-04 | 2026-10-04 | [TASK-745](./TASK-745-service-presentation.md) |
+
+| TASK-746 | Isolate project completion operations | In progress | 2026-10-04 | — | [TASK-746](./TASK-746-completion-operations.md) |
+
+| TASK-747 | Isolate service target coordinate mapping | In progress | 2026-10-04 | — | [TASK-747](./TASK-747-target-coordinates.md) |
+
+| TASK-748 | Isolate match arm list recognition and recovery | In progress | 2026-10-04 | — | [TASK-748](./TASK-748-match-arm-lists.md) |
+
+| TASK-749 | Isolate projection segment representation | In progress | 2026-10-04 | — | [TASK-749](./TASK-749-projection-segments.md) |
+
+| TASK-750 | Isolate source rewrite records and local edit helpers | In progress | 2026-10-04 | — | [TASK-750](./TASK-750-source-rewrite-records.md) |
+
+| TASK-751 | Isolate editor diagnostic symbol and fix projections | In progress | 2026-10-04 | — | [TASK-751](./TASK-751-lsp-projections.md) |
+
+| TASK-752 | Separate engine wire types from session transport | In progress | 2026-10-04 | — | [TASK-752](./TASK-752-engine-protocol-types.md) |
+
+| TASK-753 | Isolate bundler module ID recognition | In progress | 2026-10-04 | — | [TASK-753](./TASK-753-bundler-module-ids.md) |
+
+| TASK-754 | Separate website highlighting from artifact writes | In progress | 2026-10-04 | — | [TASK-754](./TASK-754-website-highlighting.md) |
+
+| TASK-755 | Separate deliberation formatting from execution | In progress | 2026-10-04 | — | [TASK-755](./TASK-755-deliberation-formatting.md) |
+
+| TASK-756 | Isolate baseline run selection | In progress | 2026-10-04 | — | [TASK-756](./TASK-756-baseline-selection.md) |
+
+| TASK-757 | Complete the refactoring roadmap audit and validation | In progress | 2026-10-04 | — | [TASK-757](./TASK-757-refactoring-final-audit.md) |
+
+| TASK-758 | Preserve the Project API layout after completion extraction | In progress | 2026-10-04 | — | [TASK-758](./TASK-758-preserve-project-api-layout.md) |
+
 ## Next task number
 
-**TASK-744**
+**TASK-759**

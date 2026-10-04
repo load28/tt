@@ -47,6 +47,7 @@
     "index.js",
     "index.d.ts",
     "compiler-server.js",
+    "module-id.js",
     "vite.js",
     "vite.d.ts",
     "rollup.js",

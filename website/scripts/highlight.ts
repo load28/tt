@@ -2,6 +2,7 @@ import { readFile, writeFile } from 'node:fs/promises'
 import { createHighlighter } from 'shiki'
 import content from '../src/content.json'
 import { buildEssays, essayPaths } from './essay'
+import { highlightSections, highlightTopics } from './content-highlighting'
 
 const grammarUrl = new URL('../../editors/vscode/syntaxes/tt.tmLanguage.json', import.meta.url)
 const ttxGrammarUrl = new URL('../../editors/vscode/syntaxes/ttx.tmLanguage.json', import.meta.url)
@@ -12,36 +13,11 @@ const highlighter = await createHighlighter({
   themes: ['github-dark-default'],
 })
 
-function topicLanguage(id: string) {
-  return id === 'cli' || id === 'install' || id === 'release'
-    ? 'shellscript'
-    : id === 'ttx'
-      ? 'ttx'
-      : 'tt'
-}
-
-const highlighted = Object.fromEntries(
-  Object.entries(content.topics).map(([id, topic]) => [
-    id,
-    highlighter.codeToHtml(topic.code, {
-      lang: topicLanguage(id),
-      theme: 'github-dark-default',
-      structure: 'inline',
-    }),
-  ]),
-)
+const highlighted = highlightTopics(content, highlighter)
 
 await writeFile(new URL('../src/highlighted.json', import.meta.url), `${JSON.stringify(highlighted, null, 2)}\n`)
 
-const highlightedSections = Object.fromEntries(
-  Object.entries(content.topics).flatMap(([id, topic]) => 'sections' in topic
-    ? [[id, topic.sections.map((section) => highlighter.codeToHtml(section.code, {
-        lang: topicLanguage(id),
-        theme: 'github-dark-default',
-        structure: 'inline',
-      }))]]
-    : []),
-)
+const highlightedSections = highlightSections(content, highlighter)
 
 await writeFile(
   new URL('../src/highlighted-sections.json', import.meta.url),
