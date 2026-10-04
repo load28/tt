@@ -752,6 +752,8 @@
 
 | TASK-740 | Design a behavior-preserving refactoring program | Complete | 2026-10-03 | 2026-10-03 | [TASK-740](./TASK-740-behavior-preserving-refactoring-design.md) |
 
+| TASK-741 | Isolate server response projection | Complete | 2026-10-03 | 2026-10-03 | [TASK-741](./TASK-741-server-response-projection.md) |
+
 ## Next task number
 
-**TASK-741**
+**TASK-742**
