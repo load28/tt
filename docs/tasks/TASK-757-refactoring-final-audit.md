@@ -39,6 +39,12 @@ Review the completed extraction series and remaining first-party ownership bound
 
 - 2026-10-04: Reviewed the complete production diff, new module dependencies and retained ownership surfaces; recorded the 417-file inventory method and explicit exclusions in the completion audit. The first full CI run later encountered process/thread exhaustion; details are recorded below.
 
+- 2026-10-04: Pushed the 13 implementation commits and audit commit to
+  `origin/refactor/remaining-roadmap` and created draft
+  [PR #139](https://github.com/load28/tt/pull/139), targeting `main`.
+  The PR states the passed checks and incomplete full local CI explicitly.
+  Task-index and whitespace checks passed; reference expectations remain unchanged.
+
 ## Issues and resolutions
 
 ### Process/thread exhaustion during full CI
@@ -58,8 +64,8 @@ Automatic approval initially rejected uploading repository content because
 explicit publication authorization was absent. On 2026-10-04 the user then
 explicitly instructed creation of the PR. Prepare the draft with the incomplete
 CI status visible; this supersedes preparation-only publication timing, but
-allows no merge or false completion claim. CLI authentication was unavailable;
-the authenticated GitHub connector can publish the local Git trees.
+allows no merge or false completion claim. The GitHub CLI token was unavailable, but the configured Git transport pushed
+the branch successfully; the GitHub connector created the draft PR.
 
 
 ## Regression test (fails before the fix)
@@ -71,9 +77,10 @@ Not applicable: Final audit and validation of behavior-preserving extractions; n
 - [x] Moved definitions and parent changes reviewed.
 - [ ] Focused checks: Run ./scripts/ci, review the complete production diff, verify unchanged reference expectations, and run task-index and whitespace checks.
 - [ ] Applicable complete repository gates.
-- [ ] Reference expectations unchanged; task-index and whitespace checks.
+- [x] Reference expectations unchanged; task-index and whitespace checks.
 
 ## Result
 
-Implementation and source audit are prepared for the explicitly requested draft PR.
+Implementation and source audit are published in
+[draft PR #139](https://github.com/load28/tt/pull/139).
 Final local CI and task completion remain pending in a healthy environment.
