@@ -208,7 +208,11 @@ and merge; this authorization does not relax any compatibility or test gate.
 PR 0 and PR 1 reached main through [#135](https://github.com/load28/tt/pull/135)
 (including the stacked [#136](https://github.com/load28/tt/pull/136)). PR 2 is
 specified in [its detailed brief](refactoring-service-responses.md) and tracked
-by [TASK-742](../tasks/TASK-742-service-response-projections.md).
+by [TASK-742](../tasks/TASK-742-service-response-projections.md); it reached
+main through [#137](https://github.com/load28/tt/pull/137). PR 3's
+[detailed brief](refactoring-target-diagnostics.md) and
+[TASK-743](../tasks/TASK-743-target-placement-diagnostics.md) continue with
+target placement diagnostics.
 
 TASK-732 is already In progress and records outstanding performance/parity
 work. This refactoring program does not complete it, relax its checks, or mix
