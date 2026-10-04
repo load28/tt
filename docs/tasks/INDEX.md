@@ -772,6 +772,8 @@
 
 | TASK-750 | Isolate source rewrite records and local edit helpers | In progress | 2026-10-04 | — | [TASK-750](./TASK-750-source-rewrite-records.md) |
 
+| TASK-751 | Isolate editor diagnostic symbol and fix projections | In progress | 2026-10-04 | — | [TASK-751](./TASK-751-lsp-projections.md) |
+
 ## Next task number
 
-**TASK-751**
+**TASK-752**
