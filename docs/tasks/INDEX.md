@@ -756,6 +756,8 @@
 
 | TASK-742 | Isolate service response projections | Complete | 2026-10-04 | 2026-10-04 | [TASK-742](./TASK-742-service-response-projections.md) |
 
+| TASK-743 | Isolate target placement diagnostics | Complete | 2026-10-04 | 2026-10-04 | [TASK-743](./TASK-743-target-placement-diagnostics.md) |
+
 ## Next task number
 
-**TASK-743**
+**TASK-744**
