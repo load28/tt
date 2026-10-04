@@ -142,12 +142,14 @@ Review rather than automatically rewrite these other surfaces:
 Completeness means every owned source surface has been assessed and each
 justified change reviewed; it does not mean every file must receive a diff.
 
-## Subagent handoff and main review
+## Implementation handoff and review
 
-The main agent owns the shared design, task numbering, integration sequence,
-and final decision. Each implementation PR uses a fresh subagent context with
-its brief and necessary source paths. Research/audit agents do not implement.
-Do not rely on implicit conversation history for an implementation handoff.
+The implementing agent owns the shared design, task numbering, integration
+sequence, and review. Each slice has a fresh detailed brief with its necessary
+source paths. For this continuation, implementation and review are sequential
+in one workspace; the active session does not authorize subagent delegation.
+The handoff requirements below also apply if delegation is explicitly authorized
+in a future task. Do not rely on implicit conversation history for a handoff.
 
 Every brief must contain:
 
@@ -200,10 +202,19 @@ Every PR must stand alone for review and rollback. Merge only through the
 repository's normal PR workflow after local gates, independent main-agent
 review, and applicable remote CI checks. On 2026-10-04 the user authorized
 autonomous sequential publication and intermediate squash merges, superseding
-the original preparation-only workflow. Each implementation starts from
-latest main after its predecessor merges and receives a fresh detailed brief
-and subagent context. Leave the final roadmap PR open for the user's review
-and merge; this authorization does not relax any compatibility or test gate.
+the original preparation-only workflow. For the remaining continuation, the
+user requested autonomous progression through all slices. TASK-744 through
+TASK-756 are a sequential local commit
+series on `refactor/remaining-roadmap`, based on main at
+`85729d01a6cc169d26bce81b9ee25e7b7734f9ae`. Each slice receives a detailed brief,
+structural review, and focused validation before the next starts; the complete
+series must pass all default gates before completion and merge. After local
+CI encountered environment process exhaustion, the user explicitly requested
+PR creation on 2026-10-04. A draft may therefore be published with incomplete
+validation clearly recorded in TASK-757. This supersedes the
+per-slice intermediate-merge schedule for this continuation. No intermediate
+merge is claimed. Leave the final roadmap PR open for the user's review and
+merge; autonomous progression does not relax compatibility or test gates.
 
 PR 0 and PR 1 reached main through [#135](https://github.com/load28/tt/pull/135)
 (including the stacked [#136](https://github.com/load28/tt/pull/136)). PR 2 is
@@ -219,8 +230,25 @@ target placement diagnostics, which reached main through
 source projection, now complete locally. PR 5's
 [presentation brief](refactoring-service-presentation.md) and
 [TASK-745](../tasks/TASK-745-service-presentation.md) are also complete locally.
-TASK-744 and TASK-745 remain local preparation until their separate publication
-and merge steps. The next candidate is PR 6's completion operation module.
+The remaining sequence is implemented locally and tracked below. Final
+validation and the retained-source assessment are recorded in
+[the completion audit](refactoring-completion-audit.md) and
+[TASK-757](../tasks/TASK-757-refactoring-final-audit.md). Publication is a
+separate review step; these records do not imply that the series has merged.
+
+| Roadmap slice | Task | Extracted responsibility |
+| --- | --- | --- |
+| PR 6 | [TASK-746](../tasks/TASK-746-completion-operations.md) | Project completion operations |
+| PR 7 | [TASK-747](../tasks/TASK-747-target-coordinates.md) | Service target coordinate mapping |
+| PR 8 | [TASK-748](../tasks/TASK-748-match-arm-lists.md) | Match arm recognition and recovery |
+| PR 9 | [TASK-749](../tasks/TASK-749-projection-segments.md) | Projection segment representation |
+| PR 10 | [TASK-750](../tasks/TASK-750-source-rewrite-records.md) | Source rewrite records and local edit helpers |
+| PR 11 | [TASK-751](../tasks/TASK-751-lsp-projections.md) | Editor diagnostic, symbol and fix projections |
+| PR 12 | [TASK-752](../tasks/TASK-752-engine-protocol-types.md) | Engine wire types |
+| PR 13 | [TASK-753](../tasks/TASK-753-bundler-module-ids.md) | Bundler module IDs and queries |
+| PR 14 | [TASK-754](../tasks/TASK-754-website-highlighting.md) | Website content highlighting |
+| PR 15 | [TASK-755](../tasks/TASK-755-deliberation-formatting.md) | Bot prompt and comment formatting |
+| PR 16 | [TASK-756](../tasks/TASK-756-baseline-selection.md) | Baseline run selection |
 
 TASK-732 is already In progress and records outstanding performance/parity
 work. This refactoring program does not complete it, relax its checks, or mix

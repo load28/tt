@@ -784,6 +784,8 @@
 
 | TASK-756 | Isolate baseline run selection | In progress | 2026-10-04 | — | [TASK-756](./TASK-756-baseline-selection.md) |
 
+| TASK-757 | Complete the refactoring roadmap audit and validation | In progress | 2026-10-04 | — | [TASK-757](./TASK-757-refactoring-final-audit.md) |
+
 ## Next task number
 
-**TASK-757**
+**TASK-758**

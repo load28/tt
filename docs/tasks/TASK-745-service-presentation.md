@@ -112,7 +112,6 @@ Changed production files are `src/engine/language/service.rs` and its new
 `service/presentation.rs` child. Documentation changes are this task, its
 detailed brief, the task index, and the shared roadmap progress note.
 
-TASK-744 and TASK-745 are recorded as separate local commits; neither has
-been published. The next
-roadmap candidate is completion operations under the existing language-project
-owner and requires a fresh detailed brief before implementation.
+TASK-744 and TASK-745 are recorded as separate local commits (`17e699ac` and
+`eb78154e`). The subsequent roadmap slices and final publication/validation
+status are tracked by [TASK-757](TASK-757-refactoring-final-audit.md).

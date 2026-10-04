@@ -103,6 +103,6 @@ Not applicable: Mechanical behavior-preserving extraction; no bug is fixed.
 
 Complete locally. Recovery selection, masking, and variant declarations now
 have a private module; public behavior and compilation orchestration remain
-unchanged. The verified extraction is recorded as a local commit; it has not been
-published. The next roadmap candidate is hover/documentation formatting
-in `engine/language/service.rs`; it needs a fresh bounded brief before edits.
+unchanged. The extraction is recorded in local commit `17e699ac`. The subsequent
+roadmap slices and final publication/validation status are tracked by
+[TASK-757](TASK-757-refactoring-final-audit.md).
