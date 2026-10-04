@@ -1,5 +1,15 @@
 //! Host rewrite planning and source-preservation classification.
 
+mod rewrites;
+
+pub(super) use rewrites::{
+    ArrowReturnRewrite, CallCompletionPlan, ComposeAction, ComposeRewrite, ComposeValue,
+    DeclaratorSplitRewrite, ForInitializerPropagationRewrite, LocalSourceEdit, LoopTestRewrite,
+    OwnerSlotRewrite, ResultReturnBoundary, SourceReplacement, compound_assignment_operator,
+    declarator_separator, discarded_operand_comma,
+};
+use rewrites::{compound_assignment_frames, discarded_operand_commas};
+
 use super::*;
 
 /// Where a generated module-top `import` is written, and whether it needs a
@@ -438,128 +448,6 @@ pub(super) struct TargetRewritePlan {
     pub(super) global_temps: HashMap<crate::core_ir::TempId, String>,
 }
 
-#[derive(Debug, Clone)]
-pub(super) struct OwnerSlotRewrite {
-    pub(super) owner: SourceSpan,
-    pub(super) source: SourceSpan,
-    pub(super) expr: ExprId,
-    pub(super) slot: String,
-    pub(super) continuation: HostContinuation,
-    pub(super) contextual_type: Option<SourceSpan>,
-    pub(super) contextual_type_awaited: bool,
-    pub(super) contextual_type_asserted: bool,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(super) struct ForInitializerPropagationRewrite {
-    pub(super) node: NodeId,
-    pub(super) owner: SourceSpan,
-    pub(super) source: SourceSpan,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct ArrowReturnRewrite {
-    pub(super) source: SourceSpan,
-    pub(super) expr: ExprId,
-    pub(super) slot: String,
-    pub(super) contextual_type: Option<SourceSpan>,
-    pub(super) contextual_type_awaited: bool,
-    pub(super) contextual_type_asserted: bool,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct DeclaratorSplitRewrite {
-    pub(super) separator: SourceSpan,
-    pub(super) at: usize,
-    pub(super) head: String,
-    pub(super) block: Option<SourceSpan>,
-    pub(super) statement: SourceSpan,
-    pub(super) last: bool,
-}
-
-pub(super) fn declarator_separator(source: &str, previous_end: usize) -> SourceSpan {
-    let bytes = source.as_bytes();
-    let (comma, _) = crate::scanner::skip_trivia(bytes, previous_end, bytes.len());
-    if bytes.get(comma) != Some(&b',') {
-        crate::ice::bug!("a declarator is not preceded by its comma");
-    }
-    SourceSpan {
-        start: comma,
-        end: comma + 1,
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct ComposeRewrite {
-    pub(super) owner: SourceSpan,
-    pub(super) owner_kind: HostOwnerKind,
-    pub(super) actions: Vec<ComposeAction>,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct LoopTestRewrite {
-    pub(super) owner: SourceSpan,
-    pub(super) kind: LoopTestKind,
-    pub(super) test: SourceSpan,
-    pub(super) body: SourceSpan,
-    pub(super) update: Option<SourceSpan>,
-    pub(super) first_expr: ExprId,
-    pub(super) first_source: SourceSpan,
-    pub(super) actions: Vec<ComposeAction>,
-}
-
-/// One unit of a compose prelude, in source order: a plain host value, or a
-/// whole conditional operation (결정 17).
-#[derive(Debug, Clone)]
-pub(super) enum ComposeAction {
-    Value(ComposeValue),
-    Operation(PlannedConditionalOperation),
-}
-
-/// A syntax-proven call the dispatch arms perform themselves, so the
-/// argument keeps the consumer's contextual type (TASK-324, TASK-327).
-#[derive(Debug, Clone)]
-pub(super) struct CallCompletionPlan {
-    /// The text each arm calls through, up to and excluding the argument:
-    /// the captured (possibly instantiated) callee plus `(`.
-    pub(super) invoke: String,
-    /// A capture emitted once before the dispatch, binding the instantiated
-    /// callee: generated name, authored type-argument span, callee slot.
-    pub(super) instantiation: Option<(String, SourceSpan, String)>,
-    /// Elided captures the dispatch has to name after all: generated name
-    /// and the authored source it binds. The completion re-emits the call
-    /// inside the arms, where the input's authored position is gone, so it
-    /// is captured once here rather than copied into every arm.
-    pub(super) captures: Vec<(String, SourceSpan)>,
-    /// The value slot receiving the call's result when the authored call is
-    /// consumed; `None` for a discarded expression-statement call.
-    pub(super) result: Option<String>,
-    /// The callee slot's generated name — a valid identifier that seeds the
-    /// region's exit label when the discarded form needs one.
-    pub(super) label: String,
-    /// The whole authored call expression.
-    pub(super) call: SourceSpan,
-    /// The authored literal the value sits inside, split at the value: the
-    /// argument's text before it and after it. Empty when the value is the
-    /// whole argument. Each arm re-emits both around its own value, which is
-    /// what puts the arm value back in the consumer's contextual position.
-    pub(super) frame: Option<(SourceSpan, SourceSpan)>,
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct ComposeValue {
-    pub(super) call_completion: Option<CallCompletionPlan>,
-    /// Multi-value owners keep each match at its native evaluation position.
-    pub(super) inline: bool,
-    pub(super) expr: ExprId,
-    pub(super) source: SourceSpan,
-    pub(super) slot: String,
-    pub(super) steps: Vec<PlannedEvaluationStep>,
-    /// Select an expression arm in the prelude, but evaluate its value in
-    /// the authored host so TypeScript can apply contextual typing.
-    pub(super) defer_arm_values: bool,
-}
-
 /// Consume the host AST's single-return-body proof. Only opaque returned
 /// values participate here; structured TT values retain their own schedules.
 pub(super) fn single_return_arm_value(
@@ -856,31 +744,6 @@ fn can_defer_arm_values(
         })
 }
 
-#[derive(Debug, Clone)]
-pub(super) struct SourceReplacement {
-    pub(super) source: SourceSpan,
-    pub(super) slot: String,
-    /// What the source walk writes in place of `source` when it is not the
-    /// slot's name — a compound assignment's operator, rewritten to apply
-    /// to the accumulator that read the target ([`compound_assignment_operator`]).
-    pub(super) rewrite: Option<String>,
-    pub(super) jsx_child: bool,
-    /// The tt value whose construct anchor the replacement's generated
-    /// name carries — a conditional operation's result stands for the whole
-    /// operation, so diagnostics on it belong to its primary tt value.
-    pub(super) anchor: Option<ExprId>,
-    /// A completed call's claimed frame. Its own active value retains the
-    /// authored source; unrelated enclosing values do not inhibit the claim.
-    pub(super) claim: bool,
-}
-
-impl SourceReplacement {
-    /// The text the source walk writes in place of the replaced source.
-    pub(super) fn written(&self) -> &str {
-        self.rewrite.as_deref().unwrap_or(&self.slot)
-    }
-}
-
 /// Whether a step is the argument of an optional call, whose callee the
 /// optional-call lowering binds or calls through its receiver itself.
 pub(super) fn optional_call_step(step: &PlannedEvaluationStep) -> bool {
@@ -932,98 +795,6 @@ pub(super) fn member_callee<'n>(
     }
     text.push_str(&source[cursor..callee.end]);
     text
-}
-
-/// The operator token of the compound assignment whose target is `target`.
-///
-/// Only trivia separates an assignment's target from its operator, and the
-/// target's span includes any parentheses around it.
-pub(super) fn compound_assignment_operator(
-    source: &str,
-    target: SourceSpan,
-    operator: &str,
-) -> SourceSpan {
-    let bytes = source.as_bytes();
-    let (start, _) = crate::scanner::skip_trivia(bytes, target.end, bytes.len());
-    let end = start + operator.len();
-    if source.get(start..end) != Some(operator) {
-        crate::ice::bug!("a compound assignment's operator does not follow its target");
-    }
-    SourceSpan { start, end }
-}
-
-/// The comma after a discarded comma operand. Once the operand ran as a
-/// statement, the lowering removes it and this comma where they were
-/// written, keeping the trivia between them. Only trivia separates an
-/// operand from its comma.
-pub(super) fn discarded_operand_comma(source: &str, operand: SourceSpan) -> SourceSpan {
-    let bytes = source.as_bytes();
-    let (comma, _) = crate::scanner::skip_trivia(bytes, operand.end, bytes.len());
-    if bytes.get(comma) != Some(&b',') {
-        crate::ice::bug!("a discarded comma operand is not followed by its comma");
-    }
-    SourceSpan {
-        start: comma,
-        end: comma + 1,
-    }
-}
-
-/// The comma of every discarded comma operand a schedule evaluates as a
-/// statement. The operand is relocated and the comma is removed with it,
-/// so the plan claims the comma.
-fn discarded_operand_commas<'s>(
-    source: &str,
-    steps: impl Iterator<Item = &'s PlannedEvaluationStep>,
-) -> Vec<SourceSpan> {
-    steps
-        .flat_map(|step| &step.inputs)
-        .filter_map(|input| match input {
-            PlannedEvaluationInput::Source {
-                source: operand,
-                mode: EvaluationInputMode::Discarded,
-                ..
-            } => Some(discarded_operand_comma(source, *operand)),
-            _ => None,
-        })
-        .collect()
-}
-
-/// The target and operator span of every compound assignment whose target a
-/// schedule reads before the right operand. The target is printed twice —
-/// read into its accumulator, then assigned — and the operator is rewritten,
-/// so the plan claims both.
-fn compound_assignment_frames<'s>(
-    source: &str,
-    steps: impl Iterator<Item = &'s PlannedEvaluationStep>,
-) -> Vec<SourceSpan> {
-    steps
-        .flat_map(|step| &step.inputs)
-        .filter_map(|input| match input {
-            PlannedEvaluationInput::Source {
-                source: target,
-                mode: EvaluationInputMode::CompoundAssignmentTarget { operator },
-                ..
-            } => Some([
-                *target,
-                compound_assignment_operator(source, *target, operator),
-            ]),
-            _ => None,
-        })
-        .flatten()
-        .collect()
-}
-
-#[derive(Debug, Clone)]
-pub(super) struct LocalSourceEdit {
-    pub(super) span: SourceSpan,
-    pub(super) text: String,
-    pub(super) result_return_mark: Option<(SourceSpan, ResultReturnBoundary)>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(super) enum ResultReturnBoundary {
-    Start,
-    End,
 }
 
 impl TargetRewritePlan {

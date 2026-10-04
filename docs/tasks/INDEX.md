@@ -770,6 +770,8 @@
 
 | TASK-749 | Isolate projection segment representation | In progress | 2026-10-04 | — | [TASK-749](./TASK-749-projection-segments.md) |
 
+| TASK-750 | Isolate source rewrite records and local edit helpers | In progress | 2026-10-04 | — | [TASK-750](./TASK-750-source-rewrite-records.md) |
+
 ## Next task number
 
-**TASK-750**
+**TASK-751**
