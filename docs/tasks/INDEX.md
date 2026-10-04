@@ -768,6 +768,8 @@
 
 | TASK-748 | Isolate match arm list recognition and recovery | In progress | 2026-10-04 | — | [TASK-748](./TASK-748-match-arm-lists.md) |
 
+| TASK-749 | Isolate projection segment representation | In progress | 2026-10-04 | — | [TASK-749](./TASK-749-projection-segments.md) |
+
 ## Next task number
 
-**TASK-749**
+**TASK-750**

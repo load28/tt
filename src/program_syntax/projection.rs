@@ -1,5 +1,9 @@
 //! TypeScript projection construction and the public syntax view.
 
+mod segments;
+
+pub(super) use segments::{ProjectionSegmentKind, ProjectionSegments, ProjectionSourceSegment};
+
 use super::*;
 
 /// A complete SWC view of one tt-containing TypeScript module.
@@ -513,63 +517,6 @@ pub(super) struct Projection {
     pub(super) pending: Vec<PendingOverlay>,
     pub(super) source_segments: Vec<ProjectionSourceSegment>,
     pub(super) projection_only_protocol_parents: Vec<ProjectedSpan>,
-}
-
-#[derive(Debug, Clone, Copy)]
-pub(super) struct ProjectionSourceSegment {
-    pub(super) projected: ProjectedSpan,
-    pub(super) source: SourceSpan,
-    pub(super) kind: ProjectionSegmentKind,
-}
-
-pub(super) struct ProjectionSegments {
-    segments: Vec<ProjectionSourceSegment>,
-    index: crate::span_index::SpanIndex,
-}
-
-impl ProjectionSegments {
-    pub(super) fn new(segments: Vec<ProjectionSourceSegment>) -> Self {
-        let index = crate::span_index::SpanIndex::new(
-            segments
-                .iter()
-                .map(|segment| (segment.projected.start.0, segment.projected.end.0)),
-        );
-        Self { segments, index }
-    }
-
-    pub(super) fn starting_at(&self, at: ProjectedByte) -> Vec<usize> {
-        self.index.starting_in(at.0, at.0.saturating_add(1))
-    }
-
-    pub(super) fn ending_at(&self, at: ProjectedByte) -> Vec<usize> {
-        self.index.ending_in(at.0, at.0.saturating_add(1))
-    }
-
-    pub(super) fn containing(&self, at: ProjectedByte) -> Vec<usize> {
-        self.index.containing(at.0)
-    }
-}
-
-impl std::ops::Deref for ProjectionSegments {
-    type Target = [ProjectionSourceSegment];
-
-    fn deref(&self) -> &Self::Target {
-        &self.segments
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum ProjectionSegmentKind {
-    Copied,
-    /// Compiler-written delimiter that closes a copied source fragment.
-    /// A parser stopping here proves that the fragment immediately before
-    /// it was incomplete; the delimiter itself is fixed syntax. Its source
-    /// is the first significant source byte after the fragment, the token
-    /// that ends the fragment in the source and where TypeScript's parser
-    /// stops on the same text.
-    SourceBoundary,
-    Placeholder,
-    AutomaticSemicolon,
 }
 
 #[derive(Debug)]
