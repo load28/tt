@@ -786,6 +786,8 @@
 
 | TASK-757 | Complete the refactoring roadmap audit and validation | In progress | 2026-10-04 | — | [TASK-757](./TASK-757-refactoring-final-audit.md) |
 
+| TASK-758 | Preserve the Project API layout after completion extraction | In progress | 2026-10-04 | — | [TASK-758](./TASK-758-preserve-project-api-layout.md) |
+
 ## Next task number
 
-**TASK-758**
+**TASK-759**

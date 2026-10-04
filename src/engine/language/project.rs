@@ -538,6 +538,63 @@ impl Project {
         Ok(out)
     }
 
+    /// Completions at a position. `member` says whether the *source* cursor
+    /// sits at a member access (the adapter knows, from the tt syntax layer)
+    /// — at a member access only a member answer means anything, and when
+    /// the plain answer is not one, a probe mends the unfinished construct
+    /// and asks again. A cursor the served text has no place for (text of
+    /// an unfinished construct the emission did not copy) is asked through
+    /// a probe too.
+    pub fn completion(
+        &mut self,
+        path: &Path,
+        position: Position,
+        member: bool,
+    ) -> Result<CompletionAnswer, String> {
+        self.triggered_completion(path, position, member, None)
+    }
+
+    /// [`Project::completion`] as the editor asks for it after typing
+    /// `trigger` (LSP 3.17 `CompletionContext`, `triggerKind`
+    /// `TriggerCharacter`); `None` is an invoked completion. TypeScript
+    /// decides whether the character begins a completion there.
+    pub fn triggered_completion(
+        &mut self,
+        path: &Path,
+        position: Position,
+        member: bool,
+        trigger: Option<&str>,
+    ) -> Result<CompletionAnswer, String> {
+        self.complete_at(path, position, member, trigger)
+    }
+
+    /// What can be written at a pattern position, typed by TypeScript where
+    /// it can answer: `None` when `position` is not a pattern position.
+    pub fn pattern_completions(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Option<Vec<crate::engine::TtCompletion>>, String> {
+        self.complete_pattern_at(path, position)
+    }
+
+    /// The signature and documentation behind one completion entry, fetched
+    /// when the consumer asks about the one entry the user is looking at.
+    /// The entry is the one listed with `label` and `source`
+    /// ([`CompletionItem::source`]). `probe` re-installs the probed text the entry was listed from;
+    /// `Ok(None)` when that probe is gone (the buffer has moved on) or the
+    /// entry cannot be resolved.
+    pub fn completion_resolve(
+        &mut self,
+        path: &Path,
+        position: Position,
+        label: &str,
+        source: Option<&str>,
+        probe: Option<u64>,
+    ) -> Result<Option<CompletionDetail>, String> {
+        self.resolve_completion_at(path, position, label, source, probe)
+    }
+
     /// Rename: every edit, each mapped to the file the user can open — or
     /// `Ok(None)` when the rename cannot be done *whole*. An edit that lands
     /// in compiler-written glue, a target that is not a file, or an edit

@@ -3,27 +3,7 @@
 use super::*;
 
 impl Project {
-    /// Completions at a position. `member` says whether the *source* cursor
-    /// sits at a member access (the adapter knows, from the tt syntax layer)
-    /// — at a member access only a member answer means anything, and when
-    /// the plain answer is not one, a probe mends the unfinished construct
-    /// and asks again. A cursor the served text has no place for (text of
-    /// an unfinished construct the emission did not copy) is asked through
-    /// a probe too.
-    pub fn completion(
-        &mut self,
-        path: &Path,
-        position: Position,
-        member: bool,
-    ) -> Result<CompletionAnswer, String> {
-        self.triggered_completion(path, position, member, None)
-    }
-
-    /// [`Project::completion`] as the editor asks for it after typing
-    /// `trigger` (LSP 3.17 `CompletionContext`, `triggerKind`
-    /// `TriggerCharacter`); `None` is an invoked completion. TypeScript
-    /// decides whether the character begins a completion there.
-    pub fn triggered_completion(
+    pub(super) fn complete_at(
         &mut self,
         path: &Path,
         position: Position,
@@ -139,9 +119,7 @@ impl Project {
         })
     }
 
-    /// What can be written at a pattern position, typed by TypeScript where
-    /// it can answer: `None` when `position` is not a pattern position.
-    pub fn pattern_completions(
+    pub(super) fn complete_pattern_at(
         &mut self,
         path: &Path,
         position: Position,
@@ -294,13 +272,7 @@ impl Project {
             .collect())
     }
 
-    /// The signature and documentation behind one completion entry, fetched
-    /// when the consumer asks about the one entry the user is looking at.
-    /// The entry is the one listed with `label` and `source`
-    /// ([`CompletionItem::source`]). `probe` re-installs the probed text the entry was listed from;
-    /// `Ok(None)` when that probe is gone (the buffer has moved on) or the
-    /// entry cannot be resolved.
-    pub fn completion_resolve(
+    pub(super) fn resolve_completion_at(
         &mut self,
         path: &Path,
         position: Position,

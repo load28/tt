@@ -33,7 +33,7 @@ in the individual tasks.
 | Tasks | Existing caller and new responsibility | Structural evidence |
 | --- | --- | --- |
 | 744–745 | Compilation recovery; service hover, documentation and parameter labels | Existing helper bodies moved intact, with narrow parent visibility; source-link lookup and session ownership stay in the caller. |
-| 746 | Project completion operations | Existing `impl Project` methods moved together; probes, candidates and mutation order unchanged. |
+| 746 | Project completion operations | Private operation bodies remain extracted; TASK-758 restores public declarations and their original impl/order after the API snapshot detected rustdoc layout drift. Probes, candidates and mutation order stay unchanged. |
 | 747 | Service target coordinates | Existing target classification, source edits and shared-binding projections moved; document acquisition remains under the existing service owner. |
 | 748 | Match arm lists | Existing recognition and recovery helpers moved together; pattern parsing and lexer advancement algorithms unchanged. |
 | 749 | Projection segments | Existing segment records and indexed lookup implementation moved; projection construction unchanged. |

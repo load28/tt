@@ -1,5 +1,9 @@
 # TASK-746: Isolate project completion operations
 
+> [TASK-758](TASK-758-preserve-project-api-layout.md) supersedes the placement
+> of public completion methods in the child impl. Their original declarations
+> and order stay in the parent; private operation bodies remain extracted.
+
 - **Status**: In progress
 - **Started**: 2026-10-04
 - **Completed**: —

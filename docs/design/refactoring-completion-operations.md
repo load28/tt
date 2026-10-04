@@ -1,5 +1,9 @@
 # Isolate project completion operations
 
+The public-method placement in this original brief is superseded by
+[TASK-758](../tasks/TASK-758-preserve-project-api-layout.md): retain the public
+declarations in their original impl and delegate to the private operation module.
+
 Task: [TASK-746](../tasks/TASK-746-completion-operations.md). Base: `eb78154e0ee8bdf25eab0f487ce53ddce261332a`.
 Program: [behavior-preserving refactoring](behavior-preserving-refactoring.md).
 
