@@ -1,5 +1,11 @@
 # TASK-740: Design a behavior-preserving refactoring program
 
+Workflow update: [TASK-742](TASK-742-service-response-projections.md) records
+the user's 2026-10-04 authorization to publish and merge intermediate PRs
+sequentially after review and verification. It supersedes this design's
+original preparation-only publication policy. The final merge stays with
+the user; behavior preservation and verification requirements are unchanged.
+
 - **Status**: Complete
 - **Started**: 2026-10-03
 - **Completed**: 2026-10-03

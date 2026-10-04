@@ -1,7 +1,10 @@
 //! Projects computed engine answers into server protocol JSON.
 
 use std::path::Path;
-use ttc::engine::{Location, Range};
+use ttc::engine::{
+    CompletionAnswer, CompletionDetail, Location, Range, ServiceDiagnostic, ServiceSeverity,
+    ServiceTag, SignatureHelp,
+};
 use ttc::lines::ProtocolPositions;
 
 /// A diagnostic's suggestions as the JSON the protocol speaks.
@@ -125,4 +128,128 @@ pub(super) fn labels_json<'a>(
             entry
         })
         .collect()
+}
+
+/// Projects completion items, membership, and probe identity into protocol JSON.
+pub(super) fn completion_json(answer: CompletionAnswer) -> serde_json::Value {
+    use serde_json::json;
+    let CompletionAnswer {
+        items,
+        member,
+        probe,
+    } = answer;
+    json!({
+        "items": items.iter().map(|item| json!({
+            "label": item.label,
+            "kind": item.kind.map(|kind| kind.lsp()),
+            "tags": item.tags.iter().map(|tag| tag.lsp()).collect::<Vec<_>>(),
+            "sortText": item.sort_text,
+            "insertText": item.insert_text,
+            "filterText": item.filter_text,
+            "snippet": item.snippet,
+            "range": item.range.map(range_json),
+            "source": item.source,
+            "detail": item.detail,
+            "labelDetails": (item.label_detail.is_some() || item.description.is_some())
+                .then(|| json!({
+                    "detail": item.label_detail,
+                    "description": item.description,
+                })),
+        })).collect::<Vec<_>>(),
+        "member": member,
+        "probe": probe,
+    })
+}
+
+/// Projects a resolved completion and its optional additional edits into protocol JSON.
+pub(super) fn completion_detail_json(detail: Option<CompletionDetail>) -> serde_json::Value {
+    use serde_json::json;
+    match detail {
+        None => serde_json::Value::Null,
+        Some(detail) => {
+            let mut answer = json!({
+                "signature": detail.signature,
+                "documentation": detail.documentation,
+            });
+            if !detail.additional_edits.is_empty() {
+                answer["additionalEdits"] = detail
+                    .additional_edits
+                    .into_iter()
+                    .map(|edit| {
+                        json!({
+                            "range": range_json(edit.range),
+                            "newText": edit.new_text,
+                        })
+                    })
+                    .collect();
+            }
+            answer
+        }
+    }
+}
+
+/// Projects signature labels, parameter offsets, and active indices into protocol JSON.
+pub(super) fn signature_help_json(help: Option<SignatureHelp>) -> serde_json::Value {
+    use serde_json::json;
+    match help {
+        None => serde_json::Value::Null,
+        Some(help) => json!({
+            "signatures": help.signatures.iter().map(|signature| json!({
+                "label": signature.label,
+                "documentation": signature.documentation,
+                "parameters": signature.parameters.iter().map(|parameter| json!({
+                    "label": [parameter.label.0, parameter.label.1],
+                    "documentation": parameter.documentation,
+                })).collect::<Vec<_>>(),
+            })).collect::<Vec<_>>(),
+            "activeSignature": help.active_signature,
+            "activeParameter": help.active_parameter,
+        }),
+    }
+}
+
+/// Projects a service diagnostic and its optional tags and related spans into protocol JSON.
+pub(super) fn service_diagnostic_json(d: ServiceDiagnostic) -> serde_json::Value {
+    use serde_json::json;
+    let mut entry = json!({
+        "range": range_json(d.range),
+        "message": d.message,
+        "code": d.code,
+        "severity": match d.severity {
+            ServiceSeverity::Error => "error",
+            ServiceSeverity::Warning => "warning",
+            ServiceSeverity::Information => "information",
+            ServiceSeverity::Hint => "hint",
+        },
+    });
+    if !d.tags.is_empty() {
+        entry["tags"] = d
+            .tags
+            .iter()
+            .map(|tag| match tag {
+                ServiceTag::Unnecessary => "unnecessary",
+                ServiceTag::Deprecated => "deprecated",
+            })
+            .collect();
+    }
+    // Secondary labeled spans ride only when there are any,
+    // so consumers of the existing shape see no new field
+    // until a diagnostic actually carries one.
+    if !d.related.is_empty() {
+        entry["related"] = d
+            .related
+            .iter()
+            .map(|r| {
+                let mut related = json!({
+                    "range": range_json(r.range),
+                    "message": r.message,
+                });
+                if let Some(path) = &r.path {
+                    related["path"] = json!(path);
+                }
+                related
+            })
+            .collect();
+    }
+    entry
 }

@@ -1895,6 +1895,9 @@ mod dynamic_imports;
 #[path = "cli/server_print.rs"]
 mod server_print;
 
+#[path = "cli/server_response_shapes.rs"]
+mod server_response_shapes;
+
 /// `-o` mirrors input paths, and named files are inputs too: two of them
 /// under one directory keep the layout that makes a relative import between
 /// them resolve in the output tree.
