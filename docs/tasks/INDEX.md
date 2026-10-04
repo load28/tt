@@ -780,6 +780,8 @@
 
 | TASK-754 | Separate website highlighting from artifact writes | In progress | 2026-10-04 | — | [TASK-754](./TASK-754-website-highlighting.md) |
 
+| TASK-755 | Separate deliberation formatting from execution | In progress | 2026-10-04 | — | [TASK-755](./TASK-755-deliberation-formatting.md) |
+
 ## Next task number
 
-**TASK-755**
+**TASK-756**
