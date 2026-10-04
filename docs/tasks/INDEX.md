@@ -774,6 +774,8 @@
 
 | TASK-751 | Isolate editor diagnostic symbol and fix projections | In progress | 2026-10-04 | — | [TASK-751](./TASK-751-lsp-projections.md) |
 
+| TASK-752 | Separate engine wire types from session transport | In progress | 2026-10-04 | — | [TASK-752](./TASK-752-engine-protocol-types.md) |
+
 ## Next task number
 
-**TASK-752**
+**TASK-753**
