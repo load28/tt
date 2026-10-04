@@ -758,6 +758,8 @@
 
 | TASK-743 | Isolate target placement diagnostics | Complete | 2026-10-04 | 2026-10-04 | [TASK-743](./TASK-743-target-placement-diagnostics.md) |
 
+| TASK-744 | Isolate recovery source projection | Complete | 2026-10-04 | 2026-10-04 | [TASK-744](./TASK-744-recovery-projection.md) |
+
 ## Next task number
 
-**TASK-744**
+**TASK-745**

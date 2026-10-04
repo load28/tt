@@ -212,7 +212,12 @@ by [TASK-742](../tasks/TASK-742-service-response-projections.md); it reached
 main through [#137](https://github.com/load28/tt/pull/137). PR 3's
 [detailed brief](refactoring-target-diagnostics.md) and
 [TASK-743](../tasks/TASK-743-target-placement-diagnostics.md) continue with
-target placement diagnostics.
+target placement diagnostics, which reached main through
+[#138](https://github.com/load28/tt/pull/138). PR 4's
+[detailed brief](refactoring-recovery-projection.md) and
+[TASK-744](../tasks/TASK-744-recovery-projection.md) continue with recovery
+source projection, now complete locally. Its extraction and validation are
+recorded in a local commit pending publication.
 
 TASK-732 is already In progress and records outstanding performance/parity
 work. This refactoring program does not complete it, relax its checks, or mix
