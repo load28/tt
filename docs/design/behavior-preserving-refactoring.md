@@ -216,8 +216,11 @@ target placement diagnostics, which reached main through
 [#138](https://github.com/load28/tt/pull/138). PR 4's
 [detailed brief](refactoring-recovery-projection.md) and
 [TASK-744](../tasks/TASK-744-recovery-projection.md) continue with recovery
-source projection, now complete locally. Its extraction and validation are
-recorded in a local commit pending publication.
+source projection, now complete locally. PR 5's
+[presentation brief](refactoring-service-presentation.md) and
+[TASK-745](../tasks/TASK-745-service-presentation.md) are also complete locally.
+TASK-744 and TASK-745 remain local preparation until their separate publication
+and merge steps. The next candidate is PR 6's completion operation module.
 
 TASK-732 is already In progress and records outstanding performance/parity
 work. This refactoring program does not complete it, relax its checks, or mix

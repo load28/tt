@@ -760,6 +760,8 @@
 
 | TASK-744 | Isolate recovery source projection | Complete | 2026-10-04 | 2026-10-04 | [TASK-744](./TASK-744-recovery-projection.md) |
 
+| TASK-745 | Isolate language service text presentation | Complete | 2026-10-04 | 2026-10-04 | [TASK-745](./TASK-745-service-presentation.md) |
+
 ## Next task number
 
-**TASK-745**
+**TASK-746**
