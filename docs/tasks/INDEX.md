@@ -766,6 +766,8 @@
 
 | TASK-747 | Isolate service target coordinate mapping | In progress | 2026-10-04 | — | [TASK-747](./TASK-747-target-coordinates.md) |
 
+| TASK-748 | Isolate match arm list recognition and recovery | In progress | 2026-10-04 | — | [TASK-748](./TASK-748-match-arm-lists.md) |
+
 ## Next task number
 
-**TASK-748**
+**TASK-749**
