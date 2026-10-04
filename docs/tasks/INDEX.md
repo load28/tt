@@ -778,6 +778,8 @@
 
 | TASK-753 | Isolate bundler module ID recognition | In progress | 2026-10-04 | — | [TASK-753](./TASK-753-bundler-module-ids.md) |
 
+| TASK-754 | Separate website highlighting from artifact writes | In progress | 2026-10-04 | — | [TASK-754](./TASK-754-website-highlighting.md) |
+
 ## Next task number
 
-**TASK-754**
+**TASK-755**
