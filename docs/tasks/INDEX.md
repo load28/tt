@@ -776,6 +776,8 @@
 
 | TASK-752 | Separate engine wire types from session transport | In progress | 2026-10-04 | — | [TASK-752](./TASK-752-engine-protocol-types.md) |
 
+| TASK-753 | Isolate bundler module ID recognition | In progress | 2026-10-04 | — | [TASK-753](./TASK-753-bundler-module-ids.md) |
+
 ## Next task number
 
-**TASK-753**
+**TASK-754**
