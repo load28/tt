@@ -762,6 +762,8 @@
 
 | TASK-745 | Isolate language service text presentation | Complete | 2026-10-04 | 2026-10-04 | [TASK-745](./TASK-745-service-presentation.md) |
 
+| TASK-746 | Isolate project completion operations | In progress | 2026-10-04 | — | [TASK-746](./TASK-746-completion-operations.md) |
+
 ## Next task number
 
-**TASK-746**
+**TASK-747**
