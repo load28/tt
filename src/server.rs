@@ -122,7 +122,8 @@
 mod responses;
 
 use responses::{
-    labels_json, location_json, pattern_items_json, range_json, suggestions_json, symbol_json,
+    completion_detail_json, completion_json, labels_json, location_json, pattern_items_json,
+    range_json, service_diagnostic_json, signature_help_json, suggestions_json, symbol_json,
 };
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
@@ -131,10 +132,7 @@ use std::process::ExitCode;
 use std::time::SystemTime;
 use ttc::lines::ProtocolPositions;
 
-use ttc::engine::{
-    CheckRequest, CompletionAnswer, Engine, Position, Project, ServiceSeverity, ServiceTag,
-    SignatureTrigger, Workspace,
-};
+use ttc::engine::{CheckRequest, Engine, Position, Project, SignatureTrigger, Workspace};
 
 /// Runs the server until stdin closes.
 pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
@@ -280,61 +278,15 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
         "completion" => semantic(workspace, params, |project, path, position| {
             let member = params["member"].as_bool().unwrap_or(false);
             let trigger = params["triggerCharacter"].as_str();
-            let CompletionAnswer {
-                items,
-                member,
-                probe,
-            } = project.triggered_completion(path, position, member, trigger)?;
-            Ok(json!({
-                "items": items.iter().map(|item| json!({
-                    "label": item.label,
-                    "kind": item.kind.map(|kind| kind.lsp()),
-                    "tags": item.tags.iter().map(|tag| tag.lsp()).collect::<Vec<_>>(),
-                    "sortText": item.sort_text,
-                    "insertText": item.insert_text,
-                    "filterText": item.filter_text,
-                    "snippet": item.snippet,
-                    "range": item.range.map(range_json),
-                    "source": item.source,
-                    "detail": item.detail,
-                    "labelDetails": (item.label_detail.is_some() || item.description.is_some())
-                        .then(|| json!({
-                            "detail": item.label_detail,
-                            "description": item.description,
-                        })),
-                })).collect::<Vec<_>>(),
-                "member": member,
-                "probe": probe,
-            }))
+            let answer = project.triggered_completion(path, position, member, trigger)?;
+            Ok(completion_json(answer))
         }),
         "completionResolve" => semantic(workspace, params, |project, path, position| {
             let label = params["label"].as_str().unwrap_or_default();
             let source = params["source"].as_str();
             let probe = params["probe"].as_u64();
-            Ok(
-                match project.completion_resolve(path, position, label, source, probe)? {
-                    None => serde_json::Value::Null,
-                    Some(detail) => {
-                        let mut answer = json!({
-                            "signature": detail.signature,
-                            "documentation": detail.documentation,
-                        });
-                        if !detail.additional_edits.is_empty() {
-                            answer["additionalEdits"] = detail
-                                .additional_edits
-                                .into_iter()
-                                .map(|edit| {
-                                    json!({
-                                        "range": range_json(edit.range),
-                                        "newText": edit.new_text,
-                                    })
-                                })
-                                .collect();
-                        }
-                        answer
-                    }
-                },
-            )
+            let detail = project.completion_resolve(path, position, label, source, probe)?;
+            Ok(completion_detail_json(detail))
         }),
         "rename" => spanning(workspace, params, |workspace, path, position| {
             Ok(match workspace.rename(path, position)? {
@@ -374,23 +326,8 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                 _ => SignatureTrigger::Invoked,
             };
             let retrigger = params["isRetrigger"].as_bool().unwrap_or(false);
-            Ok(
-                match project.triggered_signature_help(path, position, &trigger, retrigger)? {
-                    None => serde_json::Value::Null,
-                    Some(help) => json!({
-                        "signatures": help.signatures.iter().map(|signature| json!({
-                            "label": signature.label,
-                            "documentation": signature.documentation,
-                            "parameters": signature.parameters.iter().map(|parameter| json!({
-                                "label": [parameter.label.0, parameter.label.1],
-                                "documentation": parameter.documentation,
-                            })).collect::<Vec<_>>(),
-                        })).collect::<Vec<_>>(),
-                        "activeSignature": help.active_signature,
-                        "activeParameter": help.active_parameter,
-                    }),
-                },
-            )
+            let help = project.triggered_signature_help(path, position, &trigger, retrigger)?;
+            Ok(signature_help_json(help))
         }),
         "semanticTokens" => semantic_tokens(params),
         "patternCompletions" => semantic(workspace, params, |project, path, position| {
@@ -421,49 +358,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
             let diagnostics: Vec<_> = project
                 .service_diagnostics(path)?
                 .into_iter()
-                .map(|d| {
-                    let mut entry = json!({
-                        "range": range_json(d.range),
-                        "message": d.message,
-                        "code": d.code,
-                        "severity": match d.severity {
-                            ServiceSeverity::Error => "error",
-                            ServiceSeverity::Warning => "warning",
-                            ServiceSeverity::Information => "information",
-                            ServiceSeverity::Hint => "hint",
-                        },
-                    });
-                    if !d.tags.is_empty() {
-                        entry["tags"] = d
-                            .tags
-                            .iter()
-                            .map(|tag| match tag {
-                                ServiceTag::Unnecessary => "unnecessary",
-                                ServiceTag::Deprecated => "deprecated",
-                            })
-                            .collect();
-                    }
-                    // Secondary labeled spans ride only when there are any,
-                    // so consumers of the existing shape see no new field
-                    // until a diagnostic actually carries one.
-                    if !d.related.is_empty() {
-                        entry["related"] = d
-                            .related
-                            .iter()
-                            .map(|r| {
-                                let mut related = json!({
-                                    "range": range_json(r.range),
-                                    "message": r.message,
-                                });
-                                if let Some(path) = &r.path {
-                                    related["path"] = json!(path);
-                                }
-                                related
-                            })
-                            .collect();
-                    }
-                    entry
-                })
+                .map(service_diagnostic_json)
                 .collect();
             // The tt diagnostics these state in TypeScript's own words: a
             // consumer showing both layers shows the fact once.

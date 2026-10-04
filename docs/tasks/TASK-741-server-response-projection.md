@@ -1,5 +1,13 @@
 # TASK-741: Isolate server response projection
 
+Workflow update: The user subsequently authorized publication and then
+sequential intermediate merges, as recorded in
+[TASK-742](TASK-742-service-response-projections.md). PR #136 was merged into
+the design branch, and #135 integrated its identical verified tree into main
+at 21793c6b2aefe6342d0261df712fb68a40210369 after all applicable CI passed.
+The historical publication restriction below is superseded; the final
+roadmap merge remains reserved for the user.
+
 - **Status**: Complete
 - **Started**: 2026-10-03
 - **Completed**: 2026-10-03

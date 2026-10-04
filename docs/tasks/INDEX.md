@@ -754,6 +754,8 @@
 
 | TASK-741 | Isolate server response projection | Complete | 2026-10-03 | 2026-10-03 | [TASK-741](./TASK-741-server-response-projection.md) |
 
+| TASK-742 | Isolate service response projections | Complete | 2026-10-04 | 2026-10-04 | [TASK-742](./TASK-742-service-response-projections.md) |
+
 ## Next task number
 
-**TASK-742**
+**TASK-743**

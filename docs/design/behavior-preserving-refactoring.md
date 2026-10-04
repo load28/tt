@@ -197,10 +197,18 @@ pre-existing failure from a new failure; neither authorizes claiming all gates
 passed. Block merge while required checks remain unresolved.
 
 Every PR must stand alone for review and rollback. Merge only through the
-repository's normal PR workflow after gates and main review; do not merge or
-publish automatically as part of preparing these changes. The first delivery
-is PR 0 and one narrow PR 1 implementation with review evidence, followed by
-the next detailed brief after that boundary has been assessed.
+repository's normal PR workflow after local gates, independent main-agent
+review, and applicable remote CI checks. On 2026-10-04 the user authorized
+autonomous sequential publication and intermediate squash merges, superseding
+the original preparation-only workflow. Each implementation starts from
+latest main after its predecessor merges and receives a fresh detailed brief
+and subagent context. Leave the final roadmap PR open for the user's review
+and merge; this authorization does not relax any compatibility or test gate.
+
+PR 0 and PR 1 reached main through [#135](https://github.com/load28/tt/pull/135)
+(including the stacked [#136](https://github.com/load28/tt/pull/136)). PR 2 is
+specified in [its detailed brief](refactoring-service-responses.md) and tracked
+by [TASK-742](../tasks/TASK-742-service-response-projections.md).
 
 TASK-732 is already In progress and records outstanding performance/parity
 work. This refactoring program does not complete it, relax its checks, or mix
