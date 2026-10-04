@@ -764,6 +764,8 @@
 
 | TASK-746 | Isolate project completion operations | In progress | 2026-10-04 | — | [TASK-746](./TASK-746-completion-operations.md) |
 
+| TASK-747 | Isolate service target coordinate mapping | In progress | 2026-10-04 | — | [TASK-747](./TASK-747-target-coordinates.md) |
+
 ## Next task number
 
-**TASK-747**
+**TASK-748**
