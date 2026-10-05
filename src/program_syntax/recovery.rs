@@ -68,12 +68,19 @@ pub(crate) fn editor_insertions(
         .filter_map(|record| {
             let text = record.replacement?;
             let at = source_at(parsed.start.byte(record.span.lo))?;
-            // EOF cannot capture the prelude of a following statement. Keep
-            // TypeScript's own missing-token diagnostic there unchanged.
-            if at == source.len() {
+            let start = source_at(parsed.start.byte(record.owner.lo))?;
+            // EOF cannot capture the prelude of a following statement, so host
+            // text keeps TypeScript's own missing-token diagnostic there. A tt
+            // value inside the unfinished production is placed by it, though:
+            // lowering needs the production complete.
+            if at == source.len()
+                && !projection
+                    .pending
+                    .iter()
+                    .any(|entry| start <= entry.source.start && entry.source.end <= at)
+            {
                 return None;
             }
-            let start = source_at(parsed.start.byte(record.owner.lo))?;
             Some(EditorInsertion {
                 at,
                 text: text.into(),

@@ -157,6 +157,7 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
             break;
         }
         if matches!(open.last(), None | Some(b')' | b']'))
+            && !open.contains(&b'}')
             && k > cur.idx
             && !dotted_at(cur.tokens, cur.idx, k)
             && crate::lexer::statement_keyword_at(cur.parser.src, cur.tokens, k)
@@ -165,8 +166,11 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
             break;
         }
         // TypeScript ends an argument list at `;` (`isListTerminator`), and
-        // an array list returns `;` to the enclosing statement list.
-        if matches!(open.last(), Some(b')' | b']')) && matches!(token.kind, TokenKind::Punct(b';'))
+        // an array list returns `;` to the enclosing statement list. Inside a
+        // block (`() => { for (;;) {} }`) `;` belongs to that block's statements.
+        if matches!(open.last(), Some(b')' | b']'))
+            && !open.contains(&b'}')
+            && matches!(token.kind, TokenKind::Punct(b';'))
         {
             break;
         }

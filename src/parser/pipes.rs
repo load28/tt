@@ -131,6 +131,7 @@ pub(super) fn parse_pipeline(
                 break;
             }
             if matches!(open.last(), Some(b')' | b']'))
+                && !open.contains(&b'}')
                 && !dotted_at(tokens, step_from, k)
                 && crate::lexer::statement_keyword_at(parser.src, tokens, k)
                 && &parser.src[t.span.start..t.span.end] != "try"
@@ -139,7 +140,10 @@ pub(super) fn parse_pipeline(
             }
             // TypeScript ends an argument list at `;` (`isListTerminator`),
             // and an array list returns `;` to the enclosing statement list.
-            if matches!(open.last(), Some(b')' | b']')) && matches!(t.kind, TokenKind::Punct(b';'))
+            // Inside a block (`() => { for (;;) {} }`) `;` is the block's.
+            if matches!(open.last(), Some(b')' | b']'))
+                && !open.contains(&b'}')
+                && matches!(t.kind, TokenKind::Punct(b';'))
             {
                 break;
             }
