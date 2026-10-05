@@ -65,6 +65,10 @@ fn recovery_sequences_keep_independent_answers_at_every_revision() {
             "const broken = f(",
             "const broken = [",
             "const broken = { value:",
+            "type Broken = { x: ;",
+            "type Broken = Array<",
+            "const broken = 1 +",
+            "const broken = f<",
         ];
         if extension == "ttx" {
             fragments.extend([
@@ -146,6 +150,54 @@ fn recovery_sequences_keep_independent_answers_at_every_revision() {
                 observed,
                 observe(&mut fresh, &dir, &path, &units, &text, cursor),
                 "{extension}: {fragment}"
+            );
+        }
+    }
+}
+
+#[test]
+fn recovery_retains_immediate_exports_in_both_service_arrangements() {
+    if !toolchain() {
+        return;
+    }
+    for mapped in [false, true] {
+        let disk = Workspace::in_repo("recovery-exports");
+        let dir = disk.path().canonicalize().unwrap();
+        fs::write(dir.join("tsconfig.json"), DEFAULT_TSCONFIG).unwrap();
+        if mapped {
+            common::installed_mapper::install(&dir);
+        }
+        let path = dir.join("provider.tt");
+        let consumer = dir.join("consumer.tt");
+        let consumer_text =
+            "import { good } from './provider.tt'; const ok: number = good; export { ok };";
+        fs::write(&consumer, consumer_text).unwrap();
+        for broken in [
+            "type Bad = { x: ;",
+            "interface Bad { x: ;",
+            "type Bad = Array<",
+            "const broken =",
+            "const broken = 1 +",
+            "const broken = f<",
+            "const broken = obj.",
+        ] {
+            let text = format!(
+                "declare const flag: boolean;\ndeclare const obj: {{ x: number }};\ndeclare function f(): void;\n{broken}\nexport const good = match (flag) {{ true => 1, false => 2 }};\n"
+            );
+            fs::write(&path, &text).unwrap();
+            let mut workspace = EngineWorkspace::new(Engine::new(None));
+            workspace.open_document(&path, text).unwrap();
+            workspace
+                .open_document(&consumer, consumer_text.to_string())
+                .unwrap();
+            let diagnostics = workspace
+                .project_for(&consumer)
+                .unwrap()
+                .service_diagnostics(&consumer)
+                .unwrap();
+            assert!(
+                diagnostics.is_empty(),
+                "mapped={mapped}, {broken}: {diagnostics:?}"
             );
         }
     }

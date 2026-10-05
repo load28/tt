@@ -68,7 +68,6 @@ fn complete_speculative_syntax_has_no_recovery() {
         "const f = <T,>(x: T) => x; const later = 42;",
         "const x = <div>{1}</div>; const later = 42;",
         "const x = { const: 1, return() {}, throw: 2, else: 3 }; const later = 42;",
-        "const x = f(let); const later = 42;",
     ] {
         let (module, recovery, errors) = parse(source, true, RecoveryMode::Editor);
         assert_eq!(module.body.len(), 2);
@@ -135,4 +134,43 @@ fn missing_type_annotations_retain_the_declaration_shape() {
         RecoveryMode::Editor,
     );
     assert_eq!(names(&module), ["broken", "later"]);
+}
+
+#[test]
+fn complete_const_type_parameters_are_not_statement_boundaries() {
+    let (_, recovery, errors) = parse(
+        "function f<const T>(x: T) { return x; }",
+        false,
+        RecoveryMode::Editor,
+    );
+    assert!(recovery.is_empty());
+    assert_eq!(errors, 0);
+}
+
+#[test]
+fn a_contextual_keyword_argument_does_not_create_a_missing_element() {
+    let (_, recovery, _) = parse("const x = f(let);", false, RecoveryMode::Editor);
+    assert!(recovery.is_empty());
+}
+
+#[test]
+fn switch_statement_lists_advance_after_a_stray_delimiter() {
+    let (module, recovery, _) = parse(
+        "switch (value) { case 0:\n)\n}\nconst later = 42;",
+        false,
+        RecoveryMode::Editor,
+    );
+    assert_eq!(names(&module), ["later"]);
+    assert!(!recovery.is_empty());
+}
+
+#[test]
+fn an_unclosed_switch_list_returns_at_end_of_file() {
+    let (module, recovery, _) = parse(
+        "const earlier = 42; switch (value) { case 0:",
+        false,
+        RecoveryMode::Editor,
+    );
+    assert_eq!(names(&module), ["earlier"]);
+    assert!(!recovery.is_empty());
 }

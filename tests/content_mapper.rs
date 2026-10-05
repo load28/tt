@@ -170,6 +170,51 @@ fn recovery_reports_the_original_host_error_once_through_the_real_mapper() {
 }
 
 #[test]
+fn host_recovery_keeps_an_immediately_following_export_in_the_real_mapper() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    for broken in [
+        "type Bad = { x: ;",
+        "interface Bad { x: ;",
+        "type Bad = Array<",
+        "const broken =",
+        "const broken = 1 +",
+        "const broken = f<",
+        "const broken = obj.",
+    ] {
+        fs::write(project.path().join("src/provider.tt"), format!("declare const flag: boolean;\ndeclare const obj: {{ x: number }};\ndeclare function f(): void;\n{broken}\nexport const good = match (flag) {{ true => 1, false => 2 }};\n")).unwrap();
+        fs::write(
+            project.path().join("src/main.ts"),
+            "import { good } from './provider.tt';\nconst ok: number = good;\n",
+        )
+        .unwrap();
+        let (ok, text) = check(&tsc, &project);
+        assert!(!ok, "the original syntax error is retained: {broken}");
+        assert!(
+            !text.contains("src/main.ts")
+                && !text.contains("$tt_")
+                && !text.contains("Cannot find name 'let'"),
+            "{broken}: {text}"
+        );
+    }
+}
+
+#[test]
+fn every_independent_repaired_call_keeps_a_primary_diagnostic() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(project.path().join("src/main.tt"), "declare function f(): void;\ndeclare const flag: boolean;\nconst a = f(\nconst b = f(\nconst good = match (flag) { true => 1, false => 2 };\n").unwrap();
+    let (ok, text) = check(&tsc, &project);
+    assert!(!ok);
+    assert_eq!(
+        text.matches("error ").count(),
+        2,
+        "both original causes, no generated errors: {text}"
+    );
+    assert!(!text.contains("$tt_"), "{text}");
+}
+
+#[test]
 fn a_ts_file_imports_a_tt_file_with_no_sidecar_on_disk() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);

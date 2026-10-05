@@ -1,0 +1,7 @@
+//// [editorRecoveryNestedTemplateComma.tt] 5 mapping(s)
+1:1 -> 2:1 len 4  "p()?"
+1:12 -> 3:3 len 9  "return`${"
+1:24 -> 3:107 len 2  "\"\""
+1:26 -> 3:110 len 3  ",}`"
+1:30 -> 4:5 len 3  ":n\n"
+

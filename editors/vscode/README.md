@@ -98,6 +98,13 @@ the editor adapter. See [the LSP architecture](../../docs/design/lsp-architectur
 
 ### Diagnostics and project state
 
+While you type incomplete expressions, argument lists, types, or JSX, the
+compiler retains the recoverable surrounding syntax. Independent tt constructs
+and exports remain available to completion, hover, and navigation. The original
+syntax error and unrelated type errors remain visible. Recovery uses the current
+buffer; it does not reuse an older successful output. These editor projections
+do not make an incomplete program valid for builds or declaration emission.
+
 The tt server combines syntax checks, language-service results, typed compiler
 diagnostics, and hints before publishing a complete validation generation. Old
 generations are discarded. Structured compiler results can use `source: ttc`

@@ -152,13 +152,18 @@ parsing and output verification never enable this mode.
 The host projection translates parser records through its source segments.
 Known owners keep the existing evaluation/lowering model; tt values wholly
 inside skipped host input become parser-owned editor holes. Missing closing
-delimiters are materialized only in the editor input to lowering, so generated
-statement preludes cannot be swallowed by unfinished calls. `EditorSource`
+delimiters and missing expression/type operands are materialized only when
+the parser records a following statement boundary. The editor input to
+lowering therefore keeps generated statement preludes outside unfinished
+productions. EOF holes and malformed host-only files retain their original text. `EditorSource`
 restores every source coordinate and splits copied mappings around inserted
 bytes; those bytes have synthetic glue provenance, never authored mappings.
 `ProjectionReport::syntax_repairs` preserves the original syntax cause without
 suppressing independent type diagnostics in that production. `editor_only`
-blocks build/declaration output. Engine and content mapper consume this report.
+blocks build/declaration output. Engine and content mapper consume this report,
+including its withheld projection when no primary emission exists. Diagnostic
+publication retains repaired primary causes by code and original UTF-16
+position, even when TypeScript restates another occurrence of the same code.
 
 파일 표면은 `SourceKind::{TypeScript, Tsx}`로 컴파일 경계에서 정해지고 모든
 단계에 전달된다. TSX 모드에서는 완전한 JSX element/fragment를 구조적으로

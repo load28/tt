@@ -899,7 +899,10 @@ fn engine_answer(workspace: &mut ttc::engine::Workspace, request: &Request) -> V
                 .into_iter()
                 .map(|code| code.as_str())
                 .collect();
-            Ok(json!({ "diagnostics": diagnostics, "restates": restates }))
+            let retains: Vec<_> = project.service_retained_syntax(path)?.into_iter()
+                .map(|(code, start)| json!({ "code": code.as_str(), "start": { "line": start.line, "character": start.character } }))
+                .collect();
+            Ok(json!({ "diagnostics": diagnostics, "restates": restates, "retains": retains }))
         }),
         "completionResolve" => workspace.project_for(path).and_then(|project| {
             Ok(

@@ -465,7 +465,7 @@ impl<I: Tokens> Parser<I> {
         } {
             self.try_parse_ts(|p| {
                 let type_args = p.parse_ts_type_args()?;
-                p.assert_and_bump(Token::Gt);
+                expect!(p, Token::Gt);
                 if p.input().is(Token::LParen) {
                     Ok(Some(type_args))
                 } else {
@@ -1265,7 +1265,7 @@ impl<I: Tokens> Parser<I> {
                         }
 
                         let type_args = p.parse_ts_type_args()?;
-                        p.assert_and_bump(Token::Gt);
+                        expect!(p, Token::Gt);
                         let cur = p.input().cur();
 
                         if !no_call && cur == Token::LParen {
@@ -1391,7 +1391,7 @@ impl<I: Tokens> Parser<I> {
 
         let type_args = if syntax.typescript() && self.input().is(Token::Lt) && question_dot {
             let ret = self.parse_ts_type_args()?;
-            self.assert_and_bump(Token::Gt);
+            expect!(self, Token::Gt);
             Some(ret)
         } else {
             None
@@ -1924,7 +1924,7 @@ impl<I: Tokens> Parser<I> {
                         Context::ShouldNotLexLtOrGtAsType,
                         Self::parse_ts_type_args,
                     )?;
-                    p.assert_and_bump(Token::Gt);
+                    expect!(p, Token::Gt);
                     if !p.input().is(Token::LParen) {
                         let span = p.input().cur_span();
                         let cur = p.input_mut().dump_cur();
@@ -2196,7 +2196,11 @@ impl<I: Tokens> Parser<I> {
         }
 
         let right = {
-            let left_of_right = self.parse_unary_expr()?;
+            let right_start = self.cur_pos();
+            let left_of_right = match self.parse_unary_expr() {
+                Err(error) if self.editor_recovery() => self.recover_expression(right_start, error)?,
+                result => result?,
+            };
             self.parse_bin_op_recursively(
                 left_of_right,
                 if op == op!("**") {

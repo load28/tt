@@ -34,16 +34,23 @@ pub(crate) fn lost_editor_values(
         .collect())
 }
 
-/// Missing delimiters recorded by the host parser, in original coordinates.
+pub(crate) struct EditorInsertion {
+    pub at: usize,
+    pub text: String,
+    pub owner: SourceSpan,
+    pub expected: String,
+}
+
+/// Missing syntax recorded by the host parser, in original coordinates.
 /// The insertion point precedes the next token owned by the enclosing grammar.
 /// Inserted trivia separates it from the following declaration and its prelude.
-pub(crate) fn editor_delimiters(
+pub(crate) fn editor_insertions(
     semantic: &SemanticFile,
     core: &CoreFile,
     source: &str,
     source_kind: crate::SourceKind,
     tokens: &[crate::lexer::Token],
-) -> Result<Vec<(usize, String, SourceSpan)>, ProgramSyntaxError> {
+) -> Result<Vec<EditorInsertion>, ProgramSyntaxError> {
     let projection = projection::ProjectionBuilder::new(semantic, core, source, tokens).build()?;
     let parsed = parse_module(
         &projection.code,
@@ -59,12 +66,20 @@ pub(crate) fn editor_delimiters(
         .recoveries
         .iter()
         .filter_map(|record| {
-            if record.context != swc_ecma_parser::RecoveryContext::Delimiter {
+            let text = record.replacement?;
+            let at = source_at(parsed.start.byte(record.span.lo))?;
+            // EOF cannot capture the prelude of a following statement. Keep
+            // TypeScript's own missing-token diagnostic there unchanged.
+            if at == source.len() {
                 return None;
             }
-            let at = source_at(parsed.start.byte(record.span.lo))?;
             let start = source_at(parsed.start.byte(record.owner.lo))?;
-            Some((at, record.expected.clone(), SourceSpan { start, end: at }))
+            Some(EditorInsertion {
+                at,
+                text: text.into(),
+                owner: SourceSpan { start, end: at },
+                expected: record.expected.clone(),
+            })
         })
         .collect())
 }

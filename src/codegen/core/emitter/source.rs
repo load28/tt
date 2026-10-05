@@ -976,6 +976,12 @@ impl<'a> Emitter<'a> {
                 self.collect_operand_value(*inner, &mut nested);
             }
         }
+        // Interpolations already represented by inline slots or recovery
+        // values need no statement prelude. The template still delivers a
+        // value to its continuation through normal interpolation emission.
+        if nested.is_empty() {
+            return Some((Rope::new(), self.emit_template(template)));
+        }
         let span = structured_expr_span(self.semantic, self.core, expr)
             .unwrap_or_else(|| crate::ice::bug!("a template has no source extent"));
         self.emit_operand(span, &nested, continuation)

@@ -16,7 +16,8 @@ enum ParsingContext {
     HeritageClauseElement,
     TupleElementTypes,
     TypeMembers,
-    TypeParametersOrArguments,
+    TypeParameters,
+    TypeArguments,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -786,6 +787,22 @@ impl<I: Tokens> Parser<I> {
     /// `tsIsListTerminator`
     fn is_ts_list_terminator(&mut self, kind: ParsingContext) -> bool {
         debug_assert!(self.input().syntax().typescript());
+        if self.editor_recovery() {
+            let boundary = match kind {
+                ParsingContext::TypeMembers | ParsingContext::EnumMembers => {
+                    self.input().cur() != Token::Semi && self.ends_recovery_object()
+                },
+                ParsingContext::TupleElementTypes => self.ends_recovery_list(Token::RBracket),
+                ParsingContext::TypeParameters => {
+                    self.input().cur() != Token::Const && self.ends_recovery_list(Token::Gt)
+                },
+                ParsingContext::TypeArguments => self.ends_recovery_list(Token::Gt),
+                ParsingContext::HeritageClauseElement => false,
+            };
+            if boundary {
+                return true;
+            }
+        }
         let cur = self.input().cur();
         match kind {
             ParsingContext::EnumMembers | ParsingContext::TypeMembers => cur == Token::RBrace,
@@ -793,7 +810,7 @@ impl<I: Tokens> Parser<I> {
                 matches!(cur, Token::LBrace | Token::Implements | Token::Extends)
             }
             ParsingContext::TupleElementTypes => cur == Token::RBracket,
-            ParsingContext::TypeParametersOrArguments => cur == Token::Gt,
+            ParsingContext::TypeParameters | ParsingContext::TypeArguments => cur == Token::Gt,
         }
     }
 
@@ -1124,8 +1141,20 @@ impl<I: Tokens> Parser<I> {
                 } else {
                     expect!(p, Token::Lt);
                 }
+                if p.editor_recovery() && p.ends_recovery_list(Token::Gt) {
+                    let at = p.cur_pos();
+                    let ty = p.recover_type(
+                        at,
+                        crate::error::Error::new(
+                            Span::new_with_checked(at, at),
+                            SyntaxError::TS1110,
+                        ),
+                    )?;
+                    p.materialize_last_recovery("any");
+                    return Ok(vec![ty]);
+                }
                 if p.syntax().flow() {
-                    p.parse_ts_delimited_list(ParsingContext::TypeParametersOrArguments, |p| {
+                    p.parse_ts_delimited_list(ParsingContext::TypeArguments, |p| {
                         trace_cur!(p, parse_ts_type_args__arg);
 
                         p.do_outside_of_context(
@@ -1134,7 +1163,7 @@ impl<I: Tokens> Parser<I> {
                         )
                     })
                 } else {
-                    p.parse_ts_delimited_list(ParsingContext::TypeParametersOrArguments, |p| {
+                    p.parse_ts_delimited_list(ParsingContext::TypeArguments, |p| {
                         trace_cur!(p, parse_ts_type_args__arg);
 
                         p.parse_ts_type()
@@ -1146,8 +1175,17 @@ impl<I: Tokens> Parser<I> {
         // context. But be sure not to parse a regex in the jsx expression
         // `<C<number> />`, so set exprAllowed = false
         self.input_mut().set_expr_allowed(false);
-        self.expect_without_advance(Token::Gt)?;
-        let span = Span::new_with_checked(start, self.input().cur_span().hi);
+        // The caller consumes (or records) the closing type token. JSX's
+        // non-consuming expectations remain strict about lexical context.
+        if !self.can_recover_missing_token(Token::Gt) {
+            self.expect_without_advance(Token::Gt)?;
+        }
+        let end = if self.input().is(Token::Gt) {
+            self.input().cur_span().hi
+        } else {
+            self.cur_pos()
+        };
+        let span = Span::new_with_checked(start, end);
 
         // Report grammar error for empty type argument list like `I<>`.
         // Flow allows this form in several positions.
@@ -1183,7 +1221,7 @@ impl<I: Tokens> Parser<I> {
                 Context::ShouldNotLexLtOrGtAsType,
                 Self::parse_ts_type_args,
             )?;
-            self.assert_and_bump(Token::Gt);
+            expect!(self, Token::Gt);
             Some(ret)
         } else {
             None
@@ -1498,7 +1536,7 @@ impl<I: Tokens> Parser<I> {
                 p.bump();
 
                 let params = p.parse_ts_bracketed_list(
-                    ParsingContext::TypeParametersOrArguments,
+                    ParsingContext::TypeParameters,
                     |p| p.parse_ts_type_param(permit_in_out, permit_const), // bracket
                     false,
                     // skip_first_token
@@ -1703,7 +1741,7 @@ impl<I: Tokens> Parser<I> {
 
         self.try_parse_ts(|p| {
             let type_args = p.parse_ts_type_args()?;
-            p.assert_and_bump(Token::Gt);
+            expect!(p, Token::Gt);
             let cur = p.input().cur();
             if matches!(
                 cur,
@@ -2288,7 +2326,7 @@ impl<I: Tokens> Parser<I> {
             _ => {
                 let type_args = if self.input().is(Token::Lt) {
                     let ret = self.parse_ts_type_args()?;
-                    self.assert_and_bump(Token::Gt);
+                    expect!(self, Token::Gt);
                     Some(ret)
                 } else {
                     None
@@ -4226,7 +4264,7 @@ impl<I: Tokens> Parser<I> {
                 Context::ShouldNotLexLtOrGtAsType,
                 Self::parse_ts_type_args,
             )?;
-            self.assert_and_bump(Token::Gt);
+            expect!(self, Token::Gt);
             Some(ret)
         } else {
             None
@@ -4286,7 +4324,7 @@ impl<I: Tokens> Parser<I> {
                 Context::ShouldNotLexLtOrGtAsType,
                 Self::parse_ts_type_args,
             )?;
-            self.assert_and_bump(Token::Gt);
+            expect!(self, Token::Gt);
             Some(ret)
         } else {
             None

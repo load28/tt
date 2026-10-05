@@ -433,7 +433,7 @@ pub struct ProjectionReport {
     pub diagnostics: Vec<Diagnostic>,
     /// Source byte ranges occupied by parser recovery nodes.
     pub recovered: Vec<(usize, usize)>,
-    /// Host productions whose missing delimiters were materialized. Their
+    /// Host productions whose missing syntax was materialized. Their
     /// original syntax diagnostic remains authoritative; type checking continues.
     pub syntax_repairs: Vec<(usize, usize)>,
     /// Those of `recovered` that stood for a declaration (a malformed
@@ -485,7 +485,7 @@ pub(crate) fn compile_projection_report_parsed(
     program: &ast::Program,
     tokens: &[lexer::Token],
 ) -> ProjectionReport {
-    let ordinary = compile_report_parsed(source, options, program, tokens);
+    let mut ordinary = compile_report_parsed(source, options, program, tokens);
     if ordinary.emit.is_some() {
         return ProjectionReport {
             emit: ordinary.emit,
@@ -498,9 +498,13 @@ pub(crate) fn compile_projection_report_parsed(
         };
     }
 
-    if let Some((emit, recovered)) =
-        editor_host_emit(source, options, program, tokens, &ordinary.diagnostics)
+    if let Some(EditorHostEmit {
+        emit,
+        repaired: recovered,
+        diagnostics: added,
+    }) = editor_host_emit(source, options, program, tokens, &ordinary.diagnostics)
     {
+        ordinary.diagnostics.extend(added);
         return ProjectionReport {
             emit: Some(emit),
             editor_only: true,
@@ -567,7 +571,11 @@ pub(crate) fn compile_projection_report_parsed(
         let mut editor_only = false;
         let mut host_recovered = Vec::new();
         if recovered_report.emit.is_none() {
-            if let Some((emit, recovered)) = editor_host_emit(
+            if let Some(EditorHostEmit {
+                emit,
+                repaired: recovered,
+                diagnostics: added,
+            }) = editor_host_emit(
                 &recovered_source,
                 options,
                 &recovered_program,
@@ -576,6 +584,7 @@ pub(crate) fn compile_projection_report_parsed(
             ) {
                 recovered_report.emit = Some(emit);
                 host_recovered = recovered;
+                ordinary.diagnostics.extend(added);
             }
             editor_only = recovered_report.emit.is_some();
         }
@@ -626,24 +635,53 @@ pub(crate) fn compile_projection_report_parsed(
     }
 }
 
-/// Lower the parser's current editor tree. Missing delimiters are materialized
-/// before lowering so a following generated prelude cannot become an argument
-/// of an unfinished call. Insertions never acquire authored-source mappings.
+struct EditorHostEmit {
+    emit: MappedEmit,
+    repaired: Vec<(usize, usize)>,
+    diagnostics: Vec<Diagnostic>,
+}
+
+/// Lower the parser's current editor tree. Missing syntax is materialized
+/// before lowering so an unfinished production cannot capture the following
+/// generated prelude. Insertions never acquire authored-source mappings.
 fn editor_host_emit(
     source: &str,
     options: &Options,
     program: &ast::Program,
     tokens: &[lexer::Token],
     diagnostics: &[Diagnostic],
-) -> Option<(MappedEmit, Vec<(usize, usize)>)> {
+) -> Option<EditorHostEmit> {
     if !diagnostics
         .iter()
         .any(|d| d.code.restates_typescript_syntax())
     {
         return None;
     }
+    if diagnostics.iter().any(|d| d.code.leaves_tt_text())
+        || !parser::unclaimed_candidates(program).is_empty()
+    {
+        return None;
+    }
     let semantic = analysis::coverage_semantics(source, program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantic, source, tokens);
+    // No host placement is needed for pass-through text. Let TypeScript
+    // diagnose that text verbatim rather than repairing syntax unnecessarily.
+    if !core.requires_host_lowering() && !core.imports_std() {
+        return report_parsed(
+            source,
+            options,
+            program,
+            tokens,
+            false,
+            crate::program_syntax::SyntaxMode::Editor,
+        )
+        .emit
+        .map(|emit| EditorHostEmit {
+            emit,
+            repaired: Vec::new(),
+            diagnostics: Vec::new(),
+        });
+    }
     if !crate::program_syntax::lost_editor_values(
         &semantic,
         &core,
@@ -656,7 +694,7 @@ fn editor_host_emit(
     {
         return None;
     }
-    let delimiters = crate::program_syntax::editor_delimiters(
+    let insertions = crate::program_syntax::editor_insertions(
         &semantic,
         &core,
         source,
@@ -664,7 +702,7 @@ fn editor_host_emit(
         tokens,
     )
     .ok()?;
-    if delimiters.is_empty() {
+    if insertions.is_empty() {
         return report_parsed(
             source,
             options,
@@ -674,17 +712,42 @@ fn editor_host_emit(
             crate::program_syntax::SyntaxMode::Editor,
         )
         .emit
-        .map(|emit| (emit, Vec::new()));
+        .map(|emit| EditorHostEmit {
+            emit,
+            repaired: Vec::new(),
+            diagnostics: Vec::new(),
+        });
     }
-    let recovered = delimiters
+    let recovered = insertions
         .iter()
-        .map(|(_, _, owner)| (owner.start, owner.end))
+        .map(|insertion| (insertion.owner.start, insertion.owner.end))
         .collect();
+    let mut added = Vec::new();
+    for insertion in &insertions {
+        if diagnostics.iter().chain(&added).any(|diagnostic| {
+            diagnostic.code.restates_typescript_syntax()
+                && diagnostic
+                    .start
+                    .is_some_and(|at| insertion.owner.start < at && at <= insertion.at)
+        }) {
+            continue;
+        }
+        added.push(Diagnostic {
+            code: DiagnosticCode::SourceNotTypeScript,
+            severity: Severity::Error,
+            message: format!("expected {}", insertion.expected),
+            start: Some(insertion.at),
+            end: Some(insertion.at),
+            owner: None,
+            suggestions: Vec::new(),
+            labels: Vec::new(),
+        });
+    }
     let repaired = crate::recovery::EditorSource::new(
         source,
-        delimiters
+        insertions
             .into_iter()
-            .map(|(at, text, _)| (at, text))
+            .map(|insertion| (insertion.at, insertion.text))
             .collect(),
     );
     let (program, tokens) = parser::lex_and_parse_with_kind(&repaired.text, options.source_kind);
@@ -697,7 +760,11 @@ fn editor_host_emit(
         crate::program_syntax::SyntaxMode::Editor,
     )
     .emit
-    .map(|emit| (repaired.restore(emit), recovered))
+    .map(|emit| EditorHostEmit {
+        emit: repaired.restore(emit),
+        repaired: recovered,
+        diagnostics: added,
+    })
 }
 
 fn verified_emit(

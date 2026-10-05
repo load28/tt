@@ -1,3 +1,1 @@
-recoveryBlockDelimiter diagnostics recoveryBlockDelimiter.tt
 recoveryCallDelimiter diagnostics recoveryCallDelimiter.tt
-recoveryTrailingMember diagnostics recoveryTrailingMember.tt

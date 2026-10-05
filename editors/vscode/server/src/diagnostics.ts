@@ -18,6 +18,8 @@ export interface DiagnosticLayers {
   /** The codes of compiler diagnostics the service states in TypeScript's
    * words (`engine.tsDiagnosticsAnswer`). */
   restates: string[];
+  /** Original causes whose source was replaced by an editor repair. */
+  retains?: { code: string; start: { line: number; character: number } }[];
   /** tt's hints, which are never problems. */
   hints: Diagnostic[];
   /** The typed compiler pass, when it answered. `replacesTypes` says it
@@ -108,7 +110,9 @@ function inSourceOrder(left: Diagnostic, right: Diagnostic): number {
  */
 export function publishedDiagnostics(layers: DiagnosticLayers): Diagnostic[] {
   const restated = new Set(layers.restates);
-  const stated = (d: Diagnostic) => d.source === "ts" || !restated.has(String(d.code ?? ""));
+  const stated = (d: Diagnostic) => d.source === "ts" || !restated.has(String(d.code ?? "")) ||
+    layers.retains?.some((cause) => cause.code === String(d.code ?? "") &&
+      cause.start.line === d.range.start.line && cause.start.character === d.range.start.character);
   let diagnostics = [...layers.text.filter(stated), ...layers.service, ...layers.hints];
   if (layers.typed !== null) {
     diagnostics = mergeTyped(

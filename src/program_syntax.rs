@@ -21,7 +21,7 @@ mod collector;
 mod completion;
 mod projection;
 mod recovery;
-pub(crate) use recovery::{editor_delimiters, lost_editor_values};
+pub(crate) use recovery::{editor_insertions, lost_editor_values};
 mod protocol;
 mod scopes;
 mod visit;

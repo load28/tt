@@ -1,9 +1,9 @@
 # TASK-759: Preserve editor structure during incomplete syntax
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-05
-- **Completed**: —
-- **Commit**: —
+- **Completed**: 2026-10-05
+- **Commit**: `8df92671` (implementation); final corrections in the completion commit
 
 ## Purpose
 
@@ -27,7 +27,7 @@ existing syntax substrate and preserve the repository's testing contracts.
 - **Alternatives considered**: Delay diagnostics; retain stale successful
   output; replace the syntax substrate with a TypeScript service call; add
   parser-owned missing/error nodes and grammatical synchronization.
-- **Decision and rationale**: Propose the last option. It addresses the
+- **Decision and rationale**: Adopt the last option. It addresses the
   structural failure without moving syntax ownership into the type backend.
   See [the design](../design/structural-editor-recovery.md).
 
@@ -70,6 +70,69 @@ existing syntax substrate and preserve the repository's testing contracts.
 - **Resolution**: Used `codex-structural-editor-recovery` without altering the
   existing branch.
 
+### Issue 2: One incomplete host production invalidates unrelated tt owners
+
+- **Symptom**: Missing initializers, member names or delimiters make later tt
+  constructs lose completion, navigation or their usable projection.
+- **Cause**: Strict host parsing terminates the shared ownership model before
+  independent statements can be lowered.
+- **Resolution**: Add an explicit editor parser mode with missing nodes,
+  transactional recovery records and grammatical synchronization; keep strict
+  parsing for normal compilation and verification.
+
+### Issue 3: Recovery consumes the next export or generated prelude
+
+- **Symptom**: An open type member or expression before `export const` reports
+  TS2459 in a consumer, or reports generated `let`/temporary identifiers.
+- **Cause**: The unfinished production consumes a following declaration or its
+  lowered statement prelude.
+- **Resolution**: Use parser-owned list boundaries and missing expression/type
+  insertions; split type-parameter and type-argument contexts so `<const T>`
+  remains valid. Preserve source mappings across materialized editor repairs.
+
+### Issue 4: The mapper discards an available projection
+
+- **Symptom**: Member-access damage yields an empty mapped module while the
+  engine still serves its declarations.
+- **Cause**: The content mapper only selects `emit`, omitting `withheld`.
+- **Resolution**: Select the same available projection in both consumers and
+  apply source-aware syntax restatement to either form.
+
+### Issue 5: Multiple syntax causes collapse during publication
+
+- **Symptom**: Two repaired calls show one primary error; mixed raw and
+  repaired syntax with the same diagnostic code loses the repaired cause.
+- **Cause**: The strict lexer reports only one unmatched delimiter, and the
+  LSP merger restates diagnostics by code without distinguishing occurrences.
+- **Resolution**: Preserve parser-recorded independent causes and carry
+  retained code/source-position pairs through engine, server and LSP layers.
+
+### Issue 6: A missing-token range is expanded into adjacent source
+
+- **Symptom**: Explicit zero-width diagnostics cover the next character or
+  extend beyond EOF, diverging from TypeScript twins.
+- **Cause**: The adapter accepts an explicit end only when strictly greater
+  than the start.
+- **Resolution**: Accept equal endpoints, with emoji/CRLF/EOF regression checks.
+
+### Issue 7: Recovery can stall inside a switch clause
+
+- **Symptom**: Mutation tests repeat the same token or EOF until terminated.
+- **Cause**: Switch clauses use a statement-list entry point without the
+  block/module recovery contract, and their loop assumes EOF always throws.
+- **Resolution**: Share the statement-list progress contract and recognize
+  EOF as an editor list terminator. Pin both minimal inputs and a switch
+  editor case with a TypeScript twin.
+
+### Issue 8: A recovered template has a value but no pending prelude
+
+- **Symptom**: An incomplete Result/template interpolation panics during
+  continued return emission.
+- **Cause**: Already assigned interpolation slots leave the pending-operand
+  list empty; template operand emission incorrectly treats that as no value.
+- **Resolution**: Emit the ordinary template interpolation with an empty
+  prelude. Keep the malformed input's original diagnostics and strict rejection.
+
 ## Regression test (fails before the fix)
 
 - **Path**: `tests/compile.rs::editor_projection_preserves_matches_after_a_missing_initializer`.
@@ -83,22 +146,24 @@ existing syntax substrate and preserve the repository's testing contracts.
 
 - [x] `./scripts/doctor`
 - [x] `./scripts/check-task-index`
-- [x] `git diff --check`
+- [x] Handwritten-file whitespace check; generated baselines retain runner-owned trailing separators
 - [x] Design review
 - [x] Implementation plan review and execution-method selection
 - [x] Failing regression assertions observed before production changes
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] `./scripts/ci`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`
+- [x] `./scripts/ci`
+- [x] Baseline changes reviewed and committed with the change
 
 ## Result
 
-Design approved in `docs/design/structural-editor-recovery.md`. The concrete
-[implementation plan](../superpowers/plans/2026-10-05-structural-editor-recovery.md)
-is ready for review. No production code or test expectations have changed.
-Implementation is pending plan review and execution-method selection.
+Implemented parser-owned recovery across host syntax, projection, mapping and
+diagnostic publication. Independent tt constructs and exports remain usable
+while their surrounding input is incomplete; original causes and unrelated
+type errors remain visible. Strict compilation and declaration emission stay
+separate from editor-only recovery. The single final review and all local
+verification gates are complete.
 
 ## Implementation ledger
 
@@ -152,3 +217,111 @@ Implementation is pending plan review and execution-method selection.
   Existing arm-diagnostic and deprecated-member completion baselines are unchanged.
 - 2026-10-05: `cargo test --lib` passed all 419 tests with `ps` access, including
   strict pass-through/scaling/stack invariants. Final full gate remains pending.
+
+- 2026-10-05: Committed the coupled parser, host, mapping and editor changes as
+  `8df92671`. The four plan stages share one observable projection contract and
+  were validated incrementally, then committed together with their baselines.
+- 2026-10-05: The single independent final review identified lost immediate
+  exports after open type members, missing operands/generic arguments capturing
+  the next generated prelude, mapper omission of withheld emission, and loss of
+  one primary cause when two calls need repair. Fixed all four in their owning
+  parser/projection/consumer layers. Unclosed lexical text remains opaque;
+  ambiguous function-parameter scope is not invented by statement scanning.
+- 2026-10-05: Extended parser, incremental and real-mapper regressions. Against
+  archived production commit `8df92671`,
+  `tests/incremental.rs::recovery_retains_immediate_exports_in_both_service_arrangements`
+  failed with TS2459: `good` was declared locally but not exported. The same
+  assertion now passes in engine and mapper arrangements. Log:
+  `/tmp/tt759-before-review-exports-red.log`.
+- 2026-10-05: Against that archived commit, the independent repaired-call
+  regression in `tests/content_mapper.rs` observed one primary error instead of
+  two (`/tmp/tt759-before-review-multiple-red.log`). It now passes.
+- 2026-10-05: The LSP adapter expanded explicit zero-width ranges before emoji
+  and at EOF. The new diagnostics unit test failed before changing `>` to `>=`
+  and passes afterward (`/tmp/tt-recovery-zero-red.log`).
+- 2026-10-05: A mixed raw/repaired error regression proved code-only diagnostic
+  restatement removed an independent repaired primary. Added source-position
+  exceptions carried from the engine through JSON-lines to LSP publication;
+  the unit regression changed from failure to pass
+  (`/tmp/tt-recovery-mixed-red.log`, `/tmp/tt-recovery-mixed-green.log`). Added
+  `tests/cases/editor/recoveryMixedCauses.tt` for end-to-end publication.
+- 2026-10-05: The first full CI run exposed strict host-only/EOF parity and
+  unclaimed tt projection regressions. Restricted repair materialization to
+  host lowering before following statements and retained the existing raw-tt
+  rejection contract. Focused native regressions pass. Kept the existing
+  unclosed-JSX hover baseline by withholding answers within replaced input.
+
+- 2026-10-05: Full case validation found eight hover baseline differences:
+  the initial replaced-input guard also bypassed valid pattern-binding fallback.
+  Moved the guard into service hover so declared pattern bindings remain
+  available. Reviewed all eight `.types` diffs: only synthetic
+  `(property) undefined: undefined` answers disappear; real `value`/`n` binding
+  types remain unchanged. Updated those expected invalid-source observations.
+
+- 2026-10-05: Regenerated and reviewed public API/protocol baselines: the
+  projection's two new metadata fields, `service_retained_syntax`, and the
+  optional server `retains` response are now pinned. All three public-surface
+  tests pass. The existing full gate will verify them without update mode.
+- 2026-10-05: The full compiler-case baseline suite passed (315.94 seconds).
+  The subsequent CLI wire-shape assertions needed the newly pinned `retains`
+  field in three expected responses. Updated only those expectations; both
+  focused CLI response-shape tests pass. Running the remaining integration
+  binaries with `--no-fail-fast` before the final gate.
+- 2026-10-05: The mutation suite exposed a missing progress boundary in SWC
+  switch-clause statement lists. A process sample located repeated recovery
+  in `parse_switch_stmt`; the full mutation process later exited with SIGKILL.
+  Added `switch_statement_lists_advance_after_a_stray_delimiter`: unchanged
+  production failed to finish within four seconds
+  (`/tmp/tt-recovery-switch-red.log`). Route `parse_stmt_list_item` through the
+  same recovery/progress contract as block and module lists. The new test and
+  all ten parser recovery tests now finish successfully in under one second.
+- 2026-10-05: A second switch invariant needed an explicit EOF list terminator;
+  its focused pre-fix test also timed out. Both statement-list regressions now
+  pass. Added a switch editor case whose diagnostics, hover, completion and
+  definition all agree with its TypeScript twin.
+- 2026-10-05: With loop termination restored, the 1,000-mutant pass completed
+  and found one malformed Result/template crash. A template whose interpolation
+  already has an inline slot needs no statement prelude but still delivers a
+  value. Implemented that case in template operand emission instead of treating
+  an empty pending-operand list as inability to emit. Recorded the minimized
+  input in `fuzz/regressions/compile_any_bytes/editor-result-template-missing-operand.tt`
+  and `tests/cases/compiler/editorRecoveryNestedTemplateComma.tt`. Before the
+  fix, projection panicked with `returned structured value was not emitted`
+  (`/tmp/tt-recovery-result-red.log`); afterward, all fuzz regressions and the
+  1,000-mutant pass complete successfully in 1.27 seconds.
+
+- 2026-10-05: Final `./scripts/ci` passed all six stages: agents, rust, npm,
+  website, native and extension. This includes `cargo fmt --check`,
+  `cargo clippy --all-targets -- -D warnings`, `cargo test`, 420 library tests,
+  11 parser recovery tests, 173 native tests and 241 extension tests (zero
+  extension skips). Required TypeScript, extension and corpus integrations
+  were enabled. Baseline tracking compared 5,500 observations with none unused;
+  5,793 unsampled matrix baselines remain outside the normal seeded gate.
+  The 1,000-input mutation sample also passed. Full log:
+  `/tmp/tt-recovery-ci-complete.log`. Reviewed all baseline diffs, including
+  API/protocol additions, retained zero-width ranges and removed synthetic
+  hover signatures. Staged whitespace checking reports the existing runner
+  format for new baseline trailing separators; handwritten files pass. Task and plan are complete.
+
+## Changed files
+
+- Parser recovery: `vendor/swc_ecma_parser/src/parser/{mod,macros,recovery,stmt,expr,ident,object,typescript}.rs`.
+- Host and projection: `src/host_input.rs`, `src/program_syntax.rs`,
+  `src/program_syntax/{collector,projection,recovery}.rs`, `src/codegen/core/mod.rs`,
+  `src/lib.rs`, `src/lib/{compile,recovery}.rs`, `src/engine/projection.rs`,
+  `src/codegen/core/emitter/source.rs`.
+- Diagnostics and adapters: `src/typescript/mapper.rs`, `src/content_mapper.rs`,
+  `src/server.rs`, `src/engine/language.rs`,
+  `src/engine/language/{project,service}.rs`, `src/engine/semantics/report.rs`,
+  `editors/vscode/server/src/{diagnostics,engine,lsp-projections,server}.ts`.
+- Regressions: `tests/{compile,content_mapper,editor_cases,incremental,swc_editor_recovery}.rs`,
+  `tests/compile/cases_05.rs`, `tests/cli/server_response_shapes.rs`, `editors/vscode/server/src/test/{diagnostics,server}.test.ts`,
+  twelve `tests/cases/editor/recovery*` cases and their TypeScript twins,
+  `tests/cases/compiler/editorRecoveryStillRejectsIncompleteHost.tt`,
+  `tests/cases/compiler/editorRecoveryNestedTemplateComma.tt`,
+  `fuzz/regressions/compile_any_bytes/editor-result-template-missing-operand.tt`, and matching
+  `tests/baselines/reference/` output, diagnostic, type and mapping expectations.
+- Documentation: this task and `INDEX.md`, `docs/ai/tt.md`,
+  `docs/design/{compiler-architecture,structural-editor-recovery}.md`,
+  `docs/superpowers/plans/2026-10-05-structural-editor-recovery.md`,
+  and `editors/vscode/README.md`.

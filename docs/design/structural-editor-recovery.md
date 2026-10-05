@@ -206,3 +206,19 @@ and TypeScript versions and preserve user changes.
 
 This document approves no production change by itself. The next artifact is a
 concrete implementation plan after design review; TASK-759 stays In progress.
+
+## Implemented contract (TASK-759)
+
+The implementation reuses existing `recovered` source spans and adds
+`syntax_repairs` rather than introducing a second cause-table hierarchy.
+Parser recovery records remain transactional and parse-local. Missing operands,
+type arguments and closing tokens can supply grammar-owned insertions before
+following statements; EOF and host-only text retain TypeScript's original
+syntax verdict. Both service arrangements use the same current projection.
+
+LSP restatement carries source-position exceptions for repaired primary causes.
+The new recovery twins agree on completion, hover and definition. Missing-call
+syntax intentionally retains tt's original unmatched-delimiter cause rather
+than TypeScript's subsequent argument-expression wording. The parity inventory
+records this diagnostic difference; no parity-ignore rule hides it. Other new
+TypeScript twins agree on diagnostic positions, including zero-width holes.

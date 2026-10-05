@@ -788,7 +788,7 @@
 
 | TASK-758 | Preserve the Project API layout after completion extraction | In progress | 2026-10-04 | — | [TASK-758](./TASK-758-preserve-project-api-layout.md) |
 
-| TASK-759 | Preserve editor structure during incomplete syntax | In progress | 2026-10-05 | — | [TASK-759](./TASK-759-structural-editor-recovery.md) |
+| TASK-759 | Preserve editor structure during incomplete syntax | Complete | 2026-10-05 | 2026-10-05 | [TASK-759](./TASK-759-structural-editor-recovery.md) |
 
 ## Next task number
 

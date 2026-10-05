@@ -1061,7 +1061,10 @@ impl<I: Tokens> Parser<I> {
 
                 while {
                     let cur = p.input().cur();
-                    !(cur == Token::Case || cur == Token::Default || cur == Token::RBrace)
+                    !(cur == Token::Case
+                        || cur == Token::Default
+                        || cur == Token::RBrace
+                        || (p.editor_recovery() && cur == Token::Eof))
                 } {
                     cons.push(
                         p.do_outside_of_context(Context::TopLevel, Self::parse_stmt_list_item)?,
@@ -1889,7 +1892,9 @@ impl<I: Tokens> Parser<I> {
     /// Parse a statement and maybe a declaration.
     pub fn parse_stmt_list_item(&mut self) -> PResult<Stmt> {
         trace_cur!(self, parse_stmt_list_item);
-        self.parse_stmt_like(true, handle_import_export)
+        // Every statement list, including switch clauses, shares recovery
+        // ownership and the progress guarantee used by block/module bodies.
+        self.parse_recoverable_statement(&handle_import_export)
     }
 
     /// Parse a statement, declaration or module item.

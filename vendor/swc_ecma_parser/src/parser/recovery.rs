@@ -36,6 +36,8 @@ pub struct RecoveryRecord {
     pub span: Span,
     pub owner: Span,
     pub expected: String,
+    /// Materialize only syntax whose absence would capture a later statement.
+    pub replacement: Option<&'static str>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -69,6 +71,14 @@ impl<I: Tokens> Parser<I> {
             kind: TsKeywordTypeKind::TsUnknownKeyword,
         })))
     }
+    pub(super) fn materialize_last_recovery(&mut self, text: &'static str) {
+        self.recovery
+            .records
+            .last_mut()
+            .expect("a recovery was just recorded")
+            .replacement = Some(text);
+    }
+
     pub fn set_recovery_mode(&mut self, mode: RecoveryMode) {
         self.recovery.mode = mode;
     }
@@ -97,6 +107,7 @@ impl<I: Tokens> Parser<I> {
             span,
             owner: span,
             expected,
+            replacement: None,
         });
     }
 
@@ -150,7 +161,14 @@ impl<I: Tokens> Parser<I> {
         ) {
             return !matches!(
                 self.input_mut().peek(),
-                Some(Token::Colon | Token::LParen | Token::Comma | Token::RBrace)
+                Some(
+                    Token::Colon
+                        | Token::LParen
+                        | Token::Comma
+                        | Token::RBrace
+                        | Token::QuestionMark
+                        | Token::Lt
+                )
             );
         }
         true
@@ -166,7 +184,22 @@ impl<I: Tokens> Parser<I> {
                     self.input_mut().peek(),
                     Some(Token::Ident | Token::LBrace | Token::LBracket)
                 );
-        if !starts_declaration {
+        let starts_export = self.input().cur() == Token::Export
+            && matches!(
+                self.input_mut().peek(),
+                Some(
+                    Token::Const
+                        | Token::Let
+                        | Token::Var
+                        | Token::Function
+                        | Token::Class
+                        | Token::Default
+                        | Token::Type
+                        | Token::Interface
+                        | Token::Async
+                )
+            );
+        if !starts_declaration && !starts_export {
             return None;
         }
         let at = self.input().prev_span().hi;
@@ -181,6 +214,7 @@ impl<I: Tokens> Parser<I> {
             span,
             owner: span,
             expected: "identifier".into(),
+            replacement: None,
         });
         Some(IdentName::new("".into(), span))
     }
@@ -190,11 +224,17 @@ impl<I: Tokens> Parser<I> {
         token != closing && self.at_expression_boundary() && token != Token::Comma
     }
 
+    pub(super) fn can_recover_missing_token(&mut self, expected: Token) -> bool {
+        self.editor_recovery()
+            && matches!(
+                expected,
+                Token::RParen | Token::RBracket | Token::RBrace | Token::Gt
+            )
+            && self.at_expression_boundary()
+    }
+
     pub(super) fn recover_missing_token(&mut self, expected: Token) -> bool {
-        if !self.editor_recovery()
-            || !matches!(expected, Token::RParen | Token::RBracket | Token::RBrace)
-            || !self.at_expression_boundary()
-        {
+        if !self.can_recover_missing_token(expected) {
             return false;
         }
         let at = self.cur_pos();
@@ -202,6 +242,7 @@ impl<I: Tokens> Parser<I> {
             Token::RParen => ")",
             Token::RBracket => "]",
             Token::RBrace => "}",
+            Token::Gt => ">",
             _ => unreachable!(),
         }
         .to_string();
@@ -211,6 +252,13 @@ impl<I: Tokens> Parser<I> {
             RecoveryKind::MissingToken,
             message.clone(),
         );
+        self.recovery.records.last_mut().unwrap().replacement = Some(match expected {
+            Token::RParen => ")",
+            Token::RBracket => "]",
+            Token::RBrace => "}",
+            Token::Gt => ">",
+            _ => unreachable!(),
+        });
         let got = self.input_mut().dump_cur();
         self.emit_err(
             Span::new_with_checked(at, at),
@@ -247,6 +295,19 @@ impl<I: Tokens> Parser<I> {
             },
             "expression".into(),
         );
+        if missing
+            && matches!(
+                self.input().cur(),
+                Token::Const
+                    | Token::Let
+                    | Token::Var
+                    | Token::Export
+                    | Token::Return
+                    | Token::Throw
+            )
+        {
+            self.recovery.records.last_mut().unwrap().replacement = Some("(undefined as any)");
+        }
         Ok(Box::new(Expr::Invalid(Invalid {
             span: Span::new_with_checked(start, self.cur_pos().max(start)),
         })))

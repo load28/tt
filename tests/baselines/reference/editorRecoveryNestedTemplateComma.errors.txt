@@ -1,0 +1,32 @@
+==== ttc --out-dir (exit 1) ====
+error[try-crosses-value-region]: `try` crosses an isolated value region whose exits cannot target the enclosing `result` block
+ --> ./editorRecoveryNestedTemplateComma.tt:1:21
+  |
+1 | p()?result{return`${try"",}`}:n
+  |                     ^^^^^
+  |
+  = help: extract the affected expression into a nested function when doing so preserves its captures and evaluation order
+
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./editorRecoveryNestedTemplateComma.tt:1:27
+  |
+1 | p()?result{return`${try"",}`}:n
+  |                           ^
+
+
+==== ttc --check-types (exit 1) ====
+error[try-crosses-value-region]: `try` crosses an isolated value region whose exits cannot target the enclosing `result` block
+ --> editorRecoveryNestedTemplateComma.tt:1:21
+  |
+1 | p()?result{return`${try"",}`}:n
+  |                     ^^^^^
+  |
+  = help: extract the affected expression into a nested function when doing so preserves its captures and evaluation order
+error[source-not-typescript]: the TypeScript here does not parse: Expression expected. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> editorRecoveryNestedTemplateComma.tt:1:27
+  |
+1 | p()?result{return`${try"",}`}:n
+  |                           ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

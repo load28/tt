@@ -290,20 +290,23 @@ fn transform(
         // an error, so a tt warning must not travel it.
         .filter(|d| d.severity == Severity::Error)
         .filter(|d| {
-            !(report.emit.is_some()
+            !((report.emit.is_some() || report.withheld.is_some())
                 && d.code.restates_typescript_syntax()
                 && d.start.is_none_or(|at| {
                     !report
                         .recovered
                         .iter()
-                        .chain(&report.syntax_repairs)
                         .any(|&(from, to)| from <= at && at < to)
+                        && !report
+                            .syntax_repairs
+                            .iter()
+                            .any(|&(from, to)| from <= at && at <= to)
                 }))
         })
         .map(mapper_diagnostic)
         .collect();
 
-    let (text, mappings) = match report.emit {
+    let (text, mappings) = match report.emit.or(report.withheld) {
         Some(emit) => {
             let mappings = span_mappings(&emit.mappings, &emit.anchors, &report.recovered);
             (emit.code, mappings)

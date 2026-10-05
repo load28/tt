@@ -26,7 +26,7 @@ export function toDiagnostic(
         : null;
     const word = analysis.wordAt(doc.getText(), offset);
     const end =
-      reported && doc.offsetAt(reported) > offset
+      reported && doc.offsetAt(reported) >= offset
         ? reported
         : word && word.start === offset
           ? doc.positionAt(word.end)

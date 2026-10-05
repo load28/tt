@@ -1,6 +1,5 @@
 === ifLetInExpressionPositionIsAnError.tt ===
 const s = `${if let Some(value) = o { 1 }}`;
 >s : const s: string
->Some : (property) undefined: undefined
 >value : const value: T
 

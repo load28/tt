@@ -1,5 +1,4 @@
 === orPatternDoublePipeIsNotTtSyntax.tt ===
 const r = match (x) { A || B => 1 };
 >r : const r: any
->match : (property) undefined: undefined
 

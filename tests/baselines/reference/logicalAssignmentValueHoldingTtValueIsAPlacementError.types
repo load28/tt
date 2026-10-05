@@ -57,7 +57,6 @@ export function consumedMatch(o: { b: boolean }, k: number): boolean {
 >       b: boolean;
 >   }
 >b : (property) b: boolean
->match : (property) undefined: undefined
   return o.b;
 >o : (parameter) o: {
 >       b: boolean;

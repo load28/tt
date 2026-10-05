@@ -61,6 +61,15 @@ impl Project {
         position: Position,
     ) -> Result<Option<HoverInfo>, String> {
         let byte = source_byte(&doc.source, position);
+        if doc
+            .recovered
+            .iter()
+            .any(|&(start, end)| start <= byte && byte < end)
+        {
+            // A syntax placeholder is not an authored symbol or type. The
+            // surrounding proven owners remain available to normal queries.
+            return Ok(None);
+        }
         if doc.shared_bindings.iter().any(|binding| {
             binding
                 .occurrences
@@ -1093,8 +1102,11 @@ impl Project {
             let read = diagnostic.start.is_none_or(|start| {
                 !doc.recovered
                     .iter()
-                    .chain(&doc.syntax_repairs)
                     .any(|&(from, to)| from <= start && start < to)
+                    && !doc
+                        .syntax_repairs
+                        .iter()
+                        .any(|&(from, to)| from <= start && start <= to)
             });
             if diagnostic.code.restates_typescript_syntax()
                 && read
@@ -1104,6 +1116,33 @@ impl Project {
             }
         }
         Ok(codes)
+    }
+
+    /// Primary syntax causes hidden by editor repairs, keyed by source position.
+    /// Code-level restatement must not remove another occurrence of the same rule.
+    pub fn service_retained_syntax(
+        &mut self,
+        path: &Path,
+    ) -> Result<Vec<(crate::DiagnosticCode, Position)>, String> {
+        let (doc, _) = self.serve(path)?;
+        let lines = crate::lines::LineMap::lsp(&doc.source);
+        Ok(doc
+            .tt_diagnostics
+            .iter()
+            .filter_map(|diagnostic| {
+                let start = diagnostic.start?;
+                (diagnostic.code.restates_typescript_syntax()
+                    && (doc
+                        .recovered
+                        .iter()
+                        .any(|&(from, to)| from <= start && start < to)
+                        || doc
+                            .syntax_repairs
+                            .iter()
+                            .any(|&(from, to)| from <= start && start <= to)))
+                .then(|| (diagnostic.code, byte_position(&lines, start)))
+            })
+            .collect())
     }
 
     /// Starts (or reuses) the service session and serves `path` and its

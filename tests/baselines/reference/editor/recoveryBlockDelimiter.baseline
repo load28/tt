@@ -14,7 +14,7 @@ published: 6 diagnostic(s)
   5:7-5:8 "b" hint TS6133 (ts): 'b' is declared but its value is never read. [unnecessary]
   7:7-7:12 "wrong" hint TS6133 (ts): 'wrong' is declared but its value is never read. [unnecessary]
   7:7-7:12 "wrong" error ts2322 (ttc): Type 'string' is not assignable to type 'number'.
-  10:1-10:2 error ts1005 (ttc): '}' expected.
+  10:1-10:1 "" error ts1005 (ttc): '}' expected.
 
 === hover /*later*/ recoveryBlockDelimiter.tt:9:1 ===
   | later;
@@ -138,9 +138,7 @@ definition: 1 location(s)
   recoveryBlockDelimiter.tt 6:7-6:12 "later"
 
 === parity with the TypeScript twin ===
-diagnostics recoveryBlockDelimiter.tt: differs
-  tt only: recoveryBlockDelimiter.tt 10:1-10:2 error TS1005: '}' expected.
-  ts only: recoveryBlockDelimiter "" error TS1005: '}' expected.
+diagnostics recoveryBlockDelimiter.tt: same
 hover later: same
 completions member: same
 definition later: same

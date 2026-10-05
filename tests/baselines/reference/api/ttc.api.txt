@@ -886,6 +886,10 @@ impl Project
         &mut self,
         path: &Path,
     ) -> Result<Vec<DiagnosticCode>, String>
+    pub fn service_retained_syntax(
+        &mut self,
+        path: &Path,
+    ) -> Result<Vec<(DiagnosticCode, Position)>, String>
 impl Project
     pub fn root(&self) -> &Path
     pub fn identity(&self) -> (Option<&Path>, &Path)
@@ -3994,8 +3998,10 @@ impl UnwindSafe for PayloadTemp
 // struct ttc::ProjectionReport
 pub struct ProjectionReport {
     pub emit: Option<MappedEmit>,
+    pub editor_only: bool,
     pub diagnostics: Vec<Diagnostic>,
     pub recovered: Vec<(usize, usize)>,
+    pub syntax_repairs: Vec<(usize, usize)>,
     pub recovered_declarations: Vec<(usize, usize)>,
     pub withheld: Option<MappedEmit>,
 }

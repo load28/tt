@@ -1,0 +1,11 @@
+// @diagnostics: *
+// @hover: later
+// @completions: member
+declare const flag: boolean;
+const first = ;
+const second =
+const a = match (flag) { true => 1, false => 2 };
+const later = "정상";
+const wrong: number = "wrong";
+later./*member*/toUpperCase();
+/*later*/later;

@@ -28,6 +28,5 @@ const x = q++
 >x : const x: any
 >q : let q: number
   + if let Some(value) = o { value };
->Some : (property) undefined: undefined
 >value : const value: number
 

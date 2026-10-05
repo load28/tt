@@ -1,20 +1,21 @@
-=== diagnostics recoveryTrailingMember.tt ===
+=== diagnostics recoveryMixedCauses.tt ===
 diagnostics: 2 diagnostic(s)
-  3:24-3:24 "" error TS1003: Identifier expected.
-  8:7-8:12 "wrong" error TS2322: Type 'string' is not assignable to type 'number'.
+  2:15-2:16 ";" error TS1109: Expression expected.
+  6:7-6:12 "wrong" error TS2322: Type 'string' is not assignable to type 'number'.
   restates: source-not-typescript
-published: 2 diagnostic(s)
-  3:24-3:24 "" error ts1003 (ttc): Identifier expected.
-  8:7-8:12 "wrong" error ts2322 (ttc): Type 'string' is not assignable to type 'number'.
+published: 3 diagnostic(s)
+  2:15-2:16 ";" error ts1109 (ttc): Expression expected.
+  4:1-4:1 "" error source-not-typescript (ttc): expected expression
+  6:7-6:12 "wrong" error ts2322 (ttc): Type 'string' is not assignable to type 'number'.
 
-=== hover /*later*/ recoveryTrailingMember.tt:10:1 ===
+=== hover /*later*/ recoveryMixedCauses.tt:8:1 ===
   | later;
   | ^ /*later*/
-hover: 10:1-10:6 "later"
+hover: 8:1-8:6 "later"
     const later: "정상"
 ttSymbol: null
 
-=== completions /*member*/ recoveryTrailingMember.tt:9:7 ===
+=== completions /*member*/ recoveryMixedCauses.tt:7:7 ===
   | later.toUpperCase();
   |       ^ /*member*/
 completion: 50 item(s), member true, probe no
@@ -121,16 +122,4 @@ editor completion: 50 item(s)
   trimLeft (Method, 2z11) [deprecated]
   trimRight (Method, 2z11) [deprecated]
   ... 1 global or keyword item(s) (sortText 215, no source)
-
-=== definition /*later*/ recoveryTrailingMember.tt:10:1 ===
-  | later;
-  | ^ /*later*/
-definition: 1 location(s)
-  recoveryTrailingMember.tt 7:7-7:12 "later"
-
-=== parity with the TypeScript twin ===
-diagnostics recoveryTrailingMember.tt: same
-hover later: same
-completions member: same
-definition later: same
 
