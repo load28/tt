@@ -46,6 +46,25 @@ pub(super) struct RecoveryState {
     records: Vec<RecoveryRecord>,
 }
 
+/// Records are only appended during a speculation, so its rollback is the
+/// record count when it began.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct RecoveryCheckpoint {
+    records: usize,
+}
+
+impl RecoveryState {
+    pub(super) fn checkpoint(&self) -> RecoveryCheckpoint {
+        RecoveryCheckpoint {
+            records: self.records.len(),
+        }
+    }
+
+    pub(super) fn rollback(&mut self, checkpoint: RecoveryCheckpoint) {
+        self.records.truncate(checkpoint.records);
+    }
+}
+
 impl<I: Tokens> Parser<I> {
     pub(super) fn recover_type(&mut self, start: BytePos, error: Error) -> PResult<Box<TsType>> {
         self.emit_error(error);
@@ -172,32 +191,20 @@ impl<I: Tokens> Parser<I> {
         true
     }
 
+    /// TypeScript's `parseRightSideOfDot`: after a line break, an identifier
+    /// or keyword followed on the same line by another one starts a new
+    /// construct, so the name after `.` is missing. Any other token is the
+    /// member name (`obj.\nconst\nx` reads `obj.const`).
     pub(super) fn missing_member_name(&mut self) -> Option<IdentName> {
-        if !self.editor_recovery() || !self.input().had_line_break_before_cur() {
+        if !self.editor_recovery()
+            || !self.input().had_line_break_before_cur()
+            || !self.input().cur().is_word()
+        {
             return None;
         }
-        let starts_declaration =
-            matches!(self.input().cur(), Token::Const | Token::Let | Token::Var)
-                && matches!(
-                    self.input_mut().peek(),
-                    Some(Token::Ident | Token::LBrace | Token::LBracket)
-                );
-        let starts_export = self.input().cur() == Token::Export
-            && matches!(
-                self.input_mut().peek(),
-                Some(
-                    Token::Const
-                        | Token::Let
-                        | Token::Var
-                        | Token::Function
-                        | Token::Class
-                        | Token::Default
-                        | Token::Type
-                        | Token::Interface
-                        | Token::Async
-                )
-            );
-        if !starts_declaration && !starts_export {
+        if !self.input_mut().peek().is_some_and(|next| next.is_word())
+            || self.input_mut().has_linebreak_between_cur_and_peeked()
+        {
             return None;
         }
         let at = self.input().prev_span().hi;

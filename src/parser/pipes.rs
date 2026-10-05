@@ -137,6 +137,12 @@ pub(super) fn parse_pipeline(
             {
                 break;
             }
+            // TypeScript ends an argument list at `;` (`isListTerminator`),
+            // and an array list returns `;` to the enclosing statement list.
+            if matches!(open.last(), Some(b')' | b']')) && matches!(t.kind, TokenKind::Punct(b';'))
+            {
+                break;
+            }
             if depth == 0
                 && k == step_from
                 && let Some(past) = super::iflets::if_let_end(parser, tokens, k)

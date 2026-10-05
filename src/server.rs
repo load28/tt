@@ -368,7 +368,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                 .map(|code| code.as_str())
                 .collect();
             let retains: Vec<_> = project.service_retained_syntax(path)?.into_iter()
-                .map(|(code, start)| json!({ "code": code.as_str(), "start": { "line": start.line, "character": start.character } }))
+                .map(|cause| json!({ "code": cause.code.as_str(), "start": { "line": cause.range.start.line, "character": cause.range.start.character }, "range": range_json(cause.range), "message": cause.message }))
                 .collect();
             Ok(json!({ "diagnostics": diagnostics, "restates": restates, "retains": retains }))
         }),

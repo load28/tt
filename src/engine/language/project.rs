@@ -1118,12 +1118,13 @@ impl Project {
         Ok(codes)
     }
 
-    /// Primary syntax causes hidden by editor repairs, keyed by source position.
-    /// Code-level restatement must not remove another occurrence of the same rule.
+    /// Primary syntax causes hidden by editor repairs. TypeScript cannot
+    /// state them, so the service answer carries each one in full; a
+    /// code-level restatement must not remove another occurrence of the rule.
     pub fn service_retained_syntax(
         &mut self,
         path: &Path,
-    ) -> Result<Vec<(crate::DiagnosticCode, Position)>, String> {
+    ) -> Result<Vec<super::RetainedSyntax>, String> {
         let (doc, _) = self.serve(path)?;
         let lines = crate::lines::LineMap::lsp(&doc.source);
         Ok(doc
@@ -1140,7 +1141,14 @@ impl Project {
                             .syntax_repairs
                             .iter()
                             .any(|&(from, to)| from <= start && start <= to)))
-                .then(|| (diagnostic.code, byte_position(&lines, start)))
+                .then(|| super::RetainedSyntax {
+                    code: diagnostic.code,
+                    range: Range {
+                        start: byte_position(&lines, start),
+                        end: byte_position(&lines, diagnostic.end.unwrap_or(start).max(start)),
+                    },
+                    message: diagnostic.message.clone(),
+                })
             })
             .collect())
     }

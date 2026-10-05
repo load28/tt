@@ -19,6 +19,7 @@
  * one-shot commands.
  * ----------------------------------------------------------------------- */
 import { ChildProcess, spawn } from "child_process";
+import type { RetainedCause } from "./diagnostics";
 import type {
   EnginePosition,
   EngineRange,
@@ -623,7 +624,7 @@ export async function tsDiagnosticsAnswer(
   compiler: string,
   path: string,
   onError?: (message: string) => void,
-): Promise<{ diagnostics: EngineDiagnostic[]; restates: string[]; retains?: { code: string; start: { line: number; character: number } }[] } | null> {
+): Promise<{ diagnostics: EngineDiagnostic[]; restates: string[]; retains?: RetainedCause[] } | null> {
   const answer = await engineRequest(
     compiler,
     "tsDiagnostics",
@@ -638,7 +639,7 @@ export async function tsDiagnosticsAnswer(
   const result = answer.result as {
     diagnostics?: EngineDiagnostic[];
     restates?: string[];
-    retains?: { code: string; start: { line: number; character: number } }[];
+    retains?: RetainedCause[];
   } | null;
   return {
     diagnostics: result?.diagnostics ?? [],

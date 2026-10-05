@@ -164,6 +164,12 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
         {
             break;
         }
+        // TypeScript ends an argument list at `;` (`isListTerminator`), and
+        // an array list returns `;` to the enclosing statement list.
+        if matches!(open.last(), Some(b')' | b']')) && matches!(token.kind, TokenKind::Punct(b';'))
+        {
+            break;
+        }
         if open.is_empty() && matches!(token.kind, TokenKind::PipeOp) {
             if operand_token_end != k {
                 break;

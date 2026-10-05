@@ -1427,7 +1427,7 @@ impl<I: Tokens> Parser<I> {
         // member expression
         // $obj.name
         if question_dot || self.input_mut().eat(Token::Dot) {
-            let prop = self.parse_maybe_private_name().map(|e| match e {
+            let prop = self.parse_member_name().map(|e| match e {
                 Either::Left(p) => MemberProp::PrivateName(p),
                 Either::Right(i) => MemberProp::Ident(i),
             })?;
@@ -1528,7 +1528,7 @@ impl<I: Tokens> Parser<I> {
 
         if !question_dot && cur == Token::Dot {
             self.bump();
-            let prop = self.parse_maybe_private_name().map(|e| match e {
+            let prop = self.parse_member_name().map(|e| match e {
                 Either::Left(p) => MemberProp::PrivateName(p),
                 Either::Right(i) => MemberProp::Ident(i),
             })?;
@@ -1622,7 +1622,7 @@ impl<I: Tokens> Parser<I> {
         }
 
         if question_dot {
-            let prop = self.parse_maybe_private_name().map(|e| match e {
+            let prop = self.parse_member_name().map(|e| match e {
                 Either::Left(p) => MemberProp::PrivateName(p),
                 Either::Right(i) => MemberProp::Ident(i),
             })?;
@@ -1716,7 +1716,7 @@ impl<I: Tokens> Parser<I> {
             }
             Token::Dot => {
                 self.bump();
-                let prop = self.parse_maybe_private_name().map(|e| match e {
+                let prop = self.parse_member_name().map(|e| match e {
                     Either::Left(p) => MemberProp::PrivateName(p),
                     Either::Right(i) => MemberProp::Ident(i),
                 })?;

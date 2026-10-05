@@ -115,3 +115,23 @@ test("a repaired primary survives another raw syntax error with the same code", 
   };
   assert.deepEqual(shown(publishedDiagnostics(layers)), ["ts 1109", "ttc source-not-typescript"]);
 });
+
+test("a repaired cause no other layer states is published from the service answer", () => {
+  const published = publishedDiagnostics({
+    text: [diagnostic("ttc", "source-not-typescript", 3, 11, 1)],
+    service: [],
+    restates: ["source-not-typescript"],
+    retains: [
+      { code: "source-not-typescript", start: { line: 3, character: 0 },
+        range: { start: { line: 3, character: 0 }, end: { line: 3, character: 0 } }, message: "expected )" },
+      { code: "source-not-typescript", start: { line: 3, character: 11 },
+        range: { start: { line: 3, character: 11 }, end: { line: 3, character: 12 } }, message: "expected )" },
+    ],
+    hints: [],
+    typed: null,
+  });
+  assert.deepEqual(published.map((d) => [d.range.start.line, d.range.start.character, d.code]), [
+    [3, 0, "source-not-typescript"],
+    [3, 11, "source-not-typescript"],
+  ]);
+});

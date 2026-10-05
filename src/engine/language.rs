@@ -393,6 +393,19 @@ pub struct ClassifiedToken {
     pub modifiers: Vec<String>,
 }
 
+/// A primary syntax cause whose text the editor projection repaired or
+/// replaced, so TypeScript never reads it: the service layer states it in
+/// TypeScript's stead.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RetainedSyntax {
+    /// The rule.
+    pub code: crate::DiagnosticCode,
+    /// Where, in the `.tt` source.
+    pub range: Range,
+    /// The message, as the compiler states it.
+    pub message: String,
+}
+
 /// One TypeScript diagnostic, mapped onto the `.tt` source.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ServiceDiagnostic {

@@ -250,3 +250,103 @@ fn skipped_type_templates_preserve_following_declarations() {
         );
     }
 }
+
+/// Parses on a worker so a recovery loop that never ends fails the test
+/// instead of hanging the suite.
+fn parse_within(
+    source: &str,
+    tsx: bool,
+    seconds: u64,
+) -> (swc_ecma_ast::Module, Vec<RecoveryRecord>, usize) {
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let owned = source.to_string();
+    std::thread::spawn(move || {
+        let _ = sender.send(parse(&owned, tsx, RecoveryMode::Editor));
+    });
+    receiver
+        .recv_timeout(std::time::Duration::from_secs(seconds))
+        .unwrap_or_else(|_| panic!("editor parse did not finish within {seconds}s: {source}"))
+}
+
+#[test]
+fn keyword_type_members_on_their_own_line_are_members() {
+    for source in [
+        "interface I {\n  const\n  x: number\n}\nconst later = 1;",
+        "type T = {\n  let\n  x: number\n};\nconst later = 1;",
+        "interface I {\n  export\n  default: string\n}\nconst later = 1;",
+        "interface I {\n  var\n  [k: string]: number\n}\nconst later = 1;",
+    ] {
+        let (strict, _, strict_errors) = parse(source, false, RecoveryMode::Strict);
+        let (module, recovery, errors) = parse_within(source, false, 10);
+        assert_eq!(strict_errors, 0, "{source}");
+        assert_eq!(errors, 0, "{source}");
+        assert!(recovery.is_empty(), "{source}: {recovery:?}");
+        assert_eq!(names(&module), names(&strict), "{source}");
+        assert_eq!(names(&module), ["later"], "{source}");
+    }
+}
+
+#[test]
+fn a_keyword_member_name_on_the_next_line_is_the_member() {
+    // TypeScript's `parseRightSideOfDot` reports a missing name only when
+    // the keyword is followed by another name on its own line.
+    for source in [
+        "x = obj.\nconst\ny = 1;",
+        "obj.\nconst [a] = b;",
+        "x = obj.\nexport\nconst y = 1;",
+        "x = obj?.\nconst\ny = 1;",
+    ] {
+        let (_, _, strict_errors) = parse(source, false, RecoveryMode::Strict);
+        let (_, recovery, errors) = parse_within(source, false, 10);
+        assert_eq!(strict_errors, 0, "{source}");
+        assert_eq!(errors, 0, "{source}");
+        assert!(recovery.is_empty(), "{source}: {recovery:?}");
+    }
+    let (module, recovery, errors) =
+        parse_within("const broken = obj.\nconst later = 1;", false, 10);
+    assert_eq!(names(&module), ["broken", "later"]);
+    assert_eq!(recovery.len(), 1);
+    assert!(errors > 0);
+}
+
+#[test]
+fn incomplete_superclass_type_arguments_leave_following_statements() {
+    for source in [
+        "const x = 1; class B extends A<\nconst y = 2;",
+        "declare class A<T> {}\nclass B extends A<\nexport const y = 2;",
+    ] {
+        let (module, recovery, errors) = parse_within(source, false, 10);
+        assert!(errors > 0, "{source}");
+        assert!(!recovery.is_empty(), "{source}");
+        let declared: Vec<_> = module
+            .body
+            .iter()
+            .filter_map(|item| match item {
+                ModuleItem::Stmt(Stmt::Decl(Decl::Var(decl))) => Some(&decl.decls[0].name),
+                ModuleItem::ModuleDecl(swc_ecma_ast::ModuleDecl::ExportDecl(export)) => {
+                    match &export.decl {
+                        Decl::Var(decl) => Some(&decl.decls[0].name),
+                        _ => None,
+                    }
+                }
+                _ => None,
+            })
+            .filter_map(|pattern| match pattern {
+                Pat::Ident(name) => Some(name.id.sym.to_string()),
+                _ => None,
+            })
+            .collect();
+        assert!(
+            declared.contains(&"y".to_string()),
+            "{source}: {declared:?}"
+        );
+    }
+}
+
+#[test]
+fn speculation_rollback_is_independent_of_earlier_recoveries() {
+    // Each `<` speculates; a rollback must not copy every earlier record.
+    let source = "const a = ;\nf<T>(x);\n".repeat(16000);
+    let (_, recovery, _) = parse_within(&source, false, 20);
+    assert_eq!(recovery.len(), 16000);
+}

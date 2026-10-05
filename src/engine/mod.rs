@@ -69,9 +69,9 @@ pub use hints::{TtHint, TtHintKind, tt_hints};
 pub use language::{
     ClassifiedToken, CompletionAnswer, CompletionDetail, CompletionItem, CompletionItemKind,
     CompletionItemTag, DocumentSymbol, HoverInfo, Location, Position, PrepareRename,
-    RENAME_PLACEHOLDER, Range, Reference, RenameEdit, ServiceDiagnostic, ServiceRelated,
-    ServiceSeverity, ServiceTag, Signature, SignatureHelp, SignatureParameter, SignatureTrigger,
-    TextEdit,
+    RENAME_PLACEHOLDER, Range, Reference, RenameEdit, RetainedSyntax, ServiceDiagnostic,
+    ServiceRelated, ServiceSeverity, ServiceTag, Signature, SignatureHelp, SignatureParameter,
+    SignatureTrigger, TextEdit,
 };
 pub use names::{TtSymbol, TtSymbolKind, tt_symbol_at};
 pub use project::{Blocked, CheckRequest, Dependencies, Project, collect_sources};

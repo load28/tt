@@ -794,6 +794,8 @@
 
 | TASK-761 | Preserve template boundaries during editor recovery | Complete | 2026-10-05 | 2026-10-05 | [TASK-761](./TASK-761-editor-recovery-template-boundaries.md) |
 
+| TASK-762 | Audit structural editor recovery for regressions | In progress | 2026-10-05 | — | [TASK-762](./TASK-762-editor-recovery-regression-audit.md) |
+
 ## Next task number
 
-**TASK-762**
+**TASK-763**

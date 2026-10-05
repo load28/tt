@@ -69,7 +69,7 @@ import { URI } from "vscode-uri";
 
 import { insertSymbol, suggestedFixes, toDiagnostic, toDocumentSymbol } from "./lsp-projections";
 import * as analysis from "./analysis";
-import { publishedDiagnostics } from "./diagnostics";
+import { publishedDiagnostics, type RetainedCause } from "./diagnostics";
 import * as engine from "./engine";
 import { NoticeLedger } from "./notices";
 import { applyFolderChange, containingRoot, folderRoots, sidecarLocation } from "./roots";
@@ -749,7 +749,7 @@ interface TypeDiagnostics {
   /** The codes of the compiler diagnostics these state in TypeScript's
    * words (`engine.tsDiagnosticsAnswer`). */
   restates: string[];
-  retains?: { code: string; start: { line: number; character: number } }[];
+  retains?: RetainedCause[];
 }
 
 async function typeDiagnostics(
