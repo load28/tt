@@ -423,12 +423,14 @@ impl<'a> TargetFile<'a> {
     /// token. A token the source wrote at the start of a line keeps a line
     /// break before it, which is what ended the statement before it
     /// (automatic semicolon insertion); otherwise two words keep a space, as
-    /// a printer separates two tokens.
+    /// a printer separates two tokens. A byte outside ASCII is opaque and may
+    /// continue an identifier, so it joins a word as one would.
     fn separate_tokens(&mut self) {
         let Some(source) = self.source else {
             return;
         };
         let word = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$';
+        let joins = |byte: u8| word(byte) || !byte.is_ascii();
         let starts_line = |at: usize| {
             let before = &source.as_bytes()[..at];
             let blank = before
@@ -474,7 +476,7 @@ impl<'a> TargetFile<'a> {
                 // break included.
                 if replaced == Some(at) && !first.is_ascii_whitespace() && starts_line(at) {
                     separators.push((index, at, "\n"));
-                } else if word(end) && word(first) {
+                } else if word(end) && joins(first) || joins(end) && word(first) {
                     separators.push((index, at, " "));
                 }
             }

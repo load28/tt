@@ -1,0 +1,11 @@
+=== diagnostics recoveryStatementKeywordAfterUnfinishedCall.tt ===
+diagnostics: 0 diagnostic(s)
+  restates: source-not-typescript
+published: 1 diagnostic(s)
+  5:3-5:3 "" error source-not-typescript (ttc): expected expression
+
+=== parity with the TypeScript twin ===
+diagnostics recoveryStatementKeywordAfterUnfinishedCall.tt: differs
+  tt only: recoveryStatementKeywordAfterUnfinishedCall "" error TS"source-not-typescript": expected expression
+  ts only: recoveryStatementKeywordAfterUnfinishedCall "if" error TS1109: Expression expected.
+

@@ -38,6 +38,9 @@ pub struct RecoveryRecord {
     pub expected: String,
     /// Materialize only syntax whose absence would capture a later statement.
     pub replacement: Option<&'static str>,
+    /// The parser resumed at a token that starts a statement and cannot
+    /// start an expression ([`Parser::at_statement_start`]).
+    pub resumes_statement: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -117,6 +120,7 @@ impl<I: Tokens> Parser<I> {
     ) {
         let end = self.cur_pos().max(start);
         let span = Span::new_with_checked(start, end);
+        let resumes_statement = self.at_statement_start();
         self.recovery.records.push(RecoveryRecord {
             id: RecoveryId(self.recovery.records.len() as u32),
             kind,
@@ -125,39 +129,62 @@ impl<I: Tokens> Parser<I> {
             owner: span,
             expected,
             replacement: None,
+            resumes_statement,
         });
     }
 
     /// These tokens cannot begin an assignment expression. They belong to the
     /// containing statement/list; retaining them lets that production resume.
-    fn is_expression_boundary(token: Token) -> bool {
+    fn at_expression_boundary(&mut self) -> bool {
         matches!(
-            token,
+            self.input().cur(),
             Token::Semi
                 | Token::Comma
                 | Token::RParen
                 | Token::RBracket
                 | Token::RBrace
                 | Token::Eof
-                | Token::Const
-                | Token::Let
-                | Token::Var
-                | Token::Export
-                | Token::Return
-                | Token::Throw
                 | Token::Else
-        )
+        ) || self.at_statement_start()
     }
 
-    fn at_expression_boundary(&mut self) -> bool {
-        let token = self.input().cur();
-        if token == Token::Let {
-            return matches!(
+    /// A token TypeScript's `isStartOfStatement` accepts and
+    /// `isStartOfExpression` does not. An unfinished list stops there, because
+    /// the token is an element of an enclosing statement list and of no
+    /// expression list (`parser.ts`, `abortParsingListOrMoveToNextToken`).
+    /// `case` and `default` are the elements of a switch's clause list.
+    pub(super) fn at_statement_start(&mut self) -> bool {
+        match self.input().cur() {
+            Token::Var
+            | Token::Const
+            | Token::Export
+            | Token::Enum
+            | Token::If
+            | Token::Do
+            | Token::While
+            | Token::For
+            | Token::Continue
+            | Token::Break
+            | Token::Return
+            | Token::With
+            | Token::Switch
+            | Token::Throw
+            | Token::Try
+            | Token::Debugger
+            | Token::Catch
+            | Token::Finally
+            | Token::Case
+            | Token::Default => true,
+            Token::Let => matches!(
                 self.input_mut().peek(),
                 Some(Token::Ident | Token::LBrace | Token::LBracket)
-            );
+            ),
+            Token::Import => !matches!(
+                self.input_mut().peek(),
+                Some(Token::LParen | Token::Dot | Token::Lt)
+            ),
+            _ => false,
         }
-        Self::is_expression_boundary(token)
     }
 
     pub(super) fn ends_recovery_object(&mut self) -> bool {
@@ -166,16 +193,7 @@ impl<I: Tokens> Parser<I> {
         }
         // Keywords are valid property/method names, even when the keyword
         // starts a statement in another grammatical context.
-        if matches!(
-            self.input().cur(),
-            Token::Const
-                | Token::Let
-                | Token::Var
-                | Token::Return
-                | Token::Throw
-                | Token::Export
-                | Token::Else
-        ) {
+        if self.input().cur() == Token::Else || self.at_statement_start() {
             return !matches!(
                 self.input_mut().peek(),
                 Some(
@@ -220,6 +238,7 @@ impl<I: Tokens> Parser<I> {
             owner: span,
             expected: "identifier".into(),
             replacement: None,
+            resumes_statement: false,
         });
         Some(IdentName::new("".into(), span))
     }
@@ -300,17 +319,7 @@ impl<I: Tokens> Parser<I> {
             },
             "expression".into(),
         );
-        if missing
-            && matches!(
-                self.input().cur(),
-                Token::Const
-                    | Token::Let
-                    | Token::Var
-                    | Token::Export
-                    | Token::Return
-                    | Token::Throw
-            )
-        {
+        if missing && self.at_statement_start() {
             self.recovery.records.last_mut().unwrap().replacement = Some("(undefined as any)");
         }
         Ok(Box::new(Expr::Invalid(Invalid {
@@ -324,14 +333,19 @@ impl<I: Tokens> Parser<I> {
 
     fn skip_to_recovery_boundary(&mut self, stop_at_initializer: bool) {
         let mut delimiters = Vec::new();
+        // A word after `.` or `?.` is a member name (`parseRightSideOfDot`),
+        // whatever statement its keyword could start.
+        let mut member = false;
         loop {
             let token = self.input().cur();
             if token == Token::Eof
                 || delimiters.is_empty()
+                    && !(member && token.is_word())
                     && (self.at_expression_boundary() || stop_at_initializer && token == Token::Eq)
             {
                 return;
             }
+            member = matches!(token, Token::Dot | Token::OptionalChain);
             match token {
                 // Template heads include `${`. Their matching `}` must be
                 // rescanned in template mode, so text and nested interpolations

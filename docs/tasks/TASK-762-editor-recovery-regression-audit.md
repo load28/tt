@@ -52,6 +52,8 @@ until no further defect is found.
   59,799 editor projections, LSP typing simulation). Found Issues 7-9.
 - 2026-10-05: Ran the mutation pass with 100,000 of 3,054,478 mutants (the
   default gate samples 1,000) and found Issues 15-17.
+- 2026-10-05: A review of the third round's diff found Issues 19-21 and a
+  stale comment on `val` candidates in regions the host cannot parse.
 - 2026-10-05: The LSP typing simulation (1,020 published diagnostic sets
   over 10 tt/ttx files, 22 statements retyped character by character and 35
   closing delimiters deleted, TypeScript twins through `tsc --lsp`) found
@@ -249,6 +251,37 @@ until no further defect is found.
   compose rewrite close the owner blocks ending where the value ends, after
   writing the value. Any later walk finds the block closed.
 
+### Issue 19: A statement terminator was written inside a trailing comment
+
+- **Symptom**: `const // note` before a statement with a `match` projected
+  `const // note;`, and TypeScript reported `',' expected` on generated code.
+- **Cause**: The insertion point was the next token's start minus blanks, so
+  a comment after the skipped text stayed before it.
+- **Resolution**: The insertion follows the skipped text's last token.
+
+### Issue 20: Only some statement keywords ended a skipped expression
+
+- **Symptom**: `const a = g(1, 2 +` followed by `if (flag) {}` and a `match`
+  moved the match's prelude to module level, with three parse errors where
+  the twin has one.
+- **Cause**: The parser's recovery boundary and the projection's check were
+  two copies of a six-keyword list, narrower than TypeScript's, and the
+  projection compared words of the source text.
+- **Resolution**: The parser has one boundary: a token TypeScript's
+  `isStartOfStatement` accepts and `isStartOfExpression` does not
+  (`abortParsingListOrMoveToNextToken`). Each recovery record states whether
+  the parser resumed there, and the projection reads that. A word after `.`
+  or `?.` in skipped text stays a member name (`parseRightSideOfDot`).
+
+### Issue 21: A generated word could join a following non-ASCII identifier
+
+- **Symptom**: Reasoned, not observed: at a recovery seam on one line,
+  generated text ending in a word byte followed by source starting with a
+  non-ASCII identifier character would print as one identifier.
+- **Cause**: The seam rule treated only ASCII bytes as word bytes.
+- **Resolution**: A non-ASCII byte is opaque and may continue an identifier,
+  so it joins a word at a seam as a word byte does.
+
 ## Regression test (fails before the fix)
 
 - **Path**: `editors/vscode/server/src/test/server.test.ts`, "a repaired
@@ -300,6 +333,13 @@ until no further defect is found.
   (runs, printing `2`).
 - **Observed failure**: Without Issue 18's change the case failed with
   `LayoutScopeMissing`.
+
+- **Path**: `tests/cases/editor/recoveryCommentAfterSkippedStatement.tt` and
+  `recoveryStatementKeywordAfterUnfinishedCall.tt`.
+- **Observed failure**: Without Issues 19 and 20's changes the first
+  baseline had four diagnostics on generated code (`',' expected`, a
+  constant `$tt_v0`) instead of the twin's one, and the second had three
+  parse errors and a `expected )` on the next line.
 
 ## Verification
 

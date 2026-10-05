@@ -52,8 +52,9 @@ pub(super) fn owned_match_names_in_mixed(
 /// before a binding that valid TypeScript already owns (`f(val [0])`, `c ?
 /// (val [0]) : w => w`) leaves an array literal or tuple type in the same
 /// grammatical position, never a parameter, so TypeScript keeps it. A region
-/// the host cannot parse proves nothing, and its candidates stay
-/// identifiers.
+/// the host cannot parse strictly is read by its editor recovery, as
+/// TypeScript reads a file with a syntax error elsewhere; a region neither
+/// reading parses proves nothing, and its candidates stay identifiers.
 pub(super) fn rejected_val_candidates(
     src: &str,
     source_kind: crate::SourceKind,

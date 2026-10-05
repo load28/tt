@@ -111,23 +111,22 @@ pub(crate) fn editor_insertions(
             continue;
         };
         // Skipped expression text ends its statement where the parser
-        // resumed at a statement keyword.
-        if record.context != swc_ecma_parser::RecoveryContext::Statement {
-            let next = source[end..].trim_start();
-            let word = next
-                .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '$'))
-                .next()
-                .unwrap_or_default();
-            if !matches!(
-                word,
-                "const" | "let" | "var" | "export" | "return" | "throw"
-            ) {
-                continue;
-            }
+        // resumed at a statement.
+        if record.context != swc_ecma_parser::RecoveryContext::Statement
+            && !record.resumes_statement
+        {
+            continue;
         }
-        let written = source[start..end].trim_end();
-        let at = start + written.len();
-        if written.ends_with(';')
+        // The insertion follows the skipped text's last token, before the
+        // trivia (comments included) that separates it from the next.
+        let Some(last) = tokens
+            .iter()
+            .rfind(|token| start <= token.span.start && token.span.end <= end)
+        else {
+            continue;
+        };
+        let at = last.span.end;
+        if matches!(last.kind, crate::lexer::TokenKind::Punct(b';'))
             || at >= source.len()
             || !projection
                 .pending
