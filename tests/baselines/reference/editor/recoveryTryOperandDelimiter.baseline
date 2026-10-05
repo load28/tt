@@ -1,0 +1,31 @@
+=== diagnostics recoveryTryOperandDelimiter.tt ===
+diagnostics: 3 diagnostic(s)
+  3:13-3:20 "try h(1" error TS1005: ')' expected. (in code ttc generated for this construct)
+  7:7-7:12 "wrong" error TS2322: Type 'string' is not assignable to type 'number'.
+  7:7-7:12 "wrong" hint TS6133: 'wrong' is declared but its value is never read. [unnecessary]
+  restates: source-not-typescript
+published: 3 diagnostic(s)
+  3:13-3:20 "try h(1" error ts1005 (ttc): ')' expected. (in code ttc generated for this construct)
+  7:7-7:12 "wrong" hint TS6133 (ts): 'wrong' is declared but its value is never read. [unnecessary]
+  7:7-7:12 "wrong" error ts2322 (ttc): Type 'string' is not assignable to type 'number'.
+
+=== hover /*later*/ recoveryTryOperandDelimiter.tt:8:1 ===
+  | later;
+  | ^ /*later*/
+hover: 8:1-8:6 "later"
+    const later: "정상"
+ttSymbol: null
+
+=== definition /*later*/ recoveryTryOperandDelimiter.tt:8:1 ===
+  | later;
+  | ^ /*later*/
+definition: 1 location(s)
+  recoveryTryOperandDelimiter.tt 6:7-6:12 "later"
+
+=== parity with the TypeScript twin ===
+diagnostics recoveryTryOperandDelimiter.tt: differs
+  tt only: recoveryTryOperandDelimiter "try h(1" error TS1005: ')' expected. (in code ttc generated for this construct)
+  ts only: recoveryTryOperandDelimiter ";" error TS1005: ')' expected.
+hover later: same
+definition later: same
+

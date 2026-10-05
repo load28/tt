@@ -1,0 +1,10 @@
+// A pipeline statement whose match head is planned as a block-owned prelude
+// can end the file with neither a semicolon nor a line break. Nothing follows
+// the value inside its owner, so the value itself is the last thing written
+// before the owner's block closes.
+// @run: aStatementPipelineEndingTheFileWithoutASemicolon.tt
+variant G { E, F }
+const choose = (): G => G.F;
+const g = choose();
+const show = (n: number) => console.log(n);
+match (g) { E => 1, F => 2 } |> (show)

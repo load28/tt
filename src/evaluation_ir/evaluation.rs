@@ -659,9 +659,7 @@ impl EvaluationFile {
             let Expr::Propagate(propagate) = &core.exprs[expr.index()] else {
                 continue;
             };
-            if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
-                continue;
-            }
+            let exits_result = matches!(propagate.exit, ExitTarget::ResultRegion(_));
             let mut host_region = region;
             let mut covered_by_parent_propagation = false;
             while let RegionPlacement::Nested { parent, .. } = host_region.placement {
@@ -691,6 +689,20 @@ impl EvaluationFile {
                     .unwrap_or(TargetCapability::StatementRegion),
                 _ => TargetCapability::StatementRegion,
             };
+            // A `try` that exits to its `result` is written as a statement of
+            // its own host owner; only an owner that takes no statements has
+            // nowhere to write it.
+            if exits_result
+                && !matches!(
+                    context.owner,
+                    EvaluationOwner::ParameterInitializer
+                        | EvaluationOwner::ClassInitializer
+                        | EvaluationOwner::ClassDefinition
+                        | EvaluationOwner::EnumInitializer
+                )
+            {
+                continue;
+            }
             let reason = match (context.owner, capability) {
                 (EvaluationOwner::FunctionBody, TargetCapability::StatementRegion) => {
                     continue;

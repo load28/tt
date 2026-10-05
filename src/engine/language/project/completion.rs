@@ -60,9 +60,13 @@ impl Project {
                 )?;
                 // Scope walks inspect the emitted TypeScript even when
                 // the service request and reply use authored coordinates.
-                let projected_at =
-                    mapper::cursor_to_output(&doc.mappings, source_at, mapper::Affinity::Preceding)
-                        .expect("to_service_typed requires a projected cursor");
+                let projected_at = mapper::typed_cursor_to_output(
+                    &doc.mappings,
+                    &doc.anchors,
+                    &doc.source,
+                    source_at,
+                )
+                .expect("to_service_typed requires a projected cursor");
                 super::scope::restate_completions(
                     &mut plain,
                     &doc,

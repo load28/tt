@@ -720,10 +720,11 @@ fn editor_host_emit(
     }
     let recovered = insertions
         .iter()
+        .filter(|insertion| !insertion.terminates)
         .map(|insertion| (insertion.owner.start, insertion.owner.end))
         .collect();
     let mut added = Vec::new();
-    for insertion in &insertions {
+    for insertion in insertions.iter().filter(|insertion| !insertion.terminates) {
         if diagnostics.iter().chain(&added).any(|diagnostic| {
             diagnostic.code.restates_typescript_syntax()
                 && diagnostic

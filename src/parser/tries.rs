@@ -157,10 +157,20 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
             break;
         }
         if matches!(open.last(), None | Some(b')' | b']'))
+            && !open.contains(&b'}')
             && k > cur.idx
             && !dotted_at(cur.tokens, cur.idx, k)
             && crate::lexer::statement_keyword_at(cur.parser.src, cur.tokens, k)
             && (open.is_empty() || cur.text(token) != "try")
+        {
+            break;
+        }
+        // TypeScript ends an argument list at `;` (`isListTerminator`), and
+        // an array list returns `;` to the enclosing statement list. Inside a
+        // block (`() => { for (;;) {} }`) `;` belongs to that block's statements.
+        if matches!(open.last(), Some(b')' | b']'))
+            && !open.contains(&b'}')
+            && matches!(token.kind, TokenKind::Punct(b';'))
         {
             break;
         }
@@ -202,9 +212,20 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
         }
     }
     // A bracket still open is a list being written: TypeScript reads it as
-    // the operand's, up to where the enclosing syntax resumes.
+    // the operand's, with the rest of its last line, where the next argument
+    // is typed. A line break separates the enclosing syntax that resumes
+    // after it and stays that syntax's.
     if !open.is_empty() {
-        operand_end = Some(cur.stop_byte_at(k));
+        operand_end = Some(
+            match k.checked_sub(1).and_then(|last| cur.tokens.get(last)) {
+                Some(last) if k > cur.idx => crate::lexer::line_trivia_end(
+                    cur.parser.src,
+                    last.span.end,
+                    cur.stop_byte_at(k),
+                ),
+                _ => cur.stop_byte_at(k),
+            },
+        );
         operand_token_end = k;
     }
     operand_end.map(|end| (operand_token_end, end))

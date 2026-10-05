@@ -131,9 +131,19 @@ pub(super) fn parse_pipeline(
                 break;
             }
             if matches!(open.last(), Some(b')' | b']'))
+                && !open.contains(&b'}')
                 && !dotted_at(tokens, step_from, k)
                 && crate::lexer::statement_keyword_at(parser.src, tokens, k)
                 && &parser.src[t.span.start..t.span.end] != "try"
+            {
+                break;
+            }
+            // TypeScript ends an argument list at `;` (`isListTerminator`),
+            // and an array list returns `;` to the enclosing statement list.
+            // Inside a block (`() => { for (;;) {} }`) `;` is the block's.
+            if matches!(open.last(), Some(b')' | b']'))
+                && !open.contains(&b'}')
+                && matches!(t.kind, TokenKind::Punct(b';'))
             {
                 break;
             }
@@ -236,13 +246,19 @@ pub(super) fn parse_pipeline(
         };
 
         // A bracket still open is a list being written: TypeScript reads it
-        // as the step's, up to where the enclosing syntax resumes.
+        // as the step's, with the rest of its last line, where the next
+        // argument is typed. A line break separates the enclosing syntax that
+        // resumes after it and stays that syntax's.
         let span = Span {
             start: tokens[step_from].span.start,
             end: if open.is_empty() {
                 tokens[k - 1].span.end
             } else {
-                tokens.get(k).map_or(range_end, |next| next.span.start)
+                crate::lexer::line_trivia_end(
+                    parser.src,
+                    tokens[k - 1].span.end,
+                    tokens.get(k).map_or(range_end, |next| next.span.start),
+                )
             },
         };
         steps.push(PipeStep {

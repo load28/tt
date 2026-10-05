@@ -1,0 +1,17 @@
+//// [operandBlockStatementSemicolons.tt] 15 mapping(s)
+1:1 -> 2:1 len 358  "// A `;` inside a block inside a tt operand's li"...
+7:9 -> 12:9 len 1  "n"
+7:17 -> 8:18 len 32  "h(() => { for (;;) { break; } })"
+7:50 -> 12:26 len 3  "\n  "
+8:9 -> 17:9 len 1  "m"
+8:17 -> 13:18 len 48  "each([() => { for (let i = 0; i < 2; i++) {} }])"
+8:66 -> 17:26 len 3  "\n  "
+9:7 -> 18:18 len 38  "h(function () { for (;;) { break; } })"
+9:46 -> 21:4 len 59  "\n  return { kind: \"Ok\", value: n + m };\n}\nexport"...
+12:18 -> 24:69 len 1  "1"
+12:23 -> 24:18 len 50  "((v: number) => { for (;;) { break; } return v; "...
+12:73 -> 24:71 len 61  ";\nexport { g };\ndeclare const xs: number[];\nexpo"...
+15:18 -> 27:25 len 2  "xs"
+15:24 -> 27:29 len 79  "((ys: number[]) => ys.map((y) => { for (let i = "...
+15:103 -> 27:109 len 2  ";\n"
+

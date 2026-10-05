@@ -1,0 +1,40 @@
+=== diagnostics recoveryPipeOperandDelimiter.tt ===
+diagnostics: 5 diagnostic(s)
+  2:26-2:27 ";" error TS1005: ')' expected.
+  2:23-2:24 "f" error TS2554: Expected 2 arguments, but got 1.
+    related 1:31-1:40 "b: number": An argument for 'b' was not provided.
+  2:18-2:26 "1 |> f(2" error TS2349: This expression is not callable.
+        Type 'Number' has no call signatures. (in code ttc generated for this construct)
+  4:7-4:12 "wrong" error TS2322: Type 'string' is not assignable to type 'number'.
+  4:7-4:12 "wrong" hint TS6133: 'wrong' is declared but its value is never read. [unnecessary]
+  restates: source-not-typescript
+published: 5 diagnostic(s)
+  2:18-2:26 "1 |> f(2" error ts2349 (ttc): This expression is not callable.
+        Type 'Number' has no call signatures. (in code ttc generated for this construct)
+  2:23-2:24 "f" error ts2554 (ttc): Expected 2 arguments, but got 1.
+    related recoveryPipeOperandDelimiter.tt 1:31-1:40 "b: number": An argument for 'b' was not provided.
+  2:26-2:27 ";" error ts1005 (ttc): ')' expected.
+  4:7-4:12 "wrong" hint TS6133 (ts): 'wrong' is declared but its value is never read. [unnecessary]
+  4:7-4:12 "wrong" error ts2322 (ttc): Type 'string' is not assignable to type 'number'.
+
+=== hover /*later*/ recoveryPipeOperandDelimiter.tt:5:1 ===
+  | later;
+  | ^ /*later*/
+hover: 5:1-5:6 "later"
+    const later: "정상"
+ttSymbol: null
+
+=== definition /*later*/ recoveryPipeOperandDelimiter.tt:5:1 ===
+  | later;
+  | ^ /*later*/
+definition: 1 location(s)
+  recoveryPipeOperandDelimiter.tt 3:14-3:19 "later"
+
+=== parity with the TypeScript twin ===
+diagnostics recoveryPipeOperandDelimiter.tt: differs
+  tt only:   Type 'Number' has no call signatures. (in code ttc generated for this construct)
+  tt only: recoveryPipeOperandDelimiter "1 |> f(2" error TS2349: This expression is not callable.
+  tt only: recoveryPipeOperandDelimiter "f" error TS2554: Expected 2 arguments, but got 1.
+hover later: same
+definition later: same
+

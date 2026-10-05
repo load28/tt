@@ -75,9 +75,12 @@ impl<I: Tokens> Parser<I> {
     )]
     pub(crate) fn parse_assignment_expr(&mut self) -> PResult<Box<Expr>> {
         let start = self.cur_pos();
+        let checkpoint = self.recovery.checkpoint();
         let result = crate::maybe_grow(256 * 1024, 1024 * 1024, || self.parse_assignment_expr_grown());
         match result {
-            Err(error) if self.editor_recovery() => self.recover_expression(start, error),
+            Err(error) if self.editor_recovery() => {
+                self.recover_expression(start, checkpoint, error)
+            }
             result => result,
         }
     }
@@ -1427,7 +1430,7 @@ impl<I: Tokens> Parser<I> {
         // member expression
         // $obj.name
         if question_dot || self.input_mut().eat(Token::Dot) {
-            let prop = self.parse_maybe_private_name().map(|e| match e {
+            let prop = self.parse_member_name().map(|e| match e {
                 Either::Left(p) => MemberProp::PrivateName(p),
                 Either::Right(i) => MemberProp::Ident(i),
             })?;
@@ -1528,7 +1531,7 @@ impl<I: Tokens> Parser<I> {
 
         if !question_dot && cur == Token::Dot {
             self.bump();
-            let prop = self.parse_maybe_private_name().map(|e| match e {
+            let prop = self.parse_member_name().map(|e| match e {
                 Either::Left(p) => MemberProp::PrivateName(p),
                 Either::Right(i) => MemberProp::Ident(i),
             })?;
@@ -1622,7 +1625,7 @@ impl<I: Tokens> Parser<I> {
         }
 
         if question_dot {
-            let prop = self.parse_maybe_private_name().map(|e| match e {
+            let prop = self.parse_member_name().map(|e| match e {
                 Either::Left(p) => MemberProp::PrivateName(p),
                 Either::Right(i) => MemberProp::Ident(i),
             })?;
@@ -1716,7 +1719,7 @@ impl<I: Tokens> Parser<I> {
             }
             Token::Dot => {
                 self.bump();
-                let prop = self.parse_maybe_private_name().map(|e| match e {
+                let prop = self.parse_member_name().map(|e| match e {
                     Either::Left(p) => MemberProp::PrivateName(p),
                     Either::Right(i) => MemberProp::Ident(i),
                 })?;
@@ -2197,8 +2200,11 @@ impl<I: Tokens> Parser<I> {
 
         let right = {
             let right_start = self.cur_pos();
+            let checkpoint = self.recovery.checkpoint();
             let left_of_right = match self.parse_unary_expr() {
-                Err(error) if self.editor_recovery() => self.recover_expression(right_start, error)?,
+                Err(error) if self.editor_recovery() => {
+                    self.recover_expression(right_start, checkpoint, error)?
+                }
                 result => result?,
             };
             self.parse_bin_op_recursively(

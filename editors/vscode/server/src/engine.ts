@@ -19,6 +19,7 @@
  * one-shot commands.
  * ----------------------------------------------------------------------- */
 import { ChildProcess, spawn } from "child_process";
+import type { RetainedCause } from "./diagnostics";
 import type {
   EnginePosition,
   EngineRange,
@@ -168,7 +169,7 @@ function engineServerFor(compiler: string): EngineServer | null {
     while ((newline = server.buffer.indexOf("\n")) !== -1) {
       const line = server.buffer.slice(0, newline);
       server.buffer = server.buffer.slice(newline + 1);
-      let message: { id?: number | null; result?: unknown; error?: string };
+      let message: { id?: number | null; result?: unknown; error?: string; superseded?: boolean };
       try {
         message = JSON.parse(line);
       } catch {
@@ -183,7 +184,9 @@ function engineServerFor(compiler: string): EngineServer | null {
             : undefined,
         typeof message.error === "string"
           ? { error: message.error }
-          : { result: message.result },
+          : message.superseded === true
+            ? { superseded: true }
+            : { result: message.result },
       );
       if (!answered) continue;
       server.answered = true;
@@ -325,7 +328,7 @@ async function semantic<T>(
   onError?: (message: string) => void,
 ): Promise<T | null> {
   const answer = await engineRequest(compiler, method, params, SEMANTIC_TIMEOUT_MS);
-  if (!answer) return null;
+  if (!answer || "superseded" in answer) return null;
   if ("error" in answer) {
     onError?.(`tt: ${method}: ${answer.error}`);
     return null;
@@ -623,14 +626,42 @@ export async function tsDiagnosticsAnswer(
   compiler: string,
   path: string,
   onError?: (message: string) => void,
-): Promise<{ diagnostics: EngineDiagnostic[]; restates: string[]; retains?: { code: string; start: { line: number; character: number } }[] } | null> {
+): Promise<TsDiagnosticsAnswer | null> {
+  const answer = await requestTsDiagnostics(compiler, path, false, onError);
+  return answer === "superseded" ? null : answer;
+}
+
+export interface TsDiagnosticsAnswer {
+  diagnostics: EngineDiagnostic[];
+  restates: string[];
+  retains?: RetainedCause[];
+}
+
+/** [`tsDiagnosticsAnswer`] for one validation generation: the engine
+ * answers `"superseded"` instead when a document change is already queued
+ * behind the request. */
+export async function supersedableTsDiagnosticsAnswer(
+  compiler: string,
+  path: string,
+  onError?: (message: string) => void,
+): Promise<TsDiagnosticsAnswer | "superseded" | null> {
+  return requestTsDiagnostics(compiler, path, true, onError);
+}
+
+async function requestTsDiagnostics(
+  compiler: string,
+  path: string,
+  supersedable: boolean,
+  onError?: (message: string) => void,
+): Promise<TsDiagnosticsAnswer | "superseded" | null> {
   const answer = await engineRequest(
     compiler,
     "tsDiagnostics",
-    { path },
+    supersedable ? { path, supersedable } : { path },
     SEMANTIC_TIMEOUT_MS,
   );
   if (!answer) return null;
+  if ("superseded" in answer) return "superseded";
   if ("error" in answer) {
     onError?.(`tt: tsDiagnostics: ${answer.error}`);
     return { diagnostics: [], restates: [] };
@@ -638,7 +669,7 @@ export async function tsDiagnosticsAnswer(
   const result = answer.result as {
     diagnostics?: EngineDiagnostic[];
     restates?: string[];
-    retains?: { code: string; start: { line: number; character: number } }[];
+    retains?: RetainedCause[];
   } | null;
   return {
     diagnostics: result?.diagnostics ?? [],

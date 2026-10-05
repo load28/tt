@@ -1,0 +1,49 @@
+=== operandBlockStatementSemicolons.tt ===
+declare function h(f: () => void): TResult<number, string>;
+>h : function h(f: () => void): TResult<number, string>
+>f : (parameter) f: () => void
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+declare function each(fs: (() => void)[]): TResult<number, string>;
+>each : function each(fs: (() => void)[]): TResult<number, string>
+>fs : (parameter) fs: (() => void)[]
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+function g(): TResult<number, string> {
+>g : function g(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  const n = try h(() => { for (;;) { break; } });
+>n : const n: number
+>h : function h(f: () => void): TResult<number, string>
+  const m = try each([() => { for (let i = 0; i < 2; i++) {} }]);
+>m : const m: number
+>each : function each(fs: (() => void)[]): TResult<number, string>
+>i : let i: number
+>i : let i: number
+>i : let i: number
+  try h(function () { for (;;) { break; } });
+>h : function h(f: () => void): TResult<number, string>
+  return { kind: "Ok", value: n + m };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : const n: number
+>m : const m: number
+export const r = 1 |> ((v: number) => { for (;;) { break; } return v; });
+>r : const r: number
+>v : (parameter) v: number
+>v : (parameter) v: number
+export { g };
+>g : (alias) function g(): TResult<number, string>
+declare const xs: number[];
+>xs : const xs: number[]
+export const s = xs |> ((ys: number[]) => ys.map((y) => { for (let i = 0; i < y; i++) {} return y; }));
+>s : const s: number[]
+>xs : const xs: number[]
+>ys : (parameter) ys: number[]
+>ys : (parameter) ys: number[]
+>map : (method) Array<number>.map<number>(callbackfn: (value: number, index: number, array: number[]) => number, thisArg?: any): number[]
+>y : (parameter) y: number
+>i : let i: number
+>i : let i: number
+>y : (parameter) y: number
+>i : let i: number
+>y : (parameter) y: number
+

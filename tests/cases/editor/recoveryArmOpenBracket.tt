@@ -1,0 +1,9 @@
+// @diagnostics: *
+variant Ev { Key(code: string), Idle, Stop }
+export function step(ev: Ev): number {
+  return match (ev) {
+    Key(code) => (code.length,
+    Idle | Stop => 0,
+  };
+}
+export const ok: number = 1;

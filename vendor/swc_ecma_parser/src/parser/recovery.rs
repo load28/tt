@@ -46,6 +46,25 @@ pub(super) struct RecoveryState {
     records: Vec<RecoveryRecord>,
 }
 
+/// Records are only appended during a speculation, so its rollback is the
+/// record count when it began.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct RecoveryCheckpoint {
+    records: usize,
+}
+
+impl RecoveryState {
+    pub(super) fn checkpoint(&self) -> RecoveryCheckpoint {
+        RecoveryCheckpoint {
+            records: self.records.len(),
+        }
+    }
+
+    pub(super) fn rollback(&mut self, checkpoint: RecoveryCheckpoint) {
+        self.records.truncate(checkpoint.records);
+    }
+}
+
 impl<I: Tokens> Parser<I> {
     pub(super) fn recover_type(&mut self, start: BytePos, error: Error) -> PResult<Box<TsType>> {
         self.emit_error(error);
@@ -111,34 +130,56 @@ impl<I: Tokens> Parser<I> {
 
     /// These tokens cannot begin an assignment expression. They belong to the
     /// containing statement/list; retaining them lets that production resume.
-    fn is_expression_boundary(token: Token) -> bool {
+    fn at_expression_boundary(&mut self) -> bool {
         matches!(
-            token,
+            self.input().cur(),
             Token::Semi
                 | Token::Comma
                 | Token::RParen
                 | Token::RBracket
                 | Token::RBrace
                 | Token::Eof
-                | Token::Const
-                | Token::Let
-                | Token::Var
-                | Token::Export
-                | Token::Return
-                | Token::Throw
                 | Token::Else
-        )
+        ) || self.at_statement_start()
     }
 
-    fn at_expression_boundary(&mut self) -> bool {
-        let token = self.input().cur();
-        if token == Token::Let {
-            return matches!(
+    /// A token TypeScript's `isStartOfStatement` accepts and
+    /// `isStartOfExpression` does not. An unfinished list stops there, because
+    /// the token is an element of an enclosing statement list and of no
+    /// expression list (`parser.ts`, `abortParsingListOrMoveToNextToken`).
+    /// `case` and `default` are the elements of a switch's clause list.
+    pub(super) fn at_statement_start(&mut self) -> bool {
+        match self.input().cur() {
+            Token::Var
+            | Token::Const
+            | Token::Export
+            | Token::Enum
+            | Token::If
+            | Token::Do
+            | Token::While
+            | Token::For
+            | Token::Continue
+            | Token::Break
+            | Token::Return
+            | Token::With
+            | Token::Switch
+            | Token::Throw
+            | Token::Try
+            | Token::Debugger
+            | Token::Catch
+            | Token::Finally
+            | Token::Case
+            | Token::Default => true,
+            Token::Let => matches!(
                 self.input_mut().peek(),
                 Some(Token::Ident | Token::LBrace | Token::LBracket)
-            );
+            ),
+            Token::Import => !matches!(
+                self.input_mut().peek(),
+                Some(Token::LParen | Token::Dot | Token::Lt)
+            ),
+            _ => false,
         }
-        Self::is_expression_boundary(token)
     }
 
     pub(super) fn ends_recovery_object(&mut self) -> bool {
@@ -147,16 +188,7 @@ impl<I: Tokens> Parser<I> {
         }
         // Keywords are valid property/method names, even when the keyword
         // starts a statement in another grammatical context.
-        if matches!(
-            self.input().cur(),
-            Token::Const
-                | Token::Let
-                | Token::Var
-                | Token::Return
-                | Token::Throw
-                | Token::Export
-                | Token::Else
-        ) {
+        if self.input().cur() == Token::Else || self.at_statement_start() {
             return !matches!(
                 self.input_mut().peek(),
                 Some(
@@ -172,32 +204,20 @@ impl<I: Tokens> Parser<I> {
         true
     }
 
+    /// TypeScript's `parseRightSideOfDot`: after a line break, an identifier
+    /// or keyword followed on the same line by another one starts a new
+    /// construct, so the name after `.` is missing. Any other token is the
+    /// member name (`obj.\nconst\nx` reads `obj.const`).
     pub(super) fn missing_member_name(&mut self) -> Option<IdentName> {
-        if !self.editor_recovery() || !self.input().had_line_break_before_cur() {
+        if !self.editor_recovery()
+            || !self.input().had_line_break_before_cur()
+            || !self.input().cur().is_word()
+        {
             return None;
         }
-        let starts_declaration =
-            matches!(self.input().cur(), Token::Const | Token::Let | Token::Var)
-                && matches!(
-                    self.input_mut().peek(),
-                    Some(Token::Ident | Token::LBrace | Token::LBracket)
-                );
-        let starts_export = self.input().cur() == Token::Export
-            && matches!(
-                self.input_mut().peek(),
-                Some(
-                    Token::Const
-                        | Token::Let
-                        | Token::Var
-                        | Token::Function
-                        | Token::Class
-                        | Token::Default
-                        | Token::Type
-                        | Token::Interface
-                        | Token::Async
-                )
-            );
-        if !starts_declaration && !starts_export {
+        if !self.input_mut().peek().is_some_and(|next| next.is_word())
+            || self.input_mut().has_linebreak_between_cur_and_peeked()
+        {
             return None;
         }
         let at = self.input().prev_span().hi;
@@ -265,11 +285,16 @@ impl<I: Tokens> Parser<I> {
         true
     }
 
+    /// Replaces the failed expression from `start` with an invalid node. The
+    /// node is all that remains of it, so what its productions recorded
+    /// since `checkpoint` is discarded with them.
     pub(super) fn recover_expression(
         &mut self,
         start: BytePos,
+        checkpoint: RecoveryCheckpoint,
         error: Error,
     ) -> PResult<Box<Expr>> {
+        self.recovery.rollback(checkpoint);
         // A failed regexp scan leaves the lexer in regexp-rescan mode. The
         // scanner has consumed its lexical region; continuing must scan the
         // next token, not retry the same unterminated regexp forever.
@@ -293,21 +318,13 @@ impl<I: Tokens> Parser<I> {
             },
             "expression".into(),
         );
-        if missing
-            && matches!(
-                self.input().cur(),
-                Token::Const
-                    | Token::Let
-                    | Token::Var
-                    | Token::Export
-                    | Token::Return
-                    | Token::Throw
-            )
-        {
+        if missing && self.at_statement_start() {
             self.recovery.records.last_mut().unwrap().replacement = Some("(undefined as any)");
         }
+        // The node ends with the last token it skipped, as every node ends at
+        // its last token; the trivia before the next token is not its own.
         Ok(Box::new(Expr::Invalid(Invalid {
-            span: Span::new_with_checked(start, self.cur_pos().max(start)),
+            span: Span::new_with_checked(start, self.input().prev_span().hi.max(start)),
         })))
     }
 
@@ -317,14 +334,19 @@ impl<I: Tokens> Parser<I> {
 
     fn skip_to_recovery_boundary(&mut self, stop_at_initializer: bool) {
         let mut delimiters = Vec::new();
+        // A word after `.` or `?.` is a member name (`parseRightSideOfDot`),
+        // whatever statement its keyword could start.
+        let mut member = false;
         loop {
             let token = self.input().cur();
             if token == Token::Eof
                 || delimiters.is_empty()
+                    && !(member && token.is_word())
                     && (self.at_expression_boundary() || stop_at_initializer && token == Token::Eq)
             {
                 return;
             }
+            member = matches!(token, Token::Dot | Token::OptionalChain);
             match token {
                 // Template heads include `${`. Their matching `}` must be
                 // rescanned in template mode, so text and nested interpolations
@@ -364,6 +386,9 @@ impl<I: Tokens> Parser<I> {
         let result = match result {
             Err(error) if self.editor_recovery() => {
                 self.emit_error(error);
+                // The statement is skipped whole: no node of it remains, so
+                // neither does what its productions recorded.
+                self.recovery.records.truncate(first_record);
                 // A failed production that consumed no input cannot be retried
                 // at the same token by its enclosing statement list.
                 if self.cur_pos() == start && self.input().cur() != Token::Eof {

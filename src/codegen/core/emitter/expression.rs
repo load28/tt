@@ -907,7 +907,7 @@ impl<'a> Emitter<'a> {
                 guard_line_comment(value.trim(), 1, self.source_kind)
             } else if let Some(slot) = self
                 .nested_structured_value_slot(step.value)
-                .filter(|_| !conditionally_reached)
+                .filter(|_| !conditionally_reached && self.core.has_statement_form(step.value))
             {
                 inner.push_break(1);
                 inner.push_value_declaration(slot);

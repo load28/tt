@@ -179,6 +179,13 @@ pub(crate) struct Query {
     pub contextual_only: bool,
     /// Read editor diagnostics for one module, retaining generated coordinates.
     pub editor_diagnostics: Option<PathBuf>,
+    /// Check this module alone, as a language service checks one file:
+    /// its own syntax decides whether its semantics are checked, and no
+    /// program-wide diagnostic is computed.
+    pub diagnostics_scope: Option<PathBuf>,
+    /// Answer only which files this module's types can depend on
+    /// ([`Answers::reference_closure`]); nothing is checked.
+    pub reference_closure: Option<PathBuf>,
     /// Infer incoming join types only after contextual facts reach a fixed point.
     pub infer_join_types: bool,
     /// Ask the compiler to emit the lowered modules' `.d.ts` as well. ttc
@@ -362,6 +369,16 @@ pub(crate) struct Answers {
     pub declarations: Vec<Declaration>,
     pub contextual_slots: Vec<ContextualSlotType>,
     pub disk_generation: Option<u64>,
+    /// The answer to [`Query::reference_closure`].
+    pub reference_closure: Option<ReferenceClosure>,
+}
+
+/// The files a module's types can depend on, by TypeScript's referenced-file
+/// rules, and the files among them that affect the global scope.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct ReferenceClosure {
+    pub files: Vec<PathBuf>,
+    pub global: Vec<PathBuf>,
 }
 
 /// A checker-proven Result shape answer. Absent answers remain unknown.

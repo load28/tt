@@ -1,0 +1,15 @@
+=== diagnostics recoverySkippedStatementBeforePrelude.tt ===
+diagnostics: 5 diagnostic(s)
+  5:13-5:14 "(" error TS1005: ',' expected.
+  6:3-6:4 "c" error TS1110: Type expected.
+  6:2-6:3 " " error TS1005: '=>' expected. (in code ttc generated for this construct)
+  5:9-5:13 "Some" error TS7005: Variable 'Some' implicitly has an 'any' type.
+  5:9-5:13 "Some" hint TS6133: 'Some' is declared but its value is never read. [unnecessary]
+  restates: source-not-typescript
+published: 5 diagnostic(s)
+  5:9-5:13 "Some" hint TS6133 (ts): 'Some' is declared but its value is never read. [unnecessary]
+  5:9-5:13 "Some" error ts7005 (ttc): Variable 'Some' implicitly has an 'any' type.
+  5:13-5:14 "(" error ts1005 (ttc): ',' expected.
+  6:2-6:3 " " error ts1005 (ttc): '=>' expected. (in code ttc generated near this position)
+  6:3-6:4 "c" error ts1110 (ttc): Type expected.
+

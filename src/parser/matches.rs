@@ -9,7 +9,7 @@
 mod arm_list;
 
 pub(super) use arm_list::{ArmPart, outline_arms};
-use arm_list::{arms_tail, parse_strict_arm_list, recover_match_arms};
+use arm_list::{arms_tail, leaves_list_open, parse_strict_arm_list, recover_match_arms};
 
 use super::Claim;
 use super::cursor::{Cursor, find_close_at};
@@ -432,6 +432,7 @@ fn parse_match_complete<'t>(
                 body_close: cur.tokens[body_close].span.start,
                 scrutinees,
                 tail: arms_tail(&arms_cur, arms.last()?.pattern_span.start)?,
+                arms_open: leaves_list_open(&arms_cur),
                 arms: arms
                     .into_iter()
                     .map(|arm| arm.into_tuple_arm(cur.parser))
@@ -461,6 +462,7 @@ fn parse_match_complete<'t>(
             scrutinee_span,
             scrutinee,
             tail: arms_tail(&arms_cur, arms.last()?.pattern_span.start)?,
+            arms_open: leaves_list_open(&arms_cur),
             arms: arms
                 .into_iter()
                 .map(|arm| arm.into_arm(cur.parser))

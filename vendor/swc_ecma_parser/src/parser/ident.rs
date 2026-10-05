@@ -35,10 +35,15 @@ impl<I: Tokens> Parser<I> {
         Ok(IdentName::new(w, self.span(start)))
     }
 
-    pub(crate) fn parse_maybe_private_name(&mut self) -> PResult<Either<PrivateName, IdentName>> {
+    /// The name after `.` or `?.` in a member access.
+    pub(crate) fn parse_member_name(&mut self) -> PResult<Either<PrivateName, IdentName>> {
         if let Some(missing) = self.missing_member_name() {
             return Ok(Either::Right(missing));
         }
+        self.parse_maybe_private_name()
+    }
+
+    pub(crate) fn parse_maybe_private_name(&mut self) -> PResult<Either<PrivateName, IdentName>> {
         let is_private = self.input().is(Token::Hash);
         if is_private {
             self.parse_private_name().map(Either::Left)

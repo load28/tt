@@ -887,7 +887,7 @@ pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> 
 /// is being typed before the cursor (completion, signature help).
 pub(super) fn to_service_typed(doc: &ServiceDoc, position: Position) -> Option<usize> {
     let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
-    let out = mapper::cursor_to_output(&doc.mappings, byte, mapper::Affinity::Preceding)?;
+    let out = mapper::typed_cursor_to_output(&doc.mappings, &doc.anchors, &doc.source, byte)?;
     if doc.coordinates == CoordinateSpace::Authored {
         return Some(u16_offset(&doc.source, position));
     }

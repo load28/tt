@@ -193,7 +193,7 @@ pub(crate) fn lex_with_kind(
         end,
         source_kind,
         facts::Start::Statements,
-        false,
+        Region::Open,
         None,
     )
     .0
@@ -210,7 +210,7 @@ pub(crate) fn trace(src: &str, source_kind: SourceKind) -> Trace {
         src.len(),
         source_kind,
         facts::Start::Statements,
-        false,
+        Region::Open,
         Some(&mut trace),
     );
     trace
@@ -303,19 +303,62 @@ fn number_end(src: &[u8], i: usize, end: usize) -> usize {
     j
 }
 
-/// Lexes `src[start..end]` from grammar position `mode`. A `braced` region
-/// is a JavaScript expression container or template interpolation and ends
-/// at its unmatched `}`, whose index is returned.
+/// The end of the trivia from `from` (at most `limit`) that stays on its
+/// line: blanks and comments before the line terminator. A block comment
+/// that crosses the line break is left whole to the trivia after it.
+pub(crate) fn line_trivia_end(src: &str, from: usize, limit: usize) -> usize {
+    let bytes = src.as_bytes();
+    let mut i = from;
+    while i < limit {
+        match bytes[i] {
+            b' ' | b'\t' => i += 1,
+            b'/' if bytes.get(i + 1) == Some(&b'/') => {
+                while i < limit && !matches!(bytes[i], b'\n' | b'\r') {
+                    i += 1;
+                }
+                return i;
+            }
+            b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                let Some(close) = find_subslice(bytes, b"*/", i + 2, limit) else {
+                    return i;
+                };
+                if bytes[i..close].iter().any(|&b| matches!(b, b'\n' | b'\r')) {
+                    return i;
+                }
+                i = close + 2;
+            }
+            _ => return i,
+        }
+    }
+    limit
+}
+
+/// Where a lexed region ends.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Region {
+    /// At `end`.
+    Open,
+    /// At its unmatched `}`: a template interpolation or a JSX attribute's
+    /// expression container.
+    Braced,
+    /// A JSX child expression container: at its unmatched `}`, or at a
+    /// `</` that TypeScript scans as the closing tag's `LessThanSlashToken`
+    /// in a JSX file (`scanner.ts`), where its parser ends the container.
+    JsxChild,
+}
+
+/// Lexes `src[start..end]` from grammar position `mode`. A braced region
+/// ([`Region`]) ends at the returned index.
 fn lex_region(
     src_str: &str,
     start: usize,
     end: usize,
     source_kind: SourceKind,
     mode: facts::Start,
-    braced: bool,
+    region: Region,
     trace: TraceSink<'_>,
 ) -> (Vec<Token>, usize) {
-    crate::stack::grow(|| lex_region_grown(src_str, start, end, source_kind, mode, braced, trace))
+    crate::stack::grow(|| lex_region_grown(src_str, start, end, source_kind, mode, region, trace))
 }
 
 fn lex_region_grown(
@@ -324,9 +367,10 @@ fn lex_region_grown(
     end: usize,
     source_kind: SourceKind,
     mode: facts::Start,
-    braced: bool,
+    region: Region,
     mut trace: TraceSink<'_>,
 ) -> (Vec<Token>, usize) {
+    let braced = region != Region::Open;
     let src = src_str.as_bytes();
     let mut machine = facts::Machine::new(src_str, end, mode, trace.is_some());
     let mut brace_depth = 0usize;
@@ -360,6 +404,14 @@ fn lex_region_grown(
         }
         let c = src[i];
         if braced && c == b'}' && brace_depth == 0 {
+            break i;
+        }
+        if region == Region::JsxChild
+            && c == b'<'
+            && brace_depth == 0
+            && at(src, i + 1, end) == Some(b'/')
+            && at(src, i + 2, end) != Some(b'*')
+        {
             break i;
         }
 
@@ -546,6 +598,9 @@ fn pair_brackets(tokens: &mut [Token]) {
 struct JsxExpression {
     open: usize,
     close: usize,
+    /// Whether `close` is the container's `}`. A child container that
+    /// reaches its parent's closing tag first ends there without one.
+    closed: bool,
     tokens: Vec<Token>,
 }
 
@@ -554,6 +609,7 @@ fn jsx_expression(
     open: usize,
     end: usize,
     kind: SourceKind,
+    region: Region,
     trace: TraceSink<'_>,
 ) -> Option<JsxExpression> {
     let (tokens, close) = lex_region(
@@ -562,12 +618,13 @@ fn jsx_expression(
         end,
         kind,
         facts::Start::Expression,
-        true,
+        region,
         trace,
     );
-    (close < end).then_some(JsxExpression {
+    (close < end).then(|| JsxExpression {
         open,
         close,
+        closed: src.as_bytes()[close] == b'}',
         tokens,
     })
 }
@@ -700,7 +757,7 @@ fn lex_template_grown(
                 end,
                 source_kind,
                 facts::Start::Expression,
-                true,
+                Region::Braced,
                 trace.as_deref_mut(),
             );
             push_raw(&mut parts, raw_start, i);
@@ -814,7 +871,14 @@ fn scan_jsx_grown(
             continue;
         }
         if src[i] == b'{' {
-            let expression = jsx_expression(src_str, i, end, source_kind, trace.as_deref_mut())?;
+            let expression = jsx_expression(
+                src_str,
+                i,
+                end,
+                source_kind,
+                Region::JsxChild,
+                trace.as_deref_mut(),
+            )?;
             let close = expression.close;
             if raw_start < i + 1 {
                 tokens.push(Token {
@@ -828,6 +892,11 @@ fn scan_jsx_grown(
                 });
             }
             tokens.extend(expression.tokens);
+            if !expression.closed {
+                i = close;
+                raw_start = i;
+                continue;
+            }
             tokens.push(Token {
                 kind: TokenKind::JsxRaw,
                 span: Span {
@@ -851,6 +920,7 @@ fn jsx_region_tokens(start: usize, end: usize, expressions: Vec<JsxExpression>) 
     for JsxExpression {
         open,
         close,
+        closed: _,
         tokens: expression_tokens,
     } in expressions
     {
@@ -943,8 +1013,14 @@ fn scan_jsx_opening(
                 });
             }
             (Some(b'{'), _) => {
-                let expression =
-                    jsx_expression(src_str, i, end, source_kind, trace.as_deref_mut())?;
+                let expression = jsx_expression(
+                    src_str,
+                    i,
+                    end,
+                    source_kind,
+                    Region::Braced,
+                    trace.as_deref_mut(),
+                )?;
                 let close = expression.close;
                 expressions.push(expression);
                 i = close + 1;
@@ -959,8 +1035,14 @@ fn scan_jsx_opening(
                     match at(src, i, end)? {
                         b'"' | b'\'' => i = scan_string(src, i, end),
                         b'{' => {
-                            let expression =
-                                jsx_expression(src_str, i, end, source_kind, trace.as_deref_mut())?;
+                            let expression = jsx_expression(
+                                src_str,
+                                i,
+                                end,
+                                source_kind,
+                                Region::Braced,
+                                trace.as_deref_mut(),
+                            )?;
                             let close = expression.close;
                             expressions.push(expression);
                             i = close + 1;

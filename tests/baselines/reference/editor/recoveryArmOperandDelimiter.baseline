@@ -1,0 +1,24 @@
+=== diagnostics recoveryArmOperandDelimiter.tt ===
+diagnostics: 3 diagnostic(s)
+  3:18-3:27 "match (o)" error TS1005: ')' expected. (in code ttc generated for this construct)
+  5:7-5:12 "wrong" error TS2322: Type 'string' is not assignable to type 'number'.
+  5:7-5:12 "wrong" hint TS6133: 'wrong' is declared but its value is never read. [unnecessary]
+  restates: source-not-typescript
+published: 3 diagnostic(s)
+  3:18-3:27 "match (o)" error ts1005 (ttc): ')' expected. (in code ttc generated for this construct)
+  5:7-5:12 "wrong" hint TS6133 (ts): 'wrong' is declared but its value is never read. [unnecessary]
+  5:7-5:12 "wrong" error ts2322 (ttc): Type 'string' is not assignable to type 'number'.
+
+=== hover /*later*/ recoveryArmOperandDelimiter.tt:6:1 ===
+  | later;
+  | ^ /*later*/
+hover: 6:1-6:6 "later"
+    const later: "정상"
+ttSymbol: null
+
+=== parity with the TypeScript twin ===
+diagnostics recoveryArmOperandDelimiter.tt: differs
+  tt only: recoveryArmOperandDelimiter "match (o)" error TS1005: ')' expected. (in code ttc generated for this construct)
+  ts only: recoveryArmOperandDelimiter "}" error TS1005: ',' expected.
+hover later: same
+

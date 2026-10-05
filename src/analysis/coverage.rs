@@ -351,6 +351,9 @@ pub(crate) enum CoverageQuestion {
 
 /// The [`CoverageQuestion`] `expr`'s arms ask.
 pub(crate) fn coverage_question(expr: &MatchExpr) -> CoverageQuestion {
+    if expr.arms_open {
+        return CoverageQuestion::None;
+    }
     let (mut tags, mut literals) = (false, false);
     for arm in &expr.arms {
         match arm.pattern {
@@ -502,7 +505,7 @@ pub(super) fn tuple_coverage_of(
 
     let cx = Alphabets::of(table);
     let unreachable = unreachable_arms(&arm_rows, &types, &cx);
-    let coverage = (!wildcard).then(|| {
+    let coverage = (!wildcard && !expr.arms_open).then(|| {
         Coverage::of(
             positions,
             Vec::new(),

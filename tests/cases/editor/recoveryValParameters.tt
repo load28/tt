@@ -1,0 +1,14 @@
+// @diagnostics: *
+// @hover: q
+interface P { x: number }
+function a(val p: P): number {
+  return p.x;
+}
+function b(): void {
+  let c = 1;
+  c =
+}
+function d(val q: P): number {
+  return /*q*/q.x;
+}
+export const n = a({ x: 1 }) + d({ x: 2 });

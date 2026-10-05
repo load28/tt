@@ -1,0 +1,17 @@
+=== diagnostics recoveryArmUnterminatedString.tt ===
+diagnostics: 6 diagnostic(s)
+  4:53-4:55 "ok" error TS1005: ':' expected.
+  4:53-4:55 "ok" error TS1434: Unexpected keyword or identifier.
+  4:57-4:57 "" error TS1002: Unterminated string literal.
+  5:16-5:18 "=>" error TS1005: ';' expected.
+  5:5-5:8 "Num" error TS2304: Cannot find name 'Num'.
+  5:19-5:28 "value < 0" error TS2365: Operator '<' cannot be applied to types 'string' and 'number'.
+  restates: source-not-typescript
+published: 6 diagnostic(s)
+  4:53-4:55 "ok" error ts1005 (ttc): ':' expected.
+  4:53-4:55 "ok" error ts1434 (ttc): Unexpected keyword or identifier.
+  4:57-4:57 "" error ts1002 (ttc): Unterminated string literal.
+  5:5-5:8 "Num" error ts2304 (ttc): Cannot find name 'Num'.
+  5:16-5:18 "=>" error ts1005 (ttc): ';' expected.
+  5:19-5:28 "value < 0" error ts2365 (ttc): Operator '<' cannot be applied to types 'string' and 'number'.
+

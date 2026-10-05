@@ -113,7 +113,7 @@ impl<I: Tokens> Parser<I> {
     fn parse_maybe_decorator_args(&mut self, expr: Box<Expr>) -> PResult<Box<Expr>> {
         let type_args = if self.input().syntax().typescript() && self.input().is(Token::Lt) {
             let ret = self.parse_ts_type_args()?;
-            self.assert_and_bump(Token::Gt);
+            expect!(self, Token::Gt);
             Some(ret)
         } else {
             None
@@ -269,7 +269,7 @@ impl<I: Tokens> Parser<I> {
                 // but it's a super class with type params, for example, in JSX.
                 if self.syntax().typescript() && self.input().is(Token::Lt) {
                     let ret = self.parse_ts_type_args()?;
-                    self.assert_and_bump(Token::Gt);
+                    expect!(self, Token::Gt);
                     Ok((super_class, Some(ret)))
                 } else {
                     Ok((super_class, None))

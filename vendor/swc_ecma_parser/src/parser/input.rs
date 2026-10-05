@@ -77,7 +77,9 @@ pub trait Tokens: Clone {
     fn scan_jsx_open_el_terminal_token(&mut self) -> TokenAndSpan;
     fn rescan_jsx_open_el_terminal_token(&mut self, reset: BytePos) -> TokenAndSpan;
     fn rescan_jsx_token(&mut self, reset: BytePos) -> TokenAndSpan;
-    fn scan_jsx_identifier(&mut self, start: BytePos) -> TokenAndSpan;
+    /// Extends the current word token `current` into a JSX name, scanning
+    /// from its end whatever the lexer has read past it.
+    fn scan_jsx_identifier(&mut self, current: TokenAndSpan) -> TokenAndSpan;
     fn scan_jsx_attribute_value(&mut self) -> TokenAndSpan;
     fn rescan_template_token(&mut self, start: BytePos, start_with_back_tick: bool)
         -> TokenAndSpan;
@@ -197,8 +199,11 @@ impl<I: Tokens> Buffer<I> {
         if !self.cur().is_word() {
             return;
         }
-        let start = self.cur.span.lo;
-        let cur = self.iter.scan_jsx_identifier(start);
+        // A token peeked past the current one was read where the name may
+        // continue (`a-b`), so the name is scanned again from the current
+        // token's end and the peeked token is read again after it.
+        self.next = None;
+        let cur = self.iter.scan_jsx_identifier(self.cur);
         debug_assert!(cur.token == Token::JSXName);
         self.set_cur(cur);
     }

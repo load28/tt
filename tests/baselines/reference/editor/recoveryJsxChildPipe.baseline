@@ -1,0 +1,18 @@
+=== diagnostics recoveryJsxChildPipe.ttx ===
+diagnostics: 1 diagnostic(s)
+  10:46-10:48 "</" error TS1005: '}' expected.
+  restates: source-not-typescript
+published: 1 diagnostic(s)
+  10:46-10:48 "</" error ts1005 (ttc): '}' expected.
+
+=== hover /*total*/ recoveryJsxChildPipe.ttx:14:60 ===
+  |         <td colSpan={2}>{match (total) { 0 => "none", _ => total }}</td>
+  |                                                            ^ /*total*/
+hover: 14:60-14:65 "total"
+    const total: number
+ttSymbol: null
+
+=== parity with the TypeScript twin ===
+diagnostics recoveryJsxChildPipe.ttx: same
+hover total: same
+

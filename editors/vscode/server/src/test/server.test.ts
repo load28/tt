@@ -64,6 +64,36 @@ test("repairing incomplete host syntax keeps the independent error in the curren
 });
 
 
+test("a repaired syntax cause is published when typed tt checks are off", { skip: skipTyped, timeout }, async () => {
+  const dir = repoTestDir("tt-server-test-");
+  const source = [
+    "declare function f(): void;",
+    "declare const flag: boolean;",
+    "const a = f(",
+    "const b = f(",
+    "const good = match (flag) { true => 1, false => 2 };",
+  ].join("\n");
+  const file = path.join(dir, "main.tt");
+  fs.writeFileSync(file, source);
+  const uri = pathToFileURL(file).toString();
+  const client = connect(SERVER, { configuration: () => ({ typedChecks: false, typeDiagnostics: true }) });
+  try {
+    await client.request("initialize", {
+      processId: process.pid,
+      rootUri: pathToFileURL(dir).toString(),
+      workspaceFolders: [{ uri: pathToFileURL(dir).toString(), name: "test" }],
+      capabilities: { workspace: { configuration: true } },
+    });
+    client.notify("initialized", {});
+    const published = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri);
+    client.notify("textDocument/didOpen", { textDocument: { uri, languageId: "tt", version: 1, text: source } });
+    const shown = problems((await published).diagnostics);
+    const starts = new Set(shown.map((d: any) => `${d.range.start.line}:${d.range.start.character}`));
+    // Both unclosed calls are independent causes.
+    assert.ok(starts.has("3:0") && starts.size >= 2, JSON.stringify(shown));
+  } finally { client.stop(); }
+});
+
 for (const consumerKind of ["tt", "ttx"]) {
   for (const providerKind of ["tt", "ttx", "ts", "tsx"]) {
     test(`filesystem and config changes refresh ${providerKind} -> ${consumerKind}`, { skip: skipTyped, timeout }, async () => {

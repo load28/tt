@@ -1,0 +1,61 @@
+=== aParenthesizedPipelineStepAfterAMatchHead.tt ===
+variant G { E, F }
+>G : type G = {
+>       kind: "E";
+>   } | {
+>       kind: "F";
+>   }
+>E : (property) E: {
+>       readonly kind: "E";
+>   }
+>F : (property) F: {
+>       readonly kind: "F";
+>   }
+const add = (n: number) => (m: number) => n + m;
+>add : const add: (n: number) => (m: number) => number
+>n : (parameter) n: number
+>m : (parameter) m: number
+>n : (parameter) n: number
+>m : (parameter) m: number
+const p = 10;
+>p : const p: 10
+function pick(g: G): number {
+>pick : function pick(g: G): number
+>g : (parameter) g: G
+>G : type G = {
+>       kind: "E";
+>   } | {
+>       kind: "F";
+>   }
+  return match (g) { E => 1, F => 2 } |> (p |> add);
+>g : (parameter) g: G
+>p : const p: 10
+>add : const add: (n: number) => (m: number) => number
+console.log(pick(G.E), pick(G.F));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>pick : function pick(g: G): number
+>G : const G: {
+>       E: {
+>           readonly kind: "E";
+>       };
+>       F: {
+>           readonly kind: "F";
+>       };
+>   }
+>E : (property) E: {
+>       readonly kind: "E";
+>   }
+>pick : function pick(g: G): number
+>G : const G: {
+>       E: {
+>           readonly kind: "E";
+>       };
+>       F: {
+>           readonly kind: "F";
+>       };
+>   }
+>F : (property) F: {
+>       readonly kind: "F";
+>   }
+

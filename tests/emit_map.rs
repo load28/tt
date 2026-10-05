@@ -580,17 +580,19 @@ fn a_value_try_without_an_owner_keeps_its_operand_mapped() {
             "function f() {\n  const v = 1 + (try g());\n  x.\n}\n",
             "g()",
         ),
+        // An open argument list keeps the rest of its line, where the next
+        // argument is typed; the line break is the resuming syntax's.
         (
             "function f() {\n  const v = try parse(\"1\", \n}\n",
-            "parse(\"1\", \n",
+            "parse(\"1\", ",
         ),
         (
             "const r = result { const q = try parse(\"1\", \n};\n",
-            "parse(\"1\", \n",
+            "parse(\"1\", ",
         ),
         (
             "function f() {\n  const v = try parse(\"1\", \n  const z = 1;\n}\n",
-            "parse(\"1\", \n  ",
+            "parse(\"1\", ",
         ),
     ];
     for (src, operand) in cases {

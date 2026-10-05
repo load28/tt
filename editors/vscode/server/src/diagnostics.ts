@@ -9,6 +9,14 @@
  * ----------------------------------------------------------------------- */
 import { Diagnostic, DiagnosticSeverity } from "vscode-languageserver/node";
 
+/** A primary syntax cause the editor projection hid from TypeScript. */
+export interface RetainedCause {
+  code: string;
+  start: { line: number; character: number };
+  range?: { start: { line: number; character: number }; end: { line: number; character: number } };
+  message?: string;
+}
+
 /** One validation generation's layers, already on the buffer's text. */
 export interface DiagnosticLayers {
   /** What tt decides from the text alone (`ttc --check`). */
@@ -18,8 +26,10 @@ export interface DiagnosticLayers {
   /** The codes of compiler diagnostics the service states in TypeScript's
    * words (`engine.tsDiagnosticsAnswer`). */
   restates: string[];
-  /** Original causes whose source was replaced by an editor repair. */
-  retains?: { code: string; start: { line: number; character: number } }[];
+  /** Original causes whose source was replaced by an editor repair.
+   * TypeScript never reads that text, so the service layer states each
+   * cause itself when no other layer does. */
+  retains?: RetainedCause[];
   /** tt's hints, which are never problems. */
   hints: Diagnostic[];
   /** The typed compiler pass, when it answered. `replacesTypes` says it
@@ -110,10 +120,24 @@ function inSourceOrder(left: Diagnostic, right: Diagnostic): number {
  */
 export function publishedDiagnostics(layers: DiagnosticLayers): Diagnostic[] {
   const restated = new Set(layers.restates);
-  const stated = (d: Diagnostic) => d.source === "ts" || !restated.has(String(d.code ?? "")) ||
-    layers.retains?.some((cause) => cause.code === String(d.code ?? "") &&
-      cause.start.line === d.range.start.line && cause.start.character === d.range.start.character);
-  let diagnostics = [...layers.text.filter(stated), ...layers.service, ...layers.hints];
+  const retained = (d: Diagnostic) => layers.retains?.some((cause) => cause.code === String(d.code ?? "") &&
+    cause.start.line === d.range.start.line && cause.start.character === d.range.start.character) ?? false;
+  const stated = (d: Diagnostic) => d.source === "ts" || !restated.has(String(d.code ?? "")) || retained(d);
+  const text = layers.text.filter(stated);
+  // A repaired cause no text diagnostic states is the service layer's to
+  // state: its projection is why TypeScript cannot.
+  const repaired: Diagnostic[] = (layers.retains ?? [])
+    .filter((cause) => cause.range !== undefined && cause.message !== undefined)
+    .filter((cause) => !text.some((d) => String(d.code ?? "") === cause.code &&
+      d.range.start.line === cause.start.line && d.range.start.character === cause.start.character))
+    .map((cause) => ({
+      severity: DiagnosticSeverity.Error,
+      range: cause.range!,
+      message: cause.message!,
+      code: cause.code,
+      source: "ttc",
+    }));
+  let diagnostics = [...text, ...repaired, ...layers.service, ...layers.hints];
   if (layers.typed !== null) {
     diagnostics = mergeTyped(
       diagnostics,

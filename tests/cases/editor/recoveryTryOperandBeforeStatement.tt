@@ -1,0 +1,13 @@
+// @diagnostics: *
+// @hover: width
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+declare function parseNum(x: string): TResult<number, string>;
+export function rect(a: string, b: string): TResult<number, string> {
+  const width = try parseNum(a);
+  const height = try parseNum(
+  if (width <= 0) {
+    return Result.Err("width must be positive");
+  }
+  return Result.Ok(/*width*/width * height);
+}

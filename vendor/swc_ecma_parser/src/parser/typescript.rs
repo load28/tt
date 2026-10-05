@@ -694,7 +694,13 @@ impl<I: Tokens> Parser<I> {
         while !self.is_ts_list_terminator(kind) {
             // Skipping "parseListElement" from the TS source since that's just for error
             // handling.
+            let start = self.cur_pos();
             buf.push(parse_element(self)?);
+            // An editor element that consumed nothing leaves the token to the
+            // enclosing context, as TypeScript's `abortParsingListOrMoveToNextToken`.
+            if self.editor_recovery() && self.cur_pos() == start {
+                break;
+            }
         }
         Ok(buf)
     }

@@ -1,0 +1,14 @@
+=== diagnostics recoverySkippedArgumentRepairedOnce.tt ===
+diagnostics: 1 diagnostic(s)
+  5:3-5:4 "i" error TS1109: Expression expected.
+  restates: source-not-typescript
+published: 2 diagnostic(s)
+  5:3-5:3 "" error source-not-typescript (ttc): expected )
+  5:3-5:4 "i" error ts1109 (ttc): Expression expected.
+
+=== parity with the TypeScript twin ===
+diagnostics recoverySkippedArgumentRepairedOnce.tt: differs
+  tt only: recoverySkippedArgumentRepairedOnce "" error TS"source-not-typescript": expected )
+  tt only: recoverySkippedArgumentRepairedOnce "i" error TS1109: Expression expected.
+  ts only: recoverySkippedArgumentRepairedOnce "if" error TS1109: Expression expected.
+

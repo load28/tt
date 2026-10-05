@@ -114,6 +114,14 @@ enum SourceOrigin {
     },
 }
 
+/// The source byte a generated piece is attributed to.
+fn origin_start(origin: &SourceOrigin) -> usize {
+    match origin {
+        SourceOrigin::Construct { src, .. } => *src,
+        SourceOrigin::Synthetic { parent, .. } => parent.start,
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 struct ExactOrigin {
     start: usize,
@@ -127,6 +135,9 @@ enum SyntheticReason {
     /// semicolon insertion from running into generated text after it
     /// ([`TargetFile::separate_statements`]).
     StatementSeparator,
+    /// The space that keeps a generated word and a copied word two tokens
+    /// ([`TargetFile::separate_tokens`]).
+    TokenSeparator,
 }
 
 enum TargetPiece<'a> {
@@ -398,6 +409,89 @@ impl<'a> TargetFile<'a> {
                             end: boundary,
                         },
                         reason: SyntheticReason::StatementSeparator,
+                    },
+                },
+            );
+        }
+    }
+
+    /// Keeps the tokens on either side of a generated/copied seam apart.
+    ///
+    /// Lowering replaces a value with generated text. When the source it
+    /// replaced ran into the trivia before the next token (an operand whose
+    /// list is still open), the seam would join the generated text to that
+    /// token. A token the source wrote at the start of a line keeps a line
+    /// break before it, which is what ended the statement before it
+    /// (automatic semicolon insertion); otherwise two words keep a space, as
+    /// a printer separates two tokens. Source that follows a generated word
+    /// with a byte outside ASCII may continue it as an identifier, so that
+    /// byte is kept apart as a word is; source before generated text is left
+    /// as written (its last byte can be a byte order mark).
+    fn separate_tokens(&mut self) {
+        let Some(source) = self.source else {
+            return;
+        };
+        let word = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$';
+        let starts_line = |at: usize| {
+            let before = &source.as_bytes()[..at];
+            let blank = before
+                .iter()
+                .rev()
+                .take_while(|&&byte| matches!(byte, b' ' | b'\t' | b'\n' | b'\r'))
+                .count();
+            before[before.len() - blank..]
+                .iter()
+                .any(|&byte| matches!(byte, b'\n' | b'\r'))
+        };
+        let mut separators = Vec::new();
+        // The previous text piece: generated or not, its last byte, and the
+        // end of the construct a generated piece wrote.
+        let mut previous: Option<(bool, u8, Option<usize>)> = None;
+        for (index, piece) in self.pieces.iter().enumerate() {
+            let (generated, text, at, construct_end) = match piece {
+                TargetPiece::Generated { text, origin } => (
+                    true,
+                    text.as_ref(),
+                    origin_start(origin),
+                    match origin {
+                        SourceOrigin::Construct { src_end, .. } => Some(*src_end),
+                        SourceOrigin::Synthetic { .. } => None,
+                    },
+                ),
+                TargetPiece::Source { text, origin } => (false, *text, origin.start, None),
+                TargetPiece::Break { .. } => {
+                    previous = None;
+                    continue;
+                }
+                _ => continue,
+            };
+            let (Some(&first), Some(&last)) = (text.as_bytes().first(), text.as_bytes().last())
+            else {
+                continue;
+            };
+            if let Some((was_generated, end, replaced)) = previous
+                && was_generated != generated
+                && !matches!(end, b'\n' | b'\r')
+            {
+                // The construct replaced the trivia up to this token, line
+                // break included.
+                if replaced == Some(at) && !first.is_ascii_whitespace() && starts_line(at) {
+                    separators.push((index, at, "\n"));
+                } else if word(end) && (word(first) || was_generated && !first.is_ascii()) {
+                    separators.push((index, at, " "));
+                }
+            }
+            previous = Some((generated, last, construct_end));
+        }
+        for (index, at, text) in separators.into_iter().rev() {
+            self.len += text.len();
+            self.pieces.insert(
+                index,
+                TargetPiece::Generated {
+                    text: Cow::Borrowed(text),
+                    origin: SourceOrigin::Synthetic {
+                        parent: ExactOrigin { start: at, end: at },
+                        reason: SyntheticReason::TokenSeparator,
                     },
                 },
             );

@@ -26,10 +26,14 @@
 //! → { "id": 2, "method": "emitMap", "params": { "text", "filename"? } }
 //! ← { "id": 2, "result": { "code", "mappings": [{ "src", "out", "len" }] } }
 //!
-//! → { "id": 3, "method": "typedCheck", "params": { "path", "text" } }
+//! → { "id": 3, "method": "typedCheck",
+//!     "params": { "path", "text", "scope"?, "supersedable"? } }
 //! ← { "id": 3, "result": { "blocked", "diagnostics":
 //!        [{ "path", "line", "col", "endLine", "endCol", "message", "code",
 //!           "suggestions" }] } }
+//! `"scope": "file"` checks the buffer as a language service checks the
+//! file an editor shows: its own diagnostics, its TypeScript checked
+//! whenever its own syntax parses, whatever another file's does.
 //! `blocked`: the pass checked none of the buffer's TypeScript — the
 //! project could not be read, or the buffer could not be lowered and its
 //! diagnostics are its tt-level ones alone.
@@ -96,6 +100,13 @@
 //! `ttc --dependencies` for the file: the files whose change invalidates
 //! its compile, and the directories where a file added or removed does.
 //!
+//! A `typedCheck` or `tsDiagnostics` request whose params carry
+//! `"supersedable": true` describes the documents as they are when it is
+//! answered. When a document change (`openDocument`, `updateDocument`,
+//! `closeDocument`, `reloadProjects`) has already arrived behind it, the
+//! answer would be stale, and the server answers without computing it:
+//! ← { "id": N, "superseded": true }
+//!
 //! ← { "id": N, "error": "sentence" }   // the request failed; the session lives
 //! ← { "id": null, "error": "sentence" } // a line with no id the server can read
 //! ```
@@ -125,7 +136,7 @@ use responses::{
     completion_detail_json, completion_json, labels_json, location_json, pattern_items_json,
     range_json, service_diagnostic_json, signature_help_json, suggestions_json, symbol_json,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -141,16 +152,33 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
     let mut workspace = Workspace::new(Engine::new(node));
     let mut checks = Checks::default();
 
-    let stdin = std::io::stdin();
     let stdout = std::io::stdout();
-    let mut input = stdin.lock();
-    let mut bytes = Vec::new();
-    loop {
-        bytes.clear();
-        match input.read_until(b'\n', &mut bytes) {
-            Ok(0) | Err(_) => break,
-            Ok(_) => {}
+    // Lines are read as they arrive, so a request can see the document
+    // changes queued behind it (TypeScript's `changeSeq`).
+    let (sender, lines) = std::sync::mpsc::channel::<Vec<u8>>();
+    std::thread::spawn(move || {
+        let stdin = std::io::stdin();
+        let mut input = stdin.lock();
+        loop {
+            let mut bytes = Vec::new();
+            match input.read_until(b'\n', &mut bytes) {
+                Ok(0) | Err(_) => break,
+                Ok(_) => {}
+            }
+            if sender.send(bytes).is_err() {
+                break;
+            }
         }
+    });
+    let mut queued: VecDeque<Vec<u8>> = VecDeque::new();
+    loop {
+        let bytes = match queued.pop_front() {
+            Some(bytes) => bytes,
+            None => match lines.recv() {
+                Ok(bytes) => bytes,
+                Err(_) => break,
+            },
+        };
         let line = match std::str::from_utf8(&bytes) {
             Ok(line) => line.trim_end_matches(['\n', '\r']),
             Err(error) => {
@@ -170,6 +198,20 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
         };
         if line.trim().is_empty() {
             continue;
+        }
+        if supersedable(line) {
+            queued.extend(lines.try_iter());
+            if superseded(line, &queued) {
+                let response = serde_json::json!({ "id": request_id(line), "superseded": true });
+                let mut out = stdout.lock();
+                if writeln!(out, "{response}")
+                    .and_then(|_| out.flush())
+                    .is_err()
+                {
+                    break;
+                }
+                continue;
+            }
         }
         // A panic in one request is a bug in the compiler, not the end of
         // the session: the protocol promises that a failed request never
@@ -197,6 +239,57 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
         }
     }
     ExitCode::SUCCESS
+}
+
+/// The members of a request line, values unparsed.
+fn members(line: &str) -> Option<HashMap<String, Box<serde_json::value::RawValue>>> {
+    serde_json::from_str(line).ok()
+}
+
+/// A request whose answer describes one document revision and that the
+/// consumer marked `"supersedable": true`: a later document change makes
+/// the answer stale before it is computed, as a document change aborts
+/// TypeScript's pending error check (`session.ts`, `changeSeq`).
+fn supersedable(line: &str) -> bool {
+    let Some(members) = members(line) else {
+        return false;
+    };
+    let method = members
+        .get("method")
+        .and_then(|method| serde_json::from_str::<String>(method.get()).ok());
+    matches!(method.as_deref(), Some("typedCheck" | "tsDiagnostics"))
+        && members
+            .get("params")
+            .and_then(|params| {
+                serde_json::from_str::<HashMap<String, Box<serde_json::value::RawValue>>>(
+                    params.get(),
+                )
+                .ok()
+            })
+            .and_then(|params| params.get("supersedable").map(|flag| flag.get() == "true"))
+            .unwrap_or(false)
+}
+
+/// Whether a document change queued behind `line` makes its answer stale.
+fn superseded(line: &str, queued: &VecDeque<Vec<u8>>) -> bool {
+    supersedable(line) && queued.iter().any(|later| changes_documents(later))
+}
+
+/// Whether a queued line changes the documents or projects every answer
+/// is computed from.
+fn changes_documents(bytes: &[u8]) -> bool {
+    let Some(members) = std::str::from_utf8(bytes).ok().and_then(members) else {
+        return false;
+    };
+    members
+        .get("method")
+        .and_then(|method| serde_json::from_str::<String>(method.get()).ok())
+        .is_some_and(|method| {
+            matches!(
+                method.as_str(),
+                "openDocument" | "updateDocument" | "closeDocument" | "reloadProjects"
+            )
+        })
 }
 
 /// The `id` of a request the server could not answer.
@@ -368,7 +461,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                 .map(|code| code.as_str())
                 .collect();
             let retains: Vec<_> = project.service_retained_syntax(path)?.into_iter()
-                .map(|(code, start)| json!({ "code": code.as_str(), "start": { "line": start.line, "character": start.character } }))
+                .map(|cause| json!({ "code": cause.code.as_str(), "start": { "line": cause.range.start.line, "character": cause.range.start.character }, "range": range_json(cause.range), "message": cause.message }))
                 .collect();
             Ok(json!({ "diagnostics": diagnostics, "restates": restates, "retains": retains }))
         }),
@@ -874,7 +967,8 @@ fn typed_check(
         scanned.dedup();
         scanned
     };
-    let outcome = project.update(&files);
+    let scoped = params["scope"].as_str() == Some("file");
+    let outcome = project.update_scoped(&files, scoped.then_some(canonical.as_path()));
     let response = match outcome {
         Err(blocked) => {
             let positions = (blocked.path == canonical).then(|| ProtocolPositions::new(buffer));
@@ -897,13 +991,15 @@ fn typed_check(
             })
         }
         Ok(snapshot) => {
-            let checked = project.check(
-                &snapshot,
-                &CheckRequest {
-                    emit_declarations: false,
-                    tt_only: !include_types,
-                },
-            );
+            let request = CheckRequest {
+                emit_declarations: false,
+                tt_only: !include_types,
+            };
+            let checked = if scoped {
+                project.check_file(&snapshot, &request, &canonical)
+            } else {
+                project.check(&snapshot, &request)
+            };
             match checked {
                 Err(e) => {
                     if !registered {
@@ -981,4 +1077,59 @@ fn text_param(params: &serde_json::Value) -> Result<&str, String> {
     params["text"]
         .as_str()
         .ok_or_else(|| "the request needs a \"text\"".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn queue(lines: &[serde_json::Value]) -> VecDeque<Vec<u8>> {
+        lines
+            .iter()
+            .map(|line| line.to_string().into_bytes())
+            .collect()
+    }
+
+    #[test]
+    fn a_marked_diagnostic_request_yields_to_a_later_document_change() {
+        use serde_json::json;
+        let check = json!({"id": 1, "method": "typedCheck",
+            "params": {"path": "/p/a.tt", "text": "x", "supersedable": true}})
+        .to_string();
+        let service = json!({"id": 2, "method": "tsDiagnostics",
+            "params": {"path": "/p/a.tt", "supersedable": true}})
+        .to_string();
+        for change in [
+            "openDocument",
+            "updateDocument",
+            "closeDocument",
+            "reloadProjects",
+        ] {
+            let later = queue(&[
+                json!({"id": 3, "method": change, "params": {"path": "/p/b.tt", "text": ""}}),
+            ]);
+            assert!(superseded(&check, &later), "{change}");
+            assert!(superseded(&service, &later), "{change}");
+        }
+        let unrelated =
+            queue(&[json!({"id": 3, "method": "hover", "params": {"path": "/p/a.tt"}})]);
+        assert!(!superseded(&check, &unrelated));
+        assert!(!superseded(&check, &VecDeque::new()));
+    }
+
+    #[test]
+    fn an_unmarked_request_is_always_answered() {
+        use serde_json::json;
+        let later = queue(&[
+            json!({"id": 3, "method": "updateDocument", "params": {"path": "/p/a.tt", "text": ""}}),
+        ]);
+        for request in [
+            json!({"id": 1, "method": "typedCheck", "params": {"path": "/p/a.tt", "text": "x"}}),
+            json!({"id": 1, "method": "typedCheck", "params": {"path": "/p/a.tt", "text": "x", "supersedable": false}}),
+            json!({"id": 1, "method": "hover", "params": {"path": "/p/a.tt", "supersedable": true}}),
+            json!({"id": 1, "method": "check", "params": {"text": "x", "supersedable": true}}),
+        ] {
+            assert!(!superseded(&request.to_string(), &later), "{request}");
+        }
+    }
 }

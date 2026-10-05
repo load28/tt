@@ -1,0 +1,13 @@
+// A parenthesized pipeline step is an ordinary expression inside a pipeline
+// whose head is a match. The match is evaluated into the pipeline's storage,
+// and the inner pipeline is the step's function, applied to it: the step
+// has no statement form of its own to write a value slot through.
+// @run: aParenthesizedPipelineStepAfterAMatchHead.tt
+variant G { E, F }
+const add = (n: number) => (m: number) => n + m;
+const p = 10;
+function pick(g: G): number {
+  return match (g) { E => 1, F => 2 } |> (p |> add);
+}
+console.log(pick(G.E), pick(G.F));
+export {};

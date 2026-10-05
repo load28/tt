@@ -57,7 +57,7 @@ pub type PResult<T> = Result<T, crate::error::Error>;
 pub struct ParserCheckpoint<I: Tokens> {
     lexer: I::Checkpoint,
     buffer_prev_span: Span,
-    recovery: recovery::RecoveryState,
+    recovery: recovery::RecoveryCheckpoint,
     buffer_cur: TokenAndSpan,
     buffer_next: Option<crate::lexer::NextTokenAndSpan>,
     #[cfg(feature = "flow")]
@@ -100,7 +100,7 @@ impl<I: Tokens> Parser<I> {
     fn checkpoint_save(&self) -> ParserCheckpoint<I> {
         ParserCheckpoint {
             lexer: self.input.iter.checkpoint_save(),
-            recovery: self.recovery.clone(),
+            recovery: self.recovery.checkpoint(),
             buffer_cur: self.input.cur,
             buffer_next: self.input.next.clone(),
             buffer_prev_span: self.input.prev_span,
@@ -112,7 +112,7 @@ impl<I: Tokens> Parser<I> {
     fn checkpoint_save(&self) -> ParserCheckpoint<I> {
         ParserCheckpoint {
             lexer: self.input.iter.checkpoint_save(),
-            recovery: self.recovery.clone(),
+            recovery: self.recovery.checkpoint(),
             buffer_cur: self.input.cur,
             buffer_next: self.input.next.clone(),
             buffer_prev_span: self.input.prev_span,
@@ -122,7 +122,7 @@ impl<I: Tokens> Parser<I> {
     #[cfg(all(feature = "typescript", feature = "flow"))]
     fn checkpoint_load(&mut self, checkpoint: ParserCheckpoint<I>) {
         self.input.iter.checkpoint_load(checkpoint.lexer);
-        self.recovery = checkpoint.recovery;
+        self.recovery.rollback(checkpoint.recovery);
         self.input.cur = checkpoint.buffer_cur;
         self.input.next = checkpoint.buffer_next;
         self.input.prev_span = checkpoint.buffer_prev_span;
@@ -132,7 +132,7 @@ impl<I: Tokens> Parser<I> {
     #[cfg(all(feature = "typescript", not(feature = "flow")))]
     fn checkpoint_load(&mut self, checkpoint: ParserCheckpoint<I>) {
         self.input.iter.checkpoint_load(checkpoint.lexer);
-        self.recovery = checkpoint.recovery;
+        self.recovery.rollback(checkpoint.recovery);
         self.input.cur = checkpoint.buffer_cur;
         self.input.next = checkpoint.buffer_next;
         self.input.prev_span = checkpoint.buffer_prev_span;

@@ -713,10 +713,28 @@ impl<'a> Emitter<'a> {
         let mut out = Rope::new();
         for (index, statement) in statements.iter().enumerate() {
             if self.emit_statement_with_edits(statement, edits, &mut out) {
+                // An owner that ends with this statement has nothing of its
+                // own left to write; its block closes here when no walk over
+                // its source reached that end outside the owner's prelude.
+                if let Some(end) = self.statement_end(statement) {
+                    self.close_owner_blocks_at(end, &mut out);
+                }
                 out.append(self.edits_after_statement(statements, index, edits));
             }
         }
         out
+    }
+
+    fn statement_end(&self, statement: &Statement) -> Option<usize> {
+        match statement {
+            Statement::Expr(expr) => structured_expr_span(self.semantic, self.core, *expr),
+            Statement::Decision(decision) => Some(self.span(decision.extent).into()),
+            Statement::Propagate(propagate) => Some(self.span(propagate.owner).into()),
+            Statement::Adt(adt) => Some(self.span(adt.node).into()),
+            Statement::Opaque(node) => Some(self.span(*node).into()),
+            Statement::Import(_) => None,
+        }
+        .map(|span: SourceSpan| span.end)
     }
 
     pub(super) fn emit_statement_with_edits(
@@ -817,15 +835,10 @@ impl<'a> Emitter<'a> {
         edits: &[LocalSourceEdit],
     ) -> Rope<'a> {
         let mut out = Rope::new();
-        let end = match &statements[index] {
-            Statement::Expr(expr) => structured_expr_span(self.semantic, self.core, *expr),
-            Statement::Decision(decision) => Some(self.span(decision.extent).into()),
-            Statement::Propagate(propagate) => Some(self.span(propagate.owner).into()),
-            Statement::Adt(adt) => Some(self.span(adt.node).into()),
-            Statement::Opaque(_) | Statement::Import(_) => None,
+        if matches!(statements[index], Statement::Opaque(_)) {
+            return out;
         }
-        .map(|span: SourceSpan| span.end);
-        let Some(end) = end else {
+        let Some(end) = self.statement_end(&statements[index]) else {
             return out;
         };
         let held = statements.iter().any(|statement| {
@@ -1135,6 +1148,7 @@ impl<'a> Emitter<'a> {
             {
                 out.append(self.emit_compose_suffix(rewrite));
             }
+            self.close_owner_blocks_at(span.end, &mut out);
             return out;
         }
         // A completed call owns its entire authored frame, including tt
@@ -1242,6 +1256,7 @@ impl<'a> Emitter<'a> {
                 | HostOwnerKind::ModuleItem
                 | HostOwnerKind::Declarator => {}
             }
+            self.close_owner_blocks_at(value.source.end, &mut out);
             return out;
         }
         if let Some(rewrite) = self

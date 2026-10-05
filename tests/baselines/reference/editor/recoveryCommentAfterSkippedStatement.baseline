@@ -1,0 +1,10 @@
+=== diagnostics recoveryCommentAfterSkippedStatement.tt ===
+diagnostics: 1 diagnostic(s)
+  3:8-3:8 "" error TS1123: Variable declaration list cannot be empty.
+  restates: source-not-typescript
+published: 1 diagnostic(s)
+  3:8-3:8 "" error ts1123 (ttc): Variable declaration list cannot be empty.
+
+=== parity with the TypeScript twin ===
+diagnostics recoveryCommentAfterSkippedStatement.tt: same
+
