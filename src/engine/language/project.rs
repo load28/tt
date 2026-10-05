@@ -942,10 +942,10 @@ impl Project {
             {
                 continue;
             }
-            // An empty span (an error at a position, not over one) would
-            // render as an invisible squiggle; give it the character it
-            // points at.
-            let e = if e > s { e } else { s + 1 };
+            // A missing token in copied source has TypeScript's zero-width
+            // range. Extending it would blame the following token (or split a
+            // UTF-16 surrogate pair). Only an unlocated glue error needs an
+            // anchor extent supplied by the mapper above.
             let raw = item.message;
             let code = item.code;
             let glue = projected_anchor.or_else(|| glue_anchor(&doc, start));
@@ -1093,6 +1093,7 @@ impl Project {
             let read = diagnostic.start.is_none_or(|start| {
                 !doc.recovered
                     .iter()
+                    .chain(&doc.syntax_repairs)
                     .any(|&(from, to)| from <= start && start < to)
             });
             if diagnostic.code.restates_typescript_syntax()
@@ -1231,6 +1232,7 @@ impl Project {
                 destructured_lists: projected.emit.destructured_lists.clone(),
                 completion_scopes: projected.emit.completion_scopes.clone(),
                 recovered: projected.recovered.clone(),
+                syntax_repairs: projected.syntax_repairs.clone(),
                 tt_diagnostics: projected.tt_diagnostics.clone(),
                 generated_names: projected.emit.generated_names.clone(),
                 inserted: projected.emit.inserted.clone(),

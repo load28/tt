@@ -1,0 +1,330 @@
+//! Grammar-owned recovery for editor syntax trees. Strict parsing is unchanged.
+
+use super::*;
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum RecoveryMode {
+    #[default]
+    Strict,
+    Editor,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RecoveryId(pub u32);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecoveryContext {
+    Statement,
+    Expression,
+    Delimiter,
+    Type,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecoveryKind {
+    MissingToken,
+    MissingExpression,
+    SkippedInput,
+    MissingType,
+}
+
+#[derive(Debug, Clone)]
+pub struct RecoveryRecord {
+    pub id: RecoveryId,
+    pub kind: RecoveryKind,
+    pub context: RecoveryContext,
+    pub span: Span,
+    pub owner: Span,
+    pub expected: String,
+}
+
+#[derive(Debug, Default, Clone)]
+pub(super) struct RecoveryState {
+    mode: RecoveryMode,
+    records: Vec<RecoveryRecord>,
+}
+
+impl<I: Tokens> Parser<I> {
+    pub(super) fn recover_type(&mut self, start: BytePos, error: Error) -> PResult<Box<TsType>> {
+        self.emit_error(error);
+        // '=' starts the initializer, not part of the missing annotation.
+        // Other list/statement terminators belong to their enclosing grammar.
+        while self.input().cur() != Token::Eq && !self.at_expression_boundary() {
+            self.bump();
+        }
+        let end = self.cur_pos().max(start);
+        if self.input().prev_span().hi < start {
+            self.input_mut().prev_span = Span::new_with_checked(start, start);
+        }
+        self.record_recovery(
+            start,
+            RecoveryContext::Type,
+            RecoveryKind::MissingType,
+            "type".into(),
+        );
+        // This node is a syntax-only placeholder. The source-preserving emitter
+        // retains the user's annotation for TypeScript's own error recovery.
+        Ok(Box::new(TsType::TsKeywordType(TsKeywordType {
+            span: Span::new_with_checked(start, end),
+            kind: TsKeywordTypeKind::TsUnknownKeyword,
+        })))
+    }
+    pub fn set_recovery_mode(&mut self, mode: RecoveryMode) {
+        self.recovery.mode = mode;
+    }
+
+    pub fn take_recoveries(&mut self) -> Vec<RecoveryRecord> {
+        std::mem::take(&mut self.recovery.records)
+    }
+
+    pub(super) fn editor_recovery(&self) -> bool {
+        self.recovery.mode == RecoveryMode::Editor && !self.ctx().contains(Context::IgnoreError)
+    }
+
+    fn record_recovery(
+        &mut self,
+        start: BytePos,
+        context: RecoveryContext,
+        kind: RecoveryKind,
+        expected: String,
+    ) {
+        let end = self.cur_pos().max(start);
+        let span = Span::new_with_checked(start, end);
+        self.recovery.records.push(RecoveryRecord {
+            id: RecoveryId(self.recovery.records.len() as u32),
+            kind,
+            context,
+            span,
+            owner: span,
+            expected,
+        });
+    }
+
+    /// These tokens cannot begin an assignment expression. They belong to the
+    /// containing statement/list; retaining them lets that production resume.
+    fn is_expression_boundary(token: Token) -> bool {
+        matches!(
+            token,
+            Token::Semi
+                | Token::Comma
+                | Token::RParen
+                | Token::RBracket
+                | Token::RBrace
+                | Token::Eof
+                | Token::Const
+                | Token::Let
+                | Token::Var
+                | Token::Export
+                | Token::Return
+                | Token::Throw
+                | Token::Else
+        )
+    }
+
+    fn at_expression_boundary(&mut self) -> bool {
+        let token = self.input().cur();
+        if token == Token::Let {
+            return matches!(
+                self.input_mut().peek(),
+                Some(Token::Ident | Token::LBrace | Token::LBracket)
+            );
+        }
+        Self::is_expression_boundary(token)
+    }
+
+    pub(super) fn ends_recovery_object(&mut self) -> bool {
+        if !self.ends_recovery_list(Token::RBrace) {
+            return false;
+        }
+        // Keywords are valid property/method names, even when the keyword
+        // starts a statement in another grammatical context.
+        if matches!(
+            self.input().cur(),
+            Token::Const
+                | Token::Let
+                | Token::Var
+                | Token::Return
+                | Token::Throw
+                | Token::Export
+                | Token::Else
+        ) {
+            return !matches!(
+                self.input_mut().peek(),
+                Some(Token::Colon | Token::LParen | Token::Comma | Token::RBrace)
+            );
+        }
+        true
+    }
+
+    pub(super) fn missing_member_name(&mut self) -> Option<IdentName> {
+        if !self.editor_recovery() || !self.input().had_line_break_before_cur() {
+            return None;
+        }
+        let starts_declaration =
+            matches!(self.input().cur(), Token::Const | Token::Let | Token::Var)
+                && matches!(
+                    self.input_mut().peek(),
+                    Some(Token::Ident | Token::LBrace | Token::LBracket)
+                );
+        if !starts_declaration {
+            return None;
+        }
+        let at = self.input().prev_span().hi;
+        let span = Span::new_with_checked(at, at);
+        self.emit_err(span, SyntaxError::ExpectedIdent);
+        // The missing name is immediately after '.', before any intervening
+        // trivia or the token owned by the containing statement list.
+        self.recovery.records.push(RecoveryRecord {
+            id: RecoveryId(self.recovery.records.len() as u32),
+            kind: RecoveryKind::MissingToken,
+            context: RecoveryContext::Expression,
+            span,
+            owner: span,
+            expected: "identifier".into(),
+        });
+        Some(IdentName::new("".into(), span))
+    }
+
+    pub(super) fn ends_recovery_list(&mut self, closing: Token) -> bool {
+        let token = self.input().cur();
+        token != closing && self.at_expression_boundary() && token != Token::Comma
+    }
+
+    pub(super) fn recover_missing_token(&mut self, expected: Token) -> bool {
+        if !self.editor_recovery()
+            || !matches!(expected, Token::RParen | Token::RBracket | Token::RBrace)
+            || !self.at_expression_boundary()
+        {
+            return false;
+        }
+        let at = self.cur_pos();
+        let message = match expected {
+            Token::RParen => ")",
+            Token::RBracket => "]",
+            Token::RBrace => "}",
+            _ => unreachable!(),
+        }
+        .to_string();
+        self.record_recovery(
+            at,
+            RecoveryContext::Delimiter,
+            RecoveryKind::MissingToken,
+            message.clone(),
+        );
+        let got = self.input_mut().dump_cur();
+        self.emit_err(
+            Span::new_with_checked(at, at),
+            SyntaxError::Expected(message, got),
+        );
+        true
+    }
+
+    pub(super) fn recover_expression(
+        &mut self,
+        start: BytePos,
+        error: Error,
+    ) -> PResult<Box<Expr>> {
+        // A failed regexp scan leaves the lexer in regexp-rescan mode. The
+        // scanner has consumed its lexical region; continuing must scan the
+        // next token, not retry the same unterminated regexp forever.
+        self.input_mut().set_next_regexp(None);
+        self.emit_error(error);
+        self.skip_to_expression_boundary();
+        let missing = start == self.cur_pos();
+        if missing && self.input().prev_span().hi < start {
+            // A missing node occupies a grammar slot but consumes no token.
+            // SWC finishes enclosing nodes at prev_span.hi; include this
+            // virtual slot so their spans cannot end before their start.
+            self.input_mut().prev_span = Span::new_with_checked(start, start);
+        }
+        self.record_recovery(
+            start,
+            RecoveryContext::Expression,
+            if missing {
+                RecoveryKind::MissingExpression
+            } else {
+                RecoveryKind::SkippedInput
+            },
+            "expression".into(),
+        );
+        Ok(Box::new(Expr::Invalid(Invalid {
+            span: Span::new_with_checked(start, self.cur_pos().max(start)),
+        })))
+    }
+
+    fn skip_to_expression_boundary(&mut self) {
+        let mut delimiters = Vec::new();
+        loop {
+            let token = self.input().cur();
+            if token == Token::Eof || delimiters.is_empty() && self.at_expression_boundary() {
+                return;
+            }
+            match token {
+                Token::LParen => delimiters.push(Token::RParen),
+                Token::LBracket => delimiters.push(Token::RBracket),
+                Token::LBrace => delimiters.push(Token::RBrace),
+                Token::RParen | Token::RBracket | Token::RBrace => {
+                    if delimiters.last() != Some(&token) {
+                        return;
+                    }
+                    delimiters.pop();
+                }
+                _ => {}
+            }
+            self.bump();
+        }
+    }
+
+    pub(super) fn parse_recoverable_statement<T: From<Stmt>>(
+        &mut self,
+        parse_module_decl: &impl Fn(&mut Self, Vec<Decorator>) -> PResult<T>,
+    ) -> PResult<T> {
+        if !self.editor_recovery() {
+            return self.parse_stmt_like(true, parse_module_decl);
+        }
+        let start = self.cur_pos();
+        let first_record = self.recovery.records.len();
+        let result = self.parse_stmt_like(true, parse_module_decl);
+        let result = match result {
+            Err(error) if self.editor_recovery() => {
+                self.emit_error(error);
+                // A failed production that consumed no input cannot be retried
+                // at the same token by its enclosing statement list.
+                if self.cur_pos() == start && self.input().cur() != Token::Eof {
+                    self.bump();
+                }
+                self.skip_to_expression_boundary();
+                if self.input().cur() == Token::Semi {
+                    self.bump();
+                }
+                self.record_recovery(
+                    start,
+                    RecoveryContext::Statement,
+                    RecoveryKind::SkippedInput,
+                    "statement".into(),
+                );
+                Ok(T::from(Stmt::Expr(ExprStmt {
+                    span: Span::new_with_checked(start, self.input().prev_span().hi.max(start)),
+                    expr: Box::new(Expr::Invalid(Invalid {
+                        span: Span::new_with_checked(start, self.input().prev_span().hi.max(start)),
+                    })),
+                })))
+            }
+            result => result,
+        };
+        // A stray enclosing delimiter at source level has no production to
+        // return to. Even a recovered expression statement may consume zero
+        // tokens there; the statement list must make progress.
+        if self.cur_pos() == start && self.input().cur() != Token::Eof {
+            self.bump();
+        }
+        let owner = Span::new_with_checked(start, self.input().prev_span().hi.max(start));
+        for record in &mut self.recovery.records[first_record..] {
+            // Inner statements already have a more precise owner.
+            if record.owner == record.span {
+                record.owner = owner;
+            }
+        }
+        result
+    }
+}

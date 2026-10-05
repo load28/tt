@@ -60,6 +60,7 @@ pub struct ProjectedDocument {
     /// typed projection. Diagnostics originating inside these ranges are
     /// recovery effects; diagnostics elsewhere remain reportable.
     pub(crate) recovered: Vec<(usize, usize)>,
+    pub(crate) syntax_repairs: Vec<(usize, usize)>,
     /// Whether a recovery stands for one of the file's declarations
     /// ([`crate::ProjectionReport::recovered_declarations`]): the
     /// declarations emitted from this projection are not the file's own.
@@ -154,9 +155,9 @@ impl ProjectedDocument {
         let (program, tokens) = crate::parser::lex_and_parse_with_kind(&source, source_kind);
         let report = crate::compile_projection_report_parsed(&source, &options, &program, &tokens);
         let (emit, unparsed) = match (report.emit, report.withheld) {
-            (Some(emit), _) => (emit, false),
+            (Some(emit), _) if !report.editor_only || open => (emit, report.editor_only),
             (None, Some(withheld)) if open => (withheld, true),
-            (None, _) => {
+            _ => {
                 return Err(BlockedFile::new(
                     source_path.to_path_buf(),
                     source,
@@ -178,6 +179,7 @@ impl ProjectedDocument {
             emit,
             tt_diagnostics: report.diagnostics,
             recovered: report.recovered,
+            syntax_repairs: report.syntax_repairs,
             recovered_declaration: !report.recovered_declarations.is_empty(),
             unparsed,
             exported_variant_symbols: std::sync::OnceLock::new(),
@@ -754,6 +756,8 @@ pub(crate) fn diagnostic_origin(
         &file.emit.anchors,
         mapper::from_utf16(&file.emit.code, utf16_start),
         mapper::from_utf16(&file.emit.code, utf16_end),
+        &file.emit.code,
+        &file.source,
     )
 }
 

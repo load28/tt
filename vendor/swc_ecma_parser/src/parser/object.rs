@@ -27,9 +27,17 @@ impl<I: Tokens> Parser<I> {
             let mut props = Vec::with_capacity(8);
 
             while !p.input_mut().eat(Token::RBrace) {
+                if p.editor_recovery() && p.ends_recovery_object() {
+                    expect!(p, Token::RBrace);
+                    break;
+                }
                 props.push(parse_prop(p)?);
 
                 if !p.input().is(Token::RBrace) {
+                    if p.editor_recovery() && p.ends_recovery_object() {
+                        expect!(p, Token::RBrace);
+                        break;
+                    }
                     expect!(p, Token::Comma);
                     if p.input().is(Token::RBrace) {
                         trailing_comma = Some(p.input().prev_span());

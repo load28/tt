@@ -452,16 +452,21 @@ fn an_arm_whose_guard_is_not_written_yet_is_a_malformed_arm() {
 
 #[test]
 fn a_step_with_an_open_list_ends_where_typescript_ends_the_list() {
-    // The list runs to the next statement, as TypeScript reads `add(2, `
-    // with `const` after it; the statement stays outside the step.
-    let src = "const v = 1 |> add(2, \nconst w = 1;\n";
-    let report = ttc::compile_projection_report(src, &Options::default());
-    let emit = report.withheld.expect("the faithful projection");
-    assert!(emit.code.ends_with("(1)const w = 1;\n"), "{}", emit.code);
-    let src = "function f() {\n  const v = 1 |> add(2, \n}\n";
-    let report = ttc::compile_projection_report(src, &Options::default());
-    let emit = report.withheld.expect("the faithful projection");
-    assert!(emit.code.ends_with("(1)}\n"), "{}", emit.code);
+    for (src, tail) in [
+        ("const v = 1 |> add(2, \nconst w = 1;\n", "const w = 1;\n"),
+        ("function f() {\n  const v = 1 |> add(2, \n}\n", "}\n"),
+    ] {
+        let report = ttc::compile_projection_report(src, &Options::default());
+        assert!(report.editor_only);
+        assert!(!report.diagnostics.is_empty());
+        let emit = report.emit.expect("the structurally recovered editor projection");
+        assert!(emit.code.ends_with(tail), "{}", emit.code);
+        assert!(!emit.code.contains("|>"), "{}", emit.code);
+        assert!(ttc::compile_report(src, &Options::default()).emit.is_none());
+        for mapping in emit.mappings {
+            assert_eq!(&src[mapping.src..mapping.src + mapping.len], &emit.code[mapping.out..mapping.out + mapping.len]);
+        }
+    }
 }
 
 #[test]

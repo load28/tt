@@ -2263,12 +2263,12 @@ impl<I: Tokens> Parser<I> {
                         break;
                     }
 
-                    let stmt = p.parse_stmt_like(true, &handle_import_export)?;
+                    let stmt = p.parse_recoverable_statement(&handle_import_export)?;
                     stmts.push(stmt);
                 }
             } else {
                 while p.input().cur() != Token::Eof {
-                    let stmt = p.parse_stmt_like(true, &handle_import_export)?;
+                    let stmt = p.parse_recoverable_statement(&handle_import_export)?;
                     stmts.push(stmt);
                 }
             }

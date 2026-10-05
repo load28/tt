@@ -5,15 +5,18 @@ use super::*;
 pub(super) struct ParsedModule {
     pub(super) module: Module,
     pub(super) start: HostOrigin,
+    pub(super) recoveries: Vec<swc_ecma_parser::RecoveryRecord>,
 }
 
 pub(super) fn parse_module(
     code: &str,
     segments: &[ProjectionSourceSegment],
     source_kind: crate::SourceKind,
-    tolerant: bool,
+    mode: SyntaxMode,
 ) -> Result<ParsedModule, ProgramSyntaxError> {
-    if let Some((span, message)) = crate::lexer::host_syntax_error(code, source_kind) {
+    if mode != SyntaxMode::Editor
+        && let Some((span, message)) = crate::lexer::host_syntax_error(code, source_kind)
+    {
         return Err(parse_failure_at(
             code,
             segments,
@@ -23,7 +26,11 @@ pub(super) fn parse_module(
     }
     let input = HostInput::new(code);
     let start = input.origin();
-    let mut parser = input.parser(source_kind);
+    let mut parser = if mode == SyntaxMode::Editor {
+        input.editor_parser(source_kind)
+    } else {
+        input.parser(source_kind)
+    };
     let result = parser.parse_program().map(|program| match program {
         swc_ecma_ast::Program::Module(module) => module,
         swc_ecma_ast::Program::Script(script) => Module {
@@ -59,11 +66,15 @@ pub(super) fn parse_module(
         }
     };
     if let Some(error) = reported
-        && !tolerant
+        && mode == SyntaxMode::Strict
     {
         return Err(parse_failure(code, segments, start, error));
     }
-    Ok(ParsedModule { module, start })
+    Ok(ParsedModule {
+        module,
+        start,
+        recoveries: parser.take_recoveries(),
+    })
 }
 
 pub(super) fn directive_prologue_end(

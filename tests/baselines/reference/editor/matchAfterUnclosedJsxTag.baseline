@@ -1,17 +1,13 @@
 === diagnostics matchAfterUnclosedJsxTag.ttx ===
-diagnostics: 6 diagnostic(s)
-  10:8-10:9 "m" error TS1005: '...' expected.
+diagnostics: 4 diagnostic(s)
   11:5-11:7 "</" error TS1003: Identifier expected.
   8:5-8:10 "<div>" error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
-  10:20-10:24 "Idle" error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists. (in code ttc generated for this construct)
-  10:20-10:24 "Idle" error TS2698: Spread types may only be created from object types. (in code ttc generated for this construct)
   11:5-11:11 "</div>" error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
-  restates: source-not-typescript
-published: 6 diagnostic(s)
+  6:21-6:22 "s" hint TS6133: 's' is declared but its value is never read. [unnecessary]
+published: 5 diagnostic(s)
+  6:21-6:22 "s" hint TS6133 (ts): 's' is declared but its value is never read. [unnecessary]
   8:5-8:10 "<div>" error ts7026 (ttc): JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
-  10:8-10:13 "match" error ts1005 (ttc): '...' expected.
-  10:20-10:24 "Idle" error ts2698 (ttc): Spread types may only be created from object types. (in code ttc generated for this construct)
-  10:20-10:24 "Idle" error ts7026 (ttc): JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists. (in code ttc generated for this construct)
+  10:8-10:13 "match" error source-not-typescript (ttc): the TypeScript here does not parse: Expected '</', got '('. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
   11:5-11:7 "</" error ts1003 (ttc): Identifier expected.
   11:5-11:11 "</div>" error ts7026 (ttc): JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
 

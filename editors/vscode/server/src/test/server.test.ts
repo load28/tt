@@ -29,6 +29,7 @@ const SERVER = path.join(__dirname, "..", "server.js");
  * them and are not problems. */
 const problems = (diagnostics: any[]) =>
   diagnostics.filter((d) => d.severity === undefined || d.severity <= 2);
+
 const skip = compilerAvailable() ? false : "no ttc — none built, installed, or on PATH";
 /** Answers that need the TypeScript language service. A skip must mean a
  * tool is missing, never that a feature quietly answered nothing — so the
@@ -37,6 +38,31 @@ const skipTyped = skip || (findTsgo() ? false : "tsgo not installed");
 /** Each case spawns a server and compiles through it; generous, and only
  * reached when something has hung. */
 const timeout = 60_000;
+
+test("repairing incomplete host syntax keeps the independent error in the current revision", { skip: skipTyped, timeout }, async () => {
+  const complete = [
+    "declare const flag: boolean;",
+    "const broken = 1;",
+    "const later = match (flag) { true => 1, false => 2 };",
+    "const wrong: number = 'wrong';",
+  ].join("\n");
+  const { client, uri, stop } = await open(complete);
+  try {
+    await client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.diagnostics.some((d: any) => d.code === "ts2322"));
+    const damaged = complete.replace("const broken = 1;", "const broken = ;");
+    const damagedPublish = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.version === 2);
+    client.notify("textDocument/didChange", { textDocument: { uri, version: 2 }, contentChanges: [{ text: damaged }] });
+    const published = await damagedPublish;
+    assert.ok(published.diagnostics.some((d: any) => d.code === "ts2322"), JSON.stringify(published));
+    assert.ok(published.diagnostics.some((d: any) => String(d.code) === "ts1109"), JSON.stringify(published));
+    const repairedPublish = client.waitFor("textDocument/publishDiagnostics", p => p.uri === uri && p.version === 4);
+    client.notify("textDocument/didChange", { textDocument: { uri, version: 3 }, contentChanges: [{ text: complete.replace("const broken = 1;", "const broken = flag.") }] });
+    client.notify("textDocument/didChange", { textDocument: { uri, version: 4 }, contentChanges: [{ text: complete }] });
+    const repaired = await repairedPublish;
+    assert.deepEqual(problems(repaired.diagnostics).map((d: any) => d.code), ["ts2322"]);
+  } finally { stop(); }
+});
+
 
 for (const consumerKind of ["tt", "ttx"]) {
   for (const providerKind of ["tt", "ttx", "ts", "tsx"]) {

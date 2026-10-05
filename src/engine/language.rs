@@ -527,6 +527,7 @@ pub(crate) struct ServiceDoc {
     /// Parser-owned error ranges replaced only in this service projection.
     /// TypeScript diagnostics intersecting one are recovery cascades.
     recovered: Vec<(usize, usize)>,
+    syntax_repairs: Vec<(usize, usize)>,
     /// Direct TT causes found while building this exact projection. The
     /// quick checker layer uses their syntax owners before VSCode ever sees
     /// a provisional consequence.

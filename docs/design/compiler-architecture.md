@@ -136,12 +136,29 @@ run for the host syntax check, no `await`, no `//` — without lexing.
 `scaling_tests.rs` counts the parses and whole-text lexings of a compile and
 of a projection.
 
-The host syntax checks cannot move behind SWC's parse of the same text
+For strict compilation, the host syntax checks cannot move behind SWC's parse of the same text
 (TASK-512): SWC accepts some text they reject (an `export namespace` body
 that lacks its `}` or holds a stray `)` parses without an error), and it
 panics or backtracks on the rest (conflict-marker recovery, a TSX
 namespaced member, deeply unbalanced type arguments), so each guarded text
 is lexed before its parse.
+
+Editor projection uses a separate, explicit SWC recovery mode (TASK-759).
+Grammar routines retain missing expressions/types, synchronize failed
+statements, and record missing delimiters with parser-local spans and owners.
+Speculation rolls these records back with the parser checkpoint. Strict
+parsing and output verification never enable this mode.
+
+The host projection translates parser records through its source segments.
+Known owners keep the existing evaluation/lowering model; tt values wholly
+inside skipped host input become parser-owned editor holes. Missing closing
+delimiters are materialized only in the editor input to lowering, so generated
+statement preludes cannot be swallowed by unfinished calls. `EditorSource`
+restores every source coordinate and splits copied mappings around inserted
+bytes; those bytes have synthetic glue provenance, never authored mappings.
+`ProjectionReport::syntax_repairs` preserves the original syntax cause without
+suppressing independent type diagnostics in that production. `editor_only`
+blocks build/declaration output. Engine and content mapper consume this report.
 
 파일 표면은 `SourceKind::{TypeScript, Tsx}`로 컴파일 경계에서 정해지고 모든
 단계에 전달된다. TSX 모드에서는 완전한 JSX element/fragment를 구조적으로

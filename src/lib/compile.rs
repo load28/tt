@@ -326,7 +326,14 @@ fn recovered_target_errors(
     ) {
         return Vec::new();
     }
-    match codegen::lowering_plan_with(semantics, core, source, options.source_kind, tokens, true) {
+    match codegen::lowering_plan_with(
+        semantics,
+        core,
+        source,
+        options.source_kind,
+        tokens,
+        crate::program_syntax::SyntaxMode::Diagnostic,
+    ) {
         Ok(plan) => nonredundant_target_errors(&plan, existing),
         Err(_) => Vec::new(),
     }
@@ -419,10 +426,16 @@ pub struct CompileReport {
 pub struct ProjectionReport {
     /// Editor projection, including valid siblings of malformed syntax nodes.
     pub emit: Option<MappedEmit>,
+    /// This projection retains malformed host syntax for the editor only.
+    /// It must never authorize build or declaration output.
+    pub editor_only: bool,
     /// Original-source diagnostics, independent of recovery substitutions.
     pub diagnostics: Vec<Diagnostic>,
     /// Source byte ranges occupied by parser recovery nodes.
     pub recovered: Vec<(usize, usize)>,
+    /// Host productions whose missing delimiters were materialized. Their
+    /// original syntax diagnostic remains authoritative; type checking continues.
+    pub syntax_repairs: Vec<(usize, usize)>,
     /// Those of `recovered` that stood for a declaration (a malformed
     /// variant), whose name the projection declares with the error type.
     pub recovered_declarations: Vec<(usize, usize)>,
@@ -476,14 +489,53 @@ pub(crate) fn compile_projection_report_parsed(
     if ordinary.emit.is_some() {
         return ProjectionReport {
             emit: ordinary.emit,
+            editor_only: false,
             diagnostics: ordinary.diagnostics,
             recovered: Vec::new(),
+            syntax_repairs: Vec::new(),
+            recovered_declarations: Vec::new(),
+            withheld: None,
+        };
+    }
+
+    if let Some((emit, recovered)) =
+        editor_host_emit(source, options, program, tokens, &ordinary.diagnostics)
+    {
+        return ProjectionReport {
+            emit: Some(emit),
+            editor_only: true,
+            diagnostics: ordinary.diagnostics,
+            recovered: Vec::new(),
+            syntax_repairs: recovered,
             recovered_declarations: Vec::new(),
             withheld: None,
         };
     }
 
     let mut nodes = parser::projection_recoveries(program);
+    if ordinary
+        .diagnostics
+        .iter()
+        .any(|d| d.code.restates_typescript_syntax())
+    {
+        let semantic = analysis::coverage_semantics(source, program, options.extern_variants);
+        let core = core_ir::lower_semantic(&semantic, source, tokens);
+        if let Ok(lost) = crate::program_syntax::lost_editor_values(
+            &semantic,
+            &core,
+            source,
+            options.source_kind,
+            tokens,
+        ) {
+            nodes.extend(lost.into_iter().map(|span| ast::RecoveryNode {
+                span: ast::Span {
+                    start: span.start,
+                    end: span.end,
+                },
+                kind: ast::RecoveryKind::Expression,
+            }));
+        }
+    }
     nodes.extend(recoverable_constructs(&ordinary.diagnostics));
     // A construct the plan rejects is reported when planning reaches it, so
     // a file with several can show the next one only once the first is
@@ -495,21 +547,38 @@ pub(crate) fn compile_projection_report_parsed(
         if selected.is_empty() {
             return ProjectionReport {
                 emit: None,
+                editor_only: true,
                 withheld: withheld_emit(source, options, program, tokens, &ordinary.diagnostics),
                 diagnostics: ordinary.diagnostics,
                 recovered: Vec::new(),
+                syntax_repairs: Vec::new(),
                 recovered_declarations: Vec::new(),
             };
         }
         let recovered_source = recover_source(source, &selected);
         let (recovered_program, recovered_tokens) =
             parser::lex_and_parse_with_kind(&recovered_source, options.source_kind);
-        let recovered_report = compile_report_parsed(
+        let mut recovered_report = compile_report_parsed(
             &recovered_source,
             options,
             &recovered_program,
             &recovered_tokens,
         );
+        let mut editor_only = false;
+        let mut host_recovered = Vec::new();
+        if recovered_report.emit.is_none() {
+            if let Some((emit, recovered)) = editor_host_emit(
+                &recovered_source,
+                options,
+                &recovered_program,
+                &recovered_tokens,
+                &recovered_report.diagnostics,
+            ) {
+                recovered_report.emit = Some(emit);
+                host_recovered = recovered;
+            }
+            editor_only = recovered_report.emit.is_some();
+        }
         let further: Vec<_> = if recovered_report.emit.is_some() {
             Vec::new()
         } else {
@@ -534,6 +603,8 @@ pub(crate) fn compile_projection_report_parsed(
                 ),
             };
             return ProjectionReport {
+                editor_only,
+                syntax_repairs: host_recovered,
                 emit: recovered_report
                     .emit
                     .map(|emit| declare_recovered_variants(emit, &selected)),
@@ -553,6 +624,80 @@ pub(crate) fn compile_projection_report_parsed(
         nodes = selected;
         nodes.extend(further);
     }
+}
+
+/// Lower the parser's current editor tree. Missing delimiters are materialized
+/// before lowering so a following generated prelude cannot become an argument
+/// of an unfinished call. Insertions never acquire authored-source mappings.
+fn editor_host_emit(
+    source: &str,
+    options: &Options,
+    program: &ast::Program,
+    tokens: &[lexer::Token],
+    diagnostics: &[Diagnostic],
+) -> Option<(MappedEmit, Vec<(usize, usize)>)> {
+    if !diagnostics
+        .iter()
+        .any(|d| d.code.restates_typescript_syntax())
+    {
+        return None;
+    }
+    let semantic = analysis::coverage_semantics(source, program, options.extern_variants);
+    let core = core_ir::lower_semantic(&semantic, source, tokens);
+    if !crate::program_syntax::lost_editor_values(
+        &semantic,
+        &core,
+        source,
+        options.source_kind,
+        tokens,
+    )
+    .ok()?
+    .is_empty()
+    {
+        return None;
+    }
+    let delimiters = crate::program_syntax::editor_delimiters(
+        &semantic,
+        &core,
+        source,
+        options.source_kind,
+        tokens,
+    )
+    .ok()?;
+    if delimiters.is_empty() {
+        return report_parsed(
+            source,
+            options,
+            program,
+            tokens,
+            false,
+            crate::program_syntax::SyntaxMode::Editor,
+        )
+        .emit
+        .map(|emit| (emit, Vec::new()));
+    }
+    let recovered = delimiters
+        .iter()
+        .map(|(_, _, owner)| (owner.start, owner.end))
+        .collect();
+    let repaired = crate::recovery::EditorSource::new(
+        source,
+        delimiters
+            .into_iter()
+            .map(|(at, text, _)| (at, text))
+            .collect(),
+    );
+    let (program, tokens) = parser::lex_and_parse_with_kind(&repaired.text, options.source_kind);
+    report_parsed(
+        &repaired.text,
+        options,
+        &program,
+        &tokens,
+        false,
+        crate::program_syntax::SyntaxMode::Editor,
+    )
+    .emit
+    .map(|emit| (repaired.restore(emit), recovered))
 }
 
 fn verified_emit(
@@ -605,7 +750,14 @@ pub fn compile_report(source: &str, options: &Options) -> CompileReport {
 /// never reaches TypeScript.
 pub fn check_report(source: &str, options: &Options) -> CompileReport {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, options.source_kind);
-    report_parsed(source, options, &program, &tokens, false)
+    report_parsed(
+        source,
+        options,
+        &program,
+        &tokens,
+        false,
+        crate::program_syntax::SyntaxMode::Strict,
+    )
 }
 
 pub(crate) fn compile_report_parsed(
@@ -614,7 +766,14 @@ pub(crate) fn compile_report_parsed(
     program: &ast::Program,
     tokens: &[lexer::Token],
 ) -> CompileReport {
-    report_parsed(source, options, program, tokens, true)
+    report_parsed(
+        source,
+        options,
+        program,
+        tokens,
+        true,
+        crate::program_syntax::SyntaxMode::Strict,
+    )
 }
 
 fn report_parsed(
@@ -623,6 +782,7 @@ fn report_parsed(
     program: &ast::Program,
     tokens: &[lexer::Token],
     refine: bool,
+    mode: crate::program_syntax::SyntaxMode,
 ) -> CompileReport {
     let semantics = analysis::coverage_semantics(source, program, options.extern_variants);
     let core = core_ir::lower_semantic(&semantics, source, tokens);
@@ -636,27 +796,33 @@ fn report_parsed(
                 .collect(),
         };
     }
-    let mut plan =
-        match codegen::lowering_plan(&semantics, &core, source, options.source_kind, tokens) {
-            Ok(plan) => plan,
-            // Same class as a projection-blocking tt diagnostic: the file has
-            // no emittable form, and the cause is reported with everything
-            // else already found.
-            Err(failure) => {
-                errors.push(verify::in_source(source, &failure));
-                errors.extend(recovered_target_errors(
-                    &failure, &semantics, &core, source, tokens, options, &errors,
-                ));
-                errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
-                return CompileReport {
-                    emit: None,
-                    diagnostics: errors
-                        .into_iter()
-                        .map(diagnostics::Diagnostic::from_tt)
-                        .collect(),
-                };
-            }
-        };
+    let mut plan = match codegen::lowering_plan_with(
+        &semantics,
+        &core,
+        source,
+        options.source_kind,
+        tokens,
+        mode,
+    ) {
+        Ok(plan) => plan,
+        // Same class as a projection-blocking tt diagnostic: the file has
+        // no emittable form, and the cause is reported with everything
+        // else already found.
+        Err(failure) => {
+            errors.push(verify::in_source(source, &failure));
+            errors.extend(recovered_target_errors(
+                &failure, &semantics, &core, source, tokens, options, &errors,
+            ));
+            errors.sort_by_key(|error| error.offset.unwrap_or(usize::MAX));
+            return CompileReport {
+                emit: None,
+                diagnostics: errors
+                    .into_iter()
+                    .map(diagnostics::Diagnostic::from_tt)
+                    .collect(),
+            };
+        }
+    };
     let target_errors = nonredundant_target_errors(&plan, &errors);
     if !target_errors.is_empty() {
         errors.extend(target_errors);
@@ -705,13 +871,17 @@ fn report_parsed(
         support_imports: flat.support_imports,
         commonjs: flat.commonjs,
     };
-    let mut emit = verified_emit(
-        lowered,
-        program,
-        &automatic_semicolons,
-        options,
-        &mut errors,
-    );
+    let mut emit = if mode == crate::program_syntax::SyntaxMode::Editor {
+        Some(lowered)
+    } else {
+        verified_emit(
+            lowered,
+            program,
+            &automatic_semicolons,
+            options,
+            &mut errors,
+        )
+    };
     if refine
         && !options.defer_to_checker
         && let Some(lowered) = emit.take()

@@ -1,0 +1,14 @@
+// @diagnostics: *
+// @hover: later
+// @completions: member
+// @definition: later
+variant Status { Idle, Busy }
+declare const subject: Status;
+const broken = ;
+const a = match (subject) { Idle => 1, Busy => 2 };
+const b = match (subject) { Idle => 3, Busy => 4 };
+const c = match (subject) { Idle => 5, Busy => 6 };
+const later = "정상";
+const wrong: number = "wrong";
+later./*member*/toUpperCase();
+/*later*/later;

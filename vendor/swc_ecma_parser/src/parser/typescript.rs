@@ -3641,7 +3641,12 @@ impl<I: Tokens> Parser<I> {
     ///
     /// `tsParseType`
     pub(crate) fn parse_ts_type(&mut self) -> PResult<Box<TsType>> {
-        crate::maybe_grow(256 * 1024, 1024 * 1024, || self.parse_ts_type_grown())
+        let start = self.cur_pos();
+        let result = crate::maybe_grow(256 * 1024, 1024 * 1024, || self.parse_ts_type_grown());
+        match result {
+            Err(error) if self.editor_recovery() => self.recover_type(start, error),
+            result => result,
+        }
     }
 
     fn parse_ts_type_grown(&mut self) -> PResult<Box<TsType>> {

@@ -74,7 +74,12 @@ impl<I: Tokens> Parser<I> {
         tracing::instrument(level = "debug", skip_all)
     )]
     pub(crate) fn parse_assignment_expr(&mut self) -> PResult<Box<Expr>> {
-        crate::maybe_grow(256 * 1024, 1024 * 1024, || self.parse_assignment_expr_grown())
+        let start = self.cur_pos();
+        let result = crate::maybe_grow(256 * 1024, 1024 * 1024, || self.parse_assignment_expr_grown());
+        match result {
+            Err(error) if self.editor_recovery() => self.recover_expression(start, error),
+            result => result,
+        }
     }
 
     fn parse_assignment_expr_grown(&mut self) -> PResult<Box<Expr>> {
@@ -562,6 +567,7 @@ impl<I: Tokens> Parser<I> {
         let mut elems = Vec::with_capacity(8);
 
         while !self.input().is(Token::RBracket) {
+            if self.editor_recovery() && self.ends_recovery_list(Token::RBracket) { break; }
             if self.input().is(Token::Comma) {
                 expect!(self, Token::Comma);
                 elems.push(None);
@@ -571,6 +577,7 @@ impl<I: Tokens> Parser<I> {
             elems.push(self.allow_in_expr(|p| p.parse_expr_or_spread()).map(Some)?);
 
             if !self.input().is(Token::RBracket) {
+                if self.editor_recovery() && self.ends_recovery_list(Token::RBracket) { break; }
                 expect!(self, Token::Comma);
                 if self.input().is(Token::RBracket) {
                     let prev_span = self.input().prev_span();
@@ -1006,6 +1013,9 @@ impl<I: Tokens> Parser<I> {
             let mut expr_or_spreads = Vec::with_capacity(2);
 
             while !p.input().is(Token::RParen) {
+                if p.editor_recovery() && p.ends_recovery_list(Token::RParen) {
+                    break;
+                }
                 if first {
                     first = false;
                 } else {

@@ -289,6 +289,17 @@ fn transform(
         // The wire has no severity: everything a mapper reports renders as
         // an error, so a tt warning must not travel it.
         .filter(|d| d.severity == Severity::Error)
+        .filter(|d| {
+            !(report.emit.is_some()
+                && d.code.restates_typescript_syntax()
+                && d.start.is_none_or(|at| {
+                    !report
+                        .recovered
+                        .iter()
+                        .chain(&report.syntax_repairs)
+                        .any(|&(from, to)| from <= at && at < to)
+                }))
+        })
         .map(mapper_diagnostic)
         .collect();
 

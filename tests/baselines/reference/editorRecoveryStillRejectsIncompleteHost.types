@@ -1,0 +1,18 @@
+=== missingInitializer.tt ===
+declare const flag: boolean;
+>flag : const flag: boolean
+const broken = ;
+>broken : const broken: any
+const later = match (flag) { true => 1, false => 2 };
+>later : const later: number
+>flag : const flag: boolean
+
+=== missingDelimiter.tt ===
+declare const flag: boolean;
+>flag : const flag: boolean
+const broken = f(
+>broken : const broken: any
+const later = match (flag) { true => 1, false => 2 };
+>later : const later: number
+>flag : const flag: boolean
+
