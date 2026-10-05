@@ -1,8 +1,8 @@
 # TASK-764: Fix defects found by a CLI audit
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-05
-- **Completed**: —
+- **Completed**: 2026-10-05
 - **Commit**: —
 
 ## Purpose
@@ -199,11 +199,18 @@ does in the same situation. Fix each in the layer that owns it.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test` (every suite passed; the public API baseline was the one
+  change, below)
+- [x] Baseline changes reviewed and committed with the change:
+  `tests/baselines/reference/api/ttc.api.txt` gains `Options::node`
 
 ## Result
 
-In progress.
+Six of the audit's defects are fixed and pinned by regression tests; a
+directory input outside the configuration's `include` stays unchecked by
+design (Decision 7). Changed: `src/main/{build,command,modes,output,ownership,typed}.rs`,
+`src/server.rs`, `src/lib/compile.rs`, `src/typescript/{contextual.rs,host.mjs}`,
+`src/engine/semantics/{report,translate}.rs`, `docs/ai/tt.md`, and the tests
+named above.

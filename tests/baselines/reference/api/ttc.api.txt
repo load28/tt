@@ -3875,6 +3875,7 @@ pub struct Options<'a> {
     pub extern_variants: &'a [ExternVariant],
     pub defer_to_checker: bool,
     pub std_imports: StdImports<'a>,
+    pub node: Option<&'a Path>,
 }
 impl<'a> Clone for Options<'a>
 impl<'a> Debug for Options<'a>
