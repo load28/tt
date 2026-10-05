@@ -279,8 +279,12 @@ until no further defect is found.
   generated text ending in a word byte followed by source starting with a
   non-ASCII identifier character would print as one identifier.
 - **Cause**: The seam rule treated only ASCII bytes as word bytes.
-- **Resolution**: A non-ASCII byte is opaque and may continue an identifier,
-  so it joins a word at a seam as a word byte does.
+- **Resolution**: Source that follows a generated word with a non-ASCII byte
+  is kept apart from it, as a word is. The first attempt applied the rule in
+  both directions and changed the valid output of
+  `aByteOrderMarkPassesThroughAheadOfLoweredConstructs.tt`: a byte order mark
+  ends the source before the generated prelude, and gained a space. Source
+  before generated text is left as written.
 
 ## Regression test (fails before the fix)
 
