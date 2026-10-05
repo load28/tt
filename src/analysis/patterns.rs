@@ -26,6 +26,7 @@ pub(super) fn analyze(program: &Program, table: &Table, depth: Depth) -> Pattern
 }
 
 /// One candidate variant of the analysis' declaration table.
+#[derive(Clone)]
 pub(super) struct Entry {
     /// The variant's name in the analyzed file's scope.
     pub(super) name: String,
@@ -34,6 +35,7 @@ pub(super) struct Entry {
     pub(super) origin: Origin,
     /// The constructors, in declaration order, including payload fields.
     pub(super) constructors: Vec<MatchConstructor>,
+    pub(super) scope: Option<crate::hir::Span>,
 }
 
 /// The candidate variants a match's subject can resolve to, in shadowing
@@ -64,6 +66,7 @@ impl Table {
                     return None;
                 }
                 Some(Entry {
+                    scope: data.scope,
                     name: def.name.clone(),
                     origin: match &data.origin {
                         DeclOrigin::Local(_) => Origin::Local,
@@ -101,6 +104,21 @@ impl Table {
         Table { entries }
     }
 
+    pub(super) fn visible_at(&self, at: usize) -> Table {
+        Table {
+            entries: self
+                .entries
+                .iter()
+                .filter(|entry| {
+                    entry
+                        .scope
+                        .is_none_or(|scope| scope.start <= at && at < scope.end)
+                })
+                .cloned()
+                .collect(),
+        }
+    }
+
     /// The first variant whose cases contain every tag — `None` for an empty
     /// tag set (nothing identifies an variant) or when no candidate fits.
     pub(super) fn resolve(&self, tags: &[&str]) -> Option<(&str, &[MatchConstructor])> {
@@ -135,6 +153,7 @@ impl Table {
     /// read against (`coverage::subject_of`).
     pub(super) fn entry_of_members(&self, tags: &[String]) -> Entry {
         Entry {
+            scope: None,
             name: String::new(),
             origin: Origin::Local,
             constructors: tags
@@ -285,6 +304,7 @@ fn walk_if_let_grown(stmt: &IfLetStmt, table: &Table, depth: Depth, out: &mut Pa
 }
 
 pub(super) fn analyze_match(expr: &MatchExpr, table: &Table, depth: Depth) -> MatchAnalysis {
+    let table = &table.visible_at(expr.keyword_off);
     // The subject is read from *every* arm's tags, guarded or not — the
     // type-reading counterpart of the resolver's identification (name
     // resolution itself is [`crate::resolve`]'s and attached afterwards).
@@ -335,6 +355,7 @@ pub(super) fn analyze_tuple_match(
     table: &Table,
     depth: Depth,
 ) -> MatchAnalysis {
+    let table = &table.visible_at(expr.keyword_off);
     let arity = expr.scrutinees.len();
     // Each position reads its subject independently, from the tags every
     // arm uses there.
@@ -445,6 +466,7 @@ pub(super) fn analyze_alt_site(
     table: &Table,
     depth: Depth,
 ) -> PatternSite {
+    let table = &table.visible_at(keyword_off);
     let tags: Vec<&str> = alts.iter().map(|alt| alt.tag.as_str()).collect();
     let subject = table.resolve(&tags);
     let group = (alts[0].tag_off, alts.last().expect("non-empty").end);

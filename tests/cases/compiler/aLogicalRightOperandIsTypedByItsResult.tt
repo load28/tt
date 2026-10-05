@@ -1,0 +1,15 @@
+variant O { S(v: number), N }
+declare const o: O;
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+declare function r(): R<number>;
+declare function rs(): R<string>;
+export function f(flag: true, no: false, n: number, cond: boolean, s: "a" | undefined): R<number> {
+  const b0: true = true || try r();
+  const b1: true = flag || try r();
+  const b2: true = flag || match (o) { S(v) => v, N => 0 };
+  const b3: false = no && try rs();
+  const b4: number = n ?? try rs();
+  const y: "a" | "b" | false = cond && match (o) { S => "a", N => "b" };
+  const z: "a" | "b" = s ?? match (o) { S => "a", N => "b" };
+  return { kind: "Ok", value: [b0, b1, b2, b3, b4, y, z].length };
+}

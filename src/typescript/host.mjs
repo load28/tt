@@ -950,6 +950,15 @@ async function main() {
           index !== otherIndex && checker.isTypeAssignableTo(type, other) &&
           (!checker.isTypeAssignableTo(other, type) || otherIndex < index)) ? [] : [index]);
         const indefinite = (type) => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType();
+        if (declaration.initializer && !declaration.type) {
+          const captured = checker.getTypeAtLocation(declaration.initializer);
+          const node = (captured.flags & TypeFlags.UniqueESSymbol) && declaredType && captured.id !== declaredType.id
+            ? annotation(captured) : undefined;
+          if (node) {
+            out.contextualSlots.push({ index, inferred: true, annotation: project.emitter.printNode(node) });
+            continue;
+          }
+        }
         if (slot.asserted) {
           if (!job.inferJoinTypes || operandsSettling || !declaration.type || declaration.initializer) continue;
           const context = checker.getTypeFromTypeNode(declaration.type);
@@ -982,6 +991,7 @@ async function main() {
         }
         let expected;
         let ambiguous = false;
+        let deferred = false;
         let provisional = true;
         for (const identifier of identifiers) {
           if (identifier === declaration.name || identifier.text !== declaration.name.text) continue;
@@ -990,12 +1000,16 @@ async function main() {
           // type: doing so would reject the initializer's other constituents.
           if (declaredType && checker.getTypeAtLocation(identifier).id !== declaredType.id) continue;
           if (impliedByBindingPattern(identifier, SyntaxKind)) continue;
+          const logical = logicalLeftOperand(identifier, SyntaxKind);
+          if (logical && readsPending(logical, symbol.id)) { deferred = true; break; }
+          if (logical && (checker.getTypeAtLocation(logical).flags & TypeFlags.Never)) continue;
           const context = checker.getContextualType(identifier);
           if (!context || (context.flags & (TypeFlags.Any | TypeFlags.Unknown)) || context.isErrorType()) continue;
           if (expected && expected.id !== context.id) { ambiguous = true; break; }
           expected = context;
           provisional &&= assertionOperand(identifier, SyntaxKind);
         }
+        if (deferred) continue;
         if (job.inferJoinTypes && !operandsSettling && !expected && !ambiguous && !declaration.initializer) {
           // A statement join must have the union of its incoming value types.
           // In particular, TS's evolving-array inference at assignment sites is
@@ -1383,6 +1397,16 @@ function referenceClosure(project, root, canonical) {
  * question about the same type, which tells that answer apart from a
  * session that stopped answering; a session failure propagates.
  */
+function logicalLeftOperand(node, SyntaxKind) {
+  let operand = node;
+  while (operand.parent?.kind === SyntaxKind.ParenthesizedExpression) operand = operand.parent;
+  const parent = operand.parent;
+  if (parent?.kind !== SyntaxKind.BinaryExpression || parent.right !== operand) return undefined;
+  const operator = parent.operatorToken.kind;
+  return operator === SyntaxKind.BarBarToken || operator === SyntaxKind.AmpersandAmpersandToken ||
+    operator === SyntaxKind.QuestionQuestionToken ? parent.left : undefined;
+}
+
 function impliedByBindingPattern(node, SyntaxKind) {
   for (let current = node; ;) {
     const parent = current.parent;
@@ -1569,7 +1593,9 @@ function denotes(checker, node, type, location, excluded, { SyntaxKind, SymbolFl
     let symbol = checker.resolveName(name.text, members.length ? SymbolFlags.Namespace | SymbolFlags.Value : meaning, location);
     if (!symbol || excluded.has(symbol.id)) return undefined;
     for (const member of members) {
-      symbol = aliased(symbol).getExports().get(member.startsWith("__") ? "_" + member : member);
+      const owner = aliased(symbol);
+      symbol = owner.getExports().get(member.startsWith("__") ? "_" + member : member) ??
+        (meaning === SymbolFlags.Value ? checker.getPropertyOfType(checker.getTypeOfSymbol(owner), member) : undefined);
       if (!symbol) return undefined;
     }
     return aliased(symbol);

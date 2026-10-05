@@ -231,8 +231,32 @@ fn parse_variant_complete<'t>(
             generics: generics.to_string(),
             generics_off,
             cases,
+            scope: (!exported)
+                .then(|| enclosing_block(cur.tokens, keyword_index))
+                .flatten(),
         },
     ))
+}
+
+fn enclosing_block(tokens: &[crate::lexer::Token], keyword: usize) -> Option<Span> {
+    let mut depth = 0usize;
+    for k in (0..keyword).rev() {
+        let token = &tokens[k];
+        if token.closes_bracket() {
+            depth += 1;
+        } else if token.opens_bracket() {
+            if depth > 0 {
+                depth -= 1;
+            } else if matches!(token.kind, TokenKind::Punct(b'{')) {
+                let close = super::cursor::find_close_at(tokens, k)?;
+                return Some(Span {
+                    start: token.span.start,
+                    end: tokens[close].span.end,
+                });
+            }
+        }
+    }
+    None
 }
 
 fn parse_variant_cases(mut cur: Cursor, body_start: usize) -> Option<Vec<VariantCase>> {

@@ -306,6 +306,7 @@ pub struct VariantItem {
     pub generics_span: Span,
     /// The declaration's variants, in order.
     pub variants: Vec<VariantId>,
+    pub(crate) scope: Option<Span>,
 }
 
 /// One case of a variant declaration, owned by it.

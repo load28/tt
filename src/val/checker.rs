@@ -15,6 +15,7 @@ pub(super) struct Checker<'a> {
     pub(super) modifiers: &'a Modifiers,
     pub(super) signatures: &'a HashMap<&'a str, Option<Vec<ParamSig>>>,
     pub(super) applications: &'a Applications,
+    pub(super) arm_scopes: &'a [ArmScope],
     /// Probe mode: collect method calls instead of reporting violations.
     /// The violations are the same either way — the file has already been
     /// checked by the time its probes are collected.
@@ -64,7 +65,7 @@ impl<'a> Checker<'a> {
         // Parameter scopes, activated when the walk reaches the function
         // body they belong to: (body start, body end, bindings, whether the
         // body is a function's own `var` scope rather than a `catch` block).
-        let mut pending: Vec<(usize, usize, Vec<Var<'a>>, bool)> = Vec::new();
+        let mut pending: Vec<(usize, usize, Vec<Var<'a>>, bool)> = self.arm_frames(tokens);
         let mut i = 0usize;
         while i < tokens.len() {
             while frames.len() > base && frames[frames.len() - 1].end <= i {
@@ -110,6 +111,30 @@ impl<'a> Checker<'a> {
                         pending.push((start, end, vars, var_scope));
                     }
                 }
+                TokenKind::Arrow
+                    if !arms.contains(&i)
+                        && i > 0
+                        && matches!(tokens[i - 1].kind, TokenKind::Ident)
+                        && !dotted_at(tokens, 0, i - 1) =>
+                {
+                    let block = punct_at(tokens, i + 1, b'{');
+                    let end = if block {
+                        find_close_at(tokens, i + 1).unwrap_or(tokens.len())
+                    } else {
+                        expression_end(tokens, i + 1)
+                    };
+                    let parameter = &tokens[i - 1];
+                    pending.push((
+                        i + 1,
+                        end,
+                        vec![Var {
+                            name: self.text(parameter),
+                            val_at: None,
+                            ident: parameter.span.start,
+                        }],
+                        block,
+                    ));
+                }
                 TokenKind::Ident => {
                     i = self.visit_ident(tokens, i, frames, &writes, &arms);
                     continue;
@@ -119,6 +144,62 @@ impl<'a> Checker<'a> {
             i += 1;
         }
         frames.truncate(base);
+    }
+
+    /// The token of the binding a call argument passes along: a plain
+    /// access path (`x`, `x.y.z`), or one written through TypeScript's
+    /// wrappers, read by [`super::reference::argument_root`].
+    fn argument_root(&self, tokens: &[Token], start: usize, end: usize) -> Option<usize> {
+        if start >= end {
+            return None;
+        }
+        if matches!(tokens[start].kind, TokenKind::Ident) && !dotted_at(tokens, 0, start) {
+            let path = parse_path(self.src, tokens, start);
+            if path.end == end {
+                return (path.steps == 0 || path.last_prop.is_some()).then_some(start);
+            }
+        }
+        let from = tokens[start].span.start;
+        let text = &self.src[from..tokens[end - 1].span.end];
+        let input = crate::host_input::HostInput::new(text);
+        let mut parser = input.parser(self.source_kind);
+        let expression = parser.parse_expr().ok()?;
+        if !parser.take_errors().is_empty()
+            || input.byte(swc_common::Spanned::span(&*expression).hi) != text.len()
+        {
+            return None;
+        }
+        let root = super::reference::argument_root(&expression)?;
+        let root_at = from + input.byte(root.span.lo);
+        (start..end).find(|&k| tokens[k].span.start == root_at)
+    }
+
+    fn arm_frames(&self, tokens: &[Token]) -> Vec<(usize, usize, Vec<Var<'a>>, bool)> {
+        let at = |offset: usize| tokens.partition_point(|token| token.span.start < offset);
+        self.arm_scopes
+            .iter()
+            .filter_map(|scope| {
+                let start = at(scope.span.start);
+                if start >= tokens.len()
+                    || tokens[..start]
+                        .last()
+                        .is_some_and(|token| token.span.end > scope.span.start)
+                    || tokens[start].span.start >= scope.span.end
+                {
+                    return None;
+                }
+                let vars = scope
+                    .bindings
+                    .iter()
+                    .map(|binding| Var {
+                        name: &self.src[binding.start..binding.end],
+                        val_at: None,
+                        ident: binding.start,
+                    })
+                    .collect();
+                Some((start, at(scope.span.end), vars, false))
+            })
+            .collect()
     }
 
     /// Handles one identifier token: declarations register bindings, uses
@@ -652,16 +733,11 @@ impl<'a> Checker<'a> {
             return; // probes go through `probe_call`; Calls asks nothing
         };
         for (idx, (start, end)) in entries.into_iter().enumerate() {
-            if !matches!(tokens[start].kind, TokenKind::Ident) || dotted_at(tokens, 0, start) {
+            let Some(root) = self.argument_root(tokens, start, end) else {
                 continue;
-            }
-            let name = self.text(&tokens[start]);
+            };
+            let name = self.text(&tokens[root]);
             if self.lookup(frames, name).is_none() {
-                continue;
-            }
-            // only `x` / `x.y.z` — a computed argument is not a path
-            let path = parse_path(self.src, tokens, start);
-            if path.end != end || (path.steps > 0 && path.last_prop.is_none()) {
                 continue;
             }
             let Some(param) = params.get(idx) else {
@@ -676,8 +752,8 @@ impl<'a> Checker<'a> {
             };
             report.borrow_mut().push(
                 TtError::span(
-                    tokens[start].span.start,
-                    tokens[start].span.end,
+                    tokens[root].span.start,
+                    tokens[root].span.end,
                     format!(
                         "cannot pass val binding `{name}` to mutable parameter {described} of \
                          `{callee}` (the parameter is not declared with `val`, so the function \
@@ -706,17 +782,12 @@ impl<'a> Checker<'a> {
             return;
         };
         for (idx, (start, end)) in entries.into_iter().enumerate() {
-            if !matches!(tokens[start].kind, TokenKind::Ident) || dotted_at(tokens, 0, start) {
+            let Some(root) = self.argument_root(tokens, start, end) else {
                 continue;
-            }
-            // only `x` / `x.y.z` — a computed argument is not a path
-            let path = parse_path(self.src, tokens, start);
-            if path.end != end || (path.steps > 0 && path.last_prop.is_none()) {
-                continue;
-            }
+            };
             sink.borrow_mut().passes.push(ValPass {
-                offset: tokens[start].span.start,
-                name: self.text(&tokens[start]).to_string(),
+                offset: tokens[root].span.start,
+                name: self.text(&tokens[root]).to_string(),
                 callee: word.to_string(),
                 callee_at,
                 arg_index: idx,

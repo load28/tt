@@ -13,6 +13,7 @@ use super::*;
 /// into the payload, so such an arm covers exactly what it covers instead
 /// of being written off.
 pub(super) fn coverage_of(expr: &MatchExpr, table: &Table) -> (Option<Coverage>, Vec<usize>) {
+    let table = &table.visible_at(expr.keyword_off);
     let Some(rows) = match_rows(expr) else {
         return (None, Vec::new());
     };
@@ -94,6 +95,7 @@ pub(crate) fn checked_coverage(
     let mut tuples = Vec::new();
     collect_matches(&program, &mut matches, &mut tuples);
     for expr in matches {
+        let table = table.visible_at(expr.keyword_off);
         let Some((_, positions)) = members.iter().find(|(at, _)| *at == expr.keyword_off) else {
             continue;
         };
@@ -135,6 +137,7 @@ pub(crate) fn checked_coverage(
     // product, exactly as the default path does — the only difference is
     // where each column's alphabet came from.
     for expr in tuples {
+        let table = table.visible_at(expr.keyword_off);
         let Some((_, positions)) = members.iter().find(|(at, _)| *at == expr.keyword_off) else {
             continue;
         };

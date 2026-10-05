@@ -800,6 +800,8 @@
 
 | TASK-765 | Keep valid TypeScript out of tt claims and rewrites | Complete | 2026-10-05 | 2026-10-05 | [TASK-765](./TASK-765-passthrough-claim-defects.md) |
 
+| TASK-766 | Fix defects found by a compiler audit | In progress | 2026-10-05 | — | [TASK-766](./TASK-766-compiler-audit-defects.md) |
+
 ## Next task number
 
-**TASK-766**
+**TASK-767**

@@ -1,0 +1,39 @@
+==== ttc --out-dir (exit 1) ====
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `g` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./aValBindingPassedThroughAWrapperIsJudged.tt:3:4
+  |
+3 | g((x));
+  |    ^
+
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `g` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./aValBindingPassedThroughAWrapperIsJudged.tt:4:3
+  |
+4 | g(x as { a: number });
+  |   ^
+
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `g` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> ./aValBindingPassedThroughAWrapperIsJudged.tt:5:3
+  |
+5 | g(x!);
+  |   ^
+
+
+==== ttc --check-types (exit 1) ====
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `g` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> aValBindingPassedThroughAWrapperIsJudged.tt:3:4
+  |
+3 | g((x));
+  |    ^
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `g` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> aValBindingPassedThroughAWrapperIsJudged.tt:4:3
+  |
+4 | g(x as { a: number });
+  |   ^
+error[val-pass]: cannot pass val binding `x` to mutable parameter `p` of `g` (the parameter is not declared with `val`, so the function may mutate through it)
+ --> aValBindingPassedThroughAWrapperIsJudged.tt:5:3
+  |
+5 | g(x!);
+  |   ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

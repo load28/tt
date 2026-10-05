@@ -453,6 +453,7 @@ pub(crate) fn val_probes_with_emit(
             tokens,
             &parser::val_modifiers(program),
             &parser::pipeline_shapes(program),
+            &parser::arm_scopes(program),
         ),
         emit,
         source_kind,
@@ -467,6 +468,7 @@ fn val_syntax_probes(source: &str, source_kind: SourceKind) -> ValProbes {
         &tokens,
         &parser::val_modifiers(&program),
         &parser::pipeline_shapes(&program),
+        &parser::arm_scopes(&program),
     )
 }
 

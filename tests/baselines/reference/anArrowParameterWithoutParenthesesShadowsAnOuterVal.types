@@ -1,0 +1,63 @@
+=== anArrowParameterWithoutParenthesesShadowsAnOuterVal.tt ===
+val const x = { a: 1 };
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+[{ a: 1 }].forEach(x => { x.a = 1; });
+>a : (property) a: number
+>forEach : (method) Array<{ a: number; }>.forEach(callbackfn: (value: {
+>       a: number;
+>   }, index: number, array: {
+>       a: number;
+>   }[]) => void, thisArg?: any): void
+>x : (parameter) x: {
+>       a: number;
+>   }
+>x : (parameter) x: {
+>       a: number;
+>   }
+>a : (property) a: number
+[{ a: 1 }].forEach(x => x.a = 1);
+>a : (property) a: number
+>forEach : (method) Array<{ a: number; }>.forEach(callbackfn: (value: {
+>       a: number;
+>   }, index: number, array: {
+>       a: number;
+>   }[]) => void, thisArg?: any): void
+>x : (parameter) x: {
+>       a: number;
+>   }
+>x : (parameter) x: {
+>       a: number;
+>   }
+>a : (property) a: number
+[{ a: 1 }].forEach(async x => { x.a = 1; });
+>a : (property) a: number
+>forEach : (method) Array<{ a: number; }>.forEach(callbackfn: (value: {
+>       a: number;
+>   }, index: number, array: {
+>       a: number;
+>   }[]) => void, thisArg?: any): void
+>x : (parameter) x: {
+>       a: number;
+>   }
+>x : (parameter) x: {
+>       a: number;
+>   }
+>a : (property) a: number
+[{ a: 1 }].forEach(y => { x.a = 2; });
+>a : (property) a: number
+>forEach : (method) Array<{ a: number; }>.forEach(callbackfn: (value: {
+>       a: number;
+>   }, index: number, array: {
+>       a: number;
+>   }[]) => void, thisArg?: any): void
+>y : (parameter) y: {
+>       a: number;
+>   }
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+

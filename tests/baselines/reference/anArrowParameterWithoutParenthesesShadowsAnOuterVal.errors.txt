@@ -1,0 +1,27 @@
+==== ttc --out-dir (exit 1) ====
+error[val-mutation]: cannot mutate through val binding `x` (the binding is declared with `val`, so every access path from it is read-only)
+ --> ./anArrowParameterWithoutParenthesesShadowsAnOuterVal.tt:5:27
+  |
+1 | val const x = { a: 1 };
+  | --- the read-only binding is declared here
+... |
+5 | [{ a: 1 }].forEach(y => { x.a = 2; });
+  |                           ^
+  |
+  = help: remove `val` if this binding is intended to be mutable
+
+
+==== ttc --check-types (exit 1) ====
+error[val-mutation]: cannot mutate through val binding `x` (the binding is declared with `val`, so every access path from it is read-only)
+ --> anArrowParameterWithoutParenthesesShadowsAnOuterVal.tt:5:27
+  |
+1 | val const x = { a: 1 };
+  | --- the read-only binding is declared here
+... |
+5 | [{ a: 1 }].forEach(y => { x.a = 2; });
+  |                           ^
+  |
+  = help: remove `val` if this binding is intended to be mutable
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

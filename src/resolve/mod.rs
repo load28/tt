@@ -225,6 +225,14 @@ pub struct VariantDef {
     /// The variants, in declaration order — a [`VariantRef`]'s index
     /// indexes this.
     pub variants: Vec<VariantDecl>,
+    pub(crate) scope: Option<Span>,
+}
+
+impl VariantDef {
+    pub(crate) fn visible_at(&self, at: usize) -> bool {
+        self.scope
+            .is_none_or(|scope| scope.start <= at && at < scope.end)
+    }
 }
 
 /// Where a definition came from — what a diagnostic names.
@@ -401,6 +409,7 @@ impl Resolver {
                         origin: DeclOrigin::Local(decl.node),
                         generics: decl.generics.clone(),
                         variants,
+                        scope: decl.scope,
                     },
                     hir.source_map.node_span(decl.node),
                 ))
@@ -441,6 +450,7 @@ impl Resolver {
                             }),
                         })
                         .collect(),
+                    scope: None,
                 },
                 None,
                 hir,
@@ -456,6 +466,7 @@ impl Resolver {
                     origin: DeclOrigin::Builtin,
                     generics: generics.to_string(),
                     variants,
+                    scope: None,
                 },
                 None,
                 hir,
@@ -519,7 +530,11 @@ impl Resolver {
             for arm in &site.arms {
                 collect_position_tags(hir, arm.pattern, position, positions, &mut tags);
             }
-            let subject = self.identify(&tags);
+            let at = hir
+                .source_map
+                .node_span(site.node)
+                .map_or(0, |span| span.start);
+            let subject = self.identify(&tags, at);
             // Resolve this position's constructor uses against the
             // identified variant. A site with no matching case provides no
             // declaration evidence: its subject may be a hand-written
@@ -547,7 +562,7 @@ impl Resolver {
     /// module docs): a variant containing **every** tag, in shadowing order;
     /// otherwise the unique variant containing the most of them (at least
     /// one); a tie or no overlap identifies nothing.
-    fn identify(&self, tags: &[&str]) -> Option<DefId> {
+    fn identify(&self, tags: &[&str], at: usize) -> Option<DefId> {
         if tags.is_empty() {
             return None;
         }
@@ -556,8 +571,8 @@ impl Resolver {
             .defs
             .iter()
             .filter_map(|(id, def)| match &def.kind {
-                DefKind::Variant(data) => Some((id, data)),
-                DefKind::VariantValue { .. } => None,
+                DefKind::Variant(data) if data.visible_at(at) => Some((id, data)),
+                DefKind::Variant(_) | DefKind::VariantValue { .. } => None,
             })
             .filter(|(id, _)| {
                 // Only names visible after shadowing count: a replaced

@@ -220,6 +220,7 @@ impl Lower<'_> {
             generics: decl.generics.clone(),
             generics_span: Span::new(decl.generics_off, decl.generics_off + decl.generics.len()),
             variants,
+            scope: decl.scope.map(Self::span),
         }));
         owner
     }

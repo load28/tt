@@ -73,6 +73,89 @@ pub(crate) struct PipelineShape {
     pub first_call: Option<Span>,
 }
 
+#[derive(Debug, Clone)]
+pub(crate) struct ArmScope {
+    pub span: Span,
+    pub bindings: Vec<Span>,
+}
+
+pub(crate) fn arm_scopes(program: &Program) -> Vec<ArmScope> {
+    let mut scopes = Vec::new();
+    visit_programs(program, &mut |region| {
+        for segment in &region.segments {
+            match segment {
+                Segment::Match(expr) => {
+                    for arm in &expr.arms {
+                        let mut bindings = Vec::new();
+                        pattern_bindings(&arm.pattern, &mut bindings);
+                        scopes.push(ArmScope {
+                            span: Span {
+                                start: arm.pattern_span.end,
+                                end: arm.body_span.end,
+                            },
+                            bindings,
+                        });
+                    }
+                }
+                Segment::TupleMatch(expr) => {
+                    for arm in &expr.arms {
+                        let mut bindings = Vec::new();
+                        if let TuplePattern::Elems(elements) = &arm.pattern {
+                            for element in elements {
+                                pattern_bindings(element, &mut bindings);
+                            }
+                        }
+                        scopes.push(ArmScope {
+                            span: Span {
+                                start: arm.pattern_span.end,
+                                end: arm.body_span.end,
+                            },
+                            bindings,
+                        });
+                    }
+                }
+                _ => {}
+            }
+        }
+    });
+    scopes
+}
+
+fn pattern_bindings(pattern: &Pattern, out: &mut Vec<Span>) {
+    match pattern {
+        Pattern::Tags(alternatives) => {
+            if let Some(first) = alternatives.first() {
+                tag_bindings(first, out);
+            }
+        }
+        Pattern::Instances(alternatives) => {
+            for binding in alternatives
+                .iter()
+                .filter_map(|alternative| alternative.bindings.as_ref())
+                .flatten()
+            {
+                binding_names(binding, out);
+            }
+        }
+        Pattern::Wildcard | Pattern::Literals(_) => {}
+    }
+}
+
+fn tag_bindings(pattern: &TagPattern, out: &mut Vec<Span>) {
+    crate::stack::grow(|| {
+        for binding in pattern.bindings.iter().flatten() {
+            binding_names(binding, out);
+        }
+    });
+}
+
+fn binding_names(binding: &Binding, out: &mut Vec<Span>) {
+    match &binding.nested {
+        Some(nested) => tag_bindings(nested, out),
+        None => out.push(binding.alias_span.unwrap_or(binding.name_span)),
+    }
+}
+
 pub(crate) fn pipeline_shapes(program: &Program) -> Vec<PipelineShape> {
     let mut shapes = Vec::new();
     visit_programs(program, &mut |region| {

@@ -1,0 +1,4 @@
+//// [aValBindingPassedThroughAWrapperIsJudged.tt] 2 mapping(s)
+1:1 -> 1:1 len 42  "function g(p: { a: number }) { p.a = 1; }\n"
+2:5 -> 2:1 len 100  "const x = { a: 1 };\ng((x));\ng(x as { a: number }"...
+

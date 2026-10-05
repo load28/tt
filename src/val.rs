@@ -50,7 +50,9 @@ use crate::SourceKind;
 use crate::ast::{Span, ValModifier, ValModifierKind};
 use crate::error::TtError;
 use crate::lexer::{Token, TokenKind, TplPart};
-use crate::parser::{PipelineShape, dotted_at, find_close_at, is_param_modifier, is_reserved};
+use crate::parser::{
+    ArmScope, PipelineShape, dotted_at, find_close_at, is_param_modifier, is_reserved,
+};
 
 use checker::*;
 
@@ -445,6 +447,7 @@ pub(crate) fn check_all(
     tokens: &[Token],
     modifiers: &Modifiers,
     pipelines: &[PipelineShape],
+    arms: &[ArmScope],
 ) -> Vec<TtError> {
     let sink = RefCell::new(Vec::new());
     run(
@@ -453,6 +456,7 @@ pub(crate) fn check_all(
         tokens,
         modifiers,
         pipelines,
+        arms,
         Sink::Report(&sink),
     );
     sink.into_inner()
@@ -466,6 +470,7 @@ pub(crate) fn probes(
     tokens: &[Token],
     modifiers: &Modifiers,
     pipelines: &[PipelineShape],
+    arms: &[ArmScope],
 ) -> ValProbes {
     let sink = RefCell::new(ValProbes::default());
     run(
@@ -474,6 +479,7 @@ pub(crate) fn probes(
         tokens,
         modifiers,
         pipelines,
+        arms,
         Sink::Probes(&sink),
     );
     sink.into_inner()
@@ -487,6 +493,7 @@ fn run(
     tokens: &[Token],
     modifiers: &Modifiers,
     pipelines: &[PipelineShape],
+    arms: &[ArmScope],
     sink: Sink,
 ) {
     // Files that do not use the modifier — the overwhelming majority —
@@ -526,6 +533,7 @@ fn run(
         modifiers,
         signatures: &signatures,
         applications: &applications,
+        arm_scopes: arms,
         sink,
     };
     let mut frames = vec![Frame {

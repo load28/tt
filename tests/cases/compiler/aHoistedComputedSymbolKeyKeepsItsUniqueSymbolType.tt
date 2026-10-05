@@ -1,0 +1,5 @@
+variant O { S(v: number), N }
+export function f(o: O) {
+  const it = { *[Symbol.iterator]() { yield 1; }, v: match (o) { S(v) => v, N => 0 } };
+  return [...it, it.v];
+}

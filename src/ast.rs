@@ -521,6 +521,7 @@ pub(crate) struct VariantDecl {
     /// there is none).
     pub generics_off: usize,
     pub cases: Vec<VariantCase>,
+    pub scope: Option<Span>,
 }
 
 /// One case of a tt variant.
