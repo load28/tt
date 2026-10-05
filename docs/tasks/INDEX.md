@@ -790,6 +790,8 @@
 
 | TASK-759 | Preserve editor structure during incomplete syntax | Complete | 2026-10-05 | 2026-10-05 | [TASK-759](./TASK-759-structural-editor-recovery.md) |
 
+| TASK-760 | Review and correct structural editor recovery | Complete | 2026-10-05 | 2026-10-05 | [TASK-760](./TASK-760-review-structural-editor-recovery.md) |
+
 ## Next task number
 
-**TASK-760**
+**TASK-761**

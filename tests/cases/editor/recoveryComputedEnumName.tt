@@ -1,0 +1,8 @@
+// @diagnostics: *
+// @hover: later
+// @definition: later
+declare const flag: boolean;
+const before = 1 |> String;
+enum E { ["a"
+export const later = match (flag) { true => 1, false => 2 };
+/*later*/later;

@@ -1,0 +1,19 @@
+=== namespace.ttx ===
+const good = 1 |> String;
+>good : const good: string
+>String : var String: (value?: any) => string
+const bad = <G:U.m />;
+>bad : const bad: any
+
+=== nestedNamespace.ttx ===
+const good = 1 |> String;
+>good : const good: string
+>String : var String: (value?: any) => string
+const bad = <div><G:U.m /></div>;
+>bad : const bad: any
+
+=== conflict.tt ===
+const good = 1 |> String;
+>good : const good: string
+>String : var String: (value?: any) => string
+

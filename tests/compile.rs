@@ -813,6 +813,55 @@ include!("compile/cases_12.rs");
 include!("compile/cases_13.rs");
 include!("compile/cases_14.rs");
 #[test]
+fn editor_projection_rejects_namespaced_jsx_members_without_panicking() {
+    let options = Options {
+        source_kind: ttc::SourceKind::Tsx,
+        ..Options::default()
+    };
+    for tail in ["<G:U.m", "<G:U.m />", "<div><G:U.m /></div>"] {
+        let source = format!("const good = 1 |> String;\n{tail}");
+        let report = ttc::compile_projection_report(&source, &options);
+        assert!(!report.diagnostics.is_empty(), "{source}");
+        assert!(ttc::compile_report(&source, &options).emit.is_none());
+    }
+}
+
+#[test]
+fn editor_projection_rejects_conflict_markers_without_panicking() {
+    for marker in ["=======", "<<<<<<< ours", ">>>>>>> theirs", "||||||| base"] {
+        let source = format!("const good = 1 |> String;\n{marker}\n/\u{2}\n");
+        let options = Options::default();
+        let report = ttc::compile_projection_report(&source, &options);
+        assert!(report.emit.is_none(), "{source:?}");
+        assert!(!report.diagnostics.is_empty(), "{source:?}");
+        assert!(ttc::compile_report(&source, &options).emit.is_none());
+    }
+}
+
+#[test]
+fn editor_projection_recovers_incomplete_computed_enum_members() {
+    for member in [
+        "[\"a\"",
+        "[\"a\" = 1, return = 2 }",
+        "[`a`",
+        "[",
+        "[\"a",
+        "[`a",
+    ] {
+        let source = format!(
+            "const good = 1 |> String;\nenum E {{ {member}\nexport const later = match (true) {{ true => 1, false => 2 }};\n"
+        );
+        let options = Options::default();
+        let report = ttc::compile_projection_report(&source, &options);
+        assert!(!report.diagnostics.is_empty(), "{source}");
+        assert!(
+            ttc::compile_report(&source, &options).emit.is_none(),
+            "{source}"
+        );
+    }
+}
+
+#[test]
 fn editor_projection_preserves_matches_after_a_missing_initializer() {
     let source = "variant Status { Idle, Busy }\n\
                   const s: Status = Status.Idle;\n\

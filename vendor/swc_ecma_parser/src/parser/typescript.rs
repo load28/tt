@@ -790,7 +790,7 @@ impl<I: Tokens> Parser<I> {
         if self.editor_recovery() {
             let boundary = match kind {
                 ParsingContext::TypeMembers | ParsingContext::EnumMembers => {
-                    self.input().cur() != Token::Semi && self.ends_recovery_object()
+                    self.ends_recovery_ts_members(kind)
                 },
                 ParsingContext::TupleElementTypes => self.ends_recovery_list(Token::RBracket),
                 ParsingContext::TypeParameters => {
@@ -812,6 +812,44 @@ impl<I: Tokens> Parser<I> {
             ParsingContext::TupleElementTypes => cur == Token::RBracket,
             ParsingContext::TypeParameters | ParsingContext::TypeArguments => cur == Token::Gt,
         }
+    }
+
+    /// A statement keyword can also name an enum or type member. Its legal
+    /// continuation is owned by this list grammar, not by object literals.
+    fn ends_recovery_ts_members(&mut self, kind: ParsingContext) -> bool {
+        if !self.ends_recovery_list(Token::RBrace) {
+            return false;
+        }
+        if kind == ParsingContext::TypeMembers && self.input().cur() == Token::Semi {
+            return false;
+        }
+        if !self.input().cur().is_word() {
+            return true;
+        }
+        !self.ts_look_ahead(|p| {
+            p.bump();
+            let next = p.input().cur();
+            match kind {
+                ParsingContext::EnumMembers => {
+                    matches!(next, Token::Eq | Token::Comma | Token::RBrace)
+                }
+                ParsingContext::TypeMembers => {
+                    p.input().had_line_break_before_cur()
+                        || matches!(
+                            next,
+                            Token::Colon
+                                | Token::QuestionMark
+                                | Token::LParen
+                                | Token::Lt
+                                | Token::Semi
+                                | Token::Comma
+                                | Token::RBrace
+                                | Token::Eof
+                        )
+                }
+                _ => unreachable!(),
+            }
+        })
     }
 
     /// `tsNextTokenCanFollowModifier`
@@ -2107,7 +2145,7 @@ impl<I: Tokens> Parser<I> {
         } else if cur == Token::LBracket {
             self.assert_and_bump(Token::LBracket);
             let expr = self.parse_expr()?;
-            self.assert_and_bump(Token::RBracket);
+            expect!(self, Token::RBracket);
             let bracket_span = self.span(start);
 
             match *expr {
@@ -2146,7 +2184,10 @@ impl<I: Tokens> Parser<I> {
 
         let init = if self.input_mut().eat(Token::Eq) {
             Some(self.parse_assignment_expr()?)
-        } else if self.input().cur() == Token::Comma || self.input().cur() == Token::RBrace {
+        } else if self.input().cur() == Token::Comma
+            || self.input().cur() == Token::RBrace
+            || (self.editor_recovery() && self.is_ts_list_terminator(ParsingContext::EnumMembers))
+        {
             None
         } else if self.input().cur() == Token::Eof {
             return Err(self.eof_error());

@@ -1,0 +1,22 @@
+=== diagnostics recoveryComputedEnumName.tt ===
+diagnostics: 2 diagnostic(s)
+  2:7-2:13 "before" hint TS6133: 'before' is declared but its value is never read. [unnecessary]
+  3:6-3:7 "E" hint TS6196: 'E' is declared but never used. [unnecessary]
+published: 3 diagnostic(s)
+  2:7-2:13 "before" hint TS6133 (ts): 'before' is declared but its value is never read. [unnecessary]
+  3:6-3:7 "E" hint TS6196 (ts): 'E' is declared but never used. [unnecessary]
+  3:10-3:11 "[" error source-not-typescript (ttc): the TypeScript here does not parse: unbalanced TypeScript delimiter. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+
+=== hover /*later*/ recoveryComputedEnumName.tt:5:1 ===
+  | later;
+  | ^ /*later*/
+hover: 5:1-5:6 "later"
+    const later: number
+ttSymbol: null
+
+=== definition /*later*/ recoveryComputedEnumName.tt:5:1 ===
+  | later;
+  | ^ /*later*/
+definition: 1 location(s)
+  recoveryComputedEnumName.tt 4:14-4:19 "later"
+

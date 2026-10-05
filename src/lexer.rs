@@ -42,7 +42,10 @@ pub(crate) use queries::{
     has_top_level_comma, is_member_receiver, is_primary_expression, statement_continues_after,
     type_parameter_names,
 };
-pub(crate) use validation::{host_syntax_check, host_syntax_error, host_syntax_error_in};
+pub(crate) use validation::{
+    host_lexical_error, host_lexical_error_in, host_syntax_check, host_syntax_error,
+    host_syntax_error_in,
+};
 
 /// One significant token.
 #[derive(Debug)]

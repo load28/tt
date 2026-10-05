@@ -1,0 +1,12 @@
+//// [editorRecoveryComputedEnumName.tt] 10 mapping(s)
+1:1 -> 19:1 len 44  "declare const flag: boolean;\nconst before = "
+2:16 -> 20:23 len 1  "1"
+2:21 -> 20:16 len 6  "String"
+2:27 -> 20:25 len 37  ";\nenum E { [\"a\"\nexport const later = "
+4:29 -> 23:17 len 4  "flag"
+4:37 -> 25:10 len 4  "true"
+4:45 -> 26:22 len 1  "1"
+4:48 -> 29:10 len 5  "false"
+4:57 -> 30:22 len 1  "2"
+4:60 -> 37:28 len 2  ";\n"
+

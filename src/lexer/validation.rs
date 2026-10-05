@@ -7,6 +7,24 @@ pub(crate) fn host_syntax_error(src: &str, kind: SourceKind) -> Option<(Span, &'
     host_syntax_check(src, kind).0
 }
 
+/// Protections required before host parsing even when missing delimiters can
+/// be recovered. Literal/comment text is excluded by the shared token model.
+pub(crate) fn host_lexical_error(src: &str, kind: SourceKind) -> Option<(Span, &'static str)> {
+    let markers = has_conflict_marker_text(src);
+    if !markers && !(kind.is_tsx() && src.as_bytes().contains(&b'<')) {
+        return None;
+    }
+    lexical_error(src, kind, markers, &lex_with_kind(src, 0, src.len(), kind))
+}
+
+pub(crate) fn host_lexical_error_in(
+    src: &str,
+    kind: SourceKind,
+    tokens: &[Token],
+) -> Option<(Span, &'static str)> {
+    lexical_error(src, kind, has_conflict_marker_text(src), tokens)
+}
+
 /// [`host_syntax_error`], and the tokens it lexed `src` into when a failure
 /// was possible, for a caller that reads the same text's tokens next.
 ///
@@ -26,7 +44,7 @@ pub(crate) fn host_syntax_check(
         })
     {
         let tokens = lex_with_kind(src, 0, src.len(), kind);
-        (lexical_error(src, kind, markers, &tokens), Some(tokens))
+        (host_syntax_error_in(src, kind, &tokens), Some(tokens))
     } else {
         (None, None)
     }
@@ -69,7 +87,9 @@ pub(crate) fn host_syntax_error_in(
     kind: SourceKind,
     tokens: &[Token],
 ) -> Option<(Span, &'static str)> {
-    lexical_error(src, kind, has_conflict_marker_text(src), tokens)
+    host_lexical_error_in(src, kind, tokens).or_else(|| {
+        unbalanced_delimiter(tokens).map(|span| (span, "unbalanced TypeScript delimiter"))
+    })
 }
 
 fn lexical_error(
@@ -88,9 +108,6 @@ fn lexical_error(
             span,
             "a JSX namespace name cannot be followed by member access",
         ));
-    }
-    if let Some(span) = unbalanced_delimiter(tokens) {
-        return Some((span, "unbalanced TypeScript delimiter"));
     }
     None
 }

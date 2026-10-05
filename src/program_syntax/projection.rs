@@ -148,10 +148,12 @@ impl ProgramSyntax {
         tokens: &[crate::lexer::Token],
         mode: SyntaxMode,
     ) -> Result<Self, ProgramSyntaxError> {
-        if mode != SyntaxMode::Editor
-            && let Some((span, message)) =
-                crate::lexer::host_syntax_error_in(source, source_kind, tokens)
-        {
+        let error = if mode == SyntaxMode::Editor {
+            crate::lexer::host_lexical_error_in(source, source_kind, tokens)
+        } else {
+            crate::lexer::host_syntax_error_in(source, source_kind, tokens)
+        };
+        if let Some((span, message)) = error {
             return Err(ProgramSyntaxError::SourceNotTypeScript {
                 message: message.to_string(),
                 source: span.start,

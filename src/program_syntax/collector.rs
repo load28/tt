@@ -14,9 +14,12 @@ pub(super) fn parse_module(
     source_kind: crate::SourceKind,
     mode: SyntaxMode,
 ) -> Result<ParsedModule, ProgramSyntaxError> {
-    if mode != SyntaxMode::Editor
-        && let Some((span, message)) = crate::lexer::host_syntax_error(code, source_kind)
-    {
+    let error = if mode == SyntaxMode::Editor {
+        crate::lexer::host_lexical_error(code, source_kind)
+    } else {
+        crate::lexer::host_syntax_error(code, source_kind)
+    };
+    if let Some((span, message)) = error {
         return Err(parse_failure_at(
             code,
             segments,

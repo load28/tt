@@ -144,6 +144,9 @@ namespaced member, deeply unbalanced type arguments), so each guarded text
 is lexed before its parse.
 
 Editor projection uses a separate, explicit SWC recovery mode (TASK-759).
+Lexical protections still run before editor parsing; only delimiter balance
+is delegated to recovery (TASK-760). Enum and type-member lists recognize their
+own member continuations, including keyword names and type-member semicolons.
 Grammar routines retain missing expressions/types, synchronize failed
 statements, and record missing delimiters with parser-local spans and owners.
 Speculation rolls these records back with the parser checkpoint. Strict

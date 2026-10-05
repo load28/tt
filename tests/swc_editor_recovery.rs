@@ -148,6 +148,52 @@ fn complete_const_type_parameters_are_not_statement_boundaries() {
 }
 
 #[test]
+fn keyword_enum_members_are_not_recovery_boundaries() {
+    for keyword in ["const", "let", "var", "return", "throw", "export", "else"] {
+        for member in [
+            format!("{keyword} = 1, second = 2"),
+            format!("{keyword}, second"),
+        ] {
+            let source = format!("enum E {{ {member} }} const later = 42;");
+            let (module, recovery, errors) = parse(&source, false, RecoveryMode::Editor);
+            assert!(recovery.is_empty(), "{source}: {recovery:?}");
+            assert_eq!(errors, 0, "{source}");
+            assert_eq!(module.body.len(), 2, "{source}");
+        }
+    }
+}
+
+#[test]
+fn incomplete_computed_enum_members_leave_following_statements_to_their_owner() {
+    for member in ["[\"a\"", "[`a`", "["] {
+        let source = format!("enum E {{ {member}\nconst later = 42;");
+        let (module, recovery, _) = parse(&source, false, RecoveryMode::Editor);
+        assert_eq!(names(&module), ["later"], "{source}: {recovery:?}");
+    }
+}
+
+#[test]
+fn keyword_type_members_are_not_recovery_boundaries() {
+    for keyword in ["const", "let", "var", "return", "throw", "export", "else"] {
+        for member in [
+            format!("{keyword}; next: number"),
+            format!("{keyword}\nnext: number"),
+            format!("{keyword}: number; next: number"),
+            format!("{keyword}?(): void; next: number"),
+        ] {
+            for source in [
+                format!("type T = {{ {member} }};"),
+                format!("interface T {{ {member} }}"),
+            ] {
+                let (_, recovery, errors) = parse(&source, false, RecoveryMode::Editor);
+                assert!(recovery.is_empty(), "{source}: {recovery:?}");
+                assert_eq!(errors, 0, "{source}");
+            }
+        }
+    }
+}
+
+#[test]
 fn a_contextual_keyword_argument_does_not_create_a_missing_element() {
     let (_, recovery, _) = parse("const x = f(let);", false, RecoveryMode::Editor);
     assert!(recovery.is_empty());

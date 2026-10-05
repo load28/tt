@@ -200,6 +200,38 @@ fn host_recovery_keeps_an_immediately_following_export_in_the_real_mapper() {
 }
 
 #[test]
+fn recovery_preserves_keyword_members_and_exports_in_the_real_mapper() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    for (declaration, value) in [
+        ("enum E { return = 1, second = 2 }", "E.return"),
+        (
+            "type T = { return; next: number }; declare const t: T;",
+            "t.next",
+        ),
+        (
+            "interface T { return\nnext: number }; declare const t: T;",
+            "t.next",
+        ),
+    ] {
+        fs::write(
+            project.path().join("src/provider.tt"),
+            format!("{declaration}\nconst broken = ;\nexport const good = match (true) {{ true => {value}, false => 2 }};\n"),
+        ).unwrap();
+        fs::write(
+            project.path().join("src/main.ts"),
+            "import { good } from './provider.tt';\nconst ok: number = good;\n",
+        )
+        .unwrap();
+        let (ok, text) = check(&tsc, &project);
+        assert!(!ok);
+        assert_eq!(text.matches("TS1109").count(), 1, "{text}");
+        assert_eq!(text.matches("error ").count(), 1, "{text}");
+        assert!(!text.contains("src/main.ts"), "{text}");
+    }
+}
+
+#[test]
 fn every_independent_repaired_call_keeps_a_primary_diagnostic() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);

@@ -1,0 +1,12 @@
+=== editorRecoveryComputedEnumName.tt ===
+declare const flag: boolean;
+>flag : const flag: boolean
+const before = 1 |> String;
+>before : const before: string
+>String : var String: (value?: any) => string
+enum E { ["a"
+>E : enum E
+export const later = match (flag) { true => 1, false => 2 };
+>later : const later: number
+>flag : const flag: boolean
+

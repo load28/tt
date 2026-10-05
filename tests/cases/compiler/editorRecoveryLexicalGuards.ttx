@@ -1,0 +1,10 @@
+// @filename: namespace.ttx
+const good = 1 |> String;
+const bad = <G:U.m />;
+// @filename: nestedNamespace.ttx
+const good = 1 |> String;
+const bad = <div><G:U.m /></div>;
+// @filename: conflict.tt
+const good = 1 |> String;
+=======
+/
