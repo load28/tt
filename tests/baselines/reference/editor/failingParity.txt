@@ -1,1 +1,4 @@
+recoveryArmOperandDelimiter diagnostics recoveryArmOperandDelimiter.tt
 recoveryCallDelimiter diagnostics recoveryCallDelimiter.tt
+recoveryPipeOperandDelimiter diagnostics recoveryPipeOperandDelimiter.tt
+recoveryTryOperandDelimiter diagnostics recoveryTryOperandDelimiter.tt

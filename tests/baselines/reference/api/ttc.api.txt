@@ -889,7 +889,7 @@ impl Project
     pub fn service_retained_syntax(
         &mut self,
         path: &Path,
-    ) -> Result<Vec<(DiagnosticCode, Position)>, String>
+    ) -> Result<Vec<RetainedSyntax>, String>
 impl Project
     pub fn root(&self) -> &Path
     pub fn identity(&self) -> (Option<&Path>, &Path)
@@ -1012,6 +1012,25 @@ impl Sync for RenameEdit
 impl Unpin for RenameEdit
 impl UnsafeUnpin for RenameEdit
 impl UnwindSafe for RenameEdit
+
+// struct ttc::engine::RetainedSyntax
+pub struct RetainedSyntax {
+    pub code: DiagnosticCode,
+    pub range: Range,
+    pub message: String,
+}
+impl Clone for RetainedSyntax
+impl Debug for RetainedSyntax
+impl Eq for RetainedSyntax
+impl PartialEq for RetainedSyntax
+impl StructuralPartialEq for RetainedSyntax
+impl Freeze for RetainedSyntax
+impl RefUnwindSafe for RetainedSyntax
+impl Send for RetainedSyntax
+impl Sync for RetainedSyntax
+impl Unpin for RetainedSyntax
+impl UnsafeUnpin for RetainedSyntax
+impl UnwindSafe for RetainedSyntax
 
 // struct ttc::engine::SemanticToken
 pub struct SemanticToken {
