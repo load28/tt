@@ -240,6 +240,7 @@ impl Project {
             position,
             "textDocument/definition",
             serde_json::json!({}),
+            Reach::File,
         )?;
         if !found.is_empty() {
             return Ok(found);
@@ -352,12 +353,14 @@ impl Project {
             position,
             "textDocument/references",
             serde_json::json!({ "context": { "includeDeclaration": true } }),
+            Reach::Project,
         )?;
         let definitions = self.locations(
             path,
             position,
             "textDocument/definition",
             serde_json::json!({}),
+            Reach::Project,
         )?;
         let mut references: Vec<Reference> = locations
             .into_iter()
@@ -381,6 +384,7 @@ impl Project {
             declaration.range.start,
             "textDocument/references",
             serde_json::json!({ "context": { "includeDeclaration": true } }),
+            Reach::Project,
         )? {
             found.push(Reference {
                 is_definition: false,
@@ -496,8 +500,9 @@ impl Project {
         position: Position,
         method: &str,
         extra: serde_json::Value,
+        reach: Reach,
     ) -> Result<Vec<Location>, String> {
-        let (doc, path) = self.serve(path)?;
+        let (doc, path) = self.serve_in(path, reach)?;
         let documents = self.overlays.clone();
         let overlays = &*documents.read();
         let session = self.session();
@@ -624,7 +629,7 @@ impl Project {
         path: &Path,
         position: Position,
     ) -> Result<Result<Vec<RenameEdit>, Option<String>>, String> {
-        let (doc, path) = self.serve(path)?;
+        let (doc, path) = self.serve_in(path, Reach::Project)?;
         let documents = self.overlays.clone();
         let overlays = &*documents.read();
         let session = self.session();
@@ -1157,6 +1162,15 @@ impl Project {
     /// transitive `.tt` imports as the TypeScript they lower to. Returns the
     /// file's projection and its canonical path; the session is then live.
     fn serve(&mut self, path: &Path) -> Result<(Arc<ServiceDoc>, PathBuf), String> {
+        self.serve_in(path, Reach::File)
+    }
+
+    /// [`Project::serve`] for a question that reads `reach`.
+    fn serve_in(
+        &mut self,
+        path: &Path,
+        reach: Reach,
+    ) -> Result<(Arc<ServiceDoc>, PathBuf), String> {
         let canonical = crate::engine::normalize_document_path(path)?;
         if !self.service.as_ref().is_some_and(|s| s.client.alive()) {
             // (Re)start: the previous conversation, if any, is gone — served
@@ -1248,9 +1262,11 @@ impl Project {
             files.retain(|path| path.is_file() || overlays.contains_key(path));
             (doc, files)
         };
-        let snapshot = self
-            .update(&files)
-            .map_err(|blocked| blocked.error.to_string())?;
+        let snapshot = match reach {
+            Reach::File => self.update_scoped(&files, Some(&canonical)),
+            Reach::Project => self.update(&files),
+        }
+        .map_err(|blocked| blocked.error.to_string())?;
         let std_modules: Vec<_> = projection::served_std_packages(snapshot.files())
             .into_iter()
             .flat_map(|package| projection::std_package_modules(&self.root, package))
@@ -1333,4 +1349,14 @@ impl Project {
     fn session(&mut self) -> &mut ServiceSession {
         self.service.as_mut().expect("serve started it")
     }
+}
+
+/// What a service question reads. A question about one file reads the files
+/// its types can depend on, whose contextual storage a scoped update settles
+/// ([`Project::update_scoped`]); references and renames read every file that
+/// can use a name, so they settle the whole project.
+#[derive(Clone, Copy)]
+enum Reach {
+    File,
+    Project,
 }

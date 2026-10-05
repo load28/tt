@@ -521,15 +521,16 @@ async function typedDiagnosticsFor(
   compiler: string,
   includeTypes: boolean,
   includeTypedTt: boolean,
-): Promise<TypedDiagnostics | null> {
+): Promise<TypedDiagnostics | "superseded" | null> {
   const uri = URI.parse(doc.uri);
   if (uri.scheme !== "file") return null;
-  const result = await ttc.runTypedCheck(
+  const result = await ttc.runSupersedableTypedCheck(
     compiler,
     doc.getText(),
     uri.fsPath,
     includeTypes,
   );
+  if (result.kind === "superseded") return "superseded";
 
   if (result.kind === "unavailable") {
     if (result.cause === "internal") {
@@ -668,7 +669,7 @@ async function validate(
           settings.typedChecks,
         )
       : Promise.resolve(null);
-  const serviceTypes: Promise<TypeDiagnostics | null> = settings.typeDiagnostics
+  const serviceTypes: Promise<TypeDiagnostics | "superseded" | null> = settings.typeDiagnostics
     ? typeDiagnostics(doc, compiler)
     : Promise.resolve({ diagnostics: [], restates: [] });
   // Hints are not diagnostics of the compile: ttc never fails on one, and
@@ -680,6 +681,13 @@ async function validate(
     ttHints(doc, compiler),
   ]);
   if (!isCurrentValidation(doc, generation)) return;
+  // A document change reached the engine before these layers did. Every
+  // change schedules a new generation; one that did not (an opened
+  // document) is scheduled here, so the file is still validated.
+  if (typedResult === "superseded" || serviceResults === "superseded") {
+    scheduleValidation(doc);
+    return;
+  }
 
   // The engine could not be reached, which is not the same answer as "this
   // file has no type errors" — and publishing it as one clears every type
@@ -755,11 +763,11 @@ interface TypeDiagnostics {
 async function typeDiagnostics(
   doc: TextDocument,
   compiler: string,
-): Promise<TypeDiagnostics | null> {
+): Promise<TypeDiagnostics | "superseded" | null> {
   const fsPath = enginePath(doc);
   if (fsPath === null) return { diagnostics: [], restates: [] };
-  const answer = await engine.tsDiagnosticsAnswer(compiler, fsPath, logEngine);
-  if (answer === null) return null;
+  const answer = await engine.supersedableTsDiagnosticsAnswer(compiler, fsPath, logEngine);
+  if (answer === null || answer === "superseded") return answer;
   return {
     restates: answer.restates,
     retains: answer.retains,

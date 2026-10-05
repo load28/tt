@@ -903,6 +903,11 @@ impl Project
     pub fn initial_files(&self) -> Vec<PathBuf>
     pub fn sees(&mut self, path: &Path) -> Result<bool, String>
     pub fn update(&mut self, files: &[PathBuf]) -> Result<Snapshot, Box<Blocked>>
+    pub fn update_scoped(
+        &mut self,
+        files: &[PathBuf],
+        target: Option<&Path>,
+    ) -> Result<Snapshot, Box<Blocked>>
     pub fn semantic_cache_hits(&self) -> usize
     pub fn candidates(&self, inputs: &Inputs) -> Result<Vec<PathBuf>>
     pub fn dependencies_of(
@@ -915,6 +920,12 @@ impl Project
         &self,
         snapshot: &Snapshot,
         request: &CheckRequest,
+    ) -> Result<Checked, String>
+    pub fn check_file(
+        &self,
+        snapshot: &Snapshot,
+        request: &CheckRequest,
+        file: &Path,
     ) -> Result<Checked, String>
 impl Debug for Project
 impl !Freeze for Project

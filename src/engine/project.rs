@@ -133,6 +133,12 @@ pub struct Project {
     /// on an unchanged project asks the checker nothing, as a language
     /// service reuses its program while the project version is unchanged.
     materialized: RefCell<Option<Materialized>>,
+    /// Each module's materialization from a run scoped to one file's
+    /// reference closure ([`Project::update_scoped`]), kept while the inputs
+    /// of the closure it was computed in are unchanged.
+    scoped: RefCell<HashMap<PathBuf, ScopedMaterialization>>,
+    /// Each file's last reference closure and what it was computed from.
+    closures: RefCell<HashMap<PathBuf, KnownClosure>>,
     next_snapshot: u64,
     /// The language-service half — the running `tsgo --lsp` conversation —
     /// started by the first editor question ([`crate::engine::language`]).
@@ -169,6 +175,8 @@ impl Project {
             pattern_analysis_cache: RefCell::new(HashMap::new()),
             pattern_analysis_cache_hits: Cell::new(0),
             materialized: RefCell::new(None),
+            scoped: RefCell::new(HashMap::new()),
+            closures: RefCell::new(HashMap::new()),
             next_snapshot: 0,
             service: None,
         }
@@ -317,6 +325,21 @@ impl Project {
     /// An I/O failure still blocks the snapshot because no source state is
     /// available to preserve.
     pub fn update(&mut self, files: &[PathBuf]) -> Result<Snapshot, Box<Blocked>> {
+        self.update_scoped(files, None)
+    }
+
+    /// [`Project::update`] for questions about one file. Contextual storage
+    /// types are settled only for the modules that file's types can depend on
+    /// (TypeScript's referenced-file closure); the snapshot's other modules
+    /// keep a materialization that is still current, or their lowered text.
+    /// Their own questions settle them in turn. A module's materialization
+    /// depends only on its closure, so a scoped run settles every module of
+    /// the closure exactly as a whole-project run does.
+    pub fn update_scoped(
+        &mut self,
+        files: &[PathBuf],
+        target: Option<&Path>,
+    ) -> Result<Snapshot, Box<Blocked>> {
         self.requested.extend(
             files
                 .iter()
@@ -473,6 +496,29 @@ impl Project {
             query
                 .modules
                 .sort_by(|left, right| left.path.cmp(&right.path));
+            if let Some(target) = target
+                && let Some(emits) = self
+                    .scoped_emits(backend, &projected, &order, &query, &roots, target)
+                    .map_err(blocked)?
+            {
+                for (index, emit) in emits {
+                    if projected[index].emit != emit {
+                        Arc::make_mut(&mut projected[index]).emit = emit;
+                    }
+                }
+                self.next_snapshot += 1;
+                return Ok(Snapshot {
+                    id: self.next_snapshot,
+                    files: projected,
+                    blocked: blocked_files,
+                    host_overlays: overlays
+                        .iter()
+                        .filter(|(path, _)| is_host_source(path))
+                        .map(|(path, text)| (path.clone(), text.clone()))
+                        .collect(),
+                });
+            }
+            let read = Arc::new(ServedTexts::new(&projected, &query.modules).0);
             let question = ContextualQuestion {
                 modules: order
                     .iter()
@@ -488,7 +534,26 @@ impl Project {
                 roots,
             };
             let emits = self.contextual_emits(backend, question).map_err(blocked)?;
+            // A whole-project materialization settles every module as its
+            // closure would: a later question about one file reuses it while
+            // no input of the project changes.
+            let generation = self
+                .materialized
+                .borrow()
+                .as_ref()
+                .map(|materialized| materialized.generation);
+            let mut cache = self.scoped.borrow_mut();
             for (&index, emit) in order.iter().zip(emits) {
+                if let Some(generation) = generation {
+                    cache.insert(
+                        projected[index].module_path.clone(),
+                        ScopedMaterialization {
+                            read: read.clone(),
+                            generation,
+                            emit: emit.clone(),
+                        },
+                    );
+                }
                 if projected[index].emit != emit {
                     Arc::make_mut(&mut projected[index]).emit = emit;
                 }
@@ -505,6 +570,188 @@ impl Project {
                 .map(|(path, text)| (path.clone(), text.clone()))
                 .collect(),
         })
+    }
+
+    /// The refined emits of the projected modules `target`'s types can
+    /// depend on, and the unchanged materializations of the others, by index
+    /// into `projected`. `None` when the target is not projected, the backend
+    /// cannot name its closure, or the disk changed while it was being
+    /// materialized; the whole project is materialized instead.
+    fn scoped_emits(
+        &self,
+        backend: &NativeBackend,
+        projected: &[Arc<ProjectedDocument>],
+        order: &[usize],
+        support: &crate::typescript::backend::Query,
+        roots: &[PathBuf],
+        target: &Path,
+    ) -> Result<Option<Vec<(usize, crate::MappedEmit)>>, crate::typescript::backend::Failure> {
+        use crate::typescript::backend::{Module, Query};
+        let config = self.tsconfig.as_deref();
+        let target = if is_host_source(target) {
+            target.to_path_buf()
+        } else {
+            match projected.iter().find(|doc| doc.source_path == target) {
+                Some(doc) => doc.module_path.clone(),
+                None => return Ok(None),
+            }
+        };
+        let texts = ServedTexts::new(projected, &support.modules);
+        let generation = backend.current_generation(config, &self.root);
+        let unchanged = Unchanged::new(&texts, generation);
+        // The checker is served each module's unchanged materialization, so
+        // the closure is read from those texts too: asking with the lowered
+        // ones would make the checker rebuild its program twice.
+        let served: Vec<Module> = {
+            let cache = self.scoped.borrow();
+            support
+                .modules
+                .iter()
+                .cloned()
+                .chain(order.iter().map(|&index| {
+                    let path = &projected[index].module_path;
+                    let text = match cache.get(path) {
+                        Some(entry) if unchanged.of(entry) => entry.emit.code.clone(),
+                        _ => projected[index].emit.code.clone(),
+                    };
+                    Module {
+                        path: path.clone(),
+                        text,
+                    }
+                }))
+                .collect()
+        };
+        let asked = ClosureQuestion::new(&served, &support.sources, roots, generation);
+        let reused = self
+            .closures
+            .borrow()
+            .get(&target)
+            .filter(|known| known.question == asked)
+            .map(|known| known.members.clone());
+        let members = match reused {
+            Some(members) => members,
+            None => {
+                backend.observe_generations();
+                let answers = backend.ask(
+                    config,
+                    &self.root,
+                    &Query {
+                        contextual_only: true,
+                        reference_closure: Some(target.clone()),
+                        sources: support.sources.clone(),
+                        roots: roots.to_vec(),
+                        modules: served,
+                        ..Query::default()
+                    },
+                )?;
+                let Some(closure) = answers.reference_closure else {
+                    return Ok(None);
+                };
+                let mut members = closure.files;
+                members.sort();
+                members.dedup();
+                let members = Arc::new(members);
+                self.closures.borrow_mut().insert(
+                    target,
+                    KnownClosure {
+                        question: asked,
+                        members: members.clone(),
+                    },
+                );
+                members
+            }
+        };
+        let current = |entry: &ScopedMaterialization| {
+            unchanged.of(entry)
+                && members
+                    .iter()
+                    .filter(|member| texts.0.contains_key(*member))
+                    .all(|member| entry.read.contains_key(member))
+        };
+        let in_closure: Vec<usize> = order
+            .iter()
+            .copied()
+            .filter(|&index| members.binary_search(&projected[index].module_path).is_ok())
+            .collect();
+        let settled = {
+            let cache = self.scoped.borrow();
+            in_closure.iter().all(|&index| {
+                projected[index].emit.contextual_slots.is_empty()
+                    || cache
+                        .get(&projected[index].module_path)
+                        .is_some_and(&current)
+            })
+        };
+        if !settled {
+            let mut question: Vec<(PathBuf, crate::MappedEmit)> = in_closure
+                .iter()
+                .map(|&index| {
+                    (
+                        projected[index].module_path.clone(),
+                        projected[index].emit.clone(),
+                    )
+                })
+                .collect();
+            let mut others = support.modules.clone();
+            others.extend(
+                order
+                    .iter()
+                    .filter(|index| !in_closure.contains(index))
+                    .map(|&index| Module {
+                        path: projected[index].module_path.clone(),
+                        text: projected[index].emit.code.clone(),
+                    }),
+            );
+            others.sort_by(|left, right| left.path.cmp(&right.path));
+            backend.observe_generations();
+            crate::typescript::contextual::materialize(
+                backend,
+                config,
+                &self.root,
+                &mut question,
+                &others,
+                &support.sources,
+                roots,
+            )?;
+            // A disk change during the rounds leaves results that are not
+            // current for the generation this request read.
+            let Some(stable) = backend
+                .stable_generation()
+                .filter(|stable| Some(*stable) == generation)
+            else {
+                return Ok(None);
+            };
+            let read = Arc::new(texts.of(members.iter()));
+            let mut cache = self.scoped.borrow_mut();
+            for (path, emit) in question {
+                cache.insert(
+                    path,
+                    ScopedMaterialization {
+                        read: read.clone(),
+                        generation: stable,
+                        emit,
+                    },
+                );
+            }
+        }
+        let cache = self.scoped.borrow();
+        Ok(Some(
+            order
+                .iter()
+                .filter_map(|&index| {
+                    let entry = cache.get(&projected[index].module_path)?;
+                    // A module outside the closure is not read by questions
+                    // about the target; it keeps a materialization whose
+                    // served inputs are unchanged.
+                    let usable = if in_closure.contains(&index) {
+                        current(entry)
+                    } else {
+                        unchanged.of(entry)
+                    };
+                    usable.then(|| (index, entry.emit.clone()))
+                })
+                .collect(),
+        ))
     }
 
     /// The refined emits of `question`'s modules, in its order: the last
@@ -692,7 +939,8 @@ impl Project {
         let snapshot = self
             .update(&files)
             .map_err(|blocked| blocked.error.message.clone())?;
-        let checked = self.check_requested(&snapshot, &CheckRequest::default(), &inputs.named)?;
+        let checked =
+            self.check_requested(&snapshot, &CheckRequest::default(), &inputs.named, None)?;
         if let Some(error) = checked.backend_error
             && error.kind == super::BackendErrorKind::Internal
         {
@@ -715,7 +963,20 @@ impl Project {
     /// the request wants them. The session persists across calls; only what
     /// changed since the last ask travels.
     pub fn check(&self, snapshot: &Snapshot, request: &CheckRequest) -> Result<Checked, String> {
-        self.check_requested(snapshot, request, &[])
+        self.check_requested(snapshot, request, &[], None)
+    }
+
+    /// [`Project::check`] for one file, as a language service checks the
+    /// file an editor shows (TypeScript's `semanticCheck(file)` in
+    /// `server/session.ts`): TypeScript's diagnostics of that file alone,
+    /// whatever another file's syntax, and the tt diagnostics of that file.
+    pub fn check_file(
+        &self,
+        snapshot: &Snapshot,
+        request: &CheckRequest,
+        file: &Path,
+    ) -> Result<Checked, String> {
+        self.check_requested(snapshot, request, &[], Some(file))
     }
 
     /// Ask for editor diagnostics on the exact graph already served by the
@@ -747,6 +1008,7 @@ impl Project {
         snapshot: &Snapshot,
         request: &CheckRequest,
         requested: &[PathBuf],
+        scope: Option<&Path>,
     ) -> Result<Checked, String> {
         let semantics = self.file_semantics(snapshot);
         let (mut query, probes) = projection::assemble(
@@ -757,6 +1019,20 @@ impl Project {
         );
         query.emit_declarations = request.emit_declarations;
         query.roots = self.roots(snapshot.files(), requested);
+        query.diagnostics_scope = scope.map(|file| {
+            if is_host_source(file) {
+                file.to_path_buf()
+            } else {
+                snapshot
+                    .files()
+                    .iter()
+                    .find(|projected| projected.source_path == file)
+                    .map_or_else(
+                        || file.to_path_buf(),
+                        |projected| projected.module_path.clone(),
+                    )
+            }
+        });
         query
             .modules
             .extend(snapshot.host_overlays.iter().map(|(path, text)| {
@@ -809,15 +1085,19 @@ impl Project {
         } else {
             Default::default()
         };
+        let mut diagnostics = semantics::report(
+            snapshot,
+            &answers,
+            &probes,
+            request.tt_only,
+            &semantics,
+            &self.requested,
+        );
+        if let Some(file) = scope {
+            diagnostics.retain(|diagnostic| diagnostic.path == file);
+        }
         Ok(Checked {
-            diagnostics: semantics::report(
-                snapshot,
-                &answers,
-                &probes,
-                request.tt_only,
-                &semantics,
-                &self.requested,
-            ),
+            diagnostics,
             declarations,
             backend_error,
         })
@@ -863,6 +1143,128 @@ struct ContextualQuestion {
     support: Vec<crate::typescript::backend::Module>,
     sources: Vec<PathBuf>,
     roots: Vec<PathBuf>,
+}
+
+/// One module's materialization: the digest of every served file it read
+/// (shared by the modules materialized together), and the backend's disk
+/// generation, which covers the files it read from disk.
+#[derive(Debug)]
+struct ScopedMaterialization {
+    read: Arc<std::collections::BTreeMap<PathBuf, u64>>,
+    generation: (u64, u64),
+    emit: crate::MappedEmit,
+}
+
+/// Whether materializations still describe the served texts: the disk is as
+/// it was, and every served file one read is still served with the same
+/// text. A file no longer served (a closed overlay) is read from disk now,
+/// which its materialization did not read. Answers are kept per shared read
+/// set, so a request checks each set once.
+struct Unchanged<'t> {
+    texts: &'t ServedTexts,
+    generation: Option<(u64, u64)>,
+    known: RefCell<HashMap<*const std::collections::BTreeMap<PathBuf, u64>, bool>>,
+}
+
+impl<'t> Unchanged<'t> {
+    fn new(texts: &'t ServedTexts, generation: Option<(u64, u64)>) -> Unchanged<'t> {
+        Unchanged {
+            texts,
+            generation,
+            known: RefCell::new(HashMap::new()),
+        }
+    }
+
+    fn of(&self, entry: &ScopedMaterialization) -> bool {
+        if Some(entry.generation) != self.generation {
+            return false;
+        }
+        let texts = self.texts;
+        *self
+            .known
+            .borrow_mut()
+            .entry(Arc::as_ptr(&entry.read))
+            .or_insert_with(|| {
+                entry
+                    .read
+                    .iter()
+                    .all(|(path, digest)| texts.0.get(path) == Some(digest))
+            })
+    }
+}
+
+/// A file's reference closure, sorted, and what it was computed from.
+#[derive(Debug)]
+struct KnownClosure {
+    question: ClosureQuestion,
+    members: Arc<Vec<PathBuf>>,
+}
+
+/// What a reference closure was computed from: the served texts, the
+/// checker's sources and roots, and the disk generation.
+#[derive(Debug, PartialEq, Eq)]
+struct ClosureQuestion {
+    texts: u64,
+    generation: Option<(u64, u64)>,
+}
+
+impl ClosureQuestion {
+    fn new(
+        served: &[crate::typescript::backend::Module],
+        sources: &[PathBuf],
+        roots: &[PathBuf],
+        generation: Option<(u64, u64)>,
+    ) -> ClosureQuestion {
+        use std::hash::{Hash, Hasher};
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        for module in served {
+            module.path.hash(&mut hasher);
+            module.text.hash(&mut hasher);
+        }
+        sources.hash(&mut hasher);
+        roots.hash(&mut hasher);
+        ClosureQuestion {
+            texts: hasher.finish(),
+            generation,
+        }
+    }
+}
+
+/// The digest of every text the project serves the checker: a lowered
+/// module's text before materialization and a support module's text.
+struct ServedTexts(std::collections::BTreeMap<PathBuf, u64>);
+
+impl ServedTexts {
+    fn new(
+        projected: &[Arc<ProjectedDocument>],
+        support: &[crate::typescript::backend::Module],
+    ) -> ServedTexts {
+        use std::hash::{Hash, Hasher};
+        let digest = |text: &str| {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            text.hash(&mut hasher);
+            hasher.finish()
+        };
+        let mut texts = std::collections::BTreeMap::new();
+        for module in support {
+            texts.insert(module.path.clone(), digest(&module.text));
+        }
+        for doc in projected {
+            texts.insert(doc.module_path.clone(), digest(&doc.emit.code));
+        }
+        ServedTexts(texts)
+    }
+
+    /// The digests of `files` that the project serves.
+    fn of<'p>(
+        &self,
+        files: impl IntoIterator<Item = &'p PathBuf>,
+    ) -> std::collections::BTreeMap<PathBuf, u64> {
+        files
+            .into_iter()
+            .filter_map(|file| self.0.get(file).map(|digest| (file.clone(), *digest)))
+            .collect()
+    }
 }
 
 /// One materialization, kept while its question and the host's disk

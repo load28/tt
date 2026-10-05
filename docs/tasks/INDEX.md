@@ -796,6 +796,8 @@
 
 | TASK-762 | Audit structural editor recovery for regressions | In progress | 2026-10-05 | — | [TASK-762](./TASK-762-editor-recovery-regression-audit.md) |
 
+| TASK-763 | Validate editor buffers per file, lazily and cancellably | In progress | 2026-10-05 | — | [TASK-763](./TASK-763-editor-validation-scheduling.md) |
+
 ## Next task number
 
-**TASK-763**
+**TASK-764**

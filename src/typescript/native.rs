@@ -388,6 +388,8 @@ fn job_json(query: &Query) -> serde_json::Value {
             .collect::<Vec<_>>(),
         "contextualOnly": query.contextual_only,
         "editorDiagnostics": query.editor_diagnostics,
+        "diagnosticsScope": query.diagnostics_scope,
+        "referenceClosure": query.reference_closure,
         "inferJoinTypes": query.infer_join_types,
         "emitDeclarations": query.emit_declarations,
         "unparsedDocuments": query.unparsed_documents,
@@ -436,6 +438,21 @@ fn parse_answers(stdout: &str, project: &Path) -> Result<Answers, Failure> {
             .collect()
     };
     answers.dependencies = paths("dependencies");
+    if value["referenceClosure"].is_object() {
+        let closure = &value["referenceClosure"];
+        let list = |key: &str| -> Vec<PathBuf> {
+            closure[key]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|path| path.as_str().map(PathBuf::from))
+                .collect()
+        };
+        answers.reference_closure = Some(super::backend::ReferenceClosure {
+            files: list("files"),
+            global: list("global"),
+        });
+    }
     answers.directories = paths("directories");
     answers.project_modules = Some(
         project_modules
@@ -688,6 +705,70 @@ const value = consume(match (flag) {
             answer.diagnostics,
             emit.code
         );
+    }
+
+    /// TypeScript's referenced-file closure: a module's imports, followed
+    /// transitively, and every file affecting the global scope, declaration
+    /// files included, with what those files reference.
+    #[test]
+    fn a_reference_closure_follows_imports_and_global_declarations() {
+        let workspace = crate::test_workspace::Workspace::in_repo("reference-closure");
+        let root = workspace.path();
+        for (name, text) in [
+            (
+                "tsconfig.json",
+                r#"{"compilerOptions":{"strict":true,"module":"esnext","moduleResolution":"bundler","noEmit":true}}"#,
+            ),
+            (
+                "globals.d.ts",
+                "type Shared = typeof import(\"./named\").value;\n",
+            ),
+            ("named.ts", "export const value = 1;\n"),
+            ("leaf.ts", "export const leaf = 1;\n"),
+            ("middle.ts", "export { leaf } from \"./leaf\";\n"),
+            (
+                "target.ts",
+                "import { leaf } from \"./middle\";\nexport const use: Shared = leaf;\n",
+            ),
+            ("unrelated.ts", "export const other = 2;\n"),
+        ] {
+            std::fs::write(root.join(name), text).unwrap();
+        }
+        let backend = NativeBackend::new(None, Path::new(env!("CARGO_MANIFEST_DIR")))
+            .expect("pinned TypeScript toolchain");
+        let config = root.join("tsconfig.json");
+        let answer = backend
+            .ask(
+                Some(&config),
+                root,
+                &Query {
+                    contextual_only: true,
+                    reference_closure: Some(root.join("target.ts")),
+                    ..Query::default()
+                },
+            )
+            .unwrap();
+        let closure = answer.reference_closure.expect("a closure");
+        let names = |paths: &[PathBuf]| {
+            let mut names: Vec<String> = paths
+                .iter()
+                .filter(|path| path.starts_with(root))
+                .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+                .collect();
+            names.sort();
+            names
+        };
+        assert_eq!(
+            names(&closure.files),
+            [
+                "globals.d.ts",
+                "leaf.ts",
+                "middle.ts",
+                "named.ts",
+                "target.ts"
+            ]
+        );
+        assert_eq!(names(&closure.global), ["globals.d.ts"]);
     }
 
     #[test]

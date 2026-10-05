@@ -534,6 +534,8 @@ async function main() {
     return {
       ...job,
       editorDiagnostics: job.editorDiagnostics ? name(job.editorDiagnostics) : null,
+      diagnosticsScope: job.diagnosticsScope ? name(job.diagnosticsScope) : null,
+      referenceClosure: job.referenceClosure ? name(job.referenceClosure) : null,
       literalChecks: (job.literalChecks ?? []).map(module),
       tagChecks: (job.tagChecks ?? []).map(module),
       symbolChecks: (job.symbolChecks ?? []).map(module),
@@ -761,6 +763,22 @@ async function main() {
       for (const member of group.members) names.set(group.whole ? moduleName(member) : member, member);
     }
     job = addressed(job, (module) => names.get(module) ?? served(module));
+
+    // The files a module's types can depend on, by TypeScript's own rules
+    // (`builderState.ts`): every source file a module reference's symbol is
+    // declared as, every triple-slash reference, followed transitively, from
+    // the roots and from every file that affects the global scope. An
+    // ambient module's declarations are in files that affect the global
+    // scope, so those files are roots already.
+    if (job.referenceClosure) {
+      const identity = api.getCanonicalFileName(job.referenceClosure);
+      const owner = groups.find(({ members }) => [...members].some((member) => api.getCanonicalFileName(member) === identity)) ?? groups[0];
+      const closure = referenceClosure(owner.project, job.referenceClosure, (name) => api.getCanonicalFileName(name));
+      out.referenceClosure = { files: closure.files.map(moduleName), global: closure.global.map(moduleName) };
+      out.dependencies = [...dependencies.keys()];
+      out.directories = [...listings.keys()];
+      return engineAnswer(out);
+    }
 
     // The native API retains virtual offsets, category, tags and related
     // places. LSP content-map conversion irreversibly merges generated spans;
@@ -1025,7 +1043,7 @@ async function main() {
     // either is this run's to report. Which file it lands in decides how it
     // is positioned, and that is ttc's half. Another project answers only
     // for the requested modules it is the default project of.
-    const answer = ({ project, members, whole }) => {
+    const answer = ({ project, members, whole, file = false }) => {
       const checker = project.checker;
       const program = project.program;
       const scope = whole ? undefined : [...members];
@@ -1059,7 +1077,10 @@ async function main() {
       const quiet = !stopped && specifiers.length === 0 && ![...semanticStage, ...lateStage].some(reportable);
       const declares = compilerOptions.declaration === true || compilerOptions.composite === true;
       const deferred = compilerOptions.noEmit === true || compilerOptions.noEmitOnError === true;
-      const declarationStage = !listFilesOnly && declares && (quiet || !deferred)
+      // One file is checked as a language service checks it: its
+      // declaration diagnostics with its semantic ones, whenever the options
+      // declare (`services.ts` `getSemanticDiagnostics`).
+      const declarationStage = !listFilesOnly && declares && (file ? checked : quiet || !deferred)
         ? program.getDeclarationDiagnostics(scope)
         : [];
       const semantic = unique([...semanticStage, ...declarationStage]);
@@ -1262,7 +1283,20 @@ async function main() {
         });
       });
     };
-    for (const group of groups) answer(group);
+    if (job.diagnosticsScope) {
+      // TypeScript's `semanticCheck(file)` (`server/session.ts`): the
+      // diagnostics of the one file an editor shows, decided by that file's
+      // own syntax, never stopped by another file's.
+      const identity = api.getCanonicalFileName(job.diagnosticsScope);
+      for (const group of groups) {
+        const target = [...group.members].find((member) => api.getCanonicalFileName(member) === identity);
+        if (target === undefined) continue;
+        answer({ project: group.project, members: new Set([target]), whole: false, file: true });
+        break;
+      }
+    } else {
+      for (const group of groups) answer(group);
+    }
     // Declaration emit, in memory. The compiler writes the `.d.ts` for a
     // lowered module exactly as it would for a hand-written one, so ttc
     // never generates TypeScript declaration syntax itself.
@@ -1284,6 +1318,57 @@ async function main() {
     out.directories = [...listings.keys()];
     return engineAnswer(out);
   }
+}
+
+/**
+ * `root` and the files its types can depend on: TypeScript's
+ * `BuilderState.getAllDependencies` over `getReferencedFiles`, with every
+ * file that affects the global scope as a further root (such a file is a
+ * dependency of every file). A file affects the global scope
+ * (`isFileAffectingGlobalScope`) when it is not a module, declaration files
+ * included, or, conservatively, when it augments any module. A type
+ * reference directive's target is not followed: the API does not expose its
+ * resolution, and a local one that declares globals is a root as such.
+ */
+function referenceClosure(project, root, canonical) {
+  const program = project.program;
+  const checker = project.checker;
+  const local = (name) => {
+    const metadata = typeof program.getSourceFileMetadata === "function" ? program.getSourceFileMetadata(name) : undefined;
+    return !(metadata && (metadata.isDefaultLibrary || metadata.isFromExternalLibrary));
+  };
+  const global = [];
+  for (const name of program.getSourceFileNames()) {
+    if (!local(name) || name.endsWith(".json")) continue;
+    const sourceFile = program.getSourceFile(name);
+    if (sourceFile && (!sourceFile.externalModuleIndicator || sourceFile.moduleAugmentations.length > 0)) {
+      global.push(sourceFile.fileName);
+    }
+  }
+  const seen = new Set();
+  const files = [];
+  const queue = [root, ...global];
+  while (queue.length > 0) {
+    const name = queue.pop();
+    const key = canonical(name);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const sourceFile = program.getSourceFile(name);
+    if (!sourceFile) continue;
+    files.push(sourceFile.fileName);
+    if (!local(sourceFile.fileName)) continue;
+    const literals = [...sourceFile.imports, ...sourceFile.moduleAugmentations];
+    const symbols = literals.length > 0 ? checker.getSymbolAtLocation(literals) : [];
+    for (const symbol of symbols) {
+      for (const declaration of symbol?.declarations ?? []) {
+        if (declaration.path) queue.push(String(declaration.path));
+      }
+    }
+    for (const reference of sourceFile.referencedFiles) {
+      queue.push(path.resolve(path.dirname(sourceFile.fileName), reference.fileName));
+    }
+  }
+  return { files, global };
 }
 
 /**

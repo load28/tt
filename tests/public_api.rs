@@ -237,6 +237,10 @@ fn examples(path: &str) -> Vec<(&'static str, Value)> {
             json!({ "path": path, "text": MAIN, "includeTypes": true }),
         ),
         (
+            "typedCheck",
+            json!({ "path": path, "text": MAIN, "includeTypes": true, "scope": "file", "supersedable": true }),
+        ),
+        (
             "print",
             json!({ "path": path, "sourceMap": "inline", "rewriteImports": "ts", "banner": false, "verify": true }),
         ),

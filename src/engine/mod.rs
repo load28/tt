@@ -346,3 +346,6 @@ fn identity_of(collected: &[PathBuf], options: &ProjectOptions) -> (Option<PathB
     };
     (tsconfig, root)
 }
+
+#[cfg(test)]
+mod scoped_tests;

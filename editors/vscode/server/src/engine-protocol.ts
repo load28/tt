@@ -149,7 +149,9 @@ export interface EngineSemanticToken {
 
 /** How a request ended: an engine result, an engine error (the session is
  * fine, the request failed), or null — the server itself is unavailable. */
-export type EngineAnswer = { result: unknown } | { error: string } | null;
+/** `superseded`: a document change arrived behind a request marked
+ * `supersedable`, so the server did not compute its stale answer. */
+export type EngineAnswer = { result: unknown } | { error: string } | { superseded: true } | null;
 
 export interface EngineDocumentSymbol {
   name: string;

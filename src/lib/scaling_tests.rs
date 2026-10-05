@@ -355,7 +355,11 @@ fn project_requests_materialize_once_per_state_of_their_inputs() {
         }
     });
     assert_eq!(asks(&repeated), 0, "unchanged hovers materialize again");
-    let mut emits = Vec::new();
+    // A hover settles the hovered file's reference closure. The first
+    // whole-project request settles the modules outside it; asking again
+    // reads the project's materialization.
+    let mut emits = project_emits(&mut project);
+    assert_eq!(emits, fresh(&documents));
     let unchanged = measure(|| emits = project_emits(&mut project));
     assert_eq!(asks(&unchanged), 0);
     assert_eq!(emits, fresh(&documents));
@@ -394,6 +398,40 @@ fn project_requests_materialize_once_per_state_of_their_inputs() {
     assert_eq!(emits, fresh(&documents));
     let settled = measure(|| hover(&mut project, 16));
     assert_eq!(asks(&settled), 0);
+}
+
+/// A materialization that read an unsaved host buffer is stale once the
+/// buffer is closed: the file is read from disk again.
+#[test]
+fn a_file_question_after_closing_an_unsaved_dependency_reads_the_disk() {
+    if !toolchain_present() {
+        return;
+    }
+    let (_workspace, root) = contextual_files(
+        crate::test_workspace::Workspace::in_repo_with_subdir("contextual-closed-overlay", "src"),
+        1,
+    );
+    let target = root.join("src/f0.tt");
+    let dep = root.join("src/dep.ts");
+    let engine = crate::engine::Engine::new(None);
+    let mut project = open_contextual_project(&engine, &root, &[]);
+    let files = project.initial_files();
+    let scoped = |project: &mut crate::engine::Project| {
+        let snapshot = project.update_scoped(&files, Some(&target)).unwrap();
+        snapshot
+            .files()
+            .iter()
+            .find(|file| file.source_path == target)
+            .map(|file| file.emit.code.clone())
+            .unwrap()
+    };
+    let disk = scoped(&mut project);
+    assert!(disk.contains("string"), "{disk}");
+    project.open_document(dep.clone(), "export const d: boolean = true;\n".to_owned());
+    let overlay = scoped(&mut project);
+    assert!(overlay.contains("boolean"), "{overlay}");
+    project.close_document(&dep);
+    assert_eq!(scoped(&mut project), disk);
 }
 
 fn unbalanced_openers(kind: crate::SourceKind, source: &str) {

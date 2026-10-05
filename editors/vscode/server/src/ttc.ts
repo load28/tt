@@ -411,6 +411,42 @@ export async function runTypedCheck(
   fsPath: string,
   includeTypes = false,
 ): Promise<ValCheckResult> {
+  return typedCheck(compiler, text, fsPath, includeTypes, false);
+}
+
+/** [`runTypedCheck`] for one validation generation: `superseded` when a
+ * document change is already queued behind the request in the engine. */
+export function runSupersedableTypedCheck(
+  compiler: string,
+  text: string,
+  fsPath: string,
+  includeTypes: boolean,
+): Promise<ValCheckResult | { kind: "superseded" }> {
+  return typedCheck(compiler, text, fsPath, includeTypes, true);
+}
+
+/** Only a request marked `supersedable` can be answered `superseded`. */
+function typedCheck(
+  compiler: string,
+  text: string,
+  fsPath: string,
+  includeTypes: boolean,
+  supersedable: false,
+): Promise<ValCheckResult>;
+function typedCheck(
+  compiler: string,
+  text: string,
+  fsPath: string,
+  includeTypes: boolean,
+  supersedable: true,
+): Promise<ValCheckResult | { kind: "superseded" }>;
+async function typedCheck(
+  compiler: string,
+  text: string,
+  fsPath: string,
+  includeTypes: boolean,
+  supersedable: boolean,
+): Promise<ValCheckResult | { kind: "superseded" }> {
   // The file URI is the overlay's project identity; the leaf does not have
   // to be on disk yet. The engine canonicalizes its existing parent and
   // includes the overlay as a root of the configured program.
@@ -421,9 +457,12 @@ export async function runTypedCheck(
   const answer = await engineRequest(
     compiler,
     "typedCheck",
-    { path: fsPath, text, includeTypes },
+    supersedable
+      ? { path: fsPath, text, includeTypes, supersedable, scope: "file" }
+      : { path: fsPath, text, includeTypes },
     TYPED_CHECK_TIMEOUT_MS,
   );
+  if (answer && "superseded" in answer) return { kind: "superseded" };
   if (answer && "error" in answer) {
     // The session ran and the request failed (no toolchain, a backend
     // crash) — what the one-shot reports as "could not run".
