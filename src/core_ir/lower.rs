@@ -40,14 +40,16 @@ pub(crate) fn lower_semantic(
             _ => None,
         })
         .collect();
-    let file = CoreFile {
+    let mut file = CoreFile {
         root: semantic.hir.root,
         bodies,
         exprs,
         sequence_nodes,
         temporary_count: u32::try_from(cx.temp_ordinals.len())
             .unwrap_or_else(|_| crate::ice::bug!("Core IR temporary overflow")),
+        statement_forms: Vec::new(),
     };
+    file.statement_forms = file.statement_forms();
     validate(&file, semantic);
     file
 }
@@ -148,6 +150,14 @@ impl Lowering<'_> {
                                                     name: field.name.clone(),
                                                     optional: field.optional,
                                                     ty_span: field.ty_span,
+                                                    imports: field
+                                                        .imports
+                                                        .iter()
+                                                        .map(|&(specifier, kind)| Import {
+                                                            specifier,
+                                                            kind,
+                                                        })
+                                                        .collect(),
                                                     comments: field.comments.clone(),
                                                 }
                                             })

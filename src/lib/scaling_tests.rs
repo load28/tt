@@ -472,3 +472,33 @@ fn every_request_does_linear_work_in_unclosed_type_shaped_openers() {
         }
     }
 }
+
+fn nested_templates(depth: usize) -> String {
+    format!(
+        "declare const x: string;\nexport const y = {}x{};\n",
+        "`${".repeat(depth),
+        "}`".repeat(depth),
+    )
+}
+
+#[test]
+fn every_request_does_linear_work_in_the_nesting_depth_of_templates() {
+    let small = measure(|| every_request(&nested_templates(100)));
+    let large = measure(|| every_request(&nested_templates(200)));
+    assert_linear(&small, &large);
+    assert!(large["statement form decisions"] > 0);
+}
+
+#[test]
+fn a_nested_template_with_a_host_candidate_collects_its_facts_once_per_level() {
+    let source = |depth: usize| {
+        format!(
+            "declare const match: any;\nexport const y = match as {{ f: () => void }};\nexport const z = {}match{};\n",
+            "`${".repeat(depth),
+            "}`".repeat(depth),
+        )
+    };
+    let small = measure(|| crate::parser::parse(&source(100)));
+    let large = measure(|| crate::parser::parse(&source(200)));
+    assert_linear(&small, &large);
+}

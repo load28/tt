@@ -339,6 +339,7 @@ pub struct FieldData {
     pub ty_text: String,
     /// Where [`FieldData::ty_text`] is written in the source.
     pub ty_span: Span,
+    pub(crate) imports: Vec<(NodeId, ImportKind)>,
     pub(crate) comments: crate::ast::Comments,
 }
 

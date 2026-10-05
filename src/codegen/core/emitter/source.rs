@@ -792,6 +792,7 @@ impl<'a> Emitter<'a> {
                             adt,
                             self.source,
                             |node| self.span(node),
+                            |specifier, out| self.emit_import(specifier, out),
                             self.ambient_items.contains(&adt.node),
                             self.source_kind,
                         ),

@@ -85,7 +85,46 @@ pub(super) fn shape(src: &str, tokens: &[Token], idx: usize) -> Option<ValShape>
         match tokens[before].kind {
             TokenKind::Ident if is_param_modifier(word(&tokens[before])) => k = before,
             TokenKind::Punct(b'(' | b',') => return Some(ValShape::Parameter),
+            _ => k = decorator_start(tokens, before)?,
+        }
+    }
+    None
+}
+
+fn decorator_start(tokens: &[Token], last: usize) -> Option<usize> {
+    let mut k = last;
+    if matches!(tokens[k].kind, TokenKind::Punct(b')')) {
+        k = open_paren_of(tokens, k)?;
+        if k > 0 && matches!(tokens[k - 1].kind, TokenKind::Punct(b'@')) {
+            return Some(k - 1);
+        }
+        k = k.checked_sub(1)?;
+    }
+    loop {
+        if !matches!(tokens[k].kind, TokenKind::Ident) {
+            return None;
+        }
+        let before = k.checked_sub(1)?;
+        match tokens[before].kind {
+            TokenKind::Punct(b'@') => return Some(before),
+            TokenKind::Punct(b'.') => k = before.checked_sub(1)?,
             _ => return None,
+        }
+    }
+}
+
+fn open_paren_of(tokens: &[Token], close: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for k in (0..=close).rev() {
+        match tokens[k].kind {
+            TokenKind::Punct(b')' | b']' | b'}') => depth += 1,
+            TokenKind::Punct(b'(' | b'[' | b'{') => {
+                depth -= 1;
+                if depth == 0 {
+                    return matches!(tokens[k].kind, TokenKind::Punct(b'(')).then_some(k);
+                }
+            }
+            _ => {}
         }
     }
     None

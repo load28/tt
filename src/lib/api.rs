@@ -311,7 +311,10 @@ pub(crate) fn scan_module_of(source: &str, program: &ast::Program) -> ModuleScan
             // resolve or collect declarations from.
             ast::TtSpecifier::Std(_) => scan.imports_std = true,
             ast::TtSpecifier::Relative(_) => scan.imports.push(TtImport {
-                specifier: source[decl.spec.start + 1..decl.spec.end - 1].to_string(),
+                specifier: crate::parser::decode_string(&source[decl.spec.start..decl.spec.end])
+                    .unwrap_or_else(|| {
+                        crate::ice::bug!("a lifted import specifier is a complete string")
+                    }),
                 names: match &decl.names {
                     ast::TtImportNames::Namespace(ns) => TtImportNames::Namespace(ns.clone()),
                     ast::TtImportNames::Named(entries) => TtImportNames::Named(entries.clone()),

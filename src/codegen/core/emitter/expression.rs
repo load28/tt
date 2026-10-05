@@ -443,8 +443,33 @@ impl<'a> Emitter<'a> {
         } else {
             (extensions.tt, 4)
         };
-        out.push_src(&specifier[..specifier.len() - suffix_len], at);
-        out.push_lit(format!(".{extension}{}", &specifier[specifier.len() - 1..]));
+        let quote = &specifier[specifier.len() - 1..];
+        let written_suffix = if kind.is_tsx() { ".ttx" } else { ".tt" };
+        if specifier[..specifier.len() - 1].ends_with(written_suffix) {
+            out.push_src(&specifier[..specifier.len() - suffix_len], at);
+            out.push_lit(format!(".{extension}{quote}"));
+            return;
+        }
+        let value = crate::parser::decode_string(specifier)
+            .unwrap_or_else(|| crate::ice::bug!("a lifted import specifier is a complete string"));
+        let mut written = String::from(quote);
+        for c in value[..value.len() - suffix_len + 1].chars() {
+            match c {
+                '\\' => written.push_str("\\\\"),
+                '\n' => written.push_str("\\n"),
+                '\r' => written.push_str("\\r"),
+                '\u{2028}' => written.push_str("\\u2028"),
+                '\u{2029}' => written.push_str("\\u2029"),
+                '$' if quote == "`" => written.push_str("\\$"),
+                c if c.to_string() == quote => {
+                    written.push('\\');
+                    written.push(c);
+                }
+                c => written.push(c),
+            }
+        }
+        written.push_str(&format!(".{extension}{quote}"));
+        out.push_lit(written);
     }
 
     pub(super) fn emit_statement_decision(

@@ -286,6 +286,7 @@ pub(super) fn emit_adt<'a>(
     adt: &Adt,
     source: &'a str,
     span: impl Fn(NodeId) -> hir::Span,
+    import: impl Fn(&Import, &mut Rope<'a>),
     ambient: bool,
     source_kind: crate::SourceKind,
 ) -> Rope<'a> {
@@ -302,10 +303,14 @@ pub(super) fn emit_adt<'a>(
     let ambient = ambient || adt.declared;
     let annotation = |field: &AdtField, out: &mut Rope<'a>| {
         out.push_lit(if field.optional { "?: " } else { ": " });
-        out.push_src(
-            &source[field.ty_span.start..field.ty_span.end],
-            field.ty_span.start,
-        );
+        let mut at = field.ty_span.start;
+        for specifier in &field.imports {
+            let written = span(specifier.specifier);
+            out.push_src(&source[at..written.start], at);
+            import(specifier, out);
+            at = written.end;
+        }
+        out.push_src(&source[at..field.ty_span.end], at);
     };
     let field_list = |fields: &[AdtField], separator: &str, out: &mut Rope<'a>| {
         for (index, field) in fields.iter().enumerate() {

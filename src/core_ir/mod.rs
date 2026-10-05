@@ -23,6 +23,7 @@ pub(crate) struct CoreFile {
     /// stores only their tt segments.
     pub sequence_nodes: std::collections::HashMap<BodyId, NodeId>,
     pub temporary_count: u32,
+    pub statement_forms: Vec<bool>,
 }
 
 impl CoreFile {
@@ -73,10 +74,27 @@ impl CoreFile {
     /// lowering (structuring a nested value under its parent's
     /// continuation) read it from here instead of each deciding it again.
     pub(crate) fn has_statement_form(&self, expr: ExprId) -> bool {
-        crate::stack::grow(|| self.has_statement_form_grown(expr))
+        self.statement_forms[expr.index()]
     }
 
-    fn has_statement_form_grown(&self, expr: ExprId) -> bool {
+    pub(crate) fn statement_forms(&self) -> Vec<bool> {
+        let mut known = vec![None; self.exprs.len()];
+        (0..self.exprs.len())
+            .map(|index| self.statement_form(ExprId::new(index), &mut known))
+            .collect()
+    }
+
+    fn statement_form(&self, expr: ExprId, known: &mut Vec<Option<bool>>) -> bool {
+        if let Some(form) = known[expr.index()] {
+            return form;
+        }
+        let form = crate::stack::grow(|| self.statement_form_grown(expr, known));
+        known[expr.index()] = Some(form);
+        form
+    }
+
+    fn statement_form_grown(&self, expr: ExprId, known: &mut Vec<Option<bool>>) -> bool {
+        crate::work::tick("statement form decisions");
         match &self.exprs[expr.index()] {
             // Every arm must be able to deliver a value to a continuation.
             Expr::Decision(decision) => decision
@@ -87,17 +105,17 @@ impl CoreFile {
             Expr::Propagate(_) => true,
             Expr::Sequence(body) => self
                 .body_tail_expr(*body)
-                .is_some_and(|inner| self.has_statement_form(inner)),
+                .is_some_and(|inner| self.statement_form(inner, known)),
             Expr::Apply(apply) => apply.head.is_some_and(|head| {
-                self.has_statement_form(head)
+                self.statement_form(head, known)
                     || apply
                         .steps
                         .iter()
-                        .any(|step| self.has_statement_form(step.value))
+                        .any(|step| self.statement_form(step.value, known))
             }),
             Expr::Template(template) => template.parts.iter().any(|part| match part {
                 TemplatePart::Raw(_) => false,
-                TemplatePart::Interpolation(expr) => self.has_statement_form(*expr),
+                TemplatePart::Interpolation(expr) => self.statement_form(*expr, known),
             }),
             Expr::Opaque(_) => false,
         }
@@ -322,6 +340,7 @@ pub(crate) struct AdtField {
     pub name: String,
     pub optional: bool,
     pub ty_span: hir::Span,
+    pub imports: Vec<Import>,
     pub comments: crate::ast::Comments,
 }
 

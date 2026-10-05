@@ -1,0 +1,37 @@
+=== d.tt ===
+declare function dec(...args: any[]): any;
+>dec : function dec(...args: any[]): any
+>args : (parameter) args: any[]
+export class D {
+>D : class D
+  constructor(@dec private val p: { b: number }) {
+>dec : function dec(...args: any[]): any
+>p : (property) D.p: {
+>       b: number;
+>   }
+>b : (property) b: number
+    p.b = 1;
+>p : (parameter) p: {
+>       b: number;
+>   }
+>b : (property) b: number
+  m(@dec() val q: { b: number }) {
+>m : (method) D.m(q: {
+>       b: number;
+>   }): number
+>dec : function dec(...args: any[]): any
+>q : (parameter) q: {
+>       b: number;
+>   }
+>b : (property) b: number
+    q.b = 2;
+>q : (parameter) q: {
+>       b: number;
+>   }
+>b : (property) b: number
+    return q.b;
+>q : (parameter) q: {
+>       b: number;
+>   }
+>b : (property) b: number
+

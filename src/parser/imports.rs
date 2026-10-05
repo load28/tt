@@ -276,7 +276,8 @@ fn tt_spec_span(cur: &Cursor, token: &Token) -> Option<(Span, TtSpecifier)> {
     if span.end < span.start + 2 || src[span.end - 1] != quote {
         return None;
     }
-    let spec = &src[span.start + 1..span.end - 1];
+    let value = super::literals::decode_string(&cur.parser.src[span.start..span.end])?;
+    let spec = value.as_bytes();
     if let Some(module) = crate::stdlib::StdModule::from_specifier(spec) {
         return Some((span, TtSpecifier::Std(module)));
     }

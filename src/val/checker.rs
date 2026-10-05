@@ -498,7 +498,7 @@ impl<'a> Checker<'a> {
             .flat_map(|(param, (start, end))| {
                 let val_at = param.val_at;
                 let mut names = Vec::new();
-                let mut k = start;
+                let mut k = after_decorators(tokens, start, end);
                 while k < end
                     && (modifier_of(self.modifiers, &tokens[k]).is_some()
                         || matches!(&tokens[k].kind, TokenKind::Ident

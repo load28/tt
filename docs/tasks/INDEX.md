@@ -798,6 +798,8 @@
 
 | TASK-763 | Validate editor buffers per file, lazily and cancellably | Complete | 2026-10-05 | 2026-10-05 | [TASK-763](./TASK-763-editor-validation-scheduling.md) |
 
+| TASK-765 | Keep valid TypeScript out of tt claims and rewrites | Complete | 2026-10-05 | 2026-10-05 | [TASK-765](./TASK-765-passthrough-claim-defects.md) |
+
 ## Next task number
 
-**TASK-764**
+**TASK-766**

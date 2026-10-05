@@ -690,9 +690,7 @@ impl Parser<'_> {
                         continue;
                     }
                     Claim::Malformed { error, recovery } => {
-                        if host_ambiguous {
-                            host_candidates.matches.push(recovery.span);
-                        }
+                        host_candidates.malformed_matches.push(recovery.span);
                         malformed.push(error);
                         recoveries.push(recovery);
                     }
@@ -883,6 +881,7 @@ impl Parser<'_> {
             expression_root,
             segments,
             host_candidates: (!host_candidates.matches.is_empty()
+                || !host_candidates.malformed_matches.is_empty()
                 || !host_candidates.vals.is_empty())
             .then(|| Box::new(host_candidates)),
             unclaimed: (!unclaimed.is_empty()).then(|| Box::new(UnclaimedTtCandidates(unclaimed))),

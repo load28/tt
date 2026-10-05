@@ -1,0 +1,11 @@
+//// [a.tt] 1 mapping(s)
+1:1 -> 1:1 len 52  "export const x = 1;\nexport interface X { n: numb"...
+
+//// [b.tt] 6 mapping(s)
+1:25 -> 2:21 len 23  "typeof import(\"./a.tt\")"
+1:25 -> 5:10 len 23  "typeof import(\"./a.tt\")"
+1:54 -> 7:3 len 1  "\n"
+2:33 -> 9:19 len 18  "import(\"./a.tt\").X"
+2:33 -> 11:19 len 18  "import(\"./a.tt\").X"
+2:54 -> 12:3 len 36  "\nexport const v: V = V.A({ x: 1 });\n"
+

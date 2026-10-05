@@ -1,0 +1,10 @@
+=== f.tt ===
+export const f = 1;
+>f : const f: 1
+
+=== g.tt ===
+export const h = import(`./\u{66}.tt`);
+>h : const h: Promise<typeof import("./f.tt")>
+export { f };
+>f : (alias) const f: 1
+

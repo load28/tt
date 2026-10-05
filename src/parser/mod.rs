@@ -61,6 +61,7 @@ pub(crate) use cursor::{dotted_at, find_close_at};
 pub(crate) use imports::local_export_specifiers;
 pub(crate) use keywords::is_reserved;
 use keywords::*;
+pub(crate) use literals::decode_string;
 #[cfg(test)]
 use parse::visit_programs;
 pub(crate) use parse::{

@@ -1,0 +1,6 @@
+// @filename: f.tt
+export const f = 1;
+// @filename: g.tt
+import { f } from "./f.\x74t";
+export const h = import(`./\u{66}.tt`);
+export { f };

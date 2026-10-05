@@ -831,7 +831,7 @@ fn parse_params(src: &str, tokens: &[Token], modifiers: &Modifiers, open: usize)
     list_entries(tokens, open)
         .into_iter()
         .map(|(start, end)| {
-            let mut k = start;
+            let mut k = after_decorators(tokens, start, end);
             let mut val_at = None;
             while k < end {
                 match &tokens[k].kind {
@@ -865,6 +865,29 @@ fn parse_params(src: &str, tokens: &[Token], modifiers: &Modifiers, open: usize)
             ParamSig { name, val_at }
         })
         .collect()
+}
+
+fn after_decorators(tokens: &[Token], start: usize, end: usize) -> usize {
+    let mut k = start;
+    while k < end && matches!(tokens[k].kind, TokenKind::Punct(b'@')) {
+        k += 1;
+        if k < end && matches!(tokens[k].kind, TokenKind::Punct(b'(')) {
+            k = find_close_at(tokens, k).map_or(end, |close| close + 1);
+            continue;
+        }
+        while k < end && matches!(tokens[k].kind, TokenKind::Ident) {
+            k += 1;
+            if k < end && matches!(tokens[k].kind, TokenKind::Punct(b'.')) {
+                k += 1;
+            } else {
+                break;
+            }
+        }
+        if k < end && matches!(tokens[k].kind, TokenKind::Punct(b'(')) {
+            k = find_close_at(tokens, k).map_or(end, |close| close + 1);
+        }
+    }
+    k.min(end)
 }
 
 /// Every name a binding target introduces, collected into `out`. Handles

@@ -181,6 +181,21 @@ impl Lower<'_> {
                             Span::new(field.name_off, field.name_off + field.name.len()),
                             AstOrigin::VariantField,
                         );
+                        let imports = field
+                            .imports
+                            .iter()
+                            .map(|decl| {
+                                (
+                                    self.node(Self::span(decl.spec), AstOrigin::Import),
+                                    match decl.kind {
+                                        ast::TtSpecifier::Relative(kind) => {
+                                            ImportKind::Relative(kind)
+                                        }
+                                        ast::TtSpecifier::Std(module) => ImportKind::Std(module),
+                                    },
+                                )
+                            })
+                            .collect();
                         self.hir.fields.alloc(FieldData {
                             node: field_node,
                             owner: variant,
@@ -188,6 +203,7 @@ impl Lower<'_> {
                             optional: field.optional,
                             ty_text: field.ty.clone(),
                             ty_span: Span::new(field.ty_off, field.ty_off + field.ty.len()),
+                            imports,
                             comments: field.comments.clone(),
                         })
                     })

@@ -10,12 +10,12 @@
 //! Parameter-shaped `val` modifiers use the same projections: the host AST
 //! says whether the binding after an erased `val` is a formal parameter.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use swc_common::{Span as SwcSpan, Spanned};
 use swc_ecma_ast::{
-    ArrowExpr, CatchClause, ClassMethod, FnDecl, FnExpr, GetterProp, MethodProp, Module, Param,
-    PrivateMethod, PropName, SetterProp, TsFnParam, TsParamProp,
+    ArrowExpr, CatchClause, ClassMethod, FnDecl, FnExpr, GetterProp, Ident, MethodProp, Module,
+    Param, PrivateMethod, PropName, SetterProp, TsFnParam, TsParamProp,
 };
 use swc_ecma_visit::{Visit, VisitWith};
 
@@ -27,7 +27,11 @@ pub(super) fn owned_match_names_in_mixed(
     program: &Program,
 ) -> Vec<Span> {
     let mut owned = Vec::new();
+    let mut probed = HashMap::new();
     super::parse::visit_programs(program, &mut |region| {
+        if !has_match_candidates(region, &mut probed) {
+            return;
+        }
         probe_region(
             src,
             source_kind,
@@ -39,6 +43,25 @@ pub(super) fn owned_match_names_in_mixed(
     owned.sort_by_key(|span| (span.start, span.end));
     owned.dedup();
     owned
+}
+
+fn has_match_candidates(program: &Program, known: &mut HashMap<*const Program, bool>) -> bool {
+    if let Some(&has) = known.get(&std::ptr::from_ref(program)) {
+        return has;
+    }
+    let has = crate::stack::grow(|| {
+        !program.host_match_candidates().is_empty()
+            || !program.host_malformed_match_candidates().is_empty()
+            || program.segments.iter().any(|segment| match segment {
+                Segment::Template(template) => template.chunks.iter().any(|chunk| match chunk {
+                    TemplateChunk::Interp(interp) => has_match_candidates(interp, known),
+                    TemplateChunk::Raw(_) => false,
+                }),
+                _ => false,
+            })
+    });
+    known.insert(std::ptr::from_ref(program), has);
+    has
 }
 
 /// The keyword offsets, sorted, of the parameter-shaped `val` candidates
@@ -115,7 +138,9 @@ fn parameter_starts(
     }
     let mut masks = Vec::new();
     let mut match_candidates = Vec::new();
-    collect_region_facts(program, &mut masks, &mut match_candidates);
+    let mut malformed = Vec::new();
+    collect_region_facts(program, &mut masks, &mut match_candidates, &mut malformed);
+    match_candidates.extend(malformed);
     let projection = projected_region(src, program.span, &masks, &match_candidates, &[]);
     for recovering in [false, true] {
         for &wrapper in wrappers {
@@ -180,7 +205,9 @@ fn probe_region(
 
     let mut masks = Vec::new();
     let mut candidates = Vec::new();
-    collect_region_facts(program, &mut masks, &mut candidates);
+    let mut malformed = Vec::new();
+    collect_region_facts(program, &mut masks, &mut candidates, &mut malformed);
+    candidates.extend(malformed.iter().copied());
     candidates.sort_by_key(|span| (span.start, span.end));
     candidates.dedup();
     if candidates.is_empty() {
@@ -188,31 +215,32 @@ fn probe_region(
     }
 
     for &wrapper in wrappers {
-        let mut restored = Vec::new();
+        let mut restored = malformed.clone();
+        let mut settled = Vec::new();
         for _ in 0..=candidates.len() {
             let projection = projected_region(src, program.span, &masks, &candidates, &restored);
             let parsed = match parse_wrapped(&projection, source_kind, program.span.start, wrapper)
             {
                 Ok(parsed) => parsed,
                 Err(error) => {
-                    let Some(next) = candidate_at_error(&candidates, &restored, error) else {
+                    let Some(next) = candidate_at_error(&candidates, &settled, error) else {
                         break;
                     };
-                    restored.push(next);
+                    toggle(next, &mut restored, &mut settled);
                     continue;
                 }
             };
             // Recoverable diagnostics outside an unresolved candidate describe
             // context omitted by this recursive projection, not ownership. A
-            // candidate is restored only when its own bytes caused an error;
-            // the final name still has to be owned by a host AST declaration.
+            // candidate changes reading only when its own bytes caused an
+            // error; the final name still has to be owned by the host AST.
             let next = parsed
                 .errors
                 .iter()
-                .filter_map(|error| candidate_at_error(&candidates, &restored, *error))
+                .filter_map(|error| candidate_at_error(&candidates, &settled, *error))
                 .min_by_key(|candidate| candidate.end.saturating_sub(candidate.start));
             if let Some(next) = next {
-                restored.push(next);
+                toggle(next, &mut restored, &mut settled);
                 continue;
             }
             let mut collector = MatchNameCollector {
@@ -226,28 +254,46 @@ fn probe_region(
     }
 }
 
-fn candidate_at_error(candidates: &[Span], restored: &[Span], error: usize) -> Option<Span> {
+fn toggle(next: Span, restored: &mut Vec<Span>, settled: &mut Vec<Span>) {
+    settled.push(next);
+    if restored.contains(&next) {
+        restored.retain(|span| *span != next);
+    } else {
+        restored.push(next);
+    }
+}
+
+fn candidate_at_error(candidates: &[Span], settled: &[Span], error: usize) -> Option<Span> {
     candidates
         .iter()
-        .filter(|candidate| !restored.contains(candidate))
+        .filter(|candidate| !settled.contains(candidate))
         .filter(|candidate| candidate.start <= error && error <= candidate.end)
         .min_by_key(|candidate| candidate.end.saturating_sub(candidate.start))
         .copied()
 }
 
-fn collect_region_facts(program: &Program, masks: &mut Vec<Mask>, candidates: &mut Vec<Span>) {
-    crate::stack::grow(|| collect_region_facts_grown(program, masks, candidates));
+fn collect_region_facts(
+    program: &Program,
+    masks: &mut Vec<Mask>,
+    candidates: &mut Vec<Span>,
+    malformed: &mut Vec<Span>,
+) {
+    crate::stack::grow(|| collect_region_facts_grown(program, masks, candidates, malformed));
 }
 
 fn collect_region_facts_grown(
     program: &Program,
     masks: &mut Vec<Mask>,
     candidates: &mut Vec<Span>,
+    malformed: &mut Vec<Span>,
 ) {
+    crate::work::tick("host region facts");
     candidates.extend(program.host_match_candidates().iter().copied());
+    malformed.extend(program.host_malformed_match_candidates().iter().copied());
     let region_candidates: HashSet<(usize, usize)> = program
         .host_match_candidates()
         .iter()
+        .chain(program.host_malformed_match_candidates())
         .map(|span| (span.start, span.end))
         .collect();
     for segment in &program.segments {
@@ -304,7 +350,7 @@ fn collect_region_facts_grown(
             Segment::Template(template) => {
                 for chunk in &template.chunks {
                     if let TemplateChunk::Interp(interp) = chunk {
-                        collect_region_facts(interp, masks, candidates);
+                        collect_region_facts(interp, masks, candidates, malformed);
                     }
                 }
             }
@@ -584,6 +630,10 @@ impl MatchNameCollector {
 }
 
 impl Visit for MatchNameCollector {
+    fn visit_ident(&mut self, node: &Ident) {
+        self.insert(node.sym.as_ref(), node.span);
+    }
+
     fn visit_fn_decl(&mut self, node: &FnDecl) {
         self.insert(node.ident.sym.as_ref(), node.ident.span);
         node.visit_children_with(self);
