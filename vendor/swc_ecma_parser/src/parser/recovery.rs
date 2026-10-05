@@ -285,11 +285,16 @@ impl<I: Tokens> Parser<I> {
         true
     }
 
+    /// Replaces the failed expression from `start` with an invalid node. The
+    /// node is all that remains of it, so what its productions recorded
+    /// since `checkpoint` is discarded with them.
     pub(super) fn recover_expression(
         &mut self,
         start: BytePos,
+        checkpoint: RecoveryCheckpoint,
         error: Error,
     ) -> PResult<Box<Expr>> {
+        self.recovery.rollback(checkpoint);
         // A failed regexp scan leaves the lexer in regexp-rescan mode. The
         // scanner has consumed its lexical region; continuing must scan the
         // next token, not retry the same unterminated regexp forever.

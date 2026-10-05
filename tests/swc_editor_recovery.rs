@@ -366,3 +366,20 @@ fn a_skipped_statement_keeps_no_recovery_of_its_parts() {
         "{recovery:?}"
     );
 }
+
+#[test]
+fn a_skipped_expression_keeps_no_recovery_of_its_parts() {
+    // `(` before a statement on the next line fails as an operand and is
+    // skipped; the missing expression its production recorded inside it
+    // belongs to no node that remains.
+    let (_, recovery, errors) = parse_within(
+        "function f() {\n  { return(\n  return }\n}\nconst later = 1;",
+        false,
+        10,
+    );
+    assert!(errors > 0);
+    assert!(
+        recovery.iter().all(|record| record.replacement.is_none()),
+        "{recovery:?}"
+    );
+}

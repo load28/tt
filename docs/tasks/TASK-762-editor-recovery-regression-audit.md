@@ -57,6 +57,9 @@ until no further defect is found.
 - 2026-10-05: A mutation pass with another seed (7) found Issues 22-23.
 - 2026-10-05: A review of the statement-start boundary found Issues 24-26;
   a mutation pass with seed 11 found Issue 27.
+- 2026-10-05: Mutation passes with seeds 13 and 17 found nothing; seed 19
+  found Issue 28. The LSP typing simulation rerun after Issue 27 flagged
+  six fewer scenarios than before and no new one.
 - 2026-10-05: The LSP typing simulation (1,020 published diagnostic sets
   over 10 tt/ttx files, 22 statements retyped character by character and 35
   closing delimiters deleted, TypeScript twins through `tsc --lsp`) found
@@ -360,6 +363,16 @@ until no further defect is found.
 - **Resolution**: The JSX name scan takes the current token, rescans from its
   end, and drops the peeked token, which is read again after the name.
 
+### Issue 28: Repairs inside a skipped expression were applied
+
+- **Symptom**: `match(("")){1=>{return(` followed by `return}}` on the next
+  line raised `SourceEmittedTwice` in the editor projection.
+- **Cause**: Issue 17's rule (a skipped statement discards the records of
+  its parts) did not reach expressions: when an operand failed and was
+  skipped, the missing expression recorded inside it kept its replacement.
+- **Resolution**: A failed expression replaced by an invalid node discards
+  the records made since it began, as a skipped statement does.
+
 ## Regression test (fails before the fix)
 
 - **Path**: `editors/vscode/server/src/test/server.test.ts`, "a repaired
@@ -433,6 +446,13 @@ until no further defect is found.
   differed (the class closed by `)};`; a second `)`), and the mutation pass
   with seed 11 reported the lexer panic. The template case pins the
   remaining local difference.
+
+- **Path**: `tests/swc_editor_recovery.rs`,
+  `a_skipped_expression_keeps_no_recovery_of_its_parts`;
+  `fuzz/regressions/compile_any_bytes/43df64190a71b164.tt`.
+- **Observed failure**: Without Issue 28's change the parser test found a
+  `MissingExpression` record with the replacement `(undefined as any)`
+  inside the skipped `(`; the mutation pass with seed 19 reported the crash.
 
 ## Verification
 
