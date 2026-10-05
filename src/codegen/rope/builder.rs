@@ -569,6 +569,7 @@ impl<'a> Rope<'a> {
         let mut target = TargetFile::from_rope(self, source.len());
         target.source = Some(source);
         target.separate_statements(boundaries, source_kind);
+        target.separate_tokens();
         if let Err(error) = target.validate() {
             error.into_ice().raise();
         }

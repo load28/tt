@@ -473,10 +473,11 @@ fn collect(expr: &MatchExpr, src: &str, out: &mut Probes) {
 /// arms themselves. All the checker is asked for is each position's
 /// alphabet.
 fn collect_tuple(expr: &TupleMatchExpr, out: &mut Probes) {
-    if expr
-        .arms
-        .iter()
-        .any(|a| matches!(a.pattern, TuplePattern::Wildcard))
+    if expr.arms_open
+        || expr
+            .arms
+            .iter()
+            .any(|a| matches!(a.pattern, TuplePattern::Wildcard))
     {
         return;
     }

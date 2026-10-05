@@ -1,0 +1,15 @@
+=== diagnostics recoveryArmOpenBracket.tt ===
+diagnostics: 5 diagnostic(s)
+  5:17-5:19 "=>" error TS1005: ')' expected.
+  5:22-6:1 "\n" error TS1109: Expression expected.
+  5:5-5:9 "Idle" error TS2304: Cannot find name 'Idle'.
+  5:12-5:16 "Stop" error TS2552: Cannot find name 'Stop'. Did you mean 'stop'?
+  5:20-5:21 "0" error TS2695: Left side of comma operator is unused and has no side effects. [unnecessary]
+  restates: source-not-typescript
+published: 5 diagnostic(s)
+  5:5-5:9 "Idle" error ts2304 (ttc): Cannot find name 'Idle'.
+  5:12-5:16 "Stop" error ts2552 (ttc): Cannot find name 'Stop'. Did you mean 'stop'?
+  5:17-5:19 "=>" error ts1005 (ttc): ')' expected.
+  5:20-5:21 "0" error ts2695 (ttc): Left side of comma operator is unused and has no side effects.
+  5:22-6:1 "\n" error ts1109 (ttc): Expression expected.
+

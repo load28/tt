@@ -1,0 +1,44 @@
+=== aStatementPipelineEndingTheFileWithoutASemicolon.tt ===
+variant G { E, F }
+>G : type G = {
+>       kind: "E";
+>   } | {
+>       kind: "F";
+>   }
+>E : (property) E: {
+>       readonly kind: "E";
+>   }
+>F : (property) F: {
+>       readonly kind: "F";
+>   }
+const choose = (): G => G.F;
+>choose : const choose: () => G
+>G : type G = {
+>       kind: "E";
+>   } | {
+>       kind: "F";
+>   }
+>G : const G: {
+>       E: {
+>           readonly kind: "E";
+>       };
+>       F: {
+>           readonly kind: "F";
+>       };
+>   }
+>F : (property) F: {
+>       readonly kind: "F";
+>   }
+const g = choose();
+>g : const g: G
+>choose : const choose: () => G
+const show = (n: number) => console.log(n);
+>show : const show: (n: number) => void
+>n : (parameter) n: number
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>n : (parameter) n: number
+match (g) { E => 1, F => 2 } |> (show)
+>g : const g: G
+>show : const show: (n: number) => void
+

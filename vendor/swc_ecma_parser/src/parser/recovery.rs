@@ -371,6 +371,9 @@ impl<I: Tokens> Parser<I> {
         let result = match result {
             Err(error) if self.editor_recovery() => {
                 self.emit_error(error);
+                // The statement is skipped whole: no node of it remains, so
+                // neither does what its productions recorded.
+                self.recovery.records.truncate(first_record);
                 // A failed production that consumed no input cannot be retried
                 // at the same token by its enclosing statement list.
                 if self.cur_pos() == start && self.input().cur() != Token::Eof {

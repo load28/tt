@@ -246,13 +246,19 @@ pub(super) fn parse_pipeline(
         };
 
         // A bracket still open is a list being written: TypeScript reads it
-        // as the step's, up to where the enclosing syntax resumes.
+        // as the step's, with the rest of its last line, where the next
+        // argument is typed. A line break separates the enclosing syntax that
+        // resumes after it and stays that syntax's.
         let span = Span {
             start: tokens[step_from].span.start,
             end: if open.is_empty() {
                 tokens[k - 1].span.end
             } else {
-                tokens.get(k).map_or(range_end, |next| next.span.start)
+                crate::lexer::line_trivia_end(
+                    parser.src,
+                    tokens[k - 1].span.end,
+                    tokens.get(k).map_or(range_end, |next| next.span.start),
+                )
             },
         };
         steps.push(PipeStep {

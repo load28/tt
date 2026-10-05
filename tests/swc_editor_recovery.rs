@@ -350,3 +350,19 @@ fn speculation_rollback_is_independent_of_earlier_recoveries() {
     let (_, recovery, _) = parse_within(&source, false, 20);
     assert_eq!(recovery.len(), 16000);
 }
+
+#[test]
+fn a_skipped_statement_keeps_no_recovery_of_its_parts() {
+    // `return(` fails as a statement; its missing operand and `)` belong to
+    // no node that remains, so only the skipped statement is recorded.
+    let (_, recovery, errors) = parse_within(
+        "function f() {\n  { return(return }\n}\nconst later = 1;",
+        false,
+        10,
+    );
+    assert!(errors > 0);
+    assert!(
+        recovery.iter().all(|record| record.replacement.is_none()),
+        "{recovery:?}"
+    );
+}

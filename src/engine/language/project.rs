@@ -784,7 +784,7 @@ impl Project {
         // probe, as completion asks there.
         let source_at = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
         let projected_at =
-            mapper::cursor_to_output(&doc.mappings, source_at, mapper::Affinity::Preceding)
+            mapper::typed_cursor_to_output(&doc.mappings, &doc.anchors, &doc.source, source_at)
                 .map(|at| mapper::to_utf16(&doc.code, at));
         let (code, mappings, at) = match projected_at {
             Some(at) => (doc.code.clone(), doc.mappings.clone(), at),

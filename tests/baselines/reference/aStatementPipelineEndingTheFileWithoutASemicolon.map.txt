@@ -1,0 +1,8 @@
+//// [aStatementPipelineEndingTheFileWithoutASemicolon.tt] 6 mapping(s)
+1:1 -> 19:1 len 269  "// A pipeline statement whose match head is plan"...
+5:19 -> 29:3 len 94  "\nconst choose = (): G => G.F;\nconst g = choose()"...
+9:8 -> 38:21 len 1  "g"
+9:18 -> 41:20 len 1  "1"
+9:26 -> 45:20 len 1  "2"
+9:33 -> 53:14 len 6  "(show)"
+

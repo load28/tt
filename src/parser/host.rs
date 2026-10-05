@@ -116,14 +116,22 @@ fn parameter_starts(
     let mut match_candidates = Vec::new();
     collect_region_facts(program, &mut masks, &mut match_candidates);
     let projection = projected_region(src, program.span, &masks, &match_candidates, &[]);
-    for &wrapper in wrappers {
-        if let Ok(parsed) = parse_wrapped(&projection, source_kind, program.span.start, wrapper) {
-            let mut collector = ParameterCollector {
-                frame: parsed.frame,
-                starts: Vec::new(),
-            };
-            parsed.module.visit_with(&mut collector);
-            return collector.starts;
+    for recovering in [false, true] {
+        for &wrapper in wrappers {
+            if let Ok(parsed) = parse_wrapped_with(
+                &projection,
+                source_kind,
+                program.span.start,
+                wrapper,
+                recovering,
+            ) {
+                let mut collector = ParameterCollector {
+                    frame: parsed.frame,
+                    starts: Vec::new(),
+                };
+                parsed.module.visit_with(&mut collector);
+                return collector.starts;
+            }
         }
     }
     Vec::new()
@@ -395,6 +403,19 @@ fn parse_wrapped(
     source_offset: usize,
     wrapper: Wrapper,
 ) -> Result<HostParse, usize> {
+    parse_wrapped_with(source, source_kind, source_offset, wrapper, false)
+}
+
+/// [`parse_wrapped`], optionally with the host parser's editor recovery: a
+/// syntax error elsewhere in the region then leaves every complete
+/// production readable, as TypeScript's parser does.
+fn parse_wrapped_with(
+    source: &str,
+    source_kind: crate::SourceKind,
+    source_offset: usize,
+    wrapper: Wrapper,
+    recovering: bool,
+) -> Result<HostParse, usize> {
     crate::work::tick("host parses");
     let (prefix, suffix) = match wrapper {
         Wrapper::Module => ("", ""),
@@ -419,6 +440,7 @@ fn parse_wrapped(
         prefix.len(),
         source_offset,
         source.len(),
+        recovering,
     )
 }
 
@@ -428,7 +450,13 @@ fn parse_owned(
     prefix_len: usize,
     source_offset: usize,
     source_len: usize,
+    recovering: bool,
 ) -> Result<HostParse, usize> {
+    // Recovery consumes text the strict parser would reject; the lexical
+    // protections that keep the host parser safe on such text come first.
+    if recovering && let Some((span, _)) = crate::lexer::host_lexical_error(src, source_kind) {
+        return Err(span.start.saturating_sub(prefix_len) + source_offset);
+    }
     let input = crate::host_input::HostInput::new(src);
     let frame = SourceFrame {
         origin: input.origin(),
@@ -436,7 +464,11 @@ fn parse_owned(
         source_offset,
         source_end: source_offset + source_len,
     };
-    let mut parser = input.parser(source_kind);
+    let mut parser = if recovering {
+        input.editor_parser(source_kind)
+    } else {
+        input.parser(source_kind)
+    };
     let module = parser
         .parse_module()
         .map_err(|error| frame.error_offset(error.span()))?;

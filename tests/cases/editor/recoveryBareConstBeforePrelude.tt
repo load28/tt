@@ -1,0 +1,7 @@
+// @diagnostics: *
+declare const flag: boolean;
+export function f(): number {
+  const
+  const line = match (flag) { true => 1, false => 2 };
+  return line;
+}

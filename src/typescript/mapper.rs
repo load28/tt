@@ -212,6 +212,38 @@ pub(crate) fn cursor_to_output(
     .or_else(|| to_output_inclusive(mappings, src))
 }
 
+/// Where a cursor at source byte `src` lands for a question about what is
+/// being typed before it (completion, signature help): [`cursor_to_output`]
+/// with [`Affinity::Preceding`], except at the end of a construct whose
+/// trailing blanks the output does not copy (an operand whose argument list
+/// is still open, with the rest of its line). The cursor is in that list,
+/// and the text after the construct is not where it is typed: it has no
+/// place in the output, and the caller asks a probe.
+pub(crate) fn typed_cursor_to_output(
+    mappings: &[EmitMapping],
+    anchors: &[EmitAnchor],
+    source: &str,
+    src: usize,
+) -> Option<usize> {
+    let copied_before = mappings
+        .iter()
+        .any(|m| m.len > 0 && m.src < src && src <= m.src + m.len);
+    let blanks_before = source.as_bytes()[..src.min(source.len())]
+        .iter()
+        .rev()
+        .take_while(|&&byte| matches!(byte, b' ' | b'\t'))
+        .count();
+    if !copied_before
+        && blanks_before > 0
+        && anchors
+            .iter()
+            .any(|anchor| anchor.src_end == src && anchor.src + blanks_before < src)
+    {
+        return None;
+    }
+    cursor_to_output(mappings, src, Affinity::Preceding)
+}
+
 /// The inverse of [`to_output_inclusive`], for answers coming back.
 pub(crate) fn to_source_inclusive(mappings: &[EmitMapping], out: usize) -> Option<usize> {
     mappings

@@ -1,0 +1,20 @@
+=== diagnostics recoveryValParameters.tt ===
+diagnostics: 2 diagnostic(s)
+  8:1-8:2 "}" error TS1109: Expression expected.
+  6:7-6:8 "c" hint TS6133: 'c' is declared but its value is never read. [unnecessary]
+  restates: verify-failed
+published: 2 diagnostic(s)
+  6:7-6:8 "c" hint TS6133 (ts): 'c' is declared but its value is never read. [unnecessary]
+  8:1-8:2 "}" error ts1109 (ttc): Expression expected.
+
+=== hover /*q*/ recoveryValParameters.tt:10:10 ===
+  |   return q.x;
+  |          ^ /*q*/
+hover: 10:10-10:11 "q"
+    (parameter) q: P
+ttSymbol: null
+
+=== parity with the TypeScript twin ===
+diagnostics recoveryValParameters.tt: same
+hover q: same
+

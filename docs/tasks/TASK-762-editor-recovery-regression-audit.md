@@ -50,6 +50,14 @@ until no further defect is found.
   warnings` passed; the extension suite passed 243 tests with no skips.
 - 2026-10-05: Second review round (diff review, mutation fuzzing of
   59,799 editor projections, LSP typing simulation). Found Issues 7-9.
+- 2026-10-05: Ran the mutation pass with 100,000 of 3,054,478 mutants (the
+  default gate samples 1,000) and found Issues 15-17.
+- 2026-10-05: The LSP typing simulation (1,020 published diagnostic sets
+  over 10 tt/ttx files, 22 statements retyped character by character and 35
+  closing delimiters deleted, TypeScript twins through `tsc --lsp`) found
+  the diagnostic spreads of Issues 10-14. Remaining differences from the
+  twins are TypeScript's own reading of the text inside the edited
+  construct; they are listed in the parity inventory.
 
 ## Issues and resolutions
 
@@ -139,6 +147,108 @@ until no further defect is found.
 - **Resolution**: Kept. TypeScript also reports an error at that `]`
   (TS1128), the file still fails, and valid input is unaffected.
 
+### Issue 10: Any syntax error disabled `val` parameters in the whole file
+
+- **Symptom**: `function b() { c = }` made every `val p` parameter in the file
+  reach TypeScript as written (`Parameter 'val' implicitly has an 'any' type`).
+- **Cause**: The parser decides that a `val` names a formal parameter from a
+  host parse of its region, and that parse was strict: one error anywhere
+  left no parameter known.
+- **Resolution**: When the strict parse fails, the region is read with the
+  host parser's editor recovery behind the lexical protections, as
+  TypeScript reads the complete productions of an erroneous file.
+
+### Issue 11: A generated name fused with the next statement's keyword
+
+- **Symptom**: `const h = try f(` followed by `if (...)` published `Cannot find
+  name '$tt_v0if'` and a cascade to the end of the function; a pipeline step
+  left open put a later match's prelude inside the following `return (`.
+- **Cause**: An operand or pipeline step that leaves a list open ran to the
+  next token, so the line break that separated the following statement was
+  replaced together with the operand, in the host projection and in codegen.
+- **Resolution**: Such an operand keeps the rest of its last line, where the
+  next argument is typed, and leaves the line break to the syntax resuming
+  after it (`lexer::line_trivia_end`; a block comment crossing the line stays
+  whole). A cursor at the end of that operand, after blanks the output does
+  not copy, is a cursor in the open list, so completion and signature help
+  ask a probe there as before (`mapper::typed_cursor_to_output`). Codegen
+  also keeps a generated word and a copied word apart, and restores the line
+  break a construct's span absorbed (`TargetFile::separate_tokens`); no
+  complete program's emission changes. The first attempt ended the operand at
+  its last token, which broke signature help after `f(2, `; the native suite
+  caught it.
+
+### Issue 12: A pipeline in a JSX child with a missing `}` spread to EOF
+
+- **Symptom**: `<td>{a |> f</td>` reported unclosed tags through the end of
+  the file.
+- **Cause**: The lexer looked for the container's `}` past the parent's
+  closing tag, and the whole element stopped being JSX.
+- **Resolution**: In a JSX file `</` is TypeScript's `LessThanSlashToken`
+  (`scanner.ts`), never an operator, so a child container ends there. The
+  published diagnostic now equals the twin's `'}' expected`.
+
+### Issue 13: An unfinished arm reported false missing arms
+
+- **Symptom**: An arm with an unclosed `(` or an unterminated string reported
+  `match-not-exhaustive` naming arms that are written.
+- **Cause**: The open bracket or string runs over the following arms, which
+  coverage then did not see.
+- **Resolution**: The parser records that the arm list is left open, and
+  neither the text nor the typed coverage question is asked for that match.
+
+### Issue 14: A later statement's prelude was read inside a skipped statement
+
+- **Symptom**: `const` or `const Some(value:` above a statement with a match
+  published `Cannot find name '$tt_m'` and other generated names.
+- **Cause**: A skipped statement keeps its text, and TypeScript's list
+  recovery reads the following generated prelude as part of it (`;` is not
+  a statement start during its error recovery).
+- **Resolution**: Before a tt value, a skipped statement is closed with the
+  terminators of the lists it left open and `;`; its own syntax error stays
+  TypeScript's. The bare `const` case now equals its twin.
+
+### Issue 15: A JSX child container at end of file indexed past the text
+
+- **Symptom**: The mutation pass found `return<>{` panicking in the lexer.
+- **Cause**: Issue 12's change read the closing byte inside `then_some`,
+  which evaluates its argument even when the container reached the end.
+- **Resolution**: The byte is read only for a container that ends inside the
+  text.
+
+### Issue 16: A parenthesized pipeline step after a match head was an ICE
+
+- **Symptom**: `match (g) { E => 1, F => 2 } |> (p |> add)` failed with
+  `structured apply step was not emitted`, in the CLI too and before PR #140;
+  the editor projection now reached it while a match was being typed.
+- **Cause**: Planning gives the inner pipeline the outer value's slot, but the
+  inner pipeline has no statement form through which a value is written.
+- **Resolution**: A step is written through a slot only when it has a
+  statement form; otherwise it is the ordinary expression it is.
+
+### Issue 17: Repairs of a skipped statement were applied
+
+- **Symptom**: `match (x) { 1 => { return(return } }` raised
+  `SourceEmittedTwice` in the editor projection.
+- **Cause**: When a statement fails and is skipped whole, the records its
+  productions made stayed, so a missing operand inside it was materialized
+  in text that no node owns.
+- **Resolution**: A skipped statement discards the records of its parts, as
+  its node does.
+
+### Issue 18: A statement pipeline ending the file left its block open
+
+- **Symptom**: `match (g) { E => 1, F => 2 } |> (show)` as the last bytes of a
+  file, with no semicolon or line break, raised `LayoutScopeMissing`, in the
+  CLI too and before PR #140; `d9043f3fd9631d2c.tt` reached it.
+- **Cause**: The owner's block is closed by the source walk that writes what
+  follows the value inside the owner. Every walk that reached the owner's end
+  ran inside the owner's own prelude, so none could close it, and when
+  nothing follows the value no later walk did.
+- **Resolution**: The two structured-value paths that consume an owner's
+  compose rewrite close the owner blocks ending where the value ends, after
+  writing the value. Any later walk finds the block closed.
+
 ## Regression test (fails before the fix)
 
 - **Path**: `editors/vscode/server/src/test/server.test.ts`, "a repaired
@@ -167,6 +277,29 @@ until no further defect is found.
   and `editor-eof-optional-call-try.tt`.
 - **Observed failure**: `tests/fuzz_regressions.rs` reported both crashes
   (`LayoutScopeMissing`, `SourceEmittedTwice`) without Issue 8's change.
+
+- **Path**: `tests/cases/editor/recoveryValParameters.tt`,
+  `recoveryTryOperandBeforeStatement.tt`, `recoveryJsxChildPipe.ttx`,
+  `recoveryArmOpenBracket.tt`, `recoveryArmUnterminatedString.tt`,
+  `recoveryBareConstBeforePrelude.tt` and
+  `recoverySkippedStatementBeforePrelude.tt`.
+- **Observed failure**: Without the respective changes the baselines showed
+  `ts7006` on `val`, `$tt_v0if`, `TS17008` through the end of the file,
+  `match-not-exhaustive` for written arms, and generated names in diagnostics.
+
+- **Path**: `fuzz/regressions/compile_any_bytes/2dbd7de9c414347a.ttx`,
+  `d9043f3fd9631d2c.tt`, `b62ddb59e7abb322.tt`;
+  `tests/cases/compiler/aParenthesizedPipelineStepAfterAMatchHead.tt` (runs,
+  printing `11 12`); `tests/swc_editor_recovery.rs`,
+  `a_skipped_statement_keeps_no_recovery_of_its_parts`.
+- **Observed failure**: The mutation pass (100,000 mutants) reported the three
+  crashes; the compiler case failed with the ICE; the parser test found a
+  replacement record inside the skipped statement.
+
+- **Path**: `tests/cases/compiler/aStatementPipelineEndingTheFileWithoutASemicolon.tt`
+  (runs, printing `2`).
+- **Observed failure**: Without Issue 18's change the case failed with
+  `LayoutScopeMissing`.
 
 ## Verification
 

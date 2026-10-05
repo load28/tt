@@ -180,6 +180,43 @@ pub(super) fn parse_strict_arm_list<'t, T>(
         .collect()
 }
 
+/// Whether an arm of the list under `arms` leaves a bracket or a string
+/// open, running to the end of the body or its line with the arms written
+/// after it ([`outline_arms`]).
+pub(super) fn leaves_list_open(arms: &Cursor) -> bool {
+    let tokens = &arms.tokens[arms.idx..];
+    let mut index = 0;
+    while let Some(token) = tokens.get(index) {
+        if token.opens_bracket() {
+            match Token::balancing_close(tokens, index) {
+                Some(close) => index = close,
+                None => return true,
+            }
+        } else if matches!(token.kind, TokenKind::Str)
+            && !string_closed(arms.parser.src.as_bytes(), token.span)
+        {
+            return true;
+        }
+        index += 1;
+    }
+    false
+}
+
+/// Whether the string literal at `span` reaches its closing quote, which
+/// the scanner stops short of at a line break ([`crate::scanner::scan_string`]).
+fn string_closed(src: &[u8], span: Span) -> bool {
+    let quote = src[span.start];
+    let mut i = span.start + 1;
+    while i < span.end {
+        match src[i] {
+            b'\\' => i += 2,
+            b if b == quote => return i + 1 == span.end,
+            _ => i += 1,
+        }
+    }
+    false
+}
+
 /// Where a fully parsed arm list ends. The list's tokens are exactly the
 /// arms and their separators, so its last token is either the last arm's
 /// final token or the comma after it.

@@ -1,0 +1,12 @@
+// @diagnostics: *
+import type { TOption } from "@tt/std";
+variant Job { Print(text: string), Stop }
+declare function pop(): TOption<Job>;
+export function run(): string {
+  const Some(value:
+  const line = match (Job.Stop as Job) {
+    Print(text) => text,
+    Stop => "stop",
+  };
+  return line;
+}

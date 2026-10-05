@@ -1135,6 +1135,7 @@ impl<'a> Emitter<'a> {
             {
                 out.append(self.emit_compose_suffix(rewrite));
             }
+            self.close_owner_blocks_at(span.end, &mut out);
             return out;
         }
         // A completed call owns its entire authored frame, including tt
@@ -1242,6 +1243,7 @@ impl<'a> Emitter<'a> {
                 | HostOwnerKind::ModuleItem
                 | HostOwnerKind::Declarator => {}
             }
+            self.close_owner_blocks_at(value.source.end, &mut out);
             return out;
         }
         if let Some(rewrite) = self

@@ -1,0 +1,10 @@
+// @diagnostics: *
+variant F { Text(value: string), Num(value: number), Empty }
+export function hint(f: F): string {
+  return match (f) {
+    Text(value) => value.length > 10 ? "too long : "ok",
+    Num(value) => value < 0 ? "negative" : "ok",
+    Empty => "required",
+  };
+}
+export const ok: number = 1;

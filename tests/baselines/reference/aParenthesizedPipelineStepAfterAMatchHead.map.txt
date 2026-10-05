@@ -1,0 +1,13 @@
+//// [aParenthesizedPipelineStepAfterAMatchHead.tt] 11 mapping(s)
+1:1 -> 19:1 len 296  "// A parenthesized pipeline step is an ordinary "...
+5:19 -> 29:3 len 96  "\nconst add = (n: number) => (m: number) => n + m"...
+9:3 -> 55:3 len 7  "return "
+9:17 -> 37:21 len 1  "g"
+9:27 -> 40:20 len 1  "1"
+9:35 -> 44:20 len 1  "2"
+9:42 -> 52:14 len 1  "("
+9:43 -> 52:48 len 1  "p"
+9:48 -> 52:51 len 3  "add"
+9:51 -> 52:55 len 1  ")"
+9:52 -> 55:16 len 50  ";\n}\nconsole.log(pick(G.E), pick(G.F));\nexport {}"...
+

@@ -580,6 +580,10 @@ pub(crate) struct MatchExpr {
     pub arms: Vec<Arm>,
     /// Where the written arms end.
     pub tail: ArmsTail,
+    /// An arm leaves a bracket open, so it runs to the body's end and the
+    /// arms written after it are part of its text: which arms the match has
+    /// is not known, and its coverage is not decided.
+    pub arms_open: bool,
 }
 
 /// Where a match body's written arms end, as the parser tokenized them —
@@ -617,6 +621,8 @@ pub(crate) struct TupleMatchExpr {
     pub arms: Vec<TupleArm>,
     /// Where the written arms end — same role as [`MatchExpr::tail`].
     pub tail: ArmsTail,
+    /// Same role as [`MatchExpr::arms_open`].
+    pub arms_open: bool,
 }
 
 impl TupleMatchExpr {
