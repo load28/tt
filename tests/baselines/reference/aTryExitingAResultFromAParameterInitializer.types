@@ -1,0 +1,9 @@
+=== aTryExitingAResultFromAParameterInitializer.tt ===
+export function g() {
+>g : function g(): any
+  return result { const e = (x = try ()) => x; return 1; };
+>result : any
+>e : const e: (x?: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+

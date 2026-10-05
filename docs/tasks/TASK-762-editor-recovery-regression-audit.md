@@ -54,6 +54,7 @@ until no further defect is found.
   default gate samples 1,000) and found Issues 15-17.
 - 2026-10-05: A review of the third round's diff found Issues 19-21 and a
   stale comment on `val` candidates in regions the host cannot parse.
+- 2026-10-05: A mutation pass with another seed (7) found Issues 22-23.
 - 2026-10-05: The LSP typing simulation (1,020 published diagnostic sets
   over 10 tt/ttx files, 22 statements retyped character by character and 35
   closing delimiters deleted, TypeScript twins through `tsc --lsp`) found
@@ -286,6 +287,31 @@ until no further defect is found.
   ends the source before the generated prelude, and gained a space. Source
   before generated text is left as written.
 
+### Issue 22: An owner ending with a later statement left its block open
+
+- **Symptom**: `f match(s){B()=>1}|>(g)` at the end of a file raised
+  `LayoutScopeMissing`, in the CLI too and before PR #140.
+- **Cause**: The owner spans both statements TypeScript reads there. The
+  first statement's walk wrote the owner's prelude, and the second, a tt
+  value, was emitted by no walk that reaches the owner's end. Issue 18 closed
+  owners only on the paths that consume their prelude.
+- **Resolution**: After each statement, the statement list closes the owner
+  blocks that end where the statement ends. Closing stays idempotent and is
+  still withheld inside the owner's own prelude.
+
+### Issue 23: A `try` exiting a `result` from a parameter initializer was an ICE
+
+- **Symptom**: `result { const e = (x = try ()) => x; ... }` raised
+  `unscheduled expression try reached inline emission`, in the CLI too and
+  before PR #140; the editor projection reached it with
+  `return result{e=try()=>}`.
+- **Cause**: Placement planning skipped every `try` that exits to a
+  `result`, assuming the result body writes it as a statement. A parameter
+  initializer takes no statements.
+- **Resolution**: A `try` that exits to a `result` is a placement error when
+  its host owner takes no statements (a parameter, class field, class
+  definition or enum initializer), as a `try` exiting a function is.
+
 ## Regression test (fails before the fix)
 
 - **Path**: `editors/vscode/server/src/test/server.test.ts`, "a repaired
@@ -344,6 +370,12 @@ until no further defect is found.
   baseline had four diagnostics on generated code (`',' expected`, a
   constant `$tt_v0`) instead of the twin's one, and the second had three
   parse errors and a `expected )` on the next line.
+
+- **Path**: `fuzz/regressions/compile_any_bytes/b706a7fe520f7552.tt`,
+  `719324b412721beb.tt`;
+  `tests/cases/compiler/aTryExitingAResultFromAParameterInitializer.tt`.
+- **Observed failure**: A mutation pass with seed 7 reported both crashes;
+  without Issue 23's change the compiler case raised the ICE.
 
 ## Verification
 
