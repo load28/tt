@@ -713,6 +713,7 @@ async function validate(
     text: result.diagnostics.map((d) => toDiagnostic(current, d, editorUri)),
     service: typeResults.diagnostics,
     restates: typeResults.restates,
+    retains: typeResults.retains,
     hints,
     typed: typedResult,
   });
@@ -748,6 +749,7 @@ interface TypeDiagnostics {
   /** The codes of the compiler diagnostics these state in TypeScript's
    * words (`engine.tsDiagnosticsAnswer`). */
   restates: string[];
+  retains?: { code: string; start: { line: number; character: number } }[];
 }
 
 async function typeDiagnostics(
@@ -760,6 +762,7 @@ async function typeDiagnostics(
   if (answer === null) return null;
   return {
     restates: answer.restates,
+    retains: answer.retains,
     diagnostics: answer.diagnostics.map((d) => ({
       severity: SERVICE_SEVERITY[d.severity],
       tags: d.tags?.length ? d.tags.map((tag) => SERVICE_TAG[tag]) : undefined,

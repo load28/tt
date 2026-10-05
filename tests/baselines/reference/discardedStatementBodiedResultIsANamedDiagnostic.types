@@ -1,4 +1,2 @@
 === discardedStatementBodiedResultIsANamedDiagnostic.tt ===
-result { const item = try read(); return item; };
->result : (property) undefined: undefined
 

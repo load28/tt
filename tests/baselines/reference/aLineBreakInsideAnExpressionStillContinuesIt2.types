@@ -28,6 +28,5 @@ const x = p!
 >x : const x: number
 >p : const p: ((x: number) => number) | undefined
   (if let Some(value) = o { value });
->Some : (property) undefined: undefined
 >value : const value: number
 

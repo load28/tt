@@ -1,0 +1,18 @@
+//// [namespace.ttx] 4 mapping(s)
+1:1 -> 1:1 len 13  "const good = "
+1:14 -> 1:21 len 1  "1"
+1:19 -> 1:14 len 6  "String"
+1:25 -> 1:23 len 24  ";\nconst bad = <G:U.m />;"
+
+//// [nestedNamespace.ttx] 4 mapping(s)
+1:1 -> 1:1 len 13  "const good = "
+1:14 -> 1:21 len 1  "1"
+1:19 -> 1:14 len 6  "String"
+1:25 -> 1:23 len 35  ";\nconst bad = <div><G:U.m /></div>;"
+
+//// [conflict.tt] 4 mapping(s)
+1:1 -> 1:1 len 13  "const good = "
+1:14 -> 1:21 len 1  "1"
+1:19 -> 1:14 len 6  "String"
+1:25 -> 1:23 len 13  ";\n=======\n/\u{2}\n"
+

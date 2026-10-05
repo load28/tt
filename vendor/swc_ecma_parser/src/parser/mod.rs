@@ -37,6 +37,8 @@ mod jsx;
 mod module_item;
 mod object;
 mod pat;
+mod recovery;
+pub use recovery::{RecoveryContext, RecoveryId, RecoveryKind, RecoveryMode, RecoveryRecord};
 mod state;
 mod stmt;
 #[cfg(test)]
@@ -55,6 +57,7 @@ pub type PResult<T> = Result<T, crate::error::Error>;
 pub struct ParserCheckpoint<I: Tokens> {
     lexer: I::Checkpoint,
     buffer_prev_span: Span,
+    recovery: recovery::RecoveryState,
     buffer_cur: TokenAndSpan,
     buffer_next: Option<crate::lexer::NextTokenAndSpan>,
     #[cfg(feature = "flow")]
@@ -67,6 +70,7 @@ pub struct Parser<I: self::input::Tokens> {
     state: State,
     input: self::input::Buffer<I>,
     found_module_item: bool,
+    recovery: recovery::RecoveryState,
     #[cfg(feature = "flow")]
     allow_super_call: bool,
 }
@@ -96,6 +100,7 @@ impl<I: Tokens> Parser<I> {
     fn checkpoint_save(&self) -> ParserCheckpoint<I> {
         ParserCheckpoint {
             lexer: self.input.iter.checkpoint_save(),
+            recovery: self.recovery.clone(),
             buffer_cur: self.input.cur,
             buffer_next: self.input.next.clone(),
             buffer_prev_span: self.input.prev_span,
@@ -107,6 +112,7 @@ impl<I: Tokens> Parser<I> {
     fn checkpoint_save(&self) -> ParserCheckpoint<I> {
         ParserCheckpoint {
             lexer: self.input.iter.checkpoint_save(),
+            recovery: self.recovery.clone(),
             buffer_cur: self.input.cur,
             buffer_next: self.input.next.clone(),
             buffer_prev_span: self.input.prev_span,
@@ -116,6 +122,7 @@ impl<I: Tokens> Parser<I> {
     #[cfg(all(feature = "typescript", feature = "flow"))]
     fn checkpoint_load(&mut self, checkpoint: ParserCheckpoint<I>) {
         self.input.iter.checkpoint_load(checkpoint.lexer);
+        self.recovery = checkpoint.recovery;
         self.input.cur = checkpoint.buffer_cur;
         self.input.next = checkpoint.buffer_next;
         self.input.prev_span = checkpoint.buffer_prev_span;
@@ -125,6 +132,7 @@ impl<I: Tokens> Parser<I> {
     #[cfg(all(feature = "typescript", not(feature = "flow")))]
     fn checkpoint_load(&mut self, checkpoint: ParserCheckpoint<I>) {
         self.input.iter.checkpoint_load(checkpoint.lexer);
+        self.recovery = checkpoint.recovery;
         self.input.cur = checkpoint.buffer_cur;
         self.input.next = checkpoint.buffer_next;
         self.input.prev_span = checkpoint.buffer_prev_span;
@@ -189,6 +197,7 @@ impl<I: Tokens> Parser<I> {
             state: Default::default(),
             input: crate::parser::input::Buffer::new(input),
             found_module_item: false,
+            recovery: Default::default(),
             #[cfg(feature = "flow")]
             allow_super_call: false,
         };
@@ -653,6 +662,9 @@ impl<I: Tokens> Parser<I> {
     #[inline]
     pub fn expect(&mut self, t: Token) -> PResult<()> {
         if !self.input_mut().eat(t) {
+            if self.recover_missing_token(t) {
+                return Ok(());
+            }
             let span = self.input().cur_span();
             let cur = self.input_mut().dump_cur();
             syntax_error!(self, span, SyntaxError::Expected(format!("{t:?}"), cur))

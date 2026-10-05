@@ -367,7 +367,10 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
                 .into_iter()
                 .map(|code| code.as_str())
                 .collect();
-            Ok(json!({ "diagnostics": diagnostics, "restates": restates }))
+            let retains: Vec<_> = project.service_retained_syntax(path)?.into_iter()
+                .map(|(code, start)| json!({ "code": code.as_str(), "start": { "line": start.line, "character": start.character } }))
+                .collect();
+            Ok(json!({ "diagnostics": diagnostics, "restates": restates, "retains": retains }))
         }),
         method => Err(format!("unknown method \"{method}\"")),
     };

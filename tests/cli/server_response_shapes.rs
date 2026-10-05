@@ -158,7 +158,7 @@ export {};
             json!({"id": 2, "result": null}),
             json!({"id": 3, "result": {"items": [], "member": true, "probe": 1}}),
             json!({"error": "the request needs a \"path\"", "id": 4}),
-            json!({"id": 5, "result": {"diagnostics": [], "restates": []}}),
+            json!({"id": 5, "result": {"diagnostics": [], "restates": [], "retains": []}}),
         ]
     );
 }
@@ -367,10 +367,10 @@ export {};
                             ]
                         }
                     ],
-                    "restates": []
+                    "restates": [], "retains": []
                 }
             }),
-            json!({"id": 3, "result": {"diagnostics": [], "restates": []}}),
+            json!({"id": 3, "result": {"diagnostics": [], "restates": [], "retains": []}}),
         ]
     );
 }

@@ -36,6 +36,9 @@ impl<I: Tokens> Parser<I> {
     }
 
     pub(crate) fn parse_maybe_private_name(&mut self) -> PResult<Either<PrivateName, IdentName>> {
+        if let Some(missing) = self.missing_member_name() {
+            return Ok(Either::Right(missing));
+        }
         let is_private = self.input().is(Token::Hash);
         if is_private {
             self.parse_private_name().map(Either::Left)

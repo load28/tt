@@ -61,6 +61,15 @@ impl Project {
         position: Position,
     ) -> Result<Option<HoverInfo>, String> {
         let byte = source_byte(&doc.source, position);
+        if doc
+            .recovered
+            .iter()
+            .any(|&(start, end)| start <= byte && byte < end)
+        {
+            // A syntax placeholder is not an authored symbol or type. The
+            // surrounding proven owners remain available to normal queries.
+            return Ok(None);
+        }
         if doc.shared_bindings.iter().any(|binding| {
             binding
                 .occurrences
@@ -942,10 +951,10 @@ impl Project {
             {
                 continue;
             }
-            // An empty span (an error at a position, not over one) would
-            // render as an invisible squiggle; give it the character it
-            // points at.
-            let e = if e > s { e } else { s + 1 };
+            // A missing token in copied source has TypeScript's zero-width
+            // range. Extending it would blame the following token (or split a
+            // UTF-16 surrogate pair). Only an unlocated glue error needs an
+            // anchor extent supplied by the mapper above.
             let raw = item.message;
             let code = item.code;
             let glue = projected_anchor.or_else(|| glue_anchor(&doc, start));
@@ -1094,6 +1103,10 @@ impl Project {
                 !doc.recovered
                     .iter()
                     .any(|&(from, to)| from <= start && start < to)
+                    && !doc
+                        .syntax_repairs
+                        .iter()
+                        .any(|&(from, to)| from <= start && start <= to)
             });
             if diagnostic.code.restates_typescript_syntax()
                 && read
@@ -1103,6 +1116,33 @@ impl Project {
             }
         }
         Ok(codes)
+    }
+
+    /// Primary syntax causes hidden by editor repairs, keyed by source position.
+    /// Code-level restatement must not remove another occurrence of the same rule.
+    pub fn service_retained_syntax(
+        &mut self,
+        path: &Path,
+    ) -> Result<Vec<(crate::DiagnosticCode, Position)>, String> {
+        let (doc, _) = self.serve(path)?;
+        let lines = crate::lines::LineMap::lsp(&doc.source);
+        Ok(doc
+            .tt_diagnostics
+            .iter()
+            .filter_map(|diagnostic| {
+                let start = diagnostic.start?;
+                (diagnostic.code.restates_typescript_syntax()
+                    && (doc
+                        .recovered
+                        .iter()
+                        .any(|&(from, to)| from <= start && start < to)
+                        || doc
+                            .syntax_repairs
+                            .iter()
+                            .any(|&(from, to)| from <= start && start <= to)))
+                .then(|| (diagnostic.code, byte_position(&lines, start)))
+            })
+            .collect())
     }
 
     /// Starts (or reuses) the service session and serves `path` and its
@@ -1231,6 +1271,7 @@ impl Project {
                 destructured_lists: projected.emit.destructured_lists.clone(),
                 completion_scopes: projected.emit.completion_scopes.clone(),
                 recovered: projected.recovered.clone(),
+                syntax_repairs: projected.syntax_repairs.clone(),
                 tt_diagnostics: projected.tt_diagnostics.clone(),
                 generated_names: projected.emit.generated_names.clone(),
                 inserted: projected.emit.inserted.clone(),

@@ -1,0 +1,10 @@
+// @diagnostics: *
+// @hover: later
+// @definition: later
+const before = 1 |> String;
+declare const value: string;
+declare const flag: boolean;
+const broken: ? `${value}` = 1;
+export const later: number = match (flag) { true => 1, false => 2 };
+const wrong: string = later;
+/*later*/later;

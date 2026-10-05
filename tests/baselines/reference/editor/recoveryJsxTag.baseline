@@ -1,0 +1,130 @@
+=== diagnostics recoveryJsxTag.ttx ===
+diagnostics: 2 diagnostic(s)
+  3:65-3:67 "</" error TS1003: Identifier expected.
+  7:7-7:12 "wrong" error TS2322: Type 'string' is not assignable to type 'number'.
+published: 3 diagnostic(s)
+  3:26-3:31 "match" error source-not-typescript (ttc): the TypeScript here does not parse: Expected '</', got '('. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+  3:65-3:67 "</" error ts1003 (ttc): Identifier expected.
+  7:7-7:12 "wrong" error ts2322 (ttc): Type 'string' is not assignable to type 'number'.
+
+=== hover /*later*/ recoveryJsxTag.ttx:9:1 ===
+  | later;
+  | ^ /*later*/
+hover: 9:1-9:6 "later"
+    const later: "정상"
+ttSymbol: null
+
+=== completions /*member*/ recoveryJsxTag.ttx:8:7 ===
+  | later.toUpperCase();
+  |       ^ /*member*/
+completion: 50 item(s), member true, probe no
+  at (Method, 11)
+  charAt (Method, 11)
+  charCodeAt (Method, 11)
+  codePointAt (Method, 11)
+  concat (Method, 11)
+  endsWith (Method, 11)
+  includes (Method, 11)
+  indexOf (Method, 11)
+  lastIndexOf (Method, 11)
+  length (Field, 11)
+  localeCompare (Method, 11)
+  match (Method, 11)
+  matchAll (Method, 11)
+  normalize (Method, 11)
+  padEnd (Method, 11)
+  padStart (Method, 11)
+  repeat (Method, 11)
+  replace (Method, 11)
+  replaceAll (Method, 11)
+  search (Method, 11)
+  slice (Method, 11)
+  split (Method, 11)
+  startsWith (Method, 11)
+  substring (Method, 11)
+  toLocaleLowerCase (Method, 11)
+  toLocaleUpperCase (Method, 11)
+  toLowerCase (Method, 11)
+  toString (Method, 11)
+  toUpperCase (Method, 11)
+  trim (Method, 11)
+  trimEnd (Method, 11)
+  trimStart (Method, 11)
+  valueOf (Method, 11)
+  anchor (Method, z11) [deprecated]
+  big (Method, z11) [deprecated]
+  blink (Method, z11) [deprecated]
+  bold (Method, z11) [deprecated]
+  fixed (Method, z11) [deprecated]
+  fontcolor (Method, z11) [deprecated]
+  fontsize (Method, z11) [deprecated]
+  italics (Method, z11) [deprecated]
+  link (Method, z11) [deprecated]
+  small (Method, z11) [deprecated]
+  strike (Method, z11) [deprecated]
+  sub (Method, z11) [deprecated]
+  substr (Method, z11) [deprecated]
+  sup (Method, z11) [deprecated]
+  trimLeft (Method, z11) [deprecated]
+  trimRight (Method, z11) [deprecated]
+  ... 1 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member {"receiver":"later"}
+patternCompletions: null
+editor completion: 50 item(s)
+  at (Method, 211)
+  charAt (Method, 211)
+  charCodeAt (Method, 211)
+  codePointAt (Method, 211)
+  concat (Method, 211)
+  endsWith (Method, 211)
+  includes (Method, 211)
+  indexOf (Method, 211)
+  lastIndexOf (Method, 211)
+  length (Field, 211)
+  localeCompare (Method, 211)
+  match (Method, 211)
+  matchAll (Method, 211)
+  normalize (Method, 211)
+  padEnd (Method, 211)
+  padStart (Method, 211)
+  repeat (Method, 211)
+  replace (Method, 211)
+  replaceAll (Method, 211)
+  search (Method, 211)
+  slice (Method, 211)
+  split (Method, 211)
+  startsWith (Method, 211)
+  substring (Method, 211)
+  toLocaleLowerCase (Method, 211)
+  toLocaleUpperCase (Method, 211)
+  toLowerCase (Method, 211)
+  toString (Method, 211)
+  toUpperCase (Method, 211)
+  trim (Method, 211)
+  trimEnd (Method, 211)
+  trimStart (Method, 211)
+  valueOf (Method, 211)
+  anchor (Method, 2z11) [deprecated]
+  big (Method, 2z11) [deprecated]
+  blink (Method, 2z11) [deprecated]
+  bold (Method, 2z11) [deprecated]
+  fixed (Method, 2z11) [deprecated]
+  fontcolor (Method, 2z11) [deprecated]
+  fontsize (Method, 2z11) [deprecated]
+  italics (Method, 2z11) [deprecated]
+  link (Method, 2z11) [deprecated]
+  small (Method, 2z11) [deprecated]
+  strike (Method, 2z11) [deprecated]
+  sub (Method, 2z11) [deprecated]
+  substr (Method, 2z11) [deprecated]
+  sup (Method, 2z11) [deprecated]
+  trimLeft (Method, 2z11) [deprecated]
+  trimRight (Method, 2z11) [deprecated]
+  ... 1 global or keyword item(s) (sortText 215, no source)
+
+=== definition /*later*/ recoveryJsxTag.ttx:9:1 ===
+  | later;
+  | ^ /*later*/
+definition: 1 location(s)
+  recoveryJsxTag.ttx 6:7-6:12 "later"
+

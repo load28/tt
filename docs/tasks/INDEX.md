@@ -788,6 +788,12 @@
 
 | TASK-758 | Preserve the Project API layout after completion extraction | In progress | 2026-10-04 | — | [TASK-758](./TASK-758-preserve-project-api-layout.md) |
 
+| TASK-759 | Preserve editor structure during incomplete syntax | Complete | 2026-10-05 | 2026-10-05 | [TASK-759](./TASK-759-structural-editor-recovery.md) |
+
+| TASK-760 | Review and correct structural editor recovery | Complete | 2026-10-05 | 2026-10-05 | [TASK-760](./TASK-760-review-structural-editor-recovery.md) |
+
+| TASK-761 | Preserve template boundaries during editor recovery | Complete | 2026-10-05 | 2026-10-05 | [TASK-761](./TASK-761-editor-recovery-template-boundaries.md) |
+
 ## Next task number
 
-**TASK-759**
+**TASK-762**

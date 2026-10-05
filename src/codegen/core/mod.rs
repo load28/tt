@@ -66,7 +66,14 @@ pub(crate) fn lowering_plan(
     source_kind: SourceKind,
     tokens: &[crate::lexer::Token],
 ) -> Result<LoweringPlan, LoweringFailure> {
-    lowering_plan_with(semantic, core, source, source_kind, tokens, false)
+    lowering_plan_with(
+        semantic,
+        core,
+        source,
+        source_kind,
+        tokens,
+        crate::program_syntax::SyntaxMode::Strict,
+    )
 }
 
 pub(crate) fn lowering_plan_with(
@@ -75,7 +82,7 @@ pub(crate) fn lowering_plan_with(
     source: &str,
     source_kind: SourceKind,
     tokens: &[crate::lexer::Token],
-    tolerant: bool,
+    mode: crate::program_syntax::SyntaxMode,
 ) -> Result<LoweringPlan, LoweringFailure> {
     if !core.requires_host_lowering() && !core.imports_std() {
         return Ok(LoweringPlan::default());
@@ -97,7 +104,7 @@ pub(crate) fn lowering_plan_with(
         source,
         source_kind,
         tokens,
-        tolerant,
+        mode,
     ) {
         Ok(syntax) => syntax,
         Err(crate::program_syntax::ProgramSyntaxError::SourceNotTypeScript { message, source }) => {

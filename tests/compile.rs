@@ -812,3 +812,140 @@ include!("compile/cases_11.rs");
 include!("compile/cases_12.rs");
 include!("compile/cases_13.rs");
 include!("compile/cases_14.rs");
+#[test]
+fn editor_projection_rejects_namespaced_jsx_members_without_panicking() {
+    let options = Options {
+        source_kind: ttc::SourceKind::Tsx,
+        ..Options::default()
+    };
+    for tail in ["<G:U.m", "<G:U.m />", "<div><G:U.m /></div>"] {
+        let source = format!("const good = 1 |> String;\n{tail}");
+        let report = ttc::compile_projection_report(&source, &options);
+        assert!(!report.diagnostics.is_empty(), "{source}");
+        assert!(ttc::compile_report(&source, &options).emit.is_none());
+    }
+}
+
+#[test]
+fn editor_projection_rejects_conflict_markers_without_panicking() {
+    for marker in ["=======", "<<<<<<< ours", ">>>>>>> theirs", "||||||| base"] {
+        let source = format!("const good = 1 |> String;\n{marker}\n/\u{2}\n");
+        let options = Options::default();
+        let report = ttc::compile_projection_report(&source, &options);
+        assert!(report.emit.is_none(), "{source:?}");
+        assert!(!report.diagnostics.is_empty(), "{source:?}");
+        assert!(ttc::compile_report(&source, &options).emit.is_none());
+    }
+}
+
+#[test]
+fn editor_projection_recovers_incomplete_computed_enum_members() {
+    for member in [
+        "[\"a\"",
+        "[\"a\" = 1, return = 2 }",
+        "[`a`",
+        "[",
+        "[\"a",
+        "[`a",
+    ] {
+        let source = format!(
+            "const good = 1 |> String;\nenum E {{ {member}\nexport const later = match (true) {{ true => 1, false => 2 }};\n"
+        );
+        let options = Options::default();
+        let report = ttc::compile_projection_report(&source, &options);
+        assert!(!report.diagnostics.is_empty(), "{source}");
+        assert!(
+            ttc::compile_report(&source, &options).emit.is_none(),
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn editor_projection_preserves_matches_after_a_missing_initializer() {
+    let source = "variant Status { Idle, Busy }\n\
+                  const s: Status = Status.Idle;\n\
+                  const broken = ;\n\
+                  const a = match (s) { Idle => 1, Busy => 2 };\n\
+                  const b = match (s) { Idle => 3, Busy => 4 };\n\
+                  const c = match (s) { Idle => 5, Busy => 6 };\n\
+                  const wrong: number = \"wrong\";\n";
+    let options = ttc::Options::default();
+    let report = ttc::compile_projection_report(source, &options);
+    assert!(
+        report.emit.is_some(),
+        "the current editor projection must retain independent owners: {:?}",
+        report.diagnostics
+    );
+    let emit = report.emit.unwrap();
+    for declaration in ["const a", "const b", "const c", "const wrong"] {
+        assert!(emit.code.contains(declaration), "{}", emit.code);
+    }
+    assert!(!report.diagnostics.is_empty());
+    assert!(ttc::compile_report(source, &options).emit.is_none());
+}
+
+#[test]
+fn editor_projection_preserves_siblings_after_a_damaged_jsx_owner() {
+    let source = "declare const flag: boolean;\n\
+        const view = <div><span {match (flag) { true => 1, false => 2 }}</div>;\n\
+        const later = match (flag) { true => 3, false => 4 };\n";
+    let options = Options {
+        source_kind: ttc::SourceKind::Tsx,
+        ..Options::default()
+    };
+    let report = ttc::compile_projection_report(source, &options);
+    let emit = report
+        .emit
+        .expect("independent owners survive a damaged JSX owner");
+    assert!(emit.code.contains("const later"), "{}", emit.code);
+    assert!(
+        !report.recovered.is_empty(),
+        "the malformed owner's lost tt child has parser-owned recovery"
+    );
+    assert!(!report.diagnostics.is_empty());
+    assert!(ttc::compile_report(source, &options).emit.is_none());
+}
+
+#[test]
+fn editor_delimiter_insertions_preserve_unicode_source_mappings() {
+    for extension in [ttc::SourceKind::TypeScript, ttc::SourceKind::Tsx] {
+        let source = "const 한글 = '😀';\r\ndeclare const flag: boolean;\r\ndeclare function f(...xs: unknown[]): unknown;\r\nconst broken = f(f(\r\nconst later = match (flag) { true => 한글, false => '다음' };\r\n";
+        let options = ttc::Options {
+            source_kind: extension,
+            ..Default::default()
+        };
+        let report = ttc::compile_projection_report(source, &options);
+        assert!(report.editor_only);
+        assert!(!report.syntax_repairs.is_empty());
+        let emit = report
+            .emit
+            .expect("nested missing delimiters retain siblings");
+        for mapping in &emit.mappings {
+            assert_eq!(
+                &source[mapping.src..mapping.src + mapping.len],
+                &emit.code[mapping.out..mapping.out + mapping.len]
+            );
+        }
+        assert!(emit.code.contains("const later"));
+        assert!(ttc::compile_report(source, &options).emit.is_none());
+    }
+}
+
+#[test]
+fn editor_recovery_does_not_replace_matches_after_skipped_templates() {
+    let source = "const before = 1 |> String;\ncnst broken = `${value}`;\nexport const later = match (true) { true => 1, false => 2 };\n";
+    let report = ttc::compile_projection_report(source, &Options::default());
+    let emit = report
+        .emit
+        .expect("independent declarations remain projected");
+    let later = source.find("match").unwrap();
+    assert!(
+        !report
+            .recovered
+            .iter()
+            .any(|&(start, end)| start <= later && later < end),
+        "the independent match must retain its type: {}",
+        emit.code
+    );
+}

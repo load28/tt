@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: unbalanced TypeScript delimiter. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./editorRecoveryComputedEnumName.tt:3:10
+  |
+3 | enum E { ["a"
+  |          ^
+
+
+==== ttc --check-types (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: unbalanced TypeScript delimiter. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> editorRecoveryComputedEnumName.tt:3:10
+  |
+3 | enum E { ["a"
+  |          ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

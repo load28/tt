@@ -3,6 +3,16 @@ import { test } from "node:test";
 import { Diagnostic, DiagnosticSeverity, DiagnosticTag } from "vscode-languageserver/node";
 
 import { publishedDiagnostics } from "../diagnostics";
+import { TextDocument } from "vscode-languageserver-textdocument";
+import { toDiagnostic } from "../lsp-projections";
+
+test("compiler missing-token ranges stay zero-width before Unicode and at EOF", () => {
+  const doc = TextDocument.create("file:///missing.tt", "tt", 1, "value.😀\r\n");
+  for (const [line, col] of [[1, 7], [2, 1]]) {
+    const diagnostic = toDiagnostic(doc, { line, col, endLine: line, endCol: col, code: "ts1003", message: "Identifier expected." }, file => file);
+    assert.deepEqual(diagnostic.range.start, diagnostic.range.end);
+  }
+});
 
 const at = (line: number, character: number, length: number) => ({
   start: { line, character },
@@ -93,4 +103,15 @@ test("a compiler diagnostic the service restates is left to the service", () => 
     typed: { replacesTypes: false, diagnostics: [diagnostic("ttc", "source-not-typescript", 9, 12, 1)] },
   });
   assert.deepEqual(shown(published), ["ts 1109"]);
+});
+
+test("a repaired primary survives another raw syntax error with the same code", () => {
+  const layers = {
+    text: [diagnostic("ttc", "source-not-typescript", 0, 12, 1), diagnostic("ttc", "source-not-typescript", 2, 0, 0)],
+    service: [diagnostic("ts", 1109, 0, 12, 1)],
+    restates: ["source-not-typescript"],
+    retains: [{ code: "source-not-typescript", start: { line: 2, character: 0 } }],
+    hints: [], typed: null,
+  };
+  assert.deepEqual(shown(publishedDiagnostics(layers)), ["ts 1109", "ttc source-not-typescript"]);
 });

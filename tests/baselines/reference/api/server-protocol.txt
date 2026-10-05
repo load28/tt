@@ -478,6 +478,7 @@ params read: banner, filename, includeTypes, isRetrigger, label, member, path, p
         tags?: [string]
       }]
       restates: []
+      retains: []
     }
   }
 

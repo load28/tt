@@ -32,7 +32,6 @@ export function f(): TResult<number, string> {
 >F : enum F
 >P : (enum member) F.P = 7
 >Q : (enum member) F.Q
->match : (property) undefined: undefined
 >n : const n: number
 >R : (enum member) F.R
   return Result.Ok(F.Q);

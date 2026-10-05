@@ -16,7 +16,8 @@ enum ParsingContext {
     HeritageClauseElement,
     TupleElementTypes,
     TypeMembers,
-    TypeParametersOrArguments,
+    TypeParameters,
+    TypeArguments,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -786,6 +787,22 @@ impl<I: Tokens> Parser<I> {
     /// `tsIsListTerminator`
     fn is_ts_list_terminator(&mut self, kind: ParsingContext) -> bool {
         debug_assert!(self.input().syntax().typescript());
+        if self.editor_recovery() {
+            let boundary = match kind {
+                ParsingContext::TypeMembers | ParsingContext::EnumMembers => {
+                    self.ends_recovery_ts_members(kind)
+                },
+                ParsingContext::TupleElementTypes => self.ends_recovery_list(Token::RBracket),
+                ParsingContext::TypeParameters => {
+                    self.input().cur() != Token::Const && self.ends_recovery_list(Token::Gt)
+                },
+                ParsingContext::TypeArguments => self.ends_recovery_list(Token::Gt),
+                ParsingContext::HeritageClauseElement => false,
+            };
+            if boundary {
+                return true;
+            }
+        }
         let cur = self.input().cur();
         match kind {
             ParsingContext::EnumMembers | ParsingContext::TypeMembers => cur == Token::RBrace,
@@ -793,8 +810,46 @@ impl<I: Tokens> Parser<I> {
                 matches!(cur, Token::LBrace | Token::Implements | Token::Extends)
             }
             ParsingContext::TupleElementTypes => cur == Token::RBracket,
-            ParsingContext::TypeParametersOrArguments => cur == Token::Gt,
+            ParsingContext::TypeParameters | ParsingContext::TypeArguments => cur == Token::Gt,
         }
+    }
+
+    /// A statement keyword can also name an enum or type member. Its legal
+    /// continuation is owned by this list grammar, not by object literals.
+    fn ends_recovery_ts_members(&mut self, kind: ParsingContext) -> bool {
+        if !self.ends_recovery_list(Token::RBrace) {
+            return false;
+        }
+        if kind == ParsingContext::TypeMembers && self.input().cur() == Token::Semi {
+            return false;
+        }
+        if !self.input().cur().is_word() {
+            return true;
+        }
+        !self.ts_look_ahead(|p| {
+            p.bump();
+            let next = p.input().cur();
+            match kind {
+                ParsingContext::EnumMembers => {
+                    matches!(next, Token::Eq | Token::Comma | Token::RBrace)
+                }
+                ParsingContext::TypeMembers => {
+                    p.input().had_line_break_before_cur()
+                        || matches!(
+                            next,
+                            Token::Colon
+                                | Token::QuestionMark
+                                | Token::LParen
+                                | Token::Lt
+                                | Token::Semi
+                                | Token::Comma
+                                | Token::RBrace
+                                | Token::Eof
+                        )
+                }
+                _ => unreachable!(),
+            }
+        })
     }
 
     /// `tsNextTokenCanFollowModifier`
@@ -1124,8 +1179,20 @@ impl<I: Tokens> Parser<I> {
                 } else {
                     expect!(p, Token::Lt);
                 }
+                if p.editor_recovery() && p.ends_recovery_list(Token::Gt) {
+                    let at = p.cur_pos();
+                    let ty = p.recover_type(
+                        at,
+                        crate::error::Error::new(
+                            Span::new_with_checked(at, at),
+                            SyntaxError::TS1110,
+                        ),
+                    )?;
+                    p.materialize_last_recovery("any");
+                    return Ok(vec![ty]);
+                }
                 if p.syntax().flow() {
-                    p.parse_ts_delimited_list(ParsingContext::TypeParametersOrArguments, |p| {
+                    p.parse_ts_delimited_list(ParsingContext::TypeArguments, |p| {
                         trace_cur!(p, parse_ts_type_args__arg);
 
                         p.do_outside_of_context(
@@ -1134,7 +1201,7 @@ impl<I: Tokens> Parser<I> {
                         )
                     })
                 } else {
-                    p.parse_ts_delimited_list(ParsingContext::TypeParametersOrArguments, |p| {
+                    p.parse_ts_delimited_list(ParsingContext::TypeArguments, |p| {
                         trace_cur!(p, parse_ts_type_args__arg);
 
                         p.parse_ts_type()
@@ -1146,8 +1213,17 @@ impl<I: Tokens> Parser<I> {
         // context. But be sure not to parse a regex in the jsx expression
         // `<C<number> />`, so set exprAllowed = false
         self.input_mut().set_expr_allowed(false);
-        self.expect_without_advance(Token::Gt)?;
-        let span = Span::new_with_checked(start, self.input().cur_span().hi);
+        // The caller consumes (or records) the closing type token. JSX's
+        // non-consuming expectations remain strict about lexical context.
+        if !self.can_recover_missing_token(Token::Gt) {
+            self.expect_without_advance(Token::Gt)?;
+        }
+        let end = if self.input().is(Token::Gt) {
+            self.input().cur_span().hi
+        } else {
+            self.cur_pos()
+        };
+        let span = Span::new_with_checked(start, end);
 
         // Report grammar error for empty type argument list like `I<>`.
         // Flow allows this form in several positions.
@@ -1183,7 +1259,7 @@ impl<I: Tokens> Parser<I> {
                 Context::ShouldNotLexLtOrGtAsType,
                 Self::parse_ts_type_args,
             )?;
-            self.assert_and_bump(Token::Gt);
+            expect!(self, Token::Gt);
             Some(ret)
         } else {
             None
@@ -1498,7 +1574,7 @@ impl<I: Tokens> Parser<I> {
                 p.bump();
 
                 let params = p.parse_ts_bracketed_list(
-                    ParsingContext::TypeParametersOrArguments,
+                    ParsingContext::TypeParameters,
                     |p| p.parse_ts_type_param(permit_in_out, permit_const), // bracket
                     false,
                     // skip_first_token
@@ -1703,7 +1779,7 @@ impl<I: Tokens> Parser<I> {
 
         self.try_parse_ts(|p| {
             let type_args = p.parse_ts_type_args()?;
-            p.assert_and_bump(Token::Gt);
+            expect!(p, Token::Gt);
             let cur = p.input().cur();
             if matches!(
                 cur,
@@ -2069,7 +2145,7 @@ impl<I: Tokens> Parser<I> {
         } else if cur == Token::LBracket {
             self.assert_and_bump(Token::LBracket);
             let expr = self.parse_expr()?;
-            self.assert_and_bump(Token::RBracket);
+            expect!(self, Token::RBracket);
             let bracket_span = self.span(start);
 
             match *expr {
@@ -2108,7 +2184,10 @@ impl<I: Tokens> Parser<I> {
 
         let init = if self.input_mut().eat(Token::Eq) {
             Some(self.parse_assignment_expr()?)
-        } else if self.input().cur() == Token::Comma || self.input().cur() == Token::RBrace {
+        } else if self.input().cur() == Token::Comma
+            || self.input().cur() == Token::RBrace
+            || (self.editor_recovery() && self.is_ts_list_terminator(ParsingContext::EnumMembers))
+        {
             None
         } else if self.input().cur() == Token::Eof {
             return Err(self.eof_error());
@@ -2288,7 +2367,7 @@ impl<I: Tokens> Parser<I> {
             _ => {
                 let type_args = if self.input().is(Token::Lt) {
                     let ret = self.parse_ts_type_args()?;
-                    self.assert_and_bump(Token::Gt);
+                    expect!(self, Token::Gt);
                     Some(ret)
                 } else {
                     None
@@ -3641,7 +3720,12 @@ impl<I: Tokens> Parser<I> {
     ///
     /// `tsParseType`
     pub(crate) fn parse_ts_type(&mut self) -> PResult<Box<TsType>> {
-        crate::maybe_grow(256 * 1024, 1024 * 1024, || self.parse_ts_type_grown())
+        let start = self.cur_pos();
+        let result = crate::maybe_grow(256 * 1024, 1024 * 1024, || self.parse_ts_type_grown());
+        match result {
+            Err(error) if self.editor_recovery() => self.recover_type(start, error),
+            result => result,
+        }
     }
 
     fn parse_ts_type_grown(&mut self) -> PResult<Box<TsType>> {
@@ -4221,7 +4305,7 @@ impl<I: Tokens> Parser<I> {
                 Context::ShouldNotLexLtOrGtAsType,
                 Self::parse_ts_type_args,
             )?;
-            self.assert_and_bump(Token::Gt);
+            expect!(self, Token::Gt);
             Some(ret)
         } else {
             None
@@ -4281,7 +4365,7 @@ impl<I: Tokens> Parser<I> {
                 Context::ShouldNotLexLtOrGtAsType,
                 Self::parse_ts_type_args,
             )?;
-            self.assert_and_bump(Token::Gt);
+            expect!(self, Token::Gt);
             Some(ret)
         } else {
             None

@@ -33,6 +33,12 @@ impl HostInput {
         self.parser_with(syntax(source_kind))
     }
 
+    pub(crate) fn editor_parser(&self, source_kind: SourceKind) -> Parser<Lexer<'_>> {
+        let mut parser = self.parser(source_kind);
+        parser.set_recovery_mode(swc_ecma_parser::RecoveryMode::Editor);
+        parser
+    }
+
     /// A parser for a TypeScript declaration file (`.d.ts`).
     pub(crate) fn declaration_parser(&self) -> Parser<Lexer<'_>> {
         self.parser_with(Syntax::Typescript(TsSyntax {

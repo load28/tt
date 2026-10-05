@@ -149,6 +149,104 @@ fn check(tsc: &Path, project: &Workspace) -> (bool, String) {
 const SHAPE_TT: &str = "export variant Shape {\n  Circle(radius: number),\n  Rect(width: number, height: number),\n}\n\nexport function area(shape: Shape): number {\n  return match (shape) {\n    Circle(radius) => Math.PI * radius * radius,\n    Rect(width, height) => width * height,\n  };\n}\n";
 
 #[test]
+fn recovery_reports_the_original_host_error_once_through_the_real_mapper() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(project.path().join("src/provider.tt"),
+        "declare const flag: boolean;\nconst broken = ;\nexport const later = match (flag) { true => 1, false => 2 };\n").unwrap();
+    fs::write(
+        project.path().join("src/main.ts"),
+        "import { later } from './provider.tt';\nconst ok: number = later;\n",
+    )
+    .unwrap();
+    let (ok, text) = check(&tsc, &project);
+    assert!(!ok, "incomplete source still fails a build");
+    assert!(text.contains("TS1109"), "{text}");
+    assert_eq!(
+        text.matches("error ").count(),
+        1,
+        "one original syntax cause, no duplicate mapper or missing-export error:\n{text}"
+    );
+}
+
+#[test]
+fn host_recovery_keeps_an_immediately_following_export_in_the_real_mapper() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    for broken in [
+        "type Bad = { x: ;",
+        "interface Bad { x: ;",
+        "type Bad = Array<",
+        "const broken =",
+        "const broken = 1 +",
+        "const broken = f<",
+        "const broken = obj.",
+    ] {
+        fs::write(project.path().join("src/provider.tt"), format!("declare const flag: boolean;\ndeclare const obj: {{ x: number }};\ndeclare function f(): void;\n{broken}\nexport const good = match (flag) {{ true => 1, false => 2 }};\n")).unwrap();
+        fs::write(
+            project.path().join("src/main.ts"),
+            "import { good } from './provider.tt';\nconst ok: number = good;\n",
+        )
+        .unwrap();
+        let (ok, text) = check(&tsc, &project);
+        assert!(!ok, "the original syntax error is retained: {broken}");
+        assert!(
+            !text.contains("src/main.ts")
+                && !text.contains("$tt_")
+                && !text.contains("Cannot find name 'let'"),
+            "{broken}: {text}"
+        );
+    }
+}
+
+#[test]
+fn recovery_preserves_keyword_members_and_exports_in_the_real_mapper() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    for (declaration, value) in [
+        ("enum E { return = 1, second = 2 }", "E.return"),
+        (
+            "type T = { return; next: number }; declare const t: T;",
+            "t.next",
+        ),
+        (
+            "interface T { return\nnext: number }; declare const t: T;",
+            "t.next",
+        ),
+    ] {
+        fs::write(
+            project.path().join("src/provider.tt"),
+            format!("{declaration}\nconst broken = ;\nexport const good = match (true) {{ true => {value}, false => 2 }};\n"),
+        ).unwrap();
+        fs::write(
+            project.path().join("src/main.ts"),
+            "import { good } from './provider.tt';\nconst ok: number = good;\n",
+        )
+        .unwrap();
+        let (ok, text) = check(&tsc, &project);
+        assert!(!ok);
+        assert_eq!(text.matches("TS1109").count(), 1, "{text}");
+        assert_eq!(text.matches("error ").count(), 1, "{text}");
+        assert!(!text.contains("src/main.ts"), "{text}");
+    }
+}
+
+#[test]
+fn every_independent_repaired_call_keeps_a_primary_diagnostic() {
+    let tsc = require_mapper_toolchain!();
+    let project = mapper_project(false);
+    fs::write(project.path().join("src/main.tt"), "declare function f(): void;\ndeclare const flag: boolean;\nconst a = f(\nconst b = f(\nconst good = match (flag) { true => 1, false => 2 };\n").unwrap();
+    let (ok, text) = check(&tsc, &project);
+    assert!(!ok);
+    assert_eq!(
+        text.matches("error ").count(),
+        2,
+        "both original causes, no generated errors: {text}"
+    );
+    assert!(!text.contains("$tt_"), "{text}");
+}
+
+#[test]
 fn a_ts_file_imports_a_tt_file_with_no_sidecar_on_disk() {
     let tsc = require_mapper_toolchain!();
     let project = mapper_project(false);

@@ -119,6 +119,19 @@ impl<I: Tokens> Parser<I> {
             #[cfg(swc_ast_unknown)]
             _ => unreachable!(),
         };
+        if matches!(node, JSXElementName::JSXNamespacedName(_)) && self.input().is(Token::Dot) {
+            // A namespace name is a complete JSX name, not a member-expression
+            // object. Reject the production before converting it to JSXObject.
+            let span = self.input().cur_span();
+            syntax_error!(
+                self,
+                span,
+                SyntaxError::Unexpected {
+                    got: ".".into(),
+                    expected: "a JSX tag delimiter",
+                }
+            );
+        }
         while self.input_mut().eat(Token::Dot) {
             self.input_mut().scan_jsx_identifier();
             let prop: IdentName = self.parse_jsx_ident()?.into();

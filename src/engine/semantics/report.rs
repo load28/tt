@@ -389,7 +389,7 @@ pub(crate) fn report(
                 out.push(Diagnostic {
                     path: file.source_path.clone(),
                     position: Some(crate::line_col(&file.source, start)),
-                    end: (end > start).then(|| crate::line_col(&file.source, end)),
+                    end: Some(crate::line_col(&file.source, end)),
                     message: if owned_by_typescript {
                         ts_message(&diagnostic.message, declared)
                     } else {

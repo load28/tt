@@ -1,0 +1,2 @@
+// @expectErrors: source-not-typescript, try-crosses-value-region
+p()?result{return`${try"",}`}:n

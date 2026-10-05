@@ -78,6 +78,8 @@ pub mod ownership;
 mod parser;
 mod probe;
 mod program_syntax;
+#[path = "lib/recovery.rs"]
+mod recovery;
 pub mod render;
 pub mod resolve;
 mod scanner;

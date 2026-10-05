@@ -35,6 +35,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
             destructured_lists: Vec::new(),
             completion_scopes: Vec::new(),
             recovered: Vec::new(),
+            syntax_repairs: Vec::new(),
             tt_diagnostics: Vec::new(),
             generated_names: HashSet::new(),
             inserted: Vec::new(),
@@ -77,6 +78,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         destructured_lists: emit.destructured_lists,
         completion_scopes: emit.completion_scopes,
         recovered,
+        syntax_repairs: report.syntax_repairs,
         tt_diagnostics: report.diagnostics,
         generated_names: emit.generated_names,
         inserted: emit.inserted,
@@ -1274,7 +1276,9 @@ pub(super) fn diagnostic_source_span(
             start: list.src,
             end: list.src_end,
         },
-        None => mapper::diagnostic_origin(&doc.mappings, &doc.anchors, sb, eb)?,
+        None => {
+            mapper::diagnostic_origin(&doc.mappings, &doc.anchors, sb, eb, &doc.code, &doc.source)?
+        }
     };
     let (start, end) = match origin {
         mapper::DiagnosticOrigin::Exact { start, end } => (start, end),

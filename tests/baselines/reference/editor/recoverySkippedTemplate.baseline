@@ -1,0 +1,35 @@
+=== diagnostics recoverySkippedTemplate.tt ===
+diagnostics: 6 diagnostic(s)
+  4:1-4:5 "cnst" error TS1435: Unknown keyword or identifier. Did you mean 'const'?
+  4:1-4:5 "cnst" error TS2304: Cannot find name 'cnst'.
+  4:6-4:12 "broken" error TS2304: Cannot find name 'broken'.
+  6:7-6:12 "wrong" error TS2322: Type 'number' is not assignable to type 'string'.
+  1:7-1:13 "before" hint TS6133: 'before' is declared but its value is never read. [unnecessary]
+  6:7-6:12 "wrong" hint TS6133: 'wrong' is declared but its value is never read. [unnecessary]
+  restates: source-not-typescript
+published: 6 diagnostic(s)
+  1:7-1:13 "before" hint TS6133 (ts): 'before' is declared but its value is never read. [unnecessary]
+  4:1-4:5 "cnst" error ts1435 (ttc): Unknown keyword or identifier. Did you mean 'const'?
+  4:1-4:5 "cnst" error ts2304 (ttc): Cannot find name 'cnst'.
+  4:6-4:12 "broken" error ts2304 (ttc): Cannot find name 'broken'.
+  6:7-6:12 "wrong" hint TS6133 (ts): 'wrong' is declared but its value is never read. [unnecessary]
+  6:7-6:12 "wrong" error ts2322 (ttc): Type 'number' is not assignable to type 'string'.
+
+=== hover /*later*/ recoverySkippedTemplate.tt:7:1 ===
+  | later;
+  | ^ /*later*/
+hover: 7:1-7:6 "later"
+    const later: number
+ttSymbol: null
+
+=== definition /*later*/ recoverySkippedTemplate.tt:7:1 ===
+  | later;
+  | ^ /*later*/
+definition: 1 location(s)
+  recoverySkippedTemplate.tt 5:14-5:19 "later"
+
+=== parity with the TypeScript twin ===
+diagnostics recoverySkippedTemplate.tt: same
+hover later: same
+definition later: same
+

@@ -34,6 +34,8 @@ pub(crate) fn diagnostic_origin(
     anchors: &[EmitAnchor],
     start: usize,
     end: usize,
+    code: &str,
+    source: &str,
 ) -> Option<DiagnosticOrigin> {
     let end = end.max(start);
     if let Some(mapping) = mappings
@@ -58,10 +60,32 @@ pub(crate) fn diagnostic_origin(
         && !anchors.iter().any(|anchor| anchor.out == start)
         && let Some(chunk) = mappings
             .iter()
-            .find(|m| m.len > 0 && m.out + m.len == start)
+            .filter(|m| m.len > 0 && m.out + m.len <= start)
+            .filter(|m| {
+                !anchors
+                    .iter()
+                    .any(|anchor| m.out + m.len <= anchor.out && anchor.out <= start)
+            })
+            .filter(|m| {
+                m.out + m.len == start
+                    || code
+                        .get(m.out + m.len..start)
+                        .is_some_and(|gap| gap.bytes().all(|b| b.is_ascii_whitespace()))
+            })
+            .max_by_key(|m| m.out + m.len)
     {
         let at = chunk.src + chunk.len;
-        return Some(DiagnosticOrigin::Exact { start: at, end: at });
+        // The delimiter belongs to generated glue, but the missing operand
+        // belongs at the next source token. Preserve a real zero-width EOF;
+        // never split a UTF-8 code point when displaying a source boundary.
+        let width = source
+            .get(at..)
+            .and_then(|tail| tail.chars().next())
+            .map_or(0, char::len_utf8);
+        return Some(DiagnosticOrigin::Exact {
+            start: at,
+            end: at + width,
+        });
     }
     // A lowering owns a diagnostic whose whole span lies in its output. An
     // anchor that holds only where the span starts (a pipeline step's input
@@ -271,11 +295,11 @@ mod tests {
             kind: AnchorKind::Match,
         };
         assert_eq!(
-            diagnostic_origin(&mappings, &[anchor], 100, 130),
+            diagnostic_origin(&mappings, &[anchor], 100, 130, "", ""),
             Some(DiagnosticOrigin::Anchor(anchor))
         );
         assert_eq!(
-            diagnostic_origin(&mappings, &[anchor], 101, 104),
+            diagnostic_origin(&mappings, &[anchor], 101, 104, "", ""),
             Some(DiagnosticOrigin::Exact { start: 21, end: 24 })
         );
     }
@@ -303,12 +327,45 @@ mod tests {
             kind: AnchorKind::Pipe,
         };
         assert_eq!(
-            diagnostic_origin(&[], &[step, pipeline], 100, 110),
+            diagnostic_origin(&[], &[step, pipeline], 100, 110, "", ""),
             Some(DiagnosticOrigin::Anchor(pipeline))
         );
         assert_eq!(
-            diagnostic_origin(&[], &[step, pipeline], 100, 103),
+            diagnostic_origin(&[], &[step, pipeline], 100, 103, "", ""),
             Some(DiagnosticOrigin::Anchor(step))
+        );
+    }
+
+    #[test]
+    fn a_missing_operand_crosses_trivia_but_never_a_new_owner() {
+        let source = "😀 +, next";
+        let code = "😀 +  : next";
+        let mappings = [EmitMapping {
+            src: 0,
+            out: 0,
+            len: 6,
+        }];
+        assert_eq!(
+            diagnostic_origin(&mappings, &[], 8, 9, code, source),
+            Some(DiagnosticOrigin::Exact { start: 6, end: 7 })
+        );
+        let opened = EmitAnchor {
+            out: 7,
+            end: 12,
+            src: 8,
+            src_end: 12,
+            owner_end: 12,
+            context: None,
+            kind: AnchorKind::Match,
+        };
+        assert_eq!(
+            diagnostic_origin(&mappings, &[opened], 8, 9, code, source),
+            Some(DiagnosticOrigin::Anchor(opened))
+        );
+        let unicode_boundary = "😀 +다음";
+        assert_eq!(
+            diagnostic_origin(&mappings, &[], 8, 9, code, unicode_boundary),
+            Some(DiagnosticOrigin::Exact { start: 6, end: 9 })
         );
     }
 
@@ -330,18 +387,18 @@ mod tests {
         };
         // The glue `;` after the copied `radius.`.
         assert_eq!(
-            diagnostic_origin(&mappings, &[anchor], 105, 106),
+            diagnostic_origin(&mappings, &[anchor], 105, 106, "", ""),
             Some(DiagnosticOrigin::Exact { start: 25, end: 25 })
         );
         // Glue a construct opens there is that construct's.
         let opened = EmitAnchor { out: 105, ..anchor };
         assert_eq!(
-            diagnostic_origin(&mappings, &[opened, anchor], 105, 106),
+            diagnostic_origin(&mappings, &[opened, anchor], 105, 106, "", ""),
             Some(DiagnosticOrigin::Anchor(opened))
         );
         // A range reaching back into the copied text keeps its anchor.
         assert_eq!(
-            diagnostic_origin(&mappings, &[anchor], 104, 106),
+            diagnostic_origin(&mappings, &[anchor], 104, 106, "", ""),
             Some(DiagnosticOrigin::Anchor(anchor))
         );
     }

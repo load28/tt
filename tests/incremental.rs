@@ -40,6 +40,169 @@ const SEQUENCES: u64 = 3;
 const LONGEST_SPAN: usize = 12;
 const HOVER_POINTS: usize = 8;
 
+#[test]
+fn recovery_sequences_keep_independent_answers_at_every_revision() {
+    if !toolchain() {
+        return;
+    }
+    for (extension, mapped) in [("tt", false), ("ttx", false), ("tt", true), ("ttx", true)] {
+        let disk = Workspace::in_repo("recovery-incremental");
+        let dir = disk.path().canonicalize().unwrap();
+        fs::write(dir.join("tsconfig.json"), DEFAULT_TSCONFIG).unwrap();
+        if mapped {
+            common::installed_mapper::install(&dir);
+        }
+        let path = dir.join(format!("provider.{extension}"));
+        let consumer = dir.join(format!("consumer.{extension}"));
+        let consumer_text =
+            format!("import {{ later }} from './provider.{extension}';\nlater.toUpperCase();\n");
+        fs::write(&consumer, &consumer_text).unwrap();
+        let mut edited = EngineWorkspace::new(Engine::new(None));
+        let mut fragments = vec![
+            "const broken = 1;",
+            "const broken = ;",
+            "const broken = subject.",
+            "const broken = f(",
+            "const broken = [",
+            "const broken = { value:",
+            "type Broken = { x: ;",
+            "type Broken = Array<",
+            "const broken = 1 +",
+            "const broken = f<",
+        ];
+        if extension == "ttx" {
+            fragments.extend([
+                "const broken = <div title={ } />;",
+                "const broken = <div><span {match (subject) { Idle => 1, Busy => 2 }}</div>;",
+            ]);
+        }
+        fragments.push("const broken = 1;");
+        for fragment in fragments {
+            let text = format!(
+                "variant Status {{ Idle, Busy }}\ndeclare const subject: Status;\ndeclare function f(...xs: unknown[]): unknown;\n{fragment}\nconst a = match (subject) {{ Idle => 1, Busy => 2 }};\nconst b = match (subject) {{ Idle => 3, Busy => 4 }};\nexport const later = '정상';\nconst wrong: number = 'wrong';\nlater.toUpperCase();\n"
+            );
+            // Disk and open-buffer revisions deliberately differ after the
+            // first state: consumers must read the current provider overlay.
+            if !path.exists() {
+                fs::write(&path, &text).unwrap();
+            }
+            edited.open_document(&path, text.clone()).unwrap();
+            edited
+                .open_document(&consumer, consumer_text.clone())
+                .unwrap();
+            let cursor = text.rfind("later.toUpperCase").unwrap() + "later.".len();
+            let at = position(&text, cursor);
+            let answers = completion(&mut edited, &path, at);
+            assert!(
+                answers.contains("toUpperCase"),
+                "{extension}: {fragment}: {answers}"
+            );
+            let diagnostics = edited
+                .project_for(&path)
+                .unwrap()
+                .service_diagnostics(&path)
+                .unwrap();
+            assert!(
+                diagnostics.iter().any(|d| d.code == 2322),
+                "{fragment}: {diagnostics:?}"
+            );
+            assert!(
+                !diagnostics
+                    .iter()
+                    .any(|d| d.message.contains("$tt_")
+                        || d.message.contains("Cannot find name 'let'")),
+                "recovery must not manufacture generated-code errors: {fragment}: {diagnostics:?}"
+            );
+            assert!(
+                edited
+                    .project_for(&consumer)
+                    .unwrap()
+                    .service_diagnostics(&consumer)
+                    .unwrap()
+                    .is_empty(),
+                "the independent export remains available: {fragment}"
+            );
+            let hover_at = position(&text, cursor - "later.".len());
+            assert!(
+                edited
+                    .project_for(&path)
+                    .unwrap()
+                    .hover(&path, hover_at)
+                    .unwrap()
+                    .is_some()
+            );
+            assert!(
+                !edited
+                    .project_for(&path)
+                    .unwrap()
+                    .definition(&path, hover_at)
+                    .unwrap()
+                    .is_empty()
+            );
+            let units = [path.clone(), consumer.clone()];
+            let observed = observe(&mut edited, &dir, &path, &units, &text, cursor);
+            let mut fresh = EngineWorkspace::new(Engine::new(None));
+            fresh.open_document(&path, text.clone()).unwrap();
+            fresh
+                .open_document(&consumer, consumer_text.clone())
+                .unwrap();
+            assert_eq!(
+                observed,
+                observe(&mut fresh, &dir, &path, &units, &text, cursor),
+                "{extension}: {fragment}"
+            );
+        }
+    }
+}
+
+#[test]
+fn recovery_retains_immediate_exports_in_both_service_arrangements() {
+    if !toolchain() {
+        return;
+    }
+    for mapped in [false, true] {
+        let disk = Workspace::in_repo("recovery-exports");
+        let dir = disk.path().canonicalize().unwrap();
+        fs::write(dir.join("tsconfig.json"), DEFAULT_TSCONFIG).unwrap();
+        if mapped {
+            common::installed_mapper::install(&dir);
+        }
+        let path = dir.join("provider.tt");
+        let consumer = dir.join("consumer.tt");
+        let consumer_text =
+            "import { good } from './provider.tt'; const ok: number = good; export { ok };";
+        fs::write(&consumer, consumer_text).unwrap();
+        for broken in [
+            "type Bad = { x: ;",
+            "interface Bad { x: ;",
+            "type Bad = Array<",
+            "const broken =",
+            "const broken = 1 +",
+            "const broken = f<",
+            "const broken = obj.",
+        ] {
+            let text = format!(
+                "declare const flag: boolean;\ndeclare const obj: {{ x: number }};\ndeclare function f(): void;\n{broken}\nexport const good = match (flag) {{ true => 1, false => 2 }};\n"
+            );
+            fs::write(&path, &text).unwrap();
+            let mut workspace = EngineWorkspace::new(Engine::new(None));
+            workspace.open_document(&path, text).unwrap();
+            workspace
+                .open_document(&consumer, consumer_text.to_string())
+                .unwrap();
+            let diagnostics = workspace
+                .project_for(&consumer)
+                .unwrap()
+                .service_diagnostics(&consumer)
+                .unwrap();
+            assert!(
+                diagnostics.is_empty(),
+                "mapped={mapped}, {broken}: {diagnostics:?}"
+            );
+        }
+    }
+}
+
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }

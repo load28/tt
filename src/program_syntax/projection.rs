@@ -130,7 +130,14 @@ impl ProgramSyntax {
         source_kind: crate::SourceKind,
     ) -> Result<Self, ProgramSyntaxError> {
         let tokens = crate::lexer::lex_with_kind(source, 0, source.len(), source_kind);
-        Self::build_with(semantic, core, source, source_kind, &tokens, false)
+        Self::build_with(
+            semantic,
+            core,
+            source,
+            source_kind,
+            &tokens,
+            SyntaxMode::Strict,
+        )
     }
 
     pub(crate) fn build_with(
@@ -139,11 +146,14 @@ impl ProgramSyntax {
         source: &str,
         source_kind: crate::SourceKind,
         tokens: &[crate::lexer::Token],
-        tolerant: bool,
+        mode: SyntaxMode,
     ) -> Result<Self, ProgramSyntaxError> {
-        if let Some((span, message)) =
+        let error = if mode == SyntaxMode::Editor {
+            crate::lexer::host_lexical_error_in(source, source_kind, tokens)
+        } else {
             crate::lexer::host_syntax_error_in(source, source_kind, tokens)
-        {
+        };
+        if let Some((span, message)) = error {
             return Err(ProgramSyntaxError::SourceNotTypeScript {
                 message: message.to_string(),
                 source: span.start,
@@ -154,7 +164,7 @@ impl ProgramSyntax {
             &projection.code,
             &projection.source_segments,
             source_kind,
-            tolerant,
+            mode,
         )?;
         let completion_scopes = super::completion::completion_scopes(
             &parsed.module,

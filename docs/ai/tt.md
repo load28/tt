@@ -12,6 +12,12 @@ CONTRACTS:
 - A host-lowering plan that cannot yet represent a claimed tt construct is a located `lowering-plan-failed` diagnostic, reported at the construct whose generated placeholder the TypeScript parse stopped in. Every compiler client reports this failure instead of exposing an internal compiler error. A parse that stops right where a construct begins (a `{match ...}` inside an unclosed JSX opening tag, where only a `{...spread}` may stand; a `variant` written as a value) is the program as written not parsing there: it is `source-not-typescript` at the construct, and the editor shows TypeScript's own parse error.
 - Identifiers inside tt constructs: ASCII `[A-Za-z_$][A-Za-z0-9_$]*` only (names and bindings; TypeScript expressions inside a construct, such as a `try` operand or a scrutinee, may use any identifier). A tt keyword is only ever a whole identifier: `étry(1)` or `名match` is an ordinary TypeScript name. TS reserved words (new, default, if, in, of, static, class, ...) can't be tags/fields/bindings. A `variant` written with one is a located ``tt `variant` could not be parsed``; a `match` arm written with one is not claimed, so the text passes through and the output self-check reports it — the TRAP rule above, not a silent success either way.
 
+While editing `.tt` or `.ttx`, incomplete syntax is recovered at grammatical
+boundaries so independent constructs and exports remain available to editor
+queries. Original syntax errors and unrelated type errors remain visible.
+Recovery projections are editor-only: compilation still rejects the malformed
+source, and never writes recovery placeholders as executable output.
+
 ## variant
 
 ```tt

@@ -1,0 +1,39 @@
+==== ttc --out-dir (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: merge conflict marker encountered. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./conflict.tt:2:1
+  |
+2 | =======
+  | ^
+
+error[source-not-typescript]: the TypeScript here does not parse: Unexpected token `.`. Expected a JSX tag delimiter. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./namespace.ttx:2:17
+  |
+2 | const bad = <G:U.m />;
+  |                 ^
+
+error[source-not-typescript]: the TypeScript here does not parse: Expected '</', got '.'. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> ./nestedNamespace.ttx:2:22
+  |
+2 | const bad = <div><G:U.m /></div>;
+  |                      ^
+
+
+==== ttc --check-types (exit 1) ====
+error[source-not-typescript]: the TypeScript here does not parse: merge conflict marker encountered. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> conflict.tt:2:1
+  |
+2 | =======
+  | ^
+error[source-not-typescript]: the TypeScript here does not parse: Unexpected token `.`. Expected a JSX tag delimiter. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> namespace.ttx:2:17
+  |
+2 | const bad = <G:U.m />;
+  |                 ^
+error[source-not-typescript]: the TypeScript here does not parse: Expected '</', got '.'. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+ --> nestedNamespace.ttx:2:22
+  |
+2 | const bad = <div><G:U.m /></div>;
+  |                      ^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

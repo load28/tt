@@ -20,6 +20,8 @@
 mod collector;
 mod completion;
 mod projection;
+mod recovery;
+pub(crate) use recovery::{editor_insertions, lost_editor_values};
 mod protocol;
 mod scopes;
 mod visit;
@@ -1475,4 +1477,12 @@ fn is_transparent_expression_edge(parent: &AstParentKind) -> bool {
             | AstParentKind::TsTypeAssertion(fields::TsTypeAssertionField::Expr)
             | AstParentKind::TsInstantiation(fields::TsInstantiationField::Expr)
     )
+}
+
+/// Parsing policy is explicit: editor recovery never weakens build validation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SyntaxMode {
+    Strict,
+    Diagnostic,
+    Editor,
 }
