@@ -348,10 +348,12 @@ until no further defect is found.
 - **Cause**: The tt lexer reads the unterminated template as one token past
   the resume point, so the skipped text's last token lay before it.
 - **Resolution**: When a tt token runs past the resume point, the skipped
-  text cannot be read in tt tokens and no terminator is written. The
-  remaining difference from the twin is the tt lexer reading the template's
-  interpolation to the next unmatched `}`, where TypeScript's parser ends it
-  at the missing expression; it stays within the edited lines.
+  text cannot be read in tt tokens and no terminator is written. With
+  Issue 28's change the case reports TypeScript's `Expression expected` at
+  the next statement, as the twin does. The remaining difference is a
+  tt-level unbalanced-delimiter error at the call: the tt lexer reads the
+  template's interpolation to the next unmatched `}`, where TypeScript's
+  parser ends it at the missing expression.
 
 ### Issue 27: A JSX attribute name after a peeked token was an internal error
 
@@ -372,6 +374,16 @@ until no further defect is found.
   skipped, the missing expression recorded inside it kept its replacement.
 - **Resolution**: A failed expression replaced by an invalid node discards
   the records made since it began, as a skipped statement does.
+
+### Issue 29: A skipped expression's node took the line break after it
+
+- **Symptom**: `match(("")){1=>{return("` followed by `return}}` on the next
+  line raised `SourceEmittedTwice` in the editor projection.
+- **Cause**: The invalid node that replaces a skipped expression ended at
+  the next token's start, so it owned the trivia after its last token, which
+  the following statement's text owns as well.
+- **Resolution**: The invalid node ends at the last token it skipped, as
+  every node ends at its last token. The record keeps the resume point.
 
 ## Regression test (fails before the fix)
 
@@ -453,6 +465,11 @@ until no further defect is found.
 - **Observed failure**: Without Issue 28's change the parser test found a
   `MissingExpression` record with the replacement `(undefined as any)`
   inside the skipped `(`; the mutation pass with seed 19 reported the crash.
+
+- **Path**: `fuzz/regressions/compile_any_bytes/6208f4d6245601fe.tt`.
+- **Observed failure**: The mutation pass with seed 19 reported the crash
+  again after Issue 28 in this form; without Issue 29's change it replays
+  as `SourceEmittedTwice`.
 
 ## Verification
 

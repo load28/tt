@@ -321,8 +321,10 @@ impl<I: Tokens> Parser<I> {
         if missing && self.at_statement_start() {
             self.recovery.records.last_mut().unwrap().replacement = Some("(undefined as any)");
         }
+        // The node ends with the last token it skipped, as every node ends at
+        // its last token; the trivia before the next token is not its own.
         Ok(Box::new(Expr::Invalid(Invalid {
-            span: Span::new_with_checked(start, self.cur_pos().max(start)),
+            span: Span::new_with_checked(start, self.input().prev_span().hi.max(start)),
         })))
     }
 
