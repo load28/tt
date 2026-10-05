@@ -54,6 +54,12 @@ existing syntax substrate and preserve the repository's testing contracts.
   mapper integration uses the existing real-TypeScript process fixture.
   `./scripts/check-task-index` passed (757 records), and `git diff --check`
   passed. Rust and integration gates are pending implementation.
+- 2026-10-05: The user approved the written design. Prepared
+  `docs/superpowers/plans/2026-10-05-structural-editor-recovery.md` with four
+  dependency-ordered stages, parser/host/projection interfaces, regression-first
+  assertions, existing case and incremental runners, and full gate criteria.
+  Reviewed the plan against the approved spec and the five review-focus input
+  classes. Implementation remains pending plan review and execution selection.
 
 ## Issues and resolutions
 
@@ -77,7 +83,8 @@ existing syntax substrate and preserve the repository's testing contracts.
 - [x] `./scripts/doctor`
 - [x] `./scripts/check-task-index`
 - [x] `git diff --check`
-- [ ] Design review
+- [x] Design review
+- [ ] Implementation plan review and execution-method selection
 - [ ] Failing regression assertions observed before production changes
 - [ ] `cargo fmt --check`
 - [ ] `cargo clippy --all-targets -- -D warnings`
@@ -87,6 +94,7 @@ existing syntax substrate and preserve the repository's testing contracts.
 
 ## Result
 
-Design prepared in `docs/design/structural-editor-recovery.md`. No production
-code or test expectations have changed. Implementation is pending design
-review and a concrete implementation plan.
+Design approved in `docs/design/structural-editor-recovery.md`. The concrete
+[implementation plan](../superpowers/plans/2026-10-05-structural-editor-recovery.md)
+is ready for review. No production code or test expectations have changed.
+Implementation is pending plan review and execution-method selection.

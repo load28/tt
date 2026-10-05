@@ -1,7 +1,7 @@
 # Structural editor recovery
 
 Task: [TASK-759](../tasks/TASK-759-structural-editor-recovery.md).
-Status: Proposed for review; no implementation is claimed.
+Status: Approved by the user on 2026-10-05; implementation plan pending review.
 
 ## Objective and acceptance contract
 
