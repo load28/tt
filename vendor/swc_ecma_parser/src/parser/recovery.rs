@@ -38,9 +38,6 @@ pub struct RecoveryRecord {
     pub expected: String,
     /// Materialize only syntax whose absence would capture a later statement.
     pub replacement: Option<&'static str>,
-    /// The parser resumed at a token that starts a statement and cannot
-    /// start an expression ([`Parser::at_statement_start`]).
-    pub resumes_statement: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -120,7 +117,6 @@ impl<I: Tokens> Parser<I> {
     ) {
         let end = self.cur_pos().max(start);
         let span = Span::new_with_checked(start, end);
-        let resumes_statement = self.at_statement_start();
         self.recovery.records.push(RecoveryRecord {
             id: RecoveryId(self.recovery.records.len() as u32),
             kind,
@@ -129,7 +125,6 @@ impl<I: Tokens> Parser<I> {
             owner: span,
             expected,
             replacement: None,
-            resumes_statement,
         });
     }
 
@@ -238,7 +233,6 @@ impl<I: Tokens> Parser<I> {
             owner: span,
             expected: "identifier".into(),
             replacement: None,
-            resumes_statement: false,
         });
         Some(IdentName::new("".into(), span))
     }

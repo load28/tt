@@ -1,0 +1,13 @@
+=== diagnostics recoveryUnterminatedTemplateBeforeStatement.tt ===
+diagnostics: 1 diagnostic(s)
+  5:2-5:3 " " error TS1005: '}' expected. (in code ttc generated for this construct)
+published: 2 diagnostic(s)
+  4:14-4:15 "(" error source-not-typescript (ttc): the TypeScript here does not parse: unbalanced TypeScript delimiter. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+  5:2-5:3 " " error ts1005 (ttc): '}' expected. (in code ttc generated near this position)
+
+=== parity with the TypeScript twin ===
+diagnostics recoveryUnterminatedTemplateBeforeStatement.tt: differs
+  tt only: recoveryUnterminatedTemplateBeforeStatement " " error TS1005: '}' expected. (in code ttc generated near this position)
+  tt only: recoveryUnterminatedTemplateBeforeStatement "(" error TS"source-not-typescript": the TypeScript here does not parse: unbalanced TypeScript delimiter. tt lowering models this file's TypeScript, so no output is emitted (`--no-verify` does not apply).
+  ts only: recoveryUnterminatedTemplateBeforeStatement "const" error TS1109: Expression expected.
+

@@ -268,9 +268,12 @@ impl crate::input::Tokens for Lexer<'_> {
         self.finish_next_token(self.span(start), token)
     }
 
-    fn scan_jsx_identifier(&mut self, start: BytePos) -> TokenAndSpan {
-        let token = self.state.token_type;
+    fn scan_jsx_identifier(&mut self, current: TokenAndSpan) -> TokenAndSpan {
+        let start = current.span.lo;
+        let token = current.token;
         debug_assert!(token.is_word());
+        unsafe { self.input.reset_to(current.span.hi) };
+        self.state.set_token_type(token);
         let prefix_end = self.cur_pos();
         let mut v = String::with_capacity(16);
         while let Some(ch) = self.input().cur() {

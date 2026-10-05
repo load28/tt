@@ -1,0 +1,12 @@
+=== diagnostics recoveryClassMemberAfterSkippedArgument.tt ===
+diagnostics: 2 diagnostic(s)
+  5:10-5:12 "if" error TS1005: ',' expected.
+  5:3-5:9 "static" error TS2304: Cannot find name 'static'.
+  restates: source-not-typescript
+published: 2 diagnostic(s)
+  5:3-5:9 "static" error ts2304 (ttc): Cannot find name 'static'.
+  5:10-5:12 "if" error ts1005 (ttc): ',' expected.
+
+=== parity with the TypeScript twin ===
+diagnostics recoveryClassMemberAfterSkippedArgument.tt: same
+

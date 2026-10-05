@@ -197,8 +197,8 @@ impl<I: Tokens> Tokens for Capturing<I> {
         ts
     }
 
-    fn scan_jsx_identifier(&mut self, start: swc_common::BytePos) -> TokenAndSpan {
-        let ts = self.inner.scan_jsx_identifier(start);
+    fn scan_jsx_identifier(&mut self, current: TokenAndSpan) -> TokenAndSpan {
+        let ts = self.inner.scan_jsx_identifier(current);
         self.capture(ts);
         ts
     }

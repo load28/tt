@@ -55,6 +55,8 @@ until no further defect is found.
 - 2026-10-05: A review of the third round's diff found Issues 19-21 and a
   stale comment on `val` candidates in regions the host cannot parse.
 - 2026-10-05: A mutation pass with another seed (7) found Issues 22-23.
+- 2026-10-05: A review of the statement-start boundary found Issues 24-26;
+  a mutation pass with seed 11 found Issue 27.
 - 2026-10-05: The LSP typing simulation (1,020 published diagnostic sets
   over 10 tt/ttx files, 22 statements retyped character by character and 35
   closing delimiters deleted, TypeScript twins through `tsc --lsp`) found
@@ -312,6 +314,52 @@ until no further defect is found.
   its host owner takes no statements (a parameter, class field, class
   definition or enum initializer), as a `try` exiting a function is.
 
+### Issue 24: A terminator closed a class at a member named by a keyword
+
+- **Symptom**: In a class, `x = g(1,` followed by `static if() {}` and a
+  field with a `match` projected `)};` that closed the class body; the twin
+  has one `',' expected`.
+- **Cause**: Issue 20 ended skipped expression text wherever the parser
+  resumed at a statement-starting keyword, but a class member named `if`
+  resumes the class body, not a statement list.
+- **Resolution**: The terminator is written only where the host parser read
+  a statement that starts at the resume point: not an empty statement (a
+  `;` in error recovery ends a list, `isListElement`), and not a statement
+  made of recovered input alone. The record no longer carries a keyword
+  flag.
+
+### Issue 25: A skipped argument was closed twice
+
+- **Symptom**: `const a = g(1, new` followed by `if (v) {}` projected
+  `g(1, new);` and a second `)` before `if`, adding a parse error.
+- **Cause**: The terminator closed the open `(`, and the missing-token repair
+  at the resume point closed it again.
+- **Resolution**: The terminator is written at the resume point, after the
+  repairs there, and closes only the lists they leave open. Being at the next
+  token's start, it cannot fall into a trailing comment (Issue 19).
+
+### Issue 26: An unterminated template hid the skipped text's delimiters
+
+- **Symptom**: ``const a = g(1, `${`` before a statement placed the
+  terminator before the template.
+- **Cause**: The tt lexer reads the unterminated template as one token past
+  the resume point, so the skipped text's last token lay before it.
+- **Resolution**: When a tt token runs past the resume point, the skipped
+  text cannot be read in tt tokens and no terminator is written. The
+  remaining difference from the twin is the tt lexer reading the template's
+  interpolation to the next unmatched `}`, where TypeScript's parser ends it
+  at the missing expression; it stays within the edited lines.
+
+### Issue 27: A JSX attribute name after a peeked token was an internal error
+
+- **Symptom**: `return<w e={[...{const r try a` in a `.ttx` file panicked in
+  the vendored lexer (`token_value` should be a word).
+- **Cause**: Editor recovery peeks one token to tell a keyword property name
+  from a statement. The JSX name scan then read the lexer's state, which
+  described the peeked token, not the current one.
+- **Resolution**: The JSX name scan takes the current token, rescans from its
+  end, and drops the peeked token, which is read again after the name.
+
 ## Regression test (fails before the fix)
 
 - **Path**: `editors/vscode/server/src/test/server.test.ts`, "a repaired
@@ -376,6 +424,15 @@ until no further defect is found.
   `tests/cases/compiler/aTryExitingAResultFromAParameterInitializer.tt`.
 - **Observed failure**: A mutation pass with seed 7 reported both crashes;
   without Issue 23's change the compiler case raised the ICE.
+
+- **Path**: `tests/cases/editor/recoveryClassMemberAfterSkippedArgument.tt`,
+  `recoverySkippedArgumentRepairedOnce.tt`,
+  `recoveryUnterminatedTemplateBeforeStatement.tt`;
+  `fuzz/regressions/compile_any_bytes/7e8a23cf640ec560.ttx`.
+- **Observed failure**: Against the previous commit the first two baselines
+  differed (the class closed by `)};`; a second `)`), and the mutation pass
+  with seed 11 reported the lexer panic. The template case pins the
+  remaining local difference.
 
 ## Verification
 
