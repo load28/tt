@@ -931,3 +931,21 @@ fn editor_delimiter_insertions_preserve_unicode_source_mappings() {
         assert!(ttc::compile_report(source, &options).emit.is_none());
     }
 }
+
+#[test]
+fn editor_recovery_does_not_replace_matches_after_skipped_templates() {
+    let source = "const before = 1 |> String;\ncnst broken = `${value}`;\nexport const later = match (true) { true => 1, false => 2 };\n";
+    let report = ttc::compile_projection_report(source, &Options::default());
+    let emit = report
+        .emit
+        .expect("independent declarations remain projected");
+    let later = source.find("match").unwrap();
+    assert!(
+        !report
+            .recovered
+            .iter()
+            .any(|&(start, end)| start <= later && later < end),
+        "the independent match must retain its type: {}",
+        emit.code
+    );
+}

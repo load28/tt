@@ -51,9 +51,7 @@ impl<I: Tokens> Parser<I> {
         self.emit_error(error);
         // '=' starts the initializer, not part of the missing annotation.
         // Other list/statement terminators belong to their enclosing grammar.
-        while self.input().cur() != Token::Eq && !self.at_expression_boundary() {
-            self.bump();
-        }
+        self.skip_to_recovery_boundary(true);
         let end = self.cur_pos().max(start);
         if self.input().prev_span().hi < start {
             self.input_mut().prev_span = Span::new_with_checked(start, start);
@@ -314,13 +312,30 @@ impl<I: Tokens> Parser<I> {
     }
 
     fn skip_to_expression_boundary(&mut self) {
+        self.skip_to_recovery_boundary(false);
+    }
+
+    fn skip_to_recovery_boundary(&mut self, stop_at_initializer: bool) {
         let mut delimiters = Vec::new();
         loop {
             let token = self.input().cur();
-            if token == Token::Eof || delimiters.is_empty() && self.at_expression_boundary() {
+            if token == Token::Eof
+                || delimiters.is_empty()
+                    && (self.at_expression_boundary() || stop_at_initializer && token == Token::Eq)
+            {
                 return;
             }
             match token {
+                // Template heads include `${`. Their matching `}` must be
+                // rescanned in template mode, so text and nested interpolations
+                // cannot become statements or swallow the following source.
+                Token::TemplateHead => delimiters.push(Token::TemplateTail),
+                Token::RBrace if delimiters.last() == Some(&Token::TemplateTail) => {
+                    self.input_mut().rescan_template_token(false);
+                    if self.input().cur() != Token::TemplateMiddle {
+                        delimiters.pop();
+                    }
+                }
                 Token::LParen => delimiters.push(Token::RParen),
                 Token::LBracket => delimiters.push(Token::RBracket),
                 Token::LBrace => delimiters.push(Token::RBrace),

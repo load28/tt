@@ -220,3 +220,33 @@ fn an_unclosed_switch_list_returns_at_end_of_file() {
     assert_eq!(names(&module), ["earlier"]);
     assert!(!recovery.is_empty());
 }
+
+#[test]
+fn skipped_templates_preserve_following_declarations() {
+    for template in [
+        "`${value}`",
+        "`${f({ x: 1 })}text${value}`",
+        "`${`nested${value}`}tail`",
+        "`${value}const fake = 1;${value}`",
+    ] {
+        let source = format!("cnst broken = {template}; const later = 42;");
+        let (module, _, _) = parse(&source, false, RecoveryMode::Editor);
+        assert_eq!(names(&module), ["later"], "{source}");
+    }
+}
+
+#[test]
+fn skipped_type_templates_preserve_following_declarations() {
+    for damaged in [
+        "const broken: ? `${value}` = 1;",
+        "const broken: ? `${`nested${value}`}tail` = 1;",
+    ] {
+        let source = format!("{damaged} const later = 42;");
+        let (module, _, _) = parse(&source, false, RecoveryMode::Editor);
+        assert!(
+            names(&module).contains(&"later".into()),
+            "{source}: {:?}",
+            names(&module)
+        );
+    }
+}

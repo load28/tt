@@ -1,0 +1,37 @@
+=== diagnostics recoveryTypeTemplate.tt ===
+diagnostics: 7 diagnostic(s)
+  4:7-4:13 "broken" error TS2322: Type '1' is not assignable to type '`${value}`'.
+  4:15-4:27 "? `${value}`" error TS17020: '?' at the start of a type is not valid TypeScript syntax. Did you mean to write '`${value}` | null | undefined'?
+  4:20-4:25 "value" error TS2749: 'value' refers to a value, but is being used as a type here. Did you mean 'typeof value'?
+  6:7-6:12 "wrong" error TS2322: Type 'number' is not assignable to type 'string'.
+  1:7-1:13 "before" hint TS6133: 'before' is declared but its value is never read. [unnecessary]
+  4:7-4:13 "broken" hint TS6133: 'broken' is declared but its value is never read. [unnecessary]
+  6:7-6:12 "wrong" hint TS6133: 'wrong' is declared but its value is never read. [unnecessary]
+  restates: source-not-typescript
+published: 7 diagnostic(s)
+  1:7-1:13 "before" hint TS6133 (ts): 'before' is declared but its value is never read. [unnecessary]
+  4:7-4:13 "broken" hint TS6133 (ts): 'broken' is declared but its value is never read. [unnecessary]
+  4:7-4:13 "broken" error ts2322 (ttc): Type '1' is not assignable to type '`${value}`'.
+  4:15-4:27 "? `${value}`" error ts17020 (ttc): '?' at the start of a type is not valid TypeScript syntax. Did you mean to write '`${value}` | null | undefined'?
+  4:20-4:25 "value" error ts2749 (ttc): 'value' refers to a value, but is being used as a type here. Did you mean 'typeof value'?
+  6:7-6:12 "wrong" hint TS6133 (ts): 'wrong' is declared but its value is never read. [unnecessary]
+  6:7-6:12 "wrong" error ts2322 (ttc): Type 'number' is not assignable to type 'string'.
+
+=== hover /*later*/ recoveryTypeTemplate.tt:7:1 ===
+  | later;
+  | ^ /*later*/
+hover: 7:1-7:6 "later"
+    const later: number
+ttSymbol: null
+
+=== definition /*later*/ recoveryTypeTemplate.tt:7:1 ===
+  | later;
+  | ^ /*later*/
+definition: 1 location(s)
+  recoveryTypeTemplate.tt 5:14-5:19 "later"
+
+=== parity with the TypeScript twin ===
+diagnostics recoveryTypeTemplate.tt: same
+hover later: same
+definition later: same
+
