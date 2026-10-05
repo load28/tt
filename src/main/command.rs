@@ -470,6 +470,7 @@ pub(super) fn run() -> ExitCode {
             CliOption::SourceMap,
             CliOption::RewriteImports,
             CliOption::Project,
+            CliOption::Node,
         ][..]
     } else {
         &[
@@ -481,6 +482,7 @@ pub(super) fn run() -> ExitCode {
             CliOption::SourceMap,
             CliOption::RewriteImports,
             CliOption::Project,
+            CliOption::Node,
         ][..]
     };
     let mode = if types {
@@ -652,10 +654,11 @@ pub(super) fn run() -> ExitCode {
         source_map,
         out_dir: out_dir.clone(),
         jobs: jobs_limit,
+        node: node.clone(),
     };
 
     if watch {
-        return watch_mode(&inputs, out_dir.as_deref(), &build);
+        return watch_mode(&inputs, out_dir.as_deref(), project.as_deref(), &build);
     }
 
     let root = support_root(&jobs, build.out_dir.as_deref());

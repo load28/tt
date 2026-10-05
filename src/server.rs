@@ -149,7 +149,7 @@ use ttc::engine::{CheckRequest, Engine, Position, Project, SignatureTrigger, Wor
 pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
     // One live project per identity, and the documents a consumer holds
     // open in them — what a server exists to keep between requests.
-    let mut workspace = Workspace::new(Engine::new(node));
+    let mut workspace = Workspace::new(Engine::new(node.clone()));
     let mut checks = Checks::default();
 
     let stdout = std::io::stdout();
@@ -223,7 +223,9 @@ pub(crate) fn run(node: Option<PathBuf>) -> ExitCode {
         // of one request, and what that work builds — a snapshot — is
         // immutable and installed whole or not at all, so the projects the
         // workspace holds are the ones the last successful request left.
-        let response = match ttc::ice::catching(|| respond(&mut workspace, &mut checks, line)) {
+        let response = match ttc::ice::catching(|| {
+            respond(&mut workspace, &mut checks, node.as_deref(), line)
+        }) {
             Ok(response) => response,
             Err(message) => serde_json::json!({
                 "id": request_id(line),
@@ -305,7 +307,12 @@ fn request_id(line: &str) -> serde_json::Value {
 }
 
 /// One request, one answer — errors included, so the session survives them.
-fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_json::Value {
+fn respond(
+    workspace: &mut Workspace,
+    checks: &mut Checks,
+    node: Option<&Path>,
+    line: &str,
+) -> serde_json::Value {
     use serde_json::json;
     ttc::ice::panic_for_test("server");
     let request: serde_json::Value = match serde_json::from_str(line) {
@@ -318,7 +325,7 @@ fn respond(workspace: &mut Workspace, checks: &mut Checks, line: &str) -> serde_
     let params = &request["params"];
     let result = match request["method"].as_str().unwrap_or_default() {
         "check" => check(params),
-        "print" => print(params),
+        "print" => print(params, node),
         "dependencies" => dependencies(workspace, checks, params),
         "emitMap" => emit_map(params),
         "typedCheck" => typed_check(workspace, params),
@@ -798,7 +805,7 @@ fn semantic_tokens(params: &serde_json::Value) -> Result<serde_json::Value, Stri
 /// ([`crate::build::print_input`]), so the bytes are the same; what a
 /// session adds is that the TypeScript project refining the output's
 /// storage annotations stays open between requests.
-fn print(params: &serde_json::Value) -> Result<serde_json::Value, String> {
+fn print(params: &serde_json::Value, node: Option<&Path>) -> Result<serde_json::Value, String> {
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "print needs a \"path\"".to_string())?;
@@ -839,6 +846,7 @@ fn print(params: &serde_json::Value) -> Result<serde_json::Value, String> {
             source_map,
             out_dir: None,
             jobs: None,
+            node: node.map(Path::to_path_buf),
         },
     );
     Ok(serde_json::json!({ "code": printed.code, "messages": printed.messages }))

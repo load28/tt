@@ -117,6 +117,7 @@ function jsoncTree(text) {
     try { key = JSON.parse(quote === '"' ? raw : `"${raw.slice(1, -1).replaceAll('"', '\\"')}"`); } catch { key = raw; }
     return { kind: "string", start, end: at, key };
   };
+  const startsElement = () => at < text.length && !/[,:}\]]/.test(text[at]);
   const value = () => {
     if (!skip()) return null;
     const start = at;
@@ -130,6 +131,7 @@ function jsoncTree(text) {
       for (;;) {
         if (!skip()) return null;
         if (text[at] === close) { at += 1; node.end = at; return node; }
+        if (at >= text.length) { node.end = at; return node; }
         let entry;
         if (open === "{") {
           const name = text[at] === '"' || text[at] === "'" ? string() : null;
@@ -149,7 +151,9 @@ function jsoncTree(text) {
           entry.comma = at;
           previousComma = at;
           at += 1;
-        } else if (text[at] !== close) return null;
+        } else if (open === "{" && text[at] === ";") {
+          at += 1;
+        } else if (text[at] !== close && at < text.length && !startsElement()) return null;
       }
     }
     while (at < text.length && !/[\s,:{}[\]"'/]/.test(text[at])) at += 1;
@@ -638,8 +642,8 @@ async function main() {
       }
       for (const file of new Set([open.tsconfig, ...dependencies.keys()])) {
         if (!file.endsWith(".json") || !(files.has(file) || fs.existsSync(file))) continue;
-        const { config, error } = api.readConfigFile(file);
-        if (error || !config || typeof config !== "object") continue;
+        const { config } = api.readConfigFile(file);
+        if (!config || typeof config !== "object") continue;
         const text = files.has(file) ? files.get(file) : fs.readFileSync(file, "utf8");
         const tree = jsoncTree(text);
         if (tree?.kind !== "object" && tree?.kind !== "empty") continue;

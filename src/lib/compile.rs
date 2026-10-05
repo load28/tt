@@ -76,6 +76,9 @@ pub struct Options<'a> {
     /// entries leave bare specifiers such as `@tt/runtime` untouched for a
     /// bundler plugin to resolve.
     pub std_imports: StdImports<'a>,
+    /// The node binary the TypeScript client for contextual type analysis
+    /// runs with. `None` runs `node` from `PATH`.
+    pub node: Option<&'a std::path::Path>,
 }
 
 impl Default for Options<'_> {
@@ -89,6 +92,7 @@ impl Default for Options<'_> {
             extern_variants: &[],
             defer_to_checker: false,
             std_imports: StdImports::default(),
+            node: None,
         }
     }
 }

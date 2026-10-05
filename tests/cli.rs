@@ -955,6 +955,51 @@ fn types_project_output(tsconfig: &str, files: &[(&str, &str)]) -> (bool, String
     )
 }
 
+#[cfg(unix)]
+#[test]
+fn build_and_print_run_the_typescript_client_with_the_named_node() {
+    use std::os::unix::fs::PermissionsExt;
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::write(
+        dir.join("tsconfig.json"),
+        "{\"compilerOptions\":{\"strict\":true}}\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("c.tt"),
+        "declare const n: number;\nexport const b = match (n) { 1 => ({ m() { return 1; } }), _ => ({ m() { return 2; } }) };\n",
+    )
+    .unwrap();
+    let marker = dir.join("marker");
+    let node = dir.join("named-node");
+    fs::write(
+        &node,
+        format!(
+            "#!/bin/sh\necho used >> '{}'\nexec node \"$@\"\n",
+            marker.display()
+        ),
+    )
+    .unwrap();
+    fs::set_permissions(&node, fs::Permissions::from_mode(0o755)).unwrap();
+    for args in [&["-p", "c.tt"][..], &["-o", "out", "c.tt"][..]] {
+        let _ = fs::remove_file(&marker);
+        let out = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .arg("--node")
+            .arg(&node)
+            .args(args)
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(out.status.success(), "{args:?}: {stderr}");
+        assert!(
+            marker.exists(),
+            "{args:?}: the named node never ran\n{stderr}"
+        );
+    }
+}
+
 #[test]
 fn types_reports_configuration_parsing_diagnostics() {
     require_types_toolchain!();
@@ -965,6 +1010,23 @@ fn types_reports_configuration_parsing_diagnostics() {
     assert!(!ok, "{err}");
     assert!(err.contains("error[ts5024]"), "{err}");
     assert!(err.contains("--> tsconfig.json:1:"), "{err}");
+}
+
+#[test]
+fn types_checks_tt_inputs_under_a_configuration_with_syntax_errors() {
+    require_types_toolchain!();
+    for config in [
+        "{ \"compilerOptions\": { \"strict\": tru }, \"include\": [\"src\"] }\n",
+        "{ \"compilerOptions\": { \"strict\": true }, \"include\": [\"src\"] \n",
+        "{ \"compilerOptions\": { \"strict\": true } \"include\": [\"src\"] }\n",
+    ] {
+        let (ok, err) =
+            types_project_output(config, &[("src/a.tt", "export const a: number = \"x\";\n")]);
+        assert!(!ok, "{err}");
+        assert!(err.contains("error[ts2322]"), "{config}\n{err}");
+        assert!(err.contains("--> src/a.tt:1:14"), "{config}\n{err}");
+        assert!(!err.contains("error[ts18003]"), "{config}\n{err}");
+    }
 }
 
 #[test]
@@ -3142,6 +3204,34 @@ fn a_types_report_without_typescript_counts_only_what_it_printed() {
 }
 
 #[test]
+fn a_check_without_typescript_reports_only_the_inputs_it_was_given() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::create_dir_all(dir.join("other")).unwrap();
+    fs::write(dir.join("tsconfig.json"), "{\"include\":[\"src\"]}\n").unwrap();
+    fs::write(dir.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    fs::write(
+        dir.join("other/o.tt"),
+        "variant S { A, B }\nexport const f = (s: S) => match (s) { A => 1, A => 2, B => 3 };\n",
+    )
+    .unwrap();
+    for input in ["src", "src/a.tt"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["--check-types", input])
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{stderr}");
+        assert!(
+            stderr.contains("the TypeScript layer did not run"),
+            "{stderr}"
+        );
+        assert!(!stderr.contains("other/o.tt"), "{input}: {stderr}");
+    }
+}
+
+#[test]
 fn an_edited_output_written_in_place_is_one_refusal() {
     let dir = tmpdir();
     fs::create_dir_all(dir.join("src")).unwrap();
@@ -3445,5 +3535,29 @@ fn an_unreadable_jsx_option_fails_only_a_build_that_has_a_ttx_source() {
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn an_output_directory_that_is_a_file_is_named_for_each_output() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(dir.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    fs::write(dir.join("src/b.tt"), "export const b = 1;\n").unwrap();
+    fs::write(dir.join("afile"), "").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["-o", "afile/x", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert_eq!(
+        stderr.lines().collect::<Vec<_>>(),
+        [
+            "ttc: afile/x/a.ts: afile: not a directory",
+            "ttc: afile/x/b.ts: afile: not a directory",
+        ],
+        "{stderr}"
     );
 }

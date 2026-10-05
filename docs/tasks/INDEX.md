@@ -798,6 +798,8 @@
 
 | TASK-763 | Validate editor buffers per file, lazily and cancellably | Complete | 2026-10-05 | 2026-10-05 | [TASK-763](./TASK-763-editor-validation-scheduling.md) |
 
+| TASK-764 | Fix defects found by a CLI audit | In progress | 2026-10-05 | — | [TASK-764](./TASK-764-cli-audit-defects.md) |
+
 ## Next task number
 
-**TASK-764**
+**TASK-765**

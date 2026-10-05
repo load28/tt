@@ -228,14 +228,16 @@ pub(crate) fn standalone(
         .to_path_buf();
     let inferred_config = root.join(format!(".tt-contextual-{}.json", std::process::id()));
     let configuration = config.clone().unwrap_or_else(|| inferred_config.clone());
-    let session = ProjectSession::of(&root);
+    let session = ProjectSession::of(&root, options.node);
     // Availability is decided before reading project inputs: a backend is
     // available once its toolchain resolves and its host is running. From
     // then on, project and backend failures must reach the caller unchanged.
     let available = {
         let mut session = ProjectSession::lock(&session);
         if session.backend.is_none() {
-            let Ok(backend) = super::native::NativeBackend::new(None, &cwd) else {
+            let Ok(backend) =
+                super::native::NativeBackend::new(options.node.map(Path::to_path_buf), &cwd)
+            else {
                 return Ok(emit);
             };
             session.backend = Some(backend);
@@ -428,15 +430,16 @@ impl ProjectSession {
     /// The session for the project at `root`. The most recently used
     /// sessions are kept, one per core — as many as one per worker thread
     /// would hold — and an evicted one ends its host once no caller holds it.
-    fn of(root: &Path) -> Arc<Mutex<ProjectSession>> {
-        type Sessions = Vec<(PathBuf, Arc<Mutex<ProjectSession>>)>;
+    fn of(root: &Path, node: Option<&Path>) -> Arc<Mutex<ProjectSession>> {
+        type Sessions = Vec<((PathBuf, Option<PathBuf>), Arc<Mutex<ProjectSession>>)>;
         static SESSIONS: Mutex<Sessions> = Mutex::new(Vec::new());
         let mut sessions = SESSIONS.lock().unwrap_or_else(PoisonError::into_inner);
-        let session = match sessions.iter().position(|(project, _)| project == root) {
+        let key = (root.to_path_buf(), node.map(Path::to_path_buf));
+        let session = match sessions.iter().position(|(project, _)| *project == key) {
             Some(index) => sessions.remove(index).1,
             None => Arc::default(),
         };
-        sessions.push((root.to_path_buf(), session.clone()));
+        sessions.push((key, session.clone()));
         let kept = std::thread::available_parallelism().map_or(1, usize::from);
         let evicted = sessions.len().saturating_sub(kept);
         sessions.drain(..evicted);
