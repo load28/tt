@@ -1,9 +1,9 @@
 # TASK-763: Validate editor buffers per file, lazily and cancellably
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-05
-- **Completed**: —
-- **Commit**: —
+- **Completed**: 2026-10-05
+- **Commit**: `5c15fcdf`
 
 ## Purpose
 
@@ -188,12 +188,26 @@ scoped and whole-project materialization is pinned by
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test` (`TTC_REQUIRE_TSGO=1`, every test binary passing)
+- [x] Baseline changes reviewed and committed with the change
+- [x] `./scripts/ci` (agents, rust, npm, website, native, extension)
+- [x] LSP benchmark before and after (an LSP driver outside the repository, release builds)
 
 ## Result
 
-Pending.
+Complete. Editor validation follows TypeScript's language server:
+superseded requests are not computed, the typed check is per file, and
+contextual storage is materialized for the asked file's reference closure
+and reused while what it read is unchanged. On the 30-module benchmark, the
+settle time after the last of ten keystrokes 350 ms apart fell from
+5.4-6.1 s to 2.7-3.3 s (three runs each, release builds of `9f2b375d` and
+`5c15fcdf`).
+
+Changed files: `src/server.rs`, `src/engine/project.rs`,
+`src/engine/language/project.rs`, `src/engine/scoped_tests.rs`,
+`src/typescript/{backend.rs,native.rs,host.mjs}`, `src/lib/scaling_tests.rs`,
+`editors/vscode/server/src/{engine.ts,engine-protocol.ts,server.ts,ttc.ts}`,
+`tests/public_api.rs`, the API and protocol baselines, and
+`docs/design/editor-validation-scheduling.md`.

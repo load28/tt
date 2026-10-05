@@ -794,9 +794,9 @@
 
 | TASK-761 | Preserve template boundaries during editor recovery | Complete | 2026-10-05 | 2026-10-05 | [TASK-761](./TASK-761-editor-recovery-template-boundaries.md) |
 
-| TASK-762 | Audit structural editor recovery for regressions | In progress | 2026-10-05 | — | [TASK-762](./TASK-762-editor-recovery-regression-audit.md) |
+| TASK-762 | Audit structural editor recovery for regressions | Complete | 2026-10-05 | 2026-10-05 | [TASK-762](./TASK-762-editor-recovery-regression-audit.md) |
 
-| TASK-763 | Validate editor buffers per file, lazily and cancellably | In progress | 2026-10-05 | — | [TASK-763](./TASK-763-editor-validation-scheduling.md) |
+| TASK-763 | Validate editor buffers per file, lazily and cancellably | Complete | 2026-10-05 | 2026-10-05 | [TASK-763](./TASK-763-editor-validation-scheduling.md) |
 
 ## Next task number
 

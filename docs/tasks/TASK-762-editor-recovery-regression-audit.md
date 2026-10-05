@@ -1,9 +1,9 @@
 # TASK-762: Audit structural editor recovery for regressions
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-05
-- **Completed**: —
-- **Commit**: —
+- **Completed**: 2026-10-05
+- **Commit**: `f6de94a2`, `0875a1b0`, `8a418ef6`, `c8a844e6`, `35018c9d`, `a2d7fc4e`, `f5f13c14`, `7b0dd966`, `9f2b375d`, `f492e08d`, `847c6761`
 
 ## Purpose
 
@@ -473,12 +473,29 @@ until no further defect is found.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
-- [ ] `./scripts/ci`
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test` (`TTC_REQUIRE_TSGO=1`, every test binary passing)
+- [x] Baseline changes reviewed and committed with the change
+- [x] `./scripts/ci` (agents, rust, npm, website, native, extension)
+- [x] Mutation passes of 100,000 mutants with seeds 7, 11, 13, 17, 19, 23, 29, 31, 37 and 41; the last run of each reported no crash
+- [x] LSP typing simulation over ten tt/ttx files
 
 ## Result
 
-Pending.
+Complete. The audit found and fixed 29 issues in PR #140's structural
+editor recovery and in pre-existing lowering paths it made reachable: parser
+loops, panics and quadratic rollback; diagnostics spreading from an edit to
+the rest of the file; internal compiler errors in the editor projection and
+the CLI; and a lost repaired cause in the diagnostic layer. Strict
+compilation of valid input is unchanged (differential against the pre-PR
+compiler over every case file; only the new cases differ).
+
+Changed areas: `vendor/swc_ecma_parser` (editor recovery boundary, member
+names, record rollback, JSX name scan), `src/parser` (operand ends,
+`val` parameters, open arm lists), `src/lexer.rs` (JSX child containers),
+`src/program_syntax/recovery.rs` (insertions and terminators),
+`src/codegen` (owner blocks, token seams, structured steps),
+`src/evaluation_ir` (result `try` placement), `src/typescript/mapper.rs`,
+the engine and server (`RetainedSyntax`), the VS Code adapter, and the
+regression cases, fuzz inputs and baselines listed above.
