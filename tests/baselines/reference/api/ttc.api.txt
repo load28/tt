@@ -2859,6 +2859,7 @@ pub struct VariantItem {
     pub generics: String,
     pub generics_span: Span,
     pub variants: Vec<VariantId>,
+    /* private fields */
 }
 impl Debug for VariantItem
 impl Freeze for VariantItem
@@ -3342,6 +3343,7 @@ pub struct VariantDef {
     pub origin: DeclOrigin,
     pub generics: String,
     pub variants: Vec<VariantDecl>,
+    /* private fields */
 }
 impl Debug for VariantDef
 impl Freeze for VariantDef

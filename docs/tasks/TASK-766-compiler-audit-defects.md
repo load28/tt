@@ -1,8 +1,8 @@
 # TASK-766: Fix defects found by a compiler audit
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-05
-- **Completed**: —
+- **Completed**: 2026-10-05
 - **Commit**: —
 
 ## Purpose
@@ -140,11 +140,16 @@ layer that owns it.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test` (every suite passed once the API baseline was accepted)
+- [x] Baseline changes reviewed and committed with the change: six new
+  cases; `tests/baselines/reference/api/ttc.api.txt` records that
+  `hir::VariantItem` and `resolve::VariantDef` now hold a crate-private
+  scope, so code outside the crate can no longer build them with a struct
+  literal
 
 ## Result
 
-In progress.
+Six defects fixed and pinned by cases; nested conditional operations are
+documented as unsupported (Decision 6).
