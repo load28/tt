@@ -22,7 +22,8 @@ diverges between layers. Fix each in the layer that owns it.
   pipeline head inside a `result` block; a `try` in a function written in
   an isolated value region inside a `result` block; a CommonJS module's
   storage annotations naming the ECMAScript-syntax standard library; a
-  TypeScript older than the API ttc drives.
+  TypeScript older than the API ttc drives; `--symbols` import variants
+  and a namespace member variant read as a module export.
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -159,6 +160,23 @@ diverges between layers. Fix each in the layer that owns it.
   instruction, and the typed layer degrades as when TypeScript is missing.
   An unreadable version is not guessed at.
 
+### Decision 12: An import's variants are its module's exports
+
+- **Context**: `ttc --symbols` listed an import's variants as the imported
+  file's declarations written with `export`, so `export { Shape }` and
+  `export { Other as Renamed }` were missing and a variant exported from a
+  namespace body (`export namespace NS { export variant Inner {...} }`)
+  was listed as if the module exported `Inner`. The compiler's own
+  import resolution (`exported_variant_symbols`) handled the specifiers but
+  also counted the namespace member.
+- **Decision and rationale**: TypeScript binds an importer's names to the
+  module's export table: a module-level `export` declaration and the local
+  export specifiers. A declaration in a namespace body is exported from the
+  namespace, not the module. The parser records whether a variant is a
+  statement of the module itself, `exported_variant_symbols` keeps only
+  those, and `--symbols` uses that function (under the file's surface
+  kind) instead of its own filter.
+
 ## Work log
 
 - 2026-10-06: Started from the second audit's report. Fixed
@@ -170,7 +188,9 @@ diverges between layers. Fix each in the layer that owns it.
   `src/sema/checker.rs`, `src/flow/syntax.rs`, `docs/ai/tt.md` and
   `docs/design/try-result-scopes.md` (Decisions 8, 9), and
   `src/typescript/contextual.rs` (Decision 10), and
-  `src/typescript/toolchain.rs` (Decision 11). Updated
+  `src/typescript/toolchain.rs` (Decision 11), and `src/ast.rs`,
+  `src/parser/variants.rs`, `src/lib/api.rs`, `src/main/modes.rs`
+  (Decision 12). Updated
   `tests/compile/cases_08.rs`, which pinned the shorthand-breaking edit
   (Decision 1). Regenerated every `unknown-field`
   diagnostics matrix baseline (`TT_MATRIX_CASES=all`) for Decision 1.
@@ -187,6 +207,16 @@ diverges between layers. Fix each in the layer that owns it.
   never read and do not affect the compile; an ordinary package such as
   `node_modules/foo` is listed.
 - **Resolution**: Not a defect; no change.
+
+### Issue 2: A `.tt` imported from outside `include` typed `any`
+
+- **Symptom**: The audit reported storage annotations typed `any` when a
+  source imports a `.tt` file outside the configuration's `include`.
+- **Cause**: Not reproduced. With `include: ["src"]` and `src/m.tt`
+  importing `../lib/dep.tt`, a contextual annotation, a detached join,
+  an explicit and an inferred return type from the imported module were all
+  written with their types in `-p`, `-o out src`, and `--check-types`.
+- **Resolution**: No change.
 
 ## Regression test (fails before the fix)
 

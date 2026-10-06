@@ -522,6 +522,10 @@ pub(crate) struct VariantDecl {
     pub generics_off: usize,
     pub cases: Vec<VariantCase>,
     pub scope: Option<Span>,
+    /// Whether the declaration is a statement of the module itself rather
+    /// than of a block or namespace body: only such a declaration's
+    /// `export` exports it from the module.
+    pub module_level: bool,
 }
 
 /// One case of a tt variant.

@@ -16,12 +16,16 @@ pub(super) fn symbols_mode(jobs: &[Job]) -> ExitCode {
                 continue;
             }
         };
+        let kind = ttc::SourceKind::from_path(&job.file).unwrap_or_default();
         let mut entry = format!("{{\"file\":{}", json_str(&filename));
         entry.push_str(",\"variants\":");
-        entry.push_str(&variants_json(&source, &ttc::variant_symbols(&source)));
+        entry.push_str(&variants_json(
+            &source,
+            &ttc::variant_symbols_with_kind(&source, kind),
+        ));
         entry.push_str(",\"imports\":[");
         let dir = job.file.parent().unwrap_or(Path::new("."));
-        let imports = ttc::tt_imports(&source)
+        let imports = ttc::tt_imports_with_kind(&source, kind)
             .iter()
             .map(|import| {
                 let mut o = format!("{{\"specifier\":{}", json_str(&import.specifier));
@@ -34,10 +38,10 @@ pub(super) fn symbols_mode(jobs: &[Job]) -> ExitCode {
                             ",\"resolved\":{}",
                             json_str(&target.display().to_string())
                         ));
-                        let exported: Vec<VariantSymbol> = ttc::variant_symbols(&imported_src)
-                            .into_iter()
-                            .filter(|e| e.exported)
-                            .collect();
+                        let exported = ttc::exported_variant_symbols_with_kind(
+                            &imported_src,
+                            ttc::SourceKind::from_path(&target).unwrap_or_default(),
+                        );
                         o.push_str(",\"variants\":");
                         o.push_str(&variants_json(&imported_src, &exported));
                     }

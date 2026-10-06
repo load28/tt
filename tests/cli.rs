@@ -3263,6 +3263,47 @@ fn symbols_resolve_an_import_to_a_normalized_path() {
     assert_eq!(resolved, ["src/sub/b.tt", "src/c.tt"]);
 }
 
+/// TASK-768: an import's variants are what its module exports, under the
+/// names an importer binds: an `export { X }` or `export { X as Y }`
+/// specifier exports a declared variant, and an `export variant` in a
+/// namespace body is a member of that namespace, not of the module.
+#[test]
+fn symbols_list_an_imports_variants_by_what_its_module_exports() {
+    let dir = tmpdir();
+    fs::write(
+        dir.join("a.tt"),
+        "variant Shape { Circle(r: number), Square(s: number) }\n\
+         variant Other { X, Y }\n\
+         export { Shape, Other as Renamed };\n\
+         export namespace NS { export variant Inner { P, Q } }\n",
+    )
+    .unwrap();
+    fs::write(
+        dir.join("b.tt"),
+        "import { Shape, Renamed, NS } from \"./a.tt\";\nexport type T = [Shape, Renamed, NS.Inner];\n",
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--symbols", "b.tt"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(output.status.success());
+    let symbols: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let variants: Vec<(&str, u64)> = symbols[0]["imports"][0]["variants"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|variant| {
+            (
+                variant["name"].as_str().unwrap(),
+                variant["line"].as_u64().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(variants, [("Shape", 1), ("Renamed", 2)]);
+}
+
 /// A `.ttx` import names the file tsc writes for the `.tsx` ttc emits:
 /// `.jsx` under `"jsx": "preserve"` and `.js` under every other `jsx`
 /// value or none (typescript-go `GetOutputExtension`), read from the

@@ -215,6 +215,7 @@ fn parse_variant_complete<'t>(
 
     let byte_end = cur.tokens[close].span.end;
     cur.idx = close + 1;
+    let enclosing = enclosing_block(cur.tokens, keyword_index);
     Some((
         cur,
         byte_end,
@@ -231,9 +232,8 @@ fn parse_variant_complete<'t>(
             generics: generics.to_string(),
             generics_off,
             cases,
-            scope: (!exported)
-                .then(|| enclosing_block(cur.tokens, keyword_index))
-                .flatten(),
+            scope: enclosing.filter(|_| !exported),
+            module_level: enclosing.is_none(),
         },
     ))
 }

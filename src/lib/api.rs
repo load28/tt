@@ -479,7 +479,7 @@ pub fn exported_variant_symbols_with_kind(
     source_kind: SourceKind,
 ) -> Vec<VariantSymbol> {
     let (program, tokens) = parser::lex_and_parse_with_kind(source, source_kind);
-    let declared = program_variant_symbols(&program);
+    let declared = variant_symbols_where(&program, |decl| decl.module_level);
     let mut exported: Vec<VariantSymbol> = declared
         .iter()
         .filter(|symbol| symbol.exported)
@@ -501,11 +501,18 @@ pub fn exported_variant_symbols_with_kind(
 }
 
 fn program_variant_symbols(program: &ast::Program) -> Vec<VariantSymbol> {
+    variant_symbols_where(program, |_| true)
+}
+
+fn variant_symbols_where(
+    program: &ast::Program,
+    keep: impl Fn(&ast::VariantDecl) -> bool,
+) -> Vec<VariantSymbol> {
     program
         .segments
         .iter()
         .filter_map(|segment| match segment {
-            ast::Segment::Variant(decl) => Some(VariantSymbol {
+            ast::Segment::Variant(decl) if keep(decl) => Some(VariantSymbol {
                 name: decl.name.clone(),
                 offset: decl.name_off,
                 exported: decl.exported,
