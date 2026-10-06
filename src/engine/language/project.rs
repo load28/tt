@@ -938,9 +938,18 @@ impl Project {
         let source_at = doc
             .source_utf16()
             .to_byte(u16_offset(&doc.source, position));
-        let projected_at =
-            mapper::typed_cursor_to_output(&doc.mappings, &doc.anchors, &doc.source, source_at)
-                .map(|at| doc.code_utf16().to_utf16(at));
+        // Text inside a recovered construct is not served, so a cursor there
+        // has no place in the served text even where an offset maps.
+        let recovered = doc
+            .recovered
+            .iter()
+            .any(|&(start, end)| start < source_at && source_at <= end);
+        let projected_at = (!recovered)
+            .then(|| {
+                mapper::typed_cursor_to_output(&doc.mappings, &doc.anchors, &doc.source, source_at)
+            })
+            .flatten()
+            .map(|at| doc.code_utf16().to_utf16(at));
         let (code, mappings, at) = match projected_at {
             Some(at) => (doc.code.clone(), doc.mappings.clone(), at),
             None => {

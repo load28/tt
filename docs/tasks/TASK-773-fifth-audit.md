@@ -157,6 +157,19 @@ defects. This task fixes them in the layer that owns each one.
     pattern in the project's tt files that resolves to the same built-in
     case.
 
+### Decision 8: A cursor inside recovered text asks through a probe (E6)
+
+- **Context**: Signature help at `match (s) { Circle(radius) => add(§`, at
+  the end of the buffer, answered null. The unclosed match is recovered as
+  a placeholder, and the cursor at its end still mapped to an output offset
+  (the placeholder's end), so the request skipped the probe and asked
+  TypeScript about the placeholder.
+- **Decision and rationale**: Recovered text is not served, so a cursor
+  inside a recovered range has no place in the served text even where an
+  offset maps. Signature help then asks through the probe, as completion
+  does; the probe closes the construct the cursor sits in (TASK-772
+  decision 4).
+
 ## Work log
 
 - 2026-10-06: Ran the fifth audit as three read-only agents (CLI,
@@ -175,6 +188,8 @@ defects. This task fixes them in the layer that owns each one.
 - 2026-10-06: Owned the duplicate arm's consequences (decision 6) and
   extended references (decision 7); reviewed the two `.types` baselines
   decision 5 changed.
+- 2026-10-06: Sent signature help inside recovered text through the probe
+  (decision 8).
 
 ## Issues and resolutions
 
