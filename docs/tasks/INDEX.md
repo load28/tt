@@ -812,7 +812,7 @@
 
 | TASK-770 | Fix defects found by the fourth audit | Complete | 2026-10-06 | 2026-10-06 | [TASK-770](./TASK-770-fourth-audit.md) |
 | TASK-771 | Keep a logical test's narrowing and fix the fourth audit's remaining editor findings | Complete | 2026-10-06 | 2026-10-06 | [TASK-771](./TASK-771-narrowing-and-editor-cost.md) |
-| TASK-772 | Fix the deferred findings of earlier audits | In progress | 2026-10-06 | — | [TASK-772](./TASK-772-deferred-findings.md) |
+| TASK-772 | Fix the deferred findings of earlier audits | Complete | 2026-10-06 | 2026-10-06 | [TASK-772](./TASK-772-deferred-findings.md) |
 | TASK-773 | Fix defects found by the fifth audit | In progress | 2026-10-06 | — | [TASK-773](./TASK-773-fifth-audit.md) |
 
 ## Next task number

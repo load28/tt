@@ -1,8 +1,8 @@
 # TASK-772: Fix the deferred findings of earlier audits
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-06
-- **Completed**: —
+- **Completed**: 2026-10-06
 - **Commit**: —
 
 ## Purpose
@@ -152,16 +152,39 @@ None.
 
 ## Regression test (fails before the fix)
 
-- **Path**: pending
-- **Observed failure**: pending
+- **Path**: `src/lib/scaling_tests.rs`
+  (`every_request_does_linear_work_in_the_nesting_depth_of_templates_around_a_match`);
+  `tests/cases/editor/nestedTagHoverUnderAGenericPayload.tt`;
+  `tests/cases/editor/unclosedVariantFieldTypeCompletion.tt`.
+- **Observed failure**: the scaling test reported `token slots reserved for
+  a braced region: 839870 units for n matches but 3279736 for 2n` with the
+  lexer's sizing restored. The hover case lost both `patternSymbol` answers
+  with the engine's answer stubbed out. The unclosed-variant case offered no
+  `Point2` at `/*field*/` without the probe's closing step.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test --no-fail-fast` with `TTC_REQUIRE_TSGO=1`: every target
+  passed except the public API and server protocol baselines, which
+  recorded the new `Project::pattern_symbol` and `patternSymbol` request;
+  both were reviewed and accepted, and `tests/public_api.rs` now carries a
+  `patternSymbol` example.
+- [x] `npm test` in `editors/vscode`: 243 passed.
+- [x] Baseline changes reviewed and committed with the change.
+- Measurements: a template 20,000 deep around a `match` 19.0 s → 0.51 s;
+  `match` nested 4,000 deep 79 s → 23 s.
 
 ## Result
 
-In progress.
+Complete. Changed: `src/codegen/rope/builder.rs`, `src/codegen/rope/tests.rs`,
+`src/hir/mod.rs`, `src/sema/checker.rs`, `src/core_ir/lower.rs`,
+`src/evaluation_ir/validation.rs`, `src/lexer.rs`, `src/work.rs`,
+`src/program_syntax.rs`, `src/engine/completions.rs`, `src/engine/names.rs`,
+`src/engine/language/project.rs`, `src/engine/language/project/completion.rs`,
+`src/engine/language/service.rs`, `src/server.rs`, `src/server/responses.rs`,
+`editors/vscode/server/src/{engine,server}.ts`, `tests/editor_cases.rs`,
+`tests/public_api.rs`, `src/lib/scaling_tests.rs`, two editor cases, and the
+API baselines. The per-overlay ancestor path (decision 2) and an unpaired
+`<` in a never-closed construct (decision 4) stay as recorded.

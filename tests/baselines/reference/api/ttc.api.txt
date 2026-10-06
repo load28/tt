@@ -840,6 +840,11 @@ impl Project
         path: &Path,
         position: Position,
     ) -> Result<Option<Vec<TtCompletion>>, String>
+    pub fn pattern_symbol(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Option<TtSymbol>, String>
     pub fn completion_resolve(
         &mut self,
         path: &Path,
