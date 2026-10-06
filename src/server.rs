@@ -306,6 +306,36 @@ fn request_id(line: &str) -> serde_json::Value {
         .unwrap_or(serde_json::Value::Null)
 }
 
+fn bool_param(
+    value: &serde_json::Value,
+    method: &str,
+    key: &str,
+    default: bool,
+) -> Result<bool, String> {
+    match value {
+        serde_json::Value::Null => Ok(default),
+        serde_json::Value::Bool(value) => Ok(*value),
+        other => Err(format!(
+            "{method}: \"{key}\" expects true or false (got {other})"
+        )),
+    }
+}
+
+fn string_param<'a>(
+    value: &'a serde_json::Value,
+    method: &str,
+    key: &str,
+    default: &'a str,
+) -> Result<&'a str, String> {
+    match value {
+        serde_json::Value::Null => Ok(default),
+        serde_json::Value::String(value) => Ok(value),
+        other => Err(format!(
+            "{method}: \"{key}\" expects a string (got {other})"
+        )),
+    }
+}
+
 /// One request, one answer — errors included, so the session survives them.
 fn respond(
     workspace: &mut Workspace,
@@ -323,7 +353,16 @@ fn respond(
     };
     let id = request["id"].clone();
     let params = &request["params"];
-    let result = match request["method"].as_str().unwrap_or_default() {
+    let Some(method) = request
+        .as_object()
+        .and_then(|members| members.get("method")?.as_str())
+    else {
+        return json!({
+            "id": id,
+            "error": "malformed request: a request is an object with a \"method\" string",
+        });
+    };
+    let result = match method {
         "check" => check(params),
         "print" => print(params, node),
         "dependencies" => dependencies(workspace, checks, params),
@@ -376,7 +415,7 @@ fn respond(
             Ok(json!({ "locations": locations }))
         }),
         "completion" => semantic(workspace, params, |project, path, position| {
-            let member = params["member"].as_bool().unwrap_or(false);
+            let member = bool_param(&params["member"], "completion", "member", false)?;
             let trigger = params["triggerCharacter"].as_str();
             let answer = project.triggered_completion(path, position, member, trigger)?;
             Ok(completion_json(answer))
@@ -425,7 +464,12 @@ fn respond(
                 (Some(3), _) => SignatureTrigger::ContentChange,
                 _ => SignatureTrigger::Invoked,
             };
-            let retrigger = params["isRetrigger"].as_bool().unwrap_or(false);
+            let retrigger = bool_param(
+                &params["isRetrigger"],
+                "signatureHelp",
+                "isRetrigger",
+                false,
+            )?;
             let help = project.triggered_signature_help(path, position, &trigger, retrigger)?;
             Ok(signature_help_json(help))
         }),
@@ -543,7 +587,7 @@ fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
         source_kind: filename
             .and_then(|name| ttc::SourceKind::from_path(std::path::Path::new(name)))
             .unwrap_or_default(),
-        verify: params["verify"].as_bool().unwrap_or(true),
+        verify: bool_param(&params["verify"], "check", "verify", true)?,
         ..ttc::Options::default()
     };
     // Every tt-level diagnostic of the buffer, in source order (TASK-120).
@@ -809,7 +853,7 @@ fn print(params: &serde_json::Value, node: Option<&Path>) -> Result<serde_json::
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "print needs a \"path\"".to_string())?;
-    let source_map = match params["sourceMap"].as_str().unwrap_or("off") {
+    let source_map = match string_param(&params["sourceMap"], "print", "sourceMap", "off")? {
         "off" => crate::build::SourceMapMode::Off,
         "inline" => crate::build::SourceMapMode::Inline,
         other => {
@@ -818,16 +862,17 @@ fn print(params: &serde_json::Value, node: Option<&Path>) -> Result<serde_json::
             ));
         }
     };
-    let rewrite_imports = match params["rewriteImports"].as_str().unwrap_or("js") {
-        "js" => ttc::ImportRewrite::Js,
-        "ts" => ttc::ImportRewrite::Ts,
-        "off" => ttc::ImportRewrite::Off,
-        other => {
-            return Err(format!(
-                "print: \"rewriteImports\" expects js, ts, or off (got {other})"
-            ));
-        }
-    };
+    let rewrite_imports =
+        match string_param(&params["rewriteImports"], "print", "rewriteImports", "js")? {
+            "js" => ttc::ImportRewrite::Js,
+            "ts" => ttc::ImportRewrite::Ts,
+            "off" => ttc::ImportRewrite::Off,
+            other => {
+                return Err(format!(
+                    "print: \"rewriteImports\" expects js, ts, or off (got {other})"
+                ));
+            }
+        };
     let jsx_preserve = crate::build::project_jsx_preserve(
         rewrite_imports,
         &[std::path::PathBuf::from(path)],
@@ -837,10 +882,10 @@ fn print(params: &serde_json::Value, node: Option<&Path>) -> Result<serde_json::
     let printed = crate::build::print_input(
         path,
         &crate::build::BuildOptions {
-            banner: params["banner"].as_bool().unwrap_or(true),
+            banner: bool_param(&params["banner"], "print", "banner", true)?,
             print: true,
             check: false,
-            verify: params["verify"].as_bool().unwrap_or(true),
+            verify: bool_param(&params["verify"], "print", "verify", true)?,
             rewrite_imports,
             jsx_preserve,
             source_map,
@@ -959,7 +1004,7 @@ fn typed_check(
         .to_string();
     let buffer = text_param(params)?;
     let text = buffer.to_string();
-    let include_types = params["includeTypes"].as_bool().unwrap_or(false);
+    let include_types = bool_param(&params["includeTypes"], "typedCheck", "includeTypes", false)?;
     let canonical = ttc::engine::normalize_document_path(Path::new(&path))?;
     // A document the consumer holds open keeps its overlay after the check;
     // a one-off buffer's overlay is scoped to this request, so the answer
@@ -1096,6 +1141,35 @@ mod tests {
             .iter()
             .map(|line| line.to_string().into_bytes())
             .collect()
+    }
+
+    #[test]
+    fn a_request_without_a_method_or_with_a_wrongly_typed_option_is_refused() {
+        use serde_json::json;
+        let mut workspace = Workspace::new(Engine::new(None));
+        let mut checks = Checks::default();
+        let mut ask = |line: String| respond(&mut workspace, &mut checks, None, &line);
+        for line in ["{\"id\":1}", "[1,2]", "\"str\""] {
+            let answer = ask(line.to_string());
+            assert!(
+                answer["error"]
+                    .as_str()
+                    .is_some_and(|error| error.starts_with("malformed request")),
+                "{line}: {answer}"
+            );
+        }
+        for (params, key) in [
+            (json!({"path": "a.tt", "banner": "no"}), "banner"),
+            (json!({"path": "a.tt", "sourceMap": true}), "sourceMap"),
+        ] {
+            let answer = ask(json!({"id": 2, "method": "print", "params": params}).to_string());
+            assert!(
+                answer["error"]
+                    .as_str()
+                    .is_some_and(|error| error.contains(&format!("\"{key}\" expects"))),
+                "{answer}"
+            );
+        }
     }
 
     #[test]

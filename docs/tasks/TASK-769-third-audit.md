@@ -16,7 +16,10 @@ request validation. Fix each in the layer that owns it.
 - Included: the output layout of several inputs (R3L1); the standard
   library's place and specifiers in an in-place build (R3L2); a sidecar
   replaced by one typed from a placeholder (R3L3); the project a `.ttx`
-  import's spelling is read from (R3L4).
+  import's spelling is read from (R3L4); `--types` sidecars of two
+  inputs (R3L5); the server's request and option validation (R3L6); the
+  in-place refusal's advice (R3L7); the path `--check-types` shows for a
+  file outside the working directory (R3L8).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -87,6 +90,38 @@ request validation. Fix each in the layer that owns it.
   rebuilds everything only when a file's answer changes, not when a file
   is added.
 
+### Decision 5: Server options are checked for their type
+
+- **Context**: `print` with `"banner": "no"` printed the banner and
+  `"sourceMap": true` fell back to `off`, while a wrong string value was
+  refused; a line with no `method` (`{"id":1}`, `[1,2]`, `"str"`) was
+  answered `unknown method ""`.
+- **Decision and rationale**: JSON-RPC 2.0 answers a request that is not
+  an object with a `method` string as an invalid request; the session now
+  answers it `malformed request`, the wording it already uses for a line
+  it cannot read. An option of the wrong JSON type is refused, naming the
+  option and the expected type, as a wrong string value already was
+  (`print`'s `banner`, `verify`, `sourceMap`, `rewriteImports`, `check`'s
+  `verify`, `completion`'s `member`, `signatureHelp`'s `isRetrigger`,
+  `typedCheck`'s `includeTypes`).
+
+### Decision 6: The refusal's advice holds with and without `-o`
+
+- **Context**: An in-place build refusing an edited output advised
+  "choose an empty output directory" though no `-o` was given.
+- **Decision and rationale**: The ownership check does not know whether a
+  build has an output directory, so its advice now names both ways out:
+  remove the file, or write the outputs to another directory with `-o`.
+
+### Decision 7: A file outside the working directory is shown relatively
+
+- **Context**: From a sibling directory, `--check` showed
+  `../ex2/src/bad.tt` and `--check-types` the absolute path.
+- **Decision and rationale**: `tsc` shows every file relative to the
+  working directory, `..` included. The typed pass strips the working
+  directory and, for a path outside it on the same root, now writes the
+  relative path with `..`.
+
 ## Work log
 
 - 2026-10-06: Started from the third audit's reports. Merged
@@ -95,7 +130,15 @@ request validation. Fix each in the layer that owns it.
 
 ## Issues and resolutions
 
-None.
+### Issue 1: `--types` failed every sidecar on a collision
+
+- **Symptom**: With `a/p.tt` and `b/p.tt`, `--types -o ty a b` wrote
+  nothing and blamed the collision on every file, exiting 3.
+- **Cause**: The two inputs mirrored onto one output (Decision 1's old
+  per-directory roots).
+- **Resolution**: With one root the two sidecars no longer collide; a CLI
+  test pins that all three are written. The engine serves each canonical
+  source once, so no remaining input layout reaches the collision branch.
 
 ## Regression test (fails before the fix)
 

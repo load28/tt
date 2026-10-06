@@ -1199,6 +1199,60 @@ fn types_type_a_recursive_anonymous_join_whole() {
 }
 
 #[test]
+fn types_mirror_same_named_sources_of_two_inputs_apart() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    for input in ["a", "b"] {
+        fs::create_dir_all(dir.join(input)).unwrap();
+        fs::write(dir.join(input).join("p.tt"), "export const p = 1;\n").unwrap();
+    }
+    fs::write(dir.join("b/only.tt"), "export const only = 1;\n").unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"noEmit":true,"module":"esnext","moduleResolution":"bundler","target":"es2022"}}"#,
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--types", "-o", "ty", "a", "b"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    for sidecar in ["a/p.tt.d.ts", "b/p.tt.d.ts", "b/only.tt.d.ts"] {
+        assert!(dir.join("ty").join(sidecar).is_file(), "{sidecar}");
+    }
+}
+
+#[test]
+fn check_types_names_a_file_outside_the_working_directory_relatively() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::create_dir_all(dir.join("elsewhere")).unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"noEmit":true,"module":"esnext","moduleResolution":"bundler","target":"es2022"},"include":["src"]}"#,
+    )
+    .unwrap();
+    fs::write(
+        dir.join("src/bad.tt"),
+        "variant S { A, B }\ndeclare const s: S;\nexport const x = match (s) { A => 1 };\n",
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--check-types", "../src"])
+        .current_dir(dir.join("elsewhere"))
+        .output()
+        .expect("failed to run ttc");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains(" --> ../src/bad.tt:3:18"), "{stderr}");
+}
+
+#[test]
 fn types_keep_a_declaration_whose_exported_initializer_stopped_parsing() {
     require_types_toolchain!();
     let dir = typed_workspace();
@@ -3422,7 +3476,7 @@ fn an_edited_output_written_in_place_is_one_refusal() {
     assert_eq!(second.status.code(), Some(1), "{stderr}");
     assert_eq!(
         stderr.trim_end(),
-        "ttc: src/a.ts: output is not owned by this input or has been edited; refusing to overwrite it — choose an empty output directory"
+        "ttc: src/a.ts: output is not owned by this input or has been edited; refusing to overwrite it — remove it, or write the outputs to another directory with -o <dir>"
     );
     assert_eq!(fs::read_to_string(&output).unwrap(), edited);
 }

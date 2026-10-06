@@ -472,13 +472,17 @@ pub(super) fn write_declarations(
 /// back — but `ttc: /tmp/build-42/src/a.tt:3:1: ...` is not what the other
 /// modes print, and not what an editor's problem matcher expects.
 pub(super) fn shown(path: &Path) -> String {
-    let relative = std::env::current_dir()
-        .ok()
-        .and_then(|cwd| path.strip_prefix(cwd).ok().map(Path::to_path_buf));
-    relative
-        .unwrap_or_else(|| path.to_path_buf())
-        .display()
-        .to_string()
+    let Ok(cwd) = std::env::current_dir() else {
+        return path.display().to_string();
+    };
+    if let Ok(relative) = path.strip_prefix(&cwd) {
+        return relative.display().to_string();
+    }
+    let same_root = cwd.components().next() == path.components().next();
+    if path.is_absolute() && same_root {
+        return relative_path(&cwd, path);
+    }
+    path.display().to_string()
 }
 
 /// What diagnostics are painted with, decided once for the process.

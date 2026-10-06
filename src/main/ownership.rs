@@ -84,7 +84,7 @@ pub(super) fn check_output_owner(output: &Path, owner: OutputOwner) -> Result<()
         return Ok(());
     }
     Err(format!(
-        "ttc: {}: output is not owned by this input or has been edited; refusing to overwrite it — choose an empty output directory",
+        "ttc: {}: output is not owned by this input or has been edited; refusing to overwrite it — remove it, or write the outputs to another directory with -o <dir>",
         output.display()
     ))
 }
