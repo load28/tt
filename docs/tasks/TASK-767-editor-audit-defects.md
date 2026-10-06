@@ -1,8 +1,8 @@
 # TASK-767: Fix defects found by an editor audit
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-05
-- **Completed**: —
+- **Completed**: 2026-10-06
 - **Commit**: —
 
 ## Purpose
@@ -87,6 +87,13 @@ layer that owns it.
 
 ## Issues and resolutions
 
+### Issue 2: A full test run failed three case baselines under load
+
+- **Symptom**: TypeScript requests timed out (5 s content mapper start, 8 s
+  semantic tokens) and one storage annotation was missing.
+- **Cause**: The run overlapped a release build and three audit processes.
+- **Resolution**: Each case passed when rerun alone; no code change.
+
 ### Issue 1: The first tuple slot stayed untyped
 
 - **Symptom**: `(|, Slow)` still listed every case.
@@ -108,11 +115,17 @@ layer that owns it.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test`: every suite passed except three case baselines whose
+  TypeScript requests timed out while the machine was saturated (content
+  mapper initialization, semantic tokens, a contextual annotation); each of
+  the three passed when rerun alone
+- [x] Baseline changes reviewed and committed with the change: four new
+  editor cases; `patternCompletionBeforeArrow` now reports `probe yes` for
+  its cursor inside a recovered arm, with the same items
 
 ## Result
 
-In progress.
+Five defects fixed and pinned; three are recorded for a later round (see
+Scope). The editor cases need the VS Code adapter built first.
