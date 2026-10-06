@@ -805,6 +805,7 @@
 | TASK-767 | Fix defects found by an editor audit | Complete | 2026-10-05 | 2026-10-06 | [TASK-767](./TASK-767-editor-audit-defects.md) |
 
 | TASK-768 | Fix defects found by the second audit | Complete | 2026-10-06 | 2026-10-06 | [TASK-768](./TASK-768-editor-audit-round-two.md) |
+| TASK-769 | Fix defects found by the third audit | In progress | 2026-10-06 | — | [TASK-769](./TASK-769-third-audit.md) |
 
 ## Next task number
 

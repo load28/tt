@@ -96,6 +96,19 @@ pub(super) fn support_commonjs_dir(std_dir: &Path) -> PathBuf {
     std_dir.join(ttc::STD_PACKAGE_COMMONJS_DIR)
 }
 
+/// The deepest directory every input is inside, a directory input counting
+/// as itself and a file as its parent — what `-o` mirrors the inputs under.
+pub(super) fn input_root(inputs: &[String]) -> Option<PathBuf> {
+    deepest_shared_directory(inputs.iter().map(Path::new).filter_map(|path| {
+        let absolute = normalized_absolute(path);
+        if path.is_dir() {
+            Some(absolute)
+        } else {
+            absolute.parent().map(Path::to_path_buf)
+        }
+    }))
+}
+
 /// The deepest directory every output shares.
 pub(super) fn common_ancestor(jobs: &[Job]) -> Option<PathBuf> {
     let shared = deepest_shared_directory(jobs.iter().map(|job| {
@@ -166,17 +179,7 @@ pub(super) fn build_jobs(
     out_dir: Option<&Path>,
     include_ts: bool,
 ) -> Result<Vec<Job>, String> {
-    // Named files mirror under the deepest directory they are all inside,
-    // so a relative import between two of them still resolves in the output
-    // tree. A directory input keeps mirroring under itself, which is what
-    // decides whether two inputs claim one output.
-    let named_file_root = deepest_shared_directory(
-        inputs
-            .iter()
-            .map(Path::new)
-            .filter(|path| path.is_file())
-            .filter_map(|path| normalized_absolute(path).parent().map(Path::to_path_buf)),
-    );
+    let input_root = input_root(inputs);
     let mut jobs: Vec<Job> = Vec::new();
     for input in inputs {
         let input_path = Path::new(input);
@@ -203,13 +206,9 @@ pub(super) fn build_jobs(
             };
             let out_path = match out_dir {
                 Some(dir) => {
-                    let root = if is_dir {
-                        normalized_absolute(input_path)
-                    } else {
-                        named_file_root
-                            .clone()
-                            .ok_or_else(|| format!("ttc: no output root for {}", file.display()))?
-                    };
+                    let root = input_root
+                        .clone()
+                        .ok_or_else(|| format!("ttc: no output root for {}", file.display()))?;
                     let mirrored = normalized_absolute(&out_name);
                     let rel = mirrored.strip_prefix(&root).map_err(|_| {
                         format!(

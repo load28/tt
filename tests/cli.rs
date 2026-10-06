@@ -190,7 +190,7 @@ fn a_mixed_source_stem_collision_is_rejected_before_writing() {
 }
 
 #[test]
-fn separate_input_roots_cannot_collapse_to_one_output() {
+fn separate_input_roots_mirror_under_the_directory_they_share() {
     let dir = tmpdir();
     let left = dir.join("left");
     let right = dir.join("right");
@@ -198,7 +198,11 @@ fn separate_input_roots_cannot_collapse_to_one_output() {
     fs::create_dir_all(&left).unwrap();
     fs::create_dir_all(&right).unwrap();
     fs::write(left.join("index.tt"), "export const side = \"left\";\n").unwrap();
-    fs::write(right.join("index.tt"), "export const side = \"right\";\n").unwrap();
+    fs::write(
+        right.join("index.tt"),
+        "import { side } from \"../left/index.tt\";\nexport const other = side;\n",
+    )
+    .unwrap();
 
     let output = ttc(&[
         "-o",
@@ -206,14 +210,17 @@ fn separate_input_roots_cannot_collapse_to_one_output() {
         left.to_str().unwrap(),
         right.to_str().unwrap(),
     ]);
-    assert!(!output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("index.ts: multiple inputs claim this output"),
-        "{stderr}"
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
     );
-    assert!(stderr.contains("left/index.tt"), "{stderr}");
-    assert!(stderr.contains("right/index.tt"), "{stderr}");
+    assert!(out_dir.join("left/index.ts").is_file());
+    let right_out = fs::read_to_string(out_dir.join("right/index.ts")).unwrap();
+    assert!(
+        right_out.contains("from \"../left/index.js\""),
+        "{right_out}"
+    );
     assert!(!out_dir.join("index.ts").exists());
 }
 
@@ -1821,11 +1828,8 @@ fn a_project_path_that_is_not_a_file_is_rejected_by_name() {
     assert!(!output.status.success(), "{stderr}");
 }
 
-/// The output-collision contract has two halves. Two inputs claiming one
-/// output was already refused; one input claiming two — overlapping roots —
-/// used to write the same source twice and exit 0 (TASK-338).
 #[test]
-fn overlapping_input_roots_cannot_write_one_source_twice() {
+fn overlapping_input_roots_write_each_source_once() {
     let dir = tmpdir();
     fs::create_dir_all(dir.join("src/deep")).unwrap();
     fs::write(dir.join("src/deep/x.tt"), "export const a = 1;\n").unwrap();
@@ -1839,13 +1843,11 @@ fn overlapping_input_roots_cannot_write_one_source_twice() {
         dir.join("src").to_str().unwrap(),
     ]);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("one input claims two outputs"),
-        "overlapping roots were accepted: {stderr}"
-    );
-    assert!(!output.status.success(), "{stderr}");
+    assert!(output.status.success(), "{stderr}");
+    assert_eq!(stderr.matches("y.tt →").count(), 1, "{stderr}");
+    assert!(out_dir.join("src/deep/x.ts").is_file());
+    assert!(out_dir.join("src/y.ts").is_file());
 
-    // The same root named twice still resolves to one output per source.
     let twice = dir.join("twice");
     let output = ttc(&[
         "-o",
