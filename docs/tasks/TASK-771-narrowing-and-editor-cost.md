@@ -101,6 +101,41 @@ unreachable-arm hints answer inconsistently.
   (`editors/vscode/server/src/server.ts`, `onHover`), and `ttSymbol`
   answers this label. Not a defect.
 
+### Decision 6: A file's lines and UTF-16 offsets are measured once per check
+
+`ttc --check-types` grew quadratically with the number of TypeScript
+errors (400 errors: 2.1 s, 1600: 15.3 s). Sampling the release binary
+showed every reported diagnostic rebuilding a line table
+(`crate::line_col`) and rescanning the emitted text for a UTF-16 offset
+(`mapper::from_utf16`), the CLI renderer measuring the whole file again per
+diagnostic, and the host walking every top-level statement of the file to
+find the node a diagnostic starts at.
+
+- TypeScript measures a file once (`getLineStarts` caches the line map on
+  the source file; tsgo's `ast.PositionMap` records only the non-ASCII
+  characters and answers both directions by binary search). `lines::Utf16Map`
+  is that structure, and `ProjectedDocument` caches its source `LineIndex` and
+  its emitted code's `Utf16Map` in `OnceLock`s, as it already caches its
+  exported variants. The report measures a hand-written file once per path.
+- `render::render_measured` and `engine_diagnostic_measured` draw against a
+  measured `LineMap`; the CLI measures each reported file once. `render` and
+  `engine_diagnostic` keep their signatures and measure for one call.
+- The host's position lookups (`contextualMismatch`, `lookupReceiver`,
+  `smallestExpressionCovering`) use `walkContaining`, which binary-searches a
+  node's cached children for the ones holding the range, as
+  `getTokenAtPositionWorker` does, instead of visiting every sibling.
+- Rejected: a cache keyed by text inside `line_col`. The owner of the text
+  is the projected document, so the measurement lives with it.
+
+After the change 1600 errors take 4.0 s and 6400 take 21.6 s. The remaining
+growth is inside tsgo: `getSemanticDiagnostics` on a content-mapped file
+takes 1.2 s for 3200 diagnostics and 12.6 s for 12800 through the API alone
+(no ttc involved), and plain `tsc --runExternalCode` with the same identity
+mapper takes 2.5 s and 25.9 s, its CPU profile spent in
+`diagnosticwriter.newOriginalTextFile` recomputing `ComputeECMALineStarts`
+per diagnostic. Unmapped, the same check takes 0.5 s. It is recorded as an
+upstream issue and not worked around.
+
 ## Work log
 
 - 2026-10-06: Started from the findings TASK-770 moved here.

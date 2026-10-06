@@ -293,17 +293,26 @@ pub(super) fn typed_pass(
     // The snapshot, not the file on disk: an `--overlay` was checked
     // against text that was never saved, and quoting the disk would draw a
     // caret under a line the compiler did not see.
+    let mut disk: HashMap<&Path, Option<String>> = HashMap::new();
     for diagnostic in &checked.diagnostics {
-        let disk = snapshot
-            .source_of(&diagnostic.path)
-            .is_none()
-            .then(|| fs::read_to_string(&diagnostic.path).ok())
-            .flatten();
+        if snapshot.source_of(&diagnostic.path).is_none() {
+            disk.entry(&diagnostic.path)
+                .or_insert_with(|| fs::read_to_string(&diagnostic.path).ok());
+        }
+    }
+    let mut measured: HashMap<&Path, Option<ttc::lines::LineMap<'_>>> = HashMap::new();
+    for diagnostic in &checked.diagnostics {
+        let lines = measured.entry(&diagnostic.path).or_insert_with(|| {
+            snapshot
+                .source_of(&diagnostic.path)
+                .or_else(|| disk.get(diagnostic.path.as_path())?.as_deref())
+                .map(ttc::lines::LineMap::ecma)
+        });
         eprintln!(
             "{}",
-            ttc::render::engine_diagnostic(
+            ttc::render::engine_diagnostic_measured(
                 diagnostic,
-                snapshot.source_of(&diagnostic.path).or(disk.as_deref()),
+                lines.as_ref(),
                 &shown(&diagnostic.path),
                 styles(),
             )

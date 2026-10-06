@@ -169,3 +169,32 @@ fn walking_back_agrees_with_the_measured_lines() {
         }
     }
 }
+
+#[test]
+fn a_utf16_map_answers_what_scanning_the_text_answers() {
+    for text in [
+        "",
+        "abc",
+        "\u{feff}abc",
+        "a\u{e9}b",
+        "\u{1f389}ab",
+        "\u{feff}x\u{1f389}\u{2028}\u{e9}y\u{10ffff}",
+        "\u{e9}\u{e9}\u{1f389}\u{1f389}",
+    ] {
+        let map = Utf16Map::new(text);
+        for byte in 0..=text.len() + 2 {
+            assert_eq!(
+                map.to_utf16(byte),
+                crate::typescript::mapper::to_utf16(text, byte),
+                "{text:?} byte {byte}"
+            );
+        }
+        for units in 0..=text.encode_utf16().count() + 2 {
+            assert_eq!(
+                map.to_byte(units),
+                crate::typescript::mapper::from_utf16(text, units),
+                "{text:?} units {units}"
+            );
+        }
+    }
+}

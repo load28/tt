@@ -1833,8 +1833,7 @@ function contextualMismatch(project, checker, diagnostic, isExpression, SyntaxKi
   const K = SyntaxKind;
 
   const starting = [];
-  walkTree(sourceFile, (node) => {
-    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return false;
+  walkContaining(sourceFile, diagnostic.pos, diagnostic.end, (node) => {
     if (node.getStart(sourceFile) === diagnostic.pos) starting.push(node);
   });
 
@@ -1918,8 +1917,7 @@ function lookupReceiver(project, diagnostic, SyntaxKind) {
   if (!sourceFile) return null;
   const K = SyntaxKind;
   let name;
-  walkTree(sourceFile, (node) => {
-    if (node.pos > diagnostic.pos || node.end < diagnostic.end) return false;
+  walkContaining(sourceFile, diagnostic.pos, diagnostic.end, (node) => {
     if (node.getStart(sourceFile) === diagnostic.pos && node.end === diagnostic.end) name = node;
   });
   const parent = name?.parent;
@@ -1937,11 +1935,59 @@ function lookupReceiver(project, diagnostic, SyntaxKind) {
 /** The innermost expression whose source range contains the emitted value. */
 function smallestExpressionCovering(sourceFile, start, end, isExpression) {
   let found = null;
-  walkTree(sourceFile, (node) => {
-    if (node.getStart(sourceFile) > start || node.end < end) return false;
+  walkContaining(sourceFile, start, end, (node) => {
+    if (node.getStart(sourceFile) > start) return false;
     if (isExpression(node)) found = node;
   });
   return found;
+}
+
+/**
+ * The nodes whose range holds `pos..end`, outermost first and in source
+ * order — what `walkTree` visits when its callback prunes every node that
+ * does not hold the range, without visiting the siblings it prunes. A
+ * node's children are in source order and do not overlap, so their ends do
+ * not decrease and the first child that can hold the range is found by
+ * binary search, as `getTokenAtPosition` finds the child holding a
+ * position. The callback's `true` stops the walk and `false` skips the
+ * node's children.
+ */
+function walkContaining(root, pos, end, enter) {
+  const pending = [root];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (node.pos > pos || node.end < end) continue;
+    const entered = enter(node);
+    if (entered === true) return true;
+    if (entered === false) continue;
+    const children = childrenOf(node);
+    let first = 0;
+    let past = children.length;
+    while (first < past) {
+      const middle = (first + past) >>> 1;
+      if (children[middle].end < end) first = middle + 1;
+      else past = middle;
+    }
+    let last = first;
+    while (last < children.length && children[last].pos <= pos) last++;
+    for (let index = last - 1; index >= first; index--) pending.push(children[index]);
+  }
+  return false;
+}
+
+const childLists = new WeakMap();
+
+/** A node's children in source order, listed once per node. */
+function childrenOf(node) {
+  let children = childLists.get(node);
+  if (!children) {
+    children = [];
+    node.forEachChild((child) => {
+      children.push(child);
+    });
+    childLists.set(node, children);
+  }
+  return children;
 }
 
 function walkTree(root, enter) {

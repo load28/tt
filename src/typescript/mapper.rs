@@ -135,6 +135,7 @@ pub(crate) fn diagnostic_origin(
 /// Offset of `byte` in `text`, counted in UTF-16 code units — TypeScript's
 /// own coordinate space. An offset past the end clamps to the end.
 pub(crate) fn to_utf16(text: &str, byte: usize) -> usize {
+    crate::work::tick("utf-16 scans");
     let signature = crate::error::signature_len(text);
     let text = crate::error::decoded(text);
     let byte = byte.saturating_sub(signature);
@@ -148,6 +149,7 @@ pub(crate) fn to_utf16(text: &str, byte: usize) -> usize {
 /// offset past the end clamps to the length; one landing inside a surrogate
 /// pair clamps to the start of that character.
 pub(crate) fn from_utf16(text: &str, utf16: usize) -> usize {
+    crate::work::tick("utf-16 scans");
     let signature = crate::error::signature_len(text);
     let text = crate::error::decoded(text);
     let mut units = 0;

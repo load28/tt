@@ -279,8 +279,8 @@ pub(super) fn checker_labels(
     {
         labels.push(DiagnosticLabel {
             path: None,
-            position: crate::line_col(&host.source, start),
-            end: crate::line_col(&host.source, end),
+            position: host.line_col(start),
+            end: host.line_col(end),
             message: "the piped value is produced here".to_string(),
         });
     }
@@ -298,8 +298,8 @@ pub(super) fn checker_labels(
         };
         labels.push(DiagnosticLabel {
             path: (file.source_path != host.source_path).then(|| file.source_path.clone()),
-            position: crate::line_col(&file.source, start),
-            end: crate::line_col(&file.source, end),
+            position: file.line_col(start),
+            end: file.line_col(end),
             message: related.message.clone(),
         });
     }

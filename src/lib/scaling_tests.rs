@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::work::measure;
 
@@ -533,4 +533,73 @@ fn every_request_does_linear_work_in_the_number_of_statement_decisions() {
         );
     }
     assert_linear(&small, &large);
+}
+
+fn erroring_project(name: &str, count: usize) -> (crate::test_workspace::Workspace, PathBuf) {
+    let root = crate::test_workspace::Workspace::in_repo_with_subdir(name, "src");
+    std::fs::write(
+        root.join("tsconfig.json"),
+        r#"{ "compilerOptions": { "strict": true, "target": "esnext", "module": "preserve", "moduleResolution": "bundler", "noEmit": true, "skipLibCheck": true }, "include": ["src"] }"#,
+    )
+    .unwrap();
+    let functions = |prefix: &str| -> String {
+        (0..count)
+            .map(|i| {
+                format!(
+                    "export function {prefix}{i}(r: number): number {{ const v: string = r; return v; }}\n"
+                )
+            })
+            .collect()
+    };
+    std::fs::write(
+        root.join("src/main.tt"),
+        format!(
+            "{}export const m = (s: number) => match (s) {{ 1 => \"é\", _ => s }};\n",
+            functions("t")
+        ),
+    )
+    .unwrap();
+    std::fs::write(root.join("src/side.ts"), functions("s")).unwrap();
+    let canonical = root.canonicalize().unwrap();
+    (root, canonical)
+}
+
+#[test]
+fn a_check_measures_each_file_once_however_many_diagnostics_it_reports() {
+    if !toolchain_present() {
+        return;
+    }
+    let check = |name: &str, count: usize| {
+        let (_workspace, root) = erroring_project(name, count);
+        let engine = crate::engine::Engine::new(None);
+        let mut project = engine
+            .open_project(
+                &[root.join("src").to_string_lossy().into_owned()],
+                &crate::engine::ProjectOptions::default(),
+            )
+            .unwrap();
+        let files = project.initial_files();
+        let snapshot = project.update(&files).unwrap();
+        let mut reported = 0;
+        let work = measure(|| {
+            reported = project
+                .check(&snapshot, &crate::engine::CheckRequest::default())
+                .unwrap()
+                .diagnostics
+                .len();
+        });
+        (reported, work)
+    };
+    let (small_reported, small) = check("measured-once-small", 20);
+    let (large_reported, large) = check("measured-once-large", 40);
+    assert_eq!(small_reported, 80);
+    assert_eq!(large_reported, 160);
+    for name in ["line measurements", "utf-16 measurements", "utf-16 scans"] {
+        let before = small.get(name).copied().unwrap_or(0);
+        let after = large.get(name).copied().unwrap_or(0);
+        assert_eq!(
+            before, after,
+            "{name}: {before} for {small_reported} diagnostics but {after} for {large_reported}"
+        );
+    }
 }

@@ -27,16 +27,21 @@ pub(crate) fn report(
         .iter()
         .filter(|file| member_sources.contains(&file.source_path))
     {
+        let lines = crate::lines::LineMap::ecma(&file.source);
+        let line_col = |at: usize| {
+            let (line, column) = lines.char_position(at);
+            (line + 1, column + 1)
+        };
         for diagnostic in &file.diagnostics {
             out.push(Diagnostic {
                 path: file.source_path.clone(),
-                position: diagnostic.start.map(|at| crate::line_col(&file.source, at)),
-                end: diagnostic.end.map(|at| crate::line_col(&file.source, at)),
+                position: diagnostic.start.map(line_col),
+                end: diagnostic.end.map(line_col),
                 message: diagnostic.message.clone(),
                 code: Some(diagnostic.code.as_str().to_string()),
                 suggestions: diagnostic.suggestions.clone(),
                 labels: labels_in(
-                    (&file.source_path, &file.source),
+                    (&file.source_path, &line_col),
                     &file.source_path,
                     &diagnostic.labels,
                 ),
@@ -53,13 +58,13 @@ pub(crate) fn report(
         for d in &file.tt_diagnostics {
             out.push(Diagnostic {
                 path: file.source_path.clone(),
-                position: d.start.map(|at| crate::line_col(&file.source, at)),
-                end: d.end.map(|at| crate::line_col(&file.source, at)),
+                position: d.start.map(|at| file.line_col(at)),
+                end: d.end.map(|at| file.line_col(at)),
                 message: d.message.clone(),
                 code: Some(d.code.as_str().to_string()),
                 suggestions: d.suggestions.clone(),
                 labels: labels_in(
-                    (&file.source_path, &file.source),
+                    (&file.source_path, &|at| file.line_col(at)),
                     &file.source_path,
                     &d.labels,
                 ),
@@ -79,8 +84,8 @@ pub(crate) fn report(
         };
         out.push(Diagnostic {
             path: anchor.source_path.clone(),
-            position: Some(crate::line_col(&file.source, anchor.offset)),
-            end: Some(crate::line_col(&file.source, anchor.end)),
+            position: Some(file.line_col(anchor.offset)),
+            end: Some(file.line_col(anchor.end)),
             message: "`return` here would wrap an already-Result value".to_string(),
             code: Some(
                 crate::DiagnosticCode::ResultReturnNested
@@ -118,11 +123,11 @@ pub(crate) fn report(
             }
             let diagnostic = Diagnostic {
                 path: file.source_path.clone(),
-                position: error.offset.map(|at| crate::line_col(&file.source, at)),
-                end: error.end.map(|at| crate::line_col(&file.source, at)),
+                position: error.offset.map(|at| file.line_col(at)),
+                end: error.end.map(|at| file.line_col(at)),
                 message: error.message,
                 labels: labels_in(
-                    (&file.source_path, &file.source),
+                    (&file.source_path, &|at| file.line_col(at)),
                     &file.source_path,
                     &error.labels,
                 ),
@@ -146,11 +151,11 @@ pub(crate) fn report(
             }
             let diagnostic = Diagnostic {
                 path: file.source_path.clone(),
-                position: error.offset.map(|at| crate::line_col(&file.source, at)),
-                end: error.end.map(|at| crate::line_col(&file.source, at)),
+                position: error.offset.map(|at| file.line_col(at)),
+                end: error.end.map(|at| file.line_col(at)),
                 message: error.message,
                 labels: labels_in(
-                    (&file.source_path, &file.source),
+                    (&file.source_path, &|at| file.line_col(at)),
                     &file.source_path,
                     &error.labels,
                 ),
@@ -196,8 +201,13 @@ pub(crate) fn report(
         })
         .collect();
     let mut translated_seen: HashSet<(PathBuf, usize, AnchorKind, &'static str)> = HashSet::new();
+    let lowered: HashMap<&std::path::Path, &Arc<ProjectedDocument>> = files
+        .iter()
+        .map(|file| (file.module_path.as_path(), file))
+        .collect();
+    let mut hand_written: HashMap<&std::path::Path, Option<HandWritten>> = HashMap::new();
     for diagnostic in type_diagnostics {
-        let Some(file) = files.iter().find(|f| f.module_path == diagnostic.file) else {
+        let Some(&file) = lowered.get(diagnostic.file.as_path()) else {
             // A hand-written file: nothing was lowered, so TypeScript's own
             // coordinates already name the place. They arrive as UTF-16
             // offsets and every consumer of this report reads line and
@@ -205,15 +215,17 @@ pub(crate) fn report(
             // buffer's when one is open, the disk's otherwise. A file that
             // cannot be read keeps the path alone rather than a made-up
             // position.
-            let text = snapshot
-                .source_of(&diagnostic.file)
-                .map(str::to_owned)
-                .or_else(|| std::fs::read_to_string(&diagnostic.file).ok());
-            let at = |utf16: usize| {
-                text.as_deref().map(|text| {
-                    crate::line_col(text, crate::typescript::mapper::from_utf16(text, utf16))
+            let text = hand_written
+                .entry(diagnostic.file.as_path())
+                .or_insert_with(|| {
+                    snapshot
+                        .source_of(&diagnostic.file)
+                        .map(str::to_owned)
+                        .or_else(|| std::fs::read_to_string(&diagnostic.file).ok())
+                        .map(HandWritten::new)
                 })
-            };
+                .as_ref();
+            let at = |utf16: usize| text.map(|text| text.line_col(utf16));
             out.push(Diagnostic {
                 path: diagnostic.file.clone(),
                 position: at(diagnostic.start),
@@ -280,10 +292,7 @@ pub(crate) fn report(
                         .map(|declaration_file| (declaration, declaration_file))
                 })
                 .is_some_and(|(declaration, declaration_file)| {
-                    let out = crate::typescript::mapper::from_utf16(
-                        &declaration_file.emit.code,
-                        declaration.start,
-                    );
+                    let out = declaration_file.code_utf16().to_byte(declaration.start);
                     declaration_file.emit.anchors.iter().any(|anchor| {
                         anchor.out <= out
                             && out < anchor.end
@@ -342,8 +351,8 @@ pub(crate) fn report(
                     .unwrap_or_default();
                 out.push(Diagnostic {
                     path: file.source_path.clone(),
-                    position: Some(crate::line_col(&file.source, anchor.display().0)),
-                    end: Some(crate::line_col(&file.source, anchor.display().1)),
+                    position: Some(file.line_col(anchor.display().0)),
+                    end: Some(file.line_col(anchor.display().1)),
                     message: anchored_diagnostic_message(&anchor, diagnostic, declared),
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
@@ -376,8 +385,8 @@ pub(crate) fn report(
             {
                 let entry = Diagnostic {
                     path: file.source_path.clone(),
-                    position: Some(crate::line_col(&file.source, anchor.display().0)),
-                    end: Some(crate::line_col(&file.source, anchor.display().1)),
+                    position: Some(file.line_col(anchor.display().0)),
+                    end: Some(file.line_col(anchor.display().1)),
                     message: said,
                     code: Some(format!("ts{}", diagnostic.code)),
                     suggestions: Vec::new(),
@@ -400,8 +409,8 @@ pub(crate) fn report(
             DiagnosticOrigin::Exact { start, end } => {
                 out.push(Diagnostic {
                     path: file.source_path.clone(),
-                    position: Some(crate::line_col(&file.source, start)),
-                    end: Some(crate::line_col(&file.source, end)),
+                    position: Some(file.line_col(start)),
+                    end: Some(file.line_col(end)),
                     message: if owned_by_typescript {
                         ts_message(&diagnostic.message, declared)
                     } else {
@@ -414,8 +423,8 @@ pub(crate) fn report(
             }
             DiagnosticOrigin::Anchor(anchor) => out.push(Diagnostic {
                 path: file.source_path.clone(),
-                position: Some(crate::line_col(&file.source, anchor.display().0)),
-                end: Some(crate::line_col(&file.source, anchor.display().1)),
+                position: Some(file.line_col(anchor.display().0)),
+                end: Some(file.line_col(anchor.display().1)),
                 message: format!(
                     "{} (in code ttc generated for this construct)",
                     diagnostic_message(diagnostic, declared)
@@ -426,7 +435,7 @@ pub(crate) fn report(
             }),
             DiagnosticOrigin::Nearest { start } => out.push(Diagnostic {
                 path: file.source_path.clone(),
-                position: Some(crate::line_col(&file.source, start)),
+                position: Some(file.line_col(start)),
                 end: None,
                 message: format!(
                     "{} (in code ttc generated near this position)",
@@ -457,8 +466,8 @@ pub(crate) fn report(
         let uncovered: Vec<String> = missing.missing.iter().map(display_literal).collect();
         out.push(Diagnostic {
             path: file.source_path.clone(),
-            position: Some(crate::line_col(&file.source, anchor.anchor.offset)),
-            end: Some(crate::line_col(&file.source, anchor.anchor.end)),
+            position: Some(file.line_col(anchor.anchor.offset)),
+            end: Some(file.line_col(anchor.anchor.end)),
             message: crate::diagnostics::non_exhaustive_message(
                 Some("literal union"),
                 &uncovered,
@@ -576,10 +585,10 @@ pub(crate) fn report(
             };
             out.push(Diagnostic {
                 path: file.source_path.clone(),
-                position: Some(crate::line_col(&file.source, offset)),
+                position: Some(file.line_col(offset)),
                 end: match_ends
                     .get(&(file.source_path.clone(), offset))
-                    .map(|at| crate::line_col(&file.source, *at)),
+                    .map(|at| file.line_col(*at)),
                 message: hole.message,
                 code: Some(
                     crate::DiagnosticCode::MatchNotExhaustive
@@ -664,15 +673,15 @@ pub(crate) fn report(
             })
             .map_or_else(Vec::new, |declaration| {
                 labels_in(
-                    (&declaration.source_path, &declaration.source),
+                    (&declaration.source_path, &|at| declaration.line_col(at)),
                     &file.source_path,
                     &error.labels,
                 )
             });
         out.push(Diagnostic {
             path: file.source_path.clone(),
-            position: Some(crate::line_col(&file.source, mutation.anchor.offset)),
-            end: Some(crate::line_col(&file.source, mutation.anchor.end)),
+            position: Some(file.line_col(mutation.anchor.offset)),
+            end: Some(file.line_col(mutation.anchor.end)),
             message: error.message,
             code: Some(error.code.as_str().to_string()),
             suggestions: error.suggestions,
@@ -740,8 +749,8 @@ pub(crate) fn report(
         };
         out.push(Diagnostic {
             path: file.source_path.clone(),
-            position: Some(crate::line_col(&file.source, pass.anchor.offset)),
-            end: Some(crate::line_col(&file.source, pass.anchor.end)),
+            position: Some(file.line_col(pass.anchor.offset)),
+            end: Some(file.line_col(pass.anchor.end)),
             message: format!(
                 "cannot pass val binding `{}` to mutable parameter {} of \
                  `{}` (the parameter is not declared with `val`, so the function may mutate \
@@ -764,7 +773,7 @@ pub(crate) fn report(
 /// as the labels of a diagnostic reported in `reported`: a label names its
 /// file only when that is not the diagnostic's own.
 fn labels_in(
-    (path, source): (&std::path::Path, &str),
+    (path, line_col): (&std::path::Path, &dyn Fn(usize) -> (usize, usize)),
     reported: &std::path::Path,
     labels: &[crate::DiagnosticLabel],
 ) -> Vec<DiagnosticLabel> {
@@ -772,9 +781,31 @@ fn labels_in(
         .iter()
         .map(|label| DiagnosticLabel {
             path: (path != reported).then(|| path.to_path_buf()),
-            position: crate::line_col(source, label.start),
-            end: crate::line_col(source, label.end),
+            position: line_col(label.start),
+            end: line_col(label.end),
             message: label.message.clone(),
         })
         .collect()
+}
+
+struct HandWritten {
+    lines: crate::lines::LineIndex,
+    utf16: crate::lines::Utf16Map,
+    text: String,
+}
+
+impl HandWritten {
+    fn new(text: String) -> Self {
+        Self {
+            lines: crate::lines::LineMap::ecma(&text).index(),
+            utf16: crate::lines::Utf16Map::new(&text),
+            text,
+        }
+    }
+
+    fn line_col(&self, utf16: usize) -> (usize, usize) {
+        let (line, column) = crate::lines::LineMap::indexed(&self.text, &self.lines)
+            .char_position(self.utf16.to_byte(utf16));
+        (line + 1, column + 1)
+    }
 }

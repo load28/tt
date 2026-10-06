@@ -258,6 +258,89 @@ impl<'a> LineMap<'a> {
     }
 }
 
+/// Byte offsets and UTF-16 code-unit offsets of one text, measured once.
+///
+/// TypeScript addresses text in UTF-16 code units; the compiler addresses
+/// it in bytes. The two agree up to the first non-ASCII character, and each
+/// such character shifts them by a known amount, so recording those
+/// characters alone answers every conversion by binary search — the shape
+/// of tsgo's `ast.PositionMap`. A leading byte-order mark is a signature:
+/// UTF-16 offsets count the decoded text, byte offsets include it.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct Utf16Map {
+    signature: usize,
+    len: usize,
+    units: usize,
+    wide: Vec<WideChar>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct WideChar {
+    byte: usize,
+    unit: usize,
+    bytes: usize,
+    units: usize,
+}
+
+impl WideChar {
+    fn shift(self) -> usize {
+        self.byte + self.bytes - (self.unit + self.units)
+    }
+}
+
+impl Utf16Map {
+    pub(crate) fn new(text: &str) -> Self {
+        crate::work::tick("utf-16 measurements");
+        let signature = signature_len(text);
+        let decoded = crate::error::decoded(text);
+        let mut shift = 0;
+        let mut wide = Vec::new();
+        for (byte, ch) in decoded.char_indices().filter(|(_, ch)| !ch.is_ascii()) {
+            let entry = WideChar {
+                byte,
+                unit: byte - shift,
+                bytes: ch.len_utf8(),
+                units: ch.len_utf16(),
+            };
+            shift = entry.shift();
+            wide.push(entry);
+        }
+        Self {
+            signature,
+            len: decoded.len(),
+            units: decoded.len() - shift,
+            wide,
+        }
+    }
+
+    /// The UTF-16 offset of `byte`. An offset past the end, or one inside a
+    /// character, counts the whole text.
+    pub(crate) fn to_utf16(&self, byte: usize) -> usize {
+        let byte = byte.saturating_sub(self.signature);
+        if byte > self.len {
+            return self.units;
+        }
+        let before = self.wide.partition_point(|wide| wide.byte < byte);
+        match before.checked_sub(1).map(|at| self.wide[at]) {
+            Some(wide) if byte < wide.byte + wide.bytes => self.units,
+            Some(wide) => byte - wide.shift(),
+            None => byte,
+        }
+    }
+
+    /// The byte offset of the first character boundary at or after the
+    /// UTF-16 offset `utf16`; the text's end past it.
+    pub(crate) fn to_byte(&self, utf16: usize) -> usize {
+        let before = self.wide.partition_point(|wide| wide.unit < utf16);
+        let byte = match before.checked_sub(1).map(|at| self.wide[at]) {
+            Some(wide) if utf16 < wide.unit + wide.units => wide.byte + wide.bytes,
+            Some(wide) => utf16 + wide.shift(),
+            None => utf16,
+        };
+        self.signature + byte.min(self.len)
+    }
+}
+
 /// Positions in the editor protocol's coordinates, from the compiler's.
 ///
 /// The compiler reports a 1-based line under [`LineBreaks::Ecma`] and a
