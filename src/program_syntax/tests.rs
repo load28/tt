@@ -1100,12 +1100,12 @@ fn a_segment_list_keeps_the_order_a_vector_would() {
                 vector.insert(0, segment(at));
             }
             _ => {
-                let index = (state >> 40) as usize % (vector.len() + 1);
+                let index = (state >> 40) % (vector.len() + 1);
                 list.insert(index, segment(at));
                 vector.insert(index, segment(at));
             }
         }
-        let since = (state >> 20) as usize % (vector.len() + 1);
+        let since = (state >> 20) % (vector.len() + 1);
         assert_eq!(
             starts(&mut list.since(since).rev()),
             starts(&mut vector[since..].iter().rev())
