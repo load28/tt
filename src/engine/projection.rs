@@ -111,6 +111,13 @@ impl ProjectedDocument {
         (line + 1, column + 1)
     }
 
+    /// Replaces the emitted module, and with it what was measured of the
+    /// one it replaces.
+    pub(crate) fn replace_emit(&mut self, emit: MappedEmit) {
+        self.emit = emit;
+        self.code_utf16 = std::sync::OnceLock::new();
+    }
+
     /// The emitted module's byte and UTF-16 offsets, measured once per
     /// content version.
     pub(crate) fn code_utf16(&self) -> &crate::lines::Utf16Map {

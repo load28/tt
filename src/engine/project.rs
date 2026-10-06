@@ -503,7 +503,7 @@ impl Project {
             {
                 for (index, emit) in emits {
                     if projected[index].emit != emit {
-                        Arc::make_mut(&mut projected[index]).emit = emit;
+                        Arc::make_mut(&mut projected[index]).replace_emit(emit);
                     }
                 }
                 self.next_snapshot += 1;
@@ -556,7 +556,7 @@ impl Project {
                     );
                 }
                 if projected[index].emit != emit {
-                    Arc::make_mut(&mut projected[index]).emit = emit;
+                    Arc::make_mut(&mut projected[index]).replace_emit(emit);
                 }
             }
         }
