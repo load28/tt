@@ -2981,10 +2981,25 @@ pub fn engine_diagnostic(
     styles: Styles,
 ) -> String
 
+// fn ttc::render::engine_diagnostic_measured
+pub fn engine_diagnostic_measured(
+    diagnostic: &Diagnostic,
+    source: Option<&LineMap<'_>>,
+    path: &str,
+    styles: Styles,
+) -> String
+
 // fn ttc::render::render
 pub fn render(
     report: &Report<'_>,
     source: Option<&str>,
+    styles: Styles,
+) -> String
+
+// fn ttc::render::render_measured
+pub fn render_measured(
+    report: &Report<'_>,
+    source: Option<&LineMap<'_>>,
     styles: Styles,
 ) -> String
 
@@ -4016,6 +4031,7 @@ impl UnwindSafe for PayloadProbe
 pub struct PayloadTemp {
     pub src: usize,
     pub out: usize,
+    pub tag: (usize, usize),
 }
 impl Clone for PayloadTemp
 impl Copy for PayloadTemp

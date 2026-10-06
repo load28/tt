@@ -173,6 +173,9 @@ After the change 16000 matches take 2.7 s.
   === `. The arm's own condition narrows the receiver, so the answer is
   the payload's type at that arm, at any depth. When exactly one visible
   variant has every tag TypeScript offers, its cases supply the details.
+  A field whose declared type names a variant keeps its parse-only answer,
+  in declaration order: that answer is already exact, and the typed path
+  is asked only where it is empty.
 - **Not changed here**: hover and definition of a nested tag under a
   generic payload. `ttSymbol` is parse-only by its protocol contract
   (`src/server.rs`), and a typed answer needs a new project-backed
@@ -226,6 +229,16 @@ After the change 16000 matches take 2.7 s.
   (API 12.6 s for 12800 diagnostics; `tsc --runExternalCode` profile in
   `diagnosticwriter.newOriginalTextFile`, which recomputes line starts per
   diagnostic). Resolution: recorded as an upstream issue; no workaround.
+- **A cached UTF-16 map outlived the emit it measured**: the first full
+  run showed diagnostics on user code reported as glue (`(in code ttc
+  generated for this construct)` lost or gained, translated wording on
+  TS2339). Cause: `Project` replaces a document's emit after contextual
+  refinement, and the cloned `OnceLock` kept the measurement of the earlier
+  text. Resolution: `ProjectedDocument::replace_emit` replaces the emit and
+  resets its measurement; both replacement sites use it.
+- **Nested completions over a declared variant changed order**: the typed
+  path listed them in TypeScript's order. Resolution: the typed path is
+  asked only where the parse-only answer is empty (decision 8).
 - **A clippy failure reached a commit**: the commit command ran after a
   clippy pipe whose status it did not check. Resolution: fixed in the next
   commit; gates are run and read before committing.

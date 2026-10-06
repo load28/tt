@@ -232,8 +232,8 @@ pub(super) fn pattern_question(
                 .collect(),
             Some(TypedSite::Field { written, claimed }),
         ),
-        Context::Nested { tag, field } => (
-            resolve_all(&declarations, std::slice::from_ref(&tag))
+        Context::Nested { tag, field } => {
+            let items: Vec<TtCompletion> = resolve_all(&declarations, std::slice::from_ref(&tag))
                 .filter_map(|declared| {
                     declared
                         .constructors
@@ -244,12 +244,13 @@ pub(super) fn pattern_question(
                         .and_then(|f| type_variant(&declarations, &f.ty))
                 })
                 .flat_map(|inner| cases(inner, &[]))
-                .collect(),
-            Some(TypedSite::Nested {
+                .collect();
+            let typed = items.is_empty().then_some(TypedSite::Nested {
                 at: prefix.map_or(offset, |(start, _)| start),
                 prefix,
-            }),
-        ),
+            });
+            (items, typed)
+        }
     };
     Some(PatternQuestion {
         items: merge_candidates(items),
