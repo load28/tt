@@ -811,7 +811,7 @@
 | TASK-769 | Fix defects found by the third audit | Complete | 2026-10-06 | 2026-10-06 | [TASK-769](./TASK-769-third-audit.md) |
 
 | TASK-770 | Fix defects found by the fourth audit | Complete | 2026-10-06 | 2026-10-06 | [TASK-770](./TASK-770-fourth-audit.md) |
-| TASK-771 | Keep a logical test's narrowing and fix the fourth audit's remaining editor findings | In progress | 2026-10-06 | — | [TASK-771](./TASK-771-narrowing-and-editor-cost.md) |
+| TASK-771 | Keep a logical test's narrowing and fix the fourth audit's remaining editor findings | Complete | 2026-10-06 | 2026-10-06 | [TASK-771](./TASK-771-narrowing-and-editor-cost.md) |
 
 ## Next task number
 

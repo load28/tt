@@ -1,8 +1,8 @@
 # TASK-771: Keep a logical test's narrowing and fix the fourth audit's remaining editor findings
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-06
-- **Completed**: —
+- **Completed**: 2026-10-06
 - **Commit**: —
 
 ## Purpose
@@ -267,11 +267,44 @@ After the change 16000 matches take 2.7 s.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test --no-fail-fast` with `TTC_REQUIRE_TSGO=1`: every target
+  passed (exit 0) after the fixes in "Issues and resolutions".
+- [x] Baseline changes reviewed and committed with the change: the loop
+  and `if` guard outputs (decision 1), the new editor cases, and the public
+  API additions (`render_measured`, `engine_diagnostic_measured`,
+  `PayloadTemp::tag`).
+- Measurements: `--check-types` with 1600 TypeScript errors 15.3 s → 4.0 s;
+  `--check` with 16000 matches 9.3 s → 2.7 s.
+
+### Changed files
+
+- Compiler: `src/program_syntax.rs`, `src/program_syntax/projection.rs`,
+  `src/program_syntax/projection/segments.rs`,
+  `src/program_syntax/completion.rs`, `src/codegen/core/planning.rs`,
+  `src/codegen/core/emitter/` (host, source, pattern),
+  `src/codegen/rope.rs`, `src/codegen/rope/builder.rs`,
+  `src/codegen/contextual.rs`, `src/flow/`, `src/parser/`,
+  `src/lines.rs`, `src/lib/mapped.rs`, `src/typescript/mapper.rs`.
+- Engine and CLI: `src/engine/projection.rs`, `src/engine/project.rs`,
+  `src/engine/semantics/report.rs`, `src/engine/semantics/translate.rs`,
+  `src/engine/completions.rs`, `src/engine/language/service.rs`,
+  `src/engine/language/project/completion.rs`, `src/render.rs`,
+  `src/main/typed.rs`, `src/typescript/host.mjs`.
+- Tests and baselines: `src/lib/scaling_tests.rs`, `src/lines/tests.rs`,
+  `src/program_syntax/tests.rs`, `tests/native/editor_service.rs`,
+  `tests/cases/compiler/aLogicalTestKeepsItsNarrowingBesideATtValue.tt`,
+  `tests/cases/editor/orPatternArmCompletionCountsItsWrittenAlternatives.tt`,
+  `tests/cases/editor/nestedPatternCompletionUnderAGenericPayload.tt`,
+  `tests/baselines/reference/`.
 
 ## Result
 
-In progress.
+Complete. The logical-test narrowing (decision 1) and the editor and
+check costs (E3–E5, decisions 2, 6, 7) are fixed; or-pattern answers
+(E8) are fixed or reviewed; nested completion under a generic payload
+(E6) is fixed, with typed hover and definition proposed as a follow-up;
+the hint beside a duplicate-arm error (E9) is kept by decision 9. The
+remaining `--check-types` growth is tsgo's content-mapper path, recorded as
+an upstream issue.
