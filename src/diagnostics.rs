@@ -116,6 +116,7 @@ pub enum DiagnosticCode {
     VariantRequiredAfterOptional,
     /// A `variant` declared as a module's default export.
     VariantDefaultExport,
+    /// A variant case declaring the same payload field twice.
     VariantDuplicateField,
     /// A pattern binding the same name twice.
     PatternDuplicateBinding,
