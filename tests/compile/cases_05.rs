@@ -130,8 +130,6 @@ fn exported_variants_names_a_variant_by_its_local_export_specifiers() {
     assert_eq!(symbols[0].offset, "variant ".len());
 }
 
-/// TASK-768: an `export variant` in a namespace body exports a member of
-/// the namespace; the module exports only its own statements.
 #[test]
 fn a_namespace_member_variant_is_not_a_module_export() {
     let names: Vec<String> = ttc::exported_variants(

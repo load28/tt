@@ -399,6 +399,33 @@ fn analyses_collect_imported_declarations_like_the_cli() {
 }
 
 #[test]
+fn an_import_of_a_document_not_saved_yet_reads_the_open_buffer() {
+    let dir = crate::test_workspace::Workspace::new("unsaved-import");
+    let source = "import { Token as T } from \"./token.tt\";\nconst v = match (t) { Num(value) | Eof => 0 };\n";
+    let main = dir.join("main.tt");
+    std::fs::write(&main, source).unwrap();
+    let main = main.canonicalize().unwrap();
+    let engine = crate::engine::Engine::new(None);
+    let mut project = engine
+        .open_project(
+            &[dir.to_string_lossy().to_string()],
+            &crate::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    project.open_document(
+        main.parent().unwrap().join("token.tt"),
+        "export variant Token { Num(value: number), Eof }\n".to_string(),
+    );
+    let semantics = project.semantic_analyses(&main, source);
+    let binding = semantics
+        .analyses
+        .binding_at(source.find("Num(value)").unwrap() + 4)
+        .unwrap();
+    assert_eq!(binding.ty.as_deref(), Some("number"));
+    assert_eq!(binding.variant_name.as_deref(), Some("T"));
+}
+
+#[test]
 fn the_editor_and_the_typed_pass_share_one_semantic_cache() {
     let dir = crate::test_workspace::Workspace::new("shared-cache");
     let file = dir.join("a.tt");
@@ -872,6 +899,45 @@ fn a_failed_probe_restores_the_previous_document() {
     let after = project.hover(&path, position).unwrap().unwrap();
     assert_eq!(after.signature, before.signature);
     assert_eq!(after.range, before.range);
+}
+
+#[test]
+fn closing_a_document_that_was_never_saved_removes_it_from_the_service() {
+    let dir = crate::test_workspace::Workspace::in_repo("closed-unsaved-import");
+    if service_binary(&dir).is_err() {
+        assert!(
+            std::env::var_os("TTC_REQUIRE_TSGO").is_none(),
+            "TypeScript is required"
+        );
+        return;
+    }
+    let main = dir.join("b.tt");
+    std::fs::write(
+        &main,
+        "import { V } from \"./n.tt\";\nexport const x: V = V.A;\n",
+    )
+    .unwrap();
+    let main = main.canonicalize().unwrap();
+    let imported = main.parent().unwrap().join("n.tt");
+    let mut project = crate::engine::Engine::new(None)
+        .open_project(
+            &[main.to_string_lossy().into_owned()],
+            &crate::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let codes = |project: &mut Project| -> Vec<u32> {
+        project
+            .service_diagnostics(&main)
+            .unwrap()
+            .iter()
+            .map(|diagnostic| diagnostic.code)
+            .collect()
+    };
+    assert_eq!(codes(&mut project), [2307]);
+    project.open_document(imported.clone(), "export variant V { A, B }\n".to_string());
+    assert_eq!(codes(&mut project), Vec::<u32>::new());
+    project.close_document(&imported);
+    assert_eq!(codes(&mut project), [2307]);
 }
 
 #[test]

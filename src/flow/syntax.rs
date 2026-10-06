@@ -202,8 +202,6 @@ impl FunctionTargets {
         self.innermost_at_offset(offset).map(|(_, target)| target)
     }
 
-    /// The byte offset where the innermost user function enclosing `offset`
-    /// opens (its body's `{` or its concise arrow's `=>`).
     pub(crate) fn boundary_at_offset(&self, offset: usize) -> Option<usize> {
         self.innermost_at_offset(offset).map(|(start, _)| start)
     }

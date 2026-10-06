@@ -353,9 +353,6 @@ fn guard_outside_statements(cur: &Cursor<'_>, open: usize) -> bool {
         if arms.eat_punct(b',').is_some() {
             continue;
         }
-        // A body of patterns alone is an arm list whose `=>` is not
-        // written yet; the host's parser decides whether TypeScript reads
-        // the text otherwise.
         let Some(keyword) = arms.peek() else {
             return true;
         };

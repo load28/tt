@@ -1218,6 +1218,23 @@ impl Project {
                 session.client.close(&file_uri(&path));
                 session.host_served.remove(&path);
             }
+            let gone: Vec<_> = session
+                .served
+                .keys()
+                .filter(|path| {
+                    !super::super::project::is_host_source(path)
+                        && !overlays.contains_key(*path)
+                        && !path.is_file()
+                })
+                .cloned()
+                .collect();
+            for path in gone {
+                if let Some(uri) = session.uris.remove(&path) {
+                    session.client.close(&uri);
+                }
+                session.served.remove(&path);
+                session.docs.remove(&path);
+            }
             for (path, text) in overlays
                 .iter()
                 .filter(|(path, _)| super::super::project::is_host_source(path))
@@ -1238,7 +1255,7 @@ impl Project {
             let mut stack = vec![(canonical.clone(), doc.clone())];
             while let Some((file, doc)) = stack.pop() {
                 for import in crate::tt_imports(&doc.source) {
-                    let target = match crate::engine::paths::canonical(
+                    let target = match crate::engine::normalize_document_path(
                         &file
                             .parent()
                             .unwrap_or(Path::new("."))

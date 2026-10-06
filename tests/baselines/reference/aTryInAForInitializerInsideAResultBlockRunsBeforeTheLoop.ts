@@ -1,7 +1,4 @@
 //// [aTryInAForInitializerInsideAResultBlockRunsBeforeTheLoop.tt] ////
-// A `try` in a `for` declaration initializer inside a `result` block runs
-// before the loop, as it does in a function body; its failure exits the
-// result block, and the header keeps the payload declaration.
 type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
 const ok = (value: number): R<number> => ({ kind: "Ok", value });
 const err = (error: string): R<number> => ({ kind: "Err", error });
@@ -19,9 +16,6 @@ export {};
 
 
 //// [aTryInAForInitializerInsideAResultBlockRunsBeforeTheLoop.ts]
-// A `try` in a `for` declaration initializer inside a `result` block runs
-// before the loop, as it does in a function body; its failure exits the
-// result block, and the header keeps the payload declaration.
 type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
 const ok = (value: number): R<number> => ({ kind: "Ok", value });
 const err = (error: string): R<number> => ({ kind: "Err", error });

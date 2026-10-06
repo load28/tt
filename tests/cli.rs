@@ -3094,8 +3094,6 @@ fn a_commonjs_module_imports_the_standard_library_in_commonjs_syntax() {
     );
 }
 
-/// TASK-768: a storage annotation the checker writes as an import type
-/// names the standard library a CommonJS module imports, `tt/cjs/`.
 #[test]
 fn a_commonjs_module_annotates_storage_with_the_commonjs_standard_library() {
     require_types_toolchain!();
@@ -3263,10 +3261,6 @@ fn symbols_resolve_an_import_to_a_normalized_path() {
     assert_eq!(resolved, ["src/sub/b.tt", "src/c.tt"]);
 }
 
-/// TASK-768: a build points a passed-through `.ts` file's `@tt/std`
-/// specifiers at the modules it writes, as it does a `.tt` file's, and
-/// `--rewrite-imports off` leaves them as written: the documented exception
-/// to byte-for-byte pass-through.
 #[test]
 fn a_passed_through_typescript_file_imports_the_written_standard_library() {
     let dir = tmpdir();
@@ -3299,10 +3293,6 @@ fn a_passed_through_typescript_file_imports_the_written_standard_library() {
     }
 }
 
-/// TASK-768: an import's variants are what its module exports, under the
-/// names an importer binds: an `export { X }` or `export { X as Y }`
-/// specifier exports a declared variant, and an `export variant` in a
-/// namespace body is a member of that namespace, not of the module.
 #[test]
 fn symbols_list_an_imports_variants_by_what_its_module_exports() {
     let dir = tmpdir();

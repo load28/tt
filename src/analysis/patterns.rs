@@ -37,7 +37,6 @@ pub(super) struct Entry {
     /// The constructors, in declaration order, including payload fields.
     pub(super) constructors: Vec<MatchConstructor>,
     pub(super) scope: Option<crate::hir::Span>,
-    /// The other names a declared type writes this variant with.
     pub(super) type_names: Vec<String>,
 }
 

@@ -27,7 +27,8 @@ diverges between layers. Fix each in the layer that owns it.
   exception for `@tt/std` specifiers in passed-through TypeScript; the
   unreachable-arm hint's range; nested pattern completion for a field typed
   with the standard library's `TOption` or `TResult`; an unfinished arm
-  list with no `=>` written yet.
+  list with no `=>` written yet; an import of a document that is open but
+  not saved; closing such a document.
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -242,6 +243,31 @@ diverges between layers. Fix each in the layer that owns it.
   written, and completion at the `is` type asks the probe, which offers
   the classes in scope.
 
+### Decision 17: An open document that is not saved is an import target
+
+- **Context**: With `n.tt` only open in the editor, a file importing it saw
+  no variant from it in the tt layer (cases, hover, hints), while the
+  typed check found the cases.
+- **Decision and rationale**: Import targets were resolved with
+  `fs::canonicalize`, which fails for a path with no file, so the open
+  buffer was never asked. The documents store keys a document by its
+  canonical directory and name (`normalize_document_path`); resolving the
+  target the same way reaches the buffer, and a target with neither buffer
+  nor file still yields nothing. The service's transitive serving of a
+  file's imports uses the same resolution.
+
+### Decision 18: Closing a document that was never saved closes its module
+
+- **Context**: After `openDocument n.tt` and `closeDocument n.tt` with no
+  `n.tt` on disk, TypeScript kept answering from the closed text (no
+  TS2307 for the importer) until the projects were reloaded.
+- **Decision and rationale**: The service closed a hand-written TypeScript
+  overlay when it was no longer open, but a served `.tt` module stayed
+  open. TypeScript's project service drops a closed file's script info
+  when the file does not exist on disk; the engine now closes a served
+  `.tt` module whose source is neither open nor on disk before it serves
+  the next question.
+
 ## Work log
 
 - 2026-10-06: Started from the second audit's report. Fixed
@@ -260,7 +286,10 @@ diverges between layers. Fix each in the layer that owns it.
   `src/analysis/{mod,patterns}.rs`, `src/engine/hints.rs` (Decision 14),
   and `src/resolve/mod.rs`, `src/analysis/{mod,patterns}.rs`,
   `src/engine/completions.rs`, `docs/ai/tt.md` (Decision 15), and
-  `src/parser/matches.rs` (Decision 16).
+  `src/parser/matches.rs` (Decision 16), and
+  `src/engine/language/{service,project}.rs` (Decisions 17, 18). Removed
+  explanatory comments this task had added to code, tests and case files,
+  keeping only the documentation the `missing_docs` lint requires.
   Updated
   `tests/compile/cases_08.rs`, which pinned the shorthand-breaking edit
   (Decision 1). Regenerated every `unknown-field`

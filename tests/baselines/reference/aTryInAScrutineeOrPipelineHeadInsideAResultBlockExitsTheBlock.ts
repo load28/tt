@@ -1,8 +1,4 @@
 //// [aTryInAScrutineeOrPipelineHeadInsideAResultBlockExitsTheBlock.tt] ////
-// A match's scrutinee and a pipeline's head run before the construct's own
-// value regions (its arms and steps), as they do in a function body, so a
-// `try` there exits the enclosing `result` block. A `try` inside a function
-// written in an arm, a step, or an interpolation targets that function.
 type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
 variant G { E, F }
 const ok = <T,>(value: T): R<T> => ({ kind: "Ok", value });
@@ -63,10 +59,6 @@ function $tt_show(value: unknown): string {
   }
   return String(value);
 }
-// A match's scrutinee and a pipeline's head run before the construct's own
-// value regions (its arms and steps), as they do in a function body, so a
-// `try` there exits the enclosing `result` block. A `try` inside a function
-// written in an arm, a step, or an interpolation targets that function.
 type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
 type G =
   | { kind: "E" }

@@ -1,8 +1,4 @@
 //// [aConditionalOperandHoldingAnotherConditionalOperationReadsItsResult.tt] ////
-// A conditional operation whose operand holds another conditional operation
-// with a tt value reads that operation's result: the inner operation runs
-// first into its slot, and the outer condition is that slot, not the inner
-// operation's source again.
 type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
 variant G { E, F }
 const ok = (value: number): R<number> => { console.log("ok", value); return { kind: "Ok", value }; };
@@ -49,10 +45,6 @@ function $tt_show(value: unknown): string {
   }
   return String(value);
 }
-// A conditional operation whose operand holds another conditional operation
-// with a tt value reads that operation's result: the inner operation runs
-// first into its slot, and the outer condition is that slot, not the inner
-// operation's source again.
 type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
 type G =
   | { kind: "E" }

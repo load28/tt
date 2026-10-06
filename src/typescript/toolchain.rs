@@ -68,9 +68,6 @@ pub(crate) struct Client {
     pub api: PathBuf,
 }
 
-/// The oldest TypeScript line whose API client ttc drives: the project API
-/// the host opens a project through (`readConfigFile`, `parseConfigFile`)
-/// arrived in 7.1.
 const MINIMUM: (u64, u64) = (7, 1);
 
 /// Resolves the API client for a project at `from`.
@@ -309,8 +306,6 @@ mod tests {
         }
     }
 
-    /// A client older than the line ttc drives is reported with its version
-    /// and the one fix, before any host starts and fails on a missing API.
     #[test]
     fn a_typescript_older_than_the_api_ttc_drives_is_told_how_to_upgrade() {
         for (version, accepted) in [

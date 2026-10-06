@@ -522,9 +522,6 @@ pub(crate) struct VariantDecl {
     pub generics_off: usize,
     pub cases: Vec<VariantCase>,
     pub scope: Option<Span>,
-    /// Whether the declaration is a statement of the module itself rather
-    /// than of a block or namespace body: only such a declaration's
-    /// `export` exports it from the module.
     pub module_level: bool,
 }
 
@@ -672,8 +669,6 @@ pub(crate) struct TupleArm {
     /// [`Arm::diverges`].
     pub diverges: bool,
     pub missing: bool,
-    /// Byte offset just past the arm's final token: a block body's `}`, or
-    /// an expression body's last token, before any separator or comment.
     pub end: usize,
 }
 
@@ -712,8 +707,6 @@ pub(crate) struct Arm {
     /// `undefined` can never run. False for an expression body.
     pub diverges: bool,
     pub missing: bool,
-    /// Byte offset just past the arm's final token: a block body's `}`, or
-    /// an expression body's last token, before any separator or comment.
     pub end: usize,
 }
 

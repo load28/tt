@@ -994,9 +994,6 @@ fn match_as_an_identifier_beside_a_braced_arrow_is_not_a_malformed_match() {
     }
 }
 
-/// TASK-768: a match body of patterns with no `=>` written yet is read as
-/// an unfinished arm list only where TypeScript cannot read the text: a
-/// class body after a heritage call stays TypeScript.
 #[test]
 fn a_class_body_after_a_match_call_heritage_is_not_an_unfinished_arm_list() {
     for src in [

@@ -475,9 +475,6 @@ impl Resolver {
             );
             builtins.insert(name.clone(), self.resolution.type_ns[&name]);
         }
-        // The standard library's type for a built-in (`TOption`, `TResult`)
-        // is the type a field of that built-in is written with: its name,
-        // as the import binds it, names the built-in's definition.
         for item in &hir.items {
             let hir::Item::Import(import) = item else {
                 continue;
@@ -916,8 +913,6 @@ fn collect_position_tags_grown<'h>(
     }
 }
 
-/// The standard library's types for the built-ins, and the modules that
-/// export each (`src/stdlib/{types,option,result}.ts`).
 const STD_BUILTIN_TYPES: [(&str, &str); 2] = [("TOption", "Option"), ("TResult", "Result")];
 
 fn std_builtin_type(module: crate::StdModule, name: &str) -> Option<&'static str> {

@@ -1,7 +1,3 @@
-// A match's scrutinee and a pipeline's head run before the construct's own
-// value regions (its arms and steps), as they do in a function body, so a
-// `try` there exits the enclosing `result` block. A `try` inside a function
-// written in an arm, a step, or an interpolation targets that function.
 // @run: aTryInAScrutineeOrPipelineHeadInsideAResultBlockExitsTheBlock.tt
 type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
 variant G { E, F }

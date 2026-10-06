@@ -1,8 +1,4 @@
 //// [anIfLetBoundToAnUnparenthesizedTry.tt] ////
-// The bound expression of an `if let` runs to the first `{` after a
-// complete expression, and a value `try` is an expression: its operand
-// needs no parentheses. A `try` followed by `{` is the statement form and
-// is not a bound expression.
 type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
 variant G { E(n: number), F }
 const ok = (value: G): R<G> => ({ kind: "Ok", value });
@@ -20,10 +16,6 @@ export {};
 
 
 //// [anIfLetBoundToAnUnparenthesizedTry.ts]
-// The bound expression of an `if let` runs to the first `{` after a
-// complete expression, and a value `try` is an expression: its operand
-// needs no parentheses. A `try` followed by `{` is the statement form and
-// is not a bound expression.
 type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
 type G =
   | { kind: "E"; n: number }
