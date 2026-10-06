@@ -31,23 +31,6 @@ declare const o: { a?: number };
 >a : (property) a?: number | undefined
 export function loops() {
 >loops : function loops(): any
-    return result {
->result : any
-        while (try r()) { k++; }
->k : let k: number
-        do { k++; } while (try r());
->k : let k: number
-        for (;; k += try r()) { break; }
->k : let k: number
 export function defaults() {
 >defaults : function defaults(): any
-    return result {
->result : any
-        const { a = try r() } = o;
->a : const a: number
->o : const o: {
->       a?: number;
->   }
-        return a;
->a : const a: number
 
