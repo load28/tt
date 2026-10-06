@@ -178,7 +178,7 @@ impl<'a> Emitter<'a> {
             result_failure_test(&temp, propagate.layout)
         ));
         out.push_break(1);
-        out.push_lit(format!("return {temp};"));
+        out.append(self.emit_failure_exit(propagate, &temp));
         out.push_break(0);
         out.push_lit("}");
         out.push_break(0);

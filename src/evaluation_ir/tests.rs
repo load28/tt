@@ -194,6 +194,7 @@ fn a_result_binding_is_nested_under_the_result_region() {
         exits,
         protocol,
         context,
+        ..
     } = &propagation.placement
     else {
         panic!("the propagation is not nested: {:?}", propagation.placement);

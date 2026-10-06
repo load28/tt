@@ -3308,6 +3308,7 @@ pub struct UnresolvedUse {
     pub against: DefId,
     pub tag: Option<String>,
     pub suggestion: String,
+    /* private fields */
 }
 impl Clone for UnresolvedUse
 impl Debug for UnresolvedUse
@@ -4194,6 +4195,7 @@ pub struct UnresolvedName {
     pub tag: Option<String>,
     pub suggestion: String,
     pub match_owner: Option<usize>,
+    /* private fields */
 }
 impl Clone for UnresolvedName
 impl Debug for UnresolvedName

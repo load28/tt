@@ -527,7 +527,9 @@ impl<'a> Emitter<'a> {
                 Statement::Propagate(propagate) => {
                     out.append(self.emit_propagate_owner_prelude(propagate));
                     let span = self.span(propagate.node);
-                    let mut emitted = if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
+                    let mut emitted = if self.is_for_initializer_propagation(propagate.node) {
+                        self.emit_for_initializer_payload(propagate)
+                    } else if matches!(propagate.exit, ExitTarget::ResultRegion(_)) {
                         self.emit_region_propagate(propagate, context.failure, context.exit_label)
                     } else {
                         self.emit_propagate(propagate)

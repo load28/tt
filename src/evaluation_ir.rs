@@ -69,6 +69,7 @@ enum RegionPlacement {
         exits: Vec<HostExit>,
         protocol: HostEvaluationProtocol,
         context: Option<EvaluationContext>,
+        owner: Option<HostOwner>,
     },
     SourceEdit,
 }

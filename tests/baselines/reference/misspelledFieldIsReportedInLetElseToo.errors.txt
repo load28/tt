@@ -5,7 +5,7 @@ error[unknown-field]: variant Shape: case `Circle` has no field `radiuz`
 3 |   const Circle(radiuz) = s else { return 0; };
   |                ^^^^^^
   |
-  = help: a field with a similar name exists: `radius`
+  = help: a field with a similar name exists: `radius: radiuz`
 
 
 ==== ttc --check-types (exit 1) ====
@@ -15,7 +15,7 @@ error[unknown-field]: variant Shape: case `Circle` has no field `radiuz`
 3 |   const Circle(radiuz) = s else { return 0; };
   |                ^^^^^^
   |
-  = help: a field with a similar name exists: `radius`
+  = help: a field with a similar name exists: `radius: radiuz`
 error[ts2304]: Cannot find name 's'.
  --> misspelledFieldIsReportedInLetElseToo.tt:3:26
   |

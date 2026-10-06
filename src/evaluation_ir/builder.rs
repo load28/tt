@@ -265,6 +265,7 @@ impl EvaluationBuilder<'_> {
                 .as_ref()
                 .map_or_else(Vec::new, |binding| binding.exits.clone());
             let context = binding.as_ref().map(|binding| binding.context);
+            let owner = binding.as_ref().map(|binding| binding.owner);
             let protocol =
                 binding.map_or_else(HostEvaluationProtocol::default, |binding| binding.protocol);
             RegionPlacement::Nested {
@@ -273,6 +274,7 @@ impl EvaluationBuilder<'_> {
                 exits,
                 protocol,
                 context,
+                owner,
             }
         } else {
             self.placement(root, parent)?
@@ -355,6 +357,7 @@ impl EvaluationBuilder<'_> {
                 .as_ref()
                 .map_or_else(Vec::new, |binding| binding.exits.clone());
             let context = binding.as_ref().map(|binding| binding.context);
+            let owner = binding.as_ref().map(|binding| binding.owner);
             let protocol =
                 binding.map_or_else(HostEvaluationProtocol::default, |binding| binding.protocol);
             return Ok(RegionPlacement::Nested {
@@ -363,6 +366,7 @@ impl EvaluationBuilder<'_> {
                 exits,
                 protocol,
                 context,
+                owner,
             });
         }
         if let Some(binding) = self.hosts.remove(&root) {
@@ -381,6 +385,7 @@ impl EvaluationBuilder<'_> {
                 exits: Vec::new(),
                 protocol: HostEvaluationProtocol::default(),
                 context: None,
+                owner: None,
             })
         } else {
             Err(EvaluationError::MissingHost { root })

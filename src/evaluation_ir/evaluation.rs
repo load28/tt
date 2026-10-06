@@ -753,19 +753,25 @@ impl EvaluationFile {
                 let CoreRoot::Propagate(node) = region.root? else {
                     return None;
                 };
-                let RegionPlacement::Host {
-                    context,
-                    host_owner,
-                    source,
-                    ..
-                } = &region.placement
-                else {
-                    return None;
+                let (context, owner, source) = match &region.placement {
+                    RegionPlacement::Host {
+                        context,
+                        host_owner,
+                        source,
+                        ..
+                    } => (context, host_owner, source),
+                    RegionPlacement::Nested {
+                        context: Some(context),
+                        owner: Some(owner),
+                        source: Some(source),
+                        ..
+                    } => (context, owner, source),
+                    _ => return None,
                 };
                 (context.continuation == HostContinuation::ForInitialize).then_some(
                     ForInitializerPropagation {
                         node,
-                        owner: *host_owner,
+                        owner: *owner,
                         source: *source,
                     },
                 )

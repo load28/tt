@@ -1,0 +1,11 @@
+//// [aTryInAForInitializerInsideAResultBlockRunsBeforeTheLoop.tt] 9 mapping(s)
+1:1 -> 1:1 len 465  "// A `try` in a `for` declaration initializer in"...
+9:5 -> 23:5 len 7  "return "
+10:9 -> 11:7 len 23  "let total = 0;\n        "
+11:9 -> 17:9 len 5  "for ("
+11:18 -> 17:18 len 1  "i"
+11:26 -> 12:24 len 5  "start"
+11:32 -> 17:35 len 37  " i < 3; i++) { total += i; }\n        "
+12:16 -> 19:50 len 5  "total"
+13:6 -> 23:18 len 95  ";\n}\n\nconsole.log(JSON.stringify(sum(ok(0))), JSO"...
+
