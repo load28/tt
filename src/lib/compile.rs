@@ -549,6 +549,7 @@ pub(crate) fn compile_projection_report_parsed(
         }
     }
     nodes.extend(recoverable_constructs(&ordinary.diagnostics));
+    let claimed_results = parser::claimed_result_blocks(program);
     // A construct the plan rejects is reported when planning reaches it, so
     // a file with several can show the next one only once the first is
     // recovered. Each round recovers at least one construct more, until the
@@ -570,6 +571,29 @@ pub(crate) fn compile_projection_report_parsed(
         let recovered_source = recover_source(source, &selected);
         let (recovered_program, recovered_tokens) =
             parser::lex_and_parse_with_kind(&recovered_source, options.source_kind);
+        // A `result` block is claimed by the direct `try` it holds; a
+        // recovery that replaced that `try` leaves the block's text as
+        // written, which TypeScript would read as code. The block it
+        // unclaimed is the construct to recover.
+        let still_claimed = parser::claimed_result_blocks(&recovered_program);
+        let unclaimed: Vec<_> = claimed_results
+            .iter()
+            .filter(|span| !still_claimed.contains(span))
+            .filter(|span| {
+                !selected
+                    .iter()
+                    .any(|outer| outer.span.start <= span.start && span.end <= outer.span.end)
+            })
+            .map(|&span| ast::RecoveryNode {
+                span,
+                kind: ast::RecoveryKind::Expression,
+            })
+            .collect();
+        if !unclaimed.is_empty() {
+            nodes = selected;
+            nodes.extend(unclaimed);
+            continue;
+        }
         let mut recovered_report = compile_report_parsed(
             &recovered_source,
             options,

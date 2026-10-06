@@ -65,8 +65,9 @@ pub(crate) use literals::decode_string;
 #[cfg(test)]
 use parse::visit_programs;
 pub(crate) use parse::{
-    ArmScope, Parser, PipelineShape, arm_scopes, lex_and_parse_with_kind, parse, parse_with_kind,
-    pipeline_shapes, projection_recoveries, unclaimed_candidates, val_modifiers,
+    ArmScope, Parser, PipelineShape, arm_scopes, claimed_result_blocks, lex_and_parse_with_kind,
+    parse, parse_with_kind, pipeline_shapes, projection_recoveries, unclaimed_candidates,
+    val_modifiers,
 };
 pub(crate) use partial::{
     ArmHeader, PatternSite, arm_headers, pattern_of, pattern_site_at, tuple_arm_headers,

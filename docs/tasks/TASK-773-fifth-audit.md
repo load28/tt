@@ -102,6 +102,23 @@ defects. This task fixes them in the layer that owns each one.
   and grow about 2.2× per doubling. What remains is TypeScript's own work
   (the server waits on tsgo during `typedCheck` and references).
 
+### Decision 5: A recovery that unclaims a `result` block recovers the block (E3)
+
+- **Context**: In the editor, a `result` block whose only direct `try` sits
+  in a misplaced position (`while (try r())`) drew `ts2304 Cannot find name
+  'result'` and `ts1005` beside `try-placement`; the command line reports
+  only `try-placement`. The editor projection recovers the misplaced `try`
+  as a placeholder, and the parser claims a `result` block only by the
+  direct `try` it holds, so after the recovery the block's text stayed as
+  written and TypeScript read it as code.
+- **Decision and rationale**: Each recovery round compares the `result`
+  blocks the parser claims before and after it
+  (`parser::claimed_result_blocks`). A block the recovery unclaimed is
+  itself recovered, as an expression placeholder, before the round goes
+  on: one placeholder owns the construct that lost its reading. The tt
+  diagnostic stays, and nothing of the block is read by TypeScript, as on
+  the command line, where `try-placement` stops the file's projection.
+
 ## Work log
 
 - 2026-10-06: Ran the fifth audit as three read-only agents (CLI,
@@ -115,6 +132,8 @@ defects. This task fixes them in the layer that owns each one.
 - 2026-10-06: Timed every editor request with the audit's harness over
   7,000–28,000 lines, sampled the server with gdb and the host's API calls
   with a timing hook, and removed the per-item scans (decision 4).
+- 2026-10-06: Reproduced E3 with an editor case and recovered the unclaimed
+  block (decision 5).
 
 ## Issues and resolutions
 

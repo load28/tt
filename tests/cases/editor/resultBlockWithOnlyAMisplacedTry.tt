@@ -1,0 +1,11 @@
+// @diagnostics: *
+// @hover: block
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+declare function r(): R<number>;
+declare let k: number;
+export function loops() {
+  return /*block*/result {
+    while (try r()) { k++; }
+    return 1;
+  };
+}

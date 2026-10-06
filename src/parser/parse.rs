@@ -290,6 +290,20 @@ pub(crate) fn projection_recoveries(program: &Program) -> Vec<RecoveryNode> {
 /// Collects structurally recognized, rolled-back tt candidates from every
 /// nested source region. Output verification uses these facts to explain a
 /// passthrough parse failure without scanning source text for keywords.
+/// The spans of every `result` block the parser claimed, at any depth.
+pub(crate) fn claimed_result_blocks(program: &Program) -> Vec<Span> {
+    let mut out = Vec::new();
+    visit_programs(program, &mut |program| {
+        for segment in &program.segments {
+            if let Segment::ResultBlock(block) = segment {
+                out.push(block.span);
+            }
+        }
+    });
+    out.sort_by_key(|span| (span.start, span.end));
+    out
+}
+
 pub(crate) fn unclaimed_candidates(program: &Program) -> Vec<UnclaimedTtCandidate> {
     let mut out = Vec::new();
     visit_programs(program, &mut |program| {

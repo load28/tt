@@ -1,0 +1,11 @@
+=== diagnostics resultBlockWithOnlyAMisplacedTry.tt ===
+diagnostics: 0 diagnostic(s)
+published: 1 diagnostic(s)
+  6:12-6:19 "try r()" error try-placement (ttc): `try` cannot be used in a repeated loop position — propagating its `Err` across this TypeScript control-flow boundary would run once per iteration
+
+=== hover /*block*/ resultBlockWithOnlyAMisplacedTry.tt:5:10 ===
+  |   return result {
+  |          ^ /*block*/
+hover: null
+ttSymbol: null
+
