@@ -384,6 +384,8 @@ impl Project {
         }
         let mut pending = files.to_vec();
         let mut seen: HashSet<_> = files.iter().cloned().collect();
+        let mut imported = HashSet::new();
+        let mut unread = Vec::new();
         let mut cursor = 0;
         while cursor < pending.len() {
             let file = pending[cursor].clone();
@@ -394,19 +396,32 @@ impl Project {
             }
             let text = match overlays.get(file) {
                 Some(text) => text.clone(),
-                None => std::fs::read_to_string(file).map_err(|e| {
-                    Box::new(Blocked {
-                        path: file.clone(),
-                        error: CompileError {
-                            message: format!("cannot read: {e}"),
-                            filename: Some(file.display().to_string()),
-                            line: 0,
-                            col: 0,
-                            end_line: 0,
-                            end_col: 0,
-                        },
-                    })
-                })?,
+                None => match std::fs::read_to_string(file) {
+                    Ok(text) => text,
+                    Err(e) => {
+                        let failure = Box::new(Blocked {
+                            path: file.clone(),
+                            error: CompileError {
+                                message: format!("cannot read: {e}"),
+                                filename: Some(file.display().to_string()),
+                                line: 0,
+                                col: 0,
+                                end_line: 0,
+                                end_col: 0,
+                            },
+                        });
+                        // A file the project scan found, which no input
+                        // names and nothing imports, is one module the
+                        // checker does not get — TypeScript's own scan
+                        // skips an entry it cannot read — not a reason the
+                        // check cannot run.
+                        if self.requested.contains(file) || imported.contains(file) {
+                            return Err(failure);
+                        }
+                        unread.push(failure);
+                        continue;
+                    }
+                },
             };
             let open = self.opened.contains(file);
             let doc = match self.cache.get(file) {
@@ -428,6 +443,7 @@ impl Project {
                             &overlays,
                             &mut pending,
                             &mut seen,
+                            &mut imported,
                         );
                         blocked_files.push(Arc::new(blocked));
                         None
@@ -435,10 +451,23 @@ impl Project {
                 },
             };
             if let Some(doc) = doc {
-                discover_imports(file, doc.tt_imports(), &overlays, &mut pending, &mut seen);
+                discover_imports(
+                    file,
+                    doc.tt_imports(),
+                    &overlays,
+                    &mut pending,
+                    &mut seen,
+                    &mut imported,
+                );
                 cache.insert(file.clone(), doc.clone());
                 projected.push(doc);
             }
+        }
+        if let Some(failure) = unread
+            .into_iter()
+            .find(|failure| imported.contains(&failure.path))
+        {
+            return Err(failure);
         }
         // Entries for files that left the project go with the old map; a
         // blocked update above leaves the previous cache intact instead, so
@@ -1323,7 +1352,18 @@ fn project_tree(
             // Directory entries already carry the file type on supported
             // filesystems. Only symlinks need a target metadata lookup.
             let kind = entry.file_type()?;
-            if kind.is_dir() || (kind.is_symlink() && path.is_dir()) {
+            // A symlink is what its target is. One whose target cannot be
+            // read names no file or directory, and TypeScript's directory
+            // listing (`getAccessibleFileSystemEntries`) skips it too.
+            let kind = if kind.is_symlink() {
+                match std::fs::metadata(&path) {
+                    Ok(target) => target.file_type(),
+                    Err(_) => continue,
+                }
+            } else {
+                kind
+            };
+            if kind.is_dir() {
                 stack.push(path);
             } else if path
                 .extension()
@@ -1585,6 +1625,7 @@ fn discover_imports(
     overlays: &HashMap<PathBuf, String>,
     pending: &mut Vec<PathBuf>,
     seen: &mut HashSet<PathBuf>,
+    imported: &mut HashSet<PathBuf>,
 ) {
     for import in imports {
         if !(import.specifier.starts_with('.') || Path::new(&import.specifier).is_absolute()) {
@@ -1599,9 +1640,11 @@ fn discover_imports(
                 .ok()
                 .filter(|path| overlays.contains_key(path))
         });
-        if let Some(target) = target
-            && seen.insert(target.clone())
-        {
+        let Some(target) = target else {
+            continue;
+        };
+        imported.insert(target.clone());
+        if seen.insert(target.clone()) {
             pending.push(target);
         }
     }

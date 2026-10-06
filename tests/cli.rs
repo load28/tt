@@ -4065,3 +4065,46 @@ fn a_build_leaves_out_the_sidecars_types_wrote_into_its_input() {
     assert!(dir.join("out/a.ts").is_file());
     assert!(!dir.join("out/a.tt.d.ts").exists());
 }
+
+#[cfg(unix)]
+#[test]
+fn a_file_outside_the_program_that_cannot_be_read_does_not_stop_the_check() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::create_dir_all(dir.join("scratch")).unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"noEmit":true},"include":["src"]}"#,
+    )
+    .unwrap();
+    fs::write(dir.join("src/a.tt"), "export const n: number = \"x\";\n").unwrap();
+    std::os::unix::fs::symlink("/nonexistent/old.tt", dir.join("scratch/old.tt")).unwrap();
+    fs::write(
+        dir.join("scratch/latin1.tt"),
+        b"export const z = \"caf\xe9\";\n",
+    )
+    .unwrap();
+    let check = || {
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["--check-types", "src"])
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc")
+    };
+    let output = check();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("src/a.tt:1:14"), "{stderr}");
+
+    // Imported, the same file is the program's, and reading it is the check.
+    fs::write(
+        dir.join("src/b.tt"),
+        "import { z } from \"../scratch/latin1.tt\";\nexport const y = z;\n",
+    )
+    .unwrap();
+    let output = check();
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(stderr.contains("scratch/latin1.tt"), "{stderr}");
+}

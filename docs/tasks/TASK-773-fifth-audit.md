@@ -37,12 +37,37 @@ defects. This task fixes them in the layer that owns each one.
   0.24 s, and `--watch` over 1,600 starts in 0.42 s and rebuilds an edit in
   0.43 s.
 
+### Decision 2: A file outside the program that cannot be read does not stop the check (C1)
+
+- **Context**: A dangling `.tt` symlink or a non-UTF-8 `.tt` anywhere under
+  the project root, outside `include`, stopped `--check-types`, `--types`,
+  `--dependencies`, and the server's `typedCheck` with `ttc: No such file or
+  directory (os error 2)` (no path) or `cannot read`, and exit 2. `tsc`
+  checks the same project normally.
+- **Alternatives considered**: Report every unreadable candidate, which
+  makes a file the configuration excludes decide whether the check runs;
+  skip every unreadable file, which would drop a named input or an
+  imported module without a word.
+- **Decision and rationale**: The project scan only proposes candidates;
+  TypeScript's program decides membership (TASK-764 decision 4), and an
+  entry the scan cannot read is one module the checker does not get
+  (TASK-356 decision 2). The scan now treats a symlink as its target and
+  skips one whose target cannot be read, as TypeScript's directory listing
+  does (`getAccessibleFileSystemEntries` in `sys.ts`). A scanned file that
+  cannot be read is skipped unless an input names it or a projected file
+  imports it; then reading it is part of the check, and the failure is
+  reported with its path as before. The command line's own walk of a
+  directory input still names an unreadable entry (TASK-387 decision 1),
+  so `--check`, the build, and the typed modes agree on inputs.
+
 ## Work log
 
 - 2026-10-06: Ran the fifth audit as three read-only agents (CLI,
   compiler, editor) against a release build of the branch.
 - 2026-10-06: Reproduced C2, traced it to the pairwise `same_file` loops,
   and replaced them with identity hashing (decision 1).
+- 2026-10-06: Reproduced C1 with `strace`; made the project scan skip
+  unreadable candidates outside the inputs and their imports (decision 2).
 
 ## Issues and resolutions
 
