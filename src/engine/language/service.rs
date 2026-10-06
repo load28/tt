@@ -40,6 +40,8 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
             generated_names: HashSet::new(),
             inserted: Vec::new(),
             faithful: true,
+            source_lines: Default::default(),
+            code_lines: Default::default(),
         };
     }
     let options = crate::Options {
@@ -69,6 +71,8 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
             len: text.len(),
         },
         faithful,
+        source_lines: Default::default(),
+        code_lines: Default::default(),
         source: text,
         code: emit.code,
         mappings: emit.mappings,
@@ -965,37 +969,50 @@ pub(super) fn declared_name_at(doc: &ServiceDoc, position: Position) -> Option<(
 /// ttc wrote (a generated binding, the type and constructor a `variant`
 /// becomes) is not the user's, and its mapped children take its place.
 pub(super) fn source_symbols(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<DocumentSymbol> {
-    crate::stack::grow(|| source_symbols_grown(doc, items))
+    let code_lines = doc.service_lines();
+    let source_lines = doc.source_lines();
+    crate::stack::grow(|| source_symbols_grown(doc, items, &code_lines, &source_lines))
 }
 
-fn source_symbols_grown(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<DocumentSymbol> {
+fn source_symbols_grown(
+    doc: &ServiceDoc,
+    items: &[serde_json::Value],
+    code_lines: &LineMap<'_>,
+    source_lines: &LineMap<'_>,
+) -> Vec<DocumentSymbol> {
     let mut out = Vec::new();
     for item in items {
-        let children = source_symbols(
-            doc,
-            item["children"]
-                .as_array()
-                .map(Vec::as_slice)
-                .unwrap_or_default(),
-        );
-        let offset = |value: &serde_json::Value| u16_offset(doc.service_code(), position_of(value));
+        let children = crate::stack::grow(|| {
+            source_symbols_grown(
+                doc,
+                item["children"]
+                    .as_array()
+                    .map(Vec::as_slice)
+                    .unwrap_or_default(),
+                code_lines,
+                source_lines,
+            )
+        });
+        let byte = |value: &serde_json::Value| byte_at(code_lines, position_of(value));
         let selection = &item["selectionRange"];
-        let Some((name_start, name_end)) =
-            from_service_span(doc, offset(&selection["start"]), offset(&selection["end"]))
-        else {
+        let name = match doc.coordinates {
+            CoordinateSpace::Authored => Some((byte(&selection["start"]), byte(&selection["end"]))),
+            CoordinateSpace::Projected => mapper::to_source_span(
+                &doc.mappings,
+                byte(&selection["start"]),
+                byte(&selection["end"]),
+            ),
+        };
+        let Some((name_start, name_end)) = name else {
             out.extend(children);
             continue;
         };
         // The declaration's ends are the user's even when glue sits inside
         // it (a `match` in a function body); an end that is not keeps the
         // range to the name.
-        let point = |value: &serde_json::Value| {
-            if doc.coordinates == CoordinateSpace::Authored {
-                return Some(offset(value));
-            }
-            let byte = mapper::from_utf16(&doc.code, offset(value));
-            mapper::to_source_inclusive(&doc.mappings, byte)
-                .map(|source| mapper::to_utf16(&doc.source, source))
+        let point = |value: &serde_json::Value| match doc.coordinates {
+            CoordinateSpace::Authored => Some(byte(value)),
+            CoordinateSpace::Projected => mapper::to_source_inclusive(&doc.mappings, byte(value)),
         };
         let start = point(&item["range"]["start"]).map_or(name_start, |at| at.min(name_start));
         let end = point(&item["range"]["end"]).map_or(name_end, |at| at.max(name_end));
@@ -1003,8 +1020,14 @@ fn source_symbols_grown(doc: &ServiceDoc, items: &[serde_json::Value]) -> Vec<Do
             name: item["name"].as_str().unwrap_or_default().to_string(),
             detail: item["detail"].as_str().unwrap_or_default().to_string(),
             kind: item["kind"].as_u64().unwrap_or(13) as u32,
-            range: source_range(&doc.source, start, end),
-            selection_range: source_range(&doc.source, name_start, name_end),
+            range: Range {
+                start: byte_position(source_lines, start),
+                end: byte_position(source_lines, end),
+            },
+            selection_range: Range {
+                start: byte_position(source_lines, name_start),
+                end: byte_position(source_lines, name_end),
+            },
             children,
         });
     }
@@ -1174,16 +1197,10 @@ pub(super) fn declared_name_span(
     start: usize,
     end: usize,
 ) -> Option<(usize, usize)> {
-    let sb = mapper::from_utf16(&doc.code, start);
-    let eb = mapper::from_utf16(&doc.code, end);
-    let name = doc
-        .declared_names
+    doc.declared_names
         .iter()
-        .find(|name| name.out == sb && name.out_end == eb)?;
-    Some((
-        mapper::to_utf16(&doc.source, name.src),
-        mapper::to_utf16(&doc.source, name.src_end),
-    ))
+        .find(|name| name.out == start && name.out_end == end)
+        .map(|name| (name.src, name.src_end))
 }
 
 /// A TypeScript diagnostic span translated back to source UTF-16 offsets.

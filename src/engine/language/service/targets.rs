@@ -84,9 +84,9 @@ pub(in super::super) fn map_target(
             if crate::SourceKind::from_tt_path(&path).is_some()
                 && let Some(doc) = serve_doc_only(session, overlays, &path)
             {
-                let start =
-                    mapper::from_utf16(&doc.source, u16_offset(&doc.source, lsp_range.start));
-                let end = mapper::from_utf16(&doc.source, u16_offset(&doc.source, lsp_range.end));
+                let lines = doc.source_lines();
+                let start = byte_at(&lines, lsp_range.start);
+                let end = byte_at(&lines, lsp_range.end);
                 if authored_shared_binding(&doc, start, end).is_some() {
                     return None;
                 }
@@ -95,16 +95,21 @@ pub(in super::super) fn map_target(
         }
         TargetCoordinates::Projected(tt_path) => {
             let doc = serve_doc_only(session, overlays, &tt_path)?;
-            let start = u16_offset(&doc.code, lsp_range.start);
-            let end = u16_offset(&doc.code, lsp_range.end);
-            let (s, e) = match from_projected_span(&doc, start, end) {
+            let code_lines = doc.code_lines();
+            let start = byte_at(&code_lines, lsp_range.start);
+            let end = byte_at(&code_lines, lsp_range.end);
+            let (s, e) = match mapper::to_source_span(&doc.mappings, start, end) {
                 Some(span) => span,
                 None if purpose == TargetUse::Navigation => declared_name_span(&doc, start, end)?,
                 None => return None,
             };
+            let source_lines = doc.source_lines();
             return Some(Location {
                 path: tt_path,
-                range: source_range(&doc.source, s, e),
+                range: Range {
+                    start: byte_position(&source_lines, s),
+                    end: byte_position(&source_lines, e),
+                },
             });
         }
     };

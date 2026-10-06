@@ -20,7 +20,8 @@ request validation. Fix each in the layer that owns it.
   inputs (R3L5); the server's request and option validation (R3L6); the
   in-place refusal's advice (R3L7); the path `--check-types` shows for a
   file outside the working directory (R3L8); non-ASCII paths in the
-  language service's URIs (R3E1).
+  language service's URIs (R3E1); the outline's and navigation targets'
+  position conversions (R3E2).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -135,6 +136,20 @@ request validation. Fix each in the layer that owns it.
   `url.PathEscape`, which percent-encodes every non-ASCII byte, and
   `uri_path` already decodes `%XX` back to bytes. Non-ASCII bytes are now
   written as `%XX`.
+
+### Decision 9: A served document measures its lines once
+
+- **Context**: `documentSymbols` took 0.97 s, 0.95 s and 3.79 s for 150, 300
+  and 600 matches, against 0.13-1.15 s for the same file without tt syntax.
+- **Decision and rationale**: Every entry of the outline, and every
+  navigation target, converted its positions through helpers that measure
+  the whole text's lines and count UTF-16 units from the start, so the
+  work grew with the number of entries times the text's length. The
+  served document now keeps its source's and its code's line measurements
+  (computed once, `LineIndex`), and the outline and navigation targets
+  convert positions to bytes and back through them, mapping bytes to the
+  source directly. The outline now takes 0.09 s, 0.20 s and 0.33 s for 300,
+  600 and 1200 matches.
 
 ## Work log
 

@@ -553,6 +553,8 @@ pub(crate) struct ServiceDoc {
     /// a claimed construct, or a placeholder in `recovered`, so no tt text
     /// stands in it as written. Its syntax errors are then the user's own.
     faithful: bool,
+    source_lines: std::sync::OnceLock<crate::lines::LineIndex>,
+    code_lines: std::sync::OnceLock<crate::lines::LineIndex>,
 }
 
 /// A compiled completion probe: the buffer with `$tt_probe` spliced in at
@@ -585,6 +587,29 @@ pub(super) struct ServedText<'a> {
 }
 
 impl ServiceDoc {
+    fn source_lines(&self) -> crate::lines::LineMap<'_> {
+        crate::lines::LineMap::indexed(
+            &self.source,
+            self.source_lines
+                .get_or_init(|| crate::lines::LineMap::lsp(&self.source).index()),
+        )
+    }
+
+    fn code_lines(&self) -> crate::lines::LineMap<'_> {
+        crate::lines::LineMap::indexed(
+            &self.code,
+            self.code_lines
+                .get_or_init(|| crate::lines::LineMap::lsp(&self.code).index()),
+        )
+    }
+
+    fn service_lines(&self) -> crate::lines::LineMap<'_> {
+        match self.coordinates {
+            CoordinateSpace::Authored => self.source_lines(),
+            CoordinateSpace::Projected => self.code_lines(),
+        }
+    }
+
     fn service_code(&self) -> &str {
         match self.coordinates {
             CoordinateSpace::Authored => &self.source,

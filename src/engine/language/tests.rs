@@ -972,3 +972,33 @@ fn an_edit_that_keeps_the_projection_keeps_the_answers_on_the_new_source() {
     assert_eq!(second.signature, "const value: number");
     assert_eq!(second.range, first.range);
 }
+
+#[test]
+fn an_outline_measures_its_document_once_whatever_its_length() {
+    let measured = |count: usize| {
+        let source: String = (0..count)
+            .map(|i| {
+                format!(
+                    "export function f{i}(s: number) {{ return match (s) {{ 1 => 1, _ => 2 }}; }}\n"
+                )
+            })
+            .collect();
+        let doc = super::service::service_doc(Path::new("/outline/main.tt"), source);
+        let items: Vec<serde_json::Value> = (0..count)
+            .map(|line| {
+                let at = serde_json::json!({ "line": line, "character": 16 });
+                serde_json::json!({
+                    "name": format!("f{line}"),
+                    "kind": 12,
+                    "range": { "start": at, "end": at },
+                    "selectionRange": { "start": at, "end": at },
+                })
+            })
+            .collect();
+        crate::work::measure(|| super::service::source_symbols(&doc, &items))
+            .get("line measurements")
+            .copied()
+            .unwrap_or(0)
+    };
+    assert_eq!(measured(50), measured(100));
+}

@@ -72,8 +72,16 @@ pub struct LineMap<'a> {
     text: &'a str,
     signature: usize,
     /// Byte offset of each line's first byte.
-    starts: Vec<usize>,
+    starts: std::borrow::Cow<'a, [usize]>,
     /// Byte offset of each line's break, or of the text's end on the last.
+    ends: std::borrow::Cow<'a, [usize]>,
+}
+
+/// A [`LineMap`]'s measurements, kept apart from the text they measure.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct LineIndex {
+    signature: usize,
+    starts: Vec<usize>,
     ends: Vec<usize>,
 }
 
@@ -81,6 +89,7 @@ impl<'a> LineMap<'a> {
     /// Measures `text` under `breaks`.
     #[must_use]
     pub fn new(text: &'a str, breaks: LineBreaks) -> Self {
+        crate::work::tick("line measurements");
         let bytes = text.as_bytes();
         let signature = signature_len(text);
         let mut starts = vec![signature];
@@ -100,8 +109,25 @@ impl<'a> LineMap<'a> {
         Self {
             text,
             signature,
-            starts,
-            ends,
+            starts: starts.into(),
+            ends: ends.into(),
+        }
+    }
+
+    pub(crate) fn index(&self) -> LineIndex {
+        LineIndex {
+            signature: self.signature,
+            starts: self.starts.to_vec(),
+            ends: self.ends.to_vec(),
+        }
+    }
+
+    pub(crate) fn indexed(text: &'a str, index: &'a LineIndex) -> Self {
+        Self {
+            text,
+            signature: index.signature,
+            starts: std::borrow::Cow::Borrowed(&index.starts),
+            ends: std::borrow::Cow::Borrowed(&index.ends),
         }
     }
 

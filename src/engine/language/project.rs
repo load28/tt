@@ -1320,6 +1320,8 @@ impl Project {
                 generated_names: projected.emit.generated_names.clone(),
                 inserted: projected.emit.inserted.clone(),
                 faithful: true,
+                source_lines: Default::default(),
+                code_lines: Default::default(),
             });
             revisions.push((path.clone(), doc));
         }
