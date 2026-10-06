@@ -194,6 +194,8 @@ pub(super) fn build_jobs(
 ) -> Result<Vec<Job>, String> {
     let input_root = input_root(inputs);
     let mut jobs: Vec<Job> = Vec::new();
+    let mut claimed: std::collections::HashSet<(PathBuf, PathBuf)> =
+        std::collections::HashSet::new();
     for input in inputs {
         let input_path = Path::new(input);
         if !input_path.exists() {
@@ -235,24 +237,25 @@ pub(super) fn build_jobs(
                 None => out_name,
             };
             // One source/output identity owns exactly one emission job.
-            if !jobs.iter().any(|job| {
-                same_file(&job.file, &file)
-                    && normalized_absolute(&job.out_path) == normalized_absolute(&out_path)
-            }) {
+            if claimed.insert((file_identity(&file), normalized_absolute(&out_path))) {
                 jobs.push(Job { file, out_path });
             }
         }
     }
-    let compiled_outputs: Vec<PathBuf> = jobs
+    let identities: Vec<(PathBuf, PathBuf)> = jobs
         .iter()
-        .filter(|job| !same_file(&job.file, &job.out_path))
-        .map(|job| job.out_path.clone())
+        .map(|job| (file_identity(&job.file), file_identity(&job.out_path)))
         .collect();
-    jobs.retain(|job| {
-        !(same_file(&job.file, &job.out_path)
-            && compiled_outputs
-                .iter()
-                .any(|output| same_file(output, &job.file)))
+    let compiled_outputs: std::collections::HashSet<&PathBuf> = identities
+        .iter()
+        .filter(|(file, out)| file != out)
+        .map(|(_, out)| out)
+        .collect();
+    let mut index = 0;
+    jobs.retain(|_| {
+        let (file, out) = &identities[index];
+        index += 1;
+        !(file == out && compiled_outputs.contains(file))
     });
     Ok(jobs)
 }
@@ -286,17 +289,32 @@ fn output_tree_inside(input: &Path, out_dir: &Path) -> bool {
 /// yet, so the parents are compared canonically and the file names
 /// literally.
 pub(super) fn same_file(a: &Path, b: &Path) -> bool {
-    if normalized_absolute(a) == normalized_absolute(b) {
-        return true;
+    file_identity(a) == file_identity(b)
+}
+
+#[cfg(test)]
+thread_local! {
+    pub(super) static IDENTITIES_MEASURED: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// What [`same_file`] compares, measured once per path so that a set of
+/// paths is compared by hashing rather than pair by pair: the canonical
+/// path of a file that exists, the canonical directory and name of one
+/// that does not yet, and the lexically normalized path when its
+/// directory does not exist either.
+pub(super) fn file_identity(path: &Path) -> PathBuf {
+    #[cfg(test)]
+    IDENTITIES_MEASURED.with(|count| count.set(count.get() + 1));
+    if let Ok(real) = path.canonicalize() {
+        return real;
     }
-    if let (Ok(x), Ok(y)) = (a.canonicalize(), b.canonicalize()) {
-        return x == y;
+    if let (Some(name), Ok(parent)) = (
+        path.file_name(),
+        path.parent().unwrap_or(Path::new(".")).canonicalize(),
+    ) {
+        return parent.join(name);
     }
-    if a.file_name() != b.file_name() {
-        return false;
-    }
-    let canon = |p: &Path| p.parent().unwrap_or(Path::new(".")).canonicalize();
-    matches!((canon(a), canon(b)), (Ok(x), Ok(y)) if x == y)
+    normalized_absolute(path)
 }
 
 /// What compiling one job produced: the diagnostics it wants printed (in
@@ -334,7 +352,7 @@ struct Emitted {
 pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &BuildOptions) -> bool {
     if !opts.check && !opts.print {
         let mut claims: HashMap<&Path, &Path> = HashMap::with_capacity(jobs.len());
-        let mut outputs: Vec<(&Path, &Path)> = Vec::with_capacity(jobs.len());
+        let mut outputs: HashMap<PathBuf, &Path> = HashMap::with_capacity(jobs.len());
         let mut conflicted = false;
         for job in jobs {
             if let Some(first) = claims.get(job.out_path.as_path()) {
@@ -355,11 +373,8 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
             // twice, at two paths, and say nothing. Both sides are compared
             // by identity — the same source reached through two roots is
             // spelled differently on each.
-            match outputs
-                .iter()
-                .find(|(source, _)| same_file(source, &job.file))
-            {
-                Some((_, first)) if !same_file(first, &job.out_path) => {
+            match outputs.get(&file_identity(&job.file)) {
+                Some(first) if !same_file(first, &job.out_path) => {
                     eprintln!(
                         "ttc: {}: one input claims two outputs: {} and {} (overlapping input roots)",
                         job.file.display(),
@@ -369,7 +384,9 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
                     conflicted = true;
                 }
                 Some(_) => {}
-                None => outputs.push((job.file.as_path(), job.out_path.as_path())),
+                None => {
+                    outputs.insert(file_identity(&job.file), job.out_path.as_path());
+                }
             }
         }
         for job in jobs
