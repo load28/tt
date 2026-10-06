@@ -1203,6 +1203,8 @@ fn token_sources(doc: &ServiceDoc, start: usize, end: usize) -> Vec<(usize, usiz
         .collect()
 }
 
+type RangeKey = ((u32, u32), (u32, u32));
+
 pub(super) fn merge_tokens(
     own: Vec<crate::engine::tokens::SemanticToken>,
     service: Vec<ClassifiedToken>,
@@ -1214,8 +1216,7 @@ pub(super) fn merge_tokens(
         )
     };
     // The service's modifiers for each range and type, first answer first.
-    let mut service_modifiers: HashMap<(((u32, u32), (u32, u32)), &str), &[String]> =
-        HashMap::new();
+    let mut service_modifiers: HashMap<(RangeKey, &str), &[String]> = HashMap::new();
     for other in &service {
         service_modifiers
             .entry((key(&other.range), other.token_type.as_str()))
