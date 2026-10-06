@@ -994,6 +994,19 @@ fn match_as_an_identifier_beside_a_braced_arrow_is_not_a_malformed_match() {
     }
 }
 
+/// TASK-768: a match body of patterns with no `=>` written yet is read as
+/// an unfinished arm list only where TypeScript cannot read the text: a
+/// class body after a heritage call stays TypeScript.
+#[test]
+fn a_class_body_after_a_match_call_heritage_is_not_an_unfinished_arm_list() {
+    for src in [
+        "declare function match(x: unknown): new () => object;\nexport class D extends match (1) { A }\n",
+        "declare function match(x: unknown): new () => object;\nexport class D extends match (1) { A; B }\n",
+    ] {
+        assert_passthrough(src);
+    }
+}
+
 #[test]
 fn match_as_an_identifier_beside_a_tt_match_stays_an_identifier() {
     let src = "declare const match: any;\nexport const y = match as { f: () => void };\n\

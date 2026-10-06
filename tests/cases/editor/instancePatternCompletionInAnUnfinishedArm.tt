@@ -1,0 +1,5 @@
+// @completions: type
+// @diagnostics: *
+class MyErr extends Error {}
+declare const e: unknown;
+export const a = match (e) { is My/*type*/ };

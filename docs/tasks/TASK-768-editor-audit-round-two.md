@@ -26,7 +26,8 @@ diverges between layers. Fix each in the layer that owns it.
   and a namespace member variant read as a module export; the documented
   exception for `@tt/std` specifiers in passed-through TypeScript; the
   unreachable-arm hint's range; nested pattern completion for a field typed
-  with the standard library's `TOption` or `TResult`.
+  with the standard library's `TOption` or `TResult`; an unfinished arm
+  list with no `=>` written yet.
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -225,6 +226,22 @@ diverges between layers. Fix each in the layer that owns it.
   (nested pattern identification, completion) follows them. The reference
   states the rule.
 
+### Decision 16: A body of patterns alone is an unfinished arm list
+
+- **Context**: While an arm is being typed (`match (e) { is My }`,
+  `match (v) { A, B }`), the file failed the output self-check
+  (`verify-failed`, which blames passed-through TypeScript or ttc) and
+  completion at `is My|` returned nothing.
+- **Decision and rationale**: The reference reports a malformed `match`
+  wherever TypeScript's parser cannot read the same text with `match` as
+  an identifier. The parser took a body for arms only once it held a `=>`
+  or a guard, so a body of patterns never became a candidate. A body that
+  is a comma-separated list of patterns is now an arm-list candidate, and
+  the host's parser still decides (TASK-765): `class D extends match (1)
+  { A }` remains TypeScript. The malformed match is reported where it is
+  written, and completion at the `is` type asks the probe, which offers
+  the classes in scope.
+
 ## Work log
 
 - 2026-10-06: Started from the second audit's report. Fixed
@@ -242,7 +259,8 @@ diverges between layers. Fix each in the layer that owns it.
   (Decision 13), and `src/parser/matches.rs`, `src/ast.rs`,
   `src/analysis/{mod,patterns}.rs`, `src/engine/hints.rs` (Decision 14),
   and `src/resolve/mod.rs`, `src/analysis/{mod,patterns}.rs`,
-  `src/engine/completions.rs`, `docs/ai/tt.md` (Decision 15).
+  `src/engine/completions.rs`, `docs/ai/tt.md` (Decision 15), and
+  `src/parser/matches.rs` (Decision 16).
   Updated
   `tests/compile/cases_08.rs`, which pinned the shorthand-breaking edit
   (Decision 1). Regenerated every `unknown-field`
