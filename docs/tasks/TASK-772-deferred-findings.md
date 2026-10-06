@@ -64,6 +64,27 @@ ones that can be fixed in this repository, before the next audit round.
   thousands is not written by hand; it is recorded here rather than
   restructured.
 
+### Decision 3: A nested tag under a generic payload is answered by a typed request
+
+- **Context**: Hover and definition on `Circle` in `Has(item: Circle(r))`
+  over `Opt<Shape>` showed nothing (TASK-771 decision 8). `ttSymbol` is
+  parse-only by its protocol contract, and the field's declared type `T`
+  names no variant.
+- **Alternatives**: Make `ttSymbol` consult the project, which would spawn
+  the checker for a parse-only request on every hover; or let TypeScript's
+  hover answer on the emitted `"Circle"` literal, which TypeScript does not
+  resolve to a declaration.
+- **Decision and rationale**: A new project-backed request, `patternSymbol`
+  (`Project::pattern_symbol`), answers the same `TtSymbol` shape for a
+  nested tag whose position the parse-only answer leaves empty. It asks
+  TypeScript which tags the payload admits at that arm (the path of TASK-771
+  decision 8), takes the one visible variant that has all of them
+  (`completions::sole_owner`, shared with completion), and renders that
+  variant's case as `ttSymbol` would. The VS Code server asks it only when
+  `ttSymbol` is null, for hover and definition. The editor case harness
+  asks it on every hover and prints it only when it answers, as the client
+  shows it.
+
 ## Work log
 
 - 2026-10-06: Started from the deferred findings of TASK-765, TASK-767,
@@ -71,6 +92,9 @@ ones that can be fixed in this repository, before the next audit round.
 - 2026-10-06: Profiled deep templates with gdb stack samples of a
   symbol-carrying release build; fixed the four costs of decision 1, then
   the cubic term found beside them (decision 2).
+- 2026-10-06: Added `patternSymbol` to the engine, the JSON-lines server,
+  the editor case harness, and the VS Code server (decision 3); ran
+  `npm test` in `editors/vscode` (243 passed).
 
 ## Issues and resolutions
 

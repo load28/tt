@@ -544,6 +544,18 @@ export async function ttCompletions(
   };
 }
 
+/** The case a nested pattern's tag names where only the project's
+ * TypeScript identifies its variant — a payload typed by a type parameter.
+ * `null` wherever `ttSymbol` answers and wherever no such tag is written. */
+export function patternSymbol(
+  compiler: string,
+  path: string,
+  position: EnginePosition,
+  onError?: (message: string) => void,
+): Promise<EngineTtSymbol | null> {
+  return semantic(compiler, "patternSymbol", { path, position }, onError);
+}
+
 export async function patternCompletions(
   compiler: string,
   path: string,

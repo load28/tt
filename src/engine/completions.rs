@@ -1150,10 +1150,19 @@ pub(super) fn owner_cases(
     tags: &[String],
 ) -> Vec<TtCompletion> {
     let declarations = super::language::analyses_for(path, source, texts).declarations;
-    let mut owners = resolve_all(&declarations, tags);
+    sole_owner(&declarations, tags).map_or_else(Vec::new, |owner| cases(owner, &[]))
+}
+
+/// The one visible variant that has every tag in `tags`, or `None` when no
+/// variant or more than one does.
+pub(super) fn sole_owner<'a>(
+    declarations: &'a [DeclaredVariant],
+    tags: &'a [String],
+) -> Option<&'a DeclaredVariant> {
+    let mut owners = resolve_all(declarations, tags);
     match (owners.next(), owners.next()) {
-        (Some(owner), None) => cases(owner, &[]),
-        _ => Vec::new(),
+        (Some(owner), None) => Some(owner),
+        _ => None,
     }
 }
 

@@ -592,6 +592,19 @@ impl Project {
         self.complete_pattern_at(path, position)
     }
 
+    /// The case a nested pattern's tag names where only TypeScript can
+    /// identify its variant — a payload typed by a type parameter, as
+    /// `item: Circle(r)` under `Has(item: T)` over an `Opt<Shape>`. `None`
+    /// where the parse-only [`crate::engine::tt_symbol_at`] answers, and
+    /// where no such tag is written.
+    pub fn pattern_symbol(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Option<crate::engine::TtSymbol>, String> {
+        self.pattern_symbol_at(path, position)
+    }
+
     /// The signature and documentation behind one completion entry, fetched
     /// when the consumer asks about the one entry the user is looking at.
     /// The entry is the one listed with `label` and `source`

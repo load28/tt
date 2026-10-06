@@ -253,3 +253,24 @@ pub(super) fn service_diagnostic_json(d: ServiceDiagnostic) -> serde_json::Value
     }
     entry
 }
+
+/// A [`ttc::engine::TtSymbol`] as `ttSymbol` and `patternSymbol` answer it.
+pub(super) fn tt_symbol_json(symbol: ttc::engine::TtSymbol) -> serde_json::Value {
+    serde_json::json!({
+        "kind": match symbol.kind {
+            ttc::engine::TtSymbolKind::Variant => "variant",
+            ttc::engine::TtSymbolKind::Case => "case",
+            ttc::engine::TtSymbolKind::Field => "field",
+        },
+        "range": range_json(symbol.range),
+        "name": symbol.name,
+        "variantName": symbol.variant_name,
+        "signature": symbol.signature,
+        "detail": symbol.detail,
+        "definition": symbol.definition.map(|location| serde_json::json!({
+            "path": location.path.to_string_lossy(),
+            "range": range_json(location.range),
+        })),
+        "binds": symbol.binds,
+    })
+}

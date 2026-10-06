@@ -70,6 +70,12 @@
 //! The pattern completions at a pattern position with what the scrutinee's
 //! type admits, from the project's TypeScript; null elsewhere.
 //!
+//! → { "method": "patternSymbol", "params": { "path", "position" } }
+//! ← { "result": <a ttSymbol result> | null }
+//! The case a nested pattern's tag names when only the project's TypeScript
+//! identifies its variant (a payload typed by a type parameter); null
+//! wherever `ttSymbol` answers and wherever no such tag is written.
+//!
 //! → { "id": 7, "method": "ttHints", "params": { "path", "text" } }
 //! ← { "id": 7, "result": { "hints": [{ "kind", "range", "message" }] } }
 //!
@@ -135,6 +141,7 @@ mod responses;
 use responses::{
     completion_detail_json, completion_json, labels_json, location_json, pattern_items_json,
     range_json, service_diagnostic_json, signature_help_json, suggestions_json, symbol_json,
+    tt_symbol_json,
 };
 use std::collections::{HashMap, VecDeque};
 use std::io::{BufRead, Write};
@@ -480,6 +487,11 @@ fn respond(
                 Some(items) => json!({ "items": pattern_items_json(&items) }),
             })
         }),
+        "patternSymbol" => semantic(workspace, params, |project, path, position| {
+            Ok(project
+                .pattern_symbol(path, position)?
+                .map_or(serde_json::Value::Null, tt_symbol_json))
+        }),
         "documentSemanticTokens" => semantic(workspace, params, |project, path, _position| {
             let tokens: Vec<_> = project
                 .semantic_tokens(path)?
@@ -736,7 +748,6 @@ fn tt_symbol(
     workspace: &Workspace,
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
-    use serde_json::json;
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
@@ -744,27 +755,9 @@ fn tt_symbol(
         line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
         character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
     };
-    let Some(symbol) = workspace.tt_symbol_at(Path::new(path), text_param(params)?, position)
-    else {
-        return Ok(serde_json::Value::Null);
-    };
-    Ok(json!({
-        "kind": match symbol.kind {
-            ttc::engine::TtSymbolKind::Variant => "variant",
-            ttc::engine::TtSymbolKind::Case => "case",
-            ttc::engine::TtSymbolKind::Field => "field",
-        },
-        "range": range_json(symbol.range),
-        "name": symbol.name,
-        "variantName": symbol.variant_name,
-        "signature": symbol.signature,
-        "detail": symbol.detail,
-        "definition": symbol.definition.map(|location| json!({
-            "path": location.path.to_string_lossy(),
-            "range": range_json(location.range),
-        })),
-        "binds": symbol.binds,
-    }))
+    Ok(workspace
+        .tt_symbol_at(Path::new(path), text_param(params)?, position)
+        .map_or(serde_json::Value::Null, tt_symbol_json))
 }
 
 /// What can be written at a pattern position — case tags, payload field

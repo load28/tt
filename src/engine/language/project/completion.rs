@@ -310,6 +310,45 @@ impl Project {
         Ok(None)
     }
 
+    /// The case a nested pattern's tag names when only the checker can
+    /// identify its variant (a payload typed by a type parameter): `None`
+    /// anywhere else, where [`crate::engine::tt_symbol_at`] answers or no
+    /// tt name is written.
+    pub(super) fn pattern_symbol_at(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Option<crate::engine::TtSymbol>, String> {
+        use crate::engine::completions::{TypedSite, pattern_question};
+        let (doc, path) = self.serve(path)?;
+        let Some(question) =
+            pattern_question(&path, &doc.source, position, Texts::Open(&self.overlays))
+        else {
+            return Ok(None);
+        };
+        let Some(TypedSite::Nested {
+            at,
+            prefix: Some(tag),
+        }) = question.typed
+        else {
+            return Ok(None);
+        };
+        let Some(candidates) = self.nested_candidates(&doc, &path, at, Some(tag))? else {
+            return Ok(None);
+        };
+        let tags: Vec<String> = candidates
+            .iter()
+            .map(|candidate| candidate.label().to_string())
+            .collect();
+        Ok(crate::engine::names::owned_case_symbol(
+            &path,
+            &doc.source,
+            Texts::Open(&self.overlays),
+            &tags,
+            tag,
+        ))
+    }
+
     /// The tags TypeScript admits at a nested pattern's position: the
     /// payload's discriminant, asked where the lowered arm compares it
     /// ([`crate::PayloadTemp::tag`]), so a generic payload is answered by
