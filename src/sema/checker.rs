@@ -762,7 +762,8 @@ impl Checker<'_> {
                                     alt.span.end,
                                     format!("match: duplicate arm {}", alt.value.render()),
                                 )
-                                .code(DiagnosticCode::MatchDuplicateArm),
+                                .code(DiagnosticCode::MatchDuplicateArm)
+                                .owner(expr.keyword_off, expr.body_close + 1),
                             );
                             continue;
                         }
@@ -805,7 +806,8 @@ impl Checker<'_> {
                                     alt.tag_off + alt.tag.len(),
                                     format!("match: duplicate arm \"{}\"", alt.tag),
                                 )
-                                .code(DiagnosticCode::MatchDuplicateArm),
+                                .code(DiagnosticCode::MatchDuplicateArm)
+                                .owner(expr.keyword_off, expr.body_close + 1),
                             );
                             continue;
                         }
@@ -890,7 +892,8 @@ impl Checker<'_> {
                                     alt.path_span.end,
                                     format!("match: duplicate arm `is {}`", alt.path),
                                 )
-                                .code(DiagnosticCode::MatchDuplicateArm),
+                                .code(DiagnosticCode::MatchDuplicateArm)
+                                .owner(expr.keyword_off, expr.body_close + 1),
                             );
                         } else {
                             arm_paths.push(&alt.path);

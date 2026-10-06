@@ -1,0 +1,32 @@
+=== aNestedDuplicateArmDrawsNoCheckerConsequence.tt ===
+variant Shape { Circle(radius: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+export function f(t: TOption<Shape>) {
+>f : function f(t: TOption<Shape>): number
+>t : (parameter) t: TOption<Shape>
+>TOption : (alias) type TOption<T> = {
+>       kind: "Some";
+>       value: T;
+>   } | {
+>       kind: "None";
+>   }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+  return match (t) { Some(value) => 0, None => 1, Some(value: Point()) => 9 };
+>t : (parameter) t: TOption<Shape>
+>value : const value: Shape
+

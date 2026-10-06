@@ -369,7 +369,16 @@ impl Project {
                 location,
             })
             .collect();
-        let Some(declaration) = self.tt_declaration(path, position, &definitions)? else {
+        let declaration = match self.tt_declaration(path, position, &definitions)? {
+            Some(declaration) => Some(declaration),
+            None => self
+                .pattern_symbol_at(path, position)?
+                .and_then(|symbol| symbol.definition),
+        };
+        let Some(declaration) = declaration else {
+            if let Some(found) = self.builtin_case_references(path, position)? {
+                merge_references(&mut references, found);
+            }
             return Ok(references);
         };
         // A tt name's uses are of two kinds: the TypeScript ones the
@@ -410,16 +419,142 @@ impl Project {
                 });
             }
         }
-        for reference in found {
-            match references
-                .iter_mut()
-                .find(|r| crate::engine::names::same_location(&r.location, &reference.location))
-            {
-                Some(known) => known.is_definition |= reference.is_definition,
-                None => references.push(reference),
+        let typed = self.typed_nested_references(&declaration, &found)?;
+        found.extend(typed);
+        merge_references(&mut references, found);
+        Ok(references)
+    }
+
+    /// The nested pattern tags naming the case at `declaration` that only the
+    /// checker can resolve — a payload typed by a type parameter. Only the
+    /// tags spelled as the case is are asked about, one typed question each.
+    fn typed_nested_references(
+        &mut self,
+        declaration: &Location,
+        found: &[Reference],
+    ) -> Result<Vec<Reference>, String> {
+        let Some(declared) = self.text_of(&declaration.path) else {
+            return Ok(Vec::new());
+        };
+        let name = declared
+            .get(
+                source_byte(&declared, declaration.range.start)
+                    ..source_byte(&declared, declaration.range.end),
+            )
+            .unwrap_or_default()
+            .to_string();
+        if name.is_empty() {
+            return Ok(Vec::new());
+        }
+        let mut out = Vec::new();
+        for file in self.tt_files()? {
+            let Some(text) = self.text_of(&file) else {
+                continue;
+            };
+            let kind = crate::SourceKind::from_path(&file).unwrap_or_default();
+            let program = crate::parser::parse_with_kind(&text, kind);
+            for probe in crate::probe::payload_probes_of(&program) {
+                if !text[probe.offset..].starts_with(name.as_str())
+                    || text[probe.offset + name.len()..]
+                        .chars()
+                        .next()
+                        .is_some_and(|c| c.is_alphanumeric() || c == '_' || c == '$')
+                {
+                    continue;
+                }
+                let location = Location {
+                    path: file.clone(),
+                    range: super::span_range(&text, probe.offset, probe.offset + name.len()),
+                };
+                if found
+                    .iter()
+                    .any(|r| crate::engine::names::same_location(&r.location, &location))
+                {
+                    continue;
+                }
+                let resolved = self
+                    .pattern_symbol_at(&file, location.range.start)?
+                    .and_then(|symbol| symbol.definition);
+                if resolved.is_some_and(|resolved| {
+                    crate::engine::names::same_location(&resolved, declaration)
+                }) {
+                    out.push(Reference {
+                        location,
+                        is_definition: false,
+                    });
+                }
             }
         }
-        Ok(references)
+        Ok(out)
+    }
+
+    /// The uses of a built-in case (`Some`, `Ok`, ...) written at `position`:
+    /// its standard-library declaration, TypeScript's references to that,
+    /// and every pattern in the project's tt files that names the same case.
+    /// `None` when `position` is not on a built-in case.
+    fn builtin_case_references(
+        &mut self,
+        path: &Path,
+        position: Position,
+    ) -> Result<Option<Vec<Reference>>, String> {
+        let (doc, served) = self.serve(path)?;
+        let byte = source_byte(&doc.source, position);
+        let semantics = self.semantic_analyses(&served, &doc.source);
+        let Some((variant, tag)) = semantics
+            .analyses
+            .resolved
+            .iter()
+            .find(|resolved| {
+                resolved.kind == crate::analysis::NameKind::Case
+                    && resolved.origin == crate::analysis::Origin::Builtin
+                    && resolved.start <= byte
+                    && byte <= resolved.end
+            })
+            .map(|resolved| (resolved.variant_name.clone(), resolved.name.clone()))
+        else {
+            return Ok(None);
+        };
+        let mut found = Vec::new();
+        for definition in self.builtin_case_definition(path, position)? {
+            for location in self.locations(
+                &definition.path,
+                definition.range.start,
+                "textDocument/references",
+                serde_json::json!({ "context": { "includeDeclaration": true } }),
+                Reach::Project,
+            )? {
+                found.push(Reference {
+                    is_definition: false,
+                    location,
+                });
+            }
+            found.push(Reference {
+                location: definition,
+                is_definition: true,
+            });
+        }
+        for file in self.tt_files()? {
+            let Some(text) = self.text_of(&file) else {
+                continue;
+            };
+            let semantics = self.semantic_analyses(&file, &text);
+            for resolved in &semantics.analyses.resolved {
+                if resolved.kind == crate::analysis::NameKind::Case
+                    && resolved.origin == crate::analysis::Origin::Builtin
+                    && resolved.variant_name == variant
+                    && resolved.name == tag
+                {
+                    found.push(Reference {
+                        is_definition: false,
+                        location: Location {
+                            path: file.clone(),
+                            range: super::span_range(&text, resolved.start, resolved.end),
+                        },
+                    });
+                }
+            }
+        }
+        Ok(Some(found))
     }
 
     /// The tt declaration a name at `position` refers to: the name itself
@@ -1407,4 +1542,18 @@ impl Project {
 enum Reach {
     File,
     Project,
+}
+
+/// Adds `found` to `references`, once per place: a place both lists name is
+/// a definition when either says so.
+fn merge_references(references: &mut Vec<Reference>, found: Vec<Reference>) {
+    for reference in found {
+        match references
+            .iter_mut()
+            .find(|r| crate::engine::names::same_location(&r.location, &reference.location))
+        {
+            Some(known) => known.is_definition |= reference.is_definition,
+            None => references.push(reference),
+        }
+    }
 }

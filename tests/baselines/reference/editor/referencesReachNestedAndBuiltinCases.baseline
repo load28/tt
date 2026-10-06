@@ -1,0 +1,31 @@
+=== references /*nested*/ referencesReachNestedAndBuiltinCases.tt:7:44 ===
+  | export const x = match (b) { Full(item: Circle(radius)) => radius, _ => 0 };
+  |                                            ^ /*nested*/
+references: 4 location(s)
+  referencesReachNestedAndBuiltinCases.tt 10:24-10:30 "Circle"
+  referencesReachNestedAndBuiltinCases.tt 2:17-2:23 "Circle" (definition)
+  referencesReachNestedAndBuiltinCases.tt 7:41-7:47 "Circle"
+  referencesReachNestedAndBuiltinCases.tt 8:30-8:36 "Circle"
+
+=== references /*top*/ referencesReachNestedAndBuiltinCases.tt:8:33 ===
+  | export const y = match (s) { Circle(radius) => radius, Point => 0 };
+  |                                 ^ /*top*/
+references: 4 location(s)
+  referencesReachNestedAndBuiltinCases.tt 10:24-10:30 "Circle"
+  referencesReachNestedAndBuiltinCases.tt 2:17-2:23 "Circle" (definition)
+  referencesReachNestedAndBuiltinCases.tt 7:41-7:47 "Circle"
+  referencesReachNestedAndBuiltinCases.tt 8:30-8:36 "Circle"
+
+=== references /*builtin*/ referencesReachNestedAndBuiltinCases.tt:9:32 ===
+  | export const z = match (o) { Some(value) => value, None => 0 };
+  |                                ^ /*builtin*/
+references: 8 location(s)
+  node_modules/@tt/std/option.ts 100:25-100:29
+  node_modules/@tt/std/option.ts 12:14-12:18 (definition)
+  node_modules/@tt/std/option.ts 26:23-26:27
+  node_modules/@tt/std/option.ts 64:26-64:30
+  node_modules/@tt/std/option.ts 72:44-72:48
+  node_modules/@tt/std/option.ts 83:30-83:34
+  node_modules/@tt/std/option.ts 93:10-93:14
+  referencesReachNestedAndBuiltinCases.tt 9:30-9:34 "Some"
+

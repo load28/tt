@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[match-duplicate-arm]: match: duplicate arm "Some"
+ --> ./aNestedDuplicateArmDrawsNoCheckerConsequence.tt:4:51
+  |
+4 |   return match (t) { Some(value) => 0, None => 1, Some(value: Point()) => 9 };
+  |                                                   ^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[match-duplicate-arm]: match: duplicate arm "Some"
+ --> aNestedDuplicateArmDrawsNoCheckerConsequence.tt:4:51
+  |
+4 |   return match (t) { Some(value) => 0, None => 1, Some(value: Point()) => 9 };
+  |                                                   ^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

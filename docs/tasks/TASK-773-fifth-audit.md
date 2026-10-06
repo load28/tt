@@ -118,6 +118,44 @@ defects. This task fixes them in the layer that owns each one.
   on: one placeholder owns the construct that lost its reading. The tt
   diagnostic stays, and nothing of the block is read by TypeScript, as on
   the command line, where `try-placement` stops the file's projection.
+  The cost is that the editor no longer types the names inside such a
+  block (the `.types` baselines of
+  `aTryExitingAResultFromAParameterInitializer` and
+  `aTryInAResultBlockLoopConditionIsAPlacementError` lose them): tt.md
+  states that a construct left unread says nothing to TypeScript, and the
+  command line types none of that file.
+
+### Decision 6: A duplicate arm owns its match's checker consequences (E4)
+
+- **Context**: A duplicate arm with a nested pattern
+  (`Some(value) => 0, ..., Some(value: Point()) => 9`) drew
+  `match-duplicate-arm` and two `ts2339` errors on `never`, the second
+  reworded as "this scrutinee has none (a plain TypeScript `enum` is not
+  one)". The dead arm's lowered test reads a value the earlier arm already
+  narrowed away.
+- **Decision and rationale**: The duplicate-arm diagnostics now carry the
+  match as their owner, as the match's other structural diagnostics do
+  (`match-mixed-patterns`, `match-is-wildcard-required`), so checker
+  diagnostics on that match's glue are consequences of the tt cause and are
+  not reported (`origin_intersects_tt_error`).
+
+### Decision 7: References reach nested tags under a generic payload and built-in cases (E5)
+
+- **Context**: Find References on `Circle` in `Full(item: Circle(r))` over
+  `Box<Shape>` returned nothing, references from the top-level `Circle`
+  missed that site, and references on `Some`/`Ok`/`Err` in a pattern
+  returned nothing although definition reaches `@tt/std`.
+- **Decision and rationale**:
+  - At a position the parse-only resolution leaves empty, the declaration
+    comes from `patternSymbol` (TASK-772 decision 3).
+  - After the parse-only pattern references, each nested pattern tag
+    spelled as the case is asked through `patternSymbol` and kept when its
+    declaration is the target. Only same-named tags are asked, so the cost
+    follows the case's uses.
+  - A built-in case takes its standard-library declaration
+    (`builtin_case_definition`), TypeScript's references to it, and every
+    pattern in the project's tt files that resolves to the same built-in
+    case.
 
 ## Work log
 
@@ -134,6 +172,9 @@ defects. This task fixes them in the layer that owns each one.
   with a timing hook, and removed the per-item scans (decision 4).
 - 2026-10-06: Reproduced E3 with an editor case and recovered the unclaimed
   block (decision 5).
+- 2026-10-06: Owned the duplicate arm's consequences (decision 6) and
+  extended references (decision 7); reviewed the two `.types` baselines
+  decision 5 changed.
 
 ## Issues and resolutions
 
