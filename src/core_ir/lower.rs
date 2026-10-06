@@ -621,9 +621,8 @@ impl Lowering<'_> {
 
     fn function_targets(&self) -> &crate::flow::FunctionTargets {
         self.function_targets.get_or_init(|| {
-            crate::flow::FunctionTargets::new(self.tokens, &|tokens| {
-                self.semantic.hir.match_owned_tokens(tokens)
-            })
+            let owned = self.semantic.hir.match_owned();
+            crate::flow::FunctionTargets::new(self.tokens, &|tokens| owned.tokens(tokens))
         })
     }
 

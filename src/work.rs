@@ -10,6 +10,13 @@ pub(crate) fn tick(_name: &'static str) {
     COUNTS.with(|counts| *counts.borrow_mut().entry(_name).or_default() += 1);
 }
 
+/// [`tick`] for `amount` units of work at once.
+#[inline]
+pub(crate) fn tick_by(_name: &'static str, _amount: usize) {
+    #[cfg(test)]
+    COUNTS.with(|counts| *counts.borrow_mut().entry(_name).or_default() += _amount);
+}
+
 #[cfg(test)]
 pub(crate) fn measure<T>(
     run: impl FnOnce() -> T,

@@ -376,8 +376,21 @@ fn lex_region_grown(
     // Significant tokens run about one per six source bytes across real
     // TypeScript and one per four in tt source and the TypeScript the
     // compiler generates, so sizing up front for one per three spares the
-    // repeated doubling that dominated lexing on large files.
-    let mut tokens: Vec<Token> = Vec::with_capacity((end - start) / 3 + 8);
+    // repeated doubling that dominated lexing on large files. A braced
+    // region ends at its closing `}`, not at `end`, so its extent is unknown
+    // here: sizing it by the rest of the text would reserve that text once
+    // per nested region.
+    let mut tokens: Vec<Token> = if braced {
+        Vec::new()
+    } else {
+        Vec::with_capacity((end - start) / 3 + 8)
+    };
+    if braced {
+        crate::work::tick_by(
+            "token slots reserved for a braced region",
+            tokens.capacity(),
+        );
+    }
     let mut i = start;
     if start == 0 && !braced && src.starts_with(b"#!") {
         i = line_end(src, 0, end);

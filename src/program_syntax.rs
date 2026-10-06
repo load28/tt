@@ -1367,7 +1367,7 @@ fn evaluation_owner(
     decision_functions: &[usize],
 ) -> (EvaluationOwner, usize) {
     for (index, parent) in parents.iter().enumerate().rev() {
-        if decision_functions.contains(&index) {
+        if decision_functions.binary_search(&index).is_ok() {
             continue;
         }
         match parent {
@@ -1377,7 +1377,7 @@ fn evaluation_owner(
                 return (EvaluationOwner::ClassDefinition, index + 1);
             }
             AstParentKind::Class(fields::ClassField::SuperClass)
-                if decorated_classes.contains(&index) =>
+                if decorated_classes.binary_search(&index).is_ok() =>
             {
                 return (EvaluationOwner::ClassDefinition, index + 1);
             }

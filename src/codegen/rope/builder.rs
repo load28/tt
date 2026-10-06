@@ -4,7 +4,7 @@ use super::*;
 
 #[derive(Default)]
 pub(crate) struct Rope<'a> {
-    pub(super) pieces: Vec<Piece<'a>>,
+    pub(super) pieces: std::collections::VecDeque<Piece<'a>>,
     /// Total byte length of the pieces — [`Rope::flatten`]'s exact capacity.
     pub(super) len: usize,
 }
@@ -22,7 +22,7 @@ impl<'a> Rope<'a> {
         let text = text.into();
         if !text.is_empty() {
             self.len += text.len();
-            self.pieces.push(Piece::Lit(text));
+            self.pieces.push_back(Piece::Lit(text));
         }
     }
 
@@ -31,7 +31,7 @@ impl<'a> Rope<'a> {
     /// whitespace itself is resolved when the target is printed
     /// ([`Rope::scoped`]), because it depends on where the scope opened.
     pub(crate) fn push_break(&mut self, depth: u16) {
-        self.pieces.push(Piece::Break { depth });
+        self.pieces.push_back(Piece::Break { depth });
     }
 
     /// Wraps `inner` in a layout scope: every [`Rope::push_break`] inside it
@@ -46,18 +46,18 @@ impl<'a> Rope<'a> {
     /// own scope — and [`TargetError::BreakOutsideScope`] catches one that
     /// forgets rather than letting the break fall back to column 0.
     pub(crate) fn push_scope_open(&mut self) {
-        self.pieces.push(Piece::ScopeOpen);
+        self.pieces.push_back(Piece::ScopeOpen);
     }
 
     pub(crate) fn push_scope_close(&mut self) {
-        self.pieces.push(Piece::ScopeClose);
+        self.pieces.push_back(Piece::ScopeClose);
     }
 
     pub(crate) fn scoped(inner: Rope<'a>) -> Rope<'a> {
         let mut out = Rope::new();
-        out.pieces.push(Piece::ScopeOpen);
+        out.pieces.push_back(Piece::ScopeOpen);
         out.append(inner);
-        out.pieces.push(Piece::ScopeClose);
+        out.pieces.push_back(Piece::ScopeClose);
         out
     }
 
@@ -93,7 +93,7 @@ impl<'a> Rope<'a> {
     /// Notes that the next thing pushed is the name codegen writes for the
     /// construct at source offset `src`. See [`crate::ScrutineeTemp`].
     pub(crate) fn push_mark(&mut self, src: usize) {
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src,
             kind: MarkKind::Scrutinee,
         });
@@ -102,7 +102,7 @@ impl<'a> Rope<'a> {
     /// Notes that the glue pushed next is written for the source construct
     /// part at `src` ([`MarkKind::SourcePoint`]).
     pub(crate) fn push_source_point(&mut self, src: usize) {
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src,
             kind: MarkKind::SourcePoint,
         });
@@ -112,7 +112,7 @@ impl<'a> Rope<'a> {
     /// nested pattern whose tag starts at `src` — the one place a checker
     /// can be asked what that payload's type admits.
     pub(crate) fn push_payload_mark(&mut self, src: usize) {
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src,
             kind: MarkKind::Payload,
         });
@@ -121,12 +121,12 @@ impl<'a> Rope<'a> {
     /// Writes the tag literal the receiver of the nested pattern at `src` is
     /// compared with, marked as that payload's ([`crate::PayloadTemp::tag`]).
     pub(crate) fn push_payload_tag(&mut self, src: usize, literal: String) {
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src,
             kind: MarkKind::PayloadTagStart,
         });
         self.push_lit(literal);
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src,
             kind: MarkKind::PayloadTagEnd,
         });
@@ -135,7 +135,7 @@ impl<'a> Rope<'a> {
     /// Declares storage whose expected type is supplied by its contextual host.
     pub(crate) fn push_value_declaration(&mut self, name: &str) {
         self.push_lit(format!("let {name}"));
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: 0,
             kind: MarkKind::ContextualSlot,
         });
@@ -145,7 +145,7 @@ impl<'a> Rope<'a> {
     /// Declares storage for the index of the arm a dispatch selects.
     pub(crate) fn push_selector_declaration(&mut self, name: &str) {
         self.push_lit(format!("let {name}"));
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: 0,
             kind: MarkKind::SelectorSlot,
         });
@@ -154,12 +154,12 @@ impl<'a> Rope<'a> {
 
     pub(crate) fn push_asserted_declaration(&mut self, name: &str, annotation: String) {
         self.push_lit(format!("let {name}"));
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: 0,
             kind: MarkKind::ContextualSlot,
         });
         self.push_lit(annotation);
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: 0,
             kind: MarkKind::AssertedAnnotationEnd,
         });
@@ -168,7 +168,7 @@ impl<'a> Rope<'a> {
 
     pub(crate) fn push_operand_declaration(&mut self, name: &str) {
         self.push_lit(format!("let {name}"));
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: 0,
             kind: MarkKind::OperandSlot,
         });
@@ -177,7 +177,7 @@ impl<'a> Rope<'a> {
 
     pub(crate) fn push_value_definition(&mut self, name: &str) {
         self.push_lit(format!("const {name}"));
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: 0,
             kind: MarkKind::ContextualSlot,
         });
@@ -187,7 +187,7 @@ impl<'a> Rope<'a> {
     /// Starts a captured value while retaining its contextual annotation site.
     pub(crate) fn push_value_capture(&mut self, name: &str) {
         self.push_lit(format!("const {name}"));
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: 0,
             kind: MarkKind::ContextualSlot,
         });
@@ -197,7 +197,7 @@ impl<'a> Rope<'a> {
     /// Notes that the next copied source byte begins an explicit Result
     /// return value, so a checker query can use its emitted position.
     pub(crate) fn push_result_return_start(&mut self, src: usize) {
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src,
             kind: MarkKind::ResultReturnStart,
         });
@@ -205,7 +205,7 @@ impl<'a> Rope<'a> {
 
     /// Closes the emitted range opened by [`Rope::push_result_return_start`].
     pub(crate) fn push_result_return_end(&mut self, src: usize) {
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src,
             kind: MarkKind::ResultReturnEnd,
         });
@@ -217,26 +217,26 @@ impl<'a> Rope<'a> {
         src: usize,
         src_end: usize,
     ) {
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src,
             kind: MarkKind::DeclaredNameStart,
         });
         self.push_lit(text);
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: src_end,
             kind: MarkKind::DeclaredNameEnd,
         });
     }
 
     pub(crate) fn push_destructured_list_start(&mut self, src: usize) {
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src,
             kind: MarkKind::DestructuredListStart,
         });
     }
 
     pub(crate) fn push_destructured_list_end(&mut self, src_end: usize) {
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: src_end,
             kind: MarkKind::DestructuredListEnd,
         });
@@ -247,12 +247,12 @@ impl<'a> Rope<'a> {
         text: impl Into<Cow<'a, str>>,
         occurrences: &[BindingOccurrence],
     ) {
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: occurrences.first().map_or(0, |occurrence| occurrence.src),
             kind: MarkKind::SharedBindingStart,
         });
         for occurrence in occurrences {
-            self.pieces.push(Piece::Mark {
+            self.pieces.push_back(Piece::Mark {
                 src: occurrence.src,
                 kind: MarkKind::SharedBindingOccurrence {
                     end: occurrence.src_end,
@@ -262,7 +262,7 @@ impl<'a> Rope<'a> {
             });
         }
         self.push_lit(text);
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: occurrences
                 .last()
                 .map_or(0, |occurrence| occurrence.src_end),
@@ -295,7 +295,7 @@ impl<'a> Rope<'a> {
         context: Option<(usize, usize)>,
         inner: Rope<'a>,
     ) {
-        self.pieces.push(Piece::Open {
+        self.pieces.push_back(Piece::Open {
             src,
             src_end,
             owner_end,
@@ -303,16 +303,16 @@ impl<'a> Rope<'a> {
             kind,
         });
         self.append(inner);
-        self.pieces.push(Piece::Close);
+        self.pieces.push_back(Piece::Close);
     }
 
     pub(crate) fn push_restatement(&mut self, text: impl Into<Cow<'a, str>>) {
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: 0,
             kind: MarkKind::RestatementStart,
         });
         self.push_lit(text);
-        self.pieces.push(Piece::Mark {
+        self.pieces.push_back(Piece::Mark {
             src: 0,
             kind: MarkKind::RestatementEnd,
         });
@@ -321,7 +321,7 @@ impl<'a> Rope<'a> {
     pub(crate) fn push_src(&mut self, text: &'a str, src: usize) {
         if !text.is_empty() {
             self.len += text.len();
-            self.pieces.push(Piece::Src { text, src });
+            self.pieces.push_back(Piece::Src { text, src });
         }
     }
 
@@ -385,7 +385,9 @@ impl<'a> Rope<'a> {
             .collect();
         match split {
             None => {
-                self.pieces.splice(index..index, inserted);
+                let tail = self.pieces.split_off(index);
+                self.pieces.extend(inserted);
+                self.pieces.extend(tail);
             }
             Some(cut) => {
                 let Piece::Src { text: whole, src } = self.pieces[index] else {
@@ -402,14 +404,27 @@ impl<'a> Rope<'a> {
                         src: src + cut,
                     },
                 );
-                self.pieces.splice(index + 1..index + 1, inserted);
+                let tail = self.pieces.split_off(index + 1);
+                self.pieces.extend(inserted);
+                self.pieces.extend(tail);
             }
         }
     }
 
+    /// Appends `other`. The shorter of the two moves, so a rope built by
+    /// wrapping its children level by level (a nested template, a chain of
+    /// blocks) moves each piece a logarithmic number of times rather than
+    /// once per level.
     pub(crate) fn append(&mut self, mut other: Rope<'a>) {
         self.len += other.len;
-        self.pieces.append(&mut other.pieces);
+        if self.pieces.len() < other.pieces.len() {
+            std::mem::swap(&mut self.pieces, &mut other.pieces);
+            while let Some(piece) = other.pieces.pop_back() {
+                self.pieces.push_front(piece);
+            }
+        } else {
+            self.pieces.append(&mut other.pieces);
+        }
     }
 
     /// The rope's text, when every piece of it is already resolved. A rope

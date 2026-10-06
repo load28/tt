@@ -490,6 +490,21 @@ fn every_request_does_linear_work_in_the_nesting_depth_of_templates() {
 }
 
 #[test]
+fn every_request_does_linear_work_in_the_nesting_depth_of_templates_around_a_match() {
+    let source = |depth: usize| {
+        format!(
+            "declare const v: number;\nexport const y = {}match (v) {{ 1 => 1, _ => 2 }}{};\n",
+            "`a${".repeat(depth),
+            "}b`".repeat(depth),
+        )
+    };
+    let small = measure(|| every_request(&source(200)));
+    let large = measure(|| every_request(&source(400)));
+    assert_linear(&small, &large);
+    assert!(large["match-owned offsets"] > 0);
+}
+
+#[test]
 fn a_nested_template_with_a_host_candidate_collects_its_facts_once_per_level() {
     let source = |depth: usize| {
         format!(

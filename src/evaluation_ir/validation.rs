@@ -225,11 +225,10 @@ impl EvaluationFile {
                         }
                     }
                 }
-                for index in (0..steps.len()).rev() {
-                    let step = &steps[index];
-                    let conditional_after = steps[index + 1..].iter().any(|later| {
-                        matches!(later.operation, HostEvaluationOperation::Conditional(_))
-                    });
+                let mut conditional_after = false;
+                for step in steps.iter().rev() {
+                    let conditional =
+                        matches!(step.operation, HostEvaluationOperation::Conditional(_));
                     for input in &step.inputs {
                         let PlannedEvaluationInput::Source { source, target, .. } = input else {
                             continue;
@@ -298,6 +297,7 @@ impl EvaluationFile {
                         }
                         materialized.push(*source);
                     }
+                    conditional_after |= conditional;
                 }
                 let ValueTarget::Slot(slot) = value.target;
                 produced.insert(slot);
