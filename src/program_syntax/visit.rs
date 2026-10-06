@@ -642,12 +642,7 @@ impl VisitAstPath for ParentCollector {
                 .iter()
                 .map(|expression| {
                     (
-                        operand_span(
-                            expression,
-                            self.source_start,
-                            &self.placeholders,
-                            &self.source_segments,
-                        ),
+                        projected_span(expression.span(), self.source_start),
                         expression_effects(expression),
                     )
                 })

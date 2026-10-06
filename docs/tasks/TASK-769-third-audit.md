@@ -23,7 +23,8 @@ request validation. Fix each in the layer that owns it.
   language service's URIs (R3E1); the outline's and navigation targets'
   position conversions (R3E2); an empty match body (R3E6); TypeScript in a
   pipeline that does not parse (R3E7); `try` in a setter (R3C8); a case
-  declaring one field twice (R3C9).
+  declaring one field twice (R3C9); a parenthesized comma operand before a
+  tt value (R3C2).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -205,6 +206,19 @@ request validation. Fix each in the layer that owns it.
   is a tt rule with its own code (tt53, appended so no number changes
   meaning), explanation, reference sentence and generated diagnostic cases;
   the checker reports the second occurrence with the help to rename it.
+
+### Decision 14: A comma operand is the whole operand, parentheses included
+
+- **Context**: `((o), match (o) { ... })` and `((g()), try r(1))` stopped
+  the compiler with "a discarded comma operand is not followed by its
+  comma".
+- **Decision and rationale**: The comma expression's operands were read
+  with the capture rule that looks through parentheses to the value inside
+  them, so the operand `(o)` ended before its `)` and the comma after it
+  could not be found. An operand evaluated only for its effects is the
+  whole operand ECMA-262 names (`Expression , AssignmentExpression`),
+  parentheses included; the lowering now runs it as written and removes it
+  with its comma.
 
 ## Work log
 
