@@ -1,0 +1,36 @@
+==== ttc --out-dir (exit 1) ====
+error[unknown-field]: variant Shape: case `Circle` has no field `raduis`
+ --> ./aFieldTypoFixKeepsAShorthandBinding.tt:3:37
+  |
+3 | export const a = match (s) { Circle(raduis) => raduis, Rect(w) => w, Point => 0 };
+  |                                     ^^^^^^
+  |
+  = help: a field with a similar name exists: `radius: raduis`
+
+error[unknown-field]: variant Shape: case `Circle` has no field `raduis`
+ --> ./aFieldTypoFixKeepsAShorthandBinding.tt:4:37
+  |
+4 | export const b = match (s) { Circle(raduis: r) => r, Rect(w) => w, Point => 0 };
+  |                                     ^^^^^^
+  |
+  = help: a field with a similar name exists: `radius`
+
+
+==== ttc --check-types (exit 1) ====
+error[unknown-field]: variant Shape: case `Circle` has no field `raduis`
+ --> aFieldTypoFixKeepsAShorthandBinding.tt:3:37
+  |
+3 | export const a = match (s) { Circle(raduis) => raduis, Rect(w) => w, Point => 0 };
+  |                                     ^^^^^^
+  |
+  = help: a field with a similar name exists: `radius: raduis`
+error[unknown-field]: variant Shape: case `Circle` has no field `raduis`
+ --> aFieldTypoFixKeepsAShorthandBinding.tt:4:37
+  |
+4 | export const b = match (s) { Circle(raduis: r) => r, Rect(w) => w, Point => 0 };
+  |                                     ^^^^^^
+  |
+  = help: a field with a similar name exists: `radius`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

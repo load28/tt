@@ -195,6 +195,26 @@ impl<'a> Emitter<'a> {
         let mut loop_endings = loop_endings.into_iter().peekable();
         let mut cursor = span.start;
         while cursor < span.end {
+            while insertions
+                .next_if(|rewrite| rewrite.owner.start < cursor)
+                .is_some()
+            {}
+            while propagation_insertions
+                .next_if(|rewrite| rewrite.owner.start < cursor)
+                .is_some()
+            {}
+            while compose_insertions
+                .next_if(|rewrite| rewrite.owner.start < cursor)
+                .is_some()
+            {}
+            while compose_endings
+                .next_if(|rewrite| rewrite.owner.end < cursor)
+                .is_some()
+            {}
+            while loop_endings
+                .next_if(|rewrite| rewrite.body.end < cursor)
+                .is_some()
+            {}
             self.close_owner_blocks_at(cursor, &mut rope);
             while let Some(_rewrite) = loop_endings.next_if(|rewrite| rewrite.body.end == cursor) {
                 rope.push_lit("}");
@@ -1292,7 +1312,13 @@ impl<'a> Emitter<'a> {
             if self.defers_arm_values(expr) {
                 let (kind, start, end, extent) = self.value_anchor(expr);
                 let mut out = Rope::new();
-                out.anchored(kind, start, end, extent, self.emit_selected_arm_values(expr, slot));
+                out.anchored(
+                    kind,
+                    start,
+                    end,
+                    extent,
+                    self.emit_selected_arm_values(expr, slot),
+                );
                 return out;
             }
             let (kind, start, end, extent) = self.value_anchor(expr);

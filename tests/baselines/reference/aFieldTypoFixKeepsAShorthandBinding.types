@@ -1,0 +1,45 @@
+=== aFieldTypoFixKeepsAShorthandBinding.tt ===
+variant Shape { Circle(radius: number), Rect(w: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Rect : (property) Rect: (w: number) => Shape
+>w : (property) w: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+declare const s: Shape;
+>s : const s: Shape
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Rect";
+>       w: number;
+>   } | {
+>       kind: "Point";
+>   }
+export const a = match (s) { Circle(raduis) => raduis, Rect(w) => w, Point => 0 };
+>a : const a: any
+>s : const s: Shape
+>raduis : const raduis: any
+>raduis : const raduis: any
+>w : const w: number
+>w : const w: number
+export const b = match (s) { Circle(raduis: r) => r, Rect(w) => w, Point => 0 };
+>b : const b: any
+>s : const s: Shape
+>raduis : any
+>r : const r: any
+>r : const r: any
+>w : const w: number
+>w : const w: number
+

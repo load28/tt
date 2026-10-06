@@ -1,4 +1,4 @@
-# TASK-768: Fix defects found by the second editor audit
+# TASK-768: Fix defects found by the second audit
 
 - **Status**: In progress
 - **Started**: 2026-10-06

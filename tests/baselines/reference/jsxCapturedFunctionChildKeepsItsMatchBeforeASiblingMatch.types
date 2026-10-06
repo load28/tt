@@ -1,0 +1,68 @@
+=== view.ttx ===
+declare global {
+>global : namespace global
+  namespace JSX {
+>JSX : namespace JSX
+    interface IntrinsicElements { [name: string]: unknown }
+>IntrinsicElements : interface IntrinsicElements
+>name : (parameter) name: string
+    type Element = unknown;
+>Element : type Element = unknown
+export variant S { A, B }
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+declare const x: S;
+>x : const x: S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+declare const s: S;
+>s : const s: S
+>S : type S = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+declare const c: boolean;
+>c : const c: boolean
+declare function g(f: () => unknown): unknown;
+>g : function g(f: () => unknown): unknown
+>f : (parameter) f: () => unknown
+export function a() { return <ul>{() => <li>{match (x) { A => 1, B => 2 }}</li>}{match (s) { A => 3, B => 4 }}</ul>; }
+>a : function a(): unknown
+>x : const x: S
+>s : const s: S
+export function b() { return <ul>{() => (match (x) { A => 1, B => 2 })}{match (s) { A => 3, B => 4 }}</ul>; }
+>b : function b(): unknown
+>x : const x: S
+>s : const s: S
+export function c1() { return <ul a={() => <li>{match (x) { A => 1, B => 2 }}</li>} b={match (s) { A => 3, B => 4 }}/>; }
+>c1 : function c1(): unknown
+>x : const x: S
+>s : const s: S
+export function d() { return <ul><b>{() => <li>{match (x) { A => 1, B => 2 }}</li>}</b>{match (s) { A => 3, B => 4 }}</ul>; }
+>d : function d(): unknown
+>x : const x: S
+>s : const s: S
+export function e() { return <ul>{g(() => <li>{match (x) { A => 1, B => 2 }}</li>)}{c && match (s) { A => 3, B => 4 }}</ul>; }
+>e : function e(): unknown
+>g : function g(f: () => unknown): unknown
+>x : const x: S
+>c : const c: boolean
+>s : const s: S
+export function h() { return <ul>{(() => <li>{match (x) { A => 1, B => 2 }}</li>)()}{match (s) { A => 3, B => 4 }}</ul>; }
+>h : function h(): unknown
+>x : const x: S
+>s : const s: S
+
