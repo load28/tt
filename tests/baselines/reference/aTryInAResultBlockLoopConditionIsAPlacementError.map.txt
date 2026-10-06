@@ -1,0 +1,15 @@
+//// [aTryInAResultBlockLoopConditionIsAPlacementError.tt] 13 mapping(s)
+1:1 -> 1:1 len 191  "type R<T> = { kind: \"Ok\"; value: T } | { kind: \""...
+7:5 -> 17:5 len 7  "return "
+8:9 -> 9:7 len 7  "while ("
+8:23 -> 9:32 len 38  ") { k++; }\n        do { k++; } while ("
+9:35 -> 10:46 len 24  ");\n        for (;; k += "
+10:29 -> 11:40 len 21  ") { break; }\n        "
+11:16 -> 13:50 len 1  "1"
+12:6 -> 17:18 len 38  ";\n}\n\nexport function defaults() {\n    "
+16:5 -> 29:5 len 7  "return "
+17:9 -> 23:7 len 12  "const { a = "
+17:28 -> 23:37 len 16  " } = o;\n        "
+18:16 -> 25:50 len 1  "a"
+19:6 -> 29:18 len 4  ";\n}\n"
+

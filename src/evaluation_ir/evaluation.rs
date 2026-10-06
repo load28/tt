@@ -693,6 +693,7 @@ impl EvaluationFile {
             // its own host owner; only an owner that takes no statements has
             // nowhere to write it.
             if exits_result
+                && capability == TargetCapability::StatementRegion
                 && !matches!(
                     context.owner,
                     EvaluationOwner::ParameterInitializer
