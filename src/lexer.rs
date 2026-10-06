@@ -263,7 +263,7 @@ type TraceSink<'t> = Option<&'t mut Trace>;
 /// The byte just past the numeric literal starting at `i` (a digit, or a
 /// `.` before one): digits and separators, a fraction, an exponent, a radix
 /// prefix, and a BigInt suffix.
-fn number_end(src: &[u8], i: usize, end: usize) -> usize {
+pub(super) fn number_end(src: &[u8], i: usize, end: usize) -> usize {
     let digits = |mut j: usize, hex: bool| {
         while let Some(b) = at(src, j, end) {
             if b.is_ascii_digit() || b == b'_' || (hex && b.is_ascii_hexdigit()) {

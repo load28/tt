@@ -1,0 +1,21 @@
+=== anIntegerLiteralReceiverOfAPostfixStepIsParenthesized.tt ===
+const fixed = 5 |> .toFixed(1);
+>fixed : const fixed: string
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+const separated = 1_000 |> .toString();
+>separated : const separated: string
+>toString : (method) Number.toString(radix?: number): string
+const fraction = 2.5 |> .toFixed(2);
+>fraction : const fraction: string
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+const hex = 0xff |> .toString(2);
+>hex : const hex: string
+>toString : (method) Number.toString(radix?: number): string
+console.log(fixed, separated, fraction, hex);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>fixed : const fixed: string
+>separated : const separated: string
+>fraction : const fraction: string
+>hex : const hex: string
+

@@ -1,0 +1,9 @@
+//// [anIntegerLiteralReceiverOfAPostfixStepIsParenthesized.tt] 7 mapping(s)
+1:1 -> 1:1 len 14  "const fixed = "
+1:15 -> 1:16 len 1  "5"
+1:20 -> 1:18 len 31  ".toFixed(1);\nconst separated = "
+2:19 -> 2:20 len 5  "1_000"
+2:28 -> 2:26 len 33  ".toString();\nconst fraction = 2.5"
+3:25 -> 3:21 len 29  ".toFixed(2);\nconst hex = 0xff"
+4:21 -> 4:17 len 60  ".toString(2);\nconsole.log(fixed, separated, frac"...
+

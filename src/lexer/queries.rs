@@ -2,7 +2,7 @@
 //! lexer's tokens so strings, comments, templates, regular expressions, and
 //! brackets are read exactly as the lexer reads them.
 
-use super::{Token, TokenKind, TplPart, lex, lex_with_kind};
+use super::{Token, TokenKind, TplPart, lex, lex_with_kind, number_end};
 use crate::SourceKind;
 
 /// The index of the token closing the bracket opened at `open`, counting
@@ -68,7 +68,24 @@ pub(crate) fn is_primary_expression(src: &str, from: usize, end: usize, kind: So
 /// the chain short-circuits; a parenthesized expression is a
 /// `PrimaryExpression` and ends the chain. `a?.b` is primary, but only
 /// `(a?.b).c` reads `c` of the value `a?.b` evaluates to.
+///
+/// A decimal integer literal is primary but not a receiver: the `.` after
+/// it is read as its decimal point (`5.f`).
 pub(crate) fn is_member_receiver(src: &str, from: usize, end: usize, kind: SourceKind) -> bool {
+    let tokens = lex_with_kind(src, from, end, kind);
+    if let Some(first) = tokens.first()
+        && let TokenKind::Punct(byte) = first.kind
+        && byte.is_ascii_digit()
+    {
+        let literal_end = number_end(src.as_bytes(), first.span.start, end);
+        if tokens.iter().all(|token| token.span.start < literal_end)
+            && src.as_bytes()[first.span.start..literal_end]
+                .iter()
+                .all(|byte| byte.is_ascii_digit() || *byte == b'_')
+        {
+            return false;
+        }
+    }
     primary_expression(src, from, end, kind) == Some(Primary::Closed)
 }
 
@@ -368,6 +385,12 @@ mod tests {
             ("[a?.b]", true),
             ("f(a?.b)", true),
             ("a + b", false),
+            ("5", false),
+            ("1_000", false),
+            ("5.5", true),
+            ("1e3", true),
+            ("0xff", true),
+            ("5n", true),
         ] {
             assert_eq!(
                 is_member_receiver(text, 0, text.len(), SourceKind::TypeScript),

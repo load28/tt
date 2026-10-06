@@ -131,19 +131,21 @@ impl CoreFile {
     /// not necessarily the value of the entire enclosing host expression.
     pub(crate) fn body_tail_expr(&self, body: BodyId) -> Option<ExprId> {
         let statements = &self.bodies[body.index()].statements;
+        let source = |statement: &Statement| match statement {
+            Statement::Opaque(_) => true,
+            Statement::Expr(expr) => !self.expr_requires_host(*expr),
+            _ => false,
+        };
         let (index, expr) =
             statements
                 .iter()
                 .enumerate()
                 .rev()
                 .find_map(|(index, statement)| match statement {
-                    Statement::Expr(expr) => Some((index, *expr)),
+                    Statement::Expr(expr) if !source(statement) => Some((index, *expr)),
                     _ => None,
                 })?;
-        statements[index + 1..]
-            .iter()
-            .all(|statement| matches!(statement, Statement::Opaque(_)))
-            .then_some(expr)
+        statements[index + 1..].iter().all(source).then_some(expr)
     }
 
     fn expr_requires_host(&self, expr: ExprId) -> bool {

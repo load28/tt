@@ -24,7 +24,9 @@ request validation. Fix each in the layer that owns it.
   position conversions (R3E2); an empty match body (R3E6); TypeScript in a
   pipeline that does not parse (R3E7); `try` in a setter (R3C8); a case
   declaring one field twice (R3C9); a parenthesized comma operand before a
-  tt value (R3C2).
+  tt value (R3C2); a pattern subject with a plain template after a tt
+  value (R3C3); a `super` pipeline head (a regression from Decision 11);
+  an integer literal receiver of a postfix step (R3C15).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -219,6 +221,45 @@ request validation. Fix each in the layer that owns it.
   whole operand ECMA-262 names (`Expression , AssignmentExpression`),
   parentheses included; the lowering now runs it as written and removes it
   with its comma.
+
+### Decision 15: A template without tt values is source to a sequence's anchor
+
+- **Context**: `const A(n) = pick(match (k) { ... }, \`k=${k}\`) else { ... };`
+  and the same subject in an `if let` stopped the compiler with "match
+  reached expression emission without a host rewrite"; a string in place
+  of the template compiled.
+- **Decision and rationale**: Every template literal is a Core template
+  expression, so the sequence's scheduling anchor, the last tt child
+  followed only by source, was the template, which has no statement form,
+  and the subject was emitted as one expression with the `match` still
+  inside. A template none of whose interpolations needs a host is
+  TypeScript source like the text around it; the anchor now passes over
+  any expression that requires no host, so the `match` is the anchor and
+  the subject is lowered as statements.
+
+### Decision 16: A `super` pipeline head is checked as the receiver it is
+
+- **Context**: Decision 11's separate parse of an opaque pipeline head
+  rejected `super |> .value`, which the lowering writes as `super.value`,
+  and reported `super |> f` as a lowering failure at the file's first byte.
+- **Decision and rationale**: TypeScript parses `super` only before an
+  argument list or a member access. A head whose first step is a postfix
+  step and whose text the lowering keeps bare (a member receiver) is
+  parsed with a member access after it, as it is emitted; any other head
+  is parsed alone, as the lowering parenthesizes it. A failure of the
+  separate parse is located at the part it parses, since the wrapper
+  around it is the compiler's.
+
+### Decision 17: A decimal integer literal is not a member receiver
+
+- **Context**: `5 |> .toFixed(1)` emitted `5.toFixed(1)`, which does not
+  parse.
+- **Decision and rationale**: The `.` after a decimal integer literal is
+  its decimal point. TypeScript's emitter writes `5..toFixed` for the
+  same case (`mayNeedDotDotForPropertyAccess`: a literal with no radix
+  specifier, `.`, or exponent). The receiver rule this compiler already
+  uses parenthesizes anything that is not a member receiver, so such a
+  literal is no longer one and is written `(5).toFixed(1)`.
 
 ## Work log
 

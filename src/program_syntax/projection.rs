@@ -167,11 +167,19 @@ impl ProgramSyntax {
             mode,
         )?;
         for part in &projection.hidden_parts {
-            let receiver = if part.postfix { "$tt_syntax_piped" } else { "" };
+            let text = &source[part.source.start..part.source.end];
+            let (receiver, member) = match part.role {
+                HiddenRole::Step { postfix: true } => ("$tt_syntax_piped", ""),
+                HiddenRole::Head { receiver: true }
+                    if crate::lexer::is_member_receiver(text, 0, text.len(), source_kind) =>
+                {
+                    ("", ".$tt_syntax")
+                }
+                HiddenRole::Head { .. } | HiddenRole::Step { .. } => ("", ""),
+            };
             let open = "class $tt_syntax extends Object { async *$tt_syntax() { (";
             let start = open.len() + receiver.len();
-            let text = &source[part.source.start..part.source.end];
-            let code = format!("{open}{receiver}{text}); }} }}");
+            let code = format!("{open}{receiver}{text}{member}); }} }}");
             let segments = [ProjectionSourceSegment {
                 projected: ProjectedSpan {
                     start: ProjectedByte(start),
@@ -180,7 +188,15 @@ impl ProgramSyntax {
                 source: part.source,
                 kind: ProjectionSegmentKind::Copied,
             }];
-            parse_module(&code, &segments, source_kind, mode)?;
+            parse_module(&code, &segments, source_kind, mode).map_err(|error| match error {
+                ProgramSyntaxError::Parse { message, .. } => {
+                    ProgramSyntaxError::SourceNotTypeScript {
+                        message,
+                        source: part.source.start,
+                    }
+                }
+                error => error,
+            })?;
         }
         let completion_scopes = super::completion::completion_scopes(
             &parsed.module,
@@ -582,7 +598,13 @@ pub(super) struct ProjectionBuilder<'a> {
 #[derive(Debug, Clone, Copy)]
 pub(super) struct HiddenPart {
     pub(super) source: SourceSpan,
-    pub(super) postfix: bool,
+    pub(super) role: HiddenRole,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum HiddenRole {
+    Head { receiver: bool },
+    Step { postfix: bool },
 }
 
 impl<'a> ProjectionBuilder<'a> {
@@ -1068,7 +1090,11 @@ impl<'a> ProjectionBuilder<'a> {
         {
             self.hidden_parts.push(HiddenPart {
                 source: self.source_span(*node)?,
-                postfix: false,
+                role: HiddenRole::Head {
+                    receiver: apply.steps.first().is_some_and(|step| {
+                        matches!(step.mode, crate::core_ir::ApplyMode::Postfix { .. })
+                    }),
+                },
             });
         }
         for step in &apply.steps {
@@ -1077,7 +1103,9 @@ impl<'a> ProjectionBuilder<'a> {
             {
                 self.hidden_parts.push(HiddenPart {
                     source: self.source_span(step.node)?,
-                    postfix: matches!(step.mode, crate::core_ir::ApplyMode::Postfix { .. }),
+                    role: HiddenRole::Step {
+                        postfix: matches!(step.mode, crate::core_ir::ApplyMode::Postfix { .. }),
+                    },
                 });
             }
         }
