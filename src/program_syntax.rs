@@ -1019,6 +1019,7 @@ pub(crate) enum EvaluationOwner {
     FunctionBody,
     Constructor,
     Generator,
+    Setter,
     ParameterInitializer,
     ClassInitializer,
     ClassDefinition,

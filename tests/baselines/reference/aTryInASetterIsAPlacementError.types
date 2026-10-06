@@ -1,0 +1,76 @@
+=== aTryInASetterIsAPlacementError.tt ===
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+declare function r(n: number): R<number>;
+>r : function r(n: number): R<number>
+>n : (parameter) n: number
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+export class C {
+>C : class C
+    v = 0;
+>v : (property) C.v: number
+    set x(n: number) { const a = try r(n); this.v = a; }
+>x : (accessor) C.x: number
+>n : (parameter) n: number
+>a : const a: any
+>v : (property) C.v: number
+>a : const a: any
+    set y(n: number) { this.v = n + (try r(n)); }
+>y : (accessor) C.y: number
+>n : (parameter) n: number
+>v : (property) C.v: number
+>n : (parameter) n: number
+    m(n: number): R<number> { const a = try r(n); return { kind: "Ok", value: a }; }
+>m : (method) C.m(n: number): R<number>
+>n : (parameter) n: number
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>a : const a: number
+>r : function r(n: number): R<number>
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>a : const a: number
+export const o = {
+>o : const o: {
+>       v: number;
+>       w: number;
+>       z: number;
+>   }
+    v: 0,
+>v : (property) v: number
+    set w(n: number) { const a = try r(n); this.v = a; },
+>w : (accessor) w: number
+>n : (parameter) n: number
+>a : const a: any
+>v : (property) v: number
+>a : const a: any
+    set z(n: number) { this.v = n + (try r(n)); },
+>z : (accessor) z: number
+>n : (parameter) n: number
+>v : (property) v: number
+>n : (parameter) n: number
+

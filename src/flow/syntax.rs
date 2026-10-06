@@ -111,6 +111,7 @@ pub(crate) enum FunctionTarget {
     Ordinary,
     Constructor,
     Generator,
+    Setter,
     StaticBlock,
     ClassElement,
 }
@@ -320,6 +321,8 @@ pub(super) fn function_target_brace(tokens: &[Token], brace: usize) -> Option<Fu
     if facts.function_body() {
         Some(if facts.constructor_body() {
             FunctionTarget::Constructor
+        } else if facts.setter_body() {
+            FunctionTarget::Setter
         } else if facts.generator_body() {
             FunctionTarget::Generator
         } else {

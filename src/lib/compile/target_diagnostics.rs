@@ -208,6 +208,11 @@ fn try_placement_message(
              ordinary function return",
             help,
         ),
+        (EvaluationOwner::Setter, _) => (
+            "`try` cannot be used in a setter — a setter's return value is discarded, so its \
+             `Err` propagation could not reach the caller",
+            help,
+        ),
         (EvaluationOwner::Generator, _) => (
             "`try` cannot be used in a generator — its `Err` propagation requires an \
              ordinary function return",

@@ -282,6 +282,7 @@ pub(super) enum FunctionKind {
     Ordinary,
     Generator,
     Constructor,
+    Setter,
 }
 
 /// A class body, positioned at one member; `function` is the kind of the
@@ -344,6 +345,7 @@ impl Machine<'_> {
             FunctionKind::Ordinary => {}
             FunctionKind::Generator => self.mark(TokenFacts::GENERATOR_BODY),
             FunctionKind::Constructor => self.mark(TokenFacts::CONSTRUCTOR_BODY),
+            FunctionKind::Setter => self.mark(TokenFacts::SETTER_BODY),
         }
     }
 
@@ -1336,7 +1338,14 @@ impl Machine<'_> {
                         _ => false,
                     };
                     if modifier {
-                        self.push_frame(Frame::ClassBody(member));
+                        self.push_frame(Frame::ClassBody(ClassMember {
+                            function: if tok.text == "set" {
+                                FunctionKind::Setter
+                            } else {
+                                member.function
+                            },
+                            ..member
+                        }));
                     } else {
                         self.mark(TokenFacts::MEMBER);
                         self.push_frame(Frame::ClassBody(ClassMember {

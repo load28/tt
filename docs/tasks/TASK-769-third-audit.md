@@ -22,7 +22,7 @@ request validation. Fix each in the layer that owns it.
   file outside the working directory (R3L8); non-ASCII paths in the
   language service's URIs (R3E1); the outline's and navigation targets'
   position conversions (R3E2); an empty match body (R3E6); TypeScript in a
-  pipeline that does not parse (R3E7).
+  pipeline that does not parse (R3E7); `try` in a setter (R3C8).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -178,6 +178,21 @@ request validation. Fix each in the layer that owns it.
   step after a stand-in receiver) in an async generator method, where
   `yield`, `await` and `super` are as valid as in the surrounding code; a
   failure maps back to its source byte.
+
+### Decision 12: A setter is not a `try` target
+
+- **Context**: `set x(n) { const a = try r(n); ... }` compiled without a
+  tt diagnostic; the output returned the `Err` from the setter, which
+  TypeScript rejects (TS2408) and JavaScript discards, so the failure was
+  lost.
+- **Decision and rationale**: The reference already rejects targets whose
+  return cannot carry the `Err` (a constructor, a generator, a static
+  block). A setter's return value is discarded by the assignment that
+  calls it (ECMA-262 §10.2.1, the `[[Set]]` result is the assigned value),
+  so it joins them: the lexer marks class and object-literal setter bodies,
+  the checker's function targets and the planner's evaluation owners
+  report `try-placement` for a statement or value `try` there. The
+  reference lists the setter.
 
 ## Work log
 

@@ -989,9 +989,23 @@ impl VisitAstPath for ParentCollector {
 
     fn visit_function<'ast: 'r, 'r>(&mut self, node: &'ast Function, path: &mut AstNodePath<'r>) {
         self.function_depth += 1;
+        let setter = matches!(
+            path.iter().last(),
+            Some(swc_ecma_visit::AstParentNodeRef::ClassMethod(method, _))
+                if method.kind == swc_ecma_ast::MethodKind::Setter
+        ) || matches!(
+            path.iter().last(),
+            Some(swc_ecma_visit::AstParentNodeRef::PrivateMethod(method, _))
+                if method.kind == swc_ecma_ast::MethodKind::Setter
+        ) || matches!(
+            path.iter().last(),
+            Some(swc_ecma_visit::AstParentNodeRef::SetterProp(..))
+        );
         let target = self.function_target_of(
             node.span,
-            if node.is_generator {
+            if setter {
+                EvaluationOwner::Setter
+            } else if node.is_generator {
                 EvaluationOwner::Generator
             } else {
                 EvaluationOwner::FunctionBody

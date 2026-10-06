@@ -675,6 +675,7 @@ fn mixed_syntax_matrix_covers_every_host_protocol_class() {
             EvaluationOwner::FunctionBody => "function",
             EvaluationOwner::Constructor => "constructor",
             EvaluationOwner::Generator => "generator",
+            EvaluationOwner::Setter => "setter",
             EvaluationOwner::ParameterInitializer => "parameter",
             EvaluationOwner::ClassInitializer => "class-field",
             EvaluationOwner::ClassDefinition => "class-definition",

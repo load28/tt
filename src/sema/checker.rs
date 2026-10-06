@@ -205,6 +205,12 @@ impl Checker<'_> {
                 self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
                 return;
             }
+            Some(crate::flow::FunctionTarget::Setter) => (
+                "`try` cannot be used in a setter — a setter's return value is discarded, so its \
+                 `Err` propagation could not reach the caller"
+                    .to_string(),
+                "move the propagation into an ordinary function, or handle the Result explicitly",
+            ),
             Some(
                 crate::flow::FunctionTarget::Constructor | crate::flow::FunctionTarget::Generator,
             ) => (
