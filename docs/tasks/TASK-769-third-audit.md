@@ -514,6 +514,22 @@ request validation. Fix each in the layer that owns it.
 - 2026-10-06: Started from the third audit's reports. Merged
   `fix/cli-audit` (TASK-764), which this branch's CLI work builds on, and
   resolved the index and reference conflicts.
+- 2026-10-06: Fixed the CLI findings (Decisions 1-8), the editor findings
+  R3E1, R3E2 (outline), R3E6, and R3E7 (Decisions 9-11), and the compiler
+  findings R3C8, R3C9, and R3C2 (Decisions 12-14).
+- 2026-10-06: Fixed R3C3, R3C15, and the `super` head regression
+  (Decisions 15-17), then R3C1, R3C5, R3C6, and R3C7 (Decisions 18-21).
+- 2026-10-06: A full run found three regressions from the work above
+  (Issues 2-4); fixed them (Decision 22) and continued with R3C10, R3C4's
+  pipeline form, and R3C14 (Decisions 23-27).
+- 2026-10-06: Re-ran the 51 round-3 fuzz failures; reduced the remaining
+  ones and fixed them (Decisions 28-34). All 51 now compile and run.
+- 2026-10-06: Fixed R3E5 and the unlocated boundary failure (Decisions
+  35-36); re-ran 490 freshly generated differential fuzz programs: the
+  remaining reports were rejections the language documents (a ternary
+  branch holding an unparenthesized pipeline, a destructuring default
+  holding a `match`), the documented looser binding of `|>` the generator
+  did not model, or generator input with `await` in a non-async function.
 
 ## Issues and resolutions
 
@@ -527,10 +543,83 @@ request validation. Fix each in the layer that owns it.
   test pins that all three are written. The engine serves each canonical
   source once, so no remaining input layout reaches the collision branch.
 
+### Issue 2: Shadowing a `try` operand overflowed the stack
+
+- **Symptom**: `stack::tests::every_nested_tt_construct_compiles_without_the_callers_stack`
+  aborted with a stack overflow on 300 nested `try h(...)`.
+- **Cause**: Decision 24 projects a statement `try`'s operand through the
+  shadow projection, whose recursion did not run on the compiler stack.
+- **Resolution**: The shadow projection grows the stack as the main
+  projection does.
+
+### Issue 3: A ternary branch closed a concise arrow's block
+
+- **Symptom**: `a_tt_value_anywhere_in_a_concise_arrow_body_keeps_the_block_balanced`
+  stopped with `LayoutScopeMissing` for `x ? M : 0`.
+- **Cause**: Decision 19 writes a source branch through the source walk,
+  which closed the enclosing arrow's block at the branch's end.
+- **Resolution**: Decision 22.
+
+### Issue 4: Two tests pinned behaviour this task changed on purpose
+
+- **Symptom**: `a_position_only_diagnostic_keeps_a_zero_end_over_the_protocol`
+  and `types_names_each_file_of_a_declaration_collision_once` failed.
+- **Cause**: The first used `match (A.X) { }`, which Decision 10 now
+  reports as a located malformed match; the second pinned the collision
+  of two directory inputs, which Decision 1 removed.
+- **Resolution**: The first now uses another position-only diagnostic;
+  the second pins that both inputs' sidecars are written apart.
+
+### Issue 5: The first plan for Decision 34 dropped call completion
+
+- **Symptom**: Three baselines lost a call pushed into each `match` arm.
+- **Cause**: Nesting the `match` under the outer `try` moved it out of
+  the plan that completes the call in each arm.
+- **Resolution**: The inner `try` joins the host plan instead (Decision
+  34); the three baselines are unchanged.
+
 ## Regression test (fails before the fix)
 
-- **Path**: pending
-- **Observed failure**: pending
+Each case below was run against the code before its fix and failed as
+stated (a crash, output that does not parse, a wrong runtime result, or a
+missing or misplaced diagnostic).
+
+- **Path**: `tests/cases/compiler/aPatternSubjectWithAPlainTemplateAfterAMatchIsLowered.tt`
+  - **Observed failure**: internal compiler error "match reached
+    expression emission without a host rewrite".
+- **Path**: `tests/cases/compiler/anArrowStepWhoseTemplateBodyHoldsAMatchIsLowered.tt`
+  - **Observed failure**: verify-failed, "unbalanced TypeScript delimiter".
+- **Path**: `tests/cases/compiler/aCallbackWithAnIfLetBesideAHoistedArgumentIsLowered.tt`
+  - **Observed failure**: verify-failed, "Expected '(', got 'let'".
+- **Path**: `tests/cases/compiler/aPipelineStepWithAnIfLetCallbackAndAMatchIsLowered.tt`
+  - **Observed failure**: lowering-plan-failed, "a tt node's source span
+    0..0 is invalid".
+- **Path**: `tests/cases/compiler/anIfLetSubjectPipingAMatchIsOnePipeline.tt`
+  - **Observed failure**: stray-pipe at the `|>`.
+- **Path**: `tests/cases/compiler/anOuterTryRunsAMatchAndAnInnerTryInOrder.tt`
+  - **Observed failure**: internal compiler error `SourceEmittedTwice`.
+- **Path**: `tests/cases/compiler/anOuterTryRunsItsOperandsInOrderAroundAnInnerTry.tt`
+  - **Observed failure**: verify-failed, "Expression expected", with the
+    inner `try` run before the operand written before it.
+- **Path**: `tests/cases/compiler/aValBindingPassedThroughAWrappedCalleeIsReported.tt`
+  - **Observed failure**: no `val-pass` error for the five wrapped calls.
+- **Path**: `tests/cases/compiler/anAwaitInANestedArrowDoesNotMakeAResultBlockAsync.tt`
+  - **Observed failure**: verify-failed, "await isn't allowed in non-async
+    function".
+- **Path**: `tests/cases/compiler/aSpreadAppliesToTheWholePipeline.tt`
+  - **Observed failure**: source-not-typescript, "Parenthesized expression
+    cannot contain spread operator".
+- **Path**: `tests/cases/compiler/aResultBlockReturningANestedMatchWritesTheInnerMatch.tt`
+  - **Observed failure**: verify-failed, "Expression expected" (the inner
+    subject was written empty).
+- **Path**: `tests/cases/compiler/anOrPatternFieldMissingFromOneCaseIsReportedAtThatCase.tt`
+  - **Observed failure**: the error was reported at the match head as a
+    missing `kind` discriminant.
+- **Path**: `tests/cases/compiler/anAwaitOutsideAnAsyncFunctionInAResultBoundaryIsLocated.tt`
+  - **Observed failure**: verify-failed with no position.
+- The other cases added under `tests/cases/compiler/` by this task, and the
+  CLI, server, and language tests named in the decisions, were checked the
+  same way when their fix was made.
 
 ## Verification
 
