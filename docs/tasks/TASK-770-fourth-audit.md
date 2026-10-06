@@ -1,9 +1,9 @@
 # TASK-770: Fix defects found by the fourth audit
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-06
-- **Completed**: —
-- **Commit**: —
+- **Completed**: 2026-10-06
+- **Commit**: see `git log --grep TASK-770`
 
 ## Purpose
 
@@ -422,11 +422,44 @@ and repeats the audit until it finds none.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test --no-fail-fast`: every target passed.
+- [x] Baseline changes reviewed and committed with the change. The changed
+  case baselines and fixtures add the captures' `typeof` annotations, the
+  `$tt_spread` helper, and a template substitution's string conversion.
+  `tsc` on the emitted TypeScript also reports an unresolved callee in its
+  type query. No runtime output changed.
+
+## Changed files
+
+- CLI and server: `src/server.rs` (and the CLI files of the first commit:
+  `src/main/command.rs`, `src/main/typed.rs`, `src/main/build.rs`,
+  `src/main/ownership.rs`, `src/main/modes.rs`).
+- TypeScript backend: `src/typescript/host.mjs`.
+- Projection and evaluation: `src/program_syntax.rs`,
+  `src/program_syntax/collector.rs`, `src/program_syntax/protocol.rs`,
+  `src/program_syntax/visit.rs`, `src/evaluation_ir.rs`,
+  `src/evaluation_ir/evaluation.rs`, `src/evaluation_ir/planning.rs`.
+- Codegen: `src/codegen/core/mod.rs`, `src/codegen/core/planning.rs`,
+  `src/codegen/core/emitter/mod.rs`, `src/codegen/core/emitter/host.rs`,
+  `src/codegen/core/emitter/source.rs`,
+  `src/codegen/core/emitter/expression.rs`, `src/codegen/rope.rs`,
+  `src/codegen/rope/builder.rs`, `src/codegen/contextual.rs`,
+  `src/lib/compile.rs`, `src/lib/mapped.rs`.
+- Engine: `src/engine/completions.rs`, `src/engine/declarations.rs`,
+  `src/engine/projection.rs`, `src/engine/semantics.rs`,
+  `src/engine/semantics/report.rs`, `src/engine/semantics/translate.rs`,
+  `src/engine/language.rs`, `src/engine/language/project.rs`,
+  `src/engine/language/project/completion.rs`,
+  `src/engine/language/service.rs`.
+- Tests: `tests/cli.rs`, `tests/native/cases_07.rs`,
+  `tests/native/cases_10.rs`, `tests/compile/cases_11.rs`, the new cases
+  under `tests/cases/compiler/` and `tests/cases/editor/`, their baselines,
+  the changed baselines and fixtures, and
+  `fuzz/regressions/compile_any_bytes/50ac852c043fb9d7.tt`.
 
 ## Result
 
-In progress.
+Complete. Every finding of the fourth audit is fixed here or moved to
+TASK-771 (see the work log).
