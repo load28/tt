@@ -201,6 +201,7 @@ pub struct UnresolvedName {
     /// a match pattern. `None` for `if let` and let-else sites, which have no
     /// exhaustiveness or match-glue consequences to suppress.
     pub match_owner: Option<usize>,
+    pub(crate) replacement: String,
 }
 
 /// What kind of name an [`UnresolvedName`] is.
@@ -719,6 +720,7 @@ fn attach_resolution(
             origin: variant_origin(miss.against),
             tag: miss.tag.clone(),
             suggestion: miss.suggestion.clone(),
+            replacement: miss.replacement.clone(),
             match_owner,
         });
     }

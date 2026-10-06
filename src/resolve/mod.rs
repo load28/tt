@@ -347,6 +347,7 @@ pub struct UnresolvedUse {
     /// only: a case suggestion comes from `against`'s own variants, a
     /// field suggestion from the named case's own fields.
     pub suggestion: String,
+    pub(crate) replacement: String,
 }
 
 /// What kind of name an [`UnresolvedUse`] is.
@@ -708,6 +709,7 @@ impl Resolver {
                         kind: UseKind::Case,
                         against: variant_def,
                         tag: None,
+                        replacement: suggestion.clone(),
                         suggestion,
                     });
                 }
@@ -786,6 +788,12 @@ impl Resolver {
                     );
                     self.resolution.uses.insert(field_pat.node, Res::Unresolved);
                     if let Some(suggestion) = suggestion {
+                        let replacement = match &field_pat.binding {
+                            FieldBinding::Named { alias: None } => {
+                                format!("{suggestion}: {}", field_pat.name)
+                            }
+                            _ => suggestion.clone(),
+                        };
                         self.resolution.unresolved.push(UnresolvedUse {
                             site,
                             node: field_pat.node,
@@ -794,6 +802,7 @@ impl Resolver {
                             against: variant.variant_def,
                             tag: Some(variant_name.clone()),
                             suggestion,
+                            replacement,
                         });
                     }
                 }

@@ -187,7 +187,7 @@ pub(crate) fn resolution_errors(analyses: &crate::analysis::PatternAnalyses) -> 
                     hint,
                     unresolved.start,
                     unresolved.end,
-                    unresolved.suggestion.clone(),
+                    unresolved.replacement.clone(),
                 ),
         );
     }
