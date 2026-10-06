@@ -1119,6 +1119,15 @@ impl<'a> Emitter<'a> {
         }
     }
 
+    pub(super) fn defers_arm_values(&self, expr: ExprId) -> bool {
+        self.compose_rewrites
+            .iter()
+            .flat_map(|rewrite| &rewrite.actions)
+            .any(|action| {
+                matches!(action, ComposeAction::Value(value) if value.expr == expr && value.defer_arm_values)
+            })
+    }
+
     pub(super) fn emit_expr(&self, expr: ExprId) -> Rope<'a> {
         crate::stack::grow(|| self.emit_expr_grown(expr))
     }
@@ -1280,9 +1289,7 @@ impl<'a> Emitter<'a> {
                 out.anchored(kind, start, end, extent, self.emit_inline_match(expr));
                 return out;
             }
-            if self.compose_rewrites.iter().flat_map(|rewrite| &rewrite.actions).any(|action| {
-                matches!(action, ComposeAction::Value(value) if value.expr == expr && value.defer_arm_values)
-            }) {
+            if self.defers_arm_values(expr) {
                 let (kind, start, end, extent) = self.value_anchor(expr);
                 let mut out = Rope::new();
                 out.anchored(kind, start, end, extent, self.emit_selected_arm_values(expr, slot));

@@ -1090,8 +1090,13 @@ impl<'a> Emitter<'a> {
                         .get(&expr)
                         .or_else(|| delivered.then(|| &self.value_slots[&expr]))
                     {
-                        let mut slot = Rope::new();
-                        slot.push_lit(name.clone());
+                        let slot = if self.defers_arm_values(expr) {
+                            self.emit_selected_arm_values(expr, name)
+                        } else {
+                            let mut slot = Rope::new();
+                            slot.push_lit(name.clone());
+                            slot
+                        };
                         out.anchored(kind, start, head_end, extent, slot);
                     } else {
                         let _active = self.active_structured_exprs.enter(expr);
