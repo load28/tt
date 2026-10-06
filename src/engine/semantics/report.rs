@@ -225,7 +225,9 @@ pub(crate) fn report(
             });
             continue;
         };
-        if projection::diagnostic_intersects_recovery(file, diagnostic) {
+        if projection::diagnostic_intersects_recovery(file, diagnostic)
+            || projection::diagnostic_restates_source(file, diagnostic)
+        {
             continue;
         }
         if projection::diagnostic_intersects_tt_error(file, diagnostic) {

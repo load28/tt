@@ -239,6 +239,10 @@ fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
         anchor.out = shifted(edits, anchor.out, true);
         anchor.end = shifted(edits, anchor.end, false);
     }
+    for (start, end) in &mut emit.restatements {
+        *start = shifted(edits, *start, true);
+        *end = shifted(edits, *end, false);
+    }
     for (slot, annotation) in &mut emit.asserted_slots {
         *slot = shifted(edits, *slot, true);
         *annotation = shifted(edits, *annotation, false);

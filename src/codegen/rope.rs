@@ -58,6 +58,8 @@ pub(crate) enum MarkKind {
         declared: bool,
     },
     SharedBindingEnd,
+    RestatementStart,
+    RestatementEnd,
     /// The glue after it is written for the source at `src`, a construct
     /// part that starts there (a match arm), so the printer lays it out as
     /// that source's: on one line with it when a directive governs that line.
@@ -739,6 +741,7 @@ impl<'a> TargetFile<'a> {
         let mut selector_slots = Vec::new();
         let mut operand_slots = Vec::new();
         let mut asserted_slots = Vec::new();
+        let mut restatements: Vec<(usize, usize)> = Vec::new();
         let mut declared_names: Vec<DeclaredName> = Vec::new();
         let mut shared_bindings: Vec<SharedBinding> = Vec::new();
         let mut destructured_lists: Vec<crate::DestructuredList> = Vec::new();
@@ -953,6 +956,22 @@ impl<'a> TargetFile<'a> {
                         declared: *declared,
                     }),
                 TargetPiece::Mark {
+                    kind: MarkKind::RestatementStart,
+                    ..
+                } => restatements.push((out.len(), out.len())),
+                TargetPiece::Mark {
+                    kind: MarkKind::RestatementEnd,
+                    ..
+                } => {
+                    restatements
+                        .last_mut()
+                        .filter(|(start, end)| start == end)
+                        .unwrap_or_else(|| {
+                            crate::ice::bug!("restatement end has no matching start")
+                        })
+                        .1 = out.len();
+                }
+                TargetPiece::Mark {
                     kind: MarkKind::SharedBindingEnd,
                     ..
                 } => {
@@ -1027,6 +1046,7 @@ impl<'a> TargetFile<'a> {
             selector_slots,
             operand_slots,
             asserted_slots,
+            restatements,
             generated_names: std::collections::HashSet::new(),
             declared_names,
             shared_bindings,

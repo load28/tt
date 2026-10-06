@@ -546,6 +546,7 @@ pub(crate) struct ServiceDoc {
     /// a provisional consequence.
     tt_diagnostics: Vec<crate::Diagnostic>,
     generated_names: HashSet<String>,
+    restatements: Vec<(usize, usize)>,
     /// Glue written at a source point, for edits that land in it.
     inserted: Vec<crate::InsertedGlue>,
     /// Whether what TypeScript says about `code` is what it says about the

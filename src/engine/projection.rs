@@ -804,6 +804,23 @@ pub(crate) fn origin_intersects_tt_error(
         })
 }
 
+pub(crate) fn restated(restatements: &[(usize, usize)], start: usize, end: usize) -> bool {
+    restatements
+        .iter()
+        .any(|&(from, to)| from <= start && end <= to)
+}
+
+pub(crate) fn diagnostic_restates_source(
+    file: &ProjectedDocument,
+    diagnostic: &crate::typescript::backend::Diagnostic,
+) -> bool {
+    restated(
+        &file.emit.restatements,
+        mapper::from_utf16(&file.emit.code, diagnostic.start),
+        mapper::from_utf16(&file.emit.code, diagnostic.end),
+    )
+}
+
 pub(crate) fn diagnostic_intersects_recovery(
     file: &ProjectedDocument,
     diagnostic: &crate::typescript::backend::Diagnostic,

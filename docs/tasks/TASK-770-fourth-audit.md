@@ -152,7 +152,14 @@ and repeats the audit until it finds none.
   `const $tt_v: typeof name = (name);`. A type query names the reference's
   own type at that point, narrowing included, so the call or key checks
   exactly as written. The declaration then carries an explicit annotation,
-  so it takes no contextual annotation.
+  so it takes no contextual annotation. The query restates source text the
+  capture also reads, so an unresolved name drew a second TS2304 there.
+  Mapping the query's name to its source was tried and refused by the
+  emission contract that a source byte reaches the target at most once
+  (`SourceEmittedTwice`). The emission now records the query as a
+  restatement (`MappedEmit::restatements`). The CLI report and the editor
+  drop a diagnostic inside one, because the capture's own read reports the
+  same name at its source.
 
 ### Decision 11: A callee that the call itself reads is left in place
 
@@ -352,8 +359,9 @@ and repeats the audit until it finds none.
   pipeline. Resolution: it applies only to a pipeline with a statement
   form, which a structural parent delivers.
 - **A type query repeated an unresolved name's error.** Symptom: a second
-  TS2304 "in code ttc generated". Resolution: the query's name is mapped
-  to its source (decision 10).
+  TS2304 "in code ttc generated". Mapping the name to its source broke
+  `SourceEmittedTwice`. Resolution: the query is a restatement whose
+  diagnostics are dropped (decision 10).
 
 ## Regression test (fails before the fix)
 

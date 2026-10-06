@@ -2111,7 +2111,7 @@ impl<'a> Emitter<'a> {
         crate::program_syntax::source_entity_name(text, self.source_kind).then(|| {
             let mut query = Rope::new();
             query.push_lit("typeof ");
-            query.push_src(text, source.start);
+            query.push_restatement(text);
             query
         })
     }

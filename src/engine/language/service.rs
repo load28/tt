@@ -38,6 +38,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
             syntax_repairs: Vec::new(),
             tt_diagnostics: Vec::new(),
             generated_names: HashSet::new(),
+            restatements: Vec::new(),
             inserted: Vec::new(),
             faithful: true,
             source_lines: Default::default(),
@@ -85,6 +86,7 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         syntax_repairs: report.syntax_repairs,
         tt_diagnostics: report.diagnostics,
         generated_names: emit.generated_names,
+        restatements: emit.restatements,
         inserted: emit.inserted,
     }
 }
@@ -1284,6 +1286,9 @@ pub(super) fn diagnostic_source_span(
 ) -> Option<(usize, usize, mapper::DiagnosticOrigin)> {
     let sb = mapper::from_utf16(&doc.code, start);
     let eb = mapper::from_utf16(&doc.code, end);
+    if crate::engine::projection::restated(&doc.restatements, sb, eb) {
+        return None;
+    }
     let origin = match doc
         .destructured_lists
         .iter()

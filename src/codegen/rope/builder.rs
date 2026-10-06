@@ -292,6 +292,18 @@ impl<'a> Rope<'a> {
         self.pieces.push(Piece::Close);
     }
 
+    pub(crate) fn push_restatement(&mut self, text: impl Into<Cow<'a, str>>) {
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::RestatementStart,
+        });
+        self.push_lit(text);
+        self.pieces.push(Piece::Mark {
+            src: 0,
+            kind: MarkKind::RestatementEnd,
+        });
+    }
+
     pub(crate) fn push_src(&mut self, text: &'a str, src: usize) {
         if !text.is_empty() {
             self.len += text.len();
@@ -596,6 +608,7 @@ pub(crate) struct Flat {
     pub selector_slots: Vec<usize>,
     pub operand_slots: Vec<usize>,
     pub asserted_slots: Vec<(usize, usize)>,
+    pub restatements: Vec<(usize, usize)>,
     pub generated_names: std::collections::HashSet<String>,
     pub declared_names: Vec<DeclaredName>,
     pub shared_bindings: Vec<SharedBinding>,

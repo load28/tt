@@ -1324,6 +1324,7 @@ impl Project {
                 syntax_repairs: projected.syntax_repairs.clone(),
                 tt_diagnostics: projected.tt_diagnostics.clone(),
                 generated_names: projected.emit.generated_names.clone(),
+                restatements: projected.emit.restatements.clone(),
                 inserted: projected.emit.inserted.clone(),
                 faithful: true,
                 source_lines: Default::default(),
