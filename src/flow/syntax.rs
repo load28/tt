@@ -21,18 +21,36 @@ use super::*;
 /// namespace bodies, control-statement bodies, bare blocks — is
 /// transparent: it never *provides* a boundary, and never blocks an outer
 /// one from counting.
-pub(crate) fn in_function_body(tokens: &[Token], at: usize) -> bool {
-    let mut stack: Vec<bool> = Vec::new();
-    for (k, t) in tokens.iter().enumerate().take(at) {
-        match t.kind {
-            TokenKind::Punct(b'{') => stack.push(function_target_brace(tokens, k).is_some()),
-            TokenKind::Punct(b'}') => {
-                stack.pop();
+#[derive(Default)]
+pub(crate) struct FunctionBodies {
+    stack: Vec<bool>,
+    functions: usize,
+    table: Vec<bool>,
+}
+
+impl FunctionBodies {
+    pub(crate) fn inside(&mut self, tokens: &[Token], at: usize) -> bool {
+        while self.table.len() <= at {
+            let k = self.table.len();
+            crate::work::tick("function body table entries");
+            self.table.push(self.functions > 0);
+            let Some(token) = tokens.get(k) else {
+                break;
+            };
+            match token.kind {
+                TokenKind::Punct(b'{') => {
+                    let is_function = function_target_brace(tokens, k).is_some();
+                    self.functions += usize::from(is_function);
+                    self.stack.push(is_function);
+                }
+                TokenKind::Punct(b'}') if self.stack.pop() == Some(true) => {
+                    self.functions -= 1;
+                }
+                _ => {}
             }
-            _ => {}
         }
+        self.table[at]
     }
-    stack.iter().any(|&is_function| is_function)
 }
 
 /// Number of braced user-written function bodies enclosing a token. This is

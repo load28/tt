@@ -20,6 +20,7 @@ pub(crate) struct ProgramSyntax {
     pub(super) commonjs: bool,
     pub(super) globals: HashMap<SourceSpan, GlobalStatement>,
     pub(super) completion_scopes: Vec<super::completion::CompletionScope>,
+    pub(super) if_tests: Vec<IfTestFacts>,
 }
 
 #[derive(Debug)]
@@ -205,6 +206,11 @@ impl ProgramSyntax {
             &projection.source_segments,
             &projection.completion,
         );
+        let if_tests = if_tests(
+            &parsed.module,
+            parsed.start,
+            &ProjectionSegments::new(projection.source_segments.clone()),
+        );
         let mut collector = ParentCollector::new(
             parsed.start,
             &projection.pending,
@@ -250,6 +256,7 @@ impl ProgramSyntax {
             commonjs,
             globals,
             completion_scopes,
+            if_tests,
         };
         syntax.validate()?;
         Ok(syntax)
@@ -287,6 +294,10 @@ impl ProgramSyntax {
     }
 
     /// What TypeScript's completion rules say at each construct's place.
+    pub(crate) fn if_tests(&self) -> &[IfTestFacts] {
+        &self.if_tests
+    }
+
     pub(crate) fn take_completion_scopes(&mut self) -> Vec<super::completion::CompletionScope> {
         std::mem::take(&mut self.completion_scopes)
     }
@@ -1635,4 +1646,46 @@ impl<'a> ProjectionBuilder<'a> {
         }
         Ok(())
     }
+}
+
+fn if_tests(module: &Module, start: HostOrigin, segments: &ProjectionSegments) -> Vec<IfTestFacts> {
+    use swc_ecma_visit::{Visit, VisitWith};
+
+    struct Collect<'s> {
+        start: HostOrigin,
+        segments: &'s ProjectionSegments,
+        out: Vec<IfTestFacts>,
+    }
+    impl Visit for Collect<'_> {
+        fn visit_if_stmt(&mut self, node: &swc_ecma_ast::IfStmt) {
+            let map = |span: swc_common::Span| {
+                super::protocol::source_span_for_projection(
+                    self.segments,
+                    projected_span(span, self.start),
+                )
+            };
+            let mut test = &*node.test;
+            while let swc_ecma_ast::Expr::Paren(inner) = test {
+                test = &inner.expr;
+            }
+            if let (Some(test), Some(consequent)) = (map(test.span()), map(node.cons.span())) {
+                let alternate = node.alt.as_ref().map(|alternate| map(alternate.span()));
+                if alternate.is_none_or(|alternate| alternate.is_some()) {
+                    self.out.push(IfTestFacts {
+                        test,
+                        consequent,
+                        alternate: alternate.flatten(),
+                    });
+                }
+            }
+            node.visit_children_with(self);
+        }
+    }
+    let mut collect = Collect {
+        start,
+        segments,
+        out: Vec::new(),
+    };
+    module.visit_with(&mut collect);
+    collect.out
 }

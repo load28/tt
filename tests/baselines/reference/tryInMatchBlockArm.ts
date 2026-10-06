@@ -272,34 +272,31 @@ function looped(n: number): TResult<number, string> {
   let i = 0;
   while (true) {
     let $tt_v11: boolean;
-    let $tt_v10: boolean;
-    if ($tt_v10 = i < 2) {
-      let $tt_v9: boolean;
-      {
-        const $tt_m = on();
-        switch ($tt_m) {
-          case true: {
-            const $tt_t7 = read(n);
-            if (!("value" in $tt_t7)) {
-              return $tt_t7;
-            }
-            const v = $tt_t7.value; $tt_v9 = v >= 0; break;
+    
+    if (!(i < 2)) break;
+    let $tt_v9: boolean;
+    {
+      const $tt_m = on();
+      switch ($tt_m) {
+        case true: {
+          const $tt_t7 = read(n);
+          if (!("value" in $tt_t7)) {
+            return $tt_t7;
           }
-          case false: {
-            $tt_v9 = false;
-            break;
-          }
-          default: {
-            throw new Error("tt match: unexpected literal " + $tt_show($tt_m));
-          }
+          const v = $tt_t7.value; $tt_v9 = v >= 0; break;
+        }
+        case false: {
+          $tt_v9 = false;
+          break;
+        }
+        default: {
+          throw new Error("tt match: unexpected literal " + $tt_show($tt_m));
         }
       }
-      $tt_v11 = $tt_v10 && $tt_v9;
-    } else {
-      $tt_v11 = $tt_v10;
     }
-    
-    if (!($tt_v11)) break; {
+    $tt_v11 = $tt_v9;
+    if (!($tt_v11)) break;
+    {
     i++;
   }}
   return { kind: "Ok", value: i };

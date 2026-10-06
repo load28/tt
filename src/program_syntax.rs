@@ -210,6 +210,13 @@ pub(crate) struct HostEvaluationStep {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct IfTestFacts {
+    pub(crate) test: SourceSpan,
+    pub(crate) consequent: SourceSpan,
+    pub(crate) alternate: Option<SourceSpan>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct LoopTestFacts {
     pub(crate) kind: LoopTestKind,
     pub(crate) test: SourceSpan,

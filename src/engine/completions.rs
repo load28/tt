@@ -642,9 +642,21 @@ fn site_context(
             return None;
         }
         return Some(match site {
-            PatternSite::Arm { open, .. } => Context::Case {
-                of: Some(arm_tags(source, tokens, open, prefix)),
-            },
+            PatternSite::Arm { open, start } => {
+                let mut arms = arm_tags(source, tokens, open, prefix);
+                for tag in written_tags(source, &tokens[..before], start, prefix) {
+                    if !arms.tags.contains(&tag) {
+                        arms.tags.push(tag.clone());
+                    }
+                    if !arms.covered.contains(&tag) {
+                        arms.covered.push(tag);
+                    }
+                    if arms.family.is_none() {
+                        arms.family = Some(PatternFamily::Tags);
+                    }
+                }
+                Context::Case { of: Some(arms) }
+            }
             PatternSite::Single { start } => Context::Case {
                 of: Some(single_tags(source, tokens, start, prefix)),
             },
@@ -1064,6 +1076,24 @@ fn headers_tags(
 }
 
 fn single_tags(source: &str, tokens: &[Token], start: usize, prefix: Option<usize>) -> ArmTags {
+    let tags = written_tags(source, tokens, start, prefix);
+    ArmTags {
+        covered: tags.clone(),
+        family: (!tags.is_empty()).then_some(PatternFamily::Tags),
+        tags,
+        literals: Vec::new(),
+        single: true,
+        position: None,
+        statement: true,
+    }
+}
+
+fn written_tags(
+    source: &str,
+    tokens: &[Token],
+    start: usize,
+    prefix: Option<usize>,
+) -> Vec<String> {
     let mut tags: Vec<String> = Vec::new();
     let mut depth = 0usize;
     for index in start..tokens.len() {
@@ -1088,15 +1118,7 @@ fn single_tags(source: &str, tokens: &[Token], start: usize, prefix: Option<usiz
             }
         }
     }
-    ArmTags {
-        covered: tags.clone(),
-        family: (!tags.is_empty()).then_some(PatternFamily::Tags),
-        tags,
-        literals: Vec::new(),
-        single: true,
-        position: None,
-        statement: true,
-    }
+    tags
 }
 
 /// Keep every declaration consistent with the known tags. With no evidence,

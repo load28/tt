@@ -20,9 +20,8 @@ while (true) {
         break;
       }
     }
-  }if ($tt_v0) {
-    $tt_v2 = $tt_v0;
-  } else {
+  }
+  if (!($tt_v0)) {
     let $tt_v1: boolean;
     {
       const $tt_m = b();
@@ -37,7 +36,7 @@ while (true) {
         }
       }
     }
-    $tt_v2 = $tt_v0 || $tt_v1;
+    $tt_v2 = $tt_v1;
+    if (!($tt_v2)) break;
   }
-  
-  if (!($tt_v2)) break; { work(); }}
+  { work(); }}

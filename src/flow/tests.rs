@@ -434,7 +434,7 @@ fn inside(src: &str, needle: &str) -> bool {
         .iter()
         .position(|t| t.span.start >= offset)
         .unwrap_or(tokens.len());
-    in_function_body(&tokens, at)
+    FunctionBodies::default().inside(&tokens, at)
 }
 
 #[test]

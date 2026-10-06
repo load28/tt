@@ -502,3 +502,35 @@ fn a_nested_template_with_a_host_candidate_collects_its_facts_once_per_level() {
     let large = measure(|| crate::parser::parse(&source(200)));
     assert_linear(&small, &large);
 }
+
+fn statement_decisions(count: usize) -> String {
+    let declarations = "variant Opt<T> { Has(item: T), Nope }\n\
+                        import type { TResult } from \"@tt/std\";\n";
+    let bodies: String = (0..count)
+        .map(|i| {
+            format!(
+                "export function e{i}(o: Opt<number>): number {{ const Has(item: g{i}) = o else {{ return 0; }}; return g{i}; }}\n\
+                 export function i{i}(o: Opt<number>): number {{ if let Has(item) = o {{ return item; }} return 0; }}\n\
+                 export function t{i}(r: TResult<number, string>): TResult<number, string> {{ const v = try r; return {{ kind: \"Ok\", value: v }}; }}\n"
+            )
+        })
+        .collect();
+    format!("{declarations}{bodies}")
+}
+
+#[test]
+fn every_request_does_linear_work_in_the_number_of_statement_decisions() {
+    let small = measure(|| every_request(&statement_decisions(100)));
+    let large = measure(|| every_request(&statement_decisions(200)));
+    for name in [
+        "function body table entries",
+        "statements beside an edit",
+        "completion scope candidates",
+    ] {
+        assert!(
+            small.get(name).is_some_and(|&work| work > 0),
+            "{name}: {small:?}"
+        );
+    }
+    assert_linear(&small, &large);
+}

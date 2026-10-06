@@ -280,17 +280,35 @@ pub(super) fn completion_scopes(
         scopes: Vec::new(),
     };
     module.visit_with(&mut walk);
-    pending
+    let entries: Vec<&PendingOverlay> = pending
         .iter()
         .filter(|entry| entry.category != SyntaxCategory::Item)
-        .map(|entry| {
-            let at = entry.projected.start;
-            let scope = walk
-                .scopes
-                .iter()
-                .rev()
-                .find(|(span, _)| span.start <= at && at < span.end)
-                .map(|(_, scope)| scope.clone())
+        .collect();
+    let mut order: Vec<usize> = (0..entries.len()).collect();
+    order.sort_by_key(|&index| entries[index].projected.start);
+    let mut innermost: Vec<Option<usize>> = vec![None; entries.len()];
+    let mut open: Vec<usize> = Vec::new();
+    let mut next = 0;
+    for index in order {
+        let at = entries[index].projected.start;
+        while next < walk.scopes.len() && walk.scopes[next].0.start <= at {
+            open.push(next);
+            next += 1;
+        }
+        innermost[index] = open
+            .iter()
+            .rev()
+            .copied()
+            .inspect(|_| crate::work::tick("completion scope candidates"))
+            .find(|&scope| at < walk.scopes[scope].0.end);
+        open.retain(|&scope| at < walk.scopes[scope].0.end);
+    }
+    entries
+        .into_iter()
+        .zip(innermost)
+        .map(|(entry, innermost)| {
+            let scope = innermost
+                .map(|index| walk.scopes[index].1.clone())
                 .unwrap_or(Scope {
                     declaration: None,
                     function_body: false,

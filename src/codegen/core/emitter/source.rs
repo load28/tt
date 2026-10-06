@@ -220,6 +220,7 @@ impl<'a> Emitter<'a> {
                 .next_if(|rewrite| rewrite.body.end < cursor)
                 .is_some()
             {}
+            self.emit_if_test_closings(cursor, &mut rope);
             self.close_owner_blocks_at(cursor, &mut rope);
             while let Some(_rewrite) = loop_endings.next_if(|rewrite| rewrite.body.end == cursor) {
                 rope.push_lit("}");
@@ -297,7 +298,12 @@ impl<'a> Emitter<'a> {
                 if cursor == rewrite.owner.start {
                     rope.append(self.emit_loop_test_prefix(rewrite));
                 }
-                cursor = rewrite.test.start.min(span.end);
+                cursor = if self.guarded_test_operation(rewrite).is_some() {
+                    rewrite.test.end
+                } else {
+                    rewrite.test.start
+                }
+                .min(span.end);
                 continue;
             }
             if let Some(rewrite) = self
@@ -307,6 +313,10 @@ impl<'a> Emitter<'a> {
                 && self.emitted_loop_tests.claim(rewrite.owner)
             {
                 rope.append(self.emit_loop_test_prefix(rewrite));
+                if self.guarded_test_operation(rewrite).is_some() {
+                    cursor = rewrite.test.end.min(span.end);
+                    continue;
+                }
             }
             if self.loop_region_depth.get() == 0
                 && let Some(operation) = self
@@ -329,7 +339,7 @@ impl<'a> Emitter<'a> {
                 .iter()
                 .find(|rewrite| rewrite.test.end <= cursor && cursor < rewrite.body.start)
             {
-                if cursor == rewrite.test.end {
+                if cursor == rewrite.test.end && self.guarded_test_operation(rewrite).is_none() {
                     rope.push_lit(")) break; ");
                 }
                 cursor = rewrite.body.start.min(span.end);
@@ -441,7 +451,15 @@ impl<'a> Emitter<'a> {
                 .range(cursor.saturating_add(1)..span.end.max(cursor.saturating_add(1)))
                 .next()
                 .map_or(span.end, |(start, _)| *start);
+            let next_if_test = self
+                .guarded_if_tests
+                .values()
+                .flat_map(|facts| [facts.consequent.start, facts.consequent.end])
+                .filter(|boundary| cursor < *boundary && *boundary < span.end)
+                .min()
+                .unwrap_or(span.end);
             let next = next_insertion
+                .min(next_if_test)
                 .min(next_documentation)
                 .min(next_split)
                 .min(next_owner_end)
@@ -456,6 +474,7 @@ impl<'a> Emitter<'a> {
                 cursor = next;
             }
         }
+        self.emit_if_test_closings(span.end, &mut rope);
         self.close_owner_blocks_at(span.end, &mut rope);
         while let Some(rewrite) = compose_endings.next_if(|rewrite| rewrite.owner.end == span.end) {
             rope.append(self.emit_compose_suffix(rewrite));
@@ -753,6 +772,10 @@ impl<'a> Emitter<'a> {
     }
 
     fn statement_end(&self, statement: &Statement) -> Option<usize> {
+        self.statement_span(statement).map(|span| span.end)
+    }
+
+    fn statement_span(&self, statement: &Statement) -> Option<SourceSpan> {
         match statement {
             Statement::Expr(expr) => structured_expr_span(self.semantic, self.core, *expr),
             Statement::Decision(decision) => Some(self.span(decision.extent).into()),
@@ -761,7 +784,6 @@ impl<'a> Emitter<'a> {
             Statement::Opaque(node) => Some(self.span(*node).into()),
             Statement::Import(_) => None,
         }
-        .map(|span: SourceSpan| span.end)
     }
 
     pub(super) fn emit_statement_with_edits(
@@ -896,12 +918,28 @@ impl<'a> Emitter<'a> {
         let Some(end) = self.statement_end(&statements[index]) else {
             return out;
         };
-        let held = statements.iter().any(|statement| {
+        let holds = |statement: &Statement| {
+            crate::work::tick("statements beside an edit");
             matches!(statement, Statement::Opaque(node) if {
                 let span = self.span(*node);
                 span.start <= end && end <= span.end
             })
-        });
+        };
+        let held = statements[index + 1..]
+            .iter()
+            .take_while(|statement| {
+                self.statement_span(statement)
+                    .is_none_or(|span| span.start <= end)
+            })
+            .any(holds)
+            || statements[..index]
+                .iter()
+                .rev()
+                .take_while(|statement| {
+                    self.statement_span(statement)
+                        .is_none_or(|span| end <= span.end)
+                })
+                .any(holds);
         if held {
             return out;
         }
@@ -1351,6 +1389,14 @@ impl<'a> Emitter<'a> {
             let (kind, start, end, extent) = self.value_anchor(expr);
             let mut out = Rope::new();
             let mut rendered_slot = slot.as_str();
+            if self.loop_test_rewrites.iter().any(|rewrite| {
+                self.guarded_test_operation(rewrite)
+                    .is_some_and(|operation| {
+                        operation.parent.start <= start && extent <= operation.parent.end
+                    })
+            }) {
+                rendered_slot = "";
+            }
             if let Some(rewrite) = self.loop_test_rewrites.iter().find(|rewrite| {
                 rewrite.first_expr == expr && rewrite.first_source.start == rewrite.test.start
             }) {
@@ -1365,7 +1411,11 @@ impl<'a> Emitter<'a> {
                     }
                     ComposeAction::Operation(_) | ComposeAction::Value(_) => None,
                 }) {
-                    rendered_slot = self.value_slot_name(operation.result);
+                    rendered_slot = if self.guarded_test_operation(rewrite).is_some() {
+                        ""
+                    } else {
+                        self.value_slot_name(operation.result)
+                    };
                 }
             }
             let mut generated = Rope::new();

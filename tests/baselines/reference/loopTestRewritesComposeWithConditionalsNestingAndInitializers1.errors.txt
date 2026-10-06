@@ -9,4 +9,4 @@ error[ts2304]: Cannot find name 'work'.
   |                                                                   ^^^^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-loopTestRewritesComposeWithConditionalsNestingAndInitializers1.ts(23,27): error TS2304: Cannot find name 'work'.
+loopTestRewritesComposeWithConditionalsNestingAndInitializers1.ts(20,5): error TS2304: Cannot find name 'work'.

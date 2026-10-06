@@ -1,0 +1,44 @@
+//// [aLogicalTestKeepsItsNarrowingBesideATtValue.tt] 42 mapping(s)
+1:19 -> 25:3 len 77  "\nconst L: string[] = [];\nexport function ifAnd(x"...
+4:3 -> 49:3 len 4  "if ("
+4:7 -> 29:7 len 21  "typeof x === \"string\""
+4:39 -> 32:21 len 1  "v"
+4:49 -> 35:20 len 4  "true"
+4:60 -> 39:20 len 5  "false"
+4:67 -> 49:13 len 35  ") {\n    return x.toUpperCase();\n  }"
+6:4 -> 51:6 len 73  "\n  return \"-\";\n}\nexport function ifAndElse(x: st"...
+10:3 -> 77:3 len 4  "if ("
+10:7 -> 57:7 len 21  "typeof x === \"number\""
+10:39 -> 60:21 len 1  "v"
+10:49 -> 63:20 len 4  "true"
+10:60 -> 67:20 len 5  "false"
+10:67 -> 77:13 len 2  ") "
+10:69 -> 77:34 len 24  "{ return x.toFixed(1); }"
+10:93 -> 77:79 len 79  " else { return String(x); }\n}\nexport function if"...
+13:3 -> 104:3 len 4  "if ("
+13:7 -> 82:11 len 10  "y === null"
+13:28 -> 85:23 len 1  "v"
+13:38 -> 88:22 len 5  "false"
+13:50 -> 92:22 len 4  "true"
+13:56 -> 104:11 len 11  ") return 0;"
+13:67 -> 104:24 len 87  "\n  return y.length;\n}\nexport function loops(x: s"...
+18:10 -> 112:11 len 21  "typeof x === \"string\""
+18:42 -> 115:21 len 1  "v"
+18:52 -> 118:20 len 5  "n < 2"
+18:64 -> 122:20 len 5  "false"
+18:73 -> 132:5 len 33  "{ L.push(x.toUpperCase()); n++; }"
+18:106 -> 132:39 len 19  "\n  for (let i = 0; "
+19:19 -> 136:11 len 21  "typeof x === \"string\""
+19:51 -> 139:21 len 1  "v"
+19:61 -> 142:21 len 5  "i < 1"
+19:73 -> 146:21 len 5  "false"
+19:82 -> 133:21 len 3  "i++"
+19:87 -> 156:5 len 28  "{ L.push(x.toLowerCase()); }"
+19:115 -> 156:34 len 16  "\n  let k = 0;\n  "
+21:10 -> 161:11 len 21  "typeof x === \"number\""
+21:42 -> 164:23 len 1  "v"
+21:52 -> 167:23 len 7  "k++ < 1"
+21:66 -> 171:23 len 5  "false"
+21:75 -> 182:5 len 56  "{ L.push(String(x)); if (typeof x === \"number\") "...
+21:131 -> 182:62 len 270  "\n  return L.join();\n}\nconsole.log(ifAnd(\"ab\", V."...
+

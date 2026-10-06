@@ -1,0 +1,250 @@
+=== aLogicalTestKeepsItsNarrowingBesideATtValue.tt ===
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const L: string[] = [];
+>L : const L: string[]
+export function ifAnd(x: string | number, v: V) {
+>ifAnd : function ifAnd(x: string | number, v: V): string
+>x : (parameter) x: string | number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  if (typeof x === "string" && match (v) { A => true, B => false }) {
+>x : (parameter) x: string | number
+>v : (parameter) v: V
+    return x.toUpperCase();
+>x : (parameter) x: string
+>toUpperCase : (method) String.toUpperCase(): string
+export function ifAndElse(x: string | number, v: V) {
+>ifAndElse : function ifAndElse(x: string | number, v: V): string | undefined
+>x : (parameter) x: string | number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  if (typeof x === "number" && match (v) { A => true, B => false }) { return x.toFixed(1); } else { return String(x); }
+>x : (parameter) x: string | number
+>v : (parameter) v: V
+>x : (parameter) x: number
+>toFixed : (method) Number.toFixed(fractionDigits?: number): string
+>String : var String: (value?: any) => string
+>x : (parameter) x: string | number
+export function ifOr(y: string | null, v: V) {
+>ifOr : function ifOr(y: string | null, v: V): number
+>y : (parameter) y: string | null
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  if (y === null || match (v) { A => false, B => true }) return 0;
+>y : (parameter) y: string | null
+>v : (parameter) v: V
+  return y.length;
+>y : (parameter) y: string
+>length : (property) String.length: number
+export function loops(x: string | number, v: V) {
+>loops : function loops(x: string | number, v: V): string
+>x : (parameter) x: string | number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  let n = 0;
+>n : let n: number
+  while (typeof x === "string" && match (v) { A => n < 2, B => false }) { L.push(x.toUpperCase()); n++; }
+>x : (parameter) x: string | number
+>v : (parameter) v: V
+>n : let n: number
+>L : const L: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>x : (parameter) x: string
+>toUpperCase : (method) String.toUpperCase(): string
+>n : let n: number
+  for (let i = 0; typeof x === "string" && match (v) { A => i < 1, B => false }; i++) { L.push(x.toLowerCase()); }
+>i : let i: number
+>x : (parameter) x: string | number
+>v : (parameter) v: V
+>i : let i: number
+>i : let i: number
+>L : const L: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>x : (parameter) x: string
+>toLowerCase : (method) String.toLowerCase(): string
+  let k = 0;
+>k : let k: number
+  while (typeof x === "number" || match (v) { A => k++ < 1, B => false }) { L.push(String(x)); if (typeof x === "number") break; }
+>x : (parameter) x: string | number
+>v : (parameter) v: V
+>k : let k: number
+>L : const L: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>String : var String: (value?: any) => string
+>x : (parameter) x: string | number
+>x : (parameter) x: string | number
+  return L.join();
+>L : const L: string[]
+>join : (method) Array<string>.join(separator?: string): string
+console.log(ifAnd("ab", V.A), ifAnd("ab", V.B), ifAnd(1, V.A));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>ifAnd : function ifAnd(x: string | number, v: V): string
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>ifAnd : function ifAnd(x: string | number, v: V): string
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>ifAnd : function ifAnd(x: string | number, v: V): string
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+console.log(ifAndElse(2, V.A), ifAndElse(2, V.B), ifAndElse("s", V.A));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>ifAndElse : function ifAndElse(x: string | number, v: V): string | undefined
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>ifAndElse : function ifAndElse(x: string | number, v: V): string | undefined
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>ifAndElse : function ifAndElse(x: string | number, v: V): string | undefined
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+console.log(ifOr("abc", V.A), ifOr("abc", V.B), ifOr(null, V.A));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>ifOr : function ifOr(y: string | null, v: V): number
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>ifOr : function ifOr(y: string | null, v: V): number
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>ifOr : function ifOr(y: string | null, v: V): number
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+console.log(loops("Ab", V.A), loops(3, V.B));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>loops : function loops(x: string | number, v: V): string
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>loops : function loops(x: string | number, v: V): string
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+

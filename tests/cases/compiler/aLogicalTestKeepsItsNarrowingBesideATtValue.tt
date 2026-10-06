@@ -1,0 +1,28 @@
+// @run: aLogicalTestKeepsItsNarrowingBesideATtValue.tt
+variant V { A, B }
+const L: string[] = [];
+export function ifAnd(x: string | number, v: V) {
+  if (typeof x === "string" && match (v) { A => true, B => false }) {
+    return x.toUpperCase();
+  }
+  return "-";
+}
+export function ifAndElse(x: string | number, v: V) {
+  if (typeof x === "number" && match (v) { A => true, B => false }) { return x.toFixed(1); } else { return String(x); }
+}
+export function ifOr(y: string | null, v: V) {
+  if (y === null || match (v) { A => false, B => true }) return 0;
+  return y.length;
+}
+export function loops(x: string | number, v: V) {
+  let n = 0;
+  while (typeof x === "string" && match (v) { A => n < 2, B => false }) { L.push(x.toUpperCase()); n++; }
+  for (let i = 0; typeof x === "string" && match (v) { A => i < 1, B => false }; i++) { L.push(x.toLowerCase()); }
+  let k = 0;
+  while (typeof x === "number" || match (v) { A => k++ < 1, B => false }) { L.push(String(x)); if (typeof x === "number") break; }
+  return L.join();
+}
+console.log(ifAnd("ab", V.A), ifAnd("ab", V.B), ifAnd(1, V.A));
+console.log(ifAndElse(2, V.A), ifAndElse(2, V.B), ifAndElse("s", V.A));
+console.log(ifOr("abc", V.A), ifOr("abc", V.B), ifOr(null, V.A));
+console.log(loops("Ab", V.A), loops(3, V.B));

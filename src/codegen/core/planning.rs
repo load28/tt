@@ -437,6 +437,7 @@ pub(super) struct TargetRewritePlan {
     pub(super) match_raise_name: String,
     pub(super) match_show_name: String,
     pub(super) spread_name: String,
+    pub(super) guarded_if_tests: HashMap<SourceSpan, crate::program_syntax::IfTestFacts>,
     pub(super) host_error: String,
     pub(super) host_json: String,
     pub(super) host_string: String,
@@ -1130,6 +1131,50 @@ impl TargetRewritePlan {
         };
         let all_values = || compose_values().chain(loop_values());
         let all_operations = || compose_operations().chain(loop_operations());
+        let guarded_loop_tests: HashSet<SourceSpan> = loop_tests
+            .iter()
+            .flat_map(|rewrite| {
+                rewrite
+                    .actions
+                    .iter()
+                    .filter_map(move |action| match action {
+                        ComposeAction::Operation(operation)
+                            if operation.parent == rewrite.test
+                                && matches!(
+                                    operation.kind,
+                                    PlannedConditionalKind::LogicalAnd
+                                        | PlannedConditionalKind::LogicalOr
+                                ) =>
+                        {
+                            Some(operation.parent)
+                        }
+                        _ => None,
+                    })
+            })
+            .collect();
+        let guarded_if_tests: HashMap<SourceSpan, crate::program_syntax::IfTestFacts> = composes
+            .iter()
+            .filter_map(|rewrite| match rewrite.actions.last() {
+                Some(ComposeAction::Operation(operation)) => Some((rewrite, operation)),
+                _ => None,
+            })
+            .filter_map(|(rewrite, operation)| {
+                let facts = lowering
+                    .if_tests()
+                    .iter()
+                    .find(|facts| facts.test == operation.parent)?;
+                let end = facts.alternate.unwrap_or(facts.consequent).end;
+                let guarded = operation.outer.is_empty()
+                    && rewrite.owner.start < facts.test.start
+                    && rewrite.owner.end == end
+                    && match operation.kind {
+                        PlannedConditionalKind::LogicalAnd => true,
+                        PlannedConditionalKind::LogicalOr => facts.alternate.is_none(),
+                        _ => false,
+                    };
+                guarded.then_some((operation.parent, *facts))
+            })
+            .collect();
         // owner-slot and compose rewrites hoist the value's control flow
         // to a prelude before the owner; arrow-return rewrites restructure
         // the value in place, so they relocate nothing. A conditional
@@ -1391,11 +1436,20 @@ impl TargetRewritePlan {
                     jsx_child: false,
                     anchor: Some(primary),
                     claim: false,
-                    rewrite: matches!(
+                    rewrite: if matches!(
                         operation.kind,
                         PlannedConditionalKind::LogicalAssignment { .. }
-                    )
-                    .then(String::new),
+                    ) {
+                        Some(String::new())
+                    } else if operation.kind == PlannedConditionalKind::LogicalOr
+                        && guarded_if_tests.contains_key(&operation.parent)
+                    {
+                        Some("true".to_owned())
+                    } else if guarded_loop_tests.contains(&operation.parent) {
+                        Some(String::new())
+                    } else {
+                        None
+                    },
                 }
             })
             .collect();
@@ -1722,6 +1776,7 @@ impl TargetRewritePlan {
             match_raise_name: lowering.match_raise_name().to_owned(),
             match_show_name: lowering.match_show_name().to_owned(),
             spread_name: lowering.spread_name().to_owned(),
+            guarded_if_tests,
             host_error: lowering.host_global("Error"),
             host_json: lowering.host_global("JSON"),
             host_string: lowering.host_global("String"),

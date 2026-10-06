@@ -63,6 +63,8 @@ pub(super) struct Emitter<'a> {
     pub(super) match_raise_name: String,
     pub(super) match_show_name: String,
     pub(super) spread_name: String,
+    pub(super) guarded_if_tests: HashMap<SourceSpan, crate::program_syntax::IfTestFacts>,
+    pub(super) if_test_closings: RefCell<Vec<(usize, String)>>,
     pub(super) host_error: String,
     pub(super) host_json: String,
     pub(super) host_string: String,

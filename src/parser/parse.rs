@@ -36,6 +36,7 @@ pub(crate) fn lex_and_parse_with_kind(
             host_rejected_vals: host_rejected_vals.to_vec(),
             flow_queries: crate::flow::FlowBodyQueries::default(),
             passed_results: RefCell::default(),
+            function_bodies: RefCell::default(),
         }
         .parse_tokens(&tokens, 0, src.len())
     };
@@ -313,9 +314,18 @@ pub(crate) struct Parser<'a> {
     host_rejected_vals: Vec<usize>,
     flow_queries: crate::flow::FlowBodyQueries,
     passed_results: RefCell<HashSet<usize>>,
+    function_bodies: RefCell<HashMap<(usize, usize), crate::flow::FunctionBodies>>,
 }
 
 impl<'a> Parser<'a> {
+    fn in_function_body(&self, tokens: &[Token], at: usize) -> bool {
+        self.function_bodies
+            .borrow_mut()
+            .entry((tokens.as_ptr() as usize, tokens.len()))
+            .or_default()
+            .inside(tokens, at)
+    }
+
     pub(super) fn new(src: &'a str) -> Self {
         Parser {
             src,
@@ -325,6 +335,7 @@ impl<'a> Parser<'a> {
             host_rejected_vals: Vec::new(),
             flow_queries: crate::flow::FlowBodyQueries::default(),
             passed_results: RefCell::default(),
+            function_bodies: RefCell::default(),
         }
     }
 }
@@ -800,7 +811,7 @@ impl Parser<'_> {
                 }
                 match tries::parse_try_stmt(Cursor::new(self, tokens, i + 1, end), tok.span) {
                     Claim::Parsed((cur, byte_end, mut stmt)) => {
-                        stmt.in_function = crate::flow::in_function_body(tokens, i);
+                        stmt.in_function = self.in_function_body(tokens, i);
                         flush_verbatim(&mut segments, seg_start, tok.span.start);
                         segments.push(Segment::Try(stmt));
                         seg_start = byte_end;
@@ -824,7 +835,7 @@ impl Parser<'_> {
                 if let Some((cur, byte_end, mut stmt)) =
                     tries::parse_try_decl(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
-                    stmt.in_function = crate::flow::in_function_body(tokens, i);
+                    stmt.in_function = self.in_function_body(tokens, i);
                     let mut first = i;
                     while first > 0
                         && tokens[first - 1].span.start >= seg_start
@@ -849,7 +860,7 @@ impl Parser<'_> {
                     && let Some((cur, byte_end, mut stmt)) =
                         lets::parse_let_else(Cursor::new(self, tokens, i + 1, end), tok.span)
                 {
-                    stmt.in_function = crate::flow::in_function_body(tokens, i);
+                    stmt.in_function = self.in_function_body(tokens, i);
                     if !stmt.in_function
                         && i > 0
                         && tokens[i - 1].span.start >= seg_start
@@ -875,7 +886,7 @@ impl Parser<'_> {
             if iflets::if_let_pattern(self.src, tokens, i).is_some() {
                 let parsed = iflets::parse_if_let(Cursor::new(self, tokens, i + 1, end), tok.span);
                 if let Ok((cur, byte_end, mut stmt)) = parsed {
-                    stmt.in_function = crate::flow::in_function_body(tokens, i);
+                    stmt.in_function = self.in_function_body(tokens, i);
                     stmt.expression_position = !tok.facts.statement_start();
                     if stmt.expression_position {
                         recoveries.push(RecoveryNode {

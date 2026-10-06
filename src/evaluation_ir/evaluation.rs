@@ -60,6 +60,7 @@ impl EvaluationFile {
             occupied_names: syntax.occupied_names().map(str::to_owned).collect(),
             declared_names: syntax.declared_names(),
             module_declared_names: syntax.module_declared_names(),
+            if_tests: syntax.if_tests().to_vec(),
             directive_prologue_end: syntax.directive_prologue_end(),
             tt_spans: syntax
                 .core_contexts()
@@ -1097,6 +1098,7 @@ impl EvaluationFile {
             match_show_name,
             spread_name,
             statement_decision_sources,
+            if_tests: self.if_tests.clone(),
             match_subject_names,
             owners: rewrites,
             for_initializer_propagations,

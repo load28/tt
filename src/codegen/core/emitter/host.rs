@@ -324,6 +324,16 @@ impl<'a> Emitter<'a> {
                     regions += 1;
                     out.append(Rope::indented(depth, lowered));
                 }
+                ComposeAction::Operation(operation)
+                    if let Some(facts) = self.guarded_if_tests.get(&operation.parent) =>
+                {
+                    if regions > 0 {
+                        out.push_break(depth);
+                    }
+                    regions += 1;
+                    let lowered = self.emit_if_test_guard(operation, facts, &mut captured);
+                    out.append(Rope::indented(depth, lowered));
+                }
                 ComposeAction::Operation(operation) => {
                     let mut lowered = self.emit_conditional_operation(operation, &mut captured);
                     for step in &operation.outer {
@@ -379,8 +389,14 @@ impl<'a> Emitter<'a> {
         }
         self.loop_region_depth.set(self.loop_region_depth.get() + 1);
         let mut captured = HashSet::new();
+        let guarded = self.guarded_test_operation(rewrite);
         for action in &rewrite.actions {
             let lowered = match action {
+                ComposeAction::Operation(operation)
+                    if guarded.is_some_and(|guarded| std::ptr::eq(guarded, operation)) =>
+                {
+                    self.emit_test_guards(operation, &mut captured)
+                }
                 ComposeAction::Value(value) => {
                     let mut lowered = self
                         .emit_continued_expr(value.expr, &ValueContinuation::assign(&value.slot))
@@ -404,8 +420,156 @@ impl<'a> Emitter<'a> {
         }
         self.loop_region_depth.set(self.loop_region_depth.get() - 1);
         out.push_break(1);
-        out.push_lit("if (!(");
+        if guarded.is_none() {
+            out.push_lit("if (!(");
+        }
         Rope::scoped(out)
+    }
+
+    pub(super) fn guarded_test_operation<'r>(
+        &self,
+        rewrite: &'r LoopTestRewrite,
+    ) -> Option<&'r PlannedConditionalOperation> {
+        rewrite.actions.iter().find_map(|action| match action {
+            ComposeAction::Operation(operation)
+                if operation.parent == rewrite.test
+                    && matches!(
+                        operation.kind,
+                        PlannedConditionalKind::LogicalAnd | PlannedConditionalKind::LogicalOr
+                    ) =>
+            {
+                Some(operation)
+            }
+            _ => None,
+        })
+    }
+
+    fn emit_if_test_guard(
+        &self,
+        operation: &PlannedConditionalOperation,
+        facts: &crate::program_syntax::IfTestFacts,
+        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+    ) -> Rope<'a> {
+        let result = self.value_slot_name(operation.result);
+        let mut out = Rope::new();
+        self.conditional_region_depth
+            .set(self.conditional_region_depth.get() + 1);
+        let condition = self.condition_test(&operation.condition, captured);
+        let right = self.emit_conditional_active_branch(
+            operation,
+            &operation.values,
+            result,
+            None,
+            captured,
+        );
+        self.conditional_region_depth
+            .set(self.conditional_region_depth.get() - 1);
+        let mut closings = self.if_test_closings.borrow_mut();
+        if operation.kind == PlannedConditionalKind::LogicalAnd {
+            match facts.alternate {
+                Some(_) => {
+                    let flag = self.generated_name(&format!(
+                        "$tt_f_{}",
+                        result.strip_prefix("$tt_").unwrap_or(result)
+                    ));
+                    out.push_lit(format!("let {flag} = false;"));
+                    out.push_break(0);
+                    closings.push((facts.consequent.start, format!("{{ {flag} = true; ")));
+                    closings.push((facts.consequent.end, format!(" }} }} if ({flag}) {{}}")));
+                }
+                None => closings.push((facts.consequent.end, " }".to_owned())),
+            }
+            out.push_lit("if (");
+            out.append(condition);
+            out.push_lit(") {");
+            out.push_break(1);
+            out.append(Rope::indented(1, right));
+            out.push_break(1);
+        } else {
+            let label = self.exit_label(result);
+            closings.push((facts.consequent.end, " }".to_owned()));
+            out.push_lit(format!("{label}: {{"));
+            out.push_break(1);
+            out.push_lit("if (!(");
+            out.append(condition);
+            out.push_lit(")) {");
+            out.push_break(2);
+            out.append(Rope::indented(2, right));
+            out.push_break(2);
+            out.push_lit(format!("if (!({result})) break {label};"));
+            out.push_break(1);
+            out.push_lit("}");
+            out.push_break(1);
+        }
+        drop(closings);
+        self.delivered_conditional_values
+            .borrow_mut()
+            .retain(|value| !operation.values.contains(value));
+        captured.insert(operation.result);
+        out
+    }
+
+    pub(super) fn emit_if_test_closings(&self, at: usize, out: &mut Rope<'a>) {
+        let mut closings = self.if_test_closings.borrow_mut();
+        closings.retain(|(position, text)| {
+            if *position == at {
+                out.push_lit(text.clone());
+                false
+            } else {
+                true
+            }
+        });
+    }
+
+    fn emit_test_guards(
+        &self,
+        operation: &PlannedConditionalOperation,
+        captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
+    ) -> Rope<'a> {
+        let result = self.value_slot_name(operation.result);
+        let mut out = Rope::new();
+        self.conditional_region_depth
+            .set(self.conditional_region_depth.get() + 1);
+        let condition = self.condition_test(&operation.condition, captured);
+        let right = self.emit_conditional_active_branch(
+            operation,
+            &operation.values,
+            result,
+            None,
+            captured,
+        );
+        self.conditional_region_depth
+            .set(self.conditional_region_depth.get() - 1);
+        let mut right_guard = Rope::new();
+        right_guard.push_lit(format!("if (!({result})) break;"));
+        out.push_break(0);
+        match operation.kind {
+            PlannedConditionalKind::LogicalAnd => {
+                out.push_lit("if (!(");
+                out.append(condition);
+                out.push_lit(")) break;");
+                out.push_break(0);
+                out.append(right);
+                out.push_break(0);
+                out.append(right_guard);
+            }
+            _ => {
+                out.push_lit("if (!(");
+                out.append(condition);
+                out.push_lit(")) {");
+                out.push_break(1);
+                out.append(Rope::indented(1, right));
+                out.push_break(1);
+                out.append(Rope::indented(1, right_guard));
+                out.push_break(0);
+                out.push_lit("}");
+            }
+        }
+        self.delivered_conditional_values
+            .borrow_mut()
+            .retain(|value| !operation.values.contains(value));
+        captured.insert(operation.result);
+        out
     }
 
     /// Lowers one whole conditional operation (결정 17): evaluate the

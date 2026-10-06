@@ -999,11 +999,16 @@ fn source_symbols_grown(
         let selection = &item["selectionRange"];
         let name = match doc.coordinates {
             CoordinateSpace::Authored => Some((byte(&selection["start"]), byte(&selection["end"]))),
-            CoordinateSpace::Projected => mapper::to_source_span(
-                &doc.mappings,
-                byte(&selection["start"]),
-                byte(&selection["end"]),
-            ),
+            CoordinateSpace::Projected => {
+                let (start, end) = (byte(&selection["start"]), byte(&selection["end"]));
+                mapper::to_source_span(&doc.mappings, start, end).or_else(|| {
+                    doc.shared_bindings
+                        .iter()
+                        .find(|binding| binding.out <= start && end <= binding.out_end)
+                        .and_then(|binding| binding.occurrences.first())
+                        .map(|occurrence| (occurrence.src, occurrence.src_end))
+                })
+            }
         };
         let Some((name_start, name_end)) = name else {
             out.extend(children);

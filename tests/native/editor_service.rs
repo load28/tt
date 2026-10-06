@@ -1043,3 +1043,24 @@ fn installed_mapper_completes_pipeline_members_in_scripts_and_modules() {
         assert!(answer.items.iter().any(|item| item.label == "toUpperCase"), "module={module}: missing String members");
     }
 }
+
+#[test]
+fn an_or_pattern_binding_is_a_document_symbol() {
+    require_tsgo!();
+    let source = "export variant Shape { Sq(width: number), Rect(width: number, height: number), Point }\n\
+export function side(s: Shape): number {\n  return match (s) {\n    Sq(width: q) | Rect(width: q) => q,\n    Point => 0,\n  };\n}\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut service = open_service(&file);
+    let symbols = service.document_symbols(&file).unwrap();
+    let side = symbols
+        .iter()
+        .find(|symbol| symbol.name == "side")
+        .unwrap_or_else(|| panic!("{symbols:?}"));
+    let q = side
+        .children
+        .iter()
+        .find(|symbol| symbol.name == "q")
+        .unwrap_or_else(|| panic!("{symbols:?}"));
+    assert_eq!(q.selection_range.start, utf16_position(source, "q) | Rect"), "{q:?}");
+}
