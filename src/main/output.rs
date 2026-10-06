@@ -214,7 +214,7 @@ pub(super) fn watch_mode(
     let mut stamps: HashMap<PathBuf, SystemTime> = HashMap::new();
     let mut reads: HashMap<PathBuf, (SystemTime, Vec<PathBuf>)> = HashMap::new();
     let mut placed: Option<PathBuf> = None;
-    let mut configured: Option<bool> = None;
+    let mut configured: Option<JsxPreserve> = None;
     let mut first = true;
     let mut input_error = None;
 
@@ -247,7 +247,7 @@ pub(super) fn watch_mode(
             }
         };
         let round_opts = BuildOptions {
-            jsx_preserve,
+            jsx_preserve: jsx_preserve.clone(),
             ..opts.clone()
         };
         let opts = &round_opts;
@@ -273,7 +273,11 @@ pub(super) fn watch_mode(
 
         let root = support_root(&jobs, out_dir);
         let moved = root != placed;
-        let reconfigured = configured != Some(jsx_preserve);
+        let reconfigured = configured.as_ref().is_none_or(|configured| {
+            jsx_preserve
+                .iter()
+                .any(|(file, value)| configured.get(file).is_some_and(|before| before != value))
+        });
         let changed: Vec<PathBuf> = if first || moved || reconfigured {
             jobs.iter().map(|job| job.file.clone()).collect()
         } else {

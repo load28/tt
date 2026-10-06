@@ -15,7 +15,8 @@ request validation. Fix each in the layer that owns it.
 
 - Included: the output layout of several inputs (R3L1); the standard
   library's place and specifiers in an in-place build (R3L2); a sidecar
-  replaced by one typed from a placeholder (R3L3).
+  replaced by one typed from a placeholder (R3L3); the project a `.ttx`
+  import's spelling is read from (R3L4).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -72,9 +73,25 @@ request validation. Fix each in the layer that owns it.
   one names (`export type T = typeof broken`) or exports later
   (`export { broken }`) is not detected.
 
+### Decision 4: Each file's `.ttx` imports follow its own project
+
+- **Context**: `ttc -o out a b/i.tt`, with `a/tsconfig.json` choosing
+  `"jsx": "preserve"`, wrote `./v.js` for `a/i.tt`'s import; built alone,
+  `a` wrote `./v.jsx`. The build looked for one configuration above the
+  common directory of all inputs, while `--check-types` gives each file
+  its own project.
+- **Decision and rationale**: `tsc` names a `.tsx` output by the options
+  of the project compiling it, and a file belongs to the nearest
+  configuration above it. The build now reads the `jsx` option per file
+  (`--project` still names one configuration for all), and a watch round
+  rebuilds everything only when a file's answer changes, not when a file
+  is added.
+
 ## Work log
 
-- 2026-10-06: Started from the third audit's reports.
+- 2026-10-06: Started from the third audit's reports. Merged
+  `fix/cli-audit` (TASK-764), which this branch's CLI work builds on, and
+  resolved the index and reference conflicts.
 
 ## Issues and resolutions
 

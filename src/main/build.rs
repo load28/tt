@@ -28,7 +28,7 @@ pub(super) struct BuildOptions {
     pub(super) check: bool,
     pub(super) verify: bool,
     pub(super) rewrite_imports: ImportRewrite,
-    pub(super) jsx_preserve: bool,
+    pub(super) jsx_preserve: JsxPreserve,
     pub(super) source_map: SourceMapMode,
     /// Output root, when `-o` was given — also where the standard library
     /// module is written if an input imports it.
@@ -39,29 +39,36 @@ pub(super) struct BuildOptions {
     pub(super) node: Option<PathBuf>,
 }
 
+pub(super) type JsxPreserve = std::collections::BTreeMap<PathBuf, bool>;
+
 pub(super) fn project_jsx_preserve(
     rewrite: ImportRewrite,
     files: &[PathBuf],
     project: Option<&Path>,
-) -> Result<bool, String> {
+) -> Result<JsxPreserve, String> {
+    let mut preserve = JsxPreserve::new();
     if rewrite != ImportRewrite::Js {
-        return Ok(false);
+        return Ok(preserve);
     }
-    match ttc::engine::jsx_preserve(files, project) {
-        Ok(preserve) => Ok(preserve),
-        Err(_)
-            if !files
-                .iter()
-                .any(|file| file.extension().is_some_and(|extension| extension == "ttx")) =>
-        {
-            Ok(false)
+    let any_ttx = files
+        .iter()
+        .any(|file| file.extension().is_some_and(|extension| extension == "ttx"));
+    for file in files {
+        match ttc::engine::jsx_preserve(std::slice::from_ref(file), project) {
+            Ok(value) => {
+                preserve.insert(file.clone(), value);
+            }
+            Err(_) if !any_ttx => {}
+            Err(error) => {
+                return Err(format!(
+                    "cannot read the project's `jsx` option, which names a .ttx import's output: \
+                     {error} (name the configuration with --project, or choose --rewrite-imports \
+                     ts or off)"
+                ));
+            }
         }
-        Err(error) => Err(format!(
-            "cannot read the project's `jsx` option, which names a .ttx import's output: \
-             {error} (name the configuration with --project, or choose --rewrite-imports \
-             ts or off)"
-        )),
     }
+    Ok(preserve)
 }
 
 /// The directory that holds the generated `tt/` package: the output root
@@ -497,7 +504,7 @@ fn compile_outcomes(
                     source_kind: ttc::SourceKind::from_path(&job.file).unwrap_or_default(),
                     verify: opts.verify,
                     rewrite_imports: opts.rewrite_imports,
-                    jsx_preserve: opts.jsx_preserve,
+                    jsx_preserve: opts.jsx_preserve.get(&job.file).copied().unwrap_or(false),
                     extern_variants: &extern_variants,
                     defer_to_checker: false,
                     std_imports,

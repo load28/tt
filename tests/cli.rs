@@ -1959,6 +1959,39 @@ fn an_in_place_build_places_the_standard_library_by_directory_not_spelling() {
 }
 
 #[test]
+fn a_ttx_import_is_named_by_the_importing_files_own_project() {
+    let dir = tmpdir();
+    for (project, jsx) in [("a", "preserve"), ("b", "react-jsx")] {
+        fs::create_dir_all(dir.join(project)).unwrap();
+        fs::write(
+            dir.join(project).join("tsconfig.json"),
+            format!("{{\"compilerOptions\":{{\"jsx\":\"{jsx}\"}}}}"),
+        )
+        .unwrap();
+        fs::write(
+            dir.join(project).join("i.tt"),
+            "import { V } from \"./v.ttx\";\nexport const i = V;\n",
+        )
+        .unwrap();
+        fs::write(dir.join(project).join("v.ttx"), "export const V = 1;\n").unwrap();
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["-o", "out", "a", "b/i.tt"])
+        .current_dir(dir.path())
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let a = fs::read_to_string(dir.join("out/a/i.ts")).unwrap();
+    let b = fs::read_to_string(dir.join("out/b/i.ts")).unwrap();
+    assert!(a.contains("from \"./v.jsx\""), "{a}");
+    assert!(b.contains("from \"./v.js\""), "{b}");
+}
+
+#[test]
 fn overlapping_input_roots_write_each_source_once() {
     let dir = tmpdir();
     fs::create_dir_all(dir.join("src/deep")).unwrap();
