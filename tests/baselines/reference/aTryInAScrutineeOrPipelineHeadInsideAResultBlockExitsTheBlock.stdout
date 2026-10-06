@@ -1,0 +1,3 @@
+{"kind":"Ok","value":111} {"kind":"Ok","value":202} {"kind":"Err","error":"s"}
+{"kind":"Ok","value":8} {"kind":"Err","error":"h"}
+{"kind":"Ok","value":"[1,{\"kind\":\"Ok\",\"value\":2},1,\"1\"]"}

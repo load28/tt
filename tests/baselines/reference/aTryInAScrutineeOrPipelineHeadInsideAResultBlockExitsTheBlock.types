@@ -1,0 +1,251 @@
+=== aTryInAScrutineeOrPipelineHeadInsideAResultBlockExitsTheBlock.tt ===
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+variant G { E, F }
+>G : type G = {
+>       kind: "E";
+>   } | {
+>       kind: "F";
+>   }
+>E : (property) E: {
+>       readonly kind: "E";
+>   }
+>F : (property) F: {
+>       readonly kind: "F";
+>   }
+const ok = <T,>(value: T): R<T> => ({ kind: "Ok", value });
+>ok : const ok: <T>(value: T) => R<T>
+>T : (type parameter) T in <T>(value: T): R<T>
+>value : (parameter) value: T
+>T : (type parameter) T in <T>(value: T): R<T>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in <T>(value: T): R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+const err = <T,>(error: string): R<T> => ({ kind: "Err", error });
+>err : const err: <T>(error: string) => R<T>
+>T : (type parameter) T in <T>(error: string): R<T>
+>error : (parameter) error: string
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in <T>(error: string): R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+const double = (x: number) => x * 2;
+>double : const double: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+function scrutinee(g: R<G>, c: boolean): R<number> {
+>scrutinee : function scrutinee(g: R<G>, c: boolean): R<number>
+>g : (parameter) g: R<G>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>G : type G = {
+>       kind: "E";
+>   } | {
+>       kind: "F";
+>   }
+>c : (parameter) c: boolean
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+        const a = match (try g) { E => 1, F => 2 };
+>a : const a: number
+>g : (parameter) g: R<G>
+        const b = c ? match (try g) { E => 10, F => 20 } : 0;
+>b : const b: number
+>c : (parameter) c: boolean
+>g : (parameter) g: R<G>
+        const d = match (try g, try g) { (E, E) => 100, _ => 200 };
+>d : const d: number
+>g : (parameter) g: R<G>
+>g : (parameter) g: R<G>
+        return a + b + d;
+>a : const a: number
+>b : const b: number
+>d : const d: number
+function head(n: R<number>): R<number> {
+>head : function head(n: R<number>): R<number>
+>n : (parameter) n: R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+        const b = (try n) |> double;
+>b : const b: number
+>n : (parameter) n: R<number>
+>double : const double: (x: number) => number
+        return b;
+>b : const b: number
+function nested(n: R<number>, m: R<R<number>>): R<string> {
+>nested : function nested(n: R<number>, m: R<R<number>>): R<string>
+>n : (parameter) n: R<number>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>m : (parameter) m: R<R<number>>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+        const v = try n;
+>v : const v: number
+>n : (parameter) n: R<number>
+        const e = m |> (x => try x);
+>e : const e: R<number>
+>m : (parameter) m: R<R<number>>
+>x : (parameter) x: R<R<number>>
+>x : (parameter) x: R<R<number>>
+        const f = match (n) { _ => (() => try n)() };
+>f : const f: number | {
+>       kind: "Err";
+>       error: string;
+>   }
+>n : (parameter) n: R<number>
+>n : (parameter) n: R<number>
+        const h = `${(() => try n)()}`;
+>h : const h: string
+>n : (parameter) n: R<number>
+        return JSON.stringify([v, e, f, h]);
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>v : const v: number
+>e : const e: R<number>
+>f : const f: number | {
+>       kind: "Err";
+>       error: string;
+>   }
+>h : const h: string
+const show = (r: unknown) => JSON.stringify(r);
+>show : const show: (r: unknown) => string
+>r : (parameter) r: unknown
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>r : (parameter) r: unknown
+console.log(show(scrutinee(ok(G.E), true)), show(scrutinee(ok(G.F), false)), show(scrutinee(err("s"), true)));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>show : const show: (r: unknown) => string
+>scrutinee : function scrutinee(g: R<G>, c: boolean): R<number>
+>ok : const ok: <{
+>       readonly kind: "E";
+>   }>(value: {
+>       readonly kind: "E";
+>   }) => R<{
+>       readonly kind: "E";
+>   }>
+>G : const G: {
+>       E: {
+>           readonly kind: "E";
+>       };
+>       F: {
+>           readonly kind: "F";
+>       };
+>   }
+>E : (property) E: {
+>       readonly kind: "E";
+>   }
+>show : const show: (r: unknown) => string
+>scrutinee : function scrutinee(g: R<G>, c: boolean): R<number>
+>ok : const ok: <{
+>       readonly kind: "F";
+>   }>(value: {
+>       readonly kind: "F";
+>   }) => R<{
+>       readonly kind: "F";
+>   }>
+>G : const G: {
+>       E: {
+>           readonly kind: "E";
+>       };
+>       F: {
+>           readonly kind: "F";
+>       };
+>   }
+>F : (property) F: {
+>       readonly kind: "F";
+>   }
+>show : const show: (r: unknown) => string
+>scrutinee : function scrutinee(g: R<G>, c: boolean): R<number>
+>err : const err: <G>(error: string) => R<G>
+console.log(show(head(ok(4))), show(head(err("h"))));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>show : const show: (r: unknown) => string
+>head : function head(n: R<number>): R<number>
+>ok : const ok: <number>(value: number) => R<number>
+>show : const show: (r: unknown) => string
+>head : function head(n: R<number>): R<number>
+>err : const err: <number>(error: string) => R<number>
+console.log(show(nested(ok(1), ok(ok(2)))));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>show : const show: (r: unknown) => string
+>nested : function nested(n: R<number>, m: R<R<number>>): R<string>
+>ok : const ok: <number>(value: number) => R<number>
+>ok : const ok: <R<number>>(value: R<number>) => R<R<number>>
+>ok : const ok: <number>(value: number) => R<number>
+

@@ -18,7 +18,9 @@ diverges between layers. Fix each in the layer that owns it.
   points; a rejected `try` placement inside a `result` block; a `try` in a
   `for` declaration initializer inside a `result` block; a conditional
   operation whose operand holds another conditional operation; an `if let`
-  bound to an unparenthesized `try`.
+  bound to an unparenthesized `try`; a `try` in a match scrutinee or a
+  pipeline head inside a `result` block; a `try` in a function written in
+  an isolated value region inside a `result` block.
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -94,6 +96,36 @@ diverges between layers. Fix each in the layer that owns it.
   `{` is tt's value `try`, an expression prefix; `try {` is still the
   statement and still rejected.
 
+### Decision 8: A scrutinee and a pipeline head belong to the enclosing scope
+
+- **Context**: Inside a `result` block, `match (try r()) { ... }` and
+  `(try n()) |> f` were `try-crosses-value-region`, while in a function
+  body the same `try` returns from the function. The design table
+  (`docs/design/try-result-scopes.md` §4.6) listed the scrutinee as an
+  isolated value region.
+- **Alternatives considered**: Document the restriction; treat the
+  scrutinee and the head as the enclosing scope's code.
+- **Decision and rationale**: A region is isolated because it owns its
+  value exits: an arm's `return` yields the arm value, and a step runs
+  inside the pipeline's lowering. The scrutinee and the head run before
+  any arm or step, unconditionally, exactly as they do in a function body,
+  where the backend already lowers their `try` in the enclosing scope. The
+  checker now visits them in the enclosing place; the lowering needed no
+  change. The reference and the design table state the rule.
+
+### Decision 9: A `try` in a nested function does not cross a value region
+
+- **Context**: `m |> (x => try x)`, `match (n) { _ => (() => try n)() }`
+  and `` `${(() => try n)()}` `` inside a `result` block were
+  `try-crosses-value-region`, though the `try` targets the arrow written
+  in the region (§4.6: a function nested inside `result` owns its `try`).
+- **Decision and rationale**: The value `try` check judged only the place,
+  not the target. The checker now keeps the stack of enclosing `result`
+  blocks and asks the file's function targets for the innermost function
+  around the `try`; it crosses the region only when that function opens
+  before the nearest `result` block (or there is none). The statement
+  `try` already made the same judgment through `in_function`.
+
 ## Work log
 
 - 2026-10-06: Started from the second audit's report. Fixed
@@ -101,7 +133,11 @@ diverges between layers. Fix each in the layer that owns it.
   `src/codegen/core/emitter/{host,source,result}.rs` (Decisions 2, 3, 5),
   and `src/evaluation_ir/{evaluation,builder}.rs`, `src/evaluation_ir.rs`
   (Decisions 4, 5), `src/codegen/core/emitter/host.rs` (Decision 6), and
-  `src/parser/iflets.rs` (Decision 7). Regenerated every `unknown-field`
+  `src/parser/iflets.rs` (Decision 7), `src/sema.rs`,
+  `src/sema/checker.rs`, `src/flow/syntax.rs`, `docs/ai/tt.md` and
+  `docs/design/try-result-scopes.md` (Decisions 8, 9). Updated
+  `tests/compile/cases_08.rs`, which pinned the shorthand-breaking edit
+  (Decision 1). Regenerated every `unknown-field`
   diagnostics matrix baseline (`TT_MATRIX_CASES=all`) for Decision 1.
 
 ## Issues and resolutions

@@ -148,7 +148,7 @@ impl Checker<'_> {
                     // Head and steps are expressions — `try` inside them is
                     // rejected for the same reason as inside a match.
                     if let Some(head) = &pipe.head {
-                        self.visit_program(head, Ctx::Expr, place.isolated());
+                        self.visit_program(head, Ctx::Expr, place);
                     }
                     for step in &pipe.steps {
                         self.visit_program(&step.body, Ctx::Expr, place.isolated());
@@ -198,14 +198,7 @@ impl Checker<'_> {
                 self.visit_program(&stmt.expr, Ctx::Expr, Place::ValueRegion);
                 return;
             }
-            _ => self
-                .function_targets
-                .get_or_init(|| {
-                    crate::flow::FunctionTargets::new(self.tokens, &|tokens| {
-                        self.semantic.hir.match_owned_tokens(tokens)
-                    })
-                })
-                .at_offset(stmt.span.start),
+            _ => self.function_targets().at_offset(stmt.span.start),
         };
         let (message, help) = match function_target {
             Some(crate::flow::FunctionTarget::Ordinary) => {
@@ -254,7 +247,7 @@ impl Checker<'_> {
         // Ordinary expression propagation is judged after the SWC host owner
         // and evaluation protocol are known. A result block is the one
         // surface-owned boundary: its direct propagation targets that region.
-        if place == Place::ResultValueRegion {
+        if place == Place::ResultValueRegion && self.crosses_value_region(expr.span.start) {
             self.error(
                 TtError::span(
                     expr.span.start,
@@ -266,6 +259,23 @@ impl Checker<'_> {
             );
         }
         self.visit_program(&expr.expr, Ctx::Expr, Place::ValueRegion);
+    }
+
+    fn crosses_value_region(&self, at: usize) -> bool {
+        let Some(&result) = self.result_blocks.last() else {
+            return true;
+        };
+        self.function_targets()
+            .boundary_at_offset(at)
+            .is_none_or(|boundary| boundary < result)
+    }
+
+    fn function_targets(&self) -> &crate::flow::FunctionTargets {
+        self.function_targets.get_or_init(|| {
+            crate::flow::FunctionTargets::new(self.tokens, &|tokens| {
+                self.semantic.hir.match_owned_tokens(tokens)
+            })
+        })
     }
 
     /// let-else placement is the same flow fact as `try`'s, except the
@@ -404,13 +414,16 @@ impl Checker<'_> {
         } else {
             Place::ResultRegion
         };
+        self.result_blocks.push(block.span.start);
         for item in &block.items {
             let ResultItem::Stmts(stmts) = item;
             self.visit_program(stmts, Ctx::Stmt, statement_place);
         }
         if let Some(value) = &block.value {
             self.visit_program(value, Ctx::Expr, Place::ResultValueRegion);
-        } else {
+        }
+        self.result_blocks.pop();
+        if block.value.is_none() {
             self.check_result_outward_controls(block);
             let completes = self
                 .result_completions
@@ -869,7 +882,7 @@ impl Checker<'_> {
 
         // children, in source order: scrutinee first, then guards and bodies
         let isolated = place.isolated();
-        self.visit_program(&expr.scrutinee, Ctx::Expr, isolated);
+        self.visit_program(&expr.scrutinee, Ctx::Expr, place);
         for arm in &expr.arms {
             if let Some(guard) = &arm.guard {
                 self.visit_program(&guard.expr, Ctx::Expr, isolated);
@@ -1022,7 +1035,7 @@ impl Checker<'_> {
         // children, in source order
         let isolated = place.isolated();
         for (_, scrutinee) in &expr.scrutinees {
-            self.visit_program(scrutinee, Ctx::Expr, isolated);
+            self.visit_program(scrutinee, Ctx::Expr, place);
         }
         for arm in &expr.arms {
             if let Some(guard) = &arm.guard {

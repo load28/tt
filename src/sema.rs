@@ -113,6 +113,7 @@ pub(crate) fn check_all(
         semantic,
         tokens,
         function_targets: std::cell::OnceCell::new(),
+        result_blocks: Vec::new(),
     };
     checker.visit_program(program, Ctx::Top, Place::Module);
     // One analysis, two reports. Resolution comes first — a pattern whose
@@ -209,6 +210,7 @@ struct Checker<'a> {
     /// The innermost function-like boundary of every token, with match
     /// bodies and arm arrows skipped: the target a statement `try` reaches.
     function_targets: std::cell::OnceCell<crate::flow::FunctionTargets>,
+    result_blocks: Vec<usize>,
 }
 
 /// The bindings or-pattern alternatives are compared by, sorted so they

@@ -178,7 +178,12 @@ impl FunctionTargets {
         }
     }
 
+    #[cfg(test)]
     pub(crate) fn at(&self, at: usize) -> Option<FunctionTarget> {
+        self.innermost(at).map(|(_, target)| target)
+    }
+
+    fn innermost(&self, at: usize) -> Option<(usize, FunctionTarget)> {
         let braced = self.braced[at.min(self.braced.len() - 1)];
         let before = self.arrows.partition_point(|(arrow, _)| *arrow < at);
         let concise_arrow = self.arrows[..before]
@@ -187,26 +192,36 @@ impl FunctionTargets {
             .find(|(_, end)| *end > at)
             .map(|(arrow, _)| (*arrow, FunctionTarget::Ordinary));
         match (braced, concise_arrow) {
-            (Some(braced), Some(arrow)) => Some(if braced.0 > arrow.0 {
-                braced.1
-            } else {
-                arrow.1
-            }),
-            (Some((_, target)), None) | (None, Some((_, target))) => Some(target),
+            (Some(braced), Some(arrow)) => Some(if braced.0 > arrow.0 { braced } else { arrow }),
+            (Some(innermost), None) | (None, Some(innermost)) => Some(innermost),
             (None, None) => None,
         }
     }
 
     pub(crate) fn at_offset(&self, offset: usize) -> Option<FunctionTarget> {
+        self.innermost_at_offset(offset).map(|(_, target)| target)
+    }
+
+    /// The byte offset where the innermost user function enclosing `offset`
+    /// opens (its body's `{` or its concise arrow's `=>`).
+    pub(crate) fn boundary_at_offset(&self, offset: usize) -> Option<usize> {
+        self.innermost_at_offset(offset).map(|(start, _)| start)
+    }
+
+    fn innermost_at_offset(&self, offset: usize) -> Option<(usize, FunctionTarget)> {
         let at = self.spans.partition_point(|(start, _)| *start < offset);
+        let own = |at: usize| {
+            self.innermost(at)
+                .map(|(token, target)| (self.spans[token].0, target))
+        };
         match at.checked_sub(1) {
             Some(token) if self.spans[token].1 > offset => self
                 .interpolations
                 .iter()
                 .find(|(span, _)| span.start <= offset && offset < span.end)
-                .and_then(|(_, inner)| inner.at_offset(offset))
-                .or_else(|| self.at(token)),
-            _ => self.at(at),
+                .and_then(|(_, inner)| inner.innermost_at_offset(offset))
+                .or_else(|| own(token)),
+            _ => own(at),
         }
     }
 }

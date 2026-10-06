@@ -1,0 +1,42 @@
+// A match's scrutinee and a pipeline's head run before the construct's own
+// value regions (its arms and steps), as they do in a function body, so a
+// `try` there exits the enclosing `result` block. A `try` inside a function
+// written in an arm, a step, or an interpolation targets that function.
+// @run: aTryInAScrutineeOrPipelineHeadInsideAResultBlockExitsTheBlock.tt
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+variant G { E, F }
+const ok = <T,>(value: T): R<T> => ({ kind: "Ok", value });
+const err = <T,>(error: string): R<T> => ({ kind: "Err", error });
+const double = (x: number) => x * 2;
+
+function scrutinee(g: R<G>, c: boolean): R<number> {
+    return result {
+        const a = match (try g) { E => 1, F => 2 };
+        const b = c ? match (try g) { E => 10, F => 20 } : 0;
+        const d = match (try g, try g) { (E, E) => 100, _ => 200 };
+        return a + b + d;
+    };
+}
+
+function head(n: R<number>): R<number> {
+    return result {
+        const b = (try n) |> double;
+        return b;
+    };
+}
+
+function nested(n: R<number>, m: R<R<number>>): R<string> {
+    return result {
+        const v = try n;
+        const e = m |> (x => try x);
+        const f = match (n) { _ => (() => try n)() };
+        const h = `${(() => try n)()}`;
+        return JSON.stringify([v, e, f, h]);
+    };
+}
+
+const show = (r: unknown) => JSON.stringify(r);
+console.log(show(scrutinee(ok(G.E), true)), show(scrutinee(ok(G.F), false)), show(scrutinee(err("s"), true)));
+console.log(show(head(ok(4))), show(head(err("h"))));
+console.log(show(nested(ok(1), ok(ok(2)))));
+export {};
