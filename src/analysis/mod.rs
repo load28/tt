@@ -115,6 +115,10 @@ pub struct DeclaredVariant {
     /// The variant's name in the analyzed file's scope (an import alias, or
     /// `ns.Name` for a namespace import).
     pub name: String,
+    /// The other names a declared type writes this variant with in the
+    /// file's scope: a standard-library type such as `TOption` for the
+    /// built-in `Option`, as its import binds it.
+    pub type_names: Vec<String>,
     /// Where the declaration came from.
     pub origin: Origin,
     /// The constructors, in declaration order.

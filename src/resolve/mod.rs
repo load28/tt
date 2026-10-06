@@ -457,12 +457,13 @@ impl Resolver {
                 hir,
             );
         }
+        let mut builtins = HashMap::new();
         for (name, generics, variants) in builtin_variants() {
             if self.resolution.type_ns.contains_key(&name) {
                 continue; // shadowed by a local or imported declaration
             }
             self.declare_variant(
-                name,
+                name.clone(),
                 VariantDef {
                     origin: DeclOrigin::Builtin,
                     generics: generics.to_string(),
@@ -472,6 +473,40 @@ impl Resolver {
                 None,
                 hir,
             );
+            builtins.insert(name.clone(), self.resolution.type_ns[&name]);
+        }
+        // The standard library's type for a built-in (`TOption`, `TResult`)
+        // is the type a field of that built-in is written with: its name,
+        // as the import binds it, names the built-in's definition.
+        for item in &hir.items {
+            let hir::Item::Import(import) = item else {
+                continue;
+            };
+            let hir::ImportKind::Std(module) = import.kind else {
+                continue;
+            };
+            let bound: Vec<(String, &str)> = match &import.names {
+                hir::ImportNames::Named(entries) => entries
+                    .iter()
+                    .filter_map(|(name, alias)| {
+                        let builtin = std_builtin_type(module, name)?;
+                        Some((alias.clone().unwrap_or_else(|| name.clone()), builtin))
+                    })
+                    .collect(),
+                hir::ImportNames::Namespace(namespace) => STD_BUILTIN_TYPES
+                    .iter()
+                    .filter_map(|&(name, _)| {
+                        let builtin = std_builtin_type(module, name)?;
+                        Some((format!("{namespace}.{name}"), builtin))
+                    })
+                    .collect(),
+                hir::ImportNames::None => Vec::new(),
+            };
+            for (name, builtin) in bound {
+                if let Some(&def) = builtins.get(builtin) {
+                    self.resolution.type_ns.entry(name).or_insert(def);
+                }
+            }
         }
     }
 
@@ -879,6 +914,24 @@ fn collect_position_tags_grown<'h>(
             }
         }
     }
+}
+
+/// The standard library's types for the built-ins, and the modules that
+/// export each (`src/stdlib/{types,option,result}.ts`).
+const STD_BUILTIN_TYPES: [(&str, &str); 2] = [("TOption", "Option"), ("TResult", "Result")];
+
+fn std_builtin_type(module: crate::StdModule, name: &str) -> Option<&'static str> {
+    let builtin = STD_BUILTIN_TYPES
+        .iter()
+        .find(|(exported, _)| *exported == name)?
+        .1;
+    let exports = match module {
+        crate::StdModule::Types => true,
+        crate::StdModule::Option => builtin == "Option",
+        crate::StdModule::Result => builtin == "Result",
+        crate::StdModule::Runtime => false,
+    };
+    exports.then_some(builtin)
 }
 
 /// `Option`/`Result` as declaration identities — the same shapes as the

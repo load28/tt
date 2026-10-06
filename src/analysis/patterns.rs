@@ -18,6 +18,7 @@ pub(super) fn analyze(program: &Program, table: &Table, depth: Depth) -> Pattern
         .iter()
         .map(|e| DeclaredVariant {
             name: e.name.clone(),
+            type_names: e.type_names.clone(),
             origin: e.origin.clone(),
             constructors: e.constructors.clone(),
         })
@@ -36,6 +37,8 @@ pub(super) struct Entry {
     /// The constructors, in declaration order, including payload fields.
     pub(super) constructors: Vec<MatchConstructor>,
     pub(super) scope: Option<crate::hir::Span>,
+    /// The other names a declared type writes this variant with.
+    pub(super) type_names: Vec<String>,
 }
 
 /// The candidate variants a match's subject can resolve to, in shadowing
@@ -65,9 +68,17 @@ impl Table {
                 if resolution.type_ns.get(&def.name) != Some(&id) {
                     return None;
                 }
+                let mut type_names: Vec<String> = resolution
+                    .type_ns
+                    .iter()
+                    .filter(|&(name, &named)| named == id && *name != def.name)
+                    .map(|(name, _)| name.clone())
+                    .collect();
+                type_names.sort();
                 Some(Entry {
                     scope: data.scope,
                     name: def.name.clone(),
+                    type_names,
                     origin: match &data.origin {
                         DeclOrigin::Local(_) => Origin::Local,
                         DeclOrigin::Imported { from } => Origin::Imported { from: from.clone() },
@@ -155,6 +166,7 @@ impl Table {
         Entry {
             scope: None,
             name: String::new(),
+            type_names: Vec::new(),
             origin: Origin::Local,
             constructors: tags
                 .iter()
@@ -197,7 +209,9 @@ impl Table {
             return None; // a union, intersection, array, ... — not one variant
         }
         let base = &trimmed[..base_len];
-        self.entries.iter().find(|e| e.name == base)
+        self.entries
+            .iter()
+            .find(|e| e.name == base || e.type_names.iter().any(|name| name == base))
     }
 }
 

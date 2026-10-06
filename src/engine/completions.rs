@@ -1073,7 +1073,9 @@ fn type_variant<'a>(declarations: &'a [DeclaredVariant], ty: &str) -> Option<&'a
         .chars()
         .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '$' | '.'))
         .collect();
-    declarations.iter().find(|d| d.name == base)
+    declarations
+        .iter()
+        .find(|d| d.name == base || d.type_names.iter().any(|name| *name == base))
 }
 
 fn cases(declared: &DeclaredVariant, covered: &[String]) -> Vec<TtCompletion> {

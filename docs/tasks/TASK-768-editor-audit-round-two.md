@@ -25,7 +25,8 @@ diverges between layers. Fix each in the layer that owns it.
   TypeScript older than the API ttc drives; `--symbols` import variants
   and a namespace member variant read as a module export; the documented
   exception for `@tt/std` specifiers in passed-through TypeScript; the
-  unreachable-arm hint's range.
+  unreachable-arm hint's range; nested pattern completion for a field typed
+  with the standard library's `TOption` or `TResult`.
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -206,6 +207,24 @@ diverges between layers. Fix each in the layer that owns it.
   final token, and the analysis passes it on (`AnalyzedArm::end`); the hint
   spans the pattern through that end.
 
+### Decision 15: `TOption` and `TResult` name the built-in variants
+
+- **Context**: Completion at `Opt(o: |)` for a field typed `TOption<number>`
+  was empty, while a field typed `Option<number>` (which is not a
+  TypeScript type) offered `Some` and `None`.
+- **Alternatives considered**: Match the type text `TOption` in the
+  completion code; bind the standard library's type names in the resolver.
+- **Decision and rationale**: The built-ins enter the resolver as
+  definitions named `Option` and `Result`, but the type a program writes
+  for them is the standard library's `TOption`/`TResult`. The resolver now
+  binds each name a `@tt/std` import brings into scope for those types
+  (`TOption`, an alias, or `ns.TOption`, from the modules that export them)
+  to the built-in's definition in the type namespace. The analysis table
+  and the declarations it exposes carry those names
+  (`DeclaredVariant::type_names`), so every reader of a declared field type
+  (nested pattern identification, completion) follows them. The reference
+  states the rule.
+
 ## Work log
 
 - 2026-10-06: Started from the second audit's report. Fixed
@@ -221,7 +240,9 @@ diverges between layers. Fix each in the layer that owns it.
   `src/parser/variants.rs`, `src/lib/api.rs`, `src/main/modes.rs`
   (Decision 12), and `AGENTS.md`, `src/main.rs`, `docs/ai/tt.md`
   (Decision 13), and `src/parser/matches.rs`, `src/ast.rs`,
-  `src/analysis/{mod,patterns}.rs`, `src/engine/hints.rs` (Decision 14).
+  `src/analysis/{mod,patterns}.rs`, `src/engine/hints.rs` (Decision 14),
+  and `src/resolve/mod.rs`, `src/analysis/{mod,patterns}.rs`,
+  `src/engine/completions.rs`, `docs/ai/tt.md` (Decision 15).
   Updated
   `tests/compile/cases_08.rs`, which pinned the shorthand-breaking edit
   (Decision 1). Regenerated every `unknown-field`
