@@ -710,6 +710,24 @@ export const diagnostics = [
     ],
   },
   {
+    code: "variant-duplicate-field",
+    examples: [
+      {
+        id: "repeatedField",
+        title: "a case declaring one field twice",
+        fixTitle: "the second field renamed",
+        kind: "module",
+        surfaces: ["tt", "ttx"],
+        bad: { "main.EXT": `export variant Reading { Sample(at: number, [|at|]: string) }` },
+        good: { "main.EXT": `export variant Reading { Sample(at: number, label: string) }` },
+      },
+    ],
+    explain: [
+      { role: "error", units: `variant Reading { Sample(at: Date, value: number, [|at|]: string) }` },
+      { role: "fix", units: `variant Reading { Sample(at: Date, value: number, label: string) }` },
+    ],
+  },
+  {
     code: "variant-required-after-optional",
     examples: [
       {

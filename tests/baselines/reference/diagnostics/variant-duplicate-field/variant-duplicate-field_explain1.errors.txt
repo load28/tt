@@ -1,0 +1,42 @@
+==== ttc --out-dir (exit 1) ====
+error[variant-duplicate-field]: variant Reading: case "Sample" declares field `at` twice
+ --> ./main.tt:1:51
+  |
+1 | variant Reading { Sample(at: Date, value: number, at: string) }
+  |                                                   ^^
+  |
+  = help: rename one of the fields
+
+
+==== ttc --check-types (exit 1) ====
+error[ts1117]: An object literal cannot have multiple properties with the same name. (in code ttc generated for this construct)
+ --> main.tt:1:9
+  |
+1 | variant Reading { Sample(at: Date, value: number, at: string) }
+  |         ^^^^^^^
+error[ts2300]: Duplicate identifier 'at'. (in code ttc generated for this construct)
+ --> main.tt:1:9
+  |
+1 | variant Reading { Sample(at: Date, value: number, at: string) }
+  |         ^^^^^^^
+error[ts2717]: Subsequent property declarations must have the same type.  Property 'at' must be of type 'Date', but here has type 'string'. (in code ttc generated for this construct)
+ --> main.tt:1:9
+  |
+1 | variant Reading { Sample(at: Date, value: number, at: string) }
+  |         ^^^^^^^
+  |         ------- 'at' was also declared here.
+error[ts2300]: Duplicate identifier 'at'. (in code ttc generated for this construct)
+ --> main.tt:1:26
+  |
+1 | variant Reading { Sample(at: Date, value: number, at: string) }
+  |                          ^^^^^^^^
+error[variant-duplicate-field]: variant Reading: case "Sample" declares field `at` twice
+ --> main.tt:1:51
+  |
+1 | variant Reading { Sample(at: Date, value: number, at: string) }
+  |                                                   ^^
+  |
+  = help: rename one of the fields
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

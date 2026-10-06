@@ -514,6 +514,28 @@ impl Checker<'_> {
             seen.push(&case.tag);
         }
 
+        for case in &decl.cases {
+            let mut fields: Vec<&str> = Vec::new();
+            for field in case.fields.iter().flatten() {
+                if fields.contains(&field.name.as_str()) {
+                    self.error(
+                        TtError::span(
+                            field.name_off,
+                            field.name_off + field.name.len(),
+                            format!(
+                                "variant {}: case \"{}\" declares field `{}` twice",
+                                decl.name, case.tag, field.name
+                            ),
+                        )
+                        .code(DiagnosticCode::VariantDuplicateField)
+                        .help("rename one of the fields"),
+                    );
+                    continue;
+                }
+                fields.push(&field.name);
+            }
+        }
+
         // A case carries its tag in one fixed property, so a payload field
         // of that name has nowhere to go: the declaration would emit the
         // property twice, and the constructor would overwrite the tag with

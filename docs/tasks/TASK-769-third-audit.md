@@ -22,7 +22,8 @@ request validation. Fix each in the layer that owns it.
   file outside the working directory (R3L8); non-ASCII paths in the
   language service's URIs (R3E1); the outline's and navigation targets'
   position conversions (R3E2); an empty match body (R3E6); TypeScript in a
-  pipeline that does not parse (R3E7); `try` in a setter (R3C8).
+  pipeline that does not parse (R3E7); `try` in a setter (R3C8); a case
+  declaring one field twice (R3C9).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -193,6 +194,17 @@ request validation. Fix each in the layer that owns it.
   the checker's function targets and the planner's evaluation owners
   report `try-placement` for a statement or value `try` there. The
   reference lists the setter.
+
+### Decision 13: A case declaring one field twice is `variant-duplicate-field`
+
+- **Context**: `variant V { A(n: number, n: string) }` passed `ttc --check`
+  and emitted a constructor with a duplicate parameter, which does not
+  load in strict JavaScript.
+- **Decision and rationale**: The duplicate is a fact of the declaration
+  as written, like a duplicate case tag (`variant-duplicate-case`), so it
+  is a tt rule with its own code (tt53, appended so no number changes
+  meaning), explanation, reference sentence and generated diagnostic cases;
+  the checker reports the second occurrence with the help to rename it.
 
 ## Work log
 
