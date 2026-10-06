@@ -546,6 +546,7 @@ pub(crate) fn report(
             .or_default()
             .push((
                 (anchor.tag.clone(), anchor.field.clone()),
+                anchor.offset,
                 members.tags.clone(),
             ));
     }

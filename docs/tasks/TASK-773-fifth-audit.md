@@ -60,6 +60,20 @@ defects. This task fixes them in the layer that owns each one.
   directory input still names an unreadable entry (TASK-387 decision 1),
   so `--check`, the build, and the typed modes agree on inputs.
 
+### Decision 3: A payload column's alphabet is the one asked in that match (E1)
+
+- **Context**: With `Box<T>` matched as `Box<Color>` in one function and
+  as `Box<Shape>` in another, `--check-types` and the editor reported the
+  second, exhaustive match as missing `Full(item: Red())`. The typed pass
+  asks the checker for each nested pattern's alphabet at its own lowered
+  receiver, but the answers were keyed by `(constructor, field)` per file,
+  and the first answer for `(Full, item)` stood for every match.
+- **Decision and rationale**: An answer keeps the offset of the nested tag
+  it was asked at (`PayloadAnchor::offset`, `PayloadAlphabet`), and a match's
+  coverage reads only the answers asked at nested patterns inside its own
+  arm patterns (`payload_columns`). The column's alphabet is then the
+  payload's type at that match, which is what the question asked.
+
 ## Work log
 
 - 2026-10-06: Ran the fifth audit as three read-only agents (CLI,
@@ -68,6 +82,8 @@ defects. This task fixes them in the layer that owns each one.
   and replaced them with identity hashing (decision 1).
 - 2026-10-06: Reproduced C1 with `strace`; made the project scan skip
   unreadable candidates outside the inputs and their imports (decision 2).
+- 2026-10-06: Reproduced E1 and scoped payload alphabets to their match
+  (decision 3).
 
 ## Issues and resolutions
 

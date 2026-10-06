@@ -1,0 +1,94 @@
+=== aGenericPayloadIsCheckedPerInstantiation.tt ===
+variant Shape { Circle(radius: number), Point }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+>Circle : (property) Circle: (radius: number) => Shape
+>radius : (property) radius: number
+>Point : (property) Point: {
+>       readonly kind: "Point";
+>   }
+variant Color { Red, Green }
+>Color : type Color = {
+>       kind: "Red";
+>   } | {
+>       kind: "Green";
+>   }
+>Red : (property) Red: {
+>       readonly kind: "Red";
+>   }
+>Green : (property) Green: {
+>       readonly kind: "Green";
+>   }
+variant Box<T> { Full(item: T), Empty }
+>Box : type Box<T> = {
+>       kind: "Full";
+>       item: T;
+>   } | {
+>       kind: "Empty";
+>   }
+>T : (type parameter) T in type Box<T>
+>Full : (property) Full: <T>(item: T) => Box<T>
+>item : (property) item: T
+>T : (type parameter) T in type Box<T>
+>Empty : (property) Empty: {
+>       readonly kind: "Empty";
+>   }
+export function f(c: Box<Color>) {
+>f : function f(c: Box<Color>): number
+>c : (parameter) c: Box<Color>
+>Box : type Box<T> = {
+>       kind: "Full";
+>       item: T;
+>   } | {
+>       kind: "Empty";
+>   }
+>Color : type Color = {
+>       kind: "Red";
+>   } | {
+>       kind: "Green";
+>   }
+  return match (c) { Full(item: Red()) => 1, Full(item: Green()) => 2, Empty => 3 };
+>c : (parameter) c: Box<Color>
+export function g(b: Box<Shape>) {
+>g : function g(b: Box<Shape>): number
+>b : (parameter) b: Box<Shape>
+>Box : type Box<T> = {
+>       kind: "Full";
+>       item: T;
+>   } | {
+>       kind: "Empty";
+>   }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+  return match (b) { Full(item: Circle(radius)) => radius, Full(item: Point()) => 0, Empty => 1 };
+>b : (parameter) b: Box<Shape>
+>radius : const radius: number
+>radius : const radius: number
+export function h(b: Box<Shape>) {
+>h : function h(b: Box<Shape>): number
+>b : (parameter) b: Box<Shape>
+>Box : type Box<T> = {
+>       kind: "Full";
+>       item: T;
+>   } | {
+>       kind: "Empty";
+>   }
+>Shape : type Shape = {
+>       kind: "Circle";
+>       radius: number;
+>   } | {
+>       kind: "Point";
+>   }
+  return match (b) { Full(item: Circle(radius)) => radius, Empty => 1 };
+>b : (parameter) b: Box<Shape>
+>radius : const radius: number
+>radius : const radius: number
+

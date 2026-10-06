@@ -107,7 +107,10 @@ pub(crate) struct SemanticFile {
 /// This is the one thing the declaration table cannot work out — a field's
 /// declared type text may be a type parameter, or name a union no tt
 /// declaration describes (`docs/design/rust-parity-analysis.md` §10.3).
-pub(crate) type PayloadAlphabet = ((String, String), Vec<String>);
+/// The alphabet the checker gave one nested pattern's position: the
+/// `(constructor, field)` column, the byte offset of the nested pattern's
+/// tag it was asked at, and the tags the position admits there.
+pub(crate) type PayloadAlphabet = ((String, String), usize, Vec<String>);
 
 /// One variant of the analysis' declaration table.
 #[derive(Debug, Clone, PartialEq, Eq)]

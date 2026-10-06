@@ -546,6 +546,7 @@ pub(crate) fn assemble(
             });
             probes.payloads.push(PayloadAnchor {
                 source_path: file.source_path.clone(),
+                offset: probe.offset,
                 tag: probe.tag.clone(),
                 field: probe.field.clone(),
             });
@@ -701,6 +702,8 @@ pub(crate) struct ValBindingAnchor {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PayloadAnchor {
     pub source_path: PathBuf,
+    /// Byte offset of the nested pattern's tag the question was asked at.
+    pub offset: usize,
     pub tag: String,
     pub field: String,
 }
