@@ -21,7 +21,7 @@ request validation. Fix each in the layer that owns it.
   in-place refusal's advice (R3L7); the path `--check-types` shows for a
   file outside the working directory (R3L8); non-ASCII paths in the
   language service's URIs (R3E1); the outline's and navigation targets'
-  position conversions (R3E2).
+  position conversions (R3E2); an empty match body (R3E6).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -150,6 +150,16 @@ request validation. Fix each in the layer that owns it.
   convert positions to bytes and back through them, mapping bytes to the
   source directly. The outline now takes 0.09 s, 0.20 s and 0.33 s for 300,
   600 and 1200 matches.
+
+### Decision 10: An empty match body is an unfinished arm list
+
+- **Context**: `match (s) {}`, what an editor leaves after closing the
+  braces, was not claimed, so the file failed as TypeScript and the
+  service reported `Cannot find name 'match'`.
+- **Decision and rationale**: TASK-768 made a body of patterns alone an
+  arm-list candidate; an empty body is the same list with no element
+  written yet. It is now a candidate too, and the host's parser still
+  keeps `class D extends match (1) {}` TypeScript.
 
 ## Work log
 

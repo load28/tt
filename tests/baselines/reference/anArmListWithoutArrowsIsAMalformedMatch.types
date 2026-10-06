@@ -8,4 +8,6 @@ export const a = match (e) { is MyErr };
 >a : const a: any
 export const b = match (e) { A, B };
 >b : const b: any
+export const c = match (e) {};
+>c : const c: any
 

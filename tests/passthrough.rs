@@ -999,6 +999,7 @@ fn a_class_body_after_a_match_call_heritage_is_not_an_unfinished_arm_list() {
     for src in [
         "declare function match(x: unknown): new () => object;\nexport class D extends match (1) { A }\n",
         "declare function match(x: unknown): new () => object;\nexport class D extends match (1) { A; B }\n",
+        "declare function match(x: unknown): new () => object;\nexport class D extends match (1) {}\n",
     ] {
         assert_passthrough(src);
     }

@@ -3,4 +3,5 @@ class MyErr extends Error {}
 declare const e: unknown;
 export const a = match (e) { is MyErr };
 export const b = match (e) { A, B };
+export const c = match (e) {};
 

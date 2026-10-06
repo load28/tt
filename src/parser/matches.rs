@@ -333,6 +333,9 @@ fn guard_outside_statements(cur: &Cursor<'_>, open: usize) -> bool {
         return false;
     };
     let mut arms = cur.sub(open + 1, close, cur.tokens[close].span.start);
+    if arms.peek().is_none() {
+        return true;
+    }
     loop {
         let wildcard = if arms.at_punct(b'(') {
             let Some(end) = arms.find_close() else {
