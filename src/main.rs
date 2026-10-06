@@ -117,7 +117,9 @@ Tooling options (bundler plugins, editors):
                         how relative .tt/.ttx specifiers are emitted:
                         js = ./x.js (default; a .ttx import becomes .jsx
                         under the project's \"jsx\": \"preserve\", as tsc
-                        names its output), ts = ./x.ts/.tsx, off = untouched
+                        names its output), ts = ./x.ts/.tsx, off = untouched;
+                        js and ts also point @tt/std specifiers, in .tt and
+                        passed-through .ts alike, at the written tt/ modules
   --sidecar <dir>       write <name>.tt.d.ts and .map next to each input from
                         <dir>/<path>/<name>.d.ts, where <path> is the input's
                         directory below the inputs' common directory (the

@@ -3263,6 +3263,42 @@ fn symbols_resolve_an_import_to_a_normalized_path() {
     assert_eq!(resolved, ["src/sub/b.tt", "src/c.tt"]);
 }
 
+/// TASK-768: a build points a passed-through `.ts` file's `@tt/std`
+/// specifiers at the modules it writes, as it does a `.tt` file's, and
+/// `--rewrite-imports off` leaves them as written: the documented exception
+/// to byte-for-byte pass-through.
+#[test]
+fn a_passed_through_typescript_file_imports_the_written_standard_library() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    let authored = "import { Some } from \"@tt/std/option\";\nexport const v = Some(1);\n";
+    fs::write(dir.join("src/p.ts"), authored).unwrap();
+    fs::write(dir.join("src/m.tt"), "export const w = 1;\n").unwrap();
+    for (args, expected) in [
+        (
+            vec!["-o", "out", "src"],
+            "import { Some } from \"./tt/option.js\";\nexport const v = Some(1);\n",
+        ),
+        (
+            vec!["--rewrite-imports", "off", "-o", "off", "src"],
+            authored,
+        ),
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(&args)
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let written = fs::read_to_string(dir.join(args[args.len() - 2]).join("p.ts")).unwrap();
+        assert_eq!(written, expected, "{args:?}");
+    }
+}
+
 /// TASK-768: an import's variants are what its module exports, under the
 /// names an importer binds: an `export { X }` or `export { X as Y }`
 /// specifier exports a declared variant, and an `export variant` in a

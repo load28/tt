@@ -23,7 +23,8 @@ diverges between layers. Fix each in the layer that owns it.
   an isolated value region inside a `result` block; a CommonJS module's
   storage annotations naming the ECMAScript-syntax standard library; a
   TypeScript older than the API ttc drives; `--symbols` import variants
-  and a namespace member variant read as a module export.
+  and a namespace member variant read as a module export; the documented
+  exception for `@tt/std` specifiers in passed-through TypeScript.
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -177,6 +178,21 @@ diverges between layers. Fix each in the layer that owns it.
   those, and `--symbols` uses that function (under the file's surface
   kind) instead of its own filter.
 
+### Decision 13: The `@tt/std` rewrite is a documented pass-through exception
+
+- **Context**: A build rewrites `@tt/std` specifiers in a passed-through
+  `.ts` file (`"@tt/std/option"` → `"./tt/option.js"`), while the
+  pass-through contract named relative `.tt`/`.ttx` specifiers as its only
+  exception.
+- **Alternatives considered**: Stop rewriting in `.ts` files (the output
+  tree would then import the package while its `.tt` outputs import the
+  written copy: two copies of one module, whose values do not compare
+  equal); document the rewrite.
+- **Decision and rationale**: One output tree imports one copy of the
+  standard library, so the rewrite stays; `--rewrite-imports off` already
+  disables it. The contract (`AGENTS.md`), the `--rewrite-imports` help,
+  and the reference now state it, and a CLI test pins both settings.
+
 ## Work log
 
 - 2026-10-06: Started from the second audit's report. Fixed
@@ -190,7 +206,8 @@ diverges between layers. Fix each in the layer that owns it.
   `src/typescript/contextual.rs` (Decision 10), and
   `src/typescript/toolchain.rs` (Decision 11), and `src/ast.rs`,
   `src/parser/variants.rs`, `src/lib/api.rs`, `src/main/modes.rs`
-  (Decision 12). Updated
+  (Decision 12), and `AGENTS.md`, `src/main.rs`, `docs/ai/tt.md`
+  (Decision 13). Updated
   `tests/compile/cases_08.rs`, which pinned the shorthand-breaking edit
   (Decision 1). Regenerated every `unknown-field`
   diagnostics matrix baseline (`TT_MATRIX_CASES=all`) for Decision 1.
