@@ -430,14 +430,15 @@ pub(super) fn write_declarations(
     for (path, text) in &std_files {
         outcome.record(
             path,
-            fs::create_dir_all(&std_dir).and_then(|()| super::output::replace_file(path, text)),
+            super::output::create_dir_all(&std_dir)
+                .and_then(|()| super::output::replace_file(path, text)),
         );
     }
     for (declaration, target) in declarations.modules.iter().zip(targets) {
         let file = &declaration.file;
         let dir = target.parent().unwrap_or(Path::new(".")).to_path_buf();
         let map = target.with_extension("ts.map");
-        let created = fs::create_dir_all(&dir);
+        let created = super::output::create_dir_all(&dir);
         let sidecar = ttc::build_sidecar(
             &file.source,
             &declaration.text,

@@ -12,27 +12,21 @@ pub(crate) fn report(
     semantics: &HashMap<PathBuf, Arc<FileSemantics>>,
     requested: &HashSet<PathBuf>,
 ) -> Vec<Diagnostic> {
-    let all_files = snapshot.files();
     let member_sources = typed_member_sources(snapshot, answers, requested);
-    let files_storage;
-    let files = match &member_sources {
-        Some(members) => {
-            files_storage = all_files
-                .iter()
-                .filter(|file| members.contains(&file.source_path))
-                .cloned()
-                .collect::<Vec<_>>();
-            files_storage.as_slice()
-        }
-        None => all_files,
-    };
+    let files_storage = snapshot
+        .files()
+        .iter()
+        .filter(|file| member_sources.contains(&file.source_path))
+        .cloned()
+        .collect::<Vec<_>>();
+    let files = files_storage.as_slice();
     let mut out = Vec::new();
 
-    for file in snapshot.blocked().iter().filter(|file| {
-        member_sources
-            .as_ref()
-            .is_none_or(|members| members.contains(&file.source_path))
-    }) {
+    for file in snapshot
+        .blocked()
+        .iter()
+        .filter(|file| member_sources.contains(&file.source_path))
+    {
         for diagnostic in &file.diagnostics {
             out.push(Diagnostic {
                 path: file.source_path.clone(),

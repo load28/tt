@@ -95,6 +95,10 @@ pub(super) fn write_owned_output(
     code: &str,
 ) -> Result<(), String> {
     check_output_owner(output, owner)?;
+    if let Some(parent) = output.parent() {
+        super::output::create_dir_all(parent)
+            .map_err(|e| format!("ttc: {}: {e}", output.display()))?;
+    }
     let record = match owner {
         OutputOwner::Source(source) => {
             serde_json::json!({ "version": 1, "source": recorded_source(source)?, "content": code })

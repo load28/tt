@@ -201,7 +201,7 @@ pub(super) fn sidecar_mode(jobs: &[Job], decl_dir: &Path, inputs: &[String]) -> 
         let dts_path = job.out_path.with_file_name(format!("{file_name}.d.ts"));
         let map_path = job.out_path.with_file_name(format!("{file_name}.d.ts.map"));
         let dir = dts_path.parent().unwrap_or(Path::new(".")).to_path_buf();
-        if let Err(e) = fs::create_dir_all(&dir) {
+        if let Err(e) = super::output::create_dir_all(&dir) {
             eprintln!("ttc: {}: {e}", dir.display());
             failed = true;
             continue;

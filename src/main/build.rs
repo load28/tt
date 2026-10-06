@@ -21,6 +21,7 @@ pub(super) enum SourceMapMode {
     Inline,
 }
 
+#[derive(Clone)]
 pub(super) struct BuildOptions {
     pub(super) banner: bool,
     pub(super) print: bool,
@@ -35,6 +36,7 @@ pub(super) struct BuildOptions {
     /// Worker threads for the parallel phases (`--jobs`); `None` means one
     /// per available core.
     pub(super) jobs: Option<usize>,
+    pub(super) node: Option<PathBuf>,
 }
 
 pub(super) fn project_jsx_preserve(
@@ -300,6 +302,7 @@ struct Emitted {
     /// The compiler support modules `code` imports.
     support_imports: Vec<StdModule>,
     commonjs: bool,
+    in_place: bool,
 }
 
 /// Compiles every job. Returns true if any of them failed.
@@ -354,7 +357,10 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
                 None => outputs.push((job.file.as_path(), job.out_path.as_path())),
             }
         }
-        for job in jobs {
+        for job in jobs
+            .iter()
+            .filter(|job| !same_file(&job.file, &job.out_path))
+        {
             if let Err(error) = check_output_owner(&job.out_path, OutputOwner::Source(&job.file)) {
                 eprintln!("{error}");
                 conflicted = true;
@@ -458,16 +464,7 @@ fn compile_outcomes(
                 ttc::ice::panic_for_test("compile");
                 let mut out = Outcome::default();
                 let filename = job.file.display().to_string();
-                // A pass-through `.ts` compiled in place would land on top of
-                // its own source (with specifiers rewritten) — refuse rather
-                // than destroy hand-written code.
-                if !opts.print && !opts.check && same_file(&job.file, &job.out_path) {
-                    out.messages.push(format!(
-                        "ttc: {filename}: output would overwrite the input — pass -o <dir>"
-                    ));
-                    out.failed = true;
-                    return out;
-                }
+                let in_place = !opts.print && !opts.check && same_file(&job.file, &job.out_path);
                 let loaded = match loaded {
                     Ok(loaded) => loaded,
                     Err(e) => {
@@ -504,6 +501,7 @@ fn compile_outcomes(
                     extern_variants: &extern_variants,
                     defer_to_checker: false,
                     std_imports,
+                    node: opts.node.as_deref(),
                 };
                 // Every tt-level diagnostic of the file, not the first one —
                 // the reader fixes a file in one pass (TASK-120). Output is
@@ -589,12 +587,20 @@ fn compile_outcomes(
                     }
                     code.push_str(&rendered.comment);
                 }
+                if in_place && code != loaded.source {
+                    out.messages.push(format!(
+                        "ttc: {filename}: output would overwrite the input — pass -o <dir>"
+                    ));
+                    out.failed = true;
+                    return out;
+                }
                 if !opts.check {
                     out.output = Some(Emitted {
                         code,
                         map: map.and_then(|rendered| rendered.document),
                         support_imports: emit.support_imports,
                         commonjs: emit.commonjs,
+                        in_place,
                     });
                 }
                 out
@@ -671,7 +677,7 @@ fn write_outcomes(
         }
     }
     for (dir, commonjs, modules) in &forms {
-        let wrote = fs::create_dir_all(dir).and_then(|()| {
+        let wrote = create_dir_all(dir).and_then(|()| {
             for module in modules {
                 let mut code = if *commonjs {
                     module.commonjs_source().into_owned()
@@ -716,7 +722,7 @@ fn write_outcomes(
 /// Writes one job's emitted output and its source map, returning the
 /// messages to print and whether the write failed.
 fn write_emitted(job: &Job, output: Option<&Emitted>) -> (Vec<String>, bool) {
-    let Some(output) = output else {
+    let Some(output) = output.filter(|output| !output.in_place) else {
         return (Vec::new(), false);
     };
     if let Err(e) = write_owned_output(&job.out_path, OutputOwner::Source(&job.file), &output.code)

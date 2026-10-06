@@ -798,6 +798,8 @@
 
 | TASK-763 | Validate editor buffers per file, lazily and cancellably | Complete | 2026-10-05 | 2026-10-05 | [TASK-763](./TASK-763-editor-validation-scheduling.md) |
 
+| TASK-764 | Fix defects found by a CLI audit | Complete | 2026-10-05 | 2026-10-05 | [TASK-764](./TASK-764-cli-audit-defects.md) |
+
 | TASK-765 | Keep valid TypeScript out of tt claims and rewrites | Complete | 2026-10-05 | 2026-10-05 | [TASK-765](./TASK-765-passthrough-claim-defects.md) |
 
 | TASK-766 | Fix defects found by a compiler audit | Complete | 2026-10-05 | 2026-10-05 | [TASK-766](./TASK-766-compiler-audit-defects.md) |
@@ -805,8 +807,9 @@
 | TASK-767 | Fix defects found by an editor audit | Complete | 2026-10-05 | 2026-10-06 | [TASK-767](./TASK-767-editor-audit-defects.md) |
 
 | TASK-768 | Fix defects found by the second audit | Complete | 2026-10-06 | 2026-10-06 | [TASK-768](./TASK-768-editor-audit-round-two.md) |
+
 | TASK-769 | Fix defects found by the third audit | In progress | 2026-10-06 | — | [TASK-769](./TASK-769-third-audit.md) |
 
 ## Next task number
 
-**TASK-769**
+**TASK-770**

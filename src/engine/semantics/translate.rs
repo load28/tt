@@ -600,14 +600,19 @@ pub(super) fn string_end(bytes: &[u8], at: usize) -> usize {
 /// authoritative for project roots; explicit inputs are roots by user
 /// request. Relative tt imports then extend that set through the language's
 /// own module graph, including a source that could not be projected and
-/// therefore could never appear in TypeScript's source-file table.
+/// therefore could never appear in TypeScript's source-file table. Without
+/// TypeScript's answer, the explicit inputs are the only roots known.
 pub(super) fn typed_member_sources(
     snapshot: &Snapshot,
     answers: &Answers,
     requested: &HashSet<PathBuf>,
-) -> Option<HashSet<PathBuf>> {
-    let modules = answers.project_modules.as_ref()?;
-    let configured: HashSet<&std::path::Path> = modules.iter().map(PathBuf::as_path).collect();
+) -> HashSet<PathBuf> {
+    let configured: HashSet<&std::path::Path> = answers
+        .project_modules
+        .iter()
+        .flatten()
+        .map(PathBuf::as_path)
+        .collect();
     let mut members: HashSet<PathBuf> = snapshot
         .files()
         .iter()
@@ -662,7 +667,7 @@ pub(super) fn typed_member_sources(
         }
     }
 
-    Some(members)
+    members
 }
 
 pub(super) fn typescript_owned(file: &ProjectedDocument, diagnostic: &TsDiagnostic) -> bool {

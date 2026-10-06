@@ -53,18 +53,45 @@ fn cli_build_emits_a_complete_tree_that_runs() {
 #[test]
 fn cli_refuses_to_overwrite_a_pass_through_input() {
     let dir = tmpdir();
-    fs::write(dir.join("main.ts"), "export const x = 1;\n").unwrap();
+    fs::write(dir.join("a.tt"), "export const a = 1;\n").unwrap();
+    fs::write(dir.join("main.ts"), "import { a } from \"./a.tt\";\nexport const x = a;\n").unwrap();
 
-    // In place, a pass-through `.ts` would land on top of itself.
+    // In place, a pass-through `.ts` whose specifiers are rewritten would
+    // land on top of itself.
     let (ok, err) = run_ttc(&dir, &["main.ts"]);
     assert!(!ok, "expected failure:\n{err}");
     assert!(err.contains("output would overwrite the input"), "{err}");
     let untouched = fs::read_to_string(dir.join("main.ts")).unwrap();
-    assert_eq!(untouched, "export const x = 1;\n");
+    assert_eq!(untouched, "import { a } from \"./a.tt\";\nexport const x = a;\n");
 
     // A separate output tree is fine.
     let (ok, err) = run_ttc(&dir, &["-o", "out", "main.ts"]);
     assert!(ok, "build failed:\n{err}");
+}
+
+#[test]
+fn cli_in_place_directory_build_keeps_unchanged_pass_through_inputs() {
+    let dir = tmpdir();
+    fs::create_dir(dir.join("src")).unwrap();
+    fs::write(dir.join("src/main.tt"), "export const a = 1;\n").unwrap();
+    fs::write(dir.join("src/plain.ts"), "export const p = 2;\n").unwrap();
+    fs::write(dir.join("src/imp.ts"), "import { a } from \"./main.tt\";\nexport const q = a;\n").unwrap();
+
+    let (ok, err) = run_ttc(&dir, &["src"]);
+    assert!(!ok, "expected failure:\n{err}");
+    assert!(err.contains("src/imp.ts: output would overwrite the input"), "{err}");
+    assert!(!err.contains("plain.ts"), "{err}");
+    assert!(dir.join("src/main.ts").exists(), "{err}");
+    assert_eq!(fs::read_to_string(dir.join("src/plain.ts")).unwrap(), "export const p = 2;\n");
+    assert_eq!(
+        fs::read_to_string(dir.join("src/imp.ts")).unwrap(),
+        "import { a } from \"./main.tt\";\nexport const q = a;\n"
+    );
+
+    fs::remove_file(dir.join("src/imp.ts")).unwrap();
+    let (ok, err) = run_ttc(&dir, &["src"]);
+    assert!(ok, "build failed:\n{err}");
+    assert_eq!(fs::read_to_string(dir.join("src/plain.ts")).unwrap(), "export const p = 2;\n");
 }
 
 #[test]

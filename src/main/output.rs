@@ -129,11 +129,32 @@ pub(super) fn normalized_absolute(path: &Path) -> PathBuf {
 /// so a reader sees the previous file or the new one, never a prefix.
 pub(super) fn write_output(out_path: &Path, code: &str) -> Result<(), String> {
     if let Some(parent) = out_path.parent()
-        && let Err(e) = fs::create_dir_all(parent)
+        && let Err(e) = create_dir_all(parent)
     {
-        return Err(format!("ttc: {}: {e}", parent.display()));
+        return Err(format!("ttc: {}: {e}", out_path.display()));
     }
     replace_file(out_path, code.as_bytes()).map_err(|e| format!("ttc: {}: {e}", out_path.display()))
+}
+
+pub(super) fn create_dir_all(dir: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dir).map_err(|error| {
+        if !matches!(
+            error.kind(),
+            std::io::ErrorKind::AlreadyExists | std::io::ErrorKind::NotADirectory
+        ) {
+            return error;
+        }
+        match dir
+            .ancestors()
+            .find(|ancestor| fs::metadata(ancestor).is_ok_and(|meta| !meta.is_dir()))
+        {
+            Some(file) => std::io::Error::new(
+                std::io::ErrorKind::NotADirectory,
+                format!("{}: not a directory", file.display()),
+            ),
+            None => error,
+        }
+    })
 }
 
 /// Publishes bytes through an exclusively owned sibling staging file.
@@ -187,19 +208,32 @@ pub(crate) const WATCH_INTERVAL: Duration = Duration::from_millis(300);
 pub(super) fn watch_mode(
     inputs: &[String],
     out_dir: Option<&Path>,
+    project: Option<&Path>,
     opts: &BuildOptions,
 ) -> ExitCode {
     let mut stamps: HashMap<PathBuf, SystemTime> = HashMap::new();
     let mut reads: HashMap<PathBuf, (SystemTime, Vec<PathBuf>)> = HashMap::new();
     let mut placed: Option<PathBuf> = None;
+    let mut configured: Option<bool> = None;
     let mut first = true;
     let mut input_error = None;
 
     loop {
-        let jobs = match build_jobs(inputs, out_dir, true) {
-            Ok(jobs) => {
-                input_error = None;
-                jobs
+        let round = build_jobs(inputs, out_dir, true).and_then(|jobs| {
+            if opts.print && jobs.len() != 1 {
+                return Err("ttc: --print requires exactly one source file".to_string());
+            }
+            let files: Vec<PathBuf> = jobs.iter().map(|job| job.file.clone()).collect();
+            let jsx_preserve = project_jsx_preserve(opts.rewrite_imports, &files, project)
+                .map_err(|error| format!("ttc: {error}"))?;
+            Ok((jobs, jsx_preserve))
+        });
+        let (jobs, jsx_preserve) = match round {
+            Ok(round) => {
+                if input_error.take().is_some() {
+                    configured = None;
+                }
+                round
             }
             // An input can disappear mid-edit; keep watching rather than
             // tearing the session down.
@@ -212,6 +246,11 @@ pub(super) fn watch_mode(
                 continue;
             }
         };
+        let round_opts = BuildOptions {
+            jsx_preserve,
+            ..opts.clone()
+        };
+        let opts = &round_opts;
 
         let stamp = |file: &Path| {
             fs::metadata(file)
@@ -234,7 +273,8 @@ pub(super) fn watch_mode(
 
         let root = support_root(&jobs, out_dir);
         let moved = root != placed;
-        let changed: Vec<PathBuf> = if first || moved {
+        let reconfigured = configured != Some(jsx_preserve);
+        let changed: Vec<PathBuf> = if first || moved || reconfigured {
             jobs.iter().map(|job| job.file.clone()).collect()
         } else {
             current
@@ -276,6 +316,7 @@ pub(super) fn watch_mode(
         }
         stamps = current;
         placed = root;
+        configured = Some(jsx_preserve);
         thread::sleep(WATCH_INTERVAL);
     }
 }
