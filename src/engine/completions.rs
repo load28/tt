@@ -1075,7 +1075,7 @@ fn type_variant<'a>(declarations: &'a [DeclaredVariant], ty: &str) -> Option<&'a
         .collect();
     declarations
         .iter()
-        .find(|d| d.name == base || d.type_names.iter().any(|name| *name == base))
+        .find(|d| d.name == base || d.type_names.contains(&base))
 }
 
 fn cases(declared: &DeclaredVariant, covered: &[String]) -> Vec<TtCompletion> {
