@@ -110,6 +110,26 @@ ones that can be fixed in this repository, before the next audit round.
   A nameless `variant` is not tt syntax, so it passes through as
   TypeScript and draws TypeScript's errors (contract 1). Nothing changed.
 
+### Decision 6: The editor already publishes the command line's placement and wording
+
+- **Context**: TASK-769 (R3E3) and TASK-767 left the editor placing an
+  assignability error on glue (`match (flag)`, "in code ttc generated for
+  this construct") where the command line places it at the value a
+  structured mismatch names (`1`, "type mismatch: expected `string`, found
+  `number`").
+- **Decision and rationale**: Re-checked with an editor case. The
+  language service's own layer (`tsDiagnostics`) still answers in
+  TypeScript's words, because the service protocol carries no structured
+  mismatch. What the editor publishes is the merge of its layers
+  (`editors/vscode/server/src/diagnostics.ts`, `publishedDiagnostics`), in
+  which the typed pass (`typedCheck`, the command line's report) replaces
+  the service's type errors (`replacesTypes`). With the default settings
+  (`tt.typeDiagnostics` and `tt.typedChecks` both on) the published
+  diagnostic is the command line's, at `1`, with its wording. The one
+  producer the finding asked for is the typed pass. Only a user who turns
+  `tt.typedChecks` off while keeping `tt.typeDiagnostics` sees the
+  service's wording. Nothing changed.
+
 ## Work log
 
 - 2026-10-06: Started from the deferred findings of TASK-765, TASK-767,
@@ -123,6 +143,8 @@ ones that can be fixed in this repository, before the next audit round.
 - 2026-10-06: Reproduced the TASK-767 items with editor cases; closed the
   probe of an unclosed construct (decision 4) and re-checked the nameless
   declaration (decision 5).
+- 2026-10-06: Compared the editor's service and published diagnostics
+  with `ttc --check-types` on a structured mismatch (decision 6).
 
 ## Issues and resolutions
 
