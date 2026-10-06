@@ -1,8 +1,8 @@
 # TASK-769: Fix defects found by the third audit
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-06
-- **Completed**: —
+- **Completed**: 2026-10-06
 - **Commit**: —
 
 ## Purpose
@@ -585,49 +585,87 @@ stated (a crash, output that does not parse, a wrong runtime result, or a
 missing or misplaced diagnostic).
 
 - **Path**: `tests/cases/compiler/aPatternSubjectWithAPlainTemplateAfterAMatchIsLowered.tt`
-  - **Observed failure**: internal compiler error "match reached
-    expression emission without a host rewrite".
+- **Observed failure**: internal compiler error "match reached
+  expression emission without a host rewrite".
 - **Path**: `tests/cases/compiler/anArrowStepWhoseTemplateBodyHoldsAMatchIsLowered.tt`
-  - **Observed failure**: verify-failed, "unbalanced TypeScript delimiter".
+- **Observed failure**: verify-failed, "unbalanced TypeScript delimiter".
 - **Path**: `tests/cases/compiler/aCallbackWithAnIfLetBesideAHoistedArgumentIsLowered.tt`
-  - **Observed failure**: verify-failed, "Expected '(', got 'let'".
+- **Observed failure**: verify-failed, "Expected '(', got 'let'".
 - **Path**: `tests/cases/compiler/aPipelineStepWithAnIfLetCallbackAndAMatchIsLowered.tt`
-  - **Observed failure**: lowering-plan-failed, "a tt node's source span
-    0..0 is invalid".
+- **Observed failure**: lowering-plan-failed, "a tt node's source span
+  0..0 is invalid".
 - **Path**: `tests/cases/compiler/anIfLetSubjectPipingAMatchIsOnePipeline.tt`
-  - **Observed failure**: stray-pipe at the `|>`.
+- **Observed failure**: stray-pipe at the `|>`.
 - **Path**: `tests/cases/compiler/anOuterTryRunsAMatchAndAnInnerTryInOrder.tt`
-  - **Observed failure**: internal compiler error `SourceEmittedTwice`.
+- **Observed failure**: internal compiler error `SourceEmittedTwice`.
 - **Path**: `tests/cases/compiler/anOuterTryRunsItsOperandsInOrderAroundAnInnerTry.tt`
-  - **Observed failure**: verify-failed, "Expression expected", with the
-    inner `try` run before the operand written before it.
+- **Observed failure**: verify-failed, "Expression expected", with the
+  inner `try` run before the operand written before it.
 - **Path**: `tests/cases/compiler/aValBindingPassedThroughAWrappedCalleeIsReported.tt`
-  - **Observed failure**: no `val-pass` error for the five wrapped calls.
+- **Observed failure**: no `val-pass` error for the five wrapped calls.
 - **Path**: `tests/cases/compiler/anAwaitInANestedArrowDoesNotMakeAResultBlockAsync.tt`
-  - **Observed failure**: verify-failed, "await isn't allowed in non-async
-    function".
+- **Observed failure**: verify-failed, "await isn't allowed in non-async
+  function".
 - **Path**: `tests/cases/compiler/aSpreadAppliesToTheWholePipeline.tt`
-  - **Observed failure**: source-not-typescript, "Parenthesized expression
-    cannot contain spread operator".
+- **Observed failure**: source-not-typescript, "Parenthesized expression
+  cannot contain spread operator".
 - **Path**: `tests/cases/compiler/aResultBlockReturningANestedMatchWritesTheInnerMatch.tt`
-  - **Observed failure**: verify-failed, "Expression expected" (the inner
-    subject was written empty).
+- **Observed failure**: verify-failed, "Expression expected" (the inner
+  subject was written empty).
 - **Path**: `tests/cases/compiler/anOrPatternFieldMissingFromOneCaseIsReportedAtThatCase.tt`
-  - **Observed failure**: the error was reported at the match head as a
-    missing `kind` discriminant.
+- **Observed failure**: the error was reported at the match head as a
+  missing `kind` discriminant.
 - **Path**: `tests/cases/compiler/anAwaitOutsideAnAsyncFunctionInAResultBoundaryIsLocated.tt`
-  - **Observed failure**: verify-failed with no position.
+- **Observed failure**: verify-failed with no position.
 - The other cases added under `tests/cases/compiler/` by this task, and the
   CLI, server, and language tests named in the decisions, were checked the
   same way when their fix was made.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test` (`--no-fail-fast`): every target passed except two
+  editor baselines whose diagnostics Decision 35 moves from the match head
+  to the or-pattern's binding; after reading the diff they were accepted
+  and `cargo test --test editor_cases` passes.
+- [x] Baseline changes reviewed and committed with the change
+- [x] The 51 round-3 fuzz failures compile and run; 490 newly generated
+  differential programs report only documented rejections or generator
+  errors (see the work log).
+
+## Changed files
+
+- CLI: `src/main/build.rs`, `src/main/output.rs`, `src/main/modes.rs`,
+  `src/main/typed.rs`, `src/main/ownership.rs`, `src/server.rs`.
+- Parser and lexer: `src/parser/parse.rs`, `src/parser/iflets.rs`,
+  `src/parser/matches.rs`, `src/lexer.rs`, `src/lexer/queries.rs`,
+  `src/lexer/facts.rs`, `src/lexer/facts/expressions.rs`.
+- Analysis: `src/sema/checker.rs`, `src/val.rs`, `src/val/checker.rs`,
+  `src/diagnostics.rs`, `src/flow/syntax.rs`.
+- Core, evaluation, and projection: `src/core_ir/mod.rs`,
+  `src/core_ir/lower.rs`, `src/evaluation_ir/builder.rs`,
+  `src/evaluation_ir/evaluation.rs`, `src/evaluation_ir/planning.rs`,
+  `src/program_syntax/projection.rs`, `src/program_syntax/visit.rs`.
+- Codegen: `src/codegen/core/emitter/host.rs`,
+  `src/codegen/core/emitter/source.rs`,
+  `src/codegen/core/emitter/expression.rs`,
+  `src/codegen/core/emitter/result.rs`,
+  `src/codegen/core/emitter/pattern.rs`, `src/codegen/rope.rs`,
+  `src/codegen/rope/builder.rs`, `src/lib/mapped.rs`.
+- Engine and editor: `src/lib/compile.rs`, `src/lib/api.rs`,
+  `src/engine/projection.rs`, `src/engine/language/service.rs`,
+  `src/engine/lines.rs`, `src/typescript/mapper.rs`,
+  `src/typescript/service.rs`.
+- Documentation: `docs/ai/tt.md`, `docs/tasks/TASK-352-*.md`,
+  `docs/tasks/TASK-590-*.md` (reversal notes), this record, the index.
+- Tests: the cases under `tests/cases/compiler/` and
+  `tests/cases/conformance/diagnostics/variant-duplicate-field/` with
+  their baselines, `tests/cli.rs`, `tests/compile/`, `tests/passthrough.rs`,
+  `tests/native/cases_07.rs`, `tests/matrix/diagnostics.mjs`.
 
 ## Result
 
-In progress.
+The third audit's CLI, compiler, and editor findings are fixed in the
+layer that owns each of them, except R3E3, which needs one diagnostic
+producer for the CLI and the editor and is left for its own task.
