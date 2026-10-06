@@ -1325,11 +1325,16 @@ async function main() {
         process.exitCode = 5;
         fail(5, "ttc host: the resolved TypeScript has no declaration emit API");
       }
-      const emitted = project.program.getDeclarationEmit(
-        (job.modules ?? []).map((m) => served(m.path)).filter((module) => projectModules.has(module)),
-      );
-      for (const [path, file] of emitted.outputFiles) {
-        out.declarations.push({ path, text: file.text });
+      const requested = (job.modules ?? []).map((m) => m.path);
+      for (const group of groups) {
+        const modules = requested
+          .map((path) => (group.members.has(path) ? path : served(path)))
+          .filter((module) => group.members.has(module));
+        if (modules.length === 0) continue;
+        const emitted = group.project.program.getDeclarationEmit(modules);
+        for (const [path, file] of emitted.outputFiles) {
+          out.declarations.push({ path, text: file.text });
+        }
       }
     }
     out.dependencies = [...dependencies.keys()];

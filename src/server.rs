@@ -306,6 +306,55 @@ fn request_id(line: &str) -> serde_json::Value {
         .unwrap_or(serde_json::Value::Null)
 }
 
+fn replace_lone_surrogates(line: &str) -> std::borrow::Cow<'_, str> {
+    let bytes = line.as_bytes();
+    let unit = |at: usize| -> Option<u16> {
+        (bytes.get(at) == Some(&b'\\') && bytes.get(at + 1) == Some(&b'u'))
+            .then(|| line.get(at + 2..at + 6))
+            .flatten()
+            .and_then(|hex| u16::from_str_radix(hex, 16).ok())
+    };
+    let mut out = String::new();
+    let mut copied = 0;
+    let mut in_string = false;
+    let mut at = 0;
+    while at < bytes.len() {
+        match bytes[at] {
+            b'"' => {
+                in_string = !in_string;
+                at += 1;
+            }
+            b'\\' if in_string => {
+                if let Some(first) = unit(at) {
+                    let high = (0xD800..0xDC00).contains(&first);
+                    let paired =
+                        high && unit(at + 6).is_some_and(|next| (0xDC00..0xE000).contains(&next));
+                    if paired {
+                        at += 12;
+                        continue;
+                    }
+                    if (0xD800..0xE000).contains(&first) {
+                        out.push_str(&line[copied..at]);
+                        out.push_str("\\ufffd");
+                        at += 6;
+                        copied = at;
+                        continue;
+                    }
+                    at += 6;
+                } else {
+                    at += 2;
+                }
+            }
+            _ => at += 1,
+        }
+    }
+    if copied == 0 {
+        return std::borrow::Cow::Borrowed(line);
+    }
+    out.push_str(&line[copied..]);
+    std::borrow::Cow::Owned(out)
+}
+
 fn bool_param(
     value: &serde_json::Value,
     method: &str,
@@ -345,6 +394,7 @@ fn respond(
 ) -> serde_json::Value {
     use serde_json::json;
     ttc::ice::panic_for_test("server");
+    let line = &replace_lone_surrogates(line);
     let request: serde_json::Value = match serde_json::from_str(line) {
         Ok(value) => value,
         Err(e) => {
@@ -581,7 +631,7 @@ fn close_document(
 fn check(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let text = text_param(params)?;
-    let filename = params["filename"].as_str();
+    let filename = filename_param(params, "check")?;
     let options = ttc::Options {
         filename,
         source_kind: filename
@@ -827,8 +877,7 @@ fn tt_hints(
 
 fn semantic_tokens(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
-    let source_kind = params["filename"]
-        .as_str()
+    let source_kind = filename_param(params, "semanticTokens")?
         .and_then(|name| ttc::SourceKind::from_path(std::path::Path::new(name)))
         .unwrap_or_default();
     let tokens: Vec<_> = ttc::engine::semantic_tokens_with_kind(text_param(params)?, source_kind)
@@ -977,8 +1026,7 @@ fn dependencies(
 /// `--emit-map` for a buffer: the emitted TypeScript and its byte mappings.
 fn emit_map(params: &serde_json::Value) -> Result<serde_json::Value, String> {
     use serde_json::json;
-    let source_kind = params["filename"]
-        .as_str()
+    let source_kind = filename_param(params, "emitMap")?
         .and_then(|name| ttc::SourceKind::from_path(std::path::Path::new(name)))
         .unwrap_or_default();
     let emit = ttc::emit_mapped_with_kind(text_param(params)?, source_kind);
@@ -1005,6 +1053,15 @@ fn typed_check(
     let buffer = text_param(params)?;
     let text = buffer.to_string();
     let include_types = bool_param(&params["includeTypes"], "typedCheck", "includeTypes", false)?;
+    let scoped = match string_param(&params["scope"], "typedCheck", "scope", "project")? {
+        "file" => true,
+        "project" => false,
+        other => {
+            return Err(format!(
+                "typedCheck: \"scope\" expects \"file\" or \"project\" (got \"{other}\")"
+            ));
+        }
+    };
     let canonical = ttc::engine::normalize_document_path(Path::new(&path))?;
     // A document the consumer holds open keeps its overlay after the check;
     // a one-off buffer's overlay is scoped to this request, so the answer
@@ -1020,7 +1077,6 @@ fn typed_check(
         scanned.dedup();
         scanned
     };
-    let scoped = params["scope"].as_str() == Some("file");
     let outcome = project.update_scoped(&files, scoped.then_some(canonical.as_path()));
     let response = match outcome {
         Err(blocked) => {
@@ -1127,9 +1183,24 @@ fn typed_check(
 }
 
 fn text_param(params: &serde_json::Value) -> Result<&str, String> {
-    params["text"]
-        .as_str()
-        .ok_or_else(|| "the request needs a \"text\"".to_string())
+    match &params["text"] {
+        serde_json::Value::String(text) => Ok(text),
+        serde_json::Value::Null => Err("the request needs a \"text\"".to_string()),
+        other => Err(format!("\"text\" expects a string (got {other})")),
+    }
+}
+
+fn filename_param<'a>(
+    params: &'a serde_json::Value,
+    method: &str,
+) -> Result<Option<&'a str>, String> {
+    match &params["filename"] {
+        serde_json::Value::Null => Ok(None),
+        serde_json::Value::String(name) => Ok(Some(name)),
+        other => Err(format!(
+            "{method}: \"filename\" expects a string (got {other})"
+        )),
+    }
 }
 
 #[cfg(test)]
@@ -1141,6 +1212,23 @@ mod tests {
             .iter()
             .map(|line| line.to_string().into_bytes())
             .collect()
+    }
+
+    #[test]
+    fn a_lone_surrogate_in_a_buffer_is_read_as_a_replacement_character() {
+        let mut workspace = Workspace::new(Engine::new(None));
+        let mut checks = Checks::default();
+        let answer = respond(
+            &mut workspace,
+            &mut checks,
+            None,
+            r#"{"id":7,"method":"check","params":{"text":"const a = \"\ud800\";\nconst b = \"\ud83d\ude00\";\n"}}"#,
+        );
+        assert_eq!(
+            answer["result"]["diagnostics"],
+            serde_json::json!([]),
+            "{answer}"
+        );
     }
 
     #[test]
@@ -1158,11 +1246,22 @@ mod tests {
                 "{line}: {answer}"
             );
         }
-        for (params, key) in [
-            (json!({"path": "a.tt", "banner": "no"}), "banner"),
-            (json!({"path": "a.tt", "sourceMap": true}), "sourceMap"),
+        for (method, params, key) in [
+            ("print", json!({"path": "a.tt", "banner": "no"}), "banner"),
+            (
+                "print",
+                json!({"path": "a.tt", "sourceMap": true}),
+                "sourceMap",
+            ),
+            ("check", json!({"text": 5}), "text"),
+            ("emitMap", json!({"text": "x", "filename": 7}), "filename"),
+            (
+                "typedCheck",
+                json!({"path": "/a.tt", "text": "x", "scope": "bogus"}),
+                "scope",
+            ),
         ] {
-            let answer = ask(json!({"id": 2, "method": "print", "params": params}).to_string());
+            let answer = ask(json!({"id": 2, "method": method, "params": params}).to_string());
             assert!(
                 answer["error"]
                     .as_str()

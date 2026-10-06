@@ -3853,3 +3853,215 @@ fn an_output_directory_that_is_a_file_is_named_for_each_output() {
         "{stderr}"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn a_command_line_argument_that_is_not_utf8_is_refused() {
+    use std::os::unix::ffi::OsStrExt;
+    let dir = tmpdir();
+    let name = std::ffi::OsStr::from_bytes(b"b\xff.tt");
+    fs::write(dir.join(name), "export const b = 1;\n").unwrap();
+    for mode in ["-p", "--check"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .arg(mode)
+            .arg(name)
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{mode}: {stderr}");
+        assert!(
+            stderr.contains("argument is not valid UTF-8"),
+            "{mode}: {stderr}"
+        );
+        assert!(
+            !stderr.contains("internal compiler error"),
+            "{mode}: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn check_types_checks_each_input_under_its_own_project() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    for (project, file, config) in [
+        (
+            "ex",
+            "bad.tt",
+            r#"{"compilerOptions":{"strict":true,"noEmit":true},"include":["src"]}"#,
+        ),
+        (
+            "g1",
+            "bad2.tt",
+            r#"{"compilerOptions":{"strict":true,"noEmit":true}}"#,
+        ),
+    ] {
+        fs::create_dir_all(dir.join(project).join("src")).unwrap();
+        fs::write(dir.join(project).join("tsconfig.json"), config).unwrap();
+        fs::write(
+            dir.join(project).join("src").join(file),
+            "export const bad: number = \"\";\n",
+        )
+        .unwrap();
+    }
+    for inputs in [["ex/src", "g1/src"], ["g1/src/bad2.tt", "ex/src/bad.tt"]] {
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .arg("--check-types")
+            .args(inputs)
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{stderr}");
+        assert!(stderr.contains("ex/src/bad.tt:1:"), "{stderr}");
+        assert!(stderr.contains("g1/src/bad2.tt:1:"), "{stderr}");
+    }
+}
+
+#[test]
+fn types_writes_the_sidecar_of_a_named_file_the_configuration_leaves_out() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::create_dir_all(dir.join("other")).unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true},"include":["src"]}"#,
+    )
+    .unwrap();
+    fs::write(dir.join("src/y.tt"), "export const y = 1;\n").unwrap();
+    fs::write(
+        dir.join("other/x.tt"),
+        "export variant V { A }\nexport const x: number = 1;\n",
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--types", "other/x.tt"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    let sidecar = fs::read_to_string(dir.join(".tt-types/x.tt.d.ts")).expect("x.tt.d.ts");
+    assert!(
+        sidecar.contains("export declare const x: number;"),
+        "{sidecar}"
+    );
+}
+
+#[test]
+fn a_tt_importing_a_ttx_needs_a_readable_jsx_option() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        "{\"compilerOptions\":{\"jsx\":\"preserve\",}\n",
+    )
+    .unwrap();
+    fs::write(dir.join("src/v.ttx"), "export const V = 1;\n").unwrap();
+    fs::write(
+        dir.join("src/m.tt"),
+        "import { V } from \"./v.ttx\";\nexport { V };\n",
+    )
+    .unwrap();
+    fs::write(dir.join("src/z.tt"), "export const z = 1;\n").unwrap();
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(args)
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc")
+    };
+    for args in [&["-p", "src/m.tt"][..], &["-o", "out", "src/m.tt"][..]] {
+        let output = run(args);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{args:?}: {stderr}");
+        assert!(
+            stderr.contains("cannot read the project's `jsx` option"),
+            "{stderr}"
+        );
+    }
+    let output = run(&["-p", "src/z.tt"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn a_missing_input_is_a_command_line_error_in_every_mode() {
+    let dir = tmpdir();
+    for mode in [
+        &["-o", "out"][..],
+        &["--check"][..],
+        &["--check-types"][..],
+        &["--types"][..],
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(mode)
+            .arg("missing.tt")
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(1), "{mode:?}: {stderr}");
+        assert!(
+            stderr.contains("ttc: no such file or directory: missing.tt"),
+            "{mode:?}: {stderr}"
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_source_named_twice_through_a_file_symlink_claims_two_outputs() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src/x")).unwrap();
+    fs::write(dir.join("src/x/a.tt"), "export const a = 1;\n").unwrap();
+    std::os::unix::fs::symlink("src/x/a.tt", dir.join("la.tt")).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["-o", "out", "la.tt", "src/x/a.tt"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains("one input claims two outputs"), "{stderr}");
+}
+
+#[test]
+fn a_build_leaves_out_the_sidecars_types_wrote_into_its_input() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"noEmit":true}}"#,
+    )
+    .unwrap();
+    fs::write(dir.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(args)
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc")
+    };
+    let types = run(&["--types", "-o", "src", "src"]);
+    assert!(
+        types.status.success(),
+        "{}",
+        String::from_utf8_lossy(&types.stderr)
+    );
+    assert!(dir.join("src/a.tt.d.ts").is_file());
+    let build = run(&["-o", "out", "src"]);
+    assert!(
+        build.status.success(),
+        "{}",
+        String::from_utf8_lossy(&build.stderr)
+    );
+    assert!(dir.join("out/a.ts").is_file());
+    assert!(!dir.join("out/a.tt.d.ts").exists());
+}

@@ -50,15 +50,20 @@ pub(super) fn project_jsx_preserve(
     if rewrite != ImportRewrite::Js {
         return Ok(preserve);
     }
-    let any_ttx = files
-        .iter()
-        .any(|file| file.extension().is_some_and(|extension| extension == "ttx"));
+    let names_ttx = |file: &PathBuf| {
+        file.extension().is_some_and(|extension| extension == "ttx")
+            || std::fs::read_to_string(file).is_ok_and(|source| {
+                ttc::tt_imports(&source)
+                    .iter()
+                    .any(|import| import.specifier.ends_with(".ttx"))
+            })
+    };
     for file in files {
         match ttc::engine::jsx_preserve(std::slice::from_ref(file), project) {
             Ok(value) => {
                 preserve.insert(file.clone(), value);
             }
-            Err(_) if !any_ttx => {}
+            Err(_) if !names_ttx(file) => {}
             Err(error) => {
                 return Err(format!(
                     "cannot read the project's `jsx` option, which names a .ttx import's output: \
@@ -283,6 +288,9 @@ fn output_tree_inside(input: &Path, out_dir: &Path) -> bool {
 pub(super) fn same_file(a: &Path, b: &Path) -> bool {
     if normalized_absolute(a) == normalized_absolute(b) {
         return true;
+    }
+    if let (Ok(x), Ok(y)) = (a.canonicalize(), b.canonicalize()) {
+        return x == y;
     }
     if a.file_name() != b.file_name() {
         return false;

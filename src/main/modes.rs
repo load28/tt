@@ -220,6 +220,14 @@ pub(super) fn sidecar_mode(jobs: &[Job], decl_dir: &Path, inputs: &[String]) -> 
             failed = true;
             continue;
         }
+        if let Err(error) =
+            super::ownership::record_sidecar(&dts_path, &job.file, &sidecar.declarations)
+                .and_then(|()| super::ownership::record_sidecar(&map_path, &job.file, &sidecar.map))
+        {
+            eprintln!("{error}");
+            failed = true;
+            continue;
+        }
         eprintln!("ttc: {} → {}", job.file.display(), dts_path.display());
     }
     if failed {

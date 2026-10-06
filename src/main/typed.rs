@@ -13,6 +13,25 @@ pub(super) fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_
         tsconfig: options.project.map(Path::to_path_buf),
         out_dir: options.out_dir.map(Path::to_path_buf),
     };
+    let groups = project_groups(inputs, &project_options, options);
+    if groups.len() > 1 {
+        if options.watch {
+            eprintln!(
+                "ttc: the inputs belong to {} TypeScript projects; watch one project at a time, \
+                 or name one with --project",
+                groups.len()
+            );
+            return ExitCode::FAILURE;
+        }
+        let mut report = TypedReport::checked();
+        for group in &groups {
+            report.absorb(typed_check_group(&engine, group, &project_options, options));
+        }
+        if options.json_report {
+            crate::out::line(&report.to_json());
+        }
+        return report.exit_code();
+    }
     let report = match open_typed_project(&engine, inputs, &project_options, options) {
         Ok(mut project) => {
             if options.watch {
@@ -42,6 +61,56 @@ pub(super) fn typed_check_mode(inputs: &[String], options: &TypedCheckOptions<'_
         crate::out::line(&report.to_json());
     }
     report.exit_code()
+}
+
+fn project_groups(
+    inputs: &[String],
+    project_options: &ttc::engine::ProjectOptions,
+    options: &TypedCheckOptions<'_>,
+) -> Vec<Vec<String>> {
+    if project_options.tsconfig.is_some() || !options.overlay.is_empty() {
+        return vec![inputs.to_vec()];
+    }
+    let mut groups: Vec<(Option<PathBuf>, Vec<String>)> = Vec::new();
+    for input in inputs {
+        let path = Path::new(input);
+        let probe = if path.is_dir() {
+            path.join("tsconfig.json")
+        } else {
+            path.to_path_buf()
+        };
+        let tsconfig = ttc::engine::Engine::document_project_identity(&probe, project_options)
+            .ok()
+            .and_then(|(tsconfig, _)| tsconfig);
+        match groups.iter_mut().find(|(key, _)| *key == tsconfig) {
+            Some((_, group)) => group.push(input.clone()),
+            None => groups.push((tsconfig, vec![input.clone()])),
+        }
+    }
+    groups.into_iter().map(|(_, group)| group).collect()
+}
+
+fn typed_check_group(
+    engine: &ttc::engine::Engine,
+    inputs: &[String],
+    project_options: &ttc::engine::ProjectOptions,
+    options: &TypedCheckOptions<'_>,
+) -> TypedReport {
+    match open_typed_project(engine, inputs, project_options, options) {
+        Ok(mut project) => {
+            let mut files = project.initial_files();
+            files.sort();
+            files.dedup();
+            typed_pass(&mut project, &files, options).unwrap_or_else(|e| {
+                eprintln!("ttc: {e}");
+                TypedReport::unchecked(0)
+            })
+        }
+        Err(e) => {
+            eprintln!("ttc: {e}");
+            TypedReport::unchecked(0)
+        }
+    }
 }
 
 /// Opens the project `inputs` belong to, with the overlays standing in for
@@ -111,6 +180,21 @@ impl TypedReport {
             blocked: true,
             writes: WriteOutcome::default(),
         }
+    }
+
+    fn checked() -> Self {
+        Self {
+            reported: 0,
+            blocked: false,
+            writes: WriteOutcome::default(),
+        }
+    }
+
+    fn absorb(&mut self, other: TypedReport) {
+        self.reported += other.reported;
+        self.blocked |= other.blocked;
+        self.writes.written.extend(other.writes.written);
+        self.writes.failed.extend(other.writes.failed);
     }
 
     fn exit_code(&self) -> ExitCode {
@@ -444,16 +528,23 @@ pub(super) fn write_declarations(
             &declaration.text,
             &relative_path(&dir, &file.source_path),
         );
+        let owned = |path: &Path, code: &str| {
+            super::ownership::record_sidecar(path, &file.source_path, code)
+                .map_err(std::io::Error::other)
+        };
         let declared = outcome.record(
             &target,
-            created.and_then(|()| {
-                super::output::replace_file(&target, sidecar.declarations.as_bytes())
-            }),
+            created
+                .and_then(|()| {
+                    super::output::replace_file(&target, sidecar.declarations.as_bytes())
+                })
+                .and_then(|()| owned(&target, &sidecar.declarations)),
         );
         if declared {
             outcome.record(
                 &map,
-                super::output::replace_file(&map, sidecar.map.as_bytes()),
+                super::output::replace_file(&map, sidecar.map.as_bytes())
+                    .and_then(|()| owned(&map, &sidecar.map)),
             );
         } else {
             outcome.fail(

@@ -89,6 +89,12 @@ pub(super) fn check_output_owner(output: &Path, owner: OutputOwner) -> Result<()
     ))
 }
 
+pub(super) fn record_sidecar(output: &Path, source: &Path, code: &str) -> Result<(), String> {
+    let record =
+        serde_json::json!({ "version": 1, "source": recorded_source(source)?, "content": code });
+    write_output(&record_path(output), &record.to_string())
+}
+
 pub(super) fn write_owned_output(
     output: &Path,
     owner: OutputOwner,

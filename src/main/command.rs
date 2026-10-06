@@ -116,7 +116,19 @@ pub(super) fn entry() -> ExitCode {
 /// than aborting the process with a backtrace.
 pub(super) fn run() -> ExitCode {
     ttc::ice::panic_for_test("cli");
-    let argv: Vec<String> = std::env::args().skip(1).collect();
+    let mut argv: Vec<String> = Vec::new();
+    for argument in std::env::args_os().skip(1) {
+        match argument.into_string() {
+            Ok(argument) => argv.push(argument),
+            Err(argument) => {
+                eprintln!(
+                    "ttc: {}: argument is not valid UTF-8 — rename the path",
+                    argument.to_string_lossy()
+                );
+                return ExitCode::FAILURE;
+            }
+        }
+    }
 
     // `ttc help [topic]` — only as the first argument, so a file that
     // happens to be named "help" can still be passed as `./help`.
@@ -591,6 +603,15 @@ pub(super) fn run() -> ExitCode {
         // so a project's tsconfig `paths` and `.gitignore` keep pointing at
         // the same place. A check that writes nothing needs no directory.
         let sidecar_out = types.then(|| out_dir.unwrap_or_else(|| PathBuf::from(TYPES_DIR)));
+        if let Some(missing) = inputs.iter().find(|input| {
+            let path = Path::new(input.as_str());
+            !path.exists()
+                && !ttc::engine::normalize_document_path(path)
+                    .is_ok_and(|document| overlay.contains_key(&document))
+        }) {
+            eprintln!("ttc: no such file or directory: {missing}");
+            return ExitCode::FAILURE;
+        }
         return typed_check_mode(
             &inputs,
             &TypedCheckOptions {
