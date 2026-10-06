@@ -166,6 +166,22 @@ impl ProgramSyntax {
             source_kind,
             mode,
         )?;
+        for part in &projection.hidden_parts {
+            let receiver = if part.postfix { "$tt_syntax_piped" } else { "" };
+            let open = "class $tt_syntax extends Object { async *$tt_syntax() { (";
+            let start = open.len() + receiver.len();
+            let text = &source[part.source.start..part.source.end];
+            let code = format!("{open}{receiver}{text}); }} }}");
+            let segments = [ProjectionSourceSegment {
+                projected: ProjectedSpan {
+                    start: ProjectedByte(start),
+                    end: ProjectedByte(start + text.len()),
+                },
+                source: part.source,
+                kind: ProjectionSegmentKind::Copied,
+            }];
+            parse_module(&code, &segments, source_kind, mode)?;
+        }
         let completion_scopes = super::completion::completion_scopes(
             &parsed.module,
             parsed.start,
@@ -527,6 +543,7 @@ pub(super) struct Projection {
     pub(super) pending: Vec<PendingOverlay>,
     pub(super) source_segments: Vec<ProjectionSourceSegment>,
     pub(super) projection_only_protocol_parents: Vec<ProjectedSpan>,
+    pub(super) hidden_parts: Vec<HiddenPart>,
 }
 
 #[derive(Debug)]
@@ -559,6 +576,13 @@ pub(super) struct ProjectionBuilder<'a> {
     pub(super) source_segments: Vec<ProjectionSourceSegment>,
     pub(super) projection_only_protocol_parents: Vec<ProjectedSpan>,
     pub(super) automatic_semicolons: Vec<crate::lexer::AutomaticSemicolon>,
+    pub(super) hidden_parts: Vec<HiddenPart>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct HiddenPart {
+    pub(super) source: SourceSpan,
+    pub(super) postfix: bool,
 }
 
 impl<'a> ProjectionBuilder<'a> {
@@ -580,6 +604,7 @@ impl<'a> ProjectionBuilder<'a> {
             source_segments: Vec::new(),
             projection_only_protocol_parents: Vec::new(),
             automatic_semicolons: crate::lexer::automatic_semicolons(tokens),
+            hidden_parts: Vec::new(),
         }
     }
 
@@ -593,6 +618,7 @@ impl<'a> ProjectionBuilder<'a> {
             pending: self.pending,
             source_segments: self.source_segments,
             projection_only_protocol_parents: self.projection_only_protocol_parents,
+            hidden_parts: self.hidden_parts,
         })
     }
 
@@ -1037,6 +1063,24 @@ impl<'a> ProjectionBuilder<'a> {
         // placeholder hides. Project that step beside the placeholder in a
         // valid comma expression so the parent collector retains its arrow
         // or conditional boundary.
+        if let Some(head) = apply.head
+            && let Expr::Opaque(node) = &self.core.exprs[head.index()]
+        {
+            self.hidden_parts.push(HiddenPart {
+                source: self.source_span(*node)?,
+                postfix: false,
+            });
+        }
+        for step in &apply.steps {
+            if let Expr::Opaque(_) = &self.core.exprs[step.value.index()]
+                && step.mode != crate::core_ir::ApplyMode::Missing
+            {
+                self.hidden_parts.push(HiddenPart {
+                    source: self.source_span(step.node)?,
+                    postfix: matches!(step.mode, crate::core_ir::ApplyMode::Postfix { .. }),
+                });
+            }
+        }
         let shadow_steps: Vec<_> = apply
             .steps
             .iter()

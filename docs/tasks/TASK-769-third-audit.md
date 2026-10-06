@@ -21,7 +21,8 @@ request validation. Fix each in the layer that owns it.
   in-place refusal's advice (R3L7); the path `--check-types` shows for a
   file outside the working directory (R3L8); non-ASCII paths in the
   language service's URIs (R3E1); the outline's and navigation targets'
-  position conversions (R3E2); an empty match body (R3E6).
+  position conversions (R3E2); an empty match body (R3E6); TypeScript in a
+  pipeline that does not parse (R3E7).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -160,6 +161,23 @@ request validation. Fix each in the layer that owns it.
   arm-list candidate; an empty body is the same list with no element
   written yet. It is now a candidate too, and the host's parser still
   keeps `class D extends match (1) {}` TypeScript.
+
+### Decision 11: A pipeline's hidden parts are parsed as TypeScript too
+
+- **Context**: `r |> ((q) => q.)` failed the output self-check
+  (`verify-failed`, which names a possible ttc bug), while the same text
+  outside the pipeline is `source-not-typescript`.
+- **Alternatives considered**: Project every head and step beside the
+  pipeline's placeholder (changed the evaluation protocol of 23 cases and
+  broke `flow` and missing steps); parse the hidden parts on their own.
+- **Decision and rationale**: The reference makes TypeScript that does not
+  parse inside a claimed construct `source-not-typescript`, decided from
+  the projection. A pipeline is one placeholder in the projection, and a
+  head or step holding no tt value stayed hidden behind it. The projection
+  now records those parts, and each is parsed as an expression (a postfix
+  step after a stand-in receiver) in an async generator method, where
+  `yield`, `await` and `super` are as valid as in the surrounding code; a
+  failure maps back to its source byte.
 
 ## Work log
 

@@ -1,0 +1,3 @@
+export function f(r: number) { const x = r |> ((q) => q.); return x; }
+export function g(r: number) { const y = r |> h(r.); return y; }
+declare function h(n: number): (m: number) => number;
