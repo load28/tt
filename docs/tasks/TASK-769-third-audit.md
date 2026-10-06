@@ -13,7 +13,8 @@ request validation. Fix each in the layer that owns it.
 
 ## Scope
 
-- Included: the output layout of several inputs (R3L1).
+- Included: the output layout of several inputs (R3L1); the standard
+  library's place and specifiers in an in-place build (R3L2).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -35,6 +36,18 @@ request validation. Fix each in the layer that owns it.
   separate roots no longer share an output, and overlapping roots give a
   source one output. Their tests now pin that behaviour; TASK-352 records
   the reversal.
+
+### Decision 2: The support root is a directory, not a spelling
+
+- **Context**: `cd src && ttc deep ../lib` wrote the standard library to
+  `src/tt` and `lib/b.ts` imported `../.././tt/option.js`, which does not
+  exist; naming `./src/b.tt` beside `src/a.tt` moved it to `./tt`.
+- **Decision and rationale**: The support root is documented as the
+  deepest directory every output shares. It was computed over the outputs'
+  path text, so `..`, `.` and absolute spellings counted as different
+  directories, and specifiers to a `tt/` not written yet were computed from
+  raw text. Both now work on normalized absolute paths; the root is shown
+  relative to the working directory when it is inside it.
 
 ## Work log
 

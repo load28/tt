@@ -111,16 +111,15 @@ pub(super) fn input_root(inputs: &[String]) -> Option<PathBuf> {
 
 /// The deepest directory every output shares.
 pub(super) fn common_ancestor(jobs: &[Job]) -> Option<PathBuf> {
-    let shared = deepest_shared_directory(jobs.iter().map(|job| {
-        job.out_path
-            .parent()
-            .unwrap_or(Path::new("."))
-            .to_path_buf()
-    }))?;
-    Some(if shared.as_os_str().is_empty() {
-        PathBuf::from(".")
-    } else {
-        shared
+    let shared = deepest_shared_directory(
+        jobs.iter()
+            .map(|job| normalized_absolute(job.out_path.parent().unwrap_or(Path::new(".")))),
+    )?;
+    let cwd = normalized_absolute(Path::new("."));
+    Some(match shared.strip_prefix(&cwd) {
+        Ok(relative) if relative.as_os_str().is_empty() => PathBuf::from("."),
+        Ok(relative) => relative.to_path_buf(),
+        Err(_) => shared,
     })
 }
 

@@ -245,7 +245,7 @@ pub(super) fn relative_path(from_dir: &Path, to_file: &Path) -> String {
     // and mixing an absolute path with a relative one yields nonsense.
     let (from, to) = match (from_dir.canonicalize(), to_file.canonicalize()) {
         (Ok(from), Ok(to)) => (from, to),
-        _ => (from_dir.to_path_buf(), to_file.to_path_buf()),
+        _ => (normalized_absolute(from_dir), normalized_absolute(to_file)),
     };
 
     let from_parts: Vec<_> = from.components().collect();

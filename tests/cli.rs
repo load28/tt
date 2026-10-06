@@ -1829,6 +1829,32 @@ fn a_project_path_that_is_not_a_file_is_rejected_by_name() {
 }
 
 #[test]
+fn an_in_place_build_places_the_standard_library_by_directory_not_spelling() {
+    let dir = tmpdir();
+    fs::create_dir_all(dir.join("src/deep")).unwrap();
+    fs::create_dir_all(dir.join("lib")).unwrap();
+    let source = "import * as Option from \"@tt/std/option\";\nexport const v = Option.Some(1);\n";
+    fs::write(dir.join("src/deep/a.tt"), source).unwrap();
+    fs::write(dir.join("lib/b.tt"), source).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["deep", "../lib"])
+        .current_dir(dir.join("src"))
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(dir.join("tt/option.ts").is_file());
+    assert!(!dir.join("src/tt").exists());
+    let a = fs::read_to_string(dir.join("src/deep/a.ts")).unwrap();
+    let b = fs::read_to_string(dir.join("lib/b.ts")).unwrap();
+    assert!(a.contains("from \"../../tt/option.js\""), "{a}");
+    assert!(b.contains("from \"../tt/option.js\""), "{b}");
+}
+
+#[test]
 fn overlapping_input_roots_write_each_source_once() {
     let dir = tmpdir();
     fs::create_dir_all(dir.join("src/deep")).unwrap();
