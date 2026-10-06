@@ -682,16 +682,35 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
         return None;
     }
     let spliced = format!("{}{}{}", &source[..at], PROBE_NAME, &source[at..]);
-    let report = crate::compile_projection_report(
-        &spliced,
-        &crate::Options {
-            filename: path.to_str(),
-            source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
-            defer_to_checker: true,
-            rewrite_imports: crate::ImportRewrite::Off,
-            ..crate::Options::default()
-        },
-    );
+    let options = crate::Options {
+        filename: path.to_str(),
+        source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
+        defer_to_checker: true,
+        rewrite_imports: crate::ImportRewrite::Off,
+        ..crate::Options::default()
+    };
+    let probe_end = at + PROBE_NAME.len();
+    let report = crate::compile_projection_report(&spliced, &options);
+    let report = match report
+        .recovered
+        .iter()
+        .find(|&&(start, end)| start <= at && probe_end <= end)
+        .and_then(|&(start, _)| closed_at(&spliced, start, probe_end, options.source_kind))
+    {
+        Some(closed) => {
+            let mended = crate::compile_projection_report(&closed, &options);
+            if mended
+                .recovered
+                .iter()
+                .any(|&(start, end)| start <= at && probe_end <= end)
+            {
+                report
+            } else {
+                mended
+            }
+        }
+        None => report,
+    };
     let emit = report.emit.or(report.withheld)?;
     let out = mapper::to_output_inclusive(&emit.mappings, at)?;
     Some(ProbeDoc {
@@ -705,6 +724,39 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
         generated_names: emit.generated_names,
         inserted: emit.inserted,
     })
+}
+
+/// `text` with the brackets its construct starting at `start` leaves open
+/// before `at` closed right there — what TypeScript's parser assumes of a
+/// missing closer (`parseExpected` reports it and parses on), for a probe
+/// written where the whole construct was recovered because it never
+/// closes. `None` when nothing is open.
+fn closed_at(
+    text: &str,
+    start: usize,
+    at: usize,
+    source_kind: crate::SourceKind,
+) -> Option<String> {
+    use crate::lexer::TokenKind;
+    let tokens = crate::lexer::lex_with_kind(text, start, at, source_kind);
+    let mut open = Vec::new();
+    for token in &tokens {
+        if token.opens_bracket() {
+            open.push(match token.kind {
+                TokenKind::Punct(b'(') => ')',
+                TokenKind::Punct(b'[') => ']',
+                TokenKind::Punct(b'{') => '}',
+                _ => '>',
+            });
+        } else if token.closes_bracket() {
+            open.pop();
+        }
+    }
+    if open.is_empty() {
+        return None;
+    }
+    let closers: String = open.into_iter().rev().collect();
+    Some(format!("{}{closers}{}", &text[..at], &text[at..]))
 }
 
 pub(super) fn signature_position(

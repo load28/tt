@@ -1,0 +1,32 @@
+=== completions /*field*/ unclosedVariantFieldTypeCompletion.tt:4:58 ===
+  | export variant Shape { Circle(radius: number), Tri(p: Poi
+  |                                                          ^ /*field*/
+completion: 2008 item(s), member false, probe yes
+  Pair (Variable, 11)
+  Point2 (Interface, 11)
+  Shape (Variable, 11)
+  ... 2005 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+patternCompletions: null
+editor completion: 2008 item(s)
+  Pair (Variable, 211)
+  Point2 (Interface, 211)
+  Shape (Variable, 211)
+  ... 2005 global or keyword item(s) (sortText 215, no source)
+
+=== completions /*nested*/ unclosedVariantFieldTypeCompletion.tt:3:63 ===
+  | export variant Pair { Two(left: number, right: Map<string, Poi>) }
+  |                                                               ^ /*nested*/
+completion: 2008 item(s), member false, probe no
+  Pair (Variable, 11)
+  Point2 (Interface, 11)
+  Shape (Variable, 11)
+  ... 2005 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+patternCompletions: null
+editor completion: 2008 item(s)
+  Pair (Variable, 211)
+  Point2 (Interface, 211)
+  Shape (Variable, 211)
+  ... 2005 global or keyword item(s) (sortText 215, no source)
+

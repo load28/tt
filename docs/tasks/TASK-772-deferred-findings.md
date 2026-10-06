@@ -85,6 +85,31 @@ ones that can be fixed in this repository, before the next audit round.
   asks it on every hover and prints it only when it answers, as the client
   shows it.
 
+### Decision 4: A probe inside a construct that never closes is tried closed
+
+- **Context**: Completion at `Tri(p: Poi§` in a `variant` whose body is
+  never closed offered values (`Shape`, `localValue`) and no types: the
+  parser recovers the whole declaration (`malformed-variant`), so the
+  probe landed in recovery text.
+- **Decision and rationale**: TypeScript's parser treats a missing closer
+  as present after reporting it (`parseExpected`). When the probe's
+  emission recovers a construct around the probe, `build_probe` closes the
+  brackets that construct leaves open before the probe, right after it,
+  and uses that emission when the construct then parses. When it still
+  does not, the first emission stands, so nothing that answered before
+  changes. An unpaired `<` is not closed: the lexer decides type arguments
+  by their pair, and only a parser knows a type position.
+
+### Decision 5: Tokens and hints around a declaration without a name already work
+
+- **Context**: TASK-767 deferred "tokens and the unused-parameter hint
+  around a declaration whose name is missing".
+- **Decision and rationale**: Re-checked with `function (used, unused)`
+  and a nameless `export variant { ... }` beside a named function: every
+  declaration around them is tokenized and the unused parameter is hinted.
+  A nameless `variant` is not tt syntax, so it passes through as
+  TypeScript and draws TypeScript's errors (contract 1). Nothing changed.
+
 ## Work log
 
 - 2026-10-06: Started from the deferred findings of TASK-765, TASK-767,
@@ -95,6 +120,9 @@ ones that can be fixed in this repository, before the next audit round.
 - 2026-10-06: Added `patternSymbol` to the engine, the JSON-lines server,
   the editor case harness, and the VS Code server (decision 3); ran
   `npm test` in `editors/vscode` (243 passed).
+- 2026-10-06: Reproduced the TASK-767 items with editor cases; closed the
+  probe of an unclosed construct (decision 4) and re-checked the nameless
+  declaration (decision 5).
 
 ## Issues and resolutions
 
