@@ -26,7 +26,10 @@ request validation. Fix each in the layer that owns it.
   declaring one field twice (R3C9); a parenthesized comma operand before a
   tt value (R3C2); a pattern subject with a plain template after a tt
   value (R3C3); a `super` pipeline head (a regression from Decision 11);
-  an integer literal receiver of a postfix step (R3C15).
+  an integer literal receiver of a postfix step (R3C15); an arrow step
+  whose template body holds a `match` (R3C1); a callback holding an `if
+  let` beside a hoisted argument (R3C5) or in a shadowed pipeline step
+  (R3C6); an `if let` subject piping a `match` (R3C7).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -260,6 +263,54 @@ request validation. Fix each in the layer that owns it.
   specifier, `.`, or exponent). The receiver rule this compiler already
   uses parenthesizes anything that is not a member receiver, so such a
   literal is no longer one and is written `(5).toFixed(1)`.
+
+### Decision 18: A sequence enters a host region where its source does
+
+- **Context**: `v |> (w => \`value: ${match (w) { ... }}\`)` emitted the
+  arrow's block before `(w =>`, which does not parse.
+- **Decision and rationale**: A sequence's structured span is the span of
+  its first tt child, so the step `(w => ...)` claimed the rewrite of the
+  arrow body that begins at the template. Expression emission opens a
+  host region before an expression only when the expression's emission
+  starts there; a sequence whose source begins before its first tt child
+  now leaves the region to the walk over its own source, which reaches it
+  at the arrow body.
+
+### Decision 19: Captured source is lowered, not copied
+
+- **Context**: In `show(k |> String, (v) => { if let A(n) = v { ... } },
+  match (k) { ... })` the callback was captured as raw text with its `if
+  let` unlowered, and the `if let` was emitted a second time at the
+  `return`; the same callback in a `match` arm beside `try` was copied
+  unlowered too.
+- **Decision and rationale**: A source capture can contain a nested
+  function whose body holds tt statements; those are separate Core
+  statements, so copying the bytes skips them. Every capture of a call
+  completion, an optional call's operands, and a ternary's source branch
+  now goes through the capture composer, which lowers nested statements,
+  and the operand composer lowers the statements its span contains. A
+  statement inside a completed call's claimed frame is emitted by that
+  frame only, as an expression inside it already was.
+
+### Decision 20: A shadowed pipeline step projects its statements
+
+- **Context**: `vs |> pick((v) => { if let A(n) = v { ... } }, match ...)`
+  failed with "a tt node's source span 0..0 is invalid".
+- **Decision and rationale**: A step projected beside the pipeline
+  placeholder rejected any statement-shaped decision. Its `if let` sits
+  in a function body the step contains, where the main projection emits
+  the same decision; the shadow now emits it through the same projection
+  (bindings included).
+
+### Decision 21: An `if let` subject opens a `match` body
+
+- **Context**: `if let A(n) = match (x) { ... } |> id { ... }` reported
+  a stray `|>`.
+- **Decision and rationale**: The lexer's facts ended the subject at the
+  `match` body's `{`, so the `|>` after it started a statement. The
+  parser already skips a `match (...) {` body in that subject; the facts
+  machine now does the same, except in a class heritage clause, where the
+  `{` after `match(...)` is the class body in TypeScript.
 
 ## Work log
 

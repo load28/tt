@@ -1,0 +1,15 @@
+//// [anArrowStepWhoseTemplateBodyHoldsAMatchIsLowered.tt] 13 mapping(s)
+1:18 -> 23:21 len 6  "number"
+1:18 -> 26:10 len 6  "number"
+1:30 -> 28:3 len 25  "\nconst label = (v: V) => "
+2:25 -> 29:32 len 1  "v"
+2:30 -> 29:36 len 6  "(w => "
+2:36 -> 48:10 len 10  "`value: ${"
+2:53 -> 32:19 len 1  "w"
+2:60 -> 35:17 len 1  "n"
+2:66 -> 36:18 len 1  "n"
+2:74 -> 40:18 len 6  "\"none\""
+2:82 -> 48:26 len 2  "}`"
+2:84 -> 49:2 len 1  ")"
+2:85 -> 49:5 len 42  ";\nconsole.log(label(V.A(3)), label(V.B));\n"
+

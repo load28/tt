@@ -813,30 +813,31 @@ impl<'a> ProjectionBuilder<'a> {
                         ));
                     }
                 }
-                Statement::Decision(decision) => {
-                    let start = ProjectedByte(self.code.len());
-                    self.emit_statement_decision(decision)?;
-                    if let crate::core_ir::DecisionKind::LetElse { .. } = decision.kind {
-                        let mut names = Vec::new();
-                        for arm in &decision.arms {
-                            self.pattern_names(&arm.pattern, &mut names)?;
-                        }
-                        self.tt_bindings.statements.push((
-                            ProjectedSpan {
-                                start,
-                                end: ProjectedByte(self.code.len()),
-                            },
-                            names,
-                        ));
-                    }
-                    if let crate::core_ir::DecisionKind::LetElse { exported: true, .. } =
-                        decision.kind
-                    {
-                        self.code.push_str("export {};");
-                    }
-                }
+                Statement::Decision(decision) => self.emit_body_decision(decision)?,
                 Statement::Expr(expr) => self.emit_expr(*expr)?,
             }
+        }
+        Ok(())
+    }
+
+    fn emit_body_decision(&mut self, decision: &Decision) -> Result<(), ProgramSyntaxError> {
+        let start = ProjectedByte(self.code.len());
+        self.emit_statement_decision(decision)?;
+        if let crate::core_ir::DecisionKind::LetElse { .. } = decision.kind {
+            let mut names = Vec::new();
+            for arm in &decision.arms {
+                self.pattern_names(&arm.pattern, &mut names)?;
+            }
+            self.tt_bindings.statements.push((
+                ProjectedSpan {
+                    start,
+                    end: ProjectedByte(self.code.len()),
+                },
+                names,
+            ));
+        }
+        if let crate::core_ir::DecisionKind::LetElse { exported: true, .. } = decision.kind {
+            self.code.push_str("export {};");
         }
         Ok(())
     }
@@ -1294,7 +1295,8 @@ impl<'a> ProjectionBuilder<'a> {
                     self.source_span(propagate.owner)?,
                     CoreRoot::Propagate(propagate.node),
                 )?,
-                Statement::Adt(_) | Statement::Import(_) | Statement::Decision(_) => {
+                Statement::Decision(decision) => self.emit_body_decision(decision)?,
+                Statement::Adt(_) | Statement::Import(_) => {
                     return Err(ProgramSyntaxError::InvalidSourceSpan {
                         start: SourceByte(0),
                         end: SourceByte(0),

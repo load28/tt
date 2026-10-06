@@ -579,7 +579,10 @@ impl Machine<'_> {
             }
             Tk::Punct(b';' | b')' | b']' | b'}' | b'@' | b'#') => Out::Retry,
             Tk::Punct(b'{') => {
-                if e.cfg.brace_ends || !primary || tok.line_break {
+                if (e.cfg.brace_ends && (e.cfg.heritage || head != Head::MatchCall))
+                    || !primary
+                    || tok.line_break
+                {
                     return Out::Retry;
                 }
                 e.after(After::Primary);

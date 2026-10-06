@@ -1,0 +1,7 @@
+// @run: aPipelineStepWithAnIfLetCallbackAndAMatchIsLowered.tt
+variant V { A(n: number), B }
+const pick = (f: (v: V) => number, fallback: number) => (vs: V[]) => vs.map((v) => f(v) || fallback);
+function f(vs: V[], mode: number) {
+  return vs |> pick((v) => { if let A(n) = v { return n; } return 0; }, match (mode) { 1 => -1, _ => 9 });
+}
+console.log(f([V.A(3), V.B], 1).join(","), f([V.B], 2).join(","));

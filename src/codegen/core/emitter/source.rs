@@ -792,6 +792,7 @@ impl<'a> Emitter<'a> {
                                 .anchor
                                 .is_some_and(|expr| self.active_structured_exprs.contains(expr))
                     })
+                    || self.claimed_by_completed_call(span.start, span.end)
                 {
                     return false;
                 }
@@ -847,6 +848,19 @@ impl<'a> Emitter<'a> {
             }
         }
         true
+    }
+
+    fn claimed_by_completed_call(&self, start: usize, end: usize) -> bool {
+        self.replacements_covering(start, end).any(|frame| {
+            frame.claim
+                && frame.source.start <= start
+                && end <= frame.source.end
+                && !frame
+                    .anchor
+                    .is_some_and(|value| self.active_structured_exprs.contains(value))
+                && !self.capture_is_active(frame.source)
+                && !self.replacement_contains_active_value(frame.source)
+        })
     }
 
     pub(super) fn edits_after_statement(
@@ -1157,6 +1171,10 @@ impl<'a> Emitter<'a> {
         // Enter that region before substituting any captured source inside it,
         // just as the opaque-source traversal does at the same boundary.
         if let Some(span) = structured_expr_span(self.semantic, self.core, expr)
+            && !matches!(
+                &self.core.exprs[expr.index()],
+                Expr::Sequence(body) if self.body_extent(*body).start < span.start
+            )
             && let Some(rewrite) = self.compose_rewrites.iter().find(|rewrite| {
                 rewrite.owner.start == span.start
                     && !self.emitted_compose_rewrites.contains(rewrite.owner)
@@ -1186,18 +1204,7 @@ impl<'a> Emitter<'a> {
         // their capture sites, not again beside the completed call's result.
         if !self.active_structured_exprs.contains(expr)
             && let Some(span) = structured_expr_span(self.semantic, self.core, expr)
-            && self
-                .replacements_covering(span.start, span.end)
-                .any(|frame| {
-                    frame.claim
-                        && frame.source.start <= span.start
-                        && span.end <= frame.source.end
-                        && !frame
-                            .anchor
-                            .is_some_and(|value| self.active_structured_exprs.contains(value))
-                        && !self.capture_is_active(frame.source)
-                        && !self.replacement_contains_active_value(frame.source)
-                })
+            && self.claimed_by_completed_call(span.start, span.end)
         {
             return Rope::new();
         }

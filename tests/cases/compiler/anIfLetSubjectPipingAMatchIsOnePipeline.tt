@@ -1,0 +1,8 @@
+// @run: anIfLetSubjectPipingAMatchIsOnePipeline.tt
+variant V { A(n: number), B }
+const bump = (v: V): V => match (v) { A(n) => V.A(n + 1), B => V.B };
+function f(x: V) {
+  if let A(n) = match (x) { A(n) => x, B => V.A(0) } |> bump { return n; }
+  return -1;
+}
+console.log(f(V.A(1)), f(V.B));

@@ -1,0 +1,49 @@
+=== anArrowStepWhoseTemplateBodyHoldsAMatchIsLowered.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const label = (v: V) => v |> (w => `value: ${match (w) { A(n) => n, B => "none" }}`);
+>label : const label: (v: V) => string
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>v : (parameter) v: V
+>w : (parameter) w: V
+>w : (parameter) w: V
+>n : const n: number
+>n : const n: number
+console.log(label(V.A(3)), label(V.B));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>label : const label: (v: V) => string
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>label : const label: (v: V) => string
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+

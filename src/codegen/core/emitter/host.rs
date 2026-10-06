@@ -285,7 +285,7 @@ impl<'a> Emitter<'a> {
                         // arms reference one copy instead of repeating it.
                         for (name, source) in &completion.captures {
                             region.push_value_capture(name);
-                            region.push_src(&self.source[source.start..source.end], source.start);
+                            region.append(self.captured_tail(*source, &captured));
                             region.push_lit(");");
                             region.push_break(0);
                         }
@@ -559,9 +559,7 @@ impl<'a> Emitter<'a> {
                     }
                     PlannedBranch::Source(span) => {
                         out.push_lit(format!("{result} = "));
-                        let mut source = Rope::new();
-                        source.push_src(&self.source[span.start..span.end], span.start);
-                        push_grouped(out, source, self.source_kind);
+                        push_grouped(out, self.captured_tail(*span, captured), self.source_kind);
                         out.push_lit(";");
                     }
                 };
@@ -704,7 +702,7 @@ impl<'a> Emitter<'a> {
                         } => {
                             if captured.insert(*slot) {
                                 body.push_value_capture(self.value_slot_name(*slot));
-                                body.push_src(&self.source[span.start..span.end], span.start);
+                                body.append(self.captured_tail(*span, captured));
                                 body.push_lit(");");
                                 body.push_break(0);
                             }
@@ -1036,25 +1034,8 @@ impl<'a> Emitter<'a> {
                 parts.push((SourceSpan { start, end: extent }, Part::Value(*expr)));
             }
         }
-        for body in &self.core.bodies {
-            for statement in &body.statements {
-                let node = match statement {
-                    Statement::Decision(decision) => decision.extent,
-                    Statement::Propagate(propagate) => propagate.owner,
-                    Statement::Adt(adt) => adt.node,
-                    _ => continue,
-                };
-                let span = SourceSpan::from(
-                    self.semantic
-                        .hir
-                        .source_map
-                        .node_extent(node)
-                        .expect("statement extent"),
-                );
-                if source.start <= span.start && span.end <= source.end {
-                    parts.push((span, Part::Statement(statement)));
-                }
-            }
+        for (span, statement) in self.statements_within(source) {
+            parts.push((span, Part::Statement(statement)));
         }
         parts.sort_by_key(|(span, part)| {
             (
@@ -1115,6 +1096,30 @@ impl<'a> Emitter<'a> {
         }
         self.active_capture_sources.borrow_mut().pop();
         out
+    }
+
+    fn statements_within(
+        &self,
+        source: SourceSpan,
+    ) -> impl Iterator<Item = (SourceSpan, &'a Statement)> + '_ {
+        self.core.bodies.iter().flat_map(move |body| {
+            body.statements.iter().filter_map(move |statement| {
+                let node = match statement {
+                    Statement::Decision(decision) => decision.extent,
+                    Statement::Propagate(propagate) => propagate.owner,
+                    Statement::Adt(adt) => adt.node,
+                    _ => return None,
+                };
+                let span = SourceSpan::from(
+                    self.semantic
+                        .hir
+                        .source_map
+                        .node_extent(node)
+                        .expect("statement extent"),
+                );
+                (source.start <= span.start && span.end <= source.end).then_some((span, statement))
+            })
+        })
     }
 
     /// [`Self::captured_reading`], with the authored text of a member
@@ -1285,6 +1290,26 @@ impl<'a> Emitter<'a> {
                 }
             })
         }));
+        let statements: Vec<_> = self.statements_within(span).collect();
+        let within = |inner: SourceSpan, outer: SourceSpan| {
+            inner != outer && outer.start <= inner.start && inner.end <= outer.end
+        };
+        let statements: Vec<_> = statements
+            .iter()
+            .filter(|(source, _)| {
+                !replacements
+                    .iter()
+                    .any(|(replaced, _)| *replaced == *source || within(*source, *replaced))
+                    && !statements.iter().any(|(outer, _)| within(*source, *outer))
+            })
+            .map(|(source, statement)| {
+                (
+                    *source,
+                    self.emit_statements(std::slice::from_ref(*statement)),
+                )
+            })
+            .collect();
+        replacements.extend(statements);
         replacements.extend(self.piped_value_at(span.start).map(|piped| {
             (
                 SourceSpan {
@@ -1364,7 +1389,7 @@ impl<'a> Emitter<'a> {
                 if *spread {
                     out.push_lit("...");
                 }
-                out.push_src(&self.source[span.start..span.end], span.start);
+                out.append(self.captured_tail(*span, &HashSet::new()));
             }
         }
     }
