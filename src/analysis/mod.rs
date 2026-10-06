@@ -304,6 +304,9 @@ pub struct AnalyzedArm {
     pub body_start: usize,
     /// End of the body span.
     pub body_end: usize,
+    /// Byte offset just past the arm's final token — a block body's closing
+    /// brace included, any separator or trailing comment excluded.
+    pub end: usize,
     /// Every binding occurrence in the arm's pattern, alternatives kept
     /// apart — the span-keyed map.
     pub pattern_bindings: Vec<PatternBinding>,

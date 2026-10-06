@@ -672,6 +672,9 @@ pub(crate) struct TupleArm {
     /// [`Arm::diverges`].
     pub diverges: bool,
     pub missing: bool,
+    /// Byte offset just past the arm's final token: a block body's `}`, or
+    /// an expression body's last token, before any separator or comment.
+    pub end: usize,
 }
 
 /// A tuple arm's pattern.
@@ -709,6 +712,9 @@ pub(crate) struct Arm {
     /// `undefined` can never run. False for an expression body.
     pub diverges: bool,
     pub missing: bool,
+    /// Byte offset just past the arm's final token: a block body's `}`, or
+    /// an expression body's last token, before any separator or comment.
+    pub end: usize,
 }
 
 /// The `if <cond>` guard of a match arm.

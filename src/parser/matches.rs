@@ -763,6 +763,7 @@ fn parse_arm_tail<'t>(
             body_tokens: &[],
             block: false,
             missing: true,
+            end: at,
         })
     };
     if open && guard.is_some() && cur.peek().is_none() {
@@ -779,6 +780,7 @@ fn parse_arm_tail<'t>(
     // body: `{ ... }` block or a single expression
     let body_span;
     let body_tokens;
+    let end;
     let mut block = false;
     if cur.at_punct(b'{') {
         let open = cur.idx;
@@ -788,6 +790,7 @@ fn parse_arm_tail<'t>(
             end: cur.tokens[close].span.start,
         };
         body_tokens = &cur.tokens[open + 1..close];
+        end = cur.tokens[close].span.end;
         block = true;
         cur.idx = close + 1;
     } else {
@@ -804,6 +807,7 @@ fn parse_arm_tail<'t>(
             return None;
         }
         body_tokens = &cur.tokens[cur.idx..stop_idx];
+        end = body_tokens.last().map_or(stop_byte, |token| token.span.end);
         cur.idx = stop_idx;
     }
 
@@ -813,6 +817,7 @@ fn parse_arm_tail<'t>(
         body_tokens,
         block,
         missing: false,
+        end,
     })
 }
 
@@ -836,6 +841,7 @@ impl ArmSyntax<'_, Pattern> {
             block: tail.block,
             diverges: tail.diverges,
             missing: tail.missing,
+            end: tail.end,
         }
     }
 }
@@ -852,6 +858,7 @@ impl ArmSyntax<'_, TuplePattern> {
             block: tail.block,
             diverges: tail.diverges,
             missing: tail.missing,
+            end: tail.end,
         }
     }
 }
@@ -862,6 +869,7 @@ struct ArmTailSyntax<'t> {
     body_tokens: &'t [Token],
     block: bool,
     missing: bool,
+    end: usize,
 }
 
 impl ArmTailSyntax<'_> {
@@ -872,6 +880,7 @@ impl ArmTailSyntax<'_> {
             body_tokens,
             block,
             missing,
+            end,
         } = self;
         let guard = guard.map(|(span, tokens)| GuardExpr {
             span,
@@ -897,6 +906,7 @@ impl ArmTailSyntax<'_> {
             block,
             diverges,
             missing,
+            end,
         }
     }
 }
@@ -915,6 +925,7 @@ struct ArmTail {
     /// which yields by being evaluated.
     diverges: bool,
     missing: bool,
+    end: usize,
 }
 
 /// Parses one `Tag` / `Tag(bindings...)` alternative starting at the

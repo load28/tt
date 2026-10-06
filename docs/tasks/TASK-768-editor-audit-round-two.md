@@ -24,7 +24,8 @@ diverges between layers. Fix each in the layer that owns it.
   storage annotations naming the ECMAScript-syntax standard library; a
   TypeScript older than the API ttc drives; `--symbols` import variants
   and a namespace member variant read as a module export; the documented
-  exception for `@tt/std` specifiers in passed-through TypeScript.
+  exception for `@tt/std` specifiers in passed-through TypeScript; the
+  unreachable-arm hint's range.
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -193,6 +194,18 @@ diverges between layers. Fix each in the layer that owns it.
   disables it. The contract (`AGENTS.md`), the `--rewrite-imports` help,
   and the reference now state it, and a CLI test pins both settings.
 
+### Decision 14: An unreachable-arm hint ends at the arm's last token
+
+- **Context**: The `ttHints` range of a dead block arm stopped before its
+  closing brace (`_ => { return "z";`), and the range of a dead last arm
+  included a comment written after it.
+- **Decision and rationale**: The hint used the body span, which excludes a
+  block's braces and runs to the arm's delimiter, trimmed of white space.
+  TypeScript reports unreachable code over the statement's node, without
+  trailing trivia. The parser now records each arm's end, the end of its
+  final token, and the analysis passes it on (`AnalyzedArm::end`); the hint
+  spans the pattern through that end.
+
 ## Work log
 
 - 2026-10-06: Started from the second audit's report. Fixed
@@ -207,7 +220,9 @@ diverges between layers. Fix each in the layer that owns it.
   `src/typescript/toolchain.rs` (Decision 11), and `src/ast.rs`,
   `src/parser/variants.rs`, `src/lib/api.rs`, `src/main/modes.rs`
   (Decision 12), and `AGENTS.md`, `src/main.rs`, `docs/ai/tt.md`
-  (Decision 13). Updated
+  (Decision 13), and `src/parser/matches.rs`, `src/ast.rs`,
+  `src/analysis/{mod,patterns}.rs`, `src/engine/hints.rs` (Decision 14).
+  Updated
   `tests/compile/cases_08.rs`, which pinned the shorthand-breaking edit
   (Decision 1). Regenerated every `unknown-field`
   diagnostics matrix baseline (`TT_MATRIX_CASES=all`) for Decision 1.
@@ -233,6 +248,17 @@ diverges between layers. Fix each in the layer that owns it.
   importing `../lib/dep.tt`, a contextual annotation, a detached join,
   an explicit and an inferred return type from the imported module were all
   written with their types in `-p`, `-o out src`, and `--check-types`.
+- **Resolution**: No change.
+
+### Issue 3: The add-arms fixes write LF into a CRLF file
+
+- **Symptom**: The audit reported that the "add the missing arms" edit
+  inserted `\n` line breaks into a file using `\r\n`.
+- **Cause**: Not a defect under the documented rule. In a file written
+  only with `\r\n`, both fixes insert `\r\n` (checked over `--server`
+  with the exact bytes). The edit uses the file's line terminator, which
+  `line_ending` defines as the file's first line ending; the audit's file
+  mixed `\n` lines before the `match` with `\r\n` lines in it.
 - **Resolution**: No change.
 
 ## Regression test (fails before the fix)

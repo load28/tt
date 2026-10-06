@@ -326,6 +326,7 @@ pub(super) fn analyze_match(expr: &MatchExpr, table: &Table, depth: Depth) -> Ma
                 pattern_start: arm.pattern_span.start,
                 body_start: arm.body_span.start,
                 body_end: arm.body_span.end,
+                end: arm.end,
                 pattern_bindings: Vec::new(),
                 body_bindings: Vec::new(),
             };
@@ -386,6 +387,7 @@ pub(super) fn analyze_tuple_match(
                 pattern_start: arm.pattern_span.start,
                 body_start: arm.body_span.start,
                 body_end: arm.body_span.end,
+                end: arm.end,
                 pattern_bindings: Vec::new(),
                 body_bindings: Vec::new(),
             };
