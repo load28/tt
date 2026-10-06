@@ -6,7 +6,7 @@ error[unknown-field]: variant Disk: case `Round` has no field `radiu`
 6 |   while (rounds < 1 && match (note("operand", input)) { Round(radiu) => note("round", radiu), Dot => note("dot", 0) }) {
   |                                                               ^^^^^
   |
-  = help: a field with a similar name exists: `radius`
+  = help: a field with a similar name exists: `radius: radiu`
 
 
 ==== ttc --check-types (exit 1) ====
@@ -16,6 +16,6 @@ error[unknown-field]: variant Disk: case `Round` has no field `radiu`
 6 |   while (rounds < 1 && match (note("operand", input)) { Round(radiu) => note("round", radiu), Dot => note("dot", 0) }) {
   |                                                               ^^^^^
   |
-  = help: a field with a similar name exists: `radius`
+  = help: a field with a similar name exists: `radius: radiu`
 
 ==== tsc on the emitted TypeScript (exit 0) ====

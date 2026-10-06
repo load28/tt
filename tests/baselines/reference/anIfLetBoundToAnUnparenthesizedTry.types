@@ -1,0 +1,134 @@
+=== anIfLetBoundToAnUnparenthesizedTry.tt ===
+type R<T> = { kind: "Ok"; value: T } | { kind: "Err"; error: string };
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: T
+>T : (type parameter) T in type R<T>
+>kind : (property) kind: "Err"
+>error : (property) error: string
+variant G { E(n: number), F }
+>G : type G = {
+>       kind: "E";
+>       n: number;
+>   } | {
+>       kind: "F";
+>   }
+>E : (property) E: (n: number) => G
+>n : (property) n: number
+>F : (property) F: {
+>       readonly kind: "F";
+>   }
+const ok = (value: G): R<G> => ({ kind: "Ok", value });
+>ok : const ok: (value: G) => R<G>
+>value : (parameter) value: G
+>G : type G = {
+>       kind: "E";
+>       n: number;
+>   } | {
+>       kind: "F";
+>   }
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>G : type G = {
+>       kind: "E";
+>       n: number;
+>   } | {
+>       kind: "F";
+>   }
+>kind : (property) kind: "Ok"
+>value : (property) value: G
+const err = (error: string): R<G> => ({ kind: "Err", error });
+>err : const err: (error: string) => R<G>
+>error : (parameter) error: string
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>G : type G = {
+>       kind: "E";
+>       n: number;
+>   } | {
+>       kind: "F";
+>   }
+>kind : (property) kind: "Err"
+>error : (property) error: string
+function first(r: R<G>): R<number> {
+>first : function first(r: R<G>): R<number>
+>r : (parameter) r: R<G>
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+>G : type G = {
+>       kind: "E";
+>       n: number;
+>   } | {
+>       kind: "F";
+>   }
+>R : type R<T> = {
+>       kind: "Ok";
+>       value: T;
+>   } | {
+>       kind: "Err";
+>       error: string;
+>   }
+    if let E(n) = try r {
+>n : const n: number
+>r : (parameter) r: R<G>
+        return { kind: "Ok", value: n };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : const n: number
+    return { kind: "Ok", value: 0 };
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+console.log(JSON.stringify(first(ok(G.E(4)))), JSON.stringify(first(ok(G.F))), JSON.stringify(first(err("no"))));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>first : function first(r: R<G>): R<number>
+>ok : const ok: (value: G) => R<G>
+>G : const G: {
+>       E: (n: number) => G;
+>       F: {
+>           readonly kind: "F";
+>       };
+>   }
+>E : (property) E: (n: number) => G
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>first : function first(r: R<G>): R<number>
+>ok : const ok: (value: G) => R<G>
+>G : const G: {
+>       E: (n: number) => G;
+>       F: {
+>           readonly kind: "F";
+>       };
+>   }
+>F : (property) F: {
+>       readonly kind: "F";
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>first : function first(r: R<G>): R<number>
+>err : const err: (error: string) => R<G>
+

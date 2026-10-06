@@ -1,0 +1,14 @@
+ok 0
+ok 3
+ok 4
+{"kind":"Ok","value":10} {"kind":"Ok","value":3} {"kind":"Ok","value":20} {"kind":"Err","error":"x"}
+ok 1
+ok 5
+ok 0
+ok 6
+ok 1
+{"kind":"Ok","value":2} {"kind":"Ok","value":6} {"kind":"Err","error":"y"}
+ok 7
+ok 8
+ok 7
+{"kind":"Ok","value":7} {"kind":"Ok","value":0}

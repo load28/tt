@@ -16,7 +16,9 @@ diverges between layers. Fix each in the layer that owns it.
 - Included: the field-typo fix on a shorthand binding; a selector-deferred
   value read through a JSX capture; the source walk past skipped insertion
   points; a rejected `try` placement inside a `result` block; a `try` in a
-  `for` declaration initializer inside a `result` block.
+  `for` declaration initializer inside a `result` block; a conditional
+  operation whose operand holds another conditional operation; an `if let`
+  bound to an unparenthesized `try`.
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -70,13 +72,37 @@ diverges between layers. Fix each in the layer that owns it.
   own exit target, which writes the result block's storage and breaks out
   of it inside a `result` block and returns in a function body, as before.
 
+### Decision 6: A completed conditional operation is read through its slot
+
+- **Context**: `(c && try r()) || match ...`, `(c ? try d : 0) ? 2 : try e`
+  and `(c && try r()) ?? try s` emitted the outer condition as the inner
+  operation's source with its `try` removed (`$tt_v3 = c && `).
+- **Decision and rationale**: The outer operation runs after the inner
+  one, which has written its result slot. A capture inside a conditional
+  operation already substitutes the slots of the captures made before it;
+  a completed operation is one of those, so its result slot joins the
+  captured set and the capture reads the operation's source span, the
+  span itself included, as that slot.
+
+### Decision 7: A value `try` may start an `if let`'s bound expression
+
+- **Context**: `if let E(n) = try r() {` was `stray-if-let`, while the
+  reference says the body opens at the first `{` after a complete bound
+  expression and `(try r())` was accepted.
+- **Decision and rationale**: The scan stopped at `try` as a statement
+  keyword. As in the pipeline and operand scans, a `try` not followed by
+  `{` is tt's value `try`, an expression prefix; `try {` is still the
+  statement and still rejected.
+
 ## Work log
 
 - 2026-10-06: Started from the second audit's report. Fixed
   `src/resolve/`, `src/analysis/`, `src/sema.rs` (Decision 1),
   `src/codegen/core/emitter/{host,source,result}.rs` (Decisions 2, 3, 5),
   and `src/evaluation_ir/{evaluation,builder}.rs`, `src/evaluation_ir.rs`
-  (Decisions 4, 5).
+  (Decisions 4, 5), `src/codegen/core/emitter/host.rs` (Decision 6), and
+  `src/parser/iflets.rs` (Decision 7). Regenerated every `unknown-field`
+  diagnostics matrix baseline (`TT_MATRIX_CASES=all`) for Decision 1.
 
 ## Issues and resolutions
 

@@ -1,0 +1,10 @@
+//// [anIfLetBoundToAnUnparenthesizedTry.tt] 8 mapping(s)
+1:1 -> 1:1 len 317  "// The bound expression of an `if let` runs to t"...
+6:18 -> 7:21 len 6  "number"
+6:18 -> 10:10 len 6  "number"
+6:30 -> 12:3 len 162  "\nconst ok = (value: G): R<G> => ({ kind: \"Ok\", v"...
+11:14 -> 24:17 len 1  "n"
+11:23 -> 18:34 len 1  "r"
+12:9 -> 25:9 len 32  "return { kind: \"Ok\", value: n };"
+13:6 -> 27:6 len 166  "\n    return { kind: \"Ok\", value: 0 };\n}\n\nconsole"...
+

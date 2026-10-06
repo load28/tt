@@ -259,7 +259,13 @@ fn expr_until_block(cur: &Cursor) -> Option<(usize, usize)> {
         if let TokenKind::Ident = t.kind {
             if depth == 0 && !dotted_at(cur.tokens, cur.idx, k) {
                 let word = cur.text(t);
-                if crate::lexer::statement_keyword_at(cur.parser.src, cur.tokens, k) {
+                if crate::lexer::statement_keyword_at(cur.parser.src, cur.tokens, k)
+                    && (word != "try"
+                        || matches!(
+                            cur.tokens.get(k + 1).map(|next| &next.kind),
+                            Some(TokenKind::Punct(b'{')) | None
+                        ))
+                {
                     return None;
                 }
                 // Skip a whole `match ( ... ) { ... }` or `result { ... }`

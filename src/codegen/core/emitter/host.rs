@@ -426,6 +426,7 @@ impl<'a> Emitter<'a> {
         for value in &operation.values {
             delivered.remove(value);
         }
+        captured.insert(operation.result);
         emitted
     }
 
@@ -977,10 +978,10 @@ impl<'a> Emitter<'a> {
             .into_iter()
             .map(|index| &self.source_replacements[index])
         {
-            if replacement.anchor.is_none()
+            if (replacement.anchor.is_none() || !replacement.claim)
                 && source.start <= replacement.source.start
                 && replacement.source.end <= source.end
-                && replacement.source != source
+                && (replacement.source != source || replacement.anchor.is_some())
                 && !self
                     .replacements_covering(replacement.source.start, replacement.source.end)
                     .any(|frame| {
