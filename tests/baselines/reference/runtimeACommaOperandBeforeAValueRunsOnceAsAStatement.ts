@@ -106,7 +106,7 @@ if ($tt_v7 = c) {
 
 return $tt_v8; }
 function propagated(): R { let $tt_v9: number;
-const $tt_v11 = (r);
+const $tt_v11: typeof r = (r);
 (tick());
 const $tt_t0 = r(3);
 if (!("value" in $tt_t0)) {

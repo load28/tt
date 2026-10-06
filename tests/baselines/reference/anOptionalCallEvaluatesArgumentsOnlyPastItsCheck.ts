@@ -8,7 +8,7 @@ export const r = f?.(pre(), match (1) { 1 => 1, _ => 0 });
 declare const f: ((v: number, w: number) => number) | undefined;
 declare function pre(): number;
 let $tt_v3: (number) | (undefined);
-const $tt_v1 = (f);
+const $tt_v1: typeof f = (f);
 if ($tt_v1 != null) {
   const $tt_v2: number = (pre());
   let $tt_v0: number;

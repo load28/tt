@@ -33,7 +33,7 @@ declare const flag: boolean;
 declare function stringValue(value: "one" | "two"): void;
 declare function numberValue(value: 1 | 2): void;
 let $tt_v0: number;
-const $tt_v1 = (stringValue);
+const $tt_v1: typeof stringValue = (stringValue);
 {
   const $tt_m = flag;
   switch ($tt_m) {
@@ -44,7 +44,7 @@ const $tt_v1 = (stringValue);
 }
 $tt_v1(($tt_v0 === 0 ? "one" : "two"));
 let $tt_v2: number;
-const $tt_v3 = (numberValue);
+const $tt_v3: typeof numberValue = (numberValue);
 {
   const $tt_m = flag;
   switch ($tt_m) {

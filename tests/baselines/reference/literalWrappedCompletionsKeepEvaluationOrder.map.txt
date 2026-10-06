@@ -3,7 +3,7 @@
 2:30 -> 21:29 len 6  "number"
 2:30 -> 24:18 len 6  "number"
 2:46 -> 26:3 len 326  "\nconst trace: string[] = [];\nfunction mark<T>(na"...
-9:3 -> 33:19 len 7  "consume"
+9:3 -> 33:35 len 7  "consume"
 9:11 -> 39:16 len 21  "{kind: \"inert\", run: "
 9:11 -> 43:16 len 21  "{kind: \"inert\", run: "
 9:39 -> 35:19 len 22  "mark(\"subject\", state)"
@@ -13,7 +13,7 @@
 12:4 -> 39:51 len 1  "}"
 12:4 -> 43:43 len 1  "}"
 12:7 -> 51:3 len 337  "\n  console.log(trace.join(\",\"));\n}\ntrace.length "...
-20:1 -> 60:17 len 7  "consume"
+20:1 -> 60:33 len 7  "consume"
 20:8 -> 79:7 len 8  "({kind: "
 20:16 -> 61:17 len 28  "mark(\"sibling\", \"effectful\")"
 20:44 -> 79:21 len 7  ", run: "

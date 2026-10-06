@@ -20,7 +20,7 @@ const V = {
 const wrap = (xs: unknown[]): V => (xs.length === 2 ? V.A(Number(xs[0]) + String(xs[1]).length) : V.B);
 function f(k: number) {
   let $tt_t0; let $tt_v0: number;
-  const $tt_v2 = (wrap);
+  const $tt_v2: typeof wrap = (wrap);
   {
     const $tt_m = k;
     switch ($tt_m) {
@@ -41,7 +41,7 @@ function f(k: number) {
   const { n } = $tt_t0;
   {
     let $tt_t1; let $tt_v3: number;
-    const $tt_v5 = (wrap);
+    const $tt_v5: typeof wrap = (wrap);
     {
       const $tt_m = k;
       switch ($tt_m) {

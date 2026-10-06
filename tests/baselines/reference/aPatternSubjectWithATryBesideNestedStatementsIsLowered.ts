@@ -36,7 +36,7 @@ const g = (a: number, b: TResult<number, string>): V => w(a + (b.kind === "Ok" ?
 function viaIfLet(k: number, c: V): TResult<number, string> {
   {
     let $tt_t0; let $tt_v0: number;
-    const $tt_v3 = (w);
+    const $tt_v3: typeof w = (w);
     const $tt_t1 = r(k);
     if (!("value" in $tt_t1)) {
       return $tt_t1;
@@ -56,7 +56,7 @@ function viaIfLet(k: number, c: V): TResult<number, string> {
 }
 function viaLetElse(k: number): TResult<number, string> {
   let $tt_t3; let $tt_v1: number;
-  const $tt_v4 = (g);
+  const $tt_v4: typeof g = (g);
   const $tt_t4 = r(k);
   if (!("value" in $tt_t4)) {
     return $tt_t4;

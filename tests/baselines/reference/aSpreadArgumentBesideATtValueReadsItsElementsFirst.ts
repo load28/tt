@@ -55,7 +55,7 @@ const t: [number, string] = [1, "a"];
 const g = (n: number, s: string, k: number) => `${n}${s}${k}`;
 {
   let $tt_v0: number;
-  const $tt_v1 = (f);
+  const $tt_v1: typeof f = (f);
   const $tt_v2 = ($tt_spread(arr));
   {
     const $tt_m = get();
@@ -69,7 +69,7 @@ const g = (n: number, s: string, k: number) => `${n}${s}${k}`;
 }
 {
   let $tt_v4: number;
-  const $tt_v5 = (C);
+  const $tt_v5: typeof C = (C);
   const $tt_v6 = ($tt_spread(arr));
   {
     const $tt_m = get();
@@ -112,7 +112,7 @@ const g = (n: number, s: string, k: number) => `${n}${s}${k}`;
 }
 {
   let $tt_v13: number;
-  const $tt_v14 = (g);
+  const $tt_v14: typeof g = (g);
   const $tt_v15 = ($tt_spread(t));
   {
     const $tt_m = get();

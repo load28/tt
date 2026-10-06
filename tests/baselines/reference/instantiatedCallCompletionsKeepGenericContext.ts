@@ -44,7 +44,7 @@ type Item = {kind: "item"; run: (x: number) => number};
 const trace: string[] = [];
 function generic<T>(value: T): T { trace.push("call"); return value; }
 let $tt_v0: Item;
-const $tt_v1 = (generic);
+const $tt_v1: typeof generic = (generic);
 const $tt_v2 = $tt_v1<Item>;
 {
   const $tt_m = State.Ready(3);

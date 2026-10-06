@@ -4,7 +4,7 @@ async function f(x: T) { return consume(match (x) { A(url) => await fetch(url), 
 
 //// [nestedAwaitMatchKeepsItsExpressionBoundary.ts]
 async function f(x: T) { let $tt_v0;
-const $tt_v1 = (consume);
+const $tt_v1: typeof consume = (consume);
 {
   const $tt_m = x;
   switch ($tt_m.kind) {

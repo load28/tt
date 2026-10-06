@@ -48,7 +48,7 @@ function consume(callback: (value?: number) => number, item: {run: (x: number) =
   return callback() + item.run(2);
 }
 let $tt_v0: number;
-const $tt_v1 = (consume);
+const $tt_v1: typeof consume = (consume);
 {
   const $tt_m = mark<boolean>("subject", true);
   switch ($tt_m) {
@@ -61,7 +61,7 @@ const first = $tt_v1((value = mark("default", 5)) => { trace.push("body"); retur
 console.log(first, trace.join(","));
 trace.length = 0;
 let $tt_v3: number;
-const $tt_v4 = (consume);
+const $tt_v4: typeof consume = (consume);
 {
   const $tt_m = mark<boolean>("subject", false);
   switch ($tt_m) {

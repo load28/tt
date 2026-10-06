@@ -4,7 +4,7 @@ consume({run: (n) => n}, match (x) { A(v) => v, _ => 0 });
 
 //// [inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.ts]
 {
-  const $tt_v1 = (consume);
+  const $tt_v1: typeof consume = (consume);
   const $tt_v2 = ({run: (n) => n});
   {
     const $tt_m = x;

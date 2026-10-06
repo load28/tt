@@ -202,7 +202,7 @@ function guarded(ready: boolean, b: boolean): R<number> {
 }
 function argument(b: boolean): R<number> {
     let $tt_v7: number;
-    const $tt_v9 = (String);
+    const $tt_v9: typeof String = (String);
     let $tt_v8: R<number>;
     {
       const $tt_m = b;

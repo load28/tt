@@ -63,7 +63,7 @@ const absent: ((item: Item) => number) | undefined = undefined;
 for (const consume of [present, absent]) {
   trace.length = 0;
   let $tt_v2: (number) | (undefined);
-  const $tt_v1 = (consume);
+  const $tt_v1: typeof consume = (consume);
   if ($tt_v1 != null) {
     {
       const $tt_m = mark("subject", State.Ready(5));

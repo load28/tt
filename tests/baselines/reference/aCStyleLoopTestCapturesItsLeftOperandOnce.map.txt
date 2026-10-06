@@ -1,6 +1,6 @@
 //// [aCStyleLoopTestCapturesItsLeftOperandOnce.tt] 18 mapping(s)
 1:1 -> 1:1 len 62  "\nconst xs = [3];\nlet j = 0;\nconst seen: number[]"...
-5:8 -> 7:19 len 1  "j"
+5:8 -> 7:29 len 1  "j"
 5:9 -> 21:15 len 3  " < "
 5:19 -> 9:19 len 5  "xs[0]"
 5:28 -> 11:12 len 1  "3"
@@ -8,7 +8,7 @@
 5:41 -> 16:18 len 1  "0"
 5:47 -> 21:34 len 22  "{ seen.push(j); j++; }"
 5:69 -> 21:57 len 17  "\nfor (let k = 0; "
-6:17 -> 24:19 len 1  "k"
+6:17 -> 24:29 len 1  "k"
 6:18 -> 38:15 len 3  " < "
 6:28 -> 26:19 len 5  "xs[0]"
 6:37 -> 28:12 len 1  "3"

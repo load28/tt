@@ -88,7 +88,7 @@ function f(s: S, c: boolean) {
 }
 function loops(s: S, xs: number[]) {
   for (const q of xs) {
-    const $tt_v2 = (note);
+    const $tt_v2: typeof note = (note);
     {
       const $tt_m = s;
       switch ($tt_m.kind) {
@@ -110,7 +110,7 @@ function loops(s: S, xs: number[]) {
   }
   let i = 0;
   while (i++ < 2) {
-    const $tt_v4 = (note);
+    const $tt_v4: typeof note = (note);
     {
       const $tt_m = s;
       switch ($tt_m.kind) {
@@ -152,7 +152,7 @@ function loops(s: S, xs: number[]) {
   }
   outer: for (const q of $tt_v5) { if (q > 5) continue outer; note(q); }
   do {
-    const $tt_v7 = (note);
+    const $tt_v7: typeof note = (note);
     {
       const $tt_m = s;
       switch ($tt_m.kind) {
@@ -173,7 +173,7 @@ function loops(s: S, xs: number[]) {
     
   } while (false);
   lbl: {
-    const $tt_v9 = (note);
+    const $tt_v9: typeof note = (note);
     {
       const $tt_m = s;
       switch ($tt_m.kind) {
@@ -197,7 +197,7 @@ function loops(s: S, xs: number[]) {
 function tries(c: boolean, r: R): R {
   if (c) {
     let $tt_v10: number;
-    const $tt_v11 = (note);
+    const $tt_v11: typeof note = (note);
     const $tt_t0 = r;
     if (!("value" in $tt_t0)) {
       return $tt_t0;
@@ -213,7 +213,7 @@ function tries(c: boolean, r: R): R {
     kind: "Ok";
     value: number;
 });
-    const $tt_v13 = (note);
+    const $tt_v13: typeof note = (note);
     $tt_v12: {
       const $tt_t1 = r;
       if (!("value" in $tt_t1)) {

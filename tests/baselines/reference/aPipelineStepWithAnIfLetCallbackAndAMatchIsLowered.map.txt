@@ -4,7 +4,7 @@
 1:30 -> 7:3 len 141  "\nconst pick = (f: (v: V) => number, fallback: nu"...
 4:3 -> 38:3 len 7  "return "
 4:10 -> 12:20 len 2  "vs"
-4:16 -> 14:21 len 4  "pick"
+4:16 -> 14:34 len 4  "pick"
 4:20 -> 35:20 len 1  "("
 4:21 -> 15:21 len 9  "(v) => { "
 4:39 -> 18:17 len 1  "n"

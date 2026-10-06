@@ -1,5 +1,5 @@
 //// [aMatchInsideALiteralArgumentCompletesTheCallFromItsArms2.tt] 9 mapping(s)
-1:1 -> 2:19 len 7  "consume"
+1:1 -> 2:35 len 7  "consume"
 1:9 -> 8:16 len 1  "["
 1:9 -> 12:16 len 1  "["
 1:17 -> 4:19 len 1  "x"

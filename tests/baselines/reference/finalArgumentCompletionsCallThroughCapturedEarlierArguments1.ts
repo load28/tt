@@ -4,7 +4,7 @@ pair(first(), match (x) { A(v) => v, _ => 0 });
 
 //// [finalArgumentCompletionsCallThroughCapturedEarlierArguments1.ts]
 {
-  const $tt_v1 = (pair);
+  const $tt_v1: typeof pair = (pair);
   const $tt_v2 = (first());
   {
     const $tt_m = x;

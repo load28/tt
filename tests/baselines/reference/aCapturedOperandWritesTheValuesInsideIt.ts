@@ -21,7 +21,7 @@ const apply = (f: (w: number) => TResult<number, string>, at: TResult<number, st
   JSON.stringify(at.kind === "Ok" ? f(at.value) : at);
 function f(k: number) {
   let $tt_v0: TResult<number, string>;
-  const $tt_v1 = (apply);
+  const $tt_v1: typeof apply = (apply);
   const $tt_v2: (w: number) => TResult<number, string> = ((((w: number) => {
     let $tt_v3: TResult<number, string>;
     $tt_v3: {

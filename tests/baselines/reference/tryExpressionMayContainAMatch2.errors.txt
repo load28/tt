@@ -20,5 +20,6 @@ error[ts2304]: Cannot find name 'm'.
 
 ==== tsc on the emitted TypeScript (exit 2) ====
 tryExpressionMayContainAMatch2.ts(19,15): error TS2304: Cannot find name 'X'.
-tryExpressionMayContainAMatch2.ts(21,19): error TS2304: Cannot find name 'wrap'.
+tryExpressionMayContainAMatch2.ts(21,24): error TS2304: Cannot find name 'wrap'.
+tryExpressionMayContainAMatch2.ts(21,32): error TS2304: Cannot find name 'wrap'.
 tryExpressionMayContainAMatch2.ts(23,19): error TS2304: Cannot find name 'm'.

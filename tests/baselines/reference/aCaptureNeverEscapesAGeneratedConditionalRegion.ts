@@ -11,7 +11,7 @@ let $tt_v3: (number) | (false);
 let $tt_v2: boolean;
 if ($tt_v2 = flag) {
   let $tt_v0: number;
-  const $tt_v1 = (id);
+  const $tt_v1: typeof id = (id);
   {
     const $tt_m = flag;
     switch ($tt_m) {

@@ -19,6 +19,7 @@ error[ts2304]: Cannot find name 'effect'.
   |                                                           ^^^^^^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-controlFlowArmCompletionsUseALabeledRegion2.ts(3,19): error TS2304: Cannot find name 'consume'.
+controlFlowArmCompletionsUseALabeledRegion2.ts(3,24): error TS2304: Cannot find name 'consume'.
+controlFlowArmCompletionsUseALabeledRegion2.ts(3,35): error TS2304: Cannot find name 'consume'.
 controlFlowArmCompletionsUseALabeledRegion2.ts(5,19): error TS2304: Cannot find name 'x'.
 controlFlowArmCompletionsUseALabeledRegion2.ts(9,46): error TS2304: Cannot find name 'effect'.

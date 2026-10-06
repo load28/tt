@@ -4,7 +4,7 @@
 3:18 -> 8:10 len 6  "number"
 3:30 -> 10:3 len 312  "\nconst r = (n: number): TResult<number, string> "...
 8:12 -> 29:15 len 1  "n"
-8:17 -> 17:21 len 1  "w"
+8:17 -> 17:31 len 1  "w"
 8:18 -> 23:21 len 1  "("
 8:23 -> 18:20 len 4  "r(k)"
 8:27 -> 23:28 len 12  " + (() => { "
@@ -16,7 +16,7 @@
 8:95 -> 30:7 len 20  "return Result.Ok(n);"
 8:117 -> 32:4 len 87  "\n  return Result.Ok(-1);\n}\nfunction viaLetElse(k"...
 12:11 -> 53:11 len 1  "n"
-12:16 -> 37:19 len 1  "g"
+12:16 -> 37:29 len 1  "g"
 12:17 -> 43:19 len 1  "("
 12:22 -> 38:18 len 4  "r(k)"
 12:26 -> 43:26 len 2  ", "

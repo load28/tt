@@ -64,7 +64,7 @@ function step(ok: boolean): S {
   do {
     const $tt_v7 = "v";
     let $tt_v4: number;
-    const $tt_v11 = (suffix);
+    const $tt_v11: typeof suffix = (suffix);
     const $tt_v10 = (callee());
     const $tt_t1 = (ok ? okay("try", 2) : fail("err"));
     if (!("value" in $tt_t1)) {

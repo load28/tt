@@ -62,7 +62,7 @@ const nested: {first: Item; second: Item} = {
 };
 declare const made: Item;
 let $tt_v0: number;
-const $tt_v2 = (widget);
+const $tt_v2: typeof widget = (widget);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {

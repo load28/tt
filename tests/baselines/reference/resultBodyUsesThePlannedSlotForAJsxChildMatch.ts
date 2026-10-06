@@ -89,7 +89,7 @@ export function run(e: E, f: F, n: number): number {
     }
     const chosen = $tt_v1;
     let $tt_v2: number;
-    const $tt_v4 = (chosen);
+    const $tt_v4: typeof chosen = (chosen);
     {
       const $tt_m = f;
       switch ($tt_m.kind) {

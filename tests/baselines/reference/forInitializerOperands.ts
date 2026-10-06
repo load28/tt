@@ -110,7 +110,7 @@ export function firstDeclarator(ok: boolean): TResult<number[], string> {
 export function operand(o: O): number[] {
   const out: number[] = [];
   let $tt_v1: number;
-  const $tt_v2 = (g);
+  const $tt_v2: typeof g = (g);
   {
     const $tt_m = o;
     switch ($tt_m.kind) {

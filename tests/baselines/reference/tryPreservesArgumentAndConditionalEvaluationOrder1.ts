@@ -7,7 +7,7 @@ function f(flag: boolean): TResult<number, string> {
 //// [tryPreservesArgumentAndConditionalEvaluationOrder1.ts]
 function f(flag: boolean): TResult<number, string> {
   let $tt_v5;
-  const $tt_v2 = (call);
+  const $tt_v2: typeof call = (call);
   const $tt_v3 = (first());
   let $tt_v1: boolean;
   if ($tt_v1 = flag) {

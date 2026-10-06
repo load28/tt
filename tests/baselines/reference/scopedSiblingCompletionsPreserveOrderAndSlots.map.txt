@@ -4,7 +4,7 @@
 2:30 -> 24:18 len 6  "number"
 2:46 -> 26:3 len 382  "\ntype Item = {kind: \"item\"; run: (x: number) => "...
 11:3 -> 71:3 len 15  "const result = "
-11:18 -> 37:19 len 4  "pair"
+11:18 -> 37:32 len 4  "pair"
 12:12 -> 39:19 len 23  "mark(\"subject1\", state)"
 13:13 -> 42:17 len 5  "value"
 13:23 -> 43:18 len 93  "(trace.push(\"arm1\"), shared = value, {kind: \"ite"...
@@ -15,7 +15,7 @@
 18:7 -> 62:12 len 5  "false"
 18:16 -> 63:33 len 64  "(trace.push(\"arm2:small\"), {kind: \"item\", run: x"...
 20:4 -> 71:24 len 156  ";\n  console.log(result, trace.join(\",\"));\n}\nfunc"...
-26:3 -> 78:19 len 4  "pair"
+26:3 -> 78:32 len 4  "pair"
 27:12 -> 80:19 len 14  "State.Ready(1)"
 27:36 -> 83:17 len 5  "value"
 27:46 -> 84:18 len 77  "(trace.push(\"first\"), {kind: \"item\" as const, ru"...

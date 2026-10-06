@@ -112,7 +112,7 @@ function read(label: string): TResult<number, string> {
 }
 for (const left of [0, 1]) {
   let $tt_v4: number;
-  const $tt_v2 = (flush);
+  const $tt_v2: typeof flush = (flush);
   const $tt_v3: string = (`${left} && match`);
   let $tt_v1: number;
   if ($tt_v1 = note("left", left)) {
@@ -140,7 +140,7 @@ for (const left of [0, 1]) {
   
   $tt_v2($tt_v3, $tt_v4);
   let $tt_v9: number;
-  const $tt_v7 = (flush);
+  const $tt_v7: typeof flush = (flush);
   const $tt_v8: string = (`${left} || match`);
   let $tt_v6: number;
   if ($tt_v6 = note("left", left)) {
@@ -170,7 +170,7 @@ for (const left of [0, 1]) {
 }
 for (const left of [null, 0]) {
   let $tt_v14: number;
-  const $tt_v12 = (flush);
+  const $tt_v12: typeof flush = (flush);
   const $tt_v13: string = (`${left} ?? match`);
   let $tt_v11: number | null;
   if (($tt_v11 = note("left", left)) == null) {
@@ -200,7 +200,7 @@ for (const left of [null, 0]) {
 }
 for (const test of [true, false]) {
   let $tt_v19: number;
-  const $tt_v17 = (flush);
+  const $tt_v17: typeof flush = (flush);
   const $tt_v18: string = (`${test} ? match : other`);
   if (note("test", test)) {
     {
@@ -238,7 +238,7 @@ const runner = new Runner();
 const absent: { run?: (n: number) => number } = {};
 const present: { run?: (n: number) => number } = runner;
 let $tt_v24: (number) | (undefined);
-const $tt_v22 = (flush);
+const $tt_v22: typeof flush = (flush);
 const $tt_v21 = (absent.run);
 if ($tt_v21 != null) {
   {
@@ -263,7 +263,7 @@ if ($tt_v21 != null) {
 
 $tt_v22("absent?.()", $tt_v24);
 let $tt_v29: (number) | (undefined);
-const $tt_v27 = (flush);
+const $tt_v27: typeof flush = (flush);
 const $tt_v26 = (present.run);
 if ($tt_v26 != null) {
   {
@@ -289,8 +289,8 @@ if ($tt_v26 != null) {
 $tt_v27("present?.()", $tt_v29);
 const holder: { runner?: Runner } = {};
 let $tt_v35: (number) | (undefined);
-const $tt_v33 = (flush);
-const $tt_v32 = (holder.runner);
+const $tt_v33: typeof flush = (flush);
+const $tt_v32: typeof holder.runner = (holder.runner);
 if ($tt_v32 != null) {
   {
     const $tt_m = note("argument scrutinee", flag(false));

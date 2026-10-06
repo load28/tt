@@ -67,7 +67,7 @@ function inResult(v: number) {
     const q = $tt_t0.value;
     if (v > 5) {
       let $tt_v1: number;
-      const $tt_v2 = (s);
+      const $tt_v2: typeof s = (s);
       {
         const $tt_m = v;
         switch ($tt_m) {
@@ -96,7 +96,7 @@ function inArm(v: number) {
       case 1: {
         const q = 1; if (q > 0) {
           let $tt_v6: number;
-          const $tt_v7 = (s);
+          const $tt_v7: typeof s = (s);
           {
             const $tt_m = v;
             switch ($tt_m) {

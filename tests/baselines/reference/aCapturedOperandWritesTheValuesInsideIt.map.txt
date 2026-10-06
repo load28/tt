@@ -1,7 +1,7 @@
 //// [aCapturedOperandWritesTheValuesInsideIt.tt] 18 mapping(s)
 1:1 -> 1:1 len 352  "import * as Result from \"@tt/std/result\";\nimport"...
 7:3 -> 29:3 len 7  "return "
-7:10 -> 8:19 len 5  "apply"
+7:10 -> 8:33 len 5  "apply"
 7:15 -> 29:16 len 2  "(("
 7:25 -> 9:20 len 16  "((w: number) => "
 7:41 -> 19:12 len 1  "("

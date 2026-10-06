@@ -15,4 +15,5 @@ error[ts2304]: Cannot find name 'consume'.
 
 ==== tsc on the emitted TypeScript (exit 2) ====
 nestedAwaitMatchKeepsItsExpressionBoundary.ts(1,21): error TS2304: Cannot find name 'T'.
-nestedAwaitMatchKeepsItsExpressionBoundary.ts(2,17): error TS2304: Cannot find name 'consume'.
+nestedAwaitMatchKeepsItsExpressionBoundary.ts(2,22): error TS2304: Cannot find name 'consume'.
+nestedAwaitMatchKeepsItsExpressionBoundary.ts(2,33): error TS2304: Cannot find name 'consume'.

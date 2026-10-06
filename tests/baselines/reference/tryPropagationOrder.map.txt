@@ -6,7 +6,7 @@
 19:47 -> 26:18 len 18  "step(\"bb\", second)"
 19:65 -> 31:35 len 246  ");\n  log.push(\"after\");\n  return Result.Ok(total"...
 27:3 -> 58:3 len 17  "return Result.Ok("
-27:20 -> 42:19 len 3  "add"
+27:20 -> 42:31 len 3  "add"
 27:23 -> 58:26 len 1  "("
 27:28 -> 43:18 len 15  "step(\"x\", true)"
 27:43 -> 58:33 len 2  ", "

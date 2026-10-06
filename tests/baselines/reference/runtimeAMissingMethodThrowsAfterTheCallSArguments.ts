@@ -67,8 +67,8 @@ do {
 } while (false);
 const piped = $tt_v4;
 let $tt_v8: number;
-const $tt_v11 = (missing);
-const $tt_v12 = (n);
+const $tt_v11: typeof missing = (missing);
+const $tt_v12: typeof n = (n);
 {
   const $tt_m = m();
   switch ($tt_m) {

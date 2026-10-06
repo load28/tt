@@ -1,7 +1,7 @@
 //// [nestedAwaitMatchKeepsItsExpressionBoundary.tt] 8 mapping(s)
 1:1 -> 1:1 len 25  "async function f(x: T) { "
 1:26 -> 17:1 len 7  "return "
-1:33 -> 2:17 len 7  "consume"
+1:33 -> 2:33 len 7  "consume"
 1:48 -> 4:17 len 1  "x"
 1:55 -> 7:15 len 3  "url"
 1:63 -> 8:23 len 16  "await fetch(url)"

@@ -28,7 +28,7 @@ function half(n: number): TResult<number, string> {
 const abs = (n: number) => { seen.push(`abs(${n})`); return Math.abs(n); };
 function f(k: number): TResult<number, string> {
   let $tt_v1: number;
-  const $tt_v2 = (half);
+  const $tt_v2: typeof half = (half);
   const $tt_v3 = ((($tt_v, $tt_f) => $tt_f($tt_v))(k, abs));
   const $tt_t1 = half(k);
   if (!("value" in $tt_t1)) {

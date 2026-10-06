@@ -1,7 +1,7 @@
 //// [anOuterTryRunsAMatchAndAnInnerTryInOrder.tt] 12 mapping(s)
 1:1 -> 1:1 len 375  "import * as Result from \"@tt/std/result\";\nimport"...
 10:9 -> 35:9 len 1  "x"
-10:17 -> 12:19 len 4  "half"
+10:17 -> 12:32 len 4  "half"
 10:21 -> 31:24 len 1  "("
 10:29 -> 14:19 len 7  "note(k)"
 10:40 -> 16:12 len 1  "2"

@@ -112,7 +112,7 @@ function args(fail: boolean): TResult<number, string> {
   let $tt_v2: number;
   let $tt_v3: number;
   let $tt_v4: number;
-  const $tt_v5 = (add);
+  const $tt_v5: typeof add = (add);
   const $tt_t2 = step("x", true);
   if (!("value" in $tt_t2)) {
     return $tt_t2;

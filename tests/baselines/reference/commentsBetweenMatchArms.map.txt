@@ -34,7 +34,7 @@
 25:10 -> 87:16 len 7  "\"point\""
 26:4 -> 91:23 len 65  ";\n  return label;\n}\n\nexport function code(n: num"...
 31:3 -> 106:3 len 7  "return "
-31:10 -> 97:19 len 6  "String"
+31:10 -> 97:34 len 6  "String"
 31:16 -> 106:16 len 6  "(\n    "
 32:12 -> 99:19 len 1  "n"
 33:7 -> 101:12 len 1  "1"

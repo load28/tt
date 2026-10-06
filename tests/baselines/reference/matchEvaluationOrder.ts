@@ -133,8 +133,8 @@ function triple(a: number, b: number, c: number) {
   return [a, b, c];
 }
 let $tt_v1: number;
-const $tt_v4 = (flush);
-const $tt_v2 = (triple);
+const $tt_v4: typeof flush = (flush);
+const $tt_v2: typeof triple = (triple);
 const $tt_v3 = (note("argument 0", 1));
 {
   const $tt_m = note("argument 1 scrutinee", shapes[2]);
@@ -155,7 +155,7 @@ $tt_v4(
   $tt_v2($tt_v3, $tt_v1, note("argument 2", 3)),
 );
 let $tt_v6: number;
-const $tt_v8 = (flush);
+const $tt_v8: typeof flush = (flush);
 const $tt_v7 = (note("left", 1));
 {
   const $tt_m = note("right scrutinee", shapes[1]);
@@ -225,7 +225,7 @@ let $tt_v13: string;
 const nested = $tt_v13;
 flush("nested", nested);
 let $tt_v14: number;
-const $tt_v15 = (note("before", "<"));
+const $tt_v15 = (`${note("before", "<")}`);
 {
   const $tt_m = note("template scrutinee", shapes[0]);
   switch ($tt_m.kind) {

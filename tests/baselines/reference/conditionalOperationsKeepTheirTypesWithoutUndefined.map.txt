@@ -30,7 +30,7 @@
 7:64 -> 89:13 len 1  "9"
 7:65 -> 92:33 len 56  ";\ndeclare const f: ((v: number) => number) | und"...
 9:1 -> 114:1 len 37  "export const e: number | undefined = "
-9:38 -> 95:18 len 1  "f"
+9:38 -> 95:28 len 1  "f"
 9:49 -> 98:19 len 1  "1"
 9:54 -> 100:12 len 1  "1"
 9:59 -> 101:27 len 1  "5"

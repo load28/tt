@@ -26,7 +26,7 @@ let $tt_v0$x: number;
     case "A": {
       const { v } = $tt_m;
       let $tt_v1$x: number;
-      const $tt_v2$x = (g);
+      const $tt_v2$x: typeof g = (g);
       const $tt_v3$x: number = (eff());
       {
         const $tt_m = s;

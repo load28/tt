@@ -14,5 +14,6 @@ error[ts2304]: Cannot find name 'kind'.
   |                   ^^^^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-matchInSpreadOperandsEntersTheEvaluationProtocol3.ts(3,19): error TS2304: Cannot find name 'consume'.
+matchInSpreadOperandsEntersTheEvaluationProtocol3.ts(3,24): error TS2304: Cannot find name 'consume'.
+matchInSpreadOperandsEntersTheEvaluationProtocol3.ts(3,35): error TS2304: Cannot find name 'consume'.
 matchInSpreadOperandsEntersTheEvaluationProtocol3.ts(5,19): error TS2304: Cannot find name 'kind'.

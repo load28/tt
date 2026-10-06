@@ -20,7 +20,7 @@ const r = (n: number): TResult<number, string> => Result.Ok(n);
 const g = (x: unknown) => x;
 function f(o: { x: number; y: number | null }): TResult<unknown, string> {
   let $tt_v4: number;
-  const $tt_v3 = (g);
+  const $tt_v3: typeof g = (g);
   let $tt_v2: number | null;
   if (($tt_v2 = o.y) == null) {
     let $tt_v0: number;

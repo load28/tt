@@ -214,7 +214,7 @@ function nullish(on: boolean, n: number) {
 });
     $tt_v8: {
       let $tt_v11: number;
-      const $tt_v12 = (String);
+      const $tt_v12: typeof String = (String);
       const $tt_t2 = read(n);
       if (!("value" in $tt_t2)) {
         $tt_v8 = $tt_t2;
@@ -331,7 +331,7 @@ function later(on: boolean, n: number) {
         default: {
           const $tt_a6 = { value: (() => {
             let $tt_v29: number;
-            const $tt_v30 = (Number);
+            const $tt_v30: typeof Number = (Number);
             {
               const $tt_m = n;
               switch ($tt_m) {

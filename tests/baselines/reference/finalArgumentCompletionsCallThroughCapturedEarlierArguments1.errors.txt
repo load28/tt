@@ -19,6 +19,7 @@ error[ts2304]: Cannot find name 'x'.
   |                      ^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-finalArgumentCompletionsCallThroughCapturedEarlierArguments1.ts(2,19): error TS2304: Cannot find name 'pair'.
+finalArgumentCompletionsCallThroughCapturedEarlierArguments1.ts(2,24): error TS2304: Cannot find name 'pair'.
+finalArgumentCompletionsCallThroughCapturedEarlierArguments1.ts(2,32): error TS2304: Cannot find name 'pair'.
 finalArgumentCompletionsCallThroughCapturedEarlierArguments1.ts(3,19): error TS2304: Cannot find name 'first'.
 finalArgumentCompletionsCallThroughCapturedEarlierArguments1.ts(5,19): error TS2304: Cannot find name 'x'.

@@ -42,7 +42,7 @@ const State = {
 type Item = {kind: "item"; run: (x: number) => number};
 declare const state: State;
 declare function consume<T>(item: T): void;
-const $tt_v1 = (consume);
+const $tt_v1: typeof consume = (consume);
 const $tt_v2 = $tt_v1<Item>;
 {
   const $tt_m = state;

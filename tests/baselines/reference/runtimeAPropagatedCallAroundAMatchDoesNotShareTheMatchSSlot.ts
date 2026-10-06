@@ -31,7 +31,7 @@ function r(n: number): R { return n > 1 ? { kind: "Ok", value: n } : { kind: "Er
 function sum(v: number): R {
   let $tt_v0: number;
   let $tt_v1: number;
-  const $tt_v2 = (r);
+  const $tt_v2: typeof r = (r);
   {
     const $tt_m = v;
     switch ($tt_m) {
@@ -56,7 +56,7 @@ function sum(v: number): R {
 function listed(v: number): R {
   let $tt_v4: number;
   let $tt_v5: number;
-  const $tt_v6 = (r);
+  const $tt_v6: typeof r = (r);
   {
     const $tt_m = v;
     switch ($tt_m) {
@@ -78,7 +78,7 @@ function listed(v: number): R {
   const a = [$tt_v4];
   let $tt_v7: number;
   let $tt_v8: number;
-  const $tt_v10 = (r);
+  const $tt_v10: typeof r = (r);
   {
     const $tt_m = v;
     switch ($tt_m) {
@@ -111,7 +111,7 @@ function inResult(v: number) {
   $tt_v11: {
     let $tt_v12: number;
     let $tt_v13: number;
-    const $tt_v14 = (r);
+    const $tt_v14: typeof r = (r);
     {
       const $tt_m = v;
       switch ($tt_m) {
@@ -134,7 +134,7 @@ function inResult(v: number) {
     const y = 1 + $tt_v12;
     let $tt_v16: number;
     let $tt_v17: number;
-    const $tt_v18 = (r);
+    const $tt_v18: typeof r = (r);
     {
       const $tt_m = v;
       switch ($tt_m) {
@@ -157,7 +157,7 @@ function inResult(v: number) {
     const a = [$tt_v16];
     let $tt_v19: number;
     let $tt_v20: number;
-    const $tt_v22 = (r);
+    const $tt_v22: typeof r = (r);
     {
       const $tt_m = v;
       switch ($tt_m) {

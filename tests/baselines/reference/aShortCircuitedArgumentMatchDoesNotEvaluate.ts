@@ -25,7 +25,7 @@ let $tt_v3: (number) | (false);
 let $tt_v2: boolean;
 if ($tt_v2 = on) {
   let $tt_v0: number;
-  const $tt_v1 = (id);
+  const $tt_v1: typeof id = (id);
   {
     const $tt_m = subject("on");
     switch ($tt_m) {
@@ -49,7 +49,7 @@ let $tt_v7: (number) | (false);
 let $tt_v6: boolean;
 if ($tt_v6 = off) {
   let $tt_v4: number;
-  const $tt_v5 = (id);
+  const $tt_v5: typeof id = (id);
   {
     const $tt_m = subject("off");
     switch ($tt_m) {

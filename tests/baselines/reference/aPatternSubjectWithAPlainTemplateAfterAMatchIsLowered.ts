@@ -29,7 +29,7 @@ const V = {
 const pick = (k: number, label: string): V => (label.length > 3 ? V.A(k) : V.B);
 function viaLetElse(k: number) {
   let $tt_t0; let $tt_v0: number;
-  const $tt_v1 = (pick);
+  const $tt_v1: typeof pick = (pick);
   {
     const $tt_m = k;
     switch ($tt_m) {
@@ -53,7 +53,7 @@ function viaLetElse(k: number) {
 function viaIfLet(k: number) {
   {
     let $tt_t1; let $tt_v2: number;
-    const $tt_v3 = (pick);
+    const $tt_v3: typeof pick = (pick);
     {
       const $tt_m = k;
       switch ($tt_m) {
@@ -77,7 +77,7 @@ function viaIfLet(k: number) {
 }
 function viaOr(k: number, s: string) {
   let $tt_t2; let $tt_v4: number;
-  const $tt_v5 = (pick);
+  const $tt_v5: typeof pick = (pick);
   {
     const $tt_m = k;
     switch ($tt_m) {

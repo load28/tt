@@ -4,7 +4,7 @@
 2:30 -> 24:18 len 6  "number"
 2:46 -> 26:3 len 401  "\ntype Item = {kind: \"item\"; run: (x: number) => "...
 10:3 -> 58:3 len 15  "const result = "
-10:18 -> 35:19 len 7  "consume"
+10:18 -> 35:35 len 7  "consume"
 10:35 -> 38:21 len 31  "mark(\"subject\", State.Ready(5))"
 11:11 -> 41:19 len 5  "value"
 11:21 -> 42:27 len 56  "(trace.push(\"arm\"), {kind: \"item\", run: x => x +"...

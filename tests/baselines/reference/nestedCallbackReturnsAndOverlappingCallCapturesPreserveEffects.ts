@@ -129,7 +129,7 @@ if ($tt_v15 = ((() => { {
 const fromBody = $tt_v16;
 const take = (...values: number[]) => values;
 let $tt_v18: number[];
-const $tt_v19 = (take);
+const $tt_v19: typeof take = (take);
 const $tt_v20: number = (((n: number) => n + 1)(1));
 {
   const $tt_m = 3;

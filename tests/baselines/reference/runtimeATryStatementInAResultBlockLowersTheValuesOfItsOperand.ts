@@ -51,7 +51,7 @@ function viaConst(v: number) { let $tt_v0: ({
 });
 $tt_v0: {
   let $tt_v1: number;
-  const $tt_v2 = (r);
+  const $tt_v2: typeof r = (r);
   {
     const $tt_m = v;
     switch ($tt_m) {
@@ -76,7 +76,7 @@ function viaLet(v: number) { let $tt_v3: ({
 });
 $tt_v3: {
   let $tt_v4: number;
-  const $tt_v5 = (r);
+  const $tt_v5: typeof r = (r);
   {
     const $tt_m = v;
     switch ($tt_m) {
@@ -101,7 +101,7 @@ function propagateOnly(v: number) { let $tt_v6: ({
 });
 $tt_v6: {
   let $tt_v7: number;
-  const $tt_v8 = (r);
+  const $tt_v8: typeof r = (r);
   {
     const $tt_m = v;
     switch ($tt_m) {
@@ -161,7 +161,7 @@ function viaCall(v: number) { let $tt_v10: ({
 });
 $tt_v10: {
   let $tt_v11: number;
-  const $tt_v12 = (id);
+  const $tt_v12: typeof id = (id);
   {
     const $tt_m = v;
     switch ($tt_m) {
@@ -187,7 +187,7 @@ function viaResult(v: number) {
 });
   $tt_v13: {
     let $tt_v14: number;
-    const $tt_v15 = (r);
+    const $tt_v15: typeof r = (r);
     do {
       const $tt_v19: R = ($tt_expr(() => {
         const $tt_t6 = r(v);

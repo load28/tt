@@ -1,7 +1,7 @@
 //// [aSpreadArgumentBesideATtValueReadsItsElementsFirst.tt] 49 mapping(s)
 1:19 -> 31:3 len 354  "\nconst arr: number[] = [1, 2];\nfunction get(): V"...
 9:1 -> 51:3 len 12  "console.log("
-9:13 -> 41:19 len 1  "f"
+9:13 -> 41:29 len 1  "f"
 9:14 -> 51:21 len 4  "(..."
 9:18 -> 42:30 len 3  "arr"
 9:21 -> 51:31 len 2  ", "
@@ -11,7 +11,7 @@
 9:55 -> 51:55 len 3  "));"
 9:58 -> 52:2 len 1  "\n"
 10:1 -> 65:3 len 16  "console.log(new "
-10:17 -> 55:19 len 1  "C"
+10:17 -> 55:29 len 1  "C"
 10:18 -> 65:25 len 4  "(..."
 10:22 -> 56:30 len 3  "arr"
 10:25 -> 65:35 len 2  ", "
@@ -29,7 +29,7 @@
 11:60 -> 94:22 len 2  ");"
 11:62 -> 95:2 len 1  "\n"
 12:1 -> 108:3 len 12  "console.log("
-12:13 -> 98:20 len 1  "g"
+12:13 -> 98:30 len 1  "g"
 12:14 -> 108:22 len 4  "(..."
 12:18 -> 99:31 len 1  "t"
 12:19 -> 108:33 len 2  ", "

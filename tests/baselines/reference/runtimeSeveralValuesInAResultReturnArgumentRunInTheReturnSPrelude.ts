@@ -151,7 +151,7 @@ function called(x: number, y: number) { let $tt_v9: ({
 $tt_v9: {
   let $tt_v10: number;
   let $tt_v11: number;
-  const $tt_v12 = (pair);
+  const $tt_v12: typeof pair = (pair);
   const $tt_t6 = r(x);
   if (!("value" in $tt_t6)) {
     $tt_v9 = $tt_t6;

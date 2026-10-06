@@ -1,7 +1,7 @@
 //// [tryPreservesArgumentAndConditionalEvaluationOrder1.tt] 9 mapping(s)
 1:1 -> 1:1 len 55  "function f(flag: boolean): TResult<number, strin"...
 2:3 -> 18:3 len 17  "return Result.Ok("
-2:20 -> 3:19 len 4  "call"
+2:20 -> 3:32 len 4  "call"
 2:24 -> 18:26 len 1  "("
 2:25 -> 4:19 len 7  "first()"
 2:32 -> 18:33 len 2  ", "

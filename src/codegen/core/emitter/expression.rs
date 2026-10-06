@@ -855,10 +855,12 @@ impl<'a> Emitter<'a> {
             || self.span(apply.node).end,
             |step| self.span(step.node).end,
         );
-        let accumulator = self
-            .value_slots
-            .get(&expr)
-            .unwrap_or_else(|| crate::ice::bug!("structured apply has no value slot"));
+        let Some(accumulator) = self.value_slots.get(&expr) else {
+            if self.owner_model {
+                crate::ice::bug!("structured apply has no value slot");
+            }
+            return None;
+        };
         let accumulator_is_host_slot = self
             .slot_exprs
             .get(&expr)

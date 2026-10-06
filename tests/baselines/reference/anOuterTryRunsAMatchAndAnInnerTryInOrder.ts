@@ -29,7 +29,7 @@ const note = (n: number) => { seen.push(`k=${n}`); return n; };
 function f(k: number): TResult<number, string> {
   let $tt_v0: number;
   let $tt_v1: number;
-  const $tt_v2 = (half);
+  const $tt_v2: typeof half = (half);
   {
     const $tt_m = note(k);
     switch ($tt_m) {

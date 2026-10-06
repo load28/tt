@@ -11,7 +11,7 @@
 17:14 -> 50:33 len 29  "({kind: \"item\", run: x => x})"
 18:5 -> 58:24 len 219  " + mark(\"after\", 1);\n  console.log(result, trace"...
 25:3 -> 83:3 len 22  "unreached = \"lost:\" + "
-25:25 -> 66:19 len 6  "throws"
+25:25 -> 66:34 len 6  "throws"
 25:39 -> 68:19 len 14  "State.Ready(2)"
 26:11 -> 71:17 len 5  "value"
 26:23 -> 72:9 len 21  "trace.push(\"value\"); "

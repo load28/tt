@@ -53,7 +53,7 @@ const V = {
 function show(a: string, f: (v: V) => number, b: string) { return `${a} ${f(V.A(7))} ${b}`; }
 function run(k: number) {
   let $tt_v1: string;
-  const $tt_v2 = (show);
+  const $tt_v2: typeof show = (show);
   const $tt_v3: string = ((($tt_v, $tt_f) => $tt_f($tt_v))(k, String));
   const $tt_v4: (v: V) => number = ((v) => { {
     const $tt_t0 = v;
@@ -91,7 +91,7 @@ function arm(v: V): TResult<number, string> {
       }
       case "B": {
         let $tt_v11: number;
-        const $tt_v12 = (apply);
+        const $tt_v12: typeof apply = (apply);
         const $tt_t1 = read();
         if (!("value" in $tt_t1)) {
           return $tt_t1;
@@ -116,7 +116,7 @@ function arm(v: V): TResult<number, string> {
 }
 const viaArrow = (k: number) => {
   let $tt_v6: number;
-  const $tt_v7 = (show);
+  const $tt_v7: typeof show = (show);
   const $tt_v9: (v: V) => number = ((v) => {
     let $tt_v10: number;
     {

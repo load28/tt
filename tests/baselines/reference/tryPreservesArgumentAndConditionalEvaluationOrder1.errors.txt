@@ -35,7 +35,8 @@ error[ts2304]: Cannot find name 'third'.
 
 ==== tsc on the emitted TypeScript (exit 2) ====
 tryPreservesArgumentAndConditionalEvaluationOrder1.ts(1,28): error TS2304: Cannot find name 'TResult'.
-tryPreservesArgumentAndConditionalEvaluationOrder1.ts(3,19): error TS2304: Cannot find name 'call'.
+tryPreservesArgumentAndConditionalEvaluationOrder1.ts(3,24): error TS2304: Cannot find name 'call'.
+tryPreservesArgumentAndConditionalEvaluationOrder1.ts(3,32): error TS2304: Cannot find name 'call'.
 tryPreservesArgumentAndConditionalEvaluationOrder1.ts(4,19): error TS2304: Cannot find name 'first'.
 tryPreservesArgumentAndConditionalEvaluationOrder1.ts(8,20): error TS2304: Cannot find name 'second'.
 tryPreservesArgumentAndConditionalEvaluationOrder1.ts(18,10): error TS2304: Cannot find name 'Result'.

@@ -12,7 +12,7 @@
 9:45 -> 54:20 len 1  "2"
 9:48 -> 62:26 len 6  ";\n    "
 10:5 -> 73:5 len 34  "const view = <section data-value={"
-10:39 -> 64:21 len 6  "chosen"
+10:39 -> 64:36 len 6  "chosen"
 10:45 -> 73:45 len 3  "}>{"
 10:55 -> 66:21 len 1  "f"
 11:14 -> 73:64 len 9  "<strong>{"

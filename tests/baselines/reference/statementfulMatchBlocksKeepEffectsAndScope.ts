@@ -41,7 +41,7 @@ function consume(value: number) { trace.push("call"); return value; }
 for (const flag of [true, false]) {
   trace.length = 0;
   let $tt_v0: number;
-  const $tt_v1 = (consume);
+  const $tt_v1: typeof consume = (consume);
   {
     const $tt_m = flag;
     switch ($tt_m) {

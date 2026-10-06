@@ -46,7 +46,7 @@ function swap(n: number): number {
 function viaMatch(k: number): number {
   {
     let $tt_t0; let $tt_v0: number;
-    const $tt_v1 = (pick);
+    const $tt_v1: typeof pick = (pick);
     {
       const $tt_m = k;
       switch ($tt_m) {
@@ -66,7 +66,7 @@ function viaMatch(k: number): number {
       return w;
     } else {
       let $tt_t1; let $tt_v2: number;
-      const $tt_v3 = (pick);
+      const $tt_v3: typeof pick = (pick);
       {
         const $tt_m = k;
         switch ($tt_m) {

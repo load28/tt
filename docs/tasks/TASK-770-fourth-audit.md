@@ -314,6 +314,20 @@ and repeats the audit until it finds none.
   pattern offers no wildcard, since an `_` there is not a pattern the
   statement accepts.
 
+### Decision 22: Without an owner model a pipeline is emitted as an expression
+
+- **Context**: The mutation pass found `if let A()=match(x){A()=>.}|>p{}`
+  crashing `emit_mapped_with_kind` ("structured apply has no value slot").
+  The crash is older than this task; the new cases changed the mutation
+  sample that reaches it. A file whose TypeScript does not parse has no
+  owner model, so lowering plans no slots, yet the subject emission asked
+  for the pipeline's structured form.
+- **Decision and rationale**: Without an owner model, a structured pipeline
+  has no slot to write, so `emit_apply_continued` answers `None` and the
+  caller writes the expression form, as it already does for any value that
+  has no statement form. With an owner model, a missing slot is still an
+  internal compiler error.
+
 ## Work log
 
 - 2026-10-06: Started from the fourth audit's reports (compiler, CLI,
@@ -391,7 +405,8 @@ and repeats the audit until it finds none.
   `aCompletedCallInAConditionalResultBlockRunsOnce`,
   `aPossiblyUndefinedTtValueIsReportedAsAnExpression`);
   `tests/cases/editor/` (`possiblyUndefinedTtValueIsReportedAsAnExpression`,
-  `statementPatternCompletionsFollowTheSubjectType`).
+  `statementPatternCompletionsFollowTheSubjectType`);
+  `fuzz/regressions/compile_any_bytes/50ac852c043fb9d7.tt`.
 - **Observed failure**: Each was run with the source changes reverted. The
   CLI tests failed on the old exit codes and outputs. The recovery test got
   `EPIPE: broken pipe` in `backendError`, and the snapshot test measured
@@ -401,7 +416,9 @@ and repeats the audit until it finds none.
   "match reached expression emission without a host rewrite"),
   `ReferenceError`s, verify-failed parses, TS2775/TS7053/TS2556 type errors,
   or a `match-placement` rejection. The editor cases listed every case in
-  scope and reported `'$tt_v0' is possibly 'undefined'` (TS18048).
+  scope and reported `'$tt_v0' is possibly 'undefined'` (TS18048). The
+  fuzz input crashed with "structured apply has no value slot"
+  (`every_committed_crash_input_replays_as_the_list_says`).
 
 ## Verification
 

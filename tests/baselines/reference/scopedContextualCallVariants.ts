@@ -50,7 +50,7 @@ const State = {
 declare const state: State;
 declare const flag: boolean;
 declare function consume(item: {kind: "item"; run: (x: number) => number}): void;
-const $tt_v1 = (consume);
+const $tt_v1: typeof consume = (consume);
 {
   const $tt_m = state;
   do {
@@ -66,7 +66,7 @@ const $tt_v1 = (consume);
   } while (false);
 }
 
-const $tt_v3 = (consume);
+const $tt_v3: typeof consume = (consume);
 {
   const $tt_m = state;
   switch ($tt_m.kind) {
@@ -85,7 +85,7 @@ const $tt_v3 = (consume);
   }
 }
 
-const $tt_v5 = (consume);
+const $tt_v5: typeof consume = (consume);
 {
   const $tt_m = flag;
   switch ($tt_m) {

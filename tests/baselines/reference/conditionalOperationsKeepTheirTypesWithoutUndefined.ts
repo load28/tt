@@ -109,7 +109,7 @@ if (flag) {
 export const d: number = $tt_v11;
 declare const f: ((v: number) => number) | undefined;
 let $tt_v14: number | undefined;
-const $tt_v13 = (f);
+const $tt_v13: typeof f = (f);
 if ($tt_v13 != null) {
   {
     const $tt_m = 1;

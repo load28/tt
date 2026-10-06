@@ -19,6 +19,7 @@ error[ts2304]: Cannot find name 'x'.
   |                                 ^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.ts(2,19): error TS2304: Cannot find name 'consume'.
+inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.ts(2,24): error TS2304: Cannot find name 'consume'.
+inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.ts(2,35): error TS2304: Cannot find name 'consume'.
 inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.ts(3,26): error TS7006: Parameter 'n' implicitly has an 'any' type.
 inertArgumentsAreNotCapturedOutOfTheirContextualPosition3.ts(5,19): error TS2304: Cannot find name 'x'.

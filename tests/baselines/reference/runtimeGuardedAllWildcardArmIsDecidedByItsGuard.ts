@@ -103,7 +103,7 @@ function last(a: T, b: T, cond: boolean): number {
 function selected(a: T, b: T, cond: boolean): number {
   let seen = 0;
   const consume = (item: Item) => { seen = item.run(0); };
-  const $tt_v3 = (consume);
+  const $tt_v3: typeof consume = (consume);
   const $tt_m0 = a;
   const $tt_m1 = b;
   

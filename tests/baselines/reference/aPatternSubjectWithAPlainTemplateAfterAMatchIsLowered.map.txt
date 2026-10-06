@@ -3,7 +3,7 @@
 1:18 -> 5:10 len 6  "number"
 1:30 -> 7:3 len 117  "\nconst pick = (k: number, label: string): V => ("...
 4:11 -> 29:11 len 1  "n"
-4:16 -> 11:19 len 4  "pick"
+4:16 -> 11:32 len 4  "pick"
 4:20 -> 25:18 len 1  "("
 4:28 -> 13:19 len 1  "k"
 4:33 -> 15:12 len 1  "1"
@@ -13,7 +13,7 @@
 4:71 -> 27:5 len 10  "return -1;"
 4:84 -> 29:24 len 48  "\n  return n;\n}\nfunction viaIfLet(k: number) {\n  "
 8:12 -> 51:15 len 1  "n"
-8:17 -> 35:21 len 4  "pick"
+8:17 -> 35:34 len 4  "pick"
 8:21 -> 49:20 len 1  "("
 8:29 -> 37:21 len 1  "k"
 8:34 -> 39:14 len 1  "1"
@@ -23,7 +23,7 @@
 9:5 -> 52:7 len 9  "return n;"
 10:4 -> 54:4 len 57  "\n  return -2;\n}\nfunction viaOr(k: number, s: str"...
 14:11 -> 77:11 len 1  "n"
-14:16 -> 59:19 len 4  "pick"
+14:16 -> 59:32 len 4  "pick"
 14:20 -> 73:18 len 1  "("
 14:28 -> 61:19 len 1  "k"
 14:33 -> 63:12 len 1  "1"
