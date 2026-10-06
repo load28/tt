@@ -1,7 +1,7 @@
 === completions /*payloadFirstArm*/ patternCompletionBeforeArrow.tt:3:57 ===
   | export function a(s: Shape) { return match (s) { Circle() }; }
   |                                                         ^ /*payloadFirstArm*/
-completion: 1009 item(s), member false, probe no
+completion: 1009 item(s), member false, probe yes
   Shape (Variable, 11)
   a (Function, 11)
   arguments (Variable, 11)

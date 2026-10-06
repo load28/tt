@@ -329,6 +329,20 @@ diverges between layers. Fix each in the layer that owns it.
   mixed `\n` lines before the `match` with `\r\n` lines in it.
 - **Resolution**: No change.
 
+### Issue 4: An unfinished literal arm completed identifiers inside its string
+
+- **Symptom**: After Decision 16, the full run changed
+  `patternCompletionBeforeArrow`: at `match (x) { "|" }` the service
+  completion listed 2008 identifiers (it had answered none), while the
+  editor still showed the three literal patterns.
+- **Cause**: The body is now a recovered match, so completion asks the
+  probe, which splices a name into the string and asks for identifiers.
+- **Resolution**: TypeScript offers no identifier inside a string literal
+  (only string-literal completions), so completion no longer asks the
+  probe when the cursor is inside a string token; the plain answer stands.
+  The baseline keeps that answer, and `Circle(|)` now reports `probe yes`
+  with the same items.
+
 ## Regression test (fails before the fix)
 
 - **Path**: pending

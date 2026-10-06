@@ -91,8 +91,17 @@ impl Project {
         // emit, and ask at its mapped position. The probe stands in for the
         // buffer only for this question — the next serve restores the real
         // text — and no diagnostic is ever computed from it.
-        let Some(probe) = build_probe(&path, &doc.source, source_at, session.probe_count + 1)
-        else {
+        let in_string = crate::lexer::lex_with_kind(&doc.source, 0, doc.source.len(), kind)
+            .iter()
+            .any(|token| {
+                matches!(token.kind, crate::lexer::TokenKind::Str)
+                    && token.span.start < source_at
+                    && source_at < token.span.end
+            });
+        let probe = (!in_string)
+            .then(|| build_probe(&path, &doc.source, source_at, session.probe_count + 1))
+            .flatten();
+        let Some(probe) = probe else {
             return Ok(if plain.member {
                 plain
             } else {
