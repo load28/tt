@@ -149,6 +149,10 @@ pub(super) enum TypedSite {
         written: Vec<String>,
         claimed: bool,
     },
+    Nested {
+        at: usize,
+        prefix: Option<(usize, usize)>,
+    },
 }
 
 pub(super) fn pattern_question(
@@ -241,7 +245,10 @@ pub(super) fn pattern_question(
                 })
                 .flat_map(|inner| cases(inner, &[]))
                 .collect(),
-            None,
+            Some(TypedSite::Nested {
+                at: prefix.map_or(offset, |(start, _)| start),
+                prefix,
+            }),
         ),
     };
     Some(PatternQuestion {
@@ -1131,6 +1138,22 @@ fn resolve_all<'a>(
         tags.iter()
             .all(|tag| declared.constructors.iter().any(|c| c.tag == *tag))
     })
+}
+
+/// The cases of the one visible variant that has every tag in `tags` —
+/// none when no variant or more than one does.
+pub(super) fn owner_cases(
+    path: &Path,
+    source: &str,
+    texts: Texts<'_>,
+    tags: &[String],
+) -> Vec<TtCompletion> {
+    let declarations = super::language::analyses_for(path, source, texts).declarations;
+    let mut owners = resolve_all(&declarations, tags);
+    match (owners.next(), owners.next()) {
+        (Some(owner), None) => cases(owner, &[]),
+        _ => Vec::new(),
+    }
 }
 
 /// The variant a declared field type names, when it names one plainly.

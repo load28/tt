@@ -193,6 +193,32 @@ impl Project {
                 let fields = self.field_candidates(&doc, &path, position)?;
                 field_candidates(question.items, fields, &written)
             }
+            Some(TypedSite::Nested { at, prefix }) => {
+                match self.nested_candidates(&doc, &path, at, prefix)? {
+                    Some(candidates) => arm_candidates(
+                        {
+                            let tags: Vec<String> = candidates
+                                .iter()
+                                .map(|candidate| candidate.label().to_string())
+                                .collect();
+                            let mut items = question.items;
+                            items.extend(crate::engine::completions::owner_cases(
+                                &path,
+                                &doc.source,
+                                Texts::Open(&self.overlays),
+                                &tags,
+                            ));
+                            items
+                        },
+                        crate::engine::completions::PatternFamily::Tags,
+                        candidates,
+                        &[],
+                        &[],
+                        false,
+                    ),
+                    None => question.items,
+                }
+            }
             Some(TypedSite::Field { claimed: false, .. }) | None => question.items,
         };
         Ok(Some(finish.finish(items)))
@@ -282,6 +308,79 @@ impl Project {
             }
         }
         Ok(None)
+    }
+
+    /// The tags TypeScript admits at a nested pattern's position: the
+    /// payload's discriminant, asked where the lowered arm compares it
+    /// ([`crate::PayloadTemp::tag`]), so a generic payload is answered by
+    /// the type the scrutinee gives it.
+    fn nested_candidates(
+        &mut self,
+        doc: &Arc<ServiceDoc>,
+        path: &Path,
+        at: usize,
+        prefix: Option<(usize, usize)>,
+    ) -> Result<Option<Vec<Discriminant>>, String> {
+        let end = prefix.map_or(at, |(_, end)| end);
+        let called = crate::lexer::lex_with_kind(
+            &doc.source,
+            end,
+            doc.source.len(),
+            crate::SourceKind::from_path(path).unwrap_or_default(),
+        )
+        .first()
+        .is_some_and(|token| matches!(token.kind, crate::lexer::TokenKind::Punct(b'(')));
+        let tag = if called {
+            STATEMENT_TAG_PLACEHOLDER.to_string()
+        } else {
+            format!("{STATEMENT_TAG_PLACEHOLDER}()")
+        };
+        let source = format!("{}{tag}{}", &doc.source[..at], &doc.source[end..]);
+        let report = crate::compile_projection_report(
+            &source,
+            &crate::Options {
+                filename: path.to_str(),
+                source_kind: crate::SourceKind::from_path(path).unwrap_or_default(),
+                defer_to_checker: true,
+                rewrite_imports: crate::ImportRewrite::Off,
+                ..crate::Options::default()
+            },
+        );
+        let Some(emit) = report.emit.or(report.withheld) else {
+            return Ok(None);
+        };
+        let Some(&crate::PayloadTemp {
+            tag: (start, end), ..
+        }) = emit.payload_temps.iter().find(|temp| temp.src == at)
+        else {
+            return Ok(None);
+        };
+        let code = format!("{}{PROBE_NAME}{}", &emit.code[..start], &emit.code[end..]);
+        let session = self.session();
+        open_served(session, path, &code);
+        let answer = ts_completions(
+            session,
+            path,
+            mapper::to_utf16(&code, start),
+            ServedText {
+                code: &code,
+                mappings: &[],
+                inserted: &[],
+                source: "",
+                splice: None,
+            },
+            &emit.generated_names,
+            None,
+        );
+        let candidates: Vec<Discriminant> = restore_document(session, path, doc, answer)?
+            .items
+            .iter()
+            .filter(|item| item.kind != Some(crate::engine::CompletionItemKind::Keyword))
+            .filter_map(|item| {
+                discriminant(&item.label, crate::engine::completions::PatternFamily::Tags)
+            })
+            .collect();
+        Ok((!candidates.is_empty()).then_some(candidates))
     }
 
     fn field_candidates(

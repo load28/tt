@@ -118,6 +118,20 @@ impl<'a> Rope<'a> {
         });
     }
 
+    /// Writes the tag literal the receiver of the nested pattern at `src` is
+    /// compared with, marked as that payload's ([`crate::PayloadTemp::tag`]).
+    pub(crate) fn push_payload_tag(&mut self, src: usize, literal: String) {
+        self.pieces.push(Piece::Mark {
+            src,
+            kind: MarkKind::PayloadTagStart,
+        });
+        self.push_lit(literal);
+        self.pieces.push(Piece::Mark {
+            src,
+            kind: MarkKind::PayloadTagEnd,
+        });
+    }
+
     /// Declares storage whose expected type is supplied by its contextual host.
     pub(crate) fn push_value_declaration(&mut self, name: &str) {
         self.push_lit(format!("let {name}"));

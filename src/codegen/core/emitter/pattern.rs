@@ -876,10 +876,13 @@ impl<'a> Emitter<'a> {
             Test::Variant { place, constructor } => {
                 let mut test =
                     self.emit_place(place, decision, Some(constructor_node(constructor)));
-                test.push_lit(format!(
-                    ".kind === \"{}\"",
-                    self.constructor_name(constructor)
-                ));
+                let literal = format!("\"{}\"", self.constructor_name(constructor));
+                if place.fields.is_empty() {
+                    test.push_lit(format!(".kind === {literal}"));
+                } else {
+                    test.push_lit(".kind === ");
+                    test.push_payload_tag(self.span(constructor_node(constructor)).start, literal);
+                }
                 let (tag, at) = self.source_node(constructor_node(constructor));
                 let head = self.span(decision.head);
                 let mut out = Rope::new();

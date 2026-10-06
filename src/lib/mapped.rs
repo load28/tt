@@ -196,6 +196,10 @@ pub struct PayloadTemp {
     pub src: usize,
     /// Byte offset of the receiver expression in the emitted output.
     pub out: usize,
+    /// Byte range of the tag literal the receiver's discriminant is
+    /// compared with (`"Some"` in `$tt_m.value.kind === "Some"`) — where a
+    /// checker can be asked which tags the payload admits.
+    pub tag: (usize, usize),
 }
 
 /// The result of [`emit_mapped`]: the emitted TypeScript and the

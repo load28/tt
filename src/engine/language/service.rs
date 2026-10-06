@@ -1543,6 +1543,12 @@ pub(super) struct Discriminant {
     value: crate::ast::LiteralValue,
 }
 
+impl Discriminant {
+    pub(super) fn label(&self) -> &str {
+        &self.label
+    }
+}
+
 pub(super) fn discriminant(
     label: &str,
     family: crate::engine::completions::PatternFamily,

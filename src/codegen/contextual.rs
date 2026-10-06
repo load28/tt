@@ -214,6 +214,10 @@ fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
     }
     for mark in &mut emit.payload_temps {
         mark.out = shifted(edits, mark.out, true);
+        mark.tag = (
+            shifted(edits, mark.tag.0, true),
+            shifted(edits, mark.tag.1, false),
+        );
     }
     for mark in &mut emit.result_return_temps {
         mark.out = shifted(edits, mark.out, true);

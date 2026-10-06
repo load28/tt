@@ -43,6 +43,10 @@ pub(crate) enum MarkKind {
     AssertedAnnotationEnd,
     /// The receiver a nested pattern tests ([`crate::PayloadTemp`]).
     Payload,
+    /// Start of the tag literal that receiver is compared with.
+    PayloadTagStart,
+    /// End of the same literal.
+    PayloadTagEnd,
     /// Start of a value explicitly returned from a `result` block.
     ResultReturnStart,
     /// End of the same returned value.
@@ -859,7 +863,24 @@ impl<'a> TargetFile<'a> {
                 } => payloads.push(PayloadTemp {
                     src: *src,
                     out: out.len(),
+                    tag: (out.len(), out.len()),
                 }),
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::PayloadTagStart,
+                } => {
+                    if let Some(payload) = payloads.last_mut().filter(|p| p.src == *src) {
+                        payload.tag = (out.len(), out.len());
+                    }
+                }
+                TargetPiece::Mark {
+                    src,
+                    kind: MarkKind::PayloadTagEnd,
+                } => {
+                    if let Some(payload) = payloads.last_mut().filter(|p| p.src == *src) {
+                        payload.tag.1 = out.len();
+                    }
+                }
                 TargetPiece::Mark {
                     src,
                     kind: MarkKind::ResultReturnStart,

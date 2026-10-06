@@ -156,18 +156,101 @@ upstream issue and not worked around.
 
 After the change 16000 matches take 2.7 s.
 
+### Decision 8: A nested pattern position under a generic payload is completed from TypeScript
+
+- **Context**: `Has(item: §)` over `Opt<Shape>` offered nothing. The
+  parse-only list follows the field's declared type, and `T` names no
+  variant (by design: a type parameter does not transfer ownership,
+  `docs/ai/tt.md`). The typed request (`patternCompletions`) asked the
+  checker only at the arm's top level.
+- **Decision and rationale**: The emitter now records where it writes the
+  tag literal a nested pattern's receiver is compared with
+  (`PayloadTemp::tag`, the `"Circle"` of `$tt_m.item.kind === "Circle"`),
+  beside the receiver it already recorded for typed exhaustiveness. A
+  nested position (`TypedSite::Nested`) lowers the arm with a placeholder
+  tag, replaces that literal with the probe, and asks TypeScript's
+  completions there, as the top-level path asks after `(scrutinee).kind
+  === `. The arm's own condition narrows the receiver, so the answer is
+  the payload's type at that arm, at any depth. When exactly one visible
+  variant has every tag TypeScript offers, its cases supply the details.
+- **Not changed here**: hover and definition of a nested tag under a
+  generic payload. `ttSymbol` is parse-only by its protocol contract
+  (`src/server.rs`), and a typed answer needs a new project-backed
+  request and the VS Code client asking it. Proposed as a follow-up task.
+
+### Decision 9: An unreachable-arm hint beside a duplicate-arm error is kept
+
+- **Context**: A duplicate arm draws the `match-duplicate-arm` error and
+  the editor's unreachable-arm hint over the same arm.
+- **Decision and rationale**: They state two facts at two layers. The
+  error is the rule the build enforces; the hint is the editor's dimming of
+  code that cannot run (`src/engine/hints.rs`), which a duplicate arm also
+  is. An editor shows a diagnostic and an "unnecessary" tag on the same
+  range the same way TypeScript reports TS7027 or TS6133 beside an error.
+  Not a defect.
+
 ## Work log
 
 - 2026-10-06: Started from the findings TASK-770 moved here.
+- 2026-10-06: Lowered a logical statement test as guards (decision 1).
+- 2026-10-06: Made function-body placement, statement placement, and
+  completion scopes linear (decision 2); fixed or-pattern document symbols
+  and arm completion (decisions 3 and 4); reviewed or-pattern hover
+  (decision 5).
+- 2026-10-06: Profiled `--check-types` (E4) with symbol-carrying release
+  builds and gdb stack samples; cached line and UTF-16 measurements,
+  measured CLI rendering once per file, and bounded the host's position
+  walks (decision 6). Profiled tsgo with `--pprofDir` and request timings
+  and traced the rest to tsgo's content-mapper path.
+- 2026-10-06: Profiled `--check` on match-heavy files (E3); removed the
+  segment shifting and the full scans of host spans (decision 7).
+- 2026-10-06: Added typed nested-position completion (decision 8) and
+  reviewed the hint beside a duplicate-arm error (decision 9).
 
 ## Issues and resolutions
 
-None.
+- **Guard condition rendered as the result slot**: the guard's condition
+  printed `$tt_v2` in place of its operand. Cause: the condition was
+  rendered outside a conditional region, so a nested value read its slot.
+  Resolution: the guard raises `conditional_region_depth` while it writes
+  the condition and the right operand.
+- **An `||` loop guard with a tt condition printed `$tt_v2{ work(); }`**.
+  Cause: the replacement-capture path wrote the operation's slot where the
+  test was skipped. Resolution: a guarded loop operation's replacement is
+  empty text.
+- **The first function-body cache was quadratic in nesting depth**: it
+  rebuilt a full table per slice. Resolution: the table is incremental and
+  kept per slice.
+- **E4's remaining growth is in tsgo**: after decision 6, 6400 errors still
+  took 21.6 s. Cause: tsgo's semantic diagnostics on a content-mapped file
+  (API 12.6 s for 12800 diagnostics; `tsc --runExternalCode` profile in
+  `diagnosticwriter.newOriginalTextFile`, which recomputes line starts per
+  diagnostic). Resolution: recorded as an upstream issue; no workaround.
+- **A clippy failure reached a commit**: the commit command ran after a
+  clippy pipe whose status it did not check. Resolution: fixed in the next
+  commit; gates are run and read before committing.
 
 ## Regression test (fails before the fix)
 
-- **Path**: pending
-- **Observed failure**: pending
+- **Path**: `tests/cases/compiler/aLogicalTestKeepsItsNarrowingBesideATtValue.tt`;
+  `src/lib/scaling_tests.rs`
+  (`every_request_does_linear_work_in_the_number_of_statement_decisions`,
+  `a_check_measures_each_file_once_however_many_diagnostics_it_reports`,
+  `every_request_does_linear_work_in_the_number_of_statement_matches`,
+  `every_request_does_linear_work_in_the_number_of_expression_matches`,
+  `every_request_does_linear_work_in_the_nesting_depth_of_matches`);
+  `tests/native/editor_service.rs` (`an_or_pattern_binding_is_a_document_symbol`);
+  `tests/cases/editor/` (`orPatternArmCompletionCountsItsWrittenAlternatives`,
+  `nestedPatternCompletionUnderAGenericPayload`).
+- **Observed failure**: the narrowing case failed with TS2339 on
+  `x.toUpperCase()` in the test's body. The statement-decision scaling test
+  failed on missing linear work ticks. The measurement test failed with
+  `line measurements: 160 for 80 diagnostics but 320 for 160`. The match
+  scaling tests failed with `completion host segments: 360300 units for n
+  matches but 1440600 for 2n`. The document-symbol test found no symbol for
+  the shared binding. The or-pattern completion case listed every case in
+  scope without `covered`. The nested completion case had no
+  `patternCompletions` items.
 
 ## Verification
 
