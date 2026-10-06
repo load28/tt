@@ -1105,10 +1105,42 @@ fn source_symbols_grown(
         });
     }
     // Lowering can move a declaration ahead of the text around it (a
-    // pattern binding hoisted above its `match`); the outline follows the
-    // source.
+    // pattern binding hoisted above its `match`, a local a `result` block
+    // declares); the outline follows the source. A declaration written
+    // inside another's source is that one's child, as TypeScript's
+    // navigation tree places what an initializer holds under its variable.
     out.sort_by_key(|symbol| (symbol.range.start.line, symbol.range.start.character));
-    out
+    let mut nested: Vec<DocumentSymbol> = Vec::with_capacity(out.len());
+    for symbol in out {
+        match nested.last_mut() {
+            Some(parent) if encloses(&parent.range, &symbol.range) => adopt(parent, symbol),
+            _ => nested.push(symbol),
+        }
+    }
+    in_source_order(&mut nested);
+    nested
+}
+
+/// Whether `outer` holds all of `inner` and more.
+fn encloses(outer: &Range, inner: &Range) -> bool {
+    let at = |position: &Position| (position.line, position.character);
+    outer != inner && at(&outer.start) <= at(&inner.start) && at(&inner.end) <= at(&outer.end)
+}
+
+/// Places `symbol` under the innermost of `parent`'s descendants holding it.
+fn adopt(parent: &mut DocumentSymbol, symbol: DocumentSymbol) {
+    match parent.children.last_mut() {
+        Some(child) if encloses(&child.range, &symbol.range) => adopt(child, symbol),
+        _ => parent.children.push(symbol),
+    }
+}
+
+/// Puts every level of `symbols` in source order.
+fn in_source_order(symbols: &mut [DocumentSymbol]) {
+    symbols.sort_by_key(|symbol| (symbol.range.start.line, symbol.range.start.character));
+    for symbol in symbols {
+        in_source_order(&mut symbol.children);
+    }
 }
 
 pub(super) fn source_tokens(

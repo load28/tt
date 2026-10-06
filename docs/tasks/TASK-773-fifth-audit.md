@@ -170,6 +170,22 @@ defects. This task fixes them in the layer that owns each one.
   does; the probe closes the construct the cursor sits in (TASK-772
   decision 4).
 
+### Decision 9: The outline nests a declaration under the one whose source holds it (E7)
+
+- **Context**: `documentSymbols` listed `inner` of
+  `export const block = result { const inner = ...; }` and the locals of a
+  match arm as module-level symbols. Lowering writes those declarations
+  before the statement that reads their value, so TypeScript's navigation
+  tree of the served code sees them as siblings.
+- **Decision and rationale**: TypeScript's navigation bar places what a
+  variable's initializer declares under that variable
+  (`addNodeWithRecursiveInitializer`, `addNodeWithRecursiveChild` in
+  `services/navigationBar.ts`). The outline is mapped to the source and
+  then, level by level, a symbol whose source range lies inside another's is
+  moved under the innermost one, and each level is put in source order. The
+  existing outline test now expects `radius`, written in `a`'s initializer,
+  under `a`.
+
 ## Work log
 
 - 2026-10-06: Ran the fifth audit as three read-only agents (CLI,
@@ -190,6 +206,7 @@ defects. This task fixes them in the layer that owns each one.
   decision 5 changed.
 - 2026-10-06: Sent signature help inside recovered text through the probe
   (decision 8).
+- 2026-10-06: Nested outline symbols by source containment (decision 9).
 
 ## Issues and resolutions
 

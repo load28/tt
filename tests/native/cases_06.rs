@@ -258,7 +258,7 @@ export function area(s: Shape): number {\n\
         vec![
             "area [area]",
             "  a [a]",
-            "  radius [radius]",
+            "    radius [radius]",
             "  <function> []",
         ],
         "{symbols:?}"

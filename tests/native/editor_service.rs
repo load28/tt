@@ -1064,3 +1064,35 @@ export function side(s: Shape): number {\n  return match (s) {\n    Sq(width: q)
         .unwrap_or_else(|| panic!("{symbols:?}"));
     assert_eq!(q.selection_range.start, utf16_position(source, "q) | Rect"), "{q:?}");
 }
+
+#[test]
+fn a_local_written_in_an_initializer_is_outlined_under_its_variable() {
+    require_tsgo!();
+    let source = "type R<T> = { kind: \"Ok\"; value: T } | { kind: \"Err\"; error: string };\n\
+declare function r(): R<number>;\n\
+export variant V { A(n: number), B }\n\
+declare const s: V;\n\
+export const block = result { const inner = try r(); return inner; };\n\
+export const value = match (s) { A(n) => { const local = n * 2; return local; }, B => 0 };\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut service = open_service(&file);
+    let symbols = service.document_symbols(&file).unwrap();
+    let top: Vec<&str> = symbols.iter().map(|symbol| symbol.name.as_str()).collect();
+    for local in ["inner", "n", "local"] {
+        assert!(!top.contains(&local), "{local} is outlined at module level: {symbols:#?}");
+    }
+    let children = |name: &str| -> Vec<String> {
+        symbols
+            .iter()
+            .find(|symbol| symbol.name == name)
+            .unwrap_or_else(|| panic!("{symbols:#?}"))
+            .children
+            .iter()
+            .map(|symbol| symbol.name.clone())
+            .collect()
+    };
+    assert!(children("block").contains(&"inner".to_string()), "{symbols:#?}");
+    let value = children("value");
+    assert!(value.contains(&"local".to_string()), "{symbols:#?}");
+}
