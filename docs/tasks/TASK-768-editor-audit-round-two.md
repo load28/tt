@@ -21,7 +21,8 @@ diverges between layers. Fix each in the layer that owns it.
   bound to an unparenthesized `try`; a `try` in a match scrutinee or a
   pipeline head inside a `result` block; a `try` in a function written in
   an isolated value region inside a `result` block; a CommonJS module's
-  storage annotations naming the ECMAScript-syntax standard library.
+  storage annotations naming the ECMAScript-syntax standard library; a
+  TypeScript older than the API ttc drives.
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -140,6 +141,24 @@ diverges between layers. Fix each in the layer that owns it.
   annotation's rewrite now uses the specifiers that module uses, as the
   emitter does for the module's own imports.
 
+### Decision 11: A TypeScript older than 7.1 is refused at resolution
+
+- **Context**: With `typescript@7.0.2` (what `npm i -D typescript@7`
+  installs) or the latest `@typescript/native-preview`
+  (`7.0.0-dev.20260707.2`), every typed mode failed with "the TypeScript
+  backend failed: api.readConfigFile is not a function" and an empty
+  location. The documentation requires the 7.1 line.
+- **Alternatives considered**: Detect the missing method in the host after
+  it starts; check the client package's version where the toolchain is
+  resolved.
+- **Decision and rationale**: Both clients lack the project API the host
+  opens a project through (`readConfigFile` is absent from their
+  `dist/api/sync/api.js`; present in 7.1). Resolution is where "no
+  TypeScript" is already reported, so an older client is reported there
+  the same way: its version, the 7.1 requirement, and the one install
+  instruction, and the typed layer degrades as when TypeScript is missing.
+  An unreadable version is not guessed at.
+
 ## Work log
 
 - 2026-10-06: Started from the second audit's report. Fixed
@@ -150,14 +169,24 @@ diverges between layers. Fix each in the layer that owns it.
   `src/parser/iflets.rs` (Decision 7), `src/sema.rs`,
   `src/sema/checker.rs`, `src/flow/syntax.rs`, `docs/ai/tt.md` and
   `docs/design/try-result-scopes.md` (Decisions 8, 9), and
-  `src/typescript/contextual.rs` (Decision 10). Updated
+  `src/typescript/contextual.rs` (Decision 10), and
+  `src/typescript/toolchain.rs` (Decision 11). Updated
   `tests/compile/cases_08.rs`, which pinned the shorthand-breaking edit
   (Decision 1). Regenerated every `unknown-field`
   diagnostics matrix baseline (`TT_MATRIX_CASES=all`) for Decision 1.
 
 ## Issues and resolutions
 
-None.
+### Issue 1: `--dependencies` does not list `node_modules/@tt/std`
+
+- **Symptom**: The audit reported that a project importing `@tt/std` with
+  the package present on disk did not list the package's files.
+- **Cause**: The engine serves its own standard-library package at
+  `node_modules/@tt/std` in the layered file system the compiler reads
+  (`engine::projection::served_std_packages`), so the files on disk are
+  never read and do not affect the compile; an ordinary package such as
+  `node_modules/foo` is listed.
+- **Resolution**: Not a defect; no change.
 
 ## Regression test (fails before the fix)
 

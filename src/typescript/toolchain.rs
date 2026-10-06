@@ -28,7 +28,7 @@ const API_IN_PACKAGE: &str = "dist/api/sync/api.js";
 /// How to install what is missing — the one sentence every error here ends
 /// with, so the fix never depends on which half reported it.
 const INSTALL: &str = "install TypeScript in this project (`npm i -D typescript@7.1` — the 7.1 \
-     line, whose declaration-emit API `ttc --types` needs; a plain `7` \
+     line, whose project and declaration-emit APIs ttc drives; a plain `7` \
      resolves to 7.0)";
 
 /// One npm distribution of TypeScript 7.
@@ -68,17 +68,42 @@ pub(crate) struct Client {
     pub api: PathBuf,
 }
 
+/// The oldest TypeScript line whose API client ttc drives: the project API
+/// the host opens a project through (`readConfigFile`, `parseConfigFile`)
+/// arrived in 7.1.
+const MINIMUM: (u64, u64) = (7, 1);
+
 /// Resolves the API client for a project at `from`.
 pub(crate) fn client(from: &Path) -> Result<Client, String> {
     for node_modules in node_modules_from(from) {
         for distribution in &DISTRIBUTIONS {
-            let api = node_modules.join(distribution.client).join(API_IN_PACKAGE);
+            let package = node_modules.join(distribution.client);
+            let api = package.join(API_IN_PACKAGE);
             if api.exists() {
+                if let Some(version) = package_version(&package)
+                    && major_minor(&version).is_some_and(|found| found < MINIMUM)
+                {
+                    return Err(format!(
+                        "TypeScript {version} is installed, but ttc needs the {}.{} line — {INSTALL}",
+                        MINIMUM.0, MINIMUM.1
+                    ));
+                }
                 return Ok(Client { api: absolute(api) });
             }
         }
     }
     Err(format!("no TypeScript compiler found — {INSTALL}"))
+}
+
+fn package_version(package: &Path) -> Option<String> {
+    let manifest = std::fs::read_to_string(package.join("package.json")).ok()?;
+    let manifest: serde_json::Value = serde_json::from_str(&manifest).ok()?;
+    manifest["version"].as_str().map(str::to_owned)
+}
+
+fn major_minor(version: &str) -> Option<(u64, u64)> {
+    let mut parts = version.split(['.', '-', '+']);
+    Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
 }
 
 /// Resolves the executable that serves the language service for a project
@@ -281,6 +306,39 @@ mod tests {
 
             std::fs::remove_dir_all(consumer.join("node_modules")).unwrap();
             std::fs::remove_dir_all(source.join("node_modules")).unwrap();
+        }
+    }
+
+    /// A client older than the line ttc drives is reported with its version
+    /// and the one fix, before any host starts and fails on a missing API.
+    #[test]
+    fn a_typescript_older_than_the_api_ttc_drives_is_told_how_to_upgrade() {
+        for (version, accepted) in [
+            ("7.0.2", false),
+            ("7.0.0-dev.20260707.2", false),
+            ("7.1.0-dev.20260826.1", true),
+            ("7.1.0", true),
+            ("8.0.0", true),
+        ] {
+            let dir = scratch(&format!("version-{version}"));
+            let node_modules = install(&dir, &DISTRIBUTIONS[0]);
+            std::fs::write(
+                node_modules
+                    .join(DISTRIBUTIONS[0].client)
+                    .join("package.json"),
+                format!("{{ \"version\": \"{version}\" }}"),
+            )
+            .unwrap();
+            match client(&dir) {
+                Ok(_) => assert!(accepted, "{version} was accepted"),
+                Err(message) => {
+                    assert!(!accepted, "{version} was refused: {message}");
+                    assert!(
+                        message.contains(version) && message.contains(INSTALL),
+                        "unhelpful message: {message}"
+                    );
+                }
+            }
         }
     }
 
