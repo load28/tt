@@ -19,7 +19,8 @@ request validation. Fix each in the layer that owns it.
   import's spelling is read from (R3L4); `--types` sidecars of two
   inputs (R3L5); the server's request and option validation (R3L6); the
   in-place refusal's advice (R3L7); the path `--check-types` shows for a
-  file outside the working directory (R3L8).
+  file outside the working directory (R3L8); non-ASCII paths in the
+  language service's URIs (R3E1).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -121,6 +122,19 @@ request validation. Fix each in the layer that owns it.
   working directory, `..` included. The typed pass strips the working
   directory and, for a path outside it on the same root, now writes the
   relative path with `..`.
+
+### Decision 8: A file URI percent-encodes a path's UTF-8 bytes
+
+- **Context**: In a directory named `ö`, the language service reported
+  TS2307 for `./h.ts` and hover returned nothing; definitions came back
+  under `Ã¶`.
+- **Decision and rationale**: `file_uri` wrote each UTF-8 byte of the
+  path as a character, so `ö` reached the server as two Latin-1
+  characters. typescript-go's `FileNameToDocumentURI`
+  (`internal/ls/lsconv/converters.go`) escapes a path segment with
+  `url.PathEscape`, which percent-encodes every non-ASCII byte, and
+  `uri_path` already decodes `%XX` back to bytes. Non-ASCII bytes are now
+  written as `%XX`.
 
 ## Work log
 

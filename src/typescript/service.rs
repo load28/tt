@@ -687,6 +687,7 @@ pub(crate) fn file_uri(path: &Path) -> String {
             b'%' => out.push_str("%25"),
             b'#' => out.push_str("%23"),
             b'?' => out.push_str("%3F"),
+            byte if !byte.is_ascii() => out.push_str(&format!("%{byte:02X}")),
             _ => out.push(byte as char),
         }
     }
@@ -729,6 +730,14 @@ mod tests {
     use std::time::Duration;
 
     use super::{Arrangement, Response, ResponseFailure, language_id, wait_for_response};
+
+    #[test]
+    fn a_non_ascii_path_is_percent_encoded_as_utf8_and_read_back() {
+        let path = std::path::Path::new("/p/ö 日本/aé.tt");
+        let uri = super::file_uri(path);
+        assert_eq!(uri, "file:///p/%C3%B6%20%E6%97%A5%E6%9C%AC/a%C3%A9.tt");
+        assert_eq!(super::uri_path(&uri).as_deref(), Some(path));
+    }
 
     #[test]
     fn projected_ttx_documents_open_as_typescript_react() {
