@@ -1137,6 +1137,48 @@ fn types_type_a_recursive_anonymous_join_whole() {
 }
 
 #[test]
+fn types_keep_a_declaration_whose_exported_initializer_stopped_parsing() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        r#"{"compilerOptions":{"strict":true,"noEmit":true,"module":"esnext","moduleResolution":"bundler","target":"es2022"},"include":["src"]}"#,
+    )
+    .unwrap();
+    let types = || {
+        Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .args(["--types", "src"])
+            .current_dir(&dir)
+            .output()
+            .expect("failed to run ttc")
+    };
+    let sidecar = || fs::read_to_string(dir.join(".tt-types/a.tt.d.ts")).unwrap();
+    fs::write(
+        dir.join("src/a.tt"),
+        "export const a = match (1 as number) { 1 => 2, _ => 3 };\n",
+    )
+    .unwrap();
+    assert!(types().status.success());
+    let before = sidecar();
+    assert!(before.contains("const a: number"), "{before}");
+    fs::write(
+        dir.join("src/a.tt"),
+        "export const a = match (1 as number) { 1 => 2, _ => 3 ;\n",
+    )
+    .unwrap();
+    assert_eq!(types().status.code(), Some(1));
+    assert_eq!(sidecar(), before);
+    fs::write(
+        dir.join("src/a.tt"),
+        "export const k = 1;\nconst broken = match (1 as number) { 1 => 2, _ => 3 ;\n",
+    )
+    .unwrap();
+    assert_eq!(types().status.code(), Some(1));
+    assert!(sidecar().contains("const k = 1"), "{}", sidecar());
+}
+
+#[test]
 fn types_keep_declarations_written_before_a_variant_stopped_parsing() {
     require_types_toolchain!();
     // TASK-590: a malformed variant is reported once, its importers get no

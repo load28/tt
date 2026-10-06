@@ -14,7 +14,8 @@ request validation. Fix each in the layer that owns it.
 ## Scope
 
 - Included: the output layout of several inputs (R3L1); the standard
-  library's place and specifiers in an in-place build (R3L2).
+  library's place and specifiers in an in-place build (R3L2); a sidecar
+  replaced by one typed from a placeholder (R3L3).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -48,6 +49,28 @@ request validation. Fix each in the layer that owns it.
   directories, and specifiers to a `tt/` not written yet were computed from
   raw text. Both now work on normalized absolute paths; the root is shown
   relative to the working directory when it is inside it.
+
+### Decision 3: A recovery in an exported statement withholds declarations
+
+- **Context**: `export const a = match (...) { ... ;` (a malformed match)
+  replaced the sidecar's `a: number` with `a: any`. TASK-590 withheld
+  declarations only for a recovery standing for a declaration, so that a
+  recovered expression in unrelated code still refreshes the sidecar (the
+  extension's contract).
+- **Alternatives considered**: Withhold for every recovery (breaks that
+  contract); mark the placeholder with a type the declaration emit would
+  print (changes hover and diagnostics on the projection); withhold for a
+  recovery inside an exported statement.
+- **Decision and rationale**: A placeholder decides the declared type of
+  the statement it sits in when that statement is exported (its
+  initializer or body is what the type is inferred from). The lexer's
+  statement model finds the top-level statement around the recovery; when
+  it begins with `export`, the recovery counts among
+  `recovered_declarations`, so the previous sidecar stands, as the
+  reference states. A recovery in a statement that is not exported keeps
+  refreshing. Remaining debt: a non-exported declaration that an exported
+  one names (`export type T = typeof broken`) or exports later
+  (`export { broken }`) is not detected.
 
 ## Work log
 

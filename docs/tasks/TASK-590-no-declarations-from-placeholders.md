@@ -1,5 +1,9 @@
 # TASK-590: Write no declarations from placeholders, and type a malformed variant as the error type
 
+> TASK-769 narrows Issue 2's resolution: an expression recovery inside an
+> exported statement also withholds the file's declarations, since the
+> placeholder decides that statement's declared type.
+
 - **Status**: Complete
 - **Started**: 2026-09-30
 - **Completed**: 2026-09-30

@@ -437,8 +437,10 @@ pub struct ProjectionReport {
     /// Host productions whose missing syntax was materialized. Their
     /// original syntax diagnostic remains authoritative; type checking continues.
     pub syntax_repairs: Vec<(usize, usize)>,
-    /// Those of `recovered` that stood for a declaration (a malformed
-    /// variant), whose name the projection declares with the error type.
+    /// Those of `recovered` that stand for a declaration (a malformed
+    /// variant, whose name the projection declares with the error type) or
+    /// sit in an exported statement, whose declared type the placeholder
+    /// would decide.
     pub recovered_declarations: Vec<(usize, usize)>,
     /// The emission `emit` withholds from the typed program when the only
     /// thing wrong with the (recovered) file is its TypeScript: it does not
@@ -620,11 +622,18 @@ pub(crate) fn compile_projection_report_parsed(
                     .map(|emit| declare_recovered_variants(emit, &selected)),
                 withheld: withheld.map(|emit| declare_recovered_variants(emit, &selected)),
                 diagnostics: ordinary.diagnostics,
-                recovered_declarations: selected
-                    .iter()
-                    .filter(|node| matches!(node.kind, ast::RecoveryKind::VariantDecl { .. }))
-                    .map(|node| (node.span.start, node.span.end))
-                    .collect(),
+                recovered_declarations: {
+                    let tokens =
+                        crate::lexer::lex_with_kind(source, 0, source.len(), options.source_kind);
+                    selected
+                        .iter()
+                        .filter(|node| {
+                            matches!(node.kind, ast::RecoveryKind::VariantDecl { .. })
+                                || in_exported_statement(source, &tokens, node.span.start)
+                        })
+                        .map(|node| (node.span.start, node.span.end))
+                        .collect()
+                },
                 recovered: selected
                     .into_iter()
                     .map(|node| (node.span.start, node.span.end))
@@ -971,4 +980,20 @@ fn report_parsed(
             .map(diagnostics::Diagnostic::from_tt)
             .collect(),
     }
+}
+
+fn in_exported_statement(source: &str, tokens: &[crate::lexer::Token], at: usize) -> bool {
+    let mut depth = 0usize;
+    let mut statement = None;
+    for token in tokens.iter().take_while(|token| token.span.start < at) {
+        if depth == 0 && token.facts.statement_start() {
+            statement = Some(token);
+        }
+        if token.opens_bracket() {
+            depth += 1;
+        } else if token.closes_bracket() {
+            depth = depth.saturating_sub(1);
+        }
+    }
+    statement.is_some_and(|token| &source[token.span.start..token.span.end] == "export")
 }
