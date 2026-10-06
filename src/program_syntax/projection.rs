@@ -859,7 +859,9 @@ impl<'a> ProjectionBuilder<'a> {
         // initializer. Project it as an expression so that header remains
         // valid TypeScript; its typed continuation decides the eventual
         // statement shape in target lowering.
-        if self.expr_contains_value_region(propagate.value) {
+        if self.expr_contains_value_region(propagate.value)
+            || self.expr_contains_propagation(propagate.value)
+        {
             return self.emit_propagate_with_shadow(
                 SyntaxCategory::Propagation,
                 self.source_span(propagate.owner)?,
@@ -1062,7 +1064,9 @@ impl<'a> ProjectionBuilder<'a> {
         propagate: &Propagate,
     ) -> Result<(), ProgramSyntaxError> {
         let source = self.source_span(propagate.node)?;
-        if self.expr_contains_value_region(propagate.value) {
+        if self.expr_contains_value_region(propagate.value)
+            || self.expr_contains_propagation(propagate.value)
+        {
             return self.emit_propagate_with_shadow(
                 SyntaxCategory::Expression,
                 source,
@@ -1274,6 +1278,10 @@ impl<'a> ProjectionBuilder<'a> {
     }
 
     fn emit_shadow_expr(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
+        crate::stack::grow(|| self.emit_shadow_expr_grown(expr))
+    }
+
+    fn emit_shadow_expr_grown(&mut self, expr: ExprId) -> Result<(), ProgramSyntaxError> {
         match &self.core.exprs[expr.index()] {
             Expr::Opaque(node) => self.push_source(*node),
             Expr::Propagate(propagate) => self.emit_propagate_expr(expr, propagate),

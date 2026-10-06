@@ -1,0 +1,99 @@
+=== aFlowPipelineHeadBeforeStructuredStepsIsEmitted.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const r = (n: number): TResult<number, string> => (n > 0 ? Result.Ok(n) : Result.Err("none"));
+>r : const r: (n: number) => TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>n : (parameter) n: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+const double = (n: number) => n * 2;
+>double : const double: (n: number) => number
+>n : (parameter) n: number
+>n : (parameter) n: number
+const pick = (x: number): V => (x > 0 ? V.A(x) : V.B);
+>pick : const pick: (x: number) => V
+>x : (parameter) x: number
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>x : (parameter) x: number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>x : (parameter) x: number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const chained = (flow |> double |> String)
+>chained : const chained: (x: number) => number
+>double : const double: (n: number) => number
+>String : var String: StringConstructor
+  |> (f => result { const z = try r(f(4).length); return z; })
+>f : (parameter) f: (n: number) => string
+>z : const z: number
+>r : const r: (n: number) => TResult<number, string>
+>f : (parameter) f: (n: number) => string
+>length : (property) String.length: number
+>z : const z: number
+  |> (q => (x: number) => { const A(n: m) = match (x) { 1 => pick(q.kind === "Ok" ? q.value : 0), _ => V.B } else { return 0; }; return m; });
+>q : (parameter) q: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>x : (parameter) x: number
+>n : (property) n: number
+>m : const m: number
+>x : (parameter) x: number
+>pick : const pick: (x: number) => V
+>q : (parameter) q: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>kind : (property) kind: "Err" | "Ok"
+>q : (parameter) q: {
+>       kind: "Ok";
+>       value: number;
+>   }
+>value : (property) value: number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>m : const m: number
+console.log(chained(1), chained(2));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>chained : const chained: (x: number) => number
+>chained : const chained: (x: number) => number
+

@@ -1,0 +1,70 @@
+=== aPatternSubjectWithAPipelineBesideAMatchIsLowered.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const wrap = (xs: unknown[]): V => (xs.length === 2 ? V.A(Number(xs[0]) + String(xs[1]).length) : V.B);
+>wrap : const wrap: (xs: unknown[]) => V
+>xs : (parameter) xs: unknown[]
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>xs : (parameter) xs: unknown[]
+>length : (property) Array<unknown>.length: number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>Number : var Number: (value?: any) => number
+>xs : (parameter) xs: unknown[]
+>String : var String: (value?: any) => string
+>xs : (parameter) xs: unknown[]
+>length : (property) String.length: number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function f(k: number) {
+>f : function f(k: number): number
+>k : (parameter) k: number
+  const A(n) = wrap([match (k) { 1 => 10, _ => 20 }, k |> String]) else { return -1; };
+>n : const n: number
+>wrap : const wrap: (xs: unknown[]) => V
+>k : (parameter) k: number
+>k : (parameter) k: number
+>String : var String: StringConstructor
+  if let A(n: m) = wrap([match (k) { 1 => 1, _ => 2 }, 100 |> String]) { return n + m; }
+>n : (property) n: number
+>m : const m: number
+>wrap : const wrap: (xs: unknown[]) => V
+>k : (parameter) k: number
+>String : var String: (value?: any) => string
+>n : const n: number
+>m : const m: number
+  return n;
+>n : const n: number
+console.log(f(1), f(25));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : function f(k: number): number
+>f : function f(k: number): number
+

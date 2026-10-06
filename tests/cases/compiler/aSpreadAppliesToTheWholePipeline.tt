@@ -1,0 +1,8 @@
+// @run: aSpreadAppliesToTheWholePipeline.tt
+const xs = [[1, 2], [3]];
+const flat = (x: number[][]) => x.flat();
+const g = (...a: unknown[]) => a.length;
+const arr = [...xs |> flat];
+const count = g(...xs |> flat);
+const obj = { ...({ a: 1 }) |> ((o: { a: number }) => ({ ...o, b: 2 })) };
+console.log(JSON.stringify(arr), count, JSON.stringify(obj));

@@ -250,6 +250,7 @@ impl EvaluationFile {
                 .map(|(value, target)| {
                     let schedule = resolve_schedule(
                         value.protocol,
+                        &self.tt_spans,
                         &slots,
                         &mut source_slots,
                         &mut next_slot,
@@ -559,12 +560,15 @@ impl EvaluationFile {
             }
             let schedule = resolve_schedule_steps(
                 &protocol.steps()[..step_count],
+                Elision {
+                    tt_spans: &self.tt_spans,
+                    reserve_names: false,
+                },
                 &nested_sources,
                 &mut nested_source_slots,
                 &mut next_slot,
                 &mut slot_names,
                 &mut occupied_names,
-                false,
             )?;
             slot_anchors.resize(slot_names.len(), self.host_anchor(region));
             if let (

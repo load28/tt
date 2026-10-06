@@ -1,0 +1,11 @@
+// @run: aFlowPipelineHeadBeforeStructuredStepsIsEmitted.tt
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+variant V { A(n: number), B }
+const r = (n: number): TResult<number, string> => (n > 0 ? Result.Ok(n) : Result.Err("none"));
+const double = (n: number) => n * 2;
+const pick = (x: number): V => (x > 0 ? V.A(x) : V.B);
+const chained = (flow |> double |> String)
+  |> (f => result { const z = try r(f(4).length); return z; })
+  |> (q => (x: number) => { const A(n: m) = match (x) { 1 => pick(q.kind === "Ok" ? q.value : 0), _ => V.B } else { return 0; }; return m; });
+console.log(chained(1), chained(2));

@@ -1,0 +1,61 @@
+=== aValBindingPassedThroughAWrappedCalleeIsReported.tt ===
+function bad(p: { a: number }) { p.a = 1; }
+>bad : function bad(p: {
+>       a: number;
+>   }): void
+>p : (parameter) p: {
+>       a: number;
+>   }
+>a : (property) a: number
+>p : (parameter) p: {
+>       a: number;
+>   }
+>a : (property) a: number
+val const x = { a: 1 };
+>x : const x: {
+>       a: number;
+>   }
+>a : (property) a: number
+(bad)(x);
+>bad : function bad(p: {
+>       a: number;
+>   }): void
+>x : const x: {
+>       a: number;
+>   }
+bad!(x);
+>bad : function bad(p: {
+>       a: number;
+>   }): void
+>x : const x: {
+>       a: number;
+>   }
+bad?.(x);
+>bad : function bad(p: {
+>       a: number;
+>   }): void
+>x : const x: {
+>       a: number;
+>   }
+((bad))!(x);
+>bad : function bad(p: {
+>       a: number;
+>   }): void
+>x : const x: {
+>       a: number;
+>   }
+x |> (bad);
+>x : const x: {
+>       a: number;
+>   }
+>bad : function bad(p: {
+>       a: number;
+>   }): void
+x |> bad!;
+>x : const x: {
+>       a: number;
+>   }
+>bad : function bad(p: {
+>       a: number;
+>   }): void
+

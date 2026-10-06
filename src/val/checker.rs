@@ -284,8 +284,8 @@ impl<'a> Checker<'a> {
         }
 
         self.check_mutation(tokens, i, frames, writes.contains(&tokens[i].span.start));
-        if punct_at(tokens, i + 1, b'(') {
-            self.call(tokens, tokens[i].span, list_entries(tokens, i + 1), frames);
+        if let Some(open) = called_at(tokens, i) {
+            self.call(tokens, tokens[i].span, list_entries(tokens, open), frames);
         }
         let piped: Vec<(usize, usize)> = self
             .applications
@@ -794,4 +794,33 @@ impl<'a> Checker<'a> {
             });
         }
     }
+}
+
+fn called_at(tokens: &[Token], i: usize) -> Option<usize> {
+    let mut start = i;
+    let mut at = i + 1;
+    loop {
+        while punct_at(tokens, at, b'!') && !punct_at(tokens, at + 1, b'=') {
+            at += 1;
+        }
+        if start > 0
+            && punct_at(tokens, start - 1, b'(')
+            && punct_at(tokens, at, b')')
+            && find_close_at(tokens, start - 1) == Some(at)
+            && !(start > 1 && tokens[start - 2].facts.ends_expression())
+        {
+            start -= 1;
+            at += 1;
+            continue;
+        }
+        break;
+    }
+    if punct_at(tokens, at, b'(') {
+        return Some(at);
+    }
+    (matches!(
+        tokens.get(at).map(|token| &token.kind),
+        Some(TokenKind::OptChain)
+    ) && punct_at(tokens, at + 1, b'('))
+    .then_some(at + 1)
 }

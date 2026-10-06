@@ -117,14 +117,7 @@ function arm(v: V): TResult<number, string> {
 const viaArrow = (k: number) => {
   let $tt_v6: number;
   const $tt_v7 = (show);
-  {
-    const $tt_m = k;
-    switch ($tt_m) {
-      case 1: $tt_v6 = 0; break;
-      default: $tt_v6 = 1; break;
-    }
-  }
-  return $tt_v7("x", (v) => {
+  const $tt_v9: (v: V) => number = ((v) => {
     let $tt_v10: number;
     {
       const $tt_m = v;
@@ -144,6 +137,14 @@ const viaArrow = (k: number) => {
       }
     }
     return $tt_v10;
-  }, ($tt_v6 === 0 ? "one" : "other"));
+  });
+  {
+    const $tt_m = k;
+    switch ($tt_m) {
+      case 1: $tt_v6 = 0; break;
+      default: $tt_v6 = 1; break;
+    }
+  }
+  return $tt_v7("x", $tt_v9, ($tt_v6 === 0 ? "one" : "other"));
 };
 console.log(run(1), run(2), JSON.stringify(arm(V.B)), JSON.stringify(arm(V.A(1))), viaArrow(1));

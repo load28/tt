@@ -1,0 +1,144 @@
+=== aPatternSubjectWithATryBesideNestedStatementsIsLowered.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const r = (n: number): TResult<number, string> => (n > 0 ? Result.Ok(n) : Result.Err(`bad ${n}`));
+>r : const r: (n: number) => TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>n : (parameter) n: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+>n : (parameter) n: number
+const w = (n: number): V => (n > 3 ? V.A(n) : V.B);
+>w : const w: (n: number) => V
+>n : (parameter) n: number
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>n : (parameter) n: number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>n : (parameter) n: number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const g = (a: number, b: TResult<number, string>): V => w(a + (b.kind === "Ok" ? b.value : 0));
+>g : const g: (a: number, b: TResult<number, string>) => V
+>a : (parameter) a: number
+>b : (parameter) b: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>w : const w: (n: number) => V
+>a : (parameter) a: number
+>b : (parameter) b: TResult<number, string>
+>kind : (property) kind: "Err" | "Ok"
+>b : (parameter) b: Result.TOk<number>
+>value : (property) value: number
+function viaIfLet(k: number, c: V): TResult<number, string> {
+>viaIfLet : function viaIfLet(k: number, c: V): TResult<number, string>
+>k : (parameter) k: number
+>c : (parameter) c: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  if let A(n) = w(try r(k) + (() => { const A(n: m) = c else { return 0; }; return m; })()) { return Result.Ok(n); }
+>n : const n: number
+>w : const w: (n: number) => V
+>r : const r: (n: number) => TResult<number, string>
+>k : (parameter) k: number
+>n : (property) n: number
+>m : const m: number
+>c : (parameter) c: V
+>m : const m: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : const n: number
+  return Result.Ok(-1);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+function viaLetElse(k: number): TResult<number, string> {
+>viaLetElse : function viaLetElse(k: number): TResult<number, string>
+>k : (parameter) k: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const A(n) = g(try r(k), result { const z = try r(k - 1); return z * 10; }) else { return Result.Ok(-1); };
+>n : const n: number
+>g : const g: (a: number, b: TResult<number, string>) => V
+>r : const r: (n: number) => TResult<number, string>
+>k : (parameter) k: number
+>z : const z: number
+>r : const r: (n: number) => TResult<number, string>
+>k : (parameter) k: number
+>z : const z: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+  return Result.Ok(n);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : const n: number
+console.log(JSON.stringify([viaIfLet(2, V.A(5)), viaIfLet(2, V.B), viaIfLet(0, V.B), viaLetElse(2), viaLetElse(1), viaLetElse(0)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>viaIfLet : function viaIfLet(k: number, c: V): TResult<number, string>
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>viaIfLet : function viaIfLet(k: number, c: V): TResult<number, string>
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>viaIfLet : function viaIfLet(k: number, c: V): TResult<number, string>
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>viaLetElse : function viaLetElse(k: number): TResult<number, string>
+>viaLetElse : function viaLetElse(k: number): TResult<number, string>
+>viaLetElse : function viaLetElse(k: number): TResult<number, string>
+

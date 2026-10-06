@@ -22,6 +22,13 @@ function f(vs: V[], mode: number) {
     const $tt_v4: V[] = vs;
     let $tt_v1: number;
     const $tt_v2 = (pick);
+    const $tt_v3: (v: V) => number = ((v) => { {
+      const $tt_t0 = v;
+      if ($tt_t0.kind === "A") {
+        const { n } = $tt_t0;
+        return n;
+      }
+    } return 0; });
     {
       const $tt_m = mode;
       switch ($tt_m) {
@@ -35,13 +42,7 @@ function f(vs: V[], mode: number) {
         }
       }
     }
-    $tt_v0 = ($tt_v2((v) => { {
-      const $tt_t0 = v;
-      if ($tt_t0.kind === "A") {
-        const { n } = $tt_t0;
-        return n;
-      }
-    } return 0; }, $tt_v1))($tt_v4);
+    $tt_v0 = $tt_v2($tt_v3, $tt_v1)($tt_v4);
     break;
   } while (false);
   return $tt_v0;

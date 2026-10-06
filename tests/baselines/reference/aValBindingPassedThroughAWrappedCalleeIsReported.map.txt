@@ -1,0 +1,10 @@
+//// [aValBindingPassedThroughAWrappedCalleeIsReported.tt] 8 mapping(s)
+1:1 -> 1:1 len 44  "function bad(p: { a: number }) { p.a = 1; }\n"
+2:5 -> 2:1 len 62  "const x = { a: 1 };\n(bad)(x);\nbad!(x);\nbad?.(x);"...
+7:1 -> 7:34 len 1  "x"
+7:6 -> 7:37 len 5  "(bad)"
+7:11 -> 7:43 len 2  ";\n"
+8:1 -> 8:34 len 1  "x"
+8:6 -> 8:37 len 4  "bad!"
+8:10 -> 8:42 len 2  ";\n"
+

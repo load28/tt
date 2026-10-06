@@ -103,9 +103,12 @@ impl CoreFile {
                 .all(|arm| matches!(arm.action, ArmAction::Yield { .. })),
             Expr::ResultRegion(_) => true,
             Expr::Propagate(_) => true,
-            Expr::Sequence(body) => self
-                .body_tail_expr(*body)
-                .is_some_and(|inner| self.statement_form(inner, known)),
+            Expr::Sequence(body) => self.bodies[body.index()]
+                .statements
+                .iter()
+                .any(|statement| {
+                    matches!(statement, Statement::Expr(inner) if self.statement_form(*inner, known))
+                }),
             Expr::Apply(apply) => apply.head.is_some_and(|head| {
                 self.statement_form(head, known)
                     || apply
@@ -148,7 +151,7 @@ impl CoreFile {
         statements[index + 1..].iter().all(source).then_some(expr)
     }
 
-    fn expr_requires_host(&self, expr: ExprId) -> bool {
+    pub(crate) fn expr_requires_host(&self, expr: ExprId) -> bool {
         crate::stack::grow(|| self.expr_requires_host_grown(expr))
     }
 

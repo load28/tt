@@ -29,7 +29,14 @@ request validation. Fix each in the layer that owns it.
   an integer literal receiver of a postfix step (R3C15); an arrow step
   whose template body holds a `match` (R3C1); a callback holding an `if
   let` beside a hoisted argument (R3C5) or in a shadowed pipeline step
-  (R3C6); an `if let` subject piping a `match` (R3C7).
+  (R3C6); an `if let` subject piping a `match` (R3C7); a `val` binding
+  passed through a wrapped callee (R3C10); an outer `try` around an inner
+  `try` (R3C4, the pipeline form); an `await` in a function nested in a
+  `result` block (R3C14); a pattern subject holding a tt value beside a
+  pipeline, a `result` block, or a nested statement; a `flow` pipeline
+  head before structured steps (R3C12); a spread before a pipeline; a
+  parenthesized right operand of a short-circuit; an inert operand holding
+  a tt statement; a captured operand holding a tt value.
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -311,6 +318,122 @@ request validation. Fix each in the layer that owns it.
   parser already skips a `match (...) {` body in that subject; the facts
   machine now does the same, except in a class heritage clause, where the
   `{` after `match(...)` is the class body in TypeScript.
+
+### Decision 22: A capture closes no owner it does not contain
+
+- **Context**: With Decision 19, a ternary's source branch at the end of a
+  concise arrow body closed the arrow's block inside the branch
+  (`LayoutScopeMissing`).
+- **Decision and rationale**: The source walk closes an arrow block where
+  the arrow's body ends, even from a span that starts after the arrow,
+  because the source after a trailing tt value is the only span that can
+  carry the brace. A capture is source copied to another place, so while
+  a capture is being written the walk closes only arrows that began
+  inside it.
+
+### Decision 23: A `val` callee is read through grouping and `!`
+
+- **Context**: `(bad)(x)`, `bad!(x)`, `bad?.(x)`, `x |> (bad)` and
+  `x |> bad!` passed a `val` binding to a mutating parameter without the
+  `val-pass` error that `bad(x)` reports.
+- **Decision and rationale**: The callee was recognized only as an
+  identifier directly before `(` or as a bare identifier step.
+  TypeScript resolves a call through the outer expressions that keep the
+  callee's value (`skipOuterExpressions`: parentheses and non-null
+  assertions), and an optional call is still a call. The check now walks
+  out of grouping parentheses (not a call's own argument list) and `!`,
+  accepts `?.(`, and reads a pipeline step the same way.
+
+### Decision 24: A propagation statement shadows an operand holding a `try`
+
+- **Context**: `const x = try half((k |> abs) + (try half(k)));` called
+  `half(k)` before `abs(k)` and left the pipeline unlowered.
+- **Decision and rationale**: The statement form projected its operand as
+  an opaque placeholder unless the operand held a `match` or `result`, so
+  the inner `try` had no call or operator frames to order its siblings by.
+  The expression form already shadowed an operand holding a propagation;
+  the statement form now does too, and the inner `try` is scheduled after
+  the operands written before it.
+
+### Decision 25: A sequence has a statement form when any tt value in it has
+
+- **Context**: `const A(n) = [match (k) { ... }, k |> String] else { ... };`
+  emitted the pipeline unlowered, and `if let A(n) = w(try r(k) + (() => {
+  const A(m) = c else { ... }; ... })())` stopped the compiler with
+  "unscheduled expression try reached inline emission".
+- **Decision and rationale**: A sequence's statement form was its last tt
+  value's, so a sequence ending in a pipeline, or in a nested statement,
+  had none and was emitted as one expression with its `match` or `try`
+  inside. The operand lowering that a statement form selects schedules
+  every tt value of the sequence, so the sequence has a statement form
+  when any of them has one. That lowering now also emits the tt
+  expressions it copies around its values (a pipeline, a `result` block)
+  and the statements inside its span, instead of their source text.
+
+### Decision 26: An `await` belongs to the function it is written in
+
+- **Context**: `(k = result { const z = try r(async () => await o.z); ... })
+  => k` made the `result` block an awaited async boundary inside a
+  non-async arrow, which does not parse.
+- **Decision and rationale**: Whether a block awaits was read by a token
+  scan that skipped `function` and `class` bodies but not arrows. The same
+  function-boundary model the compiler uses for a generator's `yield` and
+  a `try`'s target (`FunctionTargets`) now decides it: an `await` counts
+  only when its innermost function is the block's. The token scan and its
+  unit test are removed; a case pins the arrow, function, and block-bodied
+  arrow forms.
+
+### Decision 27: Only a value with a statement form fills a slot
+
+- **Context**: `(flow |> g |> String) |> (q => result { ... }) |> ...`
+  stopped the compiler with "structured apply head was not emitted".
+- **Decision and rationale**: A `flow` composition has no head, so it has
+  no statement form, yet it was handed a slot to fill. A nested value's
+  slot is now offered only to a value with a statement form; any other
+  head is emitted as an operand.
+
+### Decision 28: A spread is not part of a pipeline head
+
+- **Context**: `[...xs |> f]` was lowered as `$tt_ap(...xs, f)`, spreading
+  `xs` into the helper, and after Decision 11 it was reported as source
+  that does not parse.
+- **Decision and rationale**: A spread element is `...` followed by an
+  `AssignmentExpression` (ECMA-262 §13.2.4), and a pipeline is one, so
+  the head starts after the spread. The parser's expression tracker now
+  starts an expression after the third dot of a spread.
+
+### Decision 29: A short-circuit keeps the parentheses its right operand had
+
+- **Context**: `g((o.y ?? (o.x += try r(1))))` emitted
+  `$tt_v4 = $tt_v2 ?? o.x = ...`, which does not parse.
+- **Decision and rationale**: The branch that runs the right operand
+  writes the operation over the stored left operand, but it copied the
+  right operand without the parentheses around it, which an assignment,
+  a conditional, or an operator that cannot mix with `??` needs there.
+  TypeScript's emitter keeps a parenthesized expression the author wrote;
+  the branch now keeps the operand's authored parentheses.
+
+### Decision 30: An inert input holding a tt construct is captured
+
+- **Context**: `((x) => { if let A(n) = v { ... } }) ? match ... : ...`
+  copied the arrow into the condition with its `if let` unlowered.
+- **Decision and rationale**: An input whose evaluation is unobservable
+  (a function, a literal) is left in place rather than captured, and its
+  text was copied as written. Its text needs lowering when a tt construct
+  is inside it, so such an input is now planned as a capture, which the
+  capture composer lowers. Evaluating a function expression once into a
+  slot is as unobservable as evaluating it in place.
+
+### Decision 31: A capture writes the values inside it
+
+- **Context**: In `apply((flow |> ((w) => (result { ... }))), result { ...
+  })` the first argument is captured before the second runs, and the
+  arrow's `result` block was written as `return ();`.
+- **Decision and rationale**: A value inside a capture's span was treated
+  as carried by that capture and printed nothing, also while the capture
+  itself was being written. A capture now carries a value only for the
+  writes outside it; inside it, the value is written as it would be
+  anywhere else, as the other capture checks already require.
 
 ## Work log
 

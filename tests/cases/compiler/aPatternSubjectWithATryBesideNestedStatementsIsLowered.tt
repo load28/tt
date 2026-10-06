@@ -1,0 +1,16 @@
+// @run: aPatternSubjectWithATryBesideNestedStatementsIsLowered.tt
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+variant V { A(n: number), B }
+const r = (n: number): TResult<number, string> => (n > 0 ? Result.Ok(n) : Result.Err(`bad ${n}`));
+const w = (n: number): V => (n > 3 ? V.A(n) : V.B);
+const g = (a: number, b: TResult<number, string>): V => w(a + (b.kind === "Ok" ? b.value : 0));
+function viaIfLet(k: number, c: V): TResult<number, string> {
+  if let A(n) = w(try r(k) + (() => { const A(n: m) = c else { return 0; }; return m; })()) { return Result.Ok(n); }
+  return Result.Ok(-1);
+}
+function viaLetElse(k: number): TResult<number, string> {
+  const A(n) = g(try r(k), result { const z = try r(k - 1); return z * 10; }) else { return Result.Ok(-1); };
+  return Result.Ok(n);
+}
+console.log(JSON.stringify([viaIfLet(2, V.A(5)), viaIfLet(2, V.B), viaIfLet(0, V.B), viaLetElse(2), viaLetElse(1), viaLetElse(0)]));

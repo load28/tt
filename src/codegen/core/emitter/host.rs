@@ -812,18 +812,42 @@ impl<'a> Emitter<'a> {
         let branch = first.branch;
         let mut out = self.emit_conditional_active_values(operation, values, captured);
         out.push_lit(format!("{result} = "));
+        let binary = left.is_some();
         if let Some((operand, operator)) = left {
             out.append(operand);
             out.push_lit(format!(" {operator} "));
         }
         let steps: Vec<_> = entries.iter().flat_map(|active| &active.steps).collect();
-        push_grouped(
-            &mut out,
-            self.source_range_with_scheduled_values(branch, &operation.values, &steps, &[]),
-            self.source_kind,
-        );
+        let operand =
+            self.source_range_with_scheduled_values(branch, &operation.values, &steps, &[]);
+        if binary
+            && self.authored_in_parentheses(branch)
+            && !operand.resolved_text().is_some_and(|text| {
+                crate::lexer::is_primary_expression(&text, 0, text.len(), self.source_kind)
+            })
+        {
+            out.push_lit("(");
+            out.append(operand);
+            out.push_lit(")");
+        } else {
+            push_grouped(&mut out, operand, self.source_kind);
+        }
         out.push_lit(";");
         out
+    }
+
+    fn authored_in_parentheses(&self, span: SourceSpan) -> bool {
+        let bytes = self.source.as_bytes();
+        let mut before = span.start;
+        while before > 0 && bytes[before - 1].is_ascii_whitespace() {
+            before -= 1;
+        }
+        let (after, _) = crate::scanner::skip_trivia(bytes, span.end, bytes.len());
+        if before == 0 || bytes[before - 1] != b'(' || bytes.get(after) != Some(&b')') {
+            return false;
+        }
+        let tokens = crate::lexer::lex(self.source, before - 1, after + 1);
+        crate::parser::find_close_at(&tokens, 0) == Some(tokens.len() - 1)
     }
 
     fn emit_conditional_assignment_branch(
@@ -903,6 +927,7 @@ impl<'a> Emitter<'a> {
                 && captured.source.start <= start
                 && end <= captured.source.end
                 && (captured.source.start < start || end < captured.source.end)
+                && !self.capture_is_active(captured.source)
                 && self.slot_exprs.keys().any(|expr| {
                     let (_, value_start, _, extent) = self.value_anchor(*expr);
                     captured.source.start <= value_start
@@ -1098,6 +1123,19 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    fn expressions_within(&self, source: SourceSpan) -> impl Iterator<Item = ExprId> + '_ {
+        self.core.bodies.iter().flat_map(move |body| {
+            body.statements.iter().filter_map(move |statement| {
+                let Statement::Expr(expr) = statement else {
+                    return None;
+                };
+                structured_expr_span(self.semantic, self.core, *expr)
+                    .is_some_and(|span| source.start <= span.start && span.end <= source.end)
+                    .then_some(*expr)
+            })
+        })
+    }
+
     fn statements_within(
         &self,
         source: SourceSpan,
@@ -1290,23 +1328,39 @@ impl<'a> Emitter<'a> {
                 }
             })
         }));
-        let statements: Vec<_> = self.statements_within(span).collect();
+        let mut nested: Vec<(SourceSpan, Option<&Statement>, Option<ExprId>)> = self
+            .statements_within(span)
+            .map(|(source, statement)| (source, Some(statement), None))
+            .collect();
         let within = |inner: SourceSpan, outer: SourceSpan| {
             inner != outer && outer.start <= inner.start && inner.end <= outer.end
         };
-        let statements: Vec<_> = statements
+        nested.extend(self.expressions_within(span).filter_map(|expr| {
+            (!values.contains(&expr) && self.core.expr_requires_host(expr))
+                .then(|| structured_expr_span(self.semantic, self.core, expr))
+                .flatten()
+                .filter(|source| {
+                    !replacements
+                        .iter()
+                        .any(|(replaced, _)| within(*replaced, *source))
+                })
+                .map(|source| (source, None, Some(expr)))
+        }));
+        let statements: Vec<_> = nested
             .iter()
-            .filter(|(source, _)| {
+            .filter(|(source, ..)| {
                 !replacements
                     .iter()
                     .any(|(replaced, _)| *replaced == *source || within(*source, *replaced))
-                    && !statements.iter().any(|(outer, _)| within(*source, *outer))
+                    && !nested.iter().any(|(outer, ..)| within(*source, *outer))
             })
-            .map(|(source, statement)| {
-                (
-                    *source,
-                    self.emit_statements(std::slice::from_ref(*statement)),
-                )
+            .map(|(source, statement, expr)| {
+                let rendered = match (statement, expr) {
+                    (Some(statement), _) => self.emit_statements(std::slice::from_ref(*statement)),
+                    (None, Some(expr)) => self.emit_expr(*expr),
+                    (None, None) => Rope::new(),
+                };
+                (*source, rendered)
             })
             .collect();
         replacements.extend(statements);
@@ -1900,6 +1954,9 @@ impl<'a> Emitter<'a> {
     }
 
     fn nested_structured_value_slot_grown(&self, expr: ExprId) -> Option<&String> {
+        if !self.core.has_statement_form(expr) {
+            return None;
+        }
         if self.structurally_nested_values.contains(&expr)
             && !matches!(self.core.exprs[expr.index()], Expr::ResultRegion(_))
         {

@@ -68,9 +68,6 @@ pub(crate) fn is_primary_expression(src: &str, from: usize, end: usize, kind: So
 /// the chain short-circuits; a parenthesized expression is a
 /// `PrimaryExpression` and ends the chain. `a?.b` is primary, but only
 /// `(a?.b).c` reads `c` of the value `a?.b` evaluates to.
-///
-/// A decimal integer literal is primary but not a receiver: the `.` after
-/// it is read as its decimal point (`5.f`).
 pub(crate) fn is_member_receiver(src: &str, from: usize, end: usize, kind: SourceKind) -> bool {
     let tokens = lex_with_kind(src, from, end, kind);
     if let Some(first) = tokens.first()
@@ -169,54 +166,6 @@ fn primary_expression(src: &str, from: usize, end: usize, kind: SourceKind) -> O
         };
     }
     Some(shape)
-}
-
-/// True if `src[from..end]` contains an `await` in code position, template
-/// interpolations included, outside the bodies of nested functions and
-/// classes, where an `await` belongs to them.
-pub(crate) fn contains_await(src: &str, from: usize, end: usize) -> bool {
-    if !src.as_bytes()[from..end]
-        .windows("await".len())
-        .any(|window| window == b"await")
-    {
-        return false;
-    }
-    fn scan(src: &str, tokens: &[Token]) -> bool {
-        crate::stack::grow(|| scan_grown(src, tokens))
-    }
-
-    fn scan_grown(src: &str, tokens: &[Token]) -> bool {
-        let mut at = 0usize;
-        while let Some(token) = tokens.get(at) {
-            match &token.kind {
-                TokenKind::Ident => match &src[token.span.start..token.span.end] {
-                    "await" => return true,
-                    "function" | "class" => {
-                        if let Some(body) = (at..tokens.len())
-                            .find(|&index| matches!(tokens[index].kind, TokenKind::Punct(b'{')))
-                        {
-                            at = close_of(tokens, body).map_or(tokens.len(), |close| close + 1);
-                            continue;
-                        }
-                    }
-                    _ => {}
-                },
-                TokenKind::Template(parts) => {
-                    for part in parts.iter() {
-                        if let TplPart::Interp { tokens, .. } = part
-                            && scan(src, tokens)
-                        {
-                            return true;
-                        }
-                    }
-                }
-                _ => {}
-            }
-            at += 1;
-        }
-        false
-    }
-    scan(src, &lex(src, from, end))
 }
 
 /// The names a type parameter list (`<T, const U extends V = W>`, brackets
@@ -335,19 +284,6 @@ pub(crate) fn statement_continues_after(tokens: &[Token], end: usize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn await_scan_stops_at_nested_function_and_class_bodies() {
-        let nested =
-            "function nested() { await later(); } class C { async m() { await later(); } }";
-        assert!(!contains_await(nested, 0, nested.len()));
-
-        let outer = "await now(); function nested() { await later(); }";
-        assert!(contains_await(outer, 0, outer.len()));
-
-        let template = "`${await now()}`";
-        assert!(contains_await(template, 0, template.len()));
-    }
 
     #[test]
     fn primary_expressions_are_single_operands() {

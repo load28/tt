@@ -1,0 +1,46 @@
+=== aCapturedOperandWritesTheValuesInsideIt.tt ===
+const r = (n: number): TResult<number, string> => (n > 0 ? Result.Ok(n) : Result.Err(`bad ${n}`));
+>r : const r: (n: number) => TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>n : (parameter) n: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+>n : (parameter) n: number
+const apply = (f: (w: number) => TResult<number, string>, at: TResult<number, string>) =>
+>apply : const apply: (f: (w: number) => TResult<number, string>, at: TResult<number, string>) => string
+>f : (parameter) f: (w: number) => TResult<number, string>
+>w : (parameter) w: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>at : (parameter) at: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  JSON.stringify(at.kind === "Ok" ? f(at.value) : at);
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>at : (parameter) at: TResult<number, string>
+>kind : (property) kind: "Err" | "Ok"
+>f : (parameter) f: (w: number) => TResult<number, string>
+>at : (parameter) at: Result.TOk<number>
+>value : (property) value: number
+>at : (parameter) at: Result.TErr<string>
+function f(k: number) {
+>f : function f(k: number): string
+>k : (parameter) k: number
+  return apply((flow |> ((w: number) => (result { const z = try r(w); return z * 2; }))), result { const z = try r(k); return z; });
+>apply : const apply: (f: (w: number) => TResult<number, string>, at: TResult<number, string>) => string
+>w : (parameter) w: number
+>z : const z: number
+>r : const r: (n: number) => TResult<number, string>
+>w : (parameter) w: number
+>z : const z: number
+>z : const z: number
+>r : const r: (n: number) => TResult<number, string>
+>k : (parameter) k: number
+>z : const z: number
+console.log(f(3), f(0));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : function f(k: number): string
+>f : function f(k: number): string
+

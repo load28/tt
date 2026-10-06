@@ -2971,7 +2971,7 @@ fn a_deeply_nested_match_is_answered_and_the_session_continues() {
 
 #[test]
 fn a_position_only_diagnostic_keeps_a_zero_end_over_the_protocol() {
-    let (lines, _) = server_lines(b"{\"id\":3,\"method\":\"check\",\"params\":{\"text\":\"variant A { X }\\nconst v = match (A.X) { }\\n\",\"filename\":\"x.tt\"}}\n");
+    let (lines, _) = server_lines(b"{\"id\":3,\"method\":\"check\",\"params\":{\"text\":\"variant A { X }\\nconst v = match (A.X) { X => 1 } +;\\n\",\"filename\":\"x.tt\"}}\n");
     assert_eq!(lines.len(), 1, "{lines:#?}");
     assert!(
         lines[0].contains("\"endLine\":0") && lines[0].contains("\"endCol\":0"),

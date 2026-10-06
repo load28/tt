@@ -4,6 +4,7 @@ use super::*;
 
 pub(super) fn resolve_schedule(
     protocol: HostEvaluationProtocol,
+    tt_spans: &[SourceSpan],
     slots: &HashMap<SourceSpan, ValueSlotId>,
     source_slots: &mut HashMap<SourceSpan, PlannedSourceSlot>,
     next_slot: &mut u32,
@@ -17,12 +18,15 @@ pub(super) fn resolve_schedule(
     // other lowering.
     let mut schedule = resolve_schedule_steps(
         protocol.steps(),
+        Elision {
+            tt_spans,
+            reserve_names: protocol.call_completion.is_some(),
+        },
         slots,
         source_slots,
         next_slot,
         slot_names,
         occupied_names,
-        protocol.call_completion.is_some(),
     )?;
     schedule.call_completion = protocol
         .call_completion
@@ -39,14 +43,20 @@ pub(super) fn resolve_schedule(
     Ok(schedule)
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct Elision<'a> {
+    pub(super) tt_spans: &'a [SourceSpan],
+    pub(super) reserve_names: bool,
+}
+
 pub(super) fn resolve_schedule_steps(
     protocol_steps: &[crate::program_syntax::HostEvaluationStep],
+    elision: Elision<'_>,
     slots: &HashMap<SourceSpan, ValueSlotId>,
     source_slots: &mut HashMap<SourceSpan, PlannedSourceSlot>,
     next_slot: &mut u32,
     slot_names: &mut Vec<String>,
     occupied_names: &mut HashSet<String>,
-    reserve_elided_names: bool,
 ) -> Result<EvaluationSchedule, EvaluationError> {
     let steps = protocol_steps
         .iter()
@@ -72,10 +82,15 @@ pub(super) fn resolve_schedule_steps(
                                         | EvaluationInputMode::JsxChildValue
                                         | EvaluationInputMode::Discarded
                                 ) && input.effects.is_inert()
+                                    && !elision.tt_spans.iter().any(|span| {
+                                        input.source.start <= span.start
+                                            && span.end <= input.source.end
+                                    })
                                 {
                                     return Ok(PlannedEvaluationInput::Stable {
                                         source: input.source,
-                                        reserved: reserve_elided_names
+                                        reserved: elision
+                                            .reserve_names
                                             .then(|| {
                                                 allocate_value_slot(
                                                     next_slot,

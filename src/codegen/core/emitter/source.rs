@@ -115,7 +115,7 @@ impl<'a> Emitter<'a> {
             })
     }
 
-    fn capture_is_active(&self, replacement: SourceSpan) -> bool {
+    pub(super) fn capture_is_active(&self, replacement: SourceSpan) -> bool {
         self.active_capture_sources
             .borrow()
             .iter()
@@ -174,6 +174,11 @@ impl<'a> Emitter<'a> {
                 rewrite.owner_kind == HostOwnerKind::ArrowExpression
                     && span.start <= rewrite.owner.end
                     && rewrite.owner.end <= span.end
+                    && !self
+                        .active_capture_sources
+                        .borrow()
+                        .last()
+                        .is_some_and(|capture| rewrite.owner.start < capture.start)
                     && !rewrite.actions.iter().any(|action| match action {
                         ComposeAction::Value(value) => {
                             self.active_structured_exprs.contains(value.expr)

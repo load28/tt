@@ -592,14 +592,45 @@ fn receiver(src: &str, flows: &HashMap<usize, (usize, Span)>, step: Span) -> Opt
     if is_identifier_text(text) {
         return Some(step);
     }
+    let trimmed = text.trim_end();
+    if let Some(asserted) = trimmed.strip_suffix('!') {
+        return receiver(
+            src,
+            flows,
+            Span {
+                start: step.start,
+                end: step.start + asserted.trim_end().len(),
+            },
+        );
+    }
     let inner = text.strip_prefix('(')?.strip_suffix(')')?;
-    let start = step.start + 1 + (inner.len() - inner.trim_start().len());
-    let end = step.end - 1 - (inner.len() - inner.trim_end().len());
-    let &(flow_end, first) = flows.get(&start)?;
-    if flow_end != end {
+    if !groups_whole(text) {
         return None;
     }
-    receiver(src, flows, first)
+    let start = step.start + 1 + (inner.len() - inner.trim_start().len());
+    let end = step.end - 1 - (inner.len() - inner.trim_end().len());
+    if let Some(&(flow_end, first)) = flows.get(&start) {
+        if flow_end != end {
+            return None;
+        }
+        return receiver(src, flows, first);
+    }
+    receiver(src, flows, Span { start, end })
+}
+
+fn groups_whole(text: &str) -> bool {
+    let mut depth = 0usize;
+    for byte in text[..text.len() - 1].bytes() {
+        match byte {
+            b'(' => depth += 1,
+            b')' => depth = depth.saturating_sub(1),
+            _ => {}
+        }
+        if depth == 0 {
+            return false;
+        }
+    }
+    true
 }
 
 fn is_identifier_text(text: &str) -> bool {

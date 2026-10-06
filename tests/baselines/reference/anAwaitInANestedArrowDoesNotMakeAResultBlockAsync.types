@@ -1,0 +1,157 @@
+=== anAwaitInANestedArrowDoesNotMakeAResultBlockAsync.tt ===
+function r(f: () => Promise<number>): TResult<() => Promise<number>, string> { return Result.Ok(f); }
+>r : function r(f: () => Promise<number>): TResult<() => Promise<number>, string>
+>f : (parameter) f: () => Promise<number>
+>Promise : interface Promise<T>
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>Promise : interface Promise<T>
+>Ok : const Ok: <() => Promise<number>>(value: () => Promise<number>) => Result.TOk<() => Promise<number>>
+>f : (parameter) f: () => Promise<number>
+const o = { z: 5 };
+>o : const o: {
+>       z: number;
+>   }
+>z : (property) z: number
+const F = (k = result { const z = try r(async () => await Promise.resolve(o.z)); return z; }) => k;
+>F : const F: (k?: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }) => Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>k : (parameter) k: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>z : const z: () => Promise<number>
+>r : function r(f: () => Promise<number>): TResult<() => Promise<number>, string>
+>Promise : var Promise: PromiseConstructor
+>resolve : (method) PromiseConstructor.resolve<number>(value: number): Promise<number>
+>o : const o: {
+>       z: number;
+>   }
+>z : (property) z: number
+>z : const z: () => Promise<number>
+>k : (parameter) k: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+const G = (k = result { const z = try r(async function () { return await Promise.resolve(o.z); }); return z; }) => k;
+>G : const G: (k?: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }) => Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>k : (parameter) k: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>z : const z: () => Promise<number>
+>r : function r(f: () => Promise<number>): TResult<() => Promise<number>, string>
+>Promise : var Promise: PromiseConstructor
+>resolve : (method) PromiseConstructor.resolve<number>(value: number): Promise<number>
+>o : const o: {
+>       z: number;
+>   }
+>z : (property) z: number
+>z : const z: () => Promise<number>
+>k : (parameter) k: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+const H = (k = result { const z = try r(async () => { const w = await Promise.resolve(o.z); return w; }); return z; }) => k;
+>H : const H: (k?: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }) => Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>k : (parameter) k: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>z : const z: () => Promise<number>
+>r : function r(f: () => Promise<number>): TResult<() => Promise<number>, string>
+>w : const w: number
+>Promise : var Promise: PromiseConstructor
+>resolve : (method) PromiseConstructor.resolve<number>(value: number): Promise<number>
+>o : const o: {
+>       z: number;
+>   }
+>z : (property) z: number
+>w : const w: number
+>z : const z: () => Promise<number>
+>k : (parameter) k: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+async function main() {
+>main : function main(): Promise<void>
+  for (const make of [F, G, H]) {
+>make : const make: (k?: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }) => Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>F : const F: (k?: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }) => Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>G : const G: (k?: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }) => Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>H : const H: (k?: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }) => Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+    const made = make();
+>made : const made: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>make : const make: (k?: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }) => Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+    console.log(made.kind, made.kind === "Ok" ? await made.value() : made.error);
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>made : const made: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>kind : (property) kind: "Err" | "Ok"
+>made : const made: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>kind : (property) kind: "Err" | "Ok"
+>made : const made: {
+>       kind: "Ok";
+>       value: () => Promise<number>;
+>   }
+>value : (property) value: () => Promise<number>
+>made : const made: Result.TErr<string>
+>error : (property) error: string
+main();
+>main : function main(): Promise<void>
+

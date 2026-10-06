@@ -1026,6 +1026,9 @@ impl Parser<'_> {
                 *expr = (i + 1, false);
             }
             TokenKind::Punct(b',') => *expr = (i + 1, false),
+            TokenKind::Punct(b'.') if follows_spread_operator(tokens, i + 1) => {
+                *expr = (i + 1, false);
+            }
             TokenKind::Punct(b'=') if pipes::is_assignment_eq(self.bytes, tok.span) => {
                 *expr = (i + 1, false);
             }

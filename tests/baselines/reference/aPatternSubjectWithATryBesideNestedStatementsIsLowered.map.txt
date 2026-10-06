@@ -1,0 +1,30 @@
+//// [aPatternSubjectWithATryBesideNestedStatementsIsLowered.tt] 28 mapping(s)
+1:1 -> 2:1 len 82  "import * as Result from \"@tt/std/result\";\nimport"...
+3:18 -> 5:21 len 6  "number"
+3:18 -> 8:10 len 6  "number"
+3:30 -> 10:3 len 312  "\nconst r = (n: number): TResult<number, string> "...
+8:12 -> 29:15 len 1  "n"
+8:17 -> 17:21 len 1  "w"
+8:18 -> 23:21 len 1  "("
+8:23 -> 18:20 len 4  "r(k)"
+8:27 -> 23:28 len 12  " + (() => { "
+8:47 -> 27:13 len 1  "n"
+8:50 -> 27:16 len 1  "m"
+8:55 -> 23:55 len 1  "c"
+8:64 -> 25:7 len 9  "return 0;"
+8:76 -> 27:29 len 16  " return m; })())"
+8:95 -> 30:7 len 20  "return Result.Ok(n);"
+8:117 -> 32:4 len 87  "\n  return Result.Ok(-1);\n}\nfunction viaLetElse(k"...
+12:11 -> 53:11 len 1  "n"
+12:16 -> 37:19 len 1  "g"
+12:17 -> 43:19 len 1  "("
+12:22 -> 38:18 len 4  "r(k)"
+12:26 -> 43:26 len 2  ", "
+12:43 -> 48:11 len 1  "z"
+12:51 -> 44:20 len 8  "r(k - 1)"
+12:60 -> 48:28 len 1  " "
+12:68 -> 48:68 len 6  "z * 10"
+12:77 -> 49:7 len 1  ")"
+12:86 -> 51:5 len 21  "return Result.Ok(-1);"
+12:110 -> 53:24 len 159  "\n  return Result.Ok(n);\n}\nconsole.log(JSON.strin"...
+

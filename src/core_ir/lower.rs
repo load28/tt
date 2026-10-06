@@ -588,7 +588,43 @@ impl Lowering<'_> {
             .source_map
             .node_span(node)
             .unwrap_or_else(|| crate::ice::bug!("Core IR async node has no source span"));
-        crate::lexer::contains_await(self.source, span.start, span.end)
+        let targets = self.function_targets();
+        let own = targets.boundary_at_offset(span.start);
+        fn scan(
+            source: &str,
+            tokens: &[crate::lexer::Token],
+            span: crate::hir::Span,
+            targets: &crate::flow::FunctionTargets,
+            own: Option<usize>,
+        ) -> bool {
+            let first = tokens.partition_point(|token| token.span.end <= span.start);
+            tokens[first..]
+                .iter()
+                .take_while(|token| token.span.start < span.end)
+                .enumerate()
+                .any(|(offset, token)| match &token.kind {
+                    crate::lexer::TokenKind::Ident => {
+                        &source[token.span.start..token.span.end] == "await"
+                            && !crate::parser::dotted_at(tokens, 0, first + offset)
+                            && span.start <= token.span.start
+                            && targets.boundary_at_offset(token.span.start) == own
+                    }
+                    crate::lexer::TokenKind::Template(parts) => parts.iter().any(|part| {
+                        matches!(part, crate::lexer::TplPart::Interp { tokens, .. }
+                            if crate::stack::grow(|| scan(source, tokens, span, targets, own)))
+                    }),
+                    _ => false,
+                })
+        }
+        scan(self.source, self.tokens, span, targets, own)
+    }
+
+    fn function_targets(&self) -> &crate::flow::FunctionTargets {
+        self.function_targets.get_or_init(|| {
+            crate::flow::FunctionTargets::new(self.tokens, &|tokens| {
+                self.semantic.hir.match_owned_tokens(tokens)
+            })
+        })
     }
 
     fn node_in_generator(&self, node: NodeId) -> bool {
@@ -598,13 +634,7 @@ impl Lowering<'_> {
             .source_map
             .node_span(node)
             .unwrap_or_else(|| crate::ice::bug!("Core IR generator node has no source span"));
-        self.function_targets
-            .get_or_init(|| {
-                crate::flow::FunctionTargets::new(self.tokens, &|tokens| {
-                    self.semantic.hir.match_owned_tokens(tokens)
-                })
-            })
-            .at_offset(span.start)
+        self.function_targets().at_offset(span.start)
             == Some(crate::flow::FunctionTarget::Generator)
     }
 }
