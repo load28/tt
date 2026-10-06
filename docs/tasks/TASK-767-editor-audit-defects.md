@@ -87,19 +87,19 @@ layer that owns it.
 
 ## Issues and resolutions
 
-### Issue 2: A full test run failed three case baselines under load
-
-- **Symptom**: TypeScript requests timed out (5 s content mapper start, 8 s
-  semantic tokens) and one storage annotation was missing.
-- **Cause**: The run overlapped a release build and three audit processes.
-- **Resolution**: Each case passed when rerun alone; no code change.
-
 ### Issue 1: The first tuple slot stayed untyped
 
 - **Symptom**: `(|, Slow)` still listed every case.
 - **Cause**: The empty first slot does not project, and the retry inserted
   a whole wildcard arm (`_ =>`) inside the tuple.
 - **Resolution**: A tuple slot is repaired with `_`.
+
+### Issue 2: A full test run failed three case baselines under load
+
+- **Symptom**: TypeScript requests timed out (5 s content mapper start, 8 s
+  semantic tokens) and one storage annotation was missing.
+- **Cause**: The run overlapped a release build and three audit processes.
+- **Resolution**: Each case passed when rerun alone; no code change.
 
 ## Regression test (fails before the fix)
 
