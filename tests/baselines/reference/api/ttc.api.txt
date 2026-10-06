@@ -3432,6 +3432,7 @@ pub struct AnalyzedArm {
     pub pattern_start: usize,
     pub body_start: usize,
     pub body_end: usize,
+    pub end: usize,
     pub pattern_bindings: Vec<PatternBinding>,
     pub body_bindings: Vec<BodyBinding>,
 }

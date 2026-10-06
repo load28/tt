@@ -1,15 +1,17 @@
 # TASK-768: Fix defects found by the second audit
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-06
-- **Completed**: —
+- **Completed**: 2026-10-06
 - **Commit**: —
 
 ## Purpose
 
-A second audit of `ttc --server` found quick fixes that break code, hint
-ranges that miss text, completions that are empty, and overlay state that
-diverges between layers. Fix each in the layer that owns it.
+A second audit of the compiler, the command line and `ttc --server` found
+internal errors, emitted TypeScript that does not parse, rejected valid
+placements, a quick fix that breaks code, hint ranges that miss text,
+empty completions, and overlay state that diverges between layers. Fix
+each in the layer that owns it.
 
 ## Scope
 
@@ -29,7 +31,8 @@ diverges between layers. Fix each in the layer that owns it.
   with the standard library's `TOption` or `TResult`; an unfinished arm
   list with no `=>` written yet; an import of a document that is open but
   not saved; closing such a document.
-- Excluded: to be recorded as the task proceeds.
+- Excluded: nothing deferred; four reports were not defects (Issues 1-3
+  and the nested unit pattern `None()`, which the reference requires).
 
 ## Decisions
 
@@ -345,16 +348,55 @@ diverges between layers. Fix each in the layer that owns it.
 
 ## Regression test (fails before the fix)
 
-- **Path**: pending
-- **Observed failure**: pending
+- **Path**: `tests/cases/compiler/aFieldTypoFixKeepsAShorthandBinding.tt`,
+  `jsxCapturedFunctionChildKeepsItsMatchBeforeASiblingMatch.ttx`,
+  `aTryInAResultBlockLoopConditionIsAPlacementError.tt`,
+  `aTryInAForInitializerInsideAResultBlockRunsBeforeTheLoop.tt`,
+  `aConditionalOperandHoldingAnotherConditionalOperationReadsItsResult.tt`,
+  `anIfLetBoundToAnUnparenthesizedTry.tt`,
+  `aTryInAScrutineeOrPipelineHeadInsideAResultBlockExitsTheBlock.tt`,
+  `anArmListWithoutArrowsIsAMalformedMatch.tt`;
+  `tests/cases/editor/nestedPatternCompletionForStandardLibraryTypes.tt`,
+  `instancePatternCompletionInAnUnfinishedArm.tt`;
+  `tests/cli.rs` `a_commonjs_module_annotates_storage_with_the_commonjs_standard_library`,
+  `symbols_list_an_imports_variants_by_what_its_module_exports`,
+  `a_passed_through_typescript_file_imports_the_written_standard_library`;
+  `tests/compile/cases_05.rs` `a_namespace_member_variant_is_not_a_module_export`;
+  `tests/passthrough.rs` `a_class_body_after_a_match_call_heritage_is_not_an_unfinished_arm_list`;
+  `src/typescript/toolchain.rs` `a_typescript_older_than_the_api_ttc_drives_is_told_how_to_upgrade`;
+  `src/engine/hints.rs` `a_dead_arm_is_hinted_through_its_last_token`;
+  `src/engine/language/tests.rs` `an_import_of_a_document_not_saved_yet_reads_the_open_buffer`,
+  `closing_a_document_that_was_never_saved_removes_it_from_the_service`.
+- **Observed failure**: With a build of `main`: the compiler cases stopped
+  with an internal error (loop and default placements, the JSX capture)
+  or emitted TypeScript that failed to parse (`for` initializer,
+  conditional operands), or reported `stray-if-let`,
+  `try-crosses-value-region` (6 errors) and `verify-failed`; the editor
+  cases returned no pattern items; the CommonJS annotation named
+  `./tt/index.js`; `--symbols` listed `Inner` only; the namespace test
+  returned `["Inner", "Outer"]`; the hint ended before `}`; the engine
+  tests found no variant from the open buffer and no TS2307 after the
+  close. The 7.0 refusal and the documented `@tt/std` rewrite are pinned
+  for the new behaviour.
 
 ## Verification
 
-- [ ] `cargo fmt --check`
-- [ ] `cargo clippy --all-targets -- -D warnings`
-- [ ] `cargo test`
-- [ ] Baseline changes reviewed and committed with the change
+- [x] `cargo fmt --check`
+- [x] `cargo clippy --all-targets -- -D warnings`
+- [x] `cargo test --no-fail-fast`: every suite passed once the baselines
+  below were accepted and the two tests that pinned the shorthand-breaking
+  edit (`tests/compile/cases_08.rs`, `tests/native/cases_01.rs`) were
+  updated to the corrected edit
+- [x] Baseline changes reviewed and committed with the change: the new
+  cases; every `unknown-field` help line now shows the shorthand-keeping
+  edit (`radius: radiuz`), in the diagnostics matrix, two compiler cases
+  and `tests/fixtures/diagnostic/unknown-case-and-field`;
+  `patternCompletionBeforeArrow` (Issue 4); `ttc.api.txt` records the
+  private fields of the resolver's unresolved use and
+  `AnalyzedArm::end`
 
 ## Result
 
-In progress.
+Eighteen defects fixed and pinned, one found while fixing (Decision 9),
+one introduced and fixed within the task (Issue 4); four reports were not
+defects.

@@ -12,4 +12,4 @@ error[unknown-field]: variant Shape: case `Circle` has no field `radiuz`
 5 | export const b = match (s) { Circle(radiuz) => radiuz, Empty => 0 };
   |                                     ^^^^^^
   |
-  = help: a field with a similar name exists: `radius`
+  = help: a field with a similar name exists: `radius: radiuz`
