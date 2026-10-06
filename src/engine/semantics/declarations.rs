@@ -75,7 +75,7 @@ fn reaches_placeholders(snapshot: &Snapshot) -> HashSet<PathBuf> {
                 .unwrap_or(std::path::Path::new("."));
             if file.tt_imports().iter().any(|import| {
                 directory
-                    .join(&import.specifier)
+                    .join(import.path())
                     .canonicalize()
                     .is_ok_and(|target| reached.contains(&target))
             }) {

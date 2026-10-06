@@ -76,7 +76,7 @@ impl ImportRewrite {
     /// assert!(ImportRewrite::Off.source_candidates("./m.js").is_empty());
     /// ```
     pub fn source_candidates(self, specifier: &str) -> Vec<String> {
-        if !(specifier.starts_with("./") || specifier.starts_with("../")) {
+        if !is_relative_specifier(specifier.as_bytes()) {
             return Vec::new();
         }
         let mut candidates = Vec::new();
@@ -178,6 +178,26 @@ pub struct TtImport {
     pub specifier: String,
     /// What the statement brings into local scope.
     pub names: TtImportNames,
+}
+
+impl TtImport {
+    /// The specifier as a path from the importing file's directory, with `\`
+    /// read as a separator as TypeScript's module resolution reads it.
+    ///
+    /// ```
+    /// let scan = ttc::scan_module("import { A } from \".\\\\m.tt\";");
+    /// assert_eq!(scan.imports[0].path(), std::path::Path::new("./m.tt"));
+    /// ```
+    pub fn path(&self) -> std::path::PathBuf {
+        std::path::PathBuf::from(self.specifier.replace('\\', "/"))
+    }
+}
+
+pub(crate) fn is_relative_specifier(specifier: &[u8]) -> bool {
+    matches!(
+        specifier,
+        [b'.', b'/' | b'\\', ..] | [b'.', b'.', b'/' | b'\\', ..]
+    )
 }
 
 /// The bindings an [`TtImport`] brings into local scope.

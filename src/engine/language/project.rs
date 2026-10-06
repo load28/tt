@@ -1423,10 +1423,7 @@ impl Project {
             while let Some((file, doc)) = stack.pop() {
                 for import in crate::tt_imports(&doc.source) {
                     let target = match crate::engine::normalize_document_path(
-                        &file
-                            .parent()
-                            .unwrap_or(Path::new("."))
-                            .join(&import.specifier),
+                        &file.parent().unwrap_or(Path::new(".")).join(import.path()),
                     ) {
                         Ok(target) => target,
                         Err(_) => continue, // unresolvable — tsc's TS2307, not ours

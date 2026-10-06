@@ -31,7 +31,7 @@ pub(super) fn symbols_mode(jobs: &[Job]) -> ExitCode {
                 let mut o = format!("{{\"specifier\":{}", json_str(&import.specifier));
                 o.push_str(",\"names\":");
                 o.push_str(&names_json(&import.names));
-                let target = lexically_joined(dir, &import.specifier);
+                let target = lexically_joined(dir, &import.path());
                 match fs::read_to_string(&target) {
                     Ok(imported_src) => {
                         o.push_str(&format!(
@@ -63,7 +63,7 @@ pub(super) fn symbols_mode(jobs: &[Job]) -> ExitCode {
     }
 }
 
-fn lexically_joined(dir: &Path, specifier: &str) -> PathBuf {
+fn lexically_joined(dir: &Path, specifier: &Path) -> PathBuf {
     use std::path::Component;
     let mut joined = PathBuf::new();
     for component in dir.join(specifier).components() {

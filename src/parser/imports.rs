@@ -281,7 +281,7 @@ fn tt_spec_span(cur: &Cursor, token: &Token) -> Option<(Span, TtSpecifier)> {
     if let Some(module) = crate::stdlib::StdModule::from_specifier(spec) {
         return Some((span, TtSpecifier::Std(module)));
     }
-    let relative = spec.starts_with(b"./") || spec.starts_with(b"../");
+    let relative = crate::is_relative_specifier(spec);
     if relative && spec.ends_with(b".tt") {
         Some((span, TtSpecifier::Relative(crate::SourceKind::TypeScript)))
     } else if relative && spec.ends_with(b".ttx") {

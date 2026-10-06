@@ -210,6 +210,22 @@ defects. This task fixes them in the layer that owns each one.
   literal (`services/utilities.ts`); the token's end would have replaced
   the rest of the line.
 
+### Decision 11: `.\` and `..\` begin a relative specifier (C3)
+
+- **Context**: `import { Shape } from ".\shape.tt"` was neither rewritten
+  nor followed: the build kept `.\shape.tt` in its output, and the match
+  over `Shape` was not checked against the imported variant.
+- **Decision and rationale**: TypeScript reads a specifier as relative when
+  it is `.`/`..` or starts with `./`, `../`, `.\`, or `..\`
+  (`pathIsRelative` in `compiler/path.ts`, `tspath.PathIsRelative` in
+  tsgo), and its resolution reads `\` as a separator on every platform
+  (`normalizeSlashes`). One predicate, `is_relative_specifier`, now decides
+  relativity for import lifting and the reverse rewrite, and every place that
+  joins a specifier to a directory goes through `TtImport::path`, which reads
+  `\` as `/`. The written specifier is kept as written: the rewrite changes
+  only its extension (`.\shape.js`), as TypeScript's
+  `rewriteRelativeImportExtensions` does.
+
 ## Work log
 
 - 2026-10-06: Ran the fifth audit as three read-only agents (CLI,
@@ -233,6 +249,7 @@ defects. This task fixes them in the layer that owns each one.
 - 2026-10-06: Nested outline symbols by source containment (decision 9).
 - 2026-10-06: Narrowed pattern completion at empty positions, after a
   wildcard, and in an unclosed literal, and offered `val` (decision 10).
+- 2026-10-06: Read backslash specifiers as relative (decision 11).
 
 ## Issues and resolutions
 

@@ -108,11 +108,7 @@ pub(super) fn extern_module(file: &Path, import: &TtImport) -> Option<PathBuf> {
     if matches!(import.names, TtImportNames::None) {
         return None;
     }
-    Some(
-        file.parent()
-            .unwrap_or(Path::new("."))
-            .join(&import.specifier),
-    )
+    Some(file.parent().unwrap_or(Path::new(".")).join(import.path()))
 }
 
 pub(super) fn compile_reads(file: &Path) -> Vec<PathBuf> {

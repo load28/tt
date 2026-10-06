@@ -591,7 +591,7 @@ pub(in super::super) fn imported_variants(
         if matches!(import.names, crate::TtImportNames::None) {
             continue; // a re-export brings nothing into scope
         }
-        let target = match crate::engine::normalize_document_path(&dir.join(&import.specifier)) {
+        let target = match crate::engine::normalize_document_path(&dir.join(import.path())) {
             Ok(target) => target,
             Err(_) => continue, // unresolvable — tsc's TS2307, not ours
         };

@@ -4196,6 +4196,8 @@ pub struct TtImport {
     pub specifier: String,
     pub names: TtImportNames,
 }
+impl TtImport
+    pub fn path(&self) -> PathBuf
 impl Clone for TtImport
 impl Debug for TtImport
 impl Eq for TtImport

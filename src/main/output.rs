@@ -358,7 +358,7 @@ pub(super) fn with_dependents(jobs: &[Job], changed: &[PathBuf]) -> HashSet<Path
         let dir = job.file.parent().unwrap_or(Path::new("."));
         let imports_changed = ttc::tt_imports(&source)
             .iter()
-            .any(|import| changed_real.contains(&identity(&dir.join(&import.specifier))));
+            .any(|import| changed_real.contains(&identity(&dir.join(import.path()))));
         if imports_changed {
             targets.insert(job.file.clone());
         }

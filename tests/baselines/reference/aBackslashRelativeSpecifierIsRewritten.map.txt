@@ -1,0 +1,13 @@
+//// [shape.tt] 2 mapping(s)
+1:34 -> 2:26 len 6  "number"
+1:34 -> 5:15 len 6  "number"
+
+//// [a.tt] 7 mapping(s)
+1:1 -> 19:1 len 61  "import { Shape } from \".\\\\shape.tt\";\ndeclare con"...
+3:1 -> 39:1 len 17  "export const n = "
+3:25 -> 23:17 len 1  "s"
+3:37 -> 26:15 len 1  "r"
+3:43 -> 27:16 len 1  "r"
+3:55 -> 31:16 len 1  "0"
+3:58 -> 39:24 len 2  ";\n"
+

@@ -667,7 +667,7 @@ pub(super) fn typed_member_sources(
         };
         let directory = source.parent().unwrap_or(std::path::Path::new("."));
         for import in imports {
-            let Ok(target) = directory.join(&import.specifier).canonicalize() else {
+            let Ok(target) = directory.join(import.path()).canonicalize() else {
                 continue;
             };
             let held = snapshot

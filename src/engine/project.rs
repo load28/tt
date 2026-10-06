@@ -1631,10 +1631,7 @@ fn discover_imports(
         if !(import.specifier.starts_with('.') || Path::new(&import.specifier).is_absolute()) {
             continue;
         }
-        let target = file
-            .parent()
-            .unwrap_or(Path::new("."))
-            .join(&import.specifier);
+        let target = file.parent().unwrap_or(Path::new(".")).join(import.path());
         let target = super::paths::canonical(&target).ok().or_else(|| {
             super::normalize_document_path(&target)
                 .ok()
