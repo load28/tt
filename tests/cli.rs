@@ -3094,6 +3094,74 @@ fn a_commonjs_module_imports_the_standard_library_in_commonjs_syntax() {
     );
 }
 
+/// TASK-768: a storage annotation the checker writes as an import type
+/// names the standard library a CommonJS module imports, `tt/cjs/`.
+#[test]
+fn a_commonjs_module_annotates_storage_with_the_commonjs_standard_library() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    let source = dir.join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(dir.join("package.json"), "{ \"type\": \"commonjs\" }\n").unwrap();
+    fs::write(
+        dir.join("tsconfig.json"),
+        "{ \"compilerOptions\": { \"strict\": true, \"target\": \"es2022\", \"module\": \"nodenext\", \
+         \"verbatimModuleSyntax\": true, \"noEmit\": true, \"types\": [] }, \"include\": [\"src\", \"out\"] }\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("dep.tt"),
+        "import type { TOption } from \"@tt/std\";\n\
+         import option = require(\"@tt/std/option\");\n\
+         const api = {\n\
+         \x20   take(x: TOption<number>, y: number) { return [x, y]; },\n\
+         \x20   some: (n: number) => option.Some(n),\n\
+         \x20   none: option.None,\n\
+         };\n\
+         export = api;\n",
+    )
+    .unwrap();
+    fs::write(
+        source.join("m.tt"),
+        "import api = require(\"./dep.tt\");\n\
+         variant G { E, F }\n\
+         declare const g: G;\n\
+         function f() {\n\
+         \x20   return api.take(match (g) { E => { const a = 1; return api.some(a); }, F => api.none }, 0);\n\
+         }\n\
+         export = f;\n",
+    )
+    .unwrap();
+    let built = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["-o", "out", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    let m = fs::read_to_string(dir.join("out/m.ts")).unwrap();
+    assert!(
+        m.contains("import(\"./tt/cjs/index.js\").TOption<number>"),
+        "{m}"
+    );
+    if !common::tsc_available() {
+        return;
+    }
+    let tsc = common::tsc()
+        .args(["-p", "tsconfig.json"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run tsc");
+    assert!(
+        tsc.status.success(),
+        "{}",
+        String::from_utf8_lossy(&tsc.stdout)
+    );
+}
+
 /// TASK-617: a module written with ECMAScript syntax keeps the
 /// ECMAScript-syntax standard library.
 #[test]

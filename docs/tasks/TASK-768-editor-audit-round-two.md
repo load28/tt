@@ -20,7 +20,8 @@ diverges between layers. Fix each in the layer that owns it.
   operation whose operand holds another conditional operation; an `if let`
   bound to an unparenthesized `try`; a `try` in a match scrutinee or a
   pipeline head inside a `result` block; a `try` in a function written in
-  an isolated value region inside a `result` block.
+  an isolated value region inside a `result` block; a CommonJS module's
+  storage annotations naming the ECMAScript-syntax standard library.
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -126,6 +127,19 @@ diverges between layers. Fix each in the layer that owns it.
   before the nearest `result` block (or there is none). The statement
   `try` already made the same judgment through `in_function`.
 
+### Decision 10: A CommonJS module's annotations name `tt/cjs/`
+
+- **Context**: A storage annotation the checker printed as an import type
+  (`import("@tt/std").TOption<number>`) was rewritten to `./tt/index.js`
+  in a CommonJS module, whose other standard-library imports go to
+  `./tt/cjs/` (TASK-617).
+- **Decision and rationale**: The annotation is rewritten by compiling it
+  as a one-line module, which has no CommonJS syntax of its own, so the
+  rewrite chose the ECMAScript specifiers. The host module's emission
+  already records that it is CommonJS (`MappedEmit::commonjs`); the
+  annotation's rewrite now uses the specifiers that module uses, as the
+  emitter does for the module's own imports.
+
 ## Work log
 
 - 2026-10-06: Started from the second audit's report. Fixed
@@ -135,7 +149,8 @@ diverges between layers. Fix each in the layer that owns it.
   (Decisions 4, 5), `src/codegen/core/emitter/host.rs` (Decision 6), and
   `src/parser/iflets.rs` (Decision 7), `src/sema.rs`,
   `src/sema/checker.rs`, `src/flow/syntax.rs`, `docs/ai/tt.md` and
-  `docs/design/try-result-scopes.md` (Decisions 8, 9). Updated
+  `docs/design/try-result-scopes.md` (Decisions 8, 9), and
+  `src/typescript/contextual.rs` (Decision 10). Updated
   `tests/compile/cases_08.rs`, which pinned the shorthand-breaking edit
   (Decision 1). Regenerated every `unknown-field`
   diagnostics matrix baseline (`TT_MATRIX_CASES=all`) for Decision 1.

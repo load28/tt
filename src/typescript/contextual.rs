@@ -382,6 +382,10 @@ pub(crate) fn standalone(
             }
         }
     };
+    let std_imports = match options.std_imports.commonjs {
+        Some(commonjs) if emit.commonjs => *commonjs,
+        _ => options.std_imports,
+    };
     let mut refinements = Vec::with_capacity(types.len());
     for slot in types {
         let annotation = match slot.annotation {
@@ -393,7 +397,7 @@ pub(crate) fn standalone(
                     &wrapper,
                     &crate::Options {
                         rewrite_imports: options.rewrite_imports,
-                        std_imports: options.std_imports,
+                        std_imports,
                         defer_to_checker: true,
                         ..crate::Options::default()
                     },
