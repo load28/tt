@@ -802,7 +802,7 @@
 
 | TASK-766 | Fix defects found by a compiler audit | Complete | 2026-10-05 | 2026-10-05 | [TASK-766](./TASK-766-compiler-audit-defects.md) |
 
-| TASK-767 | Fix defects found by an editor audit | In progress | 2026-10-05 | — | [TASK-767](./TASK-767-editor-audit-defects.md) |
+| TASK-767 | Fix defects found by an editor audit | Complete | 2026-10-05 | 2026-10-06 | [TASK-767](./TASK-767-editor-audit-defects.md) |
 
 | TASK-768 | Fix defects found by the second editor audit | In progress | 2026-10-06 | — | [TASK-768](./TASK-768-editor-audit-round-two.md) |
 
