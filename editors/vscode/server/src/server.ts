@@ -921,6 +921,19 @@ documents.onDidClose((e) => {
 
 const KEYWORD_SNIPPETS: CompletionItem[] = [
   {
+    label: "val",
+    kind: CompletionItemKind.Keyword,
+    detail: "tt read-only binding modifier",
+    documentation: {
+      kind: MarkupKind.Markdown,
+      value:
+        "Makes a binding and every path read through it read-only:\n" +
+        "`val const config = load();`. A parameter takes it too:\n" +
+        "`function read(val user: User) {}`.",
+    },
+    insertText: "val ",
+  },
+  {
     label: "variant",
     kind: CompletionItemKind.Snippet,
     detail: "tt variant declaration",

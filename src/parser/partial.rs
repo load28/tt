@@ -35,6 +35,7 @@ pub(crate) struct ArmHeader {
     pub(crate) pattern: Option<Pattern>,
     /// Whether an `if` guard follows the pattern.
     pub(crate) guarded: bool,
+    pub(crate) start: usize,
 }
 
 /// The pattern that the tokens before index `before` are being written in,
@@ -93,6 +94,7 @@ pub(crate) fn arm_headers(src: &str, tokens: &[Token], open: usize) -> Vec<ArmHe
             ArmHeader {
                 pattern: matches::parse_arm_pattern(&mut cur).filter(|_| cur.peek().is_none()),
                 guarded: arm.guard.is_some(),
+                start: body[arm.start].span.start,
             }
         })
         .collect()
@@ -146,6 +148,7 @@ pub(crate) fn tuple_arm_headers(
             Some(ArmHeader {
                 pattern: matches::parse_arm_pattern(&mut cur).filter(|_| cur.peek().is_none()),
                 guarded: arm.guard.is_some(),
+                start: body[arm.start].span.start,
             })
         })
         .collect()

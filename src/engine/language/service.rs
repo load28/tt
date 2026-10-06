@@ -735,7 +735,7 @@ pub(super) fn build_probe(path: &Path, source: &str, at: usize, version: u64) ->
 /// missing closer (`parseExpected` reports it and parses on), for a probe
 /// written where the whole construct was recovered because it never
 /// closes. `None` when nothing is open.
-fn closed_at(
+pub(super) fn closed_at(
     text: &str,
     start: usize,
     at: usize,

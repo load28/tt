@@ -103,12 +103,14 @@ pub(super) struct PatternQuestion {
     pub(super) items: Vec<TtCompletion>,
     pub(super) typed: Option<TypedSite>,
     literal: Option<super::language::Range>,
+    exhausted: bool,
 }
 
 impl PatternQuestion {
     pub(super) fn finisher(&self) -> Finisher {
         Finisher {
             literal: self.literal,
+            exhausted: self.exhausted,
         }
     }
 }
@@ -116,12 +118,25 @@ impl PatternQuestion {
 /// What the position asks of the items once they are gathered.
 pub(super) struct Finisher {
     literal: Option<super::language::Range>,
+    exhausted: bool,
 }
 
 impl Finisher {
     /// The items as offered: inside a string literal, only the literals,
     /// each replacing the whole literal written so far.
     pub(super) fn finish(&self, items: Vec<TtCompletion>) -> Vec<TtCompletion> {
+        let items = if self.exhausted {
+            items
+                .into_iter()
+                .filter(|item| item.kind != TtCompletionKind::Wildcard)
+                .map(|item| TtCompletion {
+                    covered: true,
+                    ..item
+                })
+                .collect()
+        } else {
+            items
+        };
         match self.literal {
             None => items,
             Some(range) => items
@@ -177,6 +192,7 @@ pub(super) fn pattern_question(
             .map(|index| (tokens[index].span.start, tokens[index].span.end))
     };
     let mut literal = None;
+    let exhausted = matches!(&context, Context::Case { of: Some(arms) } if arms.exhausted);
     let (items, typed) = match context {
         Context::Literal { arms, span } => {
             literal = Some(super::language::span_range(source, span.0, span.1));
@@ -256,6 +272,7 @@ pub(super) fn pattern_question(
         items: merge_candidates(items),
         typed,
         literal,
+        exhausted,
     })
 }
 
@@ -361,6 +378,8 @@ pub enum TtKeyword {
     Result,
     /// `const Tag(…) = expression else { … };`, a declaration.
     LetElse,
+    /// `val const name = …`, the read-only modifier of a declaration.
+    Val,
 }
 
 impl TtKeyword {
@@ -373,6 +392,7 @@ impl TtKeyword {
             TtKeyword::Flow => "flow",
             TtKeyword::Result => "result",
             TtKeyword::LetElse => "let-else",
+            TtKeyword::Val => "val",
         }
     }
 
@@ -390,20 +410,21 @@ impl TtKeyword {
     fn fits(self, facts: crate::lexer::TokenFacts) -> bool {
         match self {
             TtKeyword::Variant => facts.statement_start() || facts.modified(),
-            TtKeyword::Try | TtKeyword::LetElse => facts.statement_start(),
+            TtKeyword::Try | TtKeyword::LetElse | TtKeyword::Val => facts.statement_start(),
             TtKeyword::Match | TtKeyword::Flow | TtKeyword::Result => {
                 facts.statement_start() || (facts.operand_start() && !facts.modified())
             }
         }
     }
 
-    const ALL: [TtKeyword; 6] = [
+    const ALL: [TtKeyword; 7] = [
         TtKeyword::Variant,
         TtKeyword::Match,
         TtKeyword::Try,
         TtKeyword::Flow,
         TtKeyword::Result,
         TtKeyword::LetElse,
+        TtKeyword::Val,
     ];
 }
 
@@ -547,7 +568,7 @@ enum Context {
 
 fn context(source: &str, program: &Program, tokens: &[Token], offset: usize) -> Option<Context> {
     if let Some(literal) = string_at(source, tokens, offset) {
-        return literal_context(source, program, tokens, literal);
+        return literal_context(source, program, tokens, literal, offset);
     }
     if inside_text(source, tokens, offset) {
         return None;
@@ -606,6 +627,7 @@ fn literal_context(
     program: &Program,
     tokens: &[Token],
     index: usize,
+    offset: usize,
 ) -> Option<Context> {
     let token = &tokens[index];
     let (open, start) = match parsed_at(program, token.span.start) {
@@ -626,8 +648,14 @@ fn literal_context(
         return None;
     }
     Some(Context::Literal {
-        arms: arm_tags(source, tokens, open, None),
-        span: (token.span.start, token.span.end),
+        arms: arm_tags(source, tokens, open, None, token.span.start),
+        span: (
+            token.span.start,
+            match crate::scanner::string_end(source.as_bytes(), token.span.start, token.span.end) {
+                (_, true) => token.span.end,
+                (_, false) => offset.min(token.span.end),
+            },
+        ),
     })
 }
 
@@ -644,6 +672,9 @@ fn site_context(
     if before < start {
         return None;
     }
+    let cursor = tokens
+        .get(before)
+        .map_or(source.len(), |token| token.span.start);
     let Some(open) = innermost_paren(tokens, start, before)? else {
         // The pattern's top level: a tag starts the pattern or follows `|`.
         if before != start && !matches!(tokens[before - 1].kind, TokenKind::Punct(b'|')) {
@@ -651,7 +682,7 @@ fn site_context(
         }
         return Some(match site {
             PatternSite::Arm { open, start } => {
-                let mut arms = arm_tags(source, tokens, open, prefix);
+                let mut arms = arm_tags(source, tokens, open, prefix, cursor);
                 for tag in written_tags(source, &tokens[..before], start, prefix) {
                     if !arms.tags.contains(&tag) {
                         arms.tags.push(tag.clone());
@@ -717,6 +748,7 @@ fn site_context(
                 crate::parser::tuple_arm_headers(source, tokens, body, position),
                 prefix,
                 Some(position),
+                cursor,
             )),
         });
     }
@@ -1004,6 +1036,7 @@ pub(super) struct ArmTags {
     single: bool,
     position: Option<usize>,
     statement: bool,
+    exhausted: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1017,12 +1050,19 @@ pub(super) enum PatternFamily {
 /// parser reads their patterns. The tag being typed at `prefix` is not
 /// evidence yet. A guarded or nested alternative names a tag without
 /// covering it.
-fn arm_tags(source: &str, tokens: &[Token], open: usize, prefix: Option<usize>) -> ArmTags {
+fn arm_tags(
+    source: &str,
+    tokens: &[Token],
+    open: usize,
+    prefix: Option<usize>,
+    cursor: usize,
+) -> ArmTags {
     headers_tags(
         tokens,
         crate::parser::arm_headers(source, tokens, open),
         prefix,
         None,
+        cursor,
     )
 }
 
@@ -1031,12 +1071,14 @@ fn headers_tags(
     headers: Vec<crate::parser::ArmHeader>,
     prefix: Option<usize>,
     position: Option<usize>,
+    cursor: usize,
 ) -> ArmTags {
     let prefix = prefix.map(|index| tokens[index].span.start);
     let mut tags = Vec::new();
     let mut covered: Vec<String> = Vec::new();
     let mut family = None;
     let mut literals = Vec::new();
+    let mut exhausted = false;
     for header in headers {
         let alternatives = match header.pattern {
             Some(Pattern::Tags(alternatives)) => alternatives,
@@ -1051,7 +1093,11 @@ fn headers_tags(
                 family.get_or_insert(PatternFamily::Instances);
                 continue;
             }
-            Some(Pattern::Wildcard) | None => continue,
+            Some(Pattern::Wildcard) => {
+                exhausted |= !header.guarded && position.is_none() && header.start < cursor;
+                continue;
+            }
+            None => continue,
         };
         if family != Some(PatternFamily::Literals) {
             family = Some(PatternFamily::Tags);
@@ -1080,6 +1126,7 @@ fn headers_tags(
         single: true,
         position,
         statement: false,
+        exhausted,
     }
 }
 
@@ -1093,6 +1140,7 @@ fn single_tags(source: &str, tokens: &[Token], start: usize, prefix: Option<usiz
         single: true,
         position: None,
         statement: true,
+        exhausted: false,
     }
 }
 
@@ -1286,7 +1334,9 @@ const c = match (d) { is Error => 1, \"x\" => 2, ‸ };\n";
                 .map(TtKeyword::label)
                 .collect::<Vec<_>>()
         };
-        let statement = ["variant", "match", "try", "flow", "result", "let-else"];
+        let statement = [
+            "variant", "match", "try", "flow", "result", "let-else", "val",
+        ];
         let expression = ["match", "flow", "result"];
         for (path, source, expected) in [
             ("/p/a.tt", "const x = 1;\n‸\n", &statement[..]),

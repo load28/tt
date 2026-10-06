@@ -1,0 +1,111 @@
+=== completions /*iflet*/ completionAtUnfinishedPatternPositions.tt:7:10 ===
+  |   if let  = o { }
+  |          ^ /*iflet*/
+completion: 1050 item(s), member false, probe yes
+  Opt (Variable, 11)
+  Shape (Variable, 11)
+  arguments (Variable, 11)
+  d (Variable, 11)
+  f (Function, 11)
+  o (Variable, 11)
+  q (Variable, 11)
+  s (Variable, 11)
+  u (Variable, 11)
+  w (Variable, 11)
+  ... 1040 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern true, member null
+  Circle (case) "Shape.Circle(radius: number)"
+  Point (case) "Shape.Point"
+  Has (case) "Opt.Has(item: T)"
+  Nope (case) "Opt.Nope"
+  Some (case) "Option.Some(value: T)"
+  None (case) "Option.None"
+  Ok (case) "Result.Ok(value: T)"
+  Err (case) "Result.Err(error: E)"
+patternCompletions:
+  Has (case) "Opt.Has(item: T)"
+  Nope (case) "Opt.Nope"
+editor completion: 2 item(s)
+  Has (EnumMember, 0Has)
+  Nope (EnumMember, 0Nope)
+
+=== completions /*elseiflet*/ completionAtUnfinishedPatternPositions.tt:8:40 ===
+  |   if let Has(item) = o { } else if let  = o { }
+  |                                        ^ /*elseiflet*/
+completion: 1050 item(s), member false, probe yes
+  Opt (Variable, 11)
+  Shape (Variable, 11)
+  arguments (Variable, 11)
+  d (Variable, 11)
+  f (Function, 11)
+  o (Variable, 11)
+  q (Variable, 11)
+  s (Variable, 11)
+  u (Variable, 11)
+  w (Variable, 11)
+  ... 1040 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern true, member null
+  Circle (case) "Shape.Circle(radius: number)"
+  Point (case) "Shape.Point"
+  Has (case) "Opt.Has(item: T)"
+  Nope (case) "Opt.Nope"
+  Some (case) "Option.Some(value: T)"
+  None (case) "Option.None"
+  Ok (case) "Result.Ok(value: T)"
+  Err (case) "Result.Err(error: E)"
+patternCompletions:
+  Has (case) "Opt.Has(item: T)"
+  Nope (case) "Opt.Nope"
+editor completion: 2 item(s)
+  Has (EnumMember, 0Has)
+  Nope (EnumMember, 0Nope)
+
+=== completions /*afterwild*/ completionAtUnfinishedPatternPositions.tt:9:45 ===
+  |   const w = match (s) { Point => 0, _ => 1,  };
+  |                                             ^ /*afterwild*/
+completion: 0 item(s), member false, probe no
+ttCompletions: pattern true, member null
+  Circle (case) "Shape.Circle(radius: number)" covered
+  Point (case) "Shape.Point" covered
+patternCompletions:
+  Circle (case) "Shape.Circle(radius: number)" covered
+  Point (case) "Shape.Point" covered
+editor completion: 2 item(s)
+  Circle (EnumMember, 1Circle)
+  Point (EnumMember, 1Point)
+
+=== completions /*quote*/ completionAtUnfinishedPatternPositions.tt:10:26 ===
+  |   const q = match (d) { " };
+  |                          ^ /*quote*/
+completion: 0 item(s), member false, probe no
+ttCompletions: pattern true, member null
+patternCompletions:
+  "a" (literal) "literal \"a\"" replaces 10:25-10:26
+  "b" (literal) "literal \"b\"" replaces 10:25-10:26
+editor completion: 2 item(s)
+  "a" (Constant, 0"a")
+  "b" (Constant, 0"b")
+
+=== completions /*unclosed*/ completionAtUnfinishedPatternPositions.tt:11:25 ===
+  |   const u = match (s) { 
+  |                         ^ /*unclosed*/
+completion: 0 item(s), member false, probe no
+ttCompletions: pattern true, member null
+  Circle (case) "Shape.Circle(radius: number)"
+  Point (case) "Shape.Point"
+  Has (case) "Opt.Has(item: T)"
+  Nope (case) "Opt.Nope"
+  Some (case) "Option.Some(value: T)"
+  None (case) "Option.None"
+  Ok (case) "Result.Ok(value: T)"
+  Err (case) "Result.Err(error: E)"
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+patternCompletions:
+  Circle (case) "Shape.Circle(radius: number)"
+  Point (case) "Shape.Point"
+  _ (wildcard) "wildcard arm — every remaining case (must be last)"
+editor completion: 3 item(s)
+  Circle (EnumMember, 0Circle)
+  Point (EnumMember, 0Point)
+  _ (Keyword, 0_)
+

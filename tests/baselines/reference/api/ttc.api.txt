@@ -288,6 +288,7 @@ pub enum TtKeyword {
     Flow,
     Result,
     LetElse,
+    Val,
 }
 impl TtKeyword
     pub fn label(self) -> &'static str

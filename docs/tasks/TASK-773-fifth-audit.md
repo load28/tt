@@ -186,6 +186,30 @@ defects. This task fixes them in the layer that owns each one.
   existing outline test now expects `radius`, written in `a`'s initializer,
   under `a`.
 
+### Decision 10: Pattern completion narrows at empty positions and after a wildcard
+
+- **Context**: Pattern completion listed every tag in scope at
+  `if let § = o`, `else if let § = o`, and in a `match (s) {` left open at
+  the end of the file; it offered `_` and uncovered cases after an
+  unguarded `_` arm; and `val` was missing from the statement keywords.
+- **Decision and rationale**: An `if let` or let-else pattern requires its
+  parentheses, so the placeholder tag spliced in to ask the subject's type
+  is `Tag()` when no `(` follows, as nested patterns already did. When the
+  lowering still fails because the construct never closes, the brackets
+  its recovered range leaves open are closed at the placeholder, the repair
+  TASK-772 decision 4 gives the completion probe (TypeScript's
+  `parseExpected` assumes a missing closer). An unguarded `_` arm written
+  before the cursor covers every case, as Rust's usefulness check treats
+  arms after a wildcard, so every case is marked covered and no second
+  `_` is offered; `ArmHeader` carries its arm's start to tell before from
+  after. `val` is a statement-start keyword like `let-else`. A literal
+  after an unclosed opening quote (`match (d) { "§`) is answered through
+  the same closing repair, and its replacement ends at the cursor rather
+  than at the end of the unterminated token, as TypeScript's
+  `createTextSpanFromStringLiteralLikeContent` bounds an unterminated
+  literal (`services/utilities.ts`); the token's end would have replaced
+  the rest of the line.
+
 ## Work log
 
 - 2026-10-06: Ran the fifth audit as three read-only agents (CLI,
@@ -207,10 +231,25 @@ defects. This task fixes them in the layer that owns each one.
 - 2026-10-06: Sent signature help inside recovered text through the probe
   (decision 8).
 - 2026-10-06: Nested outline symbols by source containment (decision 9).
+- 2026-10-06: Narrowed pattern completion at empty positions, after a
+  wildcard, and in an unclosed literal, and offered `val` (decision 10).
 
 ## Issues and resolutions
 
-None.
+- **Commits made with clippy errors**: Two commits (casts, then a complex
+  type) went in while clippy reported errors. Cause: the commit command was
+  chained with `;` after the clippy run, so it ran whatever clippy printed.
+  Resolution: later commits fixed both; commits now run only when the
+  captured clippy output is empty and `cargo fmt --check` passes.
+- **A commit without its baselines**: The decision 5 commit left out two
+  `.types` baselines it changed. Cause: the case runs were filtered with a
+  comma list that the case runner does not split. Resolution: the reviewed
+  baselines were committed next, and cases are now regenerated one by one.
+- **A VS Code test left expecting the old outline**: Decision 9 updated the
+  Rust outline expectation but not `editors/vscode/server/src/test/server.test.ts`,
+  which still expected `radius` beside `a`. Cause: the VS Code suite was not
+  run with that change. Resolution: the test now expects `radius` under `a`,
+  committed with decision 10.
 
 ## Regression test (fails before the fix)
 

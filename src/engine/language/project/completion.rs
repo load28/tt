@@ -164,11 +164,24 @@ impl Project {
                     prefix.map_or_else(|| source_byte(&doc.source, position), |(start, _)| start);
                 let source = match (prefix, statement) {
                     (Some(_), true) => doc.source.clone(),
-                    (None, true) => format!(
-                        "{}{STATEMENT_TAG_PLACEHOLDER}{}",
-                        &doc.source[..at],
-                        &doc.source[at..]
-                    ),
+                    (None, true) => {
+                        let called = crate::lexer::lex_with_kind(
+                            &doc.source,
+                            at,
+                            doc.source.len(),
+                            crate::SourceKind::from_path(&path).unwrap_or_default(),
+                        )
+                        .first()
+                        .is_some_and(|token| {
+                            matches!(token.kind, crate::lexer::TokenKind::Punct(b'('))
+                        });
+                        let tag = if called {
+                            STATEMENT_TAG_PLACEHOLDER.to_string()
+                        } else {
+                            format!("{STATEMENT_TAG_PLACEHOLDER}()")
+                        };
+                        format!("{}{tag}{}", &doc.source[..at], &doc.source[at..])
+                    }
                     (Some((start, end)), false) => {
                         format!("{}{}", &doc.source[..start], &doc.source[end..])
                     }
@@ -236,32 +249,40 @@ impl Project {
     {
         use crate::engine::completions::PatternFamily;
         let kind = crate::SourceKind::from_path(path).unwrap_or_default();
+        let options = crate::Options {
+            filename: path.to_str(),
+            source_kind: kind,
+            defer_to_checker: true,
+            rewrite_imports: crate::ImportRewrite::Off,
+            ..crate::Options::default()
+        };
         let lowered = |text: &str| {
             let (start, end) = crate::engine::declarations::scrutinee_at(text, kind, at, position)?;
-            let report = crate::compile_projection_report(
-                text,
-                &crate::Options {
-                    filename: path.to_str(),
-                    source_kind: kind,
-                    defer_to_checker: true,
-                    rewrite_imports: crate::ImportRewrite::Off,
-                    ..crate::Options::default()
-                },
-            );
+            let report = crate::compile_projection_report(text, &options);
             let emit = report.emit.or(report.withheld)?;
             let out_start = mapper::to_output(&emit.mappings, start)?;
             let out_end = out_start + (end - start);
             (mapper::to_source_span(&emit.mappings, out_start, out_end) == Some((start, end)))
                 .then_some((emit, out_start, out_end))
         };
-        let Some((emit, out_start, out_end)) = lowered(source).or_else(|| {
-            let repair = if position.is_some() {
-                "_"
-            } else {
-                WILDCARD_ARM
-            };
-            lowered(&format!("{}{repair}{}", &source[..at], &source[at..]))
-        }) else {
+        let repair = if position.is_some() {
+            "_"
+        } else {
+            WILDCARD_ARM
+        };
+        let repaired = format!("{}{repair}{}", &source[..at], &source[at..]);
+        let closed = || {
+            let end = at + repair.len();
+            crate::compile_projection_report(&repaired, &options)
+                .recovered
+                .iter()
+                .find(|&&(start, stop)| start <= at && end <= stop)
+                .and_then(|&(start, _)| closed_at(&repaired, start, end, kind))
+        };
+        let Some((emit, out_start, out_end)) = lowered(source)
+            .or_else(|| lowered(&repaired))
+            .or_else(|| lowered(&closed()?))
+        else {
             return Ok(None);
         };
         let families: &[PatternFamily] = match family {
