@@ -99,6 +99,7 @@ pub(crate) struct BindingOccurrence {
     pub src: usize,
     pub src_end: usize,
     pub shorthand: bool,
+    pub declared: bool,
 }
 
 /// Which tt construct a stretch of compiler-written glue belongs to.

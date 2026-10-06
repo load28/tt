@@ -1,0 +1,18 @@
+==== ttc --out-dir (exit 0) ====
+ttc: ./anOrPatternFieldMissingFromOneCaseIsReportedAtThatCase.tt → $DIR/out/anOrPatternFieldMissingFromOneCaseIsReportedAtThatCase.ts
+
+==== ttc --check-types (exit 1) ====
+error[ts2339]: Property 'n' does not exist on type 'V'.
+ --> anOrPatternFieldMissingFromOneCaseIsReportedAtThatCase.tt:3:31
+  |
+3 |   return match (v) { A(n) | B(n) => n };
+  |                               ^
+error[ts2339]: Property 'n' does not exist on type 'V'.
+ --> anOrPatternFieldMissingFromOneCaseIsReportedAtThatCase.tt:6:18
+  |
+6 |   const A(n) | B(n) = v else { return 0; };
+  |                  ^
+
+==== tsc on the emitted TypeScript (exit 2) ====
+anOrPatternFieldMissingFromOneCaseIsReportedAtThatCase.ts(32,17): error TS2339: Property 'n' does not exist on type 'V'.
+anOrPatternFieldMissingFromOneCaseIsReportedAtThatCase.ts(48,11): error TS2339: Property 'n' does not exist on type 'V'.

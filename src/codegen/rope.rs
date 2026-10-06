@@ -55,6 +55,7 @@ pub(crate) enum MarkKind {
     SharedBindingOccurrence {
         end: usize,
         shorthand: bool,
+        declared: bool,
     },
     SharedBindingEnd,
     /// The glue after it is written for the source at `src`, a construct
@@ -932,7 +933,12 @@ impl<'a> TargetFile<'a> {
                 }),
                 TargetPiece::Mark {
                     src,
-                    kind: MarkKind::SharedBindingOccurrence { end, shorthand },
+                    kind:
+                        MarkKind::SharedBindingOccurrence {
+                            end,
+                            shorthand,
+                            declared,
+                        },
                 } => shared_bindings
                     .last_mut()
                     .filter(|binding| binding.out_end == binding.out)
@@ -944,6 +950,7 @@ impl<'a> TargetFile<'a> {
                         src: *src,
                         src_end: *end,
                         shorthand: *shorthand,
+                        declared: *declared,
                     }),
                 TargetPiece::Mark {
                     kind: MarkKind::SharedBindingEnd,

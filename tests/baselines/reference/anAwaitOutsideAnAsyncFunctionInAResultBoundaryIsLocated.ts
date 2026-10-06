@@ -1,0 +1,12 @@
+//// [anAwaitOutsideAnAsyncFunctionInAResultBoundaryIsLocated.tt] ////
+import type { TResult } from "@tt/std";
+declare function g(): Promise<TResult<number, string>>;
+export function F(p: any) {
+  const { a = result { const z = try await g(); return z; } } = p;
+  return a;
+}
+export function H(p: any) {
+  const q = result { const z = try await g(); return z; };
+  return q;
+}
+

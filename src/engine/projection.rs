@@ -751,6 +751,13 @@ pub(crate) fn diagnostic_origin(
     utf16_start: usize,
     utf16_end: usize,
 ) -> Option<mapper::DiagnosticOrigin> {
+    let (start, end) = (
+        mapper::from_utf16(&file.emit.code, utf16_start),
+        mapper::from_utf16(&file.emit.code, utf16_end),
+    );
+    if let Some(origin) = mapper::shared_binding_origin(&file.emit.shared_bindings, start, end) {
+        return Some(origin);
+    }
     mapper::diagnostic_origin(
         &file.emit.mappings,
         &file.emit.anchors,

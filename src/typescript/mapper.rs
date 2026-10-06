@@ -27,6 +27,27 @@ pub(crate) enum DiagnosticOrigin {
     Nearest { start: usize },
 }
 
+pub(crate) fn shared_binding_origin(
+    shared: &[crate::SharedBinding],
+    start: usize,
+    end: usize,
+) -> Option<DiagnosticOrigin> {
+    shared
+        .iter()
+        .find(|binding| binding.out <= start && end.max(start) <= binding.out_end)
+        .and_then(|binding| {
+            binding
+                .occurrences
+                .iter()
+                .find(|occurrence| !occurrence.declared)
+                .or_else(|| binding.occurrences.first())
+        })
+        .map(|occurrence| DiagnosticOrigin::Exact {
+            start: occurrence.src,
+            end: occurrence.src_end,
+        })
+}
+
 /// Projects one emitted diagnostic span without inventing a partially
 /// mapped source range.
 pub(crate) fn diagnostic_origin(

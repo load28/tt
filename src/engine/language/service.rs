@@ -1293,9 +1293,17 @@ pub(super) fn diagnostic_source_span(
             start: list.src,
             end: list.src_end,
         },
-        None => {
-            mapper::diagnostic_origin(&doc.mappings, &doc.anchors, sb, eb, &doc.code, &doc.source)?
-        }
+        None => match mapper::shared_binding_origin(&doc.shared_bindings, sb, eb) {
+            Some(origin) => origin,
+            None => mapper::diagnostic_origin(
+                &doc.mappings,
+                &doc.anchors,
+                sb,
+                eb,
+                &doc.code,
+                &doc.source,
+            )?,
+        },
     };
     let (start, end) = match origin {
         mapper::DiagnosticOrigin::Exact { start, end } => (start, end),

@@ -243,6 +243,7 @@ impl<'a> Rope<'a> {
                 kind: MarkKind::SharedBindingOccurrence {
                     end: occurrence.src_end,
                     shorthand: occurrence.shorthand,
+                    declared: occurrence.declared,
                 },
             });
         }

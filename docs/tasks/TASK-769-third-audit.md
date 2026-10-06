@@ -38,8 +38,17 @@ request validation. Fix each in the layer that owns it.
   parenthesized right operand of a short-circuit; an inert operand holding
   a tt statement; a captured operand holding a tt value; a `result`
   block returning a nested `match`; a discarded comma operand that is a
-  tt value; an outer `try` around a `match` and an inner `try` (R3C4).
-- Excluded: to be recorded as the task proceeds.
+  tt value; an outer `try` around a `match` and an inner `try` (R3C4); a
+  field an or-pattern binds that one of its cases lacks (R3E5); a parse
+  failure on a `result` block's expression boundary (R3C14).
+- Excluded: the editor's placement of a TypeScript assignability error at
+  the value a structured mismatch names (R3E3; the CLI relocates it from
+  the checker's structured facts, which the editor's pull diagnostics do
+  not carry, so it needs one diagnostic producer for both surfaces and is
+  a task of its own). References on a large file (R3E2) were measured
+  after the outline fix: they grow linearly (0.23 s for 2,401 references
+  to a constant in a 1,200-line file, 0.12 s for the same shape in a `.ts`
+  file), so nothing was changed.
 
 ## Decisions
 
@@ -474,6 +483,31 @@ request validation. Fix each in the layer that owns it.
   in `const x = half(match ... + (try half(k)));`. A first attempt nested
   the `match` under the outer `try` instead; it dropped the arms' call
   completion and changed three baselines, so it was not kept.
+
+### Decision 35: A diagnostic on a shared binding names the case that lacks it
+
+- **Context**: `match (v) { A(n) | B(n) => n }` over `variant V { A(n:
+  number), B(m: string) }` was reported at the match head as "match on a
+  tag pattern needs a value with a `kind` discriminant", in the CLI and
+  the editor alike.
+- **Decision and rationale**: An or-pattern's bindings share one
+  destructuring, written as glue that records every source occurrence of
+  the binding. A TypeScript diagnostic on that glue fell back to the
+  construct's anchor and was translated as a missing discriminant. The
+  shared binding is now a diagnostic origin of its own, as a destructured
+  list already is: the diagnostic is placed at the occurrence whose field
+  the declaration did not resolve, or at the first occurrence, and keeps
+  TypeScript's message, as a single pattern's missing field does.
+
+### Decision 36: A `result` block's expression boundary is its glue
+
+- **Context**: `const { a = result { const z = try await g(); ... } } = p;`
+  in a non-async function failed the output self-check with no position.
+- **Decision and rationale**: The boundary call written around a `result`
+  block in an expression-only owner (`(await $tt_expr(async () => {`)
+  carried no anchor, so a parse failure on it mapped nowhere. It is now
+  anchored to the block like every other construct's glue, and the
+  failure is reported at the block.
 
 ## Work log
 

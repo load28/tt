@@ -1051,6 +1051,11 @@ impl<'a> Emitter<'a> {
                         .fields
                         .last()
                         .is_some_and(|field| helpers::field_node(field) == other.binding),
+                    declared: other
+                        .source
+                        .fields
+                        .last()
+                        .is_some_and(|field| matches!(field, FieldAccess::Resolved { .. })),
                 }
             })
             .collect();

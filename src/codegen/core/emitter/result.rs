@@ -114,11 +114,14 @@ impl<'a> Emitter<'a> {
         let _failure_scope = self.enter_result_failure(region.id, &failure, None);
         let mut out = Rope::new();
         self.used_expression_boundary.set(true);
-        out.push_lit(if region.is_async {
+        let mut boundary = Rope::new();
+        boundary.push_lit(if region.is_async {
             format!("(await {}(async () => {{", self.expression_boundary_name)
         } else {
             format!("{}(() => {{", self.expression_boundary_name)
         });
+        let (start, end) = self.result_bind_anchor(region);
+        out.anchored(AnchorKind::Result, start, end, end, boundary);
         out.push_break(1);
         for item in &region.items {
             let ResultRegionItem::Statements(body) = item;
