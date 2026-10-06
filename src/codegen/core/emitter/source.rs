@@ -345,8 +345,9 @@ impl<'a> Emitter<'a> {
                         !replacement
                             .anchor
                             .is_some_and(|expr| self.active_structured_exprs.contains(expr))
-                            && self.conditional_region_depth.get() == 0
-                            && self.loop_region_depth.get() == 0
+                            && ((self.conditional_region_depth.get() == 0
+                                && self.loop_region_depth.get() == 0)
+                                || self.completed_call_emitted(replacement))
                             && !self.replacement_contains_active_value(replacement.source)
                             && replacement.source.start <= cursor
                             && cursor < replacement.source.end
@@ -413,8 +414,9 @@ impl<'a> Emitter<'a> {
                 .take_while(|replacement| replacement.source.start < span.end)
                 .find(|replacement| {
                     replacement.anchor.is_none()
-                        || (self.conditional_region_depth.get() == 0
-                            && self.loop_region_depth.get() == 0
+                        || (((self.conditional_region_depth.get() == 0
+                            && self.loop_region_depth.get() == 0)
+                            || self.completed_call_emitted(replacement))
                             && !self.replacement_contains_active_value(replacement.source))
                 })
                 .map_or(span.end, |replacement| replacement.source.start);
@@ -853,6 +855,19 @@ impl<'a> Emitter<'a> {
             }
         }
         true
+    }
+
+    fn completed_call_emitted(&self, replacement: &SourceReplacement) -> bool {
+        let Some(expr) = replacement.anchor.filter(|_| replacement.claim) else {
+            return false;
+        };
+        self.compose_rewrites.iter().any(|rewrite| {
+            self.emitted_compose_rewrites.contains(rewrite.owner)
+                && rewrite.actions.iter().any(|action| {
+                    matches!(action, ComposeAction::Value(value)
+                        if value.expr == expr && value.call_completion.is_some())
+                })
+        })
     }
 
     fn claimed_by_completed_call(&self, start: usize, end: usize) -> bool {
@@ -1359,10 +1374,11 @@ impl<'a> Emitter<'a> {
             return out;
         }
         if self.nested_values.contains(&expr)
-            && matches!(
-                self.core.exprs[expr.index()],
-                Expr::Decision(_) | Expr::ResultRegion(_) | Expr::Propagate(_)
-            )
+            && match self.core.exprs[expr.index()] {
+                Expr::Decision(_) | Expr::ResultRegion(_) | Expr::Propagate(_) => true,
+                Expr::Apply(_) => self.core.has_statement_form(expr),
+                _ => false,
+            }
             && let Some(slot) = self.value_slots.get(&expr)
         {
             let (kind, start, end, extent) = self.value_anchor(expr);

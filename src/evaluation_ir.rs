@@ -146,6 +146,8 @@ pub(crate) struct LoweringPlan {
     expression_boundary_name: String,
     match_raise_name: String,
     match_show_name: String,
+    spread_name: String,
+    statement_decision_sources: Vec<SourceSpan>,
     generated_names: Option<crate::generated_names::GeneratedNames>,
     shadowed_globals: HashSet<String>,
     host_global_aliases: HashMap<String, HostGlobalAlias>,
@@ -531,12 +533,14 @@ impl LoweringPlan {
         let expression_boundary_name = name("$tt_expr");
         let match_raise_name = name("$tt_raise");
         let match_show_name = name("$tt_show");
+        let spread_name = name("$tt_spread");
         let allocated = occupied.difference(&written).cloned().collect();
         Self {
             owner_model_unavailable: true,
             expression_boundary_name,
             match_raise_name,
             match_show_name,
+            spread_name,
             generated_names: Some(crate::generated_names::GeneratedNames::from_occupied(
                 occupied, allocated,
             )),
@@ -620,6 +624,14 @@ impl LoweringPlan {
 
     pub(crate) fn match_show_name(&self) -> &str {
         &self.match_show_name
+    }
+
+    pub(crate) fn spread_name(&self) -> &str {
+        &self.spread_name
+    }
+
+    pub(crate) fn statement_decision_sources(&self) -> &[SourceSpan] {
+        &self.statement_decision_sources
     }
 
     pub(crate) fn host_global(&self, name: &str) -> String {

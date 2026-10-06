@@ -143,6 +143,7 @@ pub(super) enum TypedSite {
         covered: Vec<String>,
         literals: Vec<crate::ast::LiteralValue>,
         position: Option<usize>,
+        statement: bool,
     },
     Field {
         written: Vec<String>,
@@ -183,6 +184,7 @@ pub(super) fn pattern_question(
                     covered: arms.covered,
                     literals: arms.literals,
                     position: arms.position,
+                    statement: false,
                 }),
             )
         }
@@ -195,13 +197,16 @@ pub(super) fn pattern_question(
                         .collect::<Vec<_>>()
                 }
             };
-            items.push(wildcard());
+            if !arms.statement {
+                items.push(wildcard());
+            }
             let typed = arms.single.then_some(TypedSite::Arm {
                 prefix,
                 family: arms.family,
                 covered: arms.covered,
                 literals: arms.literals,
                 position: arms.position,
+                statement: arms.statement,
             });
             (items, typed)
         }
@@ -640,7 +645,9 @@ fn site_context(
             PatternSite::Arm { open, .. } => Context::Case {
                 of: Some(arm_tags(source, tokens, open, prefix)),
             },
-            PatternSite::Single { .. } => Context::Case { of: None },
+            PatternSite::Single { start } => Context::Case {
+                of: Some(single_tags(source, tokens, start, prefix)),
+            },
         });
     };
     if open > start && matches!(tokens[open - 1].kind, TokenKind::Ident) {
@@ -976,6 +983,7 @@ pub(super) struct ArmTags {
     literals: Vec<crate::ast::LiteralValue>,
     single: bool,
     position: Option<usize>,
+    statement: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1051,6 +1059,43 @@ fn headers_tags(
         literals,
         single: true,
         position,
+        statement: false,
+    }
+}
+
+fn single_tags(source: &str, tokens: &[Token], start: usize, prefix: Option<usize>) -> ArmTags {
+    let mut tags: Vec<String> = Vec::new();
+    let mut depth = 0usize;
+    for index in start..tokens.len() {
+        let token = &tokens[index];
+        if token.opens_bracket() {
+            depth += 1;
+        } else if token.closes_bracket() {
+            if depth == 0 {
+                break;
+            }
+            depth -= 1;
+        } else if depth == 0 && matches!(token.kind, TokenKind::Punct(b'=')) {
+            break;
+        } else if depth == 0
+            && matches!(token.kind, TokenKind::Ident)
+            && Some(index) != prefix
+            && (index == start || matches!(tokens[index - 1].kind, TokenKind::Punct(b'|')))
+        {
+            let tag = text(source, token).to_string();
+            if !tags.contains(&tag) {
+                tags.push(tag);
+            }
+        }
+    }
+    ArmTags {
+        covered: tags.clone(),
+        family: (!tags.is_empty()).then_some(PatternFamily::Tags),
+        tags,
+        literals: Vec::new(),
+        single: true,
+        position: None,
+        statement: true,
     }
 }
 

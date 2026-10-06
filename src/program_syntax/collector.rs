@@ -278,7 +278,7 @@ pub(super) struct ProjectedHostExit {
 pub(super) enum ProjectedProtocolFrame {
     Ordered {
         parent: ProjectedSpan,
-        positions: Vec<(ProjectedSpan, Effects)>,
+        positions: Vec<(ProjectedSpan, Effects, EvaluationInputMode)>,
         kind: OrderedEvaluationKind,
         /// Whether the operation has no spread element. A spread copies its
         /// operand at the literal's own position, running whatever getters
@@ -431,7 +431,7 @@ pub(super) fn object_evaluation_positions(
     source_start: HostOrigin,
     placeholders: &HashSet<ProjectedSpan>,
     segments: &ProjectionSegments,
-) -> Vec<(ProjectedSpan, Effects)> {
+) -> Vec<(ProjectedSpan, Effects, EvaluationInputMode)> {
     let mut positions = Vec::new();
     for property in &node.props {
         match property {
@@ -439,23 +439,30 @@ pub(super) fn object_evaluation_positions(
                 positions.push((
                     operand_span(&spread.expr, source_start, placeholders, segments),
                     expression_effects(&spread.expr),
+                    EvaluationInputMode::ObjectSpread,
                 ));
             }
             PropOrSpread::Prop(property) => match &**property {
                 Prop::Shorthand(identifier) => {
-                    positions.push((projected_span(identifier.span, source_start), Effects::ANY));
+                    positions.push((
+                        projected_span(identifier.span, source_start),
+                        Effects::ANY,
+                        EvaluationInputMode::ShorthandProperty,
+                    ));
                 }
                 Prop::KeyValue(property) => {
                     push_computed_property(&mut positions, &property.key, source_start);
                     positions.push((
                         operand_span(&property.value, source_start, placeholders, segments),
                         expression_effects(&property.value),
+                        EvaluationInputMode::Value,
                     ));
                 }
                 Prop::Assign(property) => {
                     positions.push((
                         operand_span(&property.value, source_start, placeholders, segments),
                         expression_effects(&property.value),
+                        EvaluationInputMode::Value,
                     ));
                 }
                 Prop::Getter(property) => {
@@ -474,7 +481,7 @@ pub(super) fn object_evaluation_positions(
 }
 
 pub(super) fn push_computed_property(
-    positions: &mut Vec<(ProjectedSpan, Effects)>,
+    positions: &mut Vec<(ProjectedSpan, Effects, EvaluationInputMode)>,
     name: &PropName,
     source_start: HostOrigin,
 ) {
@@ -482,6 +489,7 @@ pub(super) fn push_computed_property(
         positions.push((
             projected_span(computed.expr.span(), source_start),
             expression_effects(&computed.expr),
+            EvaluationInputMode::Value,
         ));
     }
 }

@@ -1,0 +1,5 @@
+// @diagnostics: *
+variant V { A, B }
+export function f(v: V) {
+  return "n" in match (v) { A => v, B => {} };
+}

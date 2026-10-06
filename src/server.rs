@@ -306,55 +306,6 @@ fn request_id(line: &str) -> serde_json::Value {
         .unwrap_or(serde_json::Value::Null)
 }
 
-fn replace_lone_surrogates(line: &str) -> std::borrow::Cow<'_, str> {
-    let bytes = line.as_bytes();
-    let unit = |at: usize| -> Option<u16> {
-        (bytes.get(at) == Some(&b'\\') && bytes.get(at + 1) == Some(&b'u'))
-            .then(|| line.get(at + 2..at + 6))
-            .flatten()
-            .and_then(|hex| u16::from_str_radix(hex, 16).ok())
-    };
-    let mut out = String::new();
-    let mut copied = 0;
-    let mut in_string = false;
-    let mut at = 0;
-    while at < bytes.len() {
-        match bytes[at] {
-            b'"' => {
-                in_string = !in_string;
-                at += 1;
-            }
-            b'\\' if in_string => {
-                if let Some(first) = unit(at) {
-                    let high = (0xD800..0xDC00).contains(&first);
-                    let paired =
-                        high && unit(at + 6).is_some_and(|next| (0xDC00..0xE000).contains(&next));
-                    if paired {
-                        at += 12;
-                        continue;
-                    }
-                    if (0xD800..0xE000).contains(&first) {
-                        out.push_str(&line[copied..at]);
-                        out.push_str("\\ufffd");
-                        at += 6;
-                        copied = at;
-                        continue;
-                    }
-                    at += 6;
-                } else {
-                    at += 2;
-                }
-            }
-            _ => at += 1,
-        }
-    }
-    if copied == 0 {
-        return std::borrow::Cow::Borrowed(line);
-    }
-    out.push_str(&line[copied..]);
-    std::borrow::Cow::Owned(out)
-}
-
 fn bool_param(
     value: &serde_json::Value,
     method: &str,
@@ -394,7 +345,6 @@ fn respond(
 ) -> serde_json::Value {
     use serde_json::json;
     ttc::ice::panic_for_test("server");
-    let line = &replace_lone_surrogates(line);
     let request: serde_json::Value = match serde_json::from_str(line) {
         Ok(value) => value,
         Err(e) => {
@@ -1212,23 +1162,6 @@ mod tests {
             .iter()
             .map(|line| line.to_string().into_bytes())
             .collect()
-    }
-
-    #[test]
-    fn a_lone_surrogate_in_a_buffer_is_read_as_a_replacement_character() {
-        let mut workspace = Workspace::new(Engine::new(None));
-        let mut checks = Checks::default();
-        let answer = respond(
-            &mut workspace,
-            &mut checks,
-            None,
-            r#"{"id":7,"method":"check","params":{"text":"const a = \"\ud800\";\nconst b = \"\ud83d\ude00\";\n"}}"#,
-        );
-        assert_eq!(
-            answer["result"]["diagnostics"],
-            serde_json::json!([]),
-            "{answer}"
-        );
     }
 
     #[test]

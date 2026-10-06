@@ -697,12 +697,28 @@ impl<'a> Emitter<'a> {
                         }
                         PlannedOperand::Source {
                             span,
+                            spread,
                             capture: Some(slot),
-                            ..
                         } => {
                             if captured.insert(*slot) {
-                                body.push_value_capture(self.value_slot_name(*slot));
+                                let mode = if *spread {
+                                    EvaluationInputMode::SpreadElement
+                                } else {
+                                    EvaluationInputMode::Value
+                                };
+                                let (open, close) = self.capture_form(mode);
+                                if *spread {
+                                    body.push_value_capture(self.value_slot_name(*slot));
+                                } else {
+                                    self.push_capture(
+                                        self.value_slot_name(*slot),
+                                        *span,
+                                        &mut body,
+                                    );
+                                }
+                                body.push_lit(open);
                                 body.append(self.captured_tail(*span, captured));
+                                body.push_lit(close);
                                 body.push_lit(");");
                                 body.push_break(0);
                             }
@@ -1005,16 +1021,7 @@ impl<'a> Emitter<'a> {
                 && source.start <= replacement.source.start
                 && replacement.source.end <= source.end
                 && (replacement.source != source || replacement.anchor.is_some())
-                && !self
-                    .replacements_covering(replacement.source.start, replacement.source.end)
-                    .any(|frame| {
-                        frame.claim
-                            && frame.source.start <= replacement.source.start
-                            && replacement.source.end <= frame.source.end
-                            && !frame
-                                .anchor
-                                .is_some_and(|expr| self.active_structured_exprs.contains(expr))
-                    })
+                && !self.inside_claimed_frame(replacement.source, None)
                 && captured
                     .iter()
                     .any(|slot| self.value_slot_name(*slot) == replacement.slot)
@@ -1055,12 +1062,18 @@ impl<'a> Emitter<'a> {
         }
         for expr in self.value_slots.keys() {
             let (_, start, _, extent) = self.value_anchor(*expr);
-            if source.start <= start && extent <= source.end {
-                parts.push((SourceSpan { start, end: extent }, Part::Value(*expr)));
+            let span = SourceSpan { start, end: extent };
+            if source.start <= start
+                && extent <= source.end
+                && !self.inside_claimed_frame(span, Some(source))
+            {
+                parts.push((span, Part::Value(*expr)));
             }
         }
         for (span, statement) in self.statements_within(source) {
-            parts.push((span, Part::Statement(statement)));
+            if !self.inside_claimed_frame(span, Some(source)) {
+                parts.push((span, Part::Statement(statement)));
+            }
         }
         parts.sort_by_key(|(span, part)| {
             (
@@ -1216,6 +1229,16 @@ impl<'a> Emitter<'a> {
                     self.value_slot_name(slot)
                 })
             }
+            PlannedEvaluationInput::Source {
+                source,
+                target,
+                mode: EvaluationInputMode::ShorthandProperty,
+                ..
+            } => format!(
+                "{}: {}",
+                &self.source[source.start..source.end],
+                self.value_slot_name(*target)
+            ),
             PlannedEvaluationInput::Source { target, .. } => {
                 self.value_slot_name(*target).to_owned()
             }
@@ -1514,7 +1537,7 @@ impl<'a> Emitter<'a> {
             }
             PlannedEvaluationInput::Source { source, target, .. } => {
                 if captured.insert(*target) {
-                    out.push_value_capture(self.value_slot_name(*target));
+                    self.push_capture(self.value_slot_name(*target), *source, out);
                     out.append(self.captured_source(*source, captured));
                     out.push_lit(");");
                     out.push_break(0);
@@ -1608,7 +1631,15 @@ impl<'a> Emitter<'a> {
                 if captured.insert(slot) {
                     // A receiver retains its inferred members. The `this`
                     // parameter at a later bind is not its contextual type.
-                    out.push_lit(format!("const {} = (", self.value_slot_name(slot)));
+                    let name = self.value_slot_name(slot);
+                    match self.type_query(source) {
+                        Some(query) => {
+                            out.push_lit(format!("const {name}: "));
+                            out.append(query);
+                            out.push_lit(" = (");
+                        }
+                        None => out.push_lit(format!("const {name} = (")),
+                    }
                     out.append(self.captured_source(source, captured));
                     out.push_lit(");");
                     out.push_break(0);
@@ -1813,10 +1844,18 @@ impl<'a> Emitter<'a> {
                     prefix.push_lit(format!("let {} = (", self.value_slot_name(*target)));
                 } else if *mode == EvaluationInputMode::Discarded {
                     prefix.push_lit("(");
+                } else if matches!(
+                    mode,
+                    EvaluationInputMode::Value | EvaluationInputMode::DirectReference
+                ) {
+                    self.push_capture(self.value_slot_name(*target), *source, &mut prefix);
                 } else {
                     prefix.push_value_capture(self.value_slot_name(*target));
                 }
+                let (open, close) = self.capture_form(*mode);
+                prefix.push_lit(open);
                 prefix.append(self.captured_source(*source, captured));
+                prefix.push_lit(close);
                 prefix.push_lit(");");
                 prefix.push_break(0);
             }
@@ -2065,5 +2104,53 @@ impl<'a> Emitter<'a> {
         out.push_break(0);
         out.push_lit("}");
         Rope::scoped(out)
+    }
+
+    fn type_query(&self, source: SourceSpan) -> Option<Rope<'a>> {
+        let text = &self.source[source.start..source.end];
+        crate::program_syntax::source_entity_name(text, self.source_kind).then(|| {
+            let mut query = Rope::new();
+            query.push_lit("typeof ");
+            query.push_src(text, source.start);
+            query
+        })
+    }
+
+    fn push_capture(&self, name: &str, source: SourceSpan, out: &mut Rope<'a>) {
+        match self.type_query(source) {
+            Some(query) => {
+                out.push_lit(format!("const {name}: "));
+                out.append(query);
+                out.push_lit(" = (");
+            }
+            None => out.push_value_capture(name),
+        }
+    }
+
+    fn inside_claimed_frame(&self, span: SourceSpan, within: Option<SourceSpan>) -> bool {
+        self.replacements_covering(span.start, span.end)
+            .any(|frame| {
+                frame.claim
+                    && frame.source.start <= span.start
+                    && span.end <= frame.source.end
+                    && within.is_none_or(|within| {
+                        within.start <= frame.source.start && frame.source.end <= within.end
+                    })
+                    && !frame
+                        .anchor
+                        .is_some_and(|expr| self.active_structured_exprs.contains(expr))
+            })
+    }
+
+    fn capture_form(&self, mode: EvaluationInputMode) -> (String, &'static str) {
+        match mode {
+            EvaluationInputMode::SpreadElement => {
+                self.used_spread.set(true);
+                (format!("{}(", self.spread_name), ")")
+            }
+            EvaluationInputMode::ObjectSpread => ("{ ...".to_owned(), " }"),
+            EvaluationInputMode::TemplateSubstitution => ("`${".to_owned(), "}`"),
+            _ => (String::new(), ""),
+        }
     }
 }

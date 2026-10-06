@@ -1,0 +1,148 @@
+=== aCalleeReadAtTheCallIsNotCaptured.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function get(): V { return V.A(3); }
+>get : function get(): V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+export function direct() {
+>direct : function direct(): any
+  const secret = "local";
+>secret : const secret: "local"
+  return eval(match (get()) { A => "typeof secret", B => "0" });
+>eval : function eval(x: string): any
+>get : function get(): V
+class Base {
+>Base : class Base
+  constructor(public n: number) {}
+>n : (property) Base.n: number
+  m(x: number) { return x * 10; }
+>m : (method) Base.m(x: number): number
+>x : (parameter) x: number
+>x : (parameter) x: number
+class Derived extends Base {
+>Derived : class Derived
+>Base : class Base
+  constructor(v: V) { super(match (v) { A(n) => n, B => 0 }); }
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+  m(x: number) { return x; }
+>m : (method) Derived.m(x: number): number
+>x : (parameter) x: number
+>x : (parameter) x: number
+  piped(v: V) { return match (v) { A(n) => n, B => 0 } |> super.m; }
+>piped : (method) Derived.piped(v: V): number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+>m : (method) Base.m(x: number): number
+  named(v: V) { return super.m(match (v) { A(n) => n, B => 0 }); }
+>named : (method) Derived.named(v: V): number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>m : (method) Base.m(x: number): number
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+  computed(v: V) { return super["m"](match (v) { A(n) => n, B => 0 }); }
+>computed : (method) Derived.computed(v: V): number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+const d = new Derived(V.A(4));
+>d : const d: Derived
+>Derived : constructor Derived(v: V): Derived
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+console.log(direct());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>direct : function direct(): any
+console.log(d.n, d.piped(V.A(2)), d.named(V.A(3)), d.computed(V.B));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>d : const d: Derived
+>n : (property) Base.n: number
+>d : const d: Derived
+>piped : (method) Derived.piped(v: V): number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>d : const d: Derived
+>named : (method) Derived.named(v: V): number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>d : const d: Derived
+>computed : (method) Derived.computed(v: V): number
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+

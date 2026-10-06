@@ -102,9 +102,9 @@ fn literal_position_chain(
         if *parent != target {
             return false;
         }
-        let Some((position, _)) = positions
+        let Some((position, ..)) = positions
             .iter()
-            .find(|(span, _)| projected_contains(*span, value))
+            .find(|(span, ..)| projected_contains(*span, value))
         else {
             return false;
         };
@@ -144,7 +144,7 @@ pub(super) fn protocol_step(
         } => {
             let Some(position) = positions
                 .iter()
-                .position(|(span, _)| projected_contains(*span, value))
+                .position(|(span, ..)| projected_contains(*span, value))
             else {
                 return Ok(None);
             };
@@ -156,15 +156,10 @@ pub(super) fn protocol_step(
                 OrderedEvaluationKind::Sequence => EagerPosition::SequenceElement(index),
                 OrderedEvaluationKind::Unary => EagerPosition::UnaryOperand,
             });
-            let mode = if matches!(kind, OrderedEvaluationKind::Sequence) {
-                EvaluationInputMode::Discarded
-            } else {
-                EvaluationInputMode::Value
-            };
             let inputs = positions[..position]
                 .iter()
                 .copied()
-                .map(|(span, effects)| (span, mode, None, effects))
+                .map(|(span, effects, mode)| (span, mode, None, effects))
                 .collect();
             (*parent, operation, inputs)
         }
@@ -365,9 +360,18 @@ pub(super) fn protocol_step(
                 .iter()
                 .copied()
                 .map(|callee| (callee, *callee_mode, *callee_reference, Effects::ANY))
-                .chain(arguments[..position].iter().map(|(argument, _, effects)| {
-                    (*argument, EvaluationInputMode::Value, None, *effects)
-                }))
+                .chain(
+                    arguments[..position]
+                        .iter()
+                        .map(|(argument, spread, effects)| {
+                            let mode = if *spread {
+                                EvaluationInputMode::SpreadElement
+                            } else {
+                                EvaluationInputMode::Value
+                            };
+                            (*argument, mode, None, *effects)
+                        }),
+                )
                 .collect();
             (*parent, operation, inputs)
         }
@@ -412,9 +416,18 @@ pub(super) fn protocol_step(
             let index =
                 u32::try_from(position).map_err(|_| ProgramSyntaxError::NodeCountOverflow)?;
             let inputs = std::iter::once((*callee, EvaluationInputMode::Value, None, Effects::ANY))
-                .chain(arguments[..position].iter().map(|(argument, _, effects)| {
-                    (*argument, EvaluationInputMode::Value, None, *effects)
-                }))
+                .chain(
+                    arguments[..position]
+                        .iter()
+                        .map(|(argument, spread, effects)| {
+                            let mode = if *spread {
+                                EvaluationInputMode::SpreadElement
+                            } else {
+                                EvaluationInputMode::Value
+                            };
+                            (*argument, mode, None, *effects)
+                        }),
+                )
                 .collect();
             (
                 *parent,
@@ -478,7 +491,12 @@ pub(super) fn protocol_step(
                 .iter()
                 .copied()
                 .map(|(expression, effects)| {
-                    (expression, EvaluationInputMode::Value, None, effects)
+                    (
+                        expression,
+                        EvaluationInputMode::TemplateSubstitution,
+                        None,
+                        effects,
+                    )
                 })
                 .collect();
             (
@@ -760,6 +778,22 @@ pub(super) fn simple_copiable(expression: &swc_ecma_ast::Expr) -> bool {
         peel_parens(expression),
         swc_ecma_ast::Expr::Ident(_) | swc_ecma_ast::Expr::This(_)
     )
+}
+
+pub(super) fn read_at_call(callee: &swc_ecma_ast::Callee) -> bool {
+    match callee {
+        swc_ecma_ast::Callee::Super(_) | swc_ecma_ast::Callee::Import(_) => true,
+        swc_ecma_ast::Callee::Expr(expression) => match peel_parens(expression) {
+            swc_ecma_ast::Expr::Ident(ident) => &*ident.sym == "eval",
+            swc_ecma_ast::Expr::SuperProp(member) => match &member.prop {
+                swc_ecma_ast::SuperProp::Ident(_) => true,
+                swc_ecma_ast::SuperProp::Computed(computed) => {
+                    super::simple_copiable(&computed.expr)
+                }
+            },
+            _ => false,
+        },
+    }
 }
 
 fn peel_parens(expression: &swc_ecma_ast::Expr) -> &swc_ecma_ast::Expr {

@@ -81,6 +81,9 @@ pub(super) fn resolve_schedule_steps(
                                     EvaluationInputMode::Value
                                         | EvaluationInputMode::JsxChildValue
                                         | EvaluationInputMode::Discarded
+                                        | EvaluationInputMode::SpreadElement
+                                        | EvaluationInputMode::ObjectSpread
+                                        | EvaluationInputMode::TemplateSubstitution
                                 ) && input.effects.is_inert()
                                     && !elision.tt_spans.iter().any(|span| {
                                         input.source.start <= span.start

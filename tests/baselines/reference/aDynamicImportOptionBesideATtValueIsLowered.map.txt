@@ -1,0 +1,8 @@
+//// [main.tt] 6 mapping(s)
+1:19 -> 25:3 len 54  "\nconst v = V.A as V;\nexport async function load("...
+4:3 -> 37:3 len 31  "return await import(\"./other\", "
+4:41 -> 30:19 len 1  "v"
+4:51 -> 37:50 len 14  "({ with: {} })"
+4:72 -> 37:67 len 9  "undefined"
+4:83 -> 37:77 len 5  ");\n}\n"
+

@@ -1,0 +1,25 @@
+=== aPossiblyUndefinedTtValueIsReportedAsAnExpression.tt ===
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+export function f(v: V) {
+>f : function f(v: V): boolean
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+  return "n" in match (v) { A => v, B => {} };
+>v : (parameter) v: V
+>v : (parameter) v: V
+

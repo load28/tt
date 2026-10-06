@@ -1,0 +1,21 @@
+// @run: aCalleeReadAtTheCallIsNotCaptured.tt
+variant V { A(n: number), B }
+function get(): V { return V.A(3); }
+export function direct() {
+  const secret = "local";
+  return eval(match (get()) { A => "typeof secret", B => "0" });
+}
+class Base {
+  constructor(public n: number) {}
+  m(x: number) { return x * 10; }
+}
+class Derived extends Base {
+  constructor(v: V) { super(match (v) { A(n) => n, B => 0 }); }
+  m(x: number) { return x; }
+  piped(v: V) { return match (v) { A(n) => n, B => 0 } |> super.m; }
+  named(v: V) { return super.m(match (v) { A(n) => n, B => 0 }); }
+  computed(v: V) { return super["m"](match (v) { A(n) => n, B => 0 }); }
+}
+const d = new Derived(V.A(4));
+console.log(direct());
+console.log(d.n, d.piped(V.A(2)), d.named(V.A(3)), d.computed(V.B));

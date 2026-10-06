@@ -2,6 +2,8 @@
 
 use super::*;
 
+const STATEMENT_TAG_PLACEHOLDER: &str = "Tag";
+
 impl Project {
     pub(super) fn complete_at(
         &mut self,
@@ -156,17 +158,31 @@ impl Project {
                 covered,
                 literals,
                 position: slot,
+                statement,
             }) => {
                 let at =
                     prefix.map_or_else(|| source_byte(&doc.source, position), |(start, _)| start);
-                let source = match prefix {
-                    Some((start, end)) => format!("{}{}", &doc.source[..start], &doc.source[end..]),
-                    None => doc.source.clone(),
+                let source = match (prefix, statement) {
+                    (Some(_), true) => doc.source.clone(),
+                    (None, true) => format!(
+                        "{}{STATEMENT_TAG_PLACEHOLDER}{}",
+                        &doc.source[..at],
+                        &doc.source[at..]
+                    ),
+                    (Some((start, end)), false) => {
+                        format!("{}{}", &doc.source[..start], &doc.source[end..])
+                    }
+                    (None, false) => doc.source.clone(),
                 };
                 match self.discriminant_candidates(&doc, &path, &source, at, slot, family)? {
-                    Some((family, candidates)) => {
-                        arm_candidates(question.items, family, candidates, &covered, &literals)
-                    }
+                    Some((family, candidates)) => arm_candidates(
+                        question.items,
+                        family,
+                        candidates,
+                        &covered,
+                        &literals,
+                        !statement,
+                    ),
                     None => question.items,
                 }
             }

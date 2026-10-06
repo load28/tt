@@ -1,0 +1,11 @@
+// @completions: ifLet, ifLetEmpty, letElse, orLetElse
+variant Shape { Circle(radius: number), Point }
+variant Opt<T> { Has(item: T), Nope }
+declare const o: Opt<Shape>;
+export function f() {
+  if let Ha/*ifLet*/(item) = o { }
+  if let /*ifLetEmpty*/(item) = o { }
+  const Ha/*letElse*/(item) = o else { return; };
+  const Has(item: a) | /*orLetElse*/(item: a) = o else { return; };
+  return a;
+}

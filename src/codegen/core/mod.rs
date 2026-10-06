@@ -477,6 +477,7 @@ pub(crate) fn emit_with_map<'a>(
         expression_boundary_name: target.expression_boundary_name,
         match_raise_name: target.match_raise_name,
         match_show_name: target.match_show_name,
+        spread_name: target.spread_name,
         host_error: target.host_error,
         host_json: target.host_json,
         host_string: target.host_string,
@@ -502,6 +503,7 @@ pub(crate) fn emit_with_map<'a>(
         ambient_items: target.ambient_items,
         used_match_raise: Cell::new(false),
         used_match_show: Cell::new(false),
+        used_spread: Cell::new(false),
         used_host_error: Cell::new(false),
         conditional_region_depth: Cell::new(0),
         active_structured_exprs: ActiveExprStack::default(),
@@ -564,6 +566,12 @@ pub(crate) fn emit_with_map<'a>(
                 emitter.match_show_name
             ));
         }
+        if emitter.used_spread.get() {
+            prelude.push(format!(
+                "var {}: {{\n  <T extends readonly unknown[]>(values: T): [...T];\n  <T>(values: Iterable<T>): T[];\n}} = function (values: Iterable<unknown>) {{\n  return [...values];\n}};\n",
+                emitter.spread_name
+            ));
+        }
         if emitter.used_expression_boundary.get() {
             prelude.push(format!(
                 "var {}: <T>(run: () => T) => T = function (run) {{ return run(); }};\n",
@@ -606,6 +614,12 @@ pub(crate) fn emit_with_map<'a>(
             prelude.push(format!(
                 "function {}(value: unknown): string {body}\n",
                 emitter.match_show_name
+            ));
+        }
+        if emitter.used_spread.get() {
+            let name = &emitter.spread_name;
+            prelude.push(format!(
+                "function {name}<T extends readonly unknown[]>(values: T): [...T];\nfunction {name}<T>(values: Iterable<T>): T[];\nfunction {name}(values: Iterable<unknown>) {{\n  return [...values];\n}}\n"
             ));
         }
         if emitter.used_expression_boundary.get() {

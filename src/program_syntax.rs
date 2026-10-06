@@ -324,6 +324,10 @@ pub(crate) enum EvaluationInputMode {
     /// removes it, with its comma, where it was written.
     Discarded,
     LogicalAssignmentTarget,
+    ShorthandProperty,
+    SpreadElement,
+    ObjectSpread,
+    TemplateSubstitution,
 }
 
 /// What evaluating one host expression may observably do
@@ -479,6 +483,31 @@ pub(crate) fn source_expression_effects(
         Ok(_) | Err(_) => return Effects::ANY,
     };
     expression_effects(&expression)
+}
+
+pub(crate) fn source_entity_name(text: &str, source_kind: crate::SourceKind) -> bool {
+    if crate::lexer::host_syntax_error(text, source_kind).is_some() {
+        return false;
+    }
+    let input = HostInput::new(text);
+    let mut parser = input.parser(source_kind);
+    let expression = match parser.parse_expr() {
+        Ok(expression) if parser.take_errors().is_empty() => expression,
+        Ok(_) | Err(_) => return false,
+    };
+    input.byte(expression.span().lo) == 0
+        && input.byte(expression.span().hi) == text.len()
+        && entity_name(&expression)
+}
+
+fn entity_name(expression: &swc_ecma_ast::Expr) -> bool {
+    match expression {
+        swc_ecma_ast::Expr::Ident(_) => true,
+        swc_ecma_ast::Expr::Member(member) => {
+            matches!(member.prop, swc_ecma_ast::MemberProp::Ident(_)) && entity_name(&member.obj)
+        }
+        _ => false,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

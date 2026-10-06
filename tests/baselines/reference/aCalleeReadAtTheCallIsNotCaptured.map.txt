@@ -1,0 +1,35 @@
+//// [aCalleeReadAtTheCallIsNotCaptured.tt] 33 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 93  "\nfunction get(): V { return V.A(3); }\nexport fun"...
+5:3 -> 38:3 len 12  "return eval("
+5:22 -> 31:19 len 5  "get()"
+5:36 -> 38:31 len 15  "\"typeof secret\""
+5:58 -> 38:49 len 3  "\"0\""
+5:63 -> 38:53 len 140  ");\n}\nclass Base {\n  constructor(public n: number"...
+12:23 -> 63:3 len 6  "super("
+12:36 -> 47:19 len 1  "v"
+12:43 -> 50:17 len 1  "n"
+12:49 -> 51:18 len 1  "n"
+12:57 -> 55:18 len 1  "0"
+12:60 -> 63:15 len 50  "); }\n  m(x: number) { return x; }\n  piped(v: V) "...
+14:17 -> 88:3 len 7  "return "
+14:31 -> 69:21 len 1  "v"
+14:38 -> 72:19 len 1  "n"
+14:44 -> 73:20 len 1  "n"
+14:52 -> 77:20 len 1  "0"
+14:59 -> 85:14 len 7  "super.m"
+14:66 -> 88:16 len 20  "; }\n  named(v: V) { "
+15:17 -> 107:3 len 15  "return super.m("
+15:39 -> 91:19 len 1  "v"
+15:46 -> 94:17 len 1  "n"
+15:52 -> 95:18 len 1  "n"
+15:60 -> 99:18 len 1  "0"
+15:63 -> 107:24 len 24  "); }\n  computed(v: V) { "
+16:20 -> 126:3 len 18  "return super[\"m\"]("
+16:45 -> 110:19 len 1  "v"
+16:52 -> 113:17 len 1  "n"
+16:58 -> 114:18 len 1  "n"
+16:66 -> 118:18 len 1  "0"
+16:69 -> 126:27 len 130  "); }\n}\nconst d = new Derived(V.A(4));\nconsole.lo"...
+

@@ -184,9 +184,9 @@ pub(super) fn declarations(path: &Path, source: &str, texts: Texts<'_>) -> TtDec
         });
     }
 
-    let mut sites = Vec::new();
+    let mut sites = Sites::default();
     collect_matches(&program, &mut sites);
-    let mut matches: Vec<TtMatchSite> = sites.into_iter().map(|(site, _)| site).collect();
+    let mut matches: Vec<TtMatchSite> = sites.matches.into_iter().map(|(site, _)| site).collect();
     matches.sort_by_key(|m| m.keyword);
 
     TtDeclarations { variants, matches }
@@ -199,16 +199,32 @@ pub(super) fn scrutinee_at(
     position: Option<usize>,
 ) -> Option<(usize, usize)> {
     let program = crate::parser::parse_with_kind(source, source_kind);
-    let mut sites = Vec::new();
+    let mut sites = Sites::default();
     collect_matches(&program, &mut sites);
-    let (_, spans) = sites
+    let arm = sites
+        .matches
         .into_iter()
         .filter(|(site, _)| site.body_open < offset && offset <= site.body_close)
-        .max_by_key(|(site, _)| site.body_open)?;
-    let span = match position {
-        Some(position) if spans.len() > 1 => *spans.get(position)?,
-        None if spans.len() == 1 => spans[0],
-        _ => return None,
+        .max_by_key(|(site, _)| site.body_open);
+    let single = sites
+        .singles
+        .into_iter()
+        .filter(|(pattern, subject)| *pattern <= offset && offset < subject.start)
+        .max_by_key(|(pattern, _)| *pattern);
+    let innermost_single = single.filter(|(pattern, _)| {
+        position.is_none()
+            && arm
+                .as_ref()
+                .is_none_or(|(site, _)| site.body_open < *pattern)
+    });
+    let span = match (arm, innermost_single) {
+        (_, Some((_, subject))) => subject,
+        (Some((_, spans)), _) => match position {
+            Some(position) if spans.len() > 1 => *spans.get(position)?,
+            None if spans.len() == 1 => spans[0],
+            _ => return None,
+        },
+        (None, _) => return None,
     };
     let text = &source[span.start..span.end];
     let start = span.start
@@ -224,25 +240,25 @@ pub(super) fn scrutinee_at(
     (start < end).then_some((start, end))
 }
 
+#[derive(Default)]
+struct Sites {
+    matches: Vec<(TtMatchSite, Vec<crate::ast::Span>)>,
+    singles: Vec<(usize, crate::ast::Span)>,
+}
+
 /// Every `match` of a program, nested positions included.
-fn collect_matches(
-    program: &crate::ast::Program,
-    out: &mut Vec<(TtMatchSite, Vec<crate::ast::Span>)>,
-) {
+fn collect_matches(program: &crate::ast::Program, out: &mut Sites) {
     crate::stack::grow(|| collect_matches_grown(program, out));
 }
 
-fn collect_matches_grown(
-    program: &crate::ast::Program,
-    out: &mut Vec<(TtMatchSite, Vec<crate::ast::Span>)>,
-) {
+fn collect_matches_grown(program: &crate::ast::Program, out: &mut Sites) {
     use crate::ast::{IfLetElse, ResultItem, Segment, TemplateChunk};
     for segment in &program.segments {
         match segment {
             Segment::Verbatim(_) | Segment::TtImport(_) | Segment::ValModifier(_) => {}
             Segment::Variant(_) => {}
             Segment::Match(expr) => {
-                out.push((
+                out.matches.push((
                     TtMatchSite {
                         keyword: expr.keyword_off,
                         body_open: expr.body_open,
@@ -259,7 +275,7 @@ fn collect_matches_grown(
                 }
             }
             Segment::TupleMatch(expr) => {
-                out.push((
+                out.matches.push((
                     TtMatchSite {
                         keyword: expr.keyword_off,
                         body_open: expr.body_open,
@@ -280,12 +296,18 @@ fn collect_matches_grown(
             Segment::Try(stmt) => collect_matches(&stmt.expr, out),
             Segment::TryExpr(expr) => collect_matches(&expr.expr, out),
             Segment::LetElse(stmt) => {
+                if let Some(first) = stmt.alternatives.first() {
+                    out.singles.push((first.tag_off, stmt.expr.span));
+                }
                 collect_matches(&stmt.expr, out);
                 collect_matches(&stmt.else_body, out);
             }
             Segment::IfLet(stmt) => {
                 let mut current = Some(stmt);
                 while let Some(stmt) = current {
+                    if let Some(first) = stmt.alternatives.first() {
+                        out.singles.push((first.tag_off, stmt.expr.span));
+                    }
                     collect_matches(&stmt.expr, out);
                     collect_matches(&stmt.body, out);
                     match &stmt.else_part {

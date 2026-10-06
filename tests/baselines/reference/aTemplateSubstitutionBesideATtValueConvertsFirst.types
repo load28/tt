@@ -1,0 +1,45 @@
+=== aTemplateSubstitutionBesideATtValueConvertsFirst.tt ===
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const arr = [1, 2];
+>arr : const arr: number[]
+function get(): V { arr.push(3); return V.A; }
+>get : function get(): V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>arr : const arr: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+export function f() {
+>f : function f(): string
+  return `${arr}|${match (get()) { A => "a", B => "b" }}`;
+>arr : const arr: number[]
+>get : function get(): V
+console.log(f());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : function f(): string
+

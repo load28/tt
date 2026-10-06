@@ -29,7 +29,7 @@ use declarations::*;
 pub(crate) use declarations::{externs_of, match_declarations};
 pub(crate) use report::report;
 use translate::*;
-pub(crate) use translate::{name_types, translate, translation_class};
+pub(crate) use translate::{name_types, translate, translation_class, unnamed_generated_operand};
 
 /// One reported problem, at a position in a file the user can open.
 ///

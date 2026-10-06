@@ -66,6 +66,23 @@ pub(crate) fn translate(
     }
 }
 
+pub(crate) fn unnamed_generated_operand(
+    code: u32,
+    message: &str,
+    generated: &std::collections::HashSet<String>,
+) -> Option<(u32, &'static str)> {
+    let unnamed = match code {
+        18047 => (2531, "Object is possibly 'null'."),
+        18048 => (2532, "Object is possibly 'undefined'."),
+        18049 => (2533, "Object is possibly 'null' or 'undefined'."),
+        _ => return None,
+    };
+    let named = message.strip_prefix('\'')?;
+    let named = &named[..named.find('\'')?];
+    let root = named.split('.').next()?;
+    generated.contains(root).then_some(unnamed)
+}
+
 /// Stable meaning shared by CLI and editor translation deduplication.
 /// TypeScript may emit several incidental diagnostics for one tt mistake;
 /// the class identifies the single tt-level explanation they share.

@@ -1,0 +1,110 @@
+=== aCompletedCallInAConditionalResultBlockRunsOnce.tt ===
+const calls: unknown[] = [];
+>calls : const calls: unknown[]
+const g = (n: number) => { calls.push(n); return n * 10; };
+>g : const g: (n: number) => number
+>n : (parameter) n: number
+>calls : const calls: unknown[]
+>push : (method) Array<unknown>.push(...items: unknown[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+function r(n: number): TResult<number, string> { calls.push(n); return Result.Ok(n); }
+>r : function r(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>calls : const calls: unknown[]
+>push : (method) Array<unknown>.push(...items: unknown[]): number
+>n : (parameter) n: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+export function called(c: boolean, v: V) {
+>called : function called(c: boolean, v: V): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   } | null
+>c : (parameter) c: boolean
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return c ? result { const z = g(match (v) { A(n) => n, B => -1 }); return z + (try r(7)); } : null;
+>c : (parameter) c: boolean
+>z : const z: number
+>g : const g: (n: number) => number
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+>z : const z: number
+>r : function r(n: number): TResult<number, string>
+export function tried(c: boolean, v: V) {
+>tried : function tried(c: boolean, v: V): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   } | null
+>c : (parameter) c: boolean
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return c ? result { const z = try r(match (v) { A(n) => n, B => -1 }); return z + (try r(7)); } : null;
+>c : (parameter) c: boolean
+>z : const z: number
+>r : function r(n: number): TResult<number, string>
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+>z : const z: number
+>r : function r(n: number): TResult<number, string>
+console.log(JSON.stringify(called(true, V.B)), JSON.stringify(tried(true, V.A(2))), JSON.stringify(calls));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>called : function called(c: boolean, v: V): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   } | null
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>tried : function tried(c: boolean, v: V): Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   } | null
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>calls : const calls: unknown[]
+

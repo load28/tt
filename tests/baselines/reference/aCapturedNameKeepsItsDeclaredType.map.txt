@@ -1,0 +1,31 @@
+//// [aCapturedNameKeepsItsDeclaredType.tt] 29 mapping(s)
+1:18 -> 20:21 len 6  "number"
+1:18 -> 23:10 len 6  "number"
+1:30 -> 25:3 len 191  "\nfunction assertPos(n: number): asserts n {\n  if"...
+7:3 -> 31:37 len 9  "assertPos"
+7:20 -> 33:19 len 1  "v"
+7:27 -> 36:17 len 1  "n"
+7:33 -> 37:16 len 1  "n"
+7:41 -> 41:16 len 1  "1"
+7:46 -> 49:3 len 3  "\n  "
+8:27 -> 51:19 len 1  "v"
+8:34 -> 54:17 len 1  "n"
+8:40 -> 55:26 len 1  "n"
+8:48 -> 59:26 len 1  "1"
+8:53 -> 67:3 len 95  "\n  return \"asserted\";\n}\nexport function keyed(v:"...
+13:3 -> 91:3 len 13  "const d = { ["
+13:16 -> 73:31 len 3  "sym"
+13:19 -> 91:22 len 3  "]: "
+13:29 -> 75:19 len 1  "v"
+13:36 -> 78:17 len 1  "n"
+13:42 -> 79:18 len 1  "n"
+13:50 -> 83:18 len 1  "0"
+13:53 -> 91:31 len 6  " };\n  "
+14:3 -> 102:3 len 14  "const it = { ["
+14:17 -> 93:43 len 15  "Symbol.iterator"
+14:32 -> 102:23 len 3  "]: "
+14:42 -> 95:19 len 1  "v"
+14:52 -> 102:42 len 25  "function* () { yield 1; }"
+14:84 -> 102:70 len 25  "function* () { yield 2; }"
+14:111 -> 102:96 len 107  " };\n  return [d[sym], ...it];\n}\nconsole.log(asse"...
+

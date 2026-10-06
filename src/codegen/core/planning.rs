@@ -436,6 +436,7 @@ pub(super) struct TargetRewritePlan {
     pub(super) expression_boundary_name: String,
     pub(super) match_raise_name: String,
     pub(super) match_show_name: String,
+    pub(super) spread_name: String,
     pub(super) host_error: String,
     pub(super) host_json: String,
     pub(super) host_string: String,
@@ -804,6 +805,7 @@ impl TargetRewritePlan {
         source: &str,
         lowering: &LoweringPlan,
     ) -> Self {
+        let source_code = source;
         let for_initializer_propagations: Vec<_> = lowering
             .for_initializer_propagations()
             .map(|propagation| ForInitializerPropagationRewrite {
@@ -1471,7 +1473,13 @@ impl TargetRewritePlan {
                     jsx_child: *mode == EvaluationInputMode::JsxChildValue,
                     anchor: None,
                     claim: false,
-                    rewrite: None,
+                    rewrite: (*mode == EvaluationInputMode::ShorthandProperty).then(|| {
+                        format!(
+                            "{}: {}",
+                            &source_code[source.start..source.end],
+                            lowering.slot_name(*target)
+                        )
+                    }),
                 }],
                 PlannedEvaluationInput::Slot { .. } | PlannedEvaluationInput::Stable { .. } => {
                     Vec::new()
@@ -1640,14 +1648,37 @@ impl TargetRewritePlan {
             .flat_map(|owner| &owner.values)
             .filter(|value| value.capability == TargetCapability::StatementRegion)
             .map(|value| value.source)
+            .chain(lowering.statement_decision_sources().iter().copied())
             .collect();
         let structurally_nested_values: HashSet<_> = lowering
             .nested_values()
             .chain(lowering.structurally_owned_children())
             .collect();
+        let subject_values: HashSet<ExprId> = core
+            .bodies
+            .iter()
+            .flat_map(|body| &body.statements)
+            .filter_map(|statement| match statement {
+                Statement::Decision(decision) => Some(decision),
+                _ => None,
+            })
+            .flat_map(|decision| &decision.subjects)
+            .flat_map(|subject| {
+                std::iter::successors(Some(subject.value), |expr| {
+                    match &core.exprs[expr.index()] {
+                        Expr::Sequence(body) => match &core.bodies[body.index()].statements[..] {
+                            [Statement::Expr(value)] => Some(*value),
+                            _ => None,
+                        },
+                        _ => None,
+                    }
+                })
+            })
+            .collect();
         let nested_values = structurally_nested_values
             .iter()
             .copied()
+            .filter(|expr| !subject_values.contains(expr))
             .filter(|expr| {
                 // ResultRegion is an isolated expression boundary. Its own
                 // emitter delivers the result through that boundary, so
@@ -1690,6 +1721,7 @@ impl TargetRewritePlan {
             global_temps: lowering.global_temps().clone(),
             match_raise_name: lowering.match_raise_name().to_owned(),
             match_show_name: lowering.match_show_name().to_owned(),
+            spread_name: lowering.spread_name().to_owned(),
             host_error: lowering.host_global("Error"),
             host_json: lowering.host_global("JSON"),
             host_string: lowering.host_global("String"),

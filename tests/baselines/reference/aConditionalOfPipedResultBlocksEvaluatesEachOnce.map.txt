@@ -1,0 +1,13 @@
+//// [aConditionalOfPipedResultBlocksEvaluatesEachOnce.tt] 11 mapping(s)
+1:1 -> 2:1 len 239  "import type { TResult } from \"@tt/std\";\nconst L:"...
+6:3 -> 50:3 len 7  "return "
+6:38 -> 12:24 len 4  "r(5)"
+6:49 -> 18:16 len 1  "f"
+6:75 -> 26:26 len 4  "r(6)"
+6:86 -> 32:18 len 1  "f"
+6:91 -> 36:16 len 6  "\"none\""
+7:5 -> 40:12 len 4  "\"Ok\""
+7:13 -> 41:18 len 1  "1"
+8:10 -> 45:18 len 1  "0"
+9:4 -> 50:16 len 32  ";\n}\nconsole.log(F(), L.join());\n"
+

@@ -1,0 +1,12 @@
+//// [aTryAroundAPipelineInALogicalOperandLowersOnce.tt] 10 mapping(s)
+1:1 -> 2:1 len 270  "import * as Result from \"@tt/std/result\";\nimport"...
+6:3 -> 43:3 len 10  "const x = "
+6:20 -> 11:18 len 1  "c"
+6:30 -> 14:33 len 1  "r"
+6:31 -> 26:28 len 1  "("
+6:52 -> 17:26 len 4  "r(2)"
+6:63 -> 23:18 len 1  "f"
+6:64 -> 26:35 len 1  ")"
+6:75 -> 38:18 len 1  "0"
+6:78 -> 43:19 len 65  ";\n  return Result.Ok(x);\n}\nconsole.log(JSON.stri"...
+

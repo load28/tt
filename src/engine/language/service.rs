@@ -1577,6 +1577,7 @@ pub(super) fn arm_candidates(
     typed: Vec<Discriminant>,
     covered: &[String],
     literals: &[crate::ast::LiteralValue],
+    wildcard: bool,
 ) -> Vec<crate::engine::TtCompletion> {
     use crate::engine::TtCompletionKind;
     use crate::engine::completions::PatternFamily;
@@ -1611,7 +1612,9 @@ pub(super) fn arm_candidates(
         };
         out.push(item);
     }
-    out.push(crate::engine::completions::wildcard());
+    if wildcard {
+        out.push(crate::engine::completions::wildcard());
+    }
     out
 }
 

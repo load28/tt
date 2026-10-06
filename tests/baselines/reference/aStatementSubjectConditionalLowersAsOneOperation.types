@@ -1,0 +1,95 @@
+=== aStatementSubjectConditionalLowersAsOneOperation.tt ===
+const L: unknown[] = [];
+>L : const L: unknown[]
+function r(n: number): TResult<number, string> { L.push(n); return Result.Ok(n); }
+>r : function r(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>L : const L: unknown[]
+>push : (method) Array<unknown>.push(...items: unknown[]): number
+>n : (parameter) n: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+const wrap = (n: number) => ({ kind: "Some" as const, value: n });
+>wrap : const wrap: (n: number) => {
+>       kind: "Some";
+>       value: number;
+>   }
+>n : (parameter) n: number
+>kind : (property) kind: "Some"
+>const : type const = "Some"
+>value : (property) value: number
+>n : (parameter) n: number
+const none = { kind: "None" as const };
+>none : const none: {
+>       kind: "None";
+>   }
+>kind : (property) kind: "None"
+>const : type const = "None"
+const S = { kind: "Some" as const, value: 3 };
+>S : const S: {
+>       kind: "Some";
+>       value: number;
+>   }
+>kind : (property) kind: "Some"
+>const : type const = "Some"
+>value : (property) value: number
+export function letElse(c: boolean): TResult<number, string> {
+>letElse : function letElse(c: boolean): TResult<number, string>
+>c : (parameter) c: boolean
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const Some(value) = c ? wrap(try r(1)) : none else { return Result.Err("none"); };
+>value : const value: number
+>c : (parameter) c: boolean
+>wrap : const wrap: (n: number) => {
+>       kind: "Some";
+>       value: number;
+>   }
+>r : function r(n: number): TResult<number, string>
+>none : const none: {
+>       kind: "None";
+>   }
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+  return Result.Ok(value);
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>value : const value: number
+export function ifLet(n: number) {
+>ifLet : function ifLet(n: number): number
+>n : (parameter) n: number
+  if let Some(value) = match (log(n)) { _ => true } ? match (n) { _ => S } : S { return value; }
+>value : const value: number
+>log : function log<number>(x: number): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+>S : const S: {
+>       kind: "Some";
+>       value: number;
+>   }
+>S : const S: {
+>       kind: "Some";
+>       value: number;
+>   }
+>value : const value: number
+function log<T>(x: T): T { L.push(x); return x; }
+>log : function log<T>(x: T): T
+>T : (type parameter) T in log<T>(x: T): T
+>x : (parameter) x: T
+>T : (type parameter) T in log<T>(x: T): T
+>T : (type parameter) T in log<T>(x: T): T
+>L : const L: unknown[]
+>push : (method) Array<unknown>.push(...items: unknown[]): number
+>x : (parameter) x: T
+>x : (parameter) x: T
+console.log(JSON.stringify(letElse(true)), JSON.stringify(letElse(false)), ifLet(4), L.join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>letElse : function letElse(c: boolean): TResult<number, string>
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>letElse : function letElse(c: boolean): TResult<number, string>
+>ifLet : function ifLet(n: number): number
+>L : const L: unknown[]
+>join : (method) Array<unknown>.join(separator?: string): string
+

@@ -626,3 +626,175 @@ fn a_values_storage_widens_only_fresh_literal_types() {
     let out = check(&dir);
     assert!(!out.contains("error"), "{out}");
 }
+
+#[cfg(target_os = "linux")]
+struct InteractiveServer {
+    child: std::process::Child,
+    lines: std::io::Lines<std::io::BufReader<std::process::ChildStdout>>,
+    next: u64,
+}
+
+#[cfg(target_os = "linux")]
+impl InteractiveServer {
+    fn start(dir: &Path) -> Self {
+        use std::io::BufRead;
+        let mut child = Command::new(env!("CARGO_BIN_EXE_ttc"))
+            .arg("--server")
+            .current_dir(dir)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .expect("server starts");
+        let stdout = child.stdout.take().expect("stdout piped");
+        Self {
+            child,
+            lines: std::io::BufReader::new(stdout).lines(),
+            next: 0,
+        }
+    }
+
+    fn ask(&mut self, method: &str, params: serde_json::Value) -> serde_json::Value {
+        use std::io::Write;
+        self.next += 1;
+        let request = serde_json::json!({ "id": self.next, "method": method, "params": params });
+        writeln!(self.child.stdin.as_mut().unwrap(), "{request}").unwrap();
+        let line = self
+            .lines
+            .next()
+            .expect("the server answers")
+            .expect("the answer is readable");
+        serde_json::from_str(&line).expect("JSON response")
+    }
+
+    fn descendants(&self) -> Vec<u32> {
+        let parents: Vec<(u32, u32)> = fs::read_dir("/proc")
+            .unwrap()
+            .filter_map(|entry| entry.ok()?.file_name().to_str()?.parse::<u32>().ok())
+            .filter_map(|pid| {
+                let stat = fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+                let after = &stat[stat.rfind(')')? + 2..];
+                Some((pid, after.split(' ').nth(1)?.parse().ok()?))
+            })
+            .collect();
+        let mut found = vec![self.child.id()];
+        let mut index = 0;
+        while index < found.len() {
+            let parent = found[index];
+            found.extend(
+                parents
+                    .iter()
+                    .filter(|(_, ppid)| *ppid == parent)
+                    .map(|(pid, _)| *pid),
+            );
+            index += 1;
+        }
+        found.split_off(1)
+    }
+
+    fn compilers(&self) -> Vec<u32> {
+        self.descendants()
+            .into_iter()
+            .filter(|pid| {
+                fs::read_to_string(format!("/proc/{pid}/comm"))
+                    .is_ok_and(|name| name.trim() != "node")
+            })
+            .collect()
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for InteractiveServer {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_typed_session_recovers_after_its_compiler_process_dies() {
+    require_tsgo!();
+    let source = "export const n: number = 1;\n";
+    let dir = project(&[("src/main.tt", source)]);
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut server = InteractiveServer::start(&dir);
+    let first = server.ask(
+        "typedCheck",
+        serde_json::json!({ "path": file, "text": source, "includeTypes": true }),
+    );
+    assert!(first["result"]["backendError"].is_null(), "{first}");
+    let compilers = server.compilers();
+    assert!(!compilers.is_empty(), "the session started a compiler");
+    for pid in compilers {
+        let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
+    }
+    let edited = "export const n: number = \"text\";\n";
+    let mut last = serde_json::Value::Null;
+    for _ in 0..2 {
+        server.ask(
+            "updateDocument",
+            serde_json::json!({ "path": file, "text": edited }),
+        );
+        last = server.ask(
+            "typedCheck",
+            serde_json::json!({ "path": file, "text": edited, "includeTypes": true }),
+        );
+    }
+    assert!(last["result"]["backendError"].is_null(), "{last}");
+    assert!(
+        last["result"]["diagnostics"]
+            .as_array()
+            .is_some_and(|diagnostics| diagnostics.iter().any(|d| d["code"] == "ts2322")),
+        "{last}"
+    );
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn a_typed_session_releases_the_snapshots_of_earlier_edits() {
+    require_tsgo!();
+    let dir = project(&[]);
+    write(
+        &dir,
+        "tsconfig.json",
+        r#"{ "compilerOptions": { "target": "es2022", "module": "preserve", "strict": true, "noEmit": true }, "include": ["src"] }"#,
+    );
+    write(&dir, "src/main.tt", "export const n: number = 0;\n");
+    let file = dir.join("src/main.tt").canonicalize().unwrap();
+    let mut server = InteractiveServer::start(&dir);
+    let resident = |server: &InteractiveServer| -> u64 {
+        server
+            .compilers()
+            .iter()
+            .filter_map(|pid| fs::read_to_string(format!("/proc/{pid}/status")).ok())
+            .filter_map(|status| {
+                status
+                    .lines()
+                    .find_map(|line| line.strip_prefix("VmRSS:"))
+                    .and_then(|kb| kb.trim().trim_end_matches("kB").trim().parse::<u64>().ok())
+            })
+            .sum()
+    };
+    let check = |server: &mut InteractiveServer, edit: usize| {
+        let text = format!("export const n: number = {edit};\n");
+        server.ask("updateDocument", serde_json::json!({ "path": file, "text": text }));
+        let answer = server.ask(
+            "typedCheck",
+            serde_json::json!({ "path": file, "text": text, "includeTypes": true }),
+        );
+        assert!(answer["result"]["backendError"].is_null(), "{answer}");
+    };
+    for edit in 0..5 {
+        check(&mut server, edit);
+    }
+    let settled = resident(&server);
+    for edit in 5..35 {
+        check(&mut server, edit);
+    }
+    let grown = resident(&server).saturating_sub(settled);
+    assert!(
+        grown < 300 * 1024,
+        "30 edits grew the compiler by {} MB",
+        grown / 1024
+    );
+}

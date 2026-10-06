@@ -440,6 +440,12 @@ async function main() {
 
   let opened = false;
   const openRoots = new Set();
+  const snapshots = [];
+  const updateSnapshot = (params) => {
+    const snapshot = api.updateSnapshot(params);
+    snapshots.push(snapshot);
+    return snapshot;
+  };
   try {
     while (true) {
       const line = readLine();
@@ -455,7 +461,12 @@ async function main() {
         } else if (job.configuredMappers) {
           answer = configuredMappers();
         } else {
-          answer = handle(job);
+          try {
+            answer = handle(job);
+          } catch (e) {
+            reconnect();
+            throw e;
+          }
         }
       } catch (e) {
         // The Rust boundary classifies this as an internal compiler error.
@@ -464,6 +475,13 @@ async function main() {
         answer = { error: e instanceof Error ? e.message : String(e) };
       }
       writeLine(JSON.stringify(answer));
+      try {
+        const latest = snapshots.pop();
+        for (const snapshot of snapshots.splice(0)) snapshot.dispose();
+        if (latest) snapshots.push(latest);
+      } catch {
+        reconnect();
+      }
     }
   } finally {
     api.close();
@@ -573,7 +591,10 @@ async function main() {
 
   /** Switches the arrangement: a fresh compiler, the project not yet open. */
   function reconnect() {
-    api.close();
+    snapshots.length = 0;
+    try {
+      api.close();
+    } catch {}
     links.clear();
     if (mapped) {
       const link = path.join(path.dirname(open.tsconfig), "node_modules", MAPPER_PACKAGE);
@@ -722,7 +743,7 @@ async function main() {
       : open.tsconfig
         ? { openProjects: [open.tsconfig] }
         : { openFiles: [...paths, ...(job.sources ?? [])] };
-    let snapshot = api.updateSnapshot(params);
+    let snapshot = updateSnapshot(params);
     let project = open.tsconfig
       ? snapshot.getProject(open.tsconfig)
       : paths.map((p) => snapshot.getDefaultProjectForFile(p)).find(Boolean);
@@ -747,7 +768,7 @@ async function main() {
     const opening = outside.filter((root) => !openRoots.has(root));
     const closing = [...openRoots].filter((root) => !outside.includes(root));
     if (opening.length > 0 || closing.length > 0) {
-      snapshot = api.updateSnapshot({ openFiles: opening, closeFiles: closing });
+      snapshot = updateSnapshot({ openFiles: opening, closeFiles: closing });
       for (const root of closing) openRoots.delete(root);
       for (const root of opening) openRoots.add(root);
       project = snapshot.getProject(open.tsconfig);

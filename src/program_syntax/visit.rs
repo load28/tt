@@ -549,6 +549,11 @@ impl VisitAstPath for ParentCollector {
                             &self.source_segments,
                         ),
                         expression_effects(&element.expr),
+                        if element.spread.is_some() {
+                            EvaluationInputMode::SpreadElement
+                        } else {
+                            EvaluationInputMode::Value
+                        },
                     )
                 })
                 .collect(),
@@ -644,6 +649,7 @@ impl VisitAstPath for ParentCollector {
                     (
                         projected_span(expression.span(), self.source_start),
                         expression_effects(expression),
+                        EvaluationInputMode::Discarded,
                     )
                 })
                 .collect(),
@@ -669,6 +675,7 @@ impl VisitAstPath for ParentCollector {
                     &self.source_segments,
                 ),
                 expression_effects(&node.arg),
+                EvaluationInputMode::Value,
             )],
             kind: OrderedEvaluationKind::Unary,
             spread_free: true,
@@ -779,23 +786,25 @@ impl VisitAstPath for ParentCollector {
                 .find(|kind| !matches!(kind, AstParentKind::Expr(fields::ExprField::Call)))
                 .is_some_and(|kind| matches!(kind, AstParentKind::ExprStmt(_))),
             parent: span,
-            callee: Some(projected_span(
-                match &node.callee {
-                    // A method is captured with the TypeScript wrappers
-                    // around it (`o.m!`, `(o.m as F)`), so the call binds
-                    // the method as its author typed it.
-                    swc_ecma_ast::Callee::Expr(expression)
-                        if callee_mode == EvaluationInputMode::MemberReference =>
-                    {
-                        expression.span()
-                    }
-                    swc_ecma_ast::Callee::Expr(expression) => reference_value_span(expression),
-                    swc_ecma_ast::Callee::Super(_) | swc_ecma_ast::Callee::Import(_) => {
-                        node.callee.span()
-                    }
-                },
-                self.source_start,
-            )),
+            callee: (!read_at_call(&node.callee)).then(|| {
+                projected_span(
+                    match &node.callee {
+                        // A method is captured with the TypeScript wrappers
+                        // around it (`o.m!`, `(o.m as F)`), so the call binds
+                        // the method as its author typed it.
+                        swc_ecma_ast::Callee::Expr(expression)
+                            if callee_mode == EvaluationInputMode::MemberReference =>
+                        {
+                            expression.span()
+                        }
+                        swc_ecma_ast::Callee::Expr(expression) => reference_value_span(expression),
+                        swc_ecma_ast::Callee::Super(_) | swc_ecma_ast::Callee::Import(_) => {
+                            node.callee.span()
+                        }
+                    },
+                    self.source_start,
+                )
+            }),
             callee_mode,
             callee_reference: (callee_mode == EvaluationInputMode::MemberReference).then(|| {
                 projected_member_reference(callee_parts, self.source_start, &self.source_segments)
@@ -1201,7 +1210,12 @@ impl VisitAstPath for ParentCollector {
                     .iter()
                     .map(|expression| {
                         (
-                            projected_span(expression.span(), self.source_start),
+                            operand_span(
+                                expression,
+                                self.source_start,
+                                &self.placeholders,
+                                &self.source_segments,
+                            ),
                             expression_effects(expression),
                         )
                     })
@@ -1212,6 +1226,13 @@ impl VisitAstPath for ParentCollector {
     }
 
     fn visit_tpl<'ast: 'r, 'r>(&mut self, node: &'ast Tpl, path: &mut AstNodePath<'r>) {
+        if matches!(
+            path.kinds().last(),
+            Some(AstParentKind::TaggedTpl(fields::TaggedTplField::Tpl))
+        ) {
+            <Tpl as VisitWithAstPath<Self>>::visit_children_with_ast_path(node, self, path);
+            return;
+        }
         self.protocol_frames.push(ProjectedProtocolFrame::Template {
             parent: projected_span(node.span, self.source_start),
             expressions: node

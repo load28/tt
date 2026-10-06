@@ -1,0 +1,33 @@
+=== aConditionalOfPipedResultBlocksEvaluatesEachOnce.tt ===
+const L: string[] = [];
+>L : const L: string[]
+function r(n: number): TResult<number, string> { L.push("r" + n); return { kind: "Ok", value: n }; }
+>r : function r(n: number): TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+>L : const L: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : (parameter) n: number
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+>n : (parameter) n: number
+const f = (x: TResult<number, string>) => x.kind;
+>f : const f: (x: TResult<number, string>) => "Err" | "Ok"
+>x : (parameter) x: TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+>x : (parameter) x: TResult<number, string>
+>kind : (property) kind: "Err" | "Ok"
+export function F() {
+>F : function F(): number
+  return match ((result { return try r(5); } |> f) ? (result { return try r(6); } |> f) : "none") {
+>r : function r(n: number): TResult<number, string>
+>f : const f: (x: TResult<number, string>) => "Err" | "Ok"
+>r : function r(n: number): TResult<number, string>
+>f : const f: (x: TResult<number, string>) => "Err" | "Ok"
+console.log(F(), L.join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>F : function F(): number
+>L : const L: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

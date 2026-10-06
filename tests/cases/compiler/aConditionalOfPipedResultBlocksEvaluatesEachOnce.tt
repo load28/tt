@@ -1,0 +1,12 @@
+// @run: aConditionalOfPipedResultBlocksEvaluatesEachOnce.tt
+import type { TResult } from "@tt/std";
+const L: string[] = [];
+function r(n: number): TResult<number, string> { L.push("r" + n); return { kind: "Ok", value: n }; }
+const f = (x: TResult<number, string>) => x.kind;
+export function F() {
+  return match ((result { return try r(5); } |> f) ? (result { return try r(6); } |> f) : "none") {
+    "Ok" => 1,
+    _ => 0,
+  };
+}
+console.log(F(), L.join());

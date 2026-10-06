@@ -231,6 +231,22 @@ pub(crate) fn report(
         if projection::diagnostic_intersects_tt_error(file, diagnostic) {
             continue;
         }
+        let unnamed;
+        let diagnostic = match unnamed_generated_operand(
+            diagnostic.code,
+            &diagnostic.message,
+            &file.emit.generated_names,
+        ) {
+            Some((code, message)) => {
+                unnamed = TsDiagnostic {
+                    code,
+                    message: message.to_string(),
+                    ..diagnostic.clone()
+                };
+                &unnamed
+            }
+            None => diagnostic,
+        };
         let owned_by_typescript = typescript_owned(file, diagnostic);
         let (diagnostic_start, diagnostic_end) = if owned_by_typescript {
             (diagnostic.start, diagnostic.end)

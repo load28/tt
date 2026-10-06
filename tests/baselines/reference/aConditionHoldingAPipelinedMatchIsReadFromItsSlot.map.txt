@@ -1,0 +1,14 @@
+//// [aConditionHoldingAPipelinedMatchIsReadFromItsSlot.tt] 12 mapping(s)
+1:1 -> 1:1 len 135  "const L: unknown[] = [];\nfunction log<T>(x: T): "...
+5:3 -> 48:3 len 7  "return "
+5:25 -> 11:23 len 6  "log(1)"
+5:35 -> 13:16 len 1  "1"
+5:40 -> 14:22 len 1  "1"
+5:48 -> 18:22 len 1  "2"
+5:55 -> 23:16 len 1  "h"
+5:67 -> 29:23 len 6  "log(2)"
+5:82 -> 32:22 len 1  "1"
+5:88 -> 38:16 len 1  "0"
+5:98 -> 43:18 len 4  "\"ok\""
+5:104 -> 48:16 len 40  ";\n}\nconsole.log(scrutinee(), L.join());\n"
+

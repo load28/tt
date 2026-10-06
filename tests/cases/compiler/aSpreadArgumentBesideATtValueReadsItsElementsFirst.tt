@@ -1,0 +1,14 @@
+// @run: aSpreadArgumentBesideATtValueReadsItsElementsFirst.tt
+variant V { A, B }
+const arr: number[] = [1, 2];
+function get(): V { arr.push(7); return V.A; }
+const f = (...xs: number[]) => xs.join(",");
+class C { xs: number[]; constructor(...xs: number[]) { this.xs = xs; } }
+const o: { m?: (...xs: number[]) => string } = { m: f };
+const t: [number, string] = [1, "a"];
+const g = (n: number, s: string, k: number) => `${n}${s}${k}`;
+console.log(f(...arr, match (get()) { A => 1, B => 0 }));
+console.log(new C(...arr, match (get()) { A => 1, B => 0 }).xs.join(","));
+console.log(o.m?.(...arr, match (get()) { A => 1, B => 0 }));
+console.log(g(...t, match (get()) { A => 1, B => 0 }));
+console.log(`${arr}|${t}|${match (get()) { A => "a", B => "b" }}`);

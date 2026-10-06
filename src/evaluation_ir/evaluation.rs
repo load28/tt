@@ -209,6 +209,23 @@ impl EvaluationFile {
                 statement_decisions.entry(owner).or_default().push(source);
             }
         }
+        let nested_propagation_sources: Vec<SourceSpan> = self
+            .regions
+            .iter()
+            .filter_map(|region| match (region.root, &region.placement) {
+                (
+                    Some(CoreRoot::Expr(expr)),
+                    RegionPlacement::Nested {
+                        source: Some(source),
+                        ..
+                    },
+                ) if matches!(core.exprs[expr.index()], Expr::Propagate(_)) => Some(*source),
+                _ => None,
+            })
+            .collect();
+        let mut statement_decision_sources: Vec<SourceSpan> =
+            statement_decisions.values().flatten().copied().collect();
+        statement_decision_sources.sort_unstable_by_key(|span| (span.start, span.end));
         let mut next_slot = 0u32;
         let mut occupied_names = self.occupied_names.clone();
         let mut slot_names = Vec::new();
@@ -338,6 +355,7 @@ impl EvaluationFile {
                 let Some(outer) = outers
                     .iter()
                     .copied()
+                    .chain(nested_propagation_sources.iter().copied())
                     .filter(|outer| {
                         *outer != child.source
                             && outer.start <= child.source.start
@@ -532,6 +550,11 @@ impl EvaluationFile {
             let planned_boundary = loop {
                 if let Some(CoreRoot::Expr(parent_expr)) = ancestor.root
                     && let Some(source) = planned_sources.get(&parent_expr)
+                {
+                    break Some(*source);
+                }
+                if let (Some(CoreRoot::Decision(_)), RegionPlacement::Host { source, .. }) =
+                    (ancestor.root, &ancestor.placement)
                 {
                     break Some(*source);
                 }
@@ -872,6 +895,7 @@ impl EvaluationFile {
         let expression_boundary_name = allocate_generated_name("$tt_expr", &mut occupied_names)?;
         let match_raise_name = allocate_generated_name("$tt_raise", &mut occupied_names)?;
         let match_show_name = allocate_generated_name("$tt_show", &mut occupied_names)?;
+        let spread_name = allocate_generated_name("$tt_spread", &mut occupied_names)?;
         let global_bindings: HashMap<SourceSpan, &str> = self
             .globals
             .iter()
@@ -1071,6 +1095,8 @@ impl EvaluationFile {
             )),
             match_raise_name,
             match_show_name,
+            spread_name,
+            statement_decision_sources,
             match_subject_names,
             owners: rewrites,
             for_initializer_propagations,

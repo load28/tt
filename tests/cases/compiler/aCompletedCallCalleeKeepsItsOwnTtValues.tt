@@ -1,0 +1,8 @@
+// @run: aCompletedCallCalleeKeepsItsOwnTtValues.tt
+const h = (x: number) => x + 1;
+function f2(...a: unknown[]) { return a; }
+variant V { A(n: number), B }
+export function F(v: V) {
+  return f2(((w: number) => w |> h)(match (v) { A(n) => n, B => -1 }), match (v) { A => 1, B => 2 });
+}
+console.log(F(V.A(1)));

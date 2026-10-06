@@ -1,0 +1,30 @@
+=== aConditionHoldingAPipelinedMatchIsReadFromItsSlot.tt ===
+const L: unknown[] = [];
+>L : const L: unknown[]
+function log<T>(x: T): T { L.push(x); return x; }
+>log : function log<T>(x: T): T
+>T : (type parameter) T in log<T>(x: T): T
+>x : (parameter) x: T
+>T : (type parameter) T in log<T>(x: T): T
+>T : (type parameter) T in log<T>(x: T): T
+>L : const L: unknown[]
+>push : (method) Array<unknown>.push(...items: unknown[]): number
+>x : (parameter) x: T
+>x : (parameter) x: T
+const h = (x: number) => x;
+>h : const h: (x: number) => number
+>x : (parameter) x: number
+>x : (parameter) x: number
+export function scrutinee() {
+>scrutinee : function scrutinee(): string
+  return match ((match (log(1)) { 1 => 1, _ => 2 } |> h) ? match (log(2)) { _ => 1 } : 0) { _ => "ok" };
+>log : function log<1>(x: 1): 1
+>h : const h: (x: number) => number
+>log : function log<2>(x: 2): 2
+console.log(scrutinee(), L.join());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>scrutinee : function scrutinee(): string
+>L : const L: unknown[]
+>join : (method) Array<unknown>.join(separator?: string): string
+

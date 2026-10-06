@@ -960,8 +960,14 @@ impl Project {
             // range. Extending it would blame the following token (or split a
             // UTF-16 surrogate pair). Only an unlocated glue error needs an
             // anchor extent supplied by the mapper above.
-            let raw = item.message;
-            let code = item.code;
+            let (code, raw) = match crate::engine::semantics::unnamed_generated_operand(
+                item.code,
+                &item.message,
+                &doc.generated_names,
+            ) {
+                Some((code, message)) => (code, message.to_string()),
+                None => (item.code, item.message),
+            };
             let glue = projected_anchor.or_else(|| glue_anchor(&doc, start));
             // The diagnostic's secondary places: the pipeline anchor's
             // producing step, then the checker's own related information —

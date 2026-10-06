@@ -1,0 +1,101 @@
+=== aTaggedTemplateBesideATtValuePassesItsSubstitutionsAsValues.tt ===
+function tag(s: TemplateStringsArray, ...v: unknown[]) { return v; }
+>tag : function tag(s: TemplateStringsArray, ...v: unknown[]): unknown[]
+>s : (parameter) s: TemplateStringsArray
+>TemplateStringsArray : interface TemplateStringsArray
+>v : (parameter) v: unknown[]
+>v : (parameter) v: unknown[]
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+export function plain(x: number, v: V) {
+>plain : function plain(x: number, v: V): unknown[]
+>x : (parameter) x: number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return tag`${x}${match (v) { A(n) => n, B => -1 }}`;
+>tag : function tag(s: TemplateStringsArray, ...v: unknown[]): unknown[]
+>x : (parameter) x: number
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+export function grouped(x: number, v: V) {
+>grouped : function grouped(x: number, v: V): unknown[]
+>x : (parameter) x: number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return tag`${(x)}${match (v) { A(n) => n, B => -1 }}`;
+>tag : function tag(s: TemplateStringsArray, ...v: unknown[]): unknown[]
+>x : (parameter) x: number
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+export function branch(c: boolean, x: number, v: V) {
+>branch : function branch(c: boolean, x: number, v: V): unknown[] | null
+>c : (parameter) c: boolean
+>x : (parameter) x: number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return c ? tag`${(x)}${match (v) { A(n) => n, B => -1 }}` : null;
+>c : (parameter) c: boolean
+>tag : function tag(s: TemplateStringsArray, ...v: unknown[]): unknown[]
+>x : (parameter) x: number
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+console.log(JSON.stringify([plain(5, V.A(1)), grouped(6, V.B), branch(true, 7, V.A(2))]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>plain : function plain(x: number, v: V): unknown[]
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>grouped : function grouped(x: number, v: V): unknown[]
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>branch : function branch(c: boolean, x: number, v: V): unknown[] | null
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+
