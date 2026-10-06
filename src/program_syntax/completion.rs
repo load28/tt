@@ -247,13 +247,18 @@ impl Visit for Walk<'_> {
 }
 
 /// The source span a projected span's copied and placeholder text came from.
-fn source_of(segments: &[ProjectionSourceSegment], projected: ProjectedSpan) -> Option<SourceSpan> {
-    let inside = segments.iter().filter(|segment| {
-        segment.kind != ProjectionSegmentKind::SourceBoundary
-            && segment.kind != ProjectionSegmentKind::AutomaticSemicolon
-            && projected.start <= segment.projected.start
-            && segment.projected.end <= projected.end
-    });
+fn source_of(segments: &ProjectionSegments, projected: ProjectedSpan) -> Option<SourceSpan> {
+    let inside = segments
+        .starting_in(projected.start, ProjectedByte(projected.end.0 + 1))
+        .into_iter()
+        .map(|index| &segments[index])
+        .inspect(|_| crate::work::tick("completion host segments"))
+        .filter(|segment| {
+            segment.kind != ProjectionSegmentKind::SourceBoundary
+                && segment.kind != ProjectionSegmentKind::AutomaticSemicolon
+                && projected.start <= segment.projected.start
+                && segment.projected.end <= projected.end
+        });
     inside.fold(None, |span: Option<SourceSpan>, segment| {
         Some(match span {
             None => segment.source,
@@ -270,7 +275,7 @@ pub(super) fn completion_scopes(
     module: &Module,
     start: HostOrigin,
     pending: &[PendingOverlay],
-    segments: &[ProjectionSourceSegment],
+    segments: &ProjectionSegments,
     marks: &CompletionMarks,
 ) -> Vec<CompletionScope> {
     let mut walk = Walk {

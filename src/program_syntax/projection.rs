@@ -2,7 +2,9 @@
 
 mod segments;
 
-pub(super) use segments::{ProjectionSegmentKind, ProjectionSegments, ProjectionSourceSegment};
+pub(super) use segments::{
+    ProjectionSegmentKind, ProjectionSegments, ProjectionSourceSegment, SegmentList,
+};
 
 use super::*;
 
@@ -199,18 +201,15 @@ impl ProgramSyntax {
                 error => error,
             })?;
         }
+        let indexed_segments = ProjectionSegments::new(projection.source_segments.clone());
         let completion_scopes = super::completion::completion_scopes(
             &parsed.module,
             parsed.start,
             &projection.pending,
-            &projection.source_segments,
+            &indexed_segments,
             &projection.completion,
         );
-        let if_tests = if_tests(
-            &parsed.module,
-            parsed.start,
-            &ProjectionSegments::new(projection.source_segments.clone()),
-        );
+        let if_tests = if_tests(&parsed.module, parsed.start, &indexed_segments);
         let mut collector = ParentCollector::new(
             parsed.start,
             &projection.pending,
@@ -600,7 +599,7 @@ pub(super) struct ProjectionBuilder<'a> {
     pub(super) source: &'a str,
     pub(super) code: String,
     pub(super) pending: Vec<PendingOverlay>,
-    pub(super) source_segments: Vec<ProjectionSourceSegment>,
+    pub(super) source_segments: SegmentList,
     pub(super) projection_only_protocol_parents: Vec<ProjectedSpan>,
     pub(super) automatic_semicolons: Vec<crate::lexer::AutomaticSemicolon>,
     pub(super) hidden_parts: Vec<HiddenPart>,
@@ -634,7 +633,7 @@ impl<'a> ProjectionBuilder<'a> {
             source,
             code: String::with_capacity(source.len()),
             pending: Vec::new(),
-            source_segments: Vec::new(),
+            source_segments: SegmentList::default(),
             projection_only_protocol_parents: Vec::new(),
             automatic_semicolons: crate::lexer::automatic_semicolons(tokens),
             hidden_parts: Vec::new(),
@@ -649,7 +648,7 @@ impl<'a> ProjectionBuilder<'a> {
             tt_bindings: self.tt_bindings,
             code: self.code,
             pending: self.pending,
-            source_segments: self.source_segments,
+            source_segments: self.source_segments.into_vec(),
             projection_only_protocol_parents: self.projection_only_protocol_parents,
             hidden_parts: self.hidden_parts,
         })
@@ -756,8 +755,9 @@ impl<'a> ProjectionBuilder<'a> {
     /// ending exactly at this boundary can own it.
     fn push_source_boundary(&mut self, text: &str, segments_since: usize) {
         let start = ProjectedByte(self.code.len());
-        let source = self.source_segments[segments_since..]
-            .iter()
+        let source = self
+            .source_segments
+            .since(segments_since)
             .rev()
             .find(|segment| {
                 segment.kind == ProjectionSegmentKind::Copied && segment.projected.end == start
@@ -1378,14 +1378,11 @@ impl<'a> ProjectionBuilder<'a> {
         self.code.push_str("})()");
         let end = ProjectedByte(self.code.len());
         let projected = ProjectedSpan { start, end };
-        self.source_segments.insert(
-            0,
-            ProjectionSourceSegment {
-                projected,
-                source,
-                kind: ProjectionSegmentKind::Placeholder,
-            },
-        );
+        self.source_segments.push_front(ProjectionSourceSegment {
+            projected,
+            source,
+            kind: ProjectionSegmentKind::Placeholder,
+        });
         self.pending[pending_index].projected = projected;
         self.pending[pending_index].synthetic_return = Some(ProjectedSpan {
             start: synthetic_return_start,
@@ -1513,14 +1510,11 @@ impl<'a> ProjectionBuilder<'a> {
         self.code.push_str("0;})()");
         let end = ProjectedByte(self.code.len());
         let projected = ProjectedSpan { start, end };
-        self.source_segments.insert(
-            0,
-            ProjectionSourceSegment {
-                projected,
-                source,
-                kind: ProjectionSegmentKind::Placeholder,
-            },
-        );
+        self.source_segments.push_front(ProjectionSourceSegment {
+            projected,
+            source,
+            kind: ProjectionSegmentKind::Placeholder,
+        });
         self.pending[pending_index].projected = projected;
         Ok(())
     }

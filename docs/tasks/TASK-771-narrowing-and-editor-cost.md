@@ -136,6 +136,26 @@ mapper takes 2.5 s and 25.9 s, its CPU profile spent in
 per diagnostic. Unmapped, the same check takes 0.5 s. It is recorded as an
 upstream issue and not worked around.
 
+### Decision 7: Projection segments are recorded without shifting, and host spans are looked up by index
+
+`ttc --check` on a file of N match expressions was quadratic (8000 matches:
+2.6 s, 16000: 9.3 s). Two places scanned or shifted the whole file per match:
+
+- `emit_decision_region` and the result region recorded their placeholder
+  segment with `Vec::insert(0, ..)`, moving every segment written so far.
+  Consumers read segments in order (`find`, `in_segment_order`), so the order
+  is kept exactly: `SegmentList` holds the front-recorded segments in their
+  own stack and yields the same sequence a vector would
+  (`a_segment_list_keeps_the_order_a_vector_would` compares them under random
+  operations). A statement decision's `insert(segment_index, ..)` keeps its
+  index semantics, shifting only the segments written after its start.
+- `completion_scopes` mapped each decision's subject span by scanning every
+  segment. It now reads the segments starting inside the span from the
+  projection's `SpanIndex`, which the if-test collector already builds; the
+  two share one index.
+
+After the change 16000 matches take 2.7 s.
+
 ## Work log
 
 - 2026-10-06: Started from the findings TASK-770 moved here.
