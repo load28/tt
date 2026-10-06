@@ -1276,9 +1276,27 @@ impl<'a> Emitter<'a> {
                 (operation.parent, rendered)
             })
             .collect();
+        let discarded: Vec<SourceSpan> = steps
+            .iter()
+            .flat_map(|step| &step.inputs)
+            .filter_map(|input| match input {
+                PlannedEvaluationInput::Source {
+                    source,
+                    mode: EvaluationInputMode::Discarded,
+                    ..
+                } => Some(*source),
+                _ => None,
+            })
+            .collect();
         replacements.extend(values.iter().filter_map(|expr| {
             let (kind, start, head_end, extent) = self.value_anchor(*expr);
             let source = SourceSpan { start, end: extent };
+            if discarded
+                .iter()
+                .any(|operand| operand.start <= source.start && source.end <= operand.end)
+            {
+                return None;
+            }
             let covered = self
                 .replacements_covering(source.start, source.end)
                 .any(|captured| {

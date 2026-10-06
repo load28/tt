@@ -342,8 +342,11 @@ impl EvaluationBuilder<'_> {
                 || (self.region_host_owner(parent) == Some(binding.owner)
                     && (binding.protocol.steps().is_empty()
                         || matches!(root, CoreRoot::Expr(expr)
-                            if matches!(self.core.exprs[expr.index()],
-                                Expr::ResultRegion(_) | Expr::Propagate(_)))
+                            if matches!(self.core.exprs[expr.index()], Expr::ResultRegion(_)))
+                        || matches!(root, CoreRoot::Expr(expr)
+                            if matches!(self.core.exprs[expr.index()], Expr::Propagate(_))
+                                && !matches!(self.regions[parent.0 as usize].operation,
+                                    OperationId::Propagate(_)))
                         || matches!(root, CoreRoot::Expr(expr)
                         if matches!(self.core.exprs[expr.index()], Expr::Decision(_))
                             && binding.protocol.steps().iter().all(|step| matches!(

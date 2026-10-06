@@ -1,0 +1,82 @@
+=== aDiscardedCommaOperandThatIsATtValueIsRemoved.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const seen: number[] = [];
+>seen : const seen: number[]
+const r = (n: number): TResult<number, string> => { seen.push(n); return n > 0 ? Result.Ok(n) : Result.Err(`bad ${n}`); };
+>r : const r: (n: number) => TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>seen : const seen: number[]
+>push : (method) Array<number>.push(...items: number[]): number
+>n : (parameter) n: number
+>n : (parameter) n: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+>n : (parameter) n: number
+function f(k: number, v: V): TResult<string, string> {
+>f : function f(k: number, v: V): TResult<string, string>
+>k : (parameter) k: number
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+  const q = match ((try r(k), match (v) { A(n) => n, B => 0 }) as number) { 1 => "one", _ => "other" };
+>q : const q: string
+>r : const r: (n: number) => TResult<number, string>
+>k : (parameter) k: number
+>v : (parameter) v: V
+>n : const n: number
+>n : const n: number
+  return Result.Ok(q);
+>Ok : const Ok: <string>(value: string) => Result.TOk<string>
+>q : const q: string
+console.log(JSON.stringify([f(1, V.A(1)), f(2, V.B), f(0, V.A(1))]), seen.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>f : function f(k: number, v: V): TResult<string, string>
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>f : function f(k: number, v: V): TResult<string, string>
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>f : function f(k: number, v: V): TResult<string, string>
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>seen : const seen: number[]
+>join : (method) Array<number>.join(separator?: string): string
+

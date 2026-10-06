@@ -36,7 +36,9 @@ request validation. Fix each in the layer that owns it.
   pipeline, a `result` block, or a nested statement; a `flow` pipeline
   head before structured steps (R3C12); a spread before a pipeline; a
   parenthesized right operand of a short-circuit; an inert operand holding
-  a tt statement; a captured operand holding a tt value.
+  a tt statement; a captured operand holding a tt value; a `result`
+  block returning a nested `match`; a discarded comma operand that is a
+  tt value; an outer `try` around a `match` and an inner `try` (R3C4).
 - Excluded: to be recorded as the task proceeds.
 
 ## Decisions
@@ -434,6 +436,44 @@ request validation. Fix each in the layer that owns it.
   itself was being written. A capture now carries a value only for the
   writes outside it; inside it, the value is written as it would be
   anywhere else, as the other capture checks already require.
+
+### Decision 32: A value being written structurally is active
+
+- **Context**: `result { const z = try r(1); return match (a) { A(n) => 1,
+  B => match (b) { ... } }; }` wrote the inner `match` with an empty
+  subject and empty arm values.
+- **Decision and rationale**: The inner `match` has a slot, and the source
+  walk substitutes that slot for the `match`'s bytes unless the `match` is
+  the value being written. The structured return wrote it through the
+  continuation entry point without marking it, so its own source was
+  taken for its slot. The continuation entry point, which every
+  structural write goes through, now marks the value it writes.
+
+### Decision 33: A discarded comma operand is removed even when it is a tt value
+
+- **Context**: `match ((try r(1), match (v) { ... }) as number) { ... }`
+  wrote `($tt_v3 $tt_v1) as number`.
+- **Decision and rationale**: The comma's left operand runs as a statement
+  and is removed with its comma. When that operand is itself a tt value,
+  its slot replacement took precedence over the removal and the comma
+  went alone. A value inside a discarded operand is no longer substituted;
+  the operand is removed whole.
+
+### Decision 34: An inner `try` is planned with the values beside it
+
+- **Context**: `const x = try half(match (k) { ... } + (try half(k)));`
+  wrote `half(` twice (`SourceEmittedTwice`); `1 + (try half(match ... +
+  (try half(k))))` did the same.
+- **Decision and rationale**: The `match` was planned with the
+  declaration that holds the outer `try`, as it is anywhere else (its
+  arms then complete the call, which keeps each arm's argument typed on
+  its own), while the inner `try` was nested under the outer `try` with a
+  schedule of its own; both plans captured the callee. An inner `try`
+  whose parent is a `try` is now planned with its host like the `match`,
+  so one schedule orders the callee, the `match`, and the inner `try`, as
+  in `const x = half(match ... + (try half(k)));`. A first attempt nested
+  the `match` under the outer `try` instead; it dropped the arms' call
+  completion and changed three baselines, so it was not kept.
 
 ## Work log
 

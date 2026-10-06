@@ -1,0 +1,139 @@
+=== aResultBlockReturningANestedMatchWritesTheInnerMatch.tt ===
+variant V { A(n: number), B }
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => V
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const r = (n: number): TResult<number, string> => (n > 0 ? Result.Ok(n) : Result.Err(`bad ${n}`));
+>r : const r: (n: number) => TResult<number, string>
+>n : (parameter) n: number
+>TResult : (alias) type TResult<T, E> = Result.TErr<E> | Result.TOk<T>
+>n : (parameter) n: number
+>Ok : const Ok: <number>(value: number) => Result.TOk<number>
+>n : (parameter) n: number
+>Err : const Err: <string>(error: string) => Result.TErr<string>
+>n : (parameter) n: number
+function f(k: number, outer: V, inner: V) {
+>f : function f(k: number, outer: V, inner: V): string
+>k : (parameter) k: number
+>outer : (parameter) outer: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>inner : (parameter) inner: V
+>V : type V = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const q = result { const z = try r(k); return match (outer) { A(n) => n + z, B => match (inner) { A(n) => n * z, B => -z } }; };
+>q : const q: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+>z : const z: number
+>r : const r: (n: number) => TResult<number, string>
+>k : (parameter) k: number
+>outer : (parameter) outer: V
+>n : const n: number
+>n : const n: number
+>z : const z: number
+>inner : (parameter) inner: V
+>n : const n: number
+>n : const n: number
+>z : const z: number
+>z : const z: number
+  return JSON.stringify(q);
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>q : const q: Result.TErr<string> | {
+>       kind: "Ok";
+>       value: number;
+>   }
+console.log(f(2, V.A(1), V.B), f(2, V.B, V.A(5)), f(3, V.B, V.B), f(0, V.B, V.B));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>f : function f(k: number, outer: V, inner: V): string
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>f : function f(k: number, outer: V, inner: V): string
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => V
+>f : function f(k: number, outer: V, inner: V): string
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>f : function f(k: number, outer: V, inner: V): string
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>V : const V: {
+>       A: (n: number) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+

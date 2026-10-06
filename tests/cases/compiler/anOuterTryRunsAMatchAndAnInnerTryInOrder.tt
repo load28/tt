@@ -1,0 +1,14 @@
+// @run: anOuterTryRunsAMatchAndAnInnerTryInOrder.tt
+import * as Result from "@tt/std/result";
+import type { TResult } from "@tt/std";
+const seen: string[] = [];
+const half = (n: number): TResult<number, string> => {
+  seen.push(`half(${n})`);
+  return n % 2 === 0 ? Result.Ok(n / 2) : Result.Err(`odd ${n}`);
+};
+const note = (n: number) => { seen.push(`k=${n}`); return n; };
+function f(k: number): TResult<number, string> {
+  const x = try half(match (note(k)) { 2 => 10, _ => 20 } + (try half(k)));
+  return Result.Ok(x);
+}
+console.log(JSON.stringify([f(2), f(4), f(3)]), seen.join(" "));
