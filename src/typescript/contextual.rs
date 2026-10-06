@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use super::backend::{ContextualSlotQuery, Failure, FailureKind, Module, Query, TypeScriptBackend};
-use super::mapper;
+
 use crate::MappedEmit;
 use crate::codegen::contextual::{SlotRefinement, refine};
 
@@ -52,10 +52,11 @@ pub(crate) fn materialize(
                 path: path.clone(),
                 text: emit.code.clone(),
             });
+            let utf16 = crate::lines::Utf16Map::new(&emit.code);
             let at = |position: usize, settled: bool, operand: bool, asserted: bool| {
                 ContextualSlotQuery {
                     module: path.clone(),
-                    declaration_end: mapper::to_utf16(&emit.code, position),
+                    declaration_end: utf16.to_utf16(position),
                     settled,
                     operand,
                     asserted,

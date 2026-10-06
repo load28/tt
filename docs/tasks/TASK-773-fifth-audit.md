@@ -74,6 +74,34 @@ defects. This task fixes them in the layer that owns each one.
   arm patterns (`payload_columns`). The column's alphabet is then the
   payload's type at that match, which is what the question asked.
 
+### Decision 4: Editor requests measure a text once and look mappings up by position (E2)
+
+- **Context**: On a 28,000-line file of match-heavy functions,
+  `documentSemanticTokens` took 19.6 s, `typedCheck` 14.1 s,
+  `documentSymbols` 3.7 s, and references 20.8 s, each growing faster than
+  the file. Stack samples and request timings pointed at per-item scans:
+  the token list's duplicate check (`out.contains`), the token merge's
+  comparison of every service token with every tt token, an output-offset
+  lookup that scanned every mapping (`to_source`, `to_source_span`,
+  `to_source_inclusive`), a UTF-16 conversion that rescanned the served
+  text for every position (`ServiceDoc`), and one more per contextual slot.
+- **Decision and rationale**:
+  - The duplicate check hashes each token's range, type, and modifiers.
+  - The merge indexes the service's modifiers by range and type, and keeps
+    tt's token columns per line, sorted, with the furthest end so far, so
+    whether a service token overlaps one is a binary search.
+  - Mappings are in output order and do not overlap
+    (`MappedEmit::mappings`), so an output offset is found by binary search.
+    Each place that finalizes mappings (`Rope::flatten`, contextual
+    refinement, recovery) asserts that order in debug builds
+    (`mapper::in_output_order`).
+  - `ServiceDoc` measures its source and served code once
+    (`source_utf16`, `code_utf16`), as `ProjectedDocument` does since
+    TASK-771, and the contextual pass measures each module once per round.
+  On the same file the requests now take 3.3 s, 9.1 s, 1.1 s, and 13.4 s,
+  and grow about 2.2× per doubling. What remains is TypeScript's own work
+  (the server waits on tsgo during `typedCheck` and references).
+
 ## Work log
 
 - 2026-10-06: Ran the fifth audit as three read-only agents (CLI,
@@ -84,6 +112,9 @@ defects. This task fixes them in the layer that owns each one.
   unreadable candidates outside the inputs and their imports (decision 2).
 - 2026-10-06: Reproduced E1 and scoped payload alphabets to their match
   (decision 3).
+- 2026-10-06: Timed every editor request with the audit's harness over
+  7,000–28,000 lines, sampled the server with gdb and the host's API calls
+  with a timing hook, and removed the per-item scans (decision 4).
 
 ## Issues and resolutions
 

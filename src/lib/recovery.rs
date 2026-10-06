@@ -71,6 +71,7 @@ impl EditorSource {
             }
         }
         emit.mappings = mappings;
+        debug_assert!(crate::typescript::mapper::in_output_order(&emit.mappings));
         for mark in &mut emit.scrutinee_temps {
             mark.src = self.original(mark.src);
         }

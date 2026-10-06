@@ -174,10 +174,24 @@ pub(crate) fn to_output(mappings: &[EmitMapping], src: usize) -> Option<usize> {
 /// Where an emitted byte came from in the source, or `None` when it is
 /// compiler-written glue.
 pub(crate) fn to_source(mappings: &[EmitMapping], out: usize) -> Option<usize> {
+    chunk_holding(mappings, out).map(|m| m.src + (out - m.out))
+}
+
+/// Whether `mappings` are in output order and do not overlap in the output
+/// — what [`crate::MappedEmit::mappings`] promises, and what lets an output
+/// offset be found by binary search.
+pub(crate) fn in_output_order(mappings: &[EmitMapping]) -> bool {
     mappings
-        .iter()
-        .find(|m| out >= m.out && out < m.out + m.len)
-        .map(|m| m.src + (out - m.out))
+        .windows(2)
+        .all(|pair| pair[0].out + pair[0].len <= pair[1].out)
+}
+
+/// The chunk whose output holds byte `out`. Chunks are in output order and
+/// do not overlap ([`in_output_order`]), so their ends do not decrease and
+/// the first chunk ending past `out` is the only one that can hold it.
+fn chunk_holding(mappings: &[EmitMapping], out: usize) -> Option<&EmitMapping> {
+    let index = mappings.partition_point(|m| m.out + m.len <= out);
+    mappings.get(index).filter(|m| m.out <= out)
 }
 
 /// [`to_output`], but a chunk's **end** offset belongs to it too — and when
@@ -269,10 +283,10 @@ pub(crate) fn typed_cursor_to_output(
 
 /// The inverse of [`to_output_inclusive`], for answers coming back.
 pub(crate) fn to_source_inclusive(mappings: &[EmitMapping], out: usize) -> Option<usize> {
-    mappings
-        .iter()
-        .filter(|m| m.out <= out)
-        .max_by_key(|m| m.out)
+    let starting = mappings.partition_point(|m| m.out <= out);
+    starting
+        .checked_sub(1)
+        .map(|index| &mappings[index])
         .filter(|m| out <= m.out + m.len)
         .map(|m| m.src + (out - m.out))
 }
@@ -286,14 +300,15 @@ pub(crate) fn to_source_span(
         let at = to_source_inclusive(mappings, start)?;
         return (end == start).then_some((at, at));
     }
-    let first = mappings
-        .iter()
-        .find(|m| start >= m.out && start < m.out + m.len)?;
+    let first = chunk_holding(mappings, start)?;
     let mut last = first;
     while end > last.out + last.len {
-        last = mappings
+        let (out, src) = (last.out + last.len, last.src + last.len);
+        let from = mappings.partition_point(|m| m.out < out);
+        last = mappings[from..]
             .iter()
-            .find(|m| m.len > 0 && m.out == last.out + last.len && m.src == last.src + last.len)?;
+            .take_while(|m| m.out == out)
+            .find(|m| m.len > 0 && m.src == src)?;
     }
     Some((first.src + (start - first.out), last.src + (end - last.out)))
 }

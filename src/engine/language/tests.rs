@@ -274,7 +274,7 @@ fn an_or_pattern_binding_stands_for_every_alternative_it_is_written_in() {
                 .collect::<Vec<_>>(),
             "{needle}"
         );
-        let generated = mapper::to_utf16(&doc.code, binding.out);
+        let generated = doc.code_utf16().to_utf16(binding.out);
         for occurrence in occurrences {
             assert_eq!(to_service(&doc, position(occurrence)), None, "{needle}");
             assert_eq!(
@@ -304,7 +304,7 @@ fn variant_glue_names_stand_for_their_source_names_in_navigation_only() {
                 .find(glue)
                 .unwrap_or_else(|| panic!("{glue:?} in {}", doc.code))
                 + glue.find(name).unwrap();
-            let start = mapper::to_utf16(&doc.code, at);
+            let start = doc.code_utf16().to_utf16(at);
             let end = start + name.len();
             assert_eq!(from_service_span(&doc, start, end), None, "{glue:?}");
             declared_name_span(&doc, start, end)
@@ -603,7 +603,7 @@ fn incomplete_match_arms_preserve_sibling_projections() {
         let byte = source.find("=> name").unwrap() + 3;
         let offset = to_service(&doc, u16_position(&source, mapper::to_utf16(&source, byte)))
             .expect("the valid arm body must retain a source mapping");
-        let output_byte = mapper::from_utf16(&doc.code, offset);
+        let output_byte = doc.code_utf16().to_byte(offset);
         assert!(doc.code[output_byte..].starts_with("name"), "{}", doc.code);
         assert_eq!(
             mapper::to_source_inclusive(&doc.mappings, output_byte),
@@ -786,7 +786,7 @@ fn restated_keywords(source: &str, marker: &str, labels: &[&str]) -> Vec<String>
     let doc = service_doc(Path::new("/p/keywords.tt"), source.to_string());
     let at = source.find(marker).unwrap() + marker.len();
     let out = mapper::cursor_to_output(&doc.mappings, at, mapper::Affinity::Preceding).unwrap();
-    let served = mapper::to_utf16(&doc.code, out);
+    let served = doc.code_utf16().to_utf16(out);
     let mut answer = CompletionAnswer {
         items: labels.iter().map(|label| keyword_item(label)).collect(),
         ..CompletionAnswer::default()
@@ -1001,4 +1001,49 @@ fn an_outline_measures_its_document_once_whatever_its_length() {
             .unwrap_or(0)
     };
     assert_eq!(measured(50), measured(100));
+}
+
+#[test]
+fn merging_tokens_compares_each_token_a_bounded_number_of_times() {
+    let range = |line: u32, start: u32, end: u32| Range {
+        start: Position {
+            line,
+            character: start,
+        },
+        end: Position {
+            line,
+            character: end,
+        },
+    };
+    let merged = |count: u32| {
+        let own: Vec<_> = (0..count)
+            .map(|line| crate::engine::tokens::SemanticToken {
+                range: range(line, 0, 5),
+                kind: crate::engine::tokens::SemanticTokenKind::Keyword,
+            })
+            .collect();
+        let service: Vec<_> = (0..count)
+            .flat_map(|line| {
+                [range(line, 2, 4), range(line, 8, 12)].map(|range| ClassifiedToken {
+                    range,
+                    token_type: "variable".to_string(),
+                    modifiers: Vec::new(),
+                })
+            })
+            .collect();
+        let mut tokens = Vec::new();
+        let work = crate::work::measure(|| tokens = merge_tokens(own, service));
+        assert_eq!(tokens.len(), 2 * count as usize);
+        work
+    };
+    let small = merged(100);
+    let large = merged(200);
+    for (name, &work) in &large {
+        let before = small.get(name).copied().unwrap_or(0);
+        assert!(
+            work <= 2 * before + 64,
+            "{name}: {before} for n tokens but {work} for 2n"
+        );
+    }
+    assert!(large["token merge comparisons"] > 0);
 }

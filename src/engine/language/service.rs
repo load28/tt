@@ -16,6 +16,8 @@ pub(super) fn projection_accepts_diagnostics(code: &str, source_kind: crate::Sou
 pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
     if crate::engine::project::is_host_source(path) {
         return ServiceDoc {
+            source_utf16: std::sync::OnceLock::new(),
+            code_utf16: std::sync::OnceLock::new(),
             coordinates: CoordinateSpace::Projected,
             identity_mapping: EmitMapping {
                 src: 0,
@@ -65,6 +67,8 @@ pub(super) fn service_doc(path: &Path, text: String) -> ServiceDoc {
         ),
     };
     ServiceDoc {
+        source_utf16: std::sync::OnceLock::new(),
+        code_utf16: std::sync::OnceLock::new(),
         coordinates: CoordinateSpace::Projected,
         identity_mapping: EmitMapping {
             src: 0,
@@ -930,7 +934,9 @@ pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> 
     if doc.coordinates == CoordinateSpace::Authored {
         return Some(u16_offset(&doc.source, position));
     }
-    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let byte = doc
+        .source_utf16()
+        .to_byte(u16_offset(&doc.source, position));
     let affinity = match doc.source.as_bytes().get(byte) {
         Some(&b) if crate::scanner::is_ident_start(b) || b == b'#' || !b.is_ascii() => {
             mapper::Affinity::Following
@@ -938,18 +944,20 @@ pub(super) fn to_service(doc: &ServiceDoc, position: Position) -> Option<usize> 
         _ => mapper::Affinity::Preceding,
     };
     let out = mapper::cursor_to_output(&doc.mappings, byte, affinity)?;
-    Some(mapper::to_utf16(&doc.code, out))
+    Some(doc.code_utf16().to_utf16(out))
 }
 
 /// A tt position translated into the served text for a question about what
 /// is being typed before the cursor (completion, signature help).
 pub(super) fn to_service_typed(doc: &ServiceDoc, position: Position) -> Option<usize> {
-    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let byte = doc
+        .source_utf16()
+        .to_byte(u16_offset(&doc.source, position));
     let out = mapper::typed_cursor_to_output(&doc.mappings, &doc.anchors, &doc.source, byte)?;
     if doc.coordinates == CoordinateSpace::Authored {
         return Some(u16_offset(&doc.source, position));
     }
-    Some(mapper::to_utf16(&doc.code, out))
+    Some(doc.code_utf16().to_utf16(out))
 }
 
 pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<usize> {
@@ -973,14 +981,16 @@ pub(super) fn to_service_name(doc: &ServiceDoc, position: Position) -> Option<us
     if let Some(at) = to_service(doc, position) {
         return Some(at);
     }
-    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let byte = doc
+        .source_utf16()
+        .to_byte(u16_offset(&doc.source, position));
     doc.shared_bindings.iter().find_map(|binding| {
         let occurrence = binding
             .occurrences
             .iter()
             .find(|occurrence| occurrence.src <= byte && byte <= occurrence.src_end)?;
         let within = (byte - occurrence.src).min(binding.out_end - binding.out);
-        Some(mapper::to_utf16(&doc.code, binding.out + within))
+        Some(doc.code_utf16().to_utf16(binding.out + within))
     })
 }
 
@@ -992,7 +1002,9 @@ pub(super) fn to_service_names(doc: &ServiceDoc, position: Position) -> Vec<usiz
     if let Some(at) = to_service_name(doc, position) {
         return vec![at];
     }
-    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let byte = doc
+        .source_utf16()
+        .to_byte(u16_offset(&doc.source, position));
     doc.declared_names
         .iter()
         .filter(|name| name.src <= byte && byte <= name.src_end)
@@ -1007,14 +1019,16 @@ pub(super) fn to_service_names(doc: &ServiceDoc, position: Position) -> Vec<usiz
 
 /// The source span (UTF-16) of the glue-declared name covering `position`.
 pub(super) fn declared_name_at(doc: &ServiceDoc, position: Position) -> Option<(usize, usize)> {
-    let byte = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+    let byte = doc
+        .source_utf16()
+        .to_byte(u16_offset(&doc.source, position));
     doc.declared_names
         .iter()
         .find(|name| name.src <= byte && byte <= name.src_end)
         .map(|name| {
             (
-                mapper::to_utf16(&doc.source, name.src),
-                mapper::to_utf16(&doc.source, name.src_end),
+                doc.source_utf16().to_utf16(name.src),
+                doc.source_utf16().to_utf16(name.src_end),
             )
         })
 }
@@ -1105,6 +1119,7 @@ pub(super) fn source_tokens(
     let code_lines = LineMap::lsp(doc.service_code());
     let source_lines = LineMap::lsp(&doc.source);
     let mut out: Vec<ClassifiedToken> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     let (mut line, mut character) = (0u64, 0u64);
     for &[delta_line, delta_start, length, kind, bits] in data.as_chunks::<5>().0 {
         if delta_line > 0 {
@@ -1146,7 +1161,16 @@ pub(super) fn source_tokens(
                 token_type: token_type.clone(),
                 modifiers: modifiers.clone(),
             };
-            if !out.contains(&classified) {
+            let key = (
+                (
+                    classified.range.start.line,
+                    classified.range.start.character,
+                ),
+                (classified.range.end.line, classified.range.end.character),
+                classified.token_type.clone(),
+                classified.modifiers.clone(),
+            );
+            if seen.insert(key) {
                 out.push(classified);
             }
         }
@@ -1183,11 +1207,20 @@ pub(super) fn merge_tokens(
     own: Vec<crate::engine::tokens::SemanticToken>,
     service: Vec<ClassifiedToken>,
 ) -> Vec<ClassifiedToken> {
-    let overlaps = |a: &Range, b: &Range| {
-        a.start.line == b.start.line
-            && a.start.character < b.end.character
-            && b.start.character < a.end.character
+    let key = |range: &Range| {
+        (
+            (range.start.line, range.start.character),
+            (range.end.line, range.end.character),
+        )
     };
+    // The service's modifiers for each range and type, first answer first.
+    let mut service_modifiers: HashMap<(((u32, u32), (u32, u32)), &str), &[String]> =
+        HashMap::new();
+    for other in &service {
+        service_modifiers
+            .entry((key(&other.range), other.token_type.as_str()))
+            .or_insert(&other.modifiers);
+    }
     let mut out: Vec<ClassifiedToken> = own
         .into_iter()
         .map(|token| {
@@ -1198,11 +1231,8 @@ pub(super) fn merge_tokens(
                 .iter()
                 .map(|m| m.to_string())
                 .collect();
-            if let Some(other) = service
-                .iter()
-                .find(|other| other.range == token.range && other.token_type == token_type)
-            {
-                for modifier in &other.modifiers {
+            if let Some(others) = service_modifiers.get(&(key(&token.range), token_type.as_str())) {
+                for modifier in *others {
                     if !modifiers.contains(modifier) {
                         modifiers.push(modifier.clone());
                     }
@@ -1215,12 +1245,37 @@ pub(super) fn merge_tokens(
             }
         })
         .collect();
-    let owned = out.len();
+    // tt's own tokens claim their columns: a service token on a line a tt
+    // token shares is kept only where no tt token overlaps it.
+    // Per line, tt's tokens by start column with the furthest end reached so
+    // far: a range overlaps one of them exactly when some token starting
+    // before the range's end ends after its start.
+    let mut owned_on: HashMap<u32, Vec<(u32, u32)>> = HashMap::new();
+    for own in &out {
+        owned_on
+            .entry(own.range.start.line)
+            .or_default()
+            .push((own.range.start.character, own.range.end.character));
+    }
+    for columns in owned_on.values_mut() {
+        columns.sort_unstable();
+        let mut furthest = 0;
+        for column in columns.iter_mut() {
+            furthest = furthest.max(column.1);
+            column.1 = furthest;
+        }
+    }
+    let overlaps_own = |range: &Range| {
+        owned_on.get(&range.start.line).is_some_and(|columns| {
+            crate::work::tick("token merge comparisons");
+            let before = columns.partition_point(|&(start, _)| start < range.end.character);
+            before
+                .checked_sub(1)
+                .is_some_and(|last| range.start.character < columns[last].1)
+        })
+    };
     for token in service {
-        if !out[..owned]
-            .iter()
-            .any(|own| overlaps(&own.range, &token.range))
-        {
+        if !overlaps_own(&token.range) {
             out.push(token);
         }
     }
@@ -1242,12 +1297,12 @@ pub(super) fn from_service_span(
 }
 
 fn from_projected_span(doc: &ServiceDoc, start: usize, end: usize) -> Option<(usize, usize)> {
-    let sb = mapper::from_utf16(&doc.code, start);
-    let eb = mapper::from_utf16(&doc.code, end);
+    let sb = doc.code_utf16().to_byte(start);
+    let eb = doc.code_utf16().to_byte(end);
     let (ss, se) = mapper::to_source_span(&doc.mappings, sb, eb)?;
     Some((
-        mapper::to_utf16(&doc.source, ss),
-        mapper::to_utf16(&doc.source, se),
+        doc.source_utf16().to_utf16(ss),
+        doc.source_utf16().to_utf16(se),
     ))
 }
 
@@ -1269,7 +1324,7 @@ pub(super) fn declared_name_span(
 /// the language service follows the same policy.
 /// The construct whose glue a served-text UTF-16 offset falls in.
 pub(super) fn glue_anchor(doc: &ServiceDoc, utf16_start: usize) -> Option<crate::EmitAnchor> {
-    let out = mapper::from_utf16(&doc.code, utf16_start);
+    let out = doc.code_utf16().to_byte(utf16_start);
     doc.anchors
         .iter()
         .find(|a| a.out <= out && out < a.end)
@@ -1341,8 +1396,8 @@ pub(super) fn diagnostic_source_span(
     start: usize,
     end: usize,
 ) -> Option<(usize, usize, mapper::DiagnosticOrigin)> {
-    let sb = mapper::from_utf16(&doc.code, start);
-    let eb = mapper::from_utf16(&doc.code, end);
+    let sb = doc.code_utf16().to_byte(start);
+    let eb = doc.code_utf16().to_byte(end);
     if crate::engine::projection::restated(&doc.restatements, sb, eb) {
         return None;
     }
@@ -1373,8 +1428,8 @@ pub(super) fn diagnostic_source_span(
         mapper::DiagnosticOrigin::Nearest { start } => (start, start.saturating_add(1)),
     };
     Some((
-        mapper::to_utf16(&doc.source, start),
-        mapper::to_utf16(&doc.source, end),
+        doc.source_utf16().to_utf16(start),
+        doc.source_utf16().to_utf16(end),
         origin,
     ))
 }
@@ -1382,8 +1437,8 @@ pub(super) fn diagnostic_source_span(
 pub(super) fn recovery_intersects(doc: &ServiceDoc, start: usize, end: usize) -> bool {
     let end = end.max(start + 1);
     doc.recovered.iter().any(|&(recovery_start, recovery_end)| {
-        let recovery_start = mapper::to_utf16(&doc.source, recovery_start);
-        let recovery_end = mapper::to_utf16(&doc.source, recovery_end);
+        let recovery_start = doc.source_utf16().to_utf16(recovery_start);
+        let recovery_end = doc.source_utf16().to_utf16(recovery_end);
         start < recovery_end && recovery_start < end
     })
 }

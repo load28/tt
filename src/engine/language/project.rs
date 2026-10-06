@@ -138,8 +138,8 @@ impl Project {
         if let Some(binding) = analyses.binding_at(byte) {
             let range = source_range(
                 &doc.source,
-                mapper::to_utf16(&doc.source, binding.start),
-                mapper::to_utf16(&doc.source, binding.end),
+                doc.source_utf16().to_utf16(binding.start),
+                doc.source_utf16().to_utf16(binding.end),
             );
             if binding.alternatives > 1
                 && let Some(info) = self.isolated_alternative_hover(doc, path, binding, byte, range)
@@ -158,8 +158,8 @@ impl Project {
                 documentation: String::new(),
                 range: source_range(
                     &doc.source,
-                    mapper::to_utf16(&doc.source, start),
-                    mapper::to_utf16(&doc.source, end),
+                    doc.source_utf16().to_utf16(start),
+                    doc.source_utf16().to_utf16(end),
                 ),
             }));
         }
@@ -334,8 +334,8 @@ impl Project {
                 path: path.clone(),
                 range: source_range(
                     &doc.source,
-                    mapper::to_utf16(&doc.source, start),
-                    mapper::to_utf16(&doc.source, end),
+                    doc.source_utf16().to_utf16(start),
+                    doc.source_utf16().to_utf16(end),
                 ),
             })
             .collect())
@@ -800,14 +800,18 @@ impl Project {
         let session = self.session();
         // A cursor the served text has no place for is asked through a
         // probe, as completion asks there.
-        let source_at = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+        let source_at = doc
+            .source_utf16()
+            .to_byte(u16_offset(&doc.source, position));
         let projected_at =
             mapper::typed_cursor_to_output(&doc.mappings, &doc.anchors, &doc.source, source_at)
-                .map(|at| mapper::to_utf16(&doc.code, at));
+                .map(|at| doc.code_utf16().to_utf16(at));
         let (code, mappings, at) = match projected_at {
             Some(at) => (doc.code.clone(), doc.mappings.clone(), at),
             None => {
-                let source_at = mapper::from_utf16(&doc.source, u16_offset(&doc.source, position));
+                let source_at = doc
+                    .source_utf16()
+                    .to_byte(u16_offset(&doc.source, position));
                 let Some(probe) =
                     build_probe(&path, &doc.source, source_at, session.probe_count + 1)
                 else {
@@ -992,8 +996,8 @@ impl Project {
                 && anchor.kind == crate::AnchorKind::Pipe
                 && let Some((context_start, context_end)) = anchor.context
             {
-                let from = mapper::to_utf16(&doc.source, context_start);
-                let to = mapper::to_utf16(&doc.source, context_end).max(from + 1);
+                let from = doc.source_utf16().to_utf16(context_start);
+                let to = doc.source_utf16().to_utf16(context_end).max(from + 1);
                 related.push(ServiceRelated {
                     path: None,
                     range: source_range(&doc.source, from, to),
@@ -1045,8 +1049,8 @@ impl Project {
             // through, so the two surfaces cannot drift.
             if !exact && let Some(anchor) = glue {
                 let (display_start, display_end) = anchor.display();
-                let from = mapper::to_utf16(&doc.source, display_start);
-                let to = mapper::to_utf16(&doc.source, display_end).max(from + 1);
+                let from = doc.source_utf16().to_utf16(display_start);
+                let to = doc.source_utf16().to_utf16(display_end).max(from + 1);
                 let range = source_range(&doc.source, from, to);
                 let declared = declarations.get_or_insert_with(|| {
                     self.semantic_analyses(&path, &doc.source)
@@ -1315,6 +1319,8 @@ impl Project {
         for projected in snapshot.files {
             let path = &projected.source_path;
             let doc = Arc::new(ServiceDoc {
+                source_utf16: std::sync::OnceLock::new(),
+                code_utf16: std::sync::OnceLock::new(),
                 coordinates: if session.client.serves_authored_sources() {
                     CoordinateSpace::Authored
                 } else {

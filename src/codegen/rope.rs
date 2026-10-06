@@ -1053,6 +1053,7 @@ impl<'a> TargetFile<'a> {
         if result_returns.iter().any(|mark| mark.out == mark.out_end) {
             crate::ice::bug!("Result return start has no matching end")
         }
+        debug_assert!(crate::typescript::mapper::in_output_order(&mappings));
         marks.sort_by_key(|mark| mark.out);
         payloads.sort_by_key(|mark| mark.out);
         result_returns.sort_by_key(|mark| mark.out);

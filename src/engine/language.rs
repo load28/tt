@@ -523,6 +523,8 @@ enum CoordinateSpace {
 
 #[derive(Debug)]
 pub(crate) struct ServiceDoc {
+    source_utf16: std::sync::OnceLock<crate::lines::Utf16Map>,
+    code_utf16: std::sync::OnceLock<crate::lines::Utf16Map>,
     coordinates: CoordinateSpace,
     identity_mapping: EmitMapping,
     source: String,
@@ -588,6 +590,18 @@ pub(super) struct ServedText<'a> {
 }
 
 impl ServiceDoc {
+    /// The source's byte and UTF-16 offsets, measured once.
+    pub(crate) fn source_utf16(&self) -> &crate::lines::Utf16Map {
+        self.source_utf16
+            .get_or_init(|| crate::lines::Utf16Map::new(&self.source))
+    }
+
+    /// The served code's byte and UTF-16 offsets, measured once.
+    pub(crate) fn code_utf16(&self) -> &crate::lines::Utf16Map {
+        self.code_utf16
+            .get_or_init(|| crate::lines::Utf16Map::new(&self.code))
+    }
+
     fn source_lines(&self) -> crate::lines::LineMap<'_> {
         crate::lines::LineMap::indexed(
             &self.source,

@@ -209,6 +209,7 @@ fn apply(emit: &mut MappedEmit, edits: &[Edit]) {
         }
         mapping.out = shifted(edits, mapping.out, true);
     }
+    debug_assert!(crate::typescript::mapper::in_output_order(&emit.mappings));
     for mark in &mut emit.scrutinee_temps {
         mark.out = shifted(edits, mark.out, true);
     }

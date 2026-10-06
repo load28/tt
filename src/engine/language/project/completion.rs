@@ -48,7 +48,7 @@ impl Project {
         let kind = crate::SourceKind::from_path(&path).unwrap_or_default();
         let source_at = {
             let u16 = u16_offset(&doc.source, position);
-            mapper::from_utf16(&doc.source, u16)
+            doc.source_utf16().to_byte(u16)
         };
         let recovered = doc
             .recovered
@@ -78,7 +78,7 @@ impl Project {
                     &doc,
                     doc.projected(),
                     kind,
-                    mapper::to_utf16(&doc.code, projected_at),
+                    doc.code_utf16().to_utf16(projected_at),
                     source_at,
                 );
                 if !member || (plain.member && !plain.items.is_empty()) {
