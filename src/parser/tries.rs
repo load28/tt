@@ -228,6 +228,21 @@ fn scan_primary_operand(cur: &Cursor) -> Option<(usize, usize)> {
         );
         operand_token_end = k;
     }
+    if operand_end.is_some()
+        && let Some(dot) = cur.tokens.get(operand_token_end)
+        && matches!(dot.kind, TokenKind::Punct(b'.') | TokenKind::OptChain)
+        && !cur
+            .tokens
+            .get(operand_token_end + 1)
+            .is_some_and(|name| match name.kind {
+                TokenKind::Ident | TokenKind::Punct(b'#') => true,
+                TokenKind::Punct(b'(' | b'[') => matches!(dot.kind, TokenKind::OptChain),
+                _ => false,
+            })
+    {
+        operand_end = Some(dot.span.end);
+        operand_token_end += 1;
+    }
     operand_end.map(|end| (operand_token_end, end))
 }
 

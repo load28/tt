@@ -48,7 +48,11 @@ impl Project {
             let u16 = u16_offset(&doc.source, position);
             mapper::from_utf16(&doc.source, u16)
         };
-        let plain = match to_service_typed(&doc, position) {
+        let recovered = doc
+            .recovered
+            .iter()
+            .any(|&(start, end)| start <= source_at && source_at < end);
+        let plain = match to_service_typed(&doc, position).filter(|_| !recovered) {
             Some(at) => {
                 let mut plain = ts_completions(
                     session,
@@ -142,6 +146,7 @@ impl Project {
                 family,
                 covered,
                 literals,
+                position: slot,
             }) => {
                 let at =
                     prefix.map_or_else(|| source_byte(&doc.source, position), |(start, _)| start);
@@ -149,7 +154,7 @@ impl Project {
                     Some((start, end)) => format!("{}{}", &doc.source[..start], &doc.source[end..]),
                     None => doc.source.clone(),
                 };
-                match self.discriminant_candidates(&doc, &path, &source, at, family)? {
+                match self.discriminant_candidates(&doc, &path, &source, at, slot, family)? {
                     Some((family, candidates)) => {
                         arm_candidates(question.items, family, candidates, &covered, &literals)
                     }
@@ -174,13 +179,14 @@ impl Project {
         path: &Path,
         source: &str,
         at: usize,
+        position: Option<usize>,
         family: Option<crate::engine::completions::PatternFamily>,
     ) -> Result<Option<(crate::engine::completions::PatternFamily, Vec<Discriminant>)>, String>
     {
         use crate::engine::completions::PatternFamily;
         let kind = crate::SourceKind::from_path(path).unwrap_or_default();
         let lowered = |text: &str| {
-            let (start, end) = crate::engine::declarations::scrutinee_at(text, kind, at)?;
+            let (start, end) = crate::engine::declarations::scrutinee_at(text, kind, at, position)?;
             let report = crate::compile_projection_report(
                 text,
                 &crate::Options {
@@ -197,9 +203,14 @@ impl Project {
             (mapper::to_source_span(&emit.mappings, out_start, out_end) == Some((start, end)))
                 .then_some((emit, out_start, out_end))
         };
-        let Some((emit, out_start, out_end)) = lowered(source)
-            .or_else(|| lowered(&format!("{}{WILDCARD_ARM}{}", &source[..at], &source[at..])))
-        else {
+        let Some((emit, out_start, out_end)) = lowered(source).or_else(|| {
+            let repair = if position.is_some() {
+                "_"
+            } else {
+                WILDCARD_ARM
+            };
+            lowered(&format!("{}{repair}{}", &source[..at], &source[at..]))
+        }) else {
             return Ok(None);
         };
         let families: &[PatternFamily] = match family {

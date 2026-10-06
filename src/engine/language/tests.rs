@@ -873,3 +873,36 @@ fn a_failed_probe_restores_the_previous_document() {
     assert_eq!(after.signature, before.signature);
     assert_eq!(after.range, before.range);
 }
+
+#[test]
+fn an_edit_that_keeps_the_projection_keeps_the_answers_on_the_new_source() {
+    let dir = crate::test_workspace::Workspace::in_repo("edit-keeps-projection");
+    if service_binary(&dir).is_err() {
+        assert!(
+            std::env::var_os("TTC_REQUIRE_TSGO").is_none(),
+            "TypeScript is required"
+        );
+        return;
+    }
+    let path = dir.join("main.tt");
+    let before = "variant V { A(x: foo bar) }\nconst z = match (1) { _ => 0 };\nexport const value: number = 1;\nexport const other = value + z;\n";
+    let after = before.replace("foo bar", "foo barrr");
+    std::fs::write(&path, before).unwrap();
+    let path = path.canonicalize().unwrap();
+    let mut project = crate::engine::Engine::new(None)
+        .open_project(
+            &[path.to_string_lossy().into_owned()],
+            &crate::engine::ProjectOptions::default(),
+        )
+        .unwrap();
+    let position = Position {
+        line: 3,
+        character: 22,
+    };
+    project.open_document(path.clone(), before.to_string());
+    let first = project.hover(&path, position).unwrap().unwrap();
+    project.update_document(path.clone(), after);
+    let second = project.hover(&path, position).unwrap().unwrap();
+    assert_eq!(second.signature, "const value: number");
+    assert_eq!(second.range, first.range);
+}

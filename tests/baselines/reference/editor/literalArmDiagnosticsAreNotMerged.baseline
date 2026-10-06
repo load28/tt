@@ -1,0 +1,8 @@
+=== diagnostics literalArmDiagnosticsAreNotMerged.tt ===
+diagnostics: 2 diagnostic(s)
+  2:30-2:31 "3" error TS2678: Type '3' is not comparable to type '1 | 2'.
+  2:40-2:41 "4" error TS2678: Type '4' is not comparable to type '1 | 2'.
+published: 2 diagnostic(s)
+  2:30-2:31 "3" error ts2678 (ttc): Type '3' is not comparable to type '1 | 2'.
+  2:40-2:41 "4" error ts2678 (ttc): Type '4' is not comparable to type '1 | 2'.
+

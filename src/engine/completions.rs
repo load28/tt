@@ -142,6 +142,7 @@ pub(super) enum TypedSite {
         family: Option<PatternFamily>,
         covered: Vec<String>,
         literals: Vec<crate::ast::LiteralValue>,
+        position: Option<usize>,
     },
     Field {
         written: Vec<String>,
@@ -181,6 +182,7 @@ pub(super) fn pattern_question(
                     family: Some(PatternFamily::Literals),
                     covered: arms.covered,
                     literals: arms.literals,
+                    position: arms.position,
                 }),
             )
         }
@@ -199,6 +201,7 @@ pub(super) fn pattern_question(
                 family: arms.family,
                 covered: arms.covered,
                 literals: arms.literals,
+                position: arms.position,
             });
             (items, typed)
         }
@@ -663,21 +666,31 @@ fn site_context(
         return None;
     }
     // A tuple pattern's parens open the arm; each slot is a case position.
-    if matches!(site, PatternSite::Arm { .. })
+    if let PatternSite::Arm { open: body, .. } = site
         && open == start
         && matches!(
             tokens[before - 1].kind,
             TokenKind::Punct(b'(' | b',' | b'|')
         )
     {
+        let mut position = 0;
+        let mut depth = 0usize;
+        for token in &tokens[open + 1..before] {
+            if token.opens_bracket() {
+                depth += 1;
+            } else if token.closes_bracket() {
+                depth = depth.saturating_sub(1);
+            } else if depth == 0 && matches!(token.kind, TokenKind::Punct(b',')) {
+                position += 1;
+            }
+        }
         return Some(Context::Case {
-            of: Some(ArmTags {
-                tags: Vec::new(),
-                covered: Vec::new(),
-                family: None,
-                literals: Vec::new(),
-                single: false,
-            }),
+            of: Some(headers_tags(
+                tokens,
+                crate::parser::tuple_arm_headers(source, tokens, body, position),
+                prefix,
+                Some(position),
+            )),
         });
     }
     None
@@ -962,6 +975,7 @@ pub(super) struct ArmTags {
     family: Option<PatternFamily>,
     literals: Vec<crate::ast::LiteralValue>,
     single: bool,
+    position: Option<usize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -976,12 +990,26 @@ pub(super) enum PatternFamily {
 /// evidence yet. A guarded or nested alternative names a tag without
 /// covering it.
 fn arm_tags(source: &str, tokens: &[Token], open: usize, prefix: Option<usize>) -> ArmTags {
+    headers_tags(
+        tokens,
+        crate::parser::arm_headers(source, tokens, open),
+        prefix,
+        None,
+    )
+}
+
+fn headers_tags(
+    tokens: &[Token],
+    headers: Vec<crate::parser::ArmHeader>,
+    prefix: Option<usize>,
+    position: Option<usize>,
+) -> ArmTags {
     let prefix = prefix.map(|index| tokens[index].span.start);
     let mut tags = Vec::new();
     let mut covered: Vec<String> = Vec::new();
     let mut family = None;
     let mut literals = Vec::new();
-    for header in crate::parser::arm_headers(source, tokens, open) {
+    for header in headers {
         let alternatives = match header.pattern {
             Some(Pattern::Tags(alternatives)) => alternatives,
             Some(Pattern::Literals(alternatives)) => {
@@ -1022,6 +1050,7 @@ fn arm_tags(source: &str, tokens: &[Token], open: usize, prefix: Option<usize>) 
         family,
         literals,
         single: true,
+        position,
     }
 }
 

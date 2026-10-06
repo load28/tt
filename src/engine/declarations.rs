@@ -196,15 +196,20 @@ pub(super) fn scrutinee_at(
     source: &str,
     source_kind: crate::SourceKind,
     offset: usize,
+    position: Option<usize>,
 ) -> Option<(usize, usize)> {
     let program = crate::parser::parse_with_kind(source, source_kind);
     let mut sites = Vec::new();
     collect_matches(&program, &mut sites);
-    let (_, span) = sites
+    let (_, spans) = sites
         .into_iter()
         .filter(|(site, _)| site.body_open < offset && offset <= site.body_close)
         .max_by_key(|(site, _)| site.body_open)?;
-    let span = span?;
+    let span = match position {
+        Some(position) if spans.len() > 1 => *spans.get(position)?,
+        None if spans.len() == 1 => spans[0],
+        _ => return None,
+    };
     let text = &source[span.start..span.end];
     let start = span.start
         + (text.len()
@@ -222,14 +227,14 @@ pub(super) fn scrutinee_at(
 /// Every `match` of a program, nested positions included.
 fn collect_matches(
     program: &crate::ast::Program,
-    out: &mut Vec<(TtMatchSite, Option<crate::ast::Span>)>,
+    out: &mut Vec<(TtMatchSite, Vec<crate::ast::Span>)>,
 ) {
     crate::stack::grow(|| collect_matches_grown(program, out));
 }
 
 fn collect_matches_grown(
     program: &crate::ast::Program,
-    out: &mut Vec<(TtMatchSite, Option<crate::ast::Span>)>,
+    out: &mut Vec<(TtMatchSite, Vec<crate::ast::Span>)>,
 ) {
     use crate::ast::{IfLetElse, ResultItem, Segment, TemplateChunk};
     for segment in &program.segments {
@@ -243,7 +248,7 @@ fn collect_matches_grown(
                         body_open: expr.body_open,
                         body_close: expr.body_close,
                     },
-                    Some(expr.scrutinee_span),
+                    vec![expr.scrutinee_span],
                 ));
                 collect_matches(&expr.scrutinee, out);
                 for arm in &expr.arms {
@@ -260,7 +265,7 @@ fn collect_matches_grown(
                         body_open: expr.body_open,
                         body_close: expr.body_close,
                     },
-                    None,
+                    expr.scrutinees.iter().map(|(span, _)| *span).collect(),
                 ));
                 for (_, scrutinee) in &expr.scrutinees {
                     collect_matches(scrutinee, out);

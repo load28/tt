@@ -1,0 +1,5 @@
+// @completions: member
+declare const o: { s: string };
+export function f() {
+  const v = try o./*member*/;
+}

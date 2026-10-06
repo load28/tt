@@ -1,0 +1,34 @@
+=== completions /*field*/ emptyVariantFieldTypeCompletion.tt:3:55 ===
+  | export variant Shape { Circle(radius: number), Tri(p: ) }
+  |                                                       ^ /*field*/
+completion: 2008 item(s), member false, probe yes
+  Point2 (Interface, 11)
+  Shape (Variable, 11)
+  Tree (Variable, 11)
+  ... 2005 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+patternCompletions: null
+editor completion: 2008 item(s)
+  Point2 (Interface, 211)
+  Shape (Variable, 211)
+  Tree (Variable, 211)
+  ... 2005 global or keyword item(s) (sortText 215, no source)
+
+=== completions /*generic*/ emptyVariantFieldTypeCompletion.tt:4:38 ===
+  | export variant Tree<T> { Leaf(value: ) }
+  |                                      ^ /*generic*/
+completion: 2009 item(s), member false, probe yes
+  Point2 (Interface, 11)
+  Shape (Variable, 11)
+  T (Property, 11)
+  Tree (Variable, 11)
+  ... 2005 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member null
+patternCompletions: null
+editor completion: 2009 item(s)
+  Point2 (Interface, 211)
+  Shape (Variable, 211)
+  T (Property, 211)
+  Tree (Variable, 211)
+  ... 2005 global or keyword item(s) (sortText 215, no source)
+

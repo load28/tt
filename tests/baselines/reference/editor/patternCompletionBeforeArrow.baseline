@@ -22,7 +22,7 @@ editor completion: 1 item(s)
 === completions /*payloadFirstArmMultiline*/ patternCompletionBeforeArrow.tt:6:12 ===
   |     Circle()
   |            ^ /*payloadFirstArmMultiline*/
-completion: 1009 item(s), member false, probe no
+completion: 1009 item(s), member false, probe yes
   Shape (Variable, 11)
   a (Function, 11)
   arguments (Variable, 11)

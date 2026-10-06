@@ -802,6 +802,8 @@
 
 | TASK-766 | Fix defects found by a compiler audit | Complete | 2026-10-05 | 2026-10-05 | [TASK-766](./TASK-766-compiler-audit-defects.md) |
 
+| TASK-767 | Fix defects found by an editor audit | In progress | 2026-10-05 | — | [TASK-767](./TASK-767-editor-audit-defects.md) |
+
 ## Next task number
 
-**TASK-767**
+**TASK-768**

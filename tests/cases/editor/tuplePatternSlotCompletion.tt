@@ -1,0 +1,7 @@
+// @completions: second, first
+export variant Dir { North, South }
+export variant Speed { Slow, Fast }
+declare const dir: Dir;
+declare const sp: Speed;
+export const a = match (dir, sp) { (North, /*second*/) => 1, _ => 0 };
+export const b = match (dir, sp) { (/*first*/, Slow) => 1, _ => 0 };

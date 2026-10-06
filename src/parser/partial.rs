@@ -98,6 +98,59 @@ pub(crate) fn arm_headers(src: &str, tokens: &[Token], open: usize) -> Vec<ArmHe
         .collect()
 }
 
+pub(crate) fn tuple_arm_headers(
+    src: &str,
+    tokens: &[Token],
+    open: usize,
+    position: usize,
+) -> Vec<ArmHeader> {
+    let parser = Parser::new(src);
+    let body = &tokens[open + 1..body_close(tokens, open)];
+    matches::outline_arms(src, body)
+        .into_iter()
+        .filter(|arm| arm.arrow.is_some())
+        .filter_map(|arm| {
+            let end = arm.pattern_end();
+            if !matches!(body.get(arm.start)?.kind, TokenKind::Punct(b'(')) {
+                return None;
+            }
+            let close = find_close_at(body, arm.start).filter(|&close| close < end)?;
+            let mut element = arm.start + 1;
+            let mut index = 0;
+            let mut k = element;
+            let mut depth = 0usize;
+            let element_end = loop {
+                if k >= close {
+                    break (index == position).then_some(close)?;
+                }
+                let token = &body[k];
+                if token.opens_bracket() {
+                    depth += 1;
+                } else if token.closes_bracket() {
+                    depth = depth.saturating_sub(1);
+                } else if depth == 0 && matches!(token.kind, TokenKind::Punct(b',')) {
+                    if index == position {
+                        break k;
+                    }
+                    index += 1;
+                    element = k + 1;
+                }
+                k += 1;
+            };
+            let mut cur = Cursor::new(
+                &parser,
+                &body[..element_end],
+                element,
+                body[element_end].span.start,
+            );
+            Some(ArmHeader {
+                pattern: matches::parse_arm_pattern(&mut cur).filter(|_| cur.peek().is_none()),
+                guarded: arm.guard.is_some(),
+            })
+        })
+        .collect()
+}
+
 pub(crate) fn pattern_of(text: &str) -> Option<Pattern> {
     let parser = Parser::new(text);
     let tokens = crate::lexer::lex(text, 0, text.len());

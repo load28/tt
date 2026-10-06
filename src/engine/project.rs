@@ -550,6 +550,7 @@ impl Project {
                         ScopedMaterialization {
                             read: read.clone(),
                             generation,
+                            source: source_digest(&projected[index].source),
                             emit: emit.clone(),
                         },
                     );
@@ -661,8 +662,9 @@ impl Project {
                 members
             }
         };
-        let current = |entry: &ScopedMaterialization| {
-            unchanged.of(entry)
+        let current = |index: usize, entry: &ScopedMaterialization| {
+            entry.source == source_digest(&projected[index].source)
+                && unchanged.of(entry)
                 && members
                     .iter()
                     .filter(|member| texts.0.contains_key(*member))
@@ -679,7 +681,7 @@ impl Project {
                 projected[index].emit.contextual_slots.is_empty()
                     || cache
                         .get(&projected[index].module_path)
-                        .is_some_and(&current)
+                        .is_some_and(|entry| current(index, entry))
             })
         };
         if !settled {
@@ -723,12 +725,13 @@ impl Project {
             };
             let read = Arc::new(texts.of(members.iter()));
             let mut cache = self.scoped.borrow_mut();
-            for (path, emit) in question {
+            for ((path, emit), &index) in question.into_iter().zip(&in_closure) {
                 cache.insert(
                     path,
                     ScopedMaterialization {
                         read: read.clone(),
                         generation: stable,
+                        source: source_digest(&projected[index].source),
                         emit,
                     },
                 );
@@ -744,9 +747,10 @@ impl Project {
                     // about the target; it keeps a materialization whose
                     // served inputs are unchanged.
                     let usable = if in_closure.contains(&index) {
-                        current(entry)
+                        current(index, entry)
                     } else {
-                        unchanged.of(entry)
+                        entry.source == source_digest(&projected[index].source)
+                            && unchanged.of(entry)
                     };
                     usable.then(|| (index, entry.emit.clone()))
                 })
@@ -1152,7 +1156,15 @@ struct ContextualQuestion {
 struct ScopedMaterialization {
     read: Arc<std::collections::BTreeMap<PathBuf, u64>>,
     generation: (u64, u64),
+    source: u64,
     emit: crate::MappedEmit,
+}
+
+fn source_digest(source: &str) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    source.hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Whether materializations still describe the served texts: the disk is as

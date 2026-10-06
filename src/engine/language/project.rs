@@ -1010,10 +1010,13 @@ impl Project {
             let translates = |anchor: &crate::EmitAnchor| {
                 anchor.kind != crate::AnchorKind::Pipe || anchor.context.is_some()
             };
-            if let Some((anchor, class)) = glue.filter(translates).and_then(|anchor| {
-                crate::engine::semantics::translation_class(anchor.kind, code)
-                    .map(|class| (anchor, class))
-            }) && !translated_seen.insert((anchor.display().0, anchor.kind, class))
+            if let Some((anchor, class)) = glue
+                .filter(|anchor| !exact && translates(anchor))
+                .and_then(|anchor| {
+                    crate::engine::semantics::translation_class(anchor.kind, code)
+                        .map(|class| (anchor, class))
+                })
+                && !translated_seen.insert((anchor.display().0, anchor.kind, class))
             {
                 continue;
             }
