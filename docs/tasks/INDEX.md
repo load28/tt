@@ -823,7 +823,8 @@
 | TASK-780 | Fix the sixth audit's command-line findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-780](./TASK-780-sixth-audit-cli.md) |
 | TASK-781 | Fix the sixth audit's compiler findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-781](./TASK-781-sixth-audit-compiler.md) |
 | TASK-782 | Fix the sixth audit's editor findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-782](./TASK-782-sixth-audit-editor.md) |
+| TASK-783 | Fix the seventh audit's command-line findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-783](./TASK-783-seventh-audit-cli.md) |
 
 ## Next task number
 
-**TASK-783**
+**TASK-784**

@@ -219,6 +219,8 @@ pub(super) fn watch_mode(
     let mut reads: HashMap<PathBuf, (SystemTime, Vec<PathBuf>)> = HashMap::new();
     let mut placed: Option<PathBuf> = None;
     let mut configured: Option<JsxPreserve> = None;
+    let mut packaged: Option<bool> = None;
+    let mut refused = false;
     let mut first = true;
     let mut input_error = None;
 
@@ -277,26 +279,32 @@ pub(super) fn watch_mode(
 
         let root = support_root(&jobs, out_dir);
         let moved = root != placed;
+        let module_package = std_placement(root.as_deref())
+            .as_deref()
+            .is_some_and(package_is_module);
+        let repackaged = packaged.is_some_and(|before| before != module_package);
         let reconfigured = configured.as_ref().is_none_or(|configured| {
             jsx_preserve
                 .iter()
                 .any(|(file, value)| configured.get(file).is_some_and(|before| before != value))
         });
-        let changed: Vec<PathBuf> = if first || moved || reconfigured {
-            jobs.iter().map(|job| job.file.clone()).collect()
-        } else {
-            current
-                .iter()
-                .filter(|(file, stamp)| stamps.get(*file) != Some(stamp))
-                .map(|(file, _)| file.clone())
-                .chain(
-                    stamps
-                        .keys()
-                        .filter(|file| !current.contains_key(*file))
-                        .cloned(),
-                )
-                .collect()
-        };
+        let edited: Vec<PathBuf> = current
+            .iter()
+            .filter(|(file, stamp)| stamps.get(*file) != Some(stamp))
+            .map(|(file, _)| file.clone())
+            .chain(
+                stamps
+                    .keys()
+                    .filter(|file| !current.contains_key(*file))
+                    .cloned(),
+            )
+            .collect();
+        let changed: Vec<PathBuf> =
+            if first || moved || reconfigured || repackaged || (refused && !edited.is_empty()) {
+                jobs.iter().map(|job| job.file.clone()).collect()
+            } else {
+                edited
+            };
 
         let selected: Vec<Job> = if changed.is_empty() {
             Vec::new()
@@ -307,7 +315,11 @@ pub(super) fn watch_mode(
                 .cloned()
                 .collect()
         };
-        if !selected.is_empty() {
+        let claimed = selected.is_empty() || opts.check || opts.print || !claim_conflicts(&jobs).0;
+        refused = !claimed;
+        if !claimed {
+            eprintln!("ttc: 0 file(s) rebuilt, with errors — watching");
+        } else if !selected.is_empty() {
             let failed = compile_jobs(&selected, root.as_deref(), opts);
             // The count is what was rebuilt; only the word after it says
             // how the round went, so "failed" must not borrow it.
@@ -325,6 +337,7 @@ pub(super) fn watch_mode(
         stamps = current;
         placed = root;
         configured = Some(jsx_preserve);
+        packaged = Some(module_package);
         thread::sleep(WATCH_INTERVAL);
     }
 }

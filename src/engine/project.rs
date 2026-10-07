@@ -963,6 +963,16 @@ impl Project {
             dependencies
                 .files
                 .extend(tsconfig_lookup(&inputs.collected));
+            for named in inputs.named() {
+                dependencies
+                    .files
+                    .extend(tsconfig_lookup(std::slice::from_ref(named)));
+            }
+            for directory in inputs.directories() {
+                dependencies
+                    .files
+                    .extend(tsconfig_lookup(&[directory.join("tsconfig.json")]));
+            }
             dependencies.files.sort();
             dependencies.files.dedup();
         }
@@ -1558,7 +1568,11 @@ fn alias_of_walked_directory(root: &Path, dir: &Path) -> std::io::Result<bool> {
 fn excluded_source_entry(path: &Path) -> bool {
     path.file_name().is_some_and(|name| {
         let name = name.to_string_lossy();
-        name.starts_with('.') || name == "node_modules"
+        name.starts_with('.')
+            || matches!(
+                &*name,
+                "node_modules" | "bower_components" | "jspm_packages"
+            )
     })
 }
 

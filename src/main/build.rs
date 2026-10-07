@@ -386,46 +386,7 @@ struct Emitted {
 /// sequential one.
 pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &BuildOptions) -> bool {
     if !opts.check && !opts.print {
-        let mut claims: HashMap<&Path, &Path> = HashMap::with_capacity(jobs.len());
-        let mut outputs: HashMap<PathBuf, &Path> = HashMap::with_capacity(jobs.len());
-        let mut conflicted = false;
-        let mut contested: std::collections::HashSet<&Path> = std::collections::HashSet::new();
-        for job in jobs {
-            if let Some(first) = claims.get(job.out_path.as_path()) {
-                if !same_file(first, &job.file) {
-                    eprintln!(
-                        "ttc: {}: multiple inputs claim this output: {} and {}",
-                        job.out_path.display(),
-                        first.display(),
-                        job.file.display()
-                    );
-                    contested.insert(&job.out_path);
-                    conflicted = true;
-                }
-            } else {
-                claims.insert(&job.out_path, &job.file);
-            }
-            // The other half of the same contract: overlapping input roots
-            // give one source two outputs, so the build would write it
-            // twice, at two paths, and say nothing. Both sides are compared
-            // by identity — the same source reached through two roots is
-            // spelled differently on each.
-            match outputs.get(&file_identity(&job.file)) {
-                Some(first) if !same_file(first, &job.out_path) => {
-                    eprintln!(
-                        "ttc: {}: one input claims two outputs: {} and {} (overlapping input roots)",
-                        job.file.display(),
-                        first.display(),
-                        job.out_path.display()
-                    );
-                    conflicted = true;
-                }
-                Some(_) => {}
-                None => {
-                    outputs.insert(file_identity(&job.file), job.out_path.as_path());
-                }
-            }
-        }
+        let (mut conflicted, contested) = claim_conflicts(jobs);
         for job in jobs.iter().filter(|job| {
             !same_file(&job.file, &job.out_path) && !contested.contains(job.out_path.as_path())
         }) {
@@ -466,6 +427,50 @@ pub(super) fn compile_jobs(jobs: &[Job], support_root: Option<&Path>, opts: &Bui
     }
 
     write_outcomes(jobs, &outcomes, support_root, opts)
+}
+
+pub(super) fn claim_conflicts(jobs: &[Job]) -> (bool, std::collections::HashSet<&Path>) {
+    let mut claims: HashMap<&Path, &Path> = HashMap::with_capacity(jobs.len());
+    let mut outputs: HashMap<PathBuf, &Path> = HashMap::with_capacity(jobs.len());
+    let mut conflicted = false;
+    let mut contested: std::collections::HashSet<&Path> = std::collections::HashSet::new();
+    for job in jobs {
+        if let Some(first) = claims.get(job.out_path.as_path()) {
+            if !same_file(first, &job.file) {
+                eprintln!(
+                    "ttc: {}: multiple inputs claim this output: {} and {}",
+                    job.out_path.display(),
+                    first.display(),
+                    job.file.display()
+                );
+                contested.insert(&job.out_path);
+                conflicted = true;
+            }
+        } else {
+            claims.insert(&job.out_path, &job.file);
+        }
+        // The other half of the same contract: overlapping input roots
+        // give one source two outputs, so the build would write it
+        // twice, at two paths, and say nothing. Both sides are compared
+        // by identity — the same source reached through two roots is
+        // spelled differently on each.
+        match outputs.get(&file_identity(&job.file)) {
+            Some(first) if !same_file(first, &job.out_path) => {
+                eprintln!(
+                    "ttc: {}: one input claims two outputs: {} and {} (overlapping input roots)",
+                    job.file.display(),
+                    first.display(),
+                    job.out_path.display()
+                );
+                conflicted = true;
+            }
+            Some(_) => {}
+            None => {
+                outputs.insert(file_identity(&job.file), job.out_path.as_path());
+            }
+        }
+    }
+    (conflicted, contested)
 }
 
 /// What `ttc -p <input>` answers: the text it prints on stdout, present

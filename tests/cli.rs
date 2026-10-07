@@ -2405,6 +2405,93 @@ fn watch_started_without_sources_builds_the_first_one_written() {
     }
 }
 
+fn watching(dir: &Workspace, script: impl FnOnce(&dyn Fn(&str))) {
+    use std::io::{BufRead, BufReader};
+    use std::process::Stdio;
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ttc"));
+    command
+        .current_dir(dir)
+        .args(["--watch", "-o", "out", "src"])
+        .stderr(Stdio::piped())
+        .stdout(Stdio::null());
+    dir.isolate_unfinalized_child_profile(&mut command);
+    let mut child = command.spawn().unwrap();
+    let stderr = child.stderr.take().unwrap();
+    let (send, receive) = mpsc::channel::<String>();
+    let reader = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines() {
+            let _ = send.send(line.unwrap());
+        }
+    });
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let until = |text: &str| loop {
+            let line = receive.recv_timeout(Duration::from_secs(10)).unwrap();
+            if line.contains(text) {
+                break;
+            }
+        };
+        until("Ctrl-C");
+        script(&until);
+    }));
+    let _ = child.kill();
+    let _ = child.wait();
+    reader.join().unwrap();
+    if let Err(error) = result {
+        std::panic::resume_unwind(error);
+    }
+}
+
+#[test]
+fn a_watch_round_refuses_two_inputs_claiming_one_output_as_a_build_does() {
+    let dir = tmpdir();
+    fs::create_dir(dir.join("src")).unwrap();
+    fs::write(dir.join("src/x.tt"), "export const x = 1;\n").unwrap();
+    watching(&dir, |until| {
+        fs::write(dir.join("src/x.ts"), "export const x = 2;\n").unwrap();
+        until("multiple inputs claim this output");
+        fs::write(dir.join("src/x.tt"), "export const x = 3;\n").unwrap();
+        until("multiple inputs claim this output");
+    });
+    assert_eq!(
+        fs::read_to_string(dir.join("out/x.ts"))
+            .unwrap()
+            .trim_end()
+            .lines()
+            .last(),
+        Some("export const x = 1;")
+    );
+}
+
+#[test]
+fn a_watch_round_follows_the_package_type_the_support_modules_take() {
+    let dir = tmpdir();
+    fs::create_dir(dir.join("src")).unwrap();
+    fs::write(dir.join("package.json"), "{\"type\":\"module\"}\n").unwrap();
+    fs::write(
+        dir.join("src/a.mts"),
+        "import * as O from \"@tt/std/option\";\nexport const x = O.Some(1);\n",
+    )
+    .unwrap();
+    fs::write(dir.join("src/b.tt"), "export const b = 1;\n").unwrap();
+    watching(&dir, |until| {
+        assert!(
+            fs::read_to_string(dir.join("out/a.mts"))
+                .unwrap()
+                .contains("\"./tt/option.js\"")
+        );
+        fs::write(dir.join("package.json"), "{}\n").unwrap();
+        until("file(s) ok");
+    });
+    assert!(
+        fs::read_to_string(dir.join("out/a.mts"))
+            .unwrap()
+            .contains("\"./tt/esm/option.js\"")
+    );
+    assert!(dir.join("out/tt/esm/package.json").is_file());
+}
+
 /// Support modules belong to the whole watched input set: a round that
 /// recompiles one file in a subdirectory writes them where a one-shot build
 /// does, and a round whose input set moves the shared root recompiles every
@@ -4265,6 +4352,43 @@ fn dependencies_under_a_configuration_leave_out_files_its_program_never_reads() 
     );
     assert!(stdout.contains("shape.tt"), "{stdout}");
     assert!(!stdout.contains("bad.ts"), "{stdout}");
+}
+
+#[cfg(unix)]
+#[test]
+fn dependencies_list_the_configuration_a_named_directory_would_find() {
+    require_types_toolchain!();
+    let dir = typed_workspace();
+    fs::create_dir_all(dir.join("src")).unwrap();
+    fs::create_dir_all(dir.join("shared")).unwrap();
+    fs::write(dir.join("shared/s.tt"), "export const s = 1;\n").unwrap();
+    std::os::unix::fs::symlink("../shared", dir.join("src/link")).unwrap();
+    fs::write(dir.join("src/a.tt"), "export const a = 1;\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ttc"))
+        .args(["--dependencies", "src"])
+        .current_dir(&dir)
+        .output()
+        .expect("failed to run ttc");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let answer: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let probe = dir
+        .canonicalize()
+        .unwrap()
+        .join("src/tsconfig.json")
+        .to_string_lossy()
+        .into_owned();
+    assert!(
+        answer["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|file| file.as_str() == Some(probe.as_str())),
+        "{answer}"
+    );
 }
 
 #[test]

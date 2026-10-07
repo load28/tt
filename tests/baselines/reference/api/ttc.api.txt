@@ -730,6 +730,7 @@ impl Inputs
     pub fn collect(inputs: &[String]) -> Result<Inputs, String>
     pub fn files(&self) -> &[PathBuf]
     pub fn named(&self) -> &[PathBuf]
+    pub fn directories(&self) -> &[PathBuf]
 impl Clone for Inputs
 impl Debug for Inputs
 impl Eq for Inputs

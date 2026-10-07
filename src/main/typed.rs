@@ -493,7 +493,8 @@ pub(super) fn write_declarations(
                 std_dir
                     .join(declaration.module.file_name())
                     .with_extension("d.ts"),
-                declaration.text.as_bytes(),
+                declaration.module,
+                declaration.text.as_str(),
             )
         })
         .collect();
@@ -534,7 +535,7 @@ pub(super) fn write_declarations(
         // Every planned file fails once. The plan is of files, and colliding
         // declarations are two claims on one of them.
         let mut planned = HashSet::new();
-        let files = std_files.iter().map(|(path, _)| path.clone()).chain(
+        let files = std_files.iter().map(|(path, ..)| path.clone()).chain(
             targets
                 .iter()
                 .flat_map(|target| [target.clone(), target.with_extension("ts.map")]),
@@ -548,11 +549,15 @@ pub(super) fn write_declarations(
     }
     // Standard-library declarations mirror the generated `tt/` package, so
     // plain tsc can map the root and wildcard `@tt/std` entries to them.
-    for (path, text) in &std_files {
+    for (path, module, text) in &std_files {
         outcome.record(
             path,
             super::output::create_dir_all(&std_dir)
-                .and_then(|()| super::output::replace_file(path, text)),
+                .and_then(|()| super::output::replace_file(path, text.as_bytes()))
+                .and_then(|()| {
+                    super::ownership::record_support_declaration(path, *module, text)
+                        .map_err(std::io::Error::other)
+                }),
         );
     }
     for (declaration, target) in declarations.modules.iter().zip(targets) {

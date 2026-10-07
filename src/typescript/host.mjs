@@ -312,15 +312,38 @@ function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, list
     return root === undefined ? undefined : { root, real };
   };
   const writtenByTtc = (name) => /\.ttx?\.d\.ts(\.map)?$/.test(name);
+  const realDirectories = new Map();
+  const served = (f) => {
+    if (files.has(f)) return f;
+    const dir = path.dirname(f);
+    if (!realDirectories.has(dir)) {
+      let real = null;
+      try { real = fs.realpathSync(dir).replaceAll("\\", "/"); } catch {}
+      realDirectories.set(dir, real);
+    }
+    const realDir = realDirectories.get(dir);
+    if (realDir !== null && realDir !== dir) {
+      const real = path.join(realDir, path.basename(f));
+      if (files.has(real)) return real;
+    }
+    if (!LOWERED.test(f)) return undefined;
+    const extension = path.extname(f);
+    const source = f.slice(0, -extension.length);
+    let realSource;
+    try { realSource = fs.realpathSync(source).replaceAll("\\", "/"); } catch { return undefined; }
+    const real = realSource + extension;
+    return realSource !== source && files.has(real) ? real : undefined;
+  };
   return {
     // A `.tt` source the engine did not serve does not exist for TypeScript:
     // its text is tt, not the lowered module.
-    fileExists: (f) => (files.has(f) ? true : TT_SOURCE.test(f) ? false : undefined),
+    fileExists: (f) => (served(f) !== undefined ? true : TT_SOURCE.test(f) ? false : undefined),
     // `undefined` falls back to the real disk; `null` would mean "absent".
     readFile: (f) => {
-      if (!files.has(f) && !dependencies.has(f) && !published(f)) dependencies.set(f, diskVersion(f));
+      const real = served(f);
+      if (real === undefined && !dependencies.has(f) && !published(f)) dependencies.set(f, diskVersion(f));
       if (configFiles.has(f)) return configFiles.get(f);
-      if (files.has(f)) return files.get(f);
+      if (real !== undefined) return files.get(real);
       return TT_SOURCE.test(f) ? null : undefined;
     },
     directoryExists: (d) => (dirs.has(d) ? true : undefined),
@@ -328,7 +351,7 @@ function layeredFileSystem(files, aliases, dirs, configFiles, dependencies, list
       for (const [link, target] of links) {
         if (p === link || p.startsWith(link + "/")) return target + p.slice(link.length);
       }
-      return undefined;
+      return served(p);
     },
     getAccessibleEntries: (d) => {
       const inOutput = outputRoot(d);

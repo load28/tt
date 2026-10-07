@@ -926,3 +926,57 @@ fn a_build_refines_a_named_tt_source_the_configuration_does_not_include() {
         "{emitted}"
     );
 }
+
+#[test]
+fn types_records_the_standard_library_declarations_it_writes() {
+    require_emit!();
+    let dir = project(&[(
+        "src/a.tt",
+        "import * as O from \"@tt/std/option\";\nexport const a = 1 |> O.Some;\n",
+    )]);
+    let declared = run(&dir, &["--types", "-o", "src", "src"]);
+    assert!(
+        declared.status.success(),
+        "{}",
+        String::from_utf8_lossy(&declared.stderr)
+    );
+    assert!(dir.join("src/tt/option.d.ts").is_file());
+    let built = run(&dir, &["-o", "out", "src"]);
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+    for name in ["index", "option", "result"] {
+        assert!(
+            !dir.join(format!("out/tt/{name}.d.ts")).exists(),
+            "{}",
+            String::from_utf8_lossy(&built.stderr)
+        );
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn a_tt_source_imported_through_a_symlink_is_type_checked() {
+    require_emit!();
+    let dir = project(&[
+        (
+            "src/a.tt",
+            "import { s } from \"./link/s.tt\";\nexport const a: string = s;\n",
+        ),
+        (
+            "src/b.tt",
+            "import { s } from \"./fl.tt\";\nexport const b: string = s;\n",
+        ),
+    ]);
+    fs::create_dir_all(dir.join("src/real")).unwrap();
+    fs::write(dir.join("src/real/s.tt"), "export const s: number = 1;\n").unwrap();
+    std::os::unix::fs::symlink("real", dir.join("src/link")).unwrap();
+    std::os::unix::fs::symlink("real/s.tt", dir.join("src/fl.tt")).unwrap();
+    let output = run(&dir, &["--check-types", "src"]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(!stderr.contains("ts2307"), "{stderr}");
+    assert_eq!(stderr.matches("ts2322").count(), 2, "{stderr}");
+}

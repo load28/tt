@@ -104,6 +104,16 @@ pub(super) fn record_sidecar(output: &Path, source: &Path, code: &str) -> Result
     write_output(&record_path(output), &record.to_string())
 }
 
+pub(super) fn record_support_declaration(
+    output: &Path,
+    module: StdModule,
+    code: &str,
+) -> Result<(), String> {
+    let identity = format!("{}.d.ts", support_identity(module));
+    let record = serde_json::json!({ "version": 1, "support": identity, "content": code });
+    write_output(&record_path(output), &record.to_string())
+}
+
 pub(super) fn write_owned_output(
     output: &Path,
     owner: OutputOwner,
