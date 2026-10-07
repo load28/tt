@@ -407,6 +407,33 @@ defects. This task fixes them in the layer that owns each one.
   `rewriteComposesWithTtConstructsInTheSameFile` (a match over
   `Shape.Point`) loses its `ts2339` on `radius` and gains the help line.
 
+### Decision 22: A match tests a copy of its subject, so later constructs see it unnarrowed (K3)
+
+- **Context**: Inside `A => s.n` of `match (s)`, `s` is not narrowed
+  (TS2339), because the match tests a `const` copy (`$tt_m`), and
+  TypeScript narrows only the reference it tests.
+- **Alternative implemented and measured**: Read the subject by its own
+  name when nothing in the file can change it between reads (a name no
+  assignment, update, `for` head, `eval`, or `with` writes, not an import,
+  an ambient `let`/`var`, or a parameter aliased by `arguments`, bound by a
+  declaration of the file, read by the first arm's test, and not declared
+  again inside the decision), so the emission is `switch (s.kind)` and
+  `const { n } = s`. TypeScript then narrows `s` in each arm, and the
+  audit's example checked clean.
+- **Why it was not kept**: TypeScript's narrowing of `s` does not stop at the
+  construct. After `if let A(x) = s { return x; }` or a let-else, `s` stays
+  narrowed for the rest of the block, and a later `match (s)` must still
+  name every declared case (decision 21): the case narrowed away is then
+  TS2678 or TS2367, and only `_` passes both layers. Regenerating every case
+  baseline showed 13 cases that type-checked before failing
+  (`aScriptLetElseKeepsItsBindingsGlobal`, `exportedLetElse`,
+  `aMatchInAGuardIsLoweredBeforeTheGuardTest`, and others), each a program
+  that names a case an earlier tt construct had narrowed away. Narrowing
+  the subject removes valid programs from a common shape (a let-else, then
+  a match on the same value), so the copy stays: a match, an `if let`, and
+  a let-else leave their subject's type as it was, and an arm reads its
+  case through its bindings, as a Rust arm does. `docs/ai/tt.md` says so.
+
 ## Work log
 
 - 2026-10-06: Ran the fifth audit as three read-only agents (CLI,
@@ -444,6 +471,8 @@ defects. This task fixes them in the layer that owns each one.
 - 2026-10-07: Resolved val-pass callees in the scope model (decision 19).
 - 2026-10-07: Stopped generated storage from naming functions (decision 20).
 - 2026-10-07: Let an impossible arm own its binding diagnostics (decision 21).
+- 2026-10-07: Implemented reading a stable subject by name, measured it on
+  every case baseline, and reverted it (decision 22).
 
 ## Issues and resolutions
 
