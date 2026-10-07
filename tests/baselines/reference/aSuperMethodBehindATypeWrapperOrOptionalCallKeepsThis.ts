@@ -16,7 +16,12 @@ class Derived extends Base {
     return [a, b, c, d];
   }
 }
-console.log(new Derived().run(O.A(1)).join(" "), log.join(","));
+class Overriding extends Base {
+  m(x: number): string {
+    return `over(${super.m?.(match (O.A(x) as O) { A(n) => n * 5, B => 0 })})`;
+  }
+}
+console.log(new Derived().run(O.A(1)).join(" "), log.join(","), new Overriding().m(1));
 
 
 //// [main.ts]
@@ -93,7 +98,7 @@ class Derived extends Base {
     }
     const b = (super.m as (x: number) => string)($tt_v1);
     let $tt_v4: (string) | (undefined);
-    const $tt_v3 = (this.m);
+    const $tt_v3 = (super.m);
     if ($tt_v3 != null) {
       {
         const $tt_m = o;
@@ -140,4 +145,33 @@ class Derived extends Base {
     return [a, b, c, d];
   }
 }
-console.log(new Derived().run(O.A(1)).join(" "), log.join(","));
+class Overriding extends Base {
+  m(x: number): string {
+    let $tt_v10: (string) | (undefined);
+    const $tt_v9 = (super.m);
+    if ($tt_v9 != null) {
+      {
+        const $tt_m = O.A(x) as O;
+        switch ($tt_m.kind) {
+          case "A": {
+            const { n } = $tt_m;
+            $tt_v10 = $tt_v9.call(this, n * 5);
+            break;
+          }
+          case "B": {
+            $tt_v10 = $tt_v9.call(this, 0);
+            break;
+          }
+          default: {
+            throw new Error("tt match: unexpected case " + $tt_show($tt_m));
+          }
+        }
+      }
+    } else {
+      $tt_v10 = undefined;
+    }
+    
+    return `over(${$tt_v10})`;
+  }
+}
+console.log(new Derived().run(O.A(1)).join(" "), log.join(","), new Overriding().m(1));

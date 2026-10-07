@@ -1,4 +1,4 @@
-//// [main.tt] 29 mapping(s)
+//// [main.tt] 36 mapping(s)
 1:18 -> 20:21 len 6  "number"
 1:18 -> 23:10 len 6  "number"
 1:30 -> 25:3 len 250  "\nconst log: string[] = [];\nclass Base {\n  m?(x: "...
@@ -15,7 +15,7 @@
 12:82 -> 64:20 len 1  "0"
 12:85 -> 72:56 len 7  ");\n    "
 13:5 -> 97:5 len 10  "const c = "
-13:20 -> 74:25 len 2  ".m"
+13:15 -> 74:21 len 7  "super.m"
 13:32 -> 77:23 len 1  "o"
 13:39 -> 80:21 len 1  "n"
 13:45 -> 81:40 len 5  "n * 3"
@@ -27,5 +27,12 @@
 14:43 -> 104:19 len 1  "n"
 14:49 -> 105:35 len 24  "(log.push(\"arm\"), n * 4)"
 14:80 -> 109:35 len 1  "0"
-14:84 -> 117:21 len 98  ";\n    return [a, b, c, d];\n  }\n}\nconsole.log(new"...
+14:84 -> 117:21 len 94  ";\n    return [a, b, c, d];\n  }\n}\nclass Overridin"...
+20:5 -> 147:5 len 15  "return `over(${"
+20:20 -> 124:21 len 7  "super.m"
+20:37 -> 127:23 len 11  "O.A(x) as O"
+20:54 -> 130:21 len 1  "n"
+20:60 -> 131:41 len 5  "n * 5"
+20:72 -> 135:41 len 1  "0"
+20:76 -> 147:27 len 99  "})`;\n  }\n}\nconsole.log(new Derived().run(O.A(1))"...
 

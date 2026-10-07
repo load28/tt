@@ -72,7 +72,31 @@ class Derived extends Base {
 >b : const b: string
 >c : const c: string | undefined
 >d : const d: string
-console.log(new Derived().run(O.A(1)).join(" "), log.join(","));
+class Overriding extends Base {
+>Overriding : class Overriding
+>Base : class Base
+  m(x: number): string {
+>m : (method) Overriding.m(x: number): string
+>x : (parameter) x: number
+    return `over(${super.m?.(match (O.A(x) as O) { A(n) => n * 5, B => 0 })})`;
+>m : (method) Base.m?(x: number): string
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+>x : (parameter) x: number
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>n : const n: number
+>n : const n: number
+console.log(new Derived().run(O.A(1)).join(" "), log.join(","), new Overriding().m(1));
 >console : var console: Console
 >log : (method) Console.log(...data: any[]): void
 >Derived : constructor Derived(): Derived
@@ -87,4 +111,6 @@ console.log(new Derived().run(O.A(1)).join(" "), log.join(","));
 >join : (method) Array<string | undefined>.join(separator?: string): string
 >log : const log: string[]
 >join : (method) Array<string>.join(separator?: string): string
+>Overriding : constructor Overriding(): Overriding
+>m : (method) Overriding.m(x: number): string
 

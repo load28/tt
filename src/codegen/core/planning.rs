@@ -683,6 +683,26 @@ fn scoped_call_completion(
     })
 }
 
+fn discarded_value_comma(
+    source: &str,
+    first: Option<&crate::evaluation_ir::PlannedEvaluationStep>,
+    value: SourceSpan,
+) -> Option<SourceSpan> {
+    let step = first?;
+    if !matches!(
+        step.operation,
+        HostEvaluationOperation::Eager(crate::program_syntax::EagerPosition::SequenceElement(_))
+    ) {
+        return None;
+    }
+    let bytes = source.as_bytes();
+    let (comma, _) = crate::scanner::skip_trivia(bytes, value.end, step.parent.end);
+    (bytes.get(comma) == Some(&b',') && comma < step.parent.end).then_some(SourceSpan {
+        start: comma,
+        end: comma + 1,
+    })
+}
+
 fn can_defer_arm_values(
     semantic: &SemanticFile,
     core: &CoreFile,
@@ -997,11 +1017,18 @@ impl TargetRewritePlan {
                     })
                     .collect();
                 (!values.is_empty()).then(|| {
+                    let deferrable = |value: &&crate::evaluation_ir::PlannedValue| {
+                        can_defer_arm_values(semantic, core, value.expr, &value.exits)
+                            && discarded_value_comma(
+                                source,
+                                value.schedule.steps().iter().next(),
+                                value.source,
+                            )
+                            .is_none()
+                    };
                     let inline = rewrite.values.len() > 1
                         && values.len() == rewrite.values.len()
-                        && values.iter().all(|value| {
-                            can_defer_arm_values(semantic, core, value.expr, &value.exits)
-                        });
+                        && values.iter().all(deferrable);
                     // A value consumed by a conditional operation is emitted
                     // by that operation's region, at the position of the
                     // operation's first value.
@@ -1029,13 +1056,8 @@ impl TargetRewritePlan {
                                 // owner that plan does not apply, so the
                                 // final-argument completion takes over.
                                 let call_completion = if !inline
-                                    && !(rewrite.values.len() == 1
-                                        && can_defer_arm_values(
-                                            semantic,
-                                            core,
-                                            value.expr,
-                                            &value.exits,
-                                        )) {
+                                    && !(rewrite.values.len() == 1 && deferrable(&value))
+                                {
                                     scoped_call_completion(
                                         core, value, &slot_name, lowering, source,
                                     )
@@ -1054,12 +1076,7 @@ impl TargetRewritePlan {
                                         value.schedule.steps().clone()
                                     },
                                     defer_arm_values: rewrite.values.len() == 1
-                                        && can_defer_arm_values(
-                                            semantic,
-                                            core,
-                                            value.expr,
-                                            &value.exits,
-                                        ),
+                                        && deferrable(&value),
                                 }))
                             }
                         })
@@ -1390,26 +1407,8 @@ impl TargetRewritePlan {
         let compound_assignments = compound_assignment_frames(source, planned_steps());
         let discarded_values: Vec<(ExprId, SourceSpan, SourceSpan)> = all_values()
             .filter_map(|value| {
-                let step = value.steps.iter().next()?;
-                if !matches!(
-                    step.operation,
-                    HostEvaluationOperation::Eager(
-                        crate::program_syntax::EagerPosition::SequenceElement(_)
-                    )
-                ) {
-                    return None;
-                }
-                let bytes = source.as_bytes();
-                let (comma, _) =
-                    crate::scanner::skip_trivia(bytes, value.source.end, step.parent.end);
-                (bytes.get(comma) == Some(&b',') && comma < step.parent.end).then_some((
-                    value.expr,
-                    value.source,
-                    SourceSpan {
-                        start: comma,
-                        end: comma + 1,
-                    },
-                ))
+                discarded_value_comma(source, value.steps.iter().next(), value.source)
+                    .map(|comma| (value.expr, value.source, comma))
             })
             .collect();
         let closing_tags: Vec<(SourceSpan, crate::evaluation_ir::ValueSlotId)> = planned_steps()

@@ -824,7 +824,8 @@
 | TASK-781 | Fix the sixth audit's compiler findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-781](./TASK-781-sixth-audit-compiler.md) |
 | TASK-782 | Fix the sixth audit's editor findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-782](./TASK-782-sixth-audit-editor.md) |
 | TASK-783 | Fix the seventh audit's command-line findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-783](./TASK-783-seventh-audit-cli.md) |
+| TASK-784 | Fix two regressions of TASK-781 found by the seventh audit | Complete | 2026-10-07 | 2026-10-07 | [TASK-784](./TASK-784-super-optional-call-reference.md) |
 
 ## Next task number
 
-**TASK-784**
+**TASK-785**

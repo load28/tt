@@ -1862,6 +1862,9 @@ impl<'a> Emitter<'a> {
                     out.push_lit(text.to_owned());
                 }
             }
+            PlannedReceiver::ThisOfSuper { source } if mapped => {
+                out.push_src(&self.source[source.start..source.end], source.start);
+            }
             PlannedReceiver::ThisOfSuper { .. } => out.push_lit("this"),
         }
     }

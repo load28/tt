@@ -17,4 +17,9 @@ class Derived extends Base {
     return [a, b, c, d];
   }
 }
-console.log(new Derived().run(O.A(1)).join(" "), log.join(","));
+class Overriding extends Base {
+  m(x: number): string {
+    return `over(${super.m?.(match (O.A(x) as O) { A(n) => n * 5, B => 0 })})`;
+  }
+}
+console.log(new Derived().run(O.A(1)).join(" "), log.join(","), new Overriding().m(1));
