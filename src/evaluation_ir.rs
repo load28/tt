@@ -135,8 +135,10 @@ pub(crate) struct LoweringPlan {
     owners: Vec<HostRewrite>,
     for_initializer_propagations: Vec<ForInitializerPropagation>,
     slot_names: Vec<String>,
-    /// Earlier materializations substituted when an enclosing source is captured.
-    capture_dependencies: HashMap<ValueSlotId, Vec<(SourceSpan, ValueSlotId)>>,
+    /// The owner group and source span each source capture's slot holds.
+    captures: HashMap<ValueSlotId, (usize, SourceSpan)>,
+    /// The slot of each source span captured in an owner group.
+    captured_slots: HashMap<(usize, SourceSpan), ValueSlotId>,
     value_slots: HashMap<ExprId, ValueSlotId>,
     piped_slots: HashMap<ExprId, Vec<ValueSlotId>>,
     nested_exits: HashMap<ExprId, Vec<HostExit>>,
@@ -524,6 +526,23 @@ struct PlannedSourceSlot {
 }
 
 impl LoweringPlan {
+    /// Whether `earlier`, a source materialized before the capture written
+    /// to `target`, is substituted into that capture: an earlier capture of
+    /// the same owner group lying inside it, so emission reads its slot, not
+    /// its source.
+    pub(crate) fn capture_depends_on(&self, target: ValueSlotId, earlier: SourceSpan) -> bool {
+        let Some(&(group, source)) = self.captures.get(&target) else {
+            return false;
+        };
+        earlier != source
+            && source.start <= earlier.start
+            && earlier.end <= source.end
+            && self
+                .captured_slots
+                .get(&(group, earlier))
+                .is_some_and(|dependency| dependency.0 < target.0)
+    }
+
     /// The plan of a file whose TypeScript gives no owner model. The helpers
     /// a lowering without owners still calls are named against the names
     /// the source already uses, as a built plan names them.

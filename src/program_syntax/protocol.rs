@@ -988,6 +988,13 @@ pub(super) fn source_span_for_projection(
     segments: &ProjectionSegments,
     projected: ProjectedSpan,
 ) -> Option<SourceSpan> {
+    segments.mapped(projected, || look_up_source_span(segments, projected))
+}
+
+fn look_up_source_span(
+    segments: &ProjectionSegments,
+    projected: ProjectedSpan,
+) -> Option<SourceSpan> {
     crate::work::tick("projection span lookups");
     if let Some(segment) = segments
         .starting_at(projected.start)

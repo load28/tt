@@ -233,14 +233,15 @@ impl EvaluationFile {
         let mut slot_names = Vec::new();
         let mut slot_anchors: Vec<Option<SourceSpan>> = Vec::new();
         let mut value_slots = HashMap::new();
-        let mut capture_dependencies = HashMap::new();
+        let mut captures = HashMap::new();
+        let mut captured_slots = HashMap::new();
         let mut rewrites = Vec::with_capacity(owners.len());
         let mut structurally_owned_children = HashSet::new();
         let mut owned_child_schedules = Vec::new();
         let mut owned_child_exits = Vec::new();
         let mut nested_operations = Vec::new();
         let mut unsupported_owned_children = Vec::new();
-        for (owner, values) in owners {
+        for (group, (owner, values)) in owners.into_iter().enumerate() {
             let assigned = values
                 .into_iter()
                 .map(|value| {
@@ -296,19 +297,8 @@ impl EvaluationFile {
                 })
                 .collect::<Result<Vec<_>, EvaluationError>>()?;
             for (source, slot) in &source_slots {
-                capture_dependencies.insert(
-                    slot.target,
-                    source_slots
-                        .iter()
-                        .filter(|(child, dependency)| {
-                            **child != *source
-                                && source.start <= child.start
-                                && child.end <= source.end
-                                && dependency.target.0 < slot.target.0
-                        })
-                        .map(|(child, dependency)| (*child, dependency.target))
-                        .collect(),
-                );
+                captures.insert(slot.target, (group, *source));
+                captured_slots.insert((group, *source), slot.target);
             }
             let mut values = values;
             // A statement-capable outer Core value owns same-host tt values
@@ -1105,7 +1095,8 @@ impl EvaluationFile {
             owners: rewrites,
             for_initializer_propagations,
             slot_names,
-            capture_dependencies,
+            captures,
+            captured_slots,
             value_slots,
             piped_slots,
             nested_schedules,

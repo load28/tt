@@ -45,6 +45,36 @@ removes that growth from the structure that causes it.
    in source order and disjoint, so the position holding a value is found
    with `partition_point` instead of a scan.
 
+3. **A projected span is mapped to source once, by the segment index
+   itself.** Every tt value nested in an expression maps the spans of the
+   frames it shares with its siblings and ancestors (the step parents and
+   their inputs), so `source_span_for_projection` ran once per step and
+   input: 644,796 lookups for 800 matches joined by `+`, 18% of the
+   compile. The mapping is a pure function of the segments, so
+   `ProjectionSegments` memoizes it per projected span. The collector's
+   own per-owner cache (`owner_sources`) was the same memo in one caller;
+   it is removed in favour of the shared one.
+4. **A capture's dependencies are a relation, not a list.** Evaluation
+   planning stored, for each source capture, every other capture of the
+   same owner inside it with an earlier slot, and the order validation
+   only tested membership in that list. In an expression whose captures
+   nest (a left-nested `+` chain), that is quadratic in time and memory.
+   The plan now keeps each capture's owner group and span and each group's
+   span-to-slot map, and `LoweringPlan::capture_depends_on` answers the
+   same membership question in constant time.
+5. **A value's steps stay one per enclosing operation.** A schedule lists
+   each operation between the value and its owner, and the planner and
+   emitter index, slice, and compare those lists (`steps()[..index]`,
+   suffix equality for shared conditionals, `steps().is_empty()`), so a
+   value nested `d` operations deep carries `d` steps. Sharing the outer
+   steps between values (a persistent list) would change that contract in
+   every stage that reads schedules; it is left as a proposal rather than
+   folded into this task. TASK-772 decision 2 already accepted the
+   per-value path in the collector for the same reason. With decisions 3
+   and 4, 1,600 matches in one `+` chain compile in 1.5 s (from 2.9 s) and
+   800 in 0.47 s (from 0.63 s); the remaining time is copying the step
+   lists.
+
 ## Work log
 
 - 2026-10-07: Measured a release build with line tables. 1,600 matches in
@@ -65,6 +95,15 @@ removes that growth from the structure that causes it.
   chain): the collector's visit and `finish` dominate (`finish` about 52%,
   `source_span_for_projection` about 18%). The per-value paths clone every
   ancestor, which TASK-772 decision 2 accepted as depth-quadratic.
+- 2026-10-07: A second profile of the same input attributed 18% to
+  projection lookups (644,796 calls) and 22% to the order validation,
+  most of it comparing spans against each capture's dependency list.
+  Implemented decisions 3 and 4: the instruction count for 800 matches
+  fell from 3.45 G to 1.36 G, and what remains is allocating and copying
+  the per-value step lists (decision 5). Added
+  `compiling_maps_each_projected_span_once_for_nested_tt_values`, which
+  fails without the memo (`projection span lookups: 5651 units for n
+  matches but 21301 for 2n`).
 
 ## Issues and resolutions
 
@@ -76,6 +115,10 @@ None.
   (`compiling_does_linear_work_in_the_tt_values_one_expression_lists`)
 - **Observed failure**: without decision 1 the test fails on
   `projection span lookups: 5252 → 20502` (200 values against 100).
+- **Path**: `src/lib/scaling_tests.rs`
+  (`compiling_maps_each_projected_span_once_for_nested_tt_values`)
+- **Observed failure**: without decision 3 the test fails on
+  `projection span lookups: 5651 units for n matches but 21301 for 2n`.
 
 ## Verification
 

@@ -660,3 +660,17 @@ fn compiling_does_linear_work_in_the_tt_values_one_expression_lists() {
         assert!(large["evaluation protocol inputs"] > 0);
     }
 }
+
+#[test]
+fn compiling_maps_each_projected_span_once_for_nested_tt_values() {
+    let chain = |count| {
+        format!(
+            "export variant V {{ A, B }}\ndeclare const v: V;\nexport const x = {};\n",
+            vec!["match (v) { A => 1, B => 2 }"; count].join(" + "),
+        )
+    };
+    let small = measure(|| every_request(&chain(100)));
+    let large = measure(|| every_request(&chain(200)));
+    assert_linear(&small, &large);
+    assert!(large["projection span lookups"] > 0);
+}

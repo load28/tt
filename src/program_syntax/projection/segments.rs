@@ -62,6 +62,7 @@ impl SegmentList {
 pub(in super::super) struct ProjectionSegments {
     segments: Vec<ProjectionSourceSegment>,
     index: crate::span_index::SpanIndex,
+    mapped: std::cell::RefCell<HashMap<ProjectedSpan, Option<SourceSpan>>>,
 }
 
 impl ProjectionSegments {
@@ -71,7 +72,27 @@ impl ProjectionSegments {
                 .iter()
                 .map(|segment| (segment.projected.start.0, segment.projected.end.0)),
         );
-        Self { segments, index }
+        Self {
+            segments,
+            index,
+            mapped: std::cell::RefCell::default(),
+        }
+    }
+
+    /// The source span `projected` maps to, worked out once per span: every
+    /// tt value nested in an expression maps the spans of the frames it
+    /// shares with its siblings and ancestors.
+    pub(in super::super) fn mapped(
+        &self,
+        projected: ProjectedSpan,
+        map: impl FnOnce() -> Option<SourceSpan>,
+    ) -> Option<SourceSpan> {
+        if let Some(mapped) = self.mapped.borrow().get(&projected) {
+            return *mapped;
+        }
+        let mapped = map();
+        self.mapped.borrow_mut().insert(projected, mapped);
+        mapped
     }
 
     pub(in super::super) fn starting_at(&self, at: ProjectedByte) -> Vec<usize> {
