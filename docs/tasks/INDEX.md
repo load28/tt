@@ -822,7 +822,8 @@
 | TASK-779 | Share the pattern analysis' declaration entries across the scopes it narrows | Complete | 2026-10-07 | 2026-10-07 | [TASK-779](./TASK-779-shared-pattern-table-entries.md) |
 | TASK-780 | Fix the sixth audit's command-line findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-780](./TASK-780-sixth-audit-cli.md) |
 | TASK-781 | Fix the sixth audit's compiler findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-781](./TASK-781-sixth-audit-compiler.md) |
+| TASK-782 | Fix the sixth audit's editor findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-782](./TASK-782-sixth-audit-editor.md) |
 
 ## Next task number
 
-**TASK-782**
+**TASK-783**

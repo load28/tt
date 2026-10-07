@@ -7,7 +7,7 @@ completion: 1060 item(s), member false, probe no
   ... 1058 global or keyword item(s) (sortText 15, no source)
 ttCompletions: pattern false, member {"receiver":null}
 patternCompletions: null
-editor completion: 50 item(s)
+editor completion: 49 item(s)
   at (Method, 211)
   charAt (Method, 211)
   charCodeAt (Method, 211)
@@ -57,5 +57,4 @@ editor completion: 50 item(s)
   sup (Method, 2z11) [deprecated]
   trimLeft (Method, 2z11) [deprecated]
   trimRight (Method, 2z11) [deprecated]
-  ... 1 global or keyword item(s) (sortText 215, no source)
 

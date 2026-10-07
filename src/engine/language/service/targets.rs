@@ -17,9 +17,26 @@ pub(in super::super) fn source_edit(
     splice: Option<usize>,
     edit: &serde_json::Value,
 ) -> Option<TextEdit> {
-    let start = mapper::from_utf16(code, u16_offset(code, position_of(&edit["range"]["start"])));
-    let end = mapper::from_utf16(code, u16_offset(code, position_of(&edit["range"]["end"])));
+    let (start, end) = source_byte_span(code, mappings, inserted, splice, &edit["range"])?;
+    Some(TextEdit {
+        range: span_range(source, start, end),
+        new_text: edit["newText"].as_str()?.to_string(),
+    })
+}
+
+pub(in super::super) fn source_byte_span(
+    code: &str,
+    mappings: &[EmitMapping],
+    inserted: &[crate::InsertedGlue],
+    splice: Option<usize>,
+    range: &serde_json::Value,
+) -> Option<(usize, usize)> {
+    let start = mapper::from_utf16(code, u16_offset(code, position_of(&range["start"])));
+    let end = mapper::from_utf16(code, u16_offset(code, position_of(&range["end"])));
     let (start, end) = mapper::to_source_span(mappings, start, end).or_else(|| {
+        if start == 0 && end == 0 {
+            return Some((0, 0));
+        }
         let glue = inserted
             .iter()
             .find(|glue| start == end && (start == glue.out || start == glue.out_end))?;
@@ -29,10 +46,7 @@ pub(in super::super) fn source_edit(
         Some(at) if byte > at => byte.checked_sub(PROBE_NAME.len()).filter(|&b| b >= at),
         _ => Some(byte),
     };
-    Some(TextEdit {
-        range: span_range(source, unsplice(start)?, unsplice(end)?),
-        new_text: edit["newText"].as_str()?.to_string(),
-    })
+    Some((unsplice(start)?, unsplice(end)?))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

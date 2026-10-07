@@ -134,6 +134,23 @@ fn compiling_does_linear_work_in_a_left_deep_chain_of_tt_values() {
     }
 }
 
+#[test]
+fn compiling_does_linear_work_in_the_steps_of_a_pipeline() {
+    let source = |count: usize| {
+        format!(
+            "declare function f(x: number): number;\ndeclare const o: {{ m(x: number): number }};\nexport const x = 1{};\n",
+            " |> f |> .toFixed(1).length |> o.m".repeat(count),
+        )
+    };
+    let compile = |count| {
+        crate::compile(&source(count), &crate::Options::default()).expect("the file compiles")
+    };
+    let small = measure(|| compile(100));
+    let large = measure(|| compile(200));
+    assert!(small["top-level query bytes"] > 0);
+    assert_linear(&small, &large);
+}
+
 fn nested_matches(depth: usize) -> String {
     format!(
         "export variant V {{ A(v: V), B }}\ndeclare const a: V;\nexport const x = {}1{};\nexport function f() {{ {}g();{} }}\n",

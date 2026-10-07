@@ -1,0 +1,29 @@
+=== completions /*dot*/ main.tt:2:24 ===
+  | export const r = o |> .;
+  |                        ^ /*dot*/
+completion: 1062 item(s), member false, probe no
+  m (Variable, 11)
+  o (Variable, 11)
+  r (Variable, 11)
+  s (Variable, 11)
+  ... 1058 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member {"receiver":null}
+patternCompletions: null
+editor completion: 1 item(s)
+  cc (Field, 211)
+
+=== completions /*optional*/ main.tt:4:25 ===
+  | export const s = m |> ?.;
+  |                         ^ /*optional*/
+completion: 1062 item(s), member false, probe no
+  m (Variable, 11)
+  o (Variable, 11)
+  r (Variable, 11)
+  s (Variable, 11)
+  ... 1058 global or keyword item(s) (sortText 15, no source)
+ttCompletions: pattern false, member {"receiver":null}
+patternCompletions: null
+editor completion: 2 item(s)
+  a-b (Field, 211)
+  cc (Field, 211)
+

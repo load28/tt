@@ -23,6 +23,7 @@ fn close_of(tokens: &[Token], open: usize) -> Option<usize> {
 /// *keep* parentheses, so erring that way costs a pair of parentheses and
 /// never a meaning.
 pub(crate) fn has_top_level_comma(src: &str, from: usize, end: usize, kind: SourceKind) -> bool {
+    crate::work::tick_by("top-level query bytes", end - from);
     if !src.as_bytes()[from..end].iter().any(|byte| {
         matches!(
             byte,
@@ -95,6 +96,7 @@ enum Primary {
 
 fn primary_expression(src: &str, from: usize, end: usize, kind: SourceKind) -> Option<Primary> {
     crate::work::tick("primary expression checks");
+    crate::work::tick_by("top-level query bytes", end - from);
     let tokens = lex_with_kind(src, from, end, kind);
     let word = |index: usize| {
         let token = &tokens[index];

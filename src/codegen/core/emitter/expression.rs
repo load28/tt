@@ -18,7 +18,21 @@ impl<'a> Emitter<'a> {
                 // produced: the head, then each step in turn — the place a
                 // label on a rejected value points back at.
                 let mut produced = self.span(apply.node);
+                let mut shape: Option<String> = None;
                 for step in &apply.steps {
+                    let kind = self.source_kind;
+                    let acc_grouped = match &shape {
+                        Some(shape) => grouping_required(shape, kind),
+                        None => needs_grouping(&acc, kind),
+                    };
+                    let acc_closed = || match &shape {
+                        Some(shape) => {
+                            crate::lexer::is_member_receiver(shape, 0, shape.len(), kind)
+                        }
+                        None => acc.resolved_text().is_some_and(|text| {
+                            crate::lexer::is_member_receiver(&text, 0, text.len(), kind)
+                        }),
+                    };
                     let step_span = self.span(step.node);
                     let context = Some((produced.start, produced.end));
                     let body =
@@ -31,9 +45,14 @@ impl<'a> Emitter<'a> {
                     // step consuming it. Verbatim spans still resolve
                     // exactly; only glue-crossing spans re-home here.
                     let mut input = Rope::new();
+                    let next_shape: Option<String>;
                     match step.mode {
                         ApplyMode::Postfix { .. } => {
-                            push_receiver(&mut input, acc, self.source_kind);
+                            let closed = acc_closed();
+                            next_shape = body
+                                .resolved_text()
+                                .map(|text| format!("{}{text}", if closed { "x" } else { "(x)" }));
+                            push_parenthesized_unless(&mut input, acc, closed);
                             next.anchored_with_context(
                                 AnchorKind::Pipe,
                                 step_span.start,
@@ -46,9 +65,21 @@ impl<'a> Emitter<'a> {
                         }
                         ApplyMode::Call => {
                             if accumulator_is_inert {
+                                next_shape = body.resolved_text().map(|text| {
+                                    if crate::lexer::is_primary_expression(
+                                        &text,
+                                        0,
+                                        text.len(),
+                                        kind,
+                                    ) {
+                                        format!("{text}(x)")
+                                    } else {
+                                        "(x)(x)".to_owned()
+                                    }
+                                });
                                 push_callee(&mut next, body, self.source_kind);
                                 next.push_lit("(");
-                                push_grouped(&mut input, acc, self.source_kind);
+                                push_grouped_as(&mut input, acc, acc_grouped);
                                 next.anchored_with_context(
                                     AnchorKind::Pipe,
                                     step_span.start,
@@ -61,7 +92,8 @@ impl<'a> Emitter<'a> {
                             } else if let Some(member) =
                                 self.member_apply_steps.get(&step.value).copied()
                             {
-                                push_grouped(&mut input, acc, self.source_kind);
+                                next_shape = Some("(x)(x)".to_owned());
+                                push_grouped_as(&mut input, acc, acc_grouped);
                                 let mut call = Rope::new();
                                 call.anchored_with_context(
                                     AnchorKind::Pipe,
@@ -94,7 +126,8 @@ impl<'a> Emitter<'a> {
                                     piped,
                                 );
                                 next.push_lit("))(");
-                                push_grouped(&mut input, acc, self.source_kind);
+                                next_shape = Some("(x)(x)".to_owned());
+                                push_grouped_as(&mut input, acc, acc_grouped);
                                 next.anchored_with_context(
                                     AnchorKind::Pipe,
                                     step_span.start,
@@ -109,7 +142,8 @@ impl<'a> Emitter<'a> {
                             } else {
                                 self.used_pipe.set(true);
                                 next.push_lit(format!("{}(", self.generated_name("$tt_ap")));
-                                push_grouped(&mut input, acc, self.source_kind);
+                                next_shape = Some("x(x)".to_owned());
+                                push_grouped_as(&mut input, acc, acc_grouped);
                                 next.anchored_with_context(
                                     AnchorKind::Pipe,
                                     step_span.start,
@@ -125,7 +159,8 @@ impl<'a> Emitter<'a> {
                         }
                         ApplyMode::Missing => {
                             next.push_lit(format!("{RECOVERED_VALUE}("));
-                            push_grouped(&mut input, acc, self.source_kind);
+                            next_shape = Some("x(x)".to_owned());
+                            push_grouped_as(&mut input, acc, acc_grouped);
                             next.anchored_with_context(
                                 AnchorKind::Pipe,
                                 step_span.start,
@@ -138,6 +173,7 @@ impl<'a> Emitter<'a> {
                         }
                     }
                     acc = next;
+                    shape = next_shape;
                     // A call or member operation can return any value and
                     // can have arbitrary effects. Only the original head's
                     // syntax proof can authorize inline reordering.

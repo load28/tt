@@ -4,7 +4,7 @@ mod presentation;
 mod targets;
 
 pub(super) use presentation::{docs_text, parameter_span, split_hover};
-pub(super) use targets::{TargetUse, map_shared_target, map_target, source_edit};
+pub(super) use targets::{TargetUse, map_shared_target, map_target, source_byte_span, source_edit};
 
 use super::*;
 use crate::lines::LineMap;
@@ -297,20 +297,31 @@ pub(super) fn ts_completions(
             (path.to_path_buf(), at, label.clone(), source.clone()),
             item.clone(),
         );
-        let replaced = ["replace", "range"]
+        let replaced_range = ["replace", "range"]
             .iter()
             .map(|key| &item["textEdit"][*key])
-            .find(|range| range.is_object())
-            .and_then(|range| {
-                source_edit(
-                    code,
-                    text.mappings,
-                    text.inserted,
-                    text.source,
-                    text.splice,
-                    &serde_json::json!({ "range": range, "newText": "" }),
-                )
-            });
+            .find(|range| range.is_object());
+        let insert_text = item["insertText"]
+            .as_str()
+            .or_else(|| item["textEdit"]["newText"].as_str());
+        if let Some(range) = replaced_range
+            && let Some((start, _)) =
+                source_byte_span(code, text.mappings, text.inserted, text.splice, range)
+            && pipe_step_dot(text.source, kind, start)
+            && !insert_text.is_some_and(|text| text.starts_with('.') || text.starts_with("?."))
+        {
+            continue;
+        }
+        let replaced = replaced_range.and_then(|range| {
+            source_edit(
+                code,
+                text.mappings,
+                text.inserted,
+                text.source,
+                text.splice,
+                &serde_json::json!({ "range": range, "newText": "" }),
+            )
+        });
         entries.push(CompletionItem {
             kind: item["kind"]
                 .as_u64()
@@ -325,10 +336,7 @@ pub(super) fn ts_completions(
                 })
                 .collect(),
             sort_text: item["sortText"].as_str().unwrap_or(&label).to_string(),
-            insert_text: item["insertText"]
-                .as_str()
-                .or_else(|| item["textEdit"]["newText"].as_str())
-                .map(str::to_owned),
+            insert_text: insert_text.map(str::to_owned),
             filter_text: item["filterText"].as_str().map(str::to_owned),
             snippet: item["insertTextFormat"].as_u64() == Some(2),
             range: replaced.map(|edit| edit.range),
@@ -354,6 +362,31 @@ pub(super) fn ts_completions(
 }
 
 const SWITCH_CASES_SOURCE: &str = "SwitchCases/";
+
+fn pipe_step_dot(source: &str, kind: crate::SourceKind, at: usize) -> bool {
+    use crate::lexer::{TokenKind, TplPart};
+    fn search(tokens: &[crate::lexer::Token], at: usize) -> bool {
+        tokens.iter().enumerate().any(|(index, token)| {
+            (token.span.start == at
+                && matches!(token.kind, TokenKind::Punct(b'.'))
+                && index
+                    .checked_sub(1)
+                    .is_some_and(|previous| matches!(tokens[previous].kind, TokenKind::PipeOp)))
+                || match &token.kind {
+                    TokenKind::Template(parts) => parts.iter().any(|part| match part {
+                        TplPart::Interp { tokens, .. } => search(tokens, at),
+                        TplPart::Raw(_) => false,
+                    }),
+                    _ => false,
+                }
+        })
+    }
+    source.as_bytes().get(at) == Some(&b'.')
+        && search(
+            &crate::lexer::lex_with_kind(source, 0, source.len(), kind),
+            at,
+        )
+}
 
 fn module_specifier_at(source: &str, kind: crate::SourceKind, at: usize) -> Option<(usize, usize)> {
     use crate::lexer::TokenKind;

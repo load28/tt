@@ -328,6 +328,33 @@ fn bool_param(
     }
 }
 
+fn position_param(value: &serde_json::Value, method: &str) -> Result<Position, String> {
+    let part = |key: &str| {
+        match &value[key] {
+        serde_json::Value::Null => Ok(0),
+        part => part
+            .as_u64()
+            .and_then(|part| u32::try_from(part).ok())
+            .ok_or_else(|| {
+                format!("{method}: \"position.{key}\" expects a non-negative integer below 2^32 (got {part})")
+            }),
+    }
+    };
+    match value {
+        serde_json::Value::Null => Ok(Position {
+            line: 0,
+            character: 0,
+        }),
+        serde_json::Value::Object(_) => Ok(Position {
+            line: part("line")?,
+            character: part("character")?,
+        }),
+        other => Err(format!(
+            "{method}: \"position\" expects an object with \"line\" and \"character\" (got {other})"
+        )),
+    }
+}
+
 fn string_param<'a>(
     value: &'a serde_json::Value,
     method: &str,
@@ -391,7 +418,7 @@ fn respond(
             workspace.reload();
             Ok(json!({}))
         }
-        "hover" => semantic(workspace, params, |project, path, position| {
+        "hover" => semantic(workspace, method, params, |project, path, position| {
             Ok(match project.hover(path, position)? {
                 None => serde_json::Value::Null,
                 Some(info) => json!({
@@ -401,7 +428,7 @@ fn respond(
                 }),
             })
         }),
-        "definition" => semantic(workspace, params, |project, path, position| {
+        "definition" => semantic(workspace, method, params, |project, path, position| {
             let locations: Vec<_> = project
                 .definition(path, position)?
                 .into_iter()
@@ -409,7 +436,7 @@ fn respond(
                 .collect();
             Ok(json!({ "locations": locations }))
         }),
-        "references" => spanning(workspace, params, |workspace, path, position| {
+        "references" => spanning(workspace, method, params, |workspace, path, position| {
             let locations: Vec<_> = workspace
                 .references(path, position)?
                 .into_iter()
@@ -421,20 +448,20 @@ fn respond(
                 .collect();
             Ok(json!({ "locations": locations }))
         }),
-        "completion" => semantic(workspace, params, |project, path, position| {
+        "completion" => semantic(workspace, method, params, |project, path, position| {
             let member = bool_param(&params["member"], "completion", "member", false)?;
             let trigger = params["triggerCharacter"].as_str();
             let answer = project.triggered_completion(path, position, member, trigger)?;
             Ok(completion_json(answer))
         }),
-        "completionResolve" => semantic(workspace, params, |project, path, position| {
+        "completionResolve" => semantic(workspace, method, params, |project, path, position| {
             let label = params["label"].as_str().unwrap_or_default();
             let source = params["source"].as_str();
             let probe = params["probe"].as_u64();
             let detail = project.completion_resolve(path, position, label, source, probe)?;
             Ok(completion_detail_json(detail))
         }),
-        "rename" => spanning(workspace, params, |workspace, path, position| {
+        "rename" => spanning(workspace, method, params, |workspace, path, position| {
             Ok(match workspace.rename(path, position)? {
                 None => json!({ "edits": serde_json::Value::Null }),
                 Some(edits) => json!({
@@ -449,7 +476,7 @@ fn respond(
                 }),
             })
         }),
-        "prepareRename" => spanning(workspace, params, |workspace, path, position| {
+        "prepareRename" => spanning(workspace, method, params, |workspace, path, position| {
             Ok(match workspace.prepare_rename(path, position)? {
                 ttc::engine::PrepareRename::Range(range) => json!({ "range": range_json(range) }),
                 ttc::engine::PrepareRename::Refused(reason) => {
@@ -457,12 +484,12 @@ fn respond(
                 }
             })
         }),
-        "documentSymbols" => semantic(workspace, params, |project, path, _position| {
+        "documentSymbols" => semantic(workspace, method, params, |project, path, _position| {
             Ok(
                 json!({ "symbols": project.document_symbols(path)?.iter().map(symbol_json).collect::<Vec<_>>() }),
             )
         }),
-        "signatureHelp" => semantic(workspace, params, |project, path, position| {
+        "signatureHelp" => semantic(workspace, method, params, |project, path, position| {
             let trigger = match (
                 params["triggerKind"].as_u64(),
                 params["triggerCharacter"].as_str(),
@@ -481,36 +508,38 @@ fn respond(
             Ok(signature_help_json(help))
         }),
         "semanticTokens" => semantic_tokens(params),
-        "patternCompletions" => semantic(workspace, params, |project, path, position| {
+        "patternCompletions" => semantic(workspace, method, params, |project, path, position| {
             Ok(match project.pattern_completions(path, position)? {
                 None => serde_json::Value::Null,
                 Some(items) => json!({ "items": pattern_items_json(&items) }),
             })
         }),
-        "patternSymbol" => semantic(workspace, params, |project, path, position| {
+        "patternSymbol" => semantic(workspace, method, params, |project, path, position| {
             Ok(project
                 .pattern_symbol(path, position)?
                 .map_or(serde_json::Value::Null, tt_symbol_json))
         }),
-        "documentSemanticTokens" => semantic(workspace, params, |project, path, _position| {
-            let tokens: Vec<_> = project
-                .semantic_tokens(path)?
-                .into_iter()
-                .map(|token| {
-                    json!({
-                        "range": range_json(token.range),
-                        "type": token.token_type,
-                        "modifiers": token.modifiers,
+        "documentSemanticTokens" => {
+            semantic(workspace, method, params, |project, path, _position| {
+                let tokens: Vec<_> = project
+                    .semantic_tokens(path)?
+                    .into_iter()
+                    .map(|token| {
+                        json!({
+                            "range": range_json(token.range),
+                            "type": token.token_type,
+                            "modifiers": token.modifiers,
+                        })
                     })
-                })
-                .collect();
-            Ok(json!({ "tokens": tokens }))
-        }),
+                    .collect();
+                Ok(json!({ "tokens": tokens }))
+            })
+        }
         "declarations" => declarations(workspace, params),
-        "ttSymbol" => tt_symbol(workspace, params),
-        "ttCompletions" => tt_completions(workspace, params),
+        "ttSymbol" => tt_symbol(workspace, method, params),
+        "ttCompletions" => tt_completions(workspace, method, params),
         "ttHints" => tt_hints(workspace, params),
-        "tsDiagnostics" => semantic(workspace, params, |project, path, _position| {
+        "tsDiagnostics" => semantic(workspace, method, params, |project, path, _position| {
             let diagnostics: Vec<_> = project
                 .service_diagnostics(path)?
                 .into_iter()
@@ -540,10 +569,11 @@ fn respond(
 /// position defaults to 0:0 for the requests that do not carry one.
 fn semantic(
     workspace: &mut Workspace,
+    method: &str,
     params: &serde_json::Value,
     handle: impl FnOnce(&mut Project, &Path, Position) -> Result<serde_json::Value, String>,
 ) -> Result<serde_json::Value, String> {
-    spanning(workspace, params, |workspace, path, position| {
+    spanning(workspace, method, params, |workspace, path, position| {
         handle(workspace.project_for(path)?, path, position)
     })
 }
@@ -551,16 +581,14 @@ fn semantic(
 /// Hands a request whose answer can span projects to the workspace.
 fn spanning(
     workspace: &mut Workspace,
+    method: &str,
     params: &serde_json::Value,
     handle: impl FnOnce(&mut Workspace, &Path, Position) -> Result<serde_json::Value, String>,
 ) -> Result<serde_json::Value, String> {
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let position = Position {
-        line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
-        character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
-    };
+    let position = position_param(&params["position"], method)?;
     handle(workspace, Path::new(path), position)
 }
 
@@ -746,15 +774,13 @@ fn declarations(
 /// holds them open.
 fn tt_symbol(
     workspace: &Workspace,
+    method: &str,
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let position = Position {
-        line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
-        character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
-    };
+    let position = position_param(&params["position"], method)?;
     Ok(workspace
         .tt_symbol_at(Path::new(path), text_param(params)?, position)
         .map_or(serde_json::Value::Null, tt_symbol_json))
@@ -764,16 +790,14 @@ fn tt_symbol(
 /// names. Text-only, for the same reason [`tt_symbol`] is.
 fn tt_completions(
     workspace: &Workspace,
+    method: &str,
     params: &serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     use serde_json::json;
     let path = params["path"]
         .as_str()
         .ok_or_else(|| "the request needs a \"path\"".to_string())?;
-    let position = Position {
-        line: params["position"]["line"].as_u64().unwrap_or(0) as u32,
-        character: params["position"]["character"].as_u64().unwrap_or(0) as u32,
-    };
+    let position = position_param(&params["position"], method)?;
     let member = ttc::engine::member_access_at(Path::new(path), text_param(params)?, position)
         .map(|access| json!({ "receiver": access.receiver }));
     let items = pattern_items_json(&workspace.tt_completions_at(
