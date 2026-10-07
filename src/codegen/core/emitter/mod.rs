@@ -159,13 +159,50 @@ impl<'a> Emitter<'a> {
         depth: u16,
         out: &mut Rope<'a>,
     ) -> bool {
+        let arrow = self.arm_arrow_end(arm);
         let mut written = false;
-        for comment in head_comments(self.comments, &arm.head) {
+        for comment in head_comments(self.comments, &arm.head)
+            .filter(|comment| arrow.is_none_or(|arrow| comment.start < arrow))
+        {
             out.push_break(depth);
             out.push_src(&self.source[comment.start..comment.end], comment.start);
             written = true;
         }
         written
+    }
+
+    pub(super) fn push_arrow_comments(
+        &self,
+        arm: &crate::core_ir::DecisionArm,
+        depth: u16,
+        out: &mut Rope<'a>,
+    ) -> bool {
+        let Some(arrow) = self.arm_arrow_end(arm) else {
+            return false;
+        };
+        let mut written = false;
+        for comment in
+            head_comments(self.comments, &arm.head).filter(|comment| comment.start >= arrow)
+        {
+            out.push_src(&self.source[comment.start..comment.end], comment.start);
+            out.push_break(depth);
+            written = true;
+        }
+        written
+    }
+
+    fn arm_arrow_end(&self, arm: &crate::core_ir::DecisionArm) -> Option<usize> {
+        let span = arm.head.last()?;
+        let bytes = self.source.as_bytes();
+        let mut at = span.start;
+        while at < span.end {
+            let (token, _) = crate::scanner::skip_trivia(bytes, at, span.end);
+            if bytes[token..span.end].starts_with(b"=>") {
+                return Some(token + 2);
+            }
+            at = token + 1;
+        }
+        None
     }
 
     pub(super) fn relocated_documentation(&self, statement: usize) -> Option<Rope<'a>> {
@@ -286,7 +323,8 @@ enum ValueDestination<'name> {
     /// slot) that seeds the region's exit label when a rewritten exit sits
     /// inside a `break`-capturing statement.
     Invoke {
-        prefix: &'name str,
+        prefix: &'name AuthoredText,
+        close: &'name AuthoredText,
         /// The authored literal the value sits inside, split at the value.
         /// Each arm re-emits both halves around its own value, as source, so
         /// the arm value lands in the consumer's contextual position and the
@@ -345,7 +383,8 @@ impl<'name> ValueContinuation<'name> {
     }
 
     fn invoke(
-        prefix: &'name str,
+        prefix: &'name AuthoredText,
+        close: &'name AuthoredText,
         frame: Option<(SourceSpan, SourceSpan)>,
         result: Option<&'name str>,
         label: &'name str,
@@ -353,6 +392,7 @@ impl<'name> ValueContinuation<'name> {
         Self {
             destination: ValueDestination::Invoke {
                 prefix,
+                close,
                 frame,
                 result,
                 label,
@@ -399,7 +439,7 @@ impl<'name> ValueContinuation<'name> {
     /// This builds a string, so it can carry no source mapping. A framed
     /// completion has authored bytes to place and is refused for any match
     /// that reaches this path (`all_arms_are_expressions`).
-    fn assignment_prefix(&self, grouped: bool) -> String {
+    fn assignment_prefix(&self, source: &str, grouped: bool) -> String {
         if let ValueDestination::Invoke { frame: Some(_), .. } = self.destination {
             crate::ice::bug!("a framed completion cannot rewrite an exit")
         }
@@ -410,12 +450,12 @@ impl<'name> ValueContinuation<'name> {
                 prefix,
                 result: Some(result),
                 ..
-            } => format!("{result} = {prefix}"),
+            } => format!("{result} = {}", prefix.text(source)),
             ValueDestination::Invoke {
                 prefix,
                 result: None,
                 ..
-            } => prefix.to_owned(),
+            } => prefix.text(source),
             ValueDestination::Expression => {
                 crate::ice::bug!("inline expression continuation cannot rewrite an exit")
             }
@@ -439,7 +479,7 @@ impl<'name> ValueContinuation<'name> {
         matches!(self.destination, ValueDestination::Assign(_)) || !self.wrappers.is_empty()
     }
 
-    fn assignment_suffix(&self, grouped: bool) -> String {
+    fn assignment_suffix(&self, source: &str, grouped: bool) -> String {
         let mut suffix = String::new();
         if grouped {
             suffix.push(')');
@@ -447,8 +487,8 @@ impl<'name> ValueContinuation<'name> {
         for _ in self.wrappers.iter().rev() {
             suffix.push_str(" }");
         }
-        if matches!(self.destination, ValueDestination::Invoke { .. }) {
-            suffix.push(')');
+        if let ValueDestination::Invoke { close, .. } = self.destination {
+            suffix.push_str(&close.text(source));
         }
         suffix
     }
@@ -530,7 +570,12 @@ pub(super) fn gap_comments(
     comments: &[crate::ast::Span],
     gap: Option<crate::hir::Span>,
 ) -> impl Iterator<Item = &crate::ast::Span> {
-    comments.iter().filter(move |comment| {
-        gap.is_some_and(|gap| gap.start <= comment.start && comment.end <= gap.end)
-    })
+    let within = gap.map_or(&comments[..0], |gap| {
+        let first = comments.partition_point(|comment| comment.start < gap.start);
+        let last = first + comments[first..].partition_point(|comment| comment.start < gap.end);
+        &comments[first..last]
+    });
+    within
+        .iter()
+        .filter(move |comment| gap.is_some_and(|gap| comment.end <= gap.end))
 }

@@ -609,7 +609,7 @@ impl<'a> Emitter<'a> {
                                 ""
                             },
                             if exit.requires_block { "{ " } else { "" },
-                            continuation.assignment_prefix(grouped)
+                            continuation.assignment_prefix(self.source, grouped)
                         ) + open,
                         result_return_mark: None,
                     });
@@ -621,12 +621,12 @@ impl<'a> Emitter<'a> {
                         text: if starts_own_line {
                             format!(
                                 "{close}{};\n{line_indent}{generated_indent}{leave}",
-                                continuation.assignment_suffix(grouped),
+                                continuation.assignment_suffix(self.source, grouped),
                             )
                         } else {
                             format!(
                                 "{close}{}; {leave}{}",
-                                continuation.assignment_suffix(grouped),
+                                continuation.assignment_suffix(self.source, grouped),
                                 if exit.requires_block { " }" } else { "" }
                             )
                         },
@@ -638,15 +638,15 @@ impl<'a> Emitter<'a> {
                     text: if starts_own_line {
                         format!(
                             "{generated_indent}{}undefined{};\n{line_indent}{generated_indent}{leave}",
-                            continuation.assignment_prefix(false),
-                            continuation.assignment_suffix(false)
+                            continuation.assignment_prefix(self.source, false),
+                            continuation.assignment_suffix(self.source, false)
                         )
                     } else {
                         format!(
                             "{}{}undefined{}; {leave}{}",
                             if exit.requires_block { "{ " } else { "" },
-                            continuation.assignment_prefix(false),
-                            continuation.assignment_suffix(false),
+                            continuation.assignment_prefix(self.source, false),
+                            continuation.assignment_suffix(self.source, false),
                             if exit.requires_block { " }" } else { "" }
                         )
                     },

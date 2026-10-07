@@ -295,6 +295,7 @@ impl<'a> Emitter<'a> {
                                     value.expr,
                                     &ValueContinuation::invoke(
                                         &completion.invoke,
+                                        &completion.close,
                                         completion.frame,
                                         completion.result.as_deref(),
                                         &completion.label,
@@ -461,6 +462,7 @@ impl<'a> Emitter<'a> {
             &operation.values,
             result,
             None,
+            operation.gaps.first().copied(),
             captured,
         );
         self.conditional_region_depth
@@ -537,6 +539,7 @@ impl<'a> Emitter<'a> {
             &operation.values,
             result,
             None,
+            operation.gaps.first().copied(),
             captured,
         );
         self.conditional_region_depth
@@ -642,6 +645,7 @@ impl<'a> Emitter<'a> {
                         &operation.values,
                         result,
                         Some((stored, operator)),
+                        operation.gaps.first().copied(),
                         captured,
                     ),
                 );
@@ -700,7 +704,13 @@ impl<'a> Emitter<'a> {
                 out.push_break(1);
                 let mut assign = Rope::new();
                 assign.append(self.captured_source(*target, captured));
-                assign.push_lit(" = ");
+                push_gap(
+                    self.source,
+                    &mut assign,
+                    " = ",
+                    operation.gaps.first().copied(),
+                    "",
+                );
                 out.append(Rope::indented(
                     1,
                     self.emit_conditional_assignment_branch(operation, assign, captured),
@@ -713,34 +723,47 @@ impl<'a> Emitter<'a> {
                 alternate,
             } => {
                 let test = self.condition_test(&operation.condition, captured);
-                let mut branch = |out: &mut Rope<'a>, content: &PlannedBranch| match content {
-                    PlannedBranch::Values(values) => {
-                        out.append(Rope::indented(
-                            1,
-                            self.emit_conditional_active_branch(
-                                operation, values, result, None, captured,
-                            ),
-                        ));
-                    }
-                    PlannedBranch::Source(span) => {
-                        out.push_lit(format!("{result} = "));
-                        push_grouped(
-                            out,
-                            self.named_as_written(*span, self.captured_tail(*span, captured)),
-                            self.source_kind,
-                        );
-                        out.push_lit(";");
-                    }
-                };
+                let mut branch =
+                    |out: &mut Rope<'a>, content: &PlannedBranch, gap: usize| match content {
+                        PlannedBranch::Values(values) => {
+                            out.append(Rope::indented(
+                                1,
+                                self.emit_conditional_active_branch(
+                                    operation,
+                                    values,
+                                    result,
+                                    None,
+                                    operation.gaps.get(gap).copied(),
+                                    captured,
+                                ),
+                            ));
+                        }
+                        PlannedBranch::Source(span) => {
+                            out.push_lit(result.to_owned());
+                            push_gap(
+                                self.source,
+                                out,
+                                " = ",
+                                operation.gaps.get(gap).copied(),
+                                "",
+                            );
+                            push_grouped(
+                                out,
+                                self.named_as_written(*span, self.captured_tail(*span, captured)),
+                                self.source_kind,
+                            );
+                            out.push_lit(";");
+                        }
+                    };
                 out.push_lit("if (");
                 out.append(test);
                 out.push_lit(") {");
                 out.push_break(1);
-                branch(&mut out, consequent);
+                branch(&mut out, consequent, 0);
                 out.push_break(0);
                 out.push_lit("} else {");
                 out.push_break(1);
-                branch(&mut out, alternate);
+                branch(&mut out, alternate, 1);
                 out.push_break(0);
                 out.push_lit("}");
             }
@@ -816,18 +839,25 @@ impl<'a> Emitter<'a> {
                     && type_args.is_none()
                     && completable_decision_arms(self.core, *expr, &self.exits_for_expr(*expr))
                 {
-                    let prefix = match through {
-                        Some(receiver) => format!(
-                            "{condition}.call({}, ",
-                            self.planned_receiver_text(&receiver)
-                        ),
-                        None => format!("{condition}("),
-                    };
+                    let mut prefix = AuthoredText::generated(match through {
+                        Some(receiver) => {
+                            format!("{condition}.call({}", self.planned_receiver_text(&receiver))
+                        }
+                        None => condition.clone(),
+                    });
+                    prefix.push_gap(
+                        self.source,
+                        if through.is_some() { ", " } else { "(" },
+                        operation.gaps.first().copied(),
+                        "",
+                    );
+                    let mut close = AuthoredText::default();
+                    close.push_gap(self.source, "", operation.gaps.get(1).copied(), ")");
                     let _active = self.active_structured_exprs.enter(*expr);
                     let body = self
                         .emit_continued_expr(
                             *expr,
-                            &ValueContinuation::invoke(&prefix, None, Some(result), result),
+                            &ValueContinuation::invoke(&prefix, &close, None, Some(result), result),
                         )
                         .unwrap_or_else(|| {
                             crate::ice::bug!("optional completed call lost its value decision")
@@ -909,27 +939,36 @@ impl<'a> Emitter<'a> {
                 if let Some(span) = type_args {
                     body.push_src(&self.source[span.start..span.end], span.start);
                 }
-                match through {
-                    Some(receiver) => {
-                        body.push_lit(".call(");
-                        self.push_planned_receiver(&receiver, false, &mut body);
-                        for argument in arguments {
-                            body.push_lit(", ");
-                            self.push_operand(operation, argument, &mut body);
-                        }
-                        body.push_lit(");");
-                    }
-                    None => {
-                        body.push_lit("(");
-                        for (index, argument) in arguments.iter().enumerate() {
-                            if index > 0 {
-                                body.push_lit(", ");
-                            }
-                            self.push_operand(operation, argument, &mut body);
-                        }
-                        body.push_lit(");");
-                    }
+                if let Some(receiver) = through {
+                    body.push_lit(".call(");
+                    self.push_planned_receiver(&receiver, false, &mut body);
                 }
+                for (index, argument) in arguments.iter().enumerate() {
+                    let separator = if index > 0 || through.is_some() {
+                        ", "
+                    } else {
+                        "("
+                    };
+                    push_gap(
+                        self.source,
+                        &mut body,
+                        separator,
+                        operation.gaps.get(index).copied(),
+                        "",
+                    );
+                    self.push_operand(operation, argument, &mut body);
+                }
+                if arguments.is_empty() && through.is_none() {
+                    body.push_lit("(");
+                }
+                push_gap(
+                    self.source,
+                    &mut body,
+                    "",
+                    operation.gaps.get(arguments.len()).copied(),
+                    ")",
+                );
+                body.push_lit(";");
                 out.append(Rope::indented(1, body));
                 out.push_break(0);
                 out.push_lit("} else {");
@@ -975,6 +1014,7 @@ impl<'a> Emitter<'a> {
         values: &[ExprId],
         result: &str,
         left: Option<(Rope<'a>, &str)>,
+        gap: Option<SourceSpan>,
         captured: &mut HashSet<crate::evaluation_ir::ValueSlotId>,
     ) -> Rope<'a> {
         let entries: Vec<_> = values
@@ -1002,11 +1042,14 @@ impl<'a> Emitter<'a> {
         };
         let branch = first.branch;
         let mut out = self.emit_conditional_active_values(operation, values, captured);
-        out.push_lit(format!("{result} = "));
+        out.push_lit(result.to_owned());
         let binary = left.is_some();
         if let Some((operand, operator)) = left {
+            out.push_lit(" = ");
             out.append(operand);
-            out.push_lit(format!(" {operator} "));
+            push_gap(self.source, &mut out, &format!(" {operator} "), gap, "");
+        } else {
+            push_gap(self.source, &mut out, " = ", gap, "");
         }
         let steps: Vec<_> = entries.iter().flat_map(|active| &active.steps).collect();
         let operand =

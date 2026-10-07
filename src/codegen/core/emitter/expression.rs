@@ -19,7 +19,19 @@ impl<'a> Emitter<'a> {
                 // label on a rejected value points back at.
                 let mut produced = self.span(apply.node);
                 let mut shape: Option<String> = None;
+                let mut previous_end = super::structured_expr_span(self.semantic, self.core, head)
+                    .map(|span| span.end);
                 for step in &apply.steps {
+                    let value_span =
+                        super::structured_expr_span(self.semantic, self.core, step.value);
+                    let gap = previous_end
+                        .zip(value_span)
+                        .filter(|(end, value)| *end <= value.start)
+                        .map(|(end, value)| SourceSpan {
+                            start: end,
+                            end: value.start,
+                        });
+                    previous_end = value_span.map(|span| span.end);
                     let kind = self.source_kind;
                     let acc_grouped = match &shape {
                         Some(shape) => grouping_required(shape, kind),
@@ -136,7 +148,7 @@ impl<'a> Emitter<'a> {
                                     context,
                                     input,
                                 );
-                                next.push_lit(", ");
+                                push_gap(self.source, &mut next, ", ", gap, "");
                                 push_grouped(&mut next, body, self.source_kind);
                                 next.push_lit(")");
                             } else {
@@ -152,7 +164,7 @@ impl<'a> Emitter<'a> {
                                     context,
                                     input,
                                 );
-                                next.push_lit(", ");
+                                push_gap(self.source, &mut next, ", ", gap, "");
                                 push_grouped(&mut next, body, self.source_kind);
                                 next.push_lit(")");
                             }
@@ -860,9 +872,9 @@ impl<'a> Emitter<'a> {
         out.push_lit("}");
         out.push_break(0);
         let grouped = false;
-        out.push_lit(continuation.assignment_prefix(grouped));
+        out.push_lit(continuation.assignment_prefix(self.source, grouped));
         out.push_lit(format!("{temp}.{}", propagate.layout.payload_field));
-        out.push_lit(continuation.assignment_suffix(grouped));
+        out.push_lit(continuation.assignment_suffix(self.source, grouped));
         out.push_lit(";");
         let span = self.span(propagate.node);
         let mut anchored = Rope::new();
@@ -942,7 +954,16 @@ impl<'a> Emitter<'a> {
             );
             inner.push_lit(";");
         }
+        let mut previous_end =
+            super::structured_expr_span(self.semantic, self.core, head).map(|span| span.end);
         for (index, step) in apply.steps.iter().enumerate() {
+            let value_span = super::structured_expr_span(self.semantic, self.core, step.value);
+            let gap = previous_end
+                .zip(value_span)
+                .filter(|(end, value)| *end <= value.start)
+                .map(|(end, value)| hir::Span::new(end, value.start));
+            previous_end = value_span.map(|span| span.end);
+            self.push_gap_comments(gap, 1, &mut inner);
             if step.mode == ApplyMode::Missing {
                 inner.push_break(1);
                 let input = self.pipe_input(apply, index, &piped[index]);

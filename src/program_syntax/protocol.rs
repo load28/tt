@@ -10,8 +10,9 @@ pub(super) struct ProtocolScope {
     pub(super) decision: bool,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct CompletionTrack {
+    frame: std::rc::Rc<ProjectedProtocolFrame>,
     parent: ProjectedSpan,
     argument: ProjectedSpan,
     discarded: bool,
@@ -103,6 +104,7 @@ pub(super) fn evaluation_protocol(
         .completion
         .map(|track| {
             Ok::<_, ProgramSyntaxError>(CallCompletionFacts {
+                gaps: completion_gaps(segments, &track.frame, track.parent)?,
                 call: map_structural_span(segments, track.parent)?,
                 argument: map_structural_span(segments, track.argument)?,
                 literal_positions: track.literal && track.target == value,
@@ -173,9 +175,56 @@ fn link_step(
 /// value leaves the rest of the literal meaning what it meant. Anything else
 /// between them — a cast, an operator, a call — binds to the value, and
 /// re-emitting its text around a different expression would rebind it.
+fn completion_gaps(
+    segments: &ProjectionSegments,
+    frame: &ProjectedProtocolFrame,
+    call: ProjectedSpan,
+) -> Result<Box<[SourceSpan]>, ProgramSyntaxError> {
+    let ProjectedProtocolFrame::Call {
+        callee: Some(callee),
+        arguments,
+        type_args,
+        ..
+    } = frame
+    else {
+        return Ok(Box::default());
+    };
+    let pieces: Vec<ProjectedSpan> = std::iter::once(type_args.unwrap_or(*callee))
+        .chain(arguments.iter().map(|(span, ..)| *span))
+        .collect();
+    authored_gaps(segments, &pieces, Some(call))
+}
+
+fn authored_gaps(
+    segments: &ProjectionSegments,
+    pieces: &[ProjectedSpan],
+    closing: Option<ProjectedSpan>,
+) -> Result<Box<[SourceSpan]>, ProgramSyntaxError> {
+    let mut gaps = Vec::with_capacity(pieces.len());
+    let mut end = None;
+    for piece in pieces {
+        let piece = map_structural_span(segments, *piece)?;
+        if let Some(start) = end {
+            gaps.push(SourceSpan {
+                start,
+                end: piece.start.max(start),
+            });
+        }
+        end = Some(piece.end);
+    }
+    if let (Some(start), Some(closing)) = (end, closing) {
+        let closing = map_structural_span(segments, closing)?;
+        gaps.push(SourceSpan {
+            start,
+            end: closing.end.max(start),
+        });
+    }
+    Ok(gaps.into_boxed_slice())
+}
+
 fn advance_completion(
     track: Option<CompletionTrack>,
-    frame: &ProjectedProtocolFrame,
+    frame: &std::rc::Rc<ProjectedProtocolFrame>,
     value: ProjectedSpan,
 ) -> Option<CompletionTrack> {
     if let ProjectedProtocolFrame::Call {
@@ -187,11 +236,12 @@ fn advance_completion(
         optional: None,
         spread_free: true,
         ..
-    } = frame
+    } = &**frame
         && let Some((argument, false, _)) = arguments.last()
         && projected_contains(*argument, value)
     {
         return Some(CompletionTrack {
+            frame: frame.clone(),
             parent: *parent,
             argument: *argument,
             discarded: *discarded,
@@ -208,7 +258,7 @@ fn advance_completion(
             positions,
             kind: OrderedEvaluationKind::Object | OrderedEvaluationKind::Array,
             spread_free: true,
-        } = frame
+        } = &**frame
             && *parent == track.target
             && let Some(position) = position_holding(positions, |(span, ..)| *span, value)
         {
@@ -226,6 +276,8 @@ pub(super) struct ProjectedConditionalFacts {
     operands: Vec<(ProjectedSpan, bool)>,
     type_args: Option<ProjectedSpan>,
     optional_test: Option<OptionalCallTest>,
+    pieces: Vec<ProjectedSpan>,
+    closing: Option<ProjectedSpan>,
 }
 
 #[derive(Default)]
@@ -398,6 +450,8 @@ pub(super) fn protocol_step(
                 operands: Vec::new(),
                 type_args: None,
                 optional_test: None,
+                pieces: vec![*target, *right],
+                closing: None,
             });
             (
                 *parent,
@@ -475,6 +529,8 @@ pub(super) fn protocol_step(
                     operands: Vec::new(),
                     type_args: None,
                     optional_test: None,
+                    pieces: vec![left.0, *right],
+                    closing: None,
                 });
             }
             let (left, effects) = *left;
@@ -499,6 +555,8 @@ pub(super) fn protocol_step(
                 operands: Vec::new(),
                 type_args: None,
                 optional_test: None,
+                pieces: vec![test.0, *consequent, *alternate],
+                closing: None,
             });
             let (test, effects) = *test;
             (
@@ -522,6 +580,8 @@ pub(super) fn protocol_step(
                 operands: Vec::new(),
                 type_args: None,
                 optional_test: None,
+                pieces: vec![test.0, *consequent, *alternate],
+                closing: None,
             });
             let (test, effects) = *test;
             (
@@ -569,6 +629,12 @@ pub(super) fn protocol_step(
                         .collect(),
                     type_args: *type_args,
                     optional_test: Some(*test),
+                    pieces: type_args
+                        .or(*callee)
+                        .into_iter()
+                        .chain(arguments.iter().map(|(span, ..)| *span))
+                        .collect(),
+                    closing: Some(*parent),
                 });
                 HostEvaluationOperation::Conditional(ConditionalBranch::OptionalCallArgument(index))
             } else {
@@ -816,6 +882,7 @@ pub(super) fn protocol_step(
                     .map(|span| map_evaluation_span(segments, span))
                     .transpose()?,
                 optional_test: facts.optional_test,
+                gaps: authored_gaps(segments, &facts.pieces, facts.closing)?,
             })
         })
         .transpose()?;

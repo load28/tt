@@ -357,6 +357,9 @@ pub(crate) struct PlannedConditionalOperation {
     /// The evaluation steps outside this operation (its own host context),
     /// shared by every consumed value.
     pub(crate) outer: crate::chain::ChainSlice<PlannedEvaluationStep>,
+    /// The authored text between the operation's pieces
+    /// ([`crate::program_syntax::ConditionalFacts::gaps`]).
+    pub(crate) gaps: Box<[SourceSpan]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -516,7 +519,7 @@ pub(crate) struct EvaluationSchedule {
 
 /// A syntax-proven completable call with its generated-name reservations
 /// ([`crate::program_syntax::CallCompletionFacts`]).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct PlannedCallCompletion {
     pub(crate) facts: crate::program_syntax::CallCompletionFacts,
     /// The slot that holds the captured callee instantiated with the

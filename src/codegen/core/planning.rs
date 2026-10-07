@@ -562,7 +562,7 @@ fn scoped_call_completion(
 ) -> Option<CallCompletionPlan> {
     let (expr, exits, schedule, value_source) =
         (value.expr, &value.exits[..], &value.schedule, value.source);
-    let completion = schedule.call_completion?;
+    let completion = schedule.call_completion.as_ref()?;
     if !completable_decision_arms(core, expr, exits) {
         return None;
     }
@@ -625,7 +625,7 @@ fn scoped_call_completion(
         return None;
     };
     let callee = lowering.slot_name(*target).to_owned();
-    let (mut invoke, instantiation) = if *mode == EvaluationInputMode::MemberReference {
+    let (invoke, instantiation) = if *mode == EvaluationInputMode::MemberReference {
         receiver.as_ref()?;
         let mut invoke = member_callee(source, *callee_span, [*receiver, *key], |slot| {
             lowering.slot_name(slot)
@@ -649,15 +649,17 @@ fn scoped_call_completion(
             .map_or(callee.clone(), |(name, ..)| name.clone());
         (function, instantiation)
     };
-    invoke.push('(');
+    let gaps = &completion.facts.gaps;
+    let mut invoke = AuthoredText::generated(invoke);
+    invoke.push_gap(source, "(", gaps.first().copied(), "");
     let mut captures = Vec::new();
-    for input in step.inputs.iter().skip(1) {
+    for (position, input) in step.inputs.iter().enumerate().skip(1) {
         match input {
             PlannedEvaluationInput::Source { target, .. } => {
-                invoke.push_str(lowering.slot_name(*target));
+                invoke.push_generated(lowering.slot_name(*target));
             }
             PlannedEvaluationInput::Slot { slot, .. } => {
-                invoke.push_str(lowering.slot_name(*slot));
+                invoke.push_generated(lowering.slot_name(*slot));
             }
             // The arm reads generated names only, and this input's authored
             // position is inside the frame the completion claims. Bind it to
@@ -665,14 +667,17 @@ fn scoped_call_completion(
             // name it, and the completion does not apply.
             PlannedEvaluationInput::Stable { source, reserved } => {
                 let name = lowering.slot_name((*reserved)?).to_owned();
-                invoke.push_str(&name);
+                invoke.push_generated(&name);
                 captures.push((name, *source));
             }
         }
-        invoke.push_str(", ");
+        invoke.push_gap(source, ", ", gaps.get(position).copied(), "");
     }
+    let mut close = AuthoredText::default();
+    close.push_gap(source, "", gaps.last().copied(), ")");
     Some(CallCompletionPlan {
         invoke,
+        close,
         instantiation,
         captures,
         result: completion.facts.consumed.then(|| value_slot.to_owned()),

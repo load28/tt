@@ -167,8 +167,12 @@ pub(crate) struct HostEvaluationProtocol {
 /// what licenses dispatch arms to perform the call themselves; target
 /// planning decides separately whether the authored text between the
 /// argument and the value may be re-emitted inside the arms.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CallCompletionFacts {
+    /// The authored text between the call's pieces: from the callee (and
+    /// its type arguments) to the first argument, between each argument
+    /// and the next, and from the final argument to the call's end.
+    pub(crate) gaps: Box<[SourceSpan]>,
     /// The whole call expression.
     pub(crate) call: SourceSpan,
     /// The final argument. Equal to the value's own span when the value is
@@ -253,6 +257,8 @@ pub(crate) struct ConditionalFacts {
     /// What an optional call's arguments are conditional on. `None` for
     /// other operations.
     pub(crate) optional_test: Option<OptionalCallTest>,
+    /// The authored text between the operation's pieces, in source order.
+    pub(crate) gaps: Box<[SourceSpan]>,
 }
 
 /// The link of its optional chain an optional call is skipped at. A chain

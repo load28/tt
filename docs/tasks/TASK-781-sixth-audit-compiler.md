@@ -1,5 +1,7 @@
 # TASK-781: Fix the sixth audit's compiler findings
 
+> TASK-786 made the structural change decision K2 proposes.
+>
 > TASK-785 replaced K6's entity-name set with a byte pre-filter in
 > `source_entity_name`; the set described under Decision K6 and Issue 1 no
 > longer exists.

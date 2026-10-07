@@ -1,0 +1,40 @@
+variant O { A(n: number), B }
+declare function g(a: number, b: number): number;
+declare function h(n: number): number;
+declare function two(a: string, b: string): string;
+declare const obj: { m(a: number, b: number): number } | undefined;
+declare const shape: { side: number };
+declare let slot: number | undefined;
+export function f(o: O, c: boolean) {
+  const call = g(
+    // @ts-expect-error
+    "not a number",
+    match (o) { A(n) => n, B => 0 },
+  );
+  const optional = obj?.m(
+    // @ts-expect-error
+    "not a number",
+    match (o) { A(n) => n, B => 0 },
+  );
+  const ternary = c
+    // @ts-expect-error
+    ? h("s")
+    : match (o) { A(n) => n, B => 0 };
+  const logical = c &&
+    // @ts-expect-error
+    shape - match (o) { A(n) => n, B => 0 };
+  slot ??=
+    // @ts-expect-error
+    shape - match (o) { A(n) => n, B => 0 };
+  const piped = match (o) { A(n) => n, B => 0 }
+    |> String
+    // @ts-expect-error
+    |> two;
+  const arm = match (o) {
+    A(n) =>
+      // @ts-expect-error
+      n.foo,
+    B => 0,
+  };
+  return [call, optional, ternary, logical, piped, arm];
+}

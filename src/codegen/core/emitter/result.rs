@@ -12,8 +12,8 @@ impl<'a> Emitter<'a> {
         let previous = self.result_failures.borrow_mut().insert(
             id,
             ResultFailure {
-                prefix: continuation.assignment_prefix(false),
-                suffix: continuation.assignment_suffix(false),
+                prefix: continuation.assignment_prefix(self.source, false),
+                suffix: continuation.assignment_suffix(self.source, false),
                 label: label.map(str::to_owned),
                 assigns: continuation.assigns(),
             },
@@ -242,10 +242,13 @@ impl<'a> Emitter<'a> {
                         text: if starts_own_line {
                             format!(
                                 "{{\n{inner_indent}{}{open}",
-                                success.assignment_prefix(grouped)
+                                success.assignment_prefix(self.source, grouped)
                             )
                         } else {
-                            format!("{{ {}{open}", success.assignment_prefix(grouped))
+                            format!(
+                                "{{ {}{open}",
+                                success.assignment_prefix(self.source, grouped)
+                            )
                         },
                         result_return_mark: Some((argument, ResultReturnBoundary::Start)),
                     });
@@ -257,7 +260,7 @@ impl<'a> Emitter<'a> {
                         text: if starts_own_line {
                             format!(
                                 "{close}{};{}\n{line_indent}}}",
-                                success.assignment_suffix(grouped),
+                                success.assignment_suffix(self.source, grouped),
                                 if success.assigns() {
                                     format!("\n{inner_indent}{leave}")
                                 } else {
@@ -267,7 +270,7 @@ impl<'a> Emitter<'a> {
                         } else {
                             format!(
                                 "{close}{};{} }}",
-                                success.assignment_suffix(grouped),
+                                success.assignment_suffix(self.source, grouped),
                                 if success.assigns() {
                                     format!(" {leave}")
                                 } else {
@@ -282,14 +285,14 @@ impl<'a> Emitter<'a> {
                     let mut text = if starts_own_line {
                         format!(
                             "{{\n{inner_indent}{}undefined{};",
-                            success.assignment_prefix(false),
-                            success.assignment_suffix(false),
+                            success.assignment_prefix(self.source, false),
+                            success.assignment_suffix(self.source, false),
                         )
                     } else {
                         format!(
                             "{{{}undefined{};",
-                            success.assignment_prefix(false),
-                            success.assignment_suffix(false),
+                            success.assignment_prefix(self.source, false),
+                            success.assignment_suffix(self.source, false),
                         )
                     };
                     if success.assigns() {

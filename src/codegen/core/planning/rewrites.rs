@@ -86,7 +86,8 @@ pub(in super::super) enum ComposeAction {
 pub(in super::super) struct CallCompletionPlan {
     /// The text each arm calls through, up to and excluding the argument:
     /// the captured (possibly instantiated) callee plus `(`.
-    pub(in super::super) invoke: String,
+    pub(in super::super) invoke: AuthoredText,
+    pub(in super::super) close: AuthoredText,
     /// A capture emitted once before the dispatch, binding the instantiated
     /// callee: generated name, authored type-argument span, callee slot.
     pub(in super::super) instantiation: Option<(String, SourceSpan, String)>,

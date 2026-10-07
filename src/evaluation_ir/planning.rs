@@ -18,7 +18,7 @@ pub(super) fn resolve_schedule(
     // for each one so that lowering can capture it once instead of copying
     // its source into every arm; the elision itself still stands for every
     // other lowering.
-    let reserved_steps = protocol.call_completion.map_or(0, |facts| {
+    let reserved_steps = protocol.call_completion.as_ref().map_or(0, |facts| {
         protocol
             .steps()
             .iter()
@@ -744,6 +744,7 @@ pub(super) fn plan_one_operation(
         values: members.iter().map(|member| values[*member].expr).collect(),
         active,
         outer: first_steps.skip(conditional_index + 1),
+        gaps: facts.gaps.clone(),
     }))
 }
 

@@ -150,6 +150,7 @@ impl<'a> Emitter<'a> {
                     last = true;
                 }
             }
+            let arrow_commented = self.push_arrow_comments(arm, 0, &mut out);
             let value = self.emit_deferred_arm_value(expr, &arm.action);
             push_grouped(
                 &mut out,
@@ -157,7 +158,7 @@ impl<'a> Emitter<'a> {
                 self.source_kind,
             );
             let pattern_commented = self.push_head_comments(arm, 0, &mut out);
-            if commented || pattern_commented {
+            if commented || pattern_commented || arrow_commented {
                 out.push_break(0);
             }
             if last {
@@ -170,6 +171,7 @@ impl<'a> Emitter<'a> {
             if self.push_head_comments(arm, 0, &mut out) || commented {
                 out.push_break(0);
             }
+            self.push_arrow_comments(arm, 0, &mut out);
         }
         if self.push_gap_comments(decision.trailing, 0, &mut out) {
             out.push_break(0);
@@ -253,6 +255,7 @@ impl<'a> Emitter<'a> {
             } else {
                 total = true;
             }
+            let arrow_commented = self.push_arrow_comments(arm, 0, &mut out);
             push_grouped(
                 &mut out,
                 guard_line_comment(
@@ -263,7 +266,7 @@ impl<'a> Emitter<'a> {
                 self.source_kind,
             );
             let pattern_commented = self.push_head_comments(arm, 0, &mut out);
-            if commented || pattern_commented {
+            if commented || pattern_commented || arrow_commented {
                 out.push_break(0);
             }
             if total {
@@ -276,6 +279,7 @@ impl<'a> Emitter<'a> {
             if self.push_head_comments(arm, 0, &mut out) || commented {
                 out.push_break(0);
             }
+            self.push_arrow_comments(arm, 0, &mut out);
         }
         if self.push_gap_comments(decision.trailing, 0, &mut out) {
             out.push_break(0);
@@ -637,6 +641,7 @@ impl<'a> Emitter<'a> {
             out.push_lit(") {");
             out.push_break(action_depth);
         }
+        self.push_arrow_comments(arm, action_depth, out);
         out.append(action);
         if arm.guard.is_some() {
             out.push_break(depth);
@@ -833,12 +838,15 @@ impl<'a> Emitter<'a> {
                 prefix,
                 result: Some(result),
                 ..
-            } => out.push_lit(format!("{result} = {prefix}")),
+            } => {
+                out.push_lit(format!("{result} = "));
+                prefix.push_to(self.source, &mut out);
+            }
             ValueDestination::Invoke {
                 prefix,
                 result: None,
                 ..
-            } => out.push_lit(prefix.to_owned()),
+            } => prefix.push_to(self.source, &mut out),
         }
         let frame = match continuation.destination {
             ValueDestination::Invoke { frame, .. } => frame,
@@ -861,8 +869,8 @@ impl<'a> Emitter<'a> {
         if let Some((_, tail)) = frame {
             out.push_src(&self.source[tail.start..tail.end], tail.start);
         }
-        if matches!(continuation.destination, ValueDestination::Invoke { .. }) {
-            out.push_lit(")");
+        if let ValueDestination::Invoke { close, .. } = continuation.destination {
+            close.push_to(self.source, &mut out);
         }
         out.push_lit(";");
         if continuation.assigns() && exit_after_assignment {

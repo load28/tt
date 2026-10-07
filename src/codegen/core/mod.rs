@@ -4,6 +4,7 @@
 //! only through HIR nodes and the source map. Every tt surface reaches this
 //! module through a shared Core primitive.
 
+mod authored;
 mod emitter;
 mod planning;
 
@@ -26,6 +27,7 @@ use crate::program_syntax::{
 };
 use crate::{AnchorKind, RewrittenExtensions, SourceKind, StdImports};
 
+use authored::*;
 use emitter::*;
 use planning::*;
 

@@ -45,7 +45,7 @@ fn call_completion_proofs_require_a_whole_value_single_argument() {
         let completion = program
             .overlay
             .iter()
-            .find_map(|entry| entry.protocol.call_completion);
+            .find_map(|entry| entry.protocol.call_completion.clone());
         assert_eq!(
             completion.map(|facts| (
                 facts.consumed,
