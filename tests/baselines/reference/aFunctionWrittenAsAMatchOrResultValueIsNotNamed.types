@@ -1,0 +1,105 @@
+=== aFunctionWrittenAsAMatchOrResultValueIsNotNamed.tt ===
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const v = V.A as V;
+>v : const v: V
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+const arrow = match (v) { A => () => 1, B => () => 2 };
+>arrow : const arrow: () => number
+>v : const v: V
+const klass = match (v) { A => class { x = 1 }, B => class { x = 2 } };
+>klass : const klass: typeof (Anonymous class)
+>v : const v: V
+>x : (property) (Anonymous class).x: number
+>x : (property) (Anonymous class).x: number
+const fn = match (v) { A => function () { return 1; }, B => function () { return 2; } };
+>fn : const fn: () => number
+>v : const v: V
+const named = match (v) { A => function own() { return 1; }, B => () => 2 };
+>named : const named: () => number
+>v : const v: V
+>own : function own(): number
+const asserted: () => number = match (v) { A => (() => 1) as () => number, B => () => 2 };
+>asserted : const asserted: () => number
+>v : const v: V
+let assigned: (x: number) => number;
+>assigned : let assigned: (x: number) => number
+>x : (parameter) x: number
+assigned = match (v) { A => (x) => x + 1, B => (x) => x };
+>assigned : let assigned: (x: number) => number
+>v : const v: V
+>x : (parameter) x: number
+>x : (parameter) x: number
+>x : (parameter) x: number
+>x : (parameter) x: number
+function one(): TResult<number, string> { return { kind: "Ok", value: 1 }; }
+>one : function one(): TResult<number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+>kind : (property) kind: "Ok"
+>value : (property) value: number
+function made(): TResult<() => number, string> {
+>made : function made(): TResult<() => number, string>
+>TResult : (alias) type TResult<T, E> = TErr<E> | TOk<T>
+  return result { const n = try one(); return () => n; };
+>n : const n: number
+>one : function one(): TResult<number, string>
+>n : const n: number
+const ternary = v.kind === "A" ? () => 1 : () => 2;
+>ternary : const ternary: () => number
+>v : const v: V
+>kind : (property) kind: "A" | "B"
+const fromResult = made();
+>fromResult : const fromResult: TResult<() => number, string>
+>made : function made(): TResult<() => number, string>
+console.log(JSON.stringify([
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+  arrow.name, klass.name, fn.name, named.name, asserted.name, assigned.name,
+>arrow : const arrow: () => number
+>name : (property) Function.name: string
+>klass : const klass: typeof (Anonymous class)
+>name : (property) Function.name: string
+>fn : const fn: () => number
+>name : (property) Function.name: string
+>named : const named: () => number
+>name : (property) Function.name: string
+>asserted : const asserted: () => number
+>name : (property) Function.name: string
+>assigned : let assigned: (x: number) => number
+>name : (property) Function.name: string
+  fromResult.kind === "Ok" ? fromResult.value.name : "err", ternary.name,
+>fromResult : const fromResult: TResult<() => number, string>
+>kind : (property) kind: "Err" | "Ok"
+>fromResult : const fromResult: TOk<() => number>
+>value : (property) value: () => number
+>name : (property) Function.name: string
+>ternary : const ternary: () => number
+>name : (property) Function.name: string
+

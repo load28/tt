@@ -587,6 +587,13 @@ impl<'a> Emitter<'a> {
                 Some(argument) => {
                     let grouped =
                         grouping_required(self.source[argument.start..argument.end].trim(), self.source_kind);
+                    let (open, close) = if continuation.names_value()
+                        && self.anonymous_function(argument.start, argument.end)
+                    {
+                        ("(void 0, ", ")")
+                    } else {
+                        ("", "")
+                    };
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
                             start: exit.statement.start,
@@ -601,7 +608,7 @@ impl<'a> Emitter<'a> {
                             },
                             if exit.requires_block { "{ " } else { "" },
                             continuation.assignment_prefix(grouped)
-                        ),
+                        ) + open,
                         result_return_mark: None,
                     });
                     edits.push(LocalSourceEdit {
@@ -611,12 +618,12 @@ impl<'a> Emitter<'a> {
                         },
                         text: if starts_own_line {
                             format!(
-                                "{};\n{line_indent}{generated_indent}{leave}",
+                                "{close}{};\n{line_indent}{generated_indent}{leave}",
                                 continuation.assignment_suffix(grouped),
                             )
                         } else {
                             format!(
-                                "{}; {leave}{}",
+                                "{close}{}; {leave}{}",
                                 continuation.assignment_suffix(grouped),
                                 if exit.requires_block { " }" } else { "" }
                             )

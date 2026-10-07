@@ -330,11 +330,6 @@ defects. This task fixes them in the layer that owns each one.
   copy with the declared variant (which a generic variant cannot spell),
   changes every match's emission and is proposed to the user rather than
   decided here.
-- **K6** (`Function.name` of an anonymous function or class written as an
-  arm value): the value is stored through a slot, which names it as
-  ECMAScript's NamedEvaluation does for an assignment. A conditional
-  expression names nothing, but the forms that avoid naming (`(0, f)`) are
-  TS2695 in TypeScript. Proposed to the user.
 - **K8** (time for many matches in one expression): measured on a debug
   build at 200, 400, and 800 matches in one expression, 0.24 s, 0.75 s,
   and 3.2 s; let-else statements in one body are linear (0.04 s at 100,
@@ -361,6 +356,31 @@ defects. This task fixes them in the layer that owns each one.
   `const f = (...) =>` it resolves to (inside a function called later)
   resolves as it does at run time. A declaration reached by the walk does
   not bind the same identifier twice, and reports its `val` binding once.
+
+### Decision 20: Generated storage does not name the function it holds (K6)
+
+- **Context**: Decision 18 first left K6 as a proposal. `const g = match (v)
+  { A => () => 1, ... }` gave `g.name === "value"`, a class arm
+  `"$tt_v1$K"`, and a `return () => n` in a `result` block `"value"`.
+  The source positions name nothing: an arm value is an operand, like a
+  conditional expression's, and `Ok(x)` is an argument. The emission
+  stored the value with an assignment or as the `value` property of an
+  object, both of which apply ECMA-262 NamedEvaluation to an anonymous
+  function definition.
+- **Decision and rationale**: The program syntax records the source span of
+  every expression that `IsAnonymousFunctionDefinition` holds for (an arrow,
+  or a function or class expression without a name, under parentheses and
+  TypeScript's erased wrappers, which leave it one at run time). When a
+  delivery would name its value (an assignment to a slot, or a `Result`
+  wrapper's property) and the value is such a definition, it is written as
+  `(void 0, value)`. A comma expression is not a function definition, so
+  nothing is named, and its type and contextual type are the right
+  operand's. `(0, value)` is TypeScript's TS2695, because TypeScript treats a
+  literal left operand as side-effect-free (`isSideEffectFree` in tsgo's
+  `checker.go`); `void 0` is not in that list, and TypeScript itself emits
+  `void 0`. Six case baselines and one emit fixture now write their
+  function values this way; `anAnnotationNeverNamesTheStorageTheLoweringDeclared.types`
+  now shows `(Anonymous class)` where it showed the slot `$tt_v0`.
 
 ## Work log
 
@@ -397,6 +417,7 @@ defects. This task fixes them in the layer that owns each one.
   changed; its later-line match is now written on one line), and recorded
   the remaining compiler findings (decision 18).
 - 2026-10-07: Resolved val-pass callees in the scope model (decision 19).
+- 2026-10-07: Stopped generated storage from naming functions (decision 20).
 
 ## Issues and resolutions
 
@@ -452,6 +473,8 @@ Each test below was run against the code before this task (the parent of
 - **Observed failure**: no diagnostics; the arm's TS2322 was suppressed by the directive.
 - **Path**: `tests/cases/compiler/aValPassJudgesTheDeclarationTheCalleeResolvesTo.tt` (K7, fix reverted)
 - **Observed failure**: the build reported no `val-pass` error for `outer`'s call to `h`.
+- **Path**: `tests/cases/compiler/aFunctionWrittenAsAMatchOrResultValueIsNotNamed.tt` (K6, fix reverted)
+- **Observed failure**: `.stdout` was `["value","$tt_v1","value","own","$tt_v4","","value",""]` instead of `["","","","own","","","",""]`.
 
 ## Verification
 

@@ -19,7 +19,7 @@
 20:44 -> 79:21 len 7  ", run: "
 20:58 -> 63:17 len 31  "mark(\"subject\", State.Ready(1))"
 21:9 -> 66:15 len 5  "value"
-21:19 -> 67:16 len 24  "(x: number) => x + value"
-22:12 -> 71:16 len 16  "(x: number) => x"
+21:19 -> 67:25 len 24  "(x: number) => x + value"
+22:12 -> 71:25 len 16  "(x: number) => x"
 23:2 -> 79:34 len 46  "});\nconsole.log(trace.join(\",\"));\n\nexport {};\n"
 

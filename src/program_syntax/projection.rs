@@ -23,6 +23,7 @@ pub(crate) struct ProgramSyntax {
     pub(super) globals: HashMap<SourceSpan, GlobalStatement>,
     pub(super) completion_scopes: Vec<super::completion::CompletionScope>,
     pub(super) if_tests: Vec<IfTestFacts>,
+    pub(super) anonymous_functions: Vec<SourceSpan>,
 }
 
 #[derive(Debug)]
@@ -210,6 +211,8 @@ impl ProgramSyntax {
             &projection.completion,
         );
         let if_tests = if_tests(&parsed.module, parsed.start, &indexed_segments);
+        let anonymous_functions =
+            anonymous_functions(&parsed.module, parsed.start, &indexed_segments);
         let mut collector = ParentCollector::new(
             parsed.start,
             &projection.pending,
@@ -256,6 +259,7 @@ impl ProgramSyntax {
             globals,
             completion_scopes,
             if_tests,
+            anonymous_functions,
         };
         syntax.validate()?;
         Ok(syntax)
@@ -295,6 +299,15 @@ impl ProgramSyntax {
     /// What TypeScript's completion rules say at each construct's place.
     pub(crate) fn if_tests(&self) -> &[IfTestFacts] {
         &self.if_tests
+    }
+
+    /// The source spans of the expressions ECMA-262 calls anonymous function
+    /// definitions (`IsAnonymousFunctionDefinition`): an arrow function, or a
+    /// function or class expression without a name, written alone or under
+    /// parentheses and TypeScript's erased wrappers (`as`, `satisfies`, `!`,
+    /// `<T>`, instantiation). Assigning one to an identifier names it.
+    pub(crate) fn anonymous_functions(&self) -> &[SourceSpan] {
+        &self.anonymous_functions
     }
 
     pub(crate) fn take_completion_scopes(&mut self) -> Vec<super::completion::CompletionScope> {
@@ -1681,5 +1694,57 @@ fn if_tests(module: &Module, start: HostOrigin, segments: &ProjectionSegments) -
         out: Vec::new(),
     };
     module.visit_with(&mut collect);
+    collect.out
+}
+
+fn anonymous_functions(
+    module: &Module,
+    start: HostOrigin,
+    segments: &ProjectionSegments,
+) -> Vec<SourceSpan> {
+    use swc_ecma_ast::Expr;
+    use swc_ecma_visit::{Visit, VisitWith};
+
+    fn anonymous(expr: &Expr) -> bool {
+        match expr {
+            Expr::Arrow(_) => true,
+            Expr::Fn(function) => function.ident.is_none(),
+            Expr::Class(class) => class.ident.is_none(),
+            Expr::Paren(inner) => anonymous(&inner.expr),
+            Expr::TsAs(inner) => anonymous(&inner.expr),
+            Expr::TsSatisfies(inner) => anonymous(&inner.expr),
+            Expr::TsNonNull(inner) => anonymous(&inner.expr),
+            Expr::TsTypeAssertion(inner) => anonymous(&inner.expr),
+            Expr::TsInstantiation(inner) => anonymous(&inner.expr),
+            _ => false,
+        }
+    }
+
+    struct Collect<'s> {
+        start: HostOrigin,
+        segments: &'s ProjectionSegments,
+        out: Vec<SourceSpan>,
+    }
+    impl Visit for Collect<'_> {
+        fn visit_expr(&mut self, node: &Expr) {
+            if anonymous(node)
+                && let Some(span) = super::protocol::source_span_for_projection(
+                    self.segments,
+                    projected_span(node.span(), self.start),
+                )
+            {
+                self.out.push(span);
+            }
+            node.visit_children_with(self);
+        }
+    }
+    let mut collect = Collect {
+        start,
+        segments,
+        out: Vec::new(),
+    };
+    module.visit_with(&mut collect);
+    collect.out.sort_by_key(|span| (span.start, span.end));
+    collect.out.dedup();
     collect.out
 }

@@ -717,6 +717,39 @@ impl<'a> Emitter<'a> {
         self.emit_value_delivery_control(body, close, continuation, break_label, exit_depth, true)
     }
 
+    /// `value` as generated storage receives it without naming it. Assigning
+    /// an anonymous function definition to an identifier or writing it as a
+    /// property value gives the function that name (ECMA-262
+    /// NamedEvaluation); the source position the value came from names
+    /// nothing, so a value that is one is written as the right operand of a
+    /// comma expression, which is not a function definition.
+    pub(super) fn unnamed(&self, value: Rope<'a>) -> Rope<'a> {
+        if !value
+            .source_bounds()
+            .is_some_and(|(start, end)| self.anonymous_function(start, end))
+        {
+            return value;
+        }
+        let mut out = Rope::new();
+        out.push_lit("(void 0, ");
+        out.append(value);
+        out.push_lit(")");
+        out
+    }
+
+    /// Whether the source from `start` to `end` is an anonymous function
+    /// definition, as a value written from `start` and no further than the
+    /// definition's end is.
+    pub(super) fn anonymous_function(&self, start: usize, end: usize) -> bool {
+        let first = self
+            .anonymous_functions
+            .partition_point(|span| span.start < start);
+        self.anonymous_functions[first..]
+            .iter()
+            .take_while(|span| span.start == start)
+            .any(|span| end <= span.end)
+    }
+
     fn wrapped_delivery(&self, body: Rope<'a>, wrappers: &[ValueWrapper]) -> (Rope<'a>, bool) {
         let body_grouped = needs_grouping(&body, self.source_kind);
         let Some(innermost) = wrappers.len().checked_sub(1) else {
@@ -760,6 +793,11 @@ impl<'a> Emitter<'a> {
         exit_depth: Option<u16>,
         exit_after_assignment: bool,
     ) -> Rope<'a> {
+        let body = if continuation.names_value() {
+            self.unnamed(body)
+        } else {
+            body
+        };
         let (value, grouped) = self.wrapped_delivery(body, &continuation.wrappers);
         let mut out = Rope::new();
         match continuation.destination {

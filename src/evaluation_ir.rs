@@ -119,6 +119,7 @@ pub(crate) struct EvaluationFile {
     declared_names: HashSet<String>,
     module_declared_names: HashSet<String>,
     if_tests: Vec<crate::program_syntax::IfTestFacts>,
+    anonymous_functions: Vec<SourceSpan>,
     directive_prologue_end: Option<usize>,
     /// Source spans of every tt node in the file. A schedule's source
     /// capture must not overlap one: the capture copies raw source bytes,
@@ -150,6 +151,7 @@ pub(crate) struct LoweringPlan {
     spread_name: String,
     statement_decision_sources: Vec<SourceSpan>,
     if_tests: Vec<crate::program_syntax::IfTestFacts>,
+    anonymous_functions: Vec<SourceSpan>,
     generated_names: Option<crate::generated_names::GeneratedNames>,
     shadowed_globals: HashSet<String>,
     host_global_aliases: HashMap<String, HostGlobalAlias>,
@@ -638,6 +640,11 @@ impl LoweringPlan {
 
     pub(crate) fn if_tests(&self) -> &[crate::program_syntax::IfTestFacts] {
         &self.if_tests
+    }
+
+    /// [`crate::program_syntax::ProgramSyntax::anonymous_functions`].
+    pub(crate) fn anonymous_functions(&self) -> &[SourceSpan] {
+        &self.anonymous_functions
     }
 
     pub(crate) fn host_global(&self, name: &str) -> String {

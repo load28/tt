@@ -324,12 +324,12 @@ function later(on: boolean, n: number) {
       const $tt_m = n;
       switch ($tt_m) {
         case 0: {
-          const $tt_a5 = { value: () => 0 };
+          const $tt_a5 = { value: (void 0, () => 0) };
           $tt_v26 = $tt_a5.value;
           break;
         }
         default: {
-          const $tt_a6 = { value: (() => {
+          const $tt_a6 = { value: ((void 0, () => {
             let $tt_v29: number;
             const $tt_v30: typeof Number = (Number);
             {
@@ -340,7 +340,7 @@ function later(on: boolean, n: number) {
               }
             }
             return 2 * $tt_v30(($tt_v29 === 0 ? 3 : 4));
-          }) };
+          })) };
           $tt_v26 = $tt_a6.value;
           break;
         }

@@ -227,15 +227,25 @@ impl<'a> Emitter<'a> {
                         &self.source[argument.start..argument.end],
                         self.source_kind,
                     );
+                    let (open, close) = if success.names_value()
+                        && self.anonymous_function(argument.start, argument.end)
+                    {
+                        ("(void 0, ", ")")
+                    } else {
+                        ("", "")
+                    };
                     edits.push(LocalSourceEdit {
                         span: SourceSpan {
                             start: exit.statement.start,
                             end: argument.start,
                         },
                         text: if starts_own_line {
-                            format!("{{\n{inner_indent}{}", success.assignment_prefix(grouped))
+                            format!(
+                                "{{\n{inner_indent}{}{open}",
+                                success.assignment_prefix(grouped)
+                            )
                         } else {
-                            format!("{{ {}", success.assignment_prefix(grouped))
+                            format!("{{ {}{open}", success.assignment_prefix(grouped))
                         },
                         result_return_mark: Some((argument, ResultReturnBoundary::Start)),
                     });
@@ -246,7 +256,7 @@ impl<'a> Emitter<'a> {
                         },
                         text: if starts_own_line {
                             format!(
-                                "{};{}\n{line_indent}}}",
+                                "{close}{};{}\n{line_indent}}}",
                                 success.assignment_suffix(grouped),
                                 if success.assigns() {
                                     format!("\n{inner_indent}{leave}")
@@ -256,7 +266,7 @@ impl<'a> Emitter<'a> {
                             )
                         } else {
                             format!(
-                                "{};{} }}",
+                                "{close}{};{} }}",
                                 success.assignment_suffix(grouped),
                                 if success.assigns() {
                                     format!(" {leave}")

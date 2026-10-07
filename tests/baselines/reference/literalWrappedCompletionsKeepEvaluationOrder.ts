@@ -94,11 +94,11 @@ const $tt_v4 = (mark("sibling", "effectful"));
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      $tt_v3 = (x: number) => x + value;
+      $tt_v3 = (void 0, (x: number) => x + value);
       break;
     }
     case "Empty": {
-      $tt_v3 = (x: number) => x;
+      $tt_v3 = (void 0, (x: number) => x);
       break;
     }
     default: {

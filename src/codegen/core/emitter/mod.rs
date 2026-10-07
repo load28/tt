@@ -64,6 +64,7 @@ pub(super) struct Emitter<'a> {
     pub(super) match_show_name: String,
     pub(super) spread_name: String,
     pub(super) guarded_if_tests: HashMap<SourceSpan, crate::program_syntax::IfTestFacts>,
+    pub(super) anonymous_functions: Vec<SourceSpan>,
     pub(super) if_test_closings: RefCell<Vec<(usize, String)>>,
     pub(super) host_error: String,
     pub(super) host_json: String,
@@ -427,6 +428,12 @@ impl<'name> ValueContinuation<'name> {
             prefix.push('(');
         }
         prefix
+    }
+
+    /// Whether the delivery gives an anonymous function definition a name:
+    /// an assignment to the slot, or the `value` property of a wrapper.
+    fn names_value(&self) -> bool {
+        matches!(self.destination, ValueDestination::Assign(_)) || !self.wrappers.is_empty()
     }
 
     fn assignment_suffix(&self, grouped: bool) -> String {

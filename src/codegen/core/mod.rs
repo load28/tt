@@ -479,6 +479,7 @@ pub(crate) fn emit_with_map<'a>(
         match_show_name: target.match_show_name,
         spread_name: target.spread_name,
         guarded_if_tests: target.guarded_if_tests,
+        anonymous_functions: target.anonymous_functions,
         if_test_closings: RefCell::new(Vec::new()),
         host_error: target.host_error,
         host_json: target.host_json,

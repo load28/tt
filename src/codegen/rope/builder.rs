@@ -453,6 +453,27 @@ impl<'a> Rope<'a> {
         }
     }
 
+    /// Where the rope's text starts in the source, when its first text is
+    /// copied from the source, and where the last byte it copies ends.
+    pub(crate) fn source_bounds(&self) -> Option<(usize, usize)> {
+        let Piece::Src { src: start, .. } = self
+            .pieces
+            .iter()
+            .find(|piece| piece.is_text() && !piece.text().is_empty())?
+        else {
+            return None;
+        };
+        let end = self
+            .pieces
+            .iter()
+            .filter_map(|piece| match piece {
+                Piece::Src { text, src } => Some(src + text.len()),
+                _ => None,
+            })
+            .max()?;
+        Some((*start, end))
+    }
+
     pub(crate) fn is_resolved(&self) -> bool {
         !self.pieces.iter().any(|piece| piece.is_break())
     }

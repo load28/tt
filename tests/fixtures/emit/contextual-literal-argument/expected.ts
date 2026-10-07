@@ -119,11 +119,11 @@ const $tt_v12: string = (effect());
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      $tt_v11 = (x: number) => x + value;
+      $tt_v11 = (void 0, (x: number) => x + value);
       break;
     }
     case "Empty": {
-      $tt_v11 = (x: number) => x;
+      $tt_v11 = (void 0, (x: number) => x);
       break;
     }
     default: {
@@ -140,11 +140,11 @@ const $tt_v16: typeof consume = (consume);
   switch ($tt_m.kind) {
     case "Ready": {
       const { value } = $tt_m;
-      $tt_v14 = x => x + value;
+      $tt_v14 = (void 0, x => x + value);
       break;
     }
     case "Empty": {
-      $tt_v14 = x => x;
+      $tt_v14 = (void 0, x => x);
       break;
     }
     default: {

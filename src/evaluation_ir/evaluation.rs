@@ -61,6 +61,7 @@ impl EvaluationFile {
             declared_names: syntax.declared_names(),
             module_declared_names: syntax.module_declared_names(),
             if_tests: syntax.if_tests().to_vec(),
+            anonymous_functions: syntax.anonymous_functions().to_vec(),
             directive_prologue_end: syntax.directive_prologue_end(),
             tt_spans: syntax
                 .core_contexts()
@@ -1099,6 +1100,7 @@ impl EvaluationFile {
             spread_name,
             statement_decision_sources,
             if_tests: self.if_tests.clone(),
+            anonymous_functions: self.anonymous_functions.clone(),
             match_subject_names,
             owners: rewrites,
             for_initializer_propagations,
