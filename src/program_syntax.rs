@@ -497,6 +497,9 @@ pub(crate) fn source_expression_effects(
 }
 
 pub(crate) fn source_entity_name(text: &str, source_kind: crate::SourceKind) -> bool {
+    if !entity_name_bytes(text.as_bytes()) {
+        return false;
+    }
     if crate::lexer::host_syntax_error(text, source_kind).is_some() {
         return false;
     }
@@ -509,6 +512,34 @@ pub(crate) fn source_entity_name(text: &str, source_kind: crate::SourceKind) -> 
     input.byte(expression.span().lo) == 0
         && input.byte(expression.span().hi) == text.len()
         && entity_name(&expression)
+}
+
+fn entity_name_bytes(bytes: &[u8]) -> bool {
+    let mut at = 0;
+    while at < bytes.len() {
+        match bytes[at] {
+            b'/' if bytes.get(at + 1) == Some(&b'*') => {
+                match bytes[at + 2..].windows(2).position(|pair| pair == b"*/") {
+                    Some(end) => at += end + 4,
+                    None => return false,
+                }
+            }
+            b'/' if bytes.get(at + 1) == Some(&b'/') => {
+                while at < bytes.len() && bytes[at] != b'\n' {
+                    at += 1;
+                }
+            }
+            byte if byte.is_ascii_alphanumeric()
+                || matches!(byte, b'_' | b'$' | b'.' | b'\\')
+                || byte.is_ascii_whitespace()
+                || !byte.is_ascii() =>
+            {
+                at += 1;
+            }
+            _ => return false,
+        }
+    }
+    true
 }
 
 fn entity_name(expression: &swc_ecma_ast::Expr) -> bool {

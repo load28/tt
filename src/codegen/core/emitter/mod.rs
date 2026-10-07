@@ -67,7 +67,6 @@ pub(super) struct Emitter<'a> {
     pub(super) guarded_if_tests: HashMap<SourceSpan, crate::program_syntax::IfTestFacts>,
     pub(super) anonymous_functions: Vec<SourceSpan>,
     pub(super) function_names: Vec<(SourceSpan, String)>,
-    pub(super) entity_names: std::collections::HashSet<SourceSpan>,
     pub(super) discarded_values: HashSet<ExprId>,
     pub(super) if_test_closings: RefCell<Vec<(usize, String)>>,
     pub(super) host_error: String,

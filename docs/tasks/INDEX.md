@@ -825,7 +825,8 @@
 | TASK-782 | Fix the sixth audit's editor findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-782](./TASK-782-sixth-audit-editor.md) |
 | TASK-783 | Fix the seventh audit's command-line findings | Complete | 2026-10-07 | 2026-10-07 | [TASK-783](./TASK-783-seventh-audit-cli.md) |
 | TASK-784 | Fix two regressions of TASK-781 found by the seventh audit | Complete | 2026-10-07 | 2026-10-07 | [TASK-784](./TASK-784-super-optional-call-reference.md) |
+| TASK-785 | Remove the entity-name set that slowed every compile | Complete | 2026-10-07 | 2026-10-07 | [TASK-785](./TASK-785-entity-name-prefilter.md) |
 
 ## Next task number
 
-**TASK-785**
+**TASK-786**

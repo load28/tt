@@ -502,7 +502,6 @@ pub(crate) fn emit_with_map<'a>(
         guarded_if_tests: target.guarded_if_tests,
         anonymous_functions: target.anonymous_functions,
         function_names: target.function_names,
-        entity_names: target.entity_names,
         discarded_values: target.discarded_values,
         if_test_closings: RefCell::new(Vec::new()),
         host_error: target.host_error,

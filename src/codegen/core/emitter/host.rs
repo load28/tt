@@ -2308,9 +2308,7 @@ impl<'a> Emitter<'a> {
 
     fn type_query(&self, source: SourceSpan) -> Option<Rope<'a>> {
         let text = &self.source[source.start..source.end];
-        (self.entity_names.contains(&source)
-            && crate::program_syntax::source_entity_name(text, self.source_kind))
-        .then(|| {
+        crate::program_syntax::source_entity_name(text, self.source_kind).then(|| {
             let mut query = Rope::new();
             query.push_lit("typeof ");
             query.push_restatement(text);

@@ -63,7 +63,6 @@ impl EvaluationFile {
             if_tests: syntax.if_tests().to_vec(),
             anonymous_functions: syntax.anonymous_functions().to_vec(),
             function_names: syntax.function_names().to_vec(),
-            entity_names: syntax.entity_names().clone(),
             directive_prologue_end: syntax.directive_prologue_end(),
             tt_spans: TtSpans::new(
                 syntax
@@ -1136,7 +1135,6 @@ impl EvaluationFile {
             if_tests: self.if_tests.clone(),
             anonymous_functions: self.anonymous_functions.clone(),
             function_names: self.function_names.clone(),
-            entity_names: self.entity_names.clone(),
             match_subject_names,
             owners: rewrites,
             for_initializer_propagations,
