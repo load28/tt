@@ -1,0 +1,32 @@
+==== ttc --out-dir (exit 1) ====
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Rect"
+ --> ./aCaseNarrowedAwayBeforeTheMatchIsNotRequiredWhenTyped.tt:4:10
+  |
+4 |   return match (s) { Circle(r) => r, Point => 1 };
+  |          ^^^^^^^^^
+  |
+  = help: add the missing arms: `, Rect(w) => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Rect", "Point"
+ --> ./aCaseNarrowedAwayBeforeTheMatchIsNotRequiredWhenTyped.tt:8:10
+  |
+8 |   return match (s) { Circle(r) => r };
+  |          ^^^^^^^^^
+  |
+  = help: add the missing arms: `, Rect(w) => undefined, Point => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+
+==== ttc --check-types (exit 1) ====
+error[match-not-exhaustive]: match on variant Shape is not exhaustive: missing "Point"
+ --> aCaseNarrowedAwayBeforeTheMatchIsNotRequiredWhenTyped.tt:8:10
+  |
+8 |   return match (s) { Circle(r) => r };
+  |          ^^^^^^^^^
+  |
+  = help: add the missing arms: `, Point => undefined,`
+  = help: or add a final `_` arm: `, _ => undefined,`
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

@@ -1,0 +1,11 @@
+//// [aCaseNarrowedAwayBeforeTheMatchIsNotRequiredWhenTyped.tt] ////
+variant Shape { Circle(r: number), Rect(w: number), Point }
+export function f(s: Shape): number {
+  if (s.kind === "Rect") return 0;
+  return match (s) { Circle(r) => r, Point => 1 };
+}
+export function g(s: Shape): number {
+  if (s.kind === "Rect") return 0;
+  return match (s) { Circle(r) => r };
+}
+
