@@ -79,15 +79,24 @@ fn joined_matches(count: usize, separator: &str) -> String {
     )
 }
 
+fn nested_call_matches(count: usize) -> String {
+    format!(
+        "variant V {{ A, B }}\ndeclare const v: V;\ndeclare function f(...a: number[]): number;\nexport const x = {}0{};\n",
+        "f(match (v) { A => 1, B => 2 }, ".repeat(count),
+        ")".repeat(count),
+    )
+}
+
 #[test]
 fn compiling_does_linear_work_in_the_tt_values_of_one_expression() {
-    for separator in [", ", " + "] {
+    let shapes: [fn(usize) -> String; 3] = [
+        |count| joined_matches(count, ", "),
+        |count| joined_matches(count, " + "),
+        nested_call_matches,
+    ];
+    for shape in shapes {
         let compile = |count| {
-            crate::compile(
-                &joined_matches(count, separator),
-                &crate::Options::default(),
-            )
-            .expect("the file compiles")
+            crate::compile(&shape(count), &crate::Options::default()).expect("the file compiles")
         };
         let small = measure(|| compile(100));
         let large = measure(|| compile(200));

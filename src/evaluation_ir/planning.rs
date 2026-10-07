@@ -18,12 +18,28 @@ pub(super) fn resolve_schedule(
     // for each one so that lowering can capture it once instead of copying
     // its source into every arm; the elision itself still stands for every
     // other lowering.
+    let reserved_steps = protocol.call_completion.map_or(0, |facts| {
+        protocol
+            .steps()
+            .iter()
+            .position(|step| {
+                step.parent == facts.call
+                    && matches!(
+                        step.operation,
+                        HostEvaluationOperation::Eager(
+                            crate::program_syntax::EagerPosition::CallArgument(_)
+                        )
+                    )
+            })
+            .map_or(0, |call_step| call_step + 1)
+    });
     let mut schedule = resolve_schedule_steps(
         protocol.steps(),
         protocol.steps().len(),
+        reserved_steps,
         Elision {
             tt_spans,
-            reserve_names: protocol.call_completion.is_some(),
+            reserve_names: false,
         },
         slots,
         source_slots,
@@ -113,6 +129,7 @@ type InputLinks = HashMap<
 pub(super) fn resolve_schedule_steps(
     protocol_steps: &crate::chain::Chain<crate::program_syntax::HostEvaluationStep>,
     count: usize,
+    reserved_steps: usize,
     elision: Elision<'_>,
     slots: &HashMap<SourceSpan, ValueSlotId>,
     source_slots: &mut HashMap<SourceSpan, PlannedSourceSlot>,
@@ -121,12 +138,20 @@ pub(super) fn resolve_schedule_steps(
     slot_names: &mut Vec<String>,
     occupied_names: &mut HashSet<String>,
 ) -> Result<EvaluationSchedule, EvaluationError> {
-    let shared = count == protocol_steps.len() && !elision.reserve_names;
+    let shared = count == protocol_steps.len();
     let mut resolved = Vec::new();
     let mut rest = protocol_steps;
     let mut tail = crate::chain::Chain::new();
-    for _ in 0..count {
-        if shared && let Some((_, planned)) = links.steps.get(&rest.identity()) {
+    for index in 0..count {
+        let reserve_names = index < reserved_steps;
+        let elision = Elision {
+            reserve_names,
+            ..elision
+        };
+        if shared
+            && !reserve_names
+            && let Some((_, planned)) = links.steps.get(&rest.identity())
+        {
             tail = planned.clone();
             break;
         }
@@ -135,6 +160,7 @@ pub(super) fn resolve_schedule_steps(
         };
         resolved.push((
             rest.clone(),
+            reserve_names,
             resolve_step(
                 step,
                 elision,
@@ -148,11 +174,11 @@ pub(super) fn resolve_schedule_steps(
         ));
         rest = next;
     }
-    for (host, mut step) in resolved.into_iter().rev() {
+    for (host, reserved, mut step) in resolved.into_iter().rev() {
         let inputs = links.summarize(&step.inputs, elision.tt_spans);
         step.summary = StepsSummary::link(&step, inputs, &tail);
         tail = crate::chain::Chain::cons(step, tail);
-        if shared {
+        if shared && !reserved {
             links.steps.insert(host.identity(), (host, tail.clone()));
         }
     }

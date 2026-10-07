@@ -615,6 +615,7 @@ impl EvaluationFile {
             let schedule = resolve_schedule_steps(
                 protocol.steps(),
                 step_count,
+                0,
                 Elision {
                     tt_spans: &self.tt_spans,
                     reserve_names: false,

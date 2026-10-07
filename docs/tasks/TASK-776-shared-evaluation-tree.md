@@ -1,8 +1,8 @@
 # TASK-776: Lower an expression's tt values over one shared evaluation tree
 
-- **Status**: In progress
+- **Status**: Complete
 - **Started**: 2026-10-07
-- **Completed**: —
+- **Completed**: 2026-10-07
 - **Commit**: —
 
 ## Purpose
@@ -22,8 +22,8 @@ pass, guided by a subtree flag (`transformers/generators.ts`,
 - Included: the evaluation protocol (`src/program_syntax/`), the schedules
   and their planning and validation (`src/evaluation_ir/`), and the target
   planning and emitter that read them (`src/codegen/core/`).
-- Excluded: any change to what the compiler emits. Every case baseline,
-  snapshot, and fixture must stay byte for byte as it is.
+- Excluded: any change to what the compiler emits, except the generated
+  name numbering decision 5 changes.
 
 ## Decisions
 
@@ -107,6 +107,25 @@ pass, guided by a subtree flag (`transformers/generators.ts`,
   shared link and input segment contributes once (`Chain::fresh`,
   `ChainSlice::fresh`, `Segments::fresh`).
 
+### Decision 5: A completed call reserves names only for the step it re-emits
+
+- **Context**: A value whose call may complete reserved a name for every
+  inert input on its whole path and was resolved alone, so values nested as
+  `f(match, f(match, …))` allocated names quadratic in the nesting. The
+  completion re-emits only the call step's inputs
+  (`call_completion_plan`); the other reserved names were never read.
+- **Alternatives considered**: (a) Keeping every reservation, so the output
+  stays byte for byte: the allocations themselves are quadratic. (b)
+  Reserving names for the steps up to and including the call step and
+  resolving the rest of the path through the shared links.
+- **Decision and rationale**: (b), chosen by the user. The generated names
+  after a reservation are numbered lower, so one baseline renames its
+  temporaries (`runtimeAPropagatedCallAroundAMatchDoesNotShareTheMatchSSlot`
+  `.ts` and `.map.txt`); its runtime output is unchanged. A logical
+  operation whose condition sits outside the call step allocates its
+  condition name when it is planned, as it already did for every other
+  value.
+
 ## Work log
 
 - 2026-10-07: Implemented decision 1. Release timings with line tables:
@@ -124,6 +143,9 @@ pass, guided by a subtree flag (`transformers/generators.ts`,
   the task: 180M and 1,163M for the array, 312M and 3,156M for the chain).
 - 2026-10-07: Added `compiling_does_linear_work_in_the_tt_values_of_one_expression`
   with work counters on protocol links, parent edges, and planned steps.
+- 2026-10-07: Implemented decision 5 and added the nested-call shape to the
+  scaling test; with every inert input reserved it fails with `planned
+  evaluation steps: 5050 units for n matches but 20100 for 2n`.
 
 ## Issues and resolutions
 
@@ -143,13 +165,15 @@ pass, guided by a subtree flag (`transformers/generators.ts`,
   numbering of every later name, are quadratic in the nesting; keeping the
   output byte for byte requires them. Nested arms indent each level, so the
   output itself is quadratic in size (1.8 MB for depth 200).
-- **Resolution**: Recorded. Reserving names only for the inputs a completed
-  call re-reads changes generated names in the output, so it is left to a
-  separate decision.
+- **Resolution**: The user chose to reserve names only for the call step
+  (decision 5): 200 and 800 nested calls now take 90M and 357M. The nested
+  arms stay proportional to their output, which is the indentation of each
+  level.
 
 ## Regression test (fails before the fix)
 
-Not applicable: the task changes no output. The scaling test
+Not applicable: the task fixes no behaviour; it changes how much work the
+compiler does. The scaling test
 `src/lib/scaling_tests.rs::compiling_does_linear_work_in_the_tt_values_of_one_expression`
 pins the linear work; with the collector rebuilding each value's parent path
 from the root it fails with `parent path edges: 45216 units for n matches
@@ -160,8 +184,20 @@ but 170416 for 2n`.
 - [x] `cargo fmt --check`
 - [x] `cargo clippy --all-targets -- -D warnings`
 - [x] `cargo test` (`--test-threads=4`): every suite passes
-- [x] Every case baseline, snapshot, and fixture unchanged
+- [x] Every case baseline, snapshot, and fixture unchanged except the
+  renamed temporaries of decision 5
 
 ## Result
 
-In progress.
+Complete. Compiling the tt values of one expression is linear in flat
+arrays, `+` chains, call arguments, nested calls, and nested statements:
+steps and input segments are shared links (`src/chain.rs`,
+`src/program_syntax/protocol.rs`), schedule facts are link summaries
+(`src/evaluation_ir/summary.rs`), parent paths are folded chains
+(`src/program_syntax/parents.rs`), owner span queries are indexed
+(`src/span_index.rs`), and a completed call reserves names for its own step
+only. Changed files: `src/chain.rs`, `src/span_index.rs`,
+`src/program_syntax.rs`, `src/program_syntax/{collector,parents,projection,protocol,visit,tests}.rs`,
+`src/evaluation_ir.rs`, `src/evaluation_ir/{evaluation,planning,summary,validation,tests}.rs`,
+`src/codegen/core/planning.rs`, `src/codegen/core/planning/rewrites.rs`,
+`src/lib/scaling_tests.rs`, and the two renamed baselines of decision 5.
