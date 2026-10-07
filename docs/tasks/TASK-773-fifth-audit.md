@@ -375,6 +375,10 @@ defects. This task fixes them in the layer that owns each one.
   accept a named `.ts`, then reverted it when
   `tt_only_modes_name_the_file_and_the_extensions_they_accept` showed the
   TASK-770 decision (decision 16).
+- 2026-10-07: Kept a governed statement's arm line breaks (decision 17),
+  regenerated every case baseline (only `tsDirectiveBeforeLoweredStatement`
+  changed; its later-line match is now written on one line), and recorded
+  the remaining compiler findings (decision 18).
 
 ## Issues and resolutions
 
@@ -395,8 +399,39 @@ defects. This task fixes them in the layer that owns each one.
 
 ## Regression test (fails before the fix)
 
-- **Path**: pending
-- **Observed failure**: pending
+Each test below was run against the code before this task (the parent of
+`6290a290`) or, where noted, with only its fix's non-test changes reverted.
+
+- **Path**: `src/main/tests.rs` `expanding_inputs_measures_each_path_a_bounded_number_of_times` (C2)
+- **Observed failure**: "1720 path identities for 40 files but 6640 for 80".
+- **Path**: `tests/cli.rs` `a_file_outside_the_program_that_cannot_be_read_does_not_stop_the_check` (C1)
+- **Observed failure**: exit 2 where 1 was expected.
+- **Path**: `tests/cases/compiler/aGenericPayloadIsCheckedPerInstantiation.tt` (E1)
+- **Observed failure**: an extra `match-not-exhaustive` error naming `Full(item: Red())`.
+- **Path**: `src/engine/language/tests.rs` `merging_tokens_compares_each_token_a_bounded_number_of_times` (E2)
+- **Observed failure**: comparisons grew from 15050 to 60100 when the tokens doubled.
+- **Path**: `tests/cases/editor/resultBlockWithOnlyAMisplacedTry.tt` (E3)
+- **Observed failure**: the `try-placement` diagnostic was missing (0 diagnostics).
+- **Path**: `tests/cases/compiler/aNestedDuplicateArmDrawsNoCheckerConsequence.tt` (E4)
+- **Observed failure**: a `ts2339` about `kind` on `never` at the duplicate arm instead of `match-duplicate-arm` alone.
+- **Path**: `tests/cases/editor/referencesReachNestedAndBuiltinCases.tt` (E5)
+- **Observed failure**: the nested `Circle` references were missing.
+- **Path**: `tests/cases/editor/signatureHelpInAnUnclosedArm.tt` (E6)
+- **Observed failure**: `signatureHelp: null`.
+- **Path**: `tests/native/editor_service.rs` `a_local_written_in_an_initializer_is_outlined_under_its_variable` (E7)
+- **Observed failure**: assertion panic at `editor_service.rs:1083`; the local was a module-level symbol.
+- **Path**: `tests/cases/editor/completionAtUnfinishedPatternPositions.tt` (decision 10)
+- **Observed failure**: every tag in scope at the `if let` positions instead of `Has` and `Nope`.
+- **Path**: `tests/cases/compiler/aBackslashRelativeSpecifierIsRewritten.tt`, `aBackslashRelativeSpecifierNamesTheSameModule.tt` (C3)
+- **Observed failure**: `".\\shape.tt"` kept in the output; no `match-not-exhaustive` error.
+- **Path**: `tests/cli.rs` `a_type_error_in_a_typescript_file_that_is_not_utf8_keeps_typescripts_position` (C4, fix reverted)
+- **Observed failure**: ` --> a.ts` with no line and column.
+- **Path**: `tests/cli.rs` `an_in_place_build_reports_a_hand_written_twin_as_the_out_dir_build_does` (C6, fix reverted)
+- **Observed failure**: the ownership refusal instead of "multiple inputs claim this output".
+- **Path**: `tests/cli.rs` `dependencies_under_a_configuration_leave_out_files_its_program_never_reads` (C8, fix reverted)
+- **Observed failure**: `zz/bad.ts` listed.
+- **Path**: `tests/cases/compiler/aDirectiveAboveAMultiLineMatchGovernsItsFirstLineOnly.tt` (K1)
+- **Observed failure**: no diagnostics; the arm's TS2322 was suppressed by the directive.
 
 ## Verification
 
