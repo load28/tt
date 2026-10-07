@@ -43,10 +43,10 @@ const V = {
 };
 const r = (n: number): TResult<number, string> => (n > 0 ? Result.Ok(n) : Result.Err(`bad ${n}`));
 function f(k: number, outer: V, inner: V) {
-  let $tt_v0: (Result.TErr<string>) | ({
+  let $tt_v0: Result.TErr<string> | {
     kind: "Ok";
     value: number;
-});
+};
   $tt_v0: {
     const $tt_t0 = r(k);
     if (!("value" in $tt_t0)) {
@@ -58,8 +58,7 @@ function f(k: number, outer: V, inner: V) {
       switch ($tt_m.kind) {
         case "A": {
           const { n } = $tt_m;
-          const $tt_a0 = { value: { kind: "Ok" as const, value: n + z } };
-          $tt_v0 = $tt_a0.value;
+          $tt_v0 = { kind: "Ok" as const, value: n + z };
           break;
         }
         case "B": {
@@ -68,13 +67,11 @@ function f(k: number, outer: V, inner: V) {
             switch ($tt_m.kind) {
               case "A": {
                 const { n } = $tt_m;
-                const $tt_a1 = { value: { kind: "Ok" as const, value: n * z } };
-                $tt_v0 = $tt_a1.value;
+                $tt_v0 = { kind: "Ok" as const, value: n * z };
                 break;
               }
               case "B": {
-                const $tt_a2 = { value: { kind: "Ok" as const, value: -z } };
-                $tt_v0 = $tt_a2.value;
+                $tt_v0 = { kind: "Ok" as const, value: -z };
                 break;
               }
               default: {

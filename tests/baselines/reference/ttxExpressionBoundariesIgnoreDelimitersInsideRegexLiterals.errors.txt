@@ -9,4 +9,4 @@ error[ts2304]: Cannot find name 'Panel'.
   |               ^^^^^
 
 ==== tsc on the emitted TypeScript (exit 2) ====
-ttxExpressionBoundariesIgnoreDelimitersInsideRegexLiterals.tsx(46,15): error TS2304: Cannot find name 'Panel'.
+ttxExpressionBoundariesIgnoreDelimitersInsideRegexLiterals.tsx(28,22): error TS2304: Cannot find name 'Panel'.

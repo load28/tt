@@ -118,7 +118,7 @@ function tryOperand(r: (n: number) => TResult<string, string>): TResult<string, 
 }
 const block = (r: TResult<string, string>) => {
   // @ts-expect-error -- a string where a number is declared
-  let $tt_v2: (Result.TErr<string>) | ({ kind: "Ok"; value: string; }); $tt_v2: { const $tt_t2 = r; if (!("value" in $tt_t2)) { $tt_v2 = $tt_t2; break $tt_v2; } const v = $tt_t2.value; { const $tt_a0 = { value: { kind: "Ok" as const, value: v } }; $tt_v2 = $tt_a0.value; break $tt_v2; } } const w: number = $tt_v2.kind === "Ok" ? "ok" : 0;
+  let $tt_v2: (Result.TErr<string>) | ({ kind: "Ok"; value: string; }); $tt_v2: { const $tt_t2 = r; if (!("value" in $tt_t2)) { $tt_v2 = $tt_t2; break $tt_v2; } const v = $tt_t2.value; { $tt_v2 = { kind: "Ok" as const, value: v }; break $tt_v2; } } const w: number = $tt_v2.kind === "Ok" ? "ok" : 0;
   return w;
 };
 function letElse(s: S) {

@@ -1,0 +1,20 @@
+// @run: main.tt
+// @filename: main.tt
+variant O { A(n: number), B }
+const log: string[] = [];
+class Base {
+  m?(x: number) { return `m${x}${this.tag()}`; }
+  tag() { return "#base"; }
+}
+function key(): "m" { log.push("key"); return "m"; }
+class Derived extends Base {
+  tag() { return "#derived"; }
+  run(o: O) {
+    const a = super.m!(match (o) { A(n) => n, B => 0 });
+    const b = (super.m as (x: number) => string)(match (o) { A(n) => n * 2, B => 0 });
+    const c = super.m?.(match (o) { A(n) => n * 3, B => 0 });
+    const d = super[key()]!(match (o) { A(n) => (log.push("arm"), n * 4), B => 0 });
+    return [a, b, c, d];
+  }
+}
+console.log(new Derived().run(O.A(1)).join(" "), log.join(","));

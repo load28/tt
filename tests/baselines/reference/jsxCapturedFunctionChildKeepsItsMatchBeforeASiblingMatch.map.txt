@@ -2,7 +2,7 @@
 1:1 -> 19:1 len 129  "declare global {\n  namespace JSX {\n    interface"...
 7:26 -> 31:3 len 136  "\ndeclare const x: S;\ndeclare const s: S;\ndeclare"...
 12:23 -> 57:1 len 12  "return <ul>{"
-12:35 -> 37:17 len 6  "() => "
+12:35 -> 37:26 len 6  "() => "
 12:41 -> 47:10 len 5  "<li>{"
 12:53 -> 40:19 len 1  "x"
 12:63 -> 47:31 len 1  "1"
@@ -14,7 +14,7 @@
 12:107 -> 57:41 len 1  "4"
 12:110 -> 57:43 len 32  "}</ul>; }\nexport function b() { "
 13:23 -> 79:1 len 12  "return <ul>{"
-13:35 -> 59:17 len 6  "() => "
+13:35 -> 59:26 len 6  "() => "
 13:41 -> 69:10 len 1  "("
 13:49 -> 62:19 len 1  "x"
 13:59 -> 69:27 len 1  "1"
@@ -26,7 +26,7 @@
 13:98 -> 79:41 len 1  "4"
 13:101 -> 79:43 len 33  "}</ul>; }\nexport function c1() { "
 14:24 -> 101:1 len 14  "return <ul a={"
-14:38 -> 81:17 len 6  "() => "
+14:38 -> 81:26 len 6  "() => "
 14:44 -> 91:10 len 5  "<li>{"
 14:56 -> 84:19 len 1  "x"
 14:66 -> 91:31 len 1  "1"

@@ -383,6 +383,7 @@ async function main() {
   let SymbolFlags;
   let TypeFlags;
   let NodeBuilderFlags;
+  let ObjectFlags;
   let isExpression;
   let isIdentifier;
   let isVariableDeclaration;
@@ -390,7 +391,7 @@ async function main() {
   let isStatement;
   let SyntaxKind;
   try {
-    ({ API, SymbolFlags, TypeFlags, NodeBuilderFlags } = await import(open.apiModule));
+    ({ API, SymbolFlags, TypeFlags, NodeBuilderFlags, ObjectFlags } = await import(open.apiModule));
     ({
       isExpression,
       isIdentifier,
@@ -1034,6 +1035,7 @@ async function main() {
           // type: doing so would reject the initializer's other constituents.
           if (declaredType && checker.getTypeAtLocation(identifier).id !== declaredType.id) continue;
           if (impliedByBindingPattern(identifier, SyntaxKind)) continue;
+          if (namesJsxTag(identifier, SyntaxKind)) continue;
           const logical = logicalLeftOperand(identifier, SyntaxKind);
           if (logical && readsPending(logical, symbol.id)) { deferred = true; break; }
           if (logical && (checker.getTypeAtLocation(logical).flags & TypeFlags.Never)) continue;
@@ -1050,7 +1052,8 @@ async function main() {
           // not expression inference. Ask for each RHS type in its branch scope
           // and serialize it at the declaration; never infer from diagnostic text.
           const incoming = incomingOf();
-          const types = incoming.flatMap(assignment =>
+          const join = objectLiteralJoin(checker, incoming, identifiers, declaration, symbol, TypeFlags, ObjectFlags);
+          const types = join ? [join] : incoming.flatMap(assignment =>
             widenedAtMutable(checker, checker.getTypeAtLocation(assignment.right),
               freshLiterals(checker, assignment.right, SyntaxKind, TypeFlags)));
           if (!types.length || types.some(type => (type.flags & (TypeFlags.Any | TypeFlags.Unknown)) || type.isErrorType())) continue;
@@ -1449,6 +1452,13 @@ function logicalLeftOperand(node, SyntaxKind) {
     operator === SyntaxKind.QuestionQuestionToken ? parent.left : undefined;
 }
 
+function namesJsxTag(node, SyntaxKind) {
+  const parent = node.parent;
+  return !!parent
+    && (parent.kind === SyntaxKind.JsxOpeningElement || parent.kind === SyntaxKind.JsxSelfClosingElement)
+    && parent.tagName === node;
+}
+
 function impliedByBindingPattern(node, SyntaxKind) {
   for (let current = node; ;) {
     const parent = current.parent;
@@ -1586,6 +1596,25 @@ function freshLiterals(checker, node, SyntaxKind, TypeFlags) {
     }
   }
   return fresh;
+}
+
+function objectLiteralJoin(checker, incoming, identifiers, declaration, symbol, TypeFlags, ObjectFlags) {
+  const constituents = (type) => type.isUnionType() ? type.getTypes() : [type];
+  const objectLiteral = (type) => !!(type.flags & TypeFlags.Object) && !!(type.objectFlags & ObjectFlags.ObjectLiteral);
+  const assigned = incoming.flatMap((assignment) => constituents(checker.getTypeAtLocation(assignment.right)));
+  if (assigned.filter(objectLiteral).length < 2) return undefined;
+  const same = (a, b) => a.id === b.id || (checker.isTypeAssignableTo(a, b) && checker.isTypeAssignableTo(b, a));
+  const writes = new Set(incoming.map((assignment) => assignment.left));
+  for (const identifier of identifiers) {
+    if (identifier === declaration.name || writes.has(identifier)) continue;
+    if (checker.getSymbolAtLocation(identifier)?.id !== symbol.id) continue;
+    const read = constituents(checker.getTypeAtLocation(identifier));
+    if (read.every((type) => assigned.some((other) => same(type, other)))
+      && assigned.every((type) => read.some((other) => same(type, other)))) {
+      return checker.getWidenedType(checker.getTypeAtLocation(identifier));
+    }
+  }
+  return undefined;
 }
 
 function widenedAtMutable(checker, type, fresh) {

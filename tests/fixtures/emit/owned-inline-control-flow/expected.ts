@@ -66,8 +66,7 @@ export function read(o: Opt) {
     $tt_v2 = $tt_t1.value;
     n = $tt_v2;
     {
-      const $tt_a0 = { value: { kind: "Ok" as const, value: n } };
-      $tt_v1 = $tt_a0.value;
+      $tt_v1 = { kind: "Ok" as const, value: n };
       break $tt_v1;
     }
   }
@@ -101,13 +100,13 @@ let $tt_v5: number[];
   switch ($tt_m.kind) {
     case "Some": {
       const { value } = $tt_m;
-      const $tt_a1 = { value: [value] };
-      $tt_v5 = $tt_a1.value;
+      const $tt_a0 = { value: [value] };
+      $tt_v5 = $tt_a0.value;
       break;
     }
     case "None": {
-      const $tt_a2 = { value: [] };
-      $tt_v5 = $tt_a2.value;
+      const $tt_a1 = { value: [] };
+      $tt_v5 = $tt_a1.value;
       break;
     }
     default: {

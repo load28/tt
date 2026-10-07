@@ -93,13 +93,13 @@ function readOpt(n: number): R<Opt> {
   return n < 0 ? { kind: "Err", error: "neg" } : { kind: "Ok", value: n > 1 ? { kind: "Some", value: n } : { kind: "None" } };
 }
 function inResult(n: number) {
-  let $tt_v4: ({
+  let $tt_v4: {
     kind: "Err";
     error: string;
-}) | ({
+} | {
     kind: "Ok";
     value: number;
-});
+};
   $tt_v4: {
     let $tt_t2; let $tt_v5: Opt;
     const $tt_t3 = readOpt(n);
@@ -110,7 +110,7 @@ function inResult(n: number) {
     $tt_v5 = $tt_t3.value;
     $tt_t2 = ($tt_v5);
     if ($tt_t2.kind !== "Some") {
-      { const $tt_a0 = { value: { kind: "Ok" as const, value: -2 } }; $tt_v4 = $tt_a0.value; break $tt_v4; }
+      { $tt_v4 = { kind: "Ok" as const, value: -2 }; break $tt_v4; }
     }
     const { value: v } = $tt_t2;
     {
@@ -124,12 +124,11 @@ function inResult(n: number) {
       $tt_t4 = [$tt_v6][0];
       if ($tt_t4.kind === "Some") {
         const { value: q } = $tt_t4;
-        { const $tt_a1 = { value: { kind: "Ok" as const, value: v + q } }; $tt_v4 = $tt_a1.value; break $tt_v4; }
+        { $tt_v4 = { kind: "Ok" as const, value: v + q }; break $tt_v4; }
       }
     }
     {
-      const $tt_a2 = { value: { kind: "Ok" as const, value: v } };
-      $tt_v4 = $tt_a2.value;
+      $tt_v4 = { kind: "Ok" as const, value: v };
       break $tt_v4;
     }
   }

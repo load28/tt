@@ -67,7 +67,7 @@ declare const s: S;
 declare const c: boolean;
 declare function g(f: () => unknown): unknown;
 export function a() { let $tt_v0: number;
-const $tt_v1 = (() => {
+const $tt_v1 = ((void 0, () => {
   let $tt_v2: number;
   {
     const $tt_m = x;
@@ -78,7 +78,7 @@ const $tt_v1 = (() => {
     }
   }
   return <li>{($tt_v2 === 0 ? 1 : 2)}</li>;
-});
+}));
 {
   const $tt_m = s;
   switch ($tt_m.kind) {
@@ -89,7 +89,7 @@ const $tt_v1 = (() => {
 }
 return <ul>{$tt_v1}{($tt_v0 === 0 ? 3 : 4)}</ul>; }
 export function b() { let $tt_v3: number;
-const $tt_v4 = (() => {
+const $tt_v4 = ((void 0, () => {
   let $tt_v5: number;
   {
     const $tt_m = x;
@@ -100,7 +100,7 @@ const $tt_v4 = (() => {
     }
   }
   return (($tt_v5 === 0 ? 1 : 2));
-});
+}));
 {
   const $tt_m = s;
   switch ($tt_m.kind) {
@@ -111,7 +111,7 @@ const $tt_v4 = (() => {
 }
 return <ul>{$tt_v4}{($tt_v3 === 0 ? 3 : 4)}</ul>; }
 export function c1() { let $tt_v6: number;
-const $tt_v7 = (() => {
+const $tt_v7 = ((void 0, () => {
   let $tt_v8: number;
   {
     const $tt_m = x;
@@ -122,7 +122,7 @@ const $tt_v7 = (() => {
     }
   }
   return <li>{($tt_v8 === 0 ? 1 : 2)}</li>;
-});
+}));
 {
   const $tt_m = s;
   switch ($tt_m.kind) {

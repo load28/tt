@@ -22,13 +22,13 @@ function f(vs: V[], mode: number) {
     const $tt_v4: V[] = vs;
     let $tt_v1: number;
     const $tt_v2: typeof pick = (pick);
-    const $tt_v3: (v: V) => number = ((v) => { {
+    const $tt_v3: (v: V) => number = ((void 0, (v) => { {
       const $tt_t0 = v;
       if ($tt_t0.kind === "A") {
         const { n } = $tt_t0;
         return n;
       }
-    } return 0; });
+    } return 0; }));
     {
       const $tt_m = mode;
       switch ($tt_m) {

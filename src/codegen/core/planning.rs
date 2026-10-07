@@ -8,7 +8,7 @@ pub(super) use rewrites::{
     OwnerSlotRewrite, ResultReturnBoundary, SourceReplacement, compound_assignment_operator,
     declarator_separator, discarded_operand_comma,
 };
-use rewrites::{compound_assignment_frames, discarded_operand_commas};
+use rewrites::{compound_assignment_frames, discarded_operand_commas, jsx_closing_name};
 
 use super::*;
 
@@ -439,6 +439,9 @@ pub(super) struct TargetRewritePlan {
     pub(super) spread_name: String,
     pub(super) guarded_if_tests: HashMap<SourceSpan, crate::program_syntax::IfTestFacts>,
     pub(super) anonymous_functions: Vec<SourceSpan>,
+    pub(super) function_names: Vec<(SourceSpan, String)>,
+    pub(super) entity_names: std::collections::HashSet<SourceSpan>,
+    pub(super) discarded_values: HashSet<ExprId>,
     pub(super) host_error: String,
     pub(super) host_json: String,
     pub(super) host_string: String,
@@ -1385,7 +1388,46 @@ impl TargetRewritePlan {
                 )
         };
         let compound_assignments = compound_assignment_frames(source, planned_steps());
-        let discarded_commas = discarded_operand_commas(source, planned_steps());
+        let discarded_values: Vec<(ExprId, SourceSpan, SourceSpan)> = all_values()
+            .filter_map(|value| {
+                let step = value.steps.iter().next()?;
+                if !matches!(
+                    step.operation,
+                    HostEvaluationOperation::Eager(
+                        crate::program_syntax::EagerPosition::SequenceElement(_)
+                    )
+                ) {
+                    return None;
+                }
+                let bytes = source.as_bytes();
+                let (comma, _) =
+                    crate::scanner::skip_trivia(bytes, value.source.end, step.parent.end);
+                (bytes.get(comma) == Some(&b',') && comma < step.parent.end).then_some((
+                    value.expr,
+                    value.source,
+                    SourceSpan {
+                        start: comma,
+                        end: comma + 1,
+                    },
+                ))
+            })
+            .collect();
+        let closing_tags: Vec<(SourceSpan, crate::evaluation_ir::ValueSlotId)> = planned_steps()
+            .flat_map(|step| step.inputs.iter().map(move |input| (step, input)))
+            .filter_map(|(step, input)| match input {
+                PlannedEvaluationInput::Source {
+                    target,
+                    mode: EvaluationInputMode::JsxTagName,
+                    ..
+                } => Some((jsx_closing_name(source, step.parent)?, *target)),
+                _ => None,
+            })
+            .collect();
+        let discarded_commas: Vec<SourceSpan> = discarded_operand_commas(source, planned_steps())
+            .into_iter()
+            .chain(discarded_values.iter().map(|(_, _, comma)| *comma))
+            .chain(closing_tags.iter().map(|(span, _)| *span))
+            .collect();
         relocated_values.extend(compound_assignments.iter().copied());
         relocated_values.extend(discarded_commas.iter().copied());
         let rewritten_operations: Vec<SourceSpan> = all_operations()
@@ -1507,7 +1549,9 @@ impl TargetRewritePlan {
                             claim: false,
                             rewrite: None,
                         }),
-                        PlannedReceiver::Stable { .. } => None,
+                        PlannedReceiver::Stable { .. } | PlannedReceiver::ThisOfSuper { .. } => {
+                            None
+                        }
                     })
                     .collect(),
                 PlannedEvaluationInput::Source {
@@ -1533,6 +1577,26 @@ impl TargetRewritePlan {
                     Vec::new()
                 }
             })
+            .chain(closing_tags.iter().map(|(span, target)| SourceReplacement {
+                source: *span,
+                slot: lowering.slot_name(*target).to_owned(),
+                jsx_child: false,
+                anchor: None,
+                claim: false,
+                rewrite: None,
+            }))
+            .chain(
+                discarded_values
+                    .iter()
+                    .map(|(_, _, comma)| SourceReplacement {
+                        source: *comma,
+                        slot: String::new(),
+                        jsx_child: false,
+                        anchor: None,
+                        claim: false,
+                        rewrite: Some(String::new()),
+                    }),
+            )
             .chain(owner_slots.iter().map(|rewrite| SourceReplacement {
                 source: rewrite.source,
                 slot: rewrite.slot.clone(),
@@ -1561,7 +1625,8 @@ impl TargetRewritePlan {
                                 claim: false,
                                 rewrite: None,
                             }),
-                            PlannedReceiver::Stable { .. } => None,
+                            PlannedReceiver::Stable { .. }
+                            | PlannedReceiver::ThisOfSuper { .. } => None,
                         })
                         .collect(),
                     _ => Vec::new(),
@@ -1772,6 +1837,9 @@ impl TargetRewritePlan {
             spread_name: lowering.spread_name().to_owned(),
             guarded_if_tests,
             anonymous_functions: lowering.anonymous_functions().to_vec(),
+            function_names: lowering.function_names().to_vec(),
+            entity_names: lowering.entity_names().clone(),
+            discarded_values: discarded_values.iter().map(|(expr, _, _)| *expr).collect(),
             host_error: lowering.host_global("Error"),
             host_json: lowering.host_global("JSON"),
             host_string: lowering.host_global("String"),

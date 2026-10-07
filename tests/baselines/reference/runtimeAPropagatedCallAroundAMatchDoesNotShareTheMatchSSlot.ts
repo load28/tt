@@ -179,8 +179,7 @@ function inResult(v: number) {
     $tt_v17 = $tt_t5.value;
     console.log($tt_v17);
     {
-      const $tt_a0 = { value: { kind: "Ok" as const, value: y + a[0] } };
-      $tt_v10 = $tt_a0.value;
+      $tt_v10 = { kind: "Ok" as const, value: y + a[0] };
       break $tt_v10;
     }
   }

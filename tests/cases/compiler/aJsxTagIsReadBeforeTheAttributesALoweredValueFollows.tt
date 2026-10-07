@@ -1,0 +1,40 @@
+// @run: main.ttx
+// @filename: tsconfig.json
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "jsx": "react",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true
+  }
+}
+// @filename: main.ttx
+variant O { A(n: number), B }
+const log: string[] = [];
+const React = {
+  createElement(tag: { name: string }, _props: unknown, ..._children: unknown[]) {
+    log.push(`create ${tag.name}`);
+    return null;
+  },
+};
+function Old(_p: { x: number; y?: number; children?: unknown }) { return null; }
+function New(_p: { x: number; y?: number; children?: unknown }) { return null; }
+const lib = { get inner() { log.push("get inner"); return { Old }; } };
+function t<T>(label: string, value: T): T { log.push(label); return value; }
+let Comp = Old;
+function selfClosing(o: O) {
+  return <lib.inner.Old y={t("y", 1)} x={match (o) { A(n) => (log.push("arm"), n), B => 0 }} />;
+}
+function withChildren(o: O) {
+  return <lib.inner.Old y={t("y", 1)} x={match (o) { A(n) => (log.push("arm"), n), B => 0 }}>{t("child", 2)}</lib.inner.Old>;
+}
+function reassigned(o: O) {
+  return <Comp x={match (o) { A(n) => (Comp = New, n), B => 0 }} />;
+}
+selfClosing(O.A(1));
+withChildren(O.A(1));
+reassigned(O.A(1));
+console.log(log.join(", "));

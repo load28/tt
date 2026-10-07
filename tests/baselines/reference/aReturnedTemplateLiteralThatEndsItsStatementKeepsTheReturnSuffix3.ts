@@ -32,6 +32,6 @@ $tt_v0: {
     $tt_v0 = $tt_t0;
     break $tt_v0;
   }
-  const x = $tt_t0.value; { const $tt_a0 = { value: { kind: "Ok" as const, value: x + `v` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }
+  const x = $tt_t0.value; { $tt_v0 = { kind: "Ok" as const, value: x + `v` }; break $tt_v0; }
 }
 export const a = $tt_v0

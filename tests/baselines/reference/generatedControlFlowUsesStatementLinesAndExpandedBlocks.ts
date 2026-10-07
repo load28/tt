@@ -114,8 +114,7 @@ $tt_v2$computed: {
     $tt_v2$computed = $tt_t2;
     break $tt_v2$computed;
   }
-  const $tt_a0 = { value: { kind: "Ok" as const, value: $tt_t2.value } };
-  $tt_v2$computed = $tt_a0.value;
+  $tt_v2$computed = { kind: "Ok" as const, value: $tt_t2.value };
   break $tt_v2$computed;
 }
 const computed = $tt_v2$computed;

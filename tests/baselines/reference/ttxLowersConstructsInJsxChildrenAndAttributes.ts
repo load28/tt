@@ -84,7 +84,8 @@ const prop = <Panel before={mark("before")} render={() => {
 }} after={mark("after")} />;
 const ordered = (state: State) => {
   let $tt_v2: string;
-  const $tt_v3 = (mark("first"));
+  const $tt_v3 = (Panel);
+  const $tt_v4 = (mark("first"));
   {
     const $tt_m = state;
     switch ($tt_m.kind) {
@@ -102,5 +103,5 @@ const ordered = (state: State) => {
       }
     }
   }
-  return <Panel before={$tt_v3} value={$tt_v2} after={mark("last")} />;
+  return <$tt_v3 before={$tt_v4} value={$tt_v2} after={mark("last")} />;
 };

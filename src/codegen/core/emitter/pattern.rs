@@ -737,6 +737,32 @@ impl<'a> Emitter<'a> {
         out
     }
 
+    pub(super) fn named_as_written(&self, span: SourceSpan, value: Rope<'a>) -> Rope<'a> {
+        if !self.anonymous_function(span.start, span.end) {
+            return value;
+        }
+        let mut out = Rope::new();
+        match self
+            .function_names
+            .binary_search_by_key(&(span.start, span.end), |(named, _)| {
+                (named.start, named.end)
+            }) {
+            Ok(index) => {
+                let key =
+                    serde_json::Value::from(self.function_names[index].1.as_str()).to_string();
+                out.push_lit(format!("({{ {key}: "));
+                out.append(value);
+                out.push_lit(format!(" }})[{key}]"));
+            }
+            Err(_) => {
+                out.push_lit("(void 0, ");
+                out.append(value);
+                out.push_lit(")");
+            }
+        }
+        out
+    }
+
     /// Whether the source from `start` to `end` is an anonymous function
     /// definition, as a value written from `start` and no further than the
     /// definition's end is.

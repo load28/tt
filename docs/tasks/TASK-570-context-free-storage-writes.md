@@ -5,6 +5,12 @@
 - **Completed**: 2026-09-29
 - **Commit**: `TASK-570: Type a value with no contextual type as TypeScript does at its source position`
 
+> **Superseded in part by TASK-781 (decision K5)**: an object literal is
+> carried only when a property's value, a method or an accessor is typed by
+> its context; any other object literal is written to the storage directly,
+> because the carrier's widening made it a type that is no longer an object
+> literal type.
+
 ## Purpose
 
 TASK-553 Issue 1: `const b = match (n) { 1 => ({ k: 1, m() { return this; } }), _ => ({ k: 2, m() { return this; } }) }; b.m().zzz;`

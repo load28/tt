@@ -64,7 +64,7 @@ $tt_v0: {
     $tt_v0 = $tt_t0;
     break $tt_v0;
   }
-  const x = $tt_t0.value; { const $tt_a0 = { value: { kind: "Ok" as const, value: x } }; $tt_v0 = $tt_a0.value; break $tt_v0; }
+  const x = $tt_t0.value; { $tt_v0 = { kind: "Ok" as const, value: x }; break $tt_v0; }
 }
 return $tt_v0; }
 function viaLet(v: number) { let $tt_v3: ({
@@ -89,7 +89,7 @@ $tt_v3: {
     $tt_v3 = $tt_t1;
     break $tt_v3;
   }
-  let x = $tt_t1.value; x += 1; { const $tt_a1 = { value: { kind: "Ok" as const, value: x } }; $tt_v3 = $tt_a1.value; break $tt_v3; }
+  let x = $tt_t1.value; x += 1; { $tt_v3 = { kind: "Ok" as const, value: x }; break $tt_v3; }
 }
 return $tt_v3; }
 function propagateOnly(v: number) { let $tt_v6: ({
@@ -113,7 +113,7 @@ $tt_v6: {
   if (!("value" in $tt_t2)) {
     $tt_v6 = $tt_t2;
     break $tt_v6;
-  } { const $tt_a2 = { value: { kind: "Ok" as const, value: 0 } }; $tt_v6 = $tt_a2.value; break $tt_v6; }
+  } { $tt_v6 = { kind: "Ok" as const, value: 0 }; break $tt_v6; }
 }
 return $tt_v6; }
 function viaPipeline(v: number) { let $tt_v9: ({
@@ -149,7 +149,7 @@ $tt_v9: {
     $tt_v9 = $tt_t3;
     break $tt_v9;
   }
-  const x = $tt_t3.value; { const $tt_a3 = { value: { kind: "Ok" as const, value: x } }; $tt_v9 = $tt_a3.value; break $tt_v9; }
+  const x = $tt_t3.value; { $tt_v9 = { kind: "Ok" as const, value: x }; break $tt_v9; }
 }
 return $tt_v9; }
 function viaCall(v: number) { let $tt_v10: ({
@@ -174,7 +174,7 @@ $tt_v10: {
     $tt_v10 = $tt_t4;
     break $tt_v10;
   }
-  const x = $tt_t4.value; { const $tt_a4 = { value: { kind: "Ok" as const, value: x } }; $tt_v10 = $tt_a4.value; break $tt_v10; }
+  const x = $tt_t4.value; { $tt_v10 = { kind: "Ok" as const, value: x }; break $tt_v10; }
 }
 return $tt_v10; }
 function viaResult(v: number) {
@@ -205,7 +205,7 @@ function viaResult(v: number) {
       $tt_v13 = $tt_t5;
       break $tt_v13;
     }
-    const x = $tt_t5.value; { const $tt_a5 = { value: { kind: "Ok" as const, value: x } }; $tt_v13 = $tt_a5.value; break $tt_v13; }
+    const x = $tt_t5.value; { $tt_v13 = { kind: "Ok" as const, value: x }; break $tt_v13; }
   }
   return $tt_v13;
 }

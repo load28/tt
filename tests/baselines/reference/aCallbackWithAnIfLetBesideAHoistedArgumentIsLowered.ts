@@ -55,13 +55,13 @@ function run(k: number) {
   let $tt_v1: string;
   const $tt_v2: typeof show = (show);
   const $tt_v3: string = ((($tt_v, $tt_f) => $tt_f($tt_v))(k, String));
-  const $tt_v4: (v: V) => number = ((v) => { {
+  const $tt_v4: (v: V) => number = ((void 0, (v) => { {
     const $tt_t0 = v;
     if ($tt_t0.kind === "A") {
       const { n } = $tt_t0;
       return n;
     }
-  } return 0; });
+  } return 0; }));
   {
     const $tt_m = k;
     switch ($tt_m) {
@@ -117,7 +117,7 @@ function arm(v: V): TResult<number, string> {
 const viaArrow = (k: number) => {
   let $tt_v6: number;
   const $tt_v7: typeof show = (show);
-  const $tt_v9: (v: V) => number = ((v) => {
+  const $tt_v9: (v: V) => number = ((void 0, (v) => {
     let $tt_v10: number;
     {
       const $tt_m = v;
@@ -137,7 +137,7 @@ const viaArrow = (k: number) => {
       }
     }
     return $tt_v10;
-  });
+  }));
   {
     const $tt_m = k;
     switch ($tt_m) {

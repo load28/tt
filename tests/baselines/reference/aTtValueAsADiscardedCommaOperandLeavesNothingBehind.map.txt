@@ -1,0 +1,22 @@
+//// [aTtValueAsADiscardedCommaOperandLeavesNothingBehind.tt] 20 mapping(s)
+1:1 -> 19:1 len 40  "import type { TResult } from \"@tt/std\";\n"
+2:18 -> 21:21 len 6  "number"
+2:18 -> 24:10 len 6  "number"
+2:30 -> 26:3 len 162  "\nconst log: string[] = [];\nconst r = (n: number)"...
+6:10 -> 32:19 len 1  "o"
+6:17 -> 35:17 len 1  "n"
+6:23 -> 36:18 len 17  "log.push(\"a\" + n)"
+6:47 -> 40:18 len 1  "0"
+6:51 -> 48:3 len 23  " log.push(\"second\");\n  "
+7:3 -> 67:3 len 11  "const x = ("
+7:21 -> 51:19 len 1  "o"
+7:28 -> 54:17 len 1  "n"
+7:34 -> 55:18 len 1  "n"
+7:42 -> 59:18 len 1  "0"
+7:46 -> 67:14 len 68  " 5);\n  return x;\n}\nexport function g(): TResult<"...
+11:3 -> 83:3 len 11  "const y = ("
+11:18 -> 73:18 len 4  "r(1)"
+11:23 -> 83:14 len 1  " "
+11:28 -> 78:18 len 4  "r(2)"
+11:32 -> 83:21 len 97  ");\n  return { kind: \"Ok\", value: y };\n}\nconsole."...
+

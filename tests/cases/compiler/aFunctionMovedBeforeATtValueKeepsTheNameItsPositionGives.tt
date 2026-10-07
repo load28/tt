@@ -1,0 +1,13 @@
+// @run: aFunctionMovedBeforeATtValueKeepsTheNameItsPositionGives.tt
+variant O { A(n: number), B }
+function g(cb: Function, n: number) { return cb.name + ":" + n; }
+const obj = { m(cb: Function, n: number) { return cb.name + ":" + n; } };
+function run(o: O, c: boolean) {
+  const a = g(() => 1, match (o) { A(n) => n, B => 0 });
+  const b = obj.m(function () {}, match (o) { A(n) => n, B => 0 });
+  const d = { k: class {}, "a-b": () => 2, v: match (o) { A(n) => n, B => 0 } };
+  const t = c ? (() => 1) : match (o) { A => 1, B => 2 };
+  const l = (function () {}) || match (o) { A => 1, B => 2 };
+  return [a, b, d.k.name, d["a-b"].name, (t as Function).name, l.name];
+}
+console.log(JSON.stringify(run(O.A(1), true)));

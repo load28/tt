@@ -379,7 +379,7 @@ pub(super) enum ProjectedProtocolFrame {
     },
     Jsx {
         parent: ProjectedSpan,
-        expressions: Vec<(ProjectedSpan, Effects, bool)>,
+        expressions: Vec<(ProjectedSpan, Effects, JsxPosition)>,
     },
     Suspend {
         parent: ProjectedSpan,
@@ -428,6 +428,7 @@ pub(super) struct ProjectedReferencePart {
     pub(super) span: ProjectedSpan,
     pub(super) effects: Effects,
     pub(super) read_at_call: bool,
+    pub(super) this_of_super: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -560,68 +561,103 @@ pub(super) fn jsx_expression_span(
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum JsxPosition {
+    Tag,
+    Value,
+    ChildElement,
+}
+
 pub(super) fn jsx_evaluation_positions(
     node: &JSXElement,
     source_start: HostOrigin,
-) -> Vec<(ProjectedSpan, bool)> {
+) -> Vec<(ProjectedSpan, JsxPosition)> {
+    let tag = match &node.opening.name {
+        swc_ecma_ast::JSXElementName::Ident(name) => {
+            let text: &str = &name.sym;
+            let intrinsic =
+                text.starts_with(|c: char| c.is_ascii_lowercase()) || text.contains('-');
+            (!intrinsic).then(|| projected_span(name.span, source_start))
+        }
+        swc_ecma_ast::JSXElementName::JSXMemberExpr(member) => {
+            Some(projected_span(member.span(), source_start))
+        }
+        swc_ecma_ast::JSXElementName::JSXNamespacedName(_) => None,
+    };
     let attributes = node
         .opening
         .attrs
         .iter()
         .filter_map(|attribute| match attribute {
-            JSXAttrOrSpread::SpreadElement(spread) => {
-                Some((projected_span(spread.expr.span(), source_start), false))
-            }
+            JSXAttrOrSpread::SpreadElement(spread) => Some((
+                projected_span(spread.expr.span(), source_start),
+                JsxPosition::Value,
+            )),
             JSXAttrOrSpread::JSXAttr(attribute) => match attribute.value.as_ref()? {
                 JSXAttrValue::JSXExprContainer(container) => {
-                    jsx_expression_span(&container.expr, source_start).map(|span| (span, false))
+                    jsx_expression_span(&container.expr, source_start)
+                        .map(|span| (span, JsxPosition::Value))
                 }
-                JSXAttrValue::JSXElement(element) => {
-                    Some((projected_span(element.span, source_start), false))
-                }
-                JSXAttrValue::JSXFragment(fragment) => {
-                    Some((projected_span(fragment.span, source_start), false))
-                }
+                JSXAttrValue::JSXElement(element) => Some((
+                    projected_span(element.span, source_start),
+                    JsxPosition::Value,
+                )),
+                JSXAttrValue::JSXFragment(fragment) => Some((
+                    projected_span(fragment.span, source_start),
+                    JsxPosition::Value,
+                )),
                 JSXAttrValue::Str(_) => None,
             },
         });
     let children = node.children.iter().filter_map(|child| match child {
         JSXElementChild::JSXExprContainer(container) => {
-            jsx_expression_span(&container.expr, source_start).map(|span| (span, false))
+            jsx_expression_span(&container.expr, source_start)
+                .map(|span| (span, JsxPosition::Value))
         }
-        JSXElementChild::JSXSpreadChild(spread) => {
-            Some((projected_span(spread.expr.span(), source_start), false))
-        }
-        JSXElementChild::JSXElement(element) => {
-            Some((projected_span(element.span, source_start), true))
-        }
-        JSXElementChild::JSXFragment(fragment) => {
-            Some((projected_span(fragment.span, source_start), true))
-        }
+        JSXElementChild::JSXSpreadChild(spread) => Some((
+            projected_span(spread.expr.span(), source_start),
+            JsxPosition::Value,
+        )),
+        JSXElementChild::JSXElement(element) => Some((
+            projected_span(element.span, source_start),
+            JsxPosition::ChildElement,
+        )),
+        JSXElementChild::JSXFragment(fragment) => Some((
+            projected_span(fragment.span, source_start),
+            JsxPosition::ChildElement,
+        )),
         JSXElementChild::JSXText(_) => None,
     });
-    attributes.chain(children).collect()
+    tag.map(|span| (span, JsxPosition::Tag))
+        .into_iter()
+        .chain(attributes)
+        .chain(children)
+        .collect()
 }
 
 pub(super) fn jsx_fragment_positions(
     node: &JSXFragment,
     source_start: HostOrigin,
-) -> Vec<(ProjectedSpan, bool)> {
+) -> Vec<(ProjectedSpan, JsxPosition)> {
     node.children
         .iter()
         .filter_map(|child| match child {
             JSXElementChild::JSXExprContainer(container) => {
-                jsx_expression_span(&container.expr, source_start).map(|span| (span, false))
+                jsx_expression_span(&container.expr, source_start)
+                    .map(|span| (span, JsxPosition::Value))
             }
-            JSXElementChild::JSXSpreadChild(spread) => {
-                Some((projected_span(spread.expr.span(), source_start), false))
-            }
-            JSXElementChild::JSXElement(element) => {
-                Some((projected_span(element.span, source_start), true))
-            }
-            JSXElementChild::JSXFragment(fragment) => {
-                Some((projected_span(fragment.span, source_start), true))
-            }
+            JSXElementChild::JSXSpreadChild(spread) => Some((
+                projected_span(spread.expr.span(), source_start),
+                JsxPosition::Value,
+            )),
+            JSXElementChild::JSXElement(element) => Some((
+                projected_span(element.span, source_start),
+                JsxPosition::ChildElement,
+            )),
+            JSXElementChild::JSXFragment(fragment) => Some((
+                projected_span(fragment.span, source_start),
+                JsxPosition::ChildElement,
+            )),
             JSXElementChild::JSXText(_) => None,
         })
         .collect()

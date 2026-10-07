@@ -1,0 +1,90 @@
+=== main.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+class Base {
+>Base : class Base
+  m?(x: number) { return `m${x}${this.tag()}`; }
+>m : (method) Base.m?(x: number): string
+>x : (parameter) x: number
+>x : (parameter) x: number
+>tag : (method) Base.tag(): string
+  tag() { return "#base"; }
+>tag : (method) Base.tag(): string
+function key(): "m" { log.push("key"); return "m"; }
+>key : function key(): "m"
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+class Derived extends Base {
+>Derived : class Derived
+>Base : class Base
+  tag() { return "#derived"; }
+>tag : (method) Derived.tag(): string
+  run(o: O) {
+>run : (method) Derived.run(o: O): (string | undefined)[]
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+    const a = super.m!(match (o) { A(n) => n, B => 0 });
+>a : const a: string
+>m : (method) Base.m?(x: number): string
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+    const b = (super.m as (x: number) => string)(match (o) { A(n) => n * 2, B => 0 });
+>b : const b: string
+>m : (method) Base.m?(x: number): string
+>x : (parameter) x: number
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+    const c = super.m?.(match (o) { A(n) => n * 3, B => 0 });
+>c : const c: string | undefined
+>m : (method) Base.m?(x: number): string
+>o : (parameter) o: O
+>n : const n: number
+>n : const n: number
+    const d = super[key()]!(match (o) { A(n) => (log.push("arm"), n * 4), B => 0 });
+>d : const d: string
+>key : function key(): "m"
+>o : (parameter) o: O
+>n : const n: number
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : const n: number
+    return [a, b, c, d];
+>a : const a: string
+>b : const b: string
+>c : const c: string | undefined
+>d : const d: string
+console.log(new Derived().run(O.A(1)).join(" "), log.join(","));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>Derived : constructor Derived(): Derived
+>run : (method) Derived.run(o: O): (string | undefined)[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+>join : (method) Array<string | undefined>.join(separator?: string): string
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

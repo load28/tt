@@ -1,4 +1,4 @@
-//// [ttxLowersConstructsInJsxChildrenAndAttributes.ttx] 23 mapping(s)
+//// [ttxLowersConstructsInJsxChildrenAndAttributes.ttx] 25 mapping(s)
 1:30 -> 20:29 len 6  "string"
 1:30 -> 23:18 len 6  "string"
 1:46 -> 25:3 len 29  "\ndeclare const state: State;\n"
@@ -13,13 +13,15 @@
 8:19 -> 53:18 len 24  "<strong>{value}</strong>"
 9:12 -> 57:18 len 4  "null"
 10:2 -> 66:2 len 62  "} after={mark(\"after\")} />;\nconst ordered = (sta"...
-11:35 -> 87:10 len 15  "<Panel before={"
-11:50 -> 69:19 len 13  "mark(\"first\")"
-11:63 -> 87:31 len 9  "} value={"
-11:79 -> 71:19 len 5  "state"
-12:9 -> 74:17 len 5  "value"
-12:19 -> 75:18 len 5  "value"
-13:12 -> 79:18 len 2  "\"\""
-14:2 -> 87:46 len 25  "} after={mark(\"last\")} />"
-14:27 -> 88:2 len 2  ";\n"
+11:35 -> 88:10 len 1  "<"
+11:36 -> 69:19 len 5  "Panel"
+11:41 -> 88:17 len 9  " before={"
+11:50 -> 70:19 len 13  "mark(\"first\")"
+11:63 -> 88:32 len 9  "} value={"
+11:79 -> 72:19 len 5  "state"
+12:9 -> 75:17 len 5  "value"
+12:19 -> 76:18 len 5  "value"
+13:12 -> 80:18 len 2  "\"\""
+14:2 -> 88:47 len 25  "} after={mark(\"last\")} />"
+14:27 -> 89:2 len 2  ";\n"
 

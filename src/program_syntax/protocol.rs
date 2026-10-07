@@ -718,13 +718,15 @@ pub(super) fn protocol_step(
             let inputs = expressions[first..position]
                 .iter()
                 .copied()
-                .map(|(expression, effects, child)| {
+                .map(|(expression, effects, position)| {
                     (
                         expression,
-                        if child {
-                            EvaluationInputMode::JsxChildValue
-                        } else {
-                            EvaluationInputMode::Value
+                        match position {
+                            super::collector::JsxPosition::Tag => EvaluationInputMode::JsxTagName,
+                            super::collector::JsxPosition::Value => EvaluationInputMode::Value,
+                            super::collector::JsxPosition::ChildElement => {
+                                EvaluationInputMode::JsxChildValue
+                            }
                         },
                         None,
                         effects,
@@ -770,6 +772,7 @@ pub(super) fn protocol_step(
                         source: map_evaluation_span(segments, part.span)?,
                         effects: part.effects,
                         read_at_call: part.read_at_call,
+                        this_of_super: part.this_of_super,
                     })
                 })
                 .transpose()
@@ -981,17 +984,31 @@ pub(super) fn simple_copiable(expression: &swc_ecma_ast::Expr) -> bool {
 pub(super) fn read_at_call(callee: &swc_ecma_ast::Callee) -> bool {
     match callee {
         swc_ecma_ast::Callee::Super(_) | swc_ecma_ast::Callee::Import(_) => true,
-        swc_ecma_ast::Callee::Expr(expression) => match peel_parens(expression) {
-            swc_ecma_ast::Expr::Ident(ident) => &*ident.sym == "eval",
-            swc_ecma_ast::Expr::SuperProp(member) => match &member.prop {
-                swc_ecma_ast::SuperProp::Ident(_) => true,
-                swc_ecma_ast::SuperProp::Computed(computed) => {
-                    super::simple_copiable(&computed.expr)
-                }
-            },
-            _ => false,
-        },
+        swc_ecma_ast::Callee::Expr(expression) => callee_read_at_call(expression),
     }
+}
+
+pub(super) fn callee_read_at_call(expression: &swc_ecma_ast::Expr) -> bool {
+    match peel_type_wrappers(expression) {
+        swc_ecma_ast::Expr::Ident(ident) => &*ident.sym == "eval",
+        swc_ecma_ast::Expr::SuperProp(member) => match &member.prop {
+            swc_ecma_ast::SuperProp::Ident(_) => true,
+            swc_ecma_ast::SuperProp::Computed(computed) => super::simple_copiable(&computed.expr),
+        },
+        _ => false,
+    }
+}
+
+fn peel_type_wrappers(expression: &swc_ecma_ast::Expr) -> &swc_ecma_ast::Expr {
+    crate::stack::grow(|| match expression {
+        swc_ecma_ast::Expr::Paren(inner) => peel_type_wrappers(&inner.expr),
+        swc_ecma_ast::Expr::TsAs(inner) => peel_type_wrappers(&inner.expr),
+        swc_ecma_ast::Expr::TsTypeAssertion(inner) => peel_type_wrappers(&inner.expr),
+        swc_ecma_ast::Expr::TsNonNull(inner) => peel_type_wrappers(&inner.expr),
+        swc_ecma_ast::Expr::TsInstantiation(inner) => peel_type_wrappers(&inner.expr),
+        swc_ecma_ast::Expr::TsSatisfies(inner) => peel_type_wrappers(&inner.expr),
+        _ => expression,
+    })
 }
 
 fn peel_parens(expression: &swc_ecma_ast::Expr) -> &swc_ecma_ast::Expr {
@@ -1156,6 +1173,24 @@ pub(super) fn authored_span(segments: &ProjectionSegments, projected: ProjectedS
 /// The parts of a member callee's reference as the protocol records them.
 /// A part that is an authored identifier or `this` is read again at the
 /// call ([`HostReferencePart::read_at_call`]).
+pub(super) fn projected_callee_reference(
+    callee: &swc_ecma_ast::Expr,
+    parts: [Option<&swc_ecma_ast::Expr>; 2],
+    source_start: HostOrigin,
+    segments: &ProjectionSegments,
+) -> ProjectedMemberReference {
+    let mut reference = projected_member_reference(parts, source_start, segments);
+    if let swc_ecma_ast::Expr::SuperProp(member) = peel_type_wrappers(callee) {
+        reference.receiver = Some(ProjectedReferencePart {
+            span: projected_span(member.obj.span, source_start),
+            effects: Effects::NONE,
+            read_at_call: true,
+            this_of_super: true,
+        });
+    }
+    reference
+}
+
 pub(super) fn projected_member_reference(
     parts: [Option<&swc_ecma_ast::Expr>; 2],
     source_start: HostOrigin,
@@ -1168,6 +1203,7 @@ pub(super) fn projected_member_reference(
                 span,
                 effects: expression_effects(expression),
                 read_at_call: simple_copiable(expression) && authored_span(segments, span),
+                this_of_super: false,
             }
         })
     };

@@ -1,0 +1,248 @@
+=== main.ttx ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const log: string[] = [];
+>log : const log: string[]
+const React = {
+>React : const React: {
+>       createElement(tag: {
+>           name: string;
+>       }, _props: unknown, ..._children: unknown[]): null;
+>   }
+  createElement(tag: { name: string }, _props: unknown, ..._children: unknown[]) {
+>createElement : (method) createElement(tag: {
+>       name: string;
+>   }, _props: unknown, ..._children: unknown[]): null
+>tag : (parameter) tag: {
+>       name: string;
+>   }
+>name : (property) name: string
+>_props : (parameter) _props: unknown
+>_children : (parameter) _children: unknown[]
+    log.push(`create ${tag.name}`);
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>tag : (parameter) tag: {
+>       name: string;
+>   }
+>name : (property) name: string
+function Old(_p: { x: number; y?: number; children?: unknown }) { return null; }
+>Old : function Old(_p: {
+>       x: number;
+>       y?: number;
+>       children?: unknown;
+>   }): null
+>_p : (parameter) _p: {
+>       x: number;
+>       y?: number;
+>       children?: unknown;
+>   }
+>x : (property) x: number
+>y : (property) y?: number | undefined
+>children : (property) children?: unknown
+function New(_p: { x: number; y?: number; children?: unknown }) { return null; }
+>New : function New(_p: {
+>       x: number;
+>       y?: number;
+>       children?: unknown;
+>   }): null
+>_p : (parameter) _p: {
+>       x: number;
+>       y?: number;
+>       children?: unknown;
+>   }
+>x : (property) x: number
+>y : (property) y?: number | undefined
+>children : (property) children?: unknown
+const lib = { get inner() { log.push("get inner"); return { Old }; } };
+>lib : const lib: {
+>       readonly inner: {
+>           Old: (_p: {
+>               x: number;
+>               y?: number;
+>               children?: unknown;
+>           }) => null;
+>       };
+>   }
+>inner : (accessor) inner: {
+>       Old: (_p: {
+>           x: number;
+>           y?: number;
+>           children?: unknown;
+>       }) => null;
+>   }
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>Old : (property) Old: (_p: {
+>       x: number;
+>       y?: number;
+>       children?: unknown;
+>   }) => null
+function t<T>(label: string, value: T): T { log.push(label); return value; }
+>t : function t<T>(label: string, value: T): T
+>T : (type parameter) T in t<T>(label: string, value: T): T
+>label : (parameter) label: string
+>value : (parameter) value: T
+>T : (type parameter) T in t<T>(label: string, value: T): T
+>T : (type parameter) T in t<T>(label: string, value: T): T
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>label : (parameter) label: string
+>value : (parameter) value: T
+let Comp = Old;
+>Comp : let Comp: (_p: {
+>       x: number;
+>       y?: number;
+>       children?: unknown;
+>   }) => null
+>Old : function Old(_p: {
+>       x: number;
+>       y?: number;
+>       children?: unknown;
+>   }): null
+function selfClosing(o: O) {
+>selfClosing : function selfClosing(o: O): any
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return <lib.inner.Old y={t("y", 1)} x={match (o) { A(n) => (log.push("arm"), n), B => 0 }} />;
+>lib : const lib: {
+>       readonly inner: {
+>           Old: (_p: {
+>               x: number;
+>               y?: number;
+>               children?: unknown;
+>           }) => null;
+>       };
+>   }
+>inner : (accessor) inner: {
+>       Old: (_p: {
+>           x: number;
+>           y?: number;
+>           children?: unknown;
+>       }) => null;
+>   }
+>Old : (property) Old: (_p: {
+>       x: number;
+>       y?: number;
+>       children?: unknown;
+>   }) => null
+>t : function t<1>(label: string, value: 1): 1
+>o : (parameter) o: O
+>n : const n: number
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : const n: number
+function withChildren(o: O) {
+>withChildren : function withChildren(o: O): any
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return <lib.inner.Old y={t("y", 1)} x={match (o) { A(n) => (log.push("arm"), n), B => 0 }}>{t("child", 2)}</lib.inner.Old>;
+>lib : const lib: {
+>       readonly inner: {
+>           Old: (_p: {
+>               x: number;
+>               y?: number;
+>               children?: unknown;
+>           }) => null;
+>       };
+>   }
+>inner : (accessor) inner: {
+>       Old: (_p: {
+>           x: number;
+>           y?: number;
+>           children?: unknown;
+>       }) => null;
+>   }
+>Old : (property) Old: (_p: {
+>       x: number;
+>       y?: number;
+>       children?: unknown;
+>   }) => null
+>t : function t<1>(label: string, value: 1): 1
+>o : (parameter) o: O
+>n : const n: number
+>log : const log: string[]
+>push : (method) Array<string>.push(...items: string[]): number
+>n : const n: number
+>t : function t<2>(label: string, value: 2): 2
+function reassigned(o: O) {
+>reassigned : function reassigned(o: O): any
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  return <Comp x={match (o) { A(n) => (Comp = New, n), B => 0 }} />;
+>Comp : let Comp: (_p: {
+>       x: number;
+>       y?: number;
+>       children?: unknown;
+>   }) => null
+>o : (parameter) o: O
+>n : const n: number
+>Comp : let Comp: (_p: {
+>       x: number;
+>       y?: number;
+>       children?: unknown;
+>   }) => null
+>New : function New(_p: {
+>       x: number;
+>       y?: number;
+>       children?: unknown;
+>   }): null
+>n : const n: number
+selfClosing(O.A(1));
+>selfClosing : function selfClosing(o: O): any
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+withChildren(O.A(1));
+>withChildren : function withChildren(o: O): any
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+reassigned(O.A(1));
+>reassigned : function reassigned(o: O): any
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+console.log(log.join(", "));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>log : const log: string[]
+>join : (method) Array<string>.join(separator?: string): string
+

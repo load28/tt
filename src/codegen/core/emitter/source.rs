@@ -1398,6 +1398,9 @@ impl<'a> Emitter<'a> {
             let (kind, start, end, extent) = self.value_anchor(expr);
             let mut out = Rope::new();
             let mut rendered_slot = slot.as_str();
+            if self.discarded_values.contains(&expr) {
+                rendered_slot = "";
+            }
             if self.loop_test_rewrites.iter().any(|rewrite| {
                 self.guarded_test_operation(rewrite)
                     .is_some_and(|operation| {

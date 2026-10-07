@@ -101,8 +101,7 @@ export function run(e: E, f: F, n: number): number {
     const view = <section data-value={$tt_v4}>{($tt_v2 === 0 ? <strong>{(($tt_v, $tt_f) => $tt_f($tt_v))(chosen, step)}</strong> : null)}</section>;
     void view;
     {
-      const $tt_a0 = { value: { kind: "Ok" as const, value: first + chosen } };
-      $tt_v0 = $tt_a0.value;
+      $tt_v0 = { kind: "Ok" as const, value: first + chosen };
       break $tt_v0;
     }
   }

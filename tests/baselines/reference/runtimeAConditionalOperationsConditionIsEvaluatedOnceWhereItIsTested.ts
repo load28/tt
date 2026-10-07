@@ -240,7 +240,7 @@ let $tt_v23: (number) | (null);
 let $tt_v22: {
     k: number;
 } | null;
-if ($tt_v22 = ({ value: read(true) ? { k: 1 } : null }).value) {
+if ($tt_v22 = read(true) ? { k: 1 } : null) {
   let $tt_v21: number;
   {
     const $tt_m = o;

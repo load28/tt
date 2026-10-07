@@ -321,7 +321,11 @@ fn resolve_input(
             let target = allocate_value_slot(next_slot, slot_names, occupied_names)?;
             let mut part = |part: Option<crate::program_syntax::HostReferencePart>| {
                 part.map(|part| {
-                    if part.read_at_call || part.effects.is_inert() {
+                    if part.this_of_super {
+                        Ok(PlannedReceiver::ThisOfSuper {
+                            source: part.source,
+                        })
+                    } else if part.read_at_call || part.effects.is_inert() {
                         Ok(PlannedReceiver::Stable {
                             source: part.source,
                         })

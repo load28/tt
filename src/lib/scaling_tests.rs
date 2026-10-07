@@ -107,6 +107,33 @@ fn compiling_does_linear_work_in_the_tt_values_of_one_expression() {
     }
 }
 
+fn left_deep_sum(count: usize) -> String {
+    format!(
+        "declare function r(): {{ kind: \"Ok\"; value: string }} | {{ kind: \"Err\"; error: string }};\nexport function f() {{ const x = \"\"{}; return {{ kind: \"Ok\" as const, value: x }}; }}\n",
+        " + (try r())".repeat(count),
+    )
+}
+
+#[test]
+fn compiling_does_linear_work_in_a_left_deep_chain_of_tt_values() {
+    let compile = |count| {
+        crate::compile(&left_deep_sum(count), &crate::Options::default())
+            .expect("the file compiles")
+    };
+    let (small, large) = (measure(|| compile(100)), measure(|| compile(200)));
+    assert!(small["claimed frame queries"] > 0);
+    for name in ["claimed frame queries", "claimed frame checks"] {
+        let (before, after) = (
+            small.get(name).copied().unwrap_or(0),
+            large.get(name).copied().unwrap_or(0),
+        );
+        assert!(
+            after <= 2 * before + 64,
+            "{name}: {before} for n values but {after} for 2n"
+        );
+    }
+}
+
 fn nested_matches(depth: usize) -> String {
     format!(
         "export variant V {{ A(v: V), B }}\ndeclare const a: V;\nexport const x = {}1{};\nexport function f() {{ {}g();{} }}\n",

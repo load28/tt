@@ -20,23 +20,22 @@ declare const o: O;
 declare function tag(s: TemplateStringsArray, ...v: unknown[]): string;
 type R = { kind: "Ok"; value: number } | { kind: "Err"; error: string };
 declare function r(): R;
-let $tt_v0: ({
+let $tt_v0: {
     kind: "Err";
     error: string;
-}) | ({
+} | {
     kind: "Ok";
     value: string;
-});
+};
 $tt_v0: {
   const $tt_t0 = r();
   if (!("value" in $tt_t0)) {
     $tt_v0 = $tt_t0;
     break $tt_v0;
   }
-  const x = $tt_t0.value; if (x > 0) { const $tt_a0 = { value: { kind: "Ok" as const, value: `a` } }; $tt_v0 = $tt_a0.value; break $tt_v0; }
+  const x = $tt_t0.value; if (x > 0) { $tt_v0 = { kind: "Ok" as const, value: `a` }; break $tt_v0; }
   {
-    const $tt_a1 = { value: { kind: "Ok" as const, value: `b` } };
-    $tt_v0 = $tt_a1.value;
+    $tt_v0 = { kind: "Ok" as const, value: `b` };
     break $tt_v0;
   }
 }

@@ -97,8 +97,7 @@ const view = (id: number) => {
   const company = $tt_t1.value;
   const label: string = user.name.toUpperCase() + company.name;
   {
-    const $tt_a0 = { value: { kind: "Ok" as const, value: { user, company, label } } };
-    $tt_v0 = $tt_a0.value;
+    $tt_v0 = { kind: "Ok" as const, value: { user, company, label } };
     break $tt_v0;
   }
   }

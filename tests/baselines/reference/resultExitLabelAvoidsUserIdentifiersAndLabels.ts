@@ -10,6 +10,6 @@ $tt_v0_1: {
     $tt_v0_1 = $tt_t0;
     break $tt_v0_1;
   }
-  const item = $tt_t0.value; { const $tt_a0 = { value: { kind: "Ok" as const, value: item } }; $tt_v0_1 = $tt_a0.value; break $tt_v0_1; }
+  const item = $tt_t0.value; { $tt_v0_1 = { kind: "Ok" as const, value: item }; break $tt_v0_1; }
 }
 const value = $tt_v0_1; return value; }

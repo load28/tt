@@ -1,0 +1,165 @@
+=== main.tt ===
+variant O { A(n: number), B }
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: (n: number) => O
+>n : (property) n: number
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+function f(o: O) {
+>f : function f(o: O): (string | number | undefined)[]
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const x = match (o) { A(n) => ({ a: n }), B => ({ b: "x" }) };
+>x : const x: {
+>       a: number;
+>       b?: undefined;
+>   } | {
+>       a?: undefined;
+>       b: string;
+>   }
+>o : (parameter) o: O
+>n : const n: number
+>a : (property) a: number
+>n : const n: number
+>b : (property) b: string
+  return [x.a, x.b];
+>x : const x: {
+>       a: number;
+>       b?: undefined;
+>   } | {
+>       a?: undefined;
+>       b: string;
+>   }
+>a : (property) a?: number | undefined
+>x : const x: {
+>       a: number;
+>       b?: undefined;
+>   } | {
+>       a?: undefined;
+>       b: string;
+>   }
+>b : (property) b?: string | undefined
+function g(o: O) {
+>g : function g(o: O): (string | number | undefined)[]
+>o : (parameter) o: O
+>O : type O = {
+>       kind: "A";
+>       n: number;
+>   } | {
+>       kind: "B";
+>   }
+  const y = match (o) { A(n) => ({ inner: { p: n } }), B => ({ inner: { q: "y" } }) };
+>y : const y: {
+>       inner: {
+>           p: number;
+>           q?: undefined;
+>       };
+>   } | {
+>       inner: {
+>           p?: undefined;
+>           q: string;
+>       };
+>   }
+>o : (parameter) o: O
+>n : const n: number
+>inner : (property) inner: {
+>       p: number;
+>   }
+>p : (property) p: number
+>n : const n: number
+>inner : (property) inner: {
+>       q: string;
+>   }
+>q : (property) q: string
+  return [y.inner.p, y.inner.q];
+>y : const y: {
+>       inner: {
+>           p: number;
+>           q?: undefined;
+>       };
+>   } | {
+>       inner: {
+>           p?: undefined;
+>           q: string;
+>       };
+>   }
+>inner : (property) inner: {
+>       p: number;
+>       q?: undefined;
+>   } | {
+>       p?: undefined;
+>       q: string;
+>   }
+>p : (property) p?: number | undefined
+>y : const y: {
+>       inner: {
+>           p: number;
+>           q?: undefined;
+>       };
+>   } | {
+>       inner: {
+>           p?: undefined;
+>           q: string;
+>       };
+>   }
+>inner : (property) inner: {
+>       p: number;
+>       q?: undefined;
+>   } | {
+>       p?: undefined;
+>       q: string;
+>   }
+>q : (property) q?: string | undefined
+console.log(JSON.stringify([f(O.A(1)), f(O.B), g(O.A(2)), g(O.B)]));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>f : function f(o: O): (string | number | undefined)[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+>f : function f(o: O): (string | number | undefined)[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+>g : function g(o: O): (string | number | undefined)[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: (n: number) => O
+>g : function g(o: O): (string | number | undefined)[]
+>O : const O: {
+>       A: (n: number) => O;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+

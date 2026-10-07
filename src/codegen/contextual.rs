@@ -282,7 +282,9 @@ struct StorageWrite {
 /// it is given, so the `any` of undeclared storage would change it.
 ///
 /// The checker consults the contextual type in typing an object literal
-/// (its properties, and `this` in its methods), an array literal (its
+/// (the properties whose values it types from context, and `this` in its
+/// methods and accessors; a property of any other value is typed as it is
+/// without one, since `any` keeps no literal type), an array literal (its
 /// elements) and a function or arrow function (its parameters, and its
 /// return expressions); `getContextualType` passes a position's contextual
 /// type on to the operand of parentheses, `as const`, a non-null assertion
@@ -299,7 +301,17 @@ fn typed_by_context(value: &Expr) -> bool {
 fn typed_by_context_grown(value: &Expr) -> bool {
     use swc_ecma_ast::BinaryOp;
     match value {
-        Expr::Object(_) | Expr::Array(_) | Expr::Fn(_) | Expr::Arrow(_) => true,
+        Expr::Object(object) => object.props.iter().any(|prop| match prop {
+            swc_ecma_ast::PropOrSpread::Spread(_) => false,
+            swc_ecma_ast::PropOrSpread::Prop(prop) => match &**prop {
+                swc_ecma_ast::Prop::KeyValue(property) => typed_by_context(&property.value),
+                swc_ecma_ast::Prop::Getter(_)
+                | swc_ecma_ast::Prop::Setter(_)
+                | swc_ecma_ast::Prop::Method(_) => true,
+                swc_ecma_ast::Prop::Shorthand(_) | swc_ecma_ast::Prop::Assign(_) => false,
+            },
+        }),
+        Expr::Array(_) | Expr::Fn(_) | Expr::Arrow(_) => true,
         Expr::Paren(inner) => typed_by_context(&inner.expr),
         Expr::TsConstAssertion(inner) => typed_by_context(&inner.expr),
         Expr::TsNonNull(inner) => typed_by_context(&inner.expr),

@@ -240,3 +240,26 @@ pub(in super::super) enum ResultReturnBoundary {
     Start,
     End,
 }
+
+pub(in super::super) fn jsx_closing_name(source: &str, element: SourceSpan) -> Option<SourceSpan> {
+    let text = &source[element.start..element.end];
+    if text.trim_end().ends_with("/>") {
+        return None;
+    }
+    let open = text.rfind("</")? + 2;
+    let bytes = text.as_bytes();
+    let start = open
+        + bytes[open..]
+            .iter()
+            .take_while(|byte| byte.is_ascii_whitespace())
+            .count();
+    let end = start
+        + bytes[start..]
+            .iter()
+            .take_while(|byte| !byte.is_ascii_whitespace() && **byte != b'>')
+            .count();
+    (start < end).then_some(SourceSpan {
+        start: element.start + start,
+        end: element.start + end,
+    })
+}

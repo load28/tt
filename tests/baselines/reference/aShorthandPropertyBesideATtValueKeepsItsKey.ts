@@ -89,7 +89,7 @@ export function nested(a: number) {
       $tt_v5 = $tt_t1;
       break $tt_v5;
     }
-    const q = $tt_t1.value; { const $tt_a0 = { value: { kind: "Ok" as const, value: q } }; $tt_v5 = $tt_a0.value; break $tt_v5; }
+    const q = $tt_t1.value; { $tt_v5 = { kind: "Ok" as const, value: q }; break $tt_v5; }
   }
   const x = { a: $tt_v6, b: $tt_v5 };
   const y = { a, b: String(1) };

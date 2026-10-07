@@ -103,7 +103,7 @@ export function orFalse() {
       $tt_v2 = $tt_v3 || $tt_v1;
     }
     
-    const a = $tt_v2; { const $tt_a0 = { value: { kind: "Ok" as const, value: a } }; $tt_v0 = $tt_a0.value; break $tt_v0; }
+    const a = $tt_v2; { $tt_v0 = { kind: "Ok" as const, value: a }; break $tt_v0; }
   }
   return $tt_v0;
 }
@@ -158,7 +158,7 @@ export function nullishNull() {
       $tt_v9 = $tt_v10;
     }
     
-    const c = $tt_v9; { const $tt_a1 = { value: { kind: "Ok" as const, value: c } }; $tt_v7 = $tt_a1.value; break $tt_v7; }
+    const c = $tt_v9; { $tt_v7 = { kind: "Ok" as const, value: c }; break $tt_v7; }
   }
   return $tt_v7;
 }
@@ -183,7 +183,7 @@ export function nullishUndefined() {
       $tt_v14 = $tt_v13;
     }
     
-    const d = $tt_v14; { const $tt_a2 = { value: { kind: "Ok" as const, value: d } }; $tt_v11 = $tt_a2.value; break $tt_v11; }
+    const d = $tt_v14; { $tt_v11 = { kind: "Ok" as const, value: d }; break $tt_v11; }
   }
   return $tt_v11;
 }
@@ -240,8 +240,8 @@ export function numericLiterals(m: M) {
     
     const f = $tt_v20;
     {
-      const $tt_a3 = { value: { kind: "Ok" as const, value: [e, f] as const } };
-      $tt_v15 = $tt_a3.value;
+      const $tt_a0 = { value: { kind: "Ok" as const, value: [e, f] as const } };
+      $tt_v15 = $tt_a0.value;
       break $tt_v15;
     }
   }

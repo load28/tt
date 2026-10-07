@@ -1,0 +1,70 @@
+=== main.tt ===
+variant V { A(arguments: number, public: boolean, eval?: string), B }
+>V : type V = {
+>       kind: "A";
+>       arguments: number;
+>       public: boolean;
+>       eval?: string;
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: ($tt_arguments: number, $tt_public: boolean, $tt_eval?: string) => V
+>arguments : (property) arguments: number
+>public : (property) public: boolean
+>eval : (property) eval?: string | undefined
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const a = V.A(1, true);
+>a : const a: V
+>V : const V: {
+>       A: ($tt_arguments: number, $tt_public: boolean, $tt_eval?: string) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: ($tt_arguments: number, $tt_public: boolean, $tt_eval?: string) => V
+const b = V.A(2, false, "x");
+>b : const b: V
+>V : const V: {
+>       A: ($tt_arguments: number, $tt_public: boolean, $tt_eval?: string) => V;
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>A : (property) A: ($tt_arguments: number, $tt_public: boolean, $tt_eval?: string) => V
+function show(v: V): string {
+>show : function show(v: V): string
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>       arguments: number;
+>       public: boolean;
+>       eval?: string;
+>   } | {
+>       kind: "B";
+>   }
+  return match (v) {
+>v : (parameter) v: V
+    A(arguments: n, public: p, eval: e) => `${n} ${p} ${e ?? "-"}`,
+>arguments : (property) arguments: number
+>n : const n: number
+>public : (property) public: boolean
+>p : const p: boolean
+>eval : (property) eval?: string | undefined
+>e : const e: string | undefined
+>n : const n: number
+>p : const p: boolean
+>e : const e: string | undefined
+console.log(show(a), show(b), "eval" in a, JSON.stringify(b));
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>show : function show(v: V): string
+>a : const a: V
+>show : function show(v: V): string
+>b : const b: V
+>a : const a: V
+>JSON : var JSON: JSON
+>stringify : (method) JSON.stringify(value: any, replacer?: (this: any, key: string, value: any) => any, space?: string | number): string
+>b : const b: V
+

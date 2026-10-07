@@ -1,0 +1,7 @@
+//// [aMalformedMatchAsACommaOperandIsReportedNotLowered.tt] ////
+variant O { A(n: number), B }
+const log: string[] = [];
+export function f(o: O) {
+  match (o) { A(n) log.push("a" + n), B => 0 }, log.push("second");
+}
+

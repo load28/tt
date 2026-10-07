@@ -1,0 +1,20 @@
+//// [main.tt] 18 mapping(s)
+1:26 -> 20:29 len 6  "number"
+1:26 -> 23:22 len 6  "number"
+1:42 -> 20:45 len 7  "boolean"
+1:42 -> 23:42 len 7  "boolean"
+1:58 -> 20:61 len 6  "string"
+1:58 -> 23:62 len 6  "string"
+1:70 -> 25:3 len 87  "\nconst a = V.A(1, true);\nconst b = V.A(2, false,"...
+5:3 -> 47:3 len 7  "return "
+5:17 -> 31:19 len 1  "v"
+6:7 -> 34:17 len 9  "arguments"
+6:18 -> 34:28 len 1  "n"
+6:21 -> 34:31 len 6  "public"
+6:29 -> 34:39 len 1  "p"
+6:32 -> 34:42 len 4  "eval"
+6:38 -> 34:48 len 1  "e"
+6:44 -> 35:18 len 23  "`${n} ${p} ${e ?? \"-\"}`"
+7:10 -> 39:18 len 3  "\"b\""
+8:4 -> 47:16 len 67  ";\n}\nconsole.log(show(a), show(b), \"eval\" in a, J"...
+

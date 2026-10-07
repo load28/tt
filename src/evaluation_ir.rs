@@ -122,6 +122,8 @@ pub(crate) struct EvaluationFile {
     module_declared_names: HashSet<String>,
     if_tests: Vec<crate::program_syntax::IfTestFacts>,
     anonymous_functions: Vec<SourceSpan>,
+    function_names: Vec<(SourceSpan, String)>,
+    entity_names: std::collections::HashSet<SourceSpan>,
     directive_prologue_end: Option<usize>,
     /// Source spans of every tt node in the file. A schedule's source
     /// capture must not overlap one: the capture copies raw source bytes,
@@ -246,6 +248,8 @@ pub(crate) struct LoweringPlan {
     statement_decision_sources: Vec<SourceSpan>,
     if_tests: Vec<crate::program_syntax::IfTestFacts>,
     anonymous_functions: Vec<SourceSpan>,
+    function_names: Vec<(SourceSpan, String)>,
+    entity_names: std::collections::HashSet<SourceSpan>,
     generated_names: Option<crate::generated_names::GeneratedNames>,
     shadowed_globals: HashSet<String>,
     host_global_aliases: HashMap<String, HostGlobalAlias>,
@@ -606,6 +610,9 @@ pub(crate) enum PlannedReceiver {
     Stable {
         source: SourceSpan,
     },
+    ThisOfSuper {
+        source: SourceSpan,
+    },
 }
 
 struct PendingPlannedValue {
@@ -768,6 +775,14 @@ impl LoweringPlan {
     /// [`crate::program_syntax::ProgramSyntax::anonymous_functions`].
     pub(crate) fn anonymous_functions(&self) -> &[SourceSpan] {
         &self.anonymous_functions
+    }
+
+    pub(crate) fn function_names(&self) -> &[(SourceSpan, String)] {
+        &self.function_names
+    }
+
+    pub(crate) fn entity_names(&self) -> &std::collections::HashSet<SourceSpan> {
+        &self.entity_names
     }
 
     pub(crate) fn host_global(&self, name: &str) -> String {

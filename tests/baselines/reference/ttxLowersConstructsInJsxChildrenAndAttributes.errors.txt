@@ -85,6 +85,6 @@ ttxLowersConstructsInJsxChildrenAndAttributes.tsx(46,29): error TS2304: Cannot f
 ttxLowersConstructsInJsxChildrenAndAttributes.tsx(53,18): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
 ttxLowersConstructsInJsxChildrenAndAttributes.tsx(53,33): error TS7026: JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.
 ttxLowersConstructsInJsxChildrenAndAttributes.tsx(66,11): error TS2304: Cannot find name 'mark'.
-ttxLowersConstructsInJsxChildrenAndAttributes.tsx(69,19): error TS2304: Cannot find name 'mark'.
-ttxLowersConstructsInJsxChildrenAndAttributes.tsx(87,11): error TS2304: Cannot find name 'Panel'.
-ttxLowersConstructsInJsxChildrenAndAttributes.tsx(87,55): error TS2304: Cannot find name 'mark'.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(69,19): error TS2304: Cannot find name 'Panel'.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(70,19): error TS2304: Cannot find name 'mark'.
+ttxLowersConstructsInJsxChildrenAndAttributes.tsx(88,56): error TS2304: Cannot find name 'mark'.

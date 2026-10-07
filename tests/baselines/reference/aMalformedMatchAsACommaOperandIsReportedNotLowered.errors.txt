@@ -1,0 +1,17 @@
+==== ttc --out-dir (exit 1) ====
+error[malformed-match]: invalid match arm: expected `<pattern> => <body>`
+ --> ./aMalformedMatchAsACommaOperandIsReportedNotLowered.tt:4:15
+  |
+4 |   match (o) { A(n) log.push("a" + n), B => 0 }, log.push("second");
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+==== ttc --check-types (exit 1) ====
+error[malformed-match]: invalid match arm: expected `<pattern> => <body>`
+ --> aMalformedMatchAsACommaOperandIsReportedNotLowered.tt:4:15
+  |
+4 |   match (o) { A(n) log.push("a" + n), B => 0 }, log.push("second");
+  |               ^^^^^^^^^^^^^^^^^^^^^^^^
+
+==== tsc on the emitted TypeScript ====
+nothing was emitted

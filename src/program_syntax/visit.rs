@@ -842,12 +842,20 @@ impl VisitAstPath for ParentCollector {
                 }),
                 callee_mode,
                 callee_reference: (callee_mode == EvaluationInputMode::MemberReference).then(
-                    || {
-                        projected_member_reference(
+                    || match &node.callee {
+                        swc_ecma_ast::Callee::Expr(expression) => projected_callee_reference(
+                            expression,
                             callee_parts,
                             self.source_start,
                             &self.source_segments,
-                        )
+                        ),
+                        swc_ecma_ast::Callee::Super(_) | swc_ecma_ast::Callee::Import(_) => {
+                            projected_member_reference(
+                                callee_parts,
+                                self.source_start,
+                                &self.source_segments,
+                            )
+                        }
                     },
                 ),
                 arguments: argument_positions(
@@ -1179,7 +1187,8 @@ impl VisitAstPath for ParentCollector {
                 callee_mode,
                 callee_reference: (callee_mode == EvaluationInputMode::MemberReference).then(
                     || {
-                        projected_member_reference(
+                        projected_callee_reference(
+                            &node.callee,
                             callee_parts,
                             self.source_start,
                             &self.source_segments,

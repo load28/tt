@@ -82,7 +82,7 @@ export function called(c: boolean, v: V) {
         break $tt_y_v0;
       }
       $tt_v5 = $tt_t0.value;
-      { const $tt_a0 = { value: { kind: "Ok" as const, value: $tt_v6 + ($tt_v5) } }; $tt_v2 = $tt_a0.value; break $tt_y_v0; }
+      { $tt_v2 = { kind: "Ok" as const, value: $tt_v6 + ($tt_v5) }; break $tt_y_v0; }
     }
   } else {
     $tt_v2 = null;
@@ -129,7 +129,7 @@ export function tried(c: boolean, v: V) {
         break $tt_y_v7;
       }
       $tt_v12 = $tt_t2.value;
-      { const $tt_a1 = { value: { kind: "Ok" as const, value: $tt_v13 + ($tt_v12) } }; $tt_v9 = $tt_a1.value; break $tt_y_v7; }
+      { $tt_v9 = { kind: "Ok" as const, value: $tt_v13 + ($tt_v12) }; break $tt_y_v7; }
     }
   } else {
     $tt_v9 = null;

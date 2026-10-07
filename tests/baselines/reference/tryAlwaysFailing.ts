@@ -94,7 +94,7 @@ export function block() {
       $tt_v3 = $tt_t5;
       break $tt_v3;
     }
-    const z = $tt_t5.value; { const $tt_a0 = { value: { kind: "Ok" as const, value: z } }; $tt_v3 = $tt_a0.value; break $tt_v3; }
+    const z = $tt_t5.value; { $tt_v3 = { kind: "Ok" as const, value: z }; break $tt_v3; }
   }
   return $tt_v3;
 }

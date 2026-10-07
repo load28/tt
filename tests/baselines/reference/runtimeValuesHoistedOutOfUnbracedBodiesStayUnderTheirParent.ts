@@ -220,7 +220,7 @@ function tries(c: boolean, r: R): R {
         $tt_v12 = $tt_t1;
         break $tt_v12;
       }
-      const v = $tt_t1.value; { const $tt_a2 = { value: { kind: "Ok" as const, value: v + 1 } }; $tt_v12 = $tt_a2.value; break $tt_v12; }
+      const v = $tt_t1.value; { $tt_v12 = { kind: "Ok" as const, value: v + 1 }; break $tt_v12; }
     }
     $tt_v13($tt_v12.kind);
   }

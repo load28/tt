@@ -325,7 +325,7 @@ pub(super) fn emit_adt<'a>(
         let start = span(field.node).start;
         let end = field.ty_span.end;
         let mut declaration = Rope::new();
-        declaration.push_lit(field.name.clone());
+        declaration.push_lit(parameter_name(&field.name));
         annotation(field, &mut declaration);
         out.anchored(AnchorKind::Variant, start, end, end, declaration);
     };
@@ -479,13 +479,16 @@ pub(super) fn emit_adt<'a>(
             Some(fields) => {
                 let object = std::iter::once(format!("kind: \"{}\"", variant.name))
                     .chain(fields.iter().map(|field| {
-                        if field.optional {
-                            format!(
-                                "...({} === undefined ? {{}} : {{ {} }})",
-                                field.name, field.name
-                            )
+                        let parameter = parameter_name(&field.name);
+                        let property = if parameter == field.name {
+                            parameter.clone()
                         } else {
-                            field.name.clone()
+                            format!("{}: {parameter}", field.name)
+                        };
+                        if field.optional {
+                            format!("...({parameter} === undefined ? {{}} : {{ {property} }})")
+                        } else {
+                            property
                         }
                     }))
                     .collect::<Vec<_>>()
@@ -501,6 +504,14 @@ pub(super) fn emit_adt<'a>(
     out.push_break(0);
     out.push_lit("};");
     Rope::scoped(out)
+}
+
+fn parameter_name(field: &str) -> String {
+    match field {
+        "arguments" | "eval" | "implements" | "interface" | "package" | "private" | "protected"
+        | "public" => format!("$tt_{field}"),
+        _ => field.to_owned(),
+    }
 }
 
 fn push_comment<'a>(out: &mut Rope<'a>, comment: &Comment, depth: u16) {

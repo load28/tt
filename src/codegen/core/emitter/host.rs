@@ -269,52 +269,53 @@ impl<'a> Emitter<'a> {
                         continue;
                     }
                     let _active = self.active_structured_exprs.enter(value.expr);
-                    let mut lowered = if let Some(completion) = &value.call_completion {
-                        let mut region = Rope::new();
-                        if let Some((name, type_args, callee)) = &completion.instantiation {
-                            region.push_lit(format!("const {name} = {callee}"));
-                            region.push_src(
-                                &self.source[type_args.start..type_args.end],
-                                type_args.start,
+                    let mut lowered =
+                        if let Some(completion) = &value.call_completion {
+                            let mut region = Rope::new();
+                            if let Some((name, type_args, callee)) = &completion.instantiation {
+                                region.push_lit(format!("const {name} = {callee}"));
+                                region.push_src(
+                                    &self.source[type_args.start..type_args.end],
+                                    type_args.start,
+                                );
+                                region.push_lit(";");
+                                region.push_break(0);
+                            }
+                            for (name, source) in &completion.captures {
+                                region.push_value_capture(name);
+                                region.append(self.named_as_written(
+                                    *source,
+                                    self.captured_tail(*source, &captured),
+                                ));
+                                region.push_lit(");");
+                                region.push_break(0);
+                            }
+                            region.append(
+                                self.emit_continued_expr(
+                                    value.expr,
+                                    &ValueContinuation::invoke(
+                                        &completion.invoke,
+                                        completion.frame,
+                                        completion.result.as_deref(),
+                                        &completion.label,
+                                    ),
+                                )
+                                .unwrap_or_else(|| {
+                                    crate::ice::bug!("scoped call lost its value decision")
+                                }),
                             );
-                            region.push_lit(";");
-                            region.push_break(0);
-                        }
-                        // Bind each elided input the dispatch has to name, in
-                        // authored order and with its source mapping, so the
-                        // arms reference one copy instead of repeating it.
-                        for (name, source) in &completion.captures {
-                            region.push_value_capture(name);
-                            region.append(self.captured_tail(*source, &captured));
-                            region.push_lit(");");
-                            region.push_break(0);
-                        }
-                        region.append(
+                            region
+                        } else if value.defer_arm_values {
+                            self.emit_arm_selector(value.expr, &value.slot)
+                        } else {
                             self.emit_continued_expr(
                                 value.expr,
-                                &ValueContinuation::invoke(
-                                    &completion.invoke,
-                                    completion.frame,
-                                    completion.result.as_deref(),
-                                    &completion.label,
-                                ),
+                                &ValueContinuation::assign(&value.slot),
                             )
                             .unwrap_or_else(|| {
-                                crate::ice::bug!("scoped call lost its value decision")
-                            }),
-                        );
-                        region
-                    } else if value.defer_arm_values {
-                        self.emit_arm_selector(value.expr, &value.slot)
-                    } else {
-                        self.emit_continued_expr(
-                            value.expr,
-                            &ValueContinuation::assign(&value.slot),
-                        )
-                        .unwrap_or_else(|| {
-                            crate::ice::bug!("compose value is not structurally emit-able")
-                        })
-                    };
+                                crate::ice::bug!("compose value is not structurally emit-able")
+                            })
+                        };
                     for step in &value.steps {
                         lowered = self.emit_scheduled_step(step, lowered, &mut captured);
                     }
@@ -723,7 +724,11 @@ impl<'a> Emitter<'a> {
                     }
                     PlannedBranch::Source(span) => {
                         out.push_lit(format!("{result} = "));
-                        push_grouped(out, self.captured_tail(*span, captured), self.source_kind);
+                        push_grouped(
+                            out,
+                            self.named_as_written(*span, self.captured_tail(*span, captured)),
+                            self.source_kind,
+                        );
                         out.push_lit(";");
                     }
                 };
@@ -881,7 +886,12 @@ impl<'a> Emitter<'a> {
                                     );
                                 }
                                 body.push_lit(open);
-                                body.append(self.captured_tail(*span, captured));
+                                body.append(
+                                    self.named_as_written(
+                                        *span,
+                                        self.captured_tail(*span, captured),
+                                    ),
+                                );
                                 body.push_lit(close);
                                 body.push_lit(");");
                                 body.push_break(0);
@@ -945,6 +955,7 @@ impl<'a> Emitter<'a> {
         match receiver {
             PlannedReceiver::Captured { slot, .. } => self.value_slot_name(*slot).to_owned(),
             PlannedReceiver::Stable { source } => self.source[source.start..source.end].to_owned(),
+            PlannedReceiver::ThisOfSuper { .. } => "this".to_owned(),
         }
     }
 
@@ -1165,6 +1176,11 @@ impl<'a> Emitter<'a> {
             Statement(&'b Statement),
             Piped(Rope<'r>),
         }
+        enum Admit<'b> {
+            Always,
+            Unclaimed(Option<SourceSpan>),
+            CapturedReplacement(&'b str),
+        }
         let mut parts = Vec::new();
         if let Some(piped) = piped {
             parts.push((
@@ -1173,6 +1189,7 @@ impl<'a> Emitter<'a> {
                     end: source.start,
                 },
                 Part::Piped(piped),
+                Admit::Always,
             ));
         }
         for replacement in self
@@ -1185,12 +1202,12 @@ impl<'a> Emitter<'a> {
                 && source.start <= replacement.source.start
                 && replacement.source.end <= source.end
                 && (replacement.source != source || replacement.anchor.is_some())
-                && !self.inside_claimed_frame(replacement.source, None)
-                && captured
-                    .iter()
-                    .any(|slot| self.value_slot_name(*slot) == replacement.slot)
             {
-                parts.push((replacement.source, Part::Captured(replacement.written())));
+                parts.push((
+                    replacement.source,
+                    Part::Captured(replacement.written()),
+                    Admit::CapturedReplacement(&replacement.slot),
+                ));
             }
         }
         for (step, input) in self
@@ -1211,15 +1228,16 @@ impl<'a> Emitter<'a> {
                 && captured.contains(target)
             {
                 if *mode == EvaluationInputMode::Discarded {
-                    parts.push((*dependency, Part::Read(String::new())));
+                    parts.push((*dependency, Part::Read(String::new()), Admit::Always));
                     let comma = discarded_operand_comma(self.source, *dependency);
                     if comma.end <= source.end {
-                        parts.push((comma, Part::Read(String::new())));
+                        parts.push((comma, Part::Read(String::new()), Admit::Always));
                     }
                 } else {
                     parts.push((
                         *dependency,
                         Part::Piped(self.captured_reading_rope(step, input)),
+                        Admit::Always,
                     ));
                 }
             }
@@ -1227,19 +1245,18 @@ impl<'a> Emitter<'a> {
         for expr in self.value_slots.keys() {
             let (_, start, _, extent) = self.value_anchor(*expr);
             let span = SourceSpan { start, end: extent };
-            if source.start <= start
-                && extent <= source.end
-                && !self.inside_claimed_frame(span, Some(source))
-            {
-                parts.push((span, Part::Value(*expr)));
+            if source.start <= start && extent <= source.end {
+                parts.push((span, Part::Value(*expr), Admit::Unclaimed(Some(source))));
             }
         }
         for (span, statement) in self.statements_within(source) {
-            if !self.inside_claimed_frame(span, Some(source)) {
-                parts.push((span, Part::Statement(statement)));
-            }
+            parts.push((
+                span,
+                Part::Statement(statement),
+                Admit::Unclaimed(Some(source)),
+            ));
         }
-        parts.sort_by_key(|(span, part)| {
+        parts.sort_by_key(|(span, part, _)| {
             (
                 span.start,
                 std::cmp::Reverse(span.end),
@@ -1249,8 +1266,21 @@ impl<'a> Emitter<'a> {
         self.active_capture_sources.borrow_mut().push(source);
         let mut out = Rope::new();
         let mut cursor = source.start;
-        for (span, part) in parts {
+        for (span, part, admit) in parts {
             if span.start < cursor {
+                continue;
+            }
+            let admitted = match admit {
+                Admit::Always => true,
+                Admit::Unclaimed(within) => !self.inside_claimed_frame(span, within),
+                Admit::CapturedReplacement(slot) => {
+                    !self.inside_claimed_frame(span, None)
+                        && captured
+                            .iter()
+                            .any(|captured| self.value_slot_name(*captured) == slot)
+                }
+            };
+            if !admitted {
                 continue;
             }
             if cursor < span.start {
@@ -1763,7 +1793,7 @@ impl<'a> Emitter<'a> {
                 test.push_lit(format!("{name} = "));
                 push_grouped(
                     &mut test,
-                    self.captured_source(*source, captured),
+                    self.named_as_written(*source, self.captured_source(*source, captured)),
                     self.source_kind,
                 );
                 captured.insert(*target);
@@ -1810,7 +1840,7 @@ impl<'a> Emitter<'a> {
                 }
                 source
             }
-            PlannedReceiver::Stable { source } => source,
+            PlannedReceiver::Stable { source } | PlannedReceiver::ThisOfSuper { source } => source,
         }
     }
 
@@ -1832,6 +1862,7 @@ impl<'a> Emitter<'a> {
                     out.push_lit(text.to_owned());
                 }
             }
+            PlannedReceiver::ThisOfSuper { .. } => out.push_lit("this"),
         }
     }
 
@@ -2018,7 +2049,9 @@ impl<'a> Emitter<'a> {
                 }
                 let (open, close) = self.capture_form(*mode);
                 prefix.push_lit(open);
-                prefix.append(self.captured_source(*source, captured));
+                prefix.append(
+                    self.named_as_written(*source, self.captured_source(*source, captured)),
+                );
                 prefix.push_lit(close);
                 prefix.push_lit(");");
                 prefix.push_break(0);
@@ -2272,7 +2305,9 @@ impl<'a> Emitter<'a> {
 
     fn type_query(&self, source: SourceSpan) -> Option<Rope<'a>> {
         let text = &self.source[source.start..source.end];
-        crate::program_syntax::source_entity_name(text, self.source_kind).then(|| {
+        (self.entity_names.contains(&source)
+            && crate::program_syntax::source_entity_name(text, self.source_kind))
+        .then(|| {
             let mut query = Rope::new();
             query.push_lit("typeof ");
             query.push_restatement(text);
@@ -2292,17 +2327,24 @@ impl<'a> Emitter<'a> {
     }
 
     fn inside_claimed_frame(&self, span: SourceSpan, within: Option<SourceSpan>) -> bool {
-        self.replacements_covering(span.start, span.end)
-            .any(|frame| {
-                frame.claim
-                    && frame.source.start <= span.start
-                    && span.end <= frame.source.end
-                    && within.is_none_or(|within| {
-                        within.start <= frame.source.start && frame.source.end <= within.end
+        crate::work::tick("claimed frame queries");
+        let low = within.map_or(0, |within| within.start);
+        if low > span.start {
+            return false;
+        }
+        self.claimed_frames
+            .range(low..=span.start)
+            .any(|(_, frames)| {
+                let from = frames.partition_point(|&(end, _)| end < span.end);
+                frames[from..]
+                    .iter()
+                    .take_while(|&&(end, _)| within.is_none_or(|within| end <= within.end))
+                    .any(|&(_, index)| {
+                        crate::work::tick("claimed frame checks");
+                        !self.source_replacements[index]
+                            .anchor
+                            .is_some_and(|expr| self.active_structured_exprs.contains(expr))
                     })
-                    && !frame
-                        .anchor
-                        .is_some_and(|expr| self.active_structured_exprs.contains(expr))
             })
     }
 

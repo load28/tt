@@ -897,3 +897,32 @@ fn types_writes_sidecars_under_an_out_dir_or_a_declaration_dir() {
         assert!(sidecar.contains("export declare const a = 1;"), "{sidecar}");
     }
 }
+
+#[test]
+fn a_build_refines_a_named_tt_source_the_configuration_does_not_include() {
+    require_emit!();
+    let dir = tmpdir();
+    write(
+        &dir,
+        "tsconfig.json",
+        r#"{"compilerOptions": {"strict": true, "noEmit": true}, "include": ["*.ts"]}"#,
+    );
+    write(
+        &dir,
+        "c.tt",
+        "declare function g(cb: (s: string) => number, b: number): number;\n\
+         variant O { A(n: number), B }\n\
+         export function f(o: O) { return g(x => x.length, match (o) { A(n) => n, B => 0 }); }\n",
+    );
+    let output = run(&dir, &["c.tt"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let emitted = fs::read_to_string(dir.join("c.ts")).unwrap();
+    assert!(
+        emitted.contains("const $tt_v2: (s: string) => number = "),
+        "{emitted}"
+    );
+}

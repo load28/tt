@@ -27,8 +27,7 @@ export function f() {
     }
     const a = $tt_t0.value;
     {
-      const $tt_a0 = { value: { kind: "Ok" as const, value: a } };
-      $tt_v0 = $tt_a0.value;
+      $tt_v0 = { kind: "Ok" as const, value: a };
       break $tt_v0;
     }
   }

@@ -24,6 +24,8 @@ pub(crate) struct ProgramSyntax {
     pub(super) completion_scopes: Vec<super::completion::CompletionScope>,
     pub(super) if_tests: Vec<IfTestFacts>,
     pub(super) anonymous_functions: Vec<SourceSpan>,
+    pub(super) function_names: Vec<(SourceSpan, String)>,
+    pub(super) entity_names: std::collections::HashSet<SourceSpan>,
 }
 
 #[derive(Debug)]
@@ -211,7 +213,7 @@ impl ProgramSyntax {
             &projection.completion,
         );
         let if_tests = if_tests(&parsed.module, parsed.start, &indexed_segments);
-        let anonymous_functions =
+        let (anonymous_functions, function_names, entity_names) =
             anonymous_functions(&parsed.module, parsed.start, &indexed_segments);
         let mut collector = ParentCollector::new(
             parsed.start,
@@ -260,6 +262,8 @@ impl ProgramSyntax {
             completion_scopes,
             if_tests,
             anonymous_functions,
+            function_names,
+            entity_names,
         };
         syntax.validate()?;
         Ok(syntax)
@@ -308,6 +312,14 @@ impl ProgramSyntax {
     /// `<T>`, instantiation). Assigning one to an identifier names it.
     pub(crate) fn anonymous_functions(&self) -> &[SourceSpan] {
         &self.anonymous_functions
+    }
+
+    pub(crate) fn function_names(&self) -> &[(SourceSpan, String)] {
+        &self.function_names
+    }
+
+    pub(crate) fn entity_names(&self) -> &std::collections::HashSet<SourceSpan> {
+        &self.entity_names
     }
 
     pub(crate) fn take_completion_scopes(&mut self) -> Vec<super::completion::CompletionScope> {
@@ -1709,8 +1721,12 @@ fn anonymous_functions(
     module: &Module,
     start: HostOrigin,
     segments: &ProjectionSegments,
-) -> Vec<SourceSpan> {
-    use swc_ecma_ast::Expr;
+) -> (
+    Vec<SourceSpan>,
+    Vec<(SourceSpan, String)>,
+    std::collections::HashSet<SourceSpan>,
+) {
+    use swc_ecma_ast::{Expr, MemberProp, PropName};
     use swc_ecma_visit::{Visit, VisitWith};
 
     fn anonymous(expr: &Expr) -> bool {
@@ -1732,16 +1748,51 @@ fn anonymous_functions(
         start: HostOrigin,
         segments: &'s ProjectionSegments,
         out: Vec<SourceSpan>,
+        named: Vec<(SourceSpan, String)>,
+        entities: std::collections::HashSet<SourceSpan>,
+    }
+    impl Collect<'_> {
+        fn source_span(&self, node: &Expr) -> Option<SourceSpan> {
+            super::protocol::source_span_for_projection(
+                self.segments,
+                projected_span(node.span(), self.start),
+            )
+        }
     }
     impl Visit for Collect<'_> {
         fn visit_expr(&mut self, node: &Expr) {
             if anonymous(node)
-                && let Some(span) = super::protocol::source_span_for_projection(
-                    self.segments,
-                    projected_span(node.span(), self.start),
-                )
+                && let Some(span) = self.source_span(node)
             {
                 self.out.push(span);
+            }
+            node.visit_children_with(self);
+            let entity = match node {
+                Expr::Ident(_) => true,
+                Expr::Member(member) => {
+                    matches!(member.prop, MemberProp::Ident(_))
+                        && self
+                            .source_span(&member.obj)
+                            .is_some_and(|object| self.entities.contains(&object))
+                }
+                _ => false,
+            };
+            if entity && let Some(span) = self.source_span(node) {
+                self.entities.insert(span);
+            }
+        }
+        fn visit_key_value_prop(&mut self, node: &swc_ecma_ast::KeyValueProp) {
+            let name = match &node.key {
+                PropName::Ident(ident) => Some(ident.sym.to_string()),
+                PropName::Str(text) => text.value.as_str().map(str::to_owned),
+                PropName::Num(number) => Some(number.value.to_string()),
+                PropName::Computed(_) | PropName::BigInt(_) => None,
+            };
+            if let Some(name) = name
+                && anonymous(&node.value)
+                && let Some(span) = self.source_span(&node.value)
+            {
+                self.named.push((span, name));
             }
             node.visit_children_with(self);
         }
@@ -1750,9 +1801,15 @@ fn anonymous_functions(
         start,
         segments,
         out: Vec::new(),
+        named: Vec::new(),
+        entities: std::collections::HashSet::new(),
     };
     module.visit_with(&mut collect);
     collect.out.sort_by_key(|span| (span.start, span.end));
     collect.out.dedup();
-    collect.out
+    collect
+        .named
+        .sort_by_key(|(span, _)| (span.start, span.end));
+    collect.named.dedup();
+    (collect.out, collect.named, collect.entities)
 }

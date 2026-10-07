@@ -310,12 +310,14 @@ pub(crate) struct HostReferencePart {
     /// simple-copiable operand (`isSimpleCopiableExpression`). The call then
     /// keeps the reference TypeScript narrows.
     pub(crate) read_at_call: bool,
+    pub(crate) this_of_super: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EvaluationInputMode {
     Value,
     JsxChildValue,
+    JsxTagName,
     DirectReference,
     MemberReference,
     /// The value a compound assignment's target holds before its right

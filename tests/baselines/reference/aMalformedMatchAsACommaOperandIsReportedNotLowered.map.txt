@@ -1,0 +1,5 @@
+//// [aMalformedMatchAsACommaOperandIsReportedNotLowered.tt] 3 mapping(s)
+1:18 -> 2:21 len 6  "number"
+1:18 -> 5:10 len 6  "number"
+1:30 -> 7:3 len 123  "\nconst log: string[] = [];\nexport function f(o: "...
+

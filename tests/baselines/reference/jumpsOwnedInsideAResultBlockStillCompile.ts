@@ -20,6 +20,6 @@ $tt_v0: {
     $tt_v0 = $tt_t0;
     break $tt_v0;
   }
-  const v = $tt_t0.value; inner: for (;;) { if (v) break inner; continue inner; } for (;;) { break; } { const $tt_a0 = { value: { kind: "Ok" as const, value: v } }; $tt_v0 = $tt_a0.value; break $tt_v0; }
+  const v = $tt_t0.value; inner: for (;;) { if (v) break inner; continue inner; } for (;;) { break; } { $tt_v0 = { kind: "Ok" as const, value: v }; break $tt_v0; }
 }
 const r = $tt_v0; } }

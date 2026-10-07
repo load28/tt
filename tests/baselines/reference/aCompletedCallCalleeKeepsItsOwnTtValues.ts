@@ -40,7 +40,7 @@ export function F(v: V) {
   let $tt_v0: number;
   let $tt_v1: unknown[];
   const $tt_v3: typeof f2 = (f2);
-  const $tt_v2 = ((w: number) => (($tt_v, $tt_f) => $tt_f($tt_v))(w, h));
+  const $tt_v2 = ((void 0, (w: number) => (($tt_v, $tt_f) => $tt_f($tt_v))(w, h)));
   {
     const $tt_m = v;
     switch ($tt_m.kind) {

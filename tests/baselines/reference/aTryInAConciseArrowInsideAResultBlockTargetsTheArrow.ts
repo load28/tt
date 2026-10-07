@@ -40,8 +40,7 @@ if (!("value" in $tt_t1)) {
 }
 const x = $tt_t1.value;
 {
-  const $tt_a0 = { value: { kind: "Ok" as const, value: f(x) } };
-  $tt_v0 = $tt_a0.value;
+  $tt_v0 = { kind: "Ok" as const, value: f(x) };
   break $tt_v0;
 }
 }

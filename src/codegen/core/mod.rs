@@ -440,6 +440,27 @@ pub(crate) fn emit_with_map<'a>(
                 .iter()
                 .map(|replacement| replacement.source),
         ),
+        claimed_frames: target
+            .source_replacements
+            .iter()
+            .enumerate()
+            .filter(|(_, replacement)| replacement.claim)
+            .fold(
+                std::collections::BTreeMap::<usize, Vec<(usize, usize)>>::new(),
+                |mut frames, (index, replacement)| {
+                    frames
+                        .entry(replacement.source.start)
+                        .or_default()
+                        .push((replacement.source.end, index));
+                    frames
+                },
+            )
+            .into_iter()
+            .map(|(start, mut ends)| {
+                ends.sort_unstable();
+                (start, ends)
+            })
+            .collect(),
         source_replacements: target.source_replacements,
         active_capture_sources: RefCell::new(Vec::new()),
         delivered_conditional_values: RefCell::new(HashSet::new()),
@@ -480,6 +501,9 @@ pub(crate) fn emit_with_map<'a>(
         spread_name: target.spread_name,
         guarded_if_tests: target.guarded_if_tests,
         anonymous_functions: target.anonymous_functions,
+        function_names: target.function_names,
+        entity_names: target.entity_names,
+        discarded_values: target.discarded_values,
         if_test_closings: RefCell::new(Vec::new()),
         host_error: target.host_error,
         host_json: target.host_json,

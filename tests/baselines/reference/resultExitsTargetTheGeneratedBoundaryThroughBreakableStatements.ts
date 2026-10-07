@@ -15,9 +15,8 @@ $tt_v0$fromFor: {
     $tt_v0$fromFor = $tt_t0;
     break $tt_v0$fromFor;
   }
-  const $tt_a0 = { value: { kind: "Ok" as const, value: $tt_t0.value } };
-  $tt_v0$fromFor = $tt_a0.value;
-  break $tt_v0$fromFor; } { const $tt_a1 = { value: { kind: "Ok" as const, value: 0 } }; $tt_v0$fromFor = $tt_a1.value; break $tt_v0$fromFor; }
+  $tt_v0$fromFor = { kind: "Ok" as const, value: $tt_t0.value };
+  break $tt_v0$fromFor; } { $tt_v0$fromFor = { kind: "Ok" as const, value: 0 }; break $tt_v0$fromFor; }
 }
 const fromFor = $tt_v0$fromFor;
 let $tt_v1$fromWhile;
@@ -27,9 +26,8 @@ $tt_v1$fromWhile: {
     $tt_v1$fromWhile = $tt_t1;
     break $tt_v1$fromWhile;
   }
-  const $tt_a2 = { value: { kind: "Ok" as const, value: $tt_t1.value } };
-  $tt_v1$fromWhile = $tt_a2.value;
-  break $tt_v1$fromWhile; } { const $tt_a3 = { value: { kind: "Ok" as const, value: 0 } }; $tt_v1$fromWhile = $tt_a3.value; break $tt_v1$fromWhile; }
+  $tt_v1$fromWhile = { kind: "Ok" as const, value: $tt_t1.value };
+  break $tt_v1$fromWhile; } { $tt_v1$fromWhile = { kind: "Ok" as const, value: 0 }; break $tt_v1$fromWhile; }
 }
 const fromWhile = $tt_v1$fromWhile;
 let $tt_v2$fromDo;
@@ -39,9 +37,8 @@ $tt_v2$fromDo: {
     $tt_v2$fromDo = $tt_t2;
     break $tt_v2$fromDo;
   }
-  const $tt_a4 = { value: { kind: "Ok" as const, value: $tt_t2.value } };
-  $tt_v2$fromDo = $tt_a4.value;
-  break $tt_v2$fromDo; } while (ready()); { const $tt_a5 = { value: { kind: "Ok" as const, value: 0 } }; $tt_v2$fromDo = $tt_a5.value; break $tt_v2$fromDo; }
+  $tt_v2$fromDo = { kind: "Ok" as const, value: $tt_t2.value };
+  break $tt_v2$fromDo; } while (ready()); { $tt_v2$fromDo = { kind: "Ok" as const, value: 0 }; break $tt_v2$fromDo; }
 }
 const fromDo = $tt_v2$fromDo;
 let $tt_v3$fromSwitch;
@@ -51,8 +48,7 @@ $tt_v3$fromSwitch: {
     $tt_v3$fromSwitch = $tt_t3;
     break $tt_v3$fromSwitch;
   }
-  const $tt_a6 = { value: { kind: "Ok" as const, value: $tt_t3.value } };
-  $tt_v3$fromSwitch = $tt_a6.value;
-  break $tt_v3$fromSwitch; } { const $tt_a7 = { value: { kind: "Ok" as const, value: 0 } }; $tt_v3$fromSwitch = $tt_a7.value; break $tt_v3$fromSwitch; }
+  $tt_v3$fromSwitch = { kind: "Ok" as const, value: $tt_t3.value };
+  break $tt_v3$fromSwitch; } { $tt_v3$fromSwitch = { kind: "Ok" as const, value: 0 }; break $tt_v3$fromSwitch; }
 }
 const fromSwitch = $tt_v3$fromSwitch;

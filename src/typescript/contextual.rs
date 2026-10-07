@@ -358,6 +358,7 @@ pub(crate) fn standalone(
                 modules.sort_by(|left, right| left.0.cmp(&right.0));
                 let asked_modules = modules.clone();
                 backend.observe_generations();
+                let roots: Vec<PathBuf> = file.iter().map(|_| path.clone()).collect();
                 let types = materialize(
                     backend,
                     Some(configuration),
@@ -365,7 +366,7 @@ pub(crate) fn standalone(
                     &mut modules,
                     &asked.support,
                     &[],
-                    &[],
+                    &roots,
                 )?;
                 let requested = modules
                     .iter()
