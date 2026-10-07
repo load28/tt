@@ -160,7 +160,7 @@ impl<'a> Emitter<'a> {
                     })
             })
             .peekable();
-        let mut compose_endings = self
+        let mut compose_endings: Vec<_> = self
             .compose_index
             .ending_in(span.start, span.end.saturating_add(1))
             .into_iter()
@@ -189,7 +189,9 @@ impl<'a> Emitter<'a> {
                             .any(|expr| self.active_structured_exprs.contains(*expr)),
                     })
             })
-            .peekable();
+            .collect();
+        compose_endings.sort_by_key(|rewrite| rewrite.owner.end);
+        let mut compose_endings = compose_endings.into_iter().peekable();
         let mut loop_endings: Vec<_> = self
             .loop_body_index
             .ending_in(span.start.saturating_add(1), span.end.saturating_add(1))

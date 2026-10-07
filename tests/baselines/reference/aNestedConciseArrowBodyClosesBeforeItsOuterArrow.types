@@ -1,0 +1,44 @@
+=== aNestedConciseArrowBodyClosesBeforeItsOuterArrow.tt ===
+variant V { A, B }
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>A : (property) A: {
+>       readonly kind: "A";
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+const outer = (v: V) => [match (v) { A => () => [0], B => () => [2] }, () => [match (v) { A => 3, B => 4 }]];
+>outer : const outer: (v: V) => (() => number[])[]
+>v : (parameter) v: V
+>V : type V = {
+>       kind: "A";
+>   } | {
+>       kind: "B";
+>   }
+>v : (parameter) v: V
+>v : (parameter) v: V
+const [first, inner] = outer(V.B);
+>first : const first: () => number[]
+>inner : const inner: () => number[]
+>outer : const outer: (v: V) => (() => number[])[]
+>V : const V: {
+>       A: {
+>           readonly kind: "A";
+>       };
+>       B: {
+>           readonly kind: "B";
+>       };
+>   }
+>B : (property) B: {
+>       readonly kind: "B";
+>   }
+console.log(first(), inner());
+>console : var console: Console
+>log : (method) Console.log(...data: any[]): void
+>first : const first: () => number[]
+>inner : const inner: () => number[]
+
