@@ -22,6 +22,13 @@ ttSymbol: null
 diagnostics recoveryTryOperandBeforeStatement.tt: differs
   tt only: recoveryTryOperandBeforeStatement "parseNum" error TS2554: Expected 1 arguments, but got 0.
   tt only: recoveryTryOperandBeforeStatement "try parseNum(" error TS1005: ')' expected. (in code ttc generated for this construct)
+  ts only: recoveryTryOperandBeforeStatement "\"@tt/std/result\"" error TS2307: Cannot find module '@tt/std/result' or its corresponding type declarations.
+  ts only: recoveryTryOperandBeforeStatement "\"@tt/std\"" error TS2307: Cannot find module '@tt/std' or its corresponding type declarations.
+  ts only: recoveryTryOperandBeforeStatement "height" error TS18046: 'height' is of type 'unknown'.
   ts only: recoveryTryOperandBeforeStatement "if" error TS1135: Argument expression expected.
-hover width: same
+  ts only: recoveryTryOperandBeforeStatement "width" error TS18046: 'width' is of type 'unknown'.
+  ts only: recoveryTryOperandBeforeStatement /*width*/ "width" error TS18046: 'width' is of type 'unknown'.
+hover width: differs
+  tt only: const width: number
+  ts only: const width: unknown
 

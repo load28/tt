@@ -818,7 +818,8 @@
 | TASK-775 | Judge a match's exhaustiveness on the typed path by the cases its value can still be | Cancelled | 2026-10-07 | 2026-10-07 | [TASK-775](./TASK-775-typed-exhaustiveness-over-narrowed-cases.md) |
 | TASK-776 | Lower an expression's tt values over one shared evaluation tree | Complete | 2026-10-07 | 2026-10-07 | [TASK-776](./TASK-776-shared-evaluation-tree.md) |
 | TASK-777 | Give a value in a nested concise arrow body its layout scope | Complete | 2026-10-07 | 2026-10-07 | [TASK-777](./TASK-777-nested-concise-arrow-layout-scope.md) |
+| TASK-778 | Pin the TypeScript-twin parity of an `@tt/std` case as a clean checkout answers it | Complete | 2026-10-07 | 2026-10-07 | [TASK-778](./TASK-778-twin-parity-without-stray-std.md) |
 
 ## Next task number
 
-**TASK-778**
+**TASK-779**
