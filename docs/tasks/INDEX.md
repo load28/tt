@@ -815,7 +815,7 @@
 | TASK-772 | Fix the deferred findings of earlier audits | Complete | 2026-10-06 | 2026-10-06 | [TASK-772](./TASK-772-deferred-findings.md) |
 | TASK-773 | Fix defects found by the fifth audit | Complete | 2026-10-06 | 2026-10-07 | [TASK-773](./TASK-773-fifth-audit.md) |
 | TASK-774 | Make the evaluation protocol linear in the tt values of an expression | Complete | 2026-10-07 | 2026-10-07 | [TASK-774](./TASK-774-linear-evaluation-protocol.md) |
-| TASK-775 | Judge a match's exhaustiveness on the typed path by the cases its value can still be | In progress | 2026-10-07 | — | [TASK-775](./TASK-775-typed-exhaustiveness-over-narrowed-cases.md) |
+| TASK-775 | Judge a match's exhaustiveness on the typed path by the cases its value can still be | Cancelled | 2026-10-07 | 2026-10-07 | [TASK-775](./TASK-775-typed-exhaustiveness-over-narrowed-cases.md) |
 
 ## Next task number
 
